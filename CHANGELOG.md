@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.0.23] – 2026-05-18
+
+Fenced code blocks that carry extra metadata after the language now render the way they should.
+
+### Fixed
+
+- **Fenced code blocks with info-string metadata render correctly.** Only the first word of a fenced code block's info string is treated as the language, so blocks like ` ```mermaid {theme=dark} ` or ` ```swift title="example.swift" ` are recognized properly and Mermaid diagrams and math decorators are no longer broken by trailing metadata ([#109](https://github.com/pluk-inc/markdown-preview/pull/109)).
+
+### Contributors
+
+Thanks to the external contributors who shipped in this release:
+
+- [@jphastings](https://github.com/jphastings) — fenced code block info-string language handling ([#109](https://github.com/pluk-inc/markdown-preview/pull/109))
+
 ## [0.0.22] – 2026-05-14
 
 Markdown Preview now sanitizes rendered HTML before it reaches the preview WebView, and Sparkle update checks point at the Amore-published appcast.
