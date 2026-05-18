@@ -1936,6 +1936,40 @@ nonisolated enum MarkdownHTML {
     }
     blockquote > *:first-child { margin-top: 0; }
 
+    .markdown-alert {
+        margin: 1.6em 0 0;
+        padding: 12px 16px;
+        background: var(--aside-bg);
+        border-left: 4px solid var(--aside-border);
+        border-radius: 6px;
+        color: var(--text);
+    }
+    .markdown-alert > *:first-child { margin-top: 0; }
+    .markdown-alert-title {
+        font-weight: 600;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        line-height: 1;
+    }
+    .markdown-alert-icon {
+        width: 1em;
+        height: 1em;
+        margin-right: 0.5em;
+        flex: 0 0 auto;
+        fill: currentColor;
+    }
+    .markdown-alert-note { border-left-color: #0969da; }
+    .markdown-alert-note .markdown-alert-title { color: #0969da; }
+    .markdown-alert-tip { border-left-color: #1a7f37; }
+    .markdown-alert-tip .markdown-alert-title { color: #1a7f37; }
+    .markdown-alert-important { border-left-color: #8250df; }
+    .markdown-alert-important .markdown-alert-title { color: #8250df; }
+    .markdown-alert-warning { border-left-color: #9a6700; }
+    .markdown-alert-warning .markdown-alert-title { color: #9a6700; }
+    .markdown-alert-caution { border-left-color: #d1242f; }
+    .markdown-alert-caution .markdown-alert-title { color: #d1242f; }
+
     ul, ol { margin: 0.8em 0 0; padding-left: 1.6em; }
     li { margin-top: 0.4em; }
     li:first-child { margin-top: 0.8em; }
