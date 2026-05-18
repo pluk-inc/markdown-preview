@@ -576,11 +576,10 @@ nonisolated enum MarkdownHTML {
                 location: fenceCursor,
                 length: match.range.location - fenceCursor
             ))
-            let info = nsMarkdown
-                .substring(with: match.range(at: 2))
-                .trimmingCharacters(in: .whitespaces)
-                .lowercased()
-            if info == "math" {
+            let info = CodeFenceInfo(
+                rawInfoString: nsMarkdown.substring(with: match.range(at: 2))
+            )
+            if info.language == "math" {
                 let body = nsMarkdown.substring(with: match.range(at: 3))
                 blocks.append(body)
                 // Surround with blank lines so swift-markdown wraps the standalone

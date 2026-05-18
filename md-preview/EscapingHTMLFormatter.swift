@@ -48,12 +48,10 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     }
 
     mutating func visitCodeBlock(_ codeBlock: CodeBlock) {
-        let languageAttr: String
-        if let language = codeBlock.language {
-            languageAttr = " class=\"language-\(escapeAttribute(language))\""
-        } else {
-            languageAttr = ""
-        }
+        let info = CodeFenceInfo(rawInfoString: codeBlock.language)
+        let languageAttr = info.language.isEmpty
+            ? ""
+            : " class=\"language-\(escapeAttribute(info.language))\""
         result += "<pre><code\(languageAttr)>\(escapeText(codeBlock.code))</code></pre>\n"
     }
 
