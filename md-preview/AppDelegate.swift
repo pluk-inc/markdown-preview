@@ -869,6 +869,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSToolbarDelegate, NSSharing
         "com.microsoft.VSCode",
         "com.todesktop.230313mzl4w4u92",
         "dev.zed.Zed",
+        "md.obsidian",
         "com.sublimetext.4",
         "com.sublimetext.3",
         "com.barebones.bbedit",
@@ -879,6 +880,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSToolbarDelegate, NSSharing
         "com.macromates.TextMate",
         "org.vim.MacVim"
     ]
+    private static let knownMarkdownEditorBundleIDs: Set<String> = Set(editorBundleIDPriority)
 
     private func makeOpenWithItem() -> NSToolbarItem {
         let item = NSMenuToolbarItem(itemIdentifier: .openWith)
@@ -938,14 +940,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSToolbarDelegate, NSSharing
             }
         }
 
-        return NSWorkspace.shared.urlsForApplications(toOpen: fileURL).compactMap { appURL in
+        var appURLs = NSWorkspace.shared.urlsForApplications(toOpen: fileURL)
+        for bundleID in Self.knownMarkdownEditorBundleIDs {
+            guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID),
+                  !appURLs.contains(where: { sameApplication($0, appURL) }) else {
+                continue
+            }
+            appURLs.append(appURL)
+        }
+
+        return appURLs.compactMap { appURL in
             if selfURLs.contains(canonicalAppURL(appURL)) { return nil }
             let plist = infoPlist(at: appURL)
             let bundleID = (plist?["CFBundleIdentifier"] as? String)
                 ?? Bundle(url: appURL)?.bundleIdentifier
-            guard canEditMarkdown(plist: plist) else { return nil }
+            guard canEditMarkdown(plist: plist) || knownMarkdownEditor(bundleID: bundleID) else { return nil }
             return EditorCandidate(url: appURL, bundleID: bundleID)
         }
+    }
+
+    private func knownMarkdownEditor(bundleID: String?) -> Bool {
+        bundleID.map(Self.knownMarkdownEditorBundleIDs.contains) ?? false
     }
 
     private func resolveDefaultEditor(among candidates: [EditorCandidate]) -> EditorCandidate? {
