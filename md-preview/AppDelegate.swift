@@ -879,6 +879,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSToolbarDelegate, NSSharing
         "com.macromates.TextMate",
         "org.vim.MacVim"
     ]
+    /// Editors we trust to open Markdown even when their Info.plist doesn't pass
+    /// `canEditMarkdown`. Markdown-first apps like iA Writer declare a custom
+    /// imported UTI (which only *conforms to* `net.daringfireball.markdown`) and
+    /// omit `CFBundleTypeExtensions`, so the heuristic can't see them. See #114.
+    private static let editorBundleIDAllowlist: Set<String> = [
+        "pro.writer.mac",           // iA Writer (Mac App Store / direct)
+        "pro.writer.mac-setapp",    // iA Writer (Setapp)
+        "abnerworks.Typora",        // Typora
+        "com.uranusjr.macdown",     // MacDown
+        "md.obsidian"               // Obsidian
+    ]
+    /// Apps that claim a Markdown/plain-text document type but aren't useful as a
+    /// text editor — they pass `canEditMarkdown` only as noise. See #114.
+    private static let editorBundleIDDenylist: Set<String> = [
+        "com.microsoft.Word",
+        "com.ideasoncanvas.mindnode.macos",
+        "com.somac.subtitleburner"
+    ]
 
     private func makeOpenWithItem() -> NSToolbarItem {
         let item = NSMenuToolbarItem(itemIdentifier: .openWith)
@@ -943,7 +961,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSToolbarDelegate, NSSharing
             let plist = infoPlist(at: appURL)
             let bundleID = (plist?["CFBundleIdentifier"] as? String)
                 ?? Bundle(url: appURL)?.bundleIdentifier
-            guard canEditMarkdown(plist: plist) else { return nil }
+            if let bundleID, Self.editorBundleIDDenylist.contains(bundleID) { return nil }
+            let isAllowlisted = bundleID.map(Self.editorBundleIDAllowlist.contains) ?? false
+            guard isAllowlisted || canEditMarkdown(plist: plist) else { return nil }
             return EditorCandidate(url: appURL, bundleID: bundleID)
         }
     }
