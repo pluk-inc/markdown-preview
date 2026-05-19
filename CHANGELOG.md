@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.0.24] – 2026-05-19
+
+GitHub-style alert blockquotes now render with their intended labels, and the Open With menu finds more Markdown editors.
+
+### Added
+
+- **GitHub-style alert blockquotes render with labels and colors.** Blockquotes that start with `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, or `[!CAUTION]` now render as alert callouts, including custom titles after the marker ([#113](https://github.com/pluk-inc/markdown-preview/pull/113)).
+
+### Fixed
+
+- **More Markdown editors appear in Open With.** Trusted Markdown-first editors such as iA Writer, Typora, MacDown, and Obsidian are now included even when Launch Services exposes them through custom Markdown UTIs, while noisy non-editors are filtered out ([#116](https://github.com/pluk-inc/markdown-preview/pull/116), [#114](https://github.com/pluk-inc/markdown-preview/issues/114)).
+
+### Contributors
+
+Thanks to the external contributor who shipped in this release:
+
+- [@jphastings](https://github.com/jphastings) — GitHub-style alert blockquotes ([#113](https://github.com/pluk-inc/markdown-preview/pull/113))
+
 ## [0.0.23] – 2026-05-18
 
 Fenced code blocks that carry extra metadata after the language now render the way they should.
