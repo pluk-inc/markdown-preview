@@ -1307,7 +1307,8 @@ private final class FileWatcher {
             // differs from the watcher's URL — surface that to the host.
             if !event.intersection([.delete, .rename, .revoke]).isEmpty {
                 if let newURL = self.currentPath(),
-                   newURL.standardizedFileURL != self.url.standardizedFileURL {
+                   newURL.standardizedFileURL != self.url.standardizedFileURL,
+                   !FileManager.default.fileExists(atPath: self.url.path) {
                     self.onRename?(newURL)
                 }
                 self.reopen()
