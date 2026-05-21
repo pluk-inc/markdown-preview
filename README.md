@@ -1,7 +1,7 @@
 <h1 align="center">Markdown Preview</h1>
 
 <p align="center">
-  <img src="docs/app-icon.png" width="128" alt="App icon" />
+  <img src="docs/markdown-logo.svg" width="128" alt="Markdown Preview logo" />
 </p>
 
 <p align="center">
@@ -116,7 +116,7 @@ Pull requests are welcome. For larger changes, please open an issue first to dis
 
 <p align="center">
   <a href="https://pluk.sh">
-    <img src="docs/sponsors/pluk-logo.svg" height="54" alt="Pluk" />
+    <img src="docs/sponsors/pluk-logo.png" height="54" alt="Pluk" />
   </a>
   &nbsp;&nbsp;&nbsp;&nbsp;
   <a href="https://amore.computer">
@@ -125,12 +125,12 @@ Pull requests are welcome. For larger changes, please open an issue first to dis
 </p>
 
 ## Acknowledgments
-
+- [Amore](http://amore.computer/) — MacOS release automation (signing, notarization, DMG, hosting, appcast)
 - [swift-markdown](https://github.com/swiftlang/swift-markdown) — Markdown parser (Apple, cmark-gfm-backed)
-- [Mermaid](https://mermaid.js.org/) — bundled diagram renderer for `mermaid` fenced code blocks
-- [KaTeX](https://katex.org/) — bundled math typesetter for inline `$…$`, display `$$…$$`, and ` ```math ` blocks
+- [Mermaid](https://mermaid.js.org/) — Bundled diagram renderer for `mermaid` fenced code blocks
+- [KaTeX](https://katex.org/) — Bundled math typesetter for inline `$…$`, display `$$…$$`, and ` ```math ` blocks
 - [Sparkle](https://sparkle-project.org) — Auto-update framework
-- [Amore](http://amore.computer/) — macOS release automation (signing, notarization, DMG, hosting, appcast)
+- [LottieFiles](https://lottiefiles.com/) — Animated README logo
 
 ## License
 
