@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.0.25] – 2026-05-21
+
+Markdown Preview now handles common editor save workflows more reliably, strips TOML frontmatter before rendering, and keeps code-copy output clean when selecting the whole preview.
+
+### Changed
+
+- **The preview keeps following the original file after atomic saves.** When editors save by replacing the file behind the scenes, Markdown Preview now reloads the new contents while staying attached to the original path instead of following the temporary replacement file ([#126](https://github.com/pluk-inc/markdown-preview/pull/126), [#119](https://github.com/pluk-inc/markdown-preview/issues/119)).
+
+### Fixed
+
+- **TOML frontmatter is hidden from rendered previews.** Files that start with `+++` frontmatter now render like YAML-frontmatter files, keeping metadata out of the preview body ([#125](https://github.com/pluk-inc/markdown-preview/pull/125), [#118](https://github.com/pluk-inc/markdown-preview/issues/118)).
+- **Code copy buttons no longer leak into copied text.** Selecting the whole preview and copying now excludes the inline "Copy" / "Copied" button label from code block clipboard output ([#124](https://github.com/pluk-inc/markdown-preview/pull/124), [#120](https://github.com/pluk-inc/markdown-preview/issues/120)).
+
+### Contributors
+
+Thanks to the external reporters who helped improve this release:
+
+- [@gglanzani](https://github.com/gglanzani) — reported TOML frontmatter rendering and atomic-save reload issues ([#118](https://github.com/pluk-inc/markdown-preview/issues/118), [#119](https://github.com/pluk-inc/markdown-preview/issues/119))
+- [@OzzyCzech](https://github.com/OzzyCzech) — reported copy button text leaking into selected code copy output ([#120](https://github.com/pluk-inc/markdown-preview/issues/120))
+
 ## [0.0.24] – 2026-05-19
 
 GitHub-style alert blockquotes now render with their intended labels, and the Open With menu finds more Markdown editors.

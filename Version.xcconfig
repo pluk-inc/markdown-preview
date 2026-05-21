@@ -1,5 +1,5 @@
 // Centralized version configuration for all targets.
 // Bump these values to release a new version.
 
-MARKETING_VERSION = 0.0.24
-CURRENT_PROJECT_VERSION = 28
+MARKETING_VERSION = 0.0.25
+CURRENT_PROJECT_VERSION = 29
