@@ -25,7 +25,7 @@ extension DocumentMetadata {
 
         let split = MarkdownFrontmatter.split(markdown)
         if let raw = split.raw {
-            meta.frontmatter = MarkdownFrontmatter.parse(raw)
+            meta.frontmatter = MarkdownFrontmatter.parse(raw, format: split.format ?? .yaml)
         }
         let body = split.body
         let bodyLines = body.components(separatedBy: .newlines)
@@ -130,7 +130,7 @@ struct InspectorView: View {
     @ViewBuilder
     private var propertiesTab: some View {
         if metadata.frontmatter.isEmpty {
-            Text("No YAML frontmatter")
+            Text("No frontmatter")
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
