@@ -11,10 +11,9 @@ struct FrontmatterEntry: Equatable, Identifiable {
     let value: String
 }
 
-// Swift-markdown is CommonMark: it has no YAML frontmatter notion, so a closing
-// `---` would otherwise turn the preceding lines into a setext H2 in the
-// rendered output. We strip the block before parsing and surface the parsed
-// entries in the Inspector instead.
+// Swift-markdown is CommonMark: it has no frontmatter notion, so delimiter
+// blocks can be rendered as document content. We strip supported frontmatter
+// before parsing and surface the parsed entries in the Inspector instead.
 nonisolated enum MarkdownFrontmatter {
 
     static func split(_ markdown: String) -> (raw: String?, body: String) {
@@ -23,12 +22,11 @@ nonisolated enum MarkdownFrontmatter {
         stripped.enumerateLines { line, _ in lines.append(line) }
 
         guard let first = lines.first,
-              first.trimmingCharacters(in: .whitespaces) == "---"
+              let delimiter = Delimiter(openingLine: first)
         else { return (nil, markdown) }
 
         guard let close = lines.dropFirst().firstIndex(where: {
-            let trimmed = $0.trimmingCharacters(in: .whitespaces)
-            return trimmed == "---" || trimmed == "..."
+            delimiter.closes($0)
         }) else { return (nil, markdown) }
 
         let raw = lines[1..<close].joined(separator: "\n")
@@ -60,5 +58,31 @@ nonisolated enum MarkdownFrontmatter {
             entries.append(FrontmatterEntry(id: entries.count, key: key, value: value))
         }
         return entries
+    }
+
+    private enum Delimiter {
+        case yaml
+        case toml
+
+        init?(openingLine: String) {
+            switch openingLine.trimmingCharacters(in: .whitespaces) {
+            case "---":
+                self = .yaml
+            case "+++":
+                self = .toml
+            default:
+                return nil
+            }
+        }
+
+        func closes(_ line: String) -> Bool {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            switch self {
+            case .yaml:
+                return trimmed == "---" || trimmed == "..."
+            case .toml:
+                return trimmed == "+++"
+            }
+        }
     }
 }
