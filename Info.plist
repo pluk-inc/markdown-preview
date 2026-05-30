@@ -7,6 +7,8 @@
 		<dict>
 			<key>CFBundleTypeName</key>
 			<string>Markdown Document</string>
+			<key>NSDocumentClass</key>
+			<string>$(PRODUCT_MODULE_NAME).MarkdownDocument</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>LSHandlerRank</key>

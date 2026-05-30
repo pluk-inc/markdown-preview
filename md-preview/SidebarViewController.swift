@@ -615,8 +615,8 @@ final class ProjectNavigatorView: NSView {
 
     @objc private func openInNewWindow(_ sender: NSMenuItem) {
         guard let url = sender.representedObject as? URL,
-              let appDelegate = NSApp.delegate as? AppDelegate else { return }
-        appDelegate.openInNewWindow(url)
+              let controller = documentWindowController else { return }
+        controller.openInNewWindow(url)
     }
 
     @objc private func copyPath(_ sender: NSMenuItem) {
@@ -658,8 +658,8 @@ extension ProjectNavigatorView: NSMenuDelegate {
                                       symbol: "macwindow.badge.plus",
                                       action: #selector(openInNewWindow(_:)),
                                       url: url))
-            if let appDelegate = NSApp.delegate as? AppDelegate {
-                for item in appDelegate.contextMenuEditorItems(for: url) {
+            if let controller = documentWindowController {
+                for item in controller.contextMenuEditorItems(for: url) {
                     menu.addItem(item)
                 }
             }
@@ -687,6 +687,10 @@ extension ProjectNavigatorView: NSMenuDelegate {
         item.representedObject = url
         item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
         return item
+    }
+
+    private var documentWindowController: DocumentWindowController? {
+        outlineView.window?.windowController as? DocumentWindowController
     }
 }
 
