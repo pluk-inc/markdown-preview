@@ -111,6 +111,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func present(url: URL) {
+        if url.isExistingDirectory {
+            openFolder(url)
+            return
+        }
+
         // Switching to a different file blanks the preview so the previous
         // doc doesn't linger on screen during sheet dismissal + load.
         let isFileSwitch = currentFileURL != nil && currentFileURL != url
@@ -972,6 +977,18 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
     }
 
+    func openFolder(_ folderURL: URL) {
+        let folderURL = folderURL.standardizedFileURL
+        if currentFileURL == nil {
+            documentWindow.title = folderURL.lastPathComponent
+        }
+        (documentWindow.contentViewController as? MainSplitViewController)?
+            .openFolder(folderURL, selectedFileURL: currentFileURL)
+        documentWindow.makeKeyAndOrderFront(nil)
+        NSApp.activate()
+        syncSidebarMenuState()
+    }
+
     func contextMenuEditorItems(for fileURL: URL) -> [NSMenuItem] {
         let candidates = editorCandidates(for: fileURL)
         let defaultEditor = resolveDefaultEditor(among: candidates)
@@ -1031,6 +1048,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let panel = makeOpenPanel()
         panel.beginSheetModal(for: documentWindow) { [weak self] response in
             guard let self, response == .OK, let url = panel.url else { return }
+            if url.isExistingDirectory {
+                self.openFolder(url)
+                return
+            }
             self.openInNewWindow(url)
         }
     }
@@ -1038,9 +1059,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func makeOpenPanel() -> NSOpenPanel {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
+        panel.canChooseDirectories = true
         panel.canChooseFiles = true
-        panel.message = "Choose a Markdown file"
+        panel.message = "Choose a Markdown file or folder"
         panel.allowedContentTypes = Self.markdownFileExtensions
             .compactMap { UTType(filenameExtension: $0) }
         return panel

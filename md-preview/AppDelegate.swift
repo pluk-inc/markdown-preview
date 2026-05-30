@@ -29,7 +29,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
-        return false
+        NSDocumentController.shared.documents.isEmpty
+    }
+
+    func applicationOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        promptForDocument()
+        return true
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -108,6 +113,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func promptForDocument() {
         let panel = makeOpenPanel()
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        if url.isExistingDirectory {
+            openFolder(url)
+            return
+        }
         NSDocumentController.shared.openDocument(withContentsOf: url,
                                                  display: true) { _, _, error in
             guard let error else { return }
@@ -115,12 +124,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func openFolder(_ url: URL) {
+        if let controller = activeDocumentWindowController {
+            controller.openFolder(url)
+            return
+        }
+
+        do {
+            let document = try NSDocumentController.shared.openUntitledDocumentAndDisplay(true)
+            guard let controller = document.windowControllers.first as? DocumentWindowController else {
+                return
+            }
+            controller.openFolder(url)
+        } catch {
+            NSAlert(error: error).runModal()
+        }
+    }
+
     private func makeOpenPanel() -> NSOpenPanel {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
+        panel.canChooseDirectories = true
         panel.canChooseFiles = true
-        panel.message = "Choose a Markdown file"
+        panel.message = "Choose a Markdown file or folder"
         panel.allowedContentTypes = Self.markdownFileExtensions
             .compactMap { UTType(filenameExtension: $0) }
         return panel
