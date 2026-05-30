@@ -787,6 +787,7 @@ private final class NonScrollingWKWebView: WKWebView {
 
     override func keyDown(with event: NSEvent) {
         if forwardHeadingKey(event) { return }
+        if forwardShiftSpaceKey(event) { return }
         if isStandardScrollKey(event) {
             interpretKeyEvents([event])
             return
@@ -843,6 +844,15 @@ private final class NonScrollingWKWebView: WKWebView {
         default:
             return false
         }
+    }
+
+    private func forwardShiftSpaceKey(_ event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard modifiers.subtracting([.shift, .capsLock]).isEmpty,
+              modifiers.contains(.shift),
+              event.charactersIgnoringModifiers == " " else { return false }
+
+        return forwardScrollAction(.pageUp)
     }
 
     private func isStandardScrollKey(_ event: NSEvent) -> Bool {
