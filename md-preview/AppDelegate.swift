@@ -29,7 +29,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
-        return false
+        NSDocumentController.shared.documents.isEmpty
+    }
+
+    func applicationOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        promptForDocument()
+        return true
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
