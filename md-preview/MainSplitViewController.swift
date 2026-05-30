@@ -64,6 +64,12 @@ final class MainSplitViewController: NSSplitViewController {
         inspectorViewController?.display(metadata: DocumentMetadata.make(url: newURL, markdown: markdown))
     }
 
+    func openFolder(_ folderURL: URL, selectedFileURL: URL?) {
+        sidebarViewController?.openFolder(folderURL, selectedFileURL: selectedFileURL)
+        setSidebarMode(.files)
+        showSidebar()
+    }
+
     func clearContent() {
         contentViewController?.clearContent()
     }

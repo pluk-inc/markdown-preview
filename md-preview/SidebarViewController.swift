@@ -157,18 +157,34 @@ final class SidebarViewController: NSViewController {
         setOpenFileURL(newURL)
     }
 
+    /// Mounts an explicitly chosen folder as the Project Navigator root.
+    /// If the current document is inside that folder, keep it selected.
+    func openFolder(_ folderURL: URL, selectedFileURL: URL?) {
+        loadViewIfNeeded()
+        let root = folderURL.standardizedFileURL
+        pendingFolderURL = root
+        if let selectedFileURL, selectedFileURL.isDescendantOrSame(of: root) {
+            pendingFileURL = selectedFileURL.standardizedFileURL
+        } else {
+            pendingFileURL = nil
+        }
+        if currentMode == .files {
+            refreshNavigatorIfNeeded()
+        }
+    }
+
     /// Defers folder enumeration until the user is actually in the
     /// navigator (saves disk walks on every TOC-mode open). Keeps the
     /// existing root if the new file is a descendant; otherwise resets
     /// so an unrelated File → Open updates the tree.
     private func setOpenFileURL(_ fileURL: URL?) {
-        let parent = fileURL?.deletingLastPathComponent()
+        let parent = fileURL?.deletingLastPathComponent().standardizedFileURL
         if let parent, let current = loadedFolderURL, parent.isDescendantOrSame(of: current) {
             pendingFolderURL = current
         } else {
             pendingFolderURL = parent
         }
-        pendingFileURL = fileURL
+        pendingFileURL = fileURL?.standardizedFileURL
         if currentMode == .files {
             refreshNavigatorIfNeeded()
         }
@@ -452,7 +468,7 @@ final class ProjectNavigatorView: NSView {
 
     func setRoot(_ url: URL?) {
         cancelAllWatchers()
-        rootNode = url.map { FileNode(url: $0, isDirectory: true) }
+        rootNode = url.map { FileNode(url: $0.standardizedFileURL, isDirectory: true) }
         outlineView.reloadData()
         if let rootNode {
             outlineView.expandItem(rootNode)
@@ -765,14 +781,6 @@ extension ProjectNavigatorView: NSOutlineViewDelegate {
     func outlineViewItemDidExpand(_ notification: Notification) {
         // Newly-loaded subtree needs its own watcher.
         syncWatchers()
-    }
-}
-
-private extension URL {
-    func isDescendantOrSame(of other: URL) -> Bool {
-        let mine = standardizedFileURL.path
-        let root = other.standardizedFileURL.path
-        return mine == root || mine.hasPrefix(root + "/")
     }
 }
 

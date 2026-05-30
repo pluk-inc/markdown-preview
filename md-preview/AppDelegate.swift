@@ -114,6 +114,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func promptForDocument() {
         let panel = makeOpenPanel()
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        if url.isExistingDirectory {
+            openFolder(url)
+            return
+        }
+
         isOpeningDocumentFromPrompt = true
         NSDocumentController.shared.openDocument(withContentsOf: url,
                                                  display: true) { [weak self] _, _, error in
@@ -123,12 +128,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func openFolder(_ url: URL) {
+        if let controller = activeDocumentWindowController {
+            controller.openFolder(url)
+            return
+        }
+
+        let document = MarkdownDocument()
+        NSDocumentController.shared.addDocument(document)
+        document.makeWindowControllers()
+        document.showWindows()
+        guard let controller = document.windowControllers.first as? DocumentWindowController else {
+            return
+        }
+        controller.openFolder(url)
+    }
+
     private func makeOpenPanel() -> NSOpenPanel {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
+        panel.canChooseDirectories = true
         panel.canChooseFiles = true
-        panel.message = "Choose a Markdown file"
+        panel.message = "Choose a Markdown file or folder"
         panel.allowedContentTypes = Self.markdownFileExtensions
             .compactMap { UTType(filenameExtension: $0) }
         return panel
