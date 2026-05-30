@@ -819,8 +819,8 @@ private final class NonScrollingWKWebView: WKWebView {
     override func scrollLineDown(_ sender: Any?)          { forwardScrollAction(.lineDown) }
     override func scrollPageUp(_ sender: Any?)            { forwardScrollAction(.pageUp) }
     override func scrollPageDown(_ sender: Any?)          { forwardScrollAction(.pageDown) }
-    override func moveUpAndModifySelection(_ sender: Any?) { forwardScrollAction(.lineUp) }
-    override func moveDownAndModifySelection(_ sender: Any?) { forwardScrollAction(.lineDown) }
+    override func moveUpAndModifySelection(_ sender: Any?) { forwardScrollAction(.pageUp) }
+    override func moveDownAndModifySelection(_ sender: Any?) { forwardScrollAction(.pageDown) }
     override func pageUp(_ sender: Any?)                  { forwardScrollAction(.pageUp) }
     override func pageDown(_ sender: Any?)                { forwardScrollAction(.pageDown) }
     override func scrollToBeginningOfDocument(_ sender: Any?) { forwardScrollAction(.top) }
@@ -856,9 +856,9 @@ private final class NonScrollingWKWebView: WKWebView {
 
         switch Int(scalar.value) {
         case NSUpArrowFunctionKey:
-            return forwardScrollAction(.lineUp)
+            return forwardScrollAction(.pageUp)
         case NSDownArrowFunctionKey:
-            return forwardScrollAction(.lineDown)
+            return forwardScrollAction(.pageDown)
         default:
             return false
         }
@@ -889,9 +889,9 @@ private final class NonScrollingWKWebView: WKWebView {
         case #selector(scrollLineDown(_:)):
             return forwardScrollAction(.lineDown)
         case #selector(moveUpAndModifySelection(_:)):
-            return forwardScrollAction(.lineUp)
+            return forwardScrollAction(.pageUp)
         case #selector(moveDownAndModifySelection(_:)):
-            return forwardScrollAction(.lineDown)
+            return forwardScrollAction(.pageDown)
         case #selector(scrollPageUp(_:)), #selector(pageUp(_:)):
             return forwardScrollAction(.pageUp)
         case #selector(scrollPageDown(_:)), #selector(pageDown(_:)):
