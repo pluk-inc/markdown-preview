@@ -248,6 +248,16 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.setString(text, forType: .string)
+        case "scroll":
+            guard let value = dict["value"] as? String else { return }
+            switch value {
+            case "pageUp":
+                performScrollAction(.pageUp)
+            case "pageDown":
+                performScrollAction(.pageDown)
+            default:
+                break
+            }
         default:
             break
         }

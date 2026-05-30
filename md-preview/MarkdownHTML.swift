@@ -749,6 +749,47 @@ nonisolated enum MarkdownHTML {
 
         window.MdPreviewHost = { pushHeight, measureHeight };
 
+        function elementForEventTarget(target) {
+            if (target instanceof Element) return target;
+            if (target && target.parentElement instanceof Element) return target.parentElement;
+            return document.activeElement instanceof Element ? document.activeElement : null;
+        }
+
+        function spaceBelongsToFocusedControl(target) {
+            const el = elementForEventTarget(target);
+            if (!el) return false;
+            if (el.isContentEditable) return true;
+            return !!el.closest([
+                'button',
+                'input',
+                'select',
+                'textarea',
+                'summary',
+                'audio',
+                'video',
+                '[contenteditable]',
+                '[role="button"]',
+                '[role="checkbox"]',
+                '[role="switch"]',
+                '[role="textbox"]',
+                '[role="combobox"]',
+                '[role="listbox"]',
+                '[role="menuitem"]'
+            ].join(','));
+        }
+
+        document.addEventListener('keydown', (event) => {
+            const isSpace = event.key === ' ' || event.key === 'Spacebar' || event.code === 'Space';
+            if (!isSpace || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+            if (spaceBelongsToFocusedControl(event.target)) return;
+
+            const value = event.shiftKey ? 'pageUp' : 'pageDown';
+            if (post({ kind: 'scroll', value })) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        }, true);
+
         function decorateCodeBlocks() {
             document.querySelectorAll('pre > code').forEach((code) => {
                 const pre = code.parentElement;
