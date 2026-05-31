@@ -20,6 +20,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private weak var outlineMenuItem: NSMenuItem?
     private weak var filesMenuItem: NSMenuItem?
     private var isOpeningDocumentFromPrompt = false
+    private var isPromptingForDocument = false
+    private var isDocumentPromptScheduled = false
 
     private static let markdownFileExtensions = ["md", "markdown", "mdown", "txt"]
 
@@ -27,20 +29,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installSidebarViewMenuItems()
         installGoMenu()
         installZoomMenuItemIcons()
+        scheduleDocumentPrompt(requiresNoDocuments: true)
     }
 
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
-        NSDocumentController.shared.documents.isEmpty && !isOpeningDocumentFromPrompt
+        false
     }
 
     func applicationOpenUntitledFile(_ sender: NSApplication) -> Bool {
-        promptForDocument()
+        scheduleDocumentPrompt(requiresNoDocuments: true)
         return true
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag {
-            promptForDocument()
+            scheduleDocumentPrompt(requiresNoDocuments: true)
+            return false
         }
         return true
     }
@@ -112,6 +116,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func promptForDocument() {
+        guard !isPromptingForDocument else { return }
+        isPromptingForDocument = true
+        defer { isPromptingForDocument = false }
+
         let panel = makeOpenPanel()
         guard panel.runModal() == .OK, let url = panel.url else { return }
         if url.isExistingDirectory {
@@ -125,6 +133,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.isOpeningDocumentFromPrompt = false
             guard let error else { return }
             NSAlert(error: error).runModal()
+        }
+    }
+
+    private func scheduleDocumentPrompt(requiresNoDocuments: Bool = false) {
+        guard !isPromptingForDocument,
+              !isDocumentPromptScheduled else { return }
+
+        isDocumentPromptScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isDocumentPromptScheduled = false
+            guard !requiresNoDocuments || NSDocumentController.shared.documents.isEmpty else { return }
+            NSApp.activate(ignoringOtherApps: true)
+            self.promptForDocument()
         }
     }
 
