@@ -32,6 +32,8 @@
 	<true/>
 	<key>SUFeedURL</key>
 	<string>https://release.md-preview.app/v1/apps/doc.md-preview/appcast.xml</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Markdown Preview uses Terminal to install the optional command line tools.</string>
 	<key>SUPublicEDKey</key>
 	<string>gIQjgqfjkIR+egQ4S1oBLxE/NCDxpXXGdZXSpn04VAY=</string>
 	<key>UTImportedTypeDeclarations</key>
