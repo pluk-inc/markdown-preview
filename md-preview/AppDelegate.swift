@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private weak var hideSidebarMenuItem: NSMenuItem?
     private weak var outlineMenuItem: NSMenuItem?
     private weak var filesMenuItem: NSMenuItem?
+    private var isOpeningDocumentFromPrompt = false
 
     private static let markdownFileExtensions = ["md", "markdown", "mdown", "txt"]
 
@@ -29,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
-        NSDocumentController.shared.documents.isEmpty
+        NSDocumentController.shared.documents.isEmpty && !isOpeningDocumentFromPrompt
     }
 
     func applicationOpenUntitledFile(_ sender: NSApplication) -> Bool {
@@ -113,8 +114,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func promptForDocument() {
         let panel = makeOpenPanel()
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        isOpeningDocumentFromPrompt = true
         NSDocumentController.shared.openDocument(withContentsOf: url,
-                                                 display: true) { _, _, error in
+                                                 display: true) { [weak self] _, _, error in
+            self?.isOpeningDocumentFromPrompt = false
             guard let error else { return }
             NSAlert(error: error).runModal()
         }
