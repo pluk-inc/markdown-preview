@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.0.26] – 2026-05-31
+
+Markdown Preview now works more naturally as a multi-window document app, can browse Markdown folders directly, and includes app handoff and command-line installation tools for local workflows.
+
+### Added
+
+- **Native document windows.** Markdown files opened from Finder, File > Open, and Open Recent now use macOS document-window behavior, so multiple Markdown files can stay open as separate windows in one Markdown Preview process ([#131](https://github.com/pluk-inc/markdown-preview/pull/131), [#130](https://github.com/pluk-inc/markdown-preview/issues/130)).
+- **Folder opening for Project Navigator.** The open panel can choose a folder as a Markdown workspace, mounting it as the Project Navigator root without eagerly loading every file in the tree ([#135](https://github.com/pluk-inc/markdown-preview/pull/135)).
+- **Spacebar page scrolling.** Space and Shift-Space now page down and page up in the rendered preview, matching Preview-style reading behavior while leaving focused controls alone ([#132](https://github.com/pluk-inc/markdown-preview/pull/132), [#129](https://github.com/pluk-inc/markdown-preview/issues/129)).
+- **Open in LLM toolbar action.** A toolbar menu can hand the current Markdown file to supported local LLM apps, including Codex, Claude, and ChatGPT, when they are installed ([#136](https://github.com/pluk-inc/markdown-preview/pull/136), [#140](https://github.com/pluk-inc/markdown-preview/pull/140)).
+- **Command-line tool installer.** The app menu now includes an Install CLI command that installs `md-preview`, `mdp`, and `markdown-preview` launchers into a usable PATH directory ([#139](https://github.com/pluk-inc/markdown-preview/pull/139)).
+
+### Contributors
+
+Thanks to the external reporters who helped improve this release:
+
+- [@tututuhehehe](https://github.com/tututuhehehe) — requested multiple document window support ([#130](https://github.com/pluk-inc/markdown-preview/issues/130))
+- [@Ptujec](https://github.com/Ptujec) — requested Space and Shift-Space preview scrolling ([#129](https://github.com/pluk-inc/markdown-preview/issues/129))
+
 ## [0.0.25] – 2026-05-21
 
 Markdown Preview now handles common editor save workflows more reliably, strips TOML frontmatter before rendering, and keeps code-copy output clean when selecting the whole preview.
