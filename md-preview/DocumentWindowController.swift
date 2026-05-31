@@ -754,9 +754,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func llmPrompt(for fileURL: URL) -> String {
         """
         Open this Markdown file and use it as the working context:
-        \(fileURL.absoluteString)
-
-        The file is on this Mac at:
         \(fileURL.path)
         """
     }
