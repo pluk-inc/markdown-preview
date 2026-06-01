@@ -16,6 +16,7 @@ extension NSToolbarItem.Identifier {
     static let search = NSToolbarItem.Identifier("Search")
     static let sidebarMenu = NSToolbarItem.Identifier("SidebarMenu")
     static let printDocument = NSToolbarItem.Identifier("PrintDocument")
+    static let exportPDF = NSToolbarItem.Identifier("ExportPDF")
     static let copyMarkdown = NSToolbarItem.Identifier("CopyMarkdown")
     static let zoom = NSToolbarItem.Identifier("Zoom")
 }
@@ -235,6 +236,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             .share,
             .search,
             .printDocument,
+            .exportPDF,
             .copyMarkdown,
             .zoom
         ]
@@ -257,6 +259,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         case .share: return makeShareItem()
         case .search: return makeSearchItem()
         case .printDocument: return makePrintItem()
+        case .exportPDF: return makeExportPDFItem()
         case .copyMarkdown: return makeCopyItem()
         case .zoom: return makeZoomItem()
         default: return nil
@@ -400,6 +403,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         syncSidebarMenuState()
+        if menuItem.action == #selector(exportMarkdownAsPDF(_:)) {
+            return !(currentMarkdown?.isEmpty ?? true)
+        }
         return true
     }
 
@@ -455,6 +461,40 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         item.isBordered = true
         item.action = #selector(MainSplitViewController.printMarkdown(_:))
         return item
+    }
+
+    private func makeExportPDFItem() -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: .exportPDF)
+        item.label = "Export PDF"
+        item.paletteLabel = "Export as PDF"
+        item.toolTip = "Export document as PDF"
+        item.image = NSImage(systemSymbolName: "arrow.down.document",
+                             accessibilityDescription: "Export as PDF")
+        item.isBordered = true
+        item.target = self
+        item.action = #selector(exportMarkdownAsPDF(_:))
+        return item
+    }
+
+    @objc func exportMarkdownAsPDF(_ sender: Any?) {
+        guard let markdown = currentMarkdown, !markdown.isEmpty else {
+            NSSound.beep()
+            return
+        }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        let baseName = currentFileURL?.deletingPathExtension().lastPathComponent ?? "Untitled"
+        panel.nameFieldStringValue = "\(baseName).pdf"
+        panel.beginSheetModal(for: documentWindow) { [weak self] response in
+            guard let self, response == .OK, let destination = panel.url else { return }
+            let assetBaseURL = self.currentFileURL?.deletingLastPathComponent()
+            _ = PDFExporter(markdown: markdown,
+                            assetBaseURL: assetBaseURL,
+                            destinationURL: destination) { [weak self] result in
+                guard let self, case .failure(let error) = result else { return }
+                NSAlert(error: error).beginSheetModal(for: self.documentWindow)
+            }
+        }
     }
 
     private func makeCopyItem() -> NSToolbarItem {

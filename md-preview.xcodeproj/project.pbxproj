@@ -81,6 +81,7 @@
 				CodeFenceInfo.swift,
 				EscapingHTMLFormatter.swift,
 				MarkdownAssetSchemeHandler.swift,
+				MarkdownExportAssets.swift,
 				MarkdownFrontmatter.swift,
 				MarkdownHTML.swift,
 				MarkdownWebView.swift,
