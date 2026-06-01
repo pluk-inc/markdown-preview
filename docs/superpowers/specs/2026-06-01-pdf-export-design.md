@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-01
 **Branch:** `feat/add-pdf-export`
-**Status:** Approved (design); pending implementation plan
+**Status:** Implemented — branch `feat/add-pdf-export`
 
 ## Summary
 
@@ -54,7 +54,7 @@ print path (`NSPrintOperation`). Using `NSPrintOperation` also reuses the proven
 WebKit print path the existing Print menu already relies on. The PDF is written
 by setting `jobDisposition = .save`, `jobSavingURL = <destination>`,
 `showsPrintPanel = false`, `showsProgressPanel = false`, and calling
-`runOperation()`.
+`operation.run()`.
 
 ### Why an offscreen render, not the live view
 
@@ -80,7 +80,7 @@ into a PDF file.
 - **Flow:** build HTML via `MarkdownHTML.render(markdown:, assetBaseHref:,
   vendorLoading: .inline, forExport: true)` → `loadHTMLString` → await readiness
   (see C) → configure `NSPrintInfo` (see E) → `printOperation(with:)` →
-  `runOperation()` writing to `destinationURL` → call back.
+  `operation.run()` writing to `destinationURL` → call back.
 - **Lifetime:** retains itself until completion so it isn't deallocated mid-export.
 
 ### B. Render-readiness signal

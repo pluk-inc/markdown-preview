@@ -13,6 +13,8 @@ A macOS app for previewing Markdown files. AppKit, sandboxed, ships with a Quick
 | Min macOS | 15.0 |
 | Sandboxed | yes — uses Sparkle XPC services for updates |
 | Auto-updater | Sparkle 2.x (Swift package) |
+
+The app also declares `com.apple.security.files.user-selected.read-write` so **Export as PDF…** can write to a user-chosen path via `NSSavePanel` (Powerbox grants a write extension to the destination).
 | Distribution | Amore (managed) with custom domain `storage.md-preview.app` |
 
 Version is managed centrally in `Version.xcconfig` (`MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`). Both the app and the quick-look extension inherit from it.
