@@ -130,6 +130,12 @@
                                     <action selector="printMarkdown:" target="-1" id="qaZ-4w-aoO"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Export as PDF…" keyEquivalent="p" id="exp-PDF-itm">
+                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                <connections>
+                                    <action selector="exportMarkdownAsPDF:" target="-1" id="exp-PDF-act"/>
+                                </connections>
+                            </menuItem>
                         </items>
                     </menu>
                 </menuItem>
