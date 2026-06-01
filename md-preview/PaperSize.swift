@@ -1,5 +1,5 @@
 //
-//  PDFPageSize.swift
+//  PaperSize.swift
 //  md-preview
 //
 
