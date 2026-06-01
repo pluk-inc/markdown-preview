@@ -14,7 +14,7 @@ import WebKit
 ///
 /// The instance retains itself for the duration of the export, so callers can
 /// fire-and-forget after constructing it.
-nonisolated final class PDFExporter: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+@MainActor final class PDFExporter: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
 
     enum ExportError: LocalizedError {
         case renderFailed
@@ -40,7 +40,6 @@ nonisolated final class PDFExporter: NSObject, WKNavigationDelegate, WKScriptMes
     private var timeoutWork: DispatchWorkItem?
     private var selfRetain: PDFExporter?
 
-    @MainActor
     init(markdown: String,
          assetBaseURL: URL?,
          destinationURL: URL,
@@ -82,7 +81,7 @@ nonisolated final class PDFExporter: NSObject, WKNavigationDelegate, WKScriptMes
     private func scheduleTimeout() {
         let work = DispatchWorkItem { [weak self] in
             // Best-effort: a stuck renderer still exports what rendered.
-            self?.printToFile()
+            MainActor.assumeIsolated { self?.printToFile() }
         }
         timeoutWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.readinessTimeout, execute: work)
