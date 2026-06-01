@@ -44,7 +44,8 @@ nonisolated enum MarkdownHTML {
                        allowsScroll: Bool = false,
                        assetBaseHref: String? = nil,
                        vendorLoading: VendorLoading = .inline,
-                       warmup: Bool = false) -> RenderedHTML {
+                       warmup: Bool = false,
+                       forExport: Bool = false) -> RenderedHTML {
         let body = MarkdownFrontmatter.split(markdown).body
         let footnotes = extractFootnotes(from: body)
         let math = extractMath(from: footnotes.markdown)
@@ -83,6 +84,11 @@ nonisolated enum MarkdownHTML {
         // The bootstrap then reads template.innerHTML, runs it through
         // DOMPurify, and assigns the sanitized result to article.innerHTML.
         let safeBody = bodyHTML.replacingOccurrences(of: "</template", with: "<\\/template")
+        let exportInjection = forExport
+            ? MarkdownExportAssets.headInjection(containsMath: containsMath,
+                                                 containsMermaid: containsMermaid,
+                                                 containsCode: containsCode)
+            : ""
         let html = """
         <!DOCTYPE html>
         <html>
@@ -94,6 +100,7 @@ nonisolated enum MarkdownHTML {
         \(scrollOverride)
         \(sanitizerBlock)
         \(hostBridgeScript)
+        \(exportInjection)
         \(mathBlock)
         \(mermaidBlock)
         \(highlightBlock)
@@ -1582,6 +1589,11 @@ nonisolated enum MarkdownHTML {
             function bootstrap() {
                 const figures = document.querySelectorAll('.mermaid-figure');
                 if (!figures.length) return;
+                if (window.__mdPreviewRenderAll) {
+                    figures.forEach((f) => { queue.push(f); ro.observe(f); });
+                    drain();
+                    return;
+                }
                 const io = new IntersectionObserver((entries) => {
                     for (const entry of entries) {
                         if (entry.isIntersecting) {
