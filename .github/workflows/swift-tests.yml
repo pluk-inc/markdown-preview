@@ -17,3 +17,42 @@ jobs:
 
       - name: Run tests
         run: swift test --package-path tests/swift-tests
+
+  build-app:
+    name: xcodebuild (md-preview)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Build app target
+        run: >
+          xcodebuild
+          -project md-preview.xcodeproj
+          -scheme md-preview
+          -configuration Debug
+          build
+          CODE_SIGNING_ALLOWED=NO
+          SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
+
+  # Placeholder: enable when md-previewTests target exists.
+  xcode-test:
+    name: xcodebuild test (md-preview)
+    if: false
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Run Xcode tests
+        run: >
+          xcodebuild
+          -project md-preview.xcodeproj
+          -scheme md-preview
+          -configuration Debug
+          test
+          CODE_SIGNING_ALLOWED=NO
