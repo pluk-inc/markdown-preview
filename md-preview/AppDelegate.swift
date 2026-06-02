@@ -41,8 +41,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @IBOutlet private weak var checkForUpdatesMenuItem: NSMenuItem?
 
+    private static var isRunningUnderXCTest: Bool {
+        let env = ProcessInfo.processInfo.environment
+        return env["XCTestConfigurationFilePath"] != nil
+            || env["XCTestBundlePath"] != nil
+    }
+
     private let updaterController = SPUStandardUpdaterController(
-        startingUpdater: true,
+        startingUpdater: !isRunningUnderXCTest,
         updaterDelegate: nil,
         userDriverDelegate: nil
     )
@@ -61,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installGoMenu()
         installAppMenuItemIcons()
         installZoomMenuItemIcons()
+        guard !Self.isRunningUnderXCTest else { return }
         scheduleDocumentPrompt(requiresNoDocuments: true)
     }
 
