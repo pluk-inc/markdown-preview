@@ -59,7 +59,6 @@
 /* Begin PBXFileReference section */
 		9A0207C12FA0ED7C00092060 /* Markdown Preview.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Markdown Preview.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		9A02092D2FA10D4C00092060 /* quick-look.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "quick-look.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
-		9B0300012FB1000100092060 /* md-previewTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "md-previewTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		9A02092F2FA10D4C00092060 /* Quartz.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Quartz.framework; path = System/Library/Frameworks/Quartz.framework; sourceTree = SDKROOT; };
 		9A0209A02FA1100100092060 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
 		9AF000000000000000000101 /* mermaid.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = mermaid.min.js; path = "md-preview/Vendor/Mermaid/mermaid.min.js"; sourceTree = "<group>"; };
@@ -73,6 +72,7 @@
 		9AF000000000000000000109 /* Highlight-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "Highlight-LICENSE.txt"; path = "md-preview/Vendor/Highlight/Highlight-LICENSE.txt"; sourceTree = "<group>"; };
 		9AF00000000000000000010A /* purify.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = purify.min.js; path = "md-preview/Vendor/DOMPurify/purify.min.js"; sourceTree = "<group>"; };
 		9AF00000000000000000010B /* DOMPurify-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "DOMPurify-LICENSE.txt"; path = "md-preview/Vendor/DOMPurify/DOMPurify-LICENSE.txt"; sourceTree = "<group>"; };
+		9B0300012FB1000100092060 /* md-previewTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "md-previewTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -99,11 +99,6 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		9B0300062FB1000100092060 /* md-previewTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = md-previewTests;
-			sourceTree = "<group>";
-		};
 		9A0207C32FA0ED7C00092060 /* md-preview */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -118,6 +113,11 @@
 				9A0209402FA10D4C00092060 /* Exceptions for "quick-look" folder in "quick-look" target */,
 			);
 			path = "quick-look";
+			sourceTree = "<group>";
+		};
+		9B0300062FB1000100092060 /* md-previewTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "md-previewTests";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -260,8 +260,8 @@
 			fileSystemSynchronizedGroups = (
 				9B0300062FB1000100092060 /* md-previewTests */,
 			);
-			name = md-previewTests;
-			productName = md-previewTests;
+			name = "md-previewTests";
+			productName = "md-previewTests";
 			productReference = 9B0300012FB1000100092060 /* md-previewTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
@@ -514,9 +514,10 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "md-preview/md-preview.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				DEVELOPMENT_TEAM = P2QR3NXMGE;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -551,9 +552,10 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "md-preview/md-preview.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				DEVELOPMENT_TEAM = P2QR3NXMGE;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -585,8 +587,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = "quick-look/quick-look.entitlements";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				DEVELOPMENT_TEAM = P2QR3NXMGE;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -614,8 +617,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = "quick-look/quick-look.entitlements";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				DEVELOPMENT_TEAM = P2QR3NXMGE;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -643,8 +647,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				DEVELOPMENT_TEAM = P2QR3NXMGE;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -666,8 +671,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				DEVELOPMENT_TEAM = P2QR3NXMGE;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
