@@ -35,6 +35,12 @@ import WebKit
     /// Offscreen export can stall on rAF-throttled renderers (hljs, Mermaid);
     /// 30 s covers worst-case Mermaid-heavy docs without returning too early.
     private static let readinessTimeout: TimeInterval = 30.0
+    private static let contentHeightScript = """
+    Math.max(
+        document.documentElement.scrollHeight,
+        document.body ? document.body.scrollHeight : 0
+    )
+    """
     private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "doc.md-preview",
                                     category: "export")
 
@@ -128,7 +134,41 @@ import WebKit
     private func printToFile() {
         guard !didFinish else { return }
         didFinish = true
+        timeoutWork?.cancel()
 
+        Task { @MainActor in
+            await self.resizeWebViewToContentHeight()
+            self.runPrintToFile()
+        }
+    }
+
+    /// Grow the offscreen web view to the full rendered document height (same
+    /// idea as the live preview path) so AppKit paginates once instead of
+    /// tiling a one-page-tall view across thousands of PDF pages.
+    private func resizeWebViewToContentHeight() async {
+        let width = paperSize.pointSize.width
+        var contentHeight = paperSize.pointSize.height
+
+        do {
+            let result = try await webView.evaluateJavaScript(Self.contentHeightScript)
+            if let number = result as? NSNumber {
+                contentHeight = CGFloat(truncating: number)
+            } else if let value = result as? Double {
+                contentHeight = CGFloat(value)
+            }
+        } catch {
+            Self.log.warning(
+                "Could not measure export content height: \(error.localizedDescription, privacy: .public); using paper height"
+            )
+        }
+
+        contentHeight = max(ceil(contentHeight), 1)
+        webView.setFrameSize(NSSize(width: width, height: contentHeight))
+        webView.layoutSubtreeIfNeeded()
+        Self.log.debug("Export web view sized to \(width, privacy: .public)×\(contentHeight, privacy: .public) pt")
+    }
+
+    private func runPrintToFile() {
         // Clean-slate print settings — not `NSPrintInfo.shared.copy()` — so
         // export ignores the user's printer defaults and margin presets.
         let printInfo = NSPrintInfo(dictionary: [
