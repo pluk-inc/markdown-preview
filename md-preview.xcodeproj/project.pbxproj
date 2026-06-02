@@ -33,6 +33,13 @@
 			remoteGlobalIDString = 9A02092C2FA10D4C00092060;
 			remoteInfo = "quick-look";
 		};
+		9B0300082FB1000100092060 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9A0207B92FA0ED7C00092060 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9A0207C02FA0ED7C00092060;
+			remoteInfo = "md-preview";
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -52,6 +59,7 @@
 /* Begin PBXFileReference section */
 		9A0207C12FA0ED7C00092060 /* Markdown Preview.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Markdown Preview.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		9A02092D2FA10D4C00092060 /* quick-look.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "quick-look.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		9B0300012FB1000100092060 /* md-previewTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "md-previewTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		9A02092F2FA10D4C00092060 /* Quartz.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Quartz.framework; path = System/Library/Frameworks/Quartz.framework; sourceTree = SDKROOT; };
 		9A0209A02FA1100100092060 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
 		9AF000000000000000000101 /* mermaid.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = mermaid.min.js; path = "md-preview/Vendor/Mermaid/mermaid.min.js"; sourceTree = "<group>"; };
@@ -91,6 +99,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		9B0300062FB1000100092060 /* md-previewTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = md-previewTests;
+			sourceTree = "<group>";
+		};
 		9A0207C32FA0ED7C00092060 /* md-preview */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -128,6 +141,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		9B0300042FB1000100092060 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -148,6 +168,7 @@
 				9AF00000000000000000010B /* DOMPurify-LICENSE.txt */,
 				9A0207C32FA0ED7C00092060 /* md-preview */,
 				9A0209312FA10D4C00092060 /* quick-look */,
+				9B0300062FB1000100092060 /* md-previewTests */,
 				9A02092E2FA10D4C00092060 /* Frameworks */,
 				9A0207C22FA0ED7C00092060 /* Products */,
 			);
@@ -158,6 +179,7 @@
 			children = (
 				9A0207C12FA0ED7C00092060 /* Markdown Preview.app */,
 				9A02092D2FA10D4C00092060 /* quick-look.appex */,
+				9B0300012FB1000100092060 /* md-previewTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -222,6 +244,27 @@
 			productReference = 9A02092D2FA10D4C00092060 /* quick-look.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		9B0300022FB1000100092060 /* md-previewTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9B03000B2FB1000100092060 /* Build configuration list for PBXNativeTarget "md-previewTests" */;
+			buildPhases = (
+				9B0300032FB1000100092060 /* Sources */,
+				9B0300042FB1000100092060 /* Frameworks */,
+				9B0300052FB1000100092060 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9B0300072FB1000100092060 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				9B0300062FB1000100092060 /* md-previewTests */,
+			);
+			name = md-previewTests;
+			productName = md-previewTests;
+			productReference = 9B0300012FB1000100092060 /* md-previewTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -237,6 +280,10 @@
 					};
 					9A02092C2FA10D4C00092060 = {
 						CreatedOnToolsVersion = 26.4.1;
+					};
+					9B0300022FB1000100092060 = {
+						CreatedOnToolsVersion = 26.4.1;
+						TestTargetID = 9A0207C02FA0ED7C00092060;
 					};
 				};
 			};
@@ -260,6 +307,7 @@
 			targets = (
 				9A0207C02FA0ED7C00092060 /* md-preview */,
 				9A02092C2FA10D4C00092060 /* quick-look */,
+				9B0300022FB1000100092060 /* md-previewTests */,
 			);
 		};
 /* End PBXProject section */
@@ -290,6 +338,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		9B0300052FB1000100092060 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -307,6 +362,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		9B0300032FB1000100092060 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -314,6 +376,11 @@
 			isa = PBXTargetDependency;
 			target = 9A02092C2FA10D4C00092060 /* quick-look */;
 			targetProxy = 9A02093A2FA10D4C00092060 /* PBXContainerItemProxy */;
+		};
+		9B0300072FB1000100092060 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9A0207C02FA0ED7C00092060 /* md-preview */;
+			targetProxy = 9B0300082FB1000100092060 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -572,6 +639,52 @@
 			};
 			name = Release;
 		};
+		9B0300092FB1000100092060 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-previewTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Markdown Preview.app/Contents/MacOS/Markdown Preview";
+			};
+			name = Debug;
+		};
+		9B03000A2FB1000100092060 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-previewTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Markdown Preview.app/Contents/MacOS/Markdown Preview";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -598,6 +711,15 @@
 			buildConfigurations = (
 				9A02093E2FA10D4C00092060 /* Debug */,
 				9A02093F2FA10D4C00092060 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		9B03000B2FB1000100092060 /* Build configuration list for PBXNativeTarget "md-previewTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9B0300092FB1000100092060 /* Debug */,
+				9B03000A2FB1000100092060 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
