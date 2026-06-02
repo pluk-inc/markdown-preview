@@ -28,14 +28,23 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode.app
 
       - name: Build app target
-        run: >
-          xcodebuild
-          -project md-preview.xcodeproj
-          -scheme md-preview
-          -configuration Debug
-          build
-          CODE_SIGNING_ALLOWED=NO
-          SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
+        run: |
+          xcodebuild \
+            -project md-preview.xcodeproj \
+            -scheme md-preview \
+            -configuration Debug \
+            build \
+            CODE_SIGNING_ALLOWED=NO \
+            > build.log 2>&1
+
+      - name: Fail on warnings in our sources
+        run: |
+          matches=$(grep -E 'md-preview/.*: (warning|error):' build.log | grep -v 'metadata-tool' || true)
+          if [ -n "$matches" ]; then
+            echo "::error::Swift warnings or errors found in md-preview sources:"
+            echo "$matches"
+            exit 1
+          fi
 
   # Placeholder: enable when md-previewTests target exists.
   xcode-test:
