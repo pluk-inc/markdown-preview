@@ -216,6 +216,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             .openWith,
             .space,
             .zoom,
+            .exportPDF,
             .inspector,
             .share,
             .search

@@ -3,6 +3,7 @@
 //  md-previewTests
 //
 
+import PDFKit
 import XCTest
 @testable import Markdown_Preview
 
@@ -16,19 +17,22 @@ final class PDFExporterIntegrationTests: XCTestCase {
 
     @MainActor
     func testProseDocumentExport() async throws {
+        // Unique marker so the content assertion can't be satisfied by chrome.
+        let marker = "ProseMarkerZX42"
         let markdown = """
-        # Integration prose
+        # Integration prose \(marker)
 
         Paragraph with enough body text that the rendered PDF is not a trivial blank page.
         Second paragraph to add vertical extent for pagination smoke coverage.
         """
-        try await assertExportSucceeds(markdown: markdown, label: "prose")
+        try await assertExportSucceeds(markdown: markdown, label: "prose", expectedText: [marker])
     }
 
     @MainActor
     func testCodeFenceDocumentExport() async throws {
+        let marker = "CodeMarkerZX42"
         let markdown = """
-        # Code sample
+        # Code sample \(marker)
 
         ```swift
         struct Widget {
@@ -39,13 +43,16 @@ final class PDFExporterIntegrationTests: XCTestCase {
         }
         ```
         """
-        try await assertExportSucceeds(markdown: markdown, label: "code-fence")
+        try await assertExportSucceeds(markdown: markdown, label: "code-fence",
+                                       expectedText: [marker, "Widget"])
     }
 
     // MARK: - Helpers
 
     @MainActor
-    private func assertExportSucceeds(markdown: String, label: String) async throws {
+    private func assertExportSucceeds(markdown: String,
+                                      label: String,
+                                      expectedText: [String]) async throws {
         let destination = FileManager.default.temporaryDirectory
             .appendingPathComponent("md-preview-export-\(label)-\(UUID().uuidString).pdf")
         defer { try? FileManager.default.removeItem(at: destination) }
@@ -76,6 +83,21 @@ final class PDFExporterIntegrationTests: XCTestCase {
             Self.maximumPDFBytes,
             "PDF unexpectedly large (\(size) bytes) for \(label); export pipeline likely runaway"
         )
+
+        // Content assertion — the real guard against blank pages. A non-empty
+        // file size alone is satisfied by a blank PDF (~800 bytes), so extract
+        // the actual text and require the document's own content to be present.
+        let pdf = try XCTUnwrap(PDFDocument(url: url), "Produced file is not a valid PDF for \(label)")
+        XCTAssertGreaterThan(pdf.pageCount, 0, "PDF has no pages for \(label)")
+        let text = (0..<pdf.pageCount)
+            .compactMap { pdf.page(at: $0)?.string }
+            .joined(separator: "\n")
+        for needle in expectedText {
+            XCTAssertTrue(
+                text.contains(needle),
+                "Exported PDF for \(label) is missing expected content '\(needle)' — likely blank/unrendered. Extracted length: \(text.count)"
+            )
+        }
     }
 
     @MainActor

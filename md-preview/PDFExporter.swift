@@ -45,6 +45,11 @@ import WebKit
                                     category: "export")
 
     private let webView: WKWebView
+    /// Off-screen host window. A `WKWebView` that is never placed in a window is
+    /// never composited by WebKit, so the print operation captures blank pages.
+    /// Hosting it in a borderless window parked far off-screen forces a real
+    /// render while staying invisible to the user.
+    private var hostWindow: NSWindow?
     private let assetScheme = MarkdownAssetScheme()
     private let messageProxy = MessageProxy()
     private let destinationURL: URL
@@ -80,6 +85,26 @@ import WebKit
         // Required (not just CSS): Mermaid reads `prefers-color-scheme` via
         // `matchMedia`, which follows NSAppearance — `.aqua` forces light diagrams.
         webView.appearance = NSAppearance(named: .aqua)
+
+        // Host the web view in an off-screen window so WebKit actually renders
+        // the page (an unhosted web view never paints → blank PDF pages). The
+        // window is borderless, excluded from the menu/cycle, and parked far
+        // outside any display so it never appears on screen.
+        let window = NSWindow(contentRect: frame,
+                              styleMask: .borderless,
+                              backing: .buffered,
+                              defer: false)
+        window.isReleasedWhenClosed = false
+        window.isExcludedFromWindowsMenu = true
+        window.collectionBehavior = [.stationary, .ignoresCycle, .fullScreenNone]
+        window.alphaValue = 0.0   // rendered (so WebKit paints) but not visible
+        window.contentView = webView
+        // Park at the very bottom-left of the main screen; alpha 0 keeps it
+        // invisible while staying on the screen list so runModal can attach and
+        // WebKit composites the page.
+        window.setFrameOrigin((NSScreen.main?.frame.origin ?? .zero))
+        window.orderFrontRegardless()
+        hostWindow = window
 
         let rendered = MarkdownHTML.render(
             markdown: markdown,
@@ -136,34 +161,30 @@ import WebKit
         didFinish = true
         timeoutWork?.cancel()
 
-        Task { @MainActor in
-            await self.resizeWebViewToContentHeight()
+        // Callback-based (not async/await): runPrintToFile() runs an AppKit modal
+        // print loop, which must not be driven from inside a Swift async
+        // continuation. The JS-evaluation completion is delivered on the main
+        // thread, so resize + print happen on the main run loop normally.
+        webView.evaluateJavaScript(Self.contentHeightScript) { [weak self] result, _ in
+            guard let self else { return }
+            self.resizeWebViewToContentHeight(measuredHeight: result)
             self.runPrintToFile()
         }
     }
 
-    /// Grow the offscreen web view to the full rendered document height (same
-    /// idea as the live preview path) so AppKit paginates once instead of
-    /// tiling a one-page-tall view across thousands of PDF pages.
-    private func resizeWebViewToContentHeight() async {
+    /// Grow the host web view to the full rendered document height (same idea as
+    /// the live preview path) so AppKit paginates the whole document instead of
+    /// tiling a one-page-tall view.
+    private func resizeWebViewToContentHeight(measuredHeight: Any?) {
         let width = paperSize.pointSize.width
         var contentHeight = paperSize.pointSize.height
-
-        do {
-            let result = try await webView.evaluateJavaScript(Self.contentHeightScript)
-            if let number = result as? NSNumber {
-                contentHeight = CGFloat(truncating: number)
-            } else if let value = result as? Double {
-                contentHeight = CGFloat(value)
-            }
-        } catch {
-            Self.log.warning(
-                "Could not measure export content height: \(error.localizedDescription, privacy: .public); using paper height"
-            )
+        if let number = measuredHeight as? NSNumber {
+            contentHeight = CGFloat(truncating: number)
         }
-
         contentHeight = max(ceil(contentHeight), 1)
-        webView.setFrameSize(NSSize(width: width, height: contentHeight))
+        // The web view is the host window's content view; resizing the window
+        // lays out the whole document before printing.
+        hostWindow?.setContentSize(NSSize(width: width, height: contentHeight))
         webView.layoutSubtreeIfNeeded()
         Self.log.debug("Export web view sized to \(width, privacy: .public)×\(contentHeight, privacy: .public) pt")
     }
@@ -190,22 +211,48 @@ import WebKit
 
         let operation = webView.printOperation(with: printInfo)
         operation.showsPrintPanel = false
-        operation.showsProgressPanel = true
+        operation.showsProgressPanel = false
         operation.view?.frame = webView.bounds
 
-        let ok = operation.run()
-        if ok {
-            Self.log.debug("Export print succeeded → \(self.destinationURL.path, privacy: .public)")
-        } else {
-            Self.log.debug("Export print failed")
+        // Use runModal(for:…), NOT run(): WKWebView renders print content
+        // asynchronously, and run() returns before that finishes, producing
+        // blank pages with the correct page count. runModal lets WebKit's async
+        // render complete and reports the result via the didRun callback. This
+        // matches the working live print path (MarkdownWebView.printDocument).
+        guard let window = hostWindow else {
+            let ok = operation.run()
+            finish(ok ? .success(destinationURL) : .failure(ExportError.printFailed))
+            return
         }
-        finish(ok ? .success(destinationURL) : .failure(ExportError.printFailed))
+        operation.runModal(for: window,
+                           delegate: self,
+                           didRun: #selector(printOperationDidRun(_:success:contextInfo:)),
+                           contextInfo: nil)
+    }
+
+    // NSPrintOperation runs WKWebView's modal print on a background NSThread and
+    // calls this didRun callback from that thread — so it must be `nonisolated`
+    // (a @MainActor callback trips the executor assertion and crashes). Hop back
+    // to the main actor to finish.
+    @objc nonisolated private func printOperationDidRun(_ operation: NSPrintOperation,
+                                                        success: Bool,
+                                                        contextInfo: UnsafeMutableRawPointer?) {
+        let url = destinationURL
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            Self.log.debug("Export print finished, success=\(success, privacy: .public) → \(url.path, privacy: .public)")
+            self.finish(success ? .success(url) : .failure(ExportError.printFailed))
+        }
     }
 
     private func finish(_ result: Result<URL, Error>) {
         timeoutWork?.cancel()
         webView.configuration.userContentController
             .removeScriptMessageHandler(forName: Self.hostMessageName)
+        // Tear down the off-screen host window.
+        hostWindow?.orderOut(nil)
+        hostWindow?.contentView = nil
+        hostWindow = nil
         completion?(result)
         completion = nil
         selfRetain = nil
