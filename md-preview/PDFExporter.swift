@@ -4,6 +4,7 @@
 //
 
 import Cocoa
+import os
 import WebKit
 
 /// Renders a Markdown document into a dedicated offscreen WKWebView and writes
@@ -12,9 +13,11 @@ import WebKit
 /// waits for a `renderComplete` host message (with a hard timeout) so async
 /// renderers finish before printing, then runs a silent NSPrintOperation.
 ///
-/// The instance retains itself for the duration of the export, so callers can
-/// fire-and-forget after constructing it.
-@MainActor final class PDFExporter: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+/// The instance retains itself via `selfRetain` for the duration of the export
+/// so callers can fire-and-forget after constructing it. Script messages are
+/// routed through a weak `MessageProxy` so `WKUserContentController` does not
+/// form a strong-ref cycle with the exporter.
+@MainActor final class PDFExporter: NSObject, WKNavigationDelegate {
 
     enum ExportError: LocalizedError {
         case renderFailed
@@ -29,13 +32,18 @@ import WebKit
     }
 
     private static let hostMessageName = "mdPreviewHost"
-    private static let readinessTimeout: TimeInterval = 8.0
+    /// Offscreen export can stall on rAF-throttled renderers (hljs, Mermaid);
+    /// 30 s covers worst-case Mermaid-heavy docs without returning too early.
+    private static let readinessTimeout: TimeInterval = 30.0
+    private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "doc.md-preview",
+                                    category: "export")
 
     private let webView: WKWebView
     private let assetScheme = MarkdownAssetScheme()
+    private let messageProxy = MessageProxy()
     private let destinationURL: URL
     private let paperSize: PaperSize
-    private var completion: ((Result<URL, Error>) -> Void)?
+    private var completion: (@MainActor (Result<URL, Error>) -> Void)?
     private var didFinish = false
     private var timeoutWork: DispatchWorkItem?
     private var selfRetain: PDFExporter?
@@ -43,7 +51,7 @@ import WebKit
     init(markdown: String,
          assetBaseURL: URL?,
          destinationURL: URL,
-         completion: @escaping (Result<URL, Error>) -> Void) {
+         completion: @escaping @MainActor (Result<URL, Error>) -> Void) {
         self.destinationURL = destinationURL
         self.completion = completion
         self.paperSize = PaperSize.forRegion(Locale.current.region?.identifier)
@@ -60,10 +68,11 @@ import WebKit
         super.init()
 
         assetScheme.setBaseURL(assetBaseURL)
-        webView.configuration.userContentController.add(self, name: Self.hostMessageName)
+        messageProxy.owner = self
+        webView.configuration.userContentController.add(messageProxy, name: Self.hostMessageName)
         webView.navigationDelegate = self
-        // Force light so prefers-color-scheme (CSS + Mermaid matchMedia) resolves
-        // light, giving print-friendly output regardless of system appearance.
+        // Required (not just CSS): Mermaid reads `prefers-color-scheme` via
+        // `matchMedia`, which follows NSAppearance — `.aqua` forces light diagrams.
         webView.appearance = NSAppearance(named: .aqua)
 
         let rendered = MarkdownHTML.render(
@@ -74,23 +83,26 @@ import WebKit
         )
 
         selfRetain = self
-        webView.loadHTMLString(rendered.html, baseURL: nil)
-        scheduleTimeout()
+        ExportContentRules.install(on: config.userContentController) { [weak self] in
+            guard let self else { return }
+            self.webView.loadHTMLString(rendered.html, baseURL: nil)
+            self.scheduleTimeout()
+        }
     }
 
     private func scheduleTimeout() {
         let work = DispatchWorkItem { [weak self] in
-            // Best-effort: a stuck renderer still exports what rendered.
-            MainActor.assumeIsolated { self?.printToFile() }
+            guard let self else { return }
+            // Best-effort contract: a stuck renderer still exports whatever
+            // rendered; the completion type stays `.success` (no partial flag).
+            Self.log.warning("Export readiness timed out after \(Self.readinessTimeout)s; exporting best-effort partial render")
+            self.printToFile()
         }
         timeoutWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.readinessTimeout, execute: work)
     }
 
-    // MARK: - WKScriptMessageHandler
-
-    func userContentController(_ userContentController: WKUserContentController,
-                               didReceive message: WKScriptMessage) {
+    fileprivate func didReceiveHostMessage(_ message: WKScriptMessage) {
         guard message.name == Self.hostMessageName,
               let body = message.body as? [String: Any],
               body["kind"] as? String == "renderComplete" else { return }
@@ -100,12 +112,14 @@ import WebKit
     // MARK: - WKNavigationDelegate
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        Self.log.error("Export navigation failed: \(error.localizedDescription, privacy: .public)")
         finish(.failure(ExportError.renderFailed))
     }
 
     func webView(_ webView: WKWebView,
                  didFailProvisionalNavigation navigation: WKNavigation!,
                  withError error: Error) {
+        Self.log.error("Export provisional navigation failed: \(error.localizedDescription, privacy: .public)")
         finish(.failure(ExportError.renderFailed))
     }
 
@@ -114,8 +128,9 @@ import WebKit
     private func printToFile() {
         guard !didFinish else { return }
         didFinish = true
-        timeoutWork?.cancel()
 
+        // Clean-slate print settings — not `NSPrintInfo.shared.copy()` — so
+        // export ignores the user's printer defaults and margin presets.
         let printInfo = NSPrintInfo(dictionary: [
             .jobDisposition: NSPrintInfo.JobDisposition.save,
             .jobSavingURL: destinationURL,
@@ -135,18 +150,36 @@ import WebKit
 
         let operation = webView.printOperation(with: printInfo)
         operation.showsPrintPanel = false
-        operation.showsProgressPanel = false
+        operation.showsProgressPanel = true
         operation.view?.frame = webView.bounds
 
         let ok = operation.run()
+        if ok {
+            Self.log.debug("Export print succeeded → \(self.destinationURL.path, privacy: .public)")
+        } else {
+            Self.log.debug("Export print failed")
+        }
         finish(ok ? .success(destinationURL) : .failure(ExportError.printFailed))
     }
 
     private func finish(_ result: Result<URL, Error>) {
+        timeoutWork?.cancel()
         webView.configuration.userContentController
             .removeScriptMessageHandler(forName: Self.hostMessageName)
         completion?(result)
         completion = nil
         selfRetain = nil
+    }
+}
+
+// Receives postMessage() from the export page's host-bridge script. Held weakly
+// by the WKUserContentController via this proxy so PDFExporter's lifetime is
+// governed solely by `selfRetain`, not a config retain cycle.
+private final class MessageProxy: NSObject, WKScriptMessageHandler {
+    weak var owner: PDFExporter?
+
+    func userContentController(_ userContentController: WKUserContentController,
+                               didReceive message: WKScriptMessage) {
+        owner?.didReceiveHostMessage(message)
     }
 }
