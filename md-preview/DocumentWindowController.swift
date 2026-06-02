@@ -51,6 +51,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private var searchMode: SearchMode = .contains
     private var pendingFindWork: DispatchWorkItem?
     private static let findDebounceDelay: TimeInterval = 0.10
+    private var isExporting = false
 
     private var documentWindow: NSWindow {
         guard let window else {
@@ -401,12 +402,27 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         syncSidebarMenuState()
     }
 
+    private var canExportPDF: Bool {
+        !(currentMarkdown?.isEmpty ?? true) && !isExporting
+    }
+
+    func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
+        if item.action == #selector(exportMarkdownAsPDF(_:)) {
+            return canExportPDF
+        }
+        return true
+    }
+
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         syncSidebarMenuState()
         if menuItem.action == #selector(exportMarkdownAsPDF(_:)) {
-            return !(currentMarkdown?.isEmpty ?? true)
+            return validateUserInterfaceItem(menuItem)
         }
         return true
+    }
+
+    private func refreshExportValidation() {
+        documentWindow.toolbar?.validateVisibleItems()
     }
 
     private func makeInspectorItem() -> NSToolbarItem {
@@ -471,13 +487,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         item.image = NSImage(systemSymbolName: "arrow.down.document",
                              accessibilityDescription: "Export as PDF")
         item.isBordered = true
+        // Explicit target=self: export is orchestrated here (save panel + PDFExporter).
+        // Print leaves target nil so the action follows the responder chain to
+        // MainSplitViewController, which owns the on-screen WKWebView.
         item.target = self
         item.action = #selector(exportMarkdownAsPDF(_:))
         return item
     }
 
     @objc func exportMarkdownAsPDF(_ sender: Any?) {
-        guard let markdown = currentMarkdown, !markdown.isEmpty else {
+        guard canExportPDF, let markdown = currentMarkdown, !markdown.isEmpty else {
             NSSound.beep()
             return
         }
@@ -487,12 +506,19 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         panel.nameFieldStringValue = "\(baseName).pdf"
         panel.beginSheetModal(for: documentWindow) { [weak self] response in
             guard let self, response == .OK, let destination = panel.url else { return }
+            guard self.canExportPDF else { return }
+            self.isExporting = true
+            self.refreshExportValidation()
             let assetBaseURL = self.currentFileURL?.deletingLastPathComponent()
             _ = PDFExporter(markdown: markdown,
                             assetBaseURL: assetBaseURL,
                             destinationURL: destination) { [weak self] result in
-                guard let self, case .failure(let error) = result else { return }
-                NSAlert(error: error).beginSheetModal(for: self.documentWindow)
+                guard let self else { return }
+                self.isExporting = false
+                self.refreshExportValidation()
+                if case .failure(let error) = result {
+                    NSAlert(error: error).beginSheetModal(for: self.documentWindow)
+                }
             }
         }
     }
