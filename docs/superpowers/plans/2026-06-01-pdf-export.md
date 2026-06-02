@@ -12,7 +12,7 @@
 
 ## Background the engineer needs
 
-- The Xcode project uses **file-system-synchronized groups** (Xcode 16). Any `.swift` file placed in `md-preview/` is automatically compiled into the `md-preview` app target. **You never edit `project.pbxproj`.**
+- The Xcode project uses **file-system-synchronized groups** (Xcode 16). Any `.swift` file placed in `md-preview/` is automatically compiled into **both** the `md-preview` app target and the embedded `quick-look` extension. Files that use app-only APIs must be excluded from the extension via the quick-look target's `membershipExceptions` in `project.pbxproj` (as was required for `MarkdownExportAssets.swift`).
 - Pure Foundation helpers are unit-tested by a separate SwiftPM package at `tests/swift-tests/`. Source files live in `md-preview/` and are **symlinked** into `tests/swift-tests/Sources/<Target>/`. Run tests with: `swift test --package-path tests/swift-tests`.
 - `MarkdownHTML.render(...)` (`md-preview/MarkdownHTML.swift`) emits a full HTML document. It already computes `containsMath`, `containsMermaid`, `containsCode` on its `RenderedHTML` result. It has a `VendorLoading` mode: `.inline` embeds all renderer JS (self-contained, what we use for export); `.lazy` is for the live app.
 - Renderers signal completion in the DOM: KaTeX sets `data-math-done="1"` on each `.math`; highlight.js sets `data-hljs-done="1"` on each `pre code[class*="language-"]`; Mermaid sets `data-mm-done="1"` on each `.mermaid` (or adds `.mermaid-error` to the figure).
