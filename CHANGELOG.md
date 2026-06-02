@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.27] – 2026-06-01
+
+Markdown Preview can now export the document you are viewing straight to a clean, print-ready PDF.
+
+### Added
+
+- **Export as PDF.** A new File ▸ Export as PDF… command (⌥⌘P), plus a customizable toolbar button, renders the open document to a paginated PDF and saves it wherever you choose. Export runs against a fresh off-screen copy of the document, so the result is unaffected by your current zoom, scroll position, or in-document search highlights.
+- **Print-ready output.** Exported PDFs always use a light theme regardless of your system appearance, automatically use US Letter or A4 based on your region, and wait for math (KaTeX), Mermaid diagrams, and syntax highlighting to finish rendering before saving so nothing is captured half-drawn. On-screen extras like code-copy buttons and diagram zoom controls are left out of the page.
+
+### Security
+
+- **Isolated export rendering.** The off-screen view used to generate a PDF is restricted to the document's own local assets — it cannot load remote images, scripts, or other network resources while exporting.
+
 ## [0.0.26] – 2026-05-31
 
 Markdown Preview now works more naturally as a multi-window document app, can browse Markdown folders directly, and includes app handoff and command-line installation tools for local workflows.
