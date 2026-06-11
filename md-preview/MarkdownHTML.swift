@@ -1654,6 +1654,7 @@ nonisolated enum MarkdownHTML {
         --link: #0066cc;
         --aside-bg: #f5f5f7;
         --aside-border: #696969;
+        --quote-border: #d2d2d7;
         --code-bg: #f5f5f7;
         --grid: #d2d2d7;
     }
@@ -1664,6 +1665,7 @@ nonisolated enum MarkdownHTML {
             --link: #2997ff;
             --aside-bg: #323232;
             --aside-border: #9a9a9e;
+            --quote-border: #6e6e73;
             --code-bg: #2A2828;
             --grid: #424245;
         }
@@ -2007,11 +2009,10 @@ nonisolated enum MarkdownHTML {
     .katex { direction: ltr !important; unicode-bidi: isolate; }
 
     blockquote {
-        margin: 1.6em 0 0;
-        padding: 14px 16px;
-        background: var(--aside-bg);
-        border-radius: 15px;
-        color: var(--text);
+        margin: 1.2em 0 0;
+        padding: 0 0 0 1em;
+        border-left: 4px solid var(--quote-border);
+        color: var(--secondary);
     }
     blockquote > *:first-child { margin-top: 0; }
 

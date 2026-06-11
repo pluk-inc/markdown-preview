@@ -83,6 +83,31 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         XCTAssertFalse(html.contains("markdown-alert"), "no alert wrapper for unknown tag: \(html)")
     }
 
+    func testQuotedBlankLinesRenderAsPlainBlockquote() {
+        let html = EscapingHTMLFormatter.format("""
+        > All canon is stored as markdown files.
+        >
+        > Markdown files are the authoritative source of truth.
+        >
+        > Agent modifications must be applied through patches whenever possible.
+        >
+        > Generated content is disposable.
+        >
+        > Canon is permanent.
+        """)
+
+        XCTAssertTrue(html.contains("<blockquote>"), "expected plain blockquote wrapper: \(html)")
+        XCTAssertTrue(
+            html.contains("<p>All canon is stored as markdown files.</p>"),
+            "expected first quote paragraph: \(html)"
+        )
+        XCTAssertTrue(
+            html.contains("<p>Canon is permanent.</p>"),
+            "expected final quote paragraph: \(html)"
+        )
+        XCTAssertFalse(html.contains("<pre><code"), "blockquote must not render as a code block: \(html)")
+    }
+
     func testGitHubAlertEscapesPlainTextInCustomTitle() {
         // Ampersands and lone `<`/`>` in text should round-trip as entities.
         // Inline HTML (e.g. <script>) is parsed as InlineHTML and passed
