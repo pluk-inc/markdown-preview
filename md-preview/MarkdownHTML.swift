@@ -755,7 +755,7 @@ nonisolated enum MarkdownHTML {
             return document.activeElement instanceof Element ? document.activeElement : null;
         }
 
-        function spaceBelongsToFocusedControl(target) {
+        function keyBelongsToFocusedControl(target) {
             const el = elementForEventTarget(target);
             if (!el) return false;
             if (el.isContentEditable) return true;
@@ -778,13 +778,24 @@ nonisolated enum MarkdownHTML {
             ].join(','));
         }
 
-        document.addEventListener('keydown', (event) => {
-            const isSpace = event.key === ' ' || event.key === 'Spacebar' || event.code === 'Space';
-            if (!isSpace || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
-            if (spaceBelongsToFocusedControl(event.target)) return;
+        function handlePreviewScrollKey(event) {
+            if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return false;
+            if (keyBelongsToFocusedControl(event.target)) return false;
 
-            const value = event.shiftKey ? 'pageUp' : 'pageDown';
-            if (post({ kind: 'scroll', value })) {
+            const isSpace = event.key === ' ' || event.key === 'Spacebar' || event.code === 'Space';
+            if (isSpace) {
+                return post({ kind: 'scroll', value: event.shiftKey ? 'pageUp' : 'pageDown' });
+            }
+
+            if (event.shiftKey) return false;
+            const key = (event.key || '').toLowerCase();
+            if (key === 'j') return post({ kind: 'scroll', value: 'lineDown' });
+            if (key === 'k') return post({ kind: 'scroll', value: 'lineUp' });
+            return false;
+        }
+
+        document.addEventListener('keydown', (event) => {
+            if (handlePreviewScrollKey(event)) {
                 event.preventDefault();
                 event.stopPropagation();
             }

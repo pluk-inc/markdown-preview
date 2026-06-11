@@ -251,6 +251,10 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         case "scroll":
             guard let value = dict["value"] as? String else { return }
             switch value {
+            case "lineUp":
+                performScrollAction(.lineUp)
+            case "lineDown":
+                performScrollAction(.lineDown)
             case "pageUp":
                 performScrollAction(.pageUp)
             case "pageDown":
