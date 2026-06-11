@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.0.27] – 2026-06-11
+
+Markdown Preview now includes a native Appearance menu for choosing Automatic, Light, or Dark mode, adds Vim-style preview scrolling, and restores standard blockquote styling.
+
+### Added
+
+- **Appearance menu.** View > Appearance now lets you choose Automatic, Light, or Dark mode, persists the selection, and refreshes open previews so WebView content and Mermaid diagrams follow the selected theme ([#148](https://github.com/pluk-inc/markdown-preview/pull/148), [#115](https://github.com/pluk-inc/markdown-preview/issues/115)).
+- **Vim-style preview scrolling.** Pressing `j` and `k` in the rendered preview now scrolls down and up one line in read mode, while focused controls and editable content keep their normal keyboard behavior ([#147](https://github.com/pluk-inc/markdown-preview/pull/147), [#142](https://github.com/pluk-inc/markdown-preview/issues/142)).
+
+### Fixed
+
+- **Regular blockquotes no longer look like code blocks.** Standard Markdown blockquotes now use a left rule and subdued text, keeping them visually distinct from GitHub-style alert callouts and code blocks ([#146](https://github.com/pluk-inc/markdown-preview/pull/146), [#145](https://github.com/pluk-inc/markdown-preview/issues/145)).
+
+### Contributors
+
+Thanks to the external reporters who helped improve this release:
+
+- [@rsalesas](https://github.com/rsalesas) — requested a light/dark appearance setting ([#115](https://github.com/pluk-inc/markdown-preview/issues/115))
+- [@rtuszik](https://github.com/rtuszik) — requested `j`/`k` preview scrolling ([#142](https://github.com/pluk-inc/markdown-preview/issues/142))
+- [@odrobnik](https://github.com/odrobnik) — reported blockquotes being styled like code blocks ([#145](https://github.com/pluk-inc/markdown-preview/issues/145))
+
 ## [0.0.26] – 2026-05-31
 
 Markdown Preview now works more naturally as a multi-window document app, can browse Markdown folders directly, and includes app handoff and command-line installation tools for local workflows.
