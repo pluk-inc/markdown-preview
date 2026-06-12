@@ -9,6 +9,7 @@ import Cocoa
 import UniformTypeIdentifiers
 
 extension NSToolbarItem.Identifier {
+    static let openActions = NSToolbarItem.Identifier("OpenActions")
     static let openWith = NSToolbarItem.Identifier("OpenWith")
     static let openInLLM = NSToolbarItem.Identifier("OpenInLLM")
     static let inspector = NSToolbarItem.Identifier("Inspector")
@@ -21,8 +22,8 @@ extension NSToolbarItem.Identifier {
 }
 
 private extension Array where Element == NSToolbarItem.Identifier {
-    mutating func insertAfterOpenWith(_ identifier: NSToolbarItem.Identifier) {
-        guard let index = firstIndex(of: .openWith) else {
+    mutating func insertAfterOpenActions(_ identifier: NSToolbarItem.Identifier) {
+        guard let index = firstIndex(of: .openActions) else {
             append(identifier)
             return
         }
@@ -36,6 +37,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private var currentMarkdown: String?
     private var fileWatcher: FileWatcher?
     private var isInspectorToggleSelected = false
+    private weak var openActionsItem: NSMenuToolbarItem?
     private weak var openWithItem: NSMenuToolbarItem?
     private weak var openInLLMItem: NSMenuToolbarItem?
     private weak var inspectorItem: NSToolbarItem?
@@ -115,6 +117,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         NSApp.activate()
         refreshOpenWithItem()
         refreshOpenInLLMItem()
+        refreshOpenActionsItem()
         if let fileURL {
             NSDocumentController.shared.noteNewRecentDocumentURL(fileURL)
             renderCurrentDocument(text: markdown, fileURL: fileURL)
@@ -144,6 +147,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         NSDocumentController.shared.noteNewRecentDocumentURL(url)
         refreshOpenWithItem()
         refreshOpenInLLMItem()
+        refreshOpenActionsItem()
         loadFile(at: url)
         startWatching(url)
         offerToBecomeDefaultHandlerIfNeeded()
@@ -172,6 +176,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         documentWindow.title = newURL.lastPathComponent
         NSDocumentController.shared.noteNewRecentDocumentURL(newURL)
         refreshOpenWithItem()
+        refreshOpenActionsItem()
         startWatching(newURL)
         if let markdown = currentMarkdown {
             (documentWindow.contentViewController as? MainSplitViewController)?
@@ -207,21 +212,17 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        var identifiers: [NSToolbarItem.Identifier] = [
+        [
             .flexibleSpace,
             .sidebarMenu,
             .sidebarTrackingSeparator,
-            .openWith,
+            .openActions,
             .space,
             .zoom,
             .inspector,
             .share,
             .search
         ]
-        if hasLLMTargetsAvailable {
-            identifiers.insertAfterOpenWith(.openInLLM)
-        }
-        return identifiers
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -230,6 +231,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             .sidebarTrackingSeparator,
             .flexibleSpace,
             .space,
+            .openActions,
             .openWith,
             .inspector,
             .share,
@@ -239,7 +241,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             .zoom
         ]
         if hasLLMTargetsAvailable {
-            identifiers.insertAfterOpenWith(.openInLLM)
+            identifiers.insertAfterOpenActions(.openInLLM)
         }
         return identifiers
     }
@@ -249,6 +251,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         switch itemIdentifier {
         case .sidebarMenu: return makeSidebarMenuItem(willBeInsertedIntoToolbar: flag)
+        case .openActions: return makeOpenActionsItem()
         case .openWith: return makeOpenWithItem()
         case .openInLLM:
             guard hasLLMTargetsAvailable else { return nil }
@@ -511,15 +514,207 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 accessibilityDescription: "Copied")
     }
 
+    // MARK: - Open
+
+    private static let defaultOpenActionKindKey = "MarkdownPreview.defaultOpenActionKind"
+
+    private enum OpenActionKind: String {
+        case editor
+        case llm
+    }
+
+    private enum OpenActionSelection {
+        case editor(EditorCandidate)
+        case llm(LLMCandidate)
+    }
+
+    private func makeOpenActionsItem() -> NSToolbarItem {
+        let item = NSMenuToolbarItem(itemIdentifier: .openActions)
+        item.label = "Open"
+        item.paletteLabel = "Open"
+        item.toolTip = "Open document in another app"
+        item.target = self
+        item.action = #selector(openActionsPrimaryAction(_:))
+        item.showsIndicator = true
+        openActionsItem = item
+        refreshOpenActionsItem()
+        return item
+    }
+
+    private func refreshOpenActionsItem() {
+        let editors = currentFileURL.map { editorCandidates(for: $0) } ?? []
+        let defaultEditor = resolveDefaultEditor(among: editors)
+        let llmApps = llmCandidates()
+        let defaultLLM = resolveDefaultLLM(among: llmApps)
+        let defaultAction = resolveDefaultOpenAction(editors: editors,
+                                                     defaultEditor: defaultEditor,
+                                                     llmApps: llmApps,
+                                                     defaultLLM: defaultLLM)
+
+        let primaryTitle = openActionsTitle(for: defaultAction)
+
+        openActionsItem?.label = "Open"
+        openActionsItem?.image = openActionsImage(for: defaultAction)
+        openActionsItem?.toolTip = primaryTitle ?? "Open document in another app"
+        openActionsItem?.menu = buildOpenActionsMenu(editorCandidates: editors,
+                                                     llmCandidates: llmApps,
+                                                     defaultAction: defaultAction)
+    }
+
+    private func openActionsTitle(for selection: OpenActionSelection?) -> String? {
+        switch selection {
+        case .editor(let editor):
+            return "Open in \(displayName(for: editor.url))"
+        case .llm(let candidate):
+            return "Open in \(candidate.target.title)"
+        case nil:
+            return nil
+        }
+    }
+
+    private func openActionsImage(for selection: OpenActionSelection?) -> NSImage {
+        switch selection {
+        case .editor(let editor):
+            let editorURL = editor.url
+            return openWithImage(for: editorURL)
+        case .llm(let candidate):
+            return openInLLMImage(for: candidate)
+        case nil:
+            return openWithImage(for: nil)
+        }
+    }
+
+    private func resolveDefaultOpenAction(editors: [EditorCandidate],
+                                          defaultEditor: EditorCandidate?,
+                                          llmApps: [LLMCandidate],
+                                          defaultLLM: LLMCandidate?) -> OpenActionSelection? {
+        let persistedKind = UserDefaults.standard.string(forKey: Self.defaultOpenActionKindKey)
+            .flatMap(OpenActionKind.init(rawValue:))
+
+        switch persistedKind {
+        case .llm:
+            if let defaultLLM {
+                return .llm(defaultLLM)
+            }
+            if let defaultEditor {
+                return .editor(defaultEditor)
+            }
+        case .editor, nil:
+            if let defaultEditor {
+                return .editor(defaultEditor)
+            }
+            if let defaultLLM {
+                return .llm(defaultLLM)
+            }
+        }
+        return nil
+    }
+
+    private func buildOpenActionsMenu(editorCandidates: [EditorCandidate],
+                                      llmCandidates: [LLMCandidate],
+                                      defaultAction: OpenActionSelection?) -> NSMenu {
+        let menu = NSMenu()
+
+        guard currentFileURL != nil else {
+            menu.addItem(disabledItem("No document open"))
+            return menu
+        }
+
+        if editorCandidates.isEmpty && llmCandidates.isEmpty {
+            menu.addItem(disabledItem("No apps available"))
+            return menu
+        }
+
+        if !editorCandidates.isEmpty {
+            let header = NSMenuItem()
+            header.title = "Editors"
+            header.isEnabled = false
+            menu.addItem(header)
+
+            for candidate in editorCandidates {
+                let item = NSMenuItem(
+                    title: displayName(for: candidate.url),
+                    action: #selector(pickEditor(_:)),
+                    keyEquivalent: ""
+                )
+                let icon = NSWorkspace.shared.icon(forFile: candidate.url.path)
+                icon.size = NSSize(width: 16, height: 16)
+                item.image = icon
+                item.target = self
+                item.representedObject = candidate
+                if case .editor(let selectedEditor) = defaultAction,
+                   sameEditor(candidate, selectedEditor) {
+                    item.state = .on
+                }
+                menu.addItem(item)
+            }
+        }
+
+        if !llmCandidates.isEmpty {
+            if !editorCandidates.isEmpty {
+                menu.addItem(.separator())
+            }
+
+            let header = NSMenuItem()
+            header.title = "AI Apps"
+            header.isEnabled = false
+            menu.addItem(header)
+
+            for candidate in llmCandidates {
+                let item = NSMenuItem(
+                    title: candidate.target.title,
+                    action: #selector(pickLLMTarget(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = candidate.target.id
+                let icon = NSWorkspace.shared.icon(forFile: candidate.appURL.path)
+                icon.size = NSSize(width: 16, height: 16)
+                item.image = icon
+                if case .llm(let selectedLLM) = defaultAction,
+                   candidate.target.id == selectedLLM.target.id {
+                    item.state = .on
+                }
+                menu.addItem(item)
+            }
+        }
+
+        return menu
+    }
+
+    @objc private func openActionsPrimaryAction(_ sender: Any?) {
+        guard let fileURL = currentFileURL else { return }
+        let editors = editorCandidates(for: fileURL)
+        let defaultEditor = resolveDefaultEditor(among: editors)
+        let llmApps = llmCandidates()
+        let defaultLLM = resolveDefaultLLM(among: llmApps)
+        guard let defaultAction = resolveDefaultOpenAction(editors: editors,
+                                                           defaultEditor: defaultEditor,
+                                                           llmApps: llmApps,
+                                                           defaultLLM: defaultLLM) else {
+            NSSound.beep()
+            return
+        }
+
+        switch defaultAction {
+        case .editor(let editor):
+            launch(fileURL, with: editor.url)
+        case .llm(let target):
+            openInLLM(target, fileURL: fileURL)
+        }
+    }
+
     // MARK: - Open in LLM
 
     private static let defaultLLMTargetIDKey = "MarkdownPreview.defaultLLMTargetID"
     private static let llmDeepLinkCharacterLimit = 12_000
+    private static let claudeColdLaunchDeepLinkDelay: TimeInterval = 1.25
+    private static let chatGPTColdLaunchFileOpenDelay: TimeInterval = 1.25
 
     private enum LLMHandoff {
         case codexDesktop
         case claudeCodeDesktop
-        case chatGPTUniversalLink
+        case chatGPTDocumentOpen
         case copyAndOpen
     }
 
@@ -552,7 +747,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             id: "chatgpt",
             title: "ChatGPT",
             bundleIDs: ["com.openai.chat"],
-            handoff: .chatGPTUniversalLink
+            handoff: .chatGPTDocumentOpen
         )
     ]
 
@@ -676,35 +871,101 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
               let candidate = llmCandidates().first(where: { $0.target.id == targetID }),
               let fileURL = currentFileURL else { return }
         UserDefaults.standard.set(candidate.target.id, forKey: Self.defaultLLMTargetIDKey)
+        UserDefaults.standard.set(OpenActionKind.llm.rawValue, forKey: Self.defaultOpenActionKindKey)
         refreshOpenInLLMItem()
+        refreshOpenActionsItem()
         openInLLM(candidate, fileURL: fileURL)
     }
 
     private func openInLLM(_ candidate: LLMCandidate, fileURL: URL) {
-        let prompt = llmPrompt(for: fileURL)
         let folderURL = fileURL.deletingLastPathComponent()
 
         switch candidate.target.handoff {
         case .codexDesktop:
+            let prompt = llmPathPrompt(for: fileURL)
             if let url = codexDeepLink(prompt: prompt, folderURL: folderURL) {
                 NSWorkspace.shared.open(url)
             } else {
                 copyPromptAndOpen(candidate: candidate, prompt: prompt)
             }
-        case .claudeCodeDesktop where prompt.count <= Self.llmDeepLinkCharacterLimit:
-            if let url = claudeCodeDeepLink(prompt: prompt, folderURL: folderURL, fileURL: fileURL) {
-                NSWorkspace.shared.open(url)
+        case .claudeCodeDesktop:
+            let prompt = llmEmbeddedMarkdownPrompt(for: fileURL)
+            if prompt.count <= Self.llmDeepLinkCharacterLimit,
+               let url = claudeCodeDeepLink(prompt: prompt, folderURL: folderURL) {
+                openDeepLink(url, afterLaunchingIfNeeded: candidate, delay: Self.claudeColdLaunchDeepLinkDelay)
             } else {
                 copyPromptAndOpen(candidate: candidate, prompt: prompt)
             }
-        case .chatGPTUniversalLink:
-            if let url = chatGPTUniversalLink(prompt: prompt) {
-                NSWorkspace.shared.open(url)
-            } else {
-                copyPromptAndOpen(candidate: candidate, prompt: prompt)
-            }
+        case .chatGPTDocumentOpen:
+            openDocumentInChatGPT(fileURL, candidate: candidate)
         default:
+            let prompt = llmPathPrompt(for: fileURL)
             copyPromptAndOpen(candidate: candidate, prompt: prompt)
+        }
+    }
+
+    private func openDeepLink(_ url: URL, afterLaunchingIfNeeded candidate: LLMCandidate, delay: TimeInterval) {
+        guard !isRunning(candidate) else {
+            NSWorkspace.shared.open(url)
+            return
+        }
+
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(
+            at: candidate.appURL,
+            configuration: configuration
+        ) { _, error in
+            if error != nil {
+                NSSound.beep()
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                NSWorkspace.shared.open(url)
+            }
+        }
+    }
+
+    private func openDocumentInChatGPT(_ fileURL: URL, candidate: LLMCandidate) {
+        if isRunning(candidate) {
+            sendDocumentOpenEventToChatGPT(fileURL, candidate: candidate)
+            return
+        }
+
+        let delay = Self.chatGPTColdLaunchFileOpenDelay
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(
+            at: candidate.appURL,
+            configuration: configuration
+        ) { [weak self] _, error in
+            if error != nil {
+                NSSound.beep()
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                self?.sendDocumentOpenEventToChatGPT(fileURL, candidate: candidate)
+            }
+        }
+    }
+
+    private func isRunning(_ candidate: LLMCandidate) -> Bool {
+        candidate.target.bundleIDs.contains { bundleID in
+            !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
+        }
+    }
+
+    private func sendDocumentOpenEventToChatGPT(_ fileURL: URL, candidate: LLMCandidate) {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.open(
+            [fileURL],
+            withApplicationAt: candidate.appURL,
+            configuration: configuration
+        ) { _, error in
+            if error != nil {
+                NSSound.beep()
+            }
         }
     }
 
@@ -732,34 +993,44 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         return components.url
     }
 
-    private func claudeCodeDeepLink(prompt: String, folderURL: URL, fileURL: URL) -> URL? {
+    private func claudeCodeDeepLink(prompt: String, folderURL: URL) -> URL? {
         var components = URLComponents()
         components.scheme = "claude"
         components.host = "code"
         components.path = "/new"
         components.queryItems = [
             URLQueryItem(name: "q", value: prompt),
-            URLQueryItem(name: "folder", value: folderURL.path),
-            URLQueryItem(name: "file", value: fileURL.path)
+            URLQueryItem(name: "folder", value: folderURL.path)
         ]
         return components.url
     }
 
-    private func chatGPTUniversalLink(prompt: String) -> URL? {
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = "chatgpt.com"
-        components.path = "/"
-        components.queryItems = [
-            URLQueryItem(name: "q", value: prompt)
-        ]
-        return components.url
-    }
-
-    private func llmPrompt(for fileURL: URL) -> String {
+    private func llmPathPrompt(for fileURL: URL) -> String {
         """
         Open this Markdown file and use it as the working context:
         \(fileURL.path)
+        """
+    }
+
+    private func llmEmbeddedMarkdownPrompt(for fileURL: URL) -> String {
+        guard let markdown = currentMarkdown
+                ?? (try? String(contentsOf: fileURL, encoding: .utf8)),
+              !markdown.isEmpty else {
+            return llmPathPrompt(for: fileURL)
+        }
+
+        return """
+        Use this Markdown document as the working context.
+
+        The local path is included only as a reference. Do not rely on opening it to read the document contents.
+
+        File name: \(fileURL.lastPathComponent)
+        Local path: \(fileURL.path)
+
+        Markdown content:
+        ````markdown
+        \(markdown)
+        ````
         """
     }
 
@@ -1234,7 +1505,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             UserDefaults.standard.removeObject(forKey: Self.defaultEditorBundleIDKey)
         }
         UserDefaults.standard.set(candidate.url.path, forKey: Self.defaultEditorURLKey)
+        UserDefaults.standard.set(OpenActionKind.editor.rawValue, forKey: Self.defaultOpenActionKindKey)
         refreshOpenWithItem()
+        refreshOpenActionsItem()
         launch(fileURL, with: candidate.url)
     }
 
