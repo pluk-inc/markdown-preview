@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.28] – 2026-06-12
+
+Markdown Preview now has a simpler default Open toolbar action that combines editor and AI app handoffs in one menu.
+
+### Changed
+
+- **Combined Open toolbar action.** The default toolbar now uses one Open button with Editors and AI Apps sections, while the standalone Open With and Open in LLM buttons remain available from toolbar customization ([#150](https://github.com/pluk-inc/markdown-preview/pull/150)).
+- **Selected Open target becomes the primary action.** Choosing an editor or AI app promotes that app to the main Open button and keeps the menu checkmark focused on the active default ([#150](https://github.com/pluk-inc/markdown-preview/pull/150)).
+
+### Fixed
+
+- **AI app handoff is more reliable.** ChatGPT now receives Markdown documents through the app's document-open flow, and Claude handoff includes the Markdown content directly instead of depending on an unsupported file parameter ([#150](https://github.com/pluk-inc/markdown-preview/pull/150)).
+
 ## [0.0.27] – 2026-06-11
 
 Markdown Preview now includes a native Appearance menu for choosing Automatic, Light, or Dark mode, adds Vim-style preview scrolling, and restores standard blockquote styling.
