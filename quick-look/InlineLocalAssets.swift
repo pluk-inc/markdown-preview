@@ -93,7 +93,14 @@ enum InlineLocalAssets {
         // CommonMark renderers percent-encode spaces in image targets;
         // FileManager wants real paths.
         let decoded = src.removingPercentEncoding ?? src
-        return URL(fileURLWithPath: decoded, relativeTo: baseDirectory).standardizedFileURL
+        guard !decoded.isEmpty else { return nil }
+        if decoded.hasPrefix("#") || decoded.hasPrefix("/") { return nil }
+        if hasURLScheme(decoded) { return nil }
+
+        let base = baseDirectory.standardizedFileURL
+        let candidate = URL(fileURLWithPath: decoded, relativeTo: base).standardizedFileURL
+        guard isDescendantOrSame(candidate, of: base) else { return nil }
+        return candidate
     }
 
     private static func hasURLScheme(_ value: String) -> Bool {
@@ -106,5 +113,11 @@ enum InlineLocalAssets {
         return scheme.allSatisfy { c in
             c.isLetter || c.isNumber || c == "+" || c == "." || c == "-"
         }
+    }
+
+    private static func isDescendantOrSame(_ candidate: URL, of baseDirectory: URL) -> Bool {
+        let candidatePath = candidate.standardizedFileURL.path
+        let basePath = baseDirectory.standardizedFileURL.path
+        return candidatePath == basePath || candidatePath.hasPrefix(basePath + "/")
     }
 }

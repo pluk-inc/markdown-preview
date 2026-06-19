@@ -104,6 +104,39 @@ final class InlineLocalAssetsTests: XCTestCase {
         XCTAssertEqual(result.html, html)
     }
 
+    func testParentDirectoryTraversalIsLeftAlone() {
+        let html = #"<img src="../secret.png">"#
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: html,
+            baseDirectory: baseDir,
+            reader: { _ in XCTFail("reader must not be called for parent traversal"); return Data() }
+        )
+        XCTAssertEqual(result.html, html)
+        XCTAssertTrue(result.attachments.isEmpty)
+    }
+
+    func testPercentEncodedAbsolutePathIsLeftAlone() {
+        let html = #"<img src="%2Fetc%2Fpasswd">"#
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: html,
+            baseDirectory: baseDir,
+            reader: { _ in XCTFail("reader must not be called for encoded absolute path"); return Data() }
+        )
+        XCTAssertEqual(result.html, html)
+        XCTAssertTrue(result.attachments.isEmpty)
+    }
+
+    func testPercentEncodedSchemeIsLeftAlone() {
+        let html = #"<img src="file%3A%2F%2F%2Fetc%2Fpasswd">"#
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: html,
+            baseDirectory: baseDir,
+            reader: { _ in XCTFail("reader must not be called for encoded URL scheme"); return Data() }
+        )
+        XCTAssertEqual(result.html, html)
+        XCTAssertTrue(result.attachments.isEmpty)
+    }
+
     func testSingleQuotedRawHTMLImageLeftAlone() {
         let html = #"<img src='images/local.png'>"#
         let result = InlineLocalAssets.rewriteRelativeImages(
