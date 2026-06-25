@@ -12,6 +12,39 @@ Markdown Preview can now export the document you are viewing straight to a clean
 ### Security
 
 - **Isolated export rendering.** The off-screen view used to generate a PDF is restricted to the document's own local assets — it cannot load remote images, scripts, or other network resources while exporting.
+## [0.0.28] – 2026-06-12
+
+Markdown Preview now has a simpler default Open toolbar action that combines editor and AI app handoffs in one menu.
+
+### Changed
+
+- **Combined Open toolbar action.** The default toolbar now uses one Open button with Editors and AI Apps sections, while the standalone Open With and Open in LLM buttons remain available from toolbar customization ([#150](https://github.com/pluk-inc/markdown-preview/pull/150)).
+- **Selected Open target becomes the primary action.** Choosing an editor or AI app promotes that app to the main Open button and keeps the menu checkmark focused on the active default ([#150](https://github.com/pluk-inc/markdown-preview/pull/150)).
+
+### Fixed
+
+- **AI app handoff is more reliable.** ChatGPT now receives Markdown documents through the app's document-open flow, and Claude handoff includes the Markdown content directly instead of depending on an unsupported file parameter ([#150](https://github.com/pluk-inc/markdown-preview/pull/150)).
+
+## [0.0.27] – 2026-06-11
+
+Markdown Preview now includes a native Appearance menu for choosing Automatic, Light, or Dark mode, adds Vim-style preview scrolling, and restores standard blockquote styling.
+
+### Added
+
+- **Appearance menu.** View > Appearance now lets you choose Automatic, Light, or Dark mode, persists the selection, and refreshes open previews so WebView content and Mermaid diagrams follow the selected theme ([#148](https://github.com/pluk-inc/markdown-preview/pull/148), [#115](https://github.com/pluk-inc/markdown-preview/issues/115)).
+- **Vim-style preview scrolling.** Pressing `j` and `k` in the rendered preview now scrolls down and up one line in read mode, while focused controls and editable content keep their normal keyboard behavior ([#147](https://github.com/pluk-inc/markdown-preview/pull/147), [#142](https://github.com/pluk-inc/markdown-preview/issues/142)).
+
+### Fixed
+
+- **Regular blockquotes no longer look like code blocks.** Standard Markdown blockquotes now use a left rule and subdued text, keeping them visually distinct from GitHub-style alert callouts and code blocks ([#146](https://github.com/pluk-inc/markdown-preview/pull/146), [#145](https://github.com/pluk-inc/markdown-preview/issues/145)).
+
+### Contributors
+
+Thanks to the external reporters who helped improve this release:
+
+- [@rsalesas](https://github.com/rsalesas) — requested a light/dark appearance setting ([#115](https://github.com/pluk-inc/markdown-preview/issues/115))
+- [@rtuszik](https://github.com/rtuszik) — requested `j`/`k` preview scrolling ([#142](https://github.com/pluk-inc/markdown-preview/issues/142))
+- [@odrobnik](https://github.com/odrobnik) — reported blockquotes being styled like code blocks ([#145](https://github.com/pluk-inc/markdown-preview/issues/145))
 
 ## [0.0.26] – 2026-05-31
 

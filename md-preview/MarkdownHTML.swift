@@ -762,7 +762,7 @@ nonisolated enum MarkdownHTML {
             return document.activeElement instanceof Element ? document.activeElement : null;
         }
 
-        function spaceBelongsToFocusedControl(target) {
+        function keyBelongsToFocusedControl(target) {
             const el = elementForEventTarget(target);
             if (!el) return false;
             if (el.isContentEditable) return true;
@@ -785,13 +785,24 @@ nonisolated enum MarkdownHTML {
             ].join(','));
         }
 
-        document.addEventListener('keydown', (event) => {
-            const isSpace = event.key === ' ' || event.key === 'Spacebar' || event.code === 'Space';
-            if (!isSpace || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
-            if (spaceBelongsToFocusedControl(event.target)) return;
+        function handlePreviewScrollKey(event) {
+            if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return false;
+            if (keyBelongsToFocusedControl(event.target)) return false;
 
-            const value = event.shiftKey ? 'pageUp' : 'pageDown';
-            if (post({ kind: 'scroll', value })) {
+            const isSpace = event.key === ' ' || event.key === 'Spacebar' || event.code === 'Space';
+            if (isSpace) {
+                return post({ kind: 'scroll', value: event.shiftKey ? 'pageUp' : 'pageDown' });
+            }
+
+            if (event.shiftKey) return false;
+            const key = (event.key || '').toLowerCase();
+            if (key === 'j') return post({ kind: 'scroll', value: 'lineDown' });
+            if (key === 'k') return post({ kind: 'scroll', value: 'lineUp' });
+            return false;
+        }
+
+        document.addEventListener('keydown', (event) => {
+            if (handlePreviewScrollKey(event)) {
                 event.preventDefault();
                 event.stopPropagation();
             }
@@ -1391,6 +1402,7 @@ nonisolated enum MarkdownHTML {
         --link: #0066cc;
         --aside-bg: #f5f5f7;
         --aside-border: #696969;
+        --quote-border: #d2d2d7;
         --code-bg: #f5f5f7;
         --grid: #d2d2d7;
     }
@@ -1401,6 +1413,7 @@ nonisolated enum MarkdownHTML {
             --link: #2997ff;
             --aside-bg: #323232;
             --aside-border: #9a9a9e;
+            --quote-border: #6e6e73;
             --code-bg: #2A2828;
             --grid: #424245;
         }
@@ -1744,11 +1757,10 @@ nonisolated enum MarkdownHTML {
     .katex { direction: ltr !important; unicode-bidi: isolate; }
 
     blockquote {
-        margin: 1.6em 0 0;
-        padding: 14px 16px;
-        background: var(--aside-bg);
-        border-radius: 15px;
-        color: var(--text);
+        margin: 1.2em 0 0;
+        padding: 0 0 0 1em;
+        border-left: 4px solid var(--quote-border);
+        color: var(--secondary);
     }
     blockquote > *:first-child { margin-top: 0; }
 

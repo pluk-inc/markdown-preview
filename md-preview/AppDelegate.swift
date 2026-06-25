@@ -36,6 +36,44 @@ private extension String {
     }
 }
 
+private enum AppAppearanceMode: String, CaseIterable {
+    case automatic
+    case light
+    case dark
+
+    private static let defaultsKey = "MarkdownPreview.appearance"
+
+    static var current: AppAppearanceMode {
+        get {
+            UserDefaults.standard.string(forKey: defaultsKey)
+                .flatMap(AppAppearanceMode.init(rawValue:)) ?? .automatic
+        }
+        set {
+            if newValue == .automatic {
+                UserDefaults.standard.removeObject(forKey: defaultsKey)
+            } else {
+                UserDefaults.standard.set(newValue.rawValue, forKey: defaultsKey)
+            }
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .automatic: return "Automatic"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+
+    var appearance: NSAppearance? {
+        switch self {
+        case .automatic: return nil
+        case .light: return NSAppearance(named: .aqua)
+        case .dark: return NSAppearance(named: .darkAqua)
+        }
+    }
+}
+
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
@@ -56,6 +94,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private weak var hideSidebarMenuItem: NSMenuItem?
     private weak var outlineMenuItem: NSMenuItem?
     private weak var filesMenuItem: NSMenuItem?
+    private weak var automaticAppearanceMenuItem: NSMenuItem?
+    private weak var lightAppearanceMenuItem: NSMenuItem?
+    private weak var darkAppearanceMenuItem: NSMenuItem?
     private var isOpeningDocumentFromPrompt = false
     private var isPromptingForDocument = false
     private var isDocumentPromptScheduled = false
@@ -63,6 +104,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let markdownFileExtensions = ["md", "markdown", "mdown", "txt"]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        applyAppearanceMode(AppAppearanceMode.current, reloadPreviews: false)
+        installAppearanceMenuItems()
         installSidebarViewMenuItems()
         installGoMenu()
         installAppMenuItemIcons()
@@ -152,8 +195,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         syncSidebarViewMenuState()
     }
 
+    @objc private func selectAppearanceMode(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let mode = AppAppearanceMode(rawValue: rawValue),
+              mode != AppAppearanceMode.current else { return }
+
+        AppAppearanceMode.current = mode
+        applyAppearanceMode(mode, reloadPreviews: true)
+    }
+
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         syncSidebarViewMenuState()
+        syncAppearanceMenuState()
         switch menuItem.action {
         case #selector(hideSidebarFromMenu(_:)),
              #selector(selectOutlineMode(_:)),
@@ -161,6 +214,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
              #selector(performFindPanelAction(_:)),
              #selector(performTextFinderAction(_:)):
             return activeDocumentWindowController != nil
+        case #selector(selectAppearanceMode(_:)):
+            return true
         default:
             return true
         }
@@ -569,6 +624,68 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             image.isTemplate = true
             item.image = image
         }
+    }
+
+    private func installAppearanceMenuItems() {
+        guard let viewMenu = NSApp.mainMenu?.items
+            .first(where: { $0.title == "View" })?.submenu,
+              viewMenu.items.first(where: { $0.title == "Appearance" }) == nil else { return }
+
+        let appearanceItem = NSMenuItem(title: "Appearance", action: nil, keyEquivalent: "")
+        if let image = NSImage(systemSymbolName: "circle.lefthalf.filled",
+                               accessibilityDescription: "Appearance") {
+            image.isTemplate = true
+            appearanceItem.image = image
+        }
+
+        let submenu = NSMenu(title: "Appearance")
+        for mode in AppAppearanceMode.allCases {
+            let item = NSMenuItem(title: mode.title,
+                                  action: #selector(selectAppearanceMode(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.representedObject = mode.rawValue
+            submenu.addItem(item)
+
+            switch mode {
+            case .automatic:
+                automaticAppearanceMenuItem = item
+            case .light:
+                lightAppearanceMenuItem = item
+            case .dark:
+                darkAppearanceMenuItem = item
+            }
+        }
+        appearanceItem.submenu = submenu
+        viewMenu.insertItem(appearanceItem, at: 0)
+        viewMenu.insertItem(.separator(), at: 1)
+        syncAppearanceMenuState()
+    }
+
+    private func applyAppearanceMode(_ mode: AppAppearanceMode, reloadPreviews: Bool) {
+        let appearance = mode.appearance
+        NSApp.appearance = appearance
+        for window in NSApp.windows {
+            window.appearance = appearance
+        }
+        syncAppearanceMenuState()
+        if reloadPreviews {
+            reloadDocumentPreviewsForAppearanceChange()
+        }
+    }
+
+    private func syncAppearanceMenuState() {
+        let mode = AppAppearanceMode.current
+        automaticAppearanceMenuItem?.state = mode == .automatic ? .on : .off
+        lightAppearanceMenuItem?.state = mode == .light ? .on : .off
+        darkAppearanceMenuItem?.state = mode == .dark ? .on : .off
+    }
+
+    private func reloadDocumentPreviewsForAppearanceChange() {
+        NSDocumentController.shared.documents
+            .flatMap(\.windowControllers)
+            .compactMap { $0 as? DocumentWindowController }
+            .forEach { $0.reloadPreviewForAppearanceChange() }
     }
 
     private func installAppMenuItemIcons() {

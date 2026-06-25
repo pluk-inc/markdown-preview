@@ -228,6 +228,13 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         display(markdown: currentMarkdown, assetBaseURL: currentAssetBase)
     }
 
+    func reloadPreviewForAppearanceChange() {
+        guard currentMarkdown != nil else { return }
+        loadedFingerprint = nil
+        isPageReady = false
+        reloadPreview()
+    }
+
     fileprivate func didReceiveHostMessage(_ body: Any) {
         guard let dict = body as? [String: Any],
               let kind = dict["kind"] as? String else { return }
@@ -251,6 +258,10 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         case "scroll":
             guard let value = dict["value"] as? String else { return }
             switch value {
+            case "lineUp":
+                performScrollAction(.lineUp)
+            case "lineDown":
+                performScrollAction(.lineDown)
             case "pageUp":
                 performScrollAction(.pageUp)
             case "pageDown":

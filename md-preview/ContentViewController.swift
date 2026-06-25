@@ -187,6 +187,10 @@ final class ContentViewController: NSViewController {
     func resetZoom() { webView.resetZoom() }
     var pageZoom: CGFloat { webView.pageZoom }
 
+    func reloadPreviewForAppearanceChange() {
+        webView.reloadPreviewForAppearanceChange()
+    }
+
     func scrollToHeading(index: Int) {
         webView.headingOffset(index: index) { [weak self] offset in
             guard let self, let offset else { return }
