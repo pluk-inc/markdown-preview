@@ -88,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private weak var hideSidebarMenuItem: NSMenuItem?
     private weak var outlineMenuItem: NSMenuItem?
     private weak var filesMenuItem: NSMenuItem?
+    private weak var editorMenuItem: NSMenuItem?
     private weak var automaticAppearanceMenuItem: NSMenuItem?
     private weak var lightAppearanceMenuItem: NSMenuItem?
     private weak var darkAppearanceMenuItem: NSMenuItem?
@@ -101,6 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         applyAppearanceMode(AppAppearanceMode.current, reloadPreviews: false)
         installAppearanceMenuItems()
         installSidebarViewMenuItems()
+        installEditorMenuItem()
         installGoMenu()
         installAppMenuItemIcons()
         installZoomMenuItemIcons()
@@ -188,6 +190,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         syncSidebarViewMenuState()
     }
 
+    @objc private func toggleEditorFromMenu(_ sender: Any?) {
+        activeDocumentWindowController?.toggleEditorAction(sender)
+        syncEditorMenuState()
+    }
+
     @objc private func selectAppearanceMode(_ sender: NSMenuItem) {
         guard let rawValue = sender.representedObject as? String,
               let mode = AppAppearanceMode(rawValue: rawValue),
@@ -200,10 +207,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         syncSidebarViewMenuState()
         syncAppearanceMenuState()
+        syncEditorMenuState()
         switch menuItem.action {
         case #selector(hideSidebarFromMenu(_:)),
              #selector(selectOutlineMode(_:)),
              #selector(selectFilesMode(_:)),
+             #selector(toggleEditorFromMenu(_:)),
              #selector(performFindPanelAction(_:)),
              #selector(performTextFinderAction(_:)):
             return activeDocumentWindowController != nil
@@ -746,6 +755,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         viewMenu.insertItem(.separator(), at: insertIndex + 3)
     }
 
+    private func installEditorMenuItem() {
+        guard let viewMenu = NSApp.mainMenu?.items
+            .first(where: { $0.title == "View" })?.submenu,
+              viewMenu.items.first(where: { $0.action == #selector(toggleEditorFromMenu(_:)) }) == nil
+        else { return }
+
+        let item = NSMenuItem(title: "Toggle Editor",
+                              action: #selector(toggleEditorFromMenu(_:)),
+                              keyEquivalent: "e")
+        item.keyEquivalentModifierMask = .command
+        item.target = self
+        if let image = NSImage(systemSymbolName: "pencil.line",
+                               accessibilityDescription: "Toggle Editor") {
+            image.isTemplate = true
+            item.image = image
+        }
+        editorMenuItem = item
+
+        // Insert after the sidebar section separator
+        let insertIndex = viewMenu.items.lastIndex(where: {
+            $0.action == #selector(selectFilesMode(_:))
+        }).map { $0 + 2 } ?? viewMenu.items.count
+        viewMenu.insertItem(item, at: insertIndex)
+    }
+
     private func makeSidebarViewMenuItem(title: String,
                                          symbol: String,
                                          keyEquivalent: String,
@@ -770,5 +804,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hideSidebarMenuItem?.state = state.sidebarVisible ? .off : .on
         outlineMenuItem?.state = (state.sidebarVisible && state.mode == .outline) ? .on : .off
         filesMenuItem?.state = (state.sidebarVisible && state.mode == .files) ? .on : .off
+    }
+
+    private func syncEditorMenuState() {
+        guard let dwc = activeDocumentWindowController else {
+            editorMenuItem?.state = .off
+            return
+        }
+        let isVisible = (dwc.window?.contentViewController as? MainSplitViewController)?
+            .isEditorVisible ?? false
+        editorMenuItem?.state = isVisible ? .on : .off
     }
 }

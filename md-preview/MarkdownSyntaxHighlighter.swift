@@ -190,11 +190,7 @@ final class MarkdownSyntaxHighlighter {
                     in: string as String,
                     range: contentRange
                 ) {
-                    let delimiterRange = NSRange(
-                        location: contentRange.location + match.range(at: 1).location,
-                        length: match.range(at: 1).length
-                    )
-                    delimiter = string.substring(with: delimiterRange)
+                    delimiter = string.substring(with: match.range(at: 1))
                     inFence = true
                     applyCodeStyle(to: textStorage, range: lineRange)
                     protectedRanges.append(lineRange)

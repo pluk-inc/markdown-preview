@@ -1115,8 +1115,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let item = NSToolbarItem(itemIdentifier: .editToggle)
         item.label = "Edit"
         item.paletteLabel = "Edit"
-        // TODO: Wire ⌘E via View menu item in AppDelegate
-        item.toolTip = "Toggle source editor"
+        item.toolTip = "Toggle source editor (⌘E)"
 
         let image = NSImage(systemSymbolName: "pencil.line",
                             accessibilityDescription: "Edit") ?? NSImage()
@@ -1148,7 +1147,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         return item
     }
 
-    @objc private func toggleEditorAction(_ sender: Any) {
+    @objc func toggleEditorAction(_ sender: Any) {
         let isVisible = (documentWindow.contentViewController as? MainSplitViewController)?
             .toggleEditor() ?? false
         setEditToggleSelected(isVisible)
