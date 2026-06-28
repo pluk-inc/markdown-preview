@@ -21,15 +21,11 @@ final class MarkdownDocument: NSDocument {
 
     override init() {
         super.init()
-        hasUndoManager = false
+        hasUndoManager = true
     }
 
     override nonisolated class var autosavesInPlace: Bool {
-        false
-    }
-
-    override var isDocumentEdited: Bool {
-        false
+        true
     }
 
     override func makeWindowControllers() {
@@ -63,19 +59,16 @@ final class MarkdownDocument: NSDocument {
     }
 
     override nonisolated func data(ofType typeName: String) throws -> Data {
-        throw CocoaError(.fileWriteNoPermission)
+        let text = markdownStorage.withLock { $0 }
+        guard let data = text.data(using: .utf8) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        return data
     }
 
-    override func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
-        switch item.action {
-        case #selector(save(_:)),
-             #selector(saveAs(_:)),
-             #selector(saveTo(_:)),
-             #selector(revertToSaved(_:)):
-            return false
-        default:
-            return super.validateUserInterfaceItem(item)
-        }
+    func setMarkdown(_ newText: String) {
+        markdownStorage.withLock { $0 = newText }
+        updateChangeCount(.changeDone)
     }
 
     func replaceContents(markdown: String, fileURL: URL) {
