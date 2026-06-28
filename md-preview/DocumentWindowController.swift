@@ -35,8 +35,8 @@ private extension Array where Element == NSToolbarItem.Identifier {
 final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate, NSSharingServicePickerToolbarItemDelegate, NSSearchFieldDelegate, NSMenuDelegate {
 
     private var currentFileURL: URL?
-    private var currentMarkdown: String?
     private var fileWatcher: FileWatcher?
+    private var externalChangeAlertIsVisible = false
     private var isInspectorToggleSelected = false
     private weak var openActionsItem: NSMenuToolbarItem?
     private weak var openWithItem: NSMenuToolbarItem?
@@ -64,6 +64,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private var markdownDocument: MarkdownDocument? {
         document as? MarkdownDocument
+    }
+
+    private var currentMarkdown: String? {
+        markdownDocument?.markdown
     }
 
     init() {
@@ -116,7 +120,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     func display(markdown: String, fileURL: URL?) {
         currentFileURL = fileURL
-        currentMarkdown = markdown
         documentWindow.title = fileURL?.lastPathComponent ?? "Untitled"
         documentWindow.makeKeyAndOrderFront(nil)
         NSApp.activate()
@@ -141,7 +144,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // doc doesn't linger on screen during sheet dismissal + load.
         let isFileSwitch = currentFileURL != nil && currentFileURL != url
         currentFileURL = url
-        currentMarkdown = nil
         markdownDocument?.replaceFileURL(url)
         documentWindow.title = url.lastPathComponent
         if isFileSwitch {
@@ -162,6 +164,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         fileWatcher?.cancel()
         let watcher = FileWatcher(url: url) { [weak self] in
             guard let self, self.currentFileURL == url else { return }
+            guard self.markdownDocument?.isSaving != true else { return }
             if self.markdownDocument?.isDocumentEdited == true {
                 self.showExternalChangeAlert(fileURL: url)
             } else {
@@ -187,7 +190,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         refreshOpenWithItem()
         refreshOpenActionsItem()
         startWatching(newURL)
-        if let markdown = currentMarkdown {
+        if let markdown = markdownDocument?.markdown {
             (documentWindow.contentViewController as? MainSplitViewController)?
                 .openFileURLDidChange(newURL, markdown: markdown)
         } else {
@@ -1112,11 +1115,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let item = NSToolbarItem(itemIdentifier: .editToggle)
         item.label = "Edit"
         item.paletteLabel = "Edit"
-        item.toolTip = "Toggle source editor (⌘E)"
+        // TODO: Wire ⌘E via View menu item in AppDelegate
+        item.toolTip = "Toggle source editor"
 
         let image = NSImage(systemSymbolName: "pencil.line",
                             accessibilityDescription: "Edit") ?? NSImage()
-        image.isTemplate = true
 
         let button = NSButton(image: image,
                               target: self,
@@ -1149,10 +1152,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let isVisible = (documentWindow.contentViewController as? MainSplitViewController)?
             .toggleEditor() ?? false
         setEditToggleSelected(isVisible)
-        if isVisible, let markdown = currentMarkdown {
-            (documentWindow.contentViewController as? MainSplitViewController)?
-                .setEditorText(markdown)
-        }
     }
 
     private func refreshEditToggleItem() {
@@ -1165,26 +1164,49 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         editToggleButton?.state = isSelected ? .on : .off
     }
 
+    /// Handles text changes from the editor pane.
+    /// Updates the document model and re-renders the preview without
+    /// feeding text back to the editor (avoids cursor reset).
     private func handleEditorTextChange(_ newText: String) {
-        currentMarkdown = newText
         markdownDocument?.setMarkdown(newText)
         if let fileURL = currentFileURL {
-            renderCurrentDocument(text: newText, fileURL: fileURL, updateEditor: false)
+            renderPreviewOnly(text: newText, fileURL: fileURL)
+        } else {
+            // Render without asset resolution for untitled documents
+            (documentWindow.contentViewController as? MainSplitViewController)?
+                .displayPreviewOnly(markdown: newText, fileName: "Untitled",
+                                    url: nil, assetBaseURL: nil)
         }
     }
 
+    /// Shows a sheet asking the user whether to keep their changes or reload
+    /// from disk when the file was modified by another application.
+    /// Guarded against stacking multiple sheets.
     private func showExternalChangeAlert(fileURL: URL) {
+        guard !externalChangeAlertIsVisible else { return }
+        externalChangeAlertIsVisible = true
         let alert = NSAlert()
         alert.messageText = "File Modified Externally"
-        alert.informativeText = "\"\(fileURL.lastPathComponent)\" has been modified by another application. Do you want to keep your changes or reload from disk?"
+        alert.informativeText = "\"\(sanitizedFileName(fileURL))\" has been modified by another application. Do you want to keep your changes or reload from disk?"
         alert.addButton(withTitle: "Keep My Changes")
         alert.addButton(withTitle: "Reload from Disk")
         alert.alertStyle = .warning
         alert.beginSheetModal(for: documentWindow) { [weak self] response in
+            self?.externalChangeAlertIsVisible = false
             if response == .alertSecondButtonReturn {
                 self?.loadFile(at: fileURL, silentOnFailure: true)
             }
         }
+    }
+
+    private func sanitizedFileName(_ url: URL) -> String {
+        url.lastPathComponent.unicodeScalars.filter { scalar in
+            // Drop Unicode directional overrides and invisible formatters
+            switch scalar.properties.generalCategory {
+            case .format: return false
+            default: return true
+            }
+        }.reduce(into: "") { $0.append(Character($1)) }
     }
 
     func items(for pickerToolbarItem: NSSharingServicePickerToolbarItem) -> [Any] {
@@ -1730,7 +1752,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func applyLoadedMarkdown(_ text: String, fileURL: URL) {
-        currentMarkdown = text
         refreshOpenInLLMItem()
         markdownDocument?.replaceContents(markdown: text, fileURL: fileURL)
         renderCurrentDocument(text: text, fileURL: fileURL)
@@ -1741,13 +1762,20 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         NSAlert(error: error).beginSheetModal(for: documentWindow)
     }
 
-    private func renderCurrentDocument(text: String, fileURL: URL, updateEditor: Bool = true) {
+    private func renderCurrentDocument(text: String, fileURL: URL) {
         (documentWindow.contentViewController as? MainSplitViewController)?
             .display(markdown: text,
                      fileName: fileURL.lastPathComponent,
                      url: fileURL,
-                     assetBaseURL: fileURL.deletingLastPathComponent(),
-                     updateEditor: updateEditor)
+                     assetBaseURL: fileURL.deletingLastPathComponent())
+    }
+
+    private func renderPreviewOnly(text: String, fileURL: URL) {
+        (documentWindow.contentViewController as? MainSplitViewController)?
+            .displayPreviewOnly(markdown: text,
+                                fileName: fileURL.lastPathComponent,
+                                url: fileURL,
+                                assetBaseURL: fileURL.deletingLastPathComponent())
     }
 
     private func addBottomTitlebarAccessory(
