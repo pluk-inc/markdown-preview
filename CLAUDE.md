@@ -1,6 +1,6 @@
 # Markdown Preview — agent guide
 
-A macOS app for previewing Markdown files. AppKit, sandboxed, ships with a Quick Look extension. Updates via Sparkle, distributed via Amore.
+A macOS app for reading and editing Markdown files. AppKit, sandboxed, ships with a Quick Look extension. Updates via Sparkle, distributed via Amore.
 
 ## Project facts
 
@@ -11,7 +11,8 @@ A macOS app for previewing Markdown files. AppKit, sandboxed, ships with a Quick
 | Scheme | `md-preview` |
 | Quick Look target | `quick-look` (embedded extension) |
 | Min macOS | 15.0 |
-| Sandboxed | yes — uses Sparkle XPC services for updates |
+| Sandboxed | yes — read-write access to user-selected files (`com.apple.security.files.user-selected.read-write`); uses Sparkle XPC services for updates |
+| Editing | Inline source editor (NSTextView) with syntax highlighting; toggle via toolbar pencil button |
 | Auto-updater | Sparkle 2.x (Swift package) |
 | Distribution | Amore (managed) with custom domain `storage.md-preview.app` |
 
