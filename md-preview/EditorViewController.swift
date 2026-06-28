@@ -5,20 +5,29 @@
 
 import Cocoa
 
+/// View controller wrapping an `NSScrollView` + `NSTextView` for editing Markdown source.
+///
+/// Text changes are debounced and reported via `onTextChange`. Syntax highlighting
+/// is applied separately with a shorter debounce (50ms) to keep the editor responsive.
 final class EditorViewController: NSViewController, NSTextViewDelegate {
 
-    /// Called (debounced) whenever the user edits text. The String is the full document text.
+    /// Called (debounced at 200ms) whenever the user edits text.
+    /// The `String` parameter is the full document text.
     var onTextChange: ((String) -> Void)?
 
     private var textView: NSTextView!
     private var scrollView: NSScrollView!
     private var highlighter: MarkdownSyntaxHighlighter!
     private var debounceWork: DispatchWorkItem?
+    private var highlightDebounce: DispatchWorkItem?
     private static let debounceDelay: TimeInterval = 0.20
+    private static let highlightDelay: TimeInterval = 0.05  // 50ms — fast enough to feel instant
 
-    /// Whether we're programmatically setting text (suppresses onTextChange callback)
+    /// Defensive guard: `NSTextView.string =` typically does not fire `textDidChange`,
+    /// but edge cases (undo coalescing, input methods) may. Costs nothing to keep.
     private var isSettingText = false
 
+    /// The current text in the editor. Returns empty string if the view is not loaded.
     var currentText: String {
         textView?.string ?? ""
     }
@@ -61,11 +70,18 @@ final class EditorViewController: NSViewController, NSTextViewDelegate {
         highlighter = MarkdownSyntaxHighlighter()
     }
 
+    /// Sets the text view content programmatically without triggering `onTextChange`.
+    ///
+    /// Use this for file loads and external reloads. The method applies syntax
+    /// highlighting after setting the text.
+    ///
+    /// - Parameter text: The Markdown source to display.
     func setMarkdown(_ text: String) {
         isSettingText = true
         textView.string = text
         isSettingText = false
-        highlighter.applyHighlighting(to: textView.textStorage!)
+        guard let storage = textView?.textStorage else { return }
+        highlighter.applyHighlighting(to: storage)
     }
 
     func insertMarkdownSnippet(_ snippet: String) {
@@ -73,15 +89,22 @@ final class EditorViewController: NSViewController, NSTextViewDelegate {
     }
 
     override func becomeFirstResponder() -> Bool {
-        view.window?.makeFirstResponder(textView)
-        return true
+        view.window?.makeFirstResponder(textView) ?? false
     }
 
     func textDidChange(_ notification: Notification) {
         guard !isSettingText else { return }
 
-        highlighter.applyHighlighting(to: textView.textStorage!)
+        // Debounce highlighting to avoid blocking main thread on every keystroke
+        highlightDebounce?.cancel()
+        let highlightWork = DispatchWorkItem { [weak self] in
+            guard let self, let storage = self.textView?.textStorage else { return }
+            self.highlighter.applyHighlighting(to: storage)
+        }
+        highlightDebounce = highlightWork
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.highlightDelay, execute: highlightWork)
 
+        // Debounce render pipeline (existing)
         debounceWork?.cancel()
         let capturedText = textView.string
         let work = DispatchWorkItem { [weak self] in
