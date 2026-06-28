@@ -188,11 +188,14 @@ if $SHOULD_BUMP_CASK; then
     TAP_DIR="$(mktemp -d)/homebrew-tap"
     if git clone --depth=1 --quiet git@github.com:pluk-inc/homebrew-tap.git "$TAP_DIR"; then
         CASK_FILE="$TAP_DIR/Casks/markdown-preview.rb"
-        /usr/bin/sed -i '' -E "s|^  version \".*\"|  version \"$VERSION,$BUILD\"|" "$CASK_FILE"
-        /usr/bin/sed -i '' -E "s|^  sha256 \".*\"|  sha256 \"$DMG_SHA\"|"          "$CASK_FILE"
+        /usr/bin/sed -i '' -E "s|^  version \".*\"|  version \"$VERSION,$BUILD\"|" "$CASK_FILE" \
+            || { echo "  ✗ cask version sed failed"; exit 1; }
+        /usr/bin/sed -i '' -E "s|^  sha256 \".*\"|  sha256 \"$DMG_SHA\"|" "$CASK_FILE" \
+            || { echo "  ✗ cask sha256 sed failed"; exit 1; }
         if ! grep -q "version \"$VERSION,$BUILD\"" "$CASK_FILE" || \
            ! grep -q "sha256 \"$DMG_SHA\""        "$CASK_FILE"; then
             echo "  ✗ cask sed didn't take — fix Casks/markdown-preview.rb manually"
+            exit 1
         elif (cd "$TAP_DIR" && git diff --quiet); then
             echo "  ⚠ cask already at $VERSION,$BUILD — nothing to push"
         else

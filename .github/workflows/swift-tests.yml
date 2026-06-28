@@ -6,6 +6,25 @@ on:
     branches: [main]
 
 jobs:
+  build:
+    name: xcodebuild
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Build Xcode project
+        run: |
+          xcodebuild build \
+            -project md-preview.xcodeproj \
+            -scheme md-preview \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO
+
   test:
     name: swift test
     runs-on: macos-15

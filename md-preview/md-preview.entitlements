@@ -16,13 +16,13 @@
     <true/>
     <key>com.apple.security.print</key>
     <true/>
-    <!-- Read-only access to the entire filesystem so the project navigator
+    <!-- Read-only access to user home directories so the project navigator
          can enumerate sibling folders and resolve relative assets without
-         per-folder Powerbox prompts. Same pattern the Quick Look extension
-         uses. Writes still go through the sandbox + NSSavePanel. -->
+         per-folder Powerbox prompts. Writes still go through the sandbox
+         + NSSavePanel. -->
     <key>com.apple.security.temporary-exception.files.absolute-path.read-only</key>
     <array>
-        <string>/</string>
+        <string>/Users/</string>
     </array>
     <key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
     <array>
