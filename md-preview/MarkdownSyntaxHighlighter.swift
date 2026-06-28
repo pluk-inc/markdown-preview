@@ -5,7 +5,18 @@
 
 import Cocoa
 
+/// Applies regex-based syntax highlighting to Markdown source text in an `NSTextStorage`.
+///
+/// Highlights headings, bold, italic, code (inline and fenced), links, blockquotes,
+/// list markers, and horizontal rules. Code fences are detected first and excluded
+/// from all subsequent pattern matches.
+///
+/// - Important: Must be called on the main thread. For documents larger than 512 KB,
+///   highlighting is skipped to avoid blocking the UI.
+@MainActor
 final class MarkdownSyntaxHighlighter {
+
+    private static let maxHighlightLength = 512_000  // 512 KB
 
     // Theme colors — adapts to light/dark mode via semantic colors
     private let headingColor: NSColor = .systemBlue
@@ -25,9 +36,24 @@ final class MarkdownSyntaxHighlighter {
         try? NSRegularExpression(pattern: "^(`{3,}|~{3,})")
     }()
 
+    private let inlineCodeRegex = try! NSRegularExpression(pattern: "`[^`\\n]+`")
+    private let headingRegex = try! NSRegularExpression(pattern: "(?m)^#{1,6}\\s+.*$")
+    private let boldRegex = try! NSRegularExpression(pattern: "(\\*\\*|__)(.+?)\\1")
+    private let italicRegex = try! NSRegularExpression(pattern: "(?<!\\*)\\*[^*\\n]+\\*(?!\\*)")
+    private let linkRegex = try! NSRegularExpression(pattern: "\\[([^\\]]+)\\]\\(([^)]+)\\)")
+    private let blockquoteRegex = try! NSRegularExpression(pattern: "(?m)^>\\s+.*$")
+    private let listMarkerRegex = try! NSRegularExpression(pattern: "(?m)^[\\t ]*([-*+]|\\d+\\.)\\s")
+    private let hruleRegex = try! NSRegularExpression(pattern: "(?m)^[-*_]{3,}\\s*$")
+
+    /// Resets all attributes to the base style, then applies Markdown syntax highlighting.
+    ///
+    /// Call this after any text change. The method processes the full document — for
+    /// incremental use, callers should debounce invocations.
+    ///
+    /// - Parameter textStorage: The text storage to highlight. Must not be empty.
     func applyHighlighting(to textStorage: NSTextStorage) {
         let length = textStorage.length
-        guard length > 0 else { return }
+        guard length > 0, length <= Self.maxHighlightLength else { return }
 
         let fullRange = NSRange(location: 0, length: length)
         let string = textStorage.string as NSString
@@ -42,25 +68,31 @@ final class MarkdownSyntaxHighlighter {
         let fenceRanges = highlightCodeFences(in: textStorage, string: string)
 
         applyPattern(
-            "`[^`\\n]+`",
+            inlineCodeRegex,
             in: textStorage,
             string: string,
             excluding: fenceRanges
-        ) { _ in
-            [.font: self.baseFont, .foregroundColor: self.codeColor]
+        ) { match in
+            (range: match.range, attributes: [
+                .font: self.baseFont,
+                .foregroundColor: self.codeColor,
+            ])
         }
 
         applyPattern(
-            "(?m)^#{1,6}\\s+.*$",
+            headingRegex,
             in: textStorage,
             string: string,
             excluding: fenceRanges
-        ) { _ in
-            [.font: self.headingFont, .foregroundColor: self.headingColor]
+        ) { match in
+            (range: match.range, attributes: [
+                .font: self.headingFont,
+                .foregroundColor: self.headingColor,
+            ])
         }
 
         applyPattern(
-            "(\\*\\*|__)(.+?)\\1",
+            boldRegex,
             in: textStorage,
             string: string,
             excluding: fenceRanges
@@ -73,38 +105,44 @@ final class MarkdownSyntaxHighlighter {
         }
 
         applyPattern(
-            "\\*[^*\\n]+\\*",
+            italicRegex,
             in: textStorage,
             string: string,
             excluding: fenceRanges
-        ) { _ in
-            [.font: self.baseFont, .foregroundColor: self.italicColor]
+        ) { match in
+            (range: match.range, attributes: [
+                .font: self.baseFont,
+                .foregroundColor: self.italicColor,
+            ])
         }
 
         applyPattern(
-            "\\[([^\\]]+)\\]\\(([^)]+)\\)",
+            linkRegex,
             in: textStorage,
             string: string,
             excluding: fenceRanges
-        ) { _ in
-            [
+        ) { match in
+            (range: match.range, attributes: [
                 .font: self.baseFont,
                 .foregroundColor: self.linkColor,
                 .underlineStyle: NSUnderlineStyle.single.rawValue,
-            ]
+            ])
         }
 
         applyPattern(
-            "(?m)^>\\s+.*$",
+            blockquoteRegex,
             in: textStorage,
             string: string,
             excluding: fenceRanges
-        ) { _ in
-            [.font: self.baseFont, .foregroundColor: self.blockquoteColor]
+        ) { match in
+            (range: match.range, attributes: [
+                .font: self.baseFont,
+                .foregroundColor: self.blockquoteColor,
+            ])
         }
 
         applyPattern(
-            "(?m)^[\\t ]*([-*+]|\\d+\\.)\\s",
+            listMarkerRegex,
             in: textStorage,
             string: string,
             excluding: fenceRanges
@@ -117,12 +155,15 @@ final class MarkdownSyntaxHighlighter {
         }
 
         applyPattern(
-            "(?m)^[-*_]{3,}\\s*$",
+            hruleRegex,
             in: textStorage,
             string: string,
             excluding: fenceRanges
-        ) { _ in
-            [.font: self.baseFont, .foregroundColor: self.commentColor]
+        ) { match in
+            (range: match.range, attributes: [
+                .font: self.baseFont,
+                .foregroundColor: self.commentColor,
+            ])
         }
 
         textStorage.endEditing()
@@ -138,16 +179,22 @@ final class MarkdownSyntaxHighlighter {
 
         while index < string.length {
             let lineRange = string.lineRange(for: NSRange(location: index, length: 0))
-            let line = string.substring(with: lineRange)
-            let lineContent = line.hasSuffix("\n") ? String(line.dropLast()) : line
-            let lineNSString = lineContent as NSString
+            var contentRange = lineRange
+            if contentRange.length > 0,
+               string.character(at: NSMaxRange(contentRange) - 1) == 0x0A {
+                contentRange.length -= 1
+            }
 
             if !inFence {
                 if let match = fenceOpenRegex?.firstMatch(
-                    in: lineContent,
-                    range: NSRange(location: 0, length: lineNSString.length)
+                    in: string as String,
+                    range: contentRange
                 ) {
-                    delimiter = lineNSString.substring(with: match.range(at: 1))
+                    let delimiterRange = NSRange(
+                        location: contentRange.location + match.range(at: 1).location,
+                        length: match.range(at: 1).length
+                    )
+                    delimiter = string.substring(with: delimiterRange)
                     inFence = true
                     applyCodeStyle(to: textStorage, range: lineRange)
                     protectedRanges.append(lineRange)
@@ -156,12 +203,15 @@ final class MarkdownSyntaxHighlighter {
                 applyCodeStyle(to: textStorage, range: lineRange)
                 protectedRanges.append(lineRange)
 
-                if lineNSString.length >= delimiter.count {
-                    let prefix = lineNSString.substring(with: NSRange(location: 0, length: delimiter.count))
+                if contentRange.length >= delimiter.count {
+                    let prefixRange = NSRange(location: contentRange.location, length: delimiter.count)
+                    let prefix = string.substring(with: prefixRange)
                     if prefix == delimiter {
-                        let rest = lineNSString.substring(
-                            from: delimiter.count
-                        ).trimmingCharacters(in: .whitespaces)
+                        let restRange = NSRange(
+                            location: contentRange.location + delimiter.count,
+                            length: contentRange.length - delimiter.count
+                        )
+                        let rest = string.substring(with: restRange).trimmingCharacters(in: .whitespaces)
                         if rest.isEmpty {
                             inFence = false
                             delimiter = ""
@@ -187,41 +237,34 @@ final class MarkdownSyntaxHighlighter {
 
     // MARK: - Regex helpers
 
-    private func intersectsProtected(_ range: NSRange, protected: [NSRange]) -> Bool {
-        protected.contains { NSIntersectionRange($0, range).length > 0 }
-    }
-
-    private func applyPattern(
-        _ pattern: String,
-        in textStorage: NSTextStorage,
-        string: NSString,
-        excluding protected: [NSRange],
-        attributes: (NSTextCheckingResult) -> [NSAttributedString.Key: Any]
-    ) {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return }
-
-        let searchRange = NSRange(location: 0, length: string.length)
-        regex.enumerateMatches(in: string as String, range: searchRange) { match, _, _ in
-            guard let match else { return }
-            guard !self.intersectsProtected(match.range, protected: protected) else { return }
-            textStorage.addAttributes(attributes(match), range: match.range)
+    private func binaryIntersects(_ range: NSRange, sortedProtected: [NSRange]) -> Bool {
+        var lo = 0, hi = sortedProtected.count
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if NSMaxRange(sortedProtected[mid]) <= range.location {
+                lo = mid + 1
+            } else {
+                hi = mid
+            }
         }
+        for i in lo ..< min(lo + 2, sortedProtected.count) {
+            if NSIntersectionRange(sortedProtected[i], range).length > 0 { return true }
+        }
+        return false
     }
 
     private func applyPattern(
-        _ pattern: String,
+        _ regex: NSRegularExpression,
         in textStorage: NSTextStorage,
         string: NSString,
         excluding protected: [NSRange],
-        attributes: (NSTextCheckingResult) -> (range: NSRange, attributes: [NSAttributedString.Key: Any])
+        handler: (NSTextCheckingResult) -> (range: NSRange, attributes: [NSAttributedString.Key: Any])
     ) {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return }
-
         let searchRange = NSRange(location: 0, length: string.length)
         regex.enumerateMatches(in: string as String, range: searchRange) { match, _, _ in
             guard let match else { return }
-            let result = attributes(match)
-            guard !self.intersectsProtected(result.range, protected: protected) else { return }
+            let result = handler(match)
+            guard !self.binaryIntersects(result.range, sortedProtected: protected) else { return }
             textStorage.addAttributes(result.attributes, range: result.range)
         }
     }
