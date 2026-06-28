@@ -126,7 +126,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if let fileURL {
             NSDocumentController.shared.noteNewRecentDocumentURL(fileURL)
             renderCurrentDocument(text: markdown, fileURL: fileURL)
-            (documentWindow.contentViewController as? MainSplitViewController)?.setEditorText(markdown)
             startWatching(fileURL)
             offerToBecomeDefaultHandlerIfNeeded()
         }
@@ -1170,7 +1169,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         currentMarkdown = newText
         markdownDocument?.setMarkdown(newText)
         if let fileURL = currentFileURL {
-            renderCurrentDocument(text: newText, fileURL: fileURL)
+            renderCurrentDocument(text: newText, fileURL: fileURL, updateEditor: false)
         }
     }
 
@@ -1735,7 +1734,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         refreshOpenInLLMItem()
         markdownDocument?.replaceContents(markdown: text, fileURL: fileURL)
         renderCurrentDocument(text: text, fileURL: fileURL)
-        (documentWindow.contentViewController as? MainSplitViewController)?.setEditorText(text)
     }
 
     private func applyLoadFailure(error: NSError, silentOnFailure: Bool) {
@@ -1743,12 +1741,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         NSAlert(error: error).beginSheetModal(for: documentWindow)
     }
 
-    private func renderCurrentDocument(text: String, fileURL: URL) {
+    private func renderCurrentDocument(text: String, fileURL: URL, updateEditor: Bool = true) {
         (documentWindow.contentViewController as? MainSplitViewController)?
             .display(markdown: text,
                      fileName: fileURL.lastPathComponent,
                      url: fileURL,
-                     assetBaseURL: fileURL.deletingLastPathComponent())
+                     assetBaseURL: fileURL.deletingLastPathComponent(),
+                     updateEditor: updateEditor)
     }
 
     private func addBottomTitlebarAccessory(

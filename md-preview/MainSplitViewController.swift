@@ -62,11 +62,14 @@ final class MainSplitViewController: NSSplitViewController {
         }
     }
 
-    func display(markdown: String, fileName: String, url: URL?, assetBaseURL: URL?) {
+    func display(markdown: String, fileName: String, url: URL?, assetBaseURL: URL?,
+                 updateEditor: Bool = true) {
         contentViewController?.display(markdown: markdown, assetBaseURL: assetBaseURL)
         sidebarViewController?.display(markdown: markdown, fileName: fileName, fileURL: url)
         inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))
-        editorViewController?.setMarkdown(markdown)
+        if updateEditor {
+            editorViewController?.setMarkdown(markdown)
+        }
     }
 
     /// Set the editor's text without triggering onTextChange (for file loads / external reloads).
