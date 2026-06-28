@@ -22,7 +22,11 @@ final class MarkdownDocument: NSDocument {
     /// True while the document is in the middle of a save operation.
     /// Used by DocumentWindowController to suppress FileWatcher callbacks
     /// that would otherwise show a false "external change" alert.
-    private(set) var isSaving = false
+    private nonisolated let savingStorage = Mutex(false)
+
+    var isSaving: Bool {
+        savingStorage.withLock { $0 }
+    }
 
     override init() {
         super.init()
@@ -71,9 +75,9 @@ final class MarkdownDocument: NSDocument {
         return data
     }
 
-    override func writeSafely(to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType) throws {
-        isSaving = true
-        defer { isSaving = false }
+    override nonisolated func writeSafely(to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType) throws {
+        savingStorage.withLock { $0 = true }
+        defer { savingStorage.withLock { $0 = false } }
         try super.writeSafely(to: url, ofType: typeName, for: saveOperation)
     }
 
