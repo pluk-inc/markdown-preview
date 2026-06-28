@@ -9,6 +9,8 @@ final class MainSplitViewController: NSSplitViewController {
 
     private static let didSeedKey = "MainSplitView.didSeedInitialState"
 
+    private var editorSplitItem: NSSplitViewItem?
+
     var onSelectFile: ((URL) -> Void)?
     var onEditorTextChange: ((String) -> Void)?
 
@@ -18,8 +20,8 @@ final class MainSplitViewController: NSSplitViewController {
         let sidebarVC = SidebarViewController()
         sidebarVC.onSelectHeading = { [weak self] index in
             // Pin before scrolling so a no-op scroll still confirms the click.
-            self?.contentViewController?.markHeadingActiveFromClick(index)
-            self?.contentViewController?.scrollToHeading(index: index)
+            self?.previewViewController?.markHeadingActiveFromClick(index)
+            self?.previewViewController?.scrollToHeading(index: index)
         }
         sidebarVC.onSelectFile = { [weak self] url in
             self?.onSelectFile?(url)
@@ -32,13 +34,14 @@ final class MainSplitViewController: NSSplitViewController {
 
         let editorVC = EditorViewController()
         editorVC.onTextChange = { [weak self] newText in
-            self?.editorTextDidChange(newText)
+            self?.onEditorTextChange?(newText)
         }
         let editor = NSSplitViewItem(viewController: editorVC)
         editor.minimumThickness = 300
         editor.maximumThickness = 800
         editor.canCollapse = true
         editor.canCollapseFromWindowResize = false
+        self.editorSplitItem = editor
 
         let content = NSSplitViewItem(viewController: ContentViewController())
         content.minimumThickness = 420
@@ -57,22 +60,28 @@ final class MainSplitViewController: NSSplitViewController {
         splitView.autosaveName = "MainSplitView"
 
         // Wired after addSplitViewItem so the accessors are non-nil.
-        contentViewController?.activeHeadingDidChange = { [weak self] headingID in
+        previewViewController?.activeHeadingDidChange = { [weak self] headingID in
             self?.sidebarViewController?.setActiveHeading(headingID)
         }
     }
 
-    func display(markdown: String, fileName: String, url: URL?, assetBaseURL: URL?,
-                 updateEditor: Bool = true) {
-        contentViewController?.display(markdown: markdown, assetBaseURL: assetBaseURL)
+    func display(markdown: String, fileName: String, url: URL?, assetBaseURL: URL?) {
+        previewViewController?.display(markdown: markdown, assetBaseURL: assetBaseURL)
         sidebarViewController?.display(markdown: markdown, fileName: fileName, fileURL: url)
         inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))
-        if updateEditor {
-            editorViewController?.setMarkdown(markdown)
-        }
+        editorViewController?.setMarkdown(markdown)
     }
 
-    /// Set the editor's text without triggering onTextChange (for file loads / external reloads).
+    /// Updates preview, sidebar, and inspector without touching the editor.
+    /// Used by the editor-triggered render path to avoid feeding text back.
+    func displayPreviewOnly(markdown: String, fileName: String, url: URL?, assetBaseURL: URL?) {
+        previewViewController?.display(markdown: markdown, assetBaseURL: assetBaseURL)
+        sidebarViewController?.display(markdown: markdown, fileName: fileName, fileURL: url)
+        inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))
+    }
+
+    /// Sets the editor text without triggering the text change callback.
+    /// Use for file loads and external reloads.
     func setEditorText(_ text: String) {
         editorViewController?.setMarkdown(text)
     }
@@ -92,38 +101,38 @@ final class MainSplitViewController: NSSplitViewController {
     }
 
     func clearContent() {
-        contentViewController?.clearContent()
+        previewViewController?.clearContent()
     }
 
     func find(_ query: String,
               backwards: Bool = false,
               mode: SearchMode = .contains,
               completion: ((FindResult) -> Void)? = nil) {
-        contentViewController?.find(query, backwards: backwards, mode: mode, completion: completion)
+        previewViewController?.find(query, backwards: backwards, mode: mode, completion: completion)
     }
 
     // Custom selector (instead of `print:`) so AppKit's inherited
     // NSView/NSWindow `print:` doesn't intercept higher in the responder chain
     // and print the sidebar / whole window contents.
     @IBAction func printMarkdown(_ sender: Any?) {
-        contentViewController?.printDocument()
+        previewViewController?.printDocument()
     }
 
     @IBAction func zoomInDocument(_ sender: Any?) {
-        contentViewController?.zoomIn()
+        previewViewController?.zoomIn()
     }
 
     @IBAction func zoomOutDocument(_ sender: Any?) {
-        contentViewController?.zoomOut()
+        previewViewController?.zoomOut()
     }
 
     @IBAction func resetDocumentZoom(_ sender: Any?) {
-        contentViewController?.resetZoom()
+        previewViewController?.resetZoom()
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if menuItem.action == #selector(resetDocumentZoom(_:)) {
-            return abs((contentViewController?.pageZoom ?? 1.0) - 1.0) > 0.001
+            return abs((previewViewController?.pageZoom ?? 1.0) - 1.0) > 0.001
         }
         return true
     }
@@ -157,23 +166,24 @@ final class MainSplitViewController: NSSplitViewController {
         sidebar.animator().isCollapsed = false
     }
 
+    /// Whether the editor pane is currently visible (not collapsed).
     var isEditorVisible: Bool {
-        guard splitViewItems.count > 1 else { return false }
-        return !splitViewItems[1].isCollapsed
+        !(editorSplitItem?.isCollapsed ?? true)
     }
 
+    /// Toggles the editor pane visibility. Returns `true` if the editor is now visible.
     @discardableResult
     func toggleEditor() -> Bool {
-        guard splitViewItems.count > 1 else { return false }
-        let editorItem = splitViewItems[1]
+        guard let editorItem = editorSplitItem else { return false }
         let shouldShow = editorItem.isCollapsed
         editorItem.animator().isCollapsed = !shouldShow
         return shouldShow
     }
 
+    /// Shows the editor pane if it's collapsed.
     func showEditor() {
-        guard splitViewItems.count > 1, splitViewItems[1].isCollapsed else { return }
-        splitViewItems[1].animator().isCollapsed = false
+        guard let item = editorSplitItem, item.isCollapsed else { return }
+        item.animator().isCollapsed = false
     }
 
     var sidebarMode: SidebarViewController.Mode {
@@ -185,7 +195,7 @@ final class MainSplitViewController: NSSplitViewController {
     }
 
     func reloadPreviewForAppearanceChange() {
-        contentViewController?.reloadPreviewForAppearanceChange()
+        previewViewController?.reloadPreviewForAppearanceChange()
     }
 
     private var sidebarViewController: SidebarViewController? {
@@ -196,18 +206,13 @@ final class MainSplitViewController: NSSplitViewController {
         splitViewItems.dropFirst().first?.viewController as? EditorViewController
     }
 
-    private var contentViewController: ContentViewController? {
+    private var previewViewController: ContentViewController? {
         guard splitViewItems.count > 2 else { return nil }
         return splitViewItems[2].viewController as? ContentViewController
     }
 
     private var inspectorViewController: InspectorViewController? {
         splitViewItems.last?.viewController as? InspectorViewController
-    }
-
-    /// Called by the editor when the user edits text.
-    private func editorTextDidChange(_ newText: String) {
-        onEditorTextChange?(newText)
     }
 
     override func viewDidAppear() {
@@ -220,7 +225,7 @@ final class MainSplitViewController: NSSplitViewController {
         // then start collapsed (Preview-style for single-item docs).
         splitView.setPosition(240, ofDividerAt: 0)
         splitViewItems.first?.isCollapsed = true
-        splitViewItems[1].isCollapsed = true
+        editorSplitItem?.isCollapsed = true
         defaults.set(true, forKey: Self.didSeedKey)
     }
 }
