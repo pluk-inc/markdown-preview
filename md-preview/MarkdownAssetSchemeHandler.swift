@@ -53,8 +53,16 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
 
         let candidate = base.appendingPathComponent(path).standardizedFileURL
         let basePath = base.standardizedFileURL.path
+        // Lexical check (catches .. traversal)
         guard candidate.path == basePath
                 || candidate.path.hasPrefix(basePath + "/") else {
+            return nil
+        }
+        // Physical check (catches symlinks pointing outside base)
+        let physical = candidate.resolvingSymlinksInPath()
+        let physicalBase = base.standardizedFileURL.resolvingSymlinksInPath()
+        guard physical.path == physicalBase.path
+                || physical.path.hasPrefix(physicalBase.path + "/") else {
             return nil
         }
         return candidate
@@ -146,7 +154,7 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
             headerFields: [
                 "Content-Type": mime,
                 "Content-Length": String(data.count),
-                "Access-Control-Allow-Origin": "*"
+                "Access-Control-Allow-Origin": "null"
             ]
         ) ?? URLResponse(url: requestURL,
                          mimeType: mime,
