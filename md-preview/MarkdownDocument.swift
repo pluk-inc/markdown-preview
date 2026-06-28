@@ -19,9 +19,14 @@ final class MarkdownDocument: NSDocument {
         folderStorage.withLock { $0 }
     }
 
+    /// True while the document is in the middle of a save operation.
+    /// Used by DocumentWindowController to suppress FileWatcher callbacks
+    /// that would otherwise show a false "external change" alert.
+    private(set) var isSaving = false
+
     override init() {
         super.init()
-        hasUndoManager = true
+        hasUndoManager = false  // NSTextView manages its own undo stack
     }
 
     override nonisolated class var autosavesInPlace: Bool {
@@ -66,11 +71,27 @@ final class MarkdownDocument: NSDocument {
         return data
     }
 
+    override func writeSafely(to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType) throws {
+        isSaving = true
+        defer { isSaving = false }
+        try super.writeSafely(to: url, ofType: typeName, for: saveOperation)
+    }
+
+    /// Updates the document's markdown content and marks it as edited.
+    ///
+    /// Called by the editor pane when the user types. Triggers autosave via
+    /// `updateChangeCount(.changeDone)`.
+    ///
+    /// - Parameter newText: The full document text from the editor.
     func setMarkdown(_ newText: String) {
         markdownStorage.withLock { $0 = newText }
         updateChangeCount(.changeDone)
     }
 
+    /// Replaces both the markdown content and the file URL.
+    ///
+    /// Used when switching to a different file in the project navigator.
+    /// Clears the document's dirty state via `updateChangeCount(.changeCleared)`.
     func replaceContents(markdown: String, fileURL: URL) {
         markdownStorage.withLock { $0 = markdown }
         replaceFileURL(fileURL)
