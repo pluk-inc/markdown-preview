@@ -5,14 +5,14 @@
 </p>
 
 <p align="center">
-  A fast, native macOS app for reading Markdown files.
+  A fast, native macOS app for reading and editing Markdown files.
 </p>
 
 <p align="center"><img alt="Platform" src="https://img.shields.io/badge/platform-macOS%2015%2B-blue" />&nbsp;<img alt="Swift" src="https://img.shields.io/badge/swift-6.0-orange" />&nbsp;<img alt="License" src="https://img.shields.io/badge/license-MIT-green" />&nbsp;<img alt="Latest release" src="https://img.shields.io/github/v/release/pluk-inc/markdown-preview" /></p>
 
 ---
 
-> Drop a `.md` on the icon (or set Markdown Preview as your default handler) and get a clean, scrollable preview with a real document outline — no Electron, no browser tab.
+> Drop a `.md` on the icon (or set Markdown Preview as your default handler) and get a clean, scrollable preview with optional inline editing and a real document outline — no Electron, no browser tab.
 
 ## Installation
 
@@ -46,6 +46,7 @@ Or grab the latest signed and notarized DMG from the [Releases](https://github.c
 
 ## Features
 
+- **Editing** — toggle a side-by-side `NSTextView` source editor (toolbar pencil button or <kbd>⌘E</kbd>) with Markdown syntax highlighting; edits debounce into a live preview update and autosave via `NSDocument`.
 - **Native rendering** — `WKWebView` pipeline backed by [swift-markdown](https://github.com/swiftlang/swift-markdown), with heading anchors and link handling.
 - **Mermaid diagrams** — fenced `mermaid` code blocks render as diagrams in both the app and Quick Look previews, using a bundled renderer so previews work offline without a CDN request.
 - **Math equations** — LaTeX inline (`$x_1 + x_2$`), display (`$$\int_0^1 x^2\,dx$$`), and fenced `math` blocks render with a bundled KaTeX. Selecting a rendered formula and copying yields the original LaTeX source (via the official `copy-tex` extension).
@@ -84,7 +85,9 @@ Build and run the `markdown-preview` scheme. Swift Package Manager will resolve 
 ## Project layout
 
 ```
-md-preview/         Main app target (AppKit, WKWebView)
+md-preview/         Main app target (AppKit, WKWebView + source editor)
+  EditorViewController.swift
+  MarkdownSyntaxHighlighter.swift
 quick-look/         Quick Look extension (.appex)
 scripts/            Release & rollback automation
 Version.xcconfig    Marketing & build version (single source of truth)
