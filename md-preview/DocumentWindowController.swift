@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 
 extension NSToolbarItem.Identifier {
     static let openActions = NSToolbarItem.Identifier("OpenActions")
+    static let editToggle = NSToolbarItem.Identifier("EditToggle")
     static let openWith = NSToolbarItem.Identifier("OpenWith")
     static let openInLLM = NSToolbarItem.Identifier("OpenInLLM")
     static let inspector = NSToolbarItem.Identifier("Inspector")
@@ -42,6 +43,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private weak var openInLLMItem: NSMenuToolbarItem?
     private weak var inspectorItem: NSToolbarItem?
     private weak var inspectorButton: NSButton?
+    private weak var editToggleButton: NSButton?
     private weak var copyItem: NSToolbarItem?
     private var copyFeedbackWork: DispatchWorkItem?
     private weak var searchField: NSSearchField?
@@ -89,6 +91,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         split.onSelectFile = { [weak self] url in
             self?.present(url: url)
         }
+        split.onEditorTextChange = { [weak self] newText in
+            self?.handleEditorTextChange(newText)
+        }
         documentWindow.contentViewController = split
         documentWindow.setContentSize(NSSize(width: 1100, height: 720))
         documentWindow.center()
@@ -121,6 +126,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if let fileURL {
             NSDocumentController.shared.noteNewRecentDocumentURL(fileURL)
             renderCurrentDocument(text: markdown, fileURL: fileURL)
+            (documentWindow.contentViewController as? MainSplitViewController)?.setEditorText(markdown)
             startWatching(fileURL)
             offerToBecomeDefaultHandlerIfNeeded()
         }
@@ -157,7 +163,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         fileWatcher?.cancel()
         let watcher = FileWatcher(url: url) { [weak self] in
             guard let self, self.currentFileURL == url else { return }
-            self.loadFile(at: url, silentOnFailure: true)
+            if self.markdownDocument?.isDocumentEdited == true {
+                self.showExternalChangeAlert(fileURL: url)
+            } else {
+                self.loadFile(at: url, silentOnFailure: true)
+            }
         }
         watcher.onRename = { [weak self] newURL in
             self?.handleRename(to: newURL)
@@ -217,6 +227,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             .sidebarMenu,
             .sidebarTrackingSeparator,
             .openActions,
+            .editToggle,
             .space,
             .zoom,
             .inspector,
@@ -232,6 +243,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             .flexibleSpace,
             .space,
             .openActions,
+            .editToggle,
             .openWith,
             .inspector,
             .share,
@@ -252,6 +264,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         switch itemIdentifier {
         case .sidebarMenu: return makeSidebarMenuItem(willBeInsertedIntoToolbar: flag)
         case .openActions: return makeOpenActionsItem()
+        case .editToggle: return makeEditToggleItem()
         case .openWith: return makeOpenWithItem()
         case .openInLLM:
             guard hasLLMTargetsAvailable else { return nil }
@@ -1096,6 +1109,85 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         inspectorButton?.state = isSelected ? .on : .off
     }
 
+    private func makeEditToggleItem() -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: .editToggle)
+        item.label = "Edit"
+        item.paletteLabel = "Edit"
+        item.toolTip = "Toggle source editor (⌘E)"
+
+        let image = NSImage(systemSymbolName: "pencil.line",
+                            accessibilityDescription: "Edit") ?? NSImage()
+        image.isTemplate = true
+
+        let button = NSButton(image: image,
+                              target: self,
+                              action: #selector(toggleEditorAction(_:)))
+        button.setButtonType(.pushOnPushOff)
+        button.bezelStyle = .toolbar
+        button.toolTip = item.toolTip
+        button.translatesAutoresizingMaskIntoConstraints = false
+
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(button)
+        NSLayoutConstraint.activate([
+            button.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 2),
+            button.topAnchor.constraint(equalTo: container.topAnchor),
+            button.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -2),
+            button.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            button.heightAnchor.constraint(equalToConstant: 32),
+            container.widthAnchor.constraint(equalToConstant: 36),
+            container.heightAnchor.constraint(equalToConstant: 32)
+        ])
+
+        item.view = container
+        editToggleButton = button
+        refreshEditToggleItem()
+        return item
+    }
+
+    @objc private func toggleEditorAction(_ sender: Any) {
+        let isVisible = (documentWindow.contentViewController as? MainSplitViewController)?
+            .toggleEditor() ?? false
+        setEditToggleSelected(isVisible)
+        if isVisible, let markdown = currentMarkdown {
+            (documentWindow.contentViewController as? MainSplitViewController)?
+                .setEditorText(markdown)
+        }
+    }
+
+    private func refreshEditToggleItem() {
+        let isVisible = (documentWindow.contentViewController as? MainSplitViewController)?
+            .isEditorVisible ?? false
+        setEditToggleSelected(isVisible)
+    }
+
+    private func setEditToggleSelected(_ isSelected: Bool) {
+        editToggleButton?.state = isSelected ? .on : .off
+    }
+
+    private func handleEditorTextChange(_ newText: String) {
+        currentMarkdown = newText
+        markdownDocument?.setMarkdown(newText)
+        if let fileURL = currentFileURL {
+            renderCurrentDocument(text: newText, fileURL: fileURL)
+        }
+    }
+
+    private func showExternalChangeAlert(fileURL: URL) {
+        let alert = NSAlert()
+        alert.messageText = "File Modified Externally"
+        alert.informativeText = "\"\(fileURL.lastPathComponent)\" has been modified by another application. Do you want to keep your changes or reload from disk?"
+        alert.addButton(withTitle: "Keep My Changes")
+        alert.addButton(withTitle: "Reload from Disk")
+        alert.alertStyle = .warning
+        alert.beginSheetModal(for: documentWindow) { [weak self] response in
+            if response == .alertSecondButtonReturn {
+                self?.loadFile(at: fileURL, silentOnFailure: true)
+            }
+        }
+    }
+
     func items(for pickerToolbarItem: NSSharingServicePickerToolbarItem) -> [Any] {
         guard let currentMarkdown else { return [] }
         return [currentMarkdown]
@@ -1643,6 +1735,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         refreshOpenInLLMItem()
         markdownDocument?.replaceContents(markdown: text, fileURL: fileURL)
         renderCurrentDocument(text: text, fileURL: fileURL)
+        (documentWindow.contentViewController as? MainSplitViewController)?.setEditorText(text)
     }
 
     private func applyLoadFailure(error: NSError, silentOnFailure: Bool) {

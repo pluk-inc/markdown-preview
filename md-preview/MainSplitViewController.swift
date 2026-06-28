@@ -10,6 +10,7 @@ final class MainSplitViewController: NSSplitViewController {
     private static let didSeedKey = "MainSplitView.didSeedInitialState"
 
     var onSelectFile: ((URL) -> Void)?
+    var onEditorTextChange: ((String) -> Void)?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -29,6 +30,16 @@ final class MainSplitViewController: NSSplitViewController {
         sidebar.canCollapse = true
         sidebar.canCollapseFromWindowResize = false
 
+        let editorVC = EditorViewController()
+        editorVC.onTextChange = { [weak self] newText in
+            self?.editorTextDidChange(newText)
+        }
+        let editor = NSSplitViewItem(viewController: editorVC)
+        editor.minimumThickness = 300
+        editor.maximumThickness = 800
+        editor.canCollapse = true
+        editor.canCollapseFromWindowResize = false
+
         let content = NSSplitViewItem(viewController: ContentViewController())
         content.minimumThickness = 420
 
@@ -39,6 +50,7 @@ final class MainSplitViewController: NSSplitViewController {
         inspector.canCollapseFromWindowResize = false
 
         addSplitViewItem(sidebar)
+        addSplitViewItem(editor)
         addSplitViewItem(content)
         addSplitViewItem(inspector)
 
@@ -54,6 +66,12 @@ final class MainSplitViewController: NSSplitViewController {
         contentViewController?.display(markdown: markdown, assetBaseURL: assetBaseURL)
         sidebarViewController?.display(markdown: markdown, fileName: fileName, fileURL: url)
         inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))
+        editorViewController?.setMarkdown(markdown)
+    }
+
+    /// Set the editor's text without triggering onTextChange (for file loads / external reloads).
+    func setEditorText(_ text: String) {
+        editorViewController?.setMarkdown(text)
     }
 
     /// URL-only refresh after a rename. Skips the content re-render so
@@ -136,6 +154,25 @@ final class MainSplitViewController: NSSplitViewController {
         sidebar.animator().isCollapsed = false
     }
 
+    var isEditorVisible: Bool {
+        guard splitViewItems.count > 1 else { return false }
+        return !splitViewItems[1].isCollapsed
+    }
+
+    @discardableResult
+    func toggleEditor() -> Bool {
+        guard splitViewItems.count > 1 else { return false }
+        let editorItem = splitViewItems[1]
+        let shouldShow = editorItem.isCollapsed
+        editorItem.animator().isCollapsed = !shouldShow
+        return shouldShow
+    }
+
+    func showEditor() {
+        guard splitViewItems.count > 1, splitViewItems[1].isCollapsed else { return }
+        splitViewItems[1].animator().isCollapsed = false
+    }
+
     var sidebarMode: SidebarViewController.Mode {
         sidebarViewController?.currentMode ?? .outline
     }
@@ -152,12 +189,22 @@ final class MainSplitViewController: NSSplitViewController {
         splitViewItems.first?.viewController as? SidebarViewController
     }
 
+    private var editorViewController: EditorViewController? {
+        splitViewItems.dropFirst().first?.viewController as? EditorViewController
+    }
+
     private var contentViewController: ContentViewController? {
-        splitViewItems.dropFirst().first?.viewController as? ContentViewController
+        guard splitViewItems.count > 2 else { return nil }
+        return splitViewItems[2].viewController as? ContentViewController
     }
 
     private var inspectorViewController: InspectorViewController? {
         splitViewItems.last?.viewController as? InspectorViewController
+    }
+
+    /// Called by the editor when the user edits text.
+    private func editorTextDidChange(_ newText: String) {
+        onEditorTextChange?(newText)
     }
 
     override func viewDidAppear() {
@@ -170,6 +217,7 @@ final class MainSplitViewController: NSSplitViewController {
         // then start collapsed (Preview-style for single-item docs).
         splitView.setPosition(240, ofDividerAt: 0)
         splitViewItems.first?.isCollapsed = true
+        splitViewItems[1].isCollapsed = true
         defaults.set(true, forKey: Self.didSeedKey)
     }
 }
