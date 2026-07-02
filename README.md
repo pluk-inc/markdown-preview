@@ -46,7 +46,7 @@ Or grab the latest signed and notarized DMG from the [Releases](https://github.c
 
 ## Features
 
-- **Editing** — toggle a side-by-side `NSTextView` source editor (toolbar pencil button or <kbd>⇧⌘E</kbd>) with Markdown syntax highlighting; edits debounce into a live preview update and autosave via `NSDocument`.
+- **Editing** — press the pencil (or <kbd>⇧⌘E</kbd>) to switch the document into an inline editing mode: the Markdown source replaces the preview in place, styled as you type (heading sizes, real bold/italic, monospaced code) with the markup kept visible. Toggle back for the rendered preview; edits autosave via `NSDocument`.
 - **Native rendering** — `WKWebView` pipeline backed by [swift-markdown](https://github.com/swiftlang/swift-markdown), with heading anchors and link handling.
 - **Mermaid diagrams** — fenced `mermaid` code blocks render as diagrams in both the app and Quick Look previews, using a bundled renderer so previews work offline without a CDN request.
 - **Math equations** — LaTeX inline (`$x_1 + x_2$`), display (`$$\int_0^1 x^2\,dx$$`), and fenced `math` blocks render with a bundled KaTeX. Selecting a rendered formula and copying yields the original LaTeX source (via the official `copy-tex` extension).

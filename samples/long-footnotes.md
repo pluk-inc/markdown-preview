@@ -1,6 +1,6 @@
 # Long Footnote Jump Test
 
-Use this file to test whether footnote references jump to the footnote section
+Use this file to test whether footnote refserences jump to the footnote section
 and whether backlinks return to the original reference on a long page.
 
 ## Section 1

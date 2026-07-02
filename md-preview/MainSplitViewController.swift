@@ -9,14 +9,11 @@ final class MainSplitViewController: NSSplitViewController {
 
     private static let didSeedKey = "MainSplitView.didSeedInitialState"
 
-    private var editorSplitItem: NSSplitViewItem?
-    private var editorCollapseObservation: NSKeyValueObservation?
-
     var onSelectFile: ((URL) -> Void)?
     var onEditorTextChange: ((String) -> Void)?
-    /// Fired whenever the editor pane's visibility changes, regardless of
-    /// what caused it (toolbar button, menu item, divider drag). The split
-    /// item's `isCollapsed` is the single source of truth.
+    /// Fired whenever the content pane switches between preview and editor,
+    /// regardless of what caused it. `ContentAreaViewController.isEditing`
+    /// is the single source of truth.
     var onEditorVisibilityChange: ((Bool) -> Void)?
 
     override func viewDidLoad() {
@@ -37,28 +34,14 @@ final class MainSplitViewController: NSSplitViewController {
         sidebar.canCollapse = true
         sidebar.canCollapseFromWindowResize = false
 
-        let editorVC = EditorViewController()
-        editorVC.onTextChange = { [weak self] newText in
+        let contentAreaVC = ContentAreaViewController()
+        contentAreaVC.editorViewController.onTextChange = { [weak self] newText in
             self?.onEditorTextChange?(newText)
         }
-        let editor = NSSplitViewItem(viewController: editorVC)
-        editor.minimumThickness = 300
-        editor.maximumThickness = 800
-        editor.canCollapse = true
-        editor.canCollapseFromWindowResize = false
-        // Collapsed unconditionally at creation (same pattern as the
-        // inspector below) — not in the one-time seed block, which never
-        // runs for installs that predate the editor pane.
-        editor.isCollapsed = true
-        self.editorSplitItem = editor
-        editorCollapseObservation = editor.observe(\.isCollapsed) { [weak self] _, _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.onEditorVisibilityChange?(self.isEditorVisible)
-            }
+        contentAreaVC.onEditingChange = { [weak self] isEditing in
+            self?.onEditorVisibilityChange?(isEditing)
         }
-
-        let content = NSSplitViewItem(viewController: ContentViewController())
+        let content = NSSplitViewItem(viewController: contentAreaVC)
         content.minimumThickness = 420
 
         let inspector = NSSplitViewItem(inspectorWithViewController: InspectorViewController())
@@ -68,7 +51,6 @@ final class MainSplitViewController: NSSplitViewController {
         inspector.canCollapseFromWindowResize = false
 
         addSplitViewItem(sidebar)
-        addSplitViewItem(editor)
         addSplitViewItem(content)
         addSplitViewItem(inspector)
 
@@ -186,18 +168,18 @@ final class MainSplitViewController: NSSplitViewController {
         sidebar.animator().isCollapsed = false
     }
 
-    /// Whether the editor pane is currently visible (not collapsed).
+    /// Whether the content pane is currently in editing mode.
     var isEditorVisible: Bool {
-        !(editorSplitItem?.isCollapsed ?? true)
+        contentAreaViewController?.isEditing ?? false
     }
 
-    /// Toggles the editor pane visibility. Returns `true` if the editor is now visible.
+    /// Switches the content pane between preview and editor.
+    /// Returns `true` if the editor is now showing.
     @discardableResult
     func toggleEditor() -> Bool {
-        guard let editorItem = editorSplitItem else { return false }
-        let shouldShow = editorItem.isCollapsed
-        editorItem.animator().isCollapsed = !shouldShow
-        return shouldShow
+        guard let contentArea = contentAreaViewController else { return false }
+        contentArea.isEditing.toggle()
+        return contentArea.isEditing
     }
 
     var sidebarMode: SidebarViewController.Mode {
@@ -216,13 +198,16 @@ final class MainSplitViewController: NSSplitViewController {
         splitViewItems.first?.viewController as? SidebarViewController
     }
 
+    private var contentAreaViewController: ContentAreaViewController? {
+        splitViewItems.dropFirst().first?.viewController as? ContentAreaViewController
+    }
+
     private var editorViewController: EditorViewController? {
-        splitViewItems.dropFirst().first?.viewController as? EditorViewController
+        contentAreaViewController?.editorViewController
     }
 
     private var previewViewController: ContentViewController? {
-        guard splitViewItems.count > 2 else { return nil }
-        return splitViewItems[2].viewController as? ContentViewController
+        contentAreaViewController?.previewViewController
     }
 
     private var inspectorViewController: InspectorViewController? {

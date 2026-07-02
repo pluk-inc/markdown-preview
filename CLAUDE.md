@@ -12,7 +12,7 @@ A macOS app for reading and editing Markdown files. AppKit, sandboxed, ships wit
 | Quick Look target | `quick-look` (embedded extension) |
 | Min macOS | 15.0 |
 | Sandboxed | yes — read-write access to user-selected files (`com.apple.security.files.user-selected.read-write`); uses Sparkle XPC services for updates |
-| Editing | Inline source editor (NSTextView) with syntax highlighting; toggle via toolbar pencil button |
+| Editing | Inline editing mode (NSTextView) — pencil button / ⇧⌘E swaps preview ↔ editor in place, source styled as you type |
 | Auto-updater | Sparkle 2.x (Swift package) |
 | Distribution | Amore (managed) with custom domain `storage.md-preview.app` |
 

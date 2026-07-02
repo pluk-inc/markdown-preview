@@ -51,8 +51,22 @@ final class MarkdownSyntaxHighlighterTests: XCTestCase {
         let color = foregroundColor(in: storage, at: 0)
         XCTAssertEqual(color, .systemBlue, "Heading should be blue")
         let f = font(in: storage, at: 0)
-        XCTAssertEqual(f, NSFont.monospacedSystemFont(ofSize: 13, weight: .bold),
-                       "Heading should be bold")
+        XCTAssertEqual(f, MarkdownSyntaxHighlighter.headingFont(level: 1),
+                       "H1 should use the level-1 heading font")
+    }
+
+    func testHeadingLevelsScaleDown() {
+        let text = "# One\n\n### Three"
+        let storage = makeStorage(text)
+        highlighter.applyHighlighting(to: storage)
+
+        let h1Font = font(in: storage, at: 0)
+        let h3Offset = (text as NSString).range(of: "### Three").location
+        let h3Font = font(in: storage, at: h3Offset)
+        XCTAssertEqual(h1Font, MarkdownSyntaxHighlighter.headingFont(level: 1))
+        XCTAssertEqual(h3Font, MarkdownSyntaxHighlighter.headingFont(level: 3))
+        XCTAssertGreaterThan(h1Font?.pointSize ?? 0, h3Font?.pointSize ?? .infinity,
+                             "H1 should render larger than H3")
     }
 
     func testH3Heading() {
@@ -198,8 +212,8 @@ final class MarkdownSyntaxHighlighterTests: XCTestCase {
 
         let boldOffset = (text as NSString).range(of: "bold").location
         let f = font(in: storage, at: boldOffset)
-        XCTAssertEqual(f, NSFont.monospacedSystemFont(ofSize: 13, weight: .bold),
-                       "Bold text should use bold font")
+        XCTAssertEqual(f, NSFont.systemFont(ofSize: 15, weight: .bold),
+                       "Bold text should use the bold body font")
     }
 
     // MARK: - Italic (does not match inside bold)
@@ -227,10 +241,10 @@ final class MarkdownSyntaxHighlighterTests: XCTestCase {
 
         // When the size guard trips, applyHighlighting returns before the
         // base-attribute reset, so the storage keeps its default font (not
-        // the highlighter's monospaced base font) and the heading line is
-        // never colored.
+        // the highlighter's heading font) and the heading line is never
+        // colored.
         XCTAssertNotEqual(font(in: storage, at: 0),
-                          NSFont.monospacedSystemFont(ofSize: 13, weight: .bold),
+                          MarkdownSyntaxHighlighter.headingFont(level: 1),
                           "Heading font pass must not run for oversized documents")
         XCTAssertNil(foregroundColor(in: storage, at: 0),
                      "Heading must not be colored when highlighting is skipped")

@@ -5,10 +5,12 @@
 
 import Cocoa
 
-/// Applies regex-based syntax highlighting to Markdown source text in an `NSTextStorage`.
+/// Applies regex-based inline styling to Markdown source text in an `NSTextStorage`.
 ///
-/// Highlights headings, bold, italic, code (inline and fenced), links, blockquotes,
-/// list markers, and horizontal rules. Code fences are detected first and excluded
+/// Styles the source typographically as the user types — headings render at
+/// their heading sizes, bold/italic use real font traits, and code uses a
+/// monospaced font — while the markup characters stay visible (Typora /
+/// Obsidian Live-Preview style). Code fences are detected first and excluded
 /// from all subsequent pattern matches.
 ///
 /// - Important: Must be called on the main thread. For documents larger than 512 KB,
@@ -28,16 +30,33 @@ final class MarkdownSyntaxHighlighter {
     private let listMarkerColor: NSColor = .systemPurple
     private let commentColor: NSColor = .tertiaryLabelColor
 
-    private let baseFont: NSFont = .monospacedSystemFont(ofSize: 13, weight: .regular)
-    private let headingFont: NSFont = .monospacedSystemFont(ofSize: 13, weight: .bold)
-    private let boldFont: NSFont = .monospacedSystemFont(ofSize: 13, weight: .bold)
+    /// Body text font for prose — shared with the editor's default font.
+    static let bodyFont: NSFont = .systemFont(ofSize: 15)
+    /// Monospaced font for inline code and fenced blocks.
+    static let monoFont: NSFont = .monospacedSystemFont(ofSize: 13, weight: .regular)
+
+    private static let headingSizes: [CGFloat] = [26, 22, 19, 17, 16, 15]
+
+    /// Bold system font sized for the given heading level (1–6, clamped).
+    static func headingFont(level: Int) -> NSFont {
+        let clamped = min(max(level, 1), 6)
+        return .systemFont(ofSize: headingSizes[clamped - 1], weight: .bold)
+    }
+
+    private let baseFont = MarkdownSyntaxHighlighter.bodyFont
+    private let boldFont: NSFont = .systemFont(ofSize: 15, weight: .bold)
+    private let italicFont: NSFont = {
+        let base = MarkdownSyntaxHighlighter.bodyFont
+        let descriptor = base.fontDescriptor.withSymbolicTraits(.italic)
+        return NSFont(descriptor: descriptor, size: base.pointSize) ?? base
+    }()
 
     private lazy var fenceOpenRegex: NSRegularExpression? = {
         try? NSRegularExpression(pattern: "^(`{3,}|~{3,})")
     }()
 
     private let inlineCodeRegex = try! NSRegularExpression(pattern: "`[^`\\n]+`")
-    private let headingRegex = try! NSRegularExpression(pattern: "(?m)^#{1,6}\\s+.*$")
+    private let headingRegex = try! NSRegularExpression(pattern: "(?m)^(#{1,6})\\s+.*$")
     private let boldRegex = try! NSRegularExpression(pattern: "(\\*\\*|__)(.+?)\\1")
     private let italicRegex = try! NSRegularExpression(pattern: "(?<!\\*)\\*[^*\\n]+\\*(?!\\*)")
     private let linkRegex = try! NSRegularExpression(pattern: "\\[([^\\]]+)\\]\\(([^)]+)\\)")
@@ -74,7 +93,7 @@ final class MarkdownSyntaxHighlighter {
             excluding: fenceRanges
         ) { match in
             (range: match.range, attributes: [
-                .font: self.baseFont,
+                .font: Self.monoFont,
                 .foregroundColor: self.codeColor,
             ])
         }
@@ -85,8 +104,9 @@ final class MarkdownSyntaxHighlighter {
             string: string,
             excluding: fenceRanges
         ) { match in
-            (range: match.range, attributes: [
-                .font: self.headingFont,
+            let level = match.range(at: 1).length
+            return (range: match.range, attributes: [
+                .font: Self.headingFont(level: level),
                 .foregroundColor: self.headingColor,
             ])
         }
@@ -111,7 +131,7 @@ final class MarkdownSyntaxHighlighter {
             excluding: fenceRanges
         ) { match in
             (range: match.range, attributes: [
-                .font: self.baseFont,
+                .font: self.italicFont,
                 .foregroundColor: self.italicColor,
             ])
         }
@@ -233,7 +253,7 @@ final class MarkdownSyntaxHighlighter {
 
     private func applyCodeStyle(to textStorage: NSTextStorage, range: NSRange) {
         textStorage.addAttributes(
-            [.font: baseFont, .foregroundColor: codeColor],
+            [.font: Self.monoFont, .foregroundColor: codeColor],
             range: range
         )
     }

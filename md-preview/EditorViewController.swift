@@ -59,7 +59,7 @@ final class EditorViewController: NSViewController, NSTextViewDelegate {
         textView.isSelectable = true
         textView.allowsUndo = true
         textView.usesFindBar = true
-        textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        textView.font = MarkdownSyntaxHighlighter.bodyFont
         textView.textColor = NSColor.labelColor
         textView.backgroundColor = NSColor.textBackgroundColor
         textView.isAutomaticQuoteSubstitutionEnabled = false
@@ -139,6 +139,12 @@ final class EditorViewController: NSViewController, NSTextViewDelegate {
         isSettingText = false
         guard let storage = textView.textStorage else { return }
         highlighter.applyHighlighting(to: storage)
+    }
+
+    /// Moves keyboard focus into the text view.
+    func focus() {
+        guard isViewLoaded else { return }
+        view.window?.makeFirstResponder(textView)
     }
 
     /// Delivers any pending (debounced) edit to `onTextChange` immediately.

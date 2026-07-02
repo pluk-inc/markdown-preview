@@ -1162,7 +1162,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let item = NSToolbarItem(itemIdentifier: .editToggle)
         item.label = "Edit"
         item.paletteLabel = "Edit"
-        item.toolTip = "Toggle source editor (⇧⌘E)"
+        item.toolTip = "Switch between preview and editor (⇧⌘E)"
 
         let image = NSImage(systemSymbolName: "pencil.line",
                             accessibilityDescription: "Edit") ?? NSImage()
