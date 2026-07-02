@@ -111,6 +111,22 @@ final class MarkdownSyntaxHighlighterTests: XCTestCase {
         XCTAssertEqual(foregroundColor(in: storage, at: codeOffset), .systemGreen)
     }
 
+    func testCRLFFenceCloses() {
+        // CRLF line endings: the \r before the \n must not defeat the
+        // closing-fence detection.
+        let text = "```\r\ncode\r\n```\r\n# Heading after fence"
+        let storage = makeStorage(text)
+        highlighter.applyHighlighting(to: storage)
+
+        let codeOffset = (text as NSString).range(of: "code").location
+        XCTAssertEqual(foregroundColor(in: storage, at: codeOffset), .systemGreen,
+                       "Fence content should be code-colored")
+
+        let headingOffset = (text as NSString).range(of: "# Heading").location
+        XCTAssertEqual(foregroundColor(in: storage, at: headingOffset), .systemBlue,
+                       "Text after a CRLF-terminated closing fence should not be code-colored")
+    }
+
     // MARK: - Inline code
 
     func testInlineCodeIsHighlighted() {
@@ -205,16 +221,19 @@ final class MarkdownSyntaxHighlighterTests: XCTestCase {
 
     func testLargeDocumentSkipsHighlighting() {
         // Create a string > 512KB
-        let bigText = String(repeating: "a", count: 600_000)
+        let bigText = "# heading\n" + String(repeating: "a", count: 600_000)
         let storage = makeStorage(bigText)
         highlighter.applyHighlighting(to: storage)
 
-        // Should have the default label color (no highlighting applied)
-        let color = foregroundColor(in: storage, at: 100)
-        // When highlighting is skipped, the original attributes are preserved
-        // (NSTextStorage default from init), not reset to labelColor.
-        // The key assertion: it didn't crash and returned quickly.
-        XCTAssertNotNil(storage.string, "Should handle large docs without crash")
+        // When the size guard trips, applyHighlighting returns before the
+        // base-attribute reset, so the storage keeps its default font (not
+        // the highlighter's monospaced base font) and the heading line is
+        // never colored.
+        XCTAssertNotEqual(font(in: storage, at: 0),
+                          NSFont.monospacedSystemFont(ofSize: 13, weight: .bold),
+                          "Heading font pass must not run for oversized documents")
+        XCTAssertNil(foregroundColor(in: storage, at: 0),
+                     "Heading must not be colored when highlighting is skipped")
     }
 
     // MARK: - Multi-construct document

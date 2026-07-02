@@ -10,9 +10,14 @@ final class MainSplitViewController: NSSplitViewController {
     private static let didSeedKey = "MainSplitView.didSeedInitialState"
 
     private var editorSplitItem: NSSplitViewItem?
+    private var editorCollapseObservation: NSKeyValueObservation?
 
     var onSelectFile: ((URL) -> Void)?
     var onEditorTextChange: ((String) -> Void)?
+    /// Fired whenever the editor pane's visibility changes, regardless of
+    /// what caused it (toolbar button, menu item, divider drag). The split
+    /// item's `isCollapsed` is the single source of truth.
+    var onEditorVisibilityChange: ((Bool) -> Void)?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -41,7 +46,17 @@ final class MainSplitViewController: NSSplitViewController {
         editor.maximumThickness = 800
         editor.canCollapse = true
         editor.canCollapseFromWindowResize = false
+        // Collapsed unconditionally at creation (same pattern as the
+        // inspector below) — not in the one-time seed block, which never
+        // runs for installs that predate the editor pane.
+        editor.isCollapsed = true
         self.editorSplitItem = editor
+        editorCollapseObservation = editor.observe(\.isCollapsed) { [weak self] _, _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.onEditorVisibilityChange?(self.isEditorVisible)
+            }
+        }
 
         let content = NSSplitViewItem(viewController: ContentViewController())
         content.minimumThickness = 420
@@ -66,9 +81,7 @@ final class MainSplitViewController: NSSplitViewController {
     }
 
     func display(markdown: String, fileName: String, url: URL?, assetBaseURL: URL?) {
-        previewViewController?.display(markdown: markdown, assetBaseURL: assetBaseURL)
-        sidebarViewController?.display(markdown: markdown, fileName: fileName, fileURL: url)
-        inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))
+        displayPreviewOnly(markdown: markdown, fileName: fileName, url: url, assetBaseURL: assetBaseURL)
         editorViewController?.setMarkdown(markdown)
     }
 
@@ -80,10 +93,17 @@ final class MainSplitViewController: NSSplitViewController {
         inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))
     }
 
-    /// Sets the editor text without triggering the text change callback.
-    /// Use for file loads and external reloads.
-    func setEditorText(_ text: String) {
-        editorViewController?.setMarkdown(text)
+    /// Delivers any pending (debounced) editor edit immediately.
+    /// Call before switching files or closing so the document holds the
+    /// full editor text.
+    func flushPendingEditorChanges() {
+        editorViewController?.flushPendingChanges()
+    }
+
+    /// Enables or disables editing in the source pane (e.g. for files the
+    /// sandbox grants read-only access to).
+    func setEditorEditable(_ isEditable: Bool) {
+        editorViewController?.isEditable = isEditable
     }
 
     /// URL-only refresh after a rename. Skips the content re-render so
@@ -180,12 +200,6 @@ final class MainSplitViewController: NSSplitViewController {
         return shouldShow
     }
 
-    /// Shows the editor pane if it's collapsed.
-    func showEditor() {
-        guard let item = editorSplitItem, item.isCollapsed else { return }
-        item.animator().isCollapsed = false
-    }
-
     var sidebarMode: SidebarViewController.Mode {
         sidebarViewController?.currentMode ?? .outline
     }
@@ -225,7 +239,6 @@ final class MainSplitViewController: NSSplitViewController {
         // then start collapsed (Preview-style for single-item docs).
         splitView.setPosition(240, ofDividerAt: 0)
         splitViewItems.first?.isCollapsed = true
-        editorSplitItem?.isCollapsed = true
         defaults.set(true, forKey: Self.didSeedKey)
     }
 }

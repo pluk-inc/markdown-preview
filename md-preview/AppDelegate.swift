@@ -761,10 +761,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               viewMenu.items.first(where: { $0.action == #selector(toggleEditorFromMenu(_:)) }) == nil
         else { return }
 
+        // ⇧⌘E — plain ⌘E is taken by the system-standard
+        // Edit ▸ Find ▸ Use Selection for Find (MainMenu.xib), and duplicate
+        // key equivalents resolve to whichever menu comes first.
         let item = NSMenuItem(title: "Toggle Editor",
                               action: #selector(toggleEditorFromMenu(_:)),
                               keyEquivalent: "e")
-        item.keyEquivalentModifierMask = .command
+        item.keyEquivalentModifierMask = [.command, .shift]
         item.target = self
         if let image = NSImage(systemSymbolName: "pencil.line",
                                accessibilityDescription: "Toggle Editor") {

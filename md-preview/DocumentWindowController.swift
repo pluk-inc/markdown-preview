@@ -35,6 +35,11 @@ private extension Array where Element == NSToolbarItem.Identifier {
 final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate, NSSharingServicePickerToolbarItemDelegate, NSSearchFieldDelegate, NSMenuDelegate {
 
     private var currentFileURL: URL?
+    /// The URL whose content the document currently holds. Trails
+    /// `currentFileURL` while an async load is in flight, and stays on the
+    /// previous file if that load fails — so callers can tell fresh content
+    /// from stale.
+    private var loadedFileURL: URL?
     private var fileWatcher: FileWatcher?
     private var externalChangeAlertIsVisible = false
     private var isInspectorToggleSelected = false
@@ -98,6 +103,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         split.onEditorTextChange = { [weak self] newText in
             self?.handleEditorTextChange(newText)
         }
+        split.onEditorVisibilityChange = { [weak self] isVisible in
+            self?.setEditToggleSelected(isVisible)
+        }
         documentWindow.contentViewController = split
         documentWindow.setContentSize(NSSize(width: 1100, height: 720))
         documentWindow.center()
@@ -113,6 +121,15 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         installFindBar()
     }
 
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        // Hand any keystrokes still sitting in the editor's debounce window
+        // to the document, so NSDocument's close-time autosave writes the
+        // full text.
+        (documentWindow.contentViewController as? MainSplitViewController)?
+            .flushPendingEditorChanges()
+        return true
+    }
+
     func windowWillClose(_ notification: Notification) {
         fileWatcher?.cancel()
         fileWatcher = nil
@@ -120,6 +137,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     func display(markdown: String, fileURL: URL?) {
         currentFileURL = fileURL
+        loadedFileURL = fileURL
         documentWindow.title = fileURL?.lastPathComponent ?? "Untitled"
         documentWindow.makeKeyAndOrderFront(nil)
         NSApp.activate()
@@ -128,6 +146,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         refreshOpenActionsItem()
         if let fileURL {
             NSDocumentController.shared.noteNewRecentDocumentURL(fileURL)
+            refreshEditorWritability(for: fileURL)
             renderCurrentDocument(text: markdown, fileURL: fileURL)
             startWatching(fileURL)
             offerToBecomeDefaultHandlerIfNeeded()
@@ -139,6 +158,15 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             openFolder(url)
             return
         }
+
+        // Before re-pointing the document at the new file, flush the
+        // editor's debounced edits into the document and write them out.
+        // Otherwise `replaceFileURL`'s change-count reset silently discards
+        // them — or worse, the debounce fires after the switch and the old
+        // file's text is autosaved over the new file.
+        (documentWindow.contentViewController as? MainSplitViewController)?
+            .flushPendingEditorChanges()
+        markdownDocument?.persistPendingEdits()
 
         // Switching to a different file blanks the preview so the previous
         // doc doesn't linger on screen during sheet dismissal + load.
@@ -164,8 +192,14 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         fileWatcher?.cancel()
         let watcher = FileWatcher(url: url) { [weak self] in
             guard let self, self.currentFileURL == url else { return }
-            guard self.markdownDocument?.isSaving != true else { return }
-            if self.markdownDocument?.isDocumentEdited == true {
+            guard let document = self.markdownDocument else { return }
+            guard !document.isSaving else { return }
+            // The watcher's debounced callback usually lands after a save
+            // finished (isSaving already false), so filter by modification
+            // date: events from this document's own writes are not external
+            // changes and must not reload the editor or raise the alert.
+            guard document.isFileModifiedExternally(at: url) else { return }
+            if document.isDocumentEdited {
                 self.showExternalChangeAlert(fileURL: url)
             } else {
                 self.loadFile(at: url, silentOnFailure: true)
@@ -182,7 +216,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// Open With list, sidebar selection, and inspector — without
     /// re-rendering the WebView, since the markdown content didn't change.
     private func handleRename(to newURL: URL) {
-        guard currentFileURL != nil else { return }
+        guard let previousURL = currentFileURL else { return }
+        // Only trust the in-memory markdown when it actually belongs to the
+        // renamed file. During an in-flight switch (or after a failed load)
+        // the document still holds the previous file's text, so fall back
+        // to reading from disk — matching the pre-editor behavior.
+        let contentIsFresh = loadedFileURL == previousURL
+        // replaceFileURL resets the change count; unsaved edits survive the
+        // rename in the editor, so re-mark them dirty against the new URL
+        // rather than letting them silently lose their pending autosave.
+        let hadUnsavedEdits = markdownDocument?.isDocumentEdited == true
         currentFileURL = newURL
         markdownDocument?.replaceFileURL(newURL)
         documentWindow.title = newURL.lastPathComponent
@@ -190,7 +233,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         refreshOpenWithItem()
         refreshOpenActionsItem()
         startWatching(newURL)
-        if let markdown = markdownDocument?.markdown {
+        if contentIsFresh, let markdown = markdownDocument?.markdown {
+            loadedFileURL = newURL
+            if hadUnsavedEdits {
+                markdownDocument?.updateChangeCount(.changeDone)
+            }
             (documentWindow.contentViewController as? MainSplitViewController)?
                 .openFileURLDidChange(newURL, markdown: markdown)
         } else {
@@ -1115,7 +1162,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let item = NSToolbarItem(itemIdentifier: .editToggle)
         item.label = "Edit"
         item.paletteLabel = "Edit"
-        item.toolTip = "Toggle source editor (⌘E)"
+        item.toolTip = "Toggle source editor (⇧⌘E)"
 
         let image = NSImage(systemSymbolName: "pencil.line",
                             accessibilityDescription: "Edit") ?? NSImage()
@@ -1148,9 +1195,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     @objc func toggleEditorAction(_ sender: Any) {
-        let isVisible = (documentWindow.contentViewController as? MainSplitViewController)?
-            .toggleEditor() ?? false
-        setEditToggleSelected(isVisible)
+        // Button/menu state updates flow through onEditorVisibilityChange,
+        // so divider-drag collapses stay in sync too.
+        (documentWindow.contentViewController as? MainSplitViewController)?
+            .toggleEditor()
     }
 
     private func refreshEditToggleItem() {
@@ -1186,7 +1234,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         externalChangeAlertIsVisible = true
         let alert = NSAlert()
         alert.messageText = "File Modified Externally"
-        alert.informativeText = "\"\(sanitizedFileName(fileURL))\" has been modified by another application. Do you want to keep your changes or reload from disk?"
+        alert.informativeText = "\"\(fileURL.lastPathComponent)\" has been modified by another application. Do you want to keep your changes or reload from disk?"
         alert.addButton(withTitle: "Keep My Changes")
         alert.addButton(withTitle: "Reload from Disk")
         alert.alertStyle = .warning
@@ -1196,16 +1244,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 self?.loadFile(at: fileURL, silentOnFailure: true)
             }
         }
-    }
-
-    private func sanitizedFileName(_ url: URL) -> String {
-        url.lastPathComponent.unicodeScalars.filter { scalar in
-            // Drop Unicode directional overrides and invisible formatters
-            switch scalar.properties.generalCategory {
-            case .format: return false
-            default: return true
-            }
-        }.reduce(into: "") { $0.append(Character($1)) }
     }
 
     func items(for pickerToolbarItem: NSSharingServicePickerToolbarItem) -> [Any] {
@@ -1753,7 +1791,28 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func applyLoadedMarkdown(_ text: String, fileURL: URL) {
         refreshOpenInLLMItem()
         markdownDocument?.replaceContents(markdown: text, fileURL: fileURL)
+        loadedFileURL = fileURL
+        refreshEditorWritability(for: fileURL)
         renderCurrentDocument(text: text, fileURL: fileURL)
+    }
+
+    /// Disables the source editor for files the sandbox can't write —
+    /// e.g. siblings opened via the project navigator, which are readable
+    /// through the temporary-exception entitlement but carry no Powerbox
+    /// write grant. Editing them would only queue up autosaves the system
+    /// rejects.
+    private func refreshEditorWritability(for fileURL: URL) {
+        let isWritable = FileManager.default.isWritableFile(atPath: fileURL.path)
+        (documentWindow.contentViewController as? MainSplitViewController)?
+            .setEditorEditable(isWritable)
+    }
+
+    /// The document re-read its file for File ▸ Revert To Saved; refresh
+    /// every pane from the reverted content.
+    func documentDidRevert() {
+        guard let document = markdownDocument, let url = currentFileURL else { return }
+        loadedFileURL = url
+        renderCurrentDocument(text: document.markdown, fileURL: url)
     }
 
     private func applyLoadFailure(error: NSError, silentOnFailure: Bool) {

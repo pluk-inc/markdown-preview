@@ -180,8 +180,15 @@ final class MarkdownSyntaxHighlighter {
         while index < string.length {
             let lineRange = string.lineRange(for: NSRange(location: index, length: 0))
             var contentRange = lineRange
+            // Strip the line terminator: \n, \r, or the \r of a \r\n pair —
+            // a leftover \r would defeat the closing-fence emptiness check
+            // on CRLF files (CharacterSet.whitespaces excludes \r).
             if contentRange.length > 0,
                string.character(at: NSMaxRange(contentRange) - 1) == 0x0A {
+                contentRange.length -= 1
+            }
+            if contentRange.length > 0,
+               string.character(at: NSMaxRange(contentRange) - 1) == 0x0D {
                 contentRange.length -= 1
             }
 

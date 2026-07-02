@@ -15,8 +15,19 @@ final class EditorViewController: NSViewController, NSTextViewDelegate {
     /// The `String` parameter is the full document text.
     var onTextChange: ((String) -> Void)?
 
+    /// Whether the text view accepts edits. Disabled for files the sandbox
+    /// only grants read access to, so autosave never attempts a write the
+    /// system would deny.
+    var isEditable: Bool = true {
+        didSet {
+            textView?.isEditable = isEditable
+            readOnlyBadge?.isHidden = isEditable
+        }
+    }
+
     private var textView: NSTextView!
     private var scrollView: NSScrollView!
+    private var readOnlyBadge: NSTextField?
     private var highlighter: MarkdownSyntaxHighlighter!
     private var debounceWork: DispatchWorkItem?
     private var highlightDebounce: DispatchWorkItem?
@@ -26,11 +37,6 @@ final class EditorViewController: NSViewController, NSTextViewDelegate {
     /// Defensive guard: `NSTextView.string =` typically does not fire `textDidChange`,
     /// but edge cases (undo coalescing, input methods) may. Costs nothing to keep.
     private var isSettingText = false
-
-    /// The current text in the editor. Returns empty string if the view is not loaded.
-    var currentText: String {
-        textView?.string ?? ""
-    }
 
     override func loadView() {
         scrollView = NSScrollView()
@@ -42,7 +48,7 @@ final class EditorViewController: NSViewController, NSTextViewDelegate {
 
         textView = NSTextView()
         textView.isRichText = false
-        textView.isEditable = true
+        textView.isEditable = isEditable
         textView.isSelectable = true
         textView.allowsUndo = true
         textView.usesFindBar = true
@@ -67,16 +73,43 @@ final class EditorViewController: NSViewController, NSTextViewDelegate {
         scrollView.documentView = textView
         view = scrollView
 
+        installReadOnlyBadge()
         highlighter = MarkdownSyntaxHighlighter()
+    }
+
+    private func installReadOnlyBadge() {
+        let badge = NSTextField(labelWithString: "Read-only")
+        badge.font = NSFont.systemFont(ofSize: 11, weight: .medium)
+        badge.textColor = .secondaryLabelColor
+        badge.alignment = .center
+        badge.wantsLayer = true
+        badge.layer?.backgroundColor = NSColor.quaternarySystemFill.cgColor
+        badge.layer?.cornerRadius = 4
+        badge.toolTip = "The sandbox grants read-only access to this file. Open it via File ▸ Open to edit."
+        badge.translatesAutoresizingMaskIntoConstraints = false
+        badge.isHidden = isEditable
+        scrollView.addSubview(badge)
+        NSLayoutConstraint.activate([
+            badge.topAnchor.constraint(equalTo: scrollView.topAnchor, constant: 8),
+            badge.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -12),
+            badge.widthAnchor.constraint(greaterThanOrEqualToConstant: 72),
+            badge.heightAnchor.constraint(equalToConstant: 18)
+        ])
+        readOnlyBadge = badge
     }
 
     /// Sets the text view content programmatically without triggering `onTextChange`.
     ///
-    /// Use this for file loads and external reloads. The method applies syntax
-    /// highlighting after setting the text.
+    /// Use this for file loads and external reloads. Any pending debounced
+    /// edit is cancelled — the new content supersedes it — and syntax
+    /// highlighting is applied to the fresh text.
     ///
     /// - Parameter text: The Markdown source to display.
     func setMarkdown(_ text: String) {
+        debounceWork?.cancel()
+        debounceWork = nil
+        highlightDebounce?.cancel()
+        highlightDebounce = nil
         isSettingText = true
         textView.string = text
         isSettingText = false
@@ -84,12 +117,16 @@ final class EditorViewController: NSViewController, NSTextViewDelegate {
         highlighter.applyHighlighting(to: storage)
     }
 
-    func insertMarkdownSnippet(_ snippet: String) {
-        textView.insertText(snippet, replacementRange: textView.selectedRange())
-    }
-
-    override func becomeFirstResponder() -> Bool {
-        view.window?.makeFirstResponder(textView) ?? false
+    /// Delivers any pending (debounced) edit to `onTextChange` immediately.
+    ///
+    /// Call before the surrounding controller switches files or closes, so
+    /// the document model holds the full editor text rather than trailing
+    /// it by up to the debounce interval.
+    func flushPendingChanges() {
+        guard let pending = debounceWork else { return }
+        pending.cancel()
+        debounceWork = nil
+        onTextChange?(textView.string)
     }
 
     func textDidChange(_ notification: Notification) {
@@ -104,11 +141,14 @@ final class EditorViewController: NSViewController, NSTextViewDelegate {
         highlightDebounce = highlightWork
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.highlightDelay, execute: highlightWork)
 
-        // Debounce render pipeline (existing)
+        // Debounce the render pipeline. The text is read when the work item
+        // fires (not captured per keystroke) so fast typing doesn't copy the
+        // full document once per character.
         debounceWork?.cancel()
-        let capturedText = textView.string
         let work = DispatchWorkItem { [weak self] in
-            self?.onTextChange?(capturedText)
+            guard let self else { return }
+            self.debounceWork = nil
+            self.onTextChange?(self.textView.string)
         }
         debounceWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.debounceDelay, execute: work)
