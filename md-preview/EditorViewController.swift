@@ -38,6 +38,13 @@ final class EditorViewController: NSViewController, NSTextViewDelegate {
     /// but edge cases (undo coalescing, input methods) may. Costs nothing to keep.
     private var isSettingText = false
 
+    /// Markdown handed to `setMarkdown` before the view loaded. The editor
+    /// pane starts collapsed, so its view loads lazily — during window
+    /// restoration `display()` runs before `loadView` (touching `textView`
+    /// then would trap). Applied in `viewDidLoad`, which also defers the
+    /// initial full-document highlight until the pane is first shown.
+    private var pendingMarkdown: String?
+
     override func loadView() {
         scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
@@ -110,10 +117,27 @@ final class EditorViewController: NSViewController, NSTextViewDelegate {
         debounceWork = nil
         highlightDebounce?.cancel()
         highlightDebounce = nil
+        guard isViewLoaded else {
+            pendingMarkdown = text
+            return
+        }
+        pendingMarkdown = nil
+        applyMarkdown(text)
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        if let pending = pendingMarkdown {
+            pendingMarkdown = nil
+            applyMarkdown(pending)
+        }
+    }
+
+    private func applyMarkdown(_ text: String) {
         isSettingText = true
         textView.string = text
         isSettingText = false
-        guard let storage = textView?.textStorage else { return }
+        guard let storage = textView.textStorage else { return }
         highlighter.applyHighlighting(to: storage)
     }
 
