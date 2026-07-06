@@ -59,6 +59,10 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     // is invariant under pageZoom).
     private var lastReportedDocumentHeight: CGFloat = 1
     private var zoomDefaultsKey: String?
+    private var magnificationStartZoom: CGFloat?
+    private var accumulatedMagnification: CGFloat = 0
+    private var didMagnifyDuringCurrentGesture = false
+    private var isPointerOverMermaidFigure = false
     private var currentMarkdown: String?
 
     override init(frame frameRect: NSRect) {
@@ -161,6 +165,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
 
     func display(markdown: String, assetBaseURL: URL? = nil) {
         currentMarkdown = markdown
+        isPointerOverMermaidFigure = false
         assetScheme.setBaseURL(assetBaseURL)
         currentAssetBase = assetBaseURL
         let baseHref = "\(MarkdownAssetScheme.scheme):///"
@@ -250,6 +255,9 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             // --predicate 'subsystem == "doc.md-preview"'` surfaces them.
             guard let message = dict["message"] as? String else { return }
             Logger.perf.debug("\(message, privacy: .public)")
+        case "mermaidHover":
+            guard let value = dict["value"] as? NSNumber else { return }
+            isPointerOverMermaidFigure = value.boolValue
         case "copyCode":
             guard let text = dict["value"] as? String else { return }
             let pasteboard = NSPasteboard.general
@@ -322,6 +330,39 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     func zoomIn() { setPageZoom(nextZoomStep(from: webView.pageZoom, increasing: true)) }
     func zoomOut() { setPageZoom(nextZoomStep(from: webView.pageZoom, increasing: false)) }
     func resetZoom() { setPageZoom(1.0) }
+
+    fileprivate func beginMagnificationZoom() {
+        magnificationStartZoom = webView.pageZoom
+        accumulatedMagnification = 0
+        didMagnifyDuringCurrentGesture = false
+    }
+
+    fileprivate var shouldForwardMagnificationToContent: Bool {
+        isPointerOverMermaidFigure && magnificationStartZoom == nil
+    }
+
+    fileprivate func magnifyPreview(by delta: CGFloat) {
+        guard delta.isFinite else { return }
+        if magnificationStartZoom == nil {
+            beginMagnificationZoom()
+        }
+
+        didMagnifyDuringCurrentGesture = true
+        accumulatedMagnification += delta
+        let scale = max(0.1, 1 + accumulatedMagnification)
+        setPageZoom((magnificationStartZoom ?? webView.pageZoom) * scale, persist: false)
+    }
+
+    fileprivate func endMagnificationZoom() {
+        guard magnificationStartZoom != nil else { return }
+        let shouldPersistZoom = didMagnifyDuringCurrentGesture
+        magnificationStartZoom = nil
+        accumulatedMagnification = 0
+        didMagnifyDuringCurrentGesture = false
+        if shouldPersistZoom {
+            persistPageZoom(webView.pageZoom)
+        }
+    }
 
     func enablePersistentZoom(defaultsKey: String) {
         zoomDefaultsKey = defaultsKey
@@ -824,6 +865,34 @@ private final class NonScrollingWKWebView: WKWebView {
 
     override func reload(_ sender: Any?) {
         (superview as? MarkdownWebView)?.reloadPreview()
+    }
+
+    override func beginGesture(with event: NSEvent) {
+        guard let owner = superview as? MarkdownWebView else {
+            super.beginGesture(with: event)
+            return
+        }
+        if !owner.shouldForwardMagnificationToContent {
+            owner.beginMagnificationZoom()
+        }
+        super.beginGesture(with: event)
+    }
+
+    override func magnify(with event: NSEvent) {
+        guard let owner = superview as? MarkdownWebView else {
+            super.magnify(with: event)
+            return
+        }
+        if owner.shouldForwardMagnificationToContent {
+            super.magnify(with: event)
+            return
+        }
+        owner.magnifyPreview(by: event.magnification)
+    }
+
+    override func endGesture(with event: NSEvent) {
+        (superview as? MarkdownWebView)?.endMagnificationZoom()
+        super.endGesture(with: event)
     }
 
     override func scrollLineUp(_ sender: Any?)            { forwardScrollAction(.lineUp) }

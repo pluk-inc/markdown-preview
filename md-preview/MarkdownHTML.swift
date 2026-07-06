@@ -1458,6 +1458,8 @@ nonisolated enum MarkdownHTML {
                 states.set(figure, state);
                 cacheRect(figure);
 
+                figure.addEventListener('pointerenter', () => postMermaidHover(true));
+                figure.addEventListener('pointerleave', () => postMermaidHover(false));
                 figure.addEventListener('wheel', onWheel, { passive: false });
                 figure.addEventListener('pointerdown', onPointerDown);
                 figure.addEventListener('dblclick', onDoubleClick);
@@ -1468,6 +1470,15 @@ nonisolated enum MarkdownHTML {
             function cacheRect(figure) {
                 const s = states.get(figure);
                 if (s) s.rect = figure.getBoundingClientRect();
+            }
+
+            function postMermaidHover(value) {
+                try {
+                    window.webkit?.messageHandlers?.mdPreviewHost?.postMessage({
+                        kind: 'mermaidHover',
+                        value
+                    });
+                } catch (_) {}
             }
 
             function apply(figure, s) {
