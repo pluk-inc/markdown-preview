@@ -33,7 +33,8 @@ class PreviewProvider: QLPreviewProvider, QLPreviewingController {
 
         return QLPreviewReply(
             dataOfContentType: .html,
-            contentSize: CGSize(width: 900, height: 900)
+            contentSize: CGSize(width: MarkdownHTML.preferredPageWidth,
+                                height: MarkdownHTML.preferredPageWidth)
         ) { replyToUpdate in
             replyToUpdate.stringEncoding = .utf8
             replyToUpdate.attachments = replyAttachments

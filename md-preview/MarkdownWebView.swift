@@ -17,6 +17,45 @@ enum SearchMode {
     case beginsWith
 }
 
+/// User-selectable article layout, persisted across launches. Quick Look
+/// always renders the centered column; this setting only drives the app.
+/// Lives here (not AppDelegate.swift) because this file is compiled into
+/// both targets and the setting is read at render time below.
+enum ContentWidthSetting: String, CaseIterable {
+    case normal
+    case fullWidth
+
+    private static let defaultsKey = "MarkdownPreview.contentWidth"
+
+    static var current: ContentWidthSetting {
+        get {
+            UserDefaults.standard.string(forKey: defaultsKey)
+                .flatMap(ContentWidthSetting.init(rawValue:)) ?? .normal
+        }
+        set {
+            if newValue == .normal {
+                UserDefaults.standard.removeObject(forKey: defaultsKey)
+            } else {
+                UserDefaults.standard.set(newValue.rawValue, forKey: defaultsKey)
+            }
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .normal: return "Normal"
+        case .fullWidth: return "Full Width"
+        }
+    }
+
+    var renderWidth: MarkdownHTML.ContentWidth {
+        switch self {
+        case .normal: return .centered
+        case .fullWidth: return .full
+        }
+    }
+}
+
 struct FindResult {
     let top: CGFloat?
     let bottom: CGFloat?
@@ -119,10 +158,12 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         guard !isPageReady, loadedFingerprint == nil else { return }
         let baseHref = "\(MarkdownAssetScheme.scheme):///"
         let markdown = Self.warmupMarkdown
+        let contentWidth = ContentWidthSetting.current.renderWidth
         Task { @concurrent [weak self] in
             let rendered = Self.timedRender(label: "warmup",
                                             markdown: markdown,
                                             assetBaseHref: baseHref,
+                                            contentWidth: contentWidth,
                                             warmup: true)
             await self?.applyWarmup(rendered)
         }
@@ -166,10 +207,12 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let baseHref = "\(MarkdownAssetScheme.scheme):///"
         renderGeneration &+= 1
         let generation = renderGeneration
+        let contentWidth = ContentWidthSetting.current.renderWidth
         Task { @concurrent [weak self] in
             let rendered = Self.timedRender(label: "display",
                                             markdown: markdown,
-                                            assetBaseHref: baseHref)
+                                            assetBaseHref: baseHref,
+                                            contentWidth: contentWidth)
             await self?.applyDisplay(rendered, generation: generation)
         }
     }
@@ -180,11 +223,13 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     private nonisolated static func timedRender(label: String,
                                                 markdown: String,
                                                 assetBaseHref: String,
+                                                contentWidth: MarkdownHTML.ContentWidth,
                                                 warmup: Bool = false) -> MarkdownHTML.RenderedHTML {
         let t0 = DispatchTime.now()
         let rendered = MarkdownHTML.render(markdown: markdown,
                                            assetBaseHref: assetBaseHref,
                                            vendorLoading: .lazy,
+                                           contentWidth: contentWidth,
                                            warmup: warmup)
         let elapsedMs = Int(
             (Double(DispatchTime.now().uptimeNanoseconds - t0.uptimeNanoseconds)
@@ -228,8 +273,11 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         display(markdown: currentMarkdown, assetBaseURL: currentAssetBase)
     }
 
-    func reloadPreviewForAppearanceChange() {
-        guard currentMarkdown != nil else { return }
+    /// Full reload (no fast-path) so render-time settings — appearance,
+    /// content width — are re-evaluated. The fingerprint reset is
+    /// unconditional so a warmup-only page rendered under the old settings
+    /// can't be fast-pathed into later.
+    func reloadPreviewForSettingChange() {
         loadedFingerprint = nil
         isPageReady = false
         reloadPreview()

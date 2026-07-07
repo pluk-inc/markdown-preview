@@ -22,6 +22,24 @@ nonisolated enum MarkdownHTML {
         case lazy
     }
 
+    /// Layout of the rendered article column.
+    /// - centered: capped at `contentColumnWidth` and centered, so wide
+    ///   windows read like a paged document. Matches Quick Look, whose
+    ///   `preferredPageWidth` panel minus the body gutters is exactly one
+    ///   column.
+    /// - full: span the whole window.
+    enum ContentWidth {
+        case centered
+        case full
+    }
+
+    /// Width the Quick Look panel requests for its preview window.
+    static let preferredPageWidth: CGFloat = 900
+    /// The centered article measure: `preferredPageWidth` minus the 40px
+    /// body gutter on either side, so the app's centered column and the
+    /// Quick Look panel wrap lines identically.
+    static let contentColumnWidth = Int(preferredPageWidth) - 80
+
     struct RenderedHTML: Sendable {
         let html: String
         let articleHTML: String
@@ -44,6 +62,7 @@ nonisolated enum MarkdownHTML {
                        allowsScroll: Bool = false,
                        assetBaseHref: String? = nil,
                        vendorLoading: VendorLoading = .inline,
+                       contentWidth: ContentWidth = .centered,
                        warmup: Bool = false) -> RenderedHTML {
         let body = MarkdownFrontmatter.split(markdown).body
         let footnotes = extractFootnotes(from: body)
@@ -61,6 +80,11 @@ nonisolated enum MarkdownHTML {
         let scrollOverride = allowsScroll ? """
         <style>
         html, body { overflow: auto !important; }
+        </style>
+        """ : ""
+        let contentWidthOverride = contentWidth == .full ? """
+        <style>
+        article.markdown-body { max-width: none; }
         </style>
         """ : ""
         let baseTag = assetBaseHref.map { "<base href=\"\($0)\">" } ?? ""
@@ -92,6 +116,7 @@ nonisolated enum MarkdownHTML {
         \(baseTag)
         <style>\(stylesheet)</style>
         \(scrollOverride)
+        \(contentWidthOverride)
         \(sanitizerBlock)
         \(hostBridgeScript)
         \(mathBlock)
@@ -1743,6 +1768,11 @@ nonisolated enum MarkdownHTML {
         -webkit-font-smoothing: antialiased;
     }
 
+    article.markdown-body {
+        max-width: \(contentColumnWidth)px;
+        margin-left: auto;
+        margin-right: auto;
+    }
     article.markdown-body > *:first-child { margin-top: 0 !important; }
 
     p {

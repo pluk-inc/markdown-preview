@@ -144,8 +144,8 @@ final class MainSplitViewController: NSSplitViewController {
         sidebarViewController?.setMode(mode)
     }
 
-    func reloadPreviewForAppearanceChange() {
-        contentViewController?.reloadPreviewForAppearanceChange()
+    func reloadPreviewForSettingChange() {
+        contentViewController?.reloadPreviewForSettingChange()
     }
 
     private var sidebarViewController: SidebarViewController? {
