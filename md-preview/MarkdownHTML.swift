@@ -3,6 +3,7 @@
 //  md-preview
 //
 
+import CoreGraphics
 import Foundation
 import Markdown
 
