@@ -12,6 +12,15 @@ final class ContentViewController: NSViewController {
     private var webView: MarkdownWebView!
     private var documentHeightConstraint: NSLayoutConstraint!
     private var webViewHeightConstraint: NSLayoutConstraint!
+
+    // Two mutually-exclusive horizontal layouts for the web view, swapped
+    // when the Content Width setting changes. Full Width pins both edges so
+    // the web view spans the window; Normal locks a fixed page width and
+    // centers it. Centering in AppKit (not CSS) keeps the web view's width
+    // constant while the sidebar animates, so the column never re-flows and
+    // never jitters.
+    private var fullWidthConstraints: [NSLayoutConstraint] = []
+    private var centeredConstraints: [NSLayoutConstraint] = []
     private var measuredDocumentHeight: CGFloat = 1
     private var lastLaidOutSize: NSSize = .zero
     private var pendingFlashWork: DispatchWorkItem?
@@ -91,7 +100,8 @@ final class ContentViewController: NSViewController {
         webViewHeightConstraint = webView.heightAnchor.constraint(equalToConstant: 1)
 
         // Shared: document view tracks the clip width, web view pinned to
-        // the top and sized to the measured content height.
+        // the top and sized to the measured content height. Its horizontal
+        // layout is set separately by the Content Width constraint sets.
         NSLayoutConstraint.activate([
             documentView.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
             documentView.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
@@ -99,10 +109,34 @@ final class ContentViewController: NSViewController {
             documentHeightConstraint,
 
             webView.topAnchor.constraint(equalTo: documentView.topAnchor),
-            webView.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
-            webView.trailingAnchor.constraint(equalTo: documentView.trailingAnchor),
             webViewHeightConstraint
         ])
+
+        // Full Width: the web view spans the whole document view.
+        fullWidthConstraints = [
+            webView.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: documentView.trailingAnchor),
+        ]
+        // Normal (centered): lock the web view to a fixed page width and
+        // center it, shrinking below the cap on narrow windows. The width is
+        // constant across a sidebar reveal, so the web content never re-flows.
+        let pageWidth = webView.widthAnchor.constraint(
+            equalToConstant: MarkdownHTML.preferredPageWidth)
+        pageWidth.priority = .init(999)
+        centeredConstraints = [
+            webView.centerXAnchor.constraint(equalTo: documentView.centerXAnchor),
+            webView.widthAnchor.constraint(lessThanOrEqualTo: documentView.widthAnchor),
+            pageWidth,
+        ]
+        applyContentWidthConstraints()
+    }
+
+    /// Activates the constraint set matching the current Content Width
+    /// setting. Safe to call repeatedly — it deactivates the other set first.
+    private func applyContentWidthConstraints() {
+        let centered = ContentWidthSetting.current == .normal
+        NSLayoutConstraint.deactivate(centered ? fullWidthConstraints : centeredConstraints)
+        NSLayoutConstraint.activate(centered ? centeredConstraints : fullWidthConstraints)
     }
 
     override func viewDidLayout() {
@@ -190,6 +224,7 @@ final class ContentViewController: NSViewController {
     var pageZoom: CGFloat { webView.pageZoom }
 
     func reloadPreviewForSettingChange() {
+        applyContentWidthConstraints()
         webView.reloadPreviewForSettingChange()
     }
 
