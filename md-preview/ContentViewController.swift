@@ -12,6 +12,9 @@ final class ContentViewController: NSViewController {
     private var webView: MarkdownWebView!
     private var documentHeightConstraint: NSLayoutConstraint!
     private var webViewHeightConstraint: NSLayoutConstraint!
+    private var webViewPageWidthConstraint: NSLayoutConstraint?
+    private var webViewCenteredConstraints: [NSLayoutConstraint] = []
+    private var webViewFullWidthConstraints: [NSLayoutConstraint] = []
     private var measuredDocumentHeight: CGFloat = 1
     private var lastLaidOutSize: NSSize = .zero
     private var pendingFlashWork: DispatchWorkItem?
@@ -66,6 +69,9 @@ final class ContentViewController: NSViewController {
         webView.fragmentLinkActivated = { [weak self] fragment in
             self?.scrollToElement(id: fragment)
         }
+        webView.zoomDidChange = { [weak self] zoom in
+            self?.webViewPageWidthConstraint?.constant = MarkdownHTML.preferredPageWidth * zoom
+        }
         webView.enablePersistentZoom(defaultsKey: Self.pageZoomDefaultsKey)
 
         documentView.addSubview(webView)
@@ -90,6 +96,29 @@ final class ContentViewController: NSViewController {
         documentHeightConstraint = documentView.heightAnchor.constraint(equalToConstant: 1)
         webViewHeightConstraint = webView.heightAnchor.constraint(equalToConstant: 1)
 
+        // Normal (centered) mode caps the web view at the page width and
+        // centers it in AppKit rather than letting CSS auto-margins center
+        // the column inside a full-width web view. A sidebar/inspector
+        // reveal then only *moves* the web view — applied synchronously
+        // with each animation frame — instead of resizing it, which forces
+        // the web process to re-run layout asynchronously and made the
+        // column jitter for the duration of the animation (#162). The
+        // width constant tracks pageZoom (zoomDidChange above) so the
+        // column keeps its 820 CSS-px measure at every zoom level.
+        let pageWidth = webView.widthAnchor.constraint(
+            equalToConstant: MarkdownHTML.preferredPageWidth * webView.pageZoom)
+        pageWidth.priority = .init(999) // yields to the clip-width cap below
+        webViewPageWidthConstraint = pageWidth
+        webViewCenteredConstraints = [
+            webView.centerXAnchor.constraint(equalTo: documentView.centerXAnchor),
+            webView.widthAnchor.constraint(lessThanOrEqualTo: documentView.widthAnchor),
+            pageWidth
+        ]
+        webViewFullWidthConstraints = [
+            webView.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: documentView.trailingAnchor)
+        ]
+
         // Shared: document view tracks the clip width, web view pinned to
         // the top and sized to the measured content height.
         NSLayoutConstraint.activate([
@@ -99,10 +128,9 @@ final class ContentViewController: NSViewController {
             documentHeightConstraint,
 
             webView.topAnchor.constraint(equalTo: documentView.topAnchor),
-            webView.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
-            webView.trailingAnchor.constraint(equalTo: documentView.trailingAnchor),
             webViewHeightConstraint
         ])
+        applyContentWidthMode()
     }
 
     override func viewDidLayout() {
@@ -190,7 +218,22 @@ final class ContentViewController: NSViewController {
     var pageZoom: CGFloat { webView.pageZoom }
 
     func reloadPreviewForSettingChange() {
+        applyContentWidthMode()
         webView.reloadPreviewForSettingChange()
+    }
+
+    /// Swaps the web view between the AppKit-centered page column and a
+    /// full-bleed layout. See the loadView comment for why centering lives
+    /// at the constraint layer instead of CSS.
+    private func applyContentWidthMode() {
+        switch ContentWidthSetting.current {
+        case .normal:
+            NSLayoutConstraint.deactivate(webViewFullWidthConstraints)
+            NSLayoutConstraint.activate(webViewCenteredConstraints)
+        case .fullWidth:
+            NSLayoutConstraint.deactivate(webViewCenteredConstraints)
+            NSLayoutConstraint.activate(webViewFullWidthConstraints)
+        }
     }
 
     func scrollToHeading(index: Int) {

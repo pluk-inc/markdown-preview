@@ -69,6 +69,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
 
     let webView: WKWebView
     var heightDidChange: ((CGFloat) -> Void)?
+    var zoomDidChange: ((CGFloat) -> Void)?
     var fragmentLinkActivated: ((String) -> Void)?
     private let assetScheme = MarkdownAssetScheme()
     private var currentAssetBase: URL?
@@ -433,6 +434,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let clamped = clampedZoom(value)
         guard abs(webView.pageZoom - clamped) > 0.001 else { return }
         webView.pageZoom = clamped
+        zoomDidChange?(clamped)
         if persist {
             persistPageZoom(clamped)
         }
