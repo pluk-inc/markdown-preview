@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.0.30] – 2026-07-08
+
+Markdown Preview now supports native macOS window tabs and keeps centered previews steadier while sidebars, zoom, and window resizing change the reading layout.
+
+### Added
+
+- **Native window tabs.** Markdown files can now open as native macOS tabs in the frontmost document window, with File > New Tab, the window tab controls, and Project Navigator options for opening files in a new tab or separate window ([#164](https://github.com/pluk-inc/markdown-preview/pull/164)).
+
+### Fixed
+
+- **Centered previews no longer jitter during sidebar changes.** Centered mode now keeps the reading column aligned at the AppKit layout layer, so toggling the sidebar or Table of Contents no longer makes the content shift horizontally ([#163](https://github.com/pluk-inc/markdown-preview/pull/163), [#162](https://github.com/pluk-inc/markdown-preview/issues/162)).
+- **Zoom no longer resizes or pins the window.** Centered preview zoom keeps the content width stable without growing the window or blocking narrow window resizing ([#165](https://github.com/pluk-inc/markdown-preview/pull/165)).
+
+### Contributors
+
+Thanks to the external reporter who helped improve this release:
+
+- [@huwan](https://github.com/huwan) — reported centered content jitter when toggling the sidebar and Table of Contents ([#162](https://github.com/pluk-inc/markdown-preview/issues/162))
+
 ## [0.0.29] – 2026-07-08
 
 Markdown Preview now gives readers direct control over preview width and zoom gestures, while image rendering and Quick Look asset handling are more reliable.
