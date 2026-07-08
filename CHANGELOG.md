@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.31] – 2026-07-08
+
+Opening files now respects the macOS window tabbing preference instead of always gathering documents into tabs.
+
+### Fixed
+
+- **Opening files respects the system tab preference.** Files opened from Finder, File > Open, or recent documents now follow the macOS "Prefer tabs when opening documents" setting instead of always becoming a tab in the frontmost window. Open in New Tab, ⌘T, and the tab bar's "+" button still open tabs explicitly, and windows opened via Open in New Window no longer capture subsequently opened files ([#167](https://github.com/pluk-inc/markdown-preview/pull/167)).
+
 ## [0.0.30] – 2026-07-08
 
 Markdown Preview now supports native macOS window tabs and keeps centered previews steadier while sidebars, zoom, and window resizing change the reading layout.
