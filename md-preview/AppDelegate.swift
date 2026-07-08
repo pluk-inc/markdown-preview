@@ -104,6 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installAppearanceMenuItems()
         installContentWidthMenuItems()
         installSidebarViewMenuItems()
+        installNewTabMenuItem()
         installGoMenu()
         installAppMenuItemIcons()
         installZoomMenuItemIcons()
@@ -532,6 +533,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ?? errorInfo.description
             throw CommandLineToolInstallError.terminalAutomationFailed(message)
         }
+    }
+
+    private func installNewTabMenuItem() {
+        guard let fileMenu = NSApp.mainMenu?.items
+            .first(where: { $0.title == "File" })?.submenu,
+              fileMenu.items.first(where: {
+                  $0.action == #selector(NSResponder.newWindowForTab(_:))
+              }) == nil else { return }
+
+        // nil target: resolves through the responder chain to the key
+        // document window's controller, and disables itself when no
+        // document window is open.
+        let item = NSMenuItem(title: "New Tab",
+                              action: #selector(NSResponder.newWindowForTab(_:)),
+                              keyEquivalent: "t")
+        let insertIndex = fileMenu.items
+            .firstIndex { $0.action == #selector(openDocument(_:)) } ?? 0
+        fileMenu.insertItem(item, at: insertIndex)
     }
 
     private func installGoMenu() {

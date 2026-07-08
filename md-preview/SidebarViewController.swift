@@ -629,6 +629,12 @@ final class ProjectNavigatorView: NSView {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
+    @objc private func openInNewTab(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL,
+              let controller = documentWindowController else { return }
+        controller.openInNewTab(url)
+    }
+
     @objc private func openInNewWindow(_ sender: NSMenuItem) {
         guard let url = sender.representedObject as? URL,
               let controller = documentWindowController else { return }
@@ -670,6 +676,10 @@ extension ProjectNavigatorView: NSMenuDelegate {
 
         if !node.isDirectory {
             menu.addItem(.separator())
+            menu.addItem(makeMenuItem(title: "Open in New Tab",
+                                      symbol: "macwindow",
+                                      action: #selector(openInNewTab(_:)),
+                                      url: url))
             menu.addItem(makeMenuItem(title: "Open in New Window",
                                       symbol: "macwindow.badge.plus",
                                       action: #selector(openInNewWindow(_:)),
