@@ -90,6 +90,8 @@ final class ContentViewController: NSViewController {
         documentHeightConstraint = documentView.heightAnchor.constraint(equalToConstant: 1)
         webViewHeightConstraint = webView.heightAnchor.constraint(equalToConstant: 1)
 
+        // Shared: document view tracks the clip width, web view pinned to
+        // the top and sized to the measured content height.
         NSLayoutConstraint.activate([
             documentView.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
             documentView.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
@@ -187,8 +189,8 @@ final class ContentViewController: NSViewController {
     func resetZoom() { webView.resetZoom() }
     var pageZoom: CGFloat { webView.pageZoom }
 
-    func reloadPreviewForAppearanceChange() {
-        webView.reloadPreviewForAppearanceChange()
+    func reloadPreviewForSettingChange() {
+        webView.reloadPreviewForSettingChange()
     }
 
     func scrollToHeading(index: Int) {

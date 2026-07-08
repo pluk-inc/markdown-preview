@@ -361,9 +361,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         currentSidebarMenuState()
     }
 
-    func reloadPreviewForAppearanceChange() {
+    func reloadPreviewForSettingChange() {
         (documentWindow.contentViewController as? MainSplitViewController)?
-            .reloadPreviewForAppearanceChange()
+            .reloadPreviewForSettingChange()
     }
 
     private func currentSidebarMenuState() -> (sidebarVisible: Bool, mode: SidebarViewController.Mode) {

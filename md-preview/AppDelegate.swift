@@ -91,6 +91,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private weak var automaticAppearanceMenuItem: NSMenuItem?
     private weak var lightAppearanceMenuItem: NSMenuItem?
     private weak var darkAppearanceMenuItem: NSMenuItem?
+    private weak var normalContentWidthMenuItem: NSMenuItem?
+    private weak var fullContentWidthMenuItem: NSMenuItem?
     private var isOpeningDocumentFromPrompt = false
     private var isPromptingForDocument = false
     private var isDocumentPromptScheduled = false
@@ -100,6 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         applyAppearanceMode(AppAppearanceMode.current, reloadPreviews: false)
         installAppearanceMenuItems()
+        installContentWidthMenuItems()
         installSidebarViewMenuItems()
         installGoMenu()
         installAppMenuItemIcons()
@@ -197,9 +200,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         applyAppearanceMode(mode, reloadPreviews: true)
     }
 
+    @objc private func selectContentWidthSetting(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let setting = ContentWidthSetting(rawValue: rawValue),
+              setting != ContentWidthSetting.current else { return }
+
+        ContentWidthSetting.current = setting
+        syncContentWidthMenuState()
+        reloadDocumentPreviewsForSettingChange()
+    }
+
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         syncSidebarViewMenuState()
         syncAppearanceMenuState()
+        syncContentWidthMenuState()
         switch menuItem.action {
         case #selector(hideSidebarFromMenu(_:)),
              #selector(selectOutlineMode(_:)),
@@ -207,7 +221,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
              #selector(performFindPanelAction(_:)),
              #selector(performTextFinderAction(_:)):
             return activeDocumentWindowController != nil
-        case #selector(selectAppearanceMode(_:)):
+        case #selector(selectAppearanceMode(_:)),
+             #selector(selectContentWidthSetting(_:)):
             return true
         default:
             return true
@@ -655,6 +670,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         syncAppearanceMenuState()
     }
 
+    private func installContentWidthMenuItems() {
+        guard let viewMenu = NSApp.mainMenu?.items
+            .first(where: { $0.title == "View" })?.submenu,
+              viewMenu.items.first(where: { $0.title == "Content Width" }) == nil else { return }
+
+        let widthItem = NSMenuItem(title: "Content Width", action: nil, keyEquivalent: "")
+        if let image = NSImage(systemSymbolName: "arrow.left.and.right.text.vertical",
+                               accessibilityDescription: "Content Width") {
+            image.isTemplate = true
+            widthItem.image = image
+        }
+
+        let submenu = NSMenu(title: "Content Width")
+        for setting in ContentWidthSetting.allCases {
+            let item = NSMenuItem(title: setting.title,
+                                  action: #selector(selectContentWidthSetting(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.representedObject = setting.rawValue
+            submenu.addItem(item)
+
+            switch setting {
+            case .normal:
+                normalContentWidthMenuItem = item
+            case .fullWidth:
+                fullContentWidthMenuItem = item
+            }
+        }
+        widthItem.submenu = submenu
+        let insertIndex = viewMenu.items
+            .firstIndex(where: { $0.title == "Appearance" })
+            .map { $0 + 1 } ?? 0
+        viewMenu.insertItem(widthItem, at: insertIndex)
+        syncContentWidthMenuState()
+    }
+
     private func applyAppearanceMode(_ mode: AppAppearanceMode, reloadPreviews: Bool) {
         let appearance = mode.appearance
         NSApp.appearance = appearance
@@ -663,7 +714,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         syncAppearanceMenuState()
         if reloadPreviews {
-            reloadDocumentPreviewsForAppearanceChange()
+            reloadDocumentPreviewsForSettingChange()
         }
     }
 
@@ -674,11 +725,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         darkAppearanceMenuItem?.state = mode == .dark ? .on : .off
     }
 
-    private func reloadDocumentPreviewsForAppearanceChange() {
+    private func syncContentWidthMenuState() {
+        let setting = ContentWidthSetting.current
+        normalContentWidthMenuItem?.state = setting == .normal ? .on : .off
+        fullContentWidthMenuItem?.state = setting == .fullWidth ? .on : .off
+    }
+
+    private func reloadDocumentPreviewsForSettingChange() {
         NSDocumentController.shared.documents
             .flatMap(\.windowControllers)
             .compactMap { $0 as? DocumentWindowController }
-            .forEach { $0.reloadPreviewForAppearanceChange() }
+            .forEach { $0.reloadPreviewForSettingChange() }
     }
 
     private func installAppMenuItemIcons() {
