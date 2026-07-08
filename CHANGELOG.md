@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.0.29] – 2026-07-08
+
+Markdown Preview now gives readers direct control over preview width and zoom gestures, while image rendering and Quick Look asset handling are more reliable.
+
+### Added
+
+- **Content Width setting.** View > Content Width now lets you choose between Centered and Full Width preview layouts, with the selected mode applied to open previews and remembered across launches ([#157](https://github.com/pluk-inc/markdown-preview/pull/157)).
+- **Trackpad pinch zoom.** Pinch gestures now zoom the rendered preview directly, matching the existing toolbar and menu zoom controls while keeping the selected zoom level in sync ([#156](https://github.com/pluk-inc/markdown-preview/pull/156)).
+
+### Fixed
+
+- **Explicit image sizes are respected.** Markdown images with width or height attributes now keep those requested dimensions instead of being forced back to the default responsive image sizing ([#158](https://github.com/pluk-inc/markdown-preview/pull/158)).
+- **Quick Look image rewrites stay scoped to user content.** Quick Look preview asset rewriting no longer touches generated UI assets, avoiding broken internal preview resources when Markdown files contain local images ([#152](https://github.com/pluk-inc/markdown-preview/pull/152)).
+
+### Contributors
+
+Thanks to the external contributors who shipped in this release:
+
+- [@huwan](https://github.com/huwan) — Content Width setting and explicit image dimension handling ([#157](https://github.com/pluk-inc/markdown-preview/pull/157), [#158](https://github.com/pluk-inc/markdown-preview/pull/158))
+- [@jjoanna2-debug](https://github.com/jjoanna2-debug) — trackpad pinch zoom and Quick Look asset containment fixes ([#156](https://github.com/pluk-inc/markdown-preview/pull/156), [#152](https://github.com/pluk-inc/markdown-preview/pull/152))
+
 ## [0.0.28] – 2026-06-12
 
 Markdown Preview now has a simpler default Open toolbar action that combines editor and AI app handoffs in one menu.
