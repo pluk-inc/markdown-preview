@@ -86,20 +86,31 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// New Window" needs that window to skip the native tab group during
     /// its first order-front (when AppKit decides tab placement).
     private static var nextWindowDeclinesTabbing = false
+    /// One-shot for explicit tab requests (Open in New Tab, ⌘T, the tab
+    /// bar's "+"): the next window joins the frontmost window's tab group
+    /// even when the system tabbing preference wouldn't put it there.
+    private static var nextWindowRequestsTab = false
 
     static func markNextWindowAsSeparate() {
         nextWindowDeclinesTabbing = true
     }
 
+    static func markNextWindowAsTab() {
+        nextWindowRequestsTab = true
+    }
+
+    /// Whether this window was created by an explicit tab request; consumed
+    /// by attachToExistingTabGroupIfNeeded on first show.
+    private var joinsTabGroupOnFirstShow = false
+
     private func setupWindow() {
         documentWindow.styleMask.insert(.fullSizeContentView)
         documentWindow.delegate = self
         documentWindow.tabbingIdentifier = "MarkdownDocumentWindow"
-        // .preferred groups every new document window into the frontmost
-        // window's native tab bar regardless of the system "prefer tabs"
-        // setting; the one-shot override opts a window out for its first show.
-        documentWindow.tabbingMode = Self.nextWindowDeclinesTabbing ? .disallowed : .preferred
+        documentWindow.tabbingMode = Self.nextWindowDeclinesTabbing ? .disallowed : .automatic
+        joinsTabGroupOnFirstShow = Self.nextWindowRequestsTab && !Self.nextWindowDeclinesTabbing
         Self.nextWindowDeclinesTabbing = false
+        Self.nextWindowRequestsTab = false
         let split = MainSplitViewController()
         split.onSelectFile = { [weak self] url in
             self?.present(url: url)
@@ -123,18 +134,34 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// windows — but this controller orders the window front itself (from
     /// makeWindowControllers, before showWindows), so the window is already
     /// visible and placement never happens on its own. Join the frontmost
-    /// document window's tab group explicitly on first show instead.
+    /// document window's tab group explicitly on first show instead — but
+    /// only when the open was an explicit tab request, or the system
+    /// "Prefer tabs when opening documents" setting asks for it. Plain
+    /// opens (Finder, ⌘O, recents) otherwise get their own window.
     private func attachToExistingTabGroupIfNeeded() {
         guard !documentWindow.isVisible,
-              documentWindow.tabbingMode == .preferred else { return }
-        let host = ([NSApp.mainWindow] + NSApp.orderedWindows)
-            .compactMap { $0 }
-            .first {
-                $0 !== documentWindow
-                    && $0.isVisible
-                    && $0.tabbingIdentifier == documentWindow.tabbingIdentifier
+              documentWindow.tabbingMode != .disallowed,
+              let host = ([NSApp.mainWindow] + NSApp.orderedWindows)
+                  .compactMap({ $0 })
+                  .first(where: {
+                      $0 !== documentWindow
+                          && $0.isVisible
+                          && $0.tabbingIdentifier == documentWindow.tabbingIdentifier
+                  }) else { return }
+
+        let joins: Bool
+        if joinsTabGroupOnFirstShow {
+            joins = true
+        } else {
+            switch NSWindow.userTabbingPreference {
+            case .always: joins = true
+            case .inFullScreen: joins = host.styleMask.contains(.fullScreen)
+            case .manual: joins = false
+            @unknown default: joins = false
             }
-        host?.addTabbedWindow(documentWindow, ordered: .above)
+        }
+        guard joins else { return }
+        host.addTabbedWindow(documentWindow, ordered: .above)
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -149,8 +176,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         attachToExistingTabGroupIfNeeded()
         documentWindow.makeKeyAndOrderFront(nil)
         // Tab placement is settled once the window is shown; a window opened
-        // via "Open in New Window" goes back to accepting tabs afterwards.
-        documentWindow.tabbingMode = .preferred
+        // via "Open in New Window" goes back to normal tabbing afterwards
+        // (it can host or join tabs on explicit request, but plain opens no
+        // longer recapture it).
+        documentWindow.tabbingMode = .automatic
         NSApp.activate()
         refreshOpenWithItem()
         refreshOpenInLLMItem()
@@ -1562,7 +1591,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     func openInNewTab(_ fileURL: URL) {
-        openDocumentWindow(for: fileURL)
+        Self.markNextWindowAsTab()
+        openDocumentWindow(for: fileURL) {
+            // If the document was already open, no window was created and
+            // the override wasn't consumed — don't let it leak to the next one.
+            Self.nextWindowRequestsTab = false
+        }
     }
 
     func openInNewWindow(_ fileURL: URL) {
@@ -1585,9 +1619,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     /// Backs the "+" button in the native tab bar and File > New Tab.
     /// There is no untitled-document concept here, so prompt for a file
-    /// and open it — it joins the tab group via .preferred tabbing.
+    /// and open it as a tab — an explicit tab request, unlike ⌘O.
     override func newWindowForTab(_ sender: Any?) {
-        openDocument(sender)
+        promptForDocument(openAsTab: true)
     }
 
     func openFolder(_ folderURL: URL) {
@@ -1658,6 +1692,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     @IBAction func openDocument(_ sender: Any?) {
+        promptForDocument(openAsTab: false)
+    }
+
+    private func promptForDocument(openAsTab: Bool) {
         let panel = makeOpenPanel()
         panel.beginSheetModal(for: documentWindow) { [weak self] response in
             guard let self, response == .OK, let url = panel.url else { return }
@@ -1665,7 +1703,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 self.openFolder(url)
                 return
             }
-            self.openInNewTab(url)
+            if openAsTab {
+                self.openInNewTab(url)
+            } else {
+                // Plain open: tab placement follows the system
+                // "Prefer tabs" setting via attachToExistingTabGroupIfNeeded.
+                self.openDocumentWindow(for: url)
+            }
         }
     }
 
