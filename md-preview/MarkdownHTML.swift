@@ -1484,6 +1484,8 @@ nonisolated enum MarkdownHTML {
                 states.set(figure, state);
                 cacheRect(figure);
 
+                figure.addEventListener('pointerenter', () => postMermaidHover(true));
+                figure.addEventListener('pointerleave', () => postMermaidHover(false));
                 figure.addEventListener('wheel', onWheel, { passive: false });
                 figure.addEventListener('pointerdown', onPointerDown);
                 figure.addEventListener('dblclick', onDoubleClick);
@@ -1494,6 +1496,15 @@ nonisolated enum MarkdownHTML {
             function cacheRect(figure) {
                 const s = states.get(figure);
                 if (s) s.rect = figure.getBoundingClientRect();
+            }
+
+            function postMermaidHover(value) {
+                try {
+                    window.webkit?.messageHandlers?.mdPreviewHost?.postMessage({
+                        kind: 'mermaidHover',
+                        value
+                    });
+                } catch (_) {}
             }
 
             function apply(figure, s) {
@@ -2130,9 +2141,13 @@ nonisolated enum MarkdownHTML {
     img {
         display: block;
         max-width: 100%;
-        height: auto;
         margin: 1.6em auto;
         border-radius: 10px;
+    }
+    /* Keep downscaled images proportional, but let explicit width/height
+       attributes (e.g. GitHub-style <img height="54">) take effect. */
+    img:not([width]):not([height]) {
+        height: auto;
     }
     p img {
         display: inline-block;
