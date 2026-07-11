@@ -73,4 +73,3 @@ fastlane/test_output
 
 # Editor bundle build (scripts/editor-bundle)
 node_modules/
-package-lock.json

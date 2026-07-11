@@ -28,6 +28,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
 
     private var webView: WKWebView!
     private let bridge = EditorBridge()
+    private var hasLoadedEditorPage = false
+    private var pageSupportsMermaid = false
 
     override func loadView() {
         let config = WKWebViewConfiguration()
@@ -41,7 +43,25 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
 
     func load(markdown: String) {
         hasChanges = false
-        webView.loadHTMLString(Self.editorHTML(markdown: markdown), baseURL: nil)
+        let needsMermaid = Self.containsMermaidFence(in: markdown)
+        if hasLoadedEditorPage, pageSupportsMermaid || !needsMermaid {
+            let script = "window.__mdLoadEditor && window.__mdLoadEditor(\(Self.jsStringLiteral(markdown)))"
+            webView.evaluateJavaScript(script) { [weak self] _, error in
+                guard let self, error != nil else { return }
+                self.loadEditorPage(markdown: markdown, includesMermaid: needsMermaid)
+            }
+            return
+        }
+        loadEditorPage(markdown: markdown, includesMermaid: needsMermaid)
+    }
+
+    private func loadEditorPage(markdown: String, includesMermaid: Bool) {
+        hasLoadedEditorPage = false
+        pageSupportsMermaid = includesMermaid
+        webView.loadHTMLString(
+            Self.editorHTML(markdown: markdown, includesMermaid: includesMermaid),
+            baseURL: nil
+        )
     }
 
     /// Mirror the preview's page zoom so the type size and measure don't
@@ -70,11 +90,20 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                              sourceAnchor: SourceScrollAnchor?,
                              completion: @escaping () -> Void) {
         let clamped = min(max(progress, 0), 1)
-        let line = sourceAnchor.map { String($0.line) } ?? "null"
-        let offset = sourceAnchor.map { String(Double($0.viewportOffset)) } ?? "null"
-        webView.evaluateJavaScript(
-            "window.__mdEditor && window.__mdEditor.setScrollPosition(\(clamped), \(line), \(offset))"
-        ) { _, _ in
+        let arguments: [String: Any] = [
+            "progress": Double(clamped),
+            "sourceLine": sourceAnchor?.line ?? NSNull(),
+            "viewportOffset": sourceAnchor.map { Double($0.viewportOffset) } ?? NSNull(),
+        ]
+        webView.callAsyncJavaScript(
+            """
+            if (!window.__mdEditor) return false;
+            return await window.__mdEditor.setScrollPosition(progress, sourceLine, viewportOffset);
+            """,
+            arguments: arguments,
+            in: nil,
+            in: .page
+        ) { _ in
             completion()
         }
     }
@@ -110,6 +139,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             hasChanges = true
             contentDidChange?()
         case "ready":
+            hasLoadedEditorPage = true
             editorDidBecomeReady?()
         case "cancel":
             cancelRequested?()
@@ -131,6 +161,18 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         return url.flatMap { try? String(contentsOf: $0, encoding: .utf8) }
     }
 
+    private static let editorJavaScript =
+        vendorResource("mdedit.min", ext: "js", subdir: "Vendor/CodeMirror") ?? ""
+    private static let mermaidJavaScript =
+        vendorResource("mermaid.min", ext: "js", subdir: "Vendor/Mermaid") ?? ""
+
+    private static func containsMermaidFence(in markdown: String) -> Bool {
+        markdown.range(
+            of: #"(?im)^[ \t]{0,3}(?:`{3,}|~{3,})[ \t]*mermaid(?:[ \t]|$)"#,
+            options: .regularExpression
+        ) != nil
+    }
+
     /// JSON string literal safe for embedding in an inline <script>:
     /// `<` is escaped so `</script>` inside the document can't close the tag.
     private static func jsStringLiteral(_ string: String) -> String {
@@ -140,9 +182,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             .replacingOccurrences(of: "<", with: "\\u003c")
     }
 
-    private static func editorHTML(markdown: String) -> String {
-        let editorJS = vendorResource("mdedit.min", ext: "js", subdir: "Vendor/CodeMirror") ?? ""
-        let mermaidJS = vendorResource("mermaid.min", ext: "js", subdir: "Vendor/Mermaid") ?? ""
+    private static func editorHTML(markdown: String, includesMermaid: Bool) -> String {
         // Honor the preview's content-width setting: Normal caps the
         // column at the preview's measure, Full Width spans the window.
         let columnMaxWidth = ContentWidthSetting.current == .fullWidth
@@ -378,7 +418,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         </head>
         <body>
         <div id="editor"></div>
-        <script>\(mermaidJS)</script>
+        \(includesMermaid ? "<script>\(mermaidJavaScript)</script>" : "")
+        \(includesMermaid ? """
         <script>
         if (window.mermaid) {
             window.mermaid.initialize({
@@ -388,31 +429,37 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             });
         }
         </script>
-        <script>\(editorJS)</script>
+        """ : "")
+        <script>\(editorJavaScript)</script>
         <script>
         (function () {
             const post = function (m) {
                 try { window.webkit.messageHandlers.\(EditorBridge.name).postMessage(m); } catch (e) {}
             };
             window.onerror = function (message) { post("error: " + message); };
-            const editor = window.MDEditor.create(
-                document.getElementById("editor"),
-                \(jsStringLiteral(markdown)),
-                { onDirty: function () { post("dirty"); } }
-            );
-            window.__mdEditor = {
-                getMarkdown: function () { return editor.getMarkdown(); },
-                getScrollAnchor: function () { return editor.getScrollAnchor(); },
-                focus: function () { editor.focus(); },
-                setScrollPosition: function (progress, sourceLine, viewportOffset) {
-                    return editor.setScrollPosition(progress, sourceLine, viewportOffset);
-                },
-                exec: function (name) { editor.exec(name); }
+            let editor = null;
+            window.__mdLoadEditor = function (markdown) {
+                if (editor) editor.destroy();
+                editor = window.MDEditor.create(
+                    document.getElementById("editor"),
+                    markdown,
+                    { onDirty: function () { post("dirty"); } }
+                );
+                window.__mdEditor = {
+                    getMarkdown: function () { return editor.getMarkdown(); },
+                    getScrollAnchor: function () { return editor.getScrollAnchor(); },
+                    focus: function () { editor.focus(); },
+                    setScrollPosition: function (progress, sourceLine, viewportOffset) {
+                        return editor.setScrollPosition(progress, sourceLine, viewportOffset);
+                    },
+                    exec: function (name) { editor.exec(name); }
+                };
+                requestAnimationFrame(function () { post("ready"); });
             };
             document.addEventListener("keydown", function (e) {
                 if (e.key === "Escape" && !e.defaultPrevented) post("cancel");
             });
-            post("ready");
+            window.__mdLoadEditor(\(jsStringLiteral(markdown)));
         })();
         </script>
         </body>

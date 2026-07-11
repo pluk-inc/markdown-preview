@@ -96,6 +96,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isOpeningDocumentFromPrompt = false
     private var isPromptingForDocument = false
     private var isDocumentPromptScheduled = false
+    private var isTerminationSaveInProgress = false
+    private var pendingTerminationSaveCount = 0
+    private var terminationSaveFailed = false
 
     private static let markdownFileExtensions = ["md", "markdown", "mdown", "txt"]
 
@@ -145,6 +148,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if isTerminationSaveInProgress {
+            return .terminateLater
+        }
+
+        let controllers = NSDocumentController.shared.documents
+            .flatMap(\.windowControllers)
+            .compactMap { $0 as? DocumentWindowController }
+            .filter(\.hasPendingEditorChanges)
+        guard !controllers.isEmpty else { return .terminateNow }
+
+        isTerminationSaveInProgress = true
+        pendingTerminationSaveCount = controllers.count
+        terminationSaveFailed = false
+
+        for controller in controllers {
+            controller.commitPendingEditsForTermination { [weak self, weak sender] success in
+                guard let self, let sender, self.isTerminationSaveInProgress else { return }
+                self.terminationSaveFailed = self.terminationSaveFailed || !success
+                self.pendingTerminationSaveCount -= 1
+                guard self.pendingTerminationSaveCount == 0 else { return }
+
+                let shouldTerminate = !self.terminationSaveFailed
+                self.isTerminationSaveInProgress = false
+                self.terminationSaveFailed = false
+                sender.reply(toApplicationShouldTerminate: shouldTerminate)
+            }
+        }
+        return .terminateLater
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {

@@ -169,7 +169,11 @@ const mermaidEditor = dom.window.MDEditor.create(
   mermaidHost, "intro\n```mermaid\nflowchart LR\n  A --> B\n```", {})
 check("inactive Mermaid block uses diagram preview widget",
   mermaidHost.querySelector(".cm-md-mermaid-preview") != null)
-mermaidEditor.select(20)
+const stableMermaidPreview = mermaidHost.querySelector(".cm-md-mermaid-preview")
+mermaidEditor.exec("bold")
+check("unrelated edits preserve the Mermaid preview DOM",
+  mermaidHost.querySelector(".cm-md-mermaid-preview") === stableMermaidPreview)
+mermaidEditor.select(mermaidEditor.getMarkdown().indexOf("flowchart") + 2)
 check("active Mermaid block reveals editable source",
   mermaidHost.querySelector(".cm-md-mermaid-preview") == null)
 check("active Mermaid block preserves source",

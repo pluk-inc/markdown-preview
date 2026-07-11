@@ -274,6 +274,7 @@ nonisolated enum MarkdownHTML {
         let label: String
         let content: String
         let number: Int
+        let sourceLine: Int
     }
 
     private struct FootnoteReference {
@@ -327,7 +328,8 @@ nonisolated enum MarkdownHTML {
                     key: key,
                     label: stored.label,
                     content: stored.content,
-                    number: orderedDefinitions.count + 1
+                    number: orderedDefinitions.count + 1,
+                    sourceLine: stored.sourceLine
                 )
                 orderedDefinitions.append(definition)
             }
@@ -356,16 +358,17 @@ nonisolated enum MarkdownHTML {
 
     private static func splitFootnoteDefinitions(from markdown: String) -> (
         markdown: String,
-        definitions: [String: (label: String, content: String)]
+        definitions: [String: (label: String, content: String, sourceLine: Int)]
     ) {
         let lines = markdown.components(separatedBy: "\n")
         var output: [String] = []
-        var definitions: [String: (label: String, content: String)] = [:]
+        var definitions: [String: (label: String, content: String, sourceLine: Int)] = [:]
         var index = 0
 
         while index < lines.count {
             let line = lines[index]
             if let match = firstMatch(of: footnoteDefinitionRegex, in: line) {
+                let definitionStartIndex = index
                 let nsLine = line as NSString
                 let label = nsLine.substring(with: match.range(at: 1))
                 var contentLines = [nsLine.substring(with: match.range(at: 2))]
@@ -388,8 +391,16 @@ nonisolated enum MarkdownHTML {
 
                 definitions[normalizeFootnoteKey(label)] = (
                     label: label,
-                    content: contentLines.joined(separator: "\n")
+                    content: contentLines.joined(separator: "\n"),
+                    sourceLine: definitionStartIndex + 1
                 )
+                // Keep one blank placeholder for every removed source line.
+                // Swift Markdown ignores these lines, while ranges for all
+                // following blocks continue to match the original document.
+                output.append(contentsOf: repeatElement(
+                    "",
+                    count: index - definitionStartIndex
+                ))
             } else {
                 output.append(line)
                 index += 1
@@ -481,7 +492,10 @@ nonisolated enum MarkdownHTML {
         var containsMermaid = false
         let referencesByNumber = Dictionary(grouping: footnotes.references, by: { $0.number })
         let items = footnotes.definitions.map { definition -> String in
-            let renderedContent = renderFootnoteDefinitionContent(definition.content)
+            let renderedContent = renderFootnoteDefinitionContent(
+                definition.content,
+                sourceLineOffset: definition.sourceLine - 1
+            )
             containsMath = containsMath || renderedContent.containsMath
             containsMermaid = containsMermaid || renderedContent.containsMermaid
             let backrefs = (referencesByNumber[definition.number] ?? []).map { reference in
@@ -524,9 +538,15 @@ nonisolated enum MarkdownHTML {
         return html + inlineBackrefs
     }
 
-    private static func renderFootnoteDefinitionContent(_ markdown: String) -> FootnoteDefinitionRenderResult {
+    private static func renderFootnoteDefinitionContent(
+        _ markdown: String,
+        sourceLineOffset: Int
+    ) -> FootnoteDefinitionRenderResult {
         let math = extractMath(from: markdown.trimmingCharacters(in: .whitespacesAndNewlines))
-        let formatted = EscapingHTMLFormatter.format(math.processedMarkdown)
+        let formatted = EscapingHTMLFormatter.format(
+            math.processedMarkdown,
+            sourceLineOffset: sourceLineOffset
+        )
         let mermaidResult = renderMermaidBlocks(in: formatted)
         let mathResult = renderMathBlocks(in: mermaidResult.html, with: math)
         return FootnoteDefinitionRenderResult(
@@ -585,14 +605,14 @@ nonisolated enum MarkdownHTML {
         try! NSRegularExpression(pattern: #"(?<!`)(`+)(?!`)([^\n]*?)(?<!`)\1(?!`)"#)
     }()
 
-    // First alternative captures kind+index for a paragraph-wrapped block token
+    // First alternative captures attributes+kind+index for a paragraph-wrapped block token
     // (the common case after swift-markdown wraps the standalone token); the
     // second captures a bare token. The wrapper is stripped in either case for
     // block kind to keep the resulting `<div>` out of an enclosing `<p>`.
     private static let mathTokenRegex: NSRegularExpression = {
         // swiftlint:disable:next force_try
         try! NSRegularExpression(
-            pattern: #"<p>MdPreviewMath(Block|Inline)(\d+)Token</p>|MdPreviewMath(Block|Inline)(\d+)Token"#
+            pattern: #"<p\b([^>]*)>MdPreviewMath(Block|Inline)(\d+)Token</p>|MdPreviewMath(Block|Inline)(\d+)Token"#
         )
     }()
 
@@ -620,9 +640,13 @@ nonisolated enum MarkdownHTML {
             if info.language == "math" {
                 let body = nsMarkdown.substring(with: match.range(at: 3))
                 blocks.append(body)
-                // Surround with blank lines so swift-markdown wraps the standalone
-                // token in its own <p>, which mathTokenRegex then strips.
-                afterFences += "\n\nMdPreviewMathBlock\(blocks.count - 1)Token\n\n"
+                let fullFence = nsMarkdown.substring(with: match.range)
+                let newlineCount = fullFence.count(where: \.isNewline)
+                // Keep the replacement on the opening line and preserve the
+                // original number of line breaks so later source ranges remain
+                // aligned with the editor buffer.
+                afterFences += "MdPreviewMathBlock\(blocks.count - 1)Token"
+                afterFences += String(repeating: "\n", count: newlineCount)
             } else {
                 protected.append(nsMarkdown.substring(with: match.range))
                 afterFences += "MdPreviewProtect\(protected.count - 1)Token"
@@ -637,10 +661,30 @@ nonisolated enum MarkdownHTML {
             return "MdPreviewProtect\(protected.count - 1)Token"
         }
 
-        let afterBlockMath = replaceMatches(of: blockMathRegex, in: afterInlineCode) { capture in
-            defer { blocks.append(capture) }
-            return "MdPreviewMathBlock\(blocks.count)Token"
+        let nsAfterInlineCode = afterInlineCode as NSString
+        let blockMatches = blockMathRegex.matches(
+            in: afterInlineCode,
+            range: NSRange(location: 0, length: nsAfterInlineCode.length)
+        )
+        var afterBlockMath = ""
+        afterBlockMath.reserveCapacity(afterInlineCode.count)
+        var blockCursor = 0
+        for match in blockMatches {
+            afterBlockMath += nsAfterInlineCode.substring(with: NSRange(
+                location: blockCursor,
+                length: match.range.location - blockCursor
+            ))
+            let capture = nsAfterInlineCode.substring(with: match.range(at: 1))
+            let fullMatch = nsAfterInlineCode.substring(with: match.range)
+            afterBlockMath += "MdPreviewMathBlock\(blocks.count)Token"
+            afterBlockMath += String(
+                repeating: "\n",
+                count: fullMatch.count(where: \.isNewline)
+            )
+            blocks.append(capture)
+            blockCursor = match.range.location + match.range.length
         }
+        afterBlockMath += nsAfterInlineCode.substring(from: blockCursor)
         let afterInlineMath = replaceMatches(of: inlineMathRegex, in: afterBlockMath) { capture in
             defer { inlines.append(capture) }
             return "MdPreviewMathInline\(inlines.count)Token"
@@ -676,16 +720,18 @@ nonisolated enum MarkdownHTML {
                 location: cursor,
                 length: match.range.location - cursor
             ))
-            let kindRange = match.range(at: 1).location != NSNotFound
-                ? match.range(at: 1) : match.range(at: 3)
-            let indexRange = match.range(at: 2).location != NSNotFound
-                ? match.range(at: 2) : match.range(at: 4)
+            let wrapped = match.range(at: 2).location != NSNotFound
+            let kindRange = wrapped ? match.range(at: 2) : match.range(at: 4)
+            let indexRange = wrapped ? match.range(at: 3) : match.range(at: 5)
             let isBlock = nsHtml.substring(with: kindRange) == "Block"
             let index = Int(nsHtml.substring(with: indexRange)) ?? 0
             let latex = isBlock ? math.blocks[index] : math.inlines[index]
             let escaped = htmlEscape(latex)
+            let sourceAttributes = wrapped
+                ? nsHtml.substring(with: match.range(at: 1))
+                : ""
             rebuilt += isBlock
-                ? "<div class=\"math math-display\">\(escaped)</div>"
+                ? "<div\(sourceAttributes) class=\"math math-display\">\(escaped)</div>"
                 : "<span class=\"math math-inline\">\(escaped)</span>"
             cursor = match.range.location + match.range.length
         }
@@ -1378,7 +1424,7 @@ nonisolated enum MarkdownHTML {
     private static let mermaidRegex: NSRegularExpression = {
         // swiftlint:disable:next force_try
         try! NSRegularExpression(
-            pattern: #"<pre><code class="language-mermaid">([\s\S]*?)</code></pre>"#
+            pattern: #"<pre\b([^>]*)>\s*<code\b[^>]*class="[^"]*\blanguage-mermaid\b[^"]*"[^>]*>([\s\S]*?)</code>\s*</pre>"#
         )
     }()
 
@@ -1386,9 +1432,27 @@ nonisolated enum MarkdownHTML {
         guard html.contains("language-mermaid") else {
             return MermaidRenderResult(html: html, containsMermaid: false)
         }
-        let rendered = replaceMatches(of: mermaidRegex, in: html) { diagram in
-            """
-            <figure class="mermaid-figure" tabindex="0" role="img" aria-label="Mermaid diagram">
+        let nsHTML = html as NSString
+        let matches = mermaidRegex.matches(
+            in: html,
+            range: NSRange(location: 0, length: nsHTML.length)
+        )
+        guard !matches.isEmpty else {
+            return MermaidRenderResult(html: html, containsMermaid: false)
+        }
+
+        var rendered = ""
+        rendered.reserveCapacity(html.count)
+        var cursor = 0
+        for match in matches {
+            rendered += nsHTML.substring(with: NSRange(
+                location: cursor,
+                length: match.range.location - cursor
+            ))
+            let sourceAttributes = nsHTML.substring(with: match.range(at: 1))
+            let diagram = nsHTML.substring(with: match.range(at: 2))
+            rendered += """
+            <figure\(sourceAttributes) class="mermaid-figure" tabindex="0" role="img" aria-label="Mermaid diagram">
             <div class="mermaid-stage"><div class="mermaid">
             \(diagram)
             </div></div>
@@ -1399,7 +1463,9 @@ nonisolated enum MarkdownHTML {
             </div>
             </figure>
             """
+            cursor = match.range.location + match.range.length
         }
+        rendered += nsHTML.substring(from: cursor)
         return MermaidRenderResult(html: rendered, containsMermaid: true)
     }
 

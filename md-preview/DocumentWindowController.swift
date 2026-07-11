@@ -47,6 +47,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private weak var editButton: NSButton?
     /// Debounced autosave while editing.
     private var autosaveWork: DispatchWorkItem?
+    private var editorChangeRevision = 0
+    private var isEditorCommitInFlight = false
+    private var pendingCommitShouldExit = false
+    private var pendingCommitCompletions: [(Bool) -> Void] = []
     /// When sidebar navigation starts from edit mode, the newly loaded file
     /// should return to edit mode instead of dropping the user into preview.
     private var pendingEditModeURL: URL?
@@ -644,6 +648,18 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         mainSplit?.isEditingDocument ?? false
     }
 
+    var hasPendingEditorChanges: Bool {
+        isEditing && (hasUnsavedEditorChanges || isEditorCommitInFlight)
+    }
+
+    func commitPendingEditsForTermination(completion: @escaping (Bool) -> Void) {
+        guard isEditing else {
+            completion(true)
+            return
+        }
+        commitEdits(exitAfter: false, completion: completion)
+    }
+
     private func makeEditItem() -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: .editDocument)
         item.label = "Edit"
@@ -871,9 +887,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             self?.commitEdits(exitAfter: true)
         }
         editor.contentDidChange = { [weak self] in
+            self?.editorChangeRevision += 1
             self?.hasUnsavedEditorChanges = true
             self?.scheduleAutosave()
         }
+        editorChangeRevision = 0
         hasUnsavedEditorChanges = false
         showEditAccessory()
         updateEditToolbarItem()
@@ -895,44 +913,75 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// fails so no edits are lost. `completion(false)` means the commit
     /// did not go through.
     private func commitEdits(exitAfter: Bool, completion: ((Bool) -> Void)? = nil) {
+        pendingCommitShouldExit = pendingCommitShouldExit || exitAfter
+        if let completion {
+            pendingCommitCompletions.append(completion)
+        }
+        guard !isEditorCommitInFlight else { return }
+        performPendingEditorCommit()
+    }
+
+    private func performPendingEditorCommit() {
+        let exitAfter = pendingCommitShouldExit
+        pendingCommitShouldExit = false
         guard isEditing, let split = mainSplit,
               let editor = split.editorViewController else {
-            completion?(true)
+            finishEditorCommit(success: true)
             return
         }
+        let revision = editorChangeRevision
+        isEditorCommitInFlight = true
         // This commit supersedes any pending debounced autosave.
         autosaveWork?.cancel()
         editor.fetchMarkdown { [weak self] body in
             guard let self else {
-                completion?(false)
                 return
             }
             guard let body else {
                 NSSound.beep()
-                completion?(false)
+                self.finishEditorCommit(success: false)
                 return
             }
             guard editor.hasChanges, body != self.currentMarkdown else {
-                self.hasUnsavedEditorChanges = false
+                if revision == self.editorChangeRevision {
+                    self.hasUnsavedEditorChanges = false
+                }
                 if exitAfter { self.exitEditMode(rerender: false) }
-                completion?(true)
+                self.finishEditorCommit(success: true)
                 return
             }
             self.saveEditedMarkdown(body) { success in
                 guard success else {
-                    completion?(false)
+                    self.finishEditorCommit(success: false)
                     return
                 }
-                self.hasUnsavedEditorChanges = false
                 self.currentMarkdown = body
                 if let url = self.currentFileURL {
                     self.markdownDocument?.replaceContents(markdown: body, fileURL: url)
                 }
-                if exitAfter {
+                if revision == self.editorChangeRevision {
+                    self.hasUnsavedEditorChanges = false
+                }
+                if exitAfter, !self.hasUnsavedEditorChanges {
                     self.exitEditMode(rerender: true)
                 }
-                completion?(true)
+                self.finishEditorCommit(success: true)
             }
+        }
+    }
+
+    private func finishEditorCommit(success: Bool) {
+        isEditorCommitInFlight = false
+        if success, hasUnsavedEditorChanges || pendingCommitShouldExit {
+            performPendingEditorCommit()
+            return
+        }
+
+        pendingCommitShouldExit = false
+        let completions = pendingCommitCompletions
+        pendingCommitCompletions.removeAll()
+        for completion in completions {
+            completion(success)
         }
     }
 

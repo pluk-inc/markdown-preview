@@ -100,8 +100,8 @@ class RuleWidget extends WidgetType {
 let mermaidWidgetID = 0
 
 class MermaidWidget extends WidgetType {
-  constructor(source, from) { super(); this.source = source; this.from = from }
-  eq(other) { return other.source === this.source && other.from === this.from }
+  constructor(source) { super(); this.source = source }
+  eq(other) { return other.source === this.source }
 
   toDOM(view) {
     const figure = document.createElement("figure")
@@ -117,8 +117,9 @@ class MermaidWidget extends WidgetType {
     figure.addEventListener("mousedown", (event) => {
       event.preventDefault()
       view.focus()
+      const widgetPosition = view.posAtDOM(figure)
       view.dispatch({
-        selection: { anchor: this.from + 1 },
+        selection: { anchor: widgetPosition + 1 },
         userEvent: "select.pointer",
       })
     })
@@ -239,7 +240,7 @@ function buildMermaidPreviews(state) {
       if (details.language === "mermaid" && !isActive) {
         ranges.push(Decoration.replace({
           block: true,
-          widget: new MermaidWidget(details.source, node.from),
+          widget: new MermaidWidget(details.source),
         }).range(node.from, node.to))
         return false
       }
@@ -252,7 +253,26 @@ function buildMermaidPreviews(state) {
 // directly from editor state rather than from a view plugin.
 const mermaidPreviews = StateField.define({
   create: (state) => buildMermaidPreviews(state),
-  update: (_value, tr) => buildMermaidPreviews(tr.state),
+  update: (value, tr) => {
+    const previousActive = tr.startState.field(activeCodeBlock)
+    const nextActive = tr.state.field(activeCodeBlock)
+    const activeChanged = previousActive?.from !== nextActive?.from
+      || previousActive?.to !== nextActive?.to
+
+    let fenceSyntaxChanged = false
+    if (tr.docChanged) {
+      tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+        if (fenceSyntaxChanged) return
+        const removed = tr.startState.doc.sliceString(fromA, toA)
+        const changedSource = removed + inserted.toString()
+        fenceSyntaxChanged = /[`~]|mermaid/i.test(changedSource)
+      })
+    }
+
+    if (activeChanged || fenceSyntaxChanged) return buildMermaidPreviews(tr.state)
+    if (tr.docChanged) return value.map(tr.changes)
+    return value
+  },
   provide: (field) => EditorView.decorations.from(field),
 })
 
