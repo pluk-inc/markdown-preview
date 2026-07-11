@@ -648,6 +648,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         mainSplit?.isEditingDocument ?? false
     }
 
+    var canToggleEditMode: Bool {
+        isEditing || (currentFileURL != nil && currentMarkdown != nil)
+    }
+
     var hasPendingEditorChanges: Bool {
         isEditing && (hasUnsavedEditorChanges || isEditorCommitInFlight)
     }
@@ -707,6 +711,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     @objc private func toggleEditAction(_ sender: Any?) {
+        toggleEditMode()
+    }
+
+    func toggleEditMode() {
         if isEditing {
             commitEdits(exitAfter: true)
         } else {
