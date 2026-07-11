@@ -52,6 +52,8 @@ if (editor) {
   check("round-trip is byte-faithful", editor.getMarkdown() === doc)
   const text = dom.window.document.querySelector(".cm-content")?.textContent ?? ""
   check("document text renders", text.includes("Sample Markdown Cheat Sheet"))
+  editor.exec("bold")
+  check("exec('bold') inserts markers", editor.getMarkdown().startsWith("****"))
 }
 
 const headingHost = dom.window.document.createElement("div")
@@ -80,8 +82,15 @@ const emphasisHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(emphasisHost)
 const emphasisEditor = dom.window.MDEditor.create(
   emphasisHost, "plain\n**bold text** and *italic text* and ~~struck text~~", {})
+check("inactive strong emphasis keeps bold decoration",
+  emphasisHost.querySelector(".cm-md-strong")?.textContent === "bold text")
+check("inactive emphasis keeps italic decoration",
+  emphasisHost.querySelector(".cm-md-emphasis")?.textContent === "italic text")
 check("inactive strikethrough keeps decoration",
   emphasisHost.querySelector(".cm-md-strikethrough")?.textContent === "struck text")
+emphasisEditor.select(10)
+check("unfocused selection does not reveal strong markers",
+  emphasisHost.querySelector(".cm-md-strong")?.textContent === "bold text")
 emphasisEditor.destroy()
 
 const setextHost = dom.window.document.createElement("div")
