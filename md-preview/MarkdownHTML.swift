@@ -1546,9 +1546,11 @@ nonisolated enum MarkdownHTML {
                 }
                 svg.removeAttribute('width');
                 svg.removeAttribute('height');
+                svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
                 svg.style.width = '100%';
                 svg.style.height = '100%';
-                svg.style.transformOrigin = '0 0';
+                const surface = svg.parentElement || svg;
+                surface.style.transformOrigin = '0 0';
 
                 // Stable layout: figure claims height from the diagram's aspect ratio,
                 // capped by max-height so massive diagrams don't push the page.
@@ -1559,7 +1561,7 @@ nonisolated enum MarkdownHTML {
                 const state = {
                     tx: 0, ty: 0, scale: 1, min: 1, max: 8,
                     rect: null, raf: 0, dragging: false,
-                    lastX: 0, lastY: 0, svg
+                    lastX: 0, lastY: 0, surface
                 };
                 states.set(figure, state);
                 cacheRect(figure);
@@ -1591,7 +1593,7 @@ nonisolated enum MarkdownHTML {
                 if (s.raf) return;
                 s.raf = requestAnimationFrame(() => {
                     s.raf = 0;
-                    s.svg.style.transform = 'translate(' + s.tx + 'px,' + s.ty + 'px) scale(' + s.scale + ')';
+                    s.surface.style.transform = 'translate(' + s.tx + 'px,' + s.ty + 'px) scale(' + s.scale + ')';
                     const lvl = figure.querySelector('.mermaid-hud-level');
                     if (lvl) lvl.textContent = Math.round(s.scale * 100) + '%';
                 });
@@ -2051,6 +2053,9 @@ nonisolated enum MarkdownHTML {
     .mermaid {
         position: absolute;
         inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         padding: 16px;
         box-sizing: border-box;
     }

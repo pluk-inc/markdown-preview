@@ -10,6 +10,11 @@ checks = {
     "does not load Mermaid from a CDN": "cdn.jsdelivr.net/npm/mermaid" not in source,
     "initializes Mermaid after page load": "mermaid.initialize" in source and "mermaid.run" in source,
     "styles Mermaid containers": ".mermaid" in source,
+    "centers rendered diagrams": (
+        "justify-content: center" in source
+        and "svg.setAttribute('preserveAspectRatio', 'xMidYMid meet')" in source
+        and "s.surface.style.transform" in source
+    ),
 }
 failed = [name for name, ok in checks.items() if not ok]
 if failed:
