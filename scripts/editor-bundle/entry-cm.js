@@ -219,6 +219,12 @@ const activeCodeBlock = StateField.define({
 
     const head = tr.state.selection.main.head
     if (tr.isUserEvent("select.pointer")) return fencedCodeAt(tr.state, head)
+    // A fence authored from plain text has no prior active range. Resolve it
+    // after input so its source stays editable as soon as the opening marker
+    // becomes valid, including while a Mermaid block is being typed.
+    if (!value && tr.docChanged && tr.isUserEvent("input")) {
+      return fencedCodeAt(tr.state, head)
+    }
     if (!value) return null
     if (head < value.from || head > value.to) return null
 
@@ -836,6 +842,14 @@ window.MDEditor = {
         selection: { anchor },
         userEvent: "select.pointer",
       }),
+      insert: (text) => {
+        const range = view.state.selection.main
+        view.dispatch({
+          changes: { from: range.from, to: range.to, insert: text },
+          selection: { anchor: range.from + text.length },
+          userEvent: "input",
+        })
+      },
       exec: (name) => {
         const command = commands[name]
         if (command) { command(view); view.focus() }

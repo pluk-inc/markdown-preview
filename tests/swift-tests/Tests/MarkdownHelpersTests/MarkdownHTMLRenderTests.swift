@@ -50,4 +50,25 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(rendered.articleHTML.contains("<h2 data-source-line=\"9\" id=\"md-heading-0\">Target</h2>"))
         XCTAssertTrue(rendered.articleHTML.contains("<p data-source-line=\"5\">First definition line."))
     }
+
+    func testFootnoteSourceLinesIncludeFrontmatterOffset() {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ---
+            title: Footnotes
+            ---
+            Prelude.
+
+            Reference.[^note]
+
+            [^note]: First definition line.
+                Second definition line.
+            """,
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "<p data-source-line=\"8\">First definition line."
+        ))
+    }
 }

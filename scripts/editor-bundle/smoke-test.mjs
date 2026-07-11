@@ -180,4 +180,20 @@ check("active Mermaid block preserves source",
   mermaidEditor.getMarkdown().includes("flowchart LR\n  A --> B"))
 mermaidEditor.destroy()
 
+const authoredMermaidHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(authoredMermaidHost)
+const authoredMermaidEditor = dom.window.MDEditor.create(
+  authoredMermaidHost, "intro\n", {})
+authoredMermaidEditor.select(authoredMermaidEditor.getMarkdown().length)
+for (const character of "```mermaid\nflowchart LR\n  A --> B\n```") {
+  authoredMermaidEditor.insert(character)
+}
+check("newly typed Mermaid fence remains editable at the cursor",
+  authoredMermaidHost.querySelector(".cm-md-mermaid-preview") == null
+    && authoredMermaidHost.querySelector(".cm-md-code-fence-source-hidden") == null)
+authoredMermaidEditor.insert("\n")
+check("newly typed Mermaid fence previews after the cursor leaves",
+  authoredMermaidHost.querySelector(".cm-md-mermaid-preview") != null)
+authoredMermaidEditor.destroy()
+
 process.exit(failures ? 1 : 0)

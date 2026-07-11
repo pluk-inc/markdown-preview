@@ -34,6 +34,19 @@ private extension Array where Element == NSToolbarItem.Identifier {
 
 final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate, NSSharingServicePickerToolbarItemDelegate, NSSearchFieldDelegate, NSMenuDelegate {
 
+    private enum DiskFileState {
+        case unchanged
+        case modified(String)
+        case missing
+        case unreadable
+    }
+
+    private enum EditedMarkdownSaveResult {
+        case saved
+        case reloaded(String)
+        case cancelled
+    }
+
     private var currentFileURL: URL?
     private var currentMarkdown: String?
     private var fileWatcher: FileWatcher?
@@ -272,8 +285,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         fileWatcher?.cancel()
         let watcher = FileWatcher(url: url) { [weak self] in
             // While editing, disk changes (including our own ⌘S writes)
-            // must not re-render or clobber the in-progress session; the
-            // editor's content wins on the next save.
+            // must not re-render or clobber the in-progress session. Every
+            // commit revalidates the disk contents before writing, so an
+            // external edit is either reloaded or resolved explicitly.
             guard let self, self.currentFileURL == url, !self.isEditing else { return }
             self.loadFile(at: url, silentOnFailure: true)
         }
@@ -950,31 +964,107 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 self.finishEditorCommit(success: false)
                 return
             }
-            guard editor.hasChanges, body != self.currentMarkdown else {
-                if revision == self.editorChangeRevision {
-                    self.hasUnsavedEditorChanges = false
-                }
-                if exitAfter { self.exitEditMode(rerender: false) }
-                self.finishEditorCommit(success: true)
+            let diskState = self.diskFileState(for: self.currentFileURL,
+                                               expectedMarkdown: self.currentMarkdown)
+            let hasLocalChanges = body != self.currentMarkdown
+
+            if !hasLocalChanges, case let .modified(externalMarkdown) = diskState {
+                // Nothing local needs preserving, so adopt the newer disk
+                // version without presenting a needless conflict dialog.
+                self.adoptExternalMarkdown(externalMarkdown,
+                                           editor: editor,
+                                           exitAfter: exitAfter)
                 return
             }
-            self.saveEditedMarkdown(body) { success in
-                guard success else {
-                    self.finishEditorCommit(success: false)
-                    return
-                }
-                self.currentMarkdown = body
-                if let url = self.currentFileURL {
-                    self.markdownDocument?.replaceContents(markdown: body, fileURL: url)
-                }
+
+            guard editor.hasChanges, hasLocalChanges else {
                 if revision == self.editorChangeRevision {
                     self.hasUnsavedEditorChanges = false
                 }
-                if exitAfter, !self.hasUnsavedEditorChanges {
-                    self.exitEditMode(rerender: true)
+                switch diskState {
+                case .unchanged:
+                    self.completeSuccessfulEditorCommit(exitAfter: exitAfter,
+                                                        rerender: false)
+                case .modified:
+                    // Handled above.
+                    break
+                case .missing, .unreadable:
+                    self.saveEditedMarkdown(body, diskState: diskState) { result in
+                        self.handleEditedMarkdownSaveResult(result,
+                                                            body: body,
+                                                            editor: editor,
+                                                            revision: revision,
+                                                            exitAfter: exitAfter)
+                    }
                 }
-                self.finishEditorCommit(success: true)
+                return
             }
+            self.saveEditedMarkdown(body, diskState: diskState) { result in
+                self.handleEditedMarkdownSaveResult(result,
+                                                    body: body,
+                                                    editor: editor,
+                                                    revision: revision,
+                                                    exitAfter: exitAfter)
+            }
+        }
+    }
+
+    private func handleEditedMarkdownSaveResult(_ result: EditedMarkdownSaveResult,
+                                                body: String,
+                                                editor: EditorViewController,
+                                                revision: Int,
+                                                exitAfter: Bool) {
+        switch result {
+        case .saved:
+            currentMarkdown = body
+            if let url = currentFileURL {
+                markdownDocument?.replaceContents(markdown: body, fileURL: url)
+            }
+            if revision == editorChangeRevision {
+                hasUnsavedEditorChanges = false
+            }
+            completeSuccessfulEditorCommit(exitAfter: exitAfter, rerender: true)
+        case let .reloaded(externalMarkdown):
+            adoptExternalMarkdown(externalMarkdown,
+                                  editor: editor,
+                                  exitAfter: exitAfter)
+        case .cancelled:
+            finishEditorCommit(success: false)
+        }
+    }
+
+    private func adoptExternalMarkdown(_ markdown: String,
+                                       editor: EditorViewController,
+                                       exitAfter: Bool) {
+        currentMarkdown = markdown
+        editorChangeRevision = 0
+        hasUnsavedEditorChanges = false
+        if let url = currentFileURL {
+            markdownDocument?.replaceContents(markdown: markdown, fileURL: url)
+            if !exitAfter {
+                renderCurrentDocument(text: markdown, fileURL: url)
+            }
+        }
+        if !exitAfter {
+            editor.load(markdown: markdown)
+        }
+        completeSuccessfulEditorCommit(exitAfter: exitAfter, rerender: true)
+    }
+
+    private func completeSuccessfulEditorCommit(exitAfter: Bool, rerender: Bool) {
+        if hasUnsavedEditorChanges {
+            if exitAfter {
+                pendingCommitShouldExit = true
+            }
+            finishEditorCommit(success: true)
+            return
+        }
+        guard exitAfter else {
+            finishEditorCommit(success: true)
+            return
+        }
+        exitEditMode(rerender: rerender) { [weak self] in
+            self?.finishEditorCommit(success: true)
         }
     }
 
@@ -993,28 +1083,136 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
     }
 
-    private func exitEditMode(rerender: Bool) {
+    private func exitEditMode(rerender: Bool, completion: @escaping () -> Void) {
         autosaveWork?.cancel()
         autosaveWork = nil
         hideEditAccessory()
-        hasUnsavedEditorChanges = false
-        guard let split = mainSplit else { return }
+        guard let split = mainSplit else {
+            completion()
+            return
+        }
+        split.editorViewController?.contentDidChange = nil
+        split.editorViewController?.cancelRequested = nil
+        documentWindow.makeFirstResponder(nil)
         split.exitEditMode(waitForPreviewRender: rerender) { [weak self] in
-            guard let self else { return }
+            guard let self else {
+                completion()
+                return
+            }
+            self.hasUnsavedEditorChanges = false
             self.updateEditToolbarItem()
             if rerender, let url = self.currentFileURL, let markdown = self.currentMarkdown {
                 self.renderCurrentDocument(text: markdown, fileURL: url)
             }
+            completion()
         }
     }
 
-    private func saveEditedMarkdown(_ text: String, completion: @escaping (Bool) -> Void) {
+    private func diskFileState(for url: URL?, expectedMarkdown: String?) -> DiskFileState {
+        guard let url, let expectedMarkdown else { return .unreadable }
+        do {
+            let diskMarkdown = try String(contentsOf: url, encoding: .utf8)
+            return diskMarkdown == expectedMarkdown ? .unchanged : .modified(diskMarkdown)
+        } catch {
+            return FileManager.default.fileExists(atPath: url.path) ? .unreadable : .missing
+        }
+    }
+
+    private func saveEditedMarkdown(_ text: String,
+                                    diskState: DiskFileState,
+                                    completion: @escaping (EditedMarkdownSaveResult) -> Void) {
         guard let url = currentFileURL else {
-            completion(false)
+            completion(.cancelled)
             return
         }
+        switch diskState {
+        case .unchanged:
+            persistEditedMarkdown(text, to: url, completion: completion)
+        case let .modified(externalMarkdown):
+            presentExternalEditConflict(localMarkdown: text,
+                                        externalMarkdown: externalMarkdown,
+                                        fileURL: url,
+                                        completion: completion)
+        case .missing:
+            presentUnavailableFileConflict(localMarkdown: text,
+                                           fileURL: url,
+                                           reason: "The file was removed while it was open.",
+                                           overwriteTitle: "Recreate File",
+                                           completion: completion)
+        case .unreadable:
+            presentUnavailableFileConflict(localMarkdown: text,
+                                           fileURL: url,
+                                           reason: "The file could not be read to verify that it is unchanged.",
+                                           overwriteTitle: "Save Anyway",
+                                           completion: completion)
+        }
+    }
+
+    private func presentExternalEditConflict(
+        localMarkdown: String,
+        externalMarkdown: String,
+        fileURL: URL,
+        completion: @escaping (EditedMarkdownSaveResult) -> Void
+    ) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "This document changed on disk"
+        alert.informativeText = "Another app changed \(fileURL.lastPathComponent). Cancel keeps your editor changes unsaved. Choose which version to keep."
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Keep My Changes")
+        alert.addButton(withTitle: "Reload from Disk")
+        alert.beginSheetModal(for: documentWindow) { [weak self] response in
+            guard let self else {
+                completion(.cancelled)
+                return
+            }
+            switch response {
+            case .alertSecondButtonReturn:
+                self.persistEditedMarkdown(localMarkdown, to: fileURL, completion: completion)
+            case .alertThirdButtonReturn:
+                // The sheet may remain open while another editor writes
+                // again. Reload the latest bytes instead of the snapshot
+                // captured when the conflict was first detected.
+                if let latestMarkdown = try? String(contentsOf: fileURL, encoding: .utf8) {
+                    completion(.reloaded(latestMarkdown))
+                } else {
+                    completion(.reloaded(externalMarkdown))
+                }
+            default:
+                completion(.cancelled)
+            }
+        }
+    }
+
+    private func presentUnavailableFileConflict(
+        localMarkdown: String,
+        fileURL: URL,
+        reason: String,
+        overwriteTitle: String,
+        completion: @escaping (EditedMarkdownSaveResult) -> Void
+    ) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Unable to verify the document on disk"
+        alert.informativeText = "\(reason) Cancel keeps your editor changes unsaved."
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: overwriteTitle)
+        alert.beginSheetModal(for: documentWindow) { [weak self] response in
+            guard let self, response == .alertSecondButtonReturn else {
+                completion(.cancelled)
+                return
+            }
+            self.persistEditedMarkdown(localMarkdown, to: fileURL, completion: completion)
+        }
+    }
+
+    private func persistEditedMarkdown(
+        _ text: String,
+        to url: URL,
+        completion: @escaping (EditedMarkdownSaveResult) -> Void
+    ) {
         if write(text, to: url) {
-            completion(true)
+            completion(.saved)
             return
         }
         // Sandbox denied the write — the file came in through the read-only
@@ -1027,7 +1225,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         panel.message = "Markdown Preview needs your permission to save this file."
         panel.beginSheetModal(for: documentWindow) { [weak self] response in
             guard let self, response == .OK, let chosen = panel.url else {
-                completion(false)
+                completion(.cancelled)
                 return
             }
             let ok = self.write(text, to: chosen)
@@ -1035,7 +1233,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 // Saved under a different name — follow the new file.
                 self.handleRename(to: chosen)
             }
-            completion(ok)
+            completion(ok ? .saved : .cancelled)
         }
     }
 

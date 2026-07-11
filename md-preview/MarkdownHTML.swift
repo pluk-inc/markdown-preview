@@ -83,7 +83,10 @@ nonisolated enum MarkdownHTML {
         let mermaidResult = renderMermaidBlocks(in: formatted)
         let mathResult = renderMathBlocks(in: mermaidResult.html, with: math)
         let footnoteReferenceHTML = renderFootnoteReferences(in: mathResult.html, with: footnotes)
-        let footnoteDefinitions = renderFootnoteDefinitions(footnotes)
+        let footnoteDefinitions = renderFootnoteDefinitions(
+            footnotes,
+            sourceLineOffset: sourceLineOffset
+        )
         let headingsHTML = injectHeadingIDs(in: footnoteReferenceHTML + footnoteDefinitions.html)
         let bodyHTML = injectRTLDirection(in: headingsHTML)
         let containsMath = mathResult.containsMath || footnoteDefinitions.containsMath
@@ -479,7 +482,10 @@ nonisolated enum MarkdownHTML {
         return rendered
     }
 
-    private static func renderFootnoteDefinitions(_ footnotes: FootnoteExtraction) -> FootnoteDefinitionRenderResult {
+    private static func renderFootnoteDefinitions(
+        _ footnotes: FootnoteExtraction,
+        sourceLineOffset: Int
+    ) -> FootnoteDefinitionRenderResult {
         guard !footnotes.definitions.isEmpty else {
             return FootnoteDefinitionRenderResult(
                 html: "",
@@ -494,7 +500,7 @@ nonisolated enum MarkdownHTML {
         let items = footnotes.definitions.map { definition -> String in
             let renderedContent = renderFootnoteDefinitionContent(
                 definition.content,
-                sourceLineOffset: definition.sourceLine - 1
+                sourceLineOffset: sourceLineOffset + definition.sourceLine - 1
             )
             containsMath = containsMath || renderedContent.containsMath
             containsMermaid = containsMermaid || renderedContent.containsMermaid
