@@ -244,7 +244,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func present(url: URL) {
         let preserveEditMode = isEditing || pendingEditModeURL != nil
         if isEditing {
-            requestEndEditing { [weak self] success in
+            requestEndEditing(keepAccessoryMounted: true) { [weak self] success in
                 guard success else { return }
                 self?.present(url: url, preservingEditMode: true)
             }
@@ -919,21 +919,31 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         updateEditToolbarItem()
     }
 
-    private func requestEndEditing(completion: ((Bool) -> Void)? = nil) {
+    private func requestEndEditing(
+        keepAccessoryMounted: Bool = false,
+        completion: ((Bool) -> Void)? = nil
+    ) {
+        let finish: (Bool) -> Void = { [weak self] success in
+            if success, !keepAccessoryMounted {
+                self?.hideEditAccessory()
+                self?.updateEditToolbarItem()
+            }
+            completion?(success)
+        }
         resolveUnsavedEdits { [weak self] resolution in
             guard let self else {
-                completion?(false)
+                finish(false)
                 return
             }
             switch resolution {
             case .save:
-                self.commitEdits(exitAfter: true, completion: completion)
+                self.commitEdits(exitAfter: true, completion: finish)
             case .discard:
                 self.exitEditModeWithoutSaving {
-                    completion?(true)
+                    finish(true)
                 }
             case .cancel:
-                completion?(false)
+                finish(false)
             }
         }
     }
@@ -1143,7 +1153,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func exitEditMode(rerender: Bool, completion: @escaping () -> Void) {
-        hideEditAccessory()
         guard let split = mainSplit else {
             completion()
             return
@@ -1157,7 +1166,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 return
             }
             self.hasUnsavedEditorChanges = false
-            self.updateEditToolbarItem()
+            if self.editAccessory == nil {
+                self.updateEditToolbarItem()
+            }
             if rerender, let url = self.currentFileURL, let markdown = self.currentMarkdown {
                 self.renderCurrentDocument(text: markdown, fileURL: url)
             }
@@ -2487,6 +2498,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func applyLoadFailure(error: NSError, fileURL: URL, silentOnFailure: Bool) {
         if pendingEditModeURL == fileURL.standardizedFileURL {
             pendingEditModeURL = nil
+            hideEditAccessory()
+            updateEditToolbarItem()
         }
         guard !silentOnFailure else { return }
         NSAlert(error: error).beginSheetModal(for: documentWindow)
