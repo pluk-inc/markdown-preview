@@ -47,6 +47,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         case cancelled
     }
 
+    private enum UnsavedEditResolution {
+        case save
+        case discard
+        case cancel
+    }
+
     private var currentFileURL: URL?
     private var currentMarkdown: String?
     private var fileWatcher: FileWatcher?
@@ -58,8 +64,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private weak var inspectorButton: NSButton?
     private weak var editItem: NSToolbarItem?
     private weak var editButton: NSButton?
-    /// Debounced autosave while editing.
-    private var autosaveWork: DispatchWorkItem?
     private var editorChangeRevision = 0
     private var isEditorCommitInFlight = false
     private var pendingCommitShouldExit = false
@@ -199,8 +203,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        guard isEditing else { return true }
-        commitEdits(exitAfter: true) { [weak self] success in
+        guard hasPendingEditorChanges else { return true }
+        requestEndEditing { [weak self] success in
             guard success else { return }
             // close() skips windowShouldClose, so no re-entry loop.
             self?.documentWindow.close()
@@ -240,9 +244,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func present(url: URL) {
         let preserveEditMode = isEditing || pendingEditModeURL != nil
         if isEditing {
-            // Save the current file before navigating. A failed save keeps
-            // both the current document and its editor open.
-            commitEdits(exitAfter: true) { [weak self] success in
+            requestEndEditing { [weak self] success in
                 guard success else { return }
                 self?.present(url: url, preservingEditMode: true)
             }
@@ -675,7 +677,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             completion(true)
             return
         }
-        commitEdits(exitAfter: false, completion: completion)
+        requestEndEditing(completion: completion)
     }
 
     private func makeEditItem() -> NSToolbarItem {
@@ -730,7 +732,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     func toggleEditMode() {
         if isEditing {
-            commitEdits(exitAfter: true)
+            requestEndEditing()
         } else {
             enterEditMode()
         }
@@ -905,13 +907,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // read-only renderer; the editor must expose and preserve it.
         let editor = split.enterEditMode(markdown: markdown)
         editor.cancelRequested = { [weak self] in
-            // Esc: edits are already autosaved, so just leave edit mode.
-            self?.commitEdits(exitAfter: true)
+            self?.requestEndEditing()
         }
         editor.contentDidChange = { [weak self] in
             self?.editorChangeRevision += 1
             self?.hasUnsavedEditorChanges = true
-            self?.scheduleAutosave()
         }
         editorChangeRevision = 0
         hasUnsavedEditorChanges = false
@@ -919,15 +919,76 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         updateEditToolbarItem()
     }
 
-    /// Every change re-arms a short timer; the write happens once typing pauses.
-    private func scheduleAutosave() {
-        autosaveWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            guard let self, self.isEditing else { return }
-            self.commitEdits(exitAfter: false)
+    private func requestEndEditing(completion: ((Bool) -> Void)? = nil) {
+        resolveUnsavedEdits { [weak self] resolution in
+            guard let self else {
+                completion?(false)
+                return
+            }
+            switch resolution {
+            case .save:
+                self.commitEdits(exitAfter: true, completion: completion)
+            case .discard:
+                self.exitEditModeWithoutSaving {
+                    completion?(true)
+                }
+            case .cancel:
+                completion?(false)
+            }
         }
-        autosaveWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
+    }
+
+    private func resolveUnsavedEdits(
+        completion: @escaping (UnsavedEditResolution) -> Void
+    ) {
+        guard hasUnsavedEditorChanges || isEditorCommitInFlight else {
+            completion(.discard)
+            return
+        }
+
+        // If an explicit ⌘S is already running, let that request finish
+        // instead of presenting a second decision on top of it.
+        if isEditorCommitInFlight {
+            commitEdits(exitAfter: false) { success in
+                completion(success ? .discard : .cancel)
+            }
+            return
+        }
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Do you want to save your changes?"
+        let fileName = currentFileURL?.lastPathComponent ?? "this document"
+        alert.informativeText = "Your changes to \(fileName) will be lost if you don’t save them."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Don’t Save")
+        alert.beginSheetModal(for: documentWindow) { response in
+            switch response {
+            case .alertFirstButtonReturn:
+                completion(.save)
+            case .alertThirdButtonReturn:
+                completion(.discard)
+            default:
+                completion(.cancel)
+            }
+        }
+    }
+
+    private func exitEditModeWithoutSaving(completion: @escaping () -> Void) {
+        var shouldRerender = false
+        if case let .modified(externalMarkdown) = diskFileState(
+            for: currentFileURL,
+            expectedMarkdown: currentMarkdown
+        ) {
+            currentMarkdown = externalMarkdown
+            if let url = currentFileURL {
+                markdownDocument?.replaceContents(markdown: externalMarkdown, fileURL: url)
+            }
+            shouldRerender = true
+        }
+        hasUnsavedEditorChanges = false
+        exitEditMode(rerender: shouldRerender, completion: completion)
     }
 
     /// Serializes the editor, writes the file if the content changed, and
@@ -953,8 +1014,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
         let revision = editorChangeRevision
         isEditorCommitInFlight = true
-        // This commit supersedes any pending debounced autosave.
-        autosaveWork?.cancel()
         editor.fetchMarkdown { [weak self] body in
             guard let self else {
                 return
@@ -1084,8 +1143,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func exitEditMode(rerender: Bool, completion: @escaping () -> Void) {
-        autosaveWork?.cancel()
-        autosaveWork = nil
         hideEditAccessory()
         guard let split = mainSplit else {
             completion()
