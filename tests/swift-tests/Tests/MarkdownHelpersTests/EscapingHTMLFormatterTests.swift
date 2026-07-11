@@ -48,7 +48,18 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         """)
         XCTAssertTrue(html.contains("markdown-alert-warning"), "expected warning kind: \(html)")
         XCTAssertTrue(html.contains("Something specific</p>"), "expected custom title text: \(html)")
-        XCTAssertTrue(html.contains("Multi\nline body."), "expected body across lines: \(html)")
+        XCTAssertTrue(
+            html.contains("Multi<br />\nline body."),
+            "expected body line break to remain visible: \(html)"
+        )
+    }
+
+    func testSoftBreakRendersAsVisibleLineBreak() {
+        let html = EscapingHTMLFormatter.format("First line\nSecond line")
+        XCTAssertTrue(
+            html.contains("First line<br />\nSecond line"),
+            "expected a source newline to remain visible: \(html)"
+        )
     }
 
     func testGitHubAlertTagIsCaseInsensitive() {
