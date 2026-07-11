@@ -17,6 +17,12 @@ enum SearchMode {
     case beginsWith
 }
 
+struct SourceScrollAnchor {
+    let line: Int
+    /// Block top relative to the preview viewport top, in CSS pixels.
+    let viewportOffset: CGFloat
+}
+
 /// User-selectable article layout, persisted across launches. Quick Look
 /// always renders the centered column; this setting only drives the app.
 /// Lives here (not AppDelegate.swift) because this file is compiled into
@@ -482,6 +488,78 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                 return
             }
             completion(raw.map { CGFloat(truncating: $0) })
+        }
+    }
+
+    /// Finds the rendered block at (or immediately above) a document-space
+    /// Y coordinate and returns its original Markdown source line.
+    func sourceAnchor(atDocumentY documentY: CGFloat,
+                      completion: @escaping (SourceScrollAnchor?) -> Void) {
+        let script = """
+        (() => {
+            const y = \(documentY);
+            const blocks = Array.from(document.querySelectorAll('[data-source-line]'));
+            let chosen = null;
+            let chosenTop = -Infinity;
+            for (const block of blocks) {
+                const top = block.getBoundingClientRect().top
+                    + (window.scrollY || document.documentElement.scrollTop || 0);
+                if (top <= y + 0.5 && top >= chosenTop) {
+                    chosen = block;
+                    chosenTop = top;
+                }
+            }
+            if (!chosen && blocks.length) {
+                chosen = blocks[0];
+                chosenTop = chosen.getBoundingClientRect().top;
+            }
+            if (!chosen) return null;
+            return {
+                line: Number(chosen.dataset.sourceLine),
+                offset: chosenTop - y
+            };
+        })();
+        """
+        webView.evaluateJavaScript(script) { result, _ in
+            guard let raw = result as? [String: Any],
+                  let line = raw["line"] as? NSNumber,
+                  let offset = raw["offset"] as? NSNumber else {
+                completion(nil)
+                return
+            }
+            completion(SourceScrollAnchor(
+                line: line.intValue,
+                viewportOffset: CGFloat(truncating: offset)
+            ))
+        }
+    }
+
+    func sourceOffset(forLine sourceLine: Int, completion: @escaping (CGFloat?) -> Void) {
+        let script = """
+        (() => {
+            const requested = \(sourceLine);
+            const blocks = Array.from(document.querySelectorAll('[data-source-line]'));
+            let chosen = null;
+            let chosenLine = -1;
+            for (const block of blocks) {
+                const line = Number(block.dataset.sourceLine);
+                if (line <= requested && line >= chosenLine) {
+                    chosen = block;
+                    chosenLine = line;
+                }
+            }
+            if (!chosen) chosen = blocks[0] || null;
+            if (!chosen) return null;
+            return chosen.getBoundingClientRect().top
+                + (window.scrollY || document.documentElement.scrollTop || 0);
+        })();
+        """
+        webView.evaluateJavaScript(script) { result, _ in
+            guard let number = result as? NSNumber else {
+                completion(nil)
+                return
+            }
+            completion(CGFloat(truncating: number))
         }
     }
 

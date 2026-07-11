@@ -29,7 +29,7 @@ final class MainSplitViewController: NSSplitViewController {
         sidebar.canCollapse = true
         sidebar.canCollapseFromWindowResize = false
 
-        let content = NSSplitViewItem(viewController: ContentViewController())
+        let content = NSSplitViewItem(viewController: LayeredContentViewController())
         content.minimumThickness = 420
 
         let inspector = NSSplitViewItem(inspectorWithViewController: InspectorViewController())
@@ -148,12 +148,154 @@ final class MainSplitViewController: NSSplitViewController {
         contentViewController?.reloadPreviewForSettingChange()
     }
 
+    // MARK: - Edit mode
+
+    /// Preview and editor stay attached to the same content surface. Keeping
+    /// both WebKit views warm avoids the blank compositing frame produced by
+    /// removing one split item and inserting another.
+    private var cachedEditorViewController: EditorViewController?
+    private var isEditorPreparing = false
+    private var isEditorVisible = false
+    private var pendingSourceScrollAnchor: SourceScrollAnchor?
+    private var isSourceScrollAnchorResolved = false
+    private var isEditorDOMReady = false
+    private var pendingPreviewScrollProgress: CGFloat = 0
+
+    var isEditingDocument: Bool {
+        isEditorPreparing || isEditorVisible
+    }
+
+    var editorViewController: EditorViewController? {
+        isEditingDocument ? cachedEditorViewController : nil
+    }
+
+    @discardableResult
+    func enterEditMode(markdown: String) -> EditorViewController {
+        if let editor = editorViewController {
+            editor.load(markdown: markdown)
+            return editor
+        }
+        guard let contentHost = layeredContentViewController else {
+            fatalError("Edit mode requested before the content view was installed")
+        }
+        let editorVC: EditorViewController
+        if let cachedEditorViewController {
+            editorVC = cachedEditorViewController
+        } else {
+            editorVC = EditorViewController()
+            editorVC.loadViewIfNeeded()
+            editorVC.view.translatesAutoresizingMaskIntoConstraints = false
+            editorVC.view.alphaValue = 0
+            contentHost.installEditorOverlay(editorVC)
+            cachedEditorViewController = editorVC
+        }
+
+        // Captured before the swap so the editor renders at the same
+        // zoom (and therefore the same column width) as the preview.
+        let previewZoom = contentViewController?.pageZoom ?? 1
+        let previewScrollProgress = contentViewController?.scrollProgress ?? 0
+
+        isEditorPreparing = true
+        pendingSourceScrollAnchor = nil
+        isSourceScrollAnchorResolved = false
+        isEditorDOMReady = false
+        pendingPreviewScrollProgress = previewScrollProgress
+        editorVC.view.isHidden = false
+        editorVC.editorDidBecomeReady = { [weak self, weak editorVC] in
+            guard let self, let editorVC, self.isEditorPreparing else { return }
+            editorVC.editorDidBecomeReady = nil
+            self.isEditorDOMReady = true
+            self.revealEditorIfPrepared(editorVC)
+        }
+        editorVC.applyPageZoom(previewZoom)
+        editorVC.load(markdown: markdown)
+        contentViewController?.sourceScrollAnchor { [weak self, weak editorVC] anchor in
+            guard let self, let editorVC, self.isEditorPreparing else { return }
+            self.pendingSourceScrollAnchor = anchor
+            self.isSourceScrollAnchorResolved = true
+            self.revealEditorIfPrepared(editorVC)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self, weak editorVC] in
+            guard let self, let editorVC, self.isEditorPreparing,
+                  !self.isSourceScrollAnchorResolved else { return }
+            self.isSourceScrollAnchorResolved = true
+            self.revealEditorIfPrepared(editorVC)
+        }
+        return editorVC
+    }
+
+    private func revealEditorIfPrepared(_ editorVC: EditorViewController) {
+        guard isEditorPreparing, isEditorDOMReady, isSourceScrollAnchorResolved else { return }
+        // CodeMirror and the preview source lookup complete independently.
+        // Apply the exact line only after both are ready, then reveal after a
+        // display cycle so no empty editor frame is exposed.
+        editorVC.applyScrollProgress(pendingPreviewScrollProgress,
+                                     sourceAnchor: pendingSourceScrollAnchor) { [weak self, weak editorVC] in
+            DispatchQueue.main.async {
+                guard let self, let editorVC, self.isEditorPreparing else { return }
+                editorVC.view.superview?.layoutSubtreeIfNeeded()
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.10
+                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    editorVC.view.animator().alphaValue = 1
+                } completionHandler: { [weak self] in
+                    Task { @MainActor [weak self] in
+                        guard let self, self.isEditorPreparing else { return }
+                        self.isEditorPreparing = false
+                        self.isEditorVisible = true
+                    }
+                }
+            }
+        }
+    }
+
+    func exitEditMode(waitForPreviewRender: Bool, completion: @escaping () -> Void) {
+        guard let editorVC = cachedEditorViewController,
+              isEditorPreparing || isEditorVisible else {
+            completion()
+            return
+        }
+        editorVC.fetchScrollAnchor { [weak self, weak editorVC] anchor in
+            guard let self, let editorVC else {
+                completion()
+                return
+            }
+            if waitForPreviewRender {
+                self.contentViewController?.prepareToRestoreSourceScrollAnchor(anchor)
+            } else if let anchor {
+                self.contentViewController?.restoreSourceScrollAnchor(anchor)
+            }
+            editorVC.editorDidBecomeReady = nil
+            self.pendingSourceScrollAnchor = nil
+            self.isSourceScrollAnchorResolved = false
+            self.isEditorDOMReady = false
+            self.isEditorPreparing = false
+            self.isEditorVisible = false
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.10
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                editorVC.view.animator().alphaValue = 0
+            } completionHandler: { [weak self, weak editorVC] in
+                Task { @MainActor [weak self, weak editorVC] in
+                    guard let self, let editorVC,
+                          !self.isEditorPreparing, !self.isEditorVisible else { return }
+                    editorVC.view.isHidden = true
+                }
+            }
+            completion()
+        }
+    }
+
     private var sidebarViewController: SidebarViewController? {
         splitViewItems.first?.viewController as? SidebarViewController
     }
 
     private var contentViewController: ContentViewController? {
-        splitViewItems.dropFirst().first?.viewController as? ContentViewController
+        layeredContentViewController?.previewViewController
+    }
+
+    private var layeredContentViewController: LayeredContentViewController? {
+        splitViewItems.dropFirst().first?.viewController as? LayeredContentViewController
     }
 
     private var inspectorViewController: InspectorViewController? {
@@ -171,5 +313,41 @@ final class MainSplitViewController: NSSplitViewController {
         splitView.setPosition(240, ofDividerAt: 0)
         splitViewItems.first?.isCollapsed = true
         defaults.set(true, forKey: Self.didSeedKey)
+    }
+}
+
+/// Stable sibling layers for preview and edit mode. NSScrollView manages the
+/// ordering of its own clip/scroller subviews, so an editor cannot reliably be
+/// overlaid by adding it directly to ContentViewController.view.
+private final class LayeredContentViewController: NSViewController {
+    let previewViewController = ContentViewController()
+
+    override func loadView() {
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        view = container
+
+        addChild(previewViewController)
+        previewViewController.view.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(previewViewController.view)
+        NSLayoutConstraint.activate([
+            previewViewController.view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            previewViewController.view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            previewViewController.view.topAnchor.constraint(equalTo: container.topAnchor),
+            previewViewController.view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+    }
+
+    func installEditorOverlay(_ editorViewController: EditorViewController) {
+        addChild(editorViewController)
+        let editorView = editorViewController.view
+        editorView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(editorView, positioned: .above, relativeTo: previewViewController.view)
+        NSLayoutConstraint.activate([
+            editorView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            editorView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            editorView.topAnchor.constraint(equalTo: view.topAnchor),
+            editorView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
     }
 }

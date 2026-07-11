@@ -1,0 +1,26 @@
+{
+  "name": "md-preview-editor-bundle",
+  "private": true,
+  "description": "Builds md-preview/Vendor/CodeMirror/mdedit.min.js — the CodeMirror 6 live-preview markdown editor used by edit mode. Run `npm install && npm run build` after changing entry-cm.js or bumping deps.",
+  "scripts": {
+    "build": "esbuild entry-cm.js --bundle --minify --format=iife --outfile=../../md-preview/Vendor/CodeMirror/mdedit.min.js"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6",
+    "@codemirror/lang-css": "^6",
+    "@codemirror/lang-html": "^6",
+    "@codemirror/lang-javascript": "^6",
+    "@codemirror/lang-json": "^6",
+    "@codemirror/lang-markdown": "^6",
+    "@codemirror/lang-python": "^6",
+    "@codemirror/language": "^6",
+    "@codemirror/legacy-modes": "^6",
+    "@codemirror/state": "^6",
+    "@codemirror/view": "^6",
+    "@lezer/highlight": "^1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25",
+    "jsdom": "^24.1.3"
+  }
+}

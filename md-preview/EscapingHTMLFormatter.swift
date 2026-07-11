@@ -14,23 +14,32 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     private(set) var result = ""
 
     let options: HTMLFormatterOptions
+    let sourceLineOffset: Int
 
     private var inTableHead = false
     private var tableColumnAlignments: [Table.ColumnAlignment?]?
     private var currentTableColumn = 0
 
-    init(options: HTMLFormatterOptions = []) {
+    init(options: HTMLFormatterOptions = [], sourceLineOffset: Int = 0) {
         self.options = options
+        self.sourceLineOffset = sourceLineOffset
     }
 
-    static func format(_ markdown: String, options: HTMLFormatterOptions = []) -> String {
+    static func format(_ markdown: String,
+                       options: HTMLFormatterOptions = [],
+                       sourceLineOffset: Int = 0) -> String {
         let document = Document(parsing: markdown)
-        var walker = EscapingHTMLFormatter(options: options)
+        var walker = EscapingHTMLFormatter(options: options, sourceLineOffset: sourceLineOffset)
         walker.visit(document)
         return walker.result
     }
 
     // MARK: Block elements
+
+    private func sourceLineAttribute(_ markup: Markup) -> String {
+        guard let line = markup.range?.lowerBound.line else { return "" }
+        return " data-source-line=\"\(line + sourceLineOffset)\""
+    }
 
     mutating func visitBlockQuote(_ blockQuote: BlockQuote) {
         if renderAlertIfPresent(blockQuote) {
@@ -44,7 +53,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
             }
             result += "</aside>\n"
         } else {
-            result += "<blockquote>\n"
+            result += "<blockquote\(sourceLineAttribute(blockQuote))>\n"
             descendInto(blockQuote)
             result += "</blockquote>\n"
         }
@@ -171,17 +180,17 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         let languageAttr = info.language.isEmpty
             ? ""
             : " class=\"language-\(escapeAttribute(info.language))\""
-        result += "<pre><code\(languageAttr)>\(escapeText(codeBlock.code))</code></pre>\n"
+        result += "<pre\(sourceLineAttribute(codeBlock))><code\(languageAttr)>\(escapeText(codeBlock.code))</code></pre>\n"
     }
 
     mutating func visitHeading(_ heading: Heading) {
-        result += "<h\(heading.level)>"
+        result += "<h\(heading.level)\(sourceLineAttribute(heading))>"
         descendInto(heading)
         result += "</h\(heading.level)>\n"
     }
 
     mutating func visitThematicBreak(_ thematicBreak: ThematicBreak) {
-        result += "<hr />\n"
+        result += "<hr\(sourceLineAttribute(thematicBreak)) />\n"
     }
 
     mutating func visitHTMLBlock(_ html: HTMLBlock) {
@@ -191,14 +200,14 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
 
     mutating func visitListItem(_ listItem: ListItem) {
         if let checkbox = listItem.checkbox {
-            result += "<li class=\"task-list-item\">"
+            result += "<li class=\"task-list-item\"\(sourceLineAttribute(listItem))>"
             result += "<input type=\"checkbox\" class=\"task-list-item-checkbox\" disabled=\"\""
             if checkbox == .checked {
                 result += " checked=\"\""
             }
             result += " /> "
         } else {
-            result += "<li>"
+            result += "<li\(sourceLineAttribute(listItem))>"
         }
         descendInto(listItem)
         result += "</li>\n"
@@ -211,25 +220,25 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         } else {
             start = ""
         }
-        result += "<ol\(start)>\n"
+        result += "<ol\(start)\(sourceLineAttribute(orderedList))>\n"
         descendInto(orderedList)
         result += "</ol>\n"
     }
 
     mutating func visitUnorderedList(_ unorderedList: UnorderedList) {
-        result += "<ul>\n"
+        result += "<ul\(sourceLineAttribute(unorderedList))>\n"
         descendInto(unorderedList)
         result += "</ul>\n"
     }
 
     mutating func visitParagraph(_ paragraph: Paragraph) {
-        result += "<p>"
+        result += "<p\(sourceLineAttribute(paragraph))>"
         descendInto(paragraph)
         result += "</p>\n"
     }
 
     mutating func visitTable(_ table: Table) {
-        result += "<table>\n"
+        result += "<table\(sourceLineAttribute(table))>\n"
         tableColumnAlignments = table.columnAlignments
         descendInto(table)
         tableColumnAlignments = nil

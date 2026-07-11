@@ -65,10 +65,21 @@ nonisolated enum MarkdownHTML {
                        vendorLoading: VendorLoading = .inline,
                        contentWidth: ContentWidth = .centered,
                        warmup: Bool = false) -> RenderedHTML {
-        let body = MarkdownFrontmatter.split(markdown).body
+        let frontmatter = MarkdownFrontmatter.split(markdown)
+        let body = frontmatter.body
+        let sourceLineOffset: Int
+        if frontmatter.raw != nil,
+           let bodyRange = markdown.range(of: body, options: .backwards) {
+            sourceLineOffset = markdown[..<bodyRange.lowerBound].count(where: \.isNewline)
+        } else {
+            sourceLineOffset = 0
+        }
         let footnotes = extractFootnotes(from: body)
         let math = extractMath(from: footnotes.markdown)
-        let formatted = EscapingHTMLFormatter.format(math.processedMarkdown)
+        let formatted = EscapingHTMLFormatter.format(
+            math.processedMarkdown,
+            sourceLineOffset: sourceLineOffset
+        )
         let mermaidResult = renderMermaidBlocks(in: formatted)
         let mathResult = renderMathBlocks(in: mermaidResult.html, with: math)
         let footnoteReferenceHTML = renderFootnoteReferences(in: mathResult.html, with: footnotes)
@@ -141,7 +152,7 @@ nonisolated enum MarkdownHTML {
 
     private static let headingTagRegex: NSRegularExpression = {
         // swiftlint:disable:next force_try
-        try! NSRegularExpression(pattern: "<h([1-6])>")
+        try! NSRegularExpression(pattern: "<h([1-6])([^>]*)>")
     }()
 
     private static func injectHeadingIDs(in html: String) -> String {
@@ -158,12 +169,13 @@ nonisolated enum MarkdownHTML {
 
         for (index, match) in matches.enumerated() {
             let level = nsHtml.substring(with: match.range(at: 1))
+            let attributes = nsHtml.substring(with: match.range(at: 2))
             let prefix = nsHtml.substring(with: NSRange(
                 location: cursor,
                 length: match.range.location - cursor
             ))
             result += prefix
-            result += "<h\(level) id=\"md-heading-\(index)\">"
+            result += "<h\(level)\(attributes) id=\"md-heading-\(index)\">"
             cursor = match.range.location + match.range.length
         }
         result += nsHtml.substring(from: cursor)
