@@ -1276,7 +1276,9 @@ nonisolated enum MarkdownHTML {
     private static let highlightableCodeRegex: NSRegularExpression = {
         // swiftlint:disable:next force_try
         try! NSRegularExpression(
-            pattern: #"<pre><code class="language-(?!mermaid")[a-zA-Z0-9_+#-]+""#
+            // Block elements now carry source-line attributes for scroll
+            // handoff, so do not require <pre> and <code> to be bare tags.
+            pattern: #"<pre\b[^>]*>\s*<code\b[^>]*class="[^"]*\blanguage-(?!mermaid(?:\s|"))[a-zA-Z0-9_+#-]+\b[^"]*""#
         )
     }()
 
