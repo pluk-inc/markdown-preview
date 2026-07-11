@@ -78,7 +78,8 @@ nonisolated enum MarkdownHTML {
         let math = extractMath(from: footnotes.markdown)
         let formatted = EscapingHTMLFormatter.format(
             math.processedMarkdown,
-            sourceLineOffset: sourceLineOffset
+            sourceLineOffset: sourceLineOffset,
+            sourceMarkdown: body
         )
         let mermaidResult = renderMermaidBlocks(in: formatted)
         let mathResult = renderMathBlocks(in: mermaidResult.html, with: math)
@@ -1878,8 +1879,11 @@ nonisolated enum MarkdownHTML {
     p {
         margin: 0.8em 0 0;
     }
-    p + p {
-        margin-top: 1.52em;
+    .md-source-blank-line {
+        height: 22.8px;
+    }
+    .md-source-blank-line + * {
+        margin-top: 0 !important;
     }
 
     h1, h2, h3, h4, h5, h6 {

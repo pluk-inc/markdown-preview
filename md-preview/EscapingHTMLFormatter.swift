@@ -15,21 +15,30 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
 
     let options: HTMLFormatterOptions
     let sourceLineOffset: Int
+    private let sourceLines: [String]
 
     private var inTableHead = false
     private var tableColumnAlignments: [Table.ColumnAlignment?]?
     private var currentTableColumn = 0
 
-    init(options: HTMLFormatterOptions = [], sourceLineOffset: Int = 0) {
+    init(options: HTMLFormatterOptions = [],
+         sourceLineOffset: Int = 0,
+         sourceMarkdown: String = "") {
         self.options = options
         self.sourceLineOffset = sourceLineOffset
+        self.sourceLines = sourceMarkdown.components(separatedBy: "\n")
     }
 
     static func format(_ markdown: String,
                        options: HTMLFormatterOptions = [],
-                       sourceLineOffset: Int = 0) -> String {
+                       sourceLineOffset: Int = 0,
+                       sourceMarkdown: String? = nil) -> String {
         let document = Document(parsing: markdown)
-        var walker = EscapingHTMLFormatter(options: options, sourceLineOffset: sourceLineOffset)
+        var walker = EscapingHTMLFormatter(
+            options: options,
+            sourceLineOffset: sourceLineOffset,
+            sourceMarkdown: sourceMarkdown ?? markdown
+        )
         walker.visit(document)
         return walker.result
     }
@@ -39,6 +48,33 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     private func sourceLineAttribute(_ markup: Markup) -> String {
         guard let line = markup.range?.lowerBound.line else { return "" }
         return " data-source-line=\"\(line + sourceLineOffset)\""
+    }
+
+    private func precedingBlankLineCount(for markup: Markup) -> Int {
+        guard let line = markup.range?.lowerBound.line else { return 0 }
+        var precedingLineIndex = line - 2
+        var blankLineCount = 0
+        while precedingLineIndex >= 0,
+              precedingLineIndex < sourceLines.count,
+              sourceLines[precedingLineIndex]
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty {
+            blankLineCount += 1
+            precedingLineIndex -= 1
+        }
+        return blankLineCount
+    }
+
+    mutating func visitDocument(_ document: Document) {
+        for child in document.children {
+            // CommonMark discards source blank lines between blocks. Restore
+            // them with fixed, sanitizer-safe markers before rendering each
+            // block so consecutive empty lines remain distinct in preview.
+            for _ in 0..<precedingBlankLineCount(for: child) {
+                result += "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n"
+            }
+            visit(child)
+        }
     }
 
     mutating func visitBlockQuote(_ blockQuote: BlockQuote) {

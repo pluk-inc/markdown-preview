@@ -2,17 +2,20 @@ import XCTest
 @testable import MarkdownHelpers
 
 final class MarkdownHTMLRenderTests: XCTestCase {
-    func testConsecutiveParagraphsReserveAVisibleBlankLine() {
+    func testReadOnlyRenderingPreservesActualBlankLineCounts() {
         let rendered = MarkdownHTML.render(
-            markdown: "First paragraph.\n\nSecond paragraph.",
+            markdown: "First paragraph.\n\n\n## Heading\n\nSecond paragraph.",
             vendorLoading: .lazy
         )
 
         XCTAssertTrue(rendered.articleHTML.contains(
-            "<p data-source-line=\"1\">First paragraph.</p>\n<p data-source-line=\"3\">Second paragraph.</p>"
+            "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<h2 data-source-line=\"4\""
         ))
-        XCTAssertTrue(rendered.html.contains("p + p {"))
-        XCTAssertTrue(rendered.html.contains("margin-top: 1.52em;"))
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<p data-source-line=\"6\""
+        ))
+        XCTAssertTrue(rendered.html.contains(".md-source-blank-line {"))
+        XCTAssertTrue(rendered.html.contains("height: 22.8px;"))
     }
 
     func testMermaidPostProcessingAcceptsSourceMappedPreTag() {
@@ -60,7 +63,9 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             vendorLoading: .lazy
         )
 
-        XCTAssertTrue(rendered.articleHTML.contains("<h2 data-source-line=\"9\" id=\"md-heading-0\">Target</h2>"))
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "<h2 data-source-line=\"9\" id=\"md-heading-0\">Target</h2>"
+        ))
         XCTAssertTrue(rendered.articleHTML.contains("<p data-source-line=\"5\">First definition line."))
     }
 

@@ -62,6 +62,30 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         )
     }
 
+    func testEveryPrecedingBlankSourceLineIsRecorded() {
+        let html = EscapingHTMLFormatter.format("First paragraph.\n\n\nSecond paragraph.")
+        XCTAssertTrue(
+            html.contains(
+                "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<p data-source-line=\"4\">Second paragraph.</p>"
+            ),
+            "expected both empty source lines to be preserved: \(html)"
+        )
+    }
+
+    func testSourceMarkdownExcludesRemovedContentFromBlankLineCount() {
+        let html = EscapingHTMLFormatter.format(
+            "Before.\n\n\n\nAfter.",
+            sourceMarkdown: "Before.\n\n[^note]: Removed.\n\nAfter."
+        )
+        XCTAssertTrue(
+            html.contains(
+                "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<p data-source-line=\"5\">After.</p>"
+            ),
+            "removed source content must not become extra visual blank lines: \(html)"
+        )
+        XCTAssertEqual(html.components(separatedBy: "md-source-blank-line").count - 1, 1)
+    }
+
     func testGitHubAlertTagIsCaseInsensitive() {
         let html = EscapingHTMLFormatter.format("> [!tIp] Pro move")
         XCTAssertTrue(
