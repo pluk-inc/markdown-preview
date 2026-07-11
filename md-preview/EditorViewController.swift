@@ -301,6 +301,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             padding-left: 1em;
             color: var(--secondary);
         }
+        .cm-md-strong { font-weight: 600; }
+        .cm-md-emphasis { font-style: italic; }
         .cm-md-strikethrough { text-decoration: line-through; }
         .cm-md-inline-code {
             font-family: ui-monospace, "SF Mono", Menlo, monospace;

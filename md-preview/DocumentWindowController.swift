@@ -755,6 +755,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let views: [NSView] = [
             headings,
             separatorView(),
+            formatButton("bold", "bold", "Bold"),
+            formatButton("italic", "italic", "Italic"),
             formatButton("strikethrough", "strikethrough", "Strikethrough"),
             separatorView(),
             formatButton("list.bullet", "bulletList", "Bulleted List"),
