@@ -710,7 +710,7 @@ window.MDEditor = {
           livePreview,
           alignInactiveHeadings,
           // paragraphReflow deliberately omitted: the preview renders
-          // single newlines as hard breaks (Obsidian-style), so the
+          // single newlines as hard breaks, so the
           // editor keeps them visible instead of joining lines.
           keymap.of([
             ...markdownKeymap,

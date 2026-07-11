@@ -45,7 +45,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private weak var inspectorButton: NSButton?
     private weak var editItem: NSToolbarItem?
     private weak var editButton: NSButton?
-    /// Debounced Obsidian-style autosave while editing.
+    /// Debounced autosave while editing.
     private var autosaveWork: DispatchWorkItem?
     /// When sidebar navigation starts from edit mode, the newly loaded file
     /// should return to edit mode instead of dropping the user into preview.
@@ -877,8 +877,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         updateEditToolbarItem()
     }
 
-    /// Obsidian-style autosave: every change re-arms a short timer; the
-    /// write happens once typing pauses.
+    /// Every change re-arms a short timer; the write happens once typing pauses.
     private func scheduleAutosave() {
         autosaveWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
@@ -1762,7 +1761,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         "pro.writer.mac-setapp",    // iA Writer (Setapp)
         "abnerworks.Typora",        // Typora
         "com.uranusjr.macdown",     // MacDown
-        "md.obsidian"               // Obsidian
+        "md.obsidian"
     ]
     /// Apps that claim a Markdown/plain-text document type but aren't useful as a
     /// text editor — they pass `canEditMarkdown` only as noise. See #114.
