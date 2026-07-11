@@ -89,6 +89,19 @@ check("inactive inline code hides both backtick markers",
   inlineCodeHost.querySelector(".cm-content")?.textContent === "before highlight after")
 inlineCodeEditor.destroy()
 
+const indentedCodeHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(indentedCodeHost)
+const indentedCodeEditor = dom.window.MDEditor.create(
+  indentedCodeHost, "    <script>\n        run()\n    </script>", {})
+const indentedCodeLines = Array.from(indentedCodeHost.querySelectorAll(".cm-line"))
+check("indented code block receives preview block styling",
+  indentedCodeLines[0]?.classList.contains("cm-md-codeblock-first")
+    && indentedCodeLines.at(-1)?.classList.contains("cm-md-codeblock-last"))
+check("inactive indented code hides source indentation",
+  indentedCodeLines[0]?.textContent === "<script>"
+    && indentedCodeLines.at(-1)?.textContent === "</script>")
+indentedCodeEditor.destroy()
+
 const emphasisHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(emphasisHost)
 const emphasisEditor = dom.window.MDEditor.create(

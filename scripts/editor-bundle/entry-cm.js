@@ -436,8 +436,8 @@ function buildDecorations(view) {
           return
         }
 
-        // --- Fenced code -----------------------------------------------
-        if (name === "FencedCode") {
+        // --- Code blocks ------------------------------------------------
+        if (name === "FencedCode" || name === "CodeBlock") {
           const first = state.doc.lineAt(node.from)
           const last = state.doc.lineAt(node.to)
           let pos = node.from
@@ -447,6 +447,10 @@ function buildDecorations(view) {
               : line.from === last.from ? codeLineLast
               : codeLine
             lineOnce(line.from, deco)
+            if (name === "CodeBlock" && !touchesLineOf(line.from)) {
+              const indent = line.text.match(/^(?: {4}|\t)/)?.[0]
+              if (indent) ranges.push(hide.range(line.from, line.from + indent.length))
+            }
             if (line.to >= node.to) break
             pos = line.to + 1
           }
