@@ -78,6 +78,17 @@ check("blank source line before heading collapses",
   inactiveHeadingHost.querySelector(".cm-md-blank-before-heading") != null)
 inactiveHeadingEditor.destroy()
 
+const inlineCodeHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(inlineCodeHost)
+const inlineCodeEditor = dom.window.MDEditor.create(
+  inlineCodeHost, "before `highlight` after", {})
+const inlineCodeSpans = inlineCodeHost.querySelectorAll(".cm-md-inline-code")
+check("inline code renders as one styled content span",
+  inlineCodeSpans.length === 1 && inlineCodeSpans[0].textContent === "highlight")
+check("inactive inline code hides both backtick markers",
+  inlineCodeHost.querySelector(".cm-content")?.textContent === "before highlight after")
+inlineCodeEditor.destroy()
+
 const emphasisHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(emphasisHost)
 const emphasisEditor = dom.window.MDEditor.create(

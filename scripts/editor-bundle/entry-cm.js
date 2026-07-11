@@ -370,7 +370,16 @@ function buildDecorations(view) {
 
         // --- Inline code ------------------------------------------------
         if (name === "InlineCode") {
-          ranges.push(Decoration.mark({ class: "cm-md-inline-code" }).range(node.from, node.to))
+          const marks = []
+          for (let child = node.node.firstChild; child; child = child.nextSibling) {
+            if (child.name === "CodeMark") marks.push(child)
+          }
+          const contentFrom = marks.length ? marks[0].to : node.from
+          const contentTo = marks.length > 1 ? marks[marks.length - 1].from : node.to
+          if (contentFrom < contentTo) {
+            ranges.push(Decoration.mark({ class: "cm-md-inline-code" })
+              .range(contentFrom, contentTo))
+          }
           return
         }
         if (name === "CodeMark") {
