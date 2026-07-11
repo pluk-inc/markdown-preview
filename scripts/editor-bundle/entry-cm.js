@@ -174,6 +174,24 @@ const strongMark = Decoration.mark({ class: "cm-md-strong" })
 const emphasisMark = Decoration.mark({ class: "cm-md-emphasis" })
 const strikethroughMark = Decoration.mark({ class: "cm-md-strikethrough" })
 
+const autoDirectionLine = Decoration.line({ attributes: { dir: "auto" } })
+
+function buildDirectionLines(state) {
+  const ranges = []
+  for (let lineNumber = 1; lineNumber <= state.doc.lines; lineNumber++) {
+    ranges.push(autoDirectionLine.range(state.doc.line(lineNumber).from))
+  }
+  return Decoration.set(ranges)
+}
+
+const directionLines = StateField.define({
+  create: buildDirectionLines,
+  update(value, transaction) {
+    return transaction.docChanged ? buildDirectionLines(transaction.state) : value
+  },
+  provide: (field) => EditorView.decorations.from(field),
+})
+
 function fencedCodeDetails(state, node) {
   let info = ""
   const codeMarks = []
@@ -752,6 +770,8 @@ window.MDEditor = {
           drawSelection(),
           dropCursor(),
           EditorView.lineWrapping,
+          EditorView.perLineTextDirection.of(true),
+          directionLines,
           markdown({ base: markdownLanguage, codeLanguages }),
           activeCodeBlock,
           mermaidPreviews,

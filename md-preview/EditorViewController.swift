@@ -269,7 +269,11 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             box-sizing: border-box;
             caret-color: var(--text);
         }
-        #editor .cm-line { padding: 0; }
+        #editor .cm-line {
+            padding: 0;
+        }
+        #editor .cm-line[dir="rtl"] { text-align: right; }
+        #editor .cm-line[dir="ltr"] { text-align: left; }
         #editor .cm-cursor { border-left-color: var(--text); }
         #editor .cm-selectionBackground,
         #editor .cm-focused .cm-selectionBackground {
@@ -315,6 +319,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         #editor .cm-md-heading-inactive {
             transform: translateX(calc(-1 * var(--cm-md-heading-prefix-width, 0px)));
         }
+        #editor .cm-line[dir="rtl"].cm-md-heading-inactive {
+            transform: translateX(var(--cm-md-heading-prefix-width, 0px));
+        }
         /* Setext underline source remains editable, but Markdown consumes its
            physical line when rendering the heading. Collapse that line and
            paint the marker into the heading's existing bottom spacing so the
@@ -337,8 +344,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
 
         #editor .cm-md-quote {
-            border-left: 4px solid var(--quote-border);
-            padding-left: 1em;
+            border-inline-start: 4px solid var(--quote-border);
+            padding-inline-start: 1em;
             color: var(--secondary);
         }
         .cm-md-strong { font-weight: 600; }
@@ -466,6 +473,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         </html>
         """
     }
+
 }
 
 private final class EditorBridge: NSObject, WKScriptMessageHandler {

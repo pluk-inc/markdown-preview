@@ -56,6 +56,15 @@ if (editor) {
   check("exec('bold') inserts markers", editor.getMarkdown().startsWith("****"))
 }
 
+const bidiHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(bidiHost)
+const bidiEditor = dom.window.MDEditor.create(
+  bidiHost, "English line\nمرحبا بالعالم\nשלום עולם", {})
+const bidiLines = Array.from(bidiHost.querySelectorAll(".cm-line"))
+check("every editor line derives its direction from its own text",
+  bidiLines.length === 3 && bidiLines.every((line) => line.getAttribute("dir") === "auto"))
+bidiEditor.destroy()
+
 const headingHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(headingHost)
 const headingEditor = dom.window.MDEditor.create(headingHost, "### Stable heading", {})

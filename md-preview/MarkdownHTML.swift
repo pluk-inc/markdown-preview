@@ -188,10 +188,14 @@ nonisolated enum MarkdownHTML {
 
     // MARK: - RTL Direction
 
-    // Matches opening <p>, <li>, or <h1>-<h6> tags
+    // Matches opening block-level tags whose direction controls alignment and
+    // logical-edge styling such as blockquote borders.
     private static let rtlTagRegex: NSRegularExpression = {
         // swiftlint:disable:next force_try
-        try! NSRegularExpression(pattern: #"<(p|li|h[1-6])(\s[^>]*)?>"#, options: [.caseInsensitive])
+        try! NSRegularExpression(
+            pattern: #"<(blockquote|p|li|h[1-6])(\s[^>]*)?>"#,
+            options: [.caseInsensitive]
+        )
     }()
 
     private static let htmlTagRegex: NSRegularExpression = {
@@ -2161,8 +2165,8 @@ nonisolated enum MarkdownHTML {
 
     blockquote {
         margin: 1.2em 0 0;
-        padding: 0 0 0 1em;
-        border-left: 4px solid var(--quote-border);
+        padding-inline-start: 1em;
+        border-inline-start: 4px solid var(--quote-border);
         color: var(--secondary);
     }
     blockquote > *:first-child { margin-top: 0; }

@@ -2,6 +2,27 @@ import XCTest
 @testable import MarkdownHelpers
 
 final class MarkdownHTMLRenderTests: XCTestCase {
+    func testBlockquoteUsesItsContentDirectionForLogicalBorder() {
+        let rtl = MarkdownHTML.render(
+            markdown: "> هذا اقتباس بالعربية.",
+            vendorLoading: .lazy
+        )
+        let ltr = MarkdownHTML.render(
+            markdown: "> An English blockquote.",
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(rtl.articleHTML.contains(
+            #"<blockquote data-source-line="1" dir="rtl">"#
+        ))
+        XCTAssertFalse(ltr.articleHTML.contains(
+            #"<blockquote data-source-line="1" dir="rtl">"#
+        ))
+        XCTAssertTrue(rtl.html.contains(
+            "border-inline-start: 4px solid var(--quote-border);"
+        ))
+    }
+
     func testReadOnlyRenderingPreservesActualBlankLineCounts() {
         let rendered = MarkdownHTML.render(
             markdown: "First paragraph.\n\n\n## Heading\n\nSecond paragraph.",
