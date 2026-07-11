@@ -1878,6 +1878,9 @@ nonisolated enum MarkdownHTML {
     p {
         margin: 0.8em 0 0;
     }
+    p + p {
+        margin-top: 1.52em;
+    }
 
     h1, h2, h3, h4, h5, h6 {
         font-weight: 600;

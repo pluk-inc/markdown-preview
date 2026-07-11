@@ -2,6 +2,19 @@ import XCTest
 @testable import MarkdownHelpers
 
 final class MarkdownHTMLRenderTests: XCTestCase {
+    func testConsecutiveParagraphsReserveAVisibleBlankLine() {
+        let rendered = MarkdownHTML.render(
+            markdown: "First paragraph.\n\nSecond paragraph.",
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "<p data-source-line=\"1\">First paragraph.</p>\n<p data-source-line=\"3\">Second paragraph.</p>"
+        ))
+        XCTAssertTrue(rendered.html.contains("p + p {"))
+        XCTAssertTrue(rendered.html.contains("margin-top: 1.52em;"))
+    }
+
     func testMermaidPostProcessingAcceptsSourceMappedPreTag() {
         let rendered = MarkdownHTML.render(
             markdown: """
