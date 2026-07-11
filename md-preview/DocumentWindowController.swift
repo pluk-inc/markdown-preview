@@ -1158,18 +1158,18 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         alert.alertStyle = .warning
         alert.messageText = "This document changed on disk"
         alert.informativeText = "Another app changed \(fileURL.lastPathComponent). Cancel keeps your editor changes unsaved. Choose which version to keep."
-        alert.addButton(withTitle: "Cancel")
         alert.addButton(withTitle: "Keep My Changes")
         alert.addButton(withTitle: "Reload from Disk")
+        alert.addButton(withTitle: "Cancel")
         alert.beginSheetModal(for: documentWindow) { [weak self] response in
             guard let self else {
                 completion(.cancelled)
                 return
             }
             switch response {
-            case .alertSecondButtonReturn:
+            case .alertFirstButtonReturn:
                 self.persistEditedMarkdown(localMarkdown, to: fileURL, completion: completion)
-            case .alertThirdButtonReturn:
+            case .alertSecondButtonReturn:
                 // The sheet may remain open while another editor writes
                 // again. Reload the latest bytes instead of the snapshot
                 // captured when the conflict was first detected.
@@ -1195,10 +1195,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         alert.alertStyle = .warning
         alert.messageText = "Unable to verify the document on disk"
         alert.informativeText = "\(reason) Cancel keeps your editor changes unsaved."
-        alert.addButton(withTitle: "Cancel")
         alert.addButton(withTitle: overwriteTitle)
+        alert.addButton(withTitle: "Cancel")
         alert.beginSheetModal(for: documentWindow) { [weak self] response in
-            guard let self, response == .alertSecondButtonReturn else {
+            guard let self, response == .alertFirstButtonReturn else {
                 completion(.cancelled)
                 return
             }
