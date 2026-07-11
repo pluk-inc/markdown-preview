@@ -13,7 +13,7 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         ```
         """)
         XCTAssertTrue(
-            html.contains(#"<pre><code class="language-mermaid">"#),
+            html.contains(#"<pre data-source-line="1"><code class="language-mermaid">"#),
             "expected language-mermaid class (metadata after space ignored): \(html)"
         )
         XCTAssertFalse(
@@ -62,6 +62,30 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         )
     }
 
+    func testEveryPrecedingBlankSourceLineIsRecorded() {
+        let html = EscapingHTMLFormatter.format("First paragraph.\n\n\nSecond paragraph.")
+        XCTAssertTrue(
+            html.contains(
+                "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<p data-source-line=\"4\">Second paragraph.</p>"
+            ),
+            "expected both empty source lines to be preserved: \(html)"
+        )
+    }
+
+    func testSourceMarkdownExcludesRemovedContentFromBlankLineCount() {
+        let html = EscapingHTMLFormatter.format(
+            "Before.\n\n\n\nAfter.",
+            sourceMarkdown: "Before.\n\n[^note]: Removed.\n\nAfter."
+        )
+        XCTAssertTrue(
+            html.contains(
+                "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<p data-source-line=\"5\">After.</p>"
+            ),
+            "removed source content must not become extra visual blank lines: \(html)"
+        )
+        XCTAssertEqual(html.components(separatedBy: "md-source-blank-line").count - 1, 1)
+    }
+
     func testGitHubAlertTagIsCaseInsensitive() {
         let html = EscapingHTMLFormatter.format("> [!tIp] Pro move")
         XCTAssertTrue(
@@ -90,7 +114,10 @@ final class EscapingHTMLFormatterTests: XCTestCase {
 
     func testUnknownAlertTagFallsBackToBlockquote() {
         let html = EscapingHTMLFormatter.format("> [!FOO] Nope")
-        XCTAssertTrue(html.contains("<blockquote>"), "unknown tag should be a plain blockquote: \(html)")
+        XCTAssertTrue(
+            html.contains(#"<blockquote data-source-line="1">"#),
+            "unknown tag should be a source-mapped plain blockquote: \(html)"
+        )
         XCTAssertFalse(html.contains("markdown-alert"), "no alert wrapper for unknown tag: \(html)")
     }
 
@@ -107,13 +134,16 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         > Canon is permanent.
         """)
 
-        XCTAssertTrue(html.contains("<blockquote>"), "expected plain blockquote wrapper: \(html)")
         XCTAssertTrue(
-            html.contains("<p>All canon is stored as markdown files.</p>"),
+            html.contains(#"<blockquote data-source-line="1">"#),
+            "expected source-mapped plain blockquote wrapper: \(html)"
+        )
+        XCTAssertTrue(
+            html.contains(#"<p data-source-line="1">All canon is stored as markdown files.</p>"#),
             "expected first quote paragraph: \(html)"
         )
         XCTAssertTrue(
-            html.contains("<p>Canon is permanent.</p>"),
+            html.contains(#"<p data-source-line="9">Canon is permanent.</p>"#),
             "expected final quote paragraph: \(html)"
         )
         XCTAssertFalse(html.contains("<pre><code"), "blockquote must not render as a code block: \(html)")

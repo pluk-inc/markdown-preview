@@ -19,6 +19,7 @@ extension NSToolbarItem.Identifier {
     static let printDocument = NSToolbarItem.Identifier("PrintDocument")
     static let copyMarkdown = NSToolbarItem.Identifier("CopyMarkdown")
     static let zoom = NSToolbarItem.Identifier("Zoom")
+    static let editDocument = NSToolbarItem.Identifier("EditDocument")
 }
 
 private extension Array where Element == NSToolbarItem.Identifier {
@@ -33,6 +34,25 @@ private extension Array where Element == NSToolbarItem.Identifier {
 
 final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate, NSSharingServicePickerToolbarItemDelegate, NSSearchFieldDelegate, NSMenuDelegate {
 
+    private enum DiskFileState {
+        case unchanged
+        case modified(String)
+        case missing
+        case unreadable
+    }
+
+    private enum EditedMarkdownSaveResult {
+        case saved
+        case reloaded(String)
+        case cancelled
+    }
+
+    private enum UnsavedEditResolution {
+        case save
+        case discard
+        case cancel
+    }
+
     private var currentFileURL: URL?
     private var currentMarkdown: String?
     private var fileWatcher: FileWatcher?
@@ -42,6 +62,24 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private weak var openInLLMItem: NSMenuToolbarItem?
     private weak var inspectorItem: NSToolbarItem?
     private weak var inspectorButton: NSButton?
+    private weak var editItem: NSToolbarItem?
+    private weak var editButton: NSButton?
+    private var editorChangeRevision = 0
+    private var isEditorCommitInFlight = false
+    private var pendingCommitShouldExit = false
+    private var pendingCommitCompletions: [(Bool) -> Void] = []
+    /// When sidebar navigation starts from edit mode, the newly loaded file
+    /// should return to edit mode instead of dropping the user into preview.
+    private var pendingEditModeURL: URL?
+    /// Drives the native titlebar subtitle while the editor contains changes
+    /// that have not yet been written successfully.
+    private var hasUnsavedEditorChanges = false {
+        didSet {
+            guard oldValue != hasUnsavedEditorChanges else { return }
+            documentWindow.subtitle = hasUnsavedEditorChanges ? "Edited" : ""
+        }
+    }
+    private weak var editAccessory: NSTitlebarAccessoryViewController?
     private weak var copyItem: NSToolbarItem?
     private var copyFeedbackWork: DispatchWorkItem?
     private weak var searchField: NSSearchField?
@@ -164,6 +202,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         host.addTabbedWindow(documentWindow, ordered: .above)
     }
 
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard hasPendingEditorChanges else { return true }
+        requestEndEditing { [weak self] success in
+            guard success else { return }
+            // close() skips windowShouldClose, so no re-entry loop.
+            self?.documentWindow.close()
+        }
+        return false
+    }
+
     func windowWillClose(_ notification: Notification) {
         fileWatcher?.cancel()
         fileWatcher = nil
@@ -184,6 +232,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         refreshOpenWithItem()
         refreshOpenInLLMItem()
         refreshOpenActionsItem()
+        updateEditToolbarItem()
         if let fileURL {
             NSDocumentController.shared.noteNewRecentDocumentURL(fileURL)
             renderCurrentDocument(text: markdown, fileURL: fileURL)
@@ -193,7 +242,20 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func present(url: URL) {
+        let preserveEditMode = isEditing || pendingEditModeURL != nil
+        if isEditing {
+            requestEndEditing(keepAccessoryMounted: true) { [weak self] success in
+                guard success else { return }
+                self?.present(url: url, preservingEditMode: true)
+            }
+            return
+        }
+        present(url: url, preservingEditMode: preserveEditMode)
+    }
+
+    private func present(url: URL, preservingEditMode: Bool) {
         if url.isExistingDirectory {
+            pendingEditModeURL = nil
             openFolder(url)
             return
         }
@@ -203,6 +265,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let isFileSwitch = currentFileURL != nil && currentFileURL != url
         currentFileURL = url
         currentMarkdown = nil
+        pendingEditModeURL = preservingEditMode ? url.standardizedFileURL : nil
         markdownDocument?.replaceFileURL(url)
         documentWindow.title = url.lastPathComponent
         if isFileSwitch {
@@ -214,6 +277,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         refreshOpenWithItem()
         refreshOpenInLLMItem()
         refreshOpenActionsItem()
+        updateEditToolbarItem()
         loadFile(at: url)
         startWatching(url)
         offerToBecomeDefaultHandlerIfNeeded()
@@ -222,7 +286,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func startWatching(_ url: URL) {
         fileWatcher?.cancel()
         let watcher = FileWatcher(url: url) { [weak self] in
-            guard let self, self.currentFileURL == url else { return }
+            // While editing, disk changes (including our own ⌘S writes)
+            // must not re-render or clobber the in-progress session. Every
+            // commit revalidates the disk contents before writing, so an
+            // external edit is either reloaded or resolved explicitly.
+            guard let self, self.currentFileURL == url, !self.isEditing else { return }
             self.loadFile(at: url, silentOnFailure: true)
         }
         watcher.onRename = { [weak self] newURL in
@@ -287,6 +355,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             .zoom,
             .inspector,
             .share,
+            .editDocument,
             .search
         ]
     }
@@ -299,6 +368,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             .space,
             .openActions,
             .openWith,
+            .editDocument,
             .inspector,
             .share,
             .search,
@@ -322,6 +392,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         case .openInLLM:
             guard hasLLMTargetsAvailable else { return nil }
             return makeOpenInLLMItem()
+        case .editDocument: return makeEditItem()
         case .inspector: return makeInspectorItem()
         case .share: return makeShareItem()
         case .search: return makeSearchItem()
@@ -473,6 +544,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(saveDocument(_:)) {
+            return isEditing
+        }
         syncSidebarMenuState()
         return true
     }
@@ -578,6 +652,673 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func copyConfirmedImage() -> NSImage? {
         NSImage(systemSymbolName: "checkmark",
                 accessibilityDescription: "Copied")
+    }
+
+    // MARK: - Edit mode
+
+    private var mainSplit: MainSplitViewController? {
+        documentWindow.contentViewController as? MainSplitViewController
+    }
+
+    private var isEditing: Bool {
+        mainSplit?.isEditingDocument ?? false
+    }
+
+    var canToggleEditMode: Bool {
+        isEditing || (currentFileURL != nil && currentMarkdown != nil)
+    }
+
+    var hasPendingEditorChanges: Bool {
+        isEditing && (hasUnsavedEditorChanges || isEditorCommitInFlight)
+    }
+
+    func commitPendingEditsForTermination(completion: @escaping (Bool) -> Void) {
+        guard isEditing else {
+            completion(true)
+            return
+        }
+        requestEndEditing(completion: completion)
+    }
+
+    private func makeEditItem() -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: .editDocument)
+        item.label = "Edit"
+        item.paletteLabel = "Edit"
+        item.toolTip = "Edit document"
+
+        let image = NSImage(systemSymbolName: "highlighter",
+                            accessibilityDescription: "Edit") ?? NSImage()
+        image.isTemplate = true
+        let button = NSButton(image: image,
+                              target: self,
+                              action: #selector(toggleEditAction(_:)))
+        button.setButtonType(.pushOnPushOff)
+        button.toolTip = item.toolTip
+        button.translatesAutoresizingMaskIntoConstraints = false
+
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(button)
+        NSLayoutConstraint.activate([
+            button.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 2),
+            button.topAnchor.constraint(equalTo: container.topAnchor),
+            button.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -2),
+            button.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            button.heightAnchor.constraint(equalToConstant: 32),
+            container.widthAnchor.constraint(equalToConstant: 36),
+            container.heightAnchor.constraint(equalToConstant: 32)
+        ])
+
+        item.view = container
+        editButton = button
+        editItem = item
+        updateEditToolbarItem()
+        return item
+    }
+
+    private func updateEditToolbarItem() {
+        let editing = isEditing
+        editButton?.state = editing ? .on : .off
+        editItem?.toolTip = editing
+            ? "Stop editing and return to preview"
+            : "Edit document"
+        editButton?.toolTip = editItem?.toolTip
+        editButton?.isEnabled = editing || (currentFileURL != nil && currentMarkdown != nil)
+    }
+
+    @objc private func toggleEditAction(_ sender: Any?) {
+        toggleEditMode()
+    }
+
+    func toggleEditMode() {
+        if isEditing {
+            requestEndEditing()
+        } else {
+            enterEditMode()
+        }
+    }
+
+    // MARK: Formatting bar
+
+    /// Second toolbar row with common markdown actions, shown while
+    /// editing — like Preview's markup bar.
+    private func showEditAccessory() {
+        guard editAccessory == nil else { return }
+
+        let symbolConfig = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+        func formatButton(_ symbol: String, _ command: String, _ tip: String) -> NSButton {
+            let image = NSImage(systemSymbolName: symbol, accessibilityDescription: tip)?
+                .withSymbolConfiguration(symbolConfig) ?? NSImage()
+            let button = NSButton(image: image, target: self, action: #selector(formatCommand(_:)))
+            button.identifier = NSUserInterfaceItemIdentifier(command)
+            // Preview-style: small bare icons, bezel only under the pointer.
+            button.bezelStyle = .accessoryBarAction
+            button.controlSize = .small
+            button.showsBorderOnlyWhileMouseInside = true
+            button.toolTip = tip
+            // The accessory-bar bezel pads the icon generously; a fixed
+            // width tightens the leading/trailing space around the glyph.
+            button.translatesAutoresizingMaskIntoConstraints = false
+            button.widthAnchor.constraint(equalToConstant: 26).isActive = true
+            return button
+        }
+
+        // Plain button with a composed icon+chevron face: unlike a pull-down,
+        // the chevron stays visible when the hover-only bezel is hidden.
+        let headingIcon = NSImage(systemSymbolName: "textformat.size",
+                                  accessibilityDescription: "Heading")?
+            .withSymbolConfiguration(symbolConfig) ?? NSImage()
+        let headingChevron = NSImage(systemSymbolName: "chevron.down",
+                                     accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 8, weight: .semibold)) ?? NSImage()
+        let gap: CGFloat = 4
+        let faceSize = NSSize(width: headingIcon.size.width + gap + headingChevron.size.width,
+                              height: max(headingIcon.size.height, headingChevron.size.height))
+        let headingFace = NSImage(size: faceSize, flipped: false) { _ in
+            headingIcon.draw(at: NSPoint(x: 0, y: (faceSize.height - headingIcon.size.height) / 2),
+                             from: .zero, operation: .sourceOver, fraction: 1)
+            headingChevron.draw(at: NSPoint(x: headingIcon.size.width + gap,
+                                            y: (faceSize.height - headingChevron.size.height) / 2),
+                                from: .zero, operation: .sourceOver, fraction: 1)
+            return true
+        }
+        headingFace.isTemplate = true
+        let headings = NSButton(image: headingFace, target: self,
+                                action: #selector(showHeadingMenu(_:)))
+        headings.bezelStyle = .accessoryBarAction
+        headings.controlSize = .small
+        headings.showsBorderOnlyWhileMouseInside = true
+        headings.toolTip = "Heading"
+        headings.translatesAutoresizingMaskIntoConstraints = false
+        headings.widthAnchor.constraint(equalToConstant: 44).isActive = true
+
+        let views: [NSView] = [
+            headings,
+            separatorView(),
+            formatButton("bold", "bold", "Bold"),
+            formatButton("italic", "italic", "Italic"),
+            formatButton("strikethrough", "strikethrough", "Strikethrough"),
+            separatorView(),
+            formatButton("list.bullet", "bulletList", "Bulleted List"),
+            formatButton("list.number", "orderedList", "Numbered List"),
+            formatButton("text.quote", "quote", "Block Quote"),
+            separatorView(),
+            formatButton("chevron.left.forwardslash.chevron.right", "code", "Inline Code"),
+            formatButton("link", "link", "Link"),
+        ]
+        let stack = NSStackView(views: views)
+        stack.orientation = .horizontal
+        stack.spacing = 2
+        // Buttons stay tight (2px); the group dividers get room to breathe.
+        for (index, view) in views.enumerated() where view is NSBox {
+            if index > 0 { stack.setCustomSpacing(8, after: views[index - 1]) }
+            stack.setCustomSpacing(8, after: view)
+        }
+        stack.edgeInsets = NSEdgeInsets(top: 4, left: 12, bottom: 6, right: 12)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        let container = NSView()
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: container.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+
+        let accessory = NSTitlebarAccessoryViewController()
+        accessory.view = container
+        accessory.layoutAttribute = .bottom
+        accessory.fullScreenMinHeight = 34
+        // macOS 26 replaced the titlebar separator with scroll edge
+        // effects; hard = the classic line under the bar.
+        if #available(macOS 26.1, *) {
+            accessory.preferredScrollEdgeEffectStyle = .hard
+        }
+        documentWindow.addTitlebarAccessoryViewController(accessory)
+        editAccessory = accessory
+    }
+
+    private func separatorView() -> NSView {
+        let line = NSBox()
+        line.boxType = .separator
+        line.translatesAutoresizingMaskIntoConstraints = false
+        line.heightAnchor.constraint(equalToConstant: 16).isActive = true
+        return line
+    }
+
+    private func hideEditAccessory() {
+        guard let accessory = editAccessory else { return }
+        accessory.removeFromParent()
+        editAccessory = nil
+    }
+
+    @objc private func formatCommand(_ sender: NSButton) {
+        guard let command = sender.identifier?.rawValue else { return }
+        mainSplit?.editorViewController?.exec(command)
+    }
+
+    @objc private func showHeadingMenu(_ sender: NSButton) {
+        let menu = NSMenu()
+        let normalText = NSMenuItem(title: "Normal Text",
+                                    action: #selector(headingCommand(_:)),
+                                    keyEquivalent: "")
+        normalText.target = self
+        normalText.tag = 0
+        menu.addItem(normalText)
+        menu.addItem(.separator())
+        for level in 1...3 {
+            let item = NSMenuItem(title: "Heading \(level)",
+                                  action: #selector(headingCommand(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.tag = level
+            menu.addItem(item)
+        }
+        menu.popUp(positioning: nil,
+                   at: NSPoint(x: 0, y: sender.bounds.maxY + 4),
+                   in: sender)
+    }
+
+    @objc private func headingCommand(_ sender: NSMenuItem) {
+        mainSplit?.editorViewController?.exec("h\(sender.tag)")
+    }
+
+    /// File > Save (⌘S) while editing: write without leaving edit mode.
+    /// Intercepts the responder chain ahead of MarkdownDocument, whose
+    /// NSDocument save machinery stays disabled.
+    @IBAction func saveDocument(_ sender: Any?) {
+        guard isEditing else {
+            NSSound.beep()
+            return
+        }
+        commitEdits(exitAfter: false)
+    }
+
+    private func enterEditMode() {
+        guard let split = mainSplit, !split.isEditingDocument,
+              currentFileURL != nil,
+              let markdown = currentMarkdown else {
+            NSSound.beep()
+            return
+        }
+
+        // Edit the complete source. Frontmatter is stripped only by the
+        // read-only renderer; the editor must expose and preserve it.
+        let editor = split.enterEditMode(markdown: markdown)
+        editor.cancelRequested = { [weak self] in
+            self?.requestEndEditing()
+        }
+        editor.contentDidChange = { [weak self] in
+            self?.editorChangeRevision += 1
+            self?.hasUnsavedEditorChanges = true
+        }
+        editorChangeRevision = 0
+        hasUnsavedEditorChanges = false
+        showEditAccessory()
+        updateEditToolbarItem()
+    }
+
+    private func requestEndEditing(
+        keepAccessoryMounted: Bool = false,
+        completion: ((Bool) -> Void)? = nil
+    ) {
+        let finish: (Bool) -> Void = { [weak self] success in
+            if success, !keepAccessoryMounted {
+                self?.hideEditAccessory()
+                self?.updateEditToolbarItem()
+            }
+            completion?(success)
+        }
+        resolveUnsavedEdits { [weak self] resolution in
+            guard let self else {
+                finish(false)
+                return
+            }
+            switch resolution {
+            case .save:
+                self.commitEdits(exitAfter: true, completion: finish)
+            case .discard:
+                self.exitEditModeWithoutSaving {
+                    finish(true)
+                }
+            case .cancel:
+                finish(false)
+            }
+        }
+    }
+
+    private func resolveUnsavedEdits(
+        completion: @escaping (UnsavedEditResolution) -> Void
+    ) {
+        guard hasUnsavedEditorChanges || isEditorCommitInFlight else {
+            completion(.discard)
+            return
+        }
+
+        // If an explicit ⌘S is already running, let that request finish
+        // instead of presenting a second decision on top of it.
+        if isEditorCommitInFlight {
+            commitEdits(exitAfter: false) { success in
+                completion(success ? .discard : .cancel)
+            }
+            return
+        }
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Do you want to save your changes?"
+        let fileName = currentFileURL?.lastPathComponent ?? "this document"
+        alert.informativeText = "Your changes to \(fileName) will be lost if you don’t save them."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Don’t Save")
+        alert.beginSheetModal(for: documentWindow) { response in
+            switch response {
+            case .alertFirstButtonReturn:
+                completion(.save)
+            case .alertThirdButtonReturn:
+                completion(.discard)
+            default:
+                completion(.cancel)
+            }
+        }
+    }
+
+    private func exitEditModeWithoutSaving(completion: @escaping () -> Void) {
+        var shouldRerender = false
+        if case let .modified(externalMarkdown) = diskFileState(
+            for: currentFileURL,
+            expectedMarkdown: currentMarkdown
+        ) {
+            currentMarkdown = externalMarkdown
+            if let url = currentFileURL {
+                markdownDocument?.replaceContents(markdown: externalMarkdown, fileURL: url)
+            }
+            shouldRerender = true
+        }
+        hasUnsavedEditorChanges = false
+        exitEditMode(rerender: shouldRerender, completion: completion)
+    }
+
+    /// Serializes the editor, writes the file if the content changed, and
+    /// optionally returns to the preview. Stays in edit mode when the save
+    /// fails so no edits are lost. `completion(false)` means the commit
+    /// did not go through.
+    private func commitEdits(exitAfter: Bool, completion: ((Bool) -> Void)? = nil) {
+        pendingCommitShouldExit = pendingCommitShouldExit || exitAfter
+        if let completion {
+            pendingCommitCompletions.append(completion)
+        }
+        guard !isEditorCommitInFlight else { return }
+        performPendingEditorCommit()
+    }
+
+    private func performPendingEditorCommit() {
+        let exitAfter = pendingCommitShouldExit
+        pendingCommitShouldExit = false
+        guard isEditing, let split = mainSplit,
+              let editor = split.editorViewController else {
+            finishEditorCommit(success: true)
+            return
+        }
+        let revision = editorChangeRevision
+        isEditorCommitInFlight = true
+        editor.fetchMarkdown { [weak self] body in
+            guard let self else {
+                return
+            }
+            guard let body else {
+                NSSound.beep()
+                self.finishEditorCommit(success: false)
+                return
+            }
+            let diskState = self.diskFileState(for: self.currentFileURL,
+                                               expectedMarkdown: self.currentMarkdown)
+            let hasLocalChanges = body != self.currentMarkdown
+
+            if !hasLocalChanges, case let .modified(externalMarkdown) = diskState {
+                // Nothing local needs preserving, so adopt the newer disk
+                // version without presenting a needless conflict dialog.
+                self.adoptExternalMarkdown(externalMarkdown,
+                                           editor: editor,
+                                           exitAfter: exitAfter)
+                return
+            }
+
+            guard editor.hasChanges, hasLocalChanges else {
+                if revision == self.editorChangeRevision {
+                    self.hasUnsavedEditorChanges = false
+                }
+                switch diskState {
+                case .unchanged:
+                    self.completeSuccessfulEditorCommit(exitAfter: exitAfter,
+                                                        rerender: false)
+                case .modified:
+                    // Handled above.
+                    break
+                case .missing, .unreadable:
+                    self.saveEditedMarkdown(body, diskState: diskState) { result in
+                        self.handleEditedMarkdownSaveResult(result,
+                                                            body: body,
+                                                            editor: editor,
+                                                            revision: revision,
+                                                            exitAfter: exitAfter)
+                    }
+                }
+                return
+            }
+            self.saveEditedMarkdown(body, diskState: diskState) { result in
+                self.handleEditedMarkdownSaveResult(result,
+                                                    body: body,
+                                                    editor: editor,
+                                                    revision: revision,
+                                                    exitAfter: exitAfter)
+            }
+        }
+    }
+
+    private func handleEditedMarkdownSaveResult(_ result: EditedMarkdownSaveResult,
+                                                body: String,
+                                                editor: EditorViewController,
+                                                revision: Int,
+                                                exitAfter: Bool) {
+        switch result {
+        case .saved:
+            currentMarkdown = body
+            if let url = currentFileURL {
+                markdownDocument?.replaceContents(markdown: body, fileURL: url)
+            }
+            if revision == editorChangeRevision {
+                hasUnsavedEditorChanges = false
+            }
+            completeSuccessfulEditorCommit(exitAfter: exitAfter, rerender: true)
+        case let .reloaded(externalMarkdown):
+            adoptExternalMarkdown(externalMarkdown,
+                                  editor: editor,
+                                  exitAfter: exitAfter)
+        case .cancelled:
+            finishEditorCommit(success: false)
+        }
+    }
+
+    private func adoptExternalMarkdown(_ markdown: String,
+                                       editor: EditorViewController,
+                                       exitAfter: Bool) {
+        currentMarkdown = markdown
+        editorChangeRevision = 0
+        hasUnsavedEditorChanges = false
+        if let url = currentFileURL {
+            markdownDocument?.replaceContents(markdown: markdown, fileURL: url)
+            if !exitAfter {
+                renderCurrentDocument(text: markdown, fileURL: url)
+            }
+        }
+        if !exitAfter {
+            editor.load(markdown: markdown)
+        }
+        completeSuccessfulEditorCommit(exitAfter: exitAfter, rerender: true)
+    }
+
+    private func completeSuccessfulEditorCommit(exitAfter: Bool, rerender: Bool) {
+        if hasUnsavedEditorChanges {
+            if exitAfter {
+                pendingCommitShouldExit = true
+            }
+            finishEditorCommit(success: true)
+            return
+        }
+        guard exitAfter else {
+            finishEditorCommit(success: true)
+            return
+        }
+        exitEditMode(rerender: rerender) { [weak self] in
+            self?.finishEditorCommit(success: true)
+        }
+    }
+
+    private func finishEditorCommit(success: Bool) {
+        isEditorCommitInFlight = false
+        if success, hasUnsavedEditorChanges || pendingCommitShouldExit {
+            performPendingEditorCommit()
+            return
+        }
+
+        pendingCommitShouldExit = false
+        let completions = pendingCommitCompletions
+        pendingCommitCompletions.removeAll()
+        for completion in completions {
+            completion(success)
+        }
+    }
+
+    private func exitEditMode(rerender: Bool, completion: @escaping () -> Void) {
+        guard let split = mainSplit else {
+            completion()
+            return
+        }
+        split.editorViewController?.contentDidChange = nil
+        split.editorViewController?.cancelRequested = nil
+        documentWindow.makeFirstResponder(nil)
+        split.exitEditMode(waitForPreviewRender: rerender) { [weak self] in
+            guard let self else {
+                completion()
+                return
+            }
+            self.hasUnsavedEditorChanges = false
+            if self.editAccessory == nil {
+                self.updateEditToolbarItem()
+            }
+            if rerender, let url = self.currentFileURL, let markdown = self.currentMarkdown {
+                self.renderCurrentDocument(text: markdown, fileURL: url)
+            }
+            completion()
+        }
+    }
+
+    private func diskFileState(for url: URL?, expectedMarkdown: String?) -> DiskFileState {
+        guard let url, let expectedMarkdown else { return .unreadable }
+        do {
+            let diskMarkdown = try String(contentsOf: url, encoding: .utf8)
+            return diskMarkdown == expectedMarkdown ? .unchanged : .modified(diskMarkdown)
+        } catch {
+            return FileManager.default.fileExists(atPath: url.path) ? .unreadable : .missing
+        }
+    }
+
+    private func saveEditedMarkdown(_ text: String,
+                                    diskState: DiskFileState,
+                                    completion: @escaping (EditedMarkdownSaveResult) -> Void) {
+        guard let url = currentFileURL else {
+            completion(.cancelled)
+            return
+        }
+        switch diskState {
+        case .unchanged:
+            persistEditedMarkdown(text, to: url, completion: completion)
+        case let .modified(externalMarkdown):
+            presentExternalEditConflict(localMarkdown: text,
+                                        externalMarkdown: externalMarkdown,
+                                        fileURL: url,
+                                        completion: completion)
+        case .missing:
+            presentUnavailableFileConflict(localMarkdown: text,
+                                           fileURL: url,
+                                           reason: "The file was removed while it was open.",
+                                           overwriteTitle: "Recreate File",
+                                           completion: completion)
+        case .unreadable:
+            presentUnavailableFileConflict(localMarkdown: text,
+                                           fileURL: url,
+                                           reason: "The file could not be read to verify that it is unchanged.",
+                                           overwriteTitle: "Save Anyway",
+                                           completion: completion)
+        }
+    }
+
+    private func presentExternalEditConflict(
+        localMarkdown: String,
+        externalMarkdown: String,
+        fileURL: URL,
+        completion: @escaping (EditedMarkdownSaveResult) -> Void
+    ) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "This document changed on disk"
+        alert.informativeText = "Another app changed \(fileURL.lastPathComponent). Cancel keeps your editor changes unsaved. Choose which version to keep."
+        alert.addButton(withTitle: "Keep My Changes")
+        alert.addButton(withTitle: "Reload from Disk")
+        alert.addButton(withTitle: "Cancel")
+        alert.beginSheetModal(for: documentWindow) { [weak self] response in
+            guard let self else {
+                completion(.cancelled)
+                return
+            }
+            switch response {
+            case .alertFirstButtonReturn:
+                self.persistEditedMarkdown(localMarkdown, to: fileURL, completion: completion)
+            case .alertSecondButtonReturn:
+                // The sheet may remain open while another editor writes
+                // again. Reload the latest bytes instead of the snapshot
+                // captured when the conflict was first detected.
+                if let latestMarkdown = try? String(contentsOf: fileURL, encoding: .utf8) {
+                    completion(.reloaded(latestMarkdown))
+                } else {
+                    completion(.reloaded(externalMarkdown))
+                }
+            default:
+                completion(.cancelled)
+            }
+        }
+    }
+
+    private func presentUnavailableFileConflict(
+        localMarkdown: String,
+        fileURL: URL,
+        reason: String,
+        overwriteTitle: String,
+        completion: @escaping (EditedMarkdownSaveResult) -> Void
+    ) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Unable to verify the document on disk"
+        alert.informativeText = "\(reason) Cancel keeps your editor changes unsaved."
+        alert.addButton(withTitle: overwriteTitle)
+        alert.addButton(withTitle: "Cancel")
+        alert.beginSheetModal(for: documentWindow) { [weak self] response in
+            guard let self, response == .alertFirstButtonReturn else {
+                completion(.cancelled)
+                return
+            }
+            self.persistEditedMarkdown(localMarkdown, to: fileURL, completion: completion)
+        }
+    }
+
+    private func persistEditedMarkdown(
+        _ text: String,
+        to url: URL,
+        completion: @escaping (EditedMarkdownSaveResult) -> Void
+    ) {
+        if write(text, to: url) {
+            completion(.saved)
+            return
+        }
+        // Sandbox denied the write — the file came in through the read-only
+        // filesystem exception (folder navigator) rather than a user-selected
+        // grant. A save panel pointed at the same file converts the user's
+        // confirmation into a read-write grant.
+        let panel = NSSavePanel()
+        panel.directoryURL = url.deletingLastPathComponent()
+        panel.nameFieldStringValue = url.lastPathComponent
+        panel.message = "Markdown Preview needs your permission to save this file."
+        panel.beginSheetModal(for: documentWindow) { [weak self] response in
+            guard let self, response == .OK, let chosen = panel.url else {
+                completion(.cancelled)
+                return
+            }
+            let ok = self.write(text, to: chosen)
+            if ok, chosen.standardizedFileURL != url.standardizedFileURL {
+                // Saved under a different name — follow the new file.
+                self.handleRename(to: chosen)
+            }
+            completion(ok ? .saved : .cancelled)
+        }
+    }
+
+    private func write(_ text: String, to url: URL) -> Bool {
+        // Atomic first (safe against partial writes); a file-scoped sandbox
+        // grant can deny the temp-file rename, so fall back to in-place.
+        do {
+            try text.write(to: url, atomically: true, encoding: .utf8)
+            return true
+        } catch {
+            do {
+                try text.write(to: url, atomically: false, encoding: .utf8)
+                return true
+            } catch {
+                return false
+            }
+        }
     }
 
     // MARK: - Open
@@ -1139,7 +1880,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func inspectorImage() -> NSImage {
-        let image = NSImage(systemSymbolName: "info",
+        let image = NSImage(systemSymbolName: "info.circle",
                             accessibilityDescription: "Inspector") ?? NSImage()
         image.isTemplate = true
         return image
@@ -1345,7 +2086,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         "pro.writer.mac-setapp",    // iA Writer (Setapp)
         "abnerworks.Typora",        // Typora
         "com.uranusjr.macdown",     // MacDown
-        "md.obsidian"               // Obsidian
+        "md.obsidian"
     ]
     /// Apps that claim a Markdown/plain-text document type but aren't useful as a
     /// text editor — they pass `canEditMarkdown` only as noise. See #114.
@@ -1735,19 +2476,31 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 // hop back to MainActor.
                 let nsError = error as NSError
                 await self?.applyLoadFailure(error: nsError,
+                                             fileURL: url,
                                              silentOnFailure: silentOnFailure)
             }
         }
     }
 
     private func applyLoadedMarkdown(_ text: String, fileURL: URL) {
+        guard currentFileURL?.standardizedFileURL == fileURL.standardizedFileURL else { return }
         currentMarkdown = text
         refreshOpenInLLMItem()
+        updateEditToolbarItem()
         markdownDocument?.replaceContents(markdown: text, fileURL: fileURL)
         renderCurrentDocument(text: text, fileURL: fileURL)
+        if pendingEditModeURL == fileURL.standardizedFileURL {
+            pendingEditModeURL = nil
+            enterEditMode()
+        }
     }
 
-    private func applyLoadFailure(error: NSError, silentOnFailure: Bool) {
+    private func applyLoadFailure(error: NSError, fileURL: URL, silentOnFailure: Bool) {
+        if pendingEditModeURL == fileURL.standardizedFileURL {
+            pendingEditModeURL = nil
+            hideEditAccessory()
+            updateEditToolbarItem()
+        }
         guard !silentOnFailure else { return }
         NSAlert(error: error).beginSheetModal(for: documentWindow)
     }

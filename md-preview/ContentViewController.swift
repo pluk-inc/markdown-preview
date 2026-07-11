@@ -18,6 +18,8 @@ final class ContentViewController: NSViewController {
     private var measuredDocumentHeight: CGFloat = 1
     private var lastLaidOutSize: NSSize = .zero
     private var pendingFlashWork: DispatchWorkItem?
+    private var pendingPreviewScrollAnchor: SourceScrollAnchor?
+    private var shouldApplyPendingAnchorOnHeight = false
 
     // Heading top offsets in CSS pixels, indexed by heading id. Compared in
     // CSS units so page zoom doesn't invalidate them.
@@ -59,12 +61,19 @@ final class ContentViewController: NSViewController {
         webView = MarkdownWebView()
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.heightDidChange = { [weak self] height in
-            guard let self,
-                  abs(height - self.measuredDocumentHeight) > 0.5 else { return }
-            self.measuredDocumentHeight = height
-            self.applyDocumentHeight()
-            // Image load / font reflow shifted layout — re-measure offsets.
-            self.scheduleHeadingOffsetsRefresh()
+            guard let self else { return }
+            if abs(height - self.measuredDocumentHeight) > 0.5 {
+                self.measuredDocumentHeight = height
+                self.applyDocumentHeight()
+                // Image load / font reflow shifted layout — re-measure offsets.
+                self.scheduleHeadingOffsetsRefresh()
+            }
+            if self.shouldApplyPendingAnchorOnHeight,
+               let anchor = self.pendingPreviewScrollAnchor {
+                self.shouldApplyPendingAnchorOnHeight = false
+                self.pendingPreviewScrollAnchor = nil
+                self.restoreSourceScrollAnchor(anchor)
+            }
         }
         webView.fragmentLinkActivated = { [weak self] fragment in
             self?.scrollToElement(id: fragment)
@@ -147,6 +156,9 @@ final class ContentViewController: NSViewController {
     }
 
     func display(markdown: String, assetBaseURL: URL? = nil) {
+        if pendingPreviewScrollAnchor != nil {
+            shouldApplyPendingAnchorOnHeight = true
+        }
         resetScrollspy()
         webView.display(markdown: markdown, assetBaseURL: assetBaseURL)
         scheduleHeadingOffsetsRefresh()
@@ -220,6 +232,40 @@ final class ContentViewController: NSViewController {
     func resetZoom() { webView.resetZoom() }
     var pageZoom: CGFloat { webView.pageZoom }
 
+    /// Normalized top-of-viewport position used when handing the document to
+    /// the editor, whose content height differs slightly from the preview.
+    var scrollProgress: CGFloat {
+        guard let scrollView = view as? NSScrollView else { return 0 }
+        let clipView = scrollView.contentView
+        let minY = -clipView.contentInsets.top
+        let maxY = max(documentHeightConstraint.constant - clipView.bounds.height
+                       + clipView.contentInsets.bottom, minY)
+        guard maxY > minY else { return 0 }
+        return min(max((clipView.bounds.origin.y - minY) / (maxY - minY), 0), 1)
+    }
+
+    func sourceScrollAnchor(completion: @escaping (SourceScrollAnchor?) -> Void) {
+        guard let scrollView = view as? NSScrollView else {
+            completion(nil)
+            return
+        }
+        let clipView = scrollView.contentView
+        let visibleTop = clipView.bounds.origin.y + clipView.contentInsets.top
+        webView.sourceAnchor(atDocumentY: visibleTop / webView.pageZoom, completion: completion)
+    }
+
+    func prepareToRestoreSourceScrollAnchor(_ anchor: SourceScrollAnchor?) {
+        pendingPreviewScrollAnchor = anchor
+    }
+
+    func restoreSourceScrollAnchor(_ anchor: SourceScrollAnchor) {
+        webView.sourceOffset(forLine: anchor.line) { [weak self] sourceTop in
+            guard let self, let sourceTop else { return }
+            let target = (sourceTop - anchor.viewportOffset) * self.webView.pageZoom
+            self.scrollDocument(to: target, topMargin: 0)
+        }
+    }
+
     func reloadPreviewForSettingChange() {
         applyContentWidthMode()
         webView.reloadPreviewForSettingChange()
@@ -286,12 +332,11 @@ final class ContentViewController: NSViewController {
         }
     }
 
-    private func scrollDocument(to y: CGFloat) {
+    private func scrollDocument(to y: CGFloat, topMargin: CGFloat = 12) {
         guard let scrollView = view as? NSScrollView else { return }
         let clipView = scrollView.contentView
         let topInset = clipView.contentInsets.top
         let bottomInset = clipView.contentInsets.bottom
-        let topMargin: CGFloat = 12
         let adjusted = y - topInset - topMargin
         let minY = -topInset
         let maxY = max(documentHeightConstraint.constant - clipView.bounds.height + bottomInset, minY)

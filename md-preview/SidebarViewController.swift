@@ -413,6 +413,10 @@ final class ProjectNavigatorView: NSView {
     private let scrollView = NSScrollView()
     private let outlineView = NSOutlineView()
     private var rootNode: FileNode?
+    /// The file whose document is actually open. Keep this separate from the
+    /// outline's transient click selection so a pending Save/Don't Save/Cancel
+    /// decision cannot make the navigator disagree with the editor.
+    private var currentFileURL: URL?
     // One watcher per loaded directory; kept in sync with which FileNodes
     // currently have a populated children cache.
     private var watchers: [URL: DirectoryWatcher] = [:]
@@ -567,6 +571,7 @@ final class ProjectNavigatorView: NSView {
     }
 
     func setCurrentFile(_ url: URL?) {
+        currentFileURL = url?.standardizedFileURL
         guard let url, let rootNode else {
             outlineView.deselectAll(nil)
             return
@@ -620,6 +625,12 @@ final class ProjectNavigatorView: NSView {
         let row = outlineView.clickedRow
         guard row >= 0, let node = outlineView.item(atRow: row) as? FileNode else { return }
         if !node.isDirectory {
+            let requestedURL = node.url.standardizedFileURL
+            guard requestedURL != currentFileURL else { return }
+            // NSOutlineView selects before dispatching its action. Restore the
+            // committed document immediately; display(markdown:fileURL:) will
+            // select the requested file only after navigation succeeds.
+            setCurrentFile(currentFileURL)
             onSelectFile?(node.url)
         }
     }

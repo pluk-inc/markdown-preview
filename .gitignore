@@ -70,3 +70,6 @@ fastlane/test_output
 
 # macOS
 .DS_Store
+
+# Editor bundle build (scripts/editor-bundle)
+node_modules/
