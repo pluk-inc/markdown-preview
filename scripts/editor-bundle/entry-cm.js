@@ -169,8 +169,6 @@ const setextMarkerLine = Decoration.line({ class: "cm-md-setext-marker-line" })
 const setextSource = Decoration.mark({ class: "cm-md-setext-source" })
 const linkMark = Decoration.mark({ class: "cm-md-link" })
 const urlMark = Decoration.mark({ class: "cm-md-url" })
-const strongMark = Decoration.mark({ class: "cm-md-strong" })
-const emphasisMark = Decoration.mark({ class: "cm-md-emphasis" })
 const strikethroughMark = Decoration.mark({ class: "cm-md-strikethrough" })
 
 function fencedCodeDetails(state, node) {
@@ -348,14 +346,6 @@ function buildDecorations(view) {
         }
 
         // --- Emphasis family -------------------------------------------
-        if (name === "StrongEmphasis") {
-          ranges.push(strongMark.range(node.from, node.to))
-          return
-        }
-        if (name === "Emphasis") {
-          ranges.push(emphasisMark.range(node.from, node.to))
-          return
-        }
         if (name === "Strikethrough") {
           ranges.push(strikethroughMark.range(node.from, node.to))
           return
@@ -723,8 +713,6 @@ window.MDEditor = {
           // single newlines as hard breaks (Obsidian-style), so the
           // editor keeps them visible instead of joining lines.
           keymap.of([
-            { key: "Mod-b", run: toggleInlineMark("**") },
-            { key: "Mod-i", run: toggleInlineMark("*") },
             ...markdownKeymap,
             ...defaultKeymap,
             ...historyKeymap,
@@ -737,8 +725,6 @@ window.MDEditor = {
       }),
     })
     const commands = {
-      bold: toggleInlineMark("**"),
-      italic: toggleInlineMark("*"),
       strikethrough: toggleInlineMark("~~"),
       code: toggleInlineMark("`"),
       h0: setHeading(0),
