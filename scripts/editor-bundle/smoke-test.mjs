@@ -85,6 +85,8 @@ check("inactive heading line receives visual offset class",
   inactiveHeadingHost.querySelector(".cm-md-heading-inactive") != null)
 check("blank source line before heading collapses",
   inactiveHeadingHost.querySelector(".cm-md-blank-before-heading") != null)
+check("heading after blank uses source-line spacing",
+  inactiveHeadingHost.querySelector(".cm-md-heading-after-blank") != null)
 inactiveHeadingEditor.destroy()
 
 const inlineCodeHost = dom.window.document.createElement("div")

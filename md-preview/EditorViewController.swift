@@ -92,13 +92,12 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         let clamped = min(max(progress, 0), 1)
         let arguments: [String: Any] = [
             "progress": Double(clamped),
-            "sourceLine": sourceAnchor?.line ?? NSNull(),
-            "viewportOffset": sourceAnchor.map { Double($0.viewportOffset) } ?? NSNull(),
+            "sourcePosition": sourceAnchor.map { Double($0.sourcePosition) } ?? NSNull(),
         ]
         webView.callAsyncJavaScript(
             """
             if (!window.__mdEditor) return false;
-            return await window.__mdEditor.setScrollPosition(progress, sourceLine, viewportOffset);
+            return await window.__mdEditor.setScrollPosition(progress, sourcePosition);
             """,
             arguments: arguments,
             in: nil,
@@ -113,14 +112,12 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             "window.__mdEditor && window.__mdEditor.getScrollAnchor()"
         ) { result, _ in
             guard let raw = result as? [String: Any],
-                  let line = raw["line"] as? NSNumber,
-                  let offset = raw["offset"] as? NSNumber else {
+                  let position = raw["position"] as? NSNumber else {
                 completion(nil)
                 return
             }
             completion(SourceScrollAnchor(
-                line: line.intValue,
-                viewportOffset: CGFloat(truncating: offset)
+                sourcePosition: CGFloat(truncating: position)
             ))
         }
     }
@@ -187,7 +184,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         // column at the preview's measure, Full Width spans the window.
         let columnMaxWidth = ContentWidthSetting.current == .fullWidth
             ? "none"
-            : "\(MarkdownHTML.contentColumnWidth + 80)px"
+            : "\(MarkdownHTML.preferredPageWidth)px"
         return """
         <!DOCTYPE html>
         <html>
@@ -239,9 +236,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             background: Canvas;
         }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-            font-size: 15px;
-            line-height: 1.52;
+            font-family: \(MarkdownHTML.bodyFontFamily);
+            font-size: \(MarkdownHTML.bodyFontSize)px;
+            line-height: \(MarkdownHTML.bodyLineHeight);
             color: var(--text);
             -webkit-font-smoothing: antialiased;
         }
@@ -256,16 +253,16 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
            specificity (#editor), not on order. */
         #editor .cm-scroller {
             overflow: auto;
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif !important;
-            font-size: 15px;
-            line-height: 1.52;
+            font-family: \(MarkdownHTML.bodyFontFamily) !important;
+            font-size: \(MarkdownHTML.bodyFontSize)px;
+            line-height: \(MarkdownHTML.bodyLineHeight);
         }
         #editor .cm-content {
             width: 100%;
             max-width: \(columnMaxWidth);
             min-height: 100%;
             margin: 0 auto;
-            padding: 32px 40px 48px;
+            padding: \(MarkdownHTML.pagePaddingTop)px \(MarkdownHTML.pagePaddingHorizontal)px \(MarkdownHTML.pagePaddingBottom)px;
             box-sizing: border-box;
             caret-color: var(--text);
         }
@@ -291,9 +288,15 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             padding-top: 1.6em;
             /* Preview pushes the block after a heading down by its
                0.8em margin-top (12px at body size); mirror it here. */
-            padding-bottom: 12px;
+            padding-bottom: \(MarkdownHTML.paragraphSpacing)px;
         }
         #editor .cm-md-h1 { font-size: 2em; padding-top: 0.8em; }
+        /* The preview preserves a source blank line before a heading as one
+           line box and suppresses the heading margin. Mirror that exact
+           height instead of substituting the heading's larger top spacing. */
+        #editor .cm-md-heading-after-blank {
+            padding-top: \(MarkdownHTML.sourceLineHeight)px;
+        }
         /* Mirror the preview's first-child margin reset so the document
            starts at the same height in both modes. */
         #editor .cm-content > .cm-line:first-child { padding-top: 0; }
@@ -337,8 +340,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             position: absolute;
             inset-inline-start: 0;
             top: 0;
-            font-size: 15px;
-            line-height: 1.52;
+            font-size: \(MarkdownHTML.bodyFontSize)px;
+            line-height: \(MarkdownHTML.bodyLineHeight);
             color: var(--secondary);
             white-space: pre;
         }
@@ -456,8 +459,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                     getMarkdown: function () { return editor.getMarkdown(); },
                     getScrollAnchor: function () { return editor.getScrollAnchor(); },
                     focus: function () { editor.focus(); },
-                    setScrollPosition: function (progress, sourceLine, viewportOffset) {
-                        return editor.setScrollPosition(progress, sourceLine, viewportOffset);
+                    setScrollPosition: function (progress, sourcePosition) {
+                        return editor.setScrollPosition(progress, sourcePosition);
                     },
                     exec: function (name) { editor.exec(name); }
                 };

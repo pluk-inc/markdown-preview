@@ -259,9 +259,9 @@ final class ContentViewController: NSViewController {
     }
 
     func restoreSourceScrollAnchor(_ anchor: SourceScrollAnchor) {
-        webView.sourceOffset(forLine: anchor.line) { [weak self] sourceTop in
+        webView.sourceOffset(forPosition: anchor.sourcePosition) { [weak self] sourceTop in
             guard let self, let sourceTop else { return }
-            let target = (sourceTop - anchor.viewportOffset) * self.webView.pageZoom
+            let target = sourceTop * self.webView.pageZoom
             self.scrollDocument(to: target, topMargin: 0)
         }
     }

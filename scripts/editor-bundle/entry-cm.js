@@ -158,6 +158,7 @@ const for_ = (i) => Decoration.line({ class: "cm-md-h" + i })
 for (let i = 1; i <= 6; i++) HEADING_LINE[i] = for_(i)
 const inactiveHeadingLine = Decoration.line({ class: "cm-md-heading-inactive" })
 const blankBeforeHeadingLine = Decoration.line({ class: "cm-md-blank-before-heading" })
+const headingAfterBlankLine = Decoration.line({ class: "cm-md-heading-after-blank" })
 const quoteLine = Decoration.line({ class: "cm-md-quote" })
 const codeLine = Decoration.line({ class: "cm-md-codeblock" })
 const codeLineFirst = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-first" })
@@ -335,9 +336,11 @@ function buildDecorations(view) {
   }
   const collapseBlankBefore = (pos) => {
     const line = state.doc.lineAt(pos)
-    if (line.number <= 1) return
+    if (line.number <= 1) return false
     const previous = state.doc.line(line.number - 1)
-    if (previous.text.length === 0) lineOnce(previous.from, blankBeforeHeadingLine)
+    if (previous.text.length !== 0) return false
+    lineOnce(previous.from, blankBeforeHeadingLine)
+    return true
   }
 
   for (const { from, to } of view.visibleRanges) {
@@ -349,14 +352,14 @@ function buildDecorations(view) {
         // --- Headings ------------------------------------------------
         const atx = name.match(/^ATXHeading(\d)$/)
         if (atx) {
-          collapseBlankBefore(node.from)
+          if (collapseBlankBefore(node.from)) lineOnce(node.from, headingAfterBlankLine)
           lineOnce(node.from, HEADING_LINE[+atx[1]])
           if (!touchesLineOf(node.from)) lineOnce(node.from, inactiveHeadingLine)
           return
         }
         const setext = name.match(/^SetextHeading(\d)$/)
         if (setext) {
-          collapseBlankBefore(node.from)
+          if (collapseBlankBefore(node.from)) lineOnce(node.from, headingAfterBlankLine)
           lineOnce(node.from, HEADING_LINE[+setext[1]])
           return
         }
@@ -795,6 +798,49 @@ window.MDEditor = {
         ],
       }),
     })
+    let preservedSourcePosition = null
+    let didUserScroll = false
+    let userScrollIntent = false
+    let lastScrollTop = view.scrollDOM.scrollTop
+    const markScrollIntent = () => { userScrollIntent = true }
+    const markKeyboardScrollIntent = (event) => {
+      if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) {
+        userScrollIntent = true
+      }
+    }
+    const observeScroll = () => {
+      const scrollTop = view.scrollDOM.scrollTop
+      if (userScrollIntent && Math.abs(scrollTop - lastScrollTop) > 0.5) {
+        didUserScroll = true
+      }
+      lastScrollTop = scrollTop
+    }
+    view.scrollDOM.addEventListener("wheel", markScrollIntent, { passive: true })
+    view.scrollDOM.addEventListener("pointerdown", markScrollIntent, { passive: true })
+    view.scrollDOM.addEventListener("keydown", markKeyboardScrollIntent)
+    view.scrollDOM.addEventListener("scroll", observeScroll, { passive: true })
+    const lineContentBlock = (position) => {
+      const block = view.lineBlockAt(position)
+      let paddingTop = 0
+      let paddingBottom = 0
+      try {
+        const dom = view.domAtPos(position).node
+        const element = dom.nodeType === Node.ELEMENT_NODE ? dom : dom.parentElement
+        const line = element && element.closest(".cm-line")
+        if (line) {
+          const style = getComputedStyle(line)
+          paddingTop = parseFloat(style.paddingTop) || 0
+          paddingBottom = parseFloat(style.paddingBottom) || 0
+        }
+      } catch (_) {
+        // A distant virtualized line may not have DOM until scrollIntoView
+        // runs. The second animation frame measures it precisely.
+      }
+      return {
+        top: block.top + paddingTop,
+        height: Math.max(block.height - paddingTop - paddingBottom, 1),
+      }
+    }
     const commands = {
       bold: toggleInlineMark("**"),
       italic: toggleInlineMark("*"),
@@ -813,26 +859,32 @@ window.MDEditor = {
       getMarkdown: () => view.state.doc.toString(),
       focus: () => view.focus(),
       getScrollAnchor: () => {
+        if (!didUserScroll && Number.isFinite(preservedSourcePosition)) {
+          return { position: preservedSourcePosition }
+        }
         const viewportY = view.scrollDOM.scrollTop
         const visibleLine = view.lineBlockAtHeight(viewportY)
-        let node = syntaxTree(view.state).resolve(visibleLine.from, 1)
-        while (node.parent && node.parent.name !== "Document") node = node.parent
-        const blockLine = view.state.doc.lineAt(node.from).number
-        const blockTop = view.lineBlockAt(node.from).top
-        return { line: blockLine, offset: blockTop - view.scrollDOM.scrollTop }
+        const line = view.state.doc.lineAt(visibleLine.from)
+        const sourceLineBlock = lineContentBlock(line.from)
+        const progress = sourceLineBlock.height > 0
+          ? Math.min(Math.max((viewportY - sourceLineBlock.top) / sourceLineBlock.height, 0), 1)
+          : 0
+        return { position: line.number + progress }
       },
-      setScrollPosition: (progress, sourceLine, viewportOffset) => new Promise((resolve) => {
+      setScrollPosition: (progress, sourcePosition) => new Promise((resolve) => {
         const scroller = view.scrollDOM
         const maximum = Math.max(scroller.scrollHeight - scroller.clientHeight, 0)
         let target = maximum * Math.min(Math.max(Number(progress) || 0, 0), 1)
         let linePosition = null
+        let lineProgress = 0
 
-        if (Number.isInteger(sourceLine)
-            && sourceLine >= 1 && sourceLine <= view.state.doc.lines) {
+        if (Number.isFinite(sourcePosition) && sourcePosition >= 1) {
+          const sourceLine = Math.min(Math.floor(sourcePosition), view.state.doc.lines)
+          lineProgress = Math.min(Math.max(sourcePosition - sourceLine, 0), 1)
           linePosition = view.state.doc.line(sourceLine).from
           if (linePosition != null) {
-            const offset = Number.isFinite(viewportOffset) ? viewportOffset : 0
-            target = view.lineBlockAt(linePosition).top - offset
+            const block = lineContentBlock(linePosition)
+            target = block.top + block.height * lineProgress
             // Let CodeMirror create the viewport around the target before
             // applying the precise within-block offset. Directly assigning a
             // distant scrollTop can briefly leave its virtualized DOM empty.
@@ -845,15 +897,21 @@ window.MDEditor = {
         requestAnimationFrame(() => {
           const measuredMaximum = Math.max(scroller.scrollHeight - scroller.clientHeight, 0)
           if (linePosition != null) {
-            const offset = Number.isFinite(viewportOffset) ? viewportOffset : 0
-            target = view.lineBlockAt(linePosition).top - offset
+            const block = lineContentBlock(linePosition)
+            target = block.top + block.height * lineProgress
           } else {
             target = measuredMaximum * Math.min(Math.max(Number(progress) || 0, 0), 1)
           }
           scroller.scrollTop = Math.min(Math.max(target, 0), measuredMaximum)
           scroller.dispatchEvent(new Event("scroll"))
           view.requestMeasure()
-          requestAnimationFrame(() => resolve(true))
+          requestAnimationFrame(() => {
+            preservedSourcePosition = Number.isFinite(sourcePosition) ? sourcePosition : null
+            didUserScroll = false
+            userScrollIntent = false
+            lastScrollTop = scroller.scrollTop
+            resolve(true)
+          })
         })
       }),
       // Used by hosts that map an external pointer target into the source.
@@ -874,7 +932,13 @@ window.MDEditor = {
         const command = commands[name]
         if (command) { command(view); view.focus() }
       },
-      destroy: () => view.destroy(),
+      destroy: () => {
+        view.scrollDOM.removeEventListener("wheel", markScrollIntent)
+        view.scrollDOM.removeEventListener("pointerdown", markScrollIntent)
+        view.scrollDOM.removeEventListener("keydown", markKeyboardScrollIntent)
+        view.scrollDOM.removeEventListener("scroll", observeScroll)
+        view.destroy()
+      },
     }
   },
 }

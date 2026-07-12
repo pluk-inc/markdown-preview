@@ -13,10 +13,10 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         )
 
         XCTAssertTrue(rtl.articleHTML.contains(
-            #"<blockquote data-source-line="1" dir="rtl">"#
+            #"<blockquote data-source-line="1" data-source-start="1" data-source-end="1" dir="rtl">"#
         ))
         XCTAssertFalse(ltr.articleHTML.contains(
-            #"<blockquote data-source-line="1" dir="rtl">"#
+            #"<blockquote data-source-line="1" data-source-start="1" data-source-end="1" dir="rtl">"#
         ))
         XCTAssertTrue(rtl.html.contains(
             "border-inline-start: 4px solid var(--quote-border);"
@@ -50,7 +50,9 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             vendorLoading: .lazy
         )
 
-        XCTAssertTrue(rendered.articleHTML.contains("<figure data-source-line=\"1\" class=\"mermaid-figure\""))
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "<figure data-source-line=\"1\" data-source-start=\"1\" data-source-end=\"4\" class=\"mermaid-figure\""
+        ))
         XCTAssertFalse(rendered.articleHTML.contains("<code class=\"language-mermaid\""))
     }
 
@@ -64,8 +66,10 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             vendorLoading: .lazy
         )
 
-        XCTAssertTrue(rendered.articleHTML.contains("<div data-source-line=\"1\" class=\"math math-display\">"))
-        XCTAssertFalse(rendered.articleHTML.contains("<p data-source-line=\"1\"><div"))
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "<div data-source-line=\"1\" data-source-start=\"1\" data-source-end=\"3\" class=\"math math-display\">"
+        ), rendered.articleHTML)
+        XCTAssertFalse(rendered.articleHTML.contains("<p data-source-line=\"1\" data-source-start=\"1\" data-source-end=\"3\"><div"))
     }
 
     func testFootnoteRemovalDoesNotShiftFollowingSourceLines() {
@@ -85,9 +89,11 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         )
 
         XCTAssertTrue(rendered.articleHTML.contains(
-            "<h2 data-source-line=\"9\" id=\"md-heading-0\">Target</h2>"
+            "<h2 data-source-line=\"9\" data-source-start=\"9\" data-source-end=\"9\" id=\"md-heading-0\">Target</h2>"
         ))
-        XCTAssertTrue(rendered.articleHTML.contains("<p data-source-line=\"5\">First definition line."))
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "<p data-source-line=\"5\" data-source-start=\"5\" data-source-end=\"7\">First definition line."
+        ))
     }
 
     func testFootnoteSourceLinesIncludeFrontmatterOffset() {
@@ -107,7 +113,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         )
 
         XCTAssertTrue(rendered.articleHTML.contains(
-            "<p data-source-line=\"8\">First definition line."
+            "<p data-source-line=\"8\" data-source-start=\"8\" data-source-end=\"9\">First definition line."
         ))
     }
 }

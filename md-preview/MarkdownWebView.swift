@@ -18,9 +18,8 @@ enum SearchMode {
 }
 
 struct SourceScrollAnchor {
-    let line: Int
-    /// Block top relative to the preview viewport top, in CSS pixels.
-    let viewportOffset: CGFloat
+    /// Fractional one-based source line at the top of the viewport.
+    let sourcePosition: CGFloat
 }
 
 /// User-selectable article layout, persisted across launches. Quick Look
@@ -491,67 +490,93 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         }
     }
 
-    /// Finds the rendered block at (or immediately above) a document-space
-    /// Y coordinate and returns its original Markdown source line.
+    /// Maps a document-space Y coordinate to a fractional source line using
+    /// the rendered source anchors on either side.
     func sourceAnchor(atDocumentY documentY: CGFloat,
                       completion: @escaping (SourceScrollAnchor?) -> Void) {
         let script = """
         (() => {
             const y = \(documentY);
-            const blocks = Array.from(document.querySelectorAll('[data-source-line]'));
-            let chosen = null;
-            let chosenTop = -Infinity;
-            for (const block of blocks) {
-                const top = block.getBoundingClientRect().top
-                    + (window.scrollY || document.documentElement.scrollTop || 0);
-                if (top <= y + 0.5 && top >= chosenTop) {
-                    chosen = block;
-                    chosenTop = top;
-                }
+            \(Self.sourceLayoutCollectorScript)
+            const layout = collectSourceLayout();
+            if (!layout.length) return null;
+
+            // Prefer the smallest rendered block containing the viewport
+            // anchor. This selects a list item or paragraph over its parent
+            // list/container when source ranges are nested.
+            const containing = layout
+                .filter(block => block.top <= y + 0.5 && block.bottom >= y - 0.5)
+                .sort((a, b) => a.height - b.height || b.start - a.start)[0];
+            if (containing) {
+                const progress = Math.min(Math.max(
+                    (y - containing.top) / containing.height, 0), 1);
+                return {
+                    position: containing.start
+                        + progress * (containing.effectiveEnd - containing.start)
+                };
             }
-            if (!chosen && blocks.length) {
-                chosen = blocks[0];
-                chosenTop = chosen.getBoundingClientRect().top;
+
+            let previous = layout[0];
+            let next = null;
+            for (const block of layout) {
+                if (block.top <= y + 0.5) previous = block;
+                else { next = block; break; }
             }
-            if (!chosen) return null;
+            if (!next || next.top <= previous.top) {
+                return { position: previous.effectiveEnd };
+            }
+            const progress = Math.min(Math.max(
+                (y - previous.top) / (next.top - previous.top), 0), 1);
             return {
-                line: Number(chosen.dataset.sourceLine),
-                offset: chosenTop - y
+                position: previous.start + progress * (next.start - previous.start)
             };
         })();
         """
         webView.evaluateJavaScript(script) { result, _ in
             guard let raw = result as? [String: Any],
-                  let line = raw["line"] as? NSNumber,
-                  let offset = raw["offset"] as? NSNumber else {
+                  let position = raw["position"] as? NSNumber else {
                 completion(nil)
                 return
             }
             completion(SourceScrollAnchor(
-                line: line.intValue,
-                viewportOffset: CGFloat(truncating: offset)
+                sourcePosition: CGFloat(truncating: position)
             ))
         }
     }
 
-    func sourceOffset(forLine sourceLine: Int, completion: @escaping (CGFloat?) -> Void) {
+    func sourceOffset(forPosition sourcePosition: CGFloat, completion: @escaping (CGFloat?) -> Void) {
         let script = """
         (() => {
-            const requested = \(sourceLine);
-            const blocks = Array.from(document.querySelectorAll('[data-source-line]'));
-            let chosen = null;
-            let chosenLine = -1;
-            for (const block of blocks) {
-                const line = Number(block.dataset.sourceLine);
-                if (line <= requested && line >= chosenLine) {
-                    chosen = block;
-                    chosenLine = line;
-                }
+            const requested = \(Double(sourcePosition));
+            \(Self.sourceLayoutCollectorScript)
+            const layout = collectSourceLayout();
+            if (!layout.length) return null;
+
+            const containing = layout
+                .filter(block => block.start <= requested
+                    && block.effectiveEnd > requested)
+                .sort((a, b) =>
+                    (a.effectiveEnd - a.start) - (b.effectiveEnd - b.start)
+                    || a.height - b.height)[0];
+            if (containing) {
+                const sourceSpan = containing.effectiveEnd - containing.start;
+                const progress = sourceSpan > 0
+                    ? Math.min(Math.max((requested - containing.start) / sourceSpan, 0), 1)
+                    : 0;
+                return containing.top + progress * containing.height;
             }
-            if (!chosen) chosen = blocks[0] || null;
-            if (!chosen) return null;
-            return chosen.getBoundingClientRect().top
-                + (window.scrollY || document.documentElement.scrollTop || 0);
+
+            const bySource = [...layout].sort((a, b) => a.start - b.start || a.top - b.top);
+            let previous = bySource[0];
+            let next = null;
+            for (const block of bySource) {
+                if (block.start <= requested) previous = block;
+                else { next = block; break; }
+            }
+            if (!next || next.start <= previous.start) return previous.bottom;
+            const progress = Math.min(Math.max(
+                (requested - previous.start) / (next.start - previous.start), 0), 1);
+            return previous.top + progress * (next.top - previous.top);
         })();
         """
         webView.evaluateJavaScript(script) { result, _ in
@@ -562,6 +587,37 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             completion(CGFloat(truncating: number))
         }
     }
+
+    /// JavaScript declaration shared by both directions of scroll mapping.
+    /// It measures content boxes rather than CSS margin boxes and keeps full
+    /// source ranges so multiline blocks can be mapped proportionally.
+    private static let sourceLayoutCollectorScript = """
+    const collectSourceLayout = () => {
+        const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+        const blocks = [];
+        for (const element of document.querySelectorAll('[data-source-start]')) {
+            const start = Number(element.dataset.sourceStart);
+            const end = Number(element.dataset.sourceEnd);
+            if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+            const rect = element.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) continue;
+            const style = getComputedStyle(element);
+            const paddingTop = parseFloat(style.paddingTop) || 0;
+            const paddingBottom = parseFloat(style.paddingBottom) || 0;
+            const top = rect.top + scrollY + paddingTop;
+            const height = Math.max(rect.height - paddingTop - paddingBottom, 1);
+            blocks.push({
+                start,
+                end,
+                effectiveEnd: end + 1,
+                top,
+                bottom: top + height,
+                height
+            });
+        }
+        return blocks.sort((a, b) => a.top - b.top || a.start - b.start);
+    };
+    """
 
     private static let headingOffsetsScript = """
     (() => {

@@ -41,6 +41,18 @@ nonisolated enum MarkdownHTML {
     /// Quick Look panel wrap lines identically.
     static let contentColumnWidth = Int(preferredPageWidth) - 80
 
+    // Shared reading/editing design tokens. The two surfaces intentionally
+    // keep different renderers, but their page geometry and base typography
+    // must come from one source of truth.
+    static let bodyFontFamily = "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", system-ui, sans-serif"
+    static let bodyFontSize: CGFloat = 15
+    static let bodyLineHeight: CGFloat = 1.52
+    static let pagePaddingTop: CGFloat = 32
+    static let pagePaddingHorizontal: CGFloat = 40
+    static let pagePaddingBottom: CGFloat = 48
+    static let sourceLineHeight = bodyFontSize * bodyLineHeight
+    static let paragraphSpacing = bodyFontSize * 0.8
+
     struct RenderedHTML: Sendable {
         let html: String
         let articleHTML: String
@@ -580,6 +592,7 @@ nonisolated enum MarkdownHTML {
     private struct MathExtraction {
         let processedMarkdown: String
         let blocks: [String]
+        let blockLineCounts: [Int]
         let inlines: [String]
     }
 
@@ -629,6 +642,7 @@ nonisolated enum MarkdownHTML {
 
     private static func extractMath(from markdown: String) -> MathExtraction {
         var blocks: [String] = []
+        var blockLineCounts: [Int] = []
         var inlines: [String] = []
         var protected: [String] = []
 
@@ -652,6 +666,7 @@ nonisolated enum MarkdownHTML {
                 let body = nsMarkdown.substring(with: match.range(at: 3))
                 blocks.append(body)
                 let fullFence = nsMarkdown.substring(with: match.range)
+                blockLineCounts.append(fullFence.count(where: \.isNewline) + 1)
                 let newlineCount = fullFence.count(where: \.isNewline)
                 // Keep the replacement on the opening line and preserve the
                 // original number of line breaks so later source ranges remain
@@ -687,6 +702,7 @@ nonisolated enum MarkdownHTML {
             ))
             let capture = nsAfterInlineCode.substring(with: match.range(at: 1))
             let fullMatch = nsAfterInlineCode.substring(with: match.range)
+            blockLineCounts.append(fullMatch.count(where: \.isNewline) + 1)
             afterBlockMath += "MdPreviewMathBlock\(blocks.count)Token"
             afterBlockMath += String(
                 repeating: "\n",
@@ -709,7 +725,12 @@ nonisolated enum MarkdownHTML {
             )
         }
 
-        return MathExtraction(processedMarkdown: processed, blocks: blocks, inlines: inlines)
+        return MathExtraction(
+            processedMarkdown: processed,
+            blocks: blocks,
+            blockLineCounts: blockLineCounts,
+            inlines: inlines
+        )
     }
 
     private static func renderMathBlocks(in html: String,
@@ -738,9 +759,15 @@ nonisolated enum MarkdownHTML {
             let index = Int(nsHtml.substring(with: indexRange)) ?? 0
             let latex = isBlock ? math.blocks[index] : math.inlines[index]
             let escaped = htmlEscape(latex)
-            let sourceAttributes = wrapped
+            var sourceAttributes = wrapped
                 ? nsHtml.substring(with: match.range(at: 1))
                 : ""
+            if isBlock, index < math.blockLineCounts.count {
+                sourceAttributes = expandSourceEnd(
+                    in: sourceAttributes,
+                    lineCount: math.blockLineCounts[index]
+                )
+            }
             rebuilt += isBlock
                 ? "<div\(sourceAttributes) class=\"math math-display\">\(escaped)</div>"
                 : "<span class=\"math math-inline\">\(escaped)</span>"
@@ -748,6 +775,21 @@ nonisolated enum MarkdownHTML {
         }
         rebuilt += nsHtml.substring(from: cursor)
         return MathRenderResult(html: rebuilt, containsMath: true)
+    }
+
+    private static func expandSourceEnd(in attributes: String, lineCount: Int) -> String {
+        guard lineCount > 1,
+              let startRange = attributes.range(of: #"data-source-start="\d+""#,
+                                                options: .regularExpression),
+              let start = Int(attributes[startRange].dropFirst(19).dropLast()) else {
+            return attributes
+        }
+        let end = start + lineCount - 1
+        return attributes.replacingOccurrences(
+            of: #"data-source-end="\d+""#,
+            with: "data-source-end=\"\(end)\"",
+            options: .regularExpression
+        )
     }
 
     // Debug-only perf instrumentation. Routes labelled timings through the
@@ -1864,12 +1906,12 @@ nonisolated enum MarkdownHTML {
         height: 0;
     }
     body {
-        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-        font-size: 15px;
-        line-height: 1.52;
+        font-family: \(bodyFontFamily);
+        font-size: \(bodyFontSize)px;
+        line-height: \(bodyLineHeight);
         color: var(--text);
         background: transparent;
-        padding: 32px 40px 48px;
+        padding: \(pagePaddingTop)px \(pagePaddingHorizontal)px \(pagePaddingBottom)px;
         -webkit-font-smoothing: antialiased;
     }
 
@@ -1884,7 +1926,7 @@ nonisolated enum MarkdownHTML {
         margin: 0.8em 0 0;
     }
     .md-source-blank-line {
-        height: 22.8px;
+        height: \(sourceLineHeight)px;
     }
     .md-source-blank-line + * {
         margin-top: 0 !important;

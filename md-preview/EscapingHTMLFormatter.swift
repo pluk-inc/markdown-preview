@@ -46,8 +46,17 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     // MARK: Block elements
 
     private func sourceLineAttribute(_ markup: Markup) -> String {
-        guard let line = markup.range?.lowerBound.line else { return "" }
-        return " data-source-line=\"\(line + sourceLineOffset)\""
+        guard let range = markup.range else { return "" }
+        let start = range.lowerBound.line + sourceLineOffset
+        // SourceRange is half-open. A range ending at column 1 belongs to the
+        // previous source line, not the new line whose first column it meets.
+        let inclusiveEndLine = range.upperBound.column == 1
+            && range.upperBound.line > range.lowerBound.line
+            ? range.upperBound.line - 1
+            : range.upperBound.line
+        let end = max(start, inclusiveEndLine + sourceLineOffset)
+        // Keep data-source-line while callers migrate to the richer range.
+        return " data-source-line=\"\(start)\" data-source-start=\"\(start)\" data-source-end=\"\(end)\""
     }
 
     private func precedingBlankLineCount(for markup: Markup) -> Int {
