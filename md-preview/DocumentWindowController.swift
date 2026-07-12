@@ -676,6 +676,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         isEditing || (currentFileURL != nil && currentMarkdown != nil)
     }
 
+    var canFormatMarkdown: Bool { isEditing }
+
+    func formatMarkdown(_ command: String) {
+        guard isEditing else { return }
+        mainSplit?.editorViewController?.exec(command)
+    }
+
     var hasPendingEditorChanges: Bool {
         hasUnsavedEditorChanges || isEditorCommitInFlight
     }
@@ -864,7 +871,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     @objc private func formatCommand(_ sender: NSButton) {
         guard let command = sender.identifier?.rawValue else { return }
-        mainSplit?.editorViewController?.exec(command)
+        formatMarkdown(command)
     }
 
     @objc private func showHeadingMenu(_ sender: NSButton) {
@@ -890,7 +897,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     @objc private func headingCommand(_ sender: NSMenuItem) {
-        mainSplit?.editorViewController?.exec("h\(sender.tag)")
+        formatMarkdown("h\(sender.tag)")
     }
 
     /// File > Save (⌘S) while editing: write without leaving edit mode.

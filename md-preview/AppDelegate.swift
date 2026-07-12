@@ -108,6 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installContentWidthMenuItems()
         installSidebarViewMenuItems()
         installEditModeMenuItem()
+        installFormatMenu()
         installNewTabMenuItem()
         installGoMenu()
         installAppMenuItemIcons()
@@ -262,6 +263,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return true
         case #selector(toggleEditModeFromMenu(_:)):
             return activeDocumentWindowController?.canToggleEditMode ?? false
+        case #selector(formatMarkdownFromMenu(_:)):
+            return activeDocumentWindowController?.canFormatMarkdown ?? false
         default:
             return true
         }
@@ -880,6 +883,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func toggleEditModeFromMenu(_ sender: Any?) {
         activeDocumentWindowController?.toggleEditMode()
+    }
+
+    private func installFormatMenu() {
+        guard let mainMenu = NSApp.mainMenu,
+              mainMenu.items.first(where: { $0.title == "Format" }) == nil else { return }
+
+        func item(_ title: String,
+                  command: String,
+                  key: String = "",
+                  modifiers: NSEvent.ModifierFlags = [.command]) -> NSMenuItem {
+            let item = NSMenuItem(title: title,
+                                  action: #selector(formatMarkdownFromMenu(_:)),
+                                  keyEquivalent: key)
+            item.target = self
+            item.representedObject = command
+            item.keyEquivalentModifierMask = modifiers
+            return item
+        }
+
+        let menu = NSMenu(title: "Format")
+        menu.addItem(item("Body", command: "h0"))
+        menu.addItem(item("Heading 1", command: "h1", key: "1", modifiers: [.shift, .command]))
+        menu.addItem(item("Heading 2", command: "h2", key: "2", modifiers: [.shift, .command]))
+        menu.addItem(item("Heading 3", command: "h3", key: "3", modifiers: [.shift, .command]))
+        menu.addItem(.separator())
+        menu.addItem(item("Bold", command: "bold", key: "b"))
+        menu.addItem(item("Italic", command: "italic", key: "i"))
+        menu.addItem(item("Strikethrough", command: "strikethrough", key: "x", modifiers: [.shift, .command]))
+        menu.addItem(item("Inline Code", command: "code", key: "`"))
+        menu.addItem(item("Link", command: "link", key: "k"))
+        menu.addItem(.separator())
+        menu.addItem(item("Bulleted List", command: "bulletList", key: "7", modifiers: [.shift, .command]))
+        menu.addItem(item("Numbered List", command: "orderedList", key: "9", modifiers: [.shift, .command]))
+        menu.addItem(item("Checklist", command: "taskList", key: "l", modifiers: [.shift, .command]))
+        menu.addItem(item("Block Quote", command: "quote", key: "'"))
+
+        let rootItem = NSMenuItem(title: "Format", action: nil, keyEquivalent: "")
+        rootItem.submenu = menu
+        let insertIndex = mainMenu.items.firstIndex(where: { $0.title == "View" })
+            ?? mainMenu.items.count
+        mainMenu.insertItem(rootItem, at: insertIndex)
+    }
+
+    @objc private func formatMarkdownFromMenu(_ sender: NSMenuItem) {
+        guard let command = sender.representedObject as? String else { return }
+        activeDocumentWindowController?.formatMarkdown(command)
     }
 
     private func makeSidebarViewMenuItem(title: String,
