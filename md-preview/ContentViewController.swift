@@ -47,6 +47,7 @@ final class ContentViewController: NSViewController {
     private static let stickyReleaseFraction: CGFloat = 1.0 / 3.0
 
     var activeHeadingDidChange: ((Int?) -> Void)?
+    var taskCheckboxToggled: ((Int, Bool) -> Void)?
 
     override func loadView() {
         let scrollView = NSScrollView()
@@ -77,6 +78,9 @@ final class ContentViewController: NSViewController {
         }
         webView.fragmentLinkActivated = { [weak self] fragment in
             self?.scrollToElement(id: fragment)
+        }
+        webView.taskCheckboxToggled = { [weak self] line, checked in
+            self?.taskCheckboxToggled?(line, checked)
         }
         webView.zoomDidChange = { [weak self] zoom in
             self?.webViewPageWidthConstraint?.constant = MarkdownHTML.preferredPageWidth * zoom

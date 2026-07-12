@@ -6,6 +6,30 @@ import XCTest
 // trailing metadata (e.g. ```mermaid some-name) does not leak into HTML.
 final class EscapingHTMLFormatterTests: XCTestCase {
 
+    func testTaskCheckboxSourceTogglesExactSourceLine() {
+        let markdown = "- [ ] Same\n  - [x] Nested\n- [ ] Same\n"
+        XCTAssertEqual(
+            TaskCheckboxSource.settingChecked(true, onLine: 3, in: markdown),
+            "- [ ] Same\n  - [x] Nested\n- [x] Same\n"
+        )
+        XCTAssertEqual(
+            TaskCheckboxSource.settingChecked(false, onLine: 2, in: markdown),
+            "- [ ] Same\n  - [ ] Nested\n- [ ] Same\n"
+        )
+    }
+
+    func testTaskCheckboxSourceRejectsNonTaskLine() {
+        XCTAssertNil(TaskCheckboxSource.settingChecked(true, onLine: 1, in: "Plain text"))
+        XCTAssertNil(TaskCheckboxSource.settingChecked(true, onLine: 2, in: "- [ ] Task"))
+    }
+
+    func testTaskCheckboxSourceSupportsQuotedAndOrderedTasks() {
+        XCTAssertEqual(
+            TaskCheckboxSource.settingChecked(true, onLine: 1, in: "> 1. [ ] Quoted"),
+            "> 1. [x] Quoted"
+        )
+    }
+
     func testFencedCodeBlockSetsLanguageClassFromFirstInfoWord() {
         let html = EscapingHTMLFormatter.format("""
         ```mermaid some-name
