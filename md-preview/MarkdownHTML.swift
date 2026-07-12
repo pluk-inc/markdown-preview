@@ -2030,6 +2030,10 @@ nonisolated enum MarkdownHTML {
         background-color: color-mix(in srgb, var(--text) 55%, transparent);
     }
     pre code {
+        /* highlight.js adds display:block with the .hljs class after its
+           deferred pass. Match that layout from first paint so syntax
+           coloring cannot change the code block's line boxes. */
+        display: block;
         padding: 0;
         background: transparent;
         font-size: 0.88em;

@@ -56,6 +56,25 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(rendered.articleHTML.contains("<code class=\"language-mermaid\""))
     }
 
+    func testCodeBlockLayoutMatchesDeferredHighlightingFromFirstPaint() throws {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ```swift
+            let answer = 42
+            ```
+            """,
+            vendorLoading: .lazy
+        )
+
+        let codeRuleStart = try XCTUnwrap(rendered.html.range(of: "pre code {"))
+        let codeRuleEnd = try XCTUnwrap(
+            rendered.html.range(of: "}", range: codeRuleStart.upperBound..<rendered.html.endIndex)
+        )
+        let codeRule = rendered.html[codeRuleStart.lowerBound..<codeRuleEnd.upperBound]
+
+        XCTAssertTrue(codeRule.contains("display: block;"))
+    }
+
     func testBlockMathKeepsValidWrapperAndSourceLine() {
         let rendered = MarkdownHTML.render(
             markdown: """
