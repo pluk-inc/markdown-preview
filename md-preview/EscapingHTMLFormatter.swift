@@ -6,6 +6,36 @@
 import Foundation
 import Markdown
 
+nonisolated enum TaskCheckboxSource {
+    private static let markerRegex: NSRegularExpression = {
+        // swiftlint:disable:next force_try
+        try! NSRegularExpression(
+            pattern: #"^(\s*(?:>\s*)*(?:[-+*]|\d+[.)])\s+\[)([ xX])(\])"#
+        )
+    }()
+
+    /// Returns a copy with the task marker on the 1-based source line set to
+    /// the requested state. The source line comes from swift-markdown's range,
+    /// so duplicate task labels and nested lists remain unambiguous.
+    static func settingChecked(_ checked: Bool,
+                               onLine sourceLine: Int,
+                               in markdown: String) -> String? {
+        guard sourceLine > 0 else { return nil }
+        var lines = markdown.components(separatedBy: "\n")
+        let index = sourceLine - 1
+        guard lines.indices.contains(index) else { return nil }
+
+        let line = lines[index]
+        let fullRange = NSRange(line.startIndex..<line.endIndex, in: line)
+        guard let match = markerRegex.firstMatch(in: line, range: fullRange),
+              let markerRange = Range(match.range(at: 2), in: line) else {
+            return nil
+        }
+        lines[index].replaceSubrange(markerRange, with: checked ? "x" : " ")
+        return lines.joined(separator: "\n")
+    }
+}
+
 // Mirrors swift-markdown's HTMLFormatter but HTML-escapes text, code, and
 // attribute values. Upstream HTMLFormatter emits unescaped content
 // (swift-markdown 0.7.x), so characters like `<`, `>`, and `&` either render

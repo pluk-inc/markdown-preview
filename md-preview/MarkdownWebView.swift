@@ -76,6 +76,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     var heightDidChange: ((CGFloat) -> Void)?
     var zoomDidChange: ((CGFloat) -> Void)?
     var fragmentLinkActivated: ((String) -> Void)?
+    var taskCheckboxToggled: ((Int, Bool) -> Void)?
     private let assetScheme = MarkdownAssetScheme()
     private var currentAssetBase: URL?
     private let messageBridge = HostBridge()
@@ -317,6 +318,10 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.setString(text, forType: .string)
+        case "taskCheckbox":
+            guard let line = dict["line"] as? NSNumber,
+                  let checked = dict["checked"] as? NSNumber else { return }
+            taskCheckboxToggled?(line.intValue, checked.boolValue)
         case "scroll":
             guard let value = dict["value"] as? String else { return }
             switch value {

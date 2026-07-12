@@ -844,11 +844,13 @@ nonisolated enum MarkdownHTML {
     private static let hostBridgeScript: String = """
     <script>
     (() => {
+        let hasHostBridge = false;
         const post = (() => {
             try {
                 const h = window.webkit && window.webkit.messageHandlers
                     && window.webkit.messageHandlers.mdPreviewHost;
                 if (!h) return () => false;
+                hasHostBridge = true;
                 return (msg) => {
                     h.postMessage(msg);
                     return true;
@@ -1015,6 +1017,29 @@ nonisolated enum MarkdownHTML {
             copyCodeBlock(button);
         });
 
+        function enableTaskCheckboxes() {
+            if (!hasHostBridge) return;
+            document.querySelectorAll('.task-list-item-checkbox').forEach((checkbox) => {
+                checkbox.disabled = false;
+            });
+        }
+
+        document.addEventListener('change', (event) => {
+            const checkbox = event.target.closest('.task-list-item-checkbox');
+            if (!checkbox || !hasHostBridge) return;
+            const item = checkbox.closest('[data-source-line]');
+            const sourceLine = item && Number(item.dataset.sourceLine);
+            if (!Number.isInteger(sourceLine) || sourceLine < 1) {
+                checkbox.checked = !checkbox.checked;
+                return;
+            }
+            checkbox.disabled = true;
+            if (!post({ kind: 'taskCheckbox', line: sourceLine, checked: checkbox.checked })) {
+                checkbox.checked = !checkbox.checked;
+                checkbox.disabled = false;
+            }
+        });
+
         document.addEventListener('copy', (event) => {
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0 || !event.clipboardData) return;
@@ -1144,6 +1169,7 @@ nonisolated enum MarkdownHTML {
             }
             if (articleHTML) {
                 decorateCodeBlocks();
+                enableTaskCheckboxes();
                 for (const fn of reappliers) {
                     try { fn(); } catch (e) { /* one bad apple shouldn't block others */ }
                 }
@@ -2276,6 +2302,7 @@ nonisolated enum MarkdownHTML {
         border-color: #007aff;
         background: #007aff;
     }
+    .task-list-item-checkbox:not(:disabled) { cursor: pointer; }
     .task-list-item-checkbox:checked::after {
         content: "";
         position: absolute;

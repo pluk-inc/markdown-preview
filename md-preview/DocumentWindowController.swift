@@ -157,6 +157,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         split.onSelectFile = { [weak self] url in
             self?.present(url: url)
         }
+        split.onToggleTaskCheckbox = { [weak self] line, checked in
+            self?.toggleTaskCheckbox(onLine: line, checked: checked)
+        }
         documentWindow.contentViewController = split
         documentWindow.setContentSize(NSSize(width: 1100, height: 720))
         documentWindow.center()
@@ -1283,6 +1286,44 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
     }
 
+    private func toggleTaskCheckbox(onLine sourceLine: Int, checked: Bool) {
+        guard !isEditing,
+              let baseline = currentMarkdown,
+              let updated = TaskCheckboxSource.settingChecked(
+                checked, onLine: sourceLine, in: baseline
+              ),
+              updated != baseline else {
+            rerenderCurrentPreview()
+            return
+        }
+
+        let diskState = diskFileState(for: currentFileURL, expectedMarkdown: baseline)
+        saveEditedMarkdown(updated, diskState: diskState) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .saved:
+                self.currentMarkdown = updated
+                if let url = self.currentFileURL {
+                    self.markdownDocument?.replaceContents(markdown: updated, fileURL: url)
+                    self.renderCurrentDocument(text: updated, fileURL: url)
+                }
+            case let .reloaded(externalMarkdown):
+                self.currentMarkdown = externalMarkdown
+                if let url = self.currentFileURL {
+                    self.markdownDocument?.replaceContents(markdown: externalMarkdown, fileURL: url)
+                    self.renderCurrentDocument(text: externalMarkdown, fileURL: url)
+                }
+            case .cancelled:
+                self.rerenderCurrentPreview()
+            }
+        }
+    }
+
+    private func rerenderCurrentPreview() {
+        guard let url = currentFileURL, let markdown = currentMarkdown else { return }
+        renderCurrentDocument(text: markdown, fileURL: url)
+    }
+
     private func presentExternalEditConflict(
         localMarkdown: String,
         externalMarkdown: String,
@@ -1292,7 +1333,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "This document changed on disk"
-        alert.informativeText = "Another app changed \(fileURL.lastPathComponent). Cancel keeps your editor changes unsaved. Choose which version to keep."
+        alert.informativeText = "Another app changed \(fileURL.lastPathComponent). Cancel keeps your changes unsaved. Choose which version to keep."
         alert.addButton(withTitle: "Keep My Changes")
         alert.addButton(withTitle: "Reload from Disk")
         alert.addButton(withTitle: "Cancel")
@@ -1329,7 +1370,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Unable to verify the document on disk"
-        alert.informativeText = "\(reason) Cancel keeps your editor changes unsaved."
+        alert.informativeText = "\(reason) Cancel keeps your changes unsaved."
         alert.addButton(withTitle: overwriteTitle)
         alert.addButton(withTitle: "Cancel")
         alert.beginSheetModal(for: documentWindow) { [weak self] response in

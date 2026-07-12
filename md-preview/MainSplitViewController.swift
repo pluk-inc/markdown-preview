@@ -10,6 +10,7 @@ final class MainSplitViewController: NSSplitViewController {
     private static let didSeedKey = "MainSplitView.didSeedInitialState"
 
     var onSelectFile: ((URL) -> Void)?
+    var onToggleTaskCheckbox: ((Int, Bool) -> Void)?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -47,6 +48,9 @@ final class MainSplitViewController: NSSplitViewController {
         // Wired after addSplitViewItem so the accessors are non-nil.
         contentViewController?.activeHeadingDidChange = { [weak self] headingID in
             self?.sidebarViewController?.setActiveHeading(headingID)
+        }
+        contentViewController?.taskCheckboxToggled = { [weak self] line, checked in
+            self?.onToggleTaskCheckbox?(line, checked)
         }
     }
 
