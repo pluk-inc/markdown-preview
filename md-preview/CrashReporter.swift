@@ -2,8 +2,29 @@ import Foundation
 import Sentry
 
 enum CrashReporter {
+    private static let enabledDefaultsKey = "MarkdownPreview.sendAnonymousCrashReports"
+
+    static var isEnabled: Bool {
+        get {
+            guard let stored = UserDefaults.standard.object(forKey: enabledDefaultsKey) as? NSNumber else {
+                return true
+            }
+            return stored.boolValue
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: enabledDefaultsKey)
+            if newValue {
+                start()
+            } else if SentrySDK.isEnabled {
+                SentrySDK.close()
+            }
+        }
+    }
+
     static func start(bundle: Bundle = .main) {
-        guard let dsn = bundle.object(forInfoDictionaryKey: "SentryDSN") as? String,
+        guard isEnabled,
+              !SentrySDK.isEnabled,
+              let dsn = bundle.object(forInfoDictionaryKey: "SentryDSN") as? String,
               !dsn.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return
         }

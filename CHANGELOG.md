@@ -8,7 +8,7 @@ Markdown Preview now includes a live Markdown editor, so you can write and previ
 
 - **Live Markdown edit mode.** Press ⌘E to switch between the rendered preview and an in-place editor with live preview updates, synchronized scrolling, native formatting controls, and ⌘S saving ([#169](https://github.com/pluk-inc/markdown-preview/pull/169)).
 - **Bold and italic Markdown editing.** Bold and italic formatting now preserve Markdown syntax cleanly while editing, including selections and existing formatted text ([#171](https://github.com/pluk-inc/markdown-preview/pull/171)).
-- **Privacy-filtered crash reporting.** Native Sentry crash reports now help diagnose release failures without collecting document contents, file paths, user information, breadcrumbs, performance traces, or session data.
+- **Privacy-filtered crash reporting.** Native Sentry crash reports now help diagnose release failures without collecting document contents, file paths, user information, breadcrumbs, performance traces, or session data, and can be disabled completely from Preferences.
 
 ### Fixed
 

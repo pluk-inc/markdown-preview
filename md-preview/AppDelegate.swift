@@ -192,6 +192,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updaterController.updater.checkForUpdates()
     }
 
+    @IBAction func showPreferences(_ sender: Any?) {
+        let checkbox = NSButton(checkboxWithTitle: "Send Anonymous Crash Reports",
+                                target: nil,
+                                action: nil)
+        checkbox.state = CrashReporter.isEnabled ? .on : .off
+
+        let alert = NSAlert()
+        alert.messageText = "Preferences"
+        alert.informativeText = "Crash reports help diagnose failures. They never include document contents, file paths, user information, or activity tracking."
+        alert.accessoryView = checkbox
+        alert.addButton(withTitle: "Done")
+        alert.runModal()
+
+        CrashReporter.isEnabled = checkbox.state == .on
+    }
+
     @objc private func installCommandLineTools(_ sender: Any?) {
         do {
             let installerScriptURL = try writeCommandLineToolInstallerScript()
