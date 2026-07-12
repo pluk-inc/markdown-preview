@@ -29,6 +29,14 @@ Or grab the latest signed and notarized DMG from the [Releases](https://github.c
 </p>
 
 <p align="center">
+  <em>Edit Markdown directly with a native formatting toolbar:</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshot-edit-mode.png" width="820" alt="Edit Mode with document outline and Markdown formatting toolbar" />
+</p>
+
+<p align="center">
   <em>Quick Look preview — spacebar a <code>.md</code> in Finder:</em>
 </p>
 
@@ -47,6 +55,7 @@ Or grab the latest signed and notarized DMG from the [Releases](https://github.c
 ## Features
 
 - **Native rendering** — `WKWebView` pipeline backed by [swift-markdown](https://github.com/swiftlang/swift-markdown), with heading anchors and link handling.
+- **Edit Mode** — edit Markdown in place with a formatting toolbar for headings, emphasis, lists, quotes, code, and links. Toggle it from the toolbar or with <kbd>⌘E</kbd>, then save with <kbd>⌘S</kbd>.
 - **Mermaid diagrams** — fenced `mermaid` code blocks render as diagrams in both the app and Quick Look previews, using a bundled renderer so previews work offline without a CDN request.
 - **Math equations** — LaTeX inline (`$x_1 + x_2$`), display (`$$\int_0^1 x^2\,dx$$`), and fenced `math` blocks render with a bundled KaTeX. Selecting a rendered formula and copying yields the original LaTeX source (via the official `copy-tex` extension).
 - **Document outline** — sidebar TOC that mirrors your headings; click to jump.
