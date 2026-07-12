@@ -192,20 +192,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updaterController.updater.checkForUpdates()
     }
 
-    @IBAction func showPreferences(_ sender: Any?) {
-        let checkbox = NSButton(checkboxWithTitle: "Send Anonymous Crash Reports",
-                                target: nil,
-                                action: nil)
-        checkbox.state = CrashReporter.isEnabled ? .on : .off
-
-        let alert = NSAlert()
-        alert.messageText = "Preferences"
-        alert.informativeText = "Crash reports help diagnose failures. They never include document contents, file paths, user information, or activity tracking."
-        alert.accessoryView = checkbox
-        alert.addButton(withTitle: "Done")
-        alert.runModal()
-
-        CrashReporter.isEnabled = checkbox.state == .on
+    @IBAction func toggleCrashReporting(_ sender: NSMenuItem) {
+        CrashReporter.isEnabled.toggle()
+        sender.state = CrashReporter.isEnabled ? .on : .off
     }
 
     @objc private func installCommandLineTools(_ sender: Any?) {
@@ -277,6 +266,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return activeDocumentWindowController != nil
         case #selector(selectAppearanceMode(_:)),
              #selector(selectContentWidthSetting(_:)):
+            return true
+        case #selector(toggleCrashReporting(_:)):
+            menuItem.state = CrashReporter.isEnabled ? .on : .off
             return true
         case #selector(toggleEditModeFromMenu(_:)):
             return activeDocumentWindowController?.canToggleEditMode ?? false

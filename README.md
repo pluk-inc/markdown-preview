@@ -92,7 +92,7 @@ Build and run the `markdown-preview` scheme. Swift Package Manager will resolve 
 
 ### Crash reporting
 
-Release builds submit native crash reports to the `pluk-inc/markdown-preview` Sentry project. The integration does not collect performance traces, session data, breadcrumbs, network requests, user information, document contents, or file paths. Users can turn reporting off from Markdown Preview > Preferences; on later launches, the Sentry SDK will not initialize at all.
+Release builds submit native crash reports to the `pluk-inc/markdown-preview` Sentry project. The integration does not collect performance traces, session data, breadcrumbs, network requests, user information, document contents, or file paths. Users can turn reporting off directly from Markdown Preview > Send Anonymous Crash Reports; on later launches, the Sentry SDK will not initialize at all.
 
 The committed DSN is a public client key. Release archives upload the app dSYM with `sentry-cli`; authenticate locally with `sentry-cli login` and keep that authentication token outside the repository.
 
