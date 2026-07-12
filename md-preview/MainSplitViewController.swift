@@ -29,6 +29,7 @@ final class MainSplitViewController: NSSplitViewController {
         sidebar.maximumThickness = 400
         sidebar.canCollapse = true
         sidebar.canCollapseFromWindowResize = false
+        sidebar.holdingPriority = .defaultHigh
 
         let content = NSSplitViewItem(viewController: LayeredContentViewController())
 
