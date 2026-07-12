@@ -2260,8 +2260,30 @@ nonisolated enum MarkdownHTML {
     li.task-list-item { list-style: none; }
     li.task-list-item > p:first-of-type { display: inline; margin-top: 0; }
     .task-list-item-checkbox {
-        margin: 0 0.4em 0.18em -1.4em;
+        -webkit-appearance: none;
+        appearance: none;
+        width: 1.55em;
+        height: 1.55em;
+        margin: 0 0.3em 0.1em -1.85em;
         vertical-align: middle;
+        border: 1.5px solid var(--grid);
+        border-radius: 50%;
+        background: transparent;
+        position: relative;
+        flex: 0 0 auto;
+    }
+    .task-list-item-checkbox:checked {
+        border-color: #007aff;
+        background: #007aff;
+    }
+    .task-list-item-checkbox:checked::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4.4 8.4 L7 11 L11.6 5.4" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 100% 100%;
     }
 
     table {

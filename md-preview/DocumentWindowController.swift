@@ -806,6 +806,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             separatorView(),
             formatButton("list.bullet", "bulletList", "Bulleted List"),
             formatButton("list.number", "orderedList", "Numbered List"),
+            formatButton("checklist", "taskList", "Task List"),
             formatButton("text.quote", "quote", "Block Quote"),
             separatorView(),
             formatButton("chevron.left.forwardslash.chevron.right", "code", "Inline Code"),
