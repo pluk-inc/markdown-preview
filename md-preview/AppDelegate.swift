@@ -103,6 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let markdownFileExtensions = ["md", "markdown", "mdown", "txt"]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        CrashReporter.start()
         applyAppearanceMode(AppAppearanceMode.current, reloadPreviews: false)
         installAppearanceMenuItems()
         installContentWidthMenuItems()

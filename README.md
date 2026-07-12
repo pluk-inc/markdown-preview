@@ -88,7 +88,13 @@ cd markdown-preview
 open markdown-preview.xcodeproj
 ```
 
-Build and run the `markdown-preview` scheme. Swift Package Manager will resolve [Sparkle](https://github.com/sparkle-project/Sparkle) and [swift-markdown](https://github.com/swiftlang/swift-markdown) on first build.
+Build and run the `markdown-preview` scheme. Swift Package Manager will resolve [Sparkle](https://github.com/sparkle-project/Sparkle), [Sentry](https://github.com/getsentry/sentry-cocoa), and [swift-markdown](https://github.com/swiftlang/swift-markdown) on first build.
+
+### Crash reporting
+
+Release builds submit native crash reports to the `pluk-inc/markdown-preview` Sentry project. The integration does not collect performance traces, session data, breadcrumbs, network requests, user information, document contents, or file paths.
+
+The committed DSN is a public client key. Release archives upload the app dSYM with `sentry-cli`; authenticate locally with `sentry-cli login` and keep that authentication token outside the repository.
 
 ## Project layout
 
@@ -141,6 +147,7 @@ Pull requests are welcome. For larger changes, please open an issue first to dis
 - [Mermaid](https://mermaid.js.org/) — Bundled diagram renderer for `mermaid` fenced code blocks
 - [KaTeX](https://katex.org/) — Bundled math typesetter for inline `$…$`, display `$$…$$`, and ` ```math ` blocks
 - [Sparkle](https://sparkle-project.org) — Auto-update framework
+- [Sentry](https://sentry.io) — Privacy-filtered native crash reporting
 - [LottieFiles](https://lottiefiles.com/) — Animated README logo
 
 ## License

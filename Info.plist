@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>SentryDSN</key>
+	<string>https://ff4b789ea2ae9b16dd0874590ee7bcd5@o4509530813890560.ingest.us.sentry.io/4511720750120960</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>

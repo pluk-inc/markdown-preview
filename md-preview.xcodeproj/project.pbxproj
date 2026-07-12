@@ -10,6 +10,7 @@
 		9A0209302FA10D4C00092060 /* Quartz.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A02092F2FA10D4C00092060 /* Quartz.framework */; };
 		9A02093C2FA10D4C00092060 /* quick-look.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9A02092D2FA10D4C00092060 /* quick-look.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9A0209C12FA1100200092060 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 9A0209C22FA1100200092060 /* Sparkle */; };
+		9A7B10012FB0000100010001 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 9A7B10032FB0000100010001 /* Sentry */; };
 		9A33940A2FA5AF500015D9A4 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 9A3394092FA5AF500015D9A4 /* Markdown */; };
 		9A33940C2FA5AF500015D9A4 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 9A33940B2FA5AF500015D9A4 /* Markdown */; };
 		9AF000000000000000000003 /* mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000101 /* mermaid.min.js */; };
@@ -114,6 +115,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9A0209C12FA1100200092060 /* Sparkle in Frameworks */,
+				9A7B10012FB0000100010001 /* Sentry in Frameworks */,
 				9A33940A2FA5AF500015D9A4 /* Markdown in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -180,6 +182,7 @@
 				9A0207BE2FA0ED7C00092060 /* Frameworks */,
 				9A0207BF2FA0ED7C00092060 /* Resources */,
 				9A02093D2FA10D4C00092060 /* Embed Foundation Extensions */,
+				9A7B10042FB0000100010001 /* Upload dSYMs to Sentry */,
 			);
 			buildRules = (
 			);
@@ -192,6 +195,7 @@
 			name = "md-preview";
 			packageProductDependencies = (
 				9A0209C22FA1100200092060 /* Sparkle */,
+				9A7B10032FB0000100010001 /* Sentry */,
 				9A3394092FA5AF500015D9A4 /* Markdown */,
 			);
 			productName = "md-preview";
@@ -223,6 +227,29 @@
 		};
 /* End PBXNativeTarget section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		9A7B10042FB0000100010001 /* Upload dSYMs to Sentry */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Upload dSYMs to Sentry";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+			shellPath = /bin/sh;
+			shellScript = "set -eu\n\nSENTRY_CLI=\"$(command -v sentry-cli || true)\"\nif [ -z \"$SENTRY_CLI\" ] && [ -x /opt/homebrew/bin/sentry-cli ]; then\n    SENTRY_CLI=/opt/homebrew/bin/sentry-cli\nfi\nif [ -z \"$SENTRY_CLI\" ]; then\n    echo \"error: sentry-cli is required to upload release dSYMs\" >&2\n    exit 1\nfi\n\n\"$SENTRY_CLI\" debug-files upload \\\n    --org pluk-inc \\\n    --project markdown-preview \\\n    --type dsym \\\n    \"$DWARF_DSYM_FOLDER_PATH/$DWARF_DSYM_FILE_NAME\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXProject section */
 		9A0207B92FA0ED7C00092060 /* Project object */ = {
 			isa = PBXProject;
@@ -250,6 +277,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				9A0209C32FA1100200092060 /* XCRemoteSwiftPackageReference "Sparkle" */,
+				9A7B10022FB0000100010001 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 				9A3394082FA5AF500015D9A4 /* XCRemoteSwiftPackageReference "swift-markdown" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -424,7 +452,7 @@
 				DEVELOPMENT_TEAM = 5P3TSMNV42;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -614,6 +642,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		9A7B10022FB0000100010001 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.0.0;
+			};
+		};
 		9A0209C32FA1100200092060 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sparkle-project/Sparkle";
@@ -633,6 +669,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		9A7B10032FB0000100010001 /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9A7B10022FB0000100010001 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
+		};
 		9A0209C22FA1100200092060 /* Sparkle */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 9A0209C32FA1100200092060 /* XCRemoteSwiftPackageReference "Sparkle" */;

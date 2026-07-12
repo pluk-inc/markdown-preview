@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.0.33] – 2026-07-12
+
+Markdown Preview now includes a live Markdown editor, so you can write and preview documents without switching apps.
+
+### Added
+
+- **Live Markdown edit mode.** Press ⌘E to switch between the rendered preview and an in-place editor with live preview updates, synchronized scrolling, native formatting controls, and ⌘S saving ([#169](https://github.com/pluk-inc/markdown-preview/pull/169)).
+- **Bold and italic Markdown editing.** Bold and italic formatting now preserve Markdown syntax cleanly while editing, including selections and existing formatted text ([#171](https://github.com/pluk-inc/markdown-preview/pull/171)).
+- **Privacy-filtered crash reporting.** Native Sentry crash reports now help diagnose release failures without collecting document contents, file paths, user information, breadcrumbs, performance traces, or session data.
+
+### Fixed
+
+- **Sidebar resizing is steadier.** The sidebar now keeps its intended width priority during window resizing instead of collapsing unexpectedly ([#177](https://github.com/pluk-inc/markdown-preview/pull/177), [#179](https://github.com/pluk-inc/markdown-preview/pull/179)).
+
 ## [0.0.32] – 2026-07-12
 
 Markdown Preview now includes a live Markdown editor, so you can write and preview documents without switching apps.
