@@ -65,6 +65,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private weak var editItem: NSToolbarItem?
     private weak var editButton: NSButton?
     private var editorChangeRevision = 0
+    /// In-memory source shown by preview before the user saves it.
+    private var editorDraftMarkdown: String?
+    /// Last known on-disk source, retained while preview displays a draft.
+    private var editorBaselineMarkdown: String?
     private var isEditorCommitInFlight = false
     private var pendingCommitShouldExit = false
     private var pendingCommitCompletions: [(Bool) -> Void] = []
@@ -243,10 +247,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func present(url: URL) {
         let preserveEditMode = isEditing || pendingEditModeURL != nil
-        if isEditing {
+        if isEditing || hasPendingEditorChanges {
             requestEndEditing(keepAccessoryMounted: true) { [weak self] success in
                 guard success else { return }
-                self?.present(url: url, preservingEditMode: true)
+                self?.present(url: url, preservingEditMode: preserveEditMode)
             }
             return
         }
@@ -290,7 +294,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             // must not re-render or clobber the in-progress session. Every
             // commit revalidates the disk contents before writing, so an
             // external edit is either reloaded or resolved explicitly.
-            guard let self, self.currentFileURL == url, !self.isEditing else { return }
+            guard let self, self.currentFileURL == url,
+                  !self.isEditing, !self.hasPendingEditorChanges else { return }
             self.loadFile(at: url, silentOnFailure: true)
         }
         watcher.onRename = { [weak self] newURL in
@@ -669,11 +674,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     var hasPendingEditorChanges: Bool {
-        isEditing && (hasUnsavedEditorChanges || isEditorCommitInFlight)
+        hasUnsavedEditorChanges || isEditorCommitInFlight
     }
 
     func commitPendingEditsForTermination(completion: @escaping (Bool) -> Void) {
-        guard isEditing else {
+        guard isEditing || hasPendingEditorChanges else {
             completion(true)
             return
         }
@@ -732,7 +737,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     func toggleEditMode() {
         if isEditing {
-            requestEndEditing()
+            previewPendingEdits()
         } else {
             enterEditMode()
         }
@@ -888,7 +893,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// Intercepts the responder chain ahead of MarkdownDocument, whose
     /// NSDocument save machinery stays disabled.
     @IBAction func saveDocument(_ sender: Any?) {
-        guard isEditing else {
+        guard isEditing || hasPendingEditorChanges else {
             NSSound.beep()
             return
         }
@@ -898,7 +903,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func enterEditMode() {
         guard let split = mainSplit, !split.isEditingDocument,
               currentFileURL != nil,
-              let markdown = currentMarkdown else {
+              let markdown = editorDraftMarkdown ?? currentMarkdown else {
             NSSound.beep()
             return
         }
@@ -907,16 +912,43 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // read-only renderer; the editor must expose and preserve it.
         let editor = split.enterEditMode(markdown: markdown)
         editor.cancelRequested = { [weak self] in
-            self?.requestEndEditing()
+            self?.previewPendingEdits()
         }
         editor.contentDidChange = { [weak self] in
             self?.editorChangeRevision += 1
             self?.hasUnsavedEditorChanges = true
         }
-        editorChangeRevision = 0
-        hasUnsavedEditorChanges = false
+        if editorBaselineMarkdown == nil {
+            editorBaselineMarkdown = currentMarkdown
+            editorChangeRevision = 0
+            hasUnsavedEditorChanges = false
+        }
         showEditAccessory()
         updateEditToolbarItem()
+    }
+
+    /// Switches to preview without resolving the editing session. The preview
+    /// renders the in-memory source, while the disk baseline is kept for a
+    /// later Save or close decision.
+    private func previewPendingEdits() {
+        guard let split = mainSplit, let editor = split.editorViewController else { return }
+        editor.fetchMarkdown { [weak self] markdown in
+            guard let self, let markdown, let url = self.currentFileURL else {
+                NSSound.beep()
+                return
+            }
+            self.editorDraftMarkdown = markdown
+            self.currentMarkdown = markdown
+            self.hasUnsavedEditorChanges = markdown != self.editorBaselineMarkdown
+            if !self.hasUnsavedEditorChanges {
+                self.editorDraftMarkdown = nil
+                self.editorBaselineMarkdown = nil
+            }
+            self.markdownDocument?.replaceContents(markdown: markdown, fileURL: url)
+            self.renderCurrentDocument(text: markdown, fileURL: url)
+            self.hideEditAccessory()
+            self.exitEditMode(rerender: true, preserveUnsavedChanges: true) {}
+        }
     }
 
     private func requestEndEditing(
@@ -987,9 +1019,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func exitEditModeWithoutSaving(completion: @escaping () -> Void) {
         var shouldRerender = false
+        if let baseline = editorBaselineMarkdown {
+            currentMarkdown = baseline
+            if let url = currentFileURL {
+                markdownDocument?.replaceContents(markdown: baseline, fileURL: url)
+            }
+            shouldRerender = true
+        }
         if case let .modified(externalMarkdown) = diskFileState(
             for: currentFileURL,
-            expectedMarkdown: currentMarkdown
+            expectedMarkdown: editorBaselineMarkdown ?? currentMarkdown
         ) {
             currentMarkdown = externalMarkdown
             if let url = currentFileURL {
@@ -997,6 +1036,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             }
             shouldRerender = true
         }
+        editorDraftMarkdown = nil
+        editorBaselineMarkdown = nil
         hasUnsavedEditorChanges = false
         exitEditMode(rerender: shouldRerender, completion: completion)
     }
@@ -1017,8 +1058,15 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func performPendingEditorCommit() {
         let exitAfter = pendingCommitShouldExit
         pendingCommitShouldExit = false
-        guard isEditing, let split = mainSplit,
-              let editor = split.editorViewController else {
+        guard let split = mainSplit else {
+            finishEditorCommit(success: false)
+            return
+        }
+        if !isEditing, let body = editorDraftMarkdown {
+            performPendingEditorCommit(body: body, editor: nil, exitAfter: exitAfter)
+            return
+        }
+        guard let editor = split.editorViewController else {
             finishEditorCommit(success: true)
             return
         }
@@ -1033,55 +1081,65 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 self.finishEditorCommit(success: false)
                 return
             }
-            let diskState = self.diskFileState(for: self.currentFileURL,
-                                               expectedMarkdown: self.currentMarkdown)
-            let hasLocalChanges = body != self.currentMarkdown
+            self.performPendingEditorCommit(body: body, editor: editor,
+                                            revision: revision, exitAfter: exitAfter)
+        }
+    }
 
-            if !hasLocalChanges, case let .modified(externalMarkdown) = diskState {
-                // Nothing local needs preserving, so adopt the newer disk
-                // version without presenting a needless conflict dialog.
-                self.adoptExternalMarkdown(externalMarkdown,
-                                           editor: editor,
-                                           exitAfter: exitAfter)
-                return
-            }
+    private func performPendingEditorCommit(body: String,
+                                            editor: EditorViewController?,
+                                            revision: Int? = nil,
+                                            exitAfter: Bool) {
+        isEditorCommitInFlight = true
+        let baseline = editorBaselineMarkdown ?? currentMarkdown
+        let diskState = diskFileState(for: currentFileURL,
+                                      expectedMarkdown: baseline)
+        let hasLocalChanges = body != baseline
 
-            guard editor.hasChanges, hasLocalChanges else {
-                if revision == self.editorChangeRevision {
-                    self.hasUnsavedEditorChanges = false
-                }
-                switch diskState {
-                case .unchanged:
-                    self.completeSuccessfulEditorCommit(exitAfter: exitAfter,
-                                                        rerender: false)
-                case .modified:
-                    // Handled above.
-                    break
-                case .missing, .unreadable:
-                    self.saveEditedMarkdown(body, diskState: diskState) { result in
-                        self.handleEditedMarkdownSaveResult(result,
-                                                            body: body,
-                                                            editor: editor,
-                                                            revision: revision,
-                                                            exitAfter: exitAfter)
-                    }
-                }
-                return
+        if !hasLocalChanges, case let .modified(externalMarkdown) = diskState {
+            // Nothing local needs preserving, so adopt the newer disk
+            // version without presenting a needless conflict dialog.
+            adoptExternalMarkdown(externalMarkdown,
+                                  editor: editor,
+                                  exitAfter: exitAfter)
+            return
+        }
+
+        guard hasUnsavedEditorChanges, hasLocalChanges else {
+            if revision == nil || revision == editorChangeRevision {
+                hasUnsavedEditorChanges = false
             }
-            self.saveEditedMarkdown(body, diskState: diskState) { result in
-                self.handleEditedMarkdownSaveResult(result,
-                                                    body: body,
-                                                    editor: editor,
-                                                    revision: revision,
-                                                    exitAfter: exitAfter)
+            switch diskState {
+            case .unchanged:
+                completeSuccessfulEditorCommit(exitAfter: exitAfter,
+                                               rerender: false)
+            case .modified:
+                // Handled above.
+                break
+            case .missing, .unreadable:
+                saveEditedMarkdown(body, diskState: diskState) { result in
+                    self.handleEditedMarkdownSaveResult(result,
+                                                        body: body,
+                                                        editor: editor,
+                                                        revision: revision,
+                                                        exitAfter: exitAfter)
+                }
             }
+            return
+        }
+        saveEditedMarkdown(body, diskState: diskState) { result in
+            self.handleEditedMarkdownSaveResult(result,
+                                                body: body,
+                                                editor: editor,
+                                                revision: revision,
+                                                exitAfter: exitAfter)
         }
     }
 
     private func handleEditedMarkdownSaveResult(_ result: EditedMarkdownSaveResult,
                                                 body: String,
-                                                editor: EditorViewController,
-                                                revision: Int,
+                                                editor: EditorViewController?,
+                                                revision: Int?,
                                                 exitAfter: Bool) {
         switch result {
         case .saved:
@@ -1089,7 +1147,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             if let url = currentFileURL {
                 markdownDocument?.replaceContents(markdown: body, fileURL: url)
             }
-            if revision == editorChangeRevision {
+            editorDraftMarkdown = nil
+            editorBaselineMarkdown = isEditing && !exitAfter ? body : nil
+            if revision == nil || revision == editorChangeRevision {
                 hasUnsavedEditorChanges = false
             }
             completeSuccessfulEditorCommit(exitAfter: exitAfter, rerender: true)
@@ -1103,9 +1163,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func adoptExternalMarkdown(_ markdown: String,
-                                       editor: EditorViewController,
+                                       editor: EditorViewController?,
                                        exitAfter: Bool) {
         currentMarkdown = markdown
+        editorDraftMarkdown = nil
+        editorBaselineMarkdown = isEditing && !exitAfter ? markdown : nil
         editorChangeRevision = 0
         hasUnsavedEditorChanges = false
         if let url = currentFileURL {
@@ -1115,7 +1177,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             }
         }
         if !exitAfter {
-            editor.load(markdown: markdown)
+            editor?.load(markdown: markdown)
         }
         completeSuccessfulEditorCommit(exitAfter: exitAfter, rerender: true)
     }
@@ -1152,7 +1214,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
     }
 
-    private func exitEditMode(rerender: Bool, completion: @escaping () -> Void) {
+    private func exitEditMode(rerender: Bool,
+                              preserveUnsavedChanges: Bool = false,
+                              completion: @escaping () -> Void) {
         guard let split = mainSplit else {
             completion()
             return
@@ -1165,7 +1229,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 completion()
                 return
             }
-            self.hasUnsavedEditorChanges = false
+            if !preserveUnsavedChanges {
+                self.hasUnsavedEditorChanges = false
+            }
             if self.editAccessory == nil {
                 self.updateEditToolbarItem()
             }
