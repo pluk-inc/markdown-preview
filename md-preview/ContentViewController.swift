@@ -120,10 +120,10 @@ final class ContentViewController: NSViewController {
         // column keeps its 820 CSS-px measure at every zoom level.
         let pageWidth = webView.widthAnchor.constraint(
             equalToConstant: MarkdownHTML.preferredPageWidth * webView.pageZoom)
-        // Must stay below windowSizeStayPut (500): anything stronger drives
-        // the window frame through the clip-width chain — zooming would
-        // grow the window and block resizing below the page width.
-        pageWidth.priority = .init(499)
+        // Stay below the split items' holding priorities (content 250,
+        // sidebar 260) so window resizing breaks this page-width preference
+        // before AppKit changes the user's chosen sidebar width.
+        pageWidth.priority = .init(249)
         webViewPageWidthConstraint = pageWidth
         webViewCenteredConstraints = [
             webView.centerXAnchor.constraint(equalTo: documentView.centerXAnchor),

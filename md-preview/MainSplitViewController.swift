@@ -8,7 +8,6 @@ import Cocoa
 final class MainSplitViewController: NSSplitViewController {
 
     private static let didSeedKey = "MainSplitView.didSeedInitialState"
-    private var sidebarHoldingPriorityBeforeLiveResize: NSLayoutConstraint.Priority?
 
     var onSelectFile: ((URL) -> Void)?
     var onToggleTaskCheckbox: ((Int, Bool) -> Void)?
@@ -59,30 +58,6 @@ final class MainSplitViewController: NSSplitViewController {
         contentViewController?.display(markdown: markdown, assetBaseURL: assetBaseURL)
         sidebarViewController?.display(markdown: markdown, fileName: fileName, fileURL: url)
         inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))
-    }
-
-    func windowWillStartLiveResize() {
-        guard sidebarHoldingPriorityBeforeLiveResize == nil,
-              let sidebar = splitViewItems.first else { return }
-        sidebarHoldingPriorityBeforeLiveResize = sidebar.holdingPriority
-        sidebar.holdingPriority = .defaultHigh
-    }
-
-    func windowWillResize(by widthDelta: CGFloat) {
-        guard let originalPriority = sidebarHoldingPriorityBeforeLiveResize,
-              splitViewItems.count > 1 else { return }
-        let content = splitViewItems[1]
-        let proposedContentWidth = content.viewController.view.frame.width + widthDelta
-        splitViewItems[0].holdingPriority = proposedContentWidth >= content.minimumThickness
-            ? .defaultHigh
-            : originalPriority
-    }
-
-    func windowDidEndLiveResize() {
-        guard let priority = sidebarHoldingPriorityBeforeLiveResize,
-              let sidebar = splitViewItems.first else { return }
-        sidebar.holdingPriority = priority
-        sidebarHoldingPriorityBeforeLiveResize = nil
     }
 
     /// URL-only refresh after a rename. Skips the content re-render so

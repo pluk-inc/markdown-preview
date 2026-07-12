@@ -219,22 +219,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         return false
     }
 
-    func windowWillStartLiveResize(_ notification: Notification) {
-        (documentWindow.contentViewController as? MainSplitViewController)?
-            .windowWillStartLiveResize()
-    }
-
-    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
-        (documentWindow.contentViewController as? MainSplitViewController)?
-            .windowWillResize(by: frameSize.width - sender.frame.width)
-        return frameSize
-    }
-
-    func windowDidEndLiveResize(_ notification: Notification) {
-        (documentWindow.contentViewController as? MainSplitViewController)?
-            .windowDidEndLiveResize()
-    }
-
     func windowWillClose(_ notification: Notification) {
         fileWatcher?.cancel()
         fileWatcher = nil
