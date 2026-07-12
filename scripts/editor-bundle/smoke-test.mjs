@@ -52,9 +52,44 @@ if (editor) {
   check("round-trip is byte-faithful", editor.getMarkdown() === doc)
   const text = dom.window.document.querySelector(".cm-content")?.textContent ?? ""
   check("document text renders", text.includes("Sample Markdown Cheat Sheet"))
+  check("virtualized documents use CodeMirror selection painting",
+    dom.window.document.querySelector(".cm-cursorLayer") != null
+      && dom.window.document.querySelector(".cm-selectionLayer") != null)
   editor.exec("bold")
   check("exec('bold') inserts markers", editor.getMarkdown().startsWith("****"))
 }
+
+const largeHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(largeHost)
+const largeDoc = [
+  "# Large synthetic document",
+  "",
+  "```text",
+  "PACKAGE VALIDATION PASS:",
+  "1200 synthetic sections",
+  "```",
+  "",
+  ...Array.from({ length: 1200 }, (_, index) =>
+    `## Section ${index + 1}\nSynthetic paragraph ${index + 1} remains byte-faithful.`),
+].join("\n")
+const largeEditor = dom.window.MDEditor.create(largeHost, largeDoc, {})
+largeEditor.focus()
+const largeContent = largeHost.querySelector(".cm-content")
+largeContent?.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+  key: "a",
+  code: "KeyA",
+  ctrlKey: true,
+  bubbles: true,
+  cancelable: true,
+}))
+check("Cmd-A keeps hidden heading syntax in live-preview form",
+  largeHost.querySelector(".cm-md-heading-source-hidden") != null)
+check("Cmd-A keeps fenced-code markers in live-preview form",
+  largeHost.querySelector(".cm-md-code-fence-source-hidden") != null)
+largeEditor.insert("replacement")
+check("Cmd-A replaces the complete virtualized document",
+  largeEditor.getMarkdown() === "replacement")
+largeEditor.destroy()
 
 const bidiHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(bidiHost)

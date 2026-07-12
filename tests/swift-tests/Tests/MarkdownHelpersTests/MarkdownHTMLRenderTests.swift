@@ -2,6 +2,27 @@ import XCTest
 @testable import MarkdownHelpers
 
 final class MarkdownHTMLRenderTests: XCTestCase {
+    func testReadModeLeavesSelectionPaintingToWebKit() {
+        let rendered = MarkdownHTML.render(
+            markdown: "Select this text.",
+            vendorLoading: .lazy
+        )
+        let styleBlocks = rendered.html
+            .components(separatedBy: "<style>")
+            .dropFirst()
+            .compactMap { $0.components(separatedBy: "</style>").first }
+        let stylesheet = styleBlocks.joined(separator: "\n").lowercased()
+        let nonSelectableRules = stylesheet
+            .components(separatedBy: "}")
+            .filter { $0.contains("user-select: none") }
+
+        XCTAssertFalse(stylesheet.contains("::selection"))
+        XCTAssertFalse(stylesheet.contains("::-webkit-selection"))
+        XCTAssertFalse(stylesheet.contains("::-moz-selection"))
+        XCTAssertEqual(nonSelectableRules.count, 1)
+        XCTAssertTrue(nonSelectableRules[0].contains(".md-code-copy"))
+    }
+
     func testBlockquoteUsesItsContentDirectionForLogicalBorder() {
         let rtl = MarkdownHTML.render(
             markdown: "> هذا اقتباس بالعربية.",

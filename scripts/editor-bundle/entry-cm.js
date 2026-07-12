@@ -236,7 +236,10 @@ const activeCodeBlock = StateField.define({
       }
     }
 
-    const head = tr.state.selection.main.head
+    const selection = tr.state.selection.main
+    if (!selection.empty) return null
+
+    const head = selection.head
     if (tr.isUserEvent("select.pointer")) return fencedCodeAt(tr.state, head)
     // A fence authored from plain text has no prior active range. Resolve it
     // after input so its source stays editable as soon as the opening marker
@@ -310,7 +313,11 @@ function buildDecorations(view) {
   // CodeMirror always owns a selection at offset zero, even before the user
   // clicks the editor. Only reveal source syntax when the editor truly has
   // keyboard focus; otherwise the first block looks spuriously active.
-  const touches = (from, to) => view.hasFocus && sel.from <= to && sel.to >= from
+  // A range selection is an operation on rendered content, not a request to
+  // reveal every Markdown marker it spans. Only a caret activates source
+  // syntax; this keeps Cmd-A and long drag selections in live-preview form.
+  const touches = (from, to) => view.hasFocus && sel.empty
+    && sel.head >= from && sel.head <= to
   const touchesLineOf = (pos) => {
     const line = state.doc.lineAt(pos)
     return touches(line.from, line.to)
@@ -790,6 +797,8 @@ window.MDEditor = {
         doc,
         extensions: [
           history(),
+          // CodeMirror virtualizes long documents. Its selection layer keeps
+          // a full-document Cmd-A range visible as the viewport moves.
           drawSelection(),
           dropCursor(),
           EditorView.lineWrapping,
@@ -937,8 +946,8 @@ window.MDEditor = {
       }),
       // Used by hosts that map an external pointer target into the source.
       // Mark it as a pointer selection so fenced blocks enter source mode.
-      select: (anchor) => view.dispatch({
-        selection: { anchor },
+      select: (anchor, head = anchor) => view.dispatch({
+        selection: { anchor, head },
         userEvent: "select.pointer",
       }),
       insert: (text) => {
