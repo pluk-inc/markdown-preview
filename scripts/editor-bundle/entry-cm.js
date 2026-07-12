@@ -477,7 +477,11 @@ function buildDecorations(view) {
         // --- Lists --------------------------------------------------------
         if (name === "ListMark") {
           const mark = state.doc.sliceString(node.from, node.to)
-          if ((mark === "-" || mark === "*" || mark === "+") && !touchesLineOf(node.from)) {
+          const line = state.doc.lineAt(node.from)
+          // Task items (`- [ ]`) keep their literal marker; turning the dash
+          // into a bullet dot leaves a confusing "• [ ]" hybrid.
+          const isTask = /^\s*\[[ xX]\](\s|$)/.test(line.text.slice(node.to - line.from))
+          if ((mark === "-" || mark === "*" || mark === "+") && !isTask && !touchesLineOf(node.from)) {
             ranges.push(bulletDeco.range(node.from, node.to))
           }
           return
@@ -708,9 +712,25 @@ function toggleBlockPrefix(prefix, pattern) {
         return pattern.test(line.text) ? null : { from: line.from, insert: prefix }
       }).filter(Boolean)
     })
-    if (changes.length) view.dispatch({ changes, userEvent: "input" })
+    if (changes.length) dispatchBlockChanges(view, changes)
     return true
   }
+}
+
+// Dispatch line-prefix edits while keeping the cursor after any inserted
+// prefix (the default mapping leaves it before, stranding the caret behind
+// the new list marker).
+function dispatchBlockChanges(view, changes) {
+  const changeSet = view.state.changes(changes)
+  const sel = view.state.selection.main
+  view.dispatch({
+    changes,
+    selection: EditorSelection.range(
+      changeSet.mapPos(sel.anchor, 1),
+      changeSet.mapPos(sel.head, 1)
+    ),
+    userEvent: "input",
+  })
 }
 
 function orderedList(view) {
@@ -726,7 +746,7 @@ function orderedList(view) {
       return pattern.test(line.text) ? null : { from: line.from, insert: `${i++}. ` }
     }).filter(Boolean)
   })
-  if (changes.length) view.dispatch({ changes, userEvent: "input" })
+  if (changes.length) dispatchBlockChanges(view, changes)
   return true
 }
 
@@ -853,6 +873,7 @@ window.MDEditor = {
       quote: toggleBlockPrefix("> ", /^>\s?/),
       bulletList: toggleBlockPrefix("- ", /^\s*[-*+]\s/),
       orderedList,
+      taskList: toggleBlockPrefix("- [ ] ", /^\s*[-*+]\s+\[[ xX]\]\s/),
       link: insertLink,
     }
     return {
