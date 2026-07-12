@@ -27,7 +27,9 @@ final class MainSplitViewController: NSSplitViewController {
         sidebar.minimumThickness = 180
         sidebar.maximumThickness = 400
         sidebar.canCollapse = true
-        sidebar.canCollapseFromWindowResize = false
+        // When the window becomes too narrow to satisfy both panes, collapse
+        // the sidebar instead of leaving it pinned at its minimum thickness.
+        sidebar.canCollapseFromWindowResize = true
 
         let content = NSSplitViewItem(viewController: LayeredContentViewController())
         content.minimumThickness = 420
