@@ -20,6 +20,7 @@ extension NSToolbarItem.Identifier {
     static let copyMarkdown = NSToolbarItem.Identifier("CopyMarkdown")
     static let zoom = NSToolbarItem.Identifier("Zoom")
     static let editDocument = NSToolbarItem.Identifier("EditDocument")
+    static let navigation = NSToolbarItem.Identifier("Navigation")
 }
 
 private extension Array where Element == NSToolbarItem.Identifier {
@@ -33,6 +34,12 @@ private extension Array where Element == NSToolbarItem.Identifier {
 }
 
 final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate, NSSharingServicePickerToolbarItemDelegate, NSSearchFieldDelegate, NSMenuDelegate {
+
+    private enum NavigationIntent {
+        case normal
+        case back
+        case forward
+    }
 
     private enum DiskFileState {
         case unchanged
@@ -55,6 +62,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private var currentFileURL: URL?
     private var currentMarkdown: String?
+    private var backHistory: [URL] = []
+    private var forwardHistory: [URL] = []
+    private weak var navigationItem: NSToolbarItem?
+    private weak var navigationControl: NSSegmentedControl?
     private var fileWatcher: FileWatcher?
     private var isInspectorToggleSelected = false
     private weak var openActionsItem: NSMenuToolbarItem?
@@ -157,6 +168,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         split.onSelectFile = { [weak self] url in
             self?.present(url: url)
         }
+        split.onOpenMarkdownLink = { [weak self] url in
+            self?.present(url: url)
+        }
         split.onToggleTaskCheckbox = { [weak self] line, checked in
             self?.toggleTaskCheckbox(onLine: line, checked: checked)
         }
@@ -249,23 +263,31 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func present(url: URL) {
+        present(url: url, intent: .normal)
+    }
+
+    private func present(url: URL, intent: NavigationIntent) {
+        let url = Self.fileURLWithoutFragment(url)
         let preserveEditMode = isEditing || pendingEditModeURL != nil
         if isEditing || hasPendingEditorChanges {
             requestEndEditing(keepAccessoryMounted: true) { [weak self] success in
                 guard success else { return }
-                self?.present(url: url, preservingEditMode: preserveEditMode)
+                self?.present(url: url, preservingEditMode: preserveEditMode, intent: intent)
             }
             return
         }
-        present(url: url, preservingEditMode: preserveEditMode)
+        present(url: url, preservingEditMode: preserveEditMode, intent: intent)
     }
 
-    private func present(url: URL, preservingEditMode: Bool) {
+    private func present(url: URL, preservingEditMode: Bool, intent: NavigationIntent) {
         if url.isExistingDirectory {
             pendingEditModeURL = nil
             openFolder(url)
             return
         }
+
+        guard currentFileURL?.standardizedFileURL != url.standardizedFileURL else { return }
+        commitNavigation(to: url, intent: intent)
 
         // Switching to a different file blanks the preview so the previous
         // doc doesn't linger on screen during sheet dismissal + load.
@@ -288,6 +310,37 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         loadFile(at: url)
         startWatching(url)
         offerToBecomeDefaultHandlerIfNeeded()
+    }
+
+    private func commitNavigation(to url: URL, intent: NavigationIntent) {
+        guard let currentFileURL else { return }
+        switch intent {
+        case .normal:
+            Self.appendHistory(currentFileURL, to: &backHistory)
+            forwardHistory.removeAll()
+        case .back:
+            guard backHistory.last?.standardizedFileURL == url.standardizedFileURL else { return }
+            backHistory.removeLast()
+            Self.appendHistory(currentFileURL, to: &forwardHistory)
+        case .forward:
+            guard forwardHistory.last?.standardizedFileURL == url.standardizedFileURL else { return }
+            forwardHistory.removeLast()
+            Self.appendHistory(currentFileURL, to: &backHistory)
+        }
+        updateNavigationControl()
+    }
+
+    private static func appendHistory(_ url: URL, to history: inout [URL]) {
+        if history.last?.standardizedFileURL != url.standardizedFileURL {
+            history.append(url.standardizedFileURL)
+        }
+    }
+
+    private static func fileURLWithoutFragment(_ url: URL) -> URL {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              components.fragment != nil else { return url }
+        components.fragment = nil
+        return components.url ?? url
     }
 
     private func startWatching(_ url: URL) {
@@ -355,9 +408,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [
-            .flexibleSpace,
             .sidebarMenu,
             .sidebarTrackingSeparator,
+            .navigation,
+            .flexibleSpace,
             .openActions,
             .space,
             .zoom,
@@ -372,6 +426,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         var identifiers: [NSToolbarItem.Identifier] = [
             .sidebarMenu,
             .sidebarTrackingSeparator,
+            .navigation,
             .flexibleSpace,
             .space,
             .openActions,
@@ -395,6 +450,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         switch itemIdentifier {
         case .sidebarMenu: return makeSidebarMenuItem(willBeInsertedIntoToolbar: flag)
+        case .navigation: return makeNavigationItem()
         case .openActions: return makeOpenActionsItem()
         case .openWith: return makeOpenWithItem()
         case .openInLLM:
@@ -409,6 +465,53 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         case .zoom: return makeZoomItem()
         default: return nil
         }
+    }
+
+    private func makeNavigationItem() -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: .navigation)
+        item.label = "Navigation"
+        item.paletteLabel = "Back and Forward"
+        item.isNavigational = true
+        item.autovalidates = false
+
+        let control = NSSegmentedControl(labels: ["", ""],
+                                         trackingMode: .momentary,
+                                         target: self,
+                                         action: #selector(navigateHistory(_:)))
+        control.segmentStyle = .automatic
+        control.setImage(NSImage(systemSymbolName: "chevron.left", accessibilityDescription: "Back"),
+                         forSegment: 0)
+        control.setImage(NSImage(systemSymbolName: "chevron.right", accessibilityDescription: "Forward"),
+                         forSegment: 1)
+        control.setToolTip("Back", forSegment: 0)
+        control.setToolTip("Forward", forSegment: 1)
+        item.view = control
+        navigationItem = item
+        navigationControl = control
+        updateNavigationControl()
+        return item
+    }
+
+    @objc private func navigateHistory(_ sender: NSSegmentedControl) {
+        switch sender.selectedSegment {
+        case 0:
+            guard let url = backHistory.last else { return }
+            present(url: url, intent: .back)
+        case 1:
+            guard let url = forwardHistory.last else { return }
+            present(url: url, intent: .forward)
+        default:
+            break
+        }
+    }
+
+    private func updateNavigationControl() {
+        let hasHistory = !backHistory.isEmpty || !forwardHistory.isEmpty
+        navigationItem?.isHidden = !hasHistory
+        navigationItem?.isEnabled = hasHistory
+        navigationControl?.isEnabled = hasHistory
+        navigationControl?.setEnabled(!backHistory.isEmpty, forSegment: 0)
+        navigationControl?.setEnabled(!forwardHistory.isEmpty, forSegment: 1)
     }
 
     private func makeSidebarMenuItem(willBeInsertedIntoToolbar: Bool) -> NSToolbarItem {

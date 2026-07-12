@@ -10,6 +10,7 @@ final class MainSplitViewController: NSSplitViewController {
     private static let didSeedKey = "MainSplitView.didSeedInitialState"
 
     var onSelectFile: ((URL) -> Void)?
+    var onOpenMarkdownLink: ((URL) -> Void)?
     var onToggleTaskCheckbox: ((Int, Bool) -> Void)?
 
     override func viewDidLoad() {
@@ -51,6 +52,9 @@ final class MainSplitViewController: NSSplitViewController {
         }
         contentViewController?.taskCheckboxToggled = { [weak self] line, checked in
             self?.onToggleTaskCheckbox?(line, checked)
+        }
+        contentViewController?.localMarkdownLinkActivated = { [weak self] url in
+            self?.onOpenMarkdownLink?(url)
         }
     }
 

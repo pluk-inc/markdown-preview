@@ -76,6 +76,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     var heightDidChange: ((CGFloat) -> Void)?
     var zoomDidChange: ((CGFloat) -> Void)?
     var fragmentLinkActivated: ((String) -> Void)?
+    var localMarkdownLinkActivated: ((URL) -> Void)?
     var taskCheckboxToggled: ((Int, Bool) -> Void)?
     private let assetScheme = MarkdownAssetScheme()
     private var currentAssetBase: URL?
@@ -981,7 +982,11 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             } else if url.scheme == MarkdownAssetScheme.scheme,
                let base = currentAssetBase,
                let resolved = MarkdownAssetScheme.resolve(url, against: base) {
-                NSWorkspace.shared.open(resolved)
+                if Self.isMarkdownDocument(resolved) {
+                    localMarkdownLinkActivated?(resolved)
+                } else {
+                    NSWorkspace.shared.open(resolved)
+                }
             } else if url.scheme != MarkdownAssetScheme.scheme {
                 NSWorkspace.shared.open(url)
             }
@@ -989,6 +994,10 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             return
         }
         decisionHandler(.allow)
+    }
+
+    private static func isMarkdownDocument(_ url: URL) -> Bool {
+        ["md", "markdown", "mdown", "mkdn", "mkd"].contains(url.pathExtension.lowercased())
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

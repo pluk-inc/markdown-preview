@@ -48,6 +48,7 @@ final class ContentViewController: NSViewController {
 
     var activeHeadingDidChange: ((Int?) -> Void)?
     var taskCheckboxToggled: ((Int, Bool) -> Void)?
+    var localMarkdownLinkActivated: ((URL) -> Void)?
 
     override func loadView() {
         let scrollView = NSScrollView()
@@ -78,6 +79,9 @@ final class ContentViewController: NSViewController {
         }
         webView.fragmentLinkActivated = { [weak self] fragment in
             self?.scrollToElement(id: fragment)
+        }
+        webView.localMarkdownLinkActivated = { [weak self] url in
+            self?.localMarkdownLinkActivated?(url)
         }
         webView.taskCheckboxToggled = { [weak self] line, checked in
             self?.taskCheckboxToggled?(line, checked)
