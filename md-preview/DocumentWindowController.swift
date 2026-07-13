@@ -169,6 +169,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         toolbar.delegate = self
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = true
+        toolbar.autosavesConfiguration = true
         documentWindow.toolbar = toolbar
         documentWindow.toolbarStyle = .automatic
 
