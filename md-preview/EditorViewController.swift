@@ -184,7 +184,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         // column at the preview's measure, Full Width spans the window.
         let columnMaxWidth = ContentWidthSetting.current == .fullWidth
             ? "none"
-            : "\(MarkdownHTML.preferredPageWidth)px"
+            : "\(MarkdownHTML.contentColumnWidth)px"
         return """
         <!DOCTYPE html>
         <html>
@@ -253,6 +253,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
            specificity (#editor), not on order. */
         #editor .cm-scroller {
             overflow: auto;
+            /* Keep page gutters outside the editable content column. */
+            padding-inline: \(MarkdownHTML.pagePaddingHorizontal)px;
+            box-sizing: border-box;
             font-family: \(MarkdownHTML.bodyFontFamily) !important;
             font-size: \(MarkdownHTML.bodyFontSize)px;
             line-height: \(MarkdownHTML.bodyLineHeight);
@@ -262,20 +265,16 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             max-width: \(columnMaxWidth);
             min-height: 100%;
             margin: 0 auto;
-            padding: \(MarkdownHTML.pagePaddingTop)px \(MarkdownHTML.pagePaddingHorizontal)px \(MarkdownHTML.pagePaddingBottom)px;
+            padding: \(MarkdownHTML.pagePaddingTop)px 0 \(MarkdownHTML.pagePaddingBottom)px;
             box-sizing: border-box;
             caret-color: var(--text);
+            cursor: text;
         }
         #editor .cm-line {
             padding: 0;
         }
         #editor .cm-line[dir="rtl"] { text-align: right; }
         #editor .cm-line[dir="ltr"] { text-align: left; }
-        #editor .cm-cursor { border-left-color: var(--text); }
-        #editor .cm-selectionBackground,
-        #editor .cm-focused .cm-selectionBackground {
-            background: color-mix(in srgb, var(--link) 22%, transparent) !important;
-        }
 
         /* Headings — preview's scale, padding instead of margin so
            CodeMirror's per-line height measurement stays exact.
@@ -374,7 +373,10 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             font-family: ui-monospace, "SF Mono", Menlo, monospace;
             font-size: 0.88em;
             line-height: 1.45;
-            background: var(--code-bg);
+            /* CodeMirror paints full-document selection below content. Retain
+               the code-card surface while allowing that selection tint to
+               remain clearly visible through selected code. */
+            background: color-mix(in srgb, var(--code-bg) 50%, transparent);
             padding: 0 14px;
         }
         #editor .cm-md-codeblock-first {
