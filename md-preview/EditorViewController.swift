@@ -275,6 +275,11 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
         #editor .cm-line[dir="rtl"] { text-align: right; }
         #editor .cm-line[dir="ltr"] { text-align: left; }
+        #editor .cm-selectionBackground,
+        #editor .cm-focused .cm-selectionBackground {
+            /* Match WebKit's native selection tint in read-only mode. */
+            background: Highlight !important;
+        }
 
         /* Headings — preview's scale, padding instead of margin so
            CodeMirror's per-line height measurement stays exact.

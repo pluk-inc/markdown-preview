@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.0.34] – 2026-07-13
+
+Markdown Preview now makes linked documents easier to navigate and keeps selections and toolbar customizations consistent across sessions.
+
+### Added
+
+- **Back and forward navigation for Markdown links.** Local Markdown links now open in the same window, with native navigation controls for returning to previously viewed documents ([#184](https://github.com/pluk-inc/markdown-preview/pull/184), [#89](https://github.com/pluk-inc/markdown-preview/issues/89)).
+
+### Fixed
+
+- **Text selection is more reliable and visually consistent.** Full-document selections remain visible while scrolling long files, Shift-selection works correctly in read mode, and edit mode now uses the same macOS blue selection color as the rendered preview ([#185](https://github.com/pluk-inc/markdown-preview/pull/185)).
+- **Toolbar customizations persist after relaunch.** Added, removed, and reordered toolbar items are restored the next time Markdown Preview opens ([#187](https://github.com/pluk-inc/markdown-preview/pull/187), [#186](https://github.com/pluk-inc/markdown-preview/issues/186)).
+
+### Contributors
+
+Thanks to the external contributors and reporters who helped improve this release:
+
+- [@jjoanna2-debug](https://github.com/jjoanna2-debug) — improved selection behavior in long documents and read mode ([#185](https://github.com/pluk-inc/markdown-preview/pull/185))
+- [@Cuzeth](https://github.com/Cuzeth) — fixed and reported toolbar customization persistence ([#187](https://github.com/pluk-inc/markdown-preview/pull/187), [#186](https://github.com/pluk-inc/markdown-preview/issues/186))
+- [@mollydoo](https://github.com/mollydoo) — requested back navigation for linked Markdown documents ([#89](https://github.com/pluk-inc/markdown-preview/issues/89))
+
 ## [0.0.33] – 2026-07-12
 
 Markdown Preview now includes a live Markdown editor, so you can write and preview documents without switching apps.
