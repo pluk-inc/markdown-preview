@@ -455,5 +455,7 @@ final class ContentViewController: NSViewController {
 }
 
 private final class FlippedDocumentView: NSView {
-    override var isFlipped: Bool { true }
+    // AppKit may query view geometry from its background printing thread.
+    // This override is immutable and does not touch main-actor-owned state.
+    nonisolated override var isFlipped: Bool { true }
 }
