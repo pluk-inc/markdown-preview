@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.35] – 2026-07-14
+
+Markdown Preview now lets you edit Markdown tables directly in the rendered document, with native controls for managing rows and columns.
+
+### Added
+
+- **Direct table editing.** Edit cells in place, drag to select rectangular ranges, and use native context-menu actions to insert, duplicate, select, or delete rows and columns, with undo support ([#191](https://github.com/pluk-inc/markdown-preview/pull/191)).
+
+### Fixed
+
+- **Printing no longer crashes.** The macOS print sheet now opens reliably without triggering a Swift concurrency executor failure ([#189](https://github.com/pluk-inc/markdown-preview/pull/189)).
+- **The default Sidebar control is aligned with the sidebar edge.** New toolbar layouts place the native Sidebar menu beside the sidebar divider while preserving customized toolbars ([#190](https://github.com/pluk-inc/markdown-preview/pull/190)).
+
 ## [0.0.34] – 2026-07-13
 
 Markdown Preview now makes linked documents easier to navigate and keeps selections and toolbar customizations consistent across sessions.
