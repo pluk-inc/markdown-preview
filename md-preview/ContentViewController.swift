@@ -48,6 +48,7 @@ final class ContentViewController: NSViewController {
 
     var activeHeadingDidChange: ((Int?) -> Void)?
     var taskCheckboxToggled: ((Int, Bool) -> Void)?
+    var tableEditRequested: ((MarkdownTableEditRequest) -> Void)?
     var localMarkdownLinkActivated: ((URL) -> Void)?
 
     override func loadView() {
@@ -85,6 +86,9 @@ final class ContentViewController: NSViewController {
         }
         webView.taskCheckboxToggled = { [weak self] line, checked in
             self?.taskCheckboxToggled?(line, checked)
+        }
+        webView.tableEditRequested = { [weak self] request in
+            self?.tableEditRequested?(request)
         }
         webView.zoomDidChange = { [weak self] zoom in
             self?.webViewPageWidthConstraint?.constant = MarkdownHTML.preferredPageWidth * zoom

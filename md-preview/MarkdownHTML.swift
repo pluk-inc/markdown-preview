@@ -1024,6 +1024,337 @@ nonisolated enum MarkdownHTML {
             });
         }
 
+        let activeTableCell = null;
+        let nextTableContextToken = 1;
+        let pendingTableContextAction = null;
+        let selectedTablePart = null;
+        let tableCellDrag = null;
+        let suppressNextTableClick = false;
+
+        function tableMessage(cell, operation, value, pendingValue, pendingCell) {
+            const table = cell && cell.closest('table[data-source-start][data-source-end]');
+            if (!table || table.dataset.tableSaving === '1') return false;
+            const start = Number(table.dataset.sourceStart);
+            const end = Number(table.dataset.sourceEnd);
+            const row = Number(cell.dataset.tableRow);
+            const column = Number(cell.dataset.tableColumn);
+            if (![start, end, row, column].every(Number.isInteger)) return false;
+            table.dataset.tableSaving = '1';
+            table.closest('.md-table-editor')?.classList.add('is-saving');
+            const message = { kind: 'tableEdit', operation, start, end, row, column };
+            if (typeof value === 'string') message.value = value;
+            if (typeof pendingValue === 'string') {
+                message.pendingValue = pendingValue;
+                message.pendingRow = Number(pendingCell?.dataset.tableRow ?? row);
+                message.pendingColumn = Number(pendingCell?.dataset.tableColumn ?? column);
+            }
+            return post(message);
+        }
+
+        function finishTableCellEdit(save) {
+            const cell = activeTableCell;
+            if (!cell) return;
+            activeTableCell = null;
+            const original = cell.dataset.tableOriginal || '';
+            const value = (cell.innerText || '').replace(/\\n+/g, ' ').trim();
+            cell.contentEditable = 'false';
+            cell.classList.remove('is-editing');
+            if (!save) {
+                cell.innerHTML = cell.__mdOriginalHTML || '';
+                return;
+            }
+            if (value !== original) {
+                tableMessage(cell, 'setCell', value);
+            } else {
+                cell.innerHTML = cell.__mdOriginalHTML || '';
+            }
+        }
+
+        function beginTableCellEdit(cell) {
+            if (!hasHostBridge || !cell || cell === activeTableCell) return;
+            clearTablePartSelection();
+            finishTableCellEdit(true);
+            cell.__mdOriginalHTML = cell.innerHTML;
+            cell.dataset.tableOriginal = (cell.innerText || '').trim();
+            cell.textContent = cell.dataset.tableOriginal;
+            cell.contentEditable = 'plaintext-only';
+            cell.classList.add('is-editing');
+            activeTableCell = cell;
+            cell.focus();
+            const selection = window.getSelection();
+            if (selection) {
+                const range = document.createRange();
+                range.selectNodeContents(cell);
+                range.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+        }
+
+        function clearTablePartSelection() {
+            document.querySelectorAll('.is-table-part-selected').forEach((cell) => {
+                cell.classList.remove(
+                    'is-table-part-selected',
+                    'is-table-selection-top',
+                    'is-table-selection-right',
+                    'is-table-selection-bottom',
+                    'is-table-selection-left'
+                );
+            });
+            selectedTablePart?.editor.classList.remove(
+                'is-table-row-selected',
+                'is-table-column-selected',
+                'is-table-range-selected'
+            );
+            selectedTablePart?.editor.removeAttribute('aria-label');
+            selectedTablePart = null;
+        }
+
+        function applyTableSelection(cell, kind, bounds) {
+            if (!cell) return;
+            finishTableCellEdit(true);
+            clearTablePartSelection();
+            const editor = cell.closest('.md-table-editor');
+            const table = cell.closest('table');
+            if (!editor || !table) return;
+            const items = Array.from(table.querySelectorAll('[data-table-row][data-table-column]'))
+                .filter((item) => {
+                    const row = Number(item.dataset.tableRow);
+                    const column = Number(item.dataset.tableColumn);
+                    return row >= bounds.top && row <= bounds.bottom
+                        && column >= bounds.left && column <= bounds.right;
+                });
+            items.forEach((item) => {
+                item.classList.add('is-table-part-selected');
+                const row = Number(item.dataset.tableRow);
+                const column = Number(item.dataset.tableColumn);
+                if (row === bounds.top) item.classList.add('is-table-selection-top');
+                if (column === bounds.right) item.classList.add('is-table-selection-right');
+                if (row === bounds.bottom) item.classList.add('is-table-selection-bottom');
+                if (column === bounds.left) item.classList.add('is-table-selection-left');
+            });
+            editor.classList.add(
+                kind === 'row'
+                    ? 'is-table-row-selected'
+                    : kind === 'column'
+                        ? 'is-table-column-selected'
+                        : 'is-table-range-selected'
+            );
+            window.getSelection()?.removeAllRanges();
+            selectedTablePart = { cell, kind, editor, bounds };
+            editor.tabIndex = 0;
+            if (kind === 'range') {
+                const rowCount = bounds.bottom - bounds.top + 1;
+                const columnCount = bounds.right - bounds.left + 1;
+                editor.setAttribute(
+                    'aria-label',
+                    `Selected ${rowCount} rows by ${columnCount} columns.`
+                );
+            } else {
+                const row = Number(cell.dataset.tableRow);
+                const column = Number(cell.dataset.tableColumn);
+                const number = kind === 'row' ? row : column + 1;
+                editor.setAttribute(
+                    'aria-label',
+                    `Selected ${kind} ${number}. Press Delete to remove it.`
+                );
+            }
+            editor.focus({ preventScroll: true });
+        }
+
+        function selectTablePart(cell, operation) {
+            if (!cell) return;
+            const table = cell.closest('table');
+            if (!table) return;
+            const row = Number(cell.dataset.tableRow);
+            const column = Number(cell.dataset.tableColumn);
+            const kind = operation === 'selectRow' ? 'row' : 'column';
+            const bounds = kind === 'row'
+                ? { top: row, right: table.rows[0].cells.length - 1, bottom: row, left: 0 }
+                : { top: 0, right: column, bottom: table.rows.length - 1, left: column };
+            applyTableSelection(cell, kind, bounds);
+        }
+
+        function selectTableRange(anchorCell, headCell) {
+            if (!anchorCell || !headCell || anchorCell.closest('table') !== headCell.closest('table')) {
+                return;
+            }
+            const anchorRow = Number(anchorCell.dataset.tableRow);
+            const anchorColumn = Number(anchorCell.dataset.tableColumn);
+            const headRow = Number(headCell.dataset.tableRow);
+            const headColumn = Number(headCell.dataset.tableColumn);
+            applyTableSelection(anchorCell, 'range', {
+                top: Math.min(anchorRow, headRow),
+                right: Math.max(anchorColumn, headColumn),
+                bottom: Math.max(anchorRow, headRow),
+                left: Math.min(anchorColumn, headColumn)
+            });
+        }
+
+        function performTableStructure(cell, operation) {
+            if (!cell) return;
+            const table = cell.closest('table');
+            const editingCell = activeTableCell && activeTableCell.closest('table') === table
+                ? activeTableCell : null;
+            let pendingValue = null;
+            if (editingCell) {
+                const value = (editingCell.innerText || '').replace(/\\n+/g, ' ').trim();
+                if (value !== (editingCell.dataset.tableOriginal || '')) pendingValue = value;
+                else editingCell.innerHTML = editingCell.__mdOriginalHTML || '';
+                activeTableCell = null;
+                editingCell.contentEditable = 'false';
+                editingCell.classList.remove('is-editing');
+            }
+            tableMessage(cell, operation, null, pendingValue, editingCell);
+        }
+
+        function requestNativeTableContextMenu(cell) {
+            const table = cell.closest('table');
+            const row = Number(cell.dataset.tableRow);
+            const columnCount = table?.rows[0]?.cells.length || 1;
+            const token = String(nextTableContextToken++);
+            pendingTableContextAction = { token, cell };
+            post({
+                kind: 'tableContextMenu',
+                token,
+                canInsertRowAbove: row > 0,
+                canDuplicateRow: false,
+                canDeleteRow: row > 0,
+                canDeleteColumn: columnCount > 1,
+                showsDuplicateRow: false
+            });
+        }
+
+        function enableTableEditing() {
+            if (!hasHostBridge) return;
+            document.querySelectorAll('table[data-source-start][data-source-end]').forEach((table) => {
+                if (table.closest('.md-table-editor')) return;
+                const editor = document.createElement('div');
+                editor.className = 'md-table-editor';
+                table.parentNode.insertBefore(editor, table);
+                const scroll = document.createElement('div');
+                scroll.className = 'md-table-scroll';
+                editor.appendChild(scroll);
+                scroll.appendChild(table);
+                table.querySelectorAll('th[data-table-column]').forEach((cell) => {
+                    const column = Number(cell.dataset.tableColumn);
+                    const placeholder = `Column ${column + 1}`;
+                    cell.dataset.placeholder = placeholder;
+                    if (!(cell.innerText || '').trim()) cell.textContent = '';
+                    const updateAccessibilityLabel = () => {
+                        if ((cell.innerText || '').trim()) cell.removeAttribute('aria-label');
+                        else cell.setAttribute('aria-label', placeholder);
+                    };
+                    updateAccessibilityLabel();
+                    cell.addEventListener('input', updateAccessibilityLabel);
+                });
+            });
+        }
+
+        document.addEventListener('mousedown', (event) => {
+            if (event.button !== 0) return;
+            const cell = event.target.closest?.('.md-table-editor th, .md-table-editor td');
+            if (!cell) return;
+            const row = Number(cell.dataset.tableRow);
+            const column = Number(cell.dataset.tableColumn);
+            if (!Number.isInteger(row) || row < 0 || !Number.isInteger(column)) return;
+            tableCellDrag = {
+                cell,
+                table: cell.closest('table'),
+                row,
+                column,
+                head: cell,
+                active: false
+            };
+        }, true);
+
+        document.addEventListener('mousemove', (event) => {
+            if (!tableCellDrag) return;
+            const hitTarget = document.elementFromPoint?.(event.clientX, event.clientY);
+            const cell = hitTarget?.closest?.('.md-table-editor th, .md-table-editor td')
+                || event.target.closest?.('.md-table-editor th, .md-table-editor td');
+            if (!cell || cell.closest('table') !== tableCellDrag.table) {
+                return;
+            }
+            if (cell === tableCellDrag.cell && !tableCellDrag.active) return;
+            if (cell === tableCellDrag.head) return;
+            event.preventDefault();
+            tableCellDrag.active = true;
+            tableCellDrag.head = cell;
+            selectTableRange(tableCellDrag.cell, cell);
+        }, true);
+
+        document.addEventListener('mouseup', (event) => {
+            if (tableCellDrag?.active) {
+                event.preventDefault();
+                window.getSelection()?.removeAllRanges();
+                suppressNextTableClick = true;
+            }
+            tableCellDrag = null;
+        }, true);
+
+        document.addEventListener('click', (event) => {
+            if (suppressNextTableClick) {
+                suppressNextTableClick = false;
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
+            const cell = event.target.closest('.md-table-editor th, .md-table-editor td');
+            if (!cell) {
+                clearTablePartSelection();
+                finishTableCellEdit(true);
+                return;
+            }
+            if (event.target.closest('a, button, input')) return;
+            event.preventDefault();
+            clearTablePartSelection();
+            beginTableCellEdit(cell);
+        });
+
+        document.addEventListener('contextmenu', (event) => {
+            const cell = event.target.closest('.md-table-editor th, .md-table-editor td');
+            if (!cell) return;
+            event.preventDefault();
+            beginTableCellEdit(cell);
+            requestNativeTableContextMenu(cell);
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (selectedTablePart && event.target === selectedTablePart.editor) {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    clearTablePartSelection();
+                    return;
+                }
+                if (event.key === 'Backspace' || event.key === 'Delete') {
+                    event.preventDefault();
+                    if (selectedTablePart.kind === 'range') return;
+                    const selection = selectedTablePart;
+                    clearTablePartSelection();
+                    performTableStructure(
+                        selection.cell,
+                        selection.kind === 'row' ? 'deleteRow' : 'deleteColumn'
+                    );
+                    return;
+                }
+            }
+            if (!activeTableCell || event.target !== activeTableCell) return;
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                finishTableCellEdit(false);
+            } else if (event.key === 'Enter' || event.key === 'Tab') {
+                event.preventDefault();
+                finishTableCellEdit(true);
+            }
+        });
+
+        document.addEventListener('paste', (event) => {
+            if (!activeTableCell || event.target !== activeTableCell || !event.clipboardData) return;
+            event.preventDefault();
+            document.execCommand('insertText', false, event.clipboardData.getData('text/plain'));
+        });
+
         document.addEventListener('change', (event) => {
             const checkbox = event.target.closest('.task-list-item-checkbox');
             if (!checkbox || !hasHostBridge) return;
@@ -1151,6 +1482,17 @@ nonisolated enum MarkdownHTML {
         // article. Same-flag re-renders skip the WKWebView reload entirely.
         const reappliers = [];
         window.MdPreview = window.MdPreview || {};
+        window.MdPreview.performTableContextAction = (token, operation) => {
+            if (!pendingTableContextAction || pendingTableContextAction.token !== token) return false;
+            const pending = pendingTableContextAction;
+            pendingTableContextAction = null;
+            if (operation === 'selectRow' || operation === 'selectColumn') {
+                selectTablePart(pending.cell, operation);
+            } else {
+                performTableStructure(pending.cell, operation);
+            }
+            return true;
+        };
         window.MdPreview.registerReapplier = (fn) => {
             if (typeof fn === 'function') reappliers.push(fn);
         };
@@ -1170,6 +1512,7 @@ nonisolated enum MarkdownHTML {
             if (articleHTML) {
                 decorateCodeBlocks();
                 enableTaskCheckboxes();
+                enableTableEditing();
                 for (const fn of reappliers) {
                     try { fn(); } catch (e) { /* one bad apple shouldn't block others */ }
                 }
@@ -2327,6 +2670,63 @@ nonisolated enum MarkdownHTML {
         text-align: left;
     }
     th { font-weight: 600; }
+
+    .md-table-editor {
+        position: relative;
+        display: inline-block;
+        width: fit-content;
+        margin: 1.6em 0 0;
+        max-width: 100%;
+        overflow: visible;
+    }
+    .md-table-scroll {
+        width: fit-content;
+        max-width: 100%;
+        overflow-x: auto;
+    }
+    .md-table-scroll > table { margin-top: 0; }
+    .md-table-editor:focus { outline: none; }
+    .md-table-editor th,
+    .md-table-editor td { cursor: text; }
+    .md-table-editor th[data-placeholder]:empty::before {
+        content: attr(data-placeholder);
+        color: var(--secondary);
+        font-weight: 400;
+        opacity: 0.72;
+        pointer-events: none;
+    }
+    .md-table-editor th.is-editing,
+    .md-table-editor td.is-editing {
+        outline: 2px solid #007aff;
+        outline-offset: -2px;
+        background: color-mix(in srgb, #007aff 8%, transparent);
+        white-space: pre-wrap;
+    }
+    .md-table-editor .is-table-part-selected {
+        --table-selection-top-edge: 0 0 transparent;
+        --table-selection-right-edge: 0 0 transparent;
+        --table-selection-bottom-edge: 0 0 transparent;
+        --table-selection-left-edge: 0 0 transparent;
+        background: color-mix(in srgb, #007aff 14%, Canvas);
+        box-shadow:
+            var(--table-selection-top-edge),
+            var(--table-selection-right-edge),
+            var(--table-selection-bottom-edge),
+            var(--table-selection-left-edge);
+    }
+    .md-table-editor .is-table-selection-top {
+        --table-selection-top-edge: inset 0 1px color-mix(in srgb, #007aff 52%, transparent);
+    }
+    .md-table-editor .is-table-selection-right {
+        --table-selection-right-edge: inset -1px 0 color-mix(in srgb, #007aff 52%, transparent);
+    }
+    .md-table-editor .is-table-selection-bottom {
+        --table-selection-bottom-edge: inset 0 -1px color-mix(in srgb, #007aff 52%, transparent);
+    }
+    .md-table-editor .is-table-selection-left {
+        --table-selection-left-edge: inset 1px 0 color-mix(in srgb, #007aff 52%, transparent);
+    }
+    .md-table-editor.is-saving { opacity: 0.72; }
 
     hr {
         border: 0;

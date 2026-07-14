@@ -130,20 +130,46 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     }
 
     fileprivate func handle(message: Any) {
-        guard let message = message as? String else { return }
-        switch message {
-        case "dirty":
-            hasChanges = true
-            contentDidChange?()
-        case "ready":
-            hasLoadedEditorPage = true
-            editorDidBecomeReady?()
-        case "cancel":
-            cancelRequested?()
-        case let error where error.hasPrefix("error:"):
-            NSLog("Markdown editor JavaScript error: %@", error)
-        default:
-            break
+        if let message = message as? String {
+            switch message {
+            case "dirty":
+                hasChanges = true
+                contentDidChange?()
+            case "ready":
+                hasLoadedEditorPage = true
+                editorDidBecomeReady?()
+            case "cancel":
+                cancelRequested?()
+            case let error where error.hasPrefix("error:"):
+                NSLog("Markdown editor JavaScript error: %@", error)
+            default:
+                break
+            }
+            return
+        }
+
+        guard let payload = message as? [String: Any],
+              payload["kind"] as? String == "tableContextMenu" else { return }
+        presentTableContextMenu(payload)
+    }
+
+    private func presentTableContextMenu(_ payload: [String: Any]) {
+        guard let token = payload["token"] as? String else { return }
+        let context = TableContextMenuPresenter.Context(
+            canInsertRowAbove: (payload["canInsertRowAbove"] as? NSNumber)?.boolValue ?? false,
+            canDuplicateRow: (payload["canDuplicateRow"] as? NSNumber)?.boolValue ?? false,
+            canDeleteRow: (payload["canDeleteRow"] as? NSNumber)?.boolValue ?? false,
+            canDeleteColumn: (payload["canDeleteColumn"] as? NSNumber)?.boolValue ?? false,
+            showsDuplicateRow: (payload["showsDuplicateRow"] as? NSNumber)?.boolValue ?? false
+        )
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let presenter = TableContextMenuPresenter(context: context) { [weak self] operation in
+                guard let self else { return }
+                let script = "window.__mdEditor && window.__mdEditor.performTableContextAction(\(Self.jsStringLiteral(token)), \(Self.jsStringLiteral(operation)))"
+                self.webView.evaluateJavaScript(script) { _, _ in }
+            }
+            presenter.present(in: self.webView)
         }
     }
 
@@ -422,7 +448,86 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             font-family: ui-monospace, "SF Mono", Menlo, monospace;
             font-size: 0.88em;
         }
-
+        .cm-md-table-widget {
+            position: relative;
+            width: fit-content;
+            margin: 10px 0;
+            max-width: 100%;
+            overflow: visible;
+            font-family: (MarkdownHTML.bodyFontFamily);
+            font-size: (MarkdownHTML.bodyFontSize)px;
+            line-height: (MarkdownHTML.bodyLineHeight);
+        }
+        .cm-md-table-widget:focus {
+            outline: none;
+        }
+        .cm-md-table-scroll {
+            width: fit-content;
+            max-width: 100%;
+            overflow-x: auto;
+        }
+        .cm-md-table-grid {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: auto;
+        }
+        .cm-md-table-grid th,
+        .cm-md-table-grid td {
+            min-width: 72px;
+            padding: 0;
+            border-top: 1px solid var(--grid);
+            border-bottom: 1px solid var(--grid);
+            text-align: left;
+            vertical-align: top;
+        }
+        .cm-md-table-grid th {
+            font-weight: 600;
+            background: color-mix(in srgb, Canvas 94%, var(--grid));
+        }
+        .cm-md-table-cell {
+            min-height: calc((MarkdownHTML.bodyFontSize)px * (MarkdownHTML.bodyLineHeight));
+            padding: 8px 10px;
+            outline: none;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            cursor: text;
+        }
+        .cm-md-table-grid th .cm-md-table-cell[data-placeholder]:empty::before {
+            content: attr(data-placeholder);
+            color: var(--secondary);
+            font-weight: 400;
+            opacity: 0.72;
+            pointer-events: none;
+        }
+        .cm-md-table-cell:focus {
+            outline: 2px solid #007aff;
+            outline-offset: -2px;
+            background: color-mix(in srgb, #007aff 8%, transparent);
+        }
+        .cm-md-table-cell.is-table-part-selected {
+            --table-selection-top-edge: 0 0 transparent;
+            --table-selection-right-edge: 0 0 transparent;
+            --table-selection-bottom-edge: 0 0 transparent;
+            --table-selection-left-edge: 0 0 transparent;
+            background: color-mix(in srgb, #007aff 14%, Canvas);
+            box-shadow:
+                var(--table-selection-top-edge),
+                var(--table-selection-right-edge),
+                var(--table-selection-bottom-edge),
+                var(--table-selection-left-edge);
+        }
+        .cm-md-table-cell.is-table-selection-top {
+            --table-selection-top-edge: inset 0 1px color-mix(in srgb, #007aff 52%, transparent);
+        }
+        .cm-md-table-cell.is-table-selection-right {
+            --table-selection-right-edge: inset -1px 0 color-mix(in srgb, #007aff 52%, transparent);
+        }
+        .cm-md-table-cell.is-table-selection-bottom {
+            --table-selection-bottom-edge: inset 0 -1px color-mix(in srgb, #007aff 52%, transparent);
+        }
+        .cm-md-table-cell.is-table-selection-left {
+            --table-selection-left-edge: inset 1px 0 color-mix(in srgb, #007aff 52%, transparent);
+        }
         .hl-keyword { color: var(--hl-keyword); }
         .hl-string { color: var(--hl-string); }
         .hl-comment { color: var(--hl-comment); }
@@ -453,6 +558,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             const post = function (m) {
                 try { window.webkit.messageHandlers.\(EditorBridge.name).postMessage(m); } catch (e) {}
             };
+            window.__mdRequestTableContextMenu = function (details) {
+                post(Object.assign({ kind: "tableContextMenu" }, details));
+            };
             window.onerror = function (message) { post("error: " + message); };
             let editor = null;
             window.__mdLoadEditor = function (markdown) {
@@ -468,6 +576,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                     focus: function () { editor.focus(); },
                     setScrollPosition: function (progress, sourcePosition) {
                         return editor.setScrollPosition(progress, sourcePosition);
+                    },
+                    performTableContextAction: function (token, action) {
+                        return editor.performTableContextAction(token, action);
                     },
                     exec: function (name) { editor.exec(name); }
                 };

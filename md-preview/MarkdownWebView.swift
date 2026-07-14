@@ -7,6 +7,98 @@ import Cocoa
 import os
 import WebKit
 
+/// Presents table operations with a real AppKit context menu. The web views
+/// only identify the clicked cell and apply the selected command; menu
+/// rendering, submenus, keyboard navigation, and accessibility stay native.
+final class TableContextMenuPresenter: NSObject {
+    struct Context {
+        let canInsertRowAbove: Bool
+        let canDuplicateRow: Bool
+        let canDeleteRow: Bool
+        let canDeleteColumn: Bool
+        let showsDuplicateRow: Bool
+    }
+
+    private let context: Context
+    private let actionHandler: (String) -> Void
+
+    init(context: Context, actionHandler: @escaping (String) -> Void) {
+        self.context = context
+        self.actionHandler = actionHandler
+    }
+
+    func present(in view: NSView) {
+        let menu = NSMenu(title: "Table")
+        menu.autoenablesItems = false
+
+        let rowItem = NSMenuItem(title: "Row", action: nil, keyEquivalent: "")
+        rowItem.submenu = rowMenu()
+        menu.addItem(rowItem)
+
+        let columnItem = NSMenuItem(title: "Column", action: nil, keyEquivalent: "")
+        columnItem.submenu = columnMenu()
+        menu.addItem(columnItem)
+
+        guard let window = view.window else { return }
+        let windowPoint = window.convertPoint(fromScreen: NSEvent.mouseLocation)
+        let viewPoint = view.convert(windowPoint, from: nil)
+        menu.popUp(positioning: nil, at: viewPoint, in: view)
+    }
+
+    private func rowMenu() -> NSMenu {
+        let menu = NSMenu(title: "Row")
+        menu.autoenablesItems = false
+        menu.addItem(command("Select Row", operation: "selectRow",
+                             enabled: context.canDeleteRow))
+        menu.addItem(.separator())
+        menu.addItem(command("Add Row Above", operation: "insertRowBefore",
+                             enabled: context.canInsertRowAbove))
+        menu.addItem(command("Add Row Below", operation: "insertRowAfter"))
+        if context.showsDuplicateRow {
+            menu.addItem(.separator())
+            menu.addItem(command("Duplicate Row", operation: "duplicateRow",
+                                 enabled: context.canDuplicateRow))
+        }
+        menu.addItem(.separator())
+        menu.addItem(command("Delete Row", operation: "deleteRow",
+                             enabled: context.canDeleteRow))
+        return menu
+    }
+
+    private func columnMenu() -> NSMenu {
+        let menu = NSMenu(title: "Column")
+        menu.autoenablesItems = false
+        menu.addItem(command("Select Column", operation: "selectColumn",
+                             enabled: context.canDeleteColumn))
+        menu.addItem(.separator())
+        menu.addItem(command("Add Column Left", operation: "insertColumnBefore"))
+        menu.addItem(command("Add Column Right", operation: "insertColumnAfter"))
+        menu.addItem(.separator())
+        menu.addItem(command("Delete Column", operation: "deleteColumn",
+                             enabled: context.canDeleteColumn))
+        return menu
+    }
+
+    private func command(_ title: String,
+                         operation: String,
+                         enabled: Bool = true) -> NSMenuItem {
+        let item = NSMenuItem(
+            title: title,
+            action: #selector(performTableCommand(_:)),
+            keyEquivalent: ""
+        )
+        item.target = self
+        item.representedObject = operation
+        item.isEnabled = enabled
+        return item
+    }
+
+    @objc private func performTableCommand(_ sender: NSMenuItem) {
+        guard let operation = sender.representedObject as? String else { return }
+        actionHandler(operation)
+    }
+}
+
 extension Logger {
     private nonisolated static let subsystem = Bundle.main.bundleIdentifier ?? "doc.md-preview"
     nonisolated static let perf = Logger(subsystem: subsystem, category: "perf")
@@ -20,6 +112,12 @@ enum SearchMode {
 struct SourceScrollAnchor {
     /// Fractional one-based source line at the top of the viewport.
     let sourcePosition: CGFloat
+}
+
+struct MarkdownTableEditRequest {
+    let startLine: Int
+    let endLine: Int
+    let edits: [MarkdownTableEdit]
 }
 
 /// User-selectable article layout, persisted across launches. Quick Look
@@ -78,6 +176,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     var fragmentLinkActivated: ((String) -> Void)?
     var localMarkdownLinkActivated: ((URL) -> Void)?
     var taskCheckboxToggled: ((Int, Bool) -> Void)?
+    var tableEditRequested: ((MarkdownTableEditRequest) -> Void)?
     private let assetScheme = MarkdownAssetScheme()
     private var currentAssetBase: URL?
     private let messageBridge = HostBridge()
@@ -323,6 +422,50 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             guard let line = dict["line"] as? NSNumber,
                   let checked = dict["checked"] as? NSNumber else { return }
             taskCheckboxToggled?(line.intValue, checked.boolValue)
+        case "tableContextMenu":
+            presentTableContextMenu(dict)
+        case "tableEdit":
+            guard let operation = dict["operation"] as? String,
+                  let start = dict["start"] as? NSNumber,
+                  let end = dict["end"] as? NSNumber,
+                  let row = dict["row"] as? NSNumber,
+                  let column = dict["column"] as? NSNumber else { return }
+            let edit: MarkdownTableEdit
+            switch operation {
+            case "setCell":
+                guard let value = dict["value"] as? String else { return }
+                edit = .setCell(row: row.intValue, column: column.intValue, markdown: value)
+            case "insertRowBefore":
+                edit = .insertRowBefore(row.intValue)
+            case "insertRowAfter", "insertRow":
+                edit = .insertRowAfter(row.intValue)
+            case "deleteRow":
+                edit = .deleteRow(row.intValue)
+            case "insertColumnBefore":
+                edit = .insertColumnBefore(column.intValue)
+            case "insertColumnAfter", "insertColumn":
+                edit = .insertColumnAfter(column.intValue)
+            case "deleteColumn":
+                edit = .deleteColumn(column.intValue)
+            default:
+                return
+            }
+            var edits: [MarkdownTableEdit] = []
+            if operation != "setCell", let pendingValue = dict["pendingValue"] as? String {
+                let pendingRow = (dict["pendingRow"] as? NSNumber)?.intValue ?? row.intValue
+                let pendingColumn = (dict["pendingColumn"] as? NSNumber)?.intValue ?? column.intValue
+                edits.append(.setCell(
+                    row: pendingRow,
+                    column: pendingColumn,
+                    markdown: pendingValue
+                ))
+            }
+            edits.append(edit)
+            tableEditRequested?(MarkdownTableEditRequest(
+                startLine: start.intValue,
+                endLine: end.intValue,
+                edits: edits
+            ))
         case "scroll":
             guard let value = dict["value"] as? String else { return }
             switch value {
@@ -339,6 +482,26 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             }
         default:
             break
+        }
+    }
+
+    private func presentTableContextMenu(_ payload: [String: Any]) {
+        guard let token = payload["token"] as? String else { return }
+        let context = TableContextMenuPresenter.Context(
+            canInsertRowAbove: (payload["canInsertRowAbove"] as? NSNumber)?.boolValue ?? false,
+            canDuplicateRow: (payload["canDuplicateRow"] as? NSNumber)?.boolValue ?? false,
+            canDeleteRow: (payload["canDeleteRow"] as? NSNumber)?.boolValue ?? false,
+            canDeleteColumn: (payload["canDeleteColumn"] as? NSNumber)?.boolValue ?? false,
+            showsDuplicateRow: (payload["showsDuplicateRow"] as? NSNumber)?.boolValue ?? false
+        )
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let presenter = TableContextMenuPresenter(context: context) { [weak self] operation in
+                guard let self else { return }
+                let script = "window.MdPreview && window.MdPreview.performTableContextAction(\(self.javaScriptStringLiteral(token)), \(self.javaScriptStringLiteral(operation)))"
+                self.webView.evaluateJavaScript(script) { _, _ in }
+            }
+            presenter.present(in: self.webView)
         }
     }
 

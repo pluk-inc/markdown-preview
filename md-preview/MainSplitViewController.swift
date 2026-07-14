@@ -12,6 +12,7 @@ final class MainSplitViewController: NSSplitViewController {
     var onSelectFile: ((URL) -> Void)?
     var onOpenMarkdownLink: ((URL) -> Void)?
     var onToggleTaskCheckbox: ((Int, Bool) -> Void)?
+    var onEditTable: ((MarkdownTableEditRequest) -> Void)?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -52,6 +53,9 @@ final class MainSplitViewController: NSSplitViewController {
         }
         contentViewController?.taskCheckboxToggled = { [weak self] line, checked in
             self?.onToggleTaskCheckbox?(line, checked)
+        }
+        contentViewController?.tableEditRequested = { [weak self] request in
+            self?.onEditTable?(request)
         }
         contentViewController?.localMarkdownLinkActivated = { [weak self] url in
             self?.onOpenMarkdownLink?(url)

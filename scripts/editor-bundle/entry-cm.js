@@ -147,6 +147,508 @@ class MermaidWidget extends WidgetType {
   ignoreEvent() { return true }
 }
 
+// ---------------------------------------------------------------------------
+// Visual table editor
+// ---------------------------------------------------------------------------
+
+function splitTableRow(source) {
+  const cells = []
+  let cell = ""
+  let backslashes = 0
+  let codeFenceLength = 0
+  for (let index = 0; index < source.length;) {
+    const character = source[index]
+    if (character === "`" && backslashes % 2 === 0) {
+      let end = index + 1
+      while (end < source.length && source[end] === "`") end++
+      const runLength = end - index
+      if (codeFenceLength === 0) codeFenceLength = runLength
+      else if (codeFenceLength === runLength) codeFenceLength = 0
+      cell += source.slice(index, end)
+      index = end
+      backslashes = 0
+      continue
+    }
+    if (character === "|" && backslashes % 2 === 0 && codeFenceLength === 0) {
+      cells.push(cell.trim())
+      cell = ""
+    } else {
+      cell += character
+    }
+    backslashes = character === "\\" ? backslashes + 1 : 0
+    index++
+  }
+  cells.push(cell.trim())
+  const trimmed = source.trim()
+  if (trimmed.startsWith("|") && cells[0] === "") cells.shift()
+  if (trimmed.endsWith("|") && cells[cells.length - 1] === "") cells.pop()
+  return cells
+}
+
+function parseTableAlignment(cell) {
+  const token = cell.trim()
+  const left = token.startsWith(":")
+  const right = token.endsWith(":")
+  const hyphens = token.replace(/^:/, "").replace(/:$/, "")
+  if (!/^-{3,}$/.test(hyphens)) return null
+  if (left && right) return "center"
+  if (left) return "left"
+  if (right) return "right"
+  return "none"
+}
+
+function parseTableSource(source) {
+  const trailingNewline = source.endsWith("\n")
+  const lines = source.replace(/\n$/, "").split("\n")
+  if (lines.length < 2) return null
+  const header = splitTableRow(lines[0])
+  const alignments = splitTableRow(lines[1]).map(parseTableAlignment)
+  if (!header.length || !alignments.length || alignments.some((item) => item == null)) return null
+  const rows = [header, ...lines.slice(2).map(splitTableRow)]
+  const columnCount = Math.max(alignments.length, ...rows.map((row) => row.length))
+  while (alignments.length < columnCount) alignments.push("none")
+  alignments.length = columnCount
+  for (const row of rows) {
+    while (row.length < columnCount) row.push("")
+    row.length = columnCount
+  }
+  return { rows, alignments, trailingNewline }
+}
+
+function escapedTableCell(source) {
+  const flattened = source.replace(/\n+/g, " ").trim()
+  let result = ""
+  let backslashes = 0
+  let codeFenceLength = 0
+  for (let index = 0; index < flattened.length;) {
+    const character = flattened[index]
+    if (character === "`" && backslashes % 2 === 0) {
+      let end = index + 1
+      while (end < flattened.length && flattened[end] === "`") end++
+      const runLength = end - index
+      if (codeFenceLength === 0) codeFenceLength = runLength
+      else if (codeFenceLength === runLength) codeFenceLength = 0
+      result += flattened.slice(index, end)
+      index = end
+      backslashes = 0
+      continue
+    }
+    if (character === "|" && backslashes % 2 === 0 && codeFenceLength === 0) result += "\\"
+    result += character
+    backslashes = character === "\\" ? backslashes + 1 : 0
+    index++
+  }
+  return result
+}
+
+function serializeTable(model) {
+  const widths = model.alignments.map((_, column) => Math.max(
+    3,
+    ...model.rows.map((row) => Array.from(row[column] || "").length),
+  ))
+  const dataRow = (cells) => "| " + cells.map((cell, column) => {
+    const escaped = escapedTableCell(cell)
+    return escaped + " ".repeat(Math.max(0, widths[column] - Array.from(escaped).length))
+  }).join(" | ") + " |"
+  const delimiter = "| " + model.alignments.map((alignment, column) => {
+    const width = widths[column]
+    if (alignment === "left") return ":" + "-".repeat(Math.max(3, width - 1))
+    if (alignment === "right") return "-".repeat(Math.max(3, width - 1)) + ":"
+    if (alignment === "center") return ":" + "-".repeat(Math.max(3, width - 2)) + ":"
+    return "-".repeat(width)
+  }).join(" | ") + " |"
+  const lines = [dataRow(model.rows[0]), delimiter, ...model.rows.slice(1).map(dataRow)]
+  return lines.join("\n") + (model.trailingNewline ? "\n" : "")
+}
+
+let nextTableContextToken = 1
+let pendingTableContextAction = null
+
+class TableEditorWidget extends WidgetType {
+  constructor(source, from) {
+    super()
+    this.source = source
+    this.from = from
+  }
+
+  eq(other) { return other.source === this.source && other.from === this.from }
+
+  toDOM(view) {
+    const model = parseTableSource(this.source)
+    const root = document.createElement("div")
+    root.className = "cm-md-table-widget"
+    root.dataset.tableFrom = String(this.from)
+    if (!model) {
+      root.textContent = this.source
+      return root
+    }
+
+    let active = null
+    let selectedPart = null
+    let cellDrag = null
+    let suppressNextTableClick = false
+    const scroll = document.createElement("div")
+    scroll.className = "cm-md-table-scroll"
+    root.appendChild(scroll)
+    const table = document.createElement("table")
+    table.className = "cm-md-table-grid"
+    scroll.appendChild(table)
+
+    const focusCellAfterUpdate = (row, column) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const replacement = view.dom.querySelector(
+          `.cm-md-table-widget[data-table-from="${this.from}"]`
+        )
+        const cell = replacement && replacement.querySelector(
+          `[data-table-row="${row}"][data-table-column="${column}"]`
+        )
+        cell?.focus()
+      }))
+    }
+
+    const applyModel = (focusTarget = null) => {
+      const source = serializeTable(model)
+      if (source === this.source) {
+        if (focusTarget) {
+          root.querySelector(
+            `[data-table-row="${focusTarget.row}"][data-table-column="${focusTarget.column}"]`
+          )?.focus()
+        }
+        return
+      }
+      active = null
+      view.dispatch({
+        changes: { from: this.from, to: this.from + this.source.length, insert: source },
+        userEvent: "input",
+      })
+      if (focusTarget) focusCellAfterUpdate(focusTarget.row, focusTarget.column)
+    }
+
+    const captureActiveValue = () => {
+      if (!active) return
+      model.rows[active.row][active.column] = active.element.innerText || ""
+    }
+
+    const clearPartSelection = () => {
+      root.querySelectorAll(".is-table-part-selected").forEach((cell) => {
+        cell.classList.remove(
+          "is-table-part-selected",
+          "is-table-selection-top",
+          "is-table-selection-right",
+          "is-table-selection-bottom",
+          "is-table-selection-left",
+        )
+      })
+      root.classList.remove(
+        "is-table-row-selected",
+        "is-table-column-selected",
+        "is-table-range-selected",
+      )
+      root.removeAttribute("aria-label")
+      selectedPart = null
+    }
+
+    const applyTableSelection = (kind, bounds, anchor) => {
+      captureActiveValue()
+      clearPartSelection()
+      const cells = Array.from(root.querySelectorAll(".cm-md-table-cell")).filter((cell) => {
+        const row = Number(cell.dataset.tableRow)
+        const column = Number(cell.dataset.tableColumn)
+        return row >= bounds.top && row <= bounds.bottom
+          && column >= bounds.left && column <= bounds.right
+      })
+      cells.forEach((cell) => {
+        cell.classList.add("is-table-part-selected")
+        const row = Number(cell.dataset.tableRow)
+        const column = Number(cell.dataset.tableColumn)
+        if (row === bounds.top) cell.classList.add("is-table-selection-top")
+        if (column === bounds.right) cell.classList.add("is-table-selection-right")
+        if (row === bounds.bottom) cell.classList.add("is-table-selection-bottom")
+        if (column === bounds.left) cell.classList.add("is-table-selection-left")
+      })
+      root.classList.add(
+        kind === "row"
+          ? "is-table-row-selected"
+          : kind === "column"
+            ? "is-table-column-selected"
+            : "is-table-range-selected",
+      )
+      window.getSelection()?.removeAllRanges()
+      selectedPart = { kind, row: anchor.row, column: anchor.column, bounds }
+      root.tabIndex = 0
+      if (kind === "range") {
+        const rowCount = bounds.bottom - bounds.top + 1
+        const columnCount = bounds.right - bounds.left + 1
+        root.setAttribute("aria-label", `Selected ${rowCount} rows by ${columnCount} columns.`)
+      } else {
+        const number = kind === "row" ? anchor.row : anchor.column + 1
+        root.setAttribute(
+          "aria-label",
+          `Selected ${kind} ${number}. Press Delete to remove it.`
+        )
+      }
+      root.focus()
+    }
+
+    const selectTablePart = (kind, row, column) => {
+      const bounds = kind === "row"
+        ? { top: row, right: model.alignments.length - 1, bottom: row, left: 0 }
+        : { top: 0, right: column, bottom: model.rows.length - 1, left: column }
+      applyTableSelection(kind, bounds, { row, column })
+    }
+
+    const selectTableRange = (anchorRow, anchorColumn, headRow, headColumn) => {
+      applyTableSelection("range", {
+        top: Math.min(anchorRow, headRow),
+        right: Math.max(anchorColumn, headColumn),
+        bottom: Math.max(anchorRow, headRow),
+        left: Math.min(anchorColumn, headColumn),
+      }, { row: anchorRow, column: anchorColumn })
+    }
+
+    const performAction = (action, row, column) => {
+      captureActiveValue()
+      if (action === "selectRow" && row > 0) {
+        selectTablePart("row", row, column)
+      } else if (action === "selectColumn" && model.alignments.length > 1) {
+        selectTablePart("column", row, column)
+      } else if (action === "insertRowBefore" && row > 0) {
+        model.rows.splice(row, 0, Array(model.alignments.length).fill(""))
+        applyModel({ row, column })
+      } else if (action === "insertRowAfter") {
+        model.rows.splice(row + 1, 0, Array(model.alignments.length).fill(""))
+        applyModel({ row: row + 1, column })
+      } else if (action === "duplicateRow" && row > 0) {
+        model.rows.splice(row + 1, 0, [...model.rows[row]])
+        applyModel({ row: row + 1, column })
+      } else if (action === "deleteRow" && row > 0) {
+        model.rows.splice(row, 1)
+        applyModel({ row: Math.min(row, model.rows.length - 1), column })
+      } else if (action === "insertColumnBefore") {
+        for (const cells of model.rows) cells.splice(column, 0, "")
+        model.alignments.splice(column, 0, "none")
+        applyModel({ row, column })
+      } else if (action === "insertColumnAfter") {
+        for (const cells of model.rows) cells.splice(column + 1, 0, "")
+        model.alignments.splice(column + 1, 0, "none")
+        applyModel({ row, column: column + 1 })
+      } else if (action === "deleteColumn" && model.alignments.length > 1) {
+        for (const cells of model.rows) cells.splice(column, 1)
+        model.alignments.splice(column, 1)
+        applyModel({ row, column: Math.min(column, model.alignments.length - 1) })
+      }
+    }
+
+    model.rows.forEach((cells, row) => {
+      const tr = document.createElement("tr")
+      table.appendChild(tr)
+      cells.forEach((value, column) => {
+        const container = document.createElement(row === 0 ? "th" : "td")
+        const editor = document.createElement("div")
+        editor.className = "cm-md-table-cell"
+        editor.contentEditable = "plaintext-only"
+        editor.spellcheck = true
+        editor.textContent = value
+        editor.dataset.tableRow = String(row)
+        editor.dataset.tableColumn = String(column)
+        if (row === 0) {
+          const placeholder = `Column ${column + 1}`
+          editor.dataset.placeholder = placeholder
+          const updateAccessibilityLabel = () => {
+            if ((editor.innerText || "").trim()) editor.removeAttribute("aria-label")
+            else editor.setAttribute("aria-label", placeholder)
+          }
+          updateAccessibilityLabel()
+          editor.addEventListener("input", updateAccessibilityLabel)
+        }
+        if (model.alignments[column] !== "none") editor.style.textAlign = model.alignments[column]
+        editor.addEventListener("focus", () => {
+          clearPartSelection()
+          active = { row, column, element: editor }
+        })
+        editor.addEventListener("contextmenu", (event) => {
+          event.preventDefault()
+          active = { row, column, element: editor }
+          const token = String(nextTableContextToken++)
+          pendingTableContextAction = {
+            token,
+            perform: (action) => performAction(action, row, column),
+          }
+          window.__mdRequestTableContextMenu?.({
+            token,
+            canInsertRowAbove: row > 0,
+            canDuplicateRow: row > 0,
+            canDeleteRow: row > 0,
+            canDeleteColumn: model.alignments.length > 1,
+            showsDuplicateRow: true,
+          })
+        })
+        editor.addEventListener("blur", () => {
+          if (!active || active.element !== editor) return
+          model.rows[row][column] = editor.innerText || ""
+          active = null
+          applyModel()
+        })
+        editor.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") {
+            event.preventDefault()
+            editor.textContent = model.rows[row][column]
+            active = null
+            editor.blur()
+            view.focus()
+            return
+          }
+          if (event.key !== "Tab" && event.key !== "Enter") return
+          event.preventDefault()
+          model.rows[row][column] = editor.innerText || ""
+          const backwards = event.key === "Tab" && event.shiftKey
+          let nextRow = row
+          let nextColumn = column + (backwards ? -1 : 1)
+          if (nextColumn < 0) {
+            nextRow--
+            nextColumn = model.alignments.length - 1
+          } else if (nextColumn >= model.alignments.length) {
+            nextRow++
+            nextColumn = 0
+          }
+          if (nextRow < 0) {
+            nextRow = 0
+            nextColumn = 0
+          } else if (nextRow >= model.rows.length) {
+            model.rows.push(Array(model.alignments.length).fill(""))
+          }
+          applyModel({ row: nextRow, column: nextColumn })
+        })
+        container.appendChild(editor)
+        tr.appendChild(container)
+      })
+    })
+    root.addEventListener("mousedown", (event) => {
+      if (event.button !== 0) return
+      const cell = event.target.closest?.(".cm-md-table-cell")
+      if (!cell) return
+      const row = Number(cell.dataset.tableRow)
+      const column = Number(cell.dataset.tableColumn)
+      if (!Number.isInteger(row) || row < 0 || !Number.isInteger(column)) return
+      // Keep CodeMirror from replacing the widget while WebKit is tracking the
+      // contenteditable gesture. WebKit's native selection begins on mouse
+      // down and can't be reliably cancelled after the pointer crosses into a
+      // second cell, so ordinary clicks restore their caret on mouse up.
+      event.preventDefault()
+      event.stopPropagation()
+      cellDrag = { cell, row, column, head: cell, active: false }
+
+      const finishCellDrag = (finishEvent) => {
+        document.removeEventListener("mousemove", moveCellDrag, true)
+        document.removeEventListener("mouseup", finishCellDrag, true)
+        const finishedDrag = cellDrag
+        if (finishedDrag?.active) {
+          finishEvent.preventDefault()
+          window.getSelection()?.removeAllRanges()
+          suppressNextTableClick = true
+        } else if (finishedDrag) {
+          finishEvent.preventDefault()
+          finishedDrag.cell.focus({ preventScroll: true })
+          const selection = window.getSelection()
+          let range = document.caretRangeFromPoint?.(
+            finishEvent.clientX,
+            finishEvent.clientY,
+          )
+          if (!range || !finishedDrag.cell.contains(range.startContainer)) {
+            range = document.createRange()
+            range.selectNodeContents(finishedDrag.cell)
+            range.collapse(false)
+          }
+          selection?.removeAllRanges()
+          selection?.addRange(range)
+          suppressNextTableClick = true
+        }
+        cellDrag = null
+      }
+      const moveCellDrag = (moveEvent) => {
+        if (!cellDrag) return
+        const hitTarget = document.elementFromPoint?.(
+          moveEvent.clientX,
+          moveEvent.clientY,
+        )
+        const head = hitTarget?.closest?.(".cm-md-table-cell")
+          || moveEvent.target.closest?.(".cm-md-table-cell")
+        if (!head || !root.contains(head)) return
+        if (head === cellDrag.cell && !cellDrag.active) return
+        if (head === cellDrag.head) return
+        moveEvent.preventDefault()
+        cellDrag.active = true
+        cellDrag.head = head
+        selectTableRange(
+          cellDrag.row,
+          cellDrag.column,
+          Number(head.dataset.tableRow),
+          Number(head.dataset.tableColumn),
+        )
+      }
+      document.addEventListener("mousemove", moveCellDrag, true)
+      document.addEventListener("mouseup", finishCellDrag, true)
+    }, true)
+    root.addEventListener("click", (event) => {
+      if (!suppressNextTableClick) return
+      suppressNextTableClick = false
+      event.preventDefault()
+      event.stopPropagation()
+    }, true)
+    root.addEventListener("keydown", (event) => {
+      if (!selectedPart) return
+      if (event.key === "Escape") {
+        event.preventDefault()
+        clearPartSelection()
+        view.focus()
+        return
+      }
+      if (event.key !== "Backspace" && event.key !== "Delete") return
+      if (selectedPart.kind === "range") {
+        event.preventDefault()
+        return
+      }
+      event.preventDefault()
+      const selection = selectedPart
+      clearPartSelection()
+      performAction(
+        selection.kind === "row" ? "deleteRow" : "deleteColumn",
+        selection.row,
+        selection.column
+      )
+    })
+    return root
+  }
+
+  ignoreEvent() { return true }
+}
+
+function buildTableEditors(state) {
+  const ranges = []
+  const tree = ensureSyntaxTree(state, state.doc.length, 80) || syntaxTree(state)
+  tree.iterate({
+    enter(node) {
+      if (node.name !== "Table") return
+      const source = state.doc.sliceString(node.from, node.to)
+      if (!parseTableSource(source)) return
+      ranges.push(Decoration.replace({
+        block: true,
+        widget: new TableEditorWidget(source, node.from),
+      }).range(node.from, node.to))
+      return false
+    },
+  })
+  return Decoration.set(ranges, true)
+}
+
+const tableEditors = StateField.define({
+  create: buildTableEditors,
+  update: (value, transaction) => transaction.docChanged
+    ? buildTableEditors(transaction.state)
+    : value,
+  provide: (field) => EditorView.decorations.from(field),
+})
+
 const hide = Decoration.replace({})
 const bulletDeco = Decoration.replace({ widget: new TextWidget("•", "cm-md-bullet") })
 const hrDeco = Decoration.replace({ widget: new RuleWidget() })
@@ -807,6 +1309,7 @@ window.MDEditor = {
           markdown({ base: markdownLanguage, codeLanguages }),
           activeCodeBlock,
           mermaidPreviews,
+          tableEditors,
           syntaxHighlighting(codeHighlight),
           livePreview,
           alignInactiveHeadings,
@@ -961,6 +1464,13 @@ window.MDEditor = {
       exec: (name) => {
         const command = commands[name]
         if (command) { command(view); view.focus() }
+      },
+      performTableContextAction: (token, action) => {
+        if (!pendingTableContextAction || pendingTableContextAction.token !== token) return false
+        const pending = pendingTableContextAction
+        pendingTableContextAction = null
+        pending.perform(action)
+        return true
       },
       destroy: () => {
         view.scrollDOM.removeEventListener("wheel", markScrollIntent)

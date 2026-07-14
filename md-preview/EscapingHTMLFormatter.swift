@@ -36,6 +36,230 @@ nonisolated enum TaskCheckboxSource {
     }
 }
 
+nonisolated enum MarkdownTableEdit: Equatable {
+    case setCell(row: Int, column: Int, markdown: String)
+    case insertRowBefore(Int)
+    case insertRowAfter(Int)
+    case deleteRow(Int)
+    case insertColumnBefore(Int)
+    case insertColumnAfter(Int)
+    case deleteColumn(Int)
+}
+
+/// Applies visual table edits back to a source-mapped GFM table. The rendered
+/// preview supplies the table's exact source range, so similarly-shaped tables
+/// and duplicate cell values remain unambiguous.
+nonisolated enum MarkdownTableSource {
+    private enum Alignment {
+        case none, left, center, right
+    }
+
+    static func applying(_ edit: MarkdownTableEdit,
+                         fromLine startLine: Int,
+                         throughLine endLine: Int,
+                         in markdown: String) -> String? {
+        guard startLine > 0, endLine >= startLine else { return nil }
+        var sourceLines = markdown.components(separatedBy: "\n")
+        let startIndex = startLine - 1
+        let endIndex = endLine - 1
+        guard sourceLines.indices.contains(startIndex),
+              sourceLines.indices.contains(endIndex) else { return nil }
+
+        let tableLines = Array(sourceLines[startIndex...endIndex])
+        guard tableLines.count >= 2 else { return nil }
+        var rows = tableLines.map(splitRow)
+        guard rows.count >= 2,
+              !rows[0].isEmpty,
+              let alignments = parseAlignments(rows[1]) else { return nil }
+
+        // The delimiter row is structural rather than an editable data row.
+        rows.remove(at: 1)
+        var tableAlignments = alignments
+        let initialColumnCount = max(rows.map(\.count).max() ?? 0, tableAlignments.count)
+        guard initialColumnCount > 0 else { return nil }
+        normalizeRows(&rows, columnCount: initialColumnCount)
+        normalizeAlignments(&tableAlignments, columnCount: initialColumnCount)
+
+        switch edit {
+        case let .setCell(row, column, value):
+            guard rows.indices.contains(row), rows[row].indices.contains(column) else { return nil }
+            rows[row][column] = escapedCell(value)
+        case let .insertRowAfter(after):
+            guard after >= 0, after < rows.count else { return nil }
+            rows.insert(Array(repeating: "", count: tableAlignments.count), at: after + 1)
+        case let .insertRowBefore(before):
+            // A row cannot precede the Markdown header.
+            guard before > 0, before < rows.count else { return nil }
+            rows.insert(Array(repeating: "", count: tableAlignments.count), at: before)
+        case let .deleteRow(row):
+            // Header deletion would make the table invalid. Keep at least the
+            // header; a table with no body rows is still valid Markdown.
+            guard row > 0, rows.indices.contains(row) else { return nil }
+            rows.remove(at: row)
+        case let .insertColumnAfter(after):
+            guard after >= 0, after < tableAlignments.count else { return nil }
+            for index in rows.indices {
+                rows[index].insert("", at: after + 1)
+            }
+            tableAlignments.insert(.none, at: after + 1)
+        case let .insertColumnBefore(before):
+            guard before >= 0, before < tableAlignments.count else { return nil }
+            for index in rows.indices {
+                rows[index].insert("", at: before)
+            }
+            tableAlignments.insert(.none, at: before)
+        case let .deleteColumn(column):
+            guard tableAlignments.count > 1,
+                  column >= 0,
+                  column < tableAlignments.count else { return nil }
+            for index in rows.indices {
+                rows[index].remove(at: column)
+            }
+            tableAlignments.remove(at: column)
+        }
+
+        let replacement = serialize(rows: rows, alignments: tableAlignments)
+        sourceLines.replaceSubrange(startIndex...endIndex, with: replacement)
+        return sourceLines.joined(separator: "\n")
+    }
+
+    private static func splitRow(_ source: String) -> [String] {
+        var cells: [String] = []
+        var cell = ""
+        var backslashCount = 0
+        var codeFenceLength = 0
+        var index = source.startIndex
+
+        while index < source.endIndex {
+            let character = source[index]
+            if character == "`" && backslashCount.isMultiple(of: 2) {
+                var runEnd = source.index(after: index)
+                while runEnd < source.endIndex, source[runEnd] == "`" {
+                    runEnd = source.index(after: runEnd)
+                }
+                let runLength = source.distance(from: index, to: runEnd)
+                if codeFenceLength == 0 {
+                    codeFenceLength = runLength
+                } else if codeFenceLength == runLength {
+                    codeFenceLength = 0
+                }
+                cell.append(contentsOf: source[index..<runEnd])
+                index = runEnd
+                backslashCount = 0
+                continue
+            }
+            if character == "|", backslashCount.isMultiple(of: 2), codeFenceLength == 0 {
+                cells.append(cell.trimmingCharacters(in: .whitespaces))
+                cell = ""
+            } else {
+                cell.append(character)
+            }
+            if character == "\\" {
+                backslashCount += 1
+            } else {
+                backslashCount = 0
+            }
+            index = source.index(after: index)
+        }
+        cells.append(cell.trimmingCharacters(in: .whitespaces))
+
+        if source.trimmingCharacters(in: .whitespaces).hasPrefix("|"), cells.first?.isEmpty == true {
+            cells.removeFirst()
+        }
+        if source.trimmingCharacters(in: .whitespaces).hasSuffix("|"), cells.last?.isEmpty == true {
+            cells.removeLast()
+        }
+        return cells
+    }
+
+    private static func parseAlignments(_ cells: [String]) -> [Alignment]? {
+        guard !cells.isEmpty else { return nil }
+        var result: [Alignment] = []
+        for cell in cells {
+            let token = cell.trimmingCharacters(in: .whitespaces)
+            let left = token.hasPrefix(":")
+            let right = token.hasSuffix(":")
+            let hyphens = token.trimmingCharacters(in: CharacterSet(charactersIn: ":"))
+            guard hyphens.count >= 3, hyphens.allSatisfy({ $0 == "-" }) else { return nil }
+            result.append(left && right ? .center : left ? .left : right ? .right : .none)
+        }
+        return result
+    }
+
+    private static func normalizeRows(_ rows: inout [[String]], columnCount: Int) {
+        for index in rows.indices {
+            if rows[index].count < columnCount {
+                rows[index].append(contentsOf: repeatElement("", count: columnCount - rows[index].count))
+            } else if rows[index].count > columnCount {
+                rows[index] = Array(rows[index].prefix(columnCount))
+            }
+        }
+    }
+
+    private static func normalizeAlignments(_ alignments: inout [Alignment], columnCount: Int) {
+        if alignments.count < columnCount {
+            alignments.append(contentsOf: repeatElement(.none, count: columnCount - alignments.count))
+        } else if alignments.count > columnCount {
+            alignments = Array(alignments.prefix(columnCount))
+        }
+    }
+
+    private static func escapedCell(_ source: String) -> String {
+        let flattened = source.replacingOccurrences(of: "\n", with: " ")
+        var result = ""
+        var backslashCount = 0
+        var codeFenceLength = 0
+        var index = flattened.startIndex
+        while index < flattened.endIndex {
+            let character = flattened[index]
+            if character == "`" && backslashCount.isMultiple(of: 2) {
+                var runEnd = flattened.index(after: index)
+                while runEnd < flattened.endIndex, flattened[runEnd] == "`" {
+                    runEnd = flattened.index(after: runEnd)
+                }
+                let runLength = flattened.distance(from: index, to: runEnd)
+                if codeFenceLength == 0 { codeFenceLength = runLength }
+                else if codeFenceLength == runLength { codeFenceLength = 0 }
+                result.append(contentsOf: flattened[index..<runEnd])
+                index = runEnd
+                backslashCount = 0
+                continue
+            }
+            if character == "|", backslashCount.isMultiple(of: 2), codeFenceLength == 0 {
+                result.append("\\")
+            }
+            result.append(character)
+            backslashCount = character == "\\" ? backslashCount + 1 : 0
+            index = flattened.index(after: index)
+        }
+        return result.trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func serialize(rows: [[String]], alignments: [Alignment]) -> [String] {
+        let widths = alignments.indices.map { column in
+            max(3, rows.map { $0[column].count }.max() ?? 0)
+        }
+        func dataRow(_ cells: [String]) -> String {
+            "| " + cells.enumerated().map { index, cell in
+                cell + String(repeating: " ", count: max(0, widths[index] - cell.count))
+            }.joined(separator: " | ") + " |"
+        }
+        let delimiter = "| " + alignments.enumerated().map { index, alignment in
+            let width = widths[index]
+            switch alignment {
+            case .none: return String(repeating: "-", count: width)
+            case .left: return ":" + String(repeating: "-", count: max(3, width - 1))
+            case .right: return String(repeating: "-", count: max(3, width - 1)) + ":"
+            case .center: return ":" + String(repeating: "-", count: max(3, width - 2)) + ":"
+            }
+        }.joined(separator: " | ") + " |"
+
+        var result = [dataRow(rows[0]), delimiter]
+        result.append(contentsOf: rows.dropFirst().map(dataRow))
+        return result
+    }
+}
+
 // Mirrors swift-markdown's HTMLFormatter but HTML-escapes text, code, and
 // attribute values. Upstream HTMLFormatter emits unescaped content
 // (swift-markdown 0.7.x), so characters like `<`, `>`, and `&` either render
@@ -50,6 +274,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     private var inTableHead = false
     private var tableColumnAlignments: [Table.ColumnAlignment?]?
     private var currentTableColumn = 0
+    private var currentTableRow = 0
 
     init(options: HTMLFormatterOptions = [],
          sourceLineOffset: Int = 0,
@@ -315,6 +540,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     mutating func visitTable(_ table: Table) {
         result += "<table\(sourceLineAttribute(table))>\n"
         tableColumnAlignments = table.columnAlignments
+        currentTableRow = 0
         descendInto(table)
         tableColumnAlignments = nil
         result += "</table>\n"
@@ -326,6 +552,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         currentTableColumn = 0
         descendInto(tableHead)
         inTableHead = false
+        currentTableRow = 1
         result += "</tr>\n</thead>\n"
     }
 
@@ -342,6 +569,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         currentTableColumn = 0
         descendInto(tableRow)
         result += "</tr>\n"
+        currentTableRow += 1
     }
 
     mutating func visitTableCell(_ tableCell: Table.Cell) {
@@ -350,7 +578,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         guard tableCell.colspan > 0, tableCell.rowspan > 0 else { return }
 
         let element = inTableHead ? "th" : "td"
-        result += "<\(element)"
+        result += "<\(element) data-table-row=\"\(currentTableRow)\" data-table-column=\"\(currentTableColumn)\""
 
         if let alignment = alignments[currentTableColumn] {
             result += " align=\"\(alignment)\""

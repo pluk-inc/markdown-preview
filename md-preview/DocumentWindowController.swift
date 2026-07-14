@@ -105,6 +105,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private var searchMode: SearchMode = .contains
     private var pendingFindWork: DispatchWorkItem?
     private static let findDebounceDelay: TimeInterval = 0.10
+    private let tableUndoManager = UndoManager()
+    private var isTableUndoSaveInFlight = false
 
     private var documentWindow: NSWindow {
         guard let window else {
@@ -174,6 +176,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         split.onToggleTaskCheckbox = { [weak self] line, checked in
             self?.toggleTaskCheckbox(onLine: line, checked: checked)
         }
+        split.onEditTable = { [weak self] request in
+            self?.applyTableEdit(request)
+        }
         documentWindow.contentViewController = split
         documentWindow.setContentSize(NSSize(width: 1100, height: 720))
         documentWindow.center()
@@ -239,7 +244,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         fileWatcher = nil
     }
 
+    func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
+        isEditing ? nil : tableUndoManager
+    }
+
     func display(markdown: String, fileURL: URL?) {
+        tableUndoManager.removeAllActions()
         currentFileURL = fileURL
         currentMarkdown = markdown
         documentWindow.title = fileURL?.lastPathComponent ?? "Untitled"
@@ -289,6 +299,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
         guard currentFileURL?.standardizedFileURL != url.standardizedFileURL else { return }
         commitNavigation(to: url, intent: intent)
+        tableUndoManager.removeAllActions()
 
         // Switching to a different file blanks the preview so the previous
         // doc doesn't linger on screen during sheet dismissal + load.
@@ -1425,6 +1436,138 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                     self.renderCurrentDocument(text: externalMarkdown, fileURL: url)
                 }
             case .cancelled:
+                self.rerenderCurrentPreview()
+            }
+        }
+    }
+
+    private func applyTableEdit(_ request: MarkdownTableEditRequest) {
+        guard !isEditing,
+              let baseline = currentMarkdown else {
+            rerenderCurrentPreview()
+            return
+        }
+        let updated = request.edits.reduce(Optional(baseline)) { markdown, edit in
+            markdown.flatMap {
+                MarkdownTableSource.applying(
+                    edit,
+                    fromLine: request.startLine,
+                    throughLine: request.endLine,
+                    in: $0
+                )
+            }
+        }
+        guard let updated,
+              updated != baseline else {
+            rerenderCurrentPreview()
+            return
+        }
+
+        let diskState = diskFileState(for: currentFileURL, expectedMarkdown: baseline)
+        let actionName = tableUndoActionName(for: request.edits)
+        saveEditedMarkdown(updated, diskState: diskState) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .saved:
+                self.currentMarkdown = updated
+                if let url = self.currentFileURL {
+                    self.markdownDocument?.replaceContents(markdown: updated, fileURL: url)
+                    self.renderCurrentDocument(text: updated, fileURL: url)
+                    self.registerTableUndo(
+                        restoring: baseline,
+                        expectedCurrentMarkdown: updated,
+                        fileURL: url,
+                        actionName: actionName
+                    )
+                }
+            case let .reloaded(externalMarkdown):
+                self.tableUndoManager.removeAllActions()
+                self.currentMarkdown = externalMarkdown
+                if let url = self.currentFileURL {
+                    self.markdownDocument?.replaceContents(markdown: externalMarkdown, fileURL: url)
+                    self.renderCurrentDocument(text: externalMarkdown, fileURL: url)
+                }
+            case .cancelled:
+                self.rerenderCurrentPreview()
+            }
+        }
+    }
+
+    private func tableUndoActionName(for edits: [MarkdownTableEdit]) -> String {
+        for edit in edits.reversed() {
+            switch edit {
+            case .setCell:
+                return "Edit Table Cell"
+            case .insertRowBefore, .insertRowAfter:
+                return "Add Row"
+            case .deleteRow:
+                return "Delete Row"
+            case .insertColumnBefore, .insertColumnAfter:
+                return "Add Column"
+            case .deleteColumn:
+                return "Delete Column"
+            }
+        }
+        return "Edit Table"
+    }
+
+    private func registerTableUndo(restoring markdown: String,
+                                   expectedCurrentMarkdown: String,
+                                   fileURL: URL,
+                                   actionName: String) {
+        tableUndoManager.registerUndo(withTarget: self) { target in
+            target.restoreTableMarkdown(
+                markdown,
+                expectedCurrentMarkdown: expectedCurrentMarkdown,
+                fileURL: fileURL,
+                actionName: actionName
+            )
+        }
+        tableUndoManager.setActionName(actionName)
+    }
+
+    private func restoreTableMarkdown(_ markdown: String,
+                                      expectedCurrentMarkdown: String,
+                                      fileURL: URL,
+                                      actionName: String) {
+        guard !isEditing,
+              !isTableUndoSaveInFlight,
+              currentFileURL?.standardizedFileURL == fileURL.standardizedFileURL,
+              currentMarkdown == expectedCurrentMarkdown else {
+            tableUndoManager.removeAllActions()
+            return
+        }
+
+        // Register while UndoManager is actively undoing or redoing so AppKit
+        // puts this inverse operation on the opposite stack immediately. The
+        // file write can become asynchronous if sandbox permission is needed.
+        registerTableUndo(
+            restoring: expectedCurrentMarkdown,
+            expectedCurrentMarkdown: markdown,
+            fileURL: fileURL,
+            actionName: actionName
+        )
+        isTableUndoSaveInFlight = true
+        let diskState = diskFileState(for: currentFileURL,
+                                      expectedMarkdown: expectedCurrentMarkdown)
+        saveEditedMarkdown(markdown, diskState: diskState) { [weak self] result in
+            guard let self else { return }
+            self.isTableUndoSaveInFlight = false
+            switch result {
+            case .saved:
+                self.currentMarkdown = markdown
+                self.markdownDocument?.replaceContents(markdown: markdown, fileURL: fileURL)
+                self.renderCurrentDocument(text: markdown, fileURL: fileURL)
+            case let .reloaded(externalMarkdown):
+                self.tableUndoManager.removeAllActions()
+                self.currentMarkdown = externalMarkdown
+                self.markdownDocument?.replaceContents(
+                    markdown: externalMarkdown,
+                    fileURL: fileURL
+                )
+                self.renderCurrentDocument(text: externalMarkdown, fileURL: fileURL)
+            case .cancelled:
+                self.tableUndoManager.removeAllActions()
                 self.rerenderCurrentPreview()
             }
         }
