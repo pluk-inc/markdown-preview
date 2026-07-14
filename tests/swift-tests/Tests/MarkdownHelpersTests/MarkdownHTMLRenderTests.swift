@@ -175,10 +175,10 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             "<table data-source-line=\"5\" data-source-start=\"5\" data-source-end=\"7\">"
         ), rendered.articleHTML)
         XCTAssertTrue(rendered.articleHTML.contains(
-            "<th data-table-row=\"0\" data-table-column=\"0\">Name</th>"
+            "<th data-table-row=\"0\" data-table-column=\"0\" data-table-markdown=\"Name\">Name</th>"
         ), rendered.articleHTML)
         XCTAssertTrue(rendered.articleHTML.contains(
-            "<td data-table-row=\"1\" data-table-column=\"1\" align=\"right\">10</td>"
+            "<td data-table-row=\"1\" data-table-column=\"1\" data-table-markdown=\"10\" align=\"right\">10</td>"
         ), rendered.articleHTML)
         XCTAssertTrue(rendered.html.contains("function enableTableEditing()"))
         XCTAssertFalse(rendered.html.contains("md-table-edge-action"))
@@ -189,6 +189,44 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(rendered.html.contains("selectTableRange(tableCellDrag.cell, cell)"))
         XCTAssertTrue(rendered.html.contains("window.getSelection()?.removeAllRanges()"))
         XCTAssertTrue(rendered.html.contains(".md-table-editor .is-table-selection-left"))
+        XCTAssertTrue(rendered.html.contains("cell.hasAttribute('data-table-markdown')"))
+        XCTAssertTrue(rendered.html.contains("cell.dataset.tableOriginal = cell.dataset.tableMarkdown || ''"))
+    }
+
+    func testRenderedTableCellsRetainOriginalMarkdownForSourceAwareEditing() throws {
+        let markdown = """
+        | Plain | Link | Emphasis | Code | Image |
+        | --- | --- | --- | --- | --- |
+        | Text | [Docs](https://example.com) | **Bold** | `a|b` | ![Alt](image.png) |
+        """
+        let rendered = MarkdownHTML.render(markdown: markdown, vendorLoading: .lazy)
+
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "data-table-row=\"1\" data-table-column=\"0\" data-table-markdown=\"Text\""
+        ), rendered.articleHTML)
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "data-table-row=\"1\" data-table-column=\"1\" data-table-markdown=\"[Docs](https://example.com)\""
+        ), rendered.articleHTML)
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "data-table-row=\"1\" data-table-column=\"2\" data-table-markdown=\"**Bold**\""
+        ), rendered.articleHTML)
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "data-table-row=\"1\" data-table-column=\"3\" data-table-markdown=\"`a|b`\""
+        ), rendered.articleHTML)
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "data-table-row=\"1\" data-table-column=\"4\" data-table-markdown=\"![Alt](image.png)\""
+        ), rendered.articleHTML)
+
+        let updated = try XCTUnwrap(MarkdownTableSource.applying(
+            .setCell(row: 1, column: 1, markdown: "[Docs](https://example.com)!"),
+            fromLine: 1,
+            throughLine: 3,
+            in: markdown
+        ))
+        XCTAssertTrue(updated.contains("[Docs](https://example.com)!"), updated)
+        XCTAssertTrue(updated.contains("**Bold**"), updated)
+        XCTAssertTrue(updated.contains("`a|b`"), updated)
+        XCTAssertTrue(updated.contains("![Alt](image.png)"), updated)
     }
 
     func testTableCellEditTargetsExactSourceRangeAndEscapesPipes() throws {

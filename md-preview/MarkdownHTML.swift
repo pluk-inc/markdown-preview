@@ -1071,11 +1071,16 @@ nonisolated enum MarkdownHTML {
         }
 
         function beginTableCellEdit(cell) {
-            if (!hasHostBridge || !cell || cell === activeTableCell) return;
+            if (!hasHostBridge || !cell) return false;
+            if (cell === activeTableCell) return true;
             clearTablePartSelection();
             finishTableCellEdit(true);
+            // Never fall back to rendered text. Without exact source metadata,
+            // editing could silently flatten links, emphasis, code, images, or
+            // other inline Markdown into plain text.
+            if (!cell.hasAttribute('data-table-markdown')) return false;
             cell.__mdOriginalHTML = cell.innerHTML;
-            cell.dataset.tableOriginal = (cell.innerText || '').trim();
+            cell.dataset.tableOriginal = cell.dataset.tableMarkdown || '';
             cell.textContent = cell.dataset.tableOriginal;
             cell.contentEditable = 'plaintext-only';
             cell.classList.add('is-editing');
@@ -1089,6 +1094,7 @@ nonisolated enum MarkdownHTML {
                 selection.removeAllRanges();
                 selection.addRange(range);
             }
+            return true;
         }
 
         function clearTablePartSelection() {
@@ -1307,9 +1313,7 @@ nonisolated enum MarkdownHTML {
                 return;
             }
             if (event.target.closest('a, button, input')) return;
-            event.preventDefault();
-            clearTablePartSelection();
-            beginTableCellEdit(cell);
+            if (beginTableCellEdit(cell)) event.preventDefault();
         });
 
         document.addEventListener('contextmenu', (event) => {

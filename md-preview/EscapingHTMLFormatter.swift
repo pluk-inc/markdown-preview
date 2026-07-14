@@ -123,6 +123,21 @@ nonisolated enum MarkdownTableSource {
         return sourceLines.joined(separator: "\n")
     }
 
+    /// Returns the exact Markdown source for each rendered data cell. The
+    /// delimiter row is structural and is omitted so these coordinates match
+    /// the table row indices emitted into the preview DOM.
+    static func sourceRows(from tableLines: [String]) -> [[String]]? {
+        guard tableLines.count >= 2 else { return nil }
+        var rows = tableLines.map(splitRow)
+        guard !rows[0].isEmpty,
+              let alignments = parseAlignments(rows[1]) else { return nil }
+        rows.remove(at: 1)
+        let columnCount = max(rows.map(\.count).max() ?? 0, alignments.count)
+        guard columnCount > 0 else { return nil }
+        normalizeRows(&rows, columnCount: columnCount)
+        return rows
+    }
+
     private static func splitRow(_ source: String) -> [String] {
         var cells: [String] = []
         var cell = ""
@@ -273,6 +288,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
 
     private var inTableHead = false
     private var tableColumnAlignments: [Table.ColumnAlignment?]?
+    private var tableSourceRows: [[String]]?
     private var currentTableColumn = 0
     private var currentTableRow = 0
 
@@ -540,10 +556,28 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     mutating func visitTable(_ table: Table) {
         result += "<table\(sourceLineAttribute(table))>\n"
         tableColumnAlignments = table.columnAlignments
+        tableSourceRows = sourceRows(for: table)
         currentTableRow = 0
         descendInto(table)
         tableColumnAlignments = nil
+        tableSourceRows = nil
         result += "</table>\n"
+    }
+
+    private func sourceRows(for table: Table) -> [[String]]? {
+        guard let range = table.range else { return nil }
+        let startIndex = range.lowerBound.line - 1
+        let inclusiveEndLine = range.upperBound.column == 1
+            && range.upperBound.line > range.lowerBound.line
+            ? range.upperBound.line - 1
+            : range.upperBound.line
+        let endIndex = inclusiveEndLine - 1
+        guard sourceLines.indices.contains(startIndex),
+              sourceLines.indices.contains(endIndex),
+              startIndex <= endIndex else { return nil }
+        return MarkdownTableSource.sourceRows(
+            from: Array(sourceLines[startIndex...endIndex])
+        )
     }
 
     mutating func visitTableHead(_ tableHead: Table.Head) {
@@ -579,6 +613,13 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
 
         let element = inTableHead ? "th" : "td"
         result += "<\(element) data-table-row=\"\(currentTableRow)\" data-table-column=\"\(currentTableColumn)\""
+
+        if let rows = tableSourceRows,
+           rows.indices.contains(currentTableRow),
+           rows[currentTableRow].indices.contains(currentTableColumn) {
+            let source = rows[currentTableRow][currentTableColumn]
+            result += " data-table-markdown=\"\(escapeAttribute(source))\""
+        }
 
         if let alignment = alignments[currentTableColumn] {
             result += " align=\"\(alignment)\""
