@@ -2372,6 +2372,11 @@ nonisolated enum MarkdownHTML {
         background: var(--code-bg);
         border-radius: 6px;
     }
+    :not(pre) > code {
+        overflow-wrap: anywhere;
+        -webkit-box-decoration-break: clone;
+        box-decoration-break: clone;
+    }
     pre {
         position: relative;
         margin: 0.8em 0 0;
