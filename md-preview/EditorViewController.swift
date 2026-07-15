@@ -306,6 +306,15 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             /* Match WebKit's native selection tint in read-only mode. */
             background: Highlight !important;
         }
+        /* CodeMirror draws its own caret via drawSelection (a bordered div),
+           so `caret-color` on .cm-content above never reaches it. The bundled
+           theme paints the caret literal black and only switches to a light
+           color when the EditorView is constructed with dark:true — which we
+           don't do (we theme through prefers-color-scheme). Tie the primary
+           caret to our palette so it's white in dark mode, black in light. */
+        #editor .cm-cursor-primary {
+            border-left-color: var(--text) !important;
+        }
 
         /* Headings — preview's scale, padding instead of margin so
            CodeMirror's per-line height measurement stays exact.
