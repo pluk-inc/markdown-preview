@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.0.36] – 2026-07-15
+
+Markdown Preview is now available in the official Homebrew cask repository, tall Mermaid diagrams can expand to the full article width, and this release fixes two rendering issues in dark mode and long inline code.
+
+### Added
+
+- **Full-width toggle for Mermaid diagrams.** Tall Mermaid diagrams stay compact and centered by default, with a one-click control beside the zoom HUD to fill the article width and restore the fitted layout ([#195](https://github.com/pluk-inc/markdown-preview/pull/195)).
+
+### Changed
+
+- **Official Homebrew cask.** Markdown Preview was accepted into the official homebrew/cask repository — install with `brew install --cask markdown-preview`, no tap needed. New versions are picked up automatically from GitHub releases ([#196](https://github.com/pluk-inc/markdown-preview/pull/196)).
+
+### Fixed
+
+- **The editing cursor is visible in dark mode.** The insertion point no longer renders black-on-black when editing with the system in dark mode ([#194](https://github.com/pluk-inc/markdown-preview/pull/194)).
+- **Long inline code no longer gets clipped.** Long inline code tokens now wrap instead of being cut off at the page edge, keeping every glyph and its background intact ([#193](https://github.com/pluk-inc/markdown-preview/pull/193)).
+
+### Contributors
+
+Thanks to the external contributors who shipped in this release:
+
+- [@defia](https://github.com/defia) — full-width toggle for Mermaid diagrams ([#195](https://github.com/pluk-inc/markdown-preview/pull/195))
+- [@ivalkenburg](https://github.com/ivalkenburg) — fixed the black cursor in dark mode ([#194](https://github.com/pluk-inc/markdown-preview/pull/194))
+- [@berenar](https://github.com/berenar) — fixed clipping for long inline code ([#193](https://github.com/pluk-inc/markdown-preview/pull/193))
+
 ## [0.0.35] – 2026-07-14
 
 Markdown Preview now lets you edit Markdown tables directly in the rendered document, with native controls for managing rows and columns.
