@@ -2,15 +2,11 @@
 
 ## [0.0.36] – 2026-07-15
 
-Markdown Preview is now available in the official Homebrew cask repository, tall Mermaid diagrams can expand to the full article width, and this release fixes two rendering issues in dark mode and long inline code.
+Tall Mermaid diagrams can now expand to the full article width, and this release fixes two rendering issues in dark mode and long inline code.
 
 ### Added
 
 - **Full-width toggle for Mermaid diagrams.** Tall Mermaid diagrams stay compact and centered by default, with a one-click control beside the zoom HUD to fill the article width and restore the fitted layout ([#195](https://github.com/pluk-inc/markdown-preview/pull/195)).
-
-### Changed
-
-- **Official Homebrew cask.** Markdown Preview was accepted into the official homebrew/cask repository — install with `brew install --cask markdown-preview`, no tap needed. New versions are picked up automatically from GitHub releases ([#196](https://github.com/pluk-inc/markdown-preview/pull/196)).
 
 ### Fixed
 
