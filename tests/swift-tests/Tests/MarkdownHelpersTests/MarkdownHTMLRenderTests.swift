@@ -1,7 +1,61 @@
 import XCTest
+import WebKit
 @testable import MarkdownHelpers
 
 final class MarkdownHTMLRenderTests: XCTestCase {
+    @MainActor
+    func testLongInlineCodeInHeadingStaysWithinViewport() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: "## 1. New port — `src/features/imageUpload/application/repositoryInterfaces/imageProcessedPublisherInterface.ts`",
+            vendorLoading: .lazy
+        )
+        let stylesheet = try XCTUnwrap(
+            rendered.html
+                .components(separatedBy: "<style>")
+                .dropFirst()
+                .first?
+                .components(separatedBy: "</style>")
+                .first
+        )
+        let html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>\(stylesheet)</style>
+        </head>
+        <body><article class="markdown-body">\(rendered.articleHTML)</article></body>
+        </html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 500, height: 600))
+
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const heading = document.querySelector('h2');
+            const code = heading.querySelector('code');
+            const style = getComputedStyle(code);
+            return JSON.stringify({
+                headingClientWidth: heading.clientWidth,
+                headingScrollWidth: heading.scrollWidth,
+                codeRight: code.getBoundingClientRect().right,
+                viewportRight: document.documentElement.clientWidth,
+                boxDecorationBreak: style.webkitBoxDecorationBreak,
+            });
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let metrics = try JSONDecoder().decode(HeadingLayoutMetrics.self, from: Data(json.utf8))
+
+        XCTAssertLessThanOrEqual(metrics.headingScrollWidth, metrics.headingClientWidth)
+        XCTAssertLessThanOrEqual(metrics.codeRight, metrics.viewportRight)
+        XCTAssertEqual(metrics.boxDecorationBreak, "clone")
+    }
+
     func testReadModeLeavesSelectionPaintingToWebKit() {
         let rendered = MarkdownHTML.render(
             markdown: "Select this text.",
@@ -300,4 +354,12 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(withoutColumn.contains("| Name"))
         XCTAssertTrue(withoutColumn.contains("| One"))
     }
+}
+
+private struct HeadingLayoutMetrics: Decodable {
+    let headingClientWidth: CGFloat
+    let headingScrollWidth: CGFloat
+    let codeRight: CGFloat
+    let viewportRight: CGFloat
+    let boxDecorationBreak: String
 }
