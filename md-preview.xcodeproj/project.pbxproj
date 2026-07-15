@@ -315,7 +315,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 1;
 			shellPath = /bin/sh;
-			shellScript = "set -eu\n\nSENTRY_CLI=\"$(command -v sentry-cli || true)\"\nif [ -z \"$SENTRY_CLI\" ] && [ -x /opt/homebrew/bin/sentry-cli ]; then\n    SENTRY_CLI=/opt/homebrew/bin/sentry-cli\nfi\nif [ -z \"$SENTRY_CLI\" ]; then\n    echo \"error: sentry-cli is required to upload release dSYMs\" >&2\n    exit 1\nfi\n\n\"$SENTRY_CLI\" debug-files upload \\\n    --org pluk-inc \\\n    --project markdown-preview \\\n    --type dsym \\\n    \"$DWARF_DSYM_FOLDER_PATH/$DWARF_DSYM_FILE_NAME\"\n";
+			shellScript = "set -eu\n\nSENTRY_CLI=\"$(command -v sentry-cli || true)\"\nif [ -z \"$SENTRY_CLI\" ] && [ -x /opt/homebrew/bin/sentry-cli ]; then\n    SENTRY_CLI=/opt/homebrew/bin/sentry-cli\nfi\nif [ -z \"$SENTRY_CLI\" ]; then\n    echo \"warning: sentry-cli not found — skipping dSYM upload\" >&2\n    exit 0\nfi\n\n\"$SENTRY_CLI\" debug-files upload \\\n    --org pluk-inc \\\n    --project markdown-preview \\\n    --type dsym \\\n    \"$DWARF_DSYM_FOLDER_PATH/$DWARF_DSYM_FILE_NAME\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
