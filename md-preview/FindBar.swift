@@ -16,12 +16,12 @@ final class FindBar: NSView {
     var onDone: (() -> Void)?
     var onModeChanged: ((SearchMode) -> Void)?
 
-    private let modeLabel = NSTextField(labelWithString: "Match:")
-    private let containsButton = NSButton(title: "Contains", target: nil, action: nil)
-    private let beginsWithButton = NSButton(title: "Begins With", target: nil, action: nil)
+    private let modeLabel = NSTextField(labelWithString: NSLocalizedString("Match:", comment: "Find bar label for match mode"))
+    private let containsButton = NSButton(title: NSLocalizedString("Contains", comment: "Find mode: contains"), target: nil, action: nil)
+    private let beginsWithButton = NSButton(title: NSLocalizedString("Begins With", comment: "Find mode: begins with"), target: nil, action: nil)
     private let countLabel = NSTextField(labelWithString: "")
     private let navigationControl = NSSegmentedControl()
-    private let doneButton = NSButton(title: "Done", target: nil, action: nil)
+    private let doneButton = NSButton(title: NSLocalizedString("Done", comment: "Find bar done button"), target: nil, action: nil)
     private let bottomSeparator = HairlineSeparator()
 
     private enum NavigationSegment: Int {
@@ -41,9 +41,9 @@ final class FindBar: NSView {
 
     func update(matchCount: Int, currentIndex: Int) {
         if matchCount == 0 {
-            countLabel.stringValue = "Not found"
+            countLabel.stringValue = NSLocalizedString("Not found", comment: "Find bar no results")
         } else {
-            countLabel.stringValue = "\(currentIndex) of \(matchCount)"
+            countLabel.stringValue = String(format: NSLocalizedString("%d of %d", comment: "Find bar match count: current of total"), currentIndex, matchCount)
         }
         let hasMatches = matchCount > 0
         navigationControl.setEnabled(hasMatches, forSegment: NavigationSegment.previous.rawValue)
@@ -129,9 +129,9 @@ final class FindBar: NSView {
 
     private func configureNavigationControl() {
         let previous = NSImage(systemSymbolName: "chevron.left",
-                               accessibilityDescription: "Previous match") ?? NSImage()
+                               accessibilityDescription: NSLocalizedString("Previous match", comment: "Find bar previous button")) ?? NSImage()
         let next = NSImage(systemSymbolName: "chevron.right",
-                           accessibilityDescription: "Next match") ?? NSImage()
+                           accessibilityDescription: NSLocalizedString("Next match", comment: "Find bar next button")) ?? NSImage()
         previous.isTemplate = true
         next.isTemplate = true
 

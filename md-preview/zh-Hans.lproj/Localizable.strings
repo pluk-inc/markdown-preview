@@ -1,0 +1,222 @@
+/* 窗口标题 - 主窗口默认标题 */
+"Markdown Preview" = "Markdown Preview";
+
+/* 窗口标题 - 无文件打开时的默认标题 */
+"Untitled" = "未命名";
+
+/* 窗口副标题 - 文档有未保存的编辑 */
+"Edited" = "已编辑";
+
+/* ===== 主菜单 ===== */
+
+/* 文件菜单 */
+"File" = "文件";
+
+/* 文件菜单 - 新建标签页 */
+"New Tab" = "新建标签页";
+
+/* 前往菜单 */
+"Go" = "前往";
+
+/* 前往菜单项 */
+"Up" = "向上";
+"Down" = "向下";
+"Page Up" = "上翻页";
+"Page Down" = "下翻页";
+"Previous Item" = "上一项";
+"Next Item" = "下一项";
+"Top of Document" = "文档开头";
+"Bottom of Document" = "文档末尾";
+
+/* 窗口菜单 */
+"Window" = "窗口";
+
+/* 视图菜单 */
+"View" = "视图";
+
+/* 视图菜单项 */
+"Actual Size" = "实际大小";
+"Zoom In" = "放大";
+"Zoom Out" = "缩小";
+"Show Sidebar" = "显示侧边栏";
+"Hide Sidebar" = "隐藏侧边栏";
+"Table of Contents" = "目录";
+"Project Navigator" = "项目导航";
+"Toggle Edit Mode" = "切换编辑模式";
+
+/* 外观子菜单 */
+"Appearance" = "外观";
+
+/* 外观模式 */
+"Automatic" = "自动";
+"Light" = "浅色";
+"Dark" = "深色";
+
+/* 内容宽度子菜单 */
+"Content Width" = "内容宽度";
+
+/* 内容宽度设置 */
+"Normal" = "标准";
+"Full Width" = "全宽";
+
+/* 格式菜单 */
+"Format" = "格式";
+
+/* 格式菜单项 */
+"Body" = "正文";
+"Heading 1" = "标题 1";
+"Heading 2" = "标题 2";
+"Heading 3" = "标题 3";
+"Bold" = "粗体";
+"Italic" = "斜体";
+"Strikethrough" = "删除线";
+"Inline Code" = "行内代码";
+"Link" = "链接";
+"Bulleted List" = "无序列表";
+"Numbered List" = "有序列表";
+"Checklist" = "任务列表";
+"Block Quote" = "块引用";
+
+/* 应用菜单 */
+"Install CLI..." = "安装命令行工具...";
+"Check for Updates…" = "检查更新…";
+
+/* 打开面板 */
+"Choose a Markdown file or folder" = "选择 Markdown 文件或文件夹";
+
+/* ===== 工具栏 ===== */
+
+"Navigation" = "导航";
+"Back and Forward" = "后退和前进";
+"Sidebar" = "侧边栏";
+"Back" = "后退";
+"Forward" = "前进";
+"Sidebar options" = "侧边栏选项";
+"Inspector" = "检查器";
+"Get Info" = "显示信息";
+"Show the inspector" = "显示检查器";
+"Share" = "分享";
+"Share document" = "分享文档";
+"Print" = "打印";
+"Print document" = "打印文档";
+"Copy" = "复制";
+"Copy Markdown source to clipboard" = "复制 Markdown 源码到剪贴板";
+"Copied" = "已复制";
+"Edit" = "编辑";
+"Edit document" = "编辑文档";
+"Stop editing and return to preview" = "停止编辑并返回预览";
+"Open" = "打开";
+"Open document in another app" = "在其他应用中打开文档";
+"Open With" = "用其他应用打开";
+"Open in another editor" = "在其他编辑器中打开";
+"Open in LLM" = "在 LLM 中打开";
+"Open document in an LLM app" = "在 LLM 应用中打开文档";
+"Search" = "搜索";
+"Search in document" = "在文档中搜索";
+"Search in Document" = "搜索文档";
+"Zoom" = "缩放";
+
+/* 格式工具栏 */
+"Heading" = "标题";
+"Normal Text" = "普通文本";
+"Heading %d" = "标题 %d";
+"Task List" = "任务列表";
+
+/* 菜单禁用项 */
+"No document open" = "没有打开文档";
+"No apps available" = "没有可用应用";
+"No editors available" = "没有可用编辑器";
+"No LLM apps available" = "没有可用的 LLM 应用";
+"Editors" = "编辑器";
+"AI Apps" = "AI 应用";
+"Open in LLM…" = "在 LLM 中打开…";
+"Open with…" = "用…打开";
+"Open As" = "打开方式";
+"Open with External Editor" = "用外部编辑器打开";
+"Open in %@" = "在 %@ 中打开";
+
+/* ===== 查找栏 ===== */
+
+"Match:" = "匹配：";
+"Contains" = "包含";
+"Begins With" = "开头是";
+"Not found" = "未找到";
+"%d of %d" = "%d / %d";
+"Done" = "完成";
+"Previous match" = "上一个匹配";
+"Next match" = "下一个匹配";
+
+/* ===== 表格上下文菜单 ===== */
+
+"Table" = "表格";
+"Row" = "行";
+"Column" = "列";
+"Select Row" = "选择行";
+"Add Row Above" = "在上方添加行";
+"Add Row Below" = "在下方添加行";
+"Duplicate Row" = "复制行";
+"Delete Row" = "删除行";
+"Select Column" = "选择列";
+"Add Column Left" = "在左侧添加列";
+"Add Column Right" = "在右侧添加列";
+"Delete Column" = "删除列";
+
+/* ===== 侧边栏上下文菜单 ===== */
+
+"Show in Finder" = "在 Finder 中显示";
+"Open in New Tab" = "在新标签页中打开";
+"Open in New Window" = "在新窗口中打开";
+"Copy Path" = "复制路径";
+
+/* ===== 检查器 ===== */
+
+"Inspector tab" = "检查器标签";
+"File Name" = "文件名";
+"Document Type" = "文档类型";
+"Markdown Document" = "Markdown 文档";
+"File Size" = "文件大小";
+"Words" = "字数";
+"Characters" = "字符数";
+"Lines" = "行数";
+"Headings" = "标题数";
+"Links" = "链接数";
+"Images" = "图片数";
+"Modified" = "修改时间";
+"No frontmatter" = "无前置元数据";
+
+/* ===== 警告对话框 ===== */
+
+/* 保存确认 */
+"Do you want to save your changes?" = "要保存你的更改吗？";
+"Your changes to %@ will be lost if you don't save them." = "如果不保存，你对 %@ 的更改将会丢失。";
+"Save" = "保存";
+"Don't Save" = "不保存";
+"Cancel" = "取消";
+
+/* 外部编辑冲突 */
+"This document changed on disk" = "此文档在磁盘上已更改";
+"Another app changed %@. Cancel keeps your changes unsaved. Choose which version to keep." = "另一个应用更改了 %@。取消将保留未保存的更改。请选择要保留的版本。";
+"Keep My Changes" = "保留我的更改";
+"Reload from Disk" = "从磁盘重新加载";
+
+/* 文件不可用 */
+"Unable to verify the document on disk" = "无法验证磁盘上的文档";
+"The file was removed while it was open." = "文件在打开时被移除了。";
+"Recreate File" = "重新创建文件";
+"The file could not be read to verify that it is unchanged." = "无法读取文件以验证其未被更改。";
+"Save Anyway" = "仍然保存";
+"Markdown Preview needs your permission to save this file." = "Markdown Preview 需要你的权限才能保存此文件。";
+
+/* 撤销操作名称 */
+"Edit Table Cell" = "编辑表格单元格";
+"Add Row" = "添加行";
+"Delete Row" = "删除行";
+"Add Column" = "添加列";
+"Delete Column" = "删除列";
+"Edit Table" = "编辑表格";
+
+/* ===== 错误信息 ===== */
+
+"Terminal automation failed: %@" = "终端自动化失败：%@";
+"Terminal automation failed." = "终端自动化失败。";
+"Failed to write CLI installer script: %@" = "写入 CLI 安装脚本失败：%@";

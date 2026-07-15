@@ -15,11 +15,11 @@ private enum CommandLineToolInstallError: LocalizedError {
         switch self {
         case .terminalAutomationFailed(let message):
             if let message, !message.isEmpty {
-                return "Terminal automation failed: \(message)"
+                return String(format: NSLocalizedString("Terminal automation failed: %@", comment: "Error when CLI install automation fails"), message)
             }
-            return "Terminal automation failed."
+            return NSLocalizedString("Terminal automation failed.", comment: "Error when CLI install automation fails with no details")
         case .installerScriptWriteFailed(let message):
-            return "Failed to write CLI installer script: \(message)"
+            return String(format: NSLocalizedString("Failed to write CLI installer script: %@", comment: "Error when writing CLI installer script fails"), message)
         }
     }
 }
@@ -59,9 +59,9 @@ private enum AppAppearanceMode: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .automatic: return "Automatic"
-        case .light: return "Light"
-        case .dark: return "Dark"
+        case .automatic: return NSLocalizedString("Automatic", comment: "Appearance mode: automatic")
+        case .light: return NSLocalizedString("Light", comment: "Appearance mode: light")
+        case .dark: return NSLocalizedString("Dark", comment: "Appearance mode: dark")
         }
     }
 
@@ -348,7 +348,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
-        panel.message = "Choose a Markdown file or folder"
+        panel.message = NSLocalizedString("Choose a Markdown file or folder", comment: "Open panel message")
         panel.allowedContentTypes = Self.markdownFileExtensions
             .compactMap { UTType(filenameExtension: $0) }
         return panel
@@ -586,7 +586,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func installNewTabMenuItem() {
         guard let fileMenu = NSApp.mainMenu?.items
-            .first(where: { $0.title == "File" })?.submenu,
+            .first(where: { $0.title == NSLocalizedString("File", comment: "File menu") })?.submenu,
               fileMenu.items.first(where: {
                   $0.action == #selector(NSResponder.newWindowForTab(_:))
               }) == nil else { return }
@@ -594,7 +594,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // nil target: resolves through the responder chain to the key
         // document window's controller, and disables itself when no
         // document window is open.
-        let item = NSMenuItem(title: "New Tab",
+        let item = NSMenuItem(title: NSLocalizedString("New Tab", comment: "File menu item"),
                               action: #selector(NSResponder.newWindowForTab(_:)),
                               keyEquivalent: "t")
         let insertIndex = fileMenu.items
@@ -604,7 +604,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func installGoMenu() {
         guard let mainMenu = NSApp.mainMenu,
-              mainMenu.items.first(where: { $0.title == "Go" }) == nil else { return }
+              mainMenu.items.first(where: { $0.title == NSLocalizedString("Go", comment: "Go menu") }) == nil else { return }
 
         func arrow(_ functionKey: Int) -> String {
             UnicodeScalar(functionKey).map { String(Character($0)) } ?? ""
@@ -627,24 +627,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return item
         }
 
-        let menu = NSMenu(title: "Go")
+        let menu = NSMenu(title: NSLocalizedString("Go", comment: "Go menu"))
 
-        menu.addItem(makeItem("Up",
+        menu.addItem(makeItem(NSLocalizedString("Up", comment: "Go menu item"),
                               action: #selector(NSResponder.scrollLineUp(_:)),
                               keyEquivalent: arrow(NSUpArrowFunctionKey),
                               modifiers: [],
                               symbol: "arrow.up"))
-        menu.addItem(makeItem("Down",
+        menu.addItem(makeItem(NSLocalizedString("Down", comment: "Go menu item"),
                               action: #selector(NSResponder.scrollLineDown(_:)),
                               keyEquivalent: arrow(NSDownArrowFunctionKey),
                               modifiers: [],
                               symbol: "arrow.down"))
-        menu.addItem(makeItem("Page Up",
+        menu.addItem(makeItem(NSLocalizedString("Page Up", comment: "Go menu item"),
                               action: #selector(NSResponder.scrollPageUp(_:)),
                               keyEquivalent: arrow(NSPageUpFunctionKey),
                               modifiers: [],
                               symbol: "chevron.up.square"))
-        menu.addItem(makeItem("Page Down",
+        menu.addItem(makeItem(NSLocalizedString("Page Down", comment: "Go menu item"),
                               action: #selector(NSResponder.scrollPageDown(_:)),
                               keyEquivalent: arrow(NSPageDownFunctionKey),
                               modifiers: [],
@@ -652,12 +652,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
-        menu.addItem(makeItem("Previous Item",
+        menu.addItem(makeItem(NSLocalizedString("Previous Item", comment: "Go menu item"),
                               action: #selector(MarkdownWebView.mdScrollPreviousHeading(_:)),
                               keyEquivalent: arrow(NSUpArrowFunctionKey),
                               modifiers: .option,
                               symbol: "arrow.up.document"))
-        menu.addItem(makeItem("Next Item",
+        menu.addItem(makeItem(NSLocalizedString("Next Item", comment: "Go menu item"),
                               action: #selector(MarkdownWebView.mdScrollNextHeading(_:)),
                               keyEquivalent: arrow(NSDownArrowFunctionKey),
                               modifiers: .option,
@@ -665,32 +665,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
-        menu.addItem(makeItem("Top of Document",
+        menu.addItem(makeItem(NSLocalizedString("Top of Document", comment: "Go menu item"),
                               action: #selector(NSResponder.scrollToBeginningOfDocument(_:)),
                               keyEquivalent: arrow(NSUpArrowFunctionKey),
                               modifiers: .command,
                               symbol: "arrow.up.to.line"))
-        menu.addItem(makeItem("Bottom of Document",
+        menu.addItem(makeItem(NSLocalizedString("Bottom of Document", comment: "Go menu item"),
                               action: #selector(NSResponder.scrollToEndOfDocument(_:)),
                               keyEquivalent: arrow(NSDownArrowFunctionKey),
                               modifiers: .command,
                               symbol: "arrow.down.to.line"))
 
-        let goItem = NSMenuItem(title: "Go", action: nil, keyEquivalent: "")
+        let goItem = NSMenuItem(title: NSLocalizedString("Go", comment: "Go menu"), action: nil, keyEquivalent: "")
         goItem.submenu = menu
 
-        let insertIndex = mainMenu.items.firstIndex(where: { $0.title == "Window" })
+        let insertIndex = mainMenu.items.firstIndex(where: { $0.title == NSLocalizedString("Window", comment: "Window menu") })
             ?? mainMenu.items.count
         mainMenu.insertItem(goItem, at: insertIndex)
     }
 
     private func installZoomMenuItemIcons() {
         guard let viewMenu = NSApp.mainMenu?.items
-            .first(where: { $0.title == "View" })?.submenu else { return }
+            .first(where: { $0.title == NSLocalizedString("View", comment: "View menu") })?.submenu else { return }
         let icons: [(title: String, symbol: String)] = [
-            ("Actual Size", "magnifyingglass"),
-            ("Zoom In", "plus.magnifyingglass"),
-            ("Zoom Out", "minus.magnifyingglass")
+            (NSLocalizedString("Actual Size", comment: "View menu item"), "magnifyingglass"),
+            (NSLocalizedString("Zoom In", comment: "View menu item"), "plus.magnifyingglass"),
+            (NSLocalizedString("Zoom Out", comment: "View menu item"), "minus.magnifyingglass")
         ]
         for (title, symbol) in icons {
             guard let item = viewMenu.items.first(where: { $0.title == title }),
@@ -704,17 +704,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func installAppearanceMenuItems() {
         guard let viewMenu = NSApp.mainMenu?.items
-            .first(where: { $0.title == "View" })?.submenu,
-              viewMenu.items.first(where: { $0.title == "Appearance" }) == nil else { return }
+            .first(where: { $0.title == NSLocalizedString("View", comment: "View menu") })?.submenu,
+              viewMenu.items.first(where: { $0.title == NSLocalizedString("Appearance", comment: "Appearance submenu") }) == nil else { return }
 
-        let appearanceItem = NSMenuItem(title: "Appearance", action: nil, keyEquivalent: "")
+        let appearanceItem = NSMenuItem(title: NSLocalizedString("Appearance", comment: "Appearance submenu"), action: nil, keyEquivalent: "")
         if let image = NSImage(systemSymbolName: "circle.lefthalf.filled",
-                               accessibilityDescription: "Appearance") {
+                               accessibilityDescription: NSLocalizedString("Appearance", comment: "Accessibility description for appearance icon")) {
             image.isTemplate = true
             appearanceItem.image = image
         }
 
-        let submenu = NSMenu(title: "Appearance")
+        let submenu = NSMenu(title: NSLocalizedString("Appearance", comment: "Appearance submenu"))
         for mode in AppAppearanceMode.allCases {
             let item = NSMenuItem(title: mode.title,
                                   action: #selector(selectAppearanceMode(_:)),
@@ -740,17 +740,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func installContentWidthMenuItems() {
         guard let viewMenu = NSApp.mainMenu?.items
-            .first(where: { $0.title == "View" })?.submenu,
-              viewMenu.items.first(where: { $0.title == "Content Width" }) == nil else { return }
+            .first(where: { $0.title == NSLocalizedString("View", comment: "View menu") })?.submenu,
+              viewMenu.items.first(where: { $0.title == NSLocalizedString("Content Width", comment: "Content Width submenu") }) == nil else { return }
 
-        let widthItem = NSMenuItem(title: "Content Width", action: nil, keyEquivalent: "")
+        let widthItem = NSMenuItem(title: NSLocalizedString("Content Width", comment: "Content Width submenu"), action: nil, keyEquivalent: "")
         if let image = NSImage(systemSymbolName: "arrow.left.and.right.text.vertical",
-                               accessibilityDescription: "Content Width") {
+                               accessibilityDescription: NSLocalizedString("Content Width", comment: "Accessibility description for content width icon")) {
             image.isTemplate = true
             widthItem.image = image
         }
 
-        let submenu = NSMenu(title: "Content Width")
+        let submenu = NSMenu(title: NSLocalizedString("Content Width", comment: "Content Width submenu"))
         for setting in ContentWidthSetting.allCases {
             let item = NSMenuItem(title: setting.title,
                                   action: #selector(selectContentWidthSetting(_:)),
@@ -814,7 +814,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               let appMenu = updatesItem.menu
         else { return }
 
-        let cliItem = NSMenuItem(title: "Install CLI...",
+        let cliItem = NSMenuItem(title: NSLocalizedString("Install CLI...", comment: "App menu item to install CLI tools"),
                                  action: #selector(installCommandLineTools(_:)),
                                  keyEquivalent: "")
         cliItem.target = self
@@ -836,9 +836,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func installSidebarViewMenuItems() {
         guard let viewMenu = NSApp.mainMenu?.items
-            .first(where: { $0.title == "View" })?.submenu else { return }
+            .first(where: { $0.title == NSLocalizedString("View", comment: "View menu") })?.submenu else { return }
 
-        if let existing = viewMenu.items.first(where: { $0.title == "Show Sidebar" }) {
+        if let existing = viewMenu.items.first(where: { $0.title == NSLocalizedString("Show Sidebar", comment: "View menu item") }) {
             viewMenu.removeItem(existing)
         }
         guard viewMenu.items.first(where: { $0.action == #selector(hideSidebarFromMenu(_:)) }) == nil else {
@@ -847,22 +847,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let insertIndex = (viewMenu.items.firstIndex(where: { $0.isSeparatorItem }) ?? -1) + 1
 
-        let hide = makeSidebarViewMenuItem(title: "Hide Sidebar",
+        let hide = makeSidebarViewMenuItem(title: NSLocalizedString("Hide Sidebar", comment: "View menu item"),
                                            symbol: "sidebar.leading",
                                            keyEquivalent: "1",
                                            action: #selector(hideSidebarFromMenu(_:)))
         viewMenu.insertItem(hide, at: insertIndex)
         hideSidebarMenuItem = hide
 
-        let outline = makeSidebarViewMenuItem(title: "Table of Contents",
-                                              symbol: "list.bullet.indent",
+        let outline = makeSidebarViewMenuItem(title: NSLocalizedString("Table of Contents", comment: "View menu item"),
+                                               symbol: "list.bullet.indent",
                                               keyEquivalent: "2",
                                               action: #selector(selectOutlineMode(_:)))
         viewMenu.insertItem(outline, at: insertIndex + 1)
         outlineMenuItem = outline
 
-        let files = makeSidebarViewMenuItem(title: "Project Navigator",
-                                            symbol: "folder",
+        let files = makeSidebarViewMenuItem(title: NSLocalizedString("Project Navigator", comment: "View menu item"),
+                                             symbol: "folder",
                                             keyEquivalent: "3",
                                             action: #selector(selectFilesMode(_:)))
         viewMenu.insertItem(files, at: insertIndex + 2)
@@ -873,12 +873,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func installEditModeMenuItem() {
         guard let viewMenu = NSApp.mainMenu?.items
-            .first(where: { $0.title == "View" })?.submenu,
+            .first(where: { $0.title == NSLocalizedString("View", comment: "View menu") })?.submenu,
               viewMenu.items.first(where: {
                   $0.action == #selector(toggleEditModeFromMenu(_:))
               }) == nil else { return }
 
-        let item = NSMenuItem(title: "Toggle Edit Mode",
+        let item = NSMenuItem(title: NSLocalizedString("Toggle Edit Mode", comment: "View menu item"),
                               action: #selector(toggleEditModeFromMenu(_:)),
                               keyEquivalent: "e")
         item.keyEquivalentModifierMask = [.command]
@@ -896,7 +896,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func installFormatMenu() {
         guard let mainMenu = NSApp.mainMenu,
-              mainMenu.items.first(where: { $0.title == "Format" }) == nil else { return }
+              mainMenu.items.first(where: { $0.title == NSLocalizedString("Format", comment: "Format menu") }) == nil else { return }
 
         func item(_ title: String,
                   command: String,
@@ -911,26 +911,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return item
         }
 
-        let menu = NSMenu(title: "Format")
-        menu.addItem(item("Body", command: "h0"))
-        menu.addItem(item("Heading 1", command: "h1", key: "1", modifiers: [.shift, .command]))
-        menu.addItem(item("Heading 2", command: "h2", key: "2", modifiers: [.shift, .command]))
-        menu.addItem(item("Heading 3", command: "h3", key: "3", modifiers: [.shift, .command]))
+        let menu = NSMenu(title: NSLocalizedString("Format", comment: "Format menu"))
+        menu.addItem(item(NSLocalizedString("Body", comment: "Format menu item"), command: "h0"))
+        menu.addItem(item(NSLocalizedString("Heading 1", comment: "Format menu item"), command: "h1", key: "1", modifiers: [.shift, .command]))
+        menu.addItem(item(NSLocalizedString("Heading 2", comment: "Format menu item"), command: "h2", key: "2", modifiers: [.shift, .command]))
+        menu.addItem(item(NSLocalizedString("Heading 3", comment: "Format menu item"), command: "h3", key: "3", modifiers: [.shift, .command]))
         menu.addItem(.separator())
-        menu.addItem(item("Bold", command: "bold", key: "b"))
-        menu.addItem(item("Italic", command: "italic", key: "i"))
-        menu.addItem(item("Strikethrough", command: "strikethrough", key: "x", modifiers: [.shift, .command]))
-        menu.addItem(item("Inline Code", command: "code", key: "`"))
-        menu.addItem(item("Link", command: "link", key: "k"))
+        menu.addItem(item(NSLocalizedString("Bold", comment: "Format menu item"), command: "bold", key: "b"))
+        menu.addItem(item(NSLocalizedString("Italic", comment: "Format menu item"), command: "italic", key: "i"))
+        menu.addItem(item(NSLocalizedString("Strikethrough", comment: "Format menu item"), command: "strikethrough", key: "x", modifiers: [.shift, .command]))
+        menu.addItem(item(NSLocalizedString("Inline Code", comment: "Format menu item"), command: "code", key: "`"))
+        menu.addItem(item(NSLocalizedString("Link", comment: "Format menu item"), command: "link", key: "k"))
         menu.addItem(.separator())
-        menu.addItem(item("Bulleted List", command: "bulletList", key: "7", modifiers: [.shift, .command]))
-        menu.addItem(item("Numbered List", command: "orderedList", key: "9", modifiers: [.shift, .command]))
-        menu.addItem(item("Checklist", command: "taskList", key: "l", modifiers: [.shift, .command]))
-        menu.addItem(item("Block Quote", command: "quote", key: "'"))
+        menu.addItem(item(NSLocalizedString("Bulleted List", comment: "Format menu item"), command: "bulletList", key: "7", modifiers: [.shift, .command]))
+        menu.addItem(item(NSLocalizedString("Numbered List", comment: "Format menu item"), command: "orderedList", key: "9", modifiers: [.shift, .command]))
+        menu.addItem(item(NSLocalizedString("Checklist", comment: "Format menu item"), command: "taskList", key: "l", modifiers: [.shift, .command]))
+        menu.addItem(item(NSLocalizedString("Block Quote", comment: "Format menu item"), command: "quote", key: "'"))
 
-        let rootItem = NSMenuItem(title: "Format", action: nil, keyEquivalent: "")
+        let rootItem = NSMenuItem(title: NSLocalizedString("Format", comment: "Format menu"), action: nil, keyEquivalent: "")
         rootItem.submenu = menu
-        let insertIndex = mainMenu.items.firstIndex(where: { $0.title == "View" })
+        let insertIndex = mainMenu.items.firstIndex(where: { $0.title == NSLocalizedString("View", comment: "View menu") })
             ?? mainMenu.items.count
         mainMenu.insertItem(rootItem, at: insertIndex)
     }

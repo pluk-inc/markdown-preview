@@ -21,7 +21,7 @@ struct DocumentMetadata: Equatable {
 extension DocumentMetadata {
     static func make(url: URL?, markdown: String) -> DocumentMetadata {
         var meta = DocumentMetadata()
-        meta.fileName = url?.lastPathComponent ?? "Untitled"
+        meta.fileName = url?.lastPathComponent ?? NSLocalizedString("Untitled", comment: "Default file name")
 
         let split = MarkdownFrontmatter.split(markdown)
         if let raw = split.raw {
@@ -55,6 +55,10 @@ struct InspectorView: View {
     enum Tab: String, CaseIterable, Identifiable {
         case document = "Document"
         case properties = "Properties"
+
+        var localized: String {
+            NSLocalizedString(rawValue, comment: "Inspector tab")
+        }
         var id: String { rawValue }
 
         var systemImage: String {
@@ -81,10 +85,10 @@ struct InspectorView: View {
     }
 
     private var tabPicker: some View {
-        Picker("Inspector tab", selection: $tab) {
+        Picker(selection: $tab, label: Text(NSLocalizedString("Inspector tab", comment: "Inspector tab picker label"))) {
             ForEach(Tab.allCases) { tab in
                 Image(systemName: tab.systemImage)
-                    .accessibilityLabel(tab.rawValue)
+                    .accessibilityLabel(tab.localized)
                     .tag(tab)
             }
         }
