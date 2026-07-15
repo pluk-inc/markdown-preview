@@ -15,6 +15,11 @@ checks = {
         and "svg.setAttribute('preserveAspectRatio', 'xMidYMid meet')" in source
         and "s.surface.style.transform" in source
     ),
+    "toggles full-width diagrams": (
+        'data-mm-act="width"' in source
+        and "classList.toggle('mermaid-width-expanded')" in source
+        and ".mermaid-figure.mermaid-width-expanded" in source
+    ),
 }
 failed = [name for name, ok in checks.items() if not ok]
 if failed:

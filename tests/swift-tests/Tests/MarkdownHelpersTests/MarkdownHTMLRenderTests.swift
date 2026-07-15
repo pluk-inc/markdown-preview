@@ -131,6 +131,115 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(rendered.articleHTML.contains("<code class=\"language-mermaid\""))
     }
 
+    @MainActor
+    func testMermaidWidthToggleExpandsAndRestoresDiagram() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ```mermaid
+            flowchart LR
+                A --> B
+            ```
+            """,
+            vendorLoading: .lazy
+        )
+        XCTAssertTrue(rendered.articleHTML.contains(
+            #"data-mm-act="width" tabindex="-1" aria-label="Fill width" aria-pressed="false""#
+        ))
+
+        let stylesheet = try XCTUnwrap(
+            rendered.html
+                .components(separatedBy: "<style>")
+                .dropFirst()
+                .first?
+                .components(separatedBy: "</style>")
+                .first
+        )
+        let html = """
+        <!DOCTYPE html>
+        <html><head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>\(stylesheet)</style>
+        </head><body><article class="markdown-body">\(rendered.articleHTML)</article>
+        <script>
+        const figure = document.querySelector('.mermaid-figure');
+        figure.style.setProperty('--mm-aspect', '1 / 4');
+        figure.querySelector('.mermaid').innerHTML = '<svg viewBox="0 0 200 800"></svg>';
+        document.querySelector('.mermaid-hud').addEventListener('click', (event) => {
+            const button = event.target.closest('[data-mm-act="width"]');
+            if (!button) return;
+            const figure = button.closest('.mermaid-figure');
+            const expanded = figure.classList.toggle('mermaid-width-expanded');
+            button.setAttribute('aria-pressed', String(expanded));
+        });
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let metricsScript = """
+        (() => {
+            const host = document.querySelector('.mermaid');
+            const figure = document.querySelector('.mermaid-figure');
+            const article = document.querySelector('.markdown-body');
+            const svg = host.querySelector('svg');
+            const button = figure.querySelector('[data-mm-act="width"]');
+            const style = getComputedStyle(host);
+            return JSON.stringify({
+                articleWidth: article.clientWidth,
+                articleLeft: article.getBoundingClientRect().left,
+                figureWidth: figure.getBoundingClientRect().width,
+                figureLeft: figure.getBoundingClientRect().left,
+                availableWidth: host.clientWidth
+                    - parseFloat(style.paddingLeft)
+                    - parseFloat(style.paddingRight),
+                svgWidth: svg.getBoundingClientRect().width,
+                expanded: figure.classList.contains('mermaid-width-expanded'),
+                buttonPressed: button?.getAttribute('aria-pressed') || '',
+            });
+        })()
+        """
+        let initialResult = try await webView.evaluateJavaScript(metricsScript)
+        let initialJSON = try XCTUnwrap(initialResult as? String)
+        let initial = try JSONDecoder().decode(MermaidLayoutMetrics.self, from: Data(initialJSON.utf8))
+
+        XCTAssertFalse(initial.expanded)
+        XCTAssertEqual(initial.buttonPressed, "false")
+        XCTAssertLessThan(initial.figureWidth, initial.articleWidth)
+        XCTAssertEqual(
+            initial.figureLeft - initial.articleLeft,
+            (initial.articleWidth - initial.figureWidth) / 2,
+            accuracy: 1
+        )
+
+        try await webView.evaluateJavaScript(
+            "document.querySelector('[data-mm-act=\"width\"]').click()"
+        )
+        let expandedResult = try await webView.evaluateJavaScript(metricsScript)
+        let expandedJSON = try XCTUnwrap(expandedResult as? String)
+        let expanded = try JSONDecoder().decode(MermaidLayoutMetrics.self, from: Data(expandedJSON.utf8))
+
+        XCTAssertTrue(expanded.expanded)
+        XCTAssertEqual(expanded.buttonPressed, "true")
+        XCTAssertEqual(expanded.figureWidth, expanded.articleWidth, accuracy: 1)
+        XCTAssertEqual(expanded.svgWidth, expanded.availableWidth, accuracy: 1)
+
+        try await webView.evaluateJavaScript(
+            "document.querySelector('[data-mm-act=\"width\"]').click()"
+        )
+        let restoredResult = try await webView.evaluateJavaScript(metricsScript)
+        let restoredJSON = try XCTUnwrap(restoredResult as? String)
+        let restored = try JSONDecoder().decode(MermaidLayoutMetrics.self, from: Data(restoredJSON.utf8))
+
+        XCTAssertFalse(restored.expanded)
+        XCTAssertEqual(restored.buttonPressed, "false")
+        XCTAssertEqual(restored.figureWidth, initial.figureWidth, accuracy: 1)
+    }
+
     func testCodeBlockLayoutMatchesDeferredHighlightingFromFirstPaint() throws {
         let rendered = MarkdownHTML.render(
             markdown: """
@@ -362,4 +471,15 @@ private struct HeadingLayoutMetrics: Decodable {
     let codeRight: CGFloat
     let viewportRight: CGFloat
     let boxDecorationBreak: String
+}
+
+private struct MermaidLayoutMetrics: Decodable {
+    let articleWidth: CGFloat
+    let articleLeft: CGFloat
+    let figureWidth: CGFloat
+    let figureLeft: CGFloat
+    let availableWidth: CGFloat
+    let svgWidth: CGFloat
+    let expanded: Bool
+    let buttonPressed: String
 }

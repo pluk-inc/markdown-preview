@@ -1886,6 +1886,7 @@ nonisolated enum MarkdownHTML {
             <button type="button" class="mermaid-hud-btn" data-mm-act="out" tabindex="-1" aria-label="Zoom out">−</button>
             <button type="button" class="mermaid-hud-btn mermaid-hud-level" data-mm-act="reset" tabindex="-1" aria-label="Reset zoom">100%</button>
             <button type="button" class="mermaid-hud-btn" data-mm-act="in" tabindex="-1" aria-label="Zoom in">+</button>
+            <button type="button" class="mermaid-hud-btn mermaid-hud-width" data-mm-act="width" tabindex="-1" aria-label="Fill width" aria-pressed="false" title="Fill width">⤢</button>
             </div>
             </figure>
             """
@@ -2045,6 +2046,23 @@ nonisolated enum MarkdownHTML {
                 apply(figure, s);
             }
 
+            function toggleWidth(figure) {
+                const expanded = figure.classList.toggle('mermaid-width-expanded');
+                const btn = figure.querySelector('[data-mm-act="width"]');
+                if (btn) {
+                    const label = expanded ? 'Fit diagram' : 'Fill width';
+                    btn.textContent = expanded ? '⤡' : '⤢';
+                    btn.setAttribute('aria-label', label);
+                    btn.setAttribute('aria-pressed', String(expanded));
+                    btn.setAttribute('title', label);
+                }
+                reset(figure);
+                requestAnimationFrame(() => {
+                    cacheRect(figure);
+                    window.dispatchEvent(new Event('md-preview-mermaid-rendered'));
+                });
+            }
+
             function step(figure, factor) {
                 const s = states.get(figure);
                 if (!s) return;
@@ -2128,6 +2146,7 @@ nonisolated enum MarkdownHTML {
                     case 'in':    step(figure, 1.25); break;
                     case 'out':   step(figure, 0.8);  break;
                     case 'reset': reset(figure);      break;
+                    case 'width': toggleWidth(figure); break;
                 }
             }
 
@@ -2471,7 +2490,7 @@ nonisolated enum MarkdownHTML {
     }
     .mermaid-figure {
         position: relative;
-        margin: 1.6em 0 0;
+        margin: 1.6em auto 0;
         background: var(--code-bg);
         border-radius: 15px;
         overflow: hidden;
@@ -2479,6 +2498,10 @@ nonisolated enum MarkdownHTML {
         aspect-ratio: var(--mm-aspect, 4 / 3);
         max-height: min(70vh, 720px);
         contain: layout paint;
+    }
+    .mermaid-figure.mermaid-width-expanded {
+        width: 100%;
+        max-height: none;
     }
     .mermaid-figure:focus-visible {
         box-shadow: 0 0 0 3px color-mix(in srgb, AccentColor 60%, transparent);
@@ -2503,6 +2526,7 @@ nonisolated enum MarkdownHTML {
     .mermaid svg {
         display: block;
         width: 100%;
+        max-width: none !important;
         height: 100%;
     }
     .mermaid-hud {
@@ -2552,6 +2576,10 @@ nonisolated enum MarkdownHTML {
     .mermaid-hud-level {
         min-width: 46px;
         font-variant-numeric: tabular-nums;
+    }
+    .mermaid-hud-width {
+        margin-left: 2px;
+        font-size: 14px;
     }
     @media (prefers-reduced-motion: reduce) {
         .mermaid-hud { transition: none; }
