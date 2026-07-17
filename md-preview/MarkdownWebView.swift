@@ -146,8 +146,8 @@ enum ContentWidthSetting: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .normal: return "Normal"
-        case .fullWidth: return "Full Width"
+        case .normal: return NSLocalizedString("Normal", comment: "Content width")
+        case .fullWidth: return NSLocalizedString("Full Width", comment: "Content width")
         }
     }
 

@@ -1,0 +1,48 @@
+/* App menu */
+"Install CLI..." = "安装命令行工具…";
+
+/* View menu */
+"Appearance" = "外观";
+"Automatic" = "自动";
+"Light" = "浅色";
+"Dark" = "深色";
+"Content Width" = "内容宽度";
+"Normal" = "标准";
+"Full Width" = "全宽";
+"Hide Sidebar" = "隐藏边栏";
+"Table of Contents" = "目录";
+"Project Navigator" = "项目导航";
+"Toggle Edit Mode" = "切换编辑模式";
+
+/* File menu */
+"New Tab" = "新建标签页";
+
+/* Go menu */
+"Go" = "前往";
+"Up" = "向上";
+"Down" = "向下";
+"Page Up" = "上一页";
+"Page Down" = "下一页";
+"Previous Item" = "上一项";
+"Next Item" = "下一项";
+"Top of Document" = "文稿开头";
+"Bottom of Document" = "文稿结尾";
+
+/* Format menu */
+"Format" = "格式";
+"Body" = "正文";
+"Heading 1" = "标题 1";
+"Heading 2" = "标题 2";
+"Heading 3" = "标题 3";
+"Bold" = "粗体";
+"Italic" = "斜体";
+"Strikethrough" = "删除线";
+"Inline Code" = "行内代码";
+"Link" = "链接";
+"Bulleted List" = "项目符号列表";
+"Numbered List" = "编号列表";
+"Checklist" = "核对清单";
+"Block Quote" = "引用";
+
+/* Open panel */
+"Choose a Markdown file or folder" = "选择 Markdown 文件或文件夹";

@@ -1,0 +1,48 @@
+/* App menu */
+"Install CLI..." = "Install CLI...";
+
+/* View menu */
+"Appearance" = "Appearance";
+"Automatic" = "Automatic";
+"Light" = "Light";
+"Dark" = "Dark";
+"Content Width" = "Content Width";
+"Normal" = "Normal";
+"Full Width" = "Full Width";
+"Hide Sidebar" = "Hide Sidebar";
+"Table of Contents" = "Table of Contents";
+"Project Navigator" = "Project Navigator";
+"Toggle Edit Mode" = "Toggle Edit Mode";
+
+/* File menu */
+"New Tab" = "New Tab";
+
+/* Go menu */
+"Go" = "Go";
+"Up" = "Up";
+"Down" = "Down";
+"Page Up" = "Page Up";
+"Page Down" = "Page Down";
+"Previous Item" = "Previous Item";
+"Next Item" = "Next Item";
+"Top of Document" = "Top of Document";
+"Bottom of Document" = "Bottom of Document";
+
+/* Format menu */
+"Format" = "Format";
+"Body" = "Body";
+"Heading 1" = "Heading 1";
+"Heading 2" = "Heading 2";
+"Heading 3" = "Heading 3";
+"Bold" = "Bold";
+"Italic" = "Italic";
+"Strikethrough" = "Strikethrough";
+"Inline Code" = "Inline Code";
+"Link" = "Link";
+"Bulleted List" = "Bulleted List";
+"Numbered List" = "Numbered List";
+"Checklist" = "Checklist";
+"Block Quote" = "Block Quote";
+
+/* Open panel */
+"Choose a Markdown file or folder" = "Choose a Markdown file or folder";
