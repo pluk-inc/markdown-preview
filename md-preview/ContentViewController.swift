@@ -10,13 +10,9 @@ final class ContentViewController: NSViewController {
     private static let pageZoomDefaultsKey = "MarkdownPreview.pageZoom"
 
     private var webView: MarkdownWebView!
-    private var documentHeightConstraint: NSLayoutConstraint!
-    private var webViewHeightConstraint: NSLayoutConstraint!
     private var webViewPageWidthConstraint: NSLayoutConstraint?
     private var webViewCenteredConstraints: [NSLayoutConstraint] = []
     private var webViewFullWidthConstraints: [NSLayoutConstraint] = []
-    private var measuredDocumentHeight: CGFloat = 1
-    private var lastLaidOutSize: NSSize = .zero
     private var pendingFlashWork: DispatchWorkItem?
     private var pendingPreviewScrollAnchor: SourceScrollAnchor?
     private var shouldApplyPendingAnchorOnHeight = false
@@ -52,25 +48,16 @@ final class ContentViewController: NSViewController {
     var localMarkdownLinkActivated: ((URL) -> Void)?
 
     override func loadView() {
-        let scrollView = NSScrollView()
-        scrollView.drawsBackground = false
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-
-        let documentView = FlippedDocumentView()
-        documentView.translatesAutoresizingMaskIntoConstraints = false
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        view = container
 
         webView = MarkdownWebView()
         webView.translatesAutoresizingMaskIntoConstraints = false
-        webView.heightDidChange = { [weak self] height in
+        webView.heightDidChange = { [weak self] _ in
             guard let self else { return }
-            if abs(height - self.measuredDocumentHeight) > 0.5 {
-                self.measuredDocumentHeight = height
-                self.applyDocumentHeight()
-                // Image load / font reflow shifted layout — re-measure offsets.
-                self.scheduleHeadingOffsetsRefresh()
-            }
+            // Image load / font reflow shifted layout — re-measure offsets.
+            self.scheduleHeadingOffsetsRefresh()
             if self.shouldApplyPendingAnchorOnHeight,
                let anchor = self.pendingPreviewScrollAnchor {
                 self.shouldApplyPendingAnchorOnHeight = false
@@ -93,29 +80,12 @@ final class ContentViewController: NSViewController {
         webView.zoomDidChange = { [weak self] zoom in
             self?.webViewPageWidthConstraint?.constant = MarkdownHTML.preferredPageWidth * zoom
         }
+        webView.scrollDidChange = { [weak self] in
+            self?.evaluateActiveHeading()
+        }
         webView.enablePersistentZoom(defaultsKey: Self.pageZoomDefaultsKey)
 
-        documentView.addSubview(webView)
-        scrollView.documentView = documentView
-        view = scrollView
-
-        // The WKWebView is sized to full document height with internal
-        // scrolling disabled — all scroll happens at the clip view. The
-        // scrollspy listens for actual position changes (not gesture-begin
-        // signals), so a trackpad gesture that can't scroll the doc — short
-        // doc — leaves a click pin intact. queue: .main lets `assumeIsolated`
-        // hop cleanly under Swift 6.
-        scrollView.contentView.postsBoundsChangedNotifications = true
-        NotificationCenter.default.addObserver(
-            forName: NSView.boundsDidChangeNotification,
-            object: scrollView.contentView,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.evaluateActiveHeading() }
-        }
-
-        documentHeightConstraint = documentView.heightAnchor.constraint(equalToConstant: 1)
-        webViewHeightConstraint = webView.heightAnchor.constraint(equalToConstant: 1)
+        container.addSubview(webView)
 
         // Normal (centered) mode caps the web view at the page width and
         // centers it in AppKit rather than letting CSS auto-margins center
@@ -134,37 +104,23 @@ final class ContentViewController: NSViewController {
         pageWidth.priority = .init(249)
         webViewPageWidthConstraint = pageWidth
         webViewCenteredConstraints = [
-            webView.centerXAnchor.constraint(equalTo: documentView.centerXAnchor),
-            webView.widthAnchor.constraint(lessThanOrEqualTo: documentView.widthAnchor),
+            webView.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            webView.widthAnchor.constraint(lessThanOrEqualTo: container.widthAnchor),
             pageWidth
         ]
         webViewFullWidthConstraints = [
-            webView.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
-            webView.trailingAnchor.constraint(equalTo: documentView.trailingAnchor)
+            webView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: container.trailingAnchor)
         ]
 
-        // Shared: document view tracks the clip width, web view pinned to
-        // the top and sized to the measured content height.
+        // Keep the WKWebView viewport-sized and let WebKit own vertical
+        // scrolling. Expanding it to the full document height creates an
+        // enormous backing surface that loses Retina resolution on long docs.
         NSLayoutConstraint.activate([
-            documentView.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
-            documentView.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
-            documentView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
-            documentHeightConstraint,
-
-            webView.topAnchor.constraint(equalTo: documentView.topAnchor),
-            webViewHeightConstraint
+            webView.topAnchor.constraint(equalTo: container.topAnchor),
+            webView.bottomAnchor.constraint(equalTo: container.bottomAnchor)
         ])
         applyContentWidthMode()
-    }
-
-    override func viewDidLayout() {
-        super.viewDidLayout()
-
-        let laidOutSize = view.bounds.size
-        guard laidOutSize != lastLaidOutSize else { return }
-
-        lastLaidOutSize = laidOutSize
-        applyDocumentHeight()
     }
 
     func display(markdown: String, assetBaseURL: URL? = nil) {
@@ -225,12 +181,9 @@ final class ContentViewController: NSViewController {
     }
 
     private func isMatchVisible(top: CGFloat, bottom: CGFloat) -> Bool {
-        guard let scrollView = view as? NSScrollView else { return true }
-        let clipView = scrollView.contentView
-        let visibleTop = clipView.bounds.origin.y + clipView.contentInsets.top
-        let visibleBottom = clipView.bounds.origin.y
-            + clipView.bounds.height
-            - clipView.contentInsets.bottom
+        let metrics = webView.scrollMetrics
+        let visibleTop = metrics.position
+        let visibleBottom = metrics.position + metrics.viewportHeight
         return top >= visibleTop && bottom <= visibleBottom
     }
 
@@ -247,22 +200,14 @@ final class ContentViewController: NSViewController {
     /// Normalized top-of-viewport position used when handing the document to
     /// the editor, whose content height differs slightly from the preview.
     var scrollProgress: CGFloat {
-        guard let scrollView = view as? NSScrollView else { return 0 }
-        let clipView = scrollView.contentView
-        let minY = -clipView.contentInsets.top
-        let maxY = max(documentHeightConstraint.constant - clipView.bounds.height
-                       + clipView.contentInsets.bottom, minY)
-        guard maxY > minY else { return 0 }
-        return min(max((clipView.bounds.origin.y - minY) / (maxY - minY), 0), 1)
+        let metrics = webView.scrollMetrics
+        let maxY = max(metrics.documentHeight - metrics.viewportHeight, 0)
+        guard maxY > 0 else { return 0 }
+        return min(max(metrics.position / maxY, 0), 1)
     }
 
     func sourceScrollAnchor(completion: @escaping (SourceScrollAnchor?) -> Void) {
-        guard let scrollView = view as? NSScrollView else {
-            completion(nil)
-            return
-        }
-        let clipView = scrollView.contentView
-        let visibleTop = clipView.bounds.origin.y + clipView.contentInsets.top
+        let visibleTop = webView.scrollMetrics.position
         webView.sourceAnchor(atDocumentY: visibleTop / webView.pageZoom, completion: completion)
     }
 
@@ -310,8 +255,7 @@ final class ContentViewController: NSViewController {
     /// the click landed releases it.
     func markHeadingActiveFromClick(_ headingID: Int) {
         let anchor = expectedScrollPosition(forHeading: headingID)
-            ?? (view as? NSScrollView)?.contentView.bounds.origin.y
-            ?? 0
+            ?? webView.scrollMetrics.position
         sticky = StickyPin(headingID: headingID,
                            holdUntil: .now() + Self.stickyHoldDuration,
                            anchor: anchor)
@@ -323,18 +267,13 @@ final class ContentViewController: NSViewController {
     /// distance reference.
     private func expectedScrollPosition(forHeading headingID: Int) -> CGFloat? {
         guard headingID >= 0,
-              headingID < headingOffsetsCSS.count,
-              let scrollView = view as? NSScrollView else { return nil }
-        let clipView = scrollView.contentView
+              headingID < headingOffsetsCSS.count else { return nil }
+        let metrics = webView.scrollMetrics
         let zoom = max(webView.pageZoom, 0.001)
-        let topInset = clipView.contentInsets.top
-        let bottomInset = clipView.contentInsets.bottom
         let topMargin: CGFloat = 12
         let y = headingOffsetsCSS[headingID] * zoom
-        let minY = -topInset
-        let maxY = max(documentHeightConstraint.constant - clipView.bounds.height + bottomInset,
-                       minY)
-        return max(minY, min(y - topInset - topMargin, maxY))
+        let maxY = max(metrics.documentHeight - metrics.viewportHeight, 0)
+        return max(0, min(y - topMargin, maxY))
     }
 
     private func scrollToElement(id: String) {
@@ -345,27 +284,7 @@ final class ContentViewController: NSViewController {
     }
 
     private func scrollDocument(to y: CGFloat, topMargin: CGFloat = 12) {
-        guard let scrollView = view as? NSScrollView else { return }
-        let clipView = scrollView.contentView
-        let topInset = clipView.contentInsets.top
-        let bottomInset = clipView.contentInsets.bottom
-        let adjusted = y - topInset - topMargin
-        let minY = -topInset
-        let maxY = max(documentHeightConstraint.constant - clipView.bounds.height + bottomInset, minY)
-        let target = max(minY, min(adjusted, maxY))
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.25
-            context.allowsImplicitAnimation = true
-            clipView.animator().setBoundsOrigin(NSPoint(x: clipView.bounds.origin.x, y: target))
-        }
-        scrollView.reflectScrolledClipView(clipView)
-    }
-
-    private func applyDocumentHeight() {
-        let resolvedHeight = max(measuredDocumentHeight, view.bounds.height, 1)
-        documentHeightConstraint.constant = resolvedHeight
-        webViewHeightConstraint.constant = resolvedHeight
-        clampScrollPosition(toDocumentHeight: resolvedHeight)
+        webView.scrollDocument(to: y, topMargin: topMargin)
     }
 
     // MARK: - Scrollspy
@@ -406,25 +325,20 @@ final class ContentViewController: NSViewController {
     }
 
     private func hasMovedFar(from anchor: CGFloat) -> Bool {
-        guard let scrollView = view as? NSScrollView else { return true }
-        let clipView = scrollView.contentView
-        let delta = abs(clipView.bounds.origin.y - anchor)
-        return delta >= clipView.bounds.height * Self.stickyReleaseFraction
+        let metrics = webView.scrollMetrics
+        let delta = abs(metrics.position - anchor)
+        return delta >= metrics.viewportHeight * Self.stickyReleaseFraction
     }
 
     /// Last heading whose top has scrolled above the activation line.
     /// Lead-heading bump handles the doc-starts-with-a-heading case;
     /// short-doc-last-heading is handled by `markHeadingActiveFromClick`.
     private func computeActiveHeadingID() -> Int? {
-        guard !headingOffsetsCSS.isEmpty,
-              let scrollView = view as? NSScrollView else { return nil }
-        let clipView = scrollView.contentView
+        guard !headingOffsetsCSS.isEmpty else { return nil }
+        let metrics = webView.scrollMetrics
         let zoom = max(webView.pageZoom, 0.001)
         let topMargin: CGFloat = 12
-        var activationLine = (clipView.bounds.origin.y
-                              + clipView.contentInsets.top
-                              + topMargin
-                              + 8) / zoom
+        var activationLine = (metrics.position + topMargin + 8) / zoom
 
         if let firstOffset = headingOffsetsCSS.first,
            firstOffset <= Self.leadHeadingThreshold,
@@ -438,24 +352,4 @@ final class ContentViewController: NSViewController {
         }
         return active
     }
-
-    private func clampScrollPosition(toDocumentHeight documentHeight: CGFloat) {
-        guard let scrollView = view as? NSScrollView else { return }
-
-        let clipView = scrollView.contentView
-        let maxY = max(documentHeight - clipView.bounds.height, 0)
-        guard clipView.bounds.origin.y > maxY else {
-            scrollView.reflectScrolledClipView(clipView)
-            return
-        }
-
-        clipView.scroll(to: NSPoint(x: clipView.bounds.origin.x, y: maxY))
-        scrollView.reflectScrolledClipView(clipView)
-    }
-}
-
-private final class FlippedDocumentView: NSView {
-    // AppKit may query view geometry from its background printing thread.
-    // This override is immutable and does not touch main-actor-owned state.
-    nonisolated override var isFlipped: Bool { true }
 }

@@ -4,6 +4,69 @@ import WebKit
 
 final class MarkdownHTMLRenderTests: XCTestCase {
     @MainActor
+    func testScrollableLongTableKeepsWebKitViewportAndScrollsDocument() async throws {
+        let rows = (1...750).map { "| \($0) | Function \($0) | 100.00% |" }
+            .joined(separator: "\n")
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            | State | Function | Match |
+            | --- | --- | ---: |
+            \(rows)
+            """,
+            allowsScroll: true,
+            vendorLoading: .lazy
+        )
+        let styleBlocks = rendered.html
+            .components(separatedBy: "<style>")
+            .dropFirst()
+            .compactMap { $0.components(separatedBy: "</style>").first }
+            .map { "<style>\($0)</style>" }
+            .joined(separator: "\n")
+        let html = """
+        <!DOCTYPE html>
+        <html><head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        \(styleBlocks)
+        </head><body><article class="markdown-body">\(rendered.articleHTML)</article></body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const root = document.scrollingElement;
+            window.scrollTo(0, root.scrollHeight);
+            return JSON.stringify({
+                viewportHeight: window.innerHeight,
+                documentHeight: root.scrollHeight,
+                scrollPosition: root.scrollTop,
+                articleHeight: document.querySelector('article')?.getBoundingClientRect().height || 0,
+                rowCount: document.querySelectorAll('tbody tr').length,
+                overflowY: getComputedStyle(document.documentElement).overflowY,
+                bodyOverflowY: getComputedStyle(document.body).overflowY,
+            });
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let metrics = try JSONDecoder().decode(
+            LongDocumentScrollMetrics.self,
+            from: Data(json.utf8)
+        )
+
+        XCTAssertEqual(metrics.viewportHeight, 600, accuracy: 1)
+        XCTAssertEqual(metrics.rowCount, 750, json)
+        XCTAssertGreaterThan(metrics.articleHeight, metrics.viewportHeight * 5, json)
+        XCTAssertGreaterThan(metrics.documentHeight, metrics.viewportHeight * 5, json)
+        XCTAssertGreaterThan(metrics.scrollPosition, metrics.viewportHeight, json)
+        XCTAssertEqual(metrics.overflowY, "auto")
+        XCTAssertEqual(metrics.bodyOverflowY, "visible")
+    }
+
+    @MainActor
     func testLongInlineCodeInHeadingStaysWithinViewport() async throws {
         let rendered = MarkdownHTML.render(
             markdown: "## 1. New port — `src/features/imageUpload/application/repositoryInterfaces/imageProcessedPublisherInterface.ts`",
@@ -471,6 +534,16 @@ private struct HeadingLayoutMetrics: Decodable {
     let codeRight: CGFloat
     let viewportRight: CGFloat
     let boxDecorationBreak: String
+}
+
+private struct LongDocumentScrollMetrics: Decodable {
+    let viewportHeight: CGFloat
+    let documentHeight: CGFloat
+    let scrollPosition: CGFloat
+    let articleHeight: CGFloat
+    let rowCount: Int
+    let overflowY: String
+    let bodyOverflowY: String
 }
 
 private struct MermaidLayoutMetrics: Decodable {

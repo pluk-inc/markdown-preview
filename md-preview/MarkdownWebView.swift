@@ -177,6 +177,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     var localMarkdownLinkActivated: ((URL) -> Void)?
     var taskCheckboxToggled: ((Int, Bool) -> Void)?
     var tableEditRequested: ((MarkdownTableEditRequest) -> Void)?
+    var scrollDidChange: (() -> Void)?
     private let assetScheme = MarkdownAssetScheme()
     private var currentAssetBase: URL?
     private let messageBridge = HostBridge()
@@ -210,13 +211,15 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     private var didMagnifyDuringCurrentGesture = false
     private var isPointerOverMermaidFigure = false
     private var currentMarkdown: String?
+    private weak var webScrollView: NSScrollView?
+    nonisolated(unsafe) private var scrollBoundsObserver: NSObjectProtocol?
 
     override init(frame frameRect: NSRect) {
         let config = WKWebViewConfiguration()
         config.setURLSchemeHandler(assetScheme, forURLScheme: MarkdownAssetScheme.scheme)
         config.userContentController.addUserScript(Self.disableContextMenuScript)
         config.userContentController.add(messageBridge, name: HostBridge.name)
-        webView = NonScrollingWKWebView(frame: .zero, configuration: config)
+        webView = PreviewWKWebView(frame: .zero, configuration: config)
         super.init(frame: frameRect)
 
         messageBridge.owner = self
@@ -231,8 +234,14 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             webView.trailingAnchor.constraint(equalTo: trailingAnchor),
         ])
         DispatchQueue.main.async { [weak self] in
-            self?.neutralizeWebKitScrollEdgeInsets()
+            self?.configureWebKitScrollView()
             self?.warmupVendors()
+        }
+    }
+
+    deinit {
+        if let scrollBoundsObserver {
+            NotificationCenter.default.removeObserver(scrollBoundsObserver)
         }
     }
 
@@ -296,12 +305,12 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
 
     override func layout() {
         super.layout()
-        neutralizeWebKitScrollEdgeInsets()
+        configureWebKitScrollView()
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        neutralizeWebKitScrollEdgeInsets()
+        configureWebKitScrollView()
     }
 
     /// Empties the visible article without unloading the page, so the next
@@ -339,6 +348,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                                 warmup: Bool = false) -> MarkdownHTML.RenderedHTML {
         let t0 = DispatchTime.now()
         let rendered = MarkdownHTML.render(markdown: markdown,
+                                           allowsScroll: true,
                                            assetBaseHref: assetBaseHref,
                                            vendorLoading: .lazy,
                                            contentWidth: contentWidth,
@@ -961,10 +971,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             const current = marks[index];
             current.classList.add('md-search-highlight-current');
 
-            // The WKWebView host disables internal scrolling and forwards it to
-            // an outer NSScrollView, so scrollIntoView() is a no-op. Hand the
-            // document-space bounds back so AppKit can scroll the clip view —
-            // and only when the match isn't already on screen.
+            // Return document-space bounds so the native host can decide
+            // whether the match is already visible before scrolling to it.
             const rect = current.getBoundingClientRect();
             const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
             return {
@@ -1001,11 +1009,34 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         case lineUp, lineDown, pageUp, pageDown, top, bottom, previousHeading, nextHeading
     }
 
-    /// Returns true when the action was handled (false if there's no outer
-    /// scroll view yet, so the keyDown forwarder falls back to super).
+    struct ScrollMetrics {
+        let position: CGFloat
+        let viewportHeight: CGFloat
+        let documentHeight: CGFloat
+    }
+
+    var scrollMetrics: ScrollMetrics {
+        guard let scrollView = webScrollView else {
+            return ScrollMetrics(
+                position: 0,
+                viewportHeight: bounds.height,
+                documentHeight: max(lastReportedDocumentHeight * webView.pageZoom, bounds.height)
+            )
+        }
+        let clipView = scrollView.contentView
+        return ScrollMetrics(
+            position: clipView.bounds.origin.y,
+            viewportHeight: clipView.bounds.height,
+            documentHeight: scrollView.documentView?.bounds.height ?? clipView.bounds.height
+        )
+    }
+
+    /// Returns true when the action was handled (false while WebKit's internal
+    /// scroll view is not available, so the keyDown forwarder falls back to
+    /// the standard implementation).
     @discardableResult
     func performScrollAction(_ action: ScrollAction) -> Bool {
-        guard let scrollView = enclosingScrollView else { return false }
+        guard let scrollView = webScrollView else { return false }
         let clipView = scrollView.contentView
         let documentHeight = scrollView.documentView?.bounds.height ?? clipView.bounds.height
         let topInset = clipView.contentInsets.top
@@ -1048,13 +1079,25 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         case .previousHeading, .nextHeading:
             return true
         }
-        animateOuterScroll(to: target, in: scrollView, duration: duration)
+        animateScroll(to: target, in: scrollView, duration: duration)
         return true
     }
 
-    private func animateOuterScroll(to y: CGFloat,
-                                    in scrollView: NSScrollView,
-                                    duration: TimeInterval) {
+    func scrollDocument(to y: CGFloat,
+                        topMargin: CGFloat = 12,
+                        duration: TimeInterval = 0.25) {
+        guard let scrollView = webScrollView else { return }
+        let clipView = scrollView.contentView
+        let documentHeight = scrollView.documentView?.bounds.height ?? clipView.bounds.height
+        let minY = -clipView.contentInsets.top
+        let maxY = max(documentHeight - clipView.bounds.height + clipView.contentInsets.bottom, minY)
+        let target = max(minY, min(y - clipView.contentInsets.top - topMargin, maxY))
+        animateScroll(to: target, in: scrollView, duration: duration)
+    }
+
+    private func animateScroll(to y: CGFloat,
+                               in scrollView: NSScrollView,
+                               duration: TimeInterval) {
         let clipView = scrollView.contentView
         NSAnimationContext.runAnimationGroup { context in
             context.duration = duration
@@ -1091,7 +1134,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             let minY = -topInset
             let maxY = max(documentHeight - clipView.bounds.height + bottomInset, minY)
             let target = max(minY, min((headingY * zoom) - topInset - topMargin, maxY))
-            self.animateOuterScroll(to: target, in: scrollView, duration: 0.2)
+            self.animateScroll(to: target, in: scrollView, duration: 0.2)
         }
     }
 
@@ -1108,31 +1151,44 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     @objc func mdScrollPreviousHeading(_ sender: Any?) { performScrollAction(.previousHeading) }
     @objc func mdScrollNextHeading(_ sender: Any?)     { performScrollAction(.nextHeading) }
 
-    private func neutralizeWebKitScrollEdgeInsets() {
+    private func configureWebKitScrollView() {
+        guard let scrollView = webView.descendantViews.first(where: { $0 is NSScrollView })
+                as? NSScrollView else { return }
+
+        if webScrollView !== scrollView {
+            if let scrollBoundsObserver {
+                NotificationCenter.default.removeObserver(scrollBoundsObserver)
+            }
+            scrollBoundsObserver = nil
+            webScrollView = scrollView
+        }
+
         let zeroInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
-        for view in webView.descendantViews {
-            if let scrollView = view as? NSScrollView {
-                scrollView.automaticallyAdjustsContentInsets = false
-                scrollView.hasVerticalScroller = false
-                scrollView.hasHorizontalScroller = false
-                scrollView.autohidesScrollers = true
-                scrollView.verticalScrollElasticity = .none
-                scrollView.horizontalScrollElasticity = .none
-                scrollView.contentInsets = zeroInsets
-                scrollView.scrollerInsets = zeroInsets
-                scrollView.verticalScroller?.isHidden = true
-                scrollView.verticalScroller?.alphaValue = 0
-                scrollView.horizontalScroller?.isHidden = true
-                scrollView.horizontalScroller?.alphaValue = 0
-            }
-            if let scroller = view as? NSScroller {
-                scroller.isHidden = true
-                scroller.alphaValue = 0
-            }
-            if let clipView = view as? NSClipView {
-                clipView.automaticallyAdjustsContentInsets = false
-                clipView.contentInsets = zeroInsets
-            }
+        scrollView.automaticallyAdjustsContentInsets = false
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.verticalScrollElasticity = .none
+        scrollView.horizontalScrollElasticity = .none
+        scrollView.contentInsets = zeroInsets
+        scrollView.scrollerInsets = zeroInsets
+        scrollView.verticalScroller?.isHidden = false
+        scrollView.verticalScroller?.alphaValue = 1
+        scrollView.horizontalScroller?.isHidden = true
+        scrollView.horizontalScroller?.alphaValue = 0
+
+        let clipView = scrollView.contentView
+        clipView.automaticallyAdjustsContentInsets = false
+        clipView.contentInsets = zeroInsets
+
+        guard scrollBoundsObserver == nil else { return }
+        clipView.postsBoundsChangedNotifications = true
+        scrollBoundsObserver = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification,
+            object: clipView,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.scrollDidChange?() }
         }
     }
 
@@ -1164,7 +1220,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        neutralizeWebKitScrollEdgeInsets()
+        configureWebKitScrollView()
         isPageReady = true
     }
 
@@ -1194,10 +1250,7 @@ private extension NSView {
     }
 }
 
-private final class NonScrollingWKWebView: WKWebView {
-    private enum Axis { case horizontal, vertical }
-    private var lockedAxis: Axis?
-
+private final class PreviewWKWebView: WKWebView {
     override func keyDown(with event: NSEvent) {
         if forwardHeadingKey(event) { return }
         if isStandardScrollKey(event) {
@@ -1332,43 +1385,10 @@ private final class NonScrollingWKWebView: WKWebView {
     }
 
     override func scrollWheel(with event: NSEvent) {
-        let axis = decideAxis(for: event)
-        if axis == .horizontal {
-            // Inner overflow:auto element (wide <pre>, table, math) handles it.
-            super.scrollWheel(with: event)
-            return
-        }
-        if let outerScrollView = superview?.enclosingScrollView {
-            outerScrollView.scrollWheel(with: event)
-        } else {
-            super.scrollWheel(with: event)
-        }
-    }
-
-    /// Lock routing axis at the start of a trackpad gesture and carry it
-    /// through .changed/.ended and any momentum that follows. Without this,
-    /// a momentary Y-dominant event mid-horizontal-swipe routes one frame
-    /// to the outer page scroller and the user sees a lurch. Mouse-wheel
-    /// events (phase empty) clear the lock and decide per-event.
-    private func decideAxis(for event: NSEvent) -> Axis {
-        let perEvent: Axis = abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY)
-            ? .horizontal : .vertical
-
-        if event.phase == .began {
-            lockedAxis = perEvent
-            return perEvent
-        }
-
-        let isTrackpadEvent = !event.phase.isEmpty || !event.momentumPhase.isEmpty
-        if isTrackpadEvent, let locked = lockedAxis {
-            if event.momentumPhase == .ended || event.momentumPhase == .cancelled {
-                lockedAxis = nil
-            }
-            return locked
-        }
-
-        lockedAxis = nil
-        return perEvent
+        // WebKit owns both page scrolling and nested horizontal overflow.
+        // Keeping the WKWebView viewport-sized lets its tiled backing store
+        // stay at the display's native scale for very long documents.
+        super.scrollWheel(with: event)
     }
 }
 
