@@ -245,7 +245,6 @@ final class MainSplitViewController: NSSplitViewController {
                                      sourceAnchor: pendingSourceScrollAnchor) { [weak self, weak editorVC] in
             DispatchQueue.main.async {
                 guard let self, let editorVC, self.isEditorPreparing else { return }
-                editorVC.view.superview?.layoutSubtreeIfNeeded()
                 NSAnimationContext.runAnimationGroup { context in
                     context.duration = 0.10
                     context.timingFunction = CAMediaTimingFunction(name: .easeOut)
