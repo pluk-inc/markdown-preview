@@ -1,0 +1,7 @@
+#!/bin/sh
+# Managed by Markdown Preview CLI
+if [ "$#" -eq 0 ]; then
+  exec open -b "doc.md-preview" .
+else
+  exec open -b "doc.md-preview" "$@"
+fi

@@ -13,6 +13,7 @@
 		9A7B10012FB0000100010001 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 9A7B10032FB0000100010001 /* Sentry */; };
 		9A33940A2FA5AF500015D9A4 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 9A3394092FA5AF500015D9A4 /* Markdown */; };
 		9A33940C2FA5AF500015D9A4 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 9A33940B2FA5AF500015D9A4 /* Markdown */; };
+		9AC100010000000000000001 /* markdown-preview in Copy CLI Tool */ = {isa = PBXBuildFile; fileRef = 9AC100010000000000000002 /* markdown-preview */; };
 		9AF000000000000000000003 /* mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000101 /* mermaid.min.js */; };
 		9AF000000000000000000004 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000102 /* LICENSE */; };
 		9AF000000000000000000005 /* katex.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000103 /* katex.min.js */; };
@@ -37,6 +38,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		9AC100010000000000000003 /* Copy CLI Tool */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = bin;
+			dstSubfolderSpec = 7;
+			files = (
+				9AC100010000000000000001 /* markdown-preview in Copy CLI Tool */,
+			);
+			name = "Copy CLI Tool";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9A02093D2FA10D4C00092060 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -55,6 +67,7 @@
 		9A02092D2FA10D4C00092060 /* quick-look.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "quick-look.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		9A02092F2FA10D4C00092060 /* Quartz.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Quartz.framework; path = System/Library/Frameworks/Quartz.framework; sourceTree = SDKROOT; };
 		9A0209A02FA1100100092060 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
+		9AC100010000000000000002 /* markdown-preview */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "bin/markdown-preview"; sourceTree = "<group>"; };
 		9AF000000000000000000101 /* mermaid.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = mermaid.min.js; path = "md-preview/Vendor/Mermaid/mermaid.min.js"; sourceTree = "<group>"; };
 		9AF000000000000000000102 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE; path = "md-preview/Vendor/Mermaid/LICENSE"; sourceTree = "<group>"; };
 		9AF000000000000000000103 /* katex.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = katex.min.js; path = "md-preview/Vendor/KaTeX/katex.min.js"; sourceTree = "<group>"; };
@@ -137,6 +150,7 @@
 			isa = PBXGroup;
 			children = (
 				9A0209A02FA1100100092060 /* Version.xcconfig */,
+				9AC100010000000000000004 /* Resources */,
 				9AF000000000000000000101 /* mermaid.min.js */,
 				9AF000000000000000000102 /* LICENSE */,
 				9AF000000000000000000103 /* katex.min.js */,
@@ -164,6 +178,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		9AC100010000000000000004 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				9AC100010000000000000002 /* markdown-preview */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		9A02092E2FA10D4C00092060 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -182,6 +204,7 @@
 				9A0207BD2FA0ED7C00092060 /* Sources */,
 				9A0207BE2FA0ED7C00092060 /* Frameworks */,
 				9A0207BF2FA0ED7C00092060 /* Resources */,
+				9AC100010000000000000003 /* Copy CLI Tool */,
 				9A02093D2FA10D4C00092060 /* Embed Foundation Extensions */,
 				9A7B10042FB0000100010001 /* Upload dSYMs to Sentry */,
 			);

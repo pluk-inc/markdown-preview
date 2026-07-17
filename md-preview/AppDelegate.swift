@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 private enum CommandLineToolInstallError: LocalizedError {
     case terminalAutomationFailed(String?)
     case installerScriptWriteFailed(String)
+    case bundledToolMissing
 
     var errorDescription: String? {
         switch self {
@@ -20,6 +21,8 @@ private enum CommandLineToolInstallError: LocalizedError {
             return "Terminal automation failed."
         case .installerScriptWriteFailed(let message):
             return "Failed to write CLI installer script: \(message)"
+        case .bundledToolMissing:
+            return "The bundled Markdown Preview CLI could not be found."
         }
     }
 }
@@ -199,7 +202,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func installCommandLineTools(_ sender: Any?) {
         do {
-            let installerScriptURL = try writeCommandLineToolInstallerScript()
+            let commandLineToolURL = try bundledCommandLineToolURL()
+            let installerScriptURL = try writeCommandLineToolInstallerScript(
+                commandLineToolURL: commandLineToolURL
+            )
             let installCommand = makeCommandLineToolInstallCommand(scriptURL: installerScriptURL)
             try runInstallCommandInTerminal(installCommand)
         } catch {
@@ -354,22 +360,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return panel
     }
 
-    private func makeCommandLineToolInstallerScript() -> String {
-        let launcherScript = """
-        #!/bin/sh
-        # Managed by Markdown Preview CLI
-        if [ "$#" -eq 0 ]; then
-          exec open -b "doc.md-preview" .
-        else
-          exec open -b "doc.md-preview" "$@"
-        fi
+    private func makeCommandLineToolInstallerScript(commandLineToolURL: URL) -> String {
         """
-
-        let installerScript = """
         #!/bin/sh
         set -eu
         installer_path=$0
         trap 'rm -f "$installer_path"' EXIT
+        bundled_cli=\(commandLineToolURL.path.shellQuotedString)
 
         path_contains() {
           case ":$PATH:" in
@@ -487,22 +484,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
           can_replace_alias "$install_dir/$alias" || refuse_existing_command "$install_dir/$alias"
         done
 
-        tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/md-preview-cli.XXXXXX")
-        trap 'rm -rf "$tmp_dir"; rm -f "$installer_path"' EXIT
-
-        cat > "$tmp_dir/md-preview" <<'MD_PREVIEW_CLI'
-        \(launcherScript)
-        MD_PREVIEW_CLI
-
-        chmod 755 "$tmp_dir/md-preview"
-
         if [ "$needs_sudo" = "true" ]; then
           echo "Installing Markdown Preview command line tools to $install_dir requires your password."
           sudo mkdir -p "$install_dir"
-          sudo install -m 755 "$tmp_dir/md-preview" "$primary"
+          sudo install -m 755 "$bundled_cli" "$primary"
         else
           mkdir -p "$install_dir"
-          install -m 755 "$tmp_dir/md-preview" "$primary"
+          install -m 755 "$bundled_cli" "$primary"
         fi
 
         for alias in mdp markdown-preview; do
@@ -539,18 +527,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
           echo "Open a new terminal window, then try: mdp ."
         fi
         """
-
-        return installerScript
     }
 
-    private func writeCommandLineToolInstallerScript() throws -> URL {
+    private func bundledCommandLineToolURL() throws -> URL {
+        guard let url = Bundle.main.url(forResource: "markdown-preview",
+                                        withExtension: nil,
+                                        subdirectory: "bin") else {
+            throw CommandLineToolInstallError.bundledToolMissing
+        }
+        return url
+    }
+
+    private func writeCommandLineToolInstallerScript(commandLineToolURL: URL) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("install-markdown-preview-cli-\(UUID().uuidString).sh")
 
         do {
-            try makeCommandLineToolInstallerScript().write(to: url,
-                                                           atomically: true,
-                                                           encoding: .utf8)
+            try makeCommandLineToolInstallerScript(commandLineToolURL: commandLineToolURL)
+                .write(to: url, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o700],
                                                   ofItemAtPath: url.path)
             return url
