@@ -32,6 +32,7 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
 
     private let queue = DispatchQueue(label: "doc.md-preview.asset-scheme", qos: .userInitiated)
     private let lock = NSLock()
+    private let tasks = TaskRegistry()
     private var _baseURL: URL?
 
     func setBaseURL(_ url: URL?) {
@@ -97,10 +98,13 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
         let request = urlSchemeTask.request
         let base = currentBaseURL()
         let wrapper = TaskWrapper(task: urlSchemeTask)
+        let taskRegistry = tasks
+        taskRegistry.insert(wrapper)
 
         queue.async {
+            defer { taskRegistry.remove(wrapper) }
             guard let requestURL = request.url else {
-                wrapper.task.didFailWithError(URLError(.badURL))
+                wrapper.fail(with: URLError(.badURL))
                 return
             }
 
@@ -108,29 +112,29 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
             // on the user-file base URL — they must load even before/without
             // sandbox access to the user's folder.
             if let vendorURL = Self.resolveVendor(requestURL) {
-                Self.serve(file: vendorURL, requestURL: requestURL, task: wrapper.task, cacheable: true)
+                Self.serve(file: vendorURL, requestURL: requestURL, task: wrapper, cacheable: true)
                 return
             }
 
             guard let base,
                   let resolved = Self.resolve(requestURL, against: base) else {
-                wrapper.task.didFailWithError(URLError(.badURL))
+                wrapper.fail(with: URLError(.badURL))
                 return
             }
-            Self.serve(file: resolved, requestURL: requestURL, task: wrapper.task, cacheable: false)
+            Self.serve(file: resolved, requestURL: requestURL, task: wrapper, cacheable: false)
         }
     }
 
     private nonisolated static func serve(file resolved: URL,
                                           requestURL: URL,
-                                          task: any WKURLSchemeTask,
+                                          task: TaskWrapper,
                                           cacheable: Bool) {
         let data: Data
         if cacheable, let cached = vendorDataCache.data(for: resolved) {
             data = cached
         } else {
             guard let read = try? Data(contentsOf: resolved) else {
-                task.didFailWithError(URLError(.fileDoesNotExist))
+                task.fail(with: URLError(.fileDoesNotExist))
                 return
             }
             if cacheable {
@@ -152,19 +156,74 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
                          mimeType: mime,
                          expectedContentLength: data.count,
                          textEncodingName: nil)
-        task.didReceive(response)
-        task.didReceive(data)
-        task.didFinish()
+        task.receive(response)
+        task.receive(data)
+        task.finish()
     }
 
-    func webView(_ webView: WKWebView, stop urlSchemeTask: any WKURLSchemeTask) {}
+    func webView(_ webView: WKWebView, stop urlSchemeTask: any WKURLSchemeTask) {
+        tasks.stop(urlSchemeTask)
+    }
 
     // `WKURLSchemeTask` is an Objective-C protocol without useful Sendable
     // annotations. The handler immediately moves work onto its private serial
     // queue and reports results for the same task from there, which matches
     // WKURLSchemeHandler's callback-style contract.
-    private struct TaskWrapper: @unchecked Sendable {
+    private final class TaskWrapper: @unchecked Sendable {
         let task: any WKURLSchemeTask
+        private let gate = URLSchemeTaskCallbackGate()
+
+        init(task: any WKURLSchemeTask) {
+            self.task = task
+        }
+
+        var identifier: ObjectIdentifier {
+            ObjectIdentifier(task as AnyObject)
+        }
+
+        func receive(_ response: URLResponse) {
+            gate.performIfActive { task.didReceive(response) }
+        }
+
+        func receive(_ data: Data) {
+            gate.performIfActive { task.didReceive(data) }
+        }
+
+        func finish() {
+            gate.performIfActive { task.didFinish() }
+        }
+
+        func fail(with error: Error) {
+            gate.performIfActive { task.didFailWithError(error) }
+        }
+
+        func stop() {
+            gate.stop()
+        }
+    }
+
+    private final class TaskRegistry: @unchecked Sendable {
+        private let lock = NSLock()
+        private var tasks: [ObjectIdentifier: TaskWrapper] = [:]
+
+        func insert(_ task: TaskWrapper) {
+            lock.lock()
+            tasks[task.identifier] = task
+            lock.unlock()
+        }
+
+        func remove(_ task: TaskWrapper) {
+            lock.lock()
+            tasks.removeValue(forKey: task.identifier)
+            lock.unlock()
+        }
+
+        func stop(_ task: any WKURLSchemeTask) {
+            lock.lock()
+            let wrapper = tasks[ObjectIdentifier(task as AnyObject)]
+            lock.unlock()
+            wrapper?.stop()
+        }
     }
 
     // `NSCache` is internally synchronized but is not annotated Sendable by
