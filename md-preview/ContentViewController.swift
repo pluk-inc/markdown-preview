@@ -5,6 +5,13 @@
 
 import Cocoa
 
+/// Where the preview should land after the next document render — a link
+/// fragment or a restored history scroll offset.
+enum NavigationScrollTarget {
+    case anchor(String)
+    case position(CGFloat)
+}
+
 final class ContentViewController: NSViewController {
 
     private static let pageZoomDefaultsKey = "MarkdownPreview.pageZoom"
@@ -16,6 +23,14 @@ final class ContentViewController: NSViewController {
     private var pendingFlashWork: DispatchWorkItem?
     private var pendingPreviewScrollAnchor: SourceScrollAnchor?
     private var shouldApplyPendingAnchorOnHeight = false
+    private var pendingNavigationScrollTarget: NavigationScrollTarget?
+    private var shouldApplyNavigationTargetOnHeight = false
+    /// Early attempts run against the blanked page shown during a file
+    /// switch, where the target can't resolve yet — retry on a short timer
+    /// (height events accelerate it), giving up after ~2s.
+    private var navigationTargetRetriesLeft = 0
+    private static let navigationTargetMaxRetries = 25
+    private static let navigationTargetRetryInterval: TimeInterval = 0.08
 
     // Heading top offsets in CSS pixels, indexed by heading id. Compared in
     // CSS units so page zoom doesn't invalidate them.
@@ -63,6 +78,11 @@ final class ContentViewController: NSViewController {
                 self.shouldApplyPendingAnchorOnHeight = false
                 self.pendingPreviewScrollAnchor = nil
                 self.restoreSourceScrollAnchor(anchor)
+            }
+            if self.shouldApplyNavigationTargetOnHeight,
+               let target = self.pendingNavigationScrollTarget {
+                self.shouldApplyNavigationTargetOnHeight = false
+                self.attemptNavigationScrollTarget(target)
             }
         }
         webView.fragmentLinkActivated = { [weak self] fragment in
@@ -126,6 +146,12 @@ final class ContentViewController: NSViewController {
     func display(markdown: String, assetBaseURL: URL? = nil) {
         if pendingPreviewScrollAnchor != nil {
             shouldApplyPendingAnchorOnHeight = true
+        }
+        if pendingNavigationScrollTarget != nil {
+            shouldApplyNavigationTargetOnHeight = true
+            // Height events don't re-fire when the new document lays out at
+            // the same height — the timer guarantees an attempt.
+            scheduleNavigationTargetAttempt()
         }
         resetScrollspy()
         webView.display(markdown: markdown, assetBaseURL: assetBaseURL)
@@ -274,6 +300,72 @@ final class ContentViewController: NSViewController {
         let y = headingOffsetsCSS[headingID] * zoom
         let maxY = max(metrics.documentHeight - metrics.viewportHeight, 0)
         return max(0, min(y - topMargin, maxY))
+    }
+
+    /// Scroll target applied once the next `display()` has rendered;
+    /// `nil` drops a stale target.
+    func prepareToScrollAfterNavigation(to target: NavigationScrollTarget?) {
+        pendingNavigationScrollTarget = target
+        shouldApplyNavigationTargetOnHeight = false
+        navigationTargetRetriesLeft = target == nil ? 0 : Self.navigationTargetMaxRetries
+    }
+
+    /// Immediate fragment scroll within the already-rendered document.
+    func scrollToAnchor(_ fragment: String) {
+        scrollToElement(id: fragment)
+    }
+
+    var currentScrollPosition: CGFloat {
+        webView.scrollMetrics.position
+    }
+
+    private func attemptNavigationScrollTarget(_ target: NavigationScrollTarget) {
+        guard webView.isScrollGeometrySynced else {
+            retryNavigationTarget()
+            return
+        }
+        switch target {
+        case .anchor(let fragment):
+            webView.elementOffset(id: fragment) { [weak self] offset in
+                guard let self,
+                      self.pendingNavigationScrollTarget != nil else { return }
+                guard let offset else {
+                    self.retryNavigationTarget()
+                    return
+                }
+                self.pendingNavigationScrollTarget = nil
+                self.scrollDocument(to: offset)
+            }
+        case .position(let y):
+            // Synced geometry can still be the blank page — hold out until
+            // the offset is reachable, clamping only as a last resort.
+            let metrics = webView.scrollMetrics
+            let reachable = max(metrics.documentHeight - metrics.viewportHeight, 0)
+            guard y <= reachable || navigationTargetRetriesLeft <= 0 else {
+                retryNavigationTarget()
+                return
+            }
+            pendingNavigationScrollTarget = nil
+            // Exact restore: no top margin, no animation.
+            webView.scrollDocument(to: y, topMargin: 0, duration: 0)
+        }
+    }
+
+    private func retryNavigationTarget() {
+        guard navigationTargetRetriesLeft > 0 else {
+            pendingNavigationScrollTarget = nil
+            return
+        }
+        navigationTargetRetriesLeft -= 1
+        shouldApplyNavigationTargetOnHeight = true
+        scheduleNavigationTargetAttempt()
+    }
+
+    private func scheduleNavigationTargetAttempt() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.navigationTargetRetryInterval) { [weak self] in
+            guard let self, let target = self.pendingNavigationScrollTarget else { return }
+            self.attemptNavigationScrollTarget(target)
+        }
     }
 
     private func scrollToElement(id: String) {

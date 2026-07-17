@@ -60,10 +60,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         case cancel
     }
 
+    private struct HistoryEntry {
+        let url: URL
+        /// Scroll offset when the user navigated away; restored on back/forward.
+        let scrollPosition: CGFloat
+    }
+
     private var currentFileURL: URL?
     private var currentMarkdown: String?
-    private var backHistory: [URL] = []
-    private var forwardHistory: [URL] = []
+    private var backHistory: [HistoryEntry] = []
+    private var forwardHistory: [HistoryEntry] = []
     private weak var navigationItem: NSToolbarItem?
     private weak var navigationControl: NSSegmentedControl?
     private var fileWatcher: FileWatcher?
@@ -278,27 +284,35 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func present(url: URL, intent: NavigationIntent) {
+        let fragment = url.fragment?.removingPercentEncoding
         let url = Self.fileURLWithoutFragment(url)
         let preserveEditMode = isEditing || pendingEditModeURL != nil
         if isEditing || hasPendingEditorChanges {
             requestEndEditing(keepAccessoryMounted: true) { [weak self] success in
                 guard success else { return }
-                self?.present(url: url, preservingEditMode: preserveEditMode, intent: intent)
+                self?.present(url: url, preservingEditMode: preserveEditMode,
+                              intent: intent, fragment: fragment)
             }
             return
         }
-        present(url: url, preservingEditMode: preserveEditMode, intent: intent)
+        present(url: url, preservingEditMode: preserveEditMode, intent: intent, fragment: fragment)
     }
 
-    private func present(url: URL, preservingEditMode: Bool, intent: NavigationIntent) {
+    private func present(url: URL, preservingEditMode: Bool,
+                         intent: NavigationIntent, fragment: String?) {
         if url.isExistingDirectory {
             pendingEditModeURL = nil
             openFolder(url)
             return
         }
 
-        guard currentFileURL?.standardizedFileURL != url.standardizedFileURL else { return }
-        commitNavigation(to: url, intent: intent)
+        let split = documentWindow.contentViewController as? MainSplitViewController
+        guard currentFileURL?.standardizedFileURL != url.standardizedFileURL else {
+            // Link into the already-open document — just scroll.
+            if let fragment { split?.scrollToAnchor(fragment) }
+            return
+        }
+        let restoredScrollPosition = commitNavigation(to: url, intent: intent)
         tableUndoManager.removeAllActions()
 
         // Switching to a different file blanks the preview so the previous
@@ -310,7 +324,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         markdownDocument?.replaceFileURL(url)
         documentWindow.title = url.lastPathComponent
         if isFileSwitch {
-            (documentWindow.contentViewController as? MainSplitViewController)?.clearContent()
+            split?.clearContent()
         }
         documentWindow.makeKeyAndOrderFront(nil)
         NSApp.activate()
@@ -319,32 +333,56 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         refreshOpenInLLMItem()
         refreshOpenActionsItem()
         updateEditToolbarItem()
+        // History restore wins over the link fragment — back/forward returns
+        // to where the user actually was.
+        if let restoredScrollPosition {
+            split?.prepareToScrollAfterNavigation(to: .position(restoredScrollPosition))
+        } else if let fragment {
+            split?.prepareToScrollAfterNavigation(to: .anchor(fragment))
+        } else {
+            split?.prepareToScrollAfterNavigation(to: nil)
+        }
         loadFile(at: url)
         startWatching(url)
         offerToBecomeDefaultHandlerIfNeeded()
     }
 
-    private func commitNavigation(to url: URL, intent: NavigationIntent) {
-        guard let currentFileURL else { return }
+    /// Records the navigation in history, capturing the departing scroll
+    /// offset. Returns the position to restore for back/forward, nil otherwise.
+    private func commitNavigation(to url: URL, intent: NavigationIntent) -> CGFloat? {
+        guard let currentFileURL else { return nil }
+        let departed = HistoryEntry(
+            url: currentFileURL.standardizedFileURL,
+            scrollPosition: (documentWindow.contentViewController as? MainSplitViewController)?
+                .previewScrollPosition ?? 0
+        )
+        defer { updateNavigationControl() }
         switch intent {
         case .normal:
-            Self.appendHistory(currentFileURL, to: &backHistory)
+            Self.appendHistory(departed, to: &backHistory)
             forwardHistory.removeAll()
+            return nil
         case .back:
-            guard backHistory.last?.standardizedFileURL == url.standardizedFileURL else { return }
+            guard let target = backHistory.last,
+                  target.url == url.standardizedFileURL else { return nil }
             backHistory.removeLast()
-            Self.appendHistory(currentFileURL, to: &forwardHistory)
+            Self.appendHistory(departed, to: &forwardHistory)
+            return target.scrollPosition
         case .forward:
-            guard forwardHistory.last?.standardizedFileURL == url.standardizedFileURL else { return }
+            guard let target = forwardHistory.last,
+                  target.url == url.standardizedFileURL else { return nil }
             forwardHistory.removeLast()
-            Self.appendHistory(currentFileURL, to: &backHistory)
+            Self.appendHistory(departed, to: &backHistory)
+            return target.scrollPosition
         }
-        updateNavigationControl()
     }
 
-    private static func appendHistory(_ url: URL, to history: inout [URL]) {
-        if history.last?.standardizedFileURL != url.standardizedFileURL {
-            history.append(url.standardizedFileURL)
+    private static func appendHistory(_ entry: HistoryEntry, to history: inout [HistoryEntry]) {
+        if history.last?.url == entry.url {
+            // Same document again — keep one entry with the latest scroll.
+            history[history.count - 1] = entry
+        } else {
+            history.append(entry)
         }
     }
 
@@ -508,11 +546,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc private func navigateHistory(_ sender: NSSegmentedControl) {
         switch sender.selectedSegment {
         case 0:
-            guard let url = backHistory.last else { return }
-            present(url: url, intent: .back)
+            guard let entry = backHistory.last else { return }
+            present(url: entry.url, intent: .back)
         case 1:
-            guard let url = forwardHistory.last else { return }
-            present(url: url, intent: .forward)
+            guard let entry = forwardHistory.last else { return }
+            present(url: entry.url, intent: .forward)
         default:
             break
         }

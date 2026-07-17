@@ -887,6 +887,23 @@ nonisolated enum MarkdownHTML {
             });
         }
 
+        // Scroll bridge: with compositor-scrolled WKWebView (macOS 26 SDK)
+        // the host can't observe scrolling natively — the page reports it.
+        let lastScroll = -1;
+        let scrollRaf = 0;
+        function pushScroll() {
+            if (scrollRaf) return;
+            scrollRaf = requestAnimationFrame(() => {
+                scrollRaf = 0;
+                const y = window.scrollY || document.documentElement.scrollTop || 0;
+                if (y !== lastScroll) {
+                    lastScroll = y;
+                    post({ kind: 'scroll', value: y });
+                }
+            });
+        }
+        window.addEventListener('scroll', pushScroll, { passive: true });
+
         window.MdPreviewHost = { pushHeight, measureHeight };
 
         function elementForEventTarget(target) {

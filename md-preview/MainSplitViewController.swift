@@ -86,6 +86,18 @@ final class MainSplitViewController: NSSplitViewController {
         contentViewController?.clearContent()
     }
 
+    func prepareToScrollAfterNavigation(to target: NavigationScrollTarget?) {
+        contentViewController?.prepareToScrollAfterNavigation(to: target)
+    }
+
+    func scrollToAnchor(_ fragment: String) {
+        contentViewController?.scrollToAnchor(fragment)
+    }
+
+    var previewScrollPosition: CGFloat {
+        contentViewController?.currentScrollPosition ?? 0
+    }
+
     func find(_ query: String,
               backwards: Bool = false,
               mode: SearchMode = .contains,

@@ -205,6 +205,9 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     // without waiting for JS to post a fresh value (it won't — scrollHeight
     // is invariant under pageZoom).
     private var lastReportedDocumentHeight: CGFloat = 1
+    // Last scroll offset reported by the page (CSS pixels) — the only scroll
+    // position visible to the host without `webScrollView`.
+    private var lastReportedScrollY: CGFloat = 0
     private var zoomDefaultsKey: String?
     private var magnificationStartZoom: CGFloat?
     private var accumulatedMagnification: CGFloat = 0
@@ -414,6 +417,11 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             let raw = ceil(CGFloat(truncating: value))
             lastReportedDocumentHeight = raw
             heightDidChange?(raw * webView.pageZoom)
+        case "scroll":
+            guard let value = dict["value"] as? NSNumber else { return }
+            lastReportedScrollY = CGFloat(truncating: value)
+            // The native bounds observer fires this in the legacy path.
+            if webScrollView == nil { scrollDidChange?() }
         case "log":
             // MdPreviewPerf.log() — debug-only; release builds never post.
             // Routed through os.Logger so `log stream --level=debug
@@ -824,10 +832,30 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         }
     }
 
+    /// Document-Y offset for a link fragment: literal `id` match first
+    /// (footnotes carry real ids), then GitHub-style heading slugs, since
+    /// headings only get synthetic `md-heading-N` ids.
     func elementOffset(id: String, completion: @escaping (CGFloat?) -> Void) {
         let script = """
         (() => {
-            const el = document.getElementById(\(javaScriptStringLiteral(id)));
+            const target = \(javaScriptStringLiteral(id));
+            let el = document.getElementById(target);
+            if (!el) {
+                const wanted = target.toLowerCase();
+                const slugify = (text) => text
+                    .toLowerCase()
+                    .trim()
+                    .replace(/[^\\p{L}\\p{N}\\s_-]/gu, '')
+                    .replace(/\\s/g, '-');
+                const seen = new Map();
+                for (const heading of document.querySelectorAll('h1,h2,h3,h4,h5,h6')) {
+                    let slug = slugify(heading.textContent || '');
+                    const count = seen.get(slug) || 0;
+                    seen.set(slug, count + 1);
+                    if (count > 0) slug = slug + '-' + count;
+                    if (slug === wanted) { el = heading; break; }
+                }
+            }
             if (!el) return null;
             const rect = el.getBoundingClientRect();
             return rect.top + (window.scrollY || document.documentElement.scrollTop || 0);
@@ -1015,10 +1043,23 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let documentHeight: CGFloat
     }
 
+    /// Whether the native scroll geometry has caught up with the height the
+    /// page last reported — WebKit resizes its document view a beat after a
+    /// content swap, and scrolling before then clamps against the stale
+    /// height. Always true on the JS path, which clamps in the web process.
+    var isScrollGeometrySynced: Bool {
+        guard let scrollView = webScrollView,
+              let documentView = scrollView.documentView else {
+            return webScrollView == nil
+        }
+        let expected = lastReportedDocumentHeight * webView.pageZoom
+        return abs(documentView.bounds.height - expected) < 2
+    }
+
     var scrollMetrics: ScrollMetrics {
         guard let scrollView = webScrollView else {
             return ScrollMetrics(
-                position: 0,
+                position: lastReportedScrollY * webView.pageZoom,
                 viewportHeight: bounds.height,
                 documentHeight: max(lastReportedDocumentHeight * webView.pageZoom, bounds.height)
             )
@@ -1036,6 +1077,17 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     /// the standard implementation).
     @discardableResult
     func performScrollAction(_ action: ScrollAction) -> Bool {
+        // Heading navigation doesn't need the native scroll view, and
+        // nothing downstream handles it — don't fall through.
+        if action == .previousHeading {
+            scrollToAdjacentHeading(forward: false)
+            return true
+        }
+        if action == .nextHeading {
+            scrollToAdjacentHeading(forward: true)
+            return true
+        }
+
         guard let scrollView = webScrollView else { return false }
         let clipView = scrollView.contentView
         let documentHeight = scrollView.documentView?.bounds.height ?? clipView.bounds.height
@@ -1045,15 +1097,6 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let maxY = max(documentHeight - clipView.bounds.height + bottomInset, minY)
         let pageDelta = max(clipView.bounds.height * 0.9, 40)
         let lineDelta: CGFloat = 40
-
-        if action == .previousHeading {
-            scrollToAdjacentHeading(forward: false, in: scrollView)
-            return true
-        }
-        if action == .nextHeading {
-            scrollToAdjacentHeading(forward: true, in: scrollView)
-            return true
-        }
 
         let target: CGFloat
         let duration: TimeInterval
@@ -1086,7 +1129,15 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     func scrollDocument(to y: CGFloat,
                         topMargin: CGFloat = 12,
                         duration: TimeInterval = 0.25) {
-        guard let scrollView = webScrollView else { return }
+        guard let scrollView = webScrollView else {
+            let zoom = max(webView.pageZoom, 0.001)
+            let cssTop = max((y - topMargin) / zoom, 0)
+            let behavior = duration <= 0 ? "instant" : "smooth"
+            webView.evaluateJavaScript(
+                "window.scrollTo({ top: \(cssTop), behavior: '\(behavior)' });"
+            ) { _, _ in }
+            return
+        }
         let clipView = scrollView.contentView
         let documentHeight = scrollView.documentView?.bounds.height ?? clipView.bounds.height
         let minY = -clipView.contentInsets.top
@@ -1109,15 +1160,11 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         scrollView.flashScrollers()
     }
 
-    private func scrollToAdjacentHeading(forward: Bool, in scrollView: NSScrollView) {
-        let clipView = scrollView.contentView
-        let topInset = clipView.contentInsets.top
-        let bottomInset = clipView.contentInsets.bottom
-        let viewportTop = clipView.bounds.origin.y + topInset
+    private func scrollToAdjacentHeading(forward: Bool) {
+        let viewportTop = scrollMetrics.position
 
-        webView.evaluateJavaScript(Self.headingOffsetsScript) { [weak self, weak scrollView] result, _ in
+        webView.evaluateJavaScript(Self.headingOffsetsScript) { [weak self] result, _ in
             guard let self,
-                  let scrollView,
                   let raw = result as? [NSNumber] else { return }
             let offsets = raw.map { CGFloat(truncating: $0) }.sorted()
             // Headings we navigate to land at viewportTop + topMargin (12 pt).
@@ -1129,12 +1176,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                 ? offsets.first(where: { $0 > cssViewportTop + 16 })
                 : offsets.last(where: { $0 < cssViewportTop - 1 })
             guard let headingY = pick else { return }
-            let topMargin: CGFloat = 12
-            let documentHeight = scrollView.documentView?.bounds.height ?? clipView.bounds.height
-            let minY = -topInset
-            let maxY = max(documentHeight - clipView.bounds.height + bottomInset, minY)
-            let target = max(minY, min((headingY * zoom) - topInset - topMargin, maxY))
-            self.animateScroll(to: target, in: scrollView, duration: 0.2)
+            self.scrollDocument(to: headingY * zoom, topMargin: 12, duration: 0.2)
         }
     }
 
@@ -1151,6 +1193,56 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     @objc func mdScrollPreviousHeading(_ sender: Any?) { performScrollAction(.previousHeading) }
     @objc func mdScrollNextHeading(_ sender: Any?)     { performScrollAction(.nextHeading) }
 
+    /// With compositor scrolling an internal WebKit view is first responder:
+    /// `keyDown` on the WKWebView subclass never fires, and WebKit claims
+    /// ⌥arrows in the key-equivalent pass before the main menu sees them.
+    /// Claim heading navigation above WebKit, only while the preview owns
+    /// focus so text fields keep their option-arrow editing behavior.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if let responder = window?.firstResponder as? NSView,
+           responder.isDescendant(of: self),
+           let action = Self.headingScrollAction(for: event) {
+            performScrollAction(action)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    private static func headingScrollAction(for event: NSEvent) -> ScrollAction? {
+        guard event.type == .keyDown,
+              event.modifierFlags.contains(.option),
+              !event.modifierFlags.contains(.command),
+              !event.modifierFlags.contains(.control),
+              !event.modifierFlags.contains(.shift),
+              let scalar = event.charactersIgnoringModifiers?.unicodeScalars.first
+        else { return nil }
+        switch Int(scalar.value) {
+        case NSUpArrowFunctionKey: return .previousHeading
+        case NSDownArrowFunctionKey: return .nextHeading
+        default: return nil
+        }
+    }
+
+    /// Legacy path, slated for removal. Older WKWebView configurations
+    /// happen to embed an NSScrollView in the private subview tree; finding
+    /// and driving it was never API — an implementation detail this code
+    /// borrowed. Modern WebKit composites macOS web content in the UI
+    /// process (remote layer tree): the WKWebView hosts only a WKFlippedView
+    /// layer-hosting view and no NSScrollView exists — see
+    /// Source/WebKit/UIProcess/mac/WebViewImpl.mm
+    /// (ENABLE(REMOTE_LAYER_TREE_ON_MAC_BY_DEFAULT)) in
+    /// https://github.com/WebKit/WebKit. Observed here: builds with the
+    /// macOS 26 SDK get the new architecture, so `webScrollView` stays nil
+    /// and every branch guarded on it falls back to the supported route —
+    /// WKWebView exposes no scroll API on macOS (`scrollView` is available
+    /// on iOS/iPadOS/Catalyst/visionOS only,
+    /// https://developer.apple.com/documentation/webkit/wkwebview/scrollview),
+    /// so scrolling goes through `evaluateJavaScript` + `Window.scrollTo`
+    /// (https://developer.mozilla.org/docs/Web/API/Window/scrollTo) with the
+    /// page reporting scroll/height back via `WKScriptMessageHandler`
+    /// (https://developer.apple.com/documentation/webkit/wkscriptmessagehandler).
+    /// Once releases are built exclusively with the new SDK, `webScrollView`
+    /// and these branches can be deleted.
     private func configureWebKitScrollView() {
         guard let scrollView = webView.descendantViews.first(where: { $0 is NSScrollView })
                 as? NSScrollView else { return }
@@ -1202,7 +1294,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                let base = currentAssetBase,
                let resolved = MarkdownAssetScheme.resolve(url, against: base) {
                 if Self.isMarkdownDocument(resolved) {
-                    localMarkdownLinkActivated?(resolved)
+                    // resolve() works on the path alone and drops `#section`.
+                    localMarkdownLinkActivated?(Self.reattachingFragment(of: url, to: resolved))
                 } else {
                     NSWorkspace.shared.open(resolved)
                 }
@@ -1217,6 +1310,14 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
 
     private static func isMarkdownDocument(_ url: URL) -> Bool {
         ["md", "markdown", "mdown", "mkdn", "mkd"].contains(url.pathExtension.lowercased())
+    }
+
+    private static func reattachingFragment(of source: URL, to target: URL) -> URL {
+        guard let fragment = source.fragment, !fragment.isEmpty,
+              var components = URLComponents(url: target, resolvingAgainstBaseURL: false)
+        else { return target }
+        components.fragment = fragment
+        return components.url ?? target
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
