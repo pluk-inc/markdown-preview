@@ -417,7 +417,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             let raw = ceil(CGFloat(truncating: value))
             lastReportedDocumentHeight = raw
             heightDidChange?(raw * webView.pageZoom)
-        case "scroll":
+        case "scrollPosition":
             guard let value = dict["value"] as? NSNumber else { return }
             lastReportedScrollY = CGFloat(truncating: value)
             // The native bounds observer fires this in the legacy path.
@@ -1088,7 +1088,9 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             return true
         }
 
-        guard let scrollView = webScrollView else { return false }
+        guard let scrollView = webScrollView else {
+            return performScrollActionViaPage(action)
+        }
         let clipView = scrollView.contentView
         let documentHeight = scrollView.documentView?.bounds.height ?? clipView.bounds.height
         let topInset = clipView.contentInsets.top
@@ -1123,6 +1125,42 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             return true
         }
         animateScroll(to: target, in: scrollView, duration: duration)
+        return true
+    }
+
+    /// Line/page/top/bottom scrolling for the JS path, mirroring the native
+    /// deltas above.
+    private func performScrollActionViaPage(_ action: ScrollAction) -> Bool {
+        let metrics = scrollMetrics
+        let maxY = max(metrics.documentHeight - metrics.viewportHeight, 0)
+        let pageDelta = max(metrics.viewportHeight * 0.9, 40)
+        let lineDelta: CGFloat = 40
+
+        let target: CGFloat
+        let duration: TimeInterval
+        switch action {
+        case .lineUp:
+            target = metrics.position - lineDelta
+            duration = 0.08
+        case .lineDown:
+            target = metrics.position + lineDelta
+            duration = 0.08
+        case .pageUp:
+            target = metrics.position - pageDelta
+            duration = 0.08
+        case .pageDown:
+            target = metrics.position + pageDelta
+            duration = 0.08
+        case .top:
+            target = 0
+            duration = 0.2
+        case .bottom:
+            target = maxY
+            duration = 0.2
+        case .previousHeading, .nextHeading:
+            return true
+        }
+        scrollDocument(to: max(0, min(target, maxY)), topMargin: 0, duration: duration)
         return true
     }
 

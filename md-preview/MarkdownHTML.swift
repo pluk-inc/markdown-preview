@@ -898,7 +898,7 @@ nonisolated enum MarkdownHTML {
                 const y = window.scrollY || document.documentElement.scrollTop || 0;
                 if (y !== lastScroll) {
                     lastScroll = y;
-                    post({ kind: 'scroll', value: y });
+                    post({ kind: 'scrollPosition', value: y });
                 }
             });
         }
