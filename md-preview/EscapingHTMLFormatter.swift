@@ -495,7 +495,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         let info = CodeFenceInfo(rawInfoString: codeBlock.language)
         let languageAttr = info.language.isEmpty
             ? ""
-            : " class=\"language-\(escapeAttribute(info.language))\""
+            : " class=\"language-\(escapeAttribute(info.highlightLanguage))\""
         result += "<pre\(sourceLineAttribute(codeBlock))><code\(languageAttr)>\(escapeText(codeBlock.code))</code></pre>\n"
     }
 

@@ -1778,7 +1778,41 @@ nonisolated enum MarkdownHTML {
 
     /// Yields via rAF every ~8 ms so the main thread is never pinned for
     /// more than one frame on docs with many code blocks.
-    private static let highlightAllBody = """
+    static let highlightAllBody = """
+    function decorateShellOptions(block) {
+        if (!block.classList.contains('language-bash')) return;
+        const textNodes = [];
+        const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) {
+            const parent = walker.currentNode.parentElement;
+            if (!parent || parent.closest('.hljs-comment, .hljs-string, .hljs-attr')) continue;
+            textNodes.push(walker.currentNode);
+        }
+        const optionPattern = /(^|[\\s=])(-{1,2}[A-Za-z][A-Za-z0-9-]*)(?=$|[\\s;&|)])/g;
+        textNodes.forEach((node) => {
+            const source = node.nodeValue || '';
+            let match;
+            let cursor = 0;
+            let changed = false;
+            const fragment = document.createDocumentFragment();
+            optionPattern.lastIndex = 0;
+            while ((match = optionPattern.exec(source)) !== null) {
+                const optionStart = match.index + match[1].length;
+                fragment.append(document.createTextNode(source.slice(cursor, optionStart)));
+                const span = document.createElement('span');
+                span.className = 'hljs-attr';
+                span.textContent = match[2];
+                fragment.append(span);
+                cursor = optionStart + match[2].length;
+                changed = true;
+            }
+            if (changed) {
+                fragment.append(document.createTextNode(source.slice(cursor)));
+                node.replaceWith(fragment);
+            }
+        });
+    }
+
     function highlightAll() {
         if (typeof hljs === 'undefined') return;
         if (!document.querySelector('pre code[class*="language-"]:not([data-hljs-done="1"])')) return;
@@ -1793,6 +1827,7 @@ nonisolated enum MarkdownHTML {
                 const block = blocks[i++];
                 try {
                     hljs.highlightElement(block);
+                    decorateShellOptions(block);
                 } catch (e) {
                     MdPreviewPerf.log('hljs threw', String(e && e.message || e));
                 }

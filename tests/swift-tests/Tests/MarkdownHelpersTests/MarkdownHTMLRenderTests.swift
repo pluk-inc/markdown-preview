@@ -322,6 +322,79 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(codeRule.contains("display: block;"))
     }
 
+    func testShellFenceAliasesUseBashReadModeGrammar() {
+        for language in ["shell", "sh", "zsh", "console", "bash"] {
+            let rendered = MarkdownHTML.render(
+                markdown: """
+                ```\(language)
+                git status --short
+                ```
+                """,
+                vendorLoading: .lazy
+            )
+
+            XCTAssertTrue(
+                rendered.articleHTML.contains("<code class=\"language-bash\">"),
+                "\(language): \(rendered.articleHTML)"
+            )
+        }
+    }
+
+    @MainActor
+    func testReadModeHighlightsShellOptionsWithoutTouchingComments() async throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let highlightURL = repositoryRoot
+            .appendingPathComponent("md-preview/Vendor/Highlight/highlight.min.js")
+        let highlightJS = try String(contentsOf: highlightURL, encoding: .utf8)
+            .replacingOccurrences(of: "</script", with: "<\\/script")
+        let html = """
+        <!DOCTYPE html>
+        <html><body>
+        <pre><code class="language-bash">git status --short
+        npx serve-sim --list -q
+        # --ignored</code></pre>
+        <script>\(highlightJS)</script>
+        <script>
+        const MdPreviewPerf = { log() {}, now: () => performance.now() };
+        window.requestAnimationFrame = (callback) => callback();
+        \(MarkdownHTML.highlightAllBody)
+        highlightAll();
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 700, height: 300))
+
+        webView.loadHTMLString(html, baseURL: repositoryRoot)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        for _ in 0..<100 {
+            let done = try await webView.evaluateJavaScript(
+                "document.querySelector('code').dataset.hljsDone === '1'"
+            ) as? Bool
+            if done == true { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let result = try await webView.evaluateJavaScript("""
+        JSON.stringify({
+            options: Array.from(document.querySelectorAll('code > .hljs-attr')).map((node) => node.textContent),
+            commentOptions: Array.from(document.querySelectorAll('.hljs-comment .hljs-attr')).map((node) => node.textContent),
+            html: document.querySelector('code').innerHTML,
+        })
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let values = try JSONDecoder().decode(ShellHighlightValues.self, from: Data(json.utf8))
+
+        XCTAssertEqual(values.options, ["--short", "--list", "-q"], values.html)
+        XCTAssertTrue(values.commentOptions.isEmpty)
+    }
+
     func testBlockMathKeepsValidWrapperAndSourceLine() {
         let rendered = MarkdownHTML.render(
             markdown: """
@@ -544,6 +617,12 @@ private struct LongDocumentScrollMetrics: Decodable {
     let rowCount: Int
     let overflowY: String
     let bodyOverflowY: String
+}
+
+private struct ShellHighlightValues: Decodable {
+    let options: [String]
+    let commentOptions: [String]
+    let html: String
 }
 
 private struct MermaidLayoutMetrics: Decodable {
