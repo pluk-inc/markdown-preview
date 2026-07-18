@@ -1778,6 +1778,8 @@ nonisolated enum MarkdownHTML {
 
     /// Yields via rAF every ~8 ms so the main thread is never pinned for
     /// more than one frame on docs with many code blocks.
+    /// Internal so the WebKit regression tests can exercise the exact script
+    /// shipped by the app with the bundled highlight.js runtime.
     static let highlightAllBody = """
     function decorateShellOptions(block) {
         if (!block.classList.contains('language-bash')) return;
@@ -1785,10 +1787,10 @@ nonisolated enum MarkdownHTML {
         const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
         while (walker.nextNode()) {
             const parent = walker.currentNode.parentElement;
-            if (!parent || parent.closest('.hljs-comment, .hljs-string, .hljs-attr')) continue;
+            if (!parent || parent.closest('.hljs-comment, .hljs-string, .hljs-meta, .hljs-attr')) continue;
             textNodes.push(walker.currentNode);
         }
-        const optionPattern = /(^|[\\s=])(-{1,2}[A-Za-z][A-Za-z0-9-]*)(?=$|[\\s;&|)])/g;
+        const optionPattern = /(^|[\\s=])(-{1,2}[A-Za-z][A-Za-z0-9-]*)(?=$|[=\\s;&|)])/g;
         textNodes.forEach((node) => {
             const source = node.nodeValue || '';
             let match;

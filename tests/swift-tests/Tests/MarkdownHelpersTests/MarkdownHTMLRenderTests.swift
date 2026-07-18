@@ -355,8 +355,11 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         let html = """
         <!DOCTYPE html>
         <html><body>
-        <pre><code class="language-bash">git status --short
-        npx serve-sim --list -q
+        <pre><code class="language-bash">#!/bin/bash -e
+        git status --short
+        git log --pretty=format:%h
+        xcodebuild --derivedDataPath=/tmp/build
+        npx serve-sim --list -q -a -b
         # --ignored</code></pre>
         <script>\(highlightJS)</script>
         <script>
@@ -385,14 +388,20 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         JSON.stringify({
             options: Array.from(document.querySelectorAll('code > .hljs-attr')).map((node) => node.textContent),
             commentOptions: Array.from(document.querySelectorAll('.hljs-comment .hljs-attr')).map((node) => node.textContent),
+            metaOptions: Array.from(document.querySelectorAll('.hljs-meta .hljs-attr')).map((node) => node.textContent),
             html: document.querySelector('code').innerHTML,
         })
         """)
         let json = try XCTUnwrap(result as? String)
         let values = try JSONDecoder().decode(ShellHighlightValues.self, from: Data(json.utf8))
 
-        XCTAssertEqual(values.options, ["--short", "--list", "-q"], values.html)
+        XCTAssertEqual(
+            values.options,
+            ["--short", "--pretty", "--derivedDataPath", "--list", "-q", "-a", "-b"],
+            values.html
+        )
         XCTAssertTrue(values.commentOptions.isEmpty)
+        XCTAssertTrue(values.metaOptions.isEmpty)
     }
 
     func testBlockMathKeepsValidWrapperAndSourceLine() {
@@ -622,6 +631,7 @@ private struct LongDocumentScrollMetrics: Decodable {
 private struct ShellHighlightValues: Decodable {
     let options: [String]
     let commentOptions: [String]
+    let metaOptions: [String]
     let html: String
 }
 
