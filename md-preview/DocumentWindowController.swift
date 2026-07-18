@@ -1807,12 +1807,19 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             if let defaultEditor {
                 return .editor(defaultEditor)
             }
-        case .editor, nil:
+        case .editor:
             if let defaultEditor {
                 return .editor(defaultEditor)
             }
             if let defaultLLM {
                 return .llm(defaultLLM)
+            }
+        case nil:
+            if let defaultLLM {
+                return .llm(defaultLLM)
+            }
+            if let defaultEditor {
+                return .editor(defaultEditor)
             }
         }
         return nil
@@ -1833,36 +1840,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             return menu
         }
 
-        if !editorCandidates.isEmpty {
-            let header = NSMenuItem()
-            header.title = "Editors"
-            header.isEnabled = false
-            menu.addItem(header)
-
-            for candidate in editorCandidates {
-                let item = NSMenuItem(
-                    title: displayName(for: candidate.url),
-                    action: #selector(pickEditor(_:)),
-                    keyEquivalent: ""
-                )
-                let icon = NSWorkspace.shared.icon(forFile: candidate.url.path)
-                icon.size = NSSize(width: 16, height: 16)
-                item.image = icon
-                item.target = self
-                item.representedObject = candidate
-                if case .editor(let selectedEditor) = defaultAction,
-                   sameEditor(candidate, selectedEditor) {
-                    item.state = .on
-                }
-                menu.addItem(item)
-            }
-        }
-
         if !llmCandidates.isEmpty {
-            if !editorCandidates.isEmpty {
-                menu.addItem(.separator())
-            }
-
             let header = NSMenuItem()
             header.title = "AI Apps"
             header.isEnabled = false
@@ -1881,6 +1859,35 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 item.image = icon
                 if case .llm(let selectedLLM) = defaultAction,
                    candidate.target.id == selectedLLM.target.id {
+                    item.state = .on
+                }
+                menu.addItem(item)
+            }
+        }
+
+        if !editorCandidates.isEmpty {
+            if !llmCandidates.isEmpty {
+                menu.addItem(.separator())
+            }
+
+            let header = NSMenuItem()
+            header.title = "Editors"
+            header.isEnabled = false
+            menu.addItem(header)
+
+            for candidate in editorCandidates {
+                let item = NSMenuItem(
+                    title: displayName(for: candidate.url),
+                    action: #selector(pickEditor(_:)),
+                    keyEquivalent: ""
+                )
+                let icon = NSWorkspace.shared.icon(forFile: candidate.url.path)
+                icon.size = NSSize(width: 16, height: 16)
+                item.image = icon
+                item.target = self
+                item.representedObject = candidate
+                if case .editor(let selectedEditor) = defaultAction,
+                   sameEditor(candidate, selectedEditor) {
                     item.state = .on
                 }
                 menu.addItem(item)
