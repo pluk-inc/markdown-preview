@@ -11,7 +11,7 @@
 "Full Width" = "全宽";
 "Hide Sidebar" = "隐藏边栏";
 "Table of Contents" = "目录";
-"Project Navigator" = "项目导航";
+"Project Navigator" = "项目导航器";
 "Toggle Edit Mode" = "切换编辑模式";
 
 /* File menu */
@@ -41,7 +41,7 @@
 "Link" = "链接";
 "Bulleted List" = "项目符号列表";
 "Numbered List" = "编号列表";
-"Checklist" = "核对清单";
+"Checklist" = "任务列表";
 "Block Quote" = "引用";
 
 /* Open panel */
@@ -84,7 +84,7 @@
 
 /* Formatting toolbar */
 "Task List" = "任务列表";
-"Normal Text" = "普通文本";
+"Normal Text" = "正文";
 "Heading %d" = "标题 %d";
 
 /* Find bar */
@@ -99,18 +99,18 @@
 
 /* Open With context menu */
 "Open with External Editor" = "使用外部编辑器打开";
-"Open As" = "打开为";
+"Open As" = "打开方式";
 "No editors available" = "没有可用的编辑器";
 
 /* Inspector */
 "Inspector tab" = "检查器标签页";
 "Document" = "文稿";
 "Properties" = "属性";
-"File Name" = "文件名称";
+"File Name" = "文件名";
 "Document Type" = "文稿类型";
 "Markdown Document" = "Markdown 文稿";
 "File Size" = "文件大小";
-"Words" = "字数";
+"Words" = "单词数";
 "Characters" = "字符数";
 "Lines" = "行数";
 "Headings" = "标题";
@@ -130,14 +130,14 @@
 "Don’t Save" = "不存储";
 "The file was removed while it was open." = "文件在打开期间被移除。";
 "Recreate File" = "重新创建文件";
-"The file could not be read to verify that it is unchanged." = "无法读取文件以验证其未被更改。";
+"The file could not be read to verify that it is unchanged." = "无法读取文件，因此无法确认文件是否已更改。";
 "Save Anyway" = "仍要存储";
-"This document changed on disk" = "此文稿已在磁盘上更改";
-"Another app changed %@. Cancel keeps your changes unsaved. Choose which version to keep." = "另一个 App 更改了 %@。取消可保留未存储的更改。请选择要保留的版本。";
+"This document changed on disk" = "磁盘上的文稿已被更改";
+"Another app changed %@. Cancel keeps your changes unsaved. Choose which version to keep." = "另一个 App 已更改 %@。选择“取消”会保留您的未存储更改。请选择要保留的版本。";
 "Keep My Changes" = "保留我的更改";
 "Reload from Disk" = "从磁盘重新载入";
 "Unable to verify the document on disk" = "无法验证磁盘上的文稿";
-"%@ Cancel keeps your changes unsaved." = "%@ 取消可保留未存储的更改。";
+"%@ Cancel keeps your changes unsaved." = "%@选择“取消”会保留您的未存储更改。";
 "Markdown Preview needs your permission to save this file." = "Markdown Preview 需要您的权限才能存储此文件。";
 
 /* Open menus */
@@ -183,7 +183,7 @@
 "Fit diagram" = "适应图表";
 "Mermaid renderer is unavailable.\n\n" = "Mermaid 渲染器不可用。\n\n";
 "Footnote %d" = "脚注 %d";
-"Back to reference %d" = "返回引用 %d";
+"Back to reference %d" = "返回脚注引用 %d";
 "KaTeX renderer is unavailable.\n\n" = "KaTeX 渲染器不可用。\n\n";
 
 /* CLI installer errors */
