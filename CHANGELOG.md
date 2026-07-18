@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.0.37] – 2026-07-18
+
+Markdown Preview now keeps long documents sharp, makes section links and navigation history more reliable, and improves handoff to AI apps and Homebrew-installed command-line tools.
+
+### Added
+
+- **The command-line launcher is bundled for Homebrew integration.** The app now includes its launcher at a stable path so Homebrew can expose `mdp`, `md-preview`, and `markdown-preview` without a separate in-app installation step ([#202](https://github.com/pluk-inc/markdown-preview/pull/202), [#200](https://github.com/pluk-inc/markdown-preview/issues/200)).
+
+### Changed
+
+- **AI apps appear first in the Open menu.** When no preference has been saved, the first installed AI app becomes the default handoff while external editors remain available in the same menu ([#207](https://github.com/pluk-inc/markdown-preview/pull/207)).
+
+### Fixed
+
+- **Section links and navigation history now preserve your place.** Links to headings work within and across documents, and Back and Forward restore the previous scroll position instead of reopening at the top ([#206](https://github.com/pluk-inc/markdown-preview/pull/206)).
+- **Long documents stay sharp on Retina displays.** Very large Markdown files now remain at native display resolution while scrolling ([#203](https://github.com/pluk-inc/markdown-preview/pull/203)).
+- **Closing a preview while assets load no longer crashes.** Cancelled image and other local-asset requests now stop cleanly when a document closes or is replaced ([#199](https://github.com/pluk-inc/markdown-preview/pull/199)).
+- **Opening the editor no longer triggers a layout crash.** Switching from the rendered preview into edit mode now avoids recursive AppKit layout ([#201](https://github.com/pluk-inc/markdown-preview/pull/201)).
+
+### Contributors
+
+Thanks to the external contributors and reporters who helped improve this release:
+
+- [@jurajpiar](https://github.com/jurajpiar) — fixed section links and navigation-history restoration ([#206](https://github.com/pluk-inc/markdown-preview/pull/206))
+- [@banteg](https://github.com/banteg) — preserved Retina rendering in long documents ([#203](https://github.com/pluk-inc/markdown-preview/pull/203))
+- [@dannydorazio](https://github.com/dannydorazio) — requested the bundled CLI launcher for Homebrew integration ([#200](https://github.com/pluk-inc/markdown-preview/issues/200))
+
 ## [0.0.36] – 2026-07-15
 
 Tall Mermaid diagrams can now expand to the full article width, and this release fixes two rendering issues in dark mode and long inline code.
