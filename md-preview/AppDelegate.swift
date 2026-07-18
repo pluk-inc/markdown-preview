@@ -16,13 +16,28 @@ private enum CommandLineToolInstallError: LocalizedError {
         switch self {
         case .terminalAutomationFailed(let message):
             if let message, !message.isEmpty {
-                return "Terminal automation failed: \(message)"
+                return String(
+                    format: NSLocalizedString(
+                        "Terminal automation failed: %@",
+                        comment: "CLI installer error"
+                    ),
+                    message
+                )
             }
-            return "Terminal automation failed."
+            return NSLocalizedString("Terminal automation failed.", comment: "CLI installer error")
         case .installerScriptWriteFailed(let message):
-            return "Failed to write CLI installer script: \(message)"
+            return String(
+                format: NSLocalizedString(
+                    "Failed to write CLI installer script: %@",
+                    comment: "CLI installer error"
+                ),
+                message
+            )
         case .bundledToolMissing:
-            return "The bundled Markdown Preview CLI could not be found."
+            return NSLocalizedString(
+                "The bundled Markdown Preview CLI could not be found.",
+                comment: "CLI installer error"
+            )
         }
     }
 }

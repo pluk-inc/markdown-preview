@@ -97,7 +97,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private var hasUnsavedEditorChanges = false {
         didSet {
             guard oldValue != hasUnsavedEditorChanges else { return }
-            documentWindow.subtitle = hasUnsavedEditorChanges ? "Edited" : ""
+            documentWindow.subtitle = hasUnsavedEditorChanges
+                ? NSLocalizedString("Edited", comment: "Window subtitle for unsaved changes")
+                : ""
         }
     }
     private weak var editAccessory: NSTitlebarAccessoryViewController?
@@ -258,7 +260,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         tableUndoManager.removeAllActions()
         currentFileURL = fileURL
         currentMarkdown = markdown
-        documentWindow.title = fileURL?.lastPathComponent ?? "Untitled"
+        documentWindow.title = fileURL?.lastPathComponent
+            ?? NSLocalizedString("Untitled", comment: "Window title when no document is open")
         attachToExistingTabGroupIfNeeded()
         documentWindow.makeKeyAndOrderFront(nil)
         // Tab placement is settled once the window is shown; a window opened
@@ -1173,12 +1176,22 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Do you want to save your changes?"
-        let fileName = currentFileURL?.lastPathComponent ?? "this document"
-        alert.informativeText = "Your changes to \(fileName) will be lost if you don’t save them."
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-        alert.addButton(withTitle: "Don’t Save")
+        alert.messageText = NSLocalizedString(
+            "Do you want to save your changes?",
+            comment: "Unsaved changes alert title"
+        )
+        let fileName = currentFileURL?.lastPathComponent
+            ?? NSLocalizedString("this document", comment: "Fallback document name in alerts")
+        alert.informativeText = String(
+            format: NSLocalizedString(
+                "Your changes to %@ will be lost if you don’t save them.",
+                comment: "Unsaved changes alert message"
+            ),
+            fileName
+        )
+        alert.addButton(withTitle: NSLocalizedString("Save", comment: "Alert button"))
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Alert button"))
+        alert.addButton(withTitle: NSLocalizedString("Don’t Save", comment: "Alert button"))
         alert.beginSheetModal(for: documentWindow) { response in
             switch response {
             case .alertFirstButtonReturn:
@@ -1444,14 +1457,26 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         case .missing:
             presentUnavailableFileConflict(localMarkdown: text,
                                            fileURL: url,
-                                           reason: "The file was removed while it was open.",
-                                           overwriteTitle: "Recreate File",
+                                           reason: NSLocalizedString(
+                                               "The file was removed while it was open.",
+                                               comment: "Unavailable file conflict reason"
+                                           ),
+                                           overwriteTitle: NSLocalizedString(
+                                               "Recreate File",
+                                               comment: "Unavailable file conflict button"
+                                           ),
                                            completion: completion)
         case .unreadable:
             presentUnavailableFileConflict(localMarkdown: text,
                                            fileURL: url,
-                                           reason: "The file could not be read to verify that it is unchanged.",
-                                           overwriteTitle: "Save Anyway",
+                                           reason: NSLocalizedString(
+                                               "The file could not be read to verify that it is unchanged.",
+                                               comment: "Unavailable file conflict reason"
+                                           ),
+                                           overwriteTitle: NSLocalizedString(
+                                               "Save Anyway",
+                                               comment: "Unavailable file conflict button"
+                                           ),
                                            completion: completion)
         }
     }
@@ -1545,18 +1570,18 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         for edit in edits.reversed() {
             switch edit {
             case .setCell:
-                return "Edit Table Cell"
+                return NSLocalizedString("Edit Table Cell", comment: "Table edit undo action")
             case .insertRowBefore, .insertRowAfter:
-                return "Add Row"
+                return NSLocalizedString("Add Row", comment: "Table edit undo action")
             case .deleteRow:
-                return "Delete Row"
+                return NSLocalizedString("Delete Row", comment: "Table edit undo action")
             case .insertColumnBefore, .insertColumnAfter:
-                return "Add Column"
+                return NSLocalizedString("Add Column", comment: "Table edit undo action")
             case .deleteColumn:
-                return "Delete Column"
+                return NSLocalizedString("Delete Column", comment: "Table edit undo action")
             }
         }
-        return "Edit Table"
+        return NSLocalizedString("Edit Table", comment: "Table edit undo action")
     }
 
     private func registerTableUndo(restoring markdown: String,
@@ -1634,11 +1659,20 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     ) {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "This document changed on disk"
-        alert.informativeText = "Another app changed \(fileURL.lastPathComponent). Cancel keeps your changes unsaved. Choose which version to keep."
-        alert.addButton(withTitle: "Keep My Changes")
-        alert.addButton(withTitle: "Reload from Disk")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = NSLocalizedString(
+            "This document changed on disk",
+            comment: "External edit conflict alert title"
+        )
+        alert.informativeText = String(
+            format: NSLocalizedString(
+                "Another app changed %@. Cancel keeps your changes unsaved. Choose which version to keep.",
+                comment: "External edit conflict alert message"
+            ),
+            fileURL.lastPathComponent
+        )
+        alert.addButton(withTitle: NSLocalizedString("Keep My Changes", comment: "Conflict alert button"))
+        alert.addButton(withTitle: NSLocalizedString("Reload from Disk", comment: "Conflict alert button"))
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Alert button"))
         alert.beginSheetModal(for: documentWindow) { [weak self] response in
             guard let self else {
                 completion(.cancelled)
@@ -1671,10 +1705,19 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     ) {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Unable to verify the document on disk"
-        alert.informativeText = "\(reason) Cancel keeps your changes unsaved."
+        alert.messageText = NSLocalizedString(
+            "Unable to verify the document on disk",
+            comment: "Unavailable file conflict alert title"
+        )
+        alert.informativeText = String(
+            format: NSLocalizedString(
+                "%@ Cancel keeps your changes unsaved.",
+                comment: "Unavailable file conflict alert message"
+            ),
+            reason
+        )
         alert.addButton(withTitle: overwriteTitle)
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Alert button"))
         alert.beginSheetModal(for: documentWindow) { [weak self] response in
             guard let self, response == .alertFirstButtonReturn else {
                 completion(.cancelled)
@@ -1700,7 +1743,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let panel = NSSavePanel()
         panel.directoryURL = url.deletingLastPathComponent()
         panel.nameFieldStringValue = url.lastPathComponent
-        panel.message = "Markdown Preview needs your permission to save this file."
+        panel.message = NSLocalizedString(
+            "Markdown Preview needs your permission to save this file.",
+            comment: "Save panel permission message"
+        )
         panel.beginSheetModal(for: documentWindow) { [weak self] response in
             guard let self, response == .OK, let chosen = panel.url else {
                 completion(.cancelled)
@@ -1851,18 +1897,18 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let menu = NSMenu()
 
         guard currentFileURL != nil else {
-            menu.addItem(disabledItem("No document open"))
+            menu.addItem(disabledItem(NSLocalizedString("No document open", comment: "Open menu empty state")))
             return menu
         }
 
         if editorCandidates.isEmpty && llmCandidates.isEmpty {
-            menu.addItem(disabledItem("No apps available"))
+            menu.addItem(disabledItem(NSLocalizedString("No apps available", comment: "Open menu empty state")))
             return menu
         }
 
         if !llmCandidates.isEmpty {
             let header = NSMenuItem()
-            header.title = "AI Apps"
+            header.title = NSLocalizedString("AI Apps", comment: "Open menu section header")
             header.isEnabled = false
             menu.addItem(header)
 
@@ -1891,7 +1937,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             }
 
             let header = NSMenuItem()
-            header.title = "Editors"
+            header.title = NSLocalizedString("Editors", comment: "Open menu section header")
             header.isEnabled = false
             menu.addItem(header)
 
@@ -2063,16 +2109,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let menu = NSMenu()
 
         guard currentFileURL != nil else {
-            menu.addItem(disabledItem("No document open"))
+            menu.addItem(disabledItem(NSLocalizedString("No document open", comment: "Open menu empty state")))
             return menu
         }
         guard !candidates.isEmpty else {
-            menu.addItem(disabledItem("No LLM apps available"))
+            menu.addItem(disabledItem(NSLocalizedString("No LLM apps available", comment: "Open menu empty state")))
             return menu
         }
 
         let header = NSMenuItem()
-        header.title = "Open in LLM…"
+        header.title = NSLocalizedString("Open in LLM…", comment: "Open in LLM menu header")
         header.isEnabled = false
         menu.addItem(header)
 
@@ -2641,16 +2687,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let menu = NSMenu()
 
         guard currentFileURL != nil else {
-            menu.addItem(disabledItem("No document open"))
+            menu.addItem(disabledItem(NSLocalizedString("No document open", comment: "Open menu empty state")))
             return menu
         }
         guard !candidates.isEmpty else {
-            menu.addItem(disabledItem("No editors available"))
+            menu.addItem(disabledItem(NSLocalizedString("No editors available", comment: "Open menu empty state")))
             return menu
         }
 
         let header = NSMenuItem()
-        header.title = "Open with…"
+        header.title = NSLocalizedString("Open with…", comment: "Open With menu header")
         header.isEnabled = false
         menu.addItem(header)
 
@@ -2906,7 +2952,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
-        panel.message = "Choose a Markdown file or folder"
+        panel.message = NSLocalizedString(
+            "Choose a Markdown file or folder",
+            comment: "Open panel prompt"
+        )
         panel.allowedContentTypes = Self.markdownFileExtensions
             .compactMap { UTType(filenameExtension: $0) }
         return panel

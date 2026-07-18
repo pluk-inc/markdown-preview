@@ -13,6 +13,7 @@
 		9A7B10012FB0000100010001 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 9A7B10032FB0000100010001 /* Sentry */; };
 		9A33940A2FA5AF500015D9A4 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 9A3394092FA5AF500015D9A4 /* Markdown */; };
 		9A33940C2FA5AF500015D9A4 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 9A33940B2FA5AF500015D9A4 /* Markdown */; };
+		9A2040010000000000000001 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9A2040010000000000000004 /* Localizable.strings */; };
 		9AC100010000000000000001 /* markdown-preview in Copy CLI Tool */ = {isa = PBXBuildFile; fileRef = 9AC100010000000000000002 /* markdown-preview */; };
 		9AF000000000000000000003 /* mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000101 /* mermaid.min.js */; };
 		9AF000000000000000000004 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000102 /* LICENSE */; };
@@ -79,6 +80,8 @@
 		9AF000000000000000000109 /* Highlight-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "Highlight-LICENSE.txt"; path = "md-preview/Vendor/Highlight/Highlight-LICENSE.txt"; sourceTree = "<group>"; };
 		9AF00000000000000000010A /* purify.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = purify.min.js; path = "md-preview/Vendor/DOMPurify/purify.min.js"; sourceTree = "<group>"; };
 		9AF00000000000000000010B /* DOMPurify-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "DOMPurify-LICENSE.txt"; path = "md-preview/Vendor/DOMPurify/DOMPurify-LICENSE.txt"; sourceTree = "<group>"; };
+		9A2040010000000000000002 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = "md-preview/en.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		9A2040010000000000000003 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "md-preview/zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -150,6 +153,7 @@
 			isa = PBXGroup;
 			children = (
 				9A0209A02FA1100100092060 /* Version.xcconfig */,
+				9A2040010000000000000004 /* Localizable.strings */,
 				9AC100010000000000000004 /* Resources */,
 				9AF000000000000000000101 /* mermaid.min.js */,
 				9AF000000000000000000102 /* LICENSE */,
@@ -328,6 +332,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9A2040010000000000000001 /* Localizable.strings in Resources */,
 				9AF000000000000000000003 /* mermaid.min.js in Resources */,
 				9AF000000000000000000004 /* LICENSE in Resources */,
 				9AF000000000000000000005 /* katex.min.js in Resources */,
@@ -360,6 +365,18 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		9A2040010000000000000004 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				9A2040010000000000000002 /* en */,
+				9A2040010000000000000003 /* zh-Hans */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin PBXTargetDependency section */
 		9A02093B2FA10D4C00092060 /* PBXTargetDependency */ = {

@@ -28,14 +28,22 @@ final class TableContextMenuPresenter: NSObject {
     }
 
     func present(in view: NSView) {
-        let menu = NSMenu(title: "Table")
+        let menu = NSMenu(title: NSLocalizedString("Table", comment: "Table context menu title"))
         menu.autoenablesItems = false
 
-        let rowItem = NSMenuItem(title: "Row", action: nil, keyEquivalent: "")
+        let rowItem = NSMenuItem(
+            title: NSLocalizedString("Row", comment: "Table context menu submenu"),
+            action: nil,
+            keyEquivalent: ""
+        )
         rowItem.submenu = rowMenu()
         menu.addItem(rowItem)
 
-        let columnItem = NSMenuItem(title: "Column", action: nil, keyEquivalent: "")
+        let columnItem = NSMenuItem(
+            title: NSLocalizedString("Column", comment: "Table context menu submenu"),
+            action: nil,
+            keyEquivalent: ""
+        )
         columnItem.submenu = columnMenu()
         menu.addItem(columnItem)
 
@@ -46,35 +54,35 @@ final class TableContextMenuPresenter: NSObject {
     }
 
     private func rowMenu() -> NSMenu {
-        let menu = NSMenu(title: "Row")
+        let menu = NSMenu(title: NSLocalizedString("Row", comment: "Table row context menu title"))
         menu.autoenablesItems = false
-        menu.addItem(command("Select Row", operation: "selectRow",
+        menu.addItem(command(NSLocalizedString("Select Row", comment: "Table context menu item"), operation: "selectRow",
                              enabled: context.canDeleteRow))
         menu.addItem(.separator())
-        menu.addItem(command("Add Row Above", operation: "insertRowBefore",
+        menu.addItem(command(NSLocalizedString("Add Row Above", comment: "Table context menu item"), operation: "insertRowBefore",
                              enabled: context.canInsertRowAbove))
-        menu.addItem(command("Add Row Below", operation: "insertRowAfter"))
+        menu.addItem(command(NSLocalizedString("Add Row Below", comment: "Table context menu item"), operation: "insertRowAfter"))
         if context.showsDuplicateRow {
             menu.addItem(.separator())
-            menu.addItem(command("Duplicate Row", operation: "duplicateRow",
+            menu.addItem(command(NSLocalizedString("Duplicate Row", comment: "Table context menu item"), operation: "duplicateRow",
                                  enabled: context.canDuplicateRow))
         }
         menu.addItem(.separator())
-        menu.addItem(command("Delete Row", operation: "deleteRow",
+        menu.addItem(command(NSLocalizedString("Delete Row", comment: "Table context menu item"), operation: "deleteRow",
                              enabled: context.canDeleteRow))
         return menu
     }
 
     private func columnMenu() -> NSMenu {
-        let menu = NSMenu(title: "Column")
+        let menu = NSMenu(title: NSLocalizedString("Column", comment: "Table column context menu title"))
         menu.autoenablesItems = false
-        menu.addItem(command("Select Column", operation: "selectColumn",
+        menu.addItem(command(NSLocalizedString("Select Column", comment: "Table context menu item"), operation: "selectColumn",
                              enabled: context.canDeleteColumn))
         menu.addItem(.separator())
-        menu.addItem(command("Add Column Left", operation: "insertColumnBefore"))
-        menu.addItem(command("Add Column Right", operation: "insertColumnAfter"))
+        menu.addItem(command(NSLocalizedString("Add Column Left", comment: "Table context menu item"), operation: "insertColumnBefore"))
+        menu.addItem(command(NSLocalizedString("Add Column Right", comment: "Table context menu item"), operation: "insertColumnAfter"))
         menu.addItem(.separator())
-        menu.addItem(command("Delete Column", operation: "deleteColumn",
+        menu.addItem(command(NSLocalizedString("Delete Column", comment: "Table context menu item"), operation: "deleteColumn",
                              enabled: context.canDeleteColumn))
         return menu
     }

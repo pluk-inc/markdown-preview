@@ -119,3 +119,75 @@
 "Modified" = "Modified";
 "No frontmatter" = "No frontmatter";
 "Untitled" = "Untitled";
+
+/* Document state and save dialogs */
+"Edited" = "Edited";
+"Do you want to save your changes?" = "Do you want to save your changes?";
+"this document" = "this document";
+"Your changes to %@ will be lost if you don’t save them." = "Your changes to %@ will be lost if you don’t save them.";
+"Save" = "Save";
+"Cancel" = "Cancel";
+"Don’t Save" = "Don’t Save";
+"The file was removed while it was open." = "The file was removed while it was open.";
+"Recreate File" = "Recreate File";
+"The file could not be read to verify that it is unchanged." = "The file could not be read to verify that it is unchanged.";
+"Save Anyway" = "Save Anyway";
+"This document changed on disk" = "This document changed on disk";
+"Another app changed %@. Cancel keeps your changes unsaved. Choose which version to keep." = "Another app changed %@. Cancel keeps your changes unsaved. Choose which version to keep.";
+"Keep My Changes" = "Keep My Changes";
+"Reload from Disk" = "Reload from Disk";
+"Unable to verify the document on disk" = "Unable to verify the document on disk";
+"%@ Cancel keeps your changes unsaved." = "%@ Cancel keeps your changes unsaved.";
+"Markdown Preview needs your permission to save this file." = "Markdown Preview needs your permission to save this file.";
+
+/* Open menus */
+"No document open" = "No document open";
+"No apps available" = "No apps available";
+"Editors" = "Editors";
+"AI Apps" = "AI Apps";
+"No LLM apps available" = "No LLM apps available";
+"Open in LLM…" = "Open in LLM…";
+"Open with…" = "Open with…";
+
+/* Project navigator context menu */
+"Show in Finder" = "Show in Finder";
+"Open in New Tab" = "Open in New Tab";
+"Open in New Window" = "Open in New Window";
+"Copy Path" = "Copy Path";
+
+/* Table editing */
+"Table" = "Table";
+"Row" = "Row";
+"Column" = "Column";
+"Select Row" = "Select Row";
+"Add Row Above" = "Add Row Above";
+"Add Row Below" = "Add Row Below";
+"Duplicate Row" = "Duplicate Row";
+"Delete Row" = "Delete Row";
+"Select Column" = "Select Column";
+"Add Column Left" = "Add Column Left";
+"Add Column Right" = "Add Column Right";
+"Delete Column" = "Delete Column";
+"Edit Table Cell" = "Edit Table Cell";
+"Add Row" = "Add Row";
+"Add Column" = "Add Column";
+"Edit Table" = "Edit Table";
+
+/* Rendered preview controls */
+"Heading" = "Heading";
+"Copy code" = "Copy code";
+"Code copied" = "Code copied";
+"Mermaid diagram" = "Mermaid diagram";
+"Reset zoom" = "Reset zoom";
+"Fill width" = "Fill width";
+"Fit diagram" = "Fit diagram";
+"Mermaid renderer is unavailable.\n\n" = "Mermaid renderer is unavailable.\n\n";
+"Footnote %d" = "Footnote %d";
+"Back to reference %d" = "Back to reference %d";
+"KaTeX renderer is unavailable.\n\n" = "KaTeX renderer is unavailable.\n\n";
+
+/* CLI installer errors */
+"Terminal automation failed: %@" = "Terminal automation failed: %@";
+"Terminal automation failed." = "Terminal automation failed.";
+"Failed to write CLI installer script: %@" = "Failed to write CLI installer script: %@";
+"The bundled Markdown Preview CLI could not be found." = "The bundled Markdown Preview CLI could not be found.";

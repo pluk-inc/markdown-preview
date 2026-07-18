@@ -119,3 +119,75 @@
 "Modified" = "修改日期";
 "No frontmatter" = "无前置元数据";
 "Untitled" = "未命名";
+
+/* Document state and save dialogs */
+"Edited" = "已编辑";
+"Do you want to save your changes?" = "要存储您的更改吗？";
+"this document" = "此文稿";
+"Your changes to %@ will be lost if you don’t save them." = "如果不存储，对 %@ 所做的更改将丢失。";
+"Save" = "存储";
+"Cancel" = "取消";
+"Don’t Save" = "不存储";
+"The file was removed while it was open." = "文件在打开期间被移除。";
+"Recreate File" = "重新创建文件";
+"The file could not be read to verify that it is unchanged." = "无法读取文件以验证其未被更改。";
+"Save Anyway" = "仍要存储";
+"This document changed on disk" = "此文稿已在磁盘上更改";
+"Another app changed %@. Cancel keeps your changes unsaved. Choose which version to keep." = "另一个 App 更改了 %@。取消可保留未存储的更改。请选择要保留的版本。";
+"Keep My Changes" = "保留我的更改";
+"Reload from Disk" = "从磁盘重新载入";
+"Unable to verify the document on disk" = "无法验证磁盘上的文稿";
+"%@ Cancel keeps your changes unsaved." = "%@ 取消可保留未存储的更改。";
+"Markdown Preview needs your permission to save this file." = "Markdown Preview 需要您的权限才能存储此文件。";
+
+/* Open menus */
+"No document open" = "未打开文稿";
+"No apps available" = "没有可用的 App";
+"Editors" = "编辑器";
+"AI Apps" = "AI App";
+"No LLM apps available" = "没有可用的 LLM App";
+"Open in LLM…" = "在 LLM 中打开…";
+"Open with…" = "打开方式…";
+
+/* Project navigator context menu */
+"Show in Finder" = "在“访达”中显示";
+"Open in New Tab" = "在新标签页中打开";
+"Open in New Window" = "在新窗口中打开";
+"Copy Path" = "拷贝路径";
+
+/* Table editing */
+"Table" = "表格";
+"Row" = "行";
+"Column" = "列";
+"Select Row" = "选择行";
+"Add Row Above" = "在上方添加行";
+"Add Row Below" = "在下方添加行";
+"Duplicate Row" = "复制行";
+"Delete Row" = "删除行";
+"Select Column" = "选择列";
+"Add Column Left" = "在左侧添加列";
+"Add Column Right" = "在右侧添加列";
+"Delete Column" = "删除列";
+"Edit Table Cell" = "编辑表格单元格";
+"Add Row" = "添加行";
+"Add Column" = "添加列";
+"Edit Table" = "编辑表格";
+
+/* Rendered preview controls */
+"Heading" = "标题";
+"Copy code" = "拷贝代码";
+"Code copied" = "代码已拷贝";
+"Mermaid diagram" = "Mermaid 图表";
+"Reset zoom" = "重置缩放";
+"Fill width" = "填满宽度";
+"Fit diagram" = "适应图表";
+"Mermaid renderer is unavailable.\n\n" = "Mermaid 渲染器不可用。\n\n";
+"Footnote %d" = "脚注 %d";
+"Back to reference %d" = "返回引用 %d";
+"KaTeX renderer is unavailable.\n\n" = "KaTeX 渲染器不可用。\n\n";
+
+/* CLI installer errors */
+"Terminal automation failed: %@" = "终端自动化失败：%@";
+"Terminal automation failed." = "终端自动化失败。";
+"Failed to write CLI installer script: %@" = "无法写入 CLI 安装脚本：%@";
+"The bundled Markdown Preview CLI could not be found." = "找不到随附的 Markdown Preview CLI。";
