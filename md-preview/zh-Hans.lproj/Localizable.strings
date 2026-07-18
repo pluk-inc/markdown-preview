@@ -50,3 +50,54 @@
 /* Search toolbar */
 "Search" = "搜索";
 "Search in Document" = "在文稿中搜索";
+
+/* Main toolbar */
+"Navigation" = "导航";
+"Back and Forward" = "后退与前进";
+"Back" = "后退";
+"Forward" = "前进";
+"Sidebar" = "边栏";
+"Sidebar options" = "边栏选项";
+"Inspector" = "检查器";
+"Get Info" = "显示简介";
+"Show the inspector" = "显示检查器";
+"Share" = "共享";
+"Share document" = "共享文稿";
+"Print" = "打印";
+"Print document" = "打印文稿";
+"Copy" = "拷贝";
+"Copy Markdown source to clipboard" = "将 Markdown 源文本拷贝到剪贴板";
+"Copied" = "已拷贝";
+"Edit" = "编辑";
+"Edit document" = "编辑文稿";
+"Stop editing and return to preview" = "停止编辑并返回预览";
+"Open" = "打开";
+"Open document in another app" = "在其他 App 中打开文稿";
+"Open in %@" = "在 %@ 中打开";
+"Open in LLM" = "在 LLM 中打开";
+"Open document in an LLM app" = "在 LLM App 中打开文稿";
+"Zoom" = "缩放";
+"Zoom Out" = "缩小";
+"Zoom In" = "放大";
+"Open With" = "打开方式";
+"Open in another editor" = "在其他编辑器中打开";
+
+/* Formatting toolbar */
+"Task List" = "任务列表";
+"Normal Text" = "普通文本";
+"Heading %d" = "标题 %d";
+
+/* Find bar */
+"Match:" = "匹配：";
+"Contains" = "包含";
+"Begins With" = "开头为";
+"Done" = "完成";
+"Not found" = "未找到";
+"%d of %d" = "第 %1$d 个，共 %2$d 个";
+"Previous match" = "上一个匹配项";
+"Next match" = "下一个匹配项";
+
+/* Open With context menu */
+"Open with External Editor" = "使用外部编辑器打开";
+"Open As" = "打开为";
+"No editors available" = "没有可用的编辑器";

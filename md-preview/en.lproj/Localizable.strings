@@ -50,3 +50,54 @@
 /* Search toolbar */
 "Search" = "Search";
 "Search in Document" = "Search in Document";
+
+/* Main toolbar */
+"Navigation" = "Navigation";
+"Back and Forward" = "Back and Forward";
+"Back" = "Back";
+"Forward" = "Forward";
+"Sidebar" = "Sidebar";
+"Sidebar options" = "Sidebar options";
+"Inspector" = "Inspector";
+"Get Info" = "Get Info";
+"Show the inspector" = "Show the inspector";
+"Share" = "Share";
+"Share document" = "Share document";
+"Print" = "Print";
+"Print document" = "Print document";
+"Copy" = "Copy";
+"Copy Markdown source to clipboard" = "Copy Markdown source to clipboard";
+"Copied" = "Copied";
+"Edit" = "Edit";
+"Edit document" = "Edit document";
+"Stop editing and return to preview" = "Stop editing and return to preview";
+"Open" = "Open";
+"Open document in another app" = "Open document in another app";
+"Open in %@" = "Open in %@";
+"Open in LLM" = "Open in LLM";
+"Open document in an LLM app" = "Open document in an LLM app";
+"Zoom" = "Zoom";
+"Zoom Out" = "Zoom Out";
+"Zoom In" = "Zoom In";
+"Open With" = "Open With";
+"Open in another editor" = "Open in another editor";
+
+/* Formatting toolbar */
+"Task List" = "Task List";
+"Normal Text" = "Normal Text";
+"Heading %d" = "Heading %d";
+
+/* Find bar */
+"Match:" = "Match:";
+"Contains" = "Contains";
+"Begins With" = "Begins With";
+"Done" = "Done";
+"Not found" = "Not found";
+"%d of %d" = "%d of %d";
+"Previous match" = "Previous match";
+"Next match" = "Next match";
+
+/* Open With context menu */
+"Open with External Editor" = "Open with External Editor";
+"Open As" = "Open As";
+"No editors available" = "No editors available";
