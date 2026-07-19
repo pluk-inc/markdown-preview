@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>1UK-8n-QPP.title</key>
+	<string>Customize Toolbar…</string>
+	<key>1Xt-HY-uBw.title</key>
+	<string>Markdown Preview</string>
+	<key>1b7-l0-nxx.title</key>
+	<string>Find</string>
+	<key>2oI-Rn-ZJC.title</key>
+	<string>Transformations</string>
+	<key>3IN-sU-3Bg.title</key>
+	<string>Spelling</string>
+	<key>3rS-ZA-NoH.title</key>
+	<string>Speech</string>
+	<key>4EN-yA-p0u.title</key>
+	<string>Find</string>
+	<key>4J7-dP-txa.title</key>
+	<string>Enter Full Screen</string>
+	<key>4sb-4s-VLi.title</key>
+	<string>Quit Markdown Preview</string>
+	<key>5QF-Oa-p0T.title</key>
+	<string>Edit</string>
+	<key>5kV-Vb-QxS.title</key>
+	<string>About Markdown Preview</string>
+	<key>6dh-zS-Vam.title</key>
+	<string>Redo</string>
+	<key>78Y-hA-62v.title</key>
+	<string>Correct Spelling Automatically</string>
+	<key>9ic-FL-obx.title</key>
+	<string>Substitutions</string>
+	<key>9yt-4B-nSM.title</key>
+	<string>Smart Copy/Paste</string>
+	<key>AYu-sK-qS6.title</key>
+	<string>Main Menu</string>
+	<key>BOF-NM-1cW.title</key>
+	<string>Send Anonymous Crash Reports</string>
+	<key>Bw7-FT-i3A.title</key>
+	<string>Save As…</string>
+	<key>DVo-aG-piG.title</key>
+	<string>Close</string>
+	<key>Dv1-io-Yv7.title</key>
+	<string>Spelling and Grammar</string>
+	<key>F2S-fz-NVQ.title</key>
+	<string>Help</string>
+	<key>FKE-Sm-Kum.title</key>
+	<string>Markdown Preview Help</string>
+	<key>FeM-D8-WVr.title</key>
+	<string>Substitutions</string>
+	<key>H8h-7b-M4v.title</key>
+	<string>View</string>
+	<key>HFQ-gK-NFA.title</key>
+	<string>Text Replacement</string>
+	<key>HFo-cy-zxI.title</key>
+	<string>Show Spelling and Grammar</string>
+	<key>HyV-fh-RgO.title</key>
+	<string>View</string>
+	<key>IAo-SY-fd9.title</key>
+	<string>Open…</string>
+	<key>KaW-ft-85H.title</key>
+	<string>Revert to Saved</string>
+	<key>Kd2-mp-pUS.title</key>
+	<string>Show All</string>
+	<key>LE2-aR-0XJ.title</key>
+	<string>Bring All to Front</string>
+	<key>NMo-om-nkz.title</key>
+	<string>Services</string>
+	<key>OY7-WF-poV.title</key>
+	<string>Minimize</string>
+	<key>Olw-nP-bQN.title</key>
+	<string>Hide Markdown Preview</string>
+	<key>OwM-mh-QMV.title</key>
+	<string>Find Previous</string>
+	<key>Oyz-dy-DGm.title</key>
+	<string>Stop Speaking</string>
+	<key>R4o-n2-Eq4.title</key>
+	<string>Zoom</string>
+	<key>Ruw-6m-B2m.title</key>
+	<string>Select All</string>
+	<key>S0p-oC-mLd.title</key>
+	<string>Jump to Selection</string>
+	<key>Td7-aD-5lo.title</key>
+	<string>Window</string>
+	<key>UEZ-Bs-lqG.title</key>
+	<string>Capitalize</string>
+	<key>Vdr-fp-XzO.title</key>
+	<string>Hide Others</string>
+	<key>W48-6f-4Dl.title</key>
+	<string>Edit</string>
+	<key>Was-JA-tGl.title</key>
+	<string>New</string>
+	<key>WeT-3V-zwk.title</key>
+	<string>Paste and Match Style</string>
+	<key>Xz5-n4-O0W.title</key>
+	<string>Find…</string>
+	<key>YEy-JH-Tfz.title</key>
+	<string>Find and Replace…</string>
+	<key>Ynk-f8-cLZ.title</key>
+	<string>Start Speaking</string>
+	<key>aTl-1u-JFS.title</key>
+	<string>Print…</string>
+	<key>aUF-d1-5bR.title</key>
+	<string>Window</string>
+	<key>bib-Uj-vzu.title</key>
+	<string>File</string>
+	<key>buJ-ug-pKt.title</key>
+	<string>Use Selection for Find</string>
+	<key>c8a-y6-VQd.title</key>
+	<string>Transformations</string>
+	<key>cwL-P1-jid.title</key>
+	<string>Smart Links</string>
+	<key>d9M-CD-aMd.title</key>
+	<string>Make Lower Case</string>
+	<key>dMs-cI-mzQ.title</key>
+	<string>File</string>
+	<key>dRJ-4n-Yzg.title</key>
+	<string>Undo</string>
+	<key>gVA-U4-sdL.title</key>
+	<string>Paste</string>
+	<key>hQb-2v-fYv.title</key>
+	<string>Smart Quotes</string>
+	<key>hz2-CU-CR7.title</key>
+	<string>Check Document Now</string>
+	<key>hz9-B4-Xy5.title</key>
+	<string>Services</string>
+	<key>kIP-vf-haE.title</key>
+	<string>Show Sidebar</string>
+	<key>mK6-2p-4JG.title</key>
+	<string>Check Grammar With Spelling</string>
+	<key>mdp-zi-itm.title</key>
+	<string>Zoom In</string>
+	<key>mdp-zo-itm.title</key>
+	<string>Zoom Out</string>
+	<key>mdp-zr-itm.title</key>
+	<string>Actual Size</string>
+	<key>oas-Oc-fiZ.title</key>
+	<string>Open Recent</string>
+	<key>pa3-QI-u2k.title</key>
+	<string>Delete</string>
+	<key>pxx-59-PXV.title</key>
+	<string>Save…</string>
+	<key>q09-fT-Sye.title</key>
+	<string>Find Next</string>
+	<key>qIS-W8-SiK.title</key>
+	<string>Page Setup…</string>
+	<key>rbD-Rh-wIN.title</key>
+	<string>Check Spelling While Typing</string>
+	<key>rgM-f4-ycn.title</key>
+	<string>Smart Dashes</string>
+	<key>snW-S8-Cw5.title</key>
+	<string>Show Toolbar</string>
+	<key>spk-cu-itm.title</key>
+	<string>Check for Updates…</string>
+	<key>tRr-pd-1PS.title</key>
+	<string>Data Detectors</string>
+	<key>tXI-mr-wws.title</key>
+	<string>Open Recent</string>
+	<key>uQy-DD-JDr.title</key>
+	<string>Markdown Preview</string>
+	<key>uRl-iY-unG.title</key>
+	<string>Cut</string>
+	<key>vNY-rz-j42.title</key>
+	<string>Clear Menu</string>
+	<key>vmV-6d-7jI.title</key>
+	<string>Make Upper Case</string>
+	<key>wpr-3q-Mcd.title</key>
+	<string>Help</string>
+	<key>x3v-GG-iWU.title</key>
+	<string>Copy</string>
+	<key>xrE-MZ-jX0.title</key>
+	<string>Speech</string>
+	<key>z6F-FW-3nz.title</key>
+	<string>Show Substitutions</string>
+</dict>
+</plist>

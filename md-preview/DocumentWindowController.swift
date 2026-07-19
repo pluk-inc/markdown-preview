@@ -97,7 +97,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private var hasUnsavedEditorChanges = false {
         didSet {
             guard oldValue != hasUnsavedEditorChanges else { return }
-            documentWindow.subtitle = hasUnsavedEditorChanges ? "Edited" : ""
+            documentWindow.subtitle = hasUnsavedEditorChanges
+                ? NSLocalizedString("Edited", comment: "Window subtitle for unsaved changes")
+                : ""
         }
     }
     private weak var editAccessory: NSTitlebarAccessoryViewController?
@@ -258,7 +260,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         tableUndoManager.removeAllActions()
         currentFileURL = fileURL
         currentMarkdown = markdown
-        documentWindow.title = fileURL?.lastPathComponent ?? "Untitled"
+        documentWindow.title = fileURL?.lastPathComponent
+            ?? NSLocalizedString("Untitled", comment: "Window title when no document is open")
         attachToExistingTabGroupIfNeeded()
         documentWindow.makeKeyAndOrderFront(nil)
         // Tab placement is settled once the window is shown; a window opened
@@ -520,8 +523,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func makeNavigationItem() -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: .navigation)
-        item.label = "Navigation"
-        item.paletteLabel = "Back and Forward"
+        let back = NSLocalizedString("Back", comment: "Navigation toolbar back button")
+        let forward = NSLocalizedString("Forward", comment: "Navigation toolbar forward button")
+        item.label = NSLocalizedString("Navigation", comment: "Navigation toolbar item label")
+        item.paletteLabel = NSLocalizedString("Back and Forward", comment: "Navigation toolbar palette label")
         item.isNavigational = true
         item.autovalidates = false
 
@@ -530,12 +535,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                                          target: self,
                                          action: #selector(navigateHistory(_:)))
         control.segmentStyle = .automatic
-        control.setImage(NSImage(systemSymbolName: "chevron.left", accessibilityDescription: "Back"),
+        control.setImage(NSImage(systemSymbolName: "chevron.left", accessibilityDescription: back),
                          forSegment: 0)
-        control.setImage(NSImage(systemSymbolName: "chevron.right", accessibilityDescription: "Forward"),
+        control.setImage(NSImage(systemSymbolName: "chevron.right", accessibilityDescription: forward),
                          forSegment: 1)
-        control.setToolTip("Back", forSegment: 0)
-        control.setToolTip("Forward", forSegment: 1)
+        control.setToolTip(back, forSegment: 0)
+        control.setToolTip(forward, forSegment: 1)
         item.view = control
         navigationItem = item
         navigationControl = control
@@ -567,9 +572,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func makeSidebarMenuItem(willBeInsertedIntoToolbar: Bool) -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: .sidebarMenu)
-        item.label = "Sidebar"
-        item.paletteLabel = "Sidebar"
-        item.toolTip = "Sidebar options"
+        item.label = NSLocalizedString("Sidebar", comment: "Sidebar toolbar item label")
+        item.paletteLabel = NSLocalizedString("Sidebar", comment: "Sidebar toolbar palette label")
+        item.toolTip = NSLocalizedString("Sidebar options", comment: "Sidebar toolbar item tooltip")
 
         // NSPopUpButton (pull-down) so a single click anywhere on the button
         // opens the menu and the chevron renders natively. NSMenuToolbarItem
@@ -623,19 +628,19 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         face.image = sidebarFaceImage()
         menu.addItem(face)
 
-        let hide = NSMenuItem(title: "Hide Sidebar",
+        let hide = NSMenuItem(title: NSLocalizedString("Hide Sidebar", comment: "Sidebar dropdown item"),
                               action: #selector(hideSidebarFromMenu(_:)),
                               keyEquivalent: "")
         hide.target = self
         menu.addItem(hide)
 
-        let outline = NSMenuItem(title: "Table of Contents",
+        let outline = NSMenuItem(title: NSLocalizedString("Table of Contents", comment: "Sidebar dropdown item"),
                                  action: #selector(selectOutlineMode(_:)),
                                  keyEquivalent: "")
         outline.target = self
         menu.addItem(outline)
 
-        let files = NSMenuItem(title: "Project Navigator",
+        let files = NSMenuItem(title: NSLocalizedString("Project Navigator", comment: "Sidebar dropdown item"),
                                action: #selector(selectFilesMode(_:)),
                                keyEquivalent: "")
         files.target = self
@@ -674,7 +679,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func sidebarFaceImage() -> NSImage {
         let image = NSImage(systemSymbolName: "sidebar.leading",
-                            accessibilityDescription: "Sidebar") ?? NSImage()
+                            accessibilityDescription: NSLocalizedString("Sidebar", comment: "Sidebar toolbar image")) ?? NSImage()
         image.isTemplate = true
         return image
     }
@@ -715,9 +720,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func makeInspectorItem() -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: .inspector)
-        item.label = "Inspector"
-        item.paletteLabel = "Get Info"
-        item.toolTip = "Show the inspector"
+        item.label = NSLocalizedString("Inspector", comment: "Inspector toolbar item label")
+        item.paletteLabel = NSLocalizedString("Get Info", comment: "Inspector toolbar palette label")
+        item.toolTip = NSLocalizedString("Show the inspector", comment: "Inspector toolbar item tooltip")
 
         let button = NSButton(image: inspectorImage(),
                               target: self,
@@ -748,20 +753,21 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func makeShareItem() -> NSToolbarItem {
         let item = NSSharingServicePickerToolbarItem(itemIdentifier: .share)
-        item.label = "Share"
-        item.paletteLabel = "Share"
-        item.toolTip = "Share document"
+        item.label = NSLocalizedString("Share", comment: "Share toolbar item label")
+        item.paletteLabel = NSLocalizedString("Share", comment: "Share toolbar palette label")
+        item.toolTip = NSLocalizedString("Share document", comment: "Share toolbar item tooltip")
         item.delegate = self
         return item
     }
 
     private func makePrintItem() -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: .printDocument)
-        item.label = "Print"
-        item.paletteLabel = "Print"
-        item.toolTip = "Print document"
+        let print = NSLocalizedString("Print", comment: "Print toolbar item label")
+        item.label = print
+        item.paletteLabel = print
+        item.toolTip = NSLocalizedString("Print document", comment: "Print toolbar item tooltip")
         item.image = NSImage(systemSymbolName: "printer",
-                             accessibilityDescription: "Print")
+                             accessibilityDescription: print)
         item.isBordered = true
         item.action = #selector(MainSplitViewController.printMarkdown(_:))
         return item
@@ -769,9 +775,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func makeCopyItem() -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: .copyMarkdown)
-        item.label = "Copy"
-        item.paletteLabel = "Copy"
-        item.toolTip = "Copy Markdown source to clipboard"
+        let copy = NSLocalizedString("Copy", comment: "Copy toolbar item label")
+        item.label = copy
+        item.paletteLabel = copy
+        item.toolTip = NSLocalizedString("Copy Markdown source to clipboard", comment: "Copy toolbar item tooltip")
         item.image = copyIdleImage()
         item.isBordered = true
         item.target = self
@@ -808,12 +815,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func copyIdleImage() -> NSImage? {
         NSImage(systemSymbolName: "document.on.document",
-                accessibilityDescription: "Copy")
+                accessibilityDescription: NSLocalizedString("Copy", comment: "Copy toolbar image"))
     }
 
     private func copyConfirmedImage() -> NSImage? {
         NSImage(systemSymbolName: "checkmark",
-                accessibilityDescription: "Copied")
+                accessibilityDescription: NSLocalizedString("Copied", comment: "Copy confirmation image"))
     }
 
     // MARK: - Edit mode
@@ -851,12 +858,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func makeEditItem() -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: .editDocument)
-        item.label = "Edit"
-        item.paletteLabel = "Edit"
-        item.toolTip = "Edit document"
+        let edit = NSLocalizedString("Edit", comment: "Edit toolbar item label")
+        item.label = edit
+        item.paletteLabel = edit
+        item.toolTip = NSLocalizedString("Edit document", comment: "Edit toolbar item tooltip")
 
         let image = NSImage(systemSymbolName: "highlighter",
-                            accessibilityDescription: "Edit") ?? NSImage()
+                            accessibilityDescription: edit) ?? NSImage()
         image.isTemplate = true
         let button = NSButton(image: image,
                               target: self,
@@ -889,8 +897,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let editing = isEditing
         editButton?.state = editing ? .on : .off
         editItem?.toolTip = editing
-            ? "Stop editing and return to preview"
-            : "Edit document"
+            ? NSLocalizedString("Stop editing and return to preview", comment: "Edit toolbar item tooltip while editing")
+            : NSLocalizedString("Edit document", comment: "Edit toolbar item tooltip")
         editButton?.toolTip = editItem?.toolTip
         editButton?.isEnabled = editing || (currentFileURL != nil && currentMarkdown != nil)
     }
@@ -934,8 +942,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
         // Plain button with a composed icon+chevron face: unlike a pull-down,
         // the chevron stays visible when the hover-only bezel is hidden.
+        let headingTitle = NSLocalizedString("Heading", comment: "Formatting toolbar heading button")
         let headingIcon = NSImage(systemSymbolName: "textformat.size",
-                                  accessibilityDescription: "Heading")?
+                                  accessibilityDescription: headingTitle)?
             .withSymbolConfiguration(symbolConfig) ?? NSImage()
         let headingChevron = NSImage(systemSymbolName: "chevron.down",
                                      accessibilityDescription: nil)?
@@ -957,24 +966,24 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         headings.bezelStyle = .accessoryBarAction
         headings.controlSize = .small
         headings.showsBorderOnlyWhileMouseInside = true
-        headings.toolTip = "Heading"
+        headings.toolTip = headingTitle
         headings.translatesAutoresizingMaskIntoConstraints = false
         headings.widthAnchor.constraint(equalToConstant: 44).isActive = true
 
         let views: [NSView] = [
             headings,
             separatorView(),
-            formatButton("bold", "bold", "Bold"),
-            formatButton("italic", "italic", "Italic"),
-            formatButton("strikethrough", "strikethrough", "Strikethrough"),
+            formatButton("bold", "bold", NSLocalizedString("Bold", comment: "Formatting toolbar tooltip")),
+            formatButton("italic", "italic", NSLocalizedString("Italic", comment: "Formatting toolbar tooltip")),
+            formatButton("strikethrough", "strikethrough", NSLocalizedString("Strikethrough", comment: "Formatting toolbar tooltip")),
             separatorView(),
-            formatButton("list.bullet", "bulletList", "Bulleted List"),
-            formatButton("list.number", "orderedList", "Numbered List"),
-            formatButton("checklist", "taskList", "Task List"),
-            formatButton("text.quote", "quote", "Block Quote"),
+            formatButton("list.bullet", "bulletList", NSLocalizedString("Bulleted List", comment: "Formatting toolbar tooltip")),
+            formatButton("list.number", "orderedList", NSLocalizedString("Numbered List", comment: "Formatting toolbar tooltip")),
+            formatButton("checklist", "taskList", NSLocalizedString("Task List", comment: "Formatting toolbar tooltip")),
+            formatButton("text.quote", "quote", NSLocalizedString("Block Quote", comment: "Formatting toolbar tooltip")),
             separatorView(),
-            formatButton("chevron.left.forwardslash.chevron.right", "code", "Inline Code"),
-            formatButton("link", "link", "Link"),
+            formatButton("chevron.left.forwardslash.chevron.right", "code", NSLocalizedString("Inline Code", comment: "Formatting toolbar tooltip")),
+            formatButton("link", "link", NSLocalizedString("Link", comment: "Formatting toolbar tooltip")),
         ]
         let stack = NSStackView(views: views)
         stack.orientation = .horizontal
@@ -1030,7 +1039,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     @objc private func showHeadingMenu(_ sender: NSButton) {
         let menu = NSMenu()
-        let normalText = NSMenuItem(title: "Normal Text",
+        let normalText = NSMenuItem(title: NSLocalizedString("Normal Text", comment: "Formatting toolbar heading menu"),
                                     action: #selector(headingCommand(_:)),
                                     keyEquivalent: "")
         normalText.target = self
@@ -1038,7 +1047,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         menu.addItem(normalText)
         menu.addItem(.separator())
         for level in 1...3 {
-            let item = NSMenuItem(title: "Heading \(level)",
+            let item = NSMenuItem(title: String(
+                format: NSLocalizedString("Heading %d", comment: "Formatting toolbar heading menu level"),
+                level
+            ),
                                   action: #selector(headingCommand(_:)),
                                   keyEquivalent: "")
             item.target = self
@@ -1164,12 +1176,22 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Do you want to save your changes?"
-        let fileName = currentFileURL?.lastPathComponent ?? "this document"
-        alert.informativeText = "Your changes to \(fileName) will be lost if you don’t save them."
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-        alert.addButton(withTitle: "Don’t Save")
+        alert.messageText = NSLocalizedString(
+            "Do you want to save your changes?",
+            comment: "Unsaved changes alert title"
+        )
+        let fileName = currentFileURL?.lastPathComponent
+            ?? NSLocalizedString("this document", comment: "Fallback document name in alerts")
+        alert.informativeText = String(
+            format: NSLocalizedString(
+                "Your changes to %@ will be lost if you don’t save them.",
+                comment: "Unsaved changes alert message"
+            ),
+            fileName
+        )
+        alert.addButton(withTitle: NSLocalizedString("Save", comment: "Alert button"))
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Alert button"))
+        alert.addButton(withTitle: NSLocalizedString("Don’t Save", comment: "Alert button"))
         alert.beginSheetModal(for: documentWindow) { response in
             switch response {
             case .alertFirstButtonReturn:
@@ -1435,14 +1457,26 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         case .missing:
             presentUnavailableFileConflict(localMarkdown: text,
                                            fileURL: url,
-                                           reason: "The file was removed while it was open.",
-                                           overwriteTitle: "Recreate File",
+                                           reason: NSLocalizedString(
+                                               "The file was removed while it was open.",
+                                               comment: "Unavailable file conflict reason"
+                                           ),
+                                           overwriteTitle: NSLocalizedString(
+                                               "Recreate File",
+                                               comment: "Unavailable file conflict button"
+                                           ),
                                            completion: completion)
         case .unreadable:
             presentUnavailableFileConflict(localMarkdown: text,
                                            fileURL: url,
-                                           reason: "The file could not be read to verify that it is unchanged.",
-                                           overwriteTitle: "Save Anyway",
+                                           reason: NSLocalizedString(
+                                               "The file could not be read to verify that it is unchanged.",
+                                               comment: "Unavailable file conflict reason"
+                                           ),
+                                           overwriteTitle: NSLocalizedString(
+                                               "Save Anyway",
+                                               comment: "Unavailable file conflict button"
+                                           ),
                                            completion: completion)
         }
     }
@@ -1536,18 +1570,18 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         for edit in edits.reversed() {
             switch edit {
             case .setCell:
-                return "Edit Table Cell"
+                return NSLocalizedString("Edit Table Cell", comment: "Table edit undo action")
             case .insertRowBefore, .insertRowAfter:
-                return "Add Row"
+                return NSLocalizedString("Add Row", comment: "Table edit undo action")
             case .deleteRow:
-                return "Delete Row"
+                return NSLocalizedString("Delete Row", comment: "Table edit undo action")
             case .insertColumnBefore, .insertColumnAfter:
-                return "Add Column"
+                return NSLocalizedString("Add Column", comment: "Table edit undo action")
             case .deleteColumn:
-                return "Delete Column"
+                return NSLocalizedString("Delete Column", comment: "Table edit undo action")
             }
         }
-        return "Edit Table"
+        return NSLocalizedString("Edit Table", comment: "Table edit undo action")
     }
 
     private func registerTableUndo(restoring markdown: String,
@@ -1625,11 +1659,20 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     ) {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "This document changed on disk"
-        alert.informativeText = "Another app changed \(fileURL.lastPathComponent). Cancel keeps your changes unsaved. Choose which version to keep."
-        alert.addButton(withTitle: "Keep My Changes")
-        alert.addButton(withTitle: "Reload from Disk")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = NSLocalizedString(
+            "This document changed on disk",
+            comment: "External edit conflict alert title"
+        )
+        alert.informativeText = String(
+            format: NSLocalizedString(
+                "Another app changed %@. Cancel keeps your changes unsaved. Choose which version to keep.",
+                comment: "External edit conflict alert message"
+            ),
+            fileURL.lastPathComponent
+        )
+        alert.addButton(withTitle: NSLocalizedString("Keep My Changes", comment: "Conflict alert button"))
+        alert.addButton(withTitle: NSLocalizedString("Reload from Disk", comment: "Conflict alert button"))
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Alert button"))
         alert.beginSheetModal(for: documentWindow) { [weak self] response in
             guard let self else {
                 completion(.cancelled)
@@ -1662,10 +1705,19 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     ) {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Unable to verify the document on disk"
-        alert.informativeText = "\(reason) Cancel keeps your changes unsaved."
+        alert.messageText = NSLocalizedString(
+            "Unable to verify the document on disk",
+            comment: "Unavailable file conflict alert title"
+        )
+        alert.informativeText = String(
+            format: NSLocalizedString(
+                "%@ Cancel keeps your changes unsaved.",
+                comment: "Unavailable file conflict alert message"
+            ),
+            reason
+        )
         alert.addButton(withTitle: overwriteTitle)
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Alert button"))
         alert.beginSheetModal(for: documentWindow) { [weak self] response in
             guard let self, response == .alertFirstButtonReturn else {
                 completion(.cancelled)
@@ -1691,7 +1743,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let panel = NSSavePanel()
         panel.directoryURL = url.deletingLastPathComponent()
         panel.nameFieldStringValue = url.lastPathComponent
-        panel.message = "Markdown Preview needs your permission to save this file."
+        panel.message = NSLocalizedString(
+            "Markdown Preview needs your permission to save this file.",
+            comment: "Save panel permission message"
+        )
         panel.beginSheetModal(for: documentWindow) { [weak self] response in
             guard let self, response == .OK, let chosen = panel.url else {
                 completion(.cancelled)
@@ -1738,9 +1793,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func makeOpenActionsItem() -> NSToolbarItem {
         let item = NSMenuToolbarItem(itemIdentifier: .openActions)
-        item.label = "Open"
-        item.paletteLabel = "Open"
-        item.toolTip = "Open document in another app"
+        let open = NSLocalizedString("Open", comment: "Open toolbar item label")
+        item.label = open
+        item.paletteLabel = open
+        item.toolTip = NSLocalizedString("Open document in another app", comment: "Open toolbar item tooltip")
         item.target = self
         item.action = #selector(openActionsPrimaryAction(_:))
         item.showsIndicator = true
@@ -1761,9 +1817,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
         let primaryTitle = openActionsTitle(for: defaultAction)
 
-        openActionsItem?.label = "Open"
+        openActionsItem?.label = NSLocalizedString("Open", comment: "Open toolbar item label")
         openActionsItem?.image = openActionsImage(for: defaultAction)
-        openActionsItem?.toolTip = primaryTitle ?? "Open document in another app"
+        openActionsItem?.toolTip = primaryTitle ?? NSLocalizedString(
+            "Open document in another app",
+            comment: "Open toolbar item tooltip"
+        )
         openActionsItem?.menu = buildOpenActionsMenu(editorCandidates: editors,
                                                      llmCandidates: llmApps,
                                                      defaultAction: defaultAction)
@@ -1772,12 +1831,19 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func openActionsTitle(for selection: OpenActionSelection?) -> String? {
         switch selection {
         case .editor(let editor):
-            return "Open in \(displayName(for: editor.url))"
+            return localizedOpenIn(displayName(for: editor.url))
         case .llm(let candidate):
-            return "Open in \(candidate.target.title)"
+            return localizedOpenIn(candidate.target.title)
         case nil:
             return nil
         }
+    }
+
+    private func localizedOpenIn(_ applicationName: String) -> String {
+        String(
+            format: NSLocalizedString("Open in %@", comment: "Open toolbar item for a named application"),
+            applicationName
+        )
     }
 
     private func openActionsImage(for selection: OpenActionSelection?) -> NSImage {
@@ -1831,18 +1897,18 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let menu = NSMenu()
 
         guard currentFileURL != nil else {
-            menu.addItem(disabledItem("No document open"))
+            menu.addItem(disabledItem(NSLocalizedString("No document open", comment: "Open menu empty state")))
             return menu
         }
 
         if editorCandidates.isEmpty && llmCandidates.isEmpty {
-            menu.addItem(disabledItem("No apps available"))
+            menu.addItem(disabledItem(NSLocalizedString("No apps available", comment: "Open menu empty state")))
             return menu
         }
 
         if !llmCandidates.isEmpty {
             let header = NSMenuItem()
-            header.title = "AI Apps"
+            header.title = NSLocalizedString("AI Apps", comment: "Open menu section header")
             header.isEnabled = false
             menu.addItem(header)
 
@@ -1871,7 +1937,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             }
 
             let header = NSMenuItem()
-            header.title = "Editors"
+            header.title = NSLocalizedString("Editors", comment: "Open menu section header")
             header.isEnabled = false
             menu.addItem(header)
 
@@ -1972,9 +2038,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func makeOpenInLLMItem() -> NSToolbarItem {
         let item = NSMenuToolbarItem(itemIdentifier: .openInLLM)
-        item.label = "Open in LLM"
-        item.paletteLabel = "Open in LLM"
-        item.toolTip = "Open document in an LLM app"
+        let openInLLM = NSLocalizedString("Open in LLM", comment: "Open in LLM toolbar item label")
+        item.label = openInLLM
+        item.paletteLabel = openInLLM
+        item.toolTip = NSLocalizedString("Open document in an LLM app", comment: "Open in LLM toolbar item tooltip")
         item.target = self
         item.action = #selector(openInLLMPrimaryAction(_:))
         item.showsIndicator = true
@@ -1990,10 +2057,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             return
         }
         let resolvedDefault = resolveDefaultLLM(among: candidates)
-        let openInTitle = resolvedDefault.map { "Open in \($0.target.title)" }
-        openInLLMItem?.label = openInTitle ?? "Open in LLM"
+        let openInTitle = resolvedDefault.map { localizedOpenIn($0.target.title) }
+        openInLLMItem?.label = openInTitle ?? NSLocalizedString("Open in LLM", comment: "Open in LLM toolbar item label")
         openInLLMItem?.image = openInLLMImage(for: resolvedDefault)
-        openInLLMItem?.toolTip = openInTitle ?? "Open document in an LLM app"
+        openInLLMItem?.toolTip = openInTitle ?? NSLocalizedString(
+            "Open document in an LLM app",
+            comment: "Open in LLM toolbar item tooltip"
+        )
         openInLLMItem?.menu = buildOpenInLLMMenu(candidates: candidates,
                                                  defaultTarget: resolvedDefault)
     }
@@ -2013,7 +2083,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             return icon
         }
         return NSImage(systemSymbolName: "sparkles",
-                       accessibilityDescription: "Open in LLM") ?? NSImage()
+                       accessibilityDescription: NSLocalizedString("Open in LLM", comment: "Open in LLM toolbar image")) ?? NSImage()
     }
 
     private func llmCandidates() -> [LLMCandidate] {
@@ -2039,16 +2109,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let menu = NSMenu()
 
         guard currentFileURL != nil else {
-            menu.addItem(disabledItem("No document open"))
+            menu.addItem(disabledItem(NSLocalizedString("No document open", comment: "Open menu empty state")))
             return menu
         }
         guard !candidates.isEmpty else {
-            menu.addItem(disabledItem("No LLM apps available"))
+            menu.addItem(disabledItem(NSLocalizedString("No LLM apps available", comment: "Open menu empty state")))
             return menu
         }
 
         let header = NSMenuItem()
-        header.title = "Open in LLM…"
+        header.title = NSLocalizedString("Open in LLM…", comment: "Open in LLM menu header")
         header.isEnabled = false
         menu.addItem(header)
 
@@ -2250,30 +2320,33 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func makeZoomItem() -> NSToolbarItemGroup {
+        let zoomOut = NSLocalizedString("Zoom Out", comment: "Zoom toolbar button")
+        let zoomIn = NSLocalizedString("Zoom In", comment: "Zoom toolbar button")
+        let zoom = NSLocalizedString("Zoom", comment: "Zoom toolbar item label")
         let smaller = NSImage(systemSymbolName: "textformat.size.smaller",
-                              accessibilityDescription: "Zoom Out") ?? NSImage()
+                              accessibilityDescription: zoomOut) ?? NSImage()
         let larger = NSImage(systemSymbolName: "textformat.size.larger",
-                             accessibilityDescription: "Zoom In") ?? NSImage()
+                             accessibilityDescription: zoomIn) ?? NSImage()
         let group = NSToolbarItemGroup(
             itemIdentifier: .zoom,
             images: [smaller, larger],
             selectionMode: .momentary,
-            labels: ["Zoom Out", "Zoom In"],
+            labels: [zoomOut, zoomIn],
             target: self,
             action: #selector(zoomSegmentAction(_:))
         )
-        group.label = "Zoom"
-        group.paletteLabel = "Zoom"
-        group.toolTip = "Zoom"
-        for (subitem, tooltip) in zip(group.subitems, ["Zoom Out", "Zoom In"]) {
+        group.label = zoom
+        group.paletteLabel = zoom
+        group.toolTip = zoom
+        for (subitem, tooltip) in zip(group.subitems, [zoomOut, zoomIn]) {
             subitem.toolTip = tooltip
         }
         // .expanded keeps the two-segment "A A" pair visible like Books / Reader,
         // instead of collapsing into a single button + menu when space is tight.
         group.controlRepresentation = .expanded
         if let segmented = group.view as? NSSegmentedControl {
-            segmented.setToolTip("Zoom Out", forSegment: 0)
-            segmented.setToolTip("Zoom In", forSegment: 1)
+            segmented.setToolTip(zoomOut, forSegment: 0)
+            segmented.setToolTip(zoomIn, forSegment: 1)
         }
         return group
     }
@@ -2289,7 +2362,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func inspectorImage() -> NSImage {
         let image = NSImage(systemSymbolName: "info.circle",
-                            accessibilityDescription: "Inspector") ?? NSImage()
+                            accessibilityDescription: NSLocalizedString("Inspector", comment: "Inspector toolbar image")) ?? NSImage()
         image.isTemplate = true
         return image
     }
@@ -2318,10 +2391,14 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func makeSearchItem() -> NSToolbarItem {
         let item = NSSearchToolbarItem(itemIdentifier: .search)
-        item.label = "Search"
-        item.toolTip = "Search in document"
+        let searchInDocument = NSLocalizedString(
+            "Search in Document",
+            comment: "Toolbar search field tooltip and placeholder"
+        )
+        item.label = NSLocalizedString("Search", comment: "Toolbar search item label")
+        item.toolTip = searchInDocument
         item.preferredWidthForSearchField = 320
-        item.searchField.placeholderString = "Search in Document"
+        item.searchField.placeholderString = searchInDocument
         item.searchField.sendsSearchStringImmediately = true
         item.searchField.target = self
         item.searchField.action = #selector(searchFieldDidChange(_:))
@@ -2506,9 +2583,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func makeOpenWithItem() -> NSToolbarItem {
         let item = NSMenuToolbarItem(itemIdentifier: .openWith)
-        item.label = "Open With"
-        item.paletteLabel = "Open With"
-        item.toolTip = "Open in another editor"
+        let openWith = NSLocalizedString("Open With", comment: "Open With toolbar item label")
+        item.label = openWith
+        item.paletteLabel = openWith
+        item.toolTip = NSLocalizedString("Open in another editor", comment: "Open With toolbar item tooltip")
         item.target = self
         item.action = #selector(openWithPrimaryAction(_:))
         item.showsIndicator = true
@@ -2525,10 +2603,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func refreshOpenWithItem() {
         let candidates = currentFileURL.map { editorCandidates(for: $0) } ?? []
         let resolvedDefault = resolveDefaultEditor(among: candidates)
-        let openInTitle = resolvedDefault.map { "Open in \(displayName(for: $0.url))" }
-        openWithItem?.label = openInTitle ?? "Open With"
+        let openInTitle = resolvedDefault.map { localizedOpenIn(displayName(for: $0.url)) }
+        openWithItem?.label = openInTitle ?? NSLocalizedString("Open With", comment: "Open With toolbar item label")
         openWithItem?.image = openWithImage(for: resolvedDefault?.url)
-        openWithItem?.toolTip = openInTitle ?? "Open in another editor"
+        openWithItem?.toolTip = openInTitle ?? NSLocalizedString(
+            "Open in another editor",
+            comment: "Open With toolbar item tooltip"
+        )
         openWithItem?.menu = buildOpenWithMenu(candidates: candidates,
                                                defaultEditor: resolvedDefault)
     }
@@ -2540,7 +2621,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             return icon
         }
         return NSImage(systemSymbolName: "highlighter",
-                       accessibilityDescription: "Open With") ?? NSImage()
+                       accessibilityDescription: NSLocalizedString("Open With", comment: "Open With toolbar image")) ?? NSImage()
     }
 
     @objc private func openWithPrimaryAction(_ sender: Any?) {
@@ -2606,16 +2687,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let menu = NSMenu()
 
         guard currentFileURL != nil else {
-            menu.addItem(disabledItem("No document open"))
+            menu.addItem(disabledItem(NSLocalizedString("No document open", comment: "Open menu empty state")))
             return menu
         }
         guard !candidates.isEmpty else {
-            menu.addItem(disabledItem("No editors available"))
+            menu.addItem(disabledItem(NSLocalizedString("No editors available", comment: "Open menu empty state")))
             return menu
         }
 
         let header = NSMenuItem()
-        header.title = "Open with…"
+        header.title = NSLocalizedString("Open with…", comment: "Open With menu header")
         header.isEnabled = false
         menu.addItem(header)
 
@@ -2792,7 +2873,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         var items: [NSMenuItem] = []
 
         let externalItem = NSMenuItem(
-            title: "Open with External Editor",
+            title: NSLocalizedString("Open with External Editor", comment: "Context menu item"),
             action: #selector(contextLaunchEditor(_:)),
             keyEquivalent: ""
         )
@@ -2801,16 +2882,20 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if let defaultEditor {
             externalItem.target = self
             externalItem.representedObject = ContextOpenPayload(fileURL: fileURL, appURL: defaultEditor.url)
-            externalItem.toolTip = "Open in \(displayName(for: defaultEditor.url))"
+            externalItem.toolTip = localizedOpenIn(displayName(for: defaultEditor.url))
         } else {
             externalItem.isEnabled = false
         }
         items.append(externalItem)
 
-        let openAs = NSMenuItem(title: "Open As", action: nil, keyEquivalent: "")
+        let openAs = NSMenuItem(
+            title: NSLocalizedString("Open As", comment: "Context menu submenu"),
+            action: nil,
+            keyEquivalent: ""
+        )
         let submenu = NSMenu()
         if candidates.isEmpty {
-            submenu.addItem(disabledItem("No editors available"))
+            submenu.addItem(disabledItem(NSLocalizedString("No editors available", comment: "Open As empty state")))
         } else {
             for candidate in candidates {
                 let item = NSMenuItem(
@@ -2867,7 +2952,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
-        panel.message = "Choose a Markdown file or folder"
+        panel.message = NSLocalizedString(
+            "Choose a Markdown file or folder",
+            comment: "Open panel prompt"
+        )
         panel.allowedContentTypes = Self.markdownFileExtensions
             .compactMap { UTType(filenameExtension: $0) }
         return panel

@@ -16,13 +16,28 @@ private enum CommandLineToolInstallError: LocalizedError {
         switch self {
         case .terminalAutomationFailed(let message):
             if let message, !message.isEmpty {
-                return "Terminal automation failed: \(message)"
+                return String(
+                    format: NSLocalizedString(
+                        "Terminal automation failed: %@",
+                        comment: "CLI installer error"
+                    ),
+                    message
+                )
             }
-            return "Terminal automation failed."
+            return NSLocalizedString("Terminal automation failed.", comment: "CLI installer error")
         case .installerScriptWriteFailed(let message):
-            return "Failed to write CLI installer script: \(message)"
+            return String(
+                format: NSLocalizedString(
+                    "Failed to write CLI installer script: %@",
+                    comment: "CLI installer error"
+                ),
+                message
+            )
         case .bundledToolMissing:
-            return "The bundled Markdown Preview CLI could not be found."
+            return NSLocalizedString(
+                "The bundled Markdown Preview CLI could not be found.",
+                comment: "CLI installer error"
+            )
         }
     }
 }
@@ -62,9 +77,9 @@ private enum AppAppearanceMode: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .automatic: return "Automatic"
-        case .light: return "Light"
-        case .dark: return "Dark"
+        case .automatic: return NSLocalizedString("Automatic", comment: "Appearance mode")
+        case .light: return NSLocalizedString("Light", comment: "Appearance mode")
+        case .dark: return NSLocalizedString("Dark", comment: "Appearance mode")
         }
     }
 
@@ -354,7 +369,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
-        panel.message = "Choose a Markdown file or folder"
+        panel.message = NSLocalizedString("Choose a Markdown file or folder",
+                                          comment: "Open panel prompt")
         panel.allowedContentTypes = Self.markdownFileExtensions
             .compactMap { UTType(filenameExtension: $0) }
         return panel
@@ -579,8 +595,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func installNewTabMenuItem() {
-        guard let fileMenu = NSApp.mainMenu?.items
-            .first(where: { $0.title == "File" })?.submenu,
+        guard let fileMenu = topLevelSubmenu(matching: Self.fileMenuTitles),
               fileMenu.items.first(where: {
                   $0.action == #selector(NSResponder.newWindowForTab(_:))
               }) == nil else { return }
@@ -588,7 +603,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // nil target: resolves through the responder chain to the key
         // document window's controller, and disables itself when no
         // document window is open.
-        let item = NSMenuItem(title: "New Tab",
+        let item = NSMenuItem(title: L("New Tab"),
                               action: #selector(NSResponder.newWindowForTab(_:)),
                               keyEquivalent: "t")
         let insertIndex = fileMenu.items
@@ -598,7 +613,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func installGoMenu() {
         guard let mainMenu = NSApp.mainMenu,
-              mainMenu.items.first(where: { $0.title == "Go" }) == nil else { return }
+              topLevelMenuItem(matching: Self.goMenuTitles) == nil else { return }
 
         func arrow(_ functionKey: Int) -> String {
             UnicodeScalar(functionKey).map { String(Character($0)) } ?? ""
@@ -606,11 +621,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let symbolConfig = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
 
-        func makeItem(_ title: String,
+        func makeItem(_ titleKey: String,
                       action: Selector,
                       keyEquivalent: String,
                       modifiers: NSEvent.ModifierFlags,
                       symbol: String) -> NSMenuItem {
+            let title = L(titleKey)
             let item = NSMenuItem(title: title, action: action, keyEquivalent: keyEquivalent)
             item.keyEquivalentModifierMask = modifiers
             if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)?
@@ -621,7 +637,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return item
         }
 
-        let menu = NSMenu(title: "Go")
+        let goTitle = L("Go")
+        let menu = NSMenu(title: goTitle)
 
         menu.addItem(makeItem("Up",
                               action: #selector(NSResponder.scrollLineUp(_:)),
@@ -670,26 +687,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                               modifiers: .command,
                               symbol: "arrow.down.to.line"))
 
-        let goItem = NSMenuItem(title: "Go", action: nil, keyEquivalent: "")
+        let goItem = NSMenuItem(title: goTitle, action: nil, keyEquivalent: "")
         goItem.submenu = menu
 
-        let insertIndex = mainMenu.items.firstIndex(where: { $0.title == "Window" })
-            ?? mainMenu.items.count
+        let insertIndex = mainMenu.items.firstIndex(where: {
+            Self.windowMenuTitles.contains($0.title)
+        }) ?? mainMenu.items.count
         mainMenu.insertItem(goItem, at: insertIndex)
     }
 
     private func installZoomMenuItemIcons() {
-        guard let viewMenu = NSApp.mainMenu?.items
-            .first(where: { $0.title == "View" })?.submenu else { return }
-        let icons: [(title: String, symbol: String)] = [
-            ("Actual Size", "magnifyingglass"),
-            ("Zoom In", "plus.magnifyingglass"),
-            ("Zoom Out", "minus.magnifyingglass")
+        guard let viewMenu = topLevelSubmenu(matching: Self.viewMenuTitles) else { return }
+        let icons: [(titles: Set<String>, symbol: String)] = [
+            (["Actual Size", "实际大小"], "magnifyingglass"),
+            (["Zoom In", "放大"], "plus.magnifyingglass"),
+            (["Zoom Out", "缩小"], "minus.magnifyingglass")
         ]
-        for (title, symbol) in icons {
-            guard let item = viewMenu.items.first(where: { $0.title == title }),
+        for (titles, symbol) in icons {
+            guard let item = viewMenu.items.first(where: { titles.contains($0.title) }),
                   let image = NSImage(systemSymbolName: symbol,
-                                      accessibilityDescription: title)
+                                      accessibilityDescription: item.title)
             else { continue }
             image.isTemplate = true
             item.image = image
@@ -697,18 +714,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func installAppearanceMenuItems() {
-        guard let viewMenu = NSApp.mainMenu?.items
-            .first(where: { $0.title == "View" })?.submenu,
-              viewMenu.items.first(where: { $0.title == "Appearance" }) == nil else { return }
+        guard let viewMenu = topLevelSubmenu(matching: Self.viewMenuTitles),
+              viewMenu.items.first(where: {
+                  Self.appearanceMenuTitles.contains($0.title)
+              }) == nil else { return }
 
-        let appearanceItem = NSMenuItem(title: "Appearance", action: nil, keyEquivalent: "")
+        let appearanceTitle = L("Appearance")
+        let appearanceItem = NSMenuItem(title: appearanceTitle, action: nil, keyEquivalent: "")
         if let image = NSImage(systemSymbolName: "circle.lefthalf.filled",
-                               accessibilityDescription: "Appearance") {
+                               accessibilityDescription: appearanceTitle) {
             image.isTemplate = true
             appearanceItem.image = image
         }
 
-        let submenu = NSMenu(title: "Appearance")
+        let submenu = NSMenu(title: appearanceTitle)
         for mode in AppAppearanceMode.allCases {
             let item = NSMenuItem(title: mode.title,
                                   action: #selector(selectAppearanceMode(_:)),
@@ -733,18 +752,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func installContentWidthMenuItems() {
-        guard let viewMenu = NSApp.mainMenu?.items
-            .first(where: { $0.title == "View" })?.submenu,
-              viewMenu.items.first(where: { $0.title == "Content Width" }) == nil else { return }
+        guard let viewMenu = topLevelSubmenu(matching: Self.viewMenuTitles),
+              viewMenu.items.first(where: {
+                  Self.contentWidthMenuTitles.contains($0.title)
+              }) == nil else { return }
 
-        let widthItem = NSMenuItem(title: "Content Width", action: nil, keyEquivalent: "")
+        let widthTitle = L("Content Width")
+        let widthItem = NSMenuItem(title: widthTitle, action: nil, keyEquivalent: "")
         if let image = NSImage(systemSymbolName: "arrow.left.and.right.text.vertical",
-                               accessibilityDescription: "Content Width") {
+                               accessibilityDescription: widthTitle) {
             image.isTemplate = true
             widthItem.image = image
         }
 
-        let submenu = NSMenu(title: "Content Width")
+        let submenu = NSMenu(title: widthTitle)
         for setting in ContentWidthSetting.allCases {
             let item = NSMenuItem(title: setting.title,
                                   action: #selector(selectContentWidthSetting(_:)),
@@ -762,7 +783,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         widthItem.submenu = submenu
         let insertIndex = viewMenu.items
-            .firstIndex(where: { $0.title == "Appearance" })
+            .firstIndex(where: { Self.appearanceMenuTitles.contains($0.title) })
             .map { $0 + 1 } ?? 0
         viewMenu.insertItem(widthItem, at: insertIndex)
         syncContentWidthMenuState()
@@ -808,7 +829,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               let appMenu = updatesItem.menu
         else { return }
 
-        let cliItem = NSMenuItem(title: "Install CLI...",
+        let cliItem = NSMenuItem(title: L("Install CLI..."),
                                  action: #selector(installCommandLineTools(_:)),
                                  keyEquivalent: "")
         cliItem.target = self
@@ -829,10 +850,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func installSidebarViewMenuItems() {
-        guard let viewMenu = NSApp.mainMenu?.items
-            .first(where: { $0.title == "View" })?.submenu else { return }
+        guard let viewMenu = topLevelSubmenu(matching: Self.viewMenuTitles) else { return }
 
-        if let existing = viewMenu.items.first(where: { $0.title == "Show Sidebar" }) {
+        if let existing = viewMenu.items.first(where: {
+            Self.showSidebarMenuTitles.contains($0.title)
+        }) {
             viewMenu.removeItem(existing)
         }
         guard viewMenu.items.first(where: { $0.action == #selector(hideSidebarFromMenu(_:)) }) == nil else {
@@ -841,21 +863,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let insertIndex = (viewMenu.items.firstIndex(where: { $0.isSeparatorItem }) ?? -1) + 1
 
-        let hide = makeSidebarViewMenuItem(title: "Hide Sidebar",
+        let hide = makeSidebarViewMenuItem(title: L("Hide Sidebar"),
                                            symbol: "sidebar.leading",
                                            keyEquivalent: "1",
                                            action: #selector(hideSidebarFromMenu(_:)))
         viewMenu.insertItem(hide, at: insertIndex)
         hideSidebarMenuItem = hide
 
-        let outline = makeSidebarViewMenuItem(title: "Table of Contents",
+        let outline = makeSidebarViewMenuItem(title: L("Table of Contents"),
                                               symbol: "list.bullet.indent",
                                               keyEquivalent: "2",
                                               action: #selector(selectOutlineMode(_:)))
         viewMenu.insertItem(outline, at: insertIndex + 1)
         outlineMenuItem = outline
 
-        let files = makeSidebarViewMenuItem(title: "Project Navigator",
+        let files = makeSidebarViewMenuItem(title: L("Project Navigator"),
                                             symbol: "folder",
                                             keyEquivalent: "3",
                                             action: #selector(selectFilesMode(_:)))
@@ -866,20 +888,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func installEditModeMenuItem() {
-        guard let viewMenu = NSApp.mainMenu?.items
-            .first(where: { $0.title == "View" })?.submenu,
+        guard let viewMenu = topLevelSubmenu(matching: Self.viewMenuTitles),
               viewMenu.items.first(where: {
                   $0.action == #selector(toggleEditModeFromMenu(_:))
               }) == nil else { return }
 
-        let item = NSMenuItem(title: "Toggle Edit Mode",
+        let item = NSMenuItem(title: L("Toggle Edit Mode"),
                               action: #selector(toggleEditModeFromMenu(_:)),
                               keyEquivalent: "e")
         item.keyEquivalentModifierMask = [.command]
         item.target = self
 
-        let insertIndex = viewMenu.items.firstIndex(where: { $0.title == "Actual Size" })
-            ?? viewMenu.numberOfItems
+        let insertIndex = viewMenu.items.firstIndex(where: {
+            Self.actualSizeMenuTitles.contains($0.title)
+        }) ?? viewMenu.numberOfItems
         viewMenu.insertItem(item, at: insertIndex)
         viewMenu.insertItem(.separator(), at: insertIndex + 1)
     }
@@ -890,13 +912,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func installFormatMenu() {
         guard let mainMenu = NSApp.mainMenu,
-              mainMenu.items.first(where: { $0.title == "Format" }) == nil else { return }
+              topLevelMenuItem(matching: Self.formatMenuTitles) == nil else { return }
 
-        func item(_ title: String,
+        func item(_ titleKey: String,
                   command: String,
                   key: String = "",
                   modifiers: NSEvent.ModifierFlags = [.command]) -> NSMenuItem {
-            let item = NSMenuItem(title: title,
+            let item = NSMenuItem(title: L(titleKey),
                                   action: #selector(formatMarkdownFromMenu(_:)),
                                   keyEquivalent: key)
             item.target = self
@@ -905,7 +927,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return item
         }
 
-        let menu = NSMenu(title: "Format")
+        let formatTitle = L("Format")
+        let menu = NSMenu(title: formatTitle)
         menu.addItem(item("Body", command: "h0"))
         menu.addItem(item("Heading 1", command: "h1", key: "1", modifiers: [.shift, .command]))
         menu.addItem(item("Heading 2", command: "h2", key: "2", modifiers: [.shift, .command]))
@@ -922,10 +945,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(item("Checklist", command: "taskList", key: "l", modifiers: [.shift, .command]))
         menu.addItem(item("Block Quote", command: "quote", key: "'"))
 
-        let rootItem = NSMenuItem(title: "Format", action: nil, keyEquivalent: "")
+        let rootItem = NSMenuItem(title: formatTitle, action: nil, keyEquivalent: "")
         rootItem.submenu = menu
-        let insertIndex = mainMenu.items.firstIndex(where: { $0.title == "View" })
-            ?? mainMenu.items.count
+        let insertIndex = mainMenu.items.firstIndex(where: {
+            Self.viewMenuTitles.contains($0.title)
+        }) ?? mainMenu.items.count
         mainMenu.insertItem(rootItem, at: insertIndex)
     }
 
@@ -959,4 +983,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         outlineMenuItem?.state = (state.sidebarVisible && state.mode == .outline) ? .on : .off
         filesMenuItem?.state = (state.sidebarVisible && state.mode == .files) ? .on : .off
     }
+
+    private func L(_ key: String) -> String {
+        NSLocalizedString(key, comment: "")
+    }
+
+    private func topLevelMenuItem(matching titles: Set<String>) -> NSMenuItem? {
+        NSApp.mainMenu?.items.first { titles.contains($0.title) }
+    }
+
+    private func topLevelSubmenu(matching titles: Set<String>) -> NSMenu? {
+        topLevelMenuItem(matching: titles)?.submenu
+    }
+
+    private static let fileMenuTitles: Set<String> = ["File", "文件"]
+    private static let viewMenuTitles: Set<String> = ["View", "显示"]
+    private static let windowMenuTitles: Set<String> = ["Window", "窗口"]
+    private static let formatMenuTitles: Set<String> = ["Format", "格式"]
+    private static let goMenuTitles: Set<String> = ["Go", "前往"]
+    private static let appearanceMenuTitles: Set<String> = ["Appearance", "外观"]
+    private static let contentWidthMenuTitles: Set<String> = ["Content Width", "内容宽度"]
+    private static let showSidebarMenuTitles: Set<String> = ["Show Sidebar", "显示边栏"]
+    private static let actualSizeMenuTitles: Set<String> = ["Actual Size", "实际大小"]
 }

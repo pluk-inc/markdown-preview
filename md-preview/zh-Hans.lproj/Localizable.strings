@@ -1,0 +1,193 @@
+/* App menu */
+"Install CLI..." = "安装命令行工具…";
+
+/* View menu */
+"Appearance" = "外观";
+"Automatic" = "自动";
+"Light" = "浅色";
+"Dark" = "深色";
+"Content Width" = "内容宽度";
+"Normal" = "标准";
+"Full Width" = "全宽";
+"Hide Sidebar" = "隐藏边栏";
+"Table of Contents" = "目录";
+"Project Navigator" = "项目导航器";
+"Toggle Edit Mode" = "切换编辑模式";
+
+/* File menu */
+"New Tab" = "新建标签页";
+
+/* Go menu */
+"Go" = "前往";
+"Up" = "向上";
+"Down" = "向下";
+"Page Up" = "上一页";
+"Page Down" = "下一页";
+"Previous Item" = "上一项";
+"Next Item" = "下一项";
+"Top of Document" = "文稿开头";
+"Bottom of Document" = "文稿结尾";
+
+/* Format menu */
+"Format" = "格式";
+"Body" = "正文";
+"Heading 1" = "标题 1";
+"Heading 2" = "标题 2";
+"Heading 3" = "标题 3";
+"Bold" = "粗体";
+"Italic" = "斜体";
+"Strikethrough" = "删除线";
+"Inline Code" = "行内代码";
+"Link" = "链接";
+"Bulleted List" = "项目符号列表";
+"Numbered List" = "编号列表";
+"Checklist" = "任务列表";
+"Block Quote" = "引用";
+
+/* Open panel */
+"Choose a Markdown file or folder" = "选择 Markdown 文件或文件夹";
+
+/* Search toolbar */
+"Search" = "搜索";
+"Search in Document" = "在文稿中搜索";
+
+/* Main toolbar */
+"Navigation" = "导航";
+"Back and Forward" = "后退与前进";
+"Back" = "后退";
+"Forward" = "前进";
+"Sidebar" = "边栏";
+"Sidebar options" = "边栏选项";
+"Inspector" = "检查器";
+"Get Info" = "显示简介";
+"Show the inspector" = "显示检查器";
+"Share" = "共享";
+"Share document" = "共享文稿";
+"Print" = "打印";
+"Print document" = "打印文稿";
+"Copy" = "拷贝";
+"Copy Markdown source to clipboard" = "将 Markdown 源文本拷贝到剪贴板";
+"Copied" = "已拷贝";
+"Edit" = "编辑";
+"Edit document" = "编辑文稿";
+"Stop editing and return to preview" = "停止编辑并返回预览";
+"Open" = "打开";
+"Open document in another app" = "在其他 App 中打开文稿";
+"Open in %@" = "在 %@ 中打开";
+"Open in LLM" = "在 LLM 中打开";
+"Open document in an LLM app" = "在 LLM App 中打开文稿";
+"Zoom" = "缩放";
+"Zoom Out" = "缩小";
+"Zoom In" = "放大";
+"Open With" = "打开方式";
+"Open in another editor" = "在其他编辑器中打开";
+
+/* Formatting toolbar */
+"Task List" = "任务列表";
+"Normal Text" = "正文";
+"Heading %d" = "标题 %d";
+
+/* Find bar */
+"Match:" = "匹配：";
+"Contains" = "包含";
+"Begins With" = "开头为";
+"Done" = "完成";
+"Not found" = "未找到";
+"%d of %d" = "第 %1$d 个，共 %2$d 个";
+"Previous match" = "上一个匹配项";
+"Next match" = "下一个匹配项";
+
+/* Open With context menu */
+"Open with External Editor" = "使用外部编辑器打开";
+"Open As" = "打开方式";
+"No editors available" = "没有可用的编辑器";
+
+/* Inspector */
+"Inspector tab" = "检查器标签页";
+"Document" = "文稿";
+"Properties" = "属性";
+"File Name" = "文件名";
+"Document Type" = "文稿类型";
+"Markdown Document" = "Markdown 文稿";
+"File Size" = "文件大小";
+"Words" = "单词数";
+"Characters" = "字符数";
+"Lines" = "行数";
+"Headings" = "标题";
+"Links" = "链接";
+"Images" = "图像";
+"Modified" = "修改日期";
+"No frontmatter" = "无前置元数据";
+"Untitled" = "未命名";
+
+/* Document state and save dialogs */
+"Edited" = "已编辑";
+"Do you want to save your changes?" = "要存储您的更改吗？";
+"this document" = "此文稿";
+"Your changes to %@ will be lost if you don’t save them." = "如果不存储，对 %@ 所做的更改将丢失。";
+"Save" = "存储";
+"Cancel" = "取消";
+"Don’t Save" = "不存储";
+"The file was removed while it was open." = "文件在打开期间被移除。";
+"Recreate File" = "重新创建文件";
+"The file could not be read to verify that it is unchanged." = "无法读取文件，因此无法确认文件是否已更改。";
+"Save Anyway" = "仍要存储";
+"This document changed on disk" = "磁盘上的文稿已被更改";
+"Another app changed %@. Cancel keeps your changes unsaved. Choose which version to keep." = "另一个 App 已更改 %@。选择“取消”会保留您的未存储更改。请选择要保留的版本。";
+"Keep My Changes" = "保留我的更改";
+"Reload from Disk" = "从磁盘重新载入";
+"Unable to verify the document on disk" = "无法验证磁盘上的文稿";
+"%@ Cancel keeps your changes unsaved." = "%@选择“取消”会保留您的未存储更改。";
+"Markdown Preview needs your permission to save this file." = "Markdown Preview 需要您的权限才能存储此文件。";
+
+/* Open menus */
+"No document open" = "未打开文稿";
+"No apps available" = "没有可用的 App";
+"Editors" = "编辑器";
+"AI Apps" = "AI 应用";
+"No LLM apps available" = "没有可用的 LLM App";
+"Open in LLM…" = "在 LLM 中打开…";
+"Open with…" = "打开方式…";
+
+/* Project navigator context menu */
+"Show in Finder" = "在“访达”中显示";
+"Open in New Tab" = "在新标签页中打开";
+"Open in New Window" = "在新窗口中打开";
+"Copy Path" = "拷贝路径";
+
+/* Table editing */
+"Table" = "表格";
+"Row" = "行";
+"Column" = "列";
+"Select Row" = "选择行";
+"Add Row Above" = "在上方添加行";
+"Add Row Below" = "在下方添加行";
+"Duplicate Row" = "复制行";
+"Delete Row" = "删除行";
+"Select Column" = "选择列";
+"Add Column Left" = "在左侧添加列";
+"Add Column Right" = "在右侧添加列";
+"Delete Column" = "删除列";
+"Edit Table Cell" = "编辑表格单元格";
+"Add Row" = "添加行";
+"Add Column" = "添加列";
+"Edit Table" = "编辑表格";
+
+/* Rendered preview controls */
+"Heading" = "标题";
+"Copy code" = "拷贝代码";
+"Code copied" = "代码已拷贝";
+"Mermaid diagram" = "Mermaid 图表";
+"Reset zoom" = "重置缩放";
+"Fill width" = "填满宽度";
+"Fit diagram" = "适应图表";
+"Mermaid renderer is unavailable.\n\n" = "Mermaid 渲染器不可用。\n\n";
+"Footnote %d" = "脚注 %d";
+"Back to reference %d" = "返回脚注引用 %d";
+"KaTeX renderer is unavailable.\n\n" = "KaTeX 渲染器不可用。\n\n";
+
+/* CLI installer errors */
+"Terminal automation failed: %@" = "终端自动化失败：%@";
+"Terminal automation failed." = "终端自动化失败。";
+"Failed to write CLI installer script: %@" = "无法写入 CLI 安装脚本：%@";
+"The bundled Markdown Preview CLI could not be found." = "找不到随附的 Markdown Preview CLI。";

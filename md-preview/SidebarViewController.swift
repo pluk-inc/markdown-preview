@@ -680,18 +680,18 @@ extension ProjectNavigatorView: NSMenuDelegate {
         guard row >= 0, let node = outlineView.item(atRow: row) as? FileNode else { return }
         let url = node.url
 
-        menu.addItem(makeMenuItem(title: "Show in Finder",
+        menu.addItem(makeMenuItem(title: NSLocalizedString("Show in Finder", comment: "Project navigator context menu"),
                                   symbol: "folder",
                                   action: #selector(showInFinder(_:)),
                                   url: url))
 
         if !node.isDirectory {
             menu.addItem(.separator())
-            menu.addItem(makeMenuItem(title: "Open in New Tab",
+            menu.addItem(makeMenuItem(title: NSLocalizedString("Open in New Tab", comment: "Project navigator context menu"),
                                       symbol: "macwindow",
                                       action: #selector(openInNewTab(_:)),
                                       url: url))
-            menu.addItem(makeMenuItem(title: "Open in New Window",
+            menu.addItem(makeMenuItem(title: NSLocalizedString("Open in New Window", comment: "Project navigator context menu"),
                                       symbol: "macwindow.badge.plus",
                                       action: #selector(openInNewWindow(_:)),
                                       url: url))
@@ -701,7 +701,7 @@ extension ProjectNavigatorView: NSMenuDelegate {
                 }
             }
             menu.addItem(.separator())
-            menu.addItem(makeMenuItem(title: "Copy",
+            menu.addItem(makeMenuItem(title: NSLocalizedString("Copy", comment: "Project navigator context menu"),
                                       symbol: "document.on.clipboard",
                                       action: #selector(copyContents(_:)),
                                       url: url))
@@ -709,7 +709,7 @@ extension ProjectNavigatorView: NSMenuDelegate {
             menu.addItem(.separator())
         }
 
-        menu.addItem(makeMenuItem(title: "Copy Path",
+        menu.addItem(makeMenuItem(title: NSLocalizedString("Copy Path", comment: "Project navigator context menu"),
                                   symbol: "document.on.document",
                                   action: #selector(copyPath(_:)),
                                   url: url))

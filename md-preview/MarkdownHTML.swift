@@ -492,8 +492,12 @@ nonisolated enum MarkdownHTML {
         for reference in footnotes.references {
             let refID = footnoteReferenceID(number: reference.number, ordinal: reference.ordinal)
             let footnoteID = footnoteDefinitionID(number: reference.number)
+            let accessibilityLabel = htmlEscape(String(
+                format: NSLocalizedString("Footnote %d", comment: "Footnote accessibility label"),
+                reference.number
+            ))
             let replacement = """
-            <sup class="footnote-ref"><a id="\(refID)" href="#\(footnoteID)" aria-label="Footnote \(reference.number)">\(reference.number)</a></sup>
+            <sup class="footnote-ref"><a id="\(refID)" href="#\(footnoteID)" aria-label="\(accessibilityLabel)">\(reference.number)</a></sup>
             """
             rendered = rendered.replacingOccurrences(of: reference.token, with: replacement)
         }
@@ -523,8 +527,15 @@ nonisolated enum MarkdownHTML {
             containsMath = containsMath || renderedContent.containsMath
             containsMermaid = containsMermaid || renderedContent.containsMermaid
             let backrefs = (referencesByNumber[definition.number] ?? []).map { reference in
-                """
-                <a href="#\(footnoteReferenceID(number: reference.number, ordinal: reference.ordinal))" class="footnote-backref" aria-label="Back to reference \(reference.number)">&#8617;</a>
+                let accessibilityLabel = htmlEscape(String(
+                    format: NSLocalizedString(
+                        "Back to reference %d",
+                        comment: "Footnote back-reference accessibility label"
+                    ),
+                    reference.number
+                ))
+                return """
+                <a href="#\(footnoteReferenceID(number: reference.number, ordinal: reference.ordinal))" class="footnote-backref" aria-label="\(accessibilityLabel)">&#8617;</a>
                 """
             }.joined(separator: " ")
             let contentHTML = appendFootnoteBackrefs(backrefs, to: renderedContent.html)
@@ -845,6 +856,12 @@ nonisolated enum MarkdownHTML {
     private static let hostBridgeScript: String = """
     <script>
     (() => {
+        const localized = {
+            copy: \(javaScriptStringLiteral(NSLocalizedString("Copy", comment: "Code block copy button"))),
+            copied: \(javaScriptStringLiteral(NSLocalizedString("Copied", comment: "Code block copy confirmation"))),
+            copyCode: \(javaScriptStringLiteral(NSLocalizedString("Copy code", comment: "Code block copy button accessibility label"))),
+            codeCopied: \(javaScriptStringLiteral(NSLocalizedString("Code copied", comment: "Code block copy confirmation accessibility label")))
+        };
         let hasHostBridge = false;
         const post = (() => {
             try {
@@ -974,7 +991,8 @@ nonisolated enum MarkdownHTML {
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.className = 'md-code-copy';
-                button.setAttribute('aria-label', 'Copy code');
+                button.textContent = localized.copy;
+                button.setAttribute('aria-label', localized.copyCode);
                 wrap.appendChild(button);
             });
         }
@@ -1018,11 +1036,13 @@ nonisolated enum MarkdownHTML {
                 } catch (e) {}
             }
             if (!copied) return;
-            button.setAttribute('aria-label', 'Code copied');
+            button.textContent = localized.copied;
+            button.setAttribute('aria-label', localized.codeCopied);
             button.classList.add('is-copied');
             clearTimeout(button.__mdCopyTimer);
             button.__mdCopyTimer = setTimeout(() => {
-                button.setAttribute('aria-label', 'Copy code');
+                button.textContent = localized.copy;
+                button.setAttribute('aria-label', localized.copyCode);
                 button.classList.remove('is-copied');
             }, 1100);
         }
@@ -1586,7 +1606,12 @@ nonisolated enum MarkdownHTML {
     window.addEventListener('load', () => {
         document.querySelectorAll('.math').forEach((node) => {
             node.classList.add('math-error');
-            node.textContent = 'KaTeX renderer is unavailable.\\n\\n' + node.textContent;
+            node.textContent = \(javaScriptStringLiteral(
+                NSLocalizedString(
+                    "KaTeX renderer is unavailable.\n\n",
+                    comment: "Math rendering error"
+                )
+            )) + node.textContent;
         });
     });
     </script>
@@ -1759,6 +1784,14 @@ nonisolated enum MarkdownHTML {
         return out
     }
 
+    private static func javaScriptStringLiteral(_ string: String) -> String {
+        guard let data = try? JSONSerialization.data(withJSONObject: [string]),
+              let json = String(data: data, encoding: .utf8) else {
+            return "\"\""
+        }
+        return String(json.dropFirst().dropLast())
+    }
+
     // MARK: - Code highlighting (highlight.js)
 
     // Excludes `language-mermaid` since renderMermaidBlocks already lifted
@@ -1925,6 +1958,11 @@ nonisolated enum MarkdownHTML {
         var rendered = ""
         rendered.reserveCapacity(html.count)
         var cursor = 0
+        let diagramLabel = htmlEscape(NSLocalizedString("Mermaid diagram", comment: "Mermaid diagram accessibility label"))
+        let zoomOut = htmlEscape(NSLocalizedString("Zoom Out", comment: "Mermaid diagram control"))
+        let resetZoom = htmlEscape(NSLocalizedString("Reset zoom", comment: "Mermaid diagram control"))
+        let zoomIn = htmlEscape(NSLocalizedString("Zoom In", comment: "Mermaid diagram control"))
+        let fillWidth = htmlEscape(NSLocalizedString("Fill width", comment: "Mermaid diagram control"))
         for match in matches {
             rendered += nsHTML.substring(with: NSRange(
                 location: cursor,
@@ -1933,15 +1971,15 @@ nonisolated enum MarkdownHTML {
             let sourceAttributes = nsHTML.substring(with: match.range(at: 1))
             let diagram = nsHTML.substring(with: match.range(at: 2))
             rendered += """
-            <figure\(sourceAttributes) class="mermaid-figure" tabindex="0" role="img" aria-label="Mermaid diagram">
+            <figure\(sourceAttributes) class="mermaid-figure" tabindex="0" role="img" aria-label="\(diagramLabel)">
             <div class="mermaid-stage"><div class="mermaid">
             \(diagram)
             </div></div>
             <div class="mermaid-hud" aria-hidden="true">
-            <button type="button" class="mermaid-hud-btn" data-mm-act="out" tabindex="-1" aria-label="Zoom out">−</button>
-            <button type="button" class="mermaid-hud-btn mermaid-hud-level" data-mm-act="reset" tabindex="-1" aria-label="Reset zoom">100%</button>
-            <button type="button" class="mermaid-hud-btn" data-mm-act="in" tabindex="-1" aria-label="Zoom in">+</button>
-            <button type="button" class="mermaid-hud-btn mermaid-hud-width" data-mm-act="width" tabindex="-1" aria-label="Fill width" aria-pressed="false" title="Fill width">⤢</button>
+            <button type="button" class="mermaid-hud-btn" data-mm-act="out" tabindex="-1" aria-label="\(zoomOut)">−</button>
+            <button type="button" class="mermaid-hud-btn mermaid-hud-level" data-mm-act="reset" tabindex="-1" aria-label="\(resetZoom)">100%</button>
+            <button type="button" class="mermaid-hud-btn" data-mm-act="in" tabindex="-1" aria-label="\(zoomIn)">+</button>
+            <button type="button" class="mermaid-hud-btn mermaid-hud-width" data-mm-act="width" tabindex="-1" aria-label="\(fillWidth)" aria-pressed="false" title="\(fillWidth)">⤢</button>
             </div>
             </figure>
             """
@@ -1956,7 +1994,12 @@ nonisolated enum MarkdownHTML {
     window.addEventListener('load', () => {
         document.querySelectorAll('.mermaid').forEach((node) => {
             node.classList.add('mermaid-error');
-            node.textContent = 'Mermaid renderer is unavailable.\\n\\n' + node.textContent;
+            node.textContent = \(javaScriptStringLiteral(
+                NSLocalizedString(
+                    "Mermaid renderer is unavailable.\n\n",
+                    comment: "Mermaid rendering error"
+                )
+            )) + node.textContent;
         });
     });
     </script>
@@ -1968,6 +2011,12 @@ nonisolated enum MarkdownHTML {
     /// scripts run before DOMContentLoaded.
     private static let mermaidInitWiring = """
     (() => {
+            const fillWidthLabel = \(javaScriptStringLiteral(
+                NSLocalizedString("Fill width", comment: "Mermaid diagram control")
+            ));
+            const fitDiagramLabel = \(javaScriptStringLiteral(
+                NSLocalizedString("Fit diagram", comment: "Mermaid diagram control")
+            ));
             const states = new WeakMap();
             const queue = [];
             let draining = false;
@@ -2105,7 +2154,7 @@ nonisolated enum MarkdownHTML {
                 const expanded = figure.classList.toggle('mermaid-width-expanded');
                 const btn = figure.querySelector('[data-mm-act="width"]');
                 if (btn) {
-                    const label = expanded ? 'Fit diagram' : 'Fill width';
+                    const label = expanded ? fitDiagramLabel : fillWidthLabel;
                     btn.textContent = expanded ? '⤡' : '⤢';
                     btn.setAttribute('aria-label', label);
                     btn.setAttribute('aria-pressed', String(expanded));
@@ -2515,12 +2564,6 @@ nonisolated enum MarkdownHTML {
         user-select: none;
         -webkit-user-select: none;
         z-index: 2;
-    }
-    .md-code-copy::after {
-        content: "Copy";
-    }
-    .md-code-copy.is-copied::after {
-        content: "Copied";
     }
     .md-code-wrap:hover .md-code-copy,
     .md-code-wrap:focus-within .md-code-copy,
