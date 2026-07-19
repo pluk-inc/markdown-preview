@@ -118,11 +118,17 @@ check("inactive heading source reserves its width",
   inactiveHeadingHost.querySelector(".cm-md-heading-source-hidden")?.textContent === "### ")
 check("inactive heading line receives visual offset class",
   inactiveHeadingHost.querySelector(".cm-md-heading-inactive") != null)
-check("blank source line before heading collapses",
-  inactiveHeadingHost.querySelector(".cm-md-blank-before-heading") != null)
-check("heading after blank uses source-line spacing",
-  inactiveHeadingHost.querySelector(".cm-md-heading-after-blank") != null)
+check("normal separator before heading collapses",
+  inactiveHeadingHost.querySelector(".cm-md-heading-separator") != null)
 inactiveHeadingEditor.destroy()
+
+const headingFollowHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(headingFollowHost)
+const headingFollowEditor = dom.window.MDEditor.create(
+  headingFollowHost, "## Heading\n\nFollowing paragraph", {})
+check("normal separator after heading collapses",
+  headingFollowHost.querySelector(".cm-md-heading-separator") != null)
+headingFollowEditor.destroy()
 
 const inlineCodeHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(inlineCodeHost)

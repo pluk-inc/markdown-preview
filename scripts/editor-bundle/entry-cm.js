@@ -659,8 +659,7 @@ const HEADING_LINE = {}
 const for_ = (i) => Decoration.line({ class: "cm-md-h" + i })
 for (let i = 1; i <= 6; i++) HEADING_LINE[i] = for_(i)
 const inactiveHeadingLine = Decoration.line({ class: "cm-md-heading-inactive" })
-const blankBeforeHeadingLine = Decoration.line({ class: "cm-md-blank-before-heading" })
-const headingAfterBlankLine = Decoration.line({ class: "cm-md-heading-after-blank" })
+const headingSeparatorLine = Decoration.line({ class: "cm-md-heading-separator" })
 const quoteLine = Decoration.line({ class: "cm-md-quote" })
 const codeLine = Decoration.line({ class: "cm-md-codeblock" })
 const codeLineFirst = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-first" })
@@ -848,7 +847,15 @@ function buildDecorations(view) {
     if (line.number <= 1) return false
     const previous = state.doc.line(line.number - 1)
     if (previous.text.length !== 0) return false
-    lineOnce(previous.from, blankBeforeHeadingLine)
+    lineOnce(previous.from, headingSeparatorLine)
+    return true
+  }
+  const collapseBlankAfter = (pos) => {
+    const line = state.doc.lineAt(pos)
+    if (line.number >= state.doc.lines) return false
+    const next = state.doc.line(line.number + 1)
+    if (next.text.length !== 0) return false
+    lineOnce(next.from, headingSeparatorLine)
     return true
   }
 
@@ -861,14 +868,16 @@ function buildDecorations(view) {
         // --- Headings ------------------------------------------------
         const atx = name.match(/^ATXHeading(\d)$/)
         if (atx) {
-          if (collapseBlankBefore(node.from)) lineOnce(node.from, headingAfterBlankLine)
+          collapseBlankBefore(node.from)
+          collapseBlankAfter(node.to)
           lineOnce(node.from, HEADING_LINE[+atx[1]])
           if (!touchesLineOf(node.from)) lineOnce(node.from, inactiveHeadingLine)
           return
         }
         const setext = name.match(/^SetextHeading(\d)$/)
         if (setext) {
-          if (collapseBlankBefore(node.from)) lineOnce(node.from, headingAfterBlankLine)
+          collapseBlankBefore(node.from)
+          collapseBlankAfter(node.to)
           lineOnce(node.from, HEADING_LINE[+setext[1]])
           return
         }

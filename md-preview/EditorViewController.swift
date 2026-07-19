@@ -330,12 +330,6 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             padding-bottom: \(MarkdownHTML.paragraphSpacing)px;
         }
         #editor .cm-md-h1 { font-size: 2em; padding-top: 0.8em; }
-        /* The preview preserves a source blank line before a heading as one
-           line box and suppresses the heading margin. Mirror that exact
-           height instead of substituting the heading's larger top spacing. */
-        #editor .cm-md-heading-after-blank {
-            padding-top: \(MarkdownHTML.sourceLineHeight)px;
-        }
         /* Mirror the preview's first-child margin reset so the document
            starts at the same height in both modes. */
         #editor .cm-content > .cm-line:first-child { padding-top: 0; }
@@ -344,9 +338,10 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         #editor .cm-md-h4 { font-size: 1.41em; line-height: 1.08; }
         #editor .cm-md-h5 { font-size: 1.29em; line-height: 1.09; }
         #editor .cm-md-h6 { font-size: 1em; line-height: 1.24; }
-        /* A rendered heading's top margin already represents the blank source
-           line before it. Do not count that source line a second time. */
-        #editor .cm-md-blank-before-heading {
+        /* A heading's semantic padding represents the normal Markdown blank
+           separator on either side. Collapse that one source line while
+           leaving any additional blank lines at their natural height. */
+        #editor .cm-md-heading-separator {
             height: 0;
             min-height: 0;
             line-height: 0;

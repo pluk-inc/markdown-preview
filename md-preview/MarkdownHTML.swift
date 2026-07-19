@@ -2338,9 +2338,6 @@ nonisolated enum MarkdownHTML {
     .md-source-blank-line {
         height: \(sourceLineHeight)px;
     }
-    .md-source-blank-line + * {
-        margin-top: 0 !important;
-    }
 
     h1, h2, h3, h4, h5, h6 {
         font-weight: 600;
@@ -2455,7 +2452,9 @@ nonisolated enum MarkdownHTML {
     }
     .md-code-wrap {
         position: relative;
+        margin: 0.8em 0 0;
     }
+    .md-code-wrap > pre { margin: 0; }
     .md-code-copy {
         position: absolute;
         top: 8px;
@@ -2677,7 +2676,7 @@ nonisolated enum MarkdownHTML {
 
     ul, ol { margin: 0.8em 0 0; padding-left: 1.6em; }
     li { margin-top: 0.4em; }
-    li:first-child { margin-top: 0.8em; }
+    li:first-child { margin-top: 0; }
     li > ul, li > ol { margin-top: 0.4em; }
     li > p:first-child { margin-top: 0; }
 
