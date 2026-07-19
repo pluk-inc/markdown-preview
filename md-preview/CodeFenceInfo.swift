@@ -20,6 +20,21 @@ nonisolated struct CodeFenceInfo: Equatable {
     /// whitespace trimmed. Empty when there is no metadata.
     let metadata: String
 
+    /// Language identifier passed to the read-mode highlighter.
+    ///
+    /// CodeMirror treats these common shell fence names as one shell grammar,
+    /// while highlight.js reserves `shell` and `console` for transcript-style
+    /// input. Normalize them so read and edit mode parse the same source as
+    /// shell code.
+    var highlightLanguage: String {
+        switch language {
+        case "shell", "sh", "zsh", "console":
+            return "bash"
+        default:
+            return language
+        }
+    }
+
     init(rawInfoString: String?) {
         guard let raw = rawInfoString else {
             self.language = ""

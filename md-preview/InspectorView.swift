@@ -21,7 +21,8 @@ struct DocumentMetadata: Equatable {
 extension DocumentMetadata {
     static func make(url: URL?, markdown: String) -> DocumentMetadata {
         var meta = DocumentMetadata()
-        meta.fileName = url?.lastPathComponent ?? "Untitled"
+        meta.fileName = url?.lastPathComponent
+            ?? NSLocalizedString("Untitled", comment: "Inspector file name when no document is open")
 
         let split = MarkdownFrontmatter.split(markdown)
         if let raw = split.raw {
@@ -57,6 +58,10 @@ struct InspectorView: View {
         case properties = "Properties"
         var id: String { rawValue }
 
+        var localizedTitle: String {
+            NSLocalizedString(rawValue, comment: "Inspector tab title")
+        }
+
         var systemImage: String {
             switch self {
             case .document: return "doc"
@@ -81,10 +86,10 @@ struct InspectorView: View {
     }
 
     private var tabPicker: some View {
-        Picker("Inspector tab", selection: $tab) {
+        Picker(NSLocalizedString("Inspector tab", comment: "Inspector tab picker accessibility label"), selection: $tab) {
             ForEach(Tab.allCases) { tab in
                 Image(systemName: tab.systemImage)
-                    .accessibilityLabel(tab.rawValue)
+                    .accessibilityLabel(tab.localizedTitle)
                     .tag(tab)
             }
         }
@@ -97,28 +102,55 @@ struct InspectorView: View {
     private var documentTab: some View {
         Form {
             Section {
-                LabeledContent("File Name", value: metadata.fileName)
-                LabeledContent("Document Type", value: "Markdown Document")
+                LabeledContent(
+                    NSLocalizedString("File Name", comment: "Inspector field label"),
+                    value: metadata.fileName
+                )
+                LabeledContent(
+                    NSLocalizedString("Document Type", comment: "Inspector field label"),
+                    value: NSLocalizedString("Markdown Document", comment: "Inspector document type")
+                )
                 if let size = metadata.fileSize {
-                    LabeledContent("File Size", value: size.formatted(.byteCount(style: .file)))
+                    LabeledContent(
+                        NSLocalizedString("File Size", comment: "Inspector field label"),
+                        value: size.formatted(.byteCount(style: .file))
+                    )
                 }
             }
 
             Section {
-                LabeledContent("Words", value: metadata.wordCount.formatted())
-                LabeledContent("Characters", value: metadata.characterCount.formatted())
-                LabeledContent("Lines", value: metadata.lineCount.formatted())
+                LabeledContent(
+                    NSLocalizedString("Words", comment: "Inspector field label"),
+                    value: metadata.wordCount.formatted()
+                )
+                LabeledContent(
+                    NSLocalizedString("Characters", comment: "Inspector field label"),
+                    value: metadata.characterCount.formatted()
+                )
+                LabeledContent(
+                    NSLocalizedString("Lines", comment: "Inspector field label"),
+                    value: metadata.lineCount.formatted()
+                )
             }
 
             Section {
-                LabeledContent("Headings", value: metadata.headingCount.formatted())
-                LabeledContent("Links", value: metadata.linkCount.formatted())
-                LabeledContent("Images", value: metadata.imageCount.formatted())
+                LabeledContent(
+                    NSLocalizedString("Headings", comment: "Inspector field label"),
+                    value: metadata.headingCount.formatted()
+                )
+                LabeledContent(
+                    NSLocalizedString("Links", comment: "Inspector field label"),
+                    value: metadata.linkCount.formatted()
+                )
+                LabeledContent(
+                    NSLocalizedString("Images", comment: "Inspector field label"),
+                    value: metadata.imageCount.formatted()
+                )
             }
 
             if let modified = metadata.modifiedDate {
                 Section {
-                    LabeledContent("Modified") {
+                    LabeledContent(NSLocalizedString("Modified", comment: "Inspector field label")) {
                         Text(modified, format: .dateTime.year().month().day().hour().minute())
                     }
                 }
@@ -130,7 +162,7 @@ struct InspectorView: View {
     @ViewBuilder
     private var propertiesTab: some View {
         if metadata.frontmatter.isEmpty {
-            Text("No frontmatter")
+            Text(NSLocalizedString("No frontmatter", comment: "Inspector empty frontmatter message"))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {

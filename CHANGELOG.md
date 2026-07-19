@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.0.38] – 2026-07-19
+
+Markdown Preview now speaks Simplified Chinese, and shell code blocks look the same in read mode as they do in the editor.
+
+### Added
+
+- **Simplified Chinese localization.** The menu bar, toolbar, sidebar, inspector, and dynamic prompts are now localized to Simplified Chinese, following the system language or a per-app override in System Settings ([#204](https://github.com/pluk-inc/markdown-preview/pull/204)).
+
+### Fixed
+
+- **Shell options highlight correctly in read mode.** Code fences tagged `shell`, `sh`, `zsh`, or `console` now use the same Bash grammar as edit mode, so options like `--check` and `-q` keep their styling instead of rendering as plain text ([#209](https://github.com/pluk-inc/markdown-preview/pull/209), [#205](https://github.com/pluk-inc/markdown-preview/issues/205)).
+
+### Contributors
+
+Thanks to the external contributors and reporters who helped improve this release:
+
+- [@eachann1024](https://github.com/eachann1024) — added Simplified Chinese localization ([#204](https://github.com/pluk-inc/markdown-preview/pull/204))
+- [@CreepsoOff](https://github.com/CreepsoOff) — reported the shell option highlighting issue ([#205](https://github.com/pluk-inc/markdown-preview/issues/205))
+
 ## [0.0.37] – 2026-07-18
 
 Markdown Preview now keeps long documents sharp, makes section links and navigation history more reliable, and improves handoff to AI apps and Homebrew-installed command-line tools.

@@ -16,12 +16,24 @@ final class FindBar: NSView {
     var onDone: (() -> Void)?
     var onModeChanged: ((SearchMode) -> Void)?
 
-    private let modeLabel = NSTextField(labelWithString: "Match:")
-    private let containsButton = NSButton(title: "Contains", target: nil, action: nil)
-    private let beginsWithButton = NSButton(title: "Begins With", target: nil, action: nil)
+    private let modeLabel = NSTextField(labelWithString: NSLocalizedString("Match:", comment: "Find bar match mode label"))
+    private let containsButton = NSButton(
+        title: NSLocalizedString("Contains", comment: "Find bar match mode"),
+        target: nil,
+        action: nil
+    )
+    private let beginsWithButton = NSButton(
+        title: NSLocalizedString("Begins With", comment: "Find bar match mode"),
+        target: nil,
+        action: nil
+    )
     private let countLabel = NSTextField(labelWithString: "")
     private let navigationControl = NSSegmentedControl()
-    private let doneButton = NSButton(title: "Done", target: nil, action: nil)
+    private let doneButton = NSButton(
+        title: NSLocalizedString("Done", comment: "Find bar close button"),
+        target: nil,
+        action: nil
+    )
     private let bottomSeparator = HairlineSeparator()
 
     private enum NavigationSegment: Int {
@@ -41,9 +53,13 @@ final class FindBar: NSView {
 
     func update(matchCount: Int, currentIndex: Int) {
         if matchCount == 0 {
-            countLabel.stringValue = "Not found"
+            countLabel.stringValue = NSLocalizedString("Not found", comment: "Find bar empty result")
         } else {
-            countLabel.stringValue = "\(currentIndex) of \(matchCount)"
+            countLabel.stringValue = String(
+                format: NSLocalizedString("%d of %d", comment: "Find bar current and total match count"),
+                currentIndex,
+                matchCount
+            )
         }
         let hasMatches = matchCount > 0
         navigationControl.setEnabled(hasMatches, forSegment: NavigationSegment.previous.rawValue)
@@ -128,10 +144,12 @@ final class FindBar: NSView {
     }
 
     private func configureNavigationControl() {
+        let previousMatch = NSLocalizedString("Previous match", comment: "Find bar navigation button")
+        let nextMatch = NSLocalizedString("Next match", comment: "Find bar navigation button")
         let previous = NSImage(systemSymbolName: "chevron.left",
-                               accessibilityDescription: "Previous match") ?? NSImage()
+                               accessibilityDescription: previousMatch) ?? NSImage()
         let next = NSImage(systemSymbolName: "chevron.right",
-                           accessibilityDescription: "Next match") ?? NSImage()
+                           accessibilityDescription: nextMatch) ?? NSImage()
         previous.isTemplate = true
         next.isTemplate = true
 
@@ -140,6 +158,8 @@ final class FindBar: NSView {
         navigationControl.segmentCount = 2
         navigationControl.setImage(previous, forSegment: NavigationSegment.previous.rawValue)
         navigationControl.setImage(next, forSegment: NavigationSegment.next.rawValue)
+        navigationControl.setToolTip(previousMatch, forSegment: NavigationSegment.previous.rawValue)
+        navigationControl.setToolTip(nextMatch, forSegment: NavigationSegment.next.rawValue)
         navigationControl.setImageScaling(.scaleProportionallyDown,
                                           forSegment: NavigationSegment.previous.rawValue)
         navigationControl.setImageScaling(.scaleProportionallyDown,

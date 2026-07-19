@@ -58,4 +58,12 @@ final class CodeFenceInfoTests: XCTestCase {
         XCTAssertEqual(info.language, "")
         XCTAssertEqual(info.metadata, "")
     }
+
+    func testShellAliasesUseBashForReadModeHighlighting() {
+        for language in ["shell", "sh", "zsh", "console"] {
+            XCTAssertEqual(CodeFenceInfo(rawInfoString: language).highlightLanguage, "bash")
+        }
+        XCTAssertEqual(CodeFenceInfo(rawInfoString: "bash").highlightLanguage, "bash")
+        XCTAssertEqual(CodeFenceInfo(rawInfoString: "swift").highlightLanguage, "swift")
+    }
 }
