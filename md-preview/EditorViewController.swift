@@ -444,7 +444,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
         .cm-md-fence-info { color: var(--secondary); }
         .cm-md-mermaid-preview {
-            margin: 10px 0;
+            /* Outer spacing comes from the block separator lines, matching
+               the preview's .mermaid-figure margin. */
+            margin: 0;
             padding: 20px;
             border-radius: 15px;
             background: var(--code-bg);
@@ -472,7 +474,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         .cm-md-table-widget {
             position: relative;
             width: fit-content;
-            margin: 10px 0;
+            /* Outer spacing comes from the block separator lines, matching
+               the preview's .md-table-scroll margin. */
+            margin: 0;
             max-width: 100%;
             overflow: visible;
             font-family: (MarkdownHTML.bodyFontFamily);

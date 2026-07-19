@@ -933,6 +933,12 @@ function buildDecorations(view) {
       }
       case "Table": return BLOCK_MARGIN_TOP.table
       case "HorizontalRule": return BLOCK_MARGIN_TOP.hr
+      case "FencedCode": {
+        // Mermaid fences render as .mermaid-figure (1.6em) in the preview.
+        const firstLine = state.doc.lineAt(node.from)
+        return /^ {0,3}(`{3,}|~{3,})\s*mermaid\b/i.test(firstLine.text)
+          ? BLOCK_MARGIN_TOP.table : BLOCK_MARGIN_TOP.paragraph
+      }
       default: return BLOCK_MARGIN_TOP.paragraph
     }
   }
