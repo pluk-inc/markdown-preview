@@ -412,19 +412,32 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             font-family: ui-monospace, "SF Mono", Menlo, monospace;
             font-size: 0.88em;
             line-height: 1.45;
-            /* CodeMirror paints full-document selection below content. Retain
-               the code-card surface while allowing that selection tint to
-               remain clearly visible through selected code. */
-            background: color-mix(in srgb, var(--code-bg) 50%, transparent);
+            position: relative;
             padding: 0 14px;
         }
+        /* CodeMirror paints the selection on a z:-1 layer, below line
+           backgrounds. Paint the code card on a z:-2 pseudo instead of the
+           line itself: it escapes to the same stacking context, so the card
+           matches the preview's opaque --code-bg while the selection tint
+           still shows between card and text. */
+        #editor .cm-md-codeblock::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: -2;
+            background: var(--code-bg);
+        }
         #editor .cm-md-codeblock-first {
-            border-radius: 15px 15px 0 0;
             padding-top: 10px;
         }
+        #editor .cm-md-codeblock-first::before {
+            border-radius: 15px 15px 0 0;
+        }
         #editor .cm-md-codeblock-last {
-            border-radius: 0 0 15px 15px;
             padding-bottom: 10px;
+        }
+        #editor .cm-md-codeblock-last::before {
+            border-radius: 0 0 15px 15px;
         }
         #editor .cm-md-code-fence-source-hidden {
             visibility: hidden;
