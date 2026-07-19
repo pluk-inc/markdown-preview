@@ -205,6 +205,8 @@ check("pointer click activates the code block",
   leadingCodeHost.querySelector(".cm-md-code-fence-source-hidden") == null)
 check("activated code block remains syntax highlighted",
   leadingCodeHost.querySelector(".hl-keyword")?.textContent === "const")
+check("activated code block expands its fence lines",
+  leadingCodeHost.querySelectorAll(".cm-md-fence-collapsed").length === 0)
 leadingCodeEditor.destroy()
 
 const inactiveCodeHost = dom.window.document.createElement("div")
@@ -215,6 +217,10 @@ check("inactive code block hides both fence source lines",
   inactiveCodeHost.querySelectorAll(".cm-md-code-fence-source-hidden").length === 2)
 check("inactive code block keeps syntax highlighting",
   inactiveCodeHost.querySelector(".hl-keyword")?.textContent === "const")
+check("inactive fence source lines collapse to zero height",
+  inactiveCodeHost.querySelectorAll(".cm-md-fence-collapsed").length === 2)
+check("interior code line carries the card styling when fences collapse",
+  inactiveCodeHost.querySelector(".cm-md-codeblock-first.cm-md-codeblock-last") != null)
 inactiveCodeEditor.destroy()
 
 const legacyCodeHost = dom.window.document.createElement("div")

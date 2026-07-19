@@ -442,6 +442,15 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         #editor .cm-md-code-fence-source-hidden {
             visibility: hidden;
         }
+        /* Inactive fence source lines occupy no height, so the code card is
+           exactly as tall as the preview's. They expand when the cursor
+           enters the block. */
+        #editor .cm-md-fence-collapsed {
+            height: 0;
+            min-height: 0;
+            line-height: 0;
+            overflow: hidden;
+        }
         .cm-md-fence-info { color: var(--secondary); }
         .cm-md-mermaid-preview {
             /* Outer spacing comes from the block separator lines, matching

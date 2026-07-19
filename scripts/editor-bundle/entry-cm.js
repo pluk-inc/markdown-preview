@@ -691,6 +691,7 @@ const quoteLine = Decoration.line({ class: "cm-md-quote" })
 const codeLine = Decoration.line({ class: "cm-md-codeblock" })
 const codeLineFirst = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-first" })
 const codeLineLast = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-last" })
+const fenceCollapsedLine = Decoration.line({ class: "cm-md-fence-collapsed" })
 const tableLine = Decoration.line({ class: "cm-md-table" })
 // Preview gives every list item after the first a 0.4em margin-top (and a
 // nested list the same via li > ul). Mirror it on the item's first line.
@@ -1107,13 +1108,30 @@ function buildDecorations(view) {
         if (name === "FencedCode" || name === "CodeBlock") {
           const first = state.doc.lineAt(node.from)
           const last = state.doc.lineAt(node.to)
+          // An inactive fenced block collapses its fence source lines so the
+          // code card occupies exactly the preview's height. Entering the
+          // block expands them back into editable source.
+          const closed = name === "FencedCode"
+            && node.node.getChildren("CodeMark").length >= 2
+          const hasInterior = last.number - first.number >= (closed ? 2 : 1)
+          const collapseFences = name === "FencedCode"
+            && hasInterior && !isActiveFence(node)
+          const codeFirst = collapseFences ? state.doc.line(first.number + 1) : first
+          const codeLast = collapseFences && closed
+            ? state.doc.line(last.number - 1) : last
           let pos = node.from
           while (pos <= node.to) {
             const line = state.doc.lineAt(pos)
-            const deco = line.from === first.from ? codeLineFirst
-              : line.from === last.from ? codeLineLast
-              : codeLine
-            lineOnce(line.from, deco)
+            if (collapseFences
+                && (line.from === first.from || (closed && line.from === last.from))) {
+              lineOnce(line.from, fenceCollapsedLine)
+            } else {
+              const isFirst = line.from === codeFirst.from
+              const isLast = line.from === codeLast.from
+              if (isFirst) lineOnce(line.from, codeLineFirst)
+              if (isLast) lineOnce(line.from, codeLineLast)
+              if (!isFirst && !isLast) lineOnce(line.from, codeLine)
+            }
             if (name === "CodeBlock" && !touchesLineOf(line.from)) {
               const indent = line.text.match(/^(?: {4}|\t)/)?.[0]
               if (indent) ranges.push(hide.range(line.from, line.from + indent.length))
