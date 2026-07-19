@@ -10,7 +10,11 @@ const dom = new JSDOM("<!doctype html><body><div id='editor'></div></body>", {
 })
 globalThis.window = dom.window
 globalThis.document = dom.window.document
-globalThis.navigator = dom.window.navigator
+// Node 21+ exposes `navigator` as a getter-only global; plain assignment throws.
+Object.defineProperty(globalThis, "navigator", {
+  value: dom.window.navigator,
+  configurable: true,
+})
 for (const key of ["MutationObserver", "ResizeObserver", "requestAnimationFrame",
                    "cancelAnimationFrame", "getComputedStyle", "Range", "Text", "Node",
                    "HTMLElement", "Element", "Document", "DOMParser", "Selection", "Window"]) {
@@ -126,9 +130,17 @@ const headingFollowHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(headingFollowHost)
 const headingFollowEditor = dom.window.MDEditor.create(
   headingFollowHost, "## Heading\n\nFollowing paragraph", {})
-check("normal separator after heading collapses",
-  headingFollowHost.querySelector(".cm-md-heading-separator") != null)
+check("separator after heading resizes to the paragraph's margin",
+  headingFollowHost.querySelector(".cm-md-block-separator") != null)
 headingFollowEditor.destroy()
+
+const paragraphGapHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(paragraphGapHost)
+const paragraphGapEditor = dom.window.MDEditor.create(
+  paragraphGapHost, "First paragraph.\n\nSecond paragraph.\n\n\nThird paragraph.", {})
+check("single blank between paragraphs becomes one resized separator",
+  paragraphGapHost.querySelectorAll(".cm-md-block-separator").length === 2)
+paragraphGapEditor.destroy()
 
 const inlineCodeHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(inlineCodeHost)

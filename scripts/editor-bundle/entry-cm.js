@@ -660,11 +660,41 @@ const for_ = (i) => Decoration.line({ class: "cm-md-h" + i })
 for (let i = 1; i <= 6; i++) HEADING_LINE[i] = for_(i)
 const inactiveHeadingLine = Decoration.line({ class: "cm-md-heading-inactive" })
 const headingSeparatorLine = Decoration.line({ class: "cm-md-heading-separator" })
+
+// Design tokens mirrored from MarkdownHTML.swift — keep in sync. The preview
+// swallows the single blank source line before each block and expresses that
+// separation as the block's own margin-top instead. The editor mirrors this by
+// resizing the blank separator line to the same pixel height.
+const BODY_FONT_SIZE = 15 // MarkdownHTML.bodyFontSize
+const BLOCK_MARGIN_TOP = {
+  paragraph: 0.8 * BODY_FONT_SIZE, // p / ul / ol / pre / .md-code-wrap
+  quote: 1.2 * BODY_FONT_SIZE,     // blockquote
+  alert: 1.6 * BODY_FONT_SIZE,     // .markdown-alert
+  table: 1.6 * BODY_FONT_SIZE,     // .md-table-scroll
+  hr: 2.35 * BODY_FONT_SIZE,       // hr (top and bottom)
+}
+const separatorLineCache = new Map()
+const blockSeparatorLine = (height) => {
+  let deco = separatorLineCache.get(height)
+  if (!deco) {
+    deco = Decoration.line({
+      class: "cm-md-block-separator",
+      attributes: {
+        style: `height:${height}px;min-height:0;line-height:${height}px;overflow:hidden;`,
+      },
+    })
+    separatorLineCache.set(height, deco)
+  }
+  return deco
+}
 const quoteLine = Decoration.line({ class: "cm-md-quote" })
 const codeLine = Decoration.line({ class: "cm-md-codeblock" })
 const codeLineFirst = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-first" })
 const codeLineLast = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-last" })
 const tableLine = Decoration.line({ class: "cm-md-table" })
+// Preview gives every list item after the first a 0.4em margin-top (and a
+// nested list the same via li > ul). Mirror it on the item's first line.
+const listItemGapLine = Decoration.line({ class: "cm-md-list-item-gap" })
 const fenceMark = Decoration.mark({ class: "cm-md-fence-info" })
 const hiddenCodeFenceSource = Decoration.mark({ class: "cm-md-code-fence-source-hidden" })
 const hiddenHeadingSource = Decoration.mark({ class: "cm-md-heading-source-hidden" })
@@ -842,22 +872,71 @@ function buildDecorations(view) {
       pos = line.to + 1
     }
   }
+  // One blank source line between blocks is Markdown's normal separator; the
+  // preview swallows it and lets the next block's margin-top own that space.
+  // Mirror it here: exactly one line of each blank run is claimed — collapsed
+  // to zero before headings (their padding-top owns the space) or resized to
+  // the following block's semantic margin otherwise. Additional blank lines
+  // keep their natural source-line height in both surfaces.
+  const claimedBlanks = new Set()
+  const blankRunBefore = (pos) => {
+    const line = state.doc.lineAt(pos)
+    let first = line.number
+    while (first > 1 && state.doc.line(first - 1).text.length === 0) first--
+    for (let n = first; n < line.number; n++) {
+      if (claimedBlanks.has(n)) return null
+    }
+    return { line, first, count: line.number - first }
+  }
   const collapseBlankBefore = (pos) => {
-    const line = state.doc.lineAt(pos)
-    if (line.number <= 1) return false
-    const previous = state.doc.line(line.number - 1)
-    if (previous.text.length !== 0) return false
-    lineOnce(previous.from, headingSeparatorLine)
+    const run = blankRunBefore(pos)
+    if (!run || run.count === 0) return false
+    claimedBlanks.add(run.line.number - 1)
+    lineOnce(state.doc.line(run.line.number - 1).from, headingSeparatorLine)
     return true
   }
-  const collapseBlankAfter = (pos) => {
-    const line = state.doc.lineAt(pos)
-    if (line.number >= state.doc.lines) return false
-    const next = state.doc.line(line.number + 1)
-    if (next.text.length !== 0) return false
-    lineOnce(next.from, headingSeparatorLine)
-    return true
+  const topBlockNameBefore = (blankFirstLine) => {
+    if (blankFirstLine <= 1) return null
+    const prev = state.doc.line(blankFirstLine - 1)
+    let n = syntaxTree(state).resolveInner(prev.from, 1)
+    while (n.parent && n.parent.name !== "Document") n = n.parent
+    return n.name
   }
+  const separatorBlankBefore = (pos, marginTop) => {
+    const run = blankRunBefore(pos)
+    if (!run || run.count === 0) return
+    claimedBlanks.add(run.line.number - 1)
+    const separator = state.doc.line(run.line.number - 1)
+    if (run.first === 1) {
+      // Blank lines open the document. The preview strips the first block's
+      // margin entirely, so a single leading blank occupies no height.
+      lineOnce(separator.from, run.count === 1
+        ? headingSeparatorLine
+        : blockSeparatorLine(marginTop))
+      return
+    }
+    // hr is the only block with a margin-bottom. Adjacent margins collapse in
+    // the preview (max); literal blank-line spacers between them do not.
+    const marginBottom = topBlockNameBefore(run.first) === "HorizontalRule"
+      ? BLOCK_MARGIN_TOP.hr : 0
+    const height = run.count === 1
+      ? Math.max(marginBottom, marginTop)
+      : marginBottom + marginTop
+    lineOnce(separator.from, blockSeparatorLine(height))
+  }
+  const blockMarginTop = (node) => {
+    switch (node.name) {
+      case "Blockquote": {
+        const firstLine = state.doc.lineAt(node.from)
+        return /^ {0,3}> ?\[!\w+\]/.test(firstLine.text)
+          ? BLOCK_MARGIN_TOP.alert : BLOCK_MARGIN_TOP.quote
+      }
+      case "Table": return BLOCK_MARGIN_TOP.table
+      case "HorizontalRule": return BLOCK_MARGIN_TOP.hr
+      default: return BLOCK_MARGIN_TOP.paragraph
+    }
+  }
+  const SEPARATOR_BLOCKS = /^(Paragraph|FencedCode|CodeBlock|Blockquote|BulletList|OrderedList|Table|HorizontalRule|HTMLBlock)$/
 
   for (const { from, to } of view.visibleRanges) {
     syntaxTree(state).iterate({
@@ -865,11 +944,15 @@ function buildDecorations(view) {
       enter: (node) => {
         const name = node.name
 
+        // --- Block separators ------------------------------------------
+        if (SEPARATOR_BLOCKS.test(name) && node.node.parent?.name === "Document") {
+          separatorBlankBefore(node.from, blockMarginTop(node))
+        }
+
         // --- Headings ------------------------------------------------
         const atx = name.match(/^ATXHeading(\d)$/)
         if (atx) {
           collapseBlankBefore(node.from)
-          collapseBlankAfter(node.to)
           lineOnce(node.from, HEADING_LINE[+atx[1]])
           if (!touchesLineOf(node.from)) lineOnce(node.from, inactiveHeadingLine)
           return
@@ -877,7 +960,6 @@ function buildDecorations(view) {
         const setext = name.match(/^SetextHeading(\d)$/)
         if (setext) {
           collapseBlankBefore(node.from)
-          collapseBlankAfter(node.to)
           lineOnce(node.from, HEADING_LINE[+setext[1]])
           return
         }
@@ -993,6 +1075,16 @@ function buildDecorations(view) {
         }
 
         // --- Lists --------------------------------------------------------
+        if (name === "ListItem") {
+          // The first item of a top-level list carries no gap (preview:
+          // li:first-child { margin-top: 0 }); a nested list's first item
+          // inherits the li > ul margin instead, so it keeps the gap.
+          const isFirstItem = node.node.prevSibling?.name !== "ListItem"
+          const listParent = node.node.parent?.parent
+          const isNested = listParent != null && listParent.name === "ListItem"
+          if (!isFirstItem || isNested) lineOnce(node.from, listItemGapLine)
+          return
+        }
         if (name === "ListMark") {
           const mark = state.doc.sliceString(node.from, node.to)
           const line = state.doc.lineAt(node.from)

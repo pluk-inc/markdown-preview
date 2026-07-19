@@ -325,9 +325,6 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             font-weight: 600;
             line-height: 1.18;
             padding-top: 1.6em;
-            /* Preview pushes the block after a heading down by its
-               0.8em margin-top (12px at body size); mirror it here. */
-            padding-bottom: \(MarkdownHTML.paragraphSpacing)px;
         }
         #editor .cm-md-h1 { font-size: 2em; padding-top: 0.8em; }
         /* Mirror the preview's first-child margin reset so the document
@@ -338,9 +335,12 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         #editor .cm-md-h4 { font-size: 1.41em; line-height: 1.08; }
         #editor .cm-md-h5 { font-size: 1.29em; line-height: 1.09; }
         #editor .cm-md-h6 { font-size: 1em; line-height: 1.24; }
-        /* A heading's semantic padding represents the normal Markdown blank
-           separator on either side. Collapse that one source line while
-           leaving any additional blank lines at their natural height. */
+        /* A heading's semantic padding-top represents the normal Markdown
+           blank separator before it, so that one source line collapses to
+           nothing. Blank separators before other blocks resize instead —
+           .cm-md-block-separator lines carry an inline height matching the
+           preview margin of the block that follows. Additional blank lines
+           keep their natural height in both surfaces. */
         #editor .cm-md-heading-separator {
             height: 0;
             min-height: 0;
@@ -398,6 +398,10 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         .cm-md-link { color: var(--link); }
         .cm-md-url { color: var(--secondary); }
         .cm-md-bullet { color: var(--secondary); }
+        /* Preview list items after the first carry a 0.4em margin-top. */
+        #editor .cm-md-list-item-gap {
+            padding-top: \(MarkdownHTML.bodyFontSize * 0.4)px;
+        }
         .cm-md-hr {
             display: inline-block;
             width: 100%;
