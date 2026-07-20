@@ -13,14 +13,34 @@ import Markdown
 nonisolated enum MarkdownHTML {
     /// How the heavy KaTeX/Mermaid bundles are delivered.
     /// - inline: bundles are embedded as `<script>…</script>` blocks in the
-    ///   HTML head. Self-contained, slow first-paint, used by Quick Look
-    ///   (which delivers HTML as a single QLPreviewReply payload).
+    ///   HTML. Self-contained, used by Quick Look (which delivers HTML as a
+    ///   single QLPreviewReply payload). The heavy scripts sit at body-end
+    ///   behind an early populate call (see `VendorEmission`) so document
+    ///   text paints before the bundles parse.
     /// - lazy: only small init stubs are inline; the heavy vendor JS is
     ///   fetched via `md-asset:///__vendor/<file>` after first paint, so the
     ///   document text is visible while the bundles are still parsing.
     enum VendorLoading {
         case inline
         case lazy
+    }
+
+    /// A vendor renderer's contribution to the document, split by insertion
+    /// point. In `.inline` mode only the CSS stays in `head` (so layout is
+    /// stable from the first paint — no FOUC when the renderer decorates the
+    /// article later) while the multi-megabyte `<script>` bundles move to
+    /// `body`, after the article and an early populate call. That lets the
+    /// parser paint the document text before it grinds through the vendor
+    /// JS — `.inline`'s answer to `.lazy`'s deferred fetch. `.lazy` emissions
+    /// keep everything in `head`, byte-identical to the pre-split output.
+    private struct VendorEmission {
+        let head: String
+        let body: String
+
+        static let empty = VendorEmission(head: "", body: "")
+        static func headOnly(_ head: String) -> VendorEmission {
+            VendorEmission(head: head, body: "")
+        }
     }
 
     /// Layout of the rendered article column.
@@ -118,9 +138,27 @@ nonisolated enum MarkdownHTML {
         """ : ""
         let baseTag = assetBaseHref.map { "<base href=\"\($0)\">" } ?? ""
         let sanitizerBlock = dompurifyHead()
-        let mathBlock = containsMath ? katexHead(mode: vendorLoading) : ""
-        let mermaidBlock = containsMermaid ? mermaidScript(mode: vendorLoading) : ""
-        let highlightBlock = containsCode ? highlightHead(mode: vendorLoading) : ""
+        let mathBlock = containsMath ? katexHead(mode: vendorLoading) : .empty
+        let mermaidBlock = containsMermaid ? mermaidScript(mode: vendorLoading) : .empty
+        let highlightBlock = containsCode ? highlightHead(mode: vendorLoading) : .empty
+        // Inline documents populate the article as soon as its <template> has
+        // parsed — before the body-end vendor bundles below it — so the text
+        // is paintable while the parser is still working through the JS. The
+        // vendor init IIFEs still see readyState 'loading' at body-end and
+        // keep their DOMContentLoaded wiring; `populateFromTemplate` removes
+        // the template, so the later `start()` populate is a no-op. `.lazy`
+        // emits nothing here, keeping the app-path body unchanged.
+        let bodyScripts: String
+        switch vendorLoading {
+        case .inline:
+            let earlyPopulate =
+                "<script>window.MdPreview && MdPreview.populateNow && MdPreview.populateNow();</script>"
+            bodyScripts = "\n" + [earlyPopulate, mathBlock.body, mermaidBlock.body, highlightBlock.body]
+                .filter { !$0.isEmpty }
+                .joined(separator: "\n")
+        case .lazy:
+            bodyScripts = ""
+        }
         // Warmup keeps the article in layout (so Mermaid's IntersectionObserver
         // still fires and the renderer actually executes) but invisible —
         // otherwise the synthetic diagram flashes on screen before the first
@@ -148,13 +186,13 @@ nonisolated enum MarkdownHTML {
         \(contentWidthOverride)
         \(sanitizerBlock)
         \(hostBridgeScript)
-        \(mathBlock)
-        \(mermaidBlock)
-        \(highlightBlock)
+        \(mathBlock.head)
+        \(mermaidBlock.head)
+        \(highlightBlock.head)
         </head>
         <body>
         <article class="markdown-body"\(warmupAttr)\(articleStyle)></article>
-        <template id="md-article-source">\(safeBody)</template>
+        <template id="md-article-source">\(safeBody)</template>\(bodyScripts)
         </body>
         </html>
         """
@@ -1575,6 +1613,9 @@ nonisolated enum MarkdownHTML {
             window.MdPreview.update(tmpl.innerHTML, { keepHidden });
             tmpl.remove();
         }
+        // Body-end hook: inline-mode documents call this right after the
+        // template parses, before the vendor bundles, so text paints early.
+        window.MdPreview.populateNow = populateFromTemplate;
 
         function start() {
             perfLog('start (DOM ready)');
@@ -1657,9 +1698,9 @@ nonisolated enum MarkdownHTML {
         return "<script>\(safeJS)</script>"
     }
 
-    private static func katexHead(mode: VendorLoading) -> String {
+    private static func katexHead(mode: VendorLoading) -> VendorEmission {
         guard bundledVendorURL("katex.min", ext: "js", subdir: "Vendor/KaTeX") != nil else {
-            return katexFallbackScript
+            return .headOnly(katexFallbackScript)
         }
         let css = bundledVendorResource("katex.min", ext: "css", subdir: "Vendor/KaTeX") ?? ""
 
@@ -1685,15 +1726,17 @@ nonisolated enum MarkdownHTML {
             let copyTex = bundledVendorResource("copy-tex.min", ext: "js", subdir: "Vendor/KaTeX") ?? ""
             let safeJS = js.replacingOccurrences(of: "</script", with: "<\\/script")
             let safeCopyTex = copyTex.replacingOccurrences(of: "</script", with: "<\\/script")
-            return """
-            <style>\(css)</style>
-            <script>\(safeJS)</script>
-            \(initScript)
-            \(safeCopyTex.isEmpty ? "" : "<script>\(safeCopyTex)</script>")
-            """
+            return VendorEmission(
+                head: "<style>\(css)</style>",
+                body: """
+                <script>\(safeJS)</script>
+                \(initScript)
+                \(safeCopyTex.isEmpty ? "" : "<script>\(safeCopyTex)</script>")
+                """
+            )
         case .lazy:
             // CSS stays inline so layout is stable while KaTeX JS streams in.
-            return """
+            return .headOnly("""
             <style>\(css)</style>
             <script>
             (function() {
@@ -1705,7 +1748,7 @@ nonisolated enum MarkdownHTML {
                 });
             })();
             </script>
-            """
+            """)
         }
     }
 
@@ -1880,9 +1923,9 @@ nonisolated enum MarkdownHTML {
     }
     """
 
-    private static func highlightHead(mode: VendorLoading) -> String {
+    private static func highlightHead(mode: VendorLoading) -> VendorEmission {
         guard bundledVendorURL("highlight.min", ext: "js", subdir: "Vendor/Highlight") != nil else {
-            return ""
+            return .empty
         }
         let css = bundledVendorResource("highlight.min", ext: "css", subdir: "Vendor/Highlight") ?? ""
 
@@ -1906,14 +1949,16 @@ nonisolated enum MarkdownHTML {
         case .inline:
             let js = bundledVendorResource("highlight.min", ext: "js", subdir: "Vendor/Highlight") ?? ""
             let safeJS = js.replacingOccurrences(of: "</script", with: "<\\/script")
-            return """
-            <style>\(css)</style>
-            <script>\(safeJS)</script>
-            \(initScript)
-            """
+            return VendorEmission(
+                head: "<style>\(css)</style>",
+                body: """
+                <script>\(safeJS)</script>
+                \(initScript)
+                """
+            )
         case .lazy:
             // CSS stays inline so layout doesn't shift when the JS arrives.
-            return """
+            return .headOnly("""
             <style>\(css)</style>
             <script>
             (function() {
@@ -1924,7 +1969,7 @@ nonisolated enum MarkdownHTML {
                 });
             })();
             </script>
-            """
+            """)
         }
     }
 
@@ -2278,31 +2323,34 @@ nonisolated enum MarkdownHTML {
         })()
     """
 
-    private static func mermaidScript(mode: VendorLoading) -> String {
+    private static func mermaidScript(mode: VendorLoading) -> VendorEmission {
         guard bundledVendorURL("mermaid.min", ext: "js", subdir: "Vendor/Mermaid") != nil else {
-            return mermaidFallbackScript
+            return .headOnly(mermaidFallbackScript)
         }
         switch mode {
         case .inline:
             let vendorJS = bundledVendorResource("mermaid.min", ext: "js", subdir: "Vendor/Mermaid") ?? ""
             let safeVendor = vendorJS.replacingOccurrences(of: "</script", with: "<\\/script")
-            return """
-            <script>
-            \(safeVendor)
+            return VendorEmission(
+                head: "",
+                body: """
+                <script>
+                \(safeVendor)
 
-            const __mdpMermaid = \(mermaidInitWiring);
-            if (window.MdPreview && window.MdPreview.registerReapplier) {
-                window.MdPreview.registerReapplier(__mdpMermaid.bootstrap);
-            }
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', __mdpMermaid.bootstrap, { once: true });
-            } else {
-                __mdpMermaid.bootstrap();
-            }
-            </script>
-            """
+                const __mdpMermaid = \(mermaidInitWiring);
+                if (window.MdPreview && window.MdPreview.registerReapplier) {
+                    window.MdPreview.registerReapplier(__mdpMermaid.bootstrap);
+                }
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', __mdpMermaid.bootstrap, { once: true });
+                } else {
+                    __mdpMermaid.bootstrap();
+                }
+                </script>
+                """
+            )
         case .lazy:
-            return """
+            return .headOnly("""
             <script>
             (() => {
                 let mm = null;
@@ -2315,7 +2363,7 @@ nonisolated enum MarkdownHTML {
                 });
             })();
             </script>
-            """
+            """)
         }
     }
 
