@@ -93,11 +93,12 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         let arguments: [String: Any] = [
             "progress": Double(clamped),
             "sourcePosition": sourceAnchor.map { Double($0.sourcePosition) } ?? NSNull(),
+            "sourceGap": sourceAnchor.map { Double($0.topGap) } ?? 0,
         ]
         webView.callAsyncJavaScript(
             """
             if (!window.__mdEditor) return false;
-            return await window.__mdEditor.setScrollPosition(progress, sourcePosition);
+            return await window.__mdEditor.setScrollPosition(progress, sourcePosition, sourceGap);
             """,
             arguments: arguments,
             in: nil,
@@ -116,8 +117,10 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                 completion(nil)
                 return
             }
+            let gap = (raw["gap"] as? NSNumber).map { CGFloat(truncating: $0) } ?? 0
             completion(SourceScrollAnchor(
-                sourcePosition: CGFloat(truncating: position)
+                sourcePosition: CGFloat(truncating: position),
+                topGap: gap
             ))
         }
     }
@@ -608,8 +611,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                     getMarkdown: function () { return editor.getMarkdown(); },
                     getScrollAnchor: function () { return editor.getScrollAnchor(); },
                     focus: function () { editor.focus(); },
-                    setScrollPosition: function (progress, sourcePosition) {
-                        return editor.setScrollPosition(progress, sourcePosition);
+                    setScrollPosition: function (progress, sourcePosition, sourceGap) {
+                        return editor.setScrollPosition(progress, sourcePosition, sourceGap);
                     },
                     performTableContextAction: function (token, action) {
                         return editor.performTableContextAction(token, action);

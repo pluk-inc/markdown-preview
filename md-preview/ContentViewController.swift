@@ -61,6 +61,11 @@ final class ContentViewController: NSViewController {
     var taskCheckboxToggled: ((Int, Bool) -> Void)?
     var tableEditRequested: ((MarkdownTableEditRequest) -> Void)?
     var localMarkdownLinkActivated: ((URL) -> Void)?
+    /// Fires once after a pending source scroll anchor (prepared via
+    /// `prepareToRestoreSourceScrollAnchor`) has been applied to a fresh
+    /// render. The edit-mode overlay uses it to hold its cross-fade until
+    /// the preview underneath is positioned.
+    var pendingAnchorRestored: (() -> Void)?
 
     override func loadView() {
         let container = NSView()
@@ -73,17 +78,17 @@ final class ContentViewController: NSViewController {
             guard let self else { return }
             // Image load / font reflow shifted layout — re-measure offsets.
             self.scheduleHeadingOffsetsRefresh()
-            if self.shouldApplyPendingAnchorOnHeight,
-               let anchor = self.pendingPreviewScrollAnchor {
-                self.shouldApplyPendingAnchorOnHeight = false
-                self.pendingPreviewScrollAnchor = nil
-                self.restoreSourceScrollAnchor(anchor)
-            }
+            self.applyPendingScrollAnchorIfNeeded()
             if self.shouldApplyNavigationTargetOnHeight,
                let target = self.pendingNavigationScrollTarget {
                 self.shouldApplyNavigationTargetOnHeight = false
                 self.attemptNavigationScrollTarget(target)
             }
+        }
+        webView.contentDidReplace = { [weak self] in
+            // The fresh article is in the DOM; a same-height render never
+            // fires heightDidChange, so this is the reliable signal.
+            self?.applyPendingScrollAnchorIfNeeded()
         }
         webView.fragmentLinkActivated = { [weak self] fragment in
             self?.scrollToElement(id: fragment)
@@ -241,11 +246,35 @@ final class ContentViewController: NSViewController {
         pendingPreviewScrollAnchor = anchor
     }
 
-    func restoreSourceScrollAnchor(_ anchor: SourceScrollAnchor) {
+    func restoreSourceScrollAnchor(_ anchor: SourceScrollAnchor,
+                                   completion: (() -> Void)? = nil) {
         webView.sourceOffset(forPosition: anchor.sourcePosition) { [weak self] sourceTop in
-            guard let self, let sourceTop else { return }
-            let target = sourceTop * self.webView.pageZoom
-            self.scrollDocument(to: target, topMargin: 0)
+            guard let self, let sourceTop else {
+                completion?()
+                return
+            }
+            // topGap re-creates a viewport that sat inside the page padding
+            // above the anchor's rendered top (document-top case).
+            let target = max((sourceTop - anchor.topGap) * self.webView.pageZoom, 0)
+            // A mode switch is a position hand-off, not a navigation: land
+            // instantly. An animated scroll here reads as jitter when the
+            // editor overlay fades away.
+            self.scrollDocument(to: target, topMargin: 0, duration: 0)
+            completion?()
+        }
+    }
+
+    /// Applies the scroll anchor captured from the editor once the fresh
+    /// article is in place, then reports it so the editor overlay can fade.
+    private func applyPendingScrollAnchorIfNeeded() {
+        guard shouldApplyPendingAnchorOnHeight,
+              let anchor = pendingPreviewScrollAnchor else { return }
+        shouldApplyPendingAnchorOnHeight = false
+        pendingPreviewScrollAnchor = nil
+        restoreSourceScrollAnchor(anchor) { [weak self] in
+            guard let self else { return }
+            self.pendingAnchorRestored?()
+            self.pendingAnchorRestored = nil
         }
     }
 
@@ -375,8 +404,10 @@ final class ContentViewController: NSViewController {
         }
     }
 
-    private func scrollDocument(to y: CGFloat, topMargin: CGFloat = 12) {
-        webView.scrollDocument(to: y, topMargin: topMargin)
+    private func scrollDocument(to y: CGFloat,
+                                topMargin: CGFloat = 12,
+                                duration: TimeInterval = 0.25) {
+        webView.scrollDocument(to: y, topMargin: topMargin, duration: duration)
     }
 
     // MARK: - Scrollspy

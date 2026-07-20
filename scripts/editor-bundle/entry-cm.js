@@ -1456,6 +1456,7 @@ window.MDEditor = {
       }),
     })
     let preservedSourcePosition = null
+    let preservedSourceGap = 0
     let didUserScroll = false
     let userScrollIntent = false
     let lastScrollTop = view.scrollDOM.scrollTop
@@ -1518,7 +1519,7 @@ window.MDEditor = {
       focus: () => view.focus(),
       getScrollAnchor: () => {
         if (!didUserScroll && Number.isFinite(preservedSourcePosition)) {
-          return { position: preservedSourcePosition }
+          return { position: preservedSourcePosition, gap: preservedSourceGap || 0 }
         }
         const viewportY = view.scrollDOM.scrollTop
         const visibleLine = view.lineBlockAtHeight(viewportY)
@@ -1527,14 +1528,20 @@ window.MDEditor = {
         const progress = sourceLineBlock.height > 0
           ? Math.min(Math.max((viewportY - sourceLineBlock.top) / sourceLineBlock.height, 0), 1)
           : 0
-        return { position: line.number + progress }
+        // Near the document top the viewport can sit above the first line
+        // (inside the page padding), which the fractional position cannot
+        // express. Carry that remaining pixel gap so the other surface can
+        // reproduce the exact viewport, not just the line.
+        const gap = Math.max(sourceLineBlock.top - viewportY, 0)
+        return { position: line.number + progress, gap }
       },
-      setScrollPosition: (progress, sourcePosition) => new Promise((resolve) => {
+      setScrollPosition: (progress, sourcePosition, sourceGap) => new Promise((resolve) => {
         const scroller = view.scrollDOM
         const maximum = Math.max(scroller.scrollHeight - scroller.clientHeight, 0)
         let target = maximum * Math.min(Math.max(Number(progress) || 0, 0), 1)
         let linePosition = null
         let lineProgress = 0
+        const gap = Number.isFinite(sourceGap) ? Math.max(sourceGap, 0) : 0
 
         if (Number.isFinite(sourcePosition) && sourcePosition >= 1) {
           const sourceLine = Math.min(Math.floor(sourcePosition), view.state.doc.lines)
@@ -1542,7 +1549,7 @@ window.MDEditor = {
           linePosition = view.state.doc.line(sourceLine).from
           if (linePosition != null) {
             const block = lineContentBlock(linePosition)
-            target = block.top + block.height * lineProgress
+            target = block.top + block.height * lineProgress - gap
             // Let CodeMirror create the viewport around the target before
             // applying the precise within-block offset. Directly assigning a
             // distant scrollTop can briefly leave its virtualized DOM empty.
@@ -1556,7 +1563,7 @@ window.MDEditor = {
           const measuredMaximum = Math.max(scroller.scrollHeight - scroller.clientHeight, 0)
           if (linePosition != null) {
             const block = lineContentBlock(linePosition)
-            target = block.top + block.height * lineProgress
+            target = block.top + block.height * lineProgress - gap
           } else {
             target = measuredMaximum * Math.min(Math.max(Number(progress) || 0, 0), 1)
           }
@@ -1565,6 +1572,7 @@ window.MDEditor = {
           view.requestMeasure()
           requestAnimationFrame(() => {
             preservedSourcePosition = Number.isFinite(sourcePosition) ? sourcePosition : null
+            preservedSourceGap = Number.isFinite(sourcePosition) ? gap : 0
             didUserScroll = false
             userScrollIntent = false
             lastScrollTop = scroller.scrollTop
