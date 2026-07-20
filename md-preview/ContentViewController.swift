@@ -198,7 +198,7 @@ final class ContentViewController: NSViewController {
             if let top = result.top, let bottom = result.bottom {
                 let needsScroll = !self.isMatchVisible(top: top, bottom: bottom)
                 if needsScroll {
-                    self.scrollDocument(to: top)
+                    self.webView.scrollDocument(to: top)
                 }
                 let delay: TimeInterval = needsScroll ? 0.18 : 0
                 let work = DispatchWorkItem { [weak self] in
@@ -259,7 +259,7 @@ final class ContentViewController: NSViewController {
             // A mode switch is a position hand-off, not a navigation: land
             // instantly. An animated scroll here reads as jitter when the
             // editor overlay fades away.
-            self.scrollDocument(to: target, topMargin: 0, duration: 0)
+            self.webView.scrollDocument(to: target, topMargin: 0, duration: 0)
             completion?()
         }
     }
@@ -300,7 +300,7 @@ final class ContentViewController: NSViewController {
     func scrollToHeading(index: Int) {
         webView.headingOffset(index: index) { [weak self] offset in
             guard let self, let offset else { return }
-            self.scrollDocument(to: offset)
+            self.webView.scrollDocument(to: offset)
         }
     }
 
@@ -363,7 +363,7 @@ final class ContentViewController: NSViewController {
                     return
                 }
                 self.pendingNavigationScrollTarget = nil
-                self.scrollDocument(to: offset)
+                self.webView.scrollDocument(to: offset)
             }
         case .position(let y):
             // Synced geometry can still be the blank page — hold out until
@@ -400,14 +400,8 @@ final class ContentViewController: NSViewController {
     private func scrollToElement(id: String) {
         webView.elementOffset(id: id) { [weak self] offset in
             guard let self, let offset else { return }
-            self.scrollDocument(to: offset)
+            self.webView.scrollDocument(to: offset)
         }
-    }
-
-    private func scrollDocument(to y: CGFloat,
-                                topMargin: CGFloat = 12,
-                                duration: TimeInterval = 0.25) {
-        webView.scrollDocument(to: y, topMargin: topMargin, duration: duration)
     }
 
     // MARK: - Scrollspy

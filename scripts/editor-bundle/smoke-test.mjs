@@ -123,7 +123,7 @@ check("inactive heading source reserves its width",
 check("inactive heading line receives visual offset class",
   inactiveHeadingHost.querySelector(".cm-md-heading-inactive") != null)
 check("normal separator before heading collapses",
-  inactiveHeadingHost.querySelector(".cm-md-heading-separator") != null)
+  inactiveHeadingHost.querySelector(".cm-md-line-collapsed") != null)
 inactiveHeadingEditor.destroy()
 
 const headingFollowHost = dom.window.document.createElement("div")
@@ -196,17 +196,17 @@ const leadingCodeHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(leadingCodeHost)
 const leadingCodeEditor = dom.window.MDEditor.create(
   leadingCodeHost, "```javascript\nconst answer = 42\n```", {})
-check("implicit initial cursor does not activate a leading code block",
-  leadingCodeHost.querySelectorAll(".cm-md-code-fence-source-hidden").length === 2)
+check("implicit initial cursor keeps the leading code block in live preview",
+  leadingCodeHost.querySelectorAll(".cm-md-line-collapsed").length === 2)
 check("leading preview code block keeps syntax highlighting",
   leadingCodeHost.querySelector(".hl-keyword")?.textContent === "const")
 leadingCodeEditor.select(18)
 check("pointer click activates the code block",
-  leadingCodeHost.querySelector(".cm-md-code-fence-source-hidden") == null)
+  leadingCodeHost.querySelectorAll(".cm-md-line-collapsed").length === 2)
 check("activated code block remains syntax highlighted",
   leadingCodeHost.querySelector(".hl-keyword")?.textContent === "const")
-check("activated code block expands its fence lines",
-  leadingCodeHost.querySelectorAll(".cm-md-fence-collapsed").length === 0)
+check("activated code block keeps raw fence lines visually hidden",
+  leadingCodeHost.querySelectorAll(".cm-md-line-collapsed").length === 2)
 leadingCodeEditor.destroy()
 
 const inactiveCodeHost = dom.window.document.createElement("div")
@@ -218,7 +218,7 @@ check("inactive code block hides both fence source lines",
 check("inactive code block keeps syntax highlighting",
   inactiveCodeHost.querySelector(".hl-keyword")?.textContent === "const")
 check("inactive fence source lines collapse to zero height",
-  inactiveCodeHost.querySelectorAll(".cm-md-fence-collapsed").length === 2)
+  inactiveCodeHost.querySelectorAll(".cm-md-line-collapsed").length === 2)
 check("interior code line carries the card styling when fences collapse",
   inactiveCodeHost.querySelector(".cm-md-codeblock-first.cm-md-codeblock-last") != null)
 inactiveCodeEditor.destroy()

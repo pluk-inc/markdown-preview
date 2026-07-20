@@ -659,20 +659,27 @@ const HEADING_LINE = {}
 const for_ = (i) => Decoration.line({ class: "cm-md-h" + i })
 for (let i = 1; i <= 6; i++) HEADING_LINE[i] = for_(i)
 const inactiveHeadingLine = Decoration.line({ class: "cm-md-heading-inactive" })
-const headingSeparatorLine = Decoration.line({ class: "cm-md-heading-separator" })
+// A source line whose height another element owns (a heading's padding, a
+// fence card, the document's first-block margin reset) collapses to nothing.
+const collapsedLine = Decoration.line({ class: "cm-md-line-collapsed" })
 
-// Design tokens mirrored from MarkdownHTML.swift — keep in sync. The preview
-// swallows the single blank source line before each block and expresses that
-// separation as the block's own margin-top instead. The editor mirrors this by
-// resizing the blank separator line to the same pixel height.
-const BODY_FONT_SIZE = 15 // MarkdownHTML.bodyFontSize
-const BLOCK_MARGIN_TOP = {
-  paragraph: 0.8 * BODY_FONT_SIZE, // p / ul / ol / pre / .md-code-wrap
-  quote: 1.2 * BODY_FONT_SIZE,     // blockquote
-  alert: 1.6 * BODY_FONT_SIZE,     // .markdown-alert
-  table: 1.6 * BODY_FONT_SIZE,     // .md-table-scroll
-  hr: 2.35 * BODY_FONT_SIZE,       // hr (top and bottom)
+// Preview block margin-top values in CSS px. The host passes the live values
+// from MarkdownHTML.swift (the single source of truth) through
+// MDEditor.create's `spacing` option; these defaults only serve headless
+// harnesses. The preview swallows the single blank source line before each
+// block and expresses that separation as the block's own margin-top; the
+// editor mirrors it by resizing the blank separator line to the same height.
+const METRICS = {
+  paragraph: 12,  // p / ul / ol / pre / .md-code-wrap
+  quote: 18,      // blockquote
+  alert: 24,      // .markdown-alert
+  table: 24,      // .md-table-scroll
+  hr: 35.25,      // hr (top and bottom)
 }
+const SEPARATOR_BLOCKS = new Set([
+  "Paragraph", "FencedCode", "CodeBlock", "Blockquote",
+  "BulletList", "OrderedList", "Table", "HorizontalRule", "HTMLBlock",
+])
 const separatorLineCache = new Map()
 const blockSeparatorLine = (height) => {
   let deco = separatorLineCache.get(height)
@@ -691,11 +698,13 @@ const quoteLine = Decoration.line({ class: "cm-md-quote" })
 const codeLine = Decoration.line({ class: "cm-md-codeblock" })
 const codeLineFirst = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-first" })
 const codeLineLast = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-last" })
-const fenceCollapsedLine = Decoration.line({ class: "cm-md-fence-collapsed" })
 const tableLine = Decoration.line({ class: "cm-md-table" })
 // Preview gives every list item after the first a 0.4em margin-top (and a
 // nested list the same via li > ul). Mirror it on the item's first line.
 const listItemGapLine = Decoration.line({ class: "cm-md-list-item-gap" })
+// Mirrors the preview's list geometry: ul/ol start padding with the marker
+// hanging inside it, so item text and wrapped lines align like rendered <li>s.
+const listItemLine = Decoration.line({ class: "cm-md-list-item" })
 const fenceMark = Decoration.mark({ class: "cm-md-fence-info" })
 const hiddenCodeFenceSource = Decoration.mark({ class: "cm-md-code-fence-source-hidden" })
 const hiddenHeadingSource = Decoration.mark({ class: "cm-md-heading-source-hidden" })
@@ -875,85 +884,96 @@ function buildDecorations(view) {
   }
   // One blank source line between blocks is Markdown's normal separator; the
   // preview swallows it and lets the next block's margin-top own that space.
-  // Mirror it here: exactly one line of each blank run is claimed — collapsed
-  // to zero before headings (their padding-top owns the space) or resized to
+  // Mirror it here: the blank line directly above each block collapses to
+  // zero before headings (their padding-top owns the space) or resizes to
   // the following block's semantic margin otherwise. Additional blank lines
   // keep their natural source-line height in both surfaces.
-  const claimedBlanks = new Set()
   const blankRunBefore = (pos) => {
     const line = state.doc.lineAt(pos)
     let first = line.number
-    while (first > 1 && state.doc.line(first - 1).text.length === 0) first--
-    for (let n = first; n < line.number; n++) {
-      if (claimedBlanks.has(n)) return null
-    }
+    // Only "one blank" vs "several" (plus the document-start case) changes
+    // the emitted separator, so cap the walk against pathological runs.
+    const stop = Math.max(first - 64, 1)
+    while (first > stop && state.doc.line(first - 1).text.length === 0) first--
     return { line, first, count: line.number - first }
   }
   const collapseBlankBefore = (pos) => {
     const run = blankRunBefore(pos)
-    if (!run || run.count === 0) return false
-    claimedBlanks.add(run.line.number - 1)
-    lineOnce(state.doc.line(run.line.number - 1).from, headingSeparatorLine)
-    return true
+    if (run.count === 0) return
+    lineOnce(state.doc.line(run.line.number - 1).from, collapsedLine)
   }
+  // iterate visits top-level blocks in document order, so the previous
+  // block's name is a running variable; the tree is resolved only for the
+  // first block of a visible range, whose predecessor was never visited.
+  let lastTopBlockName = null
   const topBlockNameBefore = (blankFirstLine) => {
+    if (lastTopBlockName != null) return lastTopBlockName
     if (blankFirstLine <= 1) return null
     const prev = state.doc.line(blankFirstLine - 1)
     let n = syntaxTree(state).resolveInner(prev.from, 1)
     while (n.parent && n.parent.name !== "Document") n = n.parent
     return n.name
   }
-  const separatorBlankBefore = (pos, marginTop) => {
-    const run = blankRunBefore(pos)
-    if (!run || run.count === 0) return
-    claimedBlanks.add(run.line.number - 1)
+  const blockMarginTop = (node) => {
+    switch (node.name) {
+      case "Blockquote": {
+        // Alert blockquotes render as .markdown-alert; recognize the same
+        // five kinds as EscapingHTMLFormatter.
+        const firstLine = state.doc.lineAt(node.from)
+        return /^ {0,3}> ?\[!(note|tip|important|warning|caution)\]/i.test(firstLine.text)
+          ? METRICS.alert : METRICS.quote
+      }
+      case "Table": return METRICS.table
+      case "HorizontalRule": return METRICS.hr
+      case "FencedCode":
+        // Mermaid fences render as .mermaid-figure (same margin as tables).
+        return fencedCodeDetails(state, node).language === "mermaid"
+          ? METRICS.table : METRICS.paragraph
+      default: return METRICS.paragraph
+    }
+  }
+  const separatorBlankBefore = (node) => {
+    const run = blankRunBefore(node.from)
+    if (run.count === 0) return
     const separator = state.doc.line(run.line.number - 1)
     if (run.first === 1) {
       // Blank lines open the document. The preview strips the first block's
       // margin entirely, so a single leading blank occupies no height.
       lineOnce(separator.from, run.count === 1
-        ? headingSeparatorLine
-        : blockSeparatorLine(marginTop))
+        ? collapsedLine
+        : blockSeparatorLine(blockMarginTop(node)))
       return
     }
     // hr is the only block with a margin-bottom. Adjacent margins collapse in
     // the preview (max); literal blank-line spacers between them do not.
     const marginBottom = topBlockNameBefore(run.first) === "HorizontalRule"
-      ? BLOCK_MARGIN_TOP.hr : 0
+      ? METRICS.hr : 0
+    const marginTop = blockMarginTop(node)
     const height = run.count === 1
       ? Math.max(marginBottom, marginTop)
       : marginBottom + marginTop
     lineOnce(separator.from, blockSeparatorLine(height))
   }
-  const blockMarginTop = (node) => {
-    switch (node.name) {
-      case "Blockquote": {
-        const firstLine = state.doc.lineAt(node.from)
-        return /^ {0,3}> ?\[!\w+\]/.test(firstLine.text)
-          ? BLOCK_MARGIN_TOP.alert : BLOCK_MARGIN_TOP.quote
-      }
-      case "Table": return BLOCK_MARGIN_TOP.table
-      case "HorizontalRule": return BLOCK_MARGIN_TOP.hr
-      case "FencedCode": {
-        // Mermaid fences render as .mermaid-figure (1.6em) in the preview.
-        const firstLine = state.doc.lineAt(node.from)
-        return /^ {0,3}(`{3,}|~{3,})\s*mermaid\b/i.test(firstLine.text)
-          ? BLOCK_MARGIN_TOP.table : BLOCK_MARGIN_TOP.paragraph
-      }
-      default: return BLOCK_MARGIN_TOP.paragraph
-    }
-  }
-  const SEPARATOR_BLOCKS = /^(Paragraph|FencedCode|CodeBlock|Blockquote|BulletList|OrderedList|Table|HorizontalRule|HTMLBlock)$/
+
+  // Depth relative to the tree root: Document is entered at depth 1, so its
+  // children — the top-level blocks — sit at depth 2. Tracking depth (and a
+  // stack of enclosing lists) answers parent/sibling questions positionally,
+  // without materializing a SyntaxNode per visited node.
+  let depth = 0
+  const listStack = []
 
   for (const { from, to } of view.visibleRanges) {
+    lastTopBlockName = null
     syntaxTree(state).iterate({
       from, to,
       enter: (node) => {
+        depth++
         const name = node.name
 
         // --- Block separators ------------------------------------------
-        if (SEPARATOR_BLOCKS.test(name) && node.node.parent?.name === "Document") {
-          separatorBlankBefore(node.from, blockMarginTop(node))
+        if (depth === 2) {
+          if (SEPARATOR_BLOCKS.has(name)) separatorBlankBefore(node)
+          lastTopBlockName = name
         }
 
         // --- Headings ------------------------------------------------
@@ -1043,9 +1063,9 @@ function buildDecorations(view) {
           } else if (parent && parent.name === "FencedCode"
               && !isActiveFence(parent)) {
             const line = state.doc.lineAt(node.from)
-            // Hide the complete source line so the opening language info and
-            // closing fence disappear together. A mark (rather than replace)
-            // keeps its geometry stable when this block becomes active.
+            // Hide the complete source line. Collapsing handles geometry;
+            // this mark is also the fallback for fences without an interior
+            // line and keeps the raw marker out of the visual code card.
             ranges.push(hiddenCodeFenceSource.range(line.from, line.to))
           }
           return
@@ -1082,14 +1102,19 @@ function buildDecorations(view) {
         }
 
         // --- Lists --------------------------------------------------------
+        if (name === "BulletList" || name === "OrderedList") {
+          listStack.push(node.from)
+          return
+        }
         if (name === "ListItem") {
           // The first item of a top-level list carries no gap (preview:
           // li:first-child { margin-top: 0 }); a nested list's first item
-          // inherits the li > ul margin instead, so it keeps the gap.
-          const isFirstItem = node.node.prevSibling?.name !== "ListItem"
-          const listParent = node.node.parent?.parent
-          const isNested = listParent != null && listParent.name === "ListItem"
+          // inherits the li > ul margin instead, so it keeps the gap. A
+          // list starts at its first item, so "first" is a position check.
+          const isFirstItem = node.from === listStack[listStack.length - 1]
+          const isNested = listStack.length > 1
           if (!isFirstItem || isNested) lineOnce(node.from, listItemGapLine)
+          eachLine(node.from, node.to, listItemLine)
           return
         }
         if (name === "ListMark") {
@@ -1099,7 +1124,10 @@ function buildDecorations(view) {
           // into a bullet dot leaves a confusing "• [ ]" hybrid.
           const isTask = /^\s*\[[ xX]\](\s|$)/.test(line.text.slice(node.to - line.from))
           if ((mark === "-" || mark === "*" || mark === "+") && !isTask && !touchesLineOf(node.from)) {
-            ranges.push(bulletDeco.range(node.from, node.to))
+            // Swallow the following space too: the bullet widget is a fixed
+            // 1.6em box, so item text starts exactly at the list padding.
+            const after = state.doc.sliceString(node.to, node.to + 1)
+            ranges.push(bulletDeco.range(node.from, node.to + (after === " " ? 1 : 0)))
           }
           return
         }
@@ -1108,23 +1136,29 @@ function buildDecorations(view) {
         if (name === "FencedCode" || name === "CodeBlock") {
           const first = state.doc.lineAt(node.from)
           const last = state.doc.lineAt(node.to)
-          // An inactive fenced block collapses its fence source lines so the
-          // code card occupies exactly the preview's height. Entering the
-          // block expands them back into editable source.
           const closed = name === "FencedCode"
-            && node.node.getChildren("CodeMark").length >= 2
+            && node.node.lastChild?.name === "CodeMark"
           const hasInterior = last.number - first.number >= (closed ? 2 : 1)
-          const collapseFences = name === "FencedCode"
-            && hasInterior && !isActiveFence(node)
-          const codeFirst = collapseFences ? state.doc.line(first.number + 1) : first
-          const codeLast = collapseFences && closed
+          // Parsed fence lines stay out of the visual code card even while
+          // its content is active. The opening source is revealed only when
+          // the caret is actually on that line, so newly authored fences and
+          // manual language edits remain possible without polluting the code.
+          const hidesOpeningFence = name === "FencedCode"
+            && !touchesLineOf(first.from)
+          const hidesClosingFence = closed && !touchesLineOf(last.from)
+          const codeFirst = hidesOpeningFence && hasInterior
+            ? state.doc.line(first.number + 1) : first
+          const codeLast = hidesClosingFence && hasInterior
             ? state.doc.line(last.number - 1) : last
           let pos = node.from
           while (pos <= node.to) {
             const line = state.doc.lineAt(pos)
-            if (collapseFences
-                && (line.from === first.from || (closed && line.from === last.from))) {
-              lineOnce(line.from, fenceCollapsedLine)
+            if ((hidesOpeningFence && line.from === first.from)
+                || (hidesClosingFence && line.from === last.from)) {
+              lineOnce(line.from, collapsedLine)
+            } else if (name === "FencedCode" && !hasInterior
+                && line.from !== first.from) {
+              lineOnce(line.from, collapsedLine)
             } else {
               const isFirst = line.from === codeFirst.from
               const isLast = line.from === codeLast.from
@@ -1142,7 +1176,10 @@ function buildDecorations(view) {
           return
         }
         if (name === "CodeInfo") {
-          ranges.push(fenceMark.range(node.from, node.to))
+          const parent = node.node.parent
+          if (!parent || touchesLineOf(parent.from)) {
+            ranges.push(fenceMark.range(node.from, node.to))
+          }
           return
         }
 
@@ -1159,6 +1196,11 @@ function buildDecorations(view) {
           }
           return
         }
+      },
+      leave: (node) => {
+        depth--
+        const name = node.name
+        if (name === "BulletList" || name === "OrderedList") listStack.pop()
       },
     })
   }
@@ -1418,6 +1460,9 @@ function insertLink(view) {
 window.MDEditor = {
   create(parent, doc, callbacks) {
     const onDirty = callbacks && callbacks.onDirty
+    // Live preview spacing tokens from the host stylesheet (MarkdownHTML
+    // constants) — see METRICS for the headless defaults.
+    Object.assign(METRICS, (callbacks && callbacks.spacing) || {})
     const view = new EditorView({
       parent,
       state: EditorState.create({

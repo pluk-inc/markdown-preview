@@ -1032,6 +1032,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         editAccessory = nil
     }
 
+    /// Leaves edit-mode chrome as one operation: drops the formatting bar
+    /// and refreshes the toolbar pencil state.
+    private func dismissEditChrome() {
+        hideEditAccessory()
+        updateEditToolbarItem()
+    }
+
     @objc private func formatCommand(_ sender: NSButton) {
         guard let command = sender.identifier?.rawValue else { return }
         formatMarkdown(command)
@@ -1141,8 +1148,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     ) {
         let finish: (Bool) -> Void = { [weak self] success in
             if success, !keepAccessoryMounted {
-                self?.hideEditAccessory()
-                self?.updateEditToolbarItem()
+                self?.dismissEditChrome()
             }
             completion?(success)
         }
@@ -1420,10 +1426,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         split.editorViewController?.cancelRequested = nil
         documentWindow.makeFirstResponder(nil)
         let overlayHidden: (() -> Void)? = hidesAccessoryAfterFade
-            ? { [weak self] in
-                self?.hideEditAccessory()
-                self?.updateEditToolbarItem()
-            }
+            ? { [weak self] in self?.dismissEditChrome() }
             : nil
         split.exitEditMode(waitForPreviewRender: rerender,
                            overlayHidden: overlayHidden) { [weak self] in
@@ -3009,8 +3012,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func applyLoadFailure(error: NSError, fileURL: URL, silentOnFailure: Bool) {
         if pendingEditModeURL == fileURL.standardizedFileURL {
             pendingEditModeURL = nil
-            hideEditAccessory()
-            updateEditToolbarItem()
+            dismissEditChrome()
         }
         guard !silentOnFailure else { return }
         NSAlert(error: error).beginSheetModal(for: documentWindow)

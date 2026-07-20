@@ -112,16 +112,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         webView.evaluateJavaScript(
             "window.__mdEditor && window.__mdEditor.getScrollAnchor()"
         ) { result, _ in
-            guard let raw = result as? [String: Any],
-                  let position = raw["position"] as? NSNumber else {
-                completion(nil)
-                return
-            }
-            let gap = (raw["gap"] as? NSNumber).map { CGFloat(truncating: $0) } ?? 0
-            completion(SourceScrollAnchor(
-                sourcePosition: CGFloat(truncating: position),
-                topGap: gap
-            ))
+            completion(SourceScrollAnchor(scriptResult: result))
         }
     }
 
@@ -338,13 +329,15 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         #editor .cm-md-h4 { font-size: 1.41em; line-height: 1.08; }
         #editor .cm-md-h5 { font-size: 1.29em; line-height: 1.09; }
         #editor .cm-md-h6 { font-size: 1em; line-height: 1.24; }
-        /* A heading's semantic padding-top represents the normal Markdown
-           blank separator before it, so that one source line collapses to
-           nothing. Blank separators before other blocks resize instead —
+        /* A source line whose height another element owns collapses to
+           nothing: the blank separator before a heading (its padding-top
+           represents it), inactive code fence lines (the card transfers
+           their styling to the code lines), and a single blank opening the
+           document. Blank separators before other blocks resize instead —
            .cm-md-block-separator lines carry an inline height matching the
            preview margin of the block that follows. Additional blank lines
            keep their natural height in both surfaces. */
-        #editor .cm-md-heading-separator {
+        #editor .cm-md-line-collapsed {
             height: 0;
             min-height: 0;
             line-height: 0;
@@ -400,10 +393,27 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
         .cm-md-link { color: var(--link); }
         .cm-md-url { color: var(--secondary); }
-        .cm-md-bullet { color: var(--secondary); }
-        /* Preview list items after the first carry a 0.4em margin-top. */
+        /* Mirror the preview's list geometry: items indent by the ul/ol
+           1.6em padding with the marker hanging inside it, so item text and
+           wrapped lines align exactly like rendered <li>s. The bullet widget
+           replaces "- " as a fixed-width box ending where text starts, with
+           the dot sitting near its end like a ::marker. */
+        #editor .cm-md-list-item {
+            padding-inline-start: 1.6em;
+            text-indent: -1.6em;
+        }
+        .cm-md-bullet {
+            display: inline-block;
+            width: 1.6em;
+            text-indent: 0;
+            text-align: end;
+            padding-inline-end: 0.45em;
+            box-sizing: border-box;
+            color: var(--text);
+        }
+        /* Preview list items after the first carry a margin-top. */
         #editor .cm-md-list-item-gap {
-            padding-top: \(MarkdownHTML.bodyFontSize * 0.4)px;
+            padding-top: \(MarkdownHTML.listItemSpacing)px;
         }
         .cm-md-hr {
             display: inline-block;
@@ -444,15 +454,6 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
         #editor .cm-md-code-fence-source-hidden {
             visibility: hidden;
-        }
-        /* Inactive fence source lines occupy no height, so the code card is
-           exactly as tall as the preview's. They expand when the cursor
-           enters the block. */
-        #editor .cm-md-fence-collapsed {
-            height: 0;
-            min-height: 0;
-            line-height: 0;
-            overflow: hidden;
         }
         .cm-md-fence-info { color: var(--secondary); }
         .cm-md-mermaid-preview {
@@ -605,7 +606,18 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                 editor = window.MDEditor.create(
                     document.getElementById("editor"),
                     markdown,
-                    { onDirty: function () { post("dirty"); } }
+                    {
+                        onDirty: function () { post("dirty"); },
+                        // Preview block margins (MarkdownHTML design tokens):
+                        // the bundle sizes blank-separator lines from these.
+                        spacing: {
+                            paragraph: \(MarkdownHTML.paragraphSpacing),
+                            quote: \(MarkdownHTML.quoteSpacing),
+                            alert: \(MarkdownHTML.largeBlockSpacing),
+                            table: \(MarkdownHTML.largeBlockSpacing),
+                            hr: \(MarkdownHTML.hrSpacing)
+                        }
+                    }
                 );
                 window.__mdEditor = {
                     getMarkdown: function () { return editor.getMarkdown(); },

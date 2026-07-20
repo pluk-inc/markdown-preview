@@ -51,7 +51,14 @@ nonisolated enum MarkdownHTML {
     static let pagePaddingHorizontal: CGFloat = 40
     static let pagePaddingBottom: CGFloat = 48
     static let sourceLineHeight = bodyFontSize * bodyLineHeight
+    // Block margin-top tokens. The editor bundle receives these through
+    // MDEditor.create's `spacing` option so both surfaces space blocks
+    // identically — change them here, never in entry-cm.js.
     static let paragraphSpacing = bodyFontSize * 0.8
+    static let quoteSpacing = bodyFontSize * 1.2
+    static let largeBlockSpacing = bodyFontSize * 1.6  // alerts, tables, mermaid
+    static let hrSpacing = bodyFontSize * 2.35
+    static let listItemSpacing = bodyFontSize * 0.4
 
     struct RenderedHTML: Sendable {
         let html: String
@@ -2419,7 +2426,7 @@ nonisolated enum MarkdownHTML {
     article.markdown-body > *:first-child { margin-top: 0 !important; }
 
     p {
-        margin: 0.8em 0 0;
+        margin: \(paragraphSpacing)px 0 0;
     }
     .md-source-blank-line {
         height: \(sourceLineHeight)px;
@@ -2499,7 +2506,7 @@ nonisolated enum MarkdownHTML {
     }
     pre {
         position: relative;
-        margin: 0.8em 0 0;
+        margin: \(paragraphSpacing)px 0 0;
         padding: 10px 14px;
         background: var(--code-bg);
         border-radius: 15px;
@@ -2538,7 +2545,7 @@ nonisolated enum MarkdownHTML {
     }
     .md-code-wrap {
         position: relative;
-        margin: 0.8em 0 0;
+        margin: \(paragraphSpacing)px 0 0;
     }
     .md-code-wrap > pre { margin: 0; }
     .md-code-copy {
@@ -2587,7 +2594,7 @@ nonisolated enum MarkdownHTML {
     }
     .mermaid-figure {
         position: relative;
-        margin: 1.6em auto 0;
+        margin: \(largeBlockSpacing)px auto 0;
         background: var(--code-bg);
         border-radius: 15px;
         overflow: hidden;
@@ -2713,7 +2720,7 @@ nonisolated enum MarkdownHTML {
     .katex { direction: ltr !important; unicode-bidi: isolate; }
 
     blockquote {
-        margin: 1.2em 0 0;
+        margin: \(quoteSpacing)px 0 0;
         padding-inline-start: 1em;
         border-inline-start: 4px solid var(--quote-border);
         color: var(--secondary);
@@ -2721,7 +2728,7 @@ nonisolated enum MarkdownHTML {
     blockquote > *:first-child { margin-top: 0; }
 
     .markdown-alert {
-        margin: 1.6em 0 0;
+        margin: \(largeBlockSpacing)px 0 0;
         padding: 12px 16px;
         background: var(--aside-bg);
         border-left: 4px solid var(--aside-border);
@@ -2754,10 +2761,10 @@ nonisolated enum MarkdownHTML {
     .markdown-alert-caution { border-left-color: #d1242f; }
     .markdown-alert-caution .markdown-alert-title { color: #d1242f; }
 
-    ul, ol { margin: 0.8em 0 0; padding-left: 1.6em; }
-    li { margin-top: 0.4em; }
+    ul, ol { margin: \(paragraphSpacing)px 0 0; padding-left: 1.6em; }
+    li { margin-top: \(listItemSpacing)px; }
     li:first-child { margin-top: 0; }
-    li > ul, li > ol { margin-top: 0.4em; }
+    li > ul, li > ol { margin-top: \(listItemSpacing)px; }
     li > p:first-child { margin-top: 0; }
 
     li.task-list-item { list-style: none; }
@@ -2791,7 +2798,7 @@ nonisolated enum MarkdownHTML {
     }
 
     table {
-        margin: 1.6em 0 0;
+        margin: \(largeBlockSpacing)px 0 0;
         border-collapse: collapse;
         display: block;
         overflow-x: auto;
@@ -2809,7 +2816,7 @@ nonisolated enum MarkdownHTML {
         position: relative;
         display: inline-block;
         width: fit-content;
-        margin: 1.6em 0 0;
+        margin: \(largeBlockSpacing)px 0 0;
         max-width: 100%;
         overflow: visible;
     }
@@ -2866,7 +2873,7 @@ nonisolated enum MarkdownHTML {
         border: 0;
         height: 1px;
         background: var(--grid);
-        margin: 2.35em 0;
+        margin: \(hrSpacing)px 0;
     }
 
     img {

@@ -187,7 +187,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(rendered.html.contains("li:first-child { margin-top: 0; }"))
         XCTAssertTrue(rendered.html.contains(".md-code-wrap > pre { margin: 0; }"))
         XCTAssertTrue(rendered.html.contains(".md-code-wrap {"))
-        XCTAssertTrue(rendered.html.contains("margin: 0.8em 0 0;"))
+        XCTAssertTrue(rendered.html.contains("margin: \(MarkdownHTML.paragraphSpacing)px 0 0;"))
     }
 
     func testMermaidPostProcessingAcceptsSourceMappedPreTag() {

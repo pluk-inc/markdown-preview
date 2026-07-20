@@ -125,6 +125,15 @@ struct SourceScrollAnchor {
     /// inside the page padding and the fractional line alone would restore
     /// the position one padding too low.
     let topGap: CGFloat
+
+    /// Decodes the `{position, gap}` dictionaries produced by the editor's
+    /// getScrollAnchor() and the preview's source-anchor script.
+    init?(scriptResult: Any?) {
+        guard let raw = scriptResult as? [String: Any],
+              let position = raw["position"] as? NSNumber else { return nil }
+        sourcePosition = CGFloat(truncating: position)
+        topGap = (raw["gap"] as? NSNumber).map { CGFloat(truncating: $0) } ?? 0
+    }
 }
 
 struct MarkdownTableEditRequest {
@@ -714,7 +723,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             // Above the first block — inside the page padding — no block
             // contains the anchor; report the first block plus the pixel gap
             // so the restore lands at the true viewport, not the block top.
-            const topmost = [...layout].sort((a, b) => a.top - b.top)[0];
+            // collectSourceLayout() returns blocks sorted by top already.
+            const topmost = layout[0];
             if (y < topmost.top) {
                 return { position: topmost.start, gap: topmost.top - y };
             }
@@ -749,16 +759,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         })();
         """
         webView.evaluateJavaScript(script) { result, _ in
-            guard let raw = result as? [String: Any],
-                  let position = raw["position"] as? NSNumber else {
-                completion(nil)
-                return
-            }
-            let gap = (raw["gap"] as? NSNumber).map { CGFloat(truncating: $0) } ?? 0
-            completion(SourceScrollAnchor(
-                sourcePosition: CGFloat(truncating: position),
-                topGap: gap
-            ))
+            completion(SourceScrollAnchor(scriptResult: result))
         }
     }
 
