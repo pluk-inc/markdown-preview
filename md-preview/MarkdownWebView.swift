@@ -205,6 +205,16 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     }
     private var loadedFingerprint: RendererFingerprint?
     private var isPageReady = false
+    // Article payload that arrived while a covering page load (normally the
+    // launch warmup) was still in flight. Flushed via `MdPreview.update` in
+    // `webView(_:didFinish:)` instead of paying a second full page load;
+    // dropped there if a newer generation superseded it, and cleared whenever
+    // a full load is issued or the in-flight load fails.
+    private var pendingArticle: (payload: String, generation: UInt64)?
+    // True while a navigation-failure recovery reload is outstanding, so a
+    // load that fails persistently resets state once instead of looping
+    // fail → reload → fail. Cleared on the next successful didFinish.
+    private var isRecoveringFromLoadFailure = false
     // Bumped on every display() call so a slower render finishing after a
     // newer one is dropped instead of clobbering the latest article.
     private var renderGeneration: UInt64 = 0
@@ -272,7 +282,9 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     /// code). Loaded into the WebView at launch so the heavy vendor JS is
     /// parsed and executed before the user picks a real file. Every later
     /// `display()` call then hits the fast-path (innerHTML swap + reapplier
-    /// sweep) instead of paying for a full reload.
+    /// sweep) instead of paying for a full reload — including a document that
+    /// arrives while the warmup page is still loading, which is stashed in
+    /// `pendingArticle` and flushed into the warmup page on `didFinish`.
     private static let warmupMarkdown = """
     $x$
 
@@ -291,12 +303,12 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let markdown = Self.warmupMarkdown
         let contentWidth = ContentWidthSetting.current.renderWidth
         Task { @concurrent [weak self] in
-            let rendered = Self.timedRender(label: "warmup",
-                                            markdown: markdown,
-                                            assetBaseHref: baseHref,
-                                            contentWidth: contentWidth,
-                                            warmup: true)
-            await self?.applyWarmup(rendered)
+            let output = Self.timedRender(label: "warmup",
+                                          markdown: markdown,
+                                          assetBaseHref: baseHref,
+                                          contentWidth: contentWidth,
+                                          warmup: true)
+            await self?.applyWarmup(output.rendered)
         }
     }
 
@@ -327,7 +339,16 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     /// Empties the visible article without unloading the page, so the next
     /// `display()` still hits the fast-path.
     func clearContent() {
-        guard isPageReady else { return }
+        guard isPageReady else {
+            // A stashed article must not flush over a cleared view. If a page
+            // load is in flight, replace the stash with an explicit clear so
+            // the finished page comes up blank instead of revealing its
+            // baked-in article (a display() that follows overwrites this).
+            pendingArticle = loadedFingerprint == nil
+                ? nil
+                : (payload: "''", generation: renderGeneration)
+            return
+        }
         webView.evaluateJavaScript("window.MdPreview && MdPreview.update('');") { _, _ in }
     }
 
@@ -341,12 +362,21 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let generation = renderGeneration
         let contentWidth = ContentWidthSetting.current.renderWidth
         Task { @concurrent [weak self] in
-            let rendered = Self.timedRender(label: "display",
-                                            markdown: markdown,
-                                            assetBaseHref: baseHref,
-                                            contentWidth: contentWidth)
-            await self?.applyDisplay(rendered, generation: generation)
+            let output = Self.timedRender(label: "display",
+                                          markdown: markdown,
+                                          assetBaseHref: baseHref,
+                                          contentWidth: contentWidth)
+            await self?.applyDisplay(output, generation: generation)
         }
+    }
+
+    /// Off-main render result: the rendered page plus the article body
+    /// pre-encoded as a JS string literal, so `applyDisplay` never pays the
+    /// (multi-MB on big documents) JSON escaping on the main actor.
+    private struct RenderOutput: Sendable {
+        let rendered: MarkdownHTML.RenderedHTML
+        /// `rendered.articleHTML` ready to splice into `MdPreview.update(...)`.
+        let updatePayload: String
     }
 
     /// Logs Swift-side render duration alongside the JS-side `MdPreviewPerf`
@@ -356,7 +386,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                                 markdown: String,
                                                 assetBaseHref: String,
                                                 contentWidth: MarkdownHTML.ContentWidth,
-                                                warmup: Bool = false) -> MarkdownHTML.RenderedHTML {
+                                                warmup: Bool = false) -> RenderOutput {
         let t0 = DispatchTime.now()
         let rendered = MarkdownHTML.render(markdown: markdown,
                                            allowsScroll: true,
@@ -364,6 +394,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                            vendorLoading: .lazy,
                                            contentWidth: contentWidth,
                                            warmup: warmup)
+        let payload = javaScriptStringLiteral(rendered.articleHTML)
         let elapsedMs = Int(
             (Double(DispatchTime.now().uptimeNanoseconds - t0.uptimeNanoseconds)
              / 1_000_000).rounded()
@@ -371,31 +402,41 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         Logger.perf.debug(
             "[mdp-perf-swift] \(label, privacy: .public) render +\(elapsedMs, privacy: .public)ms (\(markdown.count, privacy: .public) chars)"
         )
-        return rendered
+        return RenderOutput(rendered: rendered, updatePayload: payload)
     }
 
-    private func applyDisplay(_ rendered: MarkdownHTML.RenderedHTML,
+    private func applyDisplay(_ output: RenderOutput,
                               generation: UInt64) {
         // A newer display() bumped the generation while this render was
         // off-main — drop the stale result so the latest article wins.
         guard generation == renderGeneration else { return }
+        let rendered = output.rendered
         let fingerprint = RendererFingerprint(
             math: rendered.containsMath,
             mermaid: rendered.containsMermaid,
             code: rendered.containsCode
         )
 
-        // Fast path: the loaded page already has every renderer the new doc
-        // needs — swap the article body via JS instead of reloading the
-        // WKWebView (which would re-parse and re-execute the multi-MB vendor
-        // bundles). The launch-time warmup loads both vendors, so any
-        // subsequent file with any subset of renderers fast-paths into it.
-        if isPageReady, let loaded = loadedFingerprint, loaded.covers(fingerprint) {
-            let payload = javaScriptStringLiteral(rendered.articleHTML)
-            webView.evaluateJavaScript("window.MdPreview && MdPreview.update(\(payload));") { _, _ in }
+        // Fast path: the loaded (or loading) page already has every renderer
+        // the new doc needs — swap the article body via JS instead of
+        // reloading the WKWebView (which would re-parse and re-execute the
+        // multi-MB vendor bundles). The launch-time warmup loads both
+        // vendors, so any subsequent file with any subset of renderers
+        // fast-paths into it.
+        if let loaded = loadedFingerprint, loaded.covers(fingerprint) {
+            if isPageReady {
+                webView.evaluateJavaScript("window.MdPreview && MdPreview.update(\(output.updatePayload));") { _, _ in }
+            } else {
+                // The covering page (normally the launch warmup) is still
+                // loading. Stash the article and flush it in didFinish —
+                // issuing a second full load here would throw away the
+                // vendor parse the warmup already paid for.
+                pendingArticle = (output.updatePayload, generation)
+            }
             return
         }
 
+        pendingArticle = nil
         webView.loadHTMLString(rendered.html, baseURL: nil)
         loadedFingerprint = fingerprint
         isPageReady = false
@@ -411,6 +452,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     /// unconditional so a warmup-only page rendered under the old settings
     /// can't be fast-pathed into later.
     func reloadPreviewForSettingChange() {
+        pendingArticle = nil
         loadedFingerprint = nil
         isPageReady = false
         reloadPreview()
@@ -524,7 +566,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             guard let self else { return }
             let presenter = TableContextMenuPresenter(context: context) { [weak self] operation in
                 guard let self else { return }
-                let script = "window.MdPreview && window.MdPreview.performTableContextAction(\(self.javaScriptStringLiteral(token)), \(self.javaScriptStringLiteral(operation)))"
+                let script = "window.MdPreview && window.MdPreview.performTableContextAction(\(Self.javaScriptStringLiteral(token)), \(Self.javaScriptStringLiteral(operation)))"
                 self.webView.evaluateJavaScript(script) { _, _ in }
             }
             presenter.present(in: self.webView)
@@ -846,7 +888,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     func elementOffset(id: String, completion: @escaping (CGFloat?) -> Void) {
         let script = """
         (() => {
-            const target = \(javaScriptStringLiteral(id));
+            const target = \(Self.javaScriptStringLiteral(id));
             let el = document.getElementById(target);
             if (!el) {
                 const wanted = target.toLowerCase();
@@ -889,7 +931,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             const previousQuery = window.__mdPreviewSearchQuery || '';
             const previousBeginsWith = window.__mdPreviewSearchBeginsWith === true;
             const beginsWith = \(beginsWith ? "true" : "false");
-            const sameQuery = previousQuery === \(javaScriptStringLiteral(query))
+            const sameQuery = previousQuery === \(Self.javaScriptStringLiteral(query))
                 && previousBeginsWith === beginsWith;
 
             // Tear down prior highlights, but only normalize() the parents we
@@ -906,7 +948,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                 dirty.forEach((parent) => parent.normalize());
             }
 
-            const query = \(javaScriptStringLiteral(query));
+            const query = \(Self.javaScriptStringLiteral(query));
             window.__mdPreviewSearchQuery = query;
             window.__mdPreviewSearchBeginsWith = beginsWith;
             if (!query) {
@@ -1034,7 +1076,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         cssOffset * webView.pageZoom
     }
 
-    private func javaScriptStringLiteral(_ string: String) -> String {
+    private nonisolated static func javaScriptStringLiteral(_ string: String) -> String {
         guard let data = try? JSONSerialization.data(withJSONObject: [string]),
               let json = String(data: data, encoding: .utf8),
               json.count >= 2 else { return "\"\"" }
@@ -1369,6 +1411,52 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         configureWebKitScrollView()
         isPageReady = true
+        isRecoveringFromLoadFailure = false
+        // A document that arrived while this page (normally the launch
+        // warmup) was loading is waiting to be swapped in — flush it now,
+        // unless a newer display() superseded it in the meantime.
+        if let pending = pendingArticle {
+            pendingArticle = nil
+            if pending.generation == renderGeneration {
+                self.webView.evaluateJavaScript("window.MdPreview && MdPreview.update(\(pending.payload));") { _, _ in }
+            }
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        handleNavigationFailure(error)
+    }
+
+    func webView(_ webView: WKWebView,
+                 didFailProvisionalNavigation navigation: WKNavigation!,
+                 withError error: Error) {
+        handleNavigationFailure(error)
+    }
+
+    /// A failed page load must not strand a document waiting in
+    /// `pendingArticle` (or leave `loadedFingerprint` claiming vendors that
+    /// never actually loaded) — reset the page state and re-render the
+    /// current document from source, which takes the full-load path.
+    private func handleNavigationFailure(_ error: Error) {
+        let nsError = error as NSError
+        // A load superseded by a newer loadHTMLString reports
+        // NSURLErrorCancelled; the newer navigation's own callbacks manage
+        // the state, and resetting here would reload-loop. WebKitErrorDomain
+        // 102 ("frame load interrupted") is the same story for navigations
+        // our own decidePolicyFor cancels.
+        if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled { return }
+        if nsError.domain == "WebKitErrorDomain", nsError.code == 102 { return }
+        // Only a failure of a page load we issued needs recovery — once the
+        // page is up, link/fragment navigation failures must not nuke it.
+        guard !isPageReady else { return }
+        pendingArticle = nil
+        loadedFingerprint = nil
+        // One recovery reload per failure episode: if the retry itself fails,
+        // leave the state reset so the next display() takes the full-load
+        // path, instead of looping fail → reload → fail.
+        guard !isRecoveringFromLoadFailure else { return }
+        isRecoveringFromLoadFailure = true
+        reloadPreview()
     }
 
     private func sameDocumentFragmentID(from url: URL) -> String? {
