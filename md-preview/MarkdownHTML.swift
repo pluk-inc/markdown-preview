@@ -71,7 +71,14 @@ nonisolated enum MarkdownHTML {
     static let pagePaddingHorizontal: CGFloat = 40
     static let pagePaddingBottom: CGFloat = 48
     static let sourceLineHeight = bodyFontSize * bodyLineHeight
+    // Block margin-top tokens. The editor bundle receives these through
+    // MDEditor.create's `spacing` option so both surfaces space blocks
+    // identically — change them here, never in entry-cm.js.
     static let paragraphSpacing = bodyFontSize * 0.8
+    static let quoteSpacing = bodyFontSize * 1.2
+    static let largeBlockSpacing = bodyFontSize * 1.6  // alerts, tables, mermaid
+    static let hrSpacing = bodyFontSize * 2.35
+    static let listItemSpacing = bodyFontSize * 0.4
 
     struct RenderedHTML: Sendable {
         let html: String
@@ -121,7 +128,19 @@ nonisolated enum MarkdownHTML {
             sourceLineOffset: sourceLineOffset
         )
         let headingsHTML = injectHeadingIDs(in: footnoteReferenceHTML + footnoteDefinitions.html)
-        let bodyHTML = injectRTLDirection(in: headingsHTML)
+        let renderedBodyHTML = injectRTLDirection(in: headingsHTML)
+        let frontmatterHTML: String
+        if let raw = frontmatter.raw,
+           let format = frontmatter.format {
+            frontmatterHTML = renderFrontmatter(
+                raw,
+                format: format,
+                sourceEndLine: sourceLineOffset
+            )
+        } else {
+            frontmatterHTML = ""
+        }
+        let bodyHTML = frontmatterHTML + renderedBodyHTML
         let containsMath = mathResult.containsMath || footnoteDefinitions.containsMath
         let containsMermaid = mermaidResult.containsMermaid || footnoteDefinitions.containsMermaid
         let containsCode = detectHighlightableCode(in: bodyHTML)
@@ -1982,6 +2001,38 @@ nonisolated enum MarkdownHTML {
         return out
     }
 
+    private static func renderFrontmatter(_ raw: String,
+                                          format: MarkdownFrontmatter.Format,
+                                          sourceEndLine: Int) -> String {
+        let entries = MarkdownFrontmatter.parse(raw, format: format)
+        guard !entries.isEmpty else { return "" }
+
+        let rows = entries.map { entry in
+            let valueHTML: String
+            if let items = entry.items {
+                valueHTML = items.map {
+                    "<span class=\"md-fm-pill\" dir=\"auto\">\(htmlEscape($0))</span>"
+                }.joined()
+            } else if entry.value.isEmpty {
+                valueHTML = "<span class=\"md-fm-empty\" aria-hidden=\"true\"></span>"
+            } else {
+                valueHTML = htmlEscape(entry.value)
+            }
+            return """
+            <tr><th scope="row" dir="auto">\(htmlEscape(entry.key))</th><td dir="auto">\(valueHTML)</td></tr>
+            """
+        }.joined(separator: "\n")
+
+        return """
+        <section class="md-frontmatter" data-source-line="1" data-source-start="1" data-source-end="\(max(1, sourceEndLine))">
+        <table><tbody>
+        \(rows)
+        </tbody></table>
+        </section>
+
+        """
+    }
+
     private static func javaScriptStringLiteral(_ string: String) -> String {
         guard let data = try? JSONSerialization.data(withJSONObject: [string]),
               let json = String(data: data, encoding: .utf8) else {
@@ -2627,14 +2678,61 @@ nonisolated enum MarkdownHTML {
     }
     article.markdown-body > *:first-child { margin-top: 0 !important; }
 
+    /* Frontmatter properties — Obsidian-style metadata panel. Deliberately
+       quieter than document content: no row borders (content tables own
+       horizontal rules), a muted key column, and a single hairline that
+       hands off to the document body. */
+    .md-frontmatter {
+        margin: 0 0 1.2em;
+        padding: 0 0 1em;
+        border-bottom: 1px solid var(--grid);
+    }
+    .md-frontmatter table {
+        display: table;
+        width: 100%;
+        table-layout: fixed;
+        margin: 0;
+        overflow: visible;
+        font-size: 0.92em;
+        line-height: 1.5;
+    }
+    .md-frontmatter th,
+    .md-frontmatter td {
+        padding: 0.28em 0;
+        border: 0;
+        vertical-align: baseline;
+        overflow-wrap: anywhere;
+        text-align: left;
+    }
+    .md-frontmatter th {
+        width: 26%;
+        padding-right: 1.4em;
+        font-weight: 500;
+        color: var(--secondary);
+    }
+    .md-frontmatter td {
+        white-space: pre-wrap;
+    }
+    .md-fm-pill {
+        display: inline-block;
+        margin: 0 0.4em 0.2em 0;
+        padding: 0.08em 0.7em;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--link) 12%, transparent);
+        color: var(--link);
+        font-size: 0.95em;
+        overflow-wrap: anywhere;
+    }
+    .md-fm-empty::before {
+        content: "—";
+        color: var(--secondary);
+    }
+
     p {
-        margin: 0.8em 0 0;
+        margin: \(paragraphSpacing)px 0 0;
     }
     .md-source-blank-line {
         height: \(sourceLineHeight)px;
-    }
-    .md-source-blank-line + * {
-        margin-top: 0 !important;
     }
 
     h1, h2, h3, h4, h5, h6 {
@@ -2711,7 +2809,7 @@ nonisolated enum MarkdownHTML {
     }
     pre {
         position: relative;
-        margin: 0.8em 0 0;
+        margin: \(paragraphSpacing)px 0 0;
         padding: 10px 14px;
         background: var(--code-bg);
         border-radius: 15px;
@@ -2750,7 +2848,9 @@ nonisolated enum MarkdownHTML {
     }
     .md-code-wrap {
         position: relative;
+        margin: \(paragraphSpacing)px 0 0;
     }
+    .md-code-wrap > pre { margin: 0; }
     .md-code-copy {
         position: absolute;
         top: 8px;
@@ -2797,7 +2897,7 @@ nonisolated enum MarkdownHTML {
     }
     .mermaid-figure {
         position: relative;
-        margin: 1.6em auto 0;
+        margin: \(largeBlockSpacing)px auto 0;
         background: var(--code-bg);
         border-radius: 15px;
         overflow: hidden;
@@ -2923,7 +3023,7 @@ nonisolated enum MarkdownHTML {
     .katex { direction: ltr !important; unicode-bidi: isolate; }
 
     blockquote {
-        margin: 1.2em 0 0;
+        margin: \(quoteSpacing)px 0 0;
         padding-inline-start: 1em;
         border-inline-start: 4px solid var(--quote-border);
         color: var(--secondary);
@@ -2931,7 +3031,7 @@ nonisolated enum MarkdownHTML {
     blockquote > *:first-child { margin-top: 0; }
 
     .markdown-alert {
-        margin: 1.6em 0 0;
+        margin: \(largeBlockSpacing)px 0 0;
         padding: 12px 16px;
         background: var(--aside-bg);
         border-left: 4px solid var(--aside-border);
@@ -2964,10 +3064,10 @@ nonisolated enum MarkdownHTML {
     .markdown-alert-caution { border-left-color: #d1242f; }
     .markdown-alert-caution .markdown-alert-title { color: #d1242f; }
 
-    ul, ol { margin: 0.8em 0 0; padding-left: 1.6em; }
-    li { margin-top: 0.4em; }
-    li:first-child { margin-top: 0.8em; }
-    li > ul, li > ol { margin-top: 0.4em; }
+    ul, ol { margin: \(paragraphSpacing)px 0 0; padding-left: 1.6em; }
+    li { margin-top: \(listItemSpacing)px; }
+    li:first-child { margin-top: 0; }
+    li > ul, li > ol { margin-top: \(listItemSpacing)px; }
     li > p:first-child { margin-top: 0; }
 
     li.task-list-item { list-style: none; }
@@ -3001,7 +3101,7 @@ nonisolated enum MarkdownHTML {
     }
 
     table {
-        margin: 1.6em 0 0;
+        margin: \(largeBlockSpacing)px 0 0;
         border-collapse: collapse;
         display: block;
         overflow-x: auto;
@@ -3019,7 +3119,7 @@ nonisolated enum MarkdownHTML {
         position: relative;
         display: inline-block;
         width: fit-content;
-        margin: 1.6em 0 0;
+        margin: \(largeBlockSpacing)px 0 0;
         max-width: 100%;
         overflow: visible;
     }
@@ -3076,7 +3176,7 @@ nonisolated enum MarkdownHTML {
         border: 0;
         height: 1px;
         background: var(--grid);
-        margin: 2.35em 0;
+        margin: \(hrSpacing)px 0;
     }
 
     img {

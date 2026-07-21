@@ -11,6 +11,7 @@ import {
 import { EditorState, EditorSelection, StateField } from "@codemirror/state"
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands"
 import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-markdown"
+import { yamlFrontmatter } from "@codemirror/lang-yaml"
 import {
   syntaxTree, ensureSyntaxTree, syntaxHighlighting, HighlightStyle,
   LanguageDescription, LanguageSupport, StreamLanguage,
@@ -659,13 +660,52 @@ const HEADING_LINE = {}
 const for_ = (i) => Decoration.line({ class: "cm-md-h" + i })
 for (let i = 1; i <= 6; i++) HEADING_LINE[i] = for_(i)
 const inactiveHeadingLine = Decoration.line({ class: "cm-md-heading-inactive" })
-const blankBeforeHeadingLine = Decoration.line({ class: "cm-md-blank-before-heading" })
-const headingAfterBlankLine = Decoration.line({ class: "cm-md-heading-after-blank" })
+// A source line whose height another element owns (a heading's padding, a
+// fence card, the document's first-block margin reset) collapses to nothing.
+const collapsedLine = Decoration.line({ class: "cm-md-line-collapsed" })
+
+// Preview block margin-top values in CSS px. The host passes the live values
+// from MarkdownHTML.swift (the single source of truth) through
+// MDEditor.create's `spacing` option; these defaults only serve headless
+// harnesses. The preview swallows the single blank source line before each
+// block and expresses that separation as the block's own margin-top; the
+// editor mirrors it by resizing the blank separator line to the same height.
+const METRICS = {
+  paragraph: 12,  // p / ul / ol / pre / .md-code-wrap
+  quote: 18,      // blockquote
+  alert: 24,      // .markdown-alert
+  table: 24,      // .md-table-scroll
+  hr: 35.25,      // hr (top and bottom)
+}
+const SEPARATOR_BLOCKS = new Set([
+  "Paragraph", "FencedCode", "CodeBlock", "Blockquote",
+  "BulletList", "OrderedList", "Table", "HorizontalRule", "HTMLBlock",
+])
+const separatorLineCache = new Map()
+const blockSeparatorLine = (height) => {
+  let deco = separatorLineCache.get(height)
+  if (!deco) {
+    deco = Decoration.line({
+      class: "cm-md-block-separator",
+      attributes: {
+        style: `height:${height}px;min-height:0;line-height:${height}px;overflow:hidden;`,
+      },
+    })
+    separatorLineCache.set(height, deco)
+  }
+  return deco
+}
 const quoteLine = Decoration.line({ class: "cm-md-quote" })
 const codeLine = Decoration.line({ class: "cm-md-codeblock" })
 const codeLineFirst = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-first" })
 const codeLineLast = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-last" })
 const tableLine = Decoration.line({ class: "cm-md-table" })
+// Preview gives every list item after the first a 0.4em margin-top (and a
+// nested list the same via li > ul). Mirror it on the item's first line.
+const listItemGapLine = Decoration.line({ class: "cm-md-list-item-gap" })
+// Mirrors the preview's list geometry: ul/ol start padding with the marker
+// hanging inside it, so item text and wrapped lines align like rendered <li>s.
+const listItemLine = Decoration.line({ class: "cm-md-list-item" })
 const fenceMark = Decoration.mark({ class: "cm-md-fence-info" })
 const hiddenCodeFenceSource = Decoration.mark({ class: "cm-md-code-fence-source-hidden" })
 const hiddenHeadingSource = Decoration.mark({ class: "cm-md-heading-source-hidden" })
@@ -676,6 +716,10 @@ const urlMark = Decoration.mark({ class: "cm-md-url" })
 const strongMark = Decoration.mark({ class: "cm-md-strong" })
 const emphasisMark = Decoration.mark({ class: "cm-md-emphasis" })
 const strikethroughMark = Decoration.mark({ class: "cm-md-strikethrough" })
+const frontmatterLine = Decoration.line({ class: "cm-md-frontmatter" })
+const frontmatterFirstLine = Decoration.line({ class: "cm-md-frontmatter-first" })
+const frontmatterLastLine = Decoration.line({ class: "cm-md-frontmatter-last" })
+const frontmatterDelim = Decoration.mark({ class: "cm-md-frontmatter-delim" })
 
 const autoDirectionLine = Decoration.line({ attributes: { dir: "auto" } })
 
@@ -843,32 +887,134 @@ function buildDecorations(view) {
       pos = line.to + 1
     }
   }
-  const collapseBlankBefore = (pos) => {
+  // One blank source line between blocks is Markdown's normal separator; the
+  // preview swallows it and lets the next block's margin-top own that space.
+  // Mirror it here: the blank line directly above each block collapses to
+  // zero before headings (their padding-top owns the space) or resizes to
+  // the following block's semantic margin otherwise. Additional blank lines
+  // keep their natural source-line height in both surfaces.
+  const blankRunBefore = (pos) => {
     const line = state.doc.lineAt(pos)
-    if (line.number <= 1) return false
-    const previous = state.doc.line(line.number - 1)
-    if (previous.text.length !== 0) return false
-    lineOnce(previous.from, blankBeforeHeadingLine)
-    return true
+    let first = line.number
+    // Only "one blank" vs "several" (plus the document-start case) changes
+    // the emitted separator, so cap the walk against pathological runs.
+    const stop = Math.max(first - 64, 1)
+    while (first > stop && state.doc.line(first - 1).text.length === 0) first--
+    return { line, first, count: line.number - first }
+  }
+  const collapseBlankBefore = (pos) => {
+    const run = blankRunBefore(pos)
+    if (run.count === 0) return
+    lineOnce(state.doc.line(run.line.number - 1).from, collapsedLine)
+  }
+  // iterate visits top-level blocks in document order, so the previous
+  // block's name is a running variable; the tree is resolved only for the
+  // first block of a visible range, whose predecessor was never visited.
+  let lastTopBlockName = null
+  const topBlockNameBefore = (blankFirstLine) => {
+    if (lastTopBlockName != null) return lastTopBlockName
+    if (blankFirstLine <= 1) return null
+    const prev = state.doc.line(blankFirstLine - 1)
+    let n = syntaxTree(state).resolveInner(prev.from, 1)
+    while (n.parent && n.parent.name !== "Document") n = n.parent
+    return n.name
+  }
+  const blockMarginTop = (node) => {
+    switch (node.name) {
+      case "Blockquote": {
+        // Alert blockquotes render as .markdown-alert; recognize the same
+        // five kinds as EscapingHTMLFormatter.
+        const firstLine = state.doc.lineAt(node.from)
+        return /^ {0,3}> ?\[!(note|tip|important|warning|caution)\]/i.test(firstLine.text)
+          ? METRICS.alert : METRICS.quote
+      }
+      case "Table": return METRICS.table
+      case "HorizontalRule": return METRICS.hr
+      case "FencedCode":
+        // Mermaid fences render as .mermaid-figure (same margin as tables).
+        return fencedCodeDetails(state, node).language === "mermaid"
+          ? METRICS.table : METRICS.paragraph
+      default: return METRICS.paragraph
+    }
+  }
+  const separatorBlankBefore = (node) => {
+    const run = blankRunBefore(node.from)
+    if (run.count === 0) return
+    const separator = state.doc.line(run.line.number - 1)
+    if (run.first === 1) {
+      // Blank lines open the document. The preview strips the first block's
+      // margin entirely, so a single leading blank occupies no height.
+      lineOnce(separator.from, run.count === 1
+        ? collapsedLine
+        : blockSeparatorLine(blockMarginTop(node)))
+      return
+    }
+    // hr is the only block with a margin-bottom. Adjacent margins collapse in
+    // the preview (max); literal blank-line spacers between them do not.
+    const marginBottom = topBlockNameBefore(run.first) === "HorizontalRule"
+      ? METRICS.hr : 0
+    const marginTop = blockMarginTop(node)
+    const height = run.count === 1
+      ? Math.max(marginBottom, marginTop)
+      : marginBottom + marginTop
+    lineOnce(separator.from, blockSeparatorLine(height))
   }
 
+  // yamlFrontmatter wraps the Markdown parser as Document(Document(...)), so
+  // discover the inner content Document and treat its direct children as the
+  // top-level Markdown blocks. Tracking depth (and a stack of enclosing
+  // lists) answers parent/sibling questions positionally without
+  // materializing a SyntaxNode per visited node.
+  let depth = 0
+  const listStack = []
+
   for (const { from, to } of view.visibleRanges) {
+    lastTopBlockName = null
+    let contentDocumentDepth = null
     syntaxTree(state).iterate({
       from, to,
       enter: (node) => {
+        depth++
         const name = node.name
+
+        if (depth === 2 && name === "Frontmatter") lastTopBlockName = name
+        if (depth === 2 && name === "Document") contentDocumentDepth = depth
+
+        // --- Block separators ------------------------------------------
+        if (contentDocumentDepth != null && depth === contentDocumentDepth + 1) {
+          if (SEPARATOR_BLOCKS.has(name)) separatorBlankBefore(node)
+          lastTopBlockName = name
+        }
+
+        // --- Frontmatter ----------------------------------------------
+        // Style the whole block as a quiet metadata card; keep the YAML
+        // source editable, dimming only the `---` delimiters.
+        if (name === "Frontmatter") {
+          // The node's end includes the newline after the closing ---;
+          // step back so the card never bleeds onto the first body line.
+          const end = node.to > node.from && state.doc.lineAt(node.to).from === node.to
+            ? node.to - 1 : node.to
+          eachLine(node.from, end, frontmatterLine)
+          lineOnce(node.from, frontmatterFirstLine)
+          lineOnce(state.doc.lineAt(end).from, frontmatterLastLine)
+          return
+        }
+        if (name === "DashLine") {
+          ranges.push(frontmatterDelim.range(node.from, node.to))
+          return
+        }
 
         // --- Headings ------------------------------------------------
         const atx = name.match(/^ATXHeading(\d)$/)
         if (atx) {
-          if (collapseBlankBefore(node.from)) lineOnce(node.from, headingAfterBlankLine)
+          collapseBlankBefore(node.from)
           lineOnce(node.from, HEADING_LINE[+atx[1]])
           if (!touchesLineOf(node.from)) lineOnce(node.from, inactiveHeadingLine)
           return
         }
         const setext = name.match(/^SetextHeading(\d)$/)
         if (setext) {
-          if (collapseBlankBefore(node.from)) lineOnce(node.from, headingAfterBlankLine)
+          collapseBlankBefore(node.from)
           lineOnce(node.from, HEADING_LINE[+setext[1]])
           return
         }
@@ -945,9 +1091,9 @@ function buildDecorations(view) {
           } else if (parent && parent.name === "FencedCode"
               && !isActiveFence(parent)) {
             const line = state.doc.lineAt(node.from)
-            // Hide the complete source line so the opening language info and
-            // closing fence disappear together. A mark (rather than replace)
-            // keeps its geometry stable when this block becomes active.
+            // Hide the complete source line. Collapsing handles geometry;
+            // this mark is also the fallback for fences without an interior
+            // line and keeps the raw marker out of the visual code card.
             ranges.push(hiddenCodeFenceSource.range(line.from, line.to))
           }
           return
@@ -984,6 +1130,21 @@ function buildDecorations(view) {
         }
 
         // --- Lists --------------------------------------------------------
+        if (name === "BulletList" || name === "OrderedList") {
+          listStack.push(node.from)
+          return
+        }
+        if (name === "ListItem") {
+          // The first item of a top-level list carries no gap (preview:
+          // li:first-child { margin-top: 0 }); a nested list's first item
+          // inherits the li > ul margin instead, so it keeps the gap. A
+          // list starts at its first item, so "first" is a position check.
+          const isFirstItem = node.from === listStack[listStack.length - 1]
+          const isNested = listStack.length > 1
+          if (!isFirstItem || isNested) lineOnce(node.from, listItemGapLine)
+          eachLine(node.from, node.to, listItemLine)
+          return
+        }
         if (name === "ListMark") {
           const mark = state.doc.sliceString(node.from, node.to)
           const line = state.doc.lineAt(node.from)
@@ -991,7 +1152,10 @@ function buildDecorations(view) {
           // into a bullet dot leaves a confusing "• [ ]" hybrid.
           const isTask = /^\s*\[[ xX]\](\s|$)/.test(line.text.slice(node.to - line.from))
           if ((mark === "-" || mark === "*" || mark === "+") && !isTask && !touchesLineOf(node.from)) {
-            ranges.push(bulletDeco.range(node.from, node.to))
+            // Swallow the following space too: the bullet widget is a fixed
+            // 1.6em box, so item text starts exactly at the list padding.
+            const after = state.doc.sliceString(node.to, node.to + 1)
+            ranges.push(bulletDeco.range(node.from, node.to + (after === " " ? 1 : 0)))
           }
           return
         }
@@ -1000,13 +1164,36 @@ function buildDecorations(view) {
         if (name === "FencedCode" || name === "CodeBlock") {
           const first = state.doc.lineAt(node.from)
           const last = state.doc.lineAt(node.to)
+          const closed = name === "FencedCode"
+            && node.node.lastChild?.name === "CodeMark"
+          const hasInterior = last.number - first.number >= (closed ? 2 : 1)
+          // Parsed fence lines stay out of the visual code card even while
+          // its content is active. The opening source is revealed only when
+          // the caret is actually on that line, so newly authored fences and
+          // manual language edits remain possible without polluting the code.
+          const hidesOpeningFence = name === "FencedCode"
+            && !touchesLineOf(first.from)
+          const hidesClosingFence = closed && !touchesLineOf(last.from)
+          const codeFirst = hidesOpeningFence && hasInterior
+            ? state.doc.line(first.number + 1) : first
+          const codeLast = hidesClosingFence && hasInterior
+            ? state.doc.line(last.number - 1) : last
           let pos = node.from
           while (pos <= node.to) {
             const line = state.doc.lineAt(pos)
-            const deco = line.from === first.from ? codeLineFirst
-              : line.from === last.from ? codeLineLast
-              : codeLine
-            lineOnce(line.from, deco)
+            if ((hidesOpeningFence && line.from === first.from)
+                || (hidesClosingFence && line.from === last.from)) {
+              lineOnce(line.from, collapsedLine)
+            } else if (name === "FencedCode" && !hasInterior
+                && line.from !== first.from) {
+              lineOnce(line.from, collapsedLine)
+            } else {
+              const isFirst = line.from === codeFirst.from
+              const isLast = line.from === codeLast.from
+              if (isFirst) lineOnce(line.from, codeLineFirst)
+              if (isLast) lineOnce(line.from, codeLineLast)
+              if (!isFirst && !isLast) lineOnce(line.from, codeLine)
+            }
             if (name === "CodeBlock" && !touchesLineOf(line.from)) {
               const indent = line.text.match(/^(?: {4}|\t)/)?.[0]
               if (indent) ranges.push(hide.range(line.from, line.from + indent.length))
@@ -1017,7 +1204,10 @@ function buildDecorations(view) {
           return
         }
         if (name === "CodeInfo") {
-          ranges.push(fenceMark.range(node.from, node.to))
+          const parent = node.node.parent
+          if (!parent || touchesLineOf(parent.from)) {
+            ranges.push(fenceMark.range(node.from, node.to))
+          }
           return
         }
 
@@ -1034,6 +1224,11 @@ function buildDecorations(view) {
           }
           return
         }
+      },
+      leave: (node) => {
+        depth--
+        const name = node.name
+        if (name === "BulletList" || name === "OrderedList") listStack.pop()
       },
     })
   }
@@ -1293,6 +1488,9 @@ function insertLink(view) {
 window.MDEditor = {
   create(parent, doc, callbacks) {
     const onDirty = callbacks && callbacks.onDirty
+    // Live preview spacing tokens from the host stylesheet (MarkdownHTML
+    // constants) — see METRICS for the headless defaults.
+    Object.assign(METRICS, (callbacks && callbacks.spacing) || {})
     const view = new EditorView({
       parent,
       state: EditorState.create({
@@ -1306,7 +1504,9 @@ window.MDEditor = {
           EditorView.lineWrapping,
           EditorView.perLineTextDirection.of(true),
           directionLines,
-          markdown({ base: markdownLanguage, codeLanguages }),
+          // Parse a leading `---` block as YAML frontmatter so its lines
+          // never surface as a thematic break plus setext heading.
+          yamlFrontmatter({ content: markdown({ base: markdownLanguage, codeLanguages }) }),
           activeCodeBlock,
           mermaidPreviews,
           tableEditors,
@@ -1331,6 +1531,7 @@ window.MDEditor = {
       }),
     })
     let preservedSourcePosition = null
+    let preservedSourceGap = 0
     let didUserScroll = false
     let userScrollIntent = false
     let lastScrollTop = view.scrollDOM.scrollTop
@@ -1393,7 +1594,7 @@ window.MDEditor = {
       focus: () => view.focus(),
       getScrollAnchor: () => {
         if (!didUserScroll && Number.isFinite(preservedSourcePosition)) {
-          return { position: preservedSourcePosition }
+          return { position: preservedSourcePosition, gap: preservedSourceGap || 0 }
         }
         const viewportY = view.scrollDOM.scrollTop
         const visibleLine = view.lineBlockAtHeight(viewportY)
@@ -1402,14 +1603,20 @@ window.MDEditor = {
         const progress = sourceLineBlock.height > 0
           ? Math.min(Math.max((viewportY - sourceLineBlock.top) / sourceLineBlock.height, 0), 1)
           : 0
-        return { position: line.number + progress }
+        // Near the document top the viewport can sit above the first line
+        // (inside the page padding), which the fractional position cannot
+        // express. Carry that remaining pixel gap so the other surface can
+        // reproduce the exact viewport, not just the line.
+        const gap = Math.max(sourceLineBlock.top - viewportY, 0)
+        return { position: line.number + progress, gap }
       },
-      setScrollPosition: (progress, sourcePosition) => new Promise((resolve) => {
+      setScrollPosition: (progress, sourcePosition, sourceGap) => new Promise((resolve) => {
         const scroller = view.scrollDOM
         const maximum = Math.max(scroller.scrollHeight - scroller.clientHeight, 0)
         let target = maximum * Math.min(Math.max(Number(progress) || 0, 0), 1)
         let linePosition = null
         let lineProgress = 0
+        const gap = Number.isFinite(sourceGap) ? Math.max(sourceGap, 0) : 0
 
         if (Number.isFinite(sourcePosition) && sourcePosition >= 1) {
           const sourceLine = Math.min(Math.floor(sourcePosition), view.state.doc.lines)
@@ -1417,7 +1624,7 @@ window.MDEditor = {
           linePosition = view.state.doc.line(sourceLine).from
           if (linePosition != null) {
             const block = lineContentBlock(linePosition)
-            target = block.top + block.height * lineProgress
+            target = block.top + block.height * lineProgress - gap
             // Let CodeMirror create the viewport around the target before
             // applying the precise within-block offset. Directly assigning a
             // distant scrollTop can briefly leave its virtualized DOM empty.
@@ -1431,7 +1638,7 @@ window.MDEditor = {
           const measuredMaximum = Math.max(scroller.scrollHeight - scroller.clientHeight, 0)
           if (linePosition != null) {
             const block = lineContentBlock(linePosition)
-            target = block.top + block.height * lineProgress
+            target = block.top + block.height * lineProgress - gap
           } else {
             target = measuredMaximum * Math.min(Math.max(Number(progress) || 0, 0), 1)
           }
@@ -1440,6 +1647,7 @@ window.MDEditor = {
           view.requestMeasure()
           requestAnimationFrame(() => {
             preservedSourcePosition = Number.isFinite(sourcePosition) ? sourcePosition : null
+            preservedSourceGap = Number.isFinite(sourcePosition) ? gap : 0
             didUserScroll = false
             userScrollIntent = false
             lastScrollTop = scroller.scrollTop

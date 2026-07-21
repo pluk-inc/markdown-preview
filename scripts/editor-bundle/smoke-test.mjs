@@ -10,7 +10,11 @@ const dom = new JSDOM("<!doctype html><body><div id='editor'></div></body>", {
 })
 globalThis.window = dom.window
 globalThis.document = dom.window.document
-globalThis.navigator = dom.window.navigator
+// Node 21+ exposes `navigator` as a getter-only global; plain assignment throws.
+Object.defineProperty(globalThis, "navigator", {
+  value: dom.window.navigator,
+  configurable: true,
+})
 for (const key of ["MutationObserver", "ResizeObserver", "requestAnimationFrame",
                    "cancelAnimationFrame", "getComputedStyle", "Range", "Text", "Node",
                    "HTMLElement", "Element", "Document", "DOMParser", "Selection", "Window"]) {
@@ -100,6 +104,24 @@ check("every editor line derives its direction from its own text",
   bidiLines.length === 3 && bidiLines.every((line) => line.getAttribute("dir") === "auto"))
 bidiEditor.destroy()
 
+const frontmatterHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(frontmatterHost)
+const frontmatterDoc = "---\nname: \"openai-docs\"\ntags:\n  - links\n---\n# Body heading"
+const frontmatterEditor = dom.window.MDEditor.create(frontmatterHost, frontmatterDoc, {})
+check("frontmatter renders as a metadata card, not markdown blocks",
+  frontmatterHost.querySelectorAll(".cm-md-frontmatter").length === 5
+    && frontmatterHost.querySelector(".cm-md-frontmatter-first") != null
+    && frontmatterHost.querySelector(".cm-md-frontmatter-last") != null
+    && frontmatterHost.querySelector(".cm-md-h2") == null
+    && frontmatterHost.querySelector(".cm-md-hr") == null)
+check("frontmatter delimiters are dimmed",
+  frontmatterHost.querySelectorAll(".cm-md-frontmatter-delim").length === 2)
+check("body markdown still live-previews below frontmatter",
+  frontmatterHost.querySelector(".cm-md-h1") != null)
+check("frontmatter round-trips byte-faithfully",
+  frontmatterEditor.getMarkdown() === frontmatterDoc)
+frontmatterEditor.destroy()
+
 const headingHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(headingHost)
 const headingEditor = dom.window.MDEditor.create(headingHost, "### Stable heading", {})
@@ -118,11 +140,25 @@ check("inactive heading source reserves its width",
   inactiveHeadingHost.querySelector(".cm-md-heading-source-hidden")?.textContent === "### ")
 check("inactive heading line receives visual offset class",
   inactiveHeadingHost.querySelector(".cm-md-heading-inactive") != null)
-check("blank source line before heading collapses",
-  inactiveHeadingHost.querySelector(".cm-md-blank-before-heading") != null)
-check("heading after blank uses source-line spacing",
-  inactiveHeadingHost.querySelector(".cm-md-heading-after-blank") != null)
+check("normal separator before heading collapses",
+  inactiveHeadingHost.querySelector(".cm-md-line-collapsed") != null)
 inactiveHeadingEditor.destroy()
+
+const headingFollowHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(headingFollowHost)
+const headingFollowEditor = dom.window.MDEditor.create(
+  headingFollowHost, "## Heading\n\nFollowing paragraph", {})
+check("separator after heading resizes to the paragraph's margin",
+  headingFollowHost.querySelector(".cm-md-block-separator") != null)
+headingFollowEditor.destroy()
+
+const paragraphGapHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(paragraphGapHost)
+const paragraphGapEditor = dom.window.MDEditor.create(
+  paragraphGapHost, "First paragraph.\n\nSecond paragraph.\n\n\nThird paragraph.", {})
+check("single blank between paragraphs becomes one resized separator",
+  paragraphGapHost.querySelectorAll(".cm-md-block-separator").length === 2)
+paragraphGapEditor.destroy()
 
 const inlineCodeHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(inlineCodeHost)
@@ -178,15 +214,17 @@ const leadingCodeHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(leadingCodeHost)
 const leadingCodeEditor = dom.window.MDEditor.create(
   leadingCodeHost, "```javascript\nconst answer = 42\n```", {})
-check("implicit initial cursor does not activate a leading code block",
-  leadingCodeHost.querySelectorAll(".cm-md-code-fence-source-hidden").length === 2)
+check("implicit initial cursor keeps the leading code block in live preview",
+  leadingCodeHost.querySelectorAll(".cm-md-line-collapsed").length === 2)
 check("leading preview code block keeps syntax highlighting",
   leadingCodeHost.querySelector(".hl-keyword")?.textContent === "const")
 leadingCodeEditor.select(18)
 check("pointer click activates the code block",
-  leadingCodeHost.querySelector(".cm-md-code-fence-source-hidden") == null)
+  leadingCodeHost.querySelectorAll(".cm-md-line-collapsed").length === 2)
 check("activated code block remains syntax highlighted",
   leadingCodeHost.querySelector(".hl-keyword")?.textContent === "const")
+check("activated code block keeps raw fence lines visually hidden",
+  leadingCodeHost.querySelectorAll(".cm-md-line-collapsed").length === 2)
 leadingCodeEditor.destroy()
 
 const inactiveCodeHost = dom.window.document.createElement("div")
@@ -197,6 +235,10 @@ check("inactive code block hides both fence source lines",
   inactiveCodeHost.querySelectorAll(".cm-md-code-fence-source-hidden").length === 2)
 check("inactive code block keeps syntax highlighting",
   inactiveCodeHost.querySelector(".hl-keyword")?.textContent === "const")
+check("inactive fence source lines collapse to zero height",
+  inactiveCodeHost.querySelectorAll(".cm-md-line-collapsed").length === 2)
+check("interior code line carries the card styling when fences collapse",
+  inactiveCodeHost.querySelector(".cm-md-codeblock-first.cm-md-codeblock-last") != null)
 inactiveCodeEditor.destroy()
 
 const legacyCodeHost = dom.window.document.createElement("div")
