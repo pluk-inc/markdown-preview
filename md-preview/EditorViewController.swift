@@ -455,6 +455,30 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         #editor .cm-md-code-fence-source-hidden {
             visibility: hidden;
         }
+        /* Frontmatter — a quiet metadata card above the document, echoing
+           the preview's properties panel. YAML stays editable; only the
+           --- delimiters are dimmed. */
+        #editor .cm-md-frontmatter {
+            font-family: ui-monospace, "SF Mono", Menlo, monospace;
+            font-size: 0.82em;
+            line-height: 1.6;
+            color: var(--secondary);
+            background: color-mix(in srgb, var(--code-bg) 50%, transparent);
+            padding: 0 14px;
+        }
+        /* Outranks the `.cm-line:first-child { padding-top: 0 }` reset so
+           the card keeps its inset when it opens the document. */
+        #editor .cm-content > .cm-line.cm-md-frontmatter-first {
+            border-radius: 15px 15px 0 0;
+            padding-top: 8px;
+        }
+        #editor .cm-md-frontmatter-last {
+            border-radius: 0 0 15px 15px;
+            padding-bottom: 8px;
+        }
+        .cm-md-frontmatter-delim {
+            opacity: 0.45;
+        }
         .cm-md-fence-info { color: var(--secondary); }
         .cm-md-mermaid-preview {
             /* Outer spacing comes from the block separator lines, matching

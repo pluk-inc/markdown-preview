@@ -104,6 +104,24 @@ check("every editor line derives its direction from its own text",
   bidiLines.length === 3 && bidiLines.every((line) => line.getAttribute("dir") === "auto"))
 bidiEditor.destroy()
 
+const frontmatterHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(frontmatterHost)
+const frontmatterDoc = "---\nname: \"openai-docs\"\ntags:\n  - links\n---\n# Body heading"
+const frontmatterEditor = dom.window.MDEditor.create(frontmatterHost, frontmatterDoc, {})
+check("frontmatter renders as a metadata card, not markdown blocks",
+  frontmatterHost.querySelectorAll(".cm-md-frontmatter").length === 5
+    && frontmatterHost.querySelector(".cm-md-frontmatter-first") != null
+    && frontmatterHost.querySelector(".cm-md-frontmatter-last") != null
+    && frontmatterHost.querySelector(".cm-md-h2") == null
+    && frontmatterHost.querySelector(".cm-md-hr") == null)
+check("frontmatter delimiters are dimmed",
+  frontmatterHost.querySelectorAll(".cm-md-frontmatter-delim").length === 2)
+check("body markdown still live-previews below frontmatter",
+  frontmatterHost.querySelector(".cm-md-h1") != null)
+check("frontmatter round-trips byte-faithfully",
+  frontmatterEditor.getMarkdown() === frontmatterDoc)
+frontmatterEditor.destroy()
+
 const headingHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(headingHost)
 const headingEditor = dom.window.MDEditor.create(headingHost, "### Stable heading", {})

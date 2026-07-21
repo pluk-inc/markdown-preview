@@ -11,6 +11,7 @@ import {
 import { EditorState, EditorSelection, StateField } from "@codemirror/state"
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands"
 import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-markdown"
+import { yamlFrontmatter } from "@codemirror/lang-yaml"
 import {
   syntaxTree, ensureSyntaxTree, syntaxHighlighting, HighlightStyle,
   LanguageDescription, LanguageSupport, StreamLanguage,
@@ -715,6 +716,10 @@ const urlMark = Decoration.mark({ class: "cm-md-url" })
 const strongMark = Decoration.mark({ class: "cm-md-strong" })
 const emphasisMark = Decoration.mark({ class: "cm-md-emphasis" })
 const strikethroughMark = Decoration.mark({ class: "cm-md-strikethrough" })
+const frontmatterLine = Decoration.line({ class: "cm-md-frontmatter" })
+const frontmatterFirstLine = Decoration.line({ class: "cm-md-frontmatter-first" })
+const frontmatterLastLine = Decoration.line({ class: "cm-md-frontmatter-last" })
+const frontmatterDelim = Decoration.mark({ class: "cm-md-frontmatter-delim" })
 
 const autoDirectionLine = Decoration.line({ attributes: { dir: "auto" } })
 
@@ -955,25 +960,48 @@ function buildDecorations(view) {
     lineOnce(separator.from, blockSeparatorLine(height))
   }
 
-  // Depth relative to the tree root: Document is entered at depth 1, so its
-  // children — the top-level blocks — sit at depth 2. Tracking depth (and a
-  // stack of enclosing lists) answers parent/sibling questions positionally,
-  // without materializing a SyntaxNode per visited node.
+  // yamlFrontmatter wraps the Markdown parser as Document(Document(...)), so
+  // discover the inner content Document and treat its direct children as the
+  // top-level Markdown blocks. Tracking depth (and a stack of enclosing
+  // lists) answers parent/sibling questions positionally without
+  // materializing a SyntaxNode per visited node.
   let depth = 0
   const listStack = []
 
   for (const { from, to } of view.visibleRanges) {
     lastTopBlockName = null
+    let contentDocumentDepth = null
     syntaxTree(state).iterate({
       from, to,
       enter: (node) => {
         depth++
         const name = node.name
 
+        if (depth === 2 && name === "Frontmatter") lastTopBlockName = name
+        if (depth === 2 && name === "Document") contentDocumentDepth = depth
+
         // --- Block separators ------------------------------------------
-        if (depth === 2) {
+        if (contentDocumentDepth != null && depth === contentDocumentDepth + 1) {
           if (SEPARATOR_BLOCKS.has(name)) separatorBlankBefore(node)
           lastTopBlockName = name
+        }
+
+        // --- Frontmatter ----------------------------------------------
+        // Style the whole block as a quiet metadata card; keep the YAML
+        // source editable, dimming only the `---` delimiters.
+        if (name === "Frontmatter") {
+          // The node's end includes the newline after the closing ---;
+          // step back so the card never bleeds onto the first body line.
+          const end = node.to > node.from && state.doc.lineAt(node.to).from === node.to
+            ? node.to - 1 : node.to
+          eachLine(node.from, end, frontmatterLine)
+          lineOnce(node.from, frontmatterFirstLine)
+          lineOnce(state.doc.lineAt(end).from, frontmatterLastLine)
+          return
+        }
+        if (name === "DashLine") {
+          ranges.push(frontmatterDelim.range(node.from, node.to))
+          return
         }
 
         // --- Headings ------------------------------------------------
@@ -1476,7 +1504,9 @@ window.MDEditor = {
           EditorView.lineWrapping,
           EditorView.perLineTextDirection.of(true),
           directionLines,
-          markdown({ base: markdownLanguage, codeLanguages }),
+          // Parse a leading `---` block as YAML frontmatter so its lines
+          // never surface as a thematic break plus setext heading.
+          yamlFrontmatter({ content: markdown({ base: markdownLanguage, codeLanguages }) }),
           activeCodeBlock,
           mermaidPreviews,
           tableEditors,
