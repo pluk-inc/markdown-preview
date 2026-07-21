@@ -114,6 +114,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isOpeningDocumentFromPrompt = false
     private var isPromptingForDocument = false
     private var isDocumentPromptScheduled = false
+    private var documentPromptScheduleGeneration = 0
+    private var didReceiveOpenURLsDuringLaunch = false
+    private var hasFinishedLaunching = false
     private var isTerminationSaveInProgress = false
     private var pendingTerminationSaveCount = 0
     private var terminationSaveFailed = false
@@ -132,7 +135,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installGoMenu()
         installAppMenuItemIcons()
         installZoomMenuItemIcons()
-        scheduleDocumentPrompt(requiresNoDocuments: true)
+        hasFinishedLaunching = true
+        if !didReceiveOpenURLsDuringLaunch {
+            scheduleDocumentPrompt(requiresNoDocuments: true)
+        }
     }
 
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
@@ -153,6 +159,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
+        if !hasFinishedLaunching {
+            didReceiveOpenURLsDuringLaunch = true
+        }
+        cancelScheduledDocumentPrompt()
+
         for url in urls {
             if url.isExistingDirectory {
                 openFolder(url)
@@ -339,13 +350,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               !isDocumentPromptScheduled else { return }
 
         isDocumentPromptScheduled = true
+        documentPromptScheduleGeneration += 1
+        let scheduleGeneration = documentPromptScheduleGeneration
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            guard self.documentPromptScheduleGeneration == scheduleGeneration else { return }
             self.isDocumentPromptScheduled = false
             guard !requiresNoDocuments || NSDocumentController.shared.documents.isEmpty else { return }
             NSApp.activate(ignoringOtherApps: true)
             self.promptForDocument()
         }
+    }
+
+    private func cancelScheduledDocumentPrompt() {
+        guard isDocumentPromptScheduled else { return }
+        documentPromptScheduleGeneration += 1
+        isDocumentPromptScheduled = false
     }
 
     private func openFolder(_ url: URL) {
