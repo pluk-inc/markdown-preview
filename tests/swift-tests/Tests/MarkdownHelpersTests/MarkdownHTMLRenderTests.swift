@@ -588,7 +588,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(rendered.articleHTML.contains(
             "<td data-table-row=\"1\" data-table-column=\"1\" data-table-markdown=\"10\" align=\"right\">10</td>"
         ), rendered.articleHTML)
-        XCTAssertTrue(rendered.html.contains("function enableTableEditing()"))
+        XCTAssertTrue(rendered.html.contains("function enableTableEditing(root = document)"))
         XCTAssertFalse(rendered.html.contains("md-table-edge-action"))
         XCTAssertTrue(rendered.html.contains("kind: 'tableContextMenu'"))
         XCTAssertTrue(rendered.html.contains("cell.dataset.placeholder = placeholder"))
