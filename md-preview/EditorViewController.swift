@@ -516,9 +516,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             margin: 0;
             max-width: 100%;
             overflow: visible;
-            font-family: (MarkdownHTML.bodyFontFamily);
-            font-size: (MarkdownHTML.bodyFontSize)px;
-            line-height: (MarkdownHTML.bodyLineHeight);
+            font-family: \(MarkdownHTML.bodyFontFamily);
+            font-size: \(MarkdownHTML.bodyFontSize)px;
+            line-height: \(MarkdownHTML.bodyLineHeight);
         }
         .cm-md-table-widget:focus {
             outline: none;
