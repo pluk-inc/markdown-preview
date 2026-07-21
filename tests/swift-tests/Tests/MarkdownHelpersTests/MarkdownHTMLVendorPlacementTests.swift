@@ -91,16 +91,7 @@ final class MarkdownHTMLVendorPlacementTests: XCTestCase {
     /// state at DOMContentLoaded.
     @MainActor
     private func loadInlineDocument(warmup: Bool) async throws -> PopulateMetrics {
-        let repositoryRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let purifyURL = repositoryRoot
-            .appendingPathComponent("md-preview/Vendor/DOMPurify/purify.min.js")
-        let purifyJS = try String(contentsOf: purifyURL, encoding: .utf8)
-            .replacingOccurrences(of: "</script", with: "<\\/script")
+        let purifyJS = try TestVendor.script("md-preview/Vendor/DOMPurify/purify.min.js")
 
         let rendered = MarkdownHTML.render(
             markdown: sample,

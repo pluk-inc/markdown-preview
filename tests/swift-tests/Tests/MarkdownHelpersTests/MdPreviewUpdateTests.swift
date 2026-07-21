@@ -39,8 +39,8 @@ final class MdPreviewUpdateTests: XCTestCase {
                 vendorLoading: .lazy
             ).articleHTML
         }
-        let docV1 = try jsLiteral(articleHTML(paragraph: "Intro paragraph, first draft."))
-        let docV2 = try jsLiteral(articleHTML(paragraph: "Intro paragraph, edited draft."))
+        let docV1 = MarkdownHTML.javaScriptStringLiteral(articleHTML(paragraph: "Intro paragraph, first draft."))
+        let docV2 = MarkdownHTML.javaScriptStringLiteral(articleHTML(paragraph: "Intro paragraph, edited draft."))
 
         _ = try await webView.evaluateJavaScript(
             "window.MdPreview.update(\(docV1)); true"
@@ -132,9 +132,9 @@ final class MdPreviewUpdateTests: XCTestCase {
                 vendorLoading: .lazy
             ).articleHTML
         }
-        let warmupDoc = try jsLiteral(articleHTML(paragraph: "Synthetic warmup."))
-        let realDoc = try jsLiteral(articleHTML(paragraph: "Real document."))
-        let editedDoc = try jsLiteral(articleHTML(paragraph: "Real document, edited."))
+        let warmupDoc = MarkdownHTML.javaScriptStringLiteral(articleHTML(paragraph: "Synthetic warmup."))
+        let realDoc = MarkdownHTML.javaScriptStringLiteral(articleHTML(paragraph: "Real document."))
+        let editedDoc = MarkdownHTML.javaScriptStringLiteral(articleHTML(paragraph: "Real document, edited."))
 
         // Hidden warmup populate keeps the flag, so the first real document
         // is still a guaranteed clean innerHTML replace, not a morph against
@@ -182,18 +182,8 @@ final class MdPreviewUpdateTests: XCTestCase {
     /// is detectable.
     @MainActor
     private func loadHarness(articleAttributes: String) async throws -> WKWebView {
-        let repositoryRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let purifyJS = try vendorScript(
-            at: repositoryRoot.appendingPathComponent("md-preview/Vendor/DOMPurify/purify.min.js")
-        )
-        let morphdomJS = try vendorScript(
-            at: repositoryRoot.appendingPathComponent("md-preview/Vendor/Morphdom/morphdom.min.js")
-        )
+        let purifyJS = try TestVendor.script("md-preview/Vendor/DOMPurify/purify.min.js")
+        let morphdomJS = try TestVendor.script("md-preview/Vendor/Morphdom/morphdom.min.js")
         let fakeRenderers = """
         <script>
         (() => {
@@ -234,7 +224,7 @@ final class MdPreviewUpdateTests: XCTestCase {
         </body></html>
         """
         let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
-        webView.loadHTMLString(html, baseURL: repositoryRoot)
+        webView.loadHTMLString(html, baseURL: TestVendor.repositoryRoot)
         while webView.isLoading {
             try await Task.sleep(for: .milliseconds(10))
         }
@@ -271,16 +261,6 @@ final class MdPreviewUpdateTests: XCTestCase {
         return state
     }
 
-    private func vendorScript(at url: URL) throws -> String {
-        try String(contentsOf: url, encoding: .utf8)
-            .replacingOccurrences(of: "</script", with: "<\\/script")
-    }
-
-    private func jsLiteral(_ string: String) throws -> String {
-        let data = try JSONSerialization.data(withJSONObject: [string])
-        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
-        return String(json.dropFirst().dropLast())
-    }
 }
 
 private struct MdPreviewUpdateState: Decodable {

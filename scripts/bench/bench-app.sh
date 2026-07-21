@@ -103,13 +103,6 @@ webcontent_pids() {
     pgrep -f 'com.apple.WebKit.WebContent' 2>/dev/null || true
 }
 
-# not_in "list" pid → true when pid is absent from the whitespace-separated list
-not_in() {
-    local list="$1" pid="$2" p
-    for p in $list; do [[ "$p" == "$pid" ]] && return 1; done
-    return 0
-}
-
 # Extract metrics from a captured `log stream` file and the raw ps samples,
 # append CSV rows. Args: sample-name, logfile, psfile.
 emit_metrics() {
@@ -208,7 +201,8 @@ run_sample() {
         # so the "webcontent" role reflects total WebKit cost at that moment.
         wc_pids=""
         for p in $(webcontent_pids); do
-            not_in "$baseline_wc" "$p" && wc_pids="$wc_pids $p"
+            # Space-padded pattern match: keep pids absent from the pre-launch snapshot.
+            [[ " $baseline_wc " != *" $p "* ]] && wc_pids="$wc_pids $p"
         done
         wc_pids="${wc_pids# }"
         if [[ -n "$wc_pids" ]]; then

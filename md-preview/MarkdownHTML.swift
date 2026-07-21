@@ -34,13 +34,8 @@ nonisolated enum MarkdownHTML {
     /// JS — `.inline`'s answer to `.lazy`'s deferred fetch. `.lazy` emissions
     /// keep everything in `head`, byte-identical to the pre-split output.
     private struct VendorEmission {
-        let head: String
-        let body: String
-
-        static let empty = VendorEmission(head: "", body: "")
-        static func headOnly(_ head: String) -> VendorEmission {
-            VendorEmission(head: head, body: "")
-        }
+        var head: String = ""
+        var body: String = ""
     }
 
     /// Layout of the rendered article column.
@@ -156,29 +151,25 @@ nonisolated enum MarkdownHTML {
         </style>
         """ : ""
         let baseTag = assetBaseHref.map { "<base href=\"\($0)\">" } ?? ""
-        let sanitizerBlock = dompurifyHead()
-        let morphBlock = morphdomHead()
-        let mathBlock = containsMath ? katexHead(mode: vendorLoading) : .empty
-        let mermaidBlock = containsMermaid ? mermaidScript(mode: vendorLoading) : .empty
-        let highlightBlock = containsCode ? highlightHead(mode: vendorLoading) : .empty
+        let sanitizerBlock = dompurifyBlock
+        let morphBlock = morphdomBlock
+        let mathBlock = containsMath ? katexHead(mode: vendorLoading) : VendorEmission()
+        let mermaidBlock = containsMermaid ? mermaidScript(mode: vendorLoading) : VendorEmission()
+        let highlightBlock = containsCode ? highlightHead(mode: vendorLoading) : VendorEmission()
         // Inline documents populate the article as soon as its <template> has
         // parsed — before the body-end vendor bundles below it — so the text
         // is paintable while the parser is still working through the JS. The
         // vendor init IIFEs still see readyState 'loading' at body-end and
         // keep their DOMContentLoaded wiring; `populateFromTemplate` removes
-        // the template, so the later `start()` populate is a no-op. `.lazy`
-        // emits nothing here, keeping the app-path body unchanged.
-        let bodyScripts: String
-        switch vendorLoading {
-        case .inline:
-            let earlyPopulate =
-                "<script>window.MdPreview && MdPreview.populateNow && MdPreview.populateNow();</script>"
-            bodyScripts = "\n" + [earlyPopulate, mathBlock.body, mermaidBlock.body, highlightBlock.body]
-                .filter { !$0.isEmpty }
-                .joined(separator: "\n")
-        case .lazy:
-            bodyScripts = ""
-        }
+        // the template, so the later `start()` populate is a no-op. Under
+        // `.lazy` every emission's body is empty and the populate hook is
+        // skipped, keeping the app-path body unchanged.
+        let earlyPopulate = vendorLoading == .inline
+            ? "<script>window.MdPreview && MdPreview.populateNow && MdPreview.populateNow();</script>"
+            : ""
+        let bodyParts = [earlyPopulate, mathBlock.body, mermaidBlock.body, highlightBlock.body]
+            .filter { !$0.isEmpty }
+        let bodyScripts = bodyParts.isEmpty ? "" : "\n" + bodyParts.joined(separator: "\n")
         // Warmup keeps the article in layout (so Mermaid's IntersectionObserver
         // still fires and the renderer actually executes) but invisible —
         // otherwise the synthetic diagram flashes on screen before the first
@@ -1606,6 +1597,26 @@ nonisolated enum MarkdownHTML {
             return h.toString(36);
         }
 
+        // One row per expensive block kind: the wrapper class, a key prefix,
+        // where the node carrying __mdSrc and the renderer's done flag lives
+        // inside the wrapper (null = the wrapper itself), and where the
+        // source-position attrs live when not on the wrapper. The keying,
+        // preservation, and attr-sync helpers below all derive from this
+        // table, so a new renderer means one new row — not three new branches.
+        const EXPENSIVE_BLOCKS = [
+            { cls: 'mermaid-figure', kind: 'mm',   inner: '.mermaid',   done: 'mmDone',   attrInner: null  },
+            { cls: 'md-code-wrap',   kind: 'code', inner: 'pre > code', done: 'hljsDone', attrInner: 'pre' },
+            { cls: 'math',           kind: 'math', inner: null,         done: 'mathDone', attrInner: null  }
+        ];
+        const EXPENSIVE_SELECTOR = EXPENSIVE_BLOCKS.map((b) => '.' + b.cls).join(', ');
+        function expensiveKindOf(el) {
+            if (!el.classList) return null;
+            return EXPENSIVE_BLOCKS.find((b) => el.classList.contains(b.cls)) || null;
+        }
+        function expensiveSrcNode(el, info) {
+            return info.inner ? el.querySelector(info.inner) : el;
+        }
+
         // Content-derived keys so morphdom re-pairs unchanged diagrams/math/
         // code even when blocks are inserted above them. Live nodes hash the
         // stashed __mdSrc (renderers replace textContent with their output);
@@ -1613,21 +1624,21 @@ nonisolated enum MarkdownHTML {
         // both strings, so identical source yields identical keys.
         function keyExpensiveBlocks(root) {
             const counts = new Map();
-            root.querySelectorAll('.mermaid-figure, .math, .md-code-wrap').forEach((el) => {
-                let srcNode = el;
-                let kind = 'math';
-                if (el.classList.contains('mermaid-figure')) {
-                    srcNode = el.querySelector('.mermaid');
-                    kind = 'mm';
-                } else if (el.classList.contains('md-code-wrap')) {
-                    srcNode = el.querySelector('pre > code');
-                    kind = 'code';
-                }
+            root.querySelectorAll(EXPENSIVE_SELECTOR).forEach((el) => {
+                const info = expensiveKindOf(el);
+                const srcNode = expensiveSrcNode(el, info);
                 if (!srcNode) return;
                 const src = srcNode.__mdSrc !== undefined ? srcNode.__mdSrc : srcNode.textContent;
+                // Hash memoized per node — live-tree sources are stable
+                // across updates, so only fresh incoming nodes pay the hash.
                 // Kind-prefixed so a hash collision can never pair blocks of
                 // different types (block math and code wraps are both <div>s).
-                const base = kind + '-' + mdHash(src);
+                let base = srcNode.__mdKeyBase;
+                if (base === undefined || srcNode.__mdKeySrc !== src) {
+                    base = info.kind + '-' + mdHash(src);
+                    srcNode.__mdKeyBase = base;
+                    srcNode.__mdKeySrc = src;
+                }
                 const n = (counts.get(base) || 0) + 1;
                 counts.set(base, n);
                 el.setAttribute('data-md-key', 'k' + base + ':' + n);
@@ -1636,14 +1647,13 @@ nonisolated enum MarkdownHTML {
 
         // A preserved subtree keeps its pre-shift source metadata, which
         // would desync scroll handoff and table edits after lines move.
-        // Copy the incoming line attributes onto the live node (for code
-        // wraps they live on the inner <pre>, not the wrapper div).
-        function syncSourceAttrs(fromEl, toEl) {
+        // Copy the incoming line attributes onto the live node.
+        function syncSourceAttrs(fromEl, toEl, info) {
             let from = fromEl;
             let to = toEl;
-            if (fromEl.classList.contains('md-code-wrap')) {
-                from = fromEl.querySelector('pre');
-                to = toEl.querySelector('pre');
+            if (info.attrInner) {
+                from = fromEl.querySelector(info.attrInner);
+                to = toEl.querySelector(info.attrInner);
                 if (!from || !to) return;
             }
             for (const name of ['data-source-line', 'data-source-start', 'data-source-end']) {
@@ -1657,24 +1667,35 @@ nonisolated enum MarkdownHTML {
         // exact source the incoming node carries — morphdom must then leave
         // it untouched. Anything else (still rendering, changed source)
         // morphs normally and the reappliers re-render it.
-        function shouldKeepRendered(fromEl, toEl) {
-            if (fromEl.classList.contains('math')) {
-                return fromEl.dataset.mathDone === '1' && fromEl.__mdSrc === toEl.textContent;
-            }
-            if (fromEl.classList.contains('mermaid-figure')) {
-                const live = fromEl.querySelector('.mermaid');
-                const incoming = toEl.querySelector('.mermaid');
-                return !!live && !!incoming && live.dataset.mmDone === '1'
-                    && live.__mdSrc === incoming.textContent;
-            }
-            if (fromEl.classList.contains('md-code-wrap')) {
-                const live = fromEl.querySelector('pre > code');
-                const incoming = toEl.querySelector('pre > code');
-                return !!live && !!incoming && live.dataset.hljsDone === '1'
-                    && live.__mdSrc === incoming.textContent;
-            }
-            return false;
+        function isRenderedForSource(info, fromEl, toEl) {
+            const live = expensiveSrcNode(fromEl, info);
+            const incoming = expensiveSrcNode(toEl, info);
+            return !!live && !!incoming && live.dataset[info.done] === '1'
+                && live.__mdSrc === incoming.textContent;
         }
+
+        // Both are stateless, so they're built once instead of per update —
+        // MdPreview.update is the per-keystroke-exit/file-change hot path.
+        const SANITIZE_DOM_CONFIG = Object.assign({}, SANITIZE_CONFIG, { RETURN_DOM_FRAGMENT: true });
+        const MORPH_OPTIONS = {
+            childrenOnly: true,
+            getNodeKey: (node) => node.nodeType === 1
+                ? (node.getAttribute('data-md-key') || node.id || undefined)
+                : undefined,
+            onBeforeElUpdated: (fromEl, toEl) => {
+                if (fromEl.isEqualNode(toEl)) return false;
+                // Skipping is all-or-nothing per subtree: letting morphdom
+                // descend would strip the done markers (incoming nodes lack
+                // them) and force a destructive re-render on the next reapply.
+                const info = expensiveKindOf(fromEl);
+                if (info && isRenderedForSource(info, fromEl, toEl)) {
+                    syncSourceAttrs(fromEl, toEl, info);
+                    return false;
+                }
+                if (fromEl.tagName === 'DETAILS') toEl.toggleAttribute('open', fromEl.open);
+                return true;
+            }
+        };
 
         // `opts.keepHidden` preserves the warmup opacity so the synthetic
         // Mermaid pre-render doesn't flash on screen. The host then issues a
@@ -1699,10 +1720,7 @@ nonisolated enum MarkdownHTML {
             let morphed = false;
             if (canMorph) {
                 try {
-                    const frag = DOMPurify.sanitize(
-                        articleHTML,
-                        Object.assign({}, SANITIZE_CONFIG, { RETURN_DOM_FRAGMENT: true })
-                    );
+                    const frag = DOMPurify.sanitize(articleHTML, SANITIZE_DOM_CONFIG);
                     const next = document.createElement('article');
                     next.appendChild(frag);
                     // Pre-shape the incoming tree so the decorators' wrappers
@@ -1711,25 +1729,7 @@ nonisolated enum MarkdownHTML {
                     enableTableEditing(next);
                     keyExpensiveBlocks(article);
                     keyExpensiveBlocks(next);
-                    morphdom(article, next, {
-                        childrenOnly: true,
-                        getNodeKey: (node) => node.nodeType === 1
-                            ? (node.getAttribute('data-md-key') || node.id || undefined)
-                            : undefined,
-                        onBeforeElUpdated: (fromEl, toEl) => {
-                            if (fromEl.isEqualNode(toEl)) return false;
-                            // Skipping is all-or-nothing per subtree: letting
-                            // morphdom descend would strip the done markers
-                            // (incoming nodes lack them) and force a
-                            // destructive re-render on the next reapply.
-                            if (shouldKeepRendered(fromEl, toEl)) {
-                                syncSourceAttrs(fromEl, toEl);
-                                return false;
-                            }
-                            if (fromEl.tagName === 'DETAILS') toEl.toggleAttribute('open', fromEl.open);
-                            return true;
-                        }
-                    });
+                    morphdom(article, next, MORPH_OPTIONS);
                     morphed = true;
                 } catch (e) {
                     perfLog('morphdom fallback', String(e && e.message || e));
@@ -1748,9 +1748,13 @@ nonisolated enum MarkdownHTML {
                 delete article.dataset.warmup;
             }
             if (articleHTML) {
-                decorateCodeBlocks();
+                // The morph path already decorated the incoming tree; only
+                // the innerHTML swap leaves fresh undecorated nodes behind.
+                if (!morphed) {
+                    decorateCodeBlocks();
+                    enableTableEditing();
+                }
                 enableTaskCheckboxes();
-                enableTableEditing();
                 for (const fn of reappliers) {
                     try { fn(); } catch (e) { /* one bad apple shouldn't block others */ }
                 }
@@ -1845,36 +1849,38 @@ nonisolated enum MarkdownHTML {
     }
     """
 
-    /// Inline DOMPurify so the bootstrap can call `DOMPurify.sanitize` before
-    /// the first article ever reaches `innerHTML`. Emitted ahead of the host
-    /// bridge so the sanitizer is defined by the time `MdPreview.update` runs.
-    /// If the vendored file is missing (developer setup error), this returns
-    /// empty and the bootstrap's `sanitize()` fails closed — rendering an
-    /// empty article rather than shipping unsanitized HTML.
-    private static func dompurifyHead() -> String {
-        guard let js = bundledVendorResource("purify.min", ext: "js", subdir: "Vendor/DOMPurify") else {
+    /// Bundled vendor JS as an inline `<script>` block, or empty when the
+    /// resource is missing so callers fail soft. The `</script` escape is the
+    /// one correctness-sensitive step of inlining — keep it here, in one place.
+    private static func bundledVendorScriptTag(_ name: String, subdir: String) -> String {
+        guard let js = bundledVendorResource(name, ext: "js", subdir: subdir) else {
             return ""
         }
         let safeJS = js.replacingOccurrences(of: "</script", with: "<\\/script")
         return "<script>\(safeJS)</script>"
     }
+
+    /// Inline DOMPurify so the bootstrap can call `DOMPurify.sanitize` before
+    /// the first article ever reaches `innerHTML`. Emitted ahead of the host
+    /// bridge so the sanitizer is defined by the time `MdPreview.update` runs.
+    /// If the vendored file is missing (developer setup error), this is empty
+    /// and the bootstrap's `sanitize()` fails closed — rendering an empty
+    /// article rather than shipping unsanitized HTML.
+    /// Cached: bundle contents are immutable for the process lifetime, and
+    /// `render()` runs on every display, so the disk read happens once.
+    private static let dompurifyBlock = bundledVendorScriptTag("purify.min", subdir: "Vendor/DOMPurify")
 
     /// Inline morphdom so `MdPreview.update` can DOM-diff fast-path updates
     /// instead of replacing the whole article subtree — finished Mermaid
     /// SVGs, KaTeX output, and highlighted code survive updates untouched.
     /// If the vendored file is missing (SPM tests, Quick Look bundle), this
-    /// returns empty and `MdPreview.update` keeps its innerHTML fallback.
-    private static func morphdomHead() -> String {
-        guard let js = bundledVendorResource("morphdom.min", ext: "js", subdir: "Vendor/Morphdom") else {
-            return ""
-        }
-        let safeJS = js.replacingOccurrences(of: "</script", with: "<\\/script")
-        return "<script>\(safeJS)</script>"
-    }
+    /// is empty and `MdPreview.update` keeps its innerHTML fallback. Cached
+    /// for the same reason as `dompurifyBlock`.
+    private static let morphdomBlock = bundledVendorScriptTag("morphdom.min", subdir: "Vendor/Morphdom")
 
     private static func katexHead(mode: VendorLoading) -> VendorEmission {
         guard bundledVendorURL("katex.min", ext: "js", subdir: "Vendor/KaTeX") != nil else {
-            return .headOnly(katexFallbackScript)
+            return VendorEmission(head: katexFallbackScript)
         }
         let css = bundledVendorResource("katex.min", ext: "css", subdir: "Vendor/KaTeX") ?? ""
 
@@ -1910,7 +1916,7 @@ nonisolated enum MarkdownHTML {
             )
         case .lazy:
             // CSS stays inline so layout is stable while KaTeX JS streams in.
-            return .headOnly("""
+            return VendorEmission(head: """
             <style>\(css)</style>
             <script>
             (function() {
@@ -2033,7 +2039,9 @@ nonisolated enum MarkdownHTML {
         """
     }
 
-    private static func javaScriptStringLiteral(_ string: String) -> String {
+    // Internal (not private) so regression tests can build JS payloads with
+    // the exact escaping the production bridge uses, like `hostBridgeScript`.
+    static func javaScriptStringLiteral(_ string: String) -> String {
         guard let data = try? JSONSerialization.data(withJSONObject: [string]),
               let json = String(data: data, encoding: .utf8) else {
             return "\"\""
@@ -2134,7 +2142,7 @@ nonisolated enum MarkdownHTML {
 
     private static func highlightHead(mode: VendorLoading) -> VendorEmission {
         guard bundledVendorURL("highlight.min", ext: "js", subdir: "Vendor/Highlight") != nil else {
-            return .empty
+            return VendorEmission()
         }
         let css = bundledVendorResource("highlight.min", ext: "css", subdir: "Vendor/Highlight") ?? ""
 
@@ -2167,7 +2175,7 @@ nonisolated enum MarkdownHTML {
             )
         case .lazy:
             // CSS stays inline so layout doesn't shift when the JS arrives.
-            return .headOnly("""
+            return VendorEmission(head: """
             <style>\(css)</style>
             <script>
             (function() {
@@ -2537,14 +2545,13 @@ nonisolated enum MarkdownHTML {
 
     private static func mermaidScript(mode: VendorLoading) -> VendorEmission {
         guard bundledVendorURL("mermaid.min", ext: "js", subdir: "Vendor/Mermaid") != nil else {
-            return .headOnly(mermaidFallbackScript)
+            return VendorEmission(head: mermaidFallbackScript)
         }
         switch mode {
         case .inline:
             let vendorJS = bundledVendorResource("mermaid.min", ext: "js", subdir: "Vendor/Mermaid") ?? ""
             let safeVendor = vendorJS.replacingOccurrences(of: "</script", with: "<\\/script")
             return VendorEmission(
-                head: "",
                 body: """
                 <script>
                 \(safeVendor)
@@ -2562,7 +2569,7 @@ nonisolated enum MarkdownHTML {
                 """
             )
         case .lazy:
-            return .headOnly("""
+            return VendorEmission(head: """
             <script>
             (() => {
                 let mm = null;
