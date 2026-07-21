@@ -117,6 +117,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var documentPromptScheduleGeneration = 0
     private var didReceiveOpenURLsDuringLaunch = false
     private var hasFinishedLaunching = false
+    private var pendingOpenURLCount = 0
+    private weak var activeOpenPanel: NSOpenPanel?
     private var isTerminationSaveInProgress = false
     private var pendingTerminationSaveCount = 0
     private var terminationSaveFailed = false
@@ -170,10 +172,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 continue
             }
 
+            pendingOpenURLCount += 1
             NSDocumentController.shared.openDocument(withContentsOf: url,
-                                                     display: true) { _, _, error in
-                guard let error else { return }
-                NSAlert(error: error).runModal()
+                                                     display: true) { [weak self] _, _, error in
+                if let error {
+                    NSAlert(error: error).runModal()
+                }
+                guard let self else { return }
+                self.pendingOpenURLCount -= 1
+                if error != nil, self.pendingOpenURLCount == 0 {
+                    self.scheduleDocumentPrompt(requiresNoDocuments: true)
+                }
             }
         }
     }
@@ -330,6 +339,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         defer { isPromptingForDocument = false }
 
         let panel = makeOpenPanel()
+        activeOpenPanel = panel
+        defer { activeOpenPanel = nil }
         guard panel.runModal() == .OK, let url = panel.url else { return }
         if url.isExistingDirectory {
             openFolder(url)
@@ -363,6 +374,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func cancelScheduledDocumentPrompt() {
+        // Dismiss a prompt that already made it past the generation check and
+        // is sitting in runModal() when the open event arrives.
+        activeOpenPanel?.cancel(nil)
         guard isDocumentPromptScheduled else { return }
         documentPromptScheduleGeneration += 1
         isDocumentPromptScheduled = false
