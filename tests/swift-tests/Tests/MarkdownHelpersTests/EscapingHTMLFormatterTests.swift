@@ -86,14 +86,15 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         )
     }
 
-    func testEveryPrecedingBlankSourceLineIsRecorded() {
+    func testOnlyAdditionalPrecedingBlankSourceLinesAreRecorded() {
         let html = EscapingHTMLFormatter.format("First paragraph.\n\n\nSecond paragraph.")
         XCTAssertTrue(
             html.contains(
-                "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<p data-source-line=\"4\" data-source-start=\"4\" data-source-end=\"4\">Second paragraph.</p>"
+                "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<p data-source-line=\"4\" data-source-start=\"4\" data-source-end=\"4\">Second paragraph.</p>"
             ),
-            "expected both empty source lines to be preserved: \(html)"
+            "expected only the additional empty source line to be preserved: \(html)"
         )
+        XCTAssertEqual(html.components(separatedBy: "md-source-blank-line").count - 1, 1)
     }
 
     func testSourceMarkdownExcludesRemovedContentFromBlankLineCount() {
@@ -101,13 +102,10 @@ final class EscapingHTMLFormatterTests: XCTestCase {
             "Before.\n\n\n\nAfter.",
             sourceMarkdown: "Before.\n\n[^note]: Removed.\n\nAfter."
         )
-        XCTAssertTrue(
-            html.contains(
-                "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<p data-source-line=\"5\" data-source-start=\"5\" data-source-end=\"5\">After.</p>"
-            ),
-            "removed source content must not become extra visual blank lines: \(html)"
-        )
-        XCTAssertEqual(html.components(separatedBy: "md-source-blank-line").count - 1, 1)
+        XCTAssertTrue(html.contains(
+            "<p data-source-line=\"5\" data-source-start=\"5\" data-source-end=\"5\">After.</p>"
+        ))
+        XCTAssertEqual(html.components(separatedBy: "md-source-blank-line").count - 1, 0)
     }
 
     func testGitHubAlertTagIsCaseInsensitive() {

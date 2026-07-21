@@ -224,6 +224,11 @@ final class MainSplitViewController: NSSplitViewController {
         isSourceScrollAnchorResolved = false
         isEditorDOMReady = false
         pendingPreviewScrollProgress = previewScrollProgress
+        // A rapid re-entry can interrupt a previous exit whose anchor
+        // restore is still pending; drop that machinery so it can't fire
+        // into the new editing session.
+        contentViewController?.prepareToRestoreSourceScrollAnchor(nil)
+        contentViewController?.pendingAnchorRestored = nil
         editorVC.view.isHidden = false
         editorVC.editorDidBecomeReady = { [weak self, weak editorVC] in
             guard let self, let editorVC, self.isEditorPreparing else { return }
@@ -272,21 +277,23 @@ final class MainSplitViewController: NSSplitViewController {
         }
     }
 
-    func exitEditMode(waitForPreviewRender: Bool, completion: @escaping () -> Void) {
+    /// `overlayHidden` fires once the editor overlay has fully faded out and
+    /// been hidden — the moment chrome tied to editing (the formatting
+    /// accessory) can be dismissed without reflowing the crossfade.
+    func exitEditMode(waitForPreviewRender: Bool,
+                      overlayHidden: (@MainActor () -> Void)? = nil,
+                      completion: @escaping () -> Void) {
         guard let editorVC = cachedEditorViewController,
               isEditorPreparing || isEditorVisible else {
+            overlayHidden?()
             completion()
             return
         }
         editorVC.fetchScrollAnchor { [weak self, weak editorVC] anchor in
             guard let self, let editorVC else {
+                overlayHidden?()
                 completion()
                 return
-            }
-            if waitForPreviewRender {
-                self.contentViewController?.prepareToRestoreSourceScrollAnchor(anchor)
-            } else if let anchor {
-                self.contentViewController?.restoreSourceScrollAnchor(anchor)
             }
             editorVC.editorDidBecomeReady = nil
             self.pendingSourceScrollAnchor = nil
@@ -294,16 +301,42 @@ final class MainSplitViewController: NSSplitViewController {
             self.isEditorDOMReady = false
             self.isEditorPreparing = false
             self.isEditorVisible = false
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.10
-                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                editorVC.view.animator().alphaValue = 0
-            } completionHandler: { [weak self, weak editorVC] in
-                Task { @MainActor [weak self, weak editorVC] in
-                    guard let self, let editorVC,
-                          !self.isEditorPreparing, !self.isEditorVisible else { return }
-                    editorVC.view.isHidden = true
+
+            let fadeOutEditor = { [weak self, weak editorVC] in
+                guard let self, let editorVC,
+                      !self.isEditorPreparing, !self.isEditorVisible,
+                      editorVC.view.alphaValue > 0 else { return }
+                self.contentViewController?.pendingAnchorRestored = nil
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.10
+                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    editorVC.view.animator().alphaValue = 0
+                } completionHandler: { [weak self, weak editorVC] in
+                    Task { @MainActor [weak self, weak editorVC] in
+                        guard let self, let editorVC,
+                              !self.isEditorPreparing, !self.isEditorVisible else { return }
+                        editorVC.view.isHidden = true
+                        overlayHidden?()
+                    }
                 }
+            }
+
+            if waitForPreviewRender, anchor != nil {
+                // Keep the editor overlay covering the preview until the
+                // fresh render has restored the source anchor beneath it —
+                // fading immediately exposed the old article re-rendering
+                // and scrolling into place, which read as jitter. A deadline
+                // caps the hold in case the render outruns it.
+                self.contentViewController?.prepareToRestoreSourceScrollAnchor(anchor)
+                self.contentViewController?.pendingAnchorRestored = fadeOutEditor
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    fadeOutEditor()
+                }
+            } else {
+                if let anchor {
+                    self.contentViewController?.restoreSourceScrollAnchor(anchor)
+                }
+                fadeOutEditor()
             }
             completion()
         }

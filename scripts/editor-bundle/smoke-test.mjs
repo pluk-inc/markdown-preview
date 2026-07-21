@@ -10,7 +10,7 @@ const dom = new JSDOM("<!doctype html><body><div id='editor'></div></body>", {
 })
 globalThis.window = dom.window
 globalThis.document = dom.window.document
-// Node 22+ ships a built-in getter-only `navigator`; assignment throws.
+// Node 21+ exposes `navigator` as a getter-only global; plain assignment throws.
 Object.defineProperty(globalThis, "navigator", {
   value: dom.window.navigator,
   configurable: true,
@@ -140,11 +140,25 @@ check("inactive heading source reserves its width",
   inactiveHeadingHost.querySelector(".cm-md-heading-source-hidden")?.textContent === "### ")
 check("inactive heading line receives visual offset class",
   inactiveHeadingHost.querySelector(".cm-md-heading-inactive") != null)
-check("blank source line before heading collapses",
-  inactiveHeadingHost.querySelector(".cm-md-blank-before-heading") != null)
-check("heading after blank uses source-line spacing",
-  inactiveHeadingHost.querySelector(".cm-md-heading-after-blank") != null)
+check("normal separator before heading collapses",
+  inactiveHeadingHost.querySelector(".cm-md-line-collapsed") != null)
 inactiveHeadingEditor.destroy()
+
+const headingFollowHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(headingFollowHost)
+const headingFollowEditor = dom.window.MDEditor.create(
+  headingFollowHost, "## Heading\n\nFollowing paragraph", {})
+check("separator after heading resizes to the paragraph's margin",
+  headingFollowHost.querySelector(".cm-md-block-separator") != null)
+headingFollowEditor.destroy()
+
+const paragraphGapHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(paragraphGapHost)
+const paragraphGapEditor = dom.window.MDEditor.create(
+  paragraphGapHost, "First paragraph.\n\nSecond paragraph.\n\n\nThird paragraph.", {})
+check("single blank between paragraphs becomes one resized separator",
+  paragraphGapHost.querySelectorAll(".cm-md-block-separator").length === 2)
+paragraphGapEditor.destroy()
 
 const inlineCodeHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(inlineCodeHost)
@@ -200,15 +214,17 @@ const leadingCodeHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(leadingCodeHost)
 const leadingCodeEditor = dom.window.MDEditor.create(
   leadingCodeHost, "```javascript\nconst answer = 42\n```", {})
-check("implicit initial cursor does not activate a leading code block",
-  leadingCodeHost.querySelectorAll(".cm-md-code-fence-source-hidden").length === 2)
+check("implicit initial cursor keeps the leading code block in live preview",
+  leadingCodeHost.querySelectorAll(".cm-md-line-collapsed").length === 2)
 check("leading preview code block keeps syntax highlighting",
   leadingCodeHost.querySelector(".hl-keyword")?.textContent === "const")
 leadingCodeEditor.select(18)
 check("pointer click activates the code block",
-  leadingCodeHost.querySelector(".cm-md-code-fence-source-hidden") == null)
+  leadingCodeHost.querySelectorAll(".cm-md-line-collapsed").length === 2)
 check("activated code block remains syntax highlighted",
   leadingCodeHost.querySelector(".hl-keyword")?.textContent === "const")
+check("activated code block keeps raw fence lines visually hidden",
+  leadingCodeHost.querySelectorAll(".cm-md-line-collapsed").length === 2)
 leadingCodeEditor.destroy()
 
 const inactiveCodeHost = dom.window.document.createElement("div")
@@ -219,6 +235,10 @@ check("inactive code block hides both fence source lines",
   inactiveCodeHost.querySelectorAll(".cm-md-code-fence-source-hidden").length === 2)
 check("inactive code block keeps syntax highlighting",
   inactiveCodeHost.querySelector(".hl-keyword")?.textContent === "const")
+check("inactive fence source lines collapse to zero height",
+  inactiveCodeHost.querySelectorAll(".cm-md-line-collapsed").length === 2)
+check("interior code line carries the card styling when fences collapse",
+  inactiveCodeHost.querySelector(".cm-md-codeblock-first.cm-md-codeblock-last") != null)
 inactiveCodeEditor.destroy()
 
 const legacyCodeHost = dom.window.document.createElement("div")

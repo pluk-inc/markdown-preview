@@ -248,20 +248,33 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         ))
     }
 
-    func testReadOnlyRenderingPreservesActualBlankLineCounts() {
+    func testReadOnlyRenderingUsesSemanticSpacingForNormalSeparators() {
         let rendered = MarkdownHTML.render(
             markdown: "First paragraph.\n\n\n## Heading\n\nSecond paragraph.",
             vendorLoading: .lazy
         )
 
         XCTAssertTrue(rendered.articleHTML.contains(
-            "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<h2 data-source-line=\"4\""
+            "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<h2 data-source-line=\"4\""
         ))
-        XCTAssertTrue(rendered.articleHTML.contains(
+        XCTAssertFalse(rendered.articleHTML.contains(
             "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<p data-source-line=\"6\""
         ))
         XCTAssertTrue(rendered.html.contains(".md-source-blank-line {"))
         XCTAssertTrue(rendered.html.contains("height: 22.8px;"))
+        XCTAssertFalse(rendered.html.contains(".md-source-blank-line + *"))
+    }
+
+    func testListsAndDecoratedCodeBlocksOwnTheirOuterSpacing() {
+        let rendered = MarkdownHTML.render(
+            markdown: "## Heading\n\n- First\n- Second\n\n```sh\necho hello\n```",
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(rendered.html.contains("li:first-child { margin-top: 0; }"))
+        XCTAssertTrue(rendered.html.contains(".md-code-wrap > pre { margin: 0; }"))
+        XCTAssertTrue(rendered.html.contains(".md-code-wrap {"))
+        XCTAssertTrue(rendered.html.contains("margin: \(MarkdownHTML.paragraphSpacing)px 0 0;"))
     }
 
     func testMermaidPostProcessingAcceptsSourceMappedPreTag() {
