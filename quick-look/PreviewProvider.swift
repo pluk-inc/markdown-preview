@@ -12,20 +12,17 @@ import UniformTypeIdentifiers
 
 class PreviewProvider: QLPreviewProvider, QLPreviewingController {
 
-    #if DEBUG
-    // Debug-only perf instrumentation so `log stream --level debug
-    // --predicate 'subsystem BEGINSWITH "doc.md-preview"'` shows Quick Look
-    // render wall-time alongside the app's `[mdp-perf]` entries.
-    private static let perf = Logger(subsystem: "doc.md-preview.quicklook", category: "perf")
-    #endif
-
     func providePreview(for request: QLFilePreviewRequest) async throws -> QLPreviewReply {
         #if DEBUG
-        // Default log level (not .debug): Quick Look appex processes are
-        // short-lived, and their debug-level messages don't reliably reach a
-        // running `log stream` — default-level entries are always persisted.
+        // Debug-only perf instrumentation on the shared `Logger.perf` (its
+        // subsystem is the appex bundle id, so the bench scripts' `subsystem
+        // BEGINSWITH "doc.md-preview"` predicate picks it up alongside the
+        // app's `[mdp-perf]` entries). Default log level (not .debug): Quick
+        // Look appex processes are short-lived, and their debug-level
+        // messages don't reliably reach a running `log stream` —
+        // default-level entries are always persisted.
         let t0 = DispatchTime.now()
-        Self.perf.log(
+        Logger.perf.log(
             "[mdp-perf-ql] provide start \(request.fileURL.lastPathComponent, privacy: .public)"
         )
         #endif
@@ -53,7 +50,7 @@ class PreviewProvider: QLPreviewProvider, QLPreviewingController {
             (Double(DispatchTime.now().uptimeNanoseconds - t0.uptimeNanoseconds)
              / 1_000_000).rounded()
         )
-        Self.perf.log(
+        Logger.perf.log(
             "[mdp-perf-ql] provide finish +\(elapsedMs, privacy: .public)ms (\(text.count, privacy: .public) chars)"
         )
         #endif
