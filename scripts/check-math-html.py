@@ -9,6 +9,10 @@ checks = {
     "extracts block $$...$$ math": "blockMathRegex" in source,
     r"extracts inline \\(...\\) math": "parenthesizedInlineMathRegex" in source,
     r"extracts block \\[...\\] math": "bracketedBlockMathRegex" in source,
+    r"extracts Markdown-escaped inline \\\\(...\\\\) math":
+        "markdownEscapedParenthesizedInlineMathRegex" in source,
+    r"extracts Markdown-escaped block \\\\[...\\\\] math":
+        "markdownEscapedBracketedBlockMathRegex" in source,
     "detects ```math fences": "codeFenceRegex" in source and 'info.language == "math"' in source,
     "skips math inside code spans/fences": "inlineCodeRegex" in source and "MdPreviewProtect" in source,
     "loads bundled KaTeX renderer": "Vendor/KaTeX" in source and "katex.min" in source,

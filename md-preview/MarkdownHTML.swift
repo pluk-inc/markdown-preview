@@ -673,6 +673,15 @@ nonisolated enum MarkdownHTML {
         try! NSRegularExpression(pattern: #"(?<!\\)\\\[([\s\S]+?)\\\]"#)
     }()
 
+    // Markdown authors sometimes double the delimiter backslashes so the
+    // Markdown parser emits the single-backslash form expected by MathJax.
+    // Math is extracted before Markdown parsing here, so accept that source
+    // form directly while still rejecting runs of three or more backslashes.
+    private static let markdownEscapedBracketedBlockMathRegex: NSRegularExpression = {
+        // swiftlint:disable:next force_try
+        try! NSRegularExpression(pattern: #"(?<!\\)\\\\\[([\s\S]+?)\\\\\]"#)
+    }()
+
     // Reject leading `\$` (escaped) and require non-whitespace adjacent to
     // delimiters so prose like "$5 and $10" doesn't match.
     private static let inlineMathRegex: NSRegularExpression = {
@@ -683,6 +692,11 @@ nonisolated enum MarkdownHTML {
     private static let parenthesizedInlineMathRegex: NSRegularExpression = {
         // swiftlint:disable:next force_try
         try! NSRegularExpression(pattern: #"(?<!\\)\\\(([^\n]+?)\\\)"#)
+    }()
+
+    private static let markdownEscapedParenthesizedInlineMathRegex: NSRegularExpression = {
+        // swiftlint:disable:next force_try
+        try! NSRegularExpression(pattern: #"(?<!\\)\\\\\(([^\n]+?)\\\\\)"#)
     }()
 
     // Fenced code block. Group 1 = backtick run, group 2 = info string, group 3 = body.
@@ -787,9 +801,13 @@ nonisolated enum MarkdownHTML {
         }
 
         let afterDollarBlockMath = extractBlocks(matching: blockMathRegex, from: afterInlineCode)
+        let afterMarkdownEscapedBlockMath = extractBlocks(
+            matching: markdownEscapedBracketedBlockMathRegex,
+            from: afterDollarBlockMath
+        )
         let afterBlockMath = extractBlocks(
             matching: bracketedBlockMathRegex,
-            from: afterDollarBlockMath
+            from: afterMarkdownEscapedBlockMath
         )
         let afterDollarInlineMath = replaceMatches(
             of: inlineMathRegex,
@@ -798,9 +816,16 @@ nonisolated enum MarkdownHTML {
             defer { inlines.append(capture) }
             return "MdPreviewMathInline\(inlines.count)Token"
         }
+        let afterMarkdownEscapedInlineMath = replaceMatches(
+            of: markdownEscapedParenthesizedInlineMathRegex,
+            in: afterDollarInlineMath
+        ) { capture in
+            defer { inlines.append(capture) }
+            return "MdPreviewMathInline\(inlines.count)Token"
+        }
         let afterInlineMath = replaceMatches(
             of: parenthesizedInlineMathRegex,
-            in: afterDollarInlineMath
+            in: afterMarkdownEscapedInlineMath
         ) { capture in
             defer { inlines.append(capture) }
             return "MdPreviewMathInline\(inlines.count)Token"
