@@ -550,15 +550,46 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         ), rendered.articleHTML)
     }
 
+    func testMarkdownEscapedLatexDelimitersRenderAsMath() {
+        let rendered = MarkdownHTML.render(
+            markdown: #"""
+            Inline \\(\frac{\pi}{2}\\) expression.
+
+            \\[\int_0^1 f(t) \mathrm{d}t\\]
+
+            \\[\sum_j \gamma_j^2/d_j\\]
+            """#,
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(rendered.containsMath)
+        XCTAssertTrue(rendered.articleHTML.contains(
+            #"<span class="math math-inline">\frac{\pi}{2}</span>"#
+        ), rendered.articleHTML)
+        XCTAssertTrue(rendered.articleHTML.contains(
+            #"class="math math-display">\int_0^1 f(t) \mathrm{d}t</div>"#
+        ), rendered.articleHTML)
+        XCTAssertTrue(rendered.articleHTML.contains(
+            #"class="math math-display">\sum_j \gamma_j^2/d_j</div>"#
+        ), rendered.articleHTML)
+        XCTAssertEqual(
+            rendered.articleHTML.components(separatedBy: "class=\"math ").count - 1,
+            3
+        )
+    }
+
     func testLatexDelimitersInsideCodeRemainLiteral() {
         let rendered = MarkdownHTML.render(
             markdown: #"""
             `\(inline\)`
+            `\\(markdown escaped inline\\)`
 
             ```latex
             \[
             \frac{a}{b}
             \]
+
+            \\[\sum_i x_i\\]
             ```
             """#,
             vendorLoading: .lazy
@@ -566,7 +597,9 @@ final class MarkdownHTMLRenderTests: XCTestCase {
 
         XCTAssertFalse(rendered.containsMath)
         XCTAssertTrue(rendered.articleHTML.contains(#"<code>\(inline\)</code>"#))
+        XCTAssertTrue(rendered.articleHTML.contains(#"<code>\\(markdown escaped inline\\)</code>"#))
         XCTAssertTrue(rendered.articleHTML.contains(#"\["#))
+        XCTAssertTrue(rendered.articleHTML.contains(#"\\[\sum_i x_i\\]"#))
         XCTAssertFalse(rendered.articleHTML.contains("class=\"math"))
     }
 
