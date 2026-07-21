@@ -520,6 +520,127 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(rendered.articleHTML.contains("<p data-source-line=\"1\" data-source-start=\"1\" data-source-end=\"3\"><div"))
     }
 
+    func testLatexDelimitersRenderAsMath() {
+        let rendered = MarkdownHTML.render(
+            markdown: #"""
+            Inline \( E=mc^2 \) expression.
+
+            \[
+            \begin{equation}
+            E=mc^2
+            \end{equation}
+            \]
+            """#,
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(rendered.containsMath)
+        XCTAssertTrue(rendered.articleHTML.contains(
+            #"<span class="math math-inline"> E=mc^2 </span>"#
+        ), rendered.articleHTML)
+        XCTAssertTrue(rendered.articleHTML.contains(
+            #"data-source-line="3" data-source-start="3" data-source-end="7" class="math math-display""#
+        ), rendered.articleHTML)
+        XCTAssertTrue(rendered.articleHTML.contains(
+            #"""
+            \begin{equation}
+            E=mc^2
+            \end{equation}
+            """#
+        ), rendered.articleHTML)
+    }
+
+    func testLatexDelimitersInsideCodeRemainLiteral() {
+        let rendered = MarkdownHTML.render(
+            markdown: #"""
+            `\(inline\)`
+
+            ```latex
+            \[
+            \frac{a}{b}
+            \]
+            ```
+            """#,
+            vendorLoading: .lazy
+        )
+
+        XCTAssertFalse(rendered.containsMath)
+        XCTAssertTrue(rendered.articleHTML.contains(#"<code>\(inline\)</code>"#))
+        XCTAssertTrue(rendered.articleHTML.contains(#"\["#))
+        XCTAssertFalse(rendered.articleHTML.contains("class=\"math"))
+    }
+
+    @MainActor
+    func testReportedLatexStructuresRenderWithBundledKatex() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: #"""
+            \[
+            \begin{equation}
+            E=mc^2
+            \end{equation}
+            \]
+
+            $$
+            \begin{aligned}
+            a &= b+c\\
+            d &= e+f
+            \end{aligned}
+            $$
+
+            $$\frac{a}{b}$$
+            $$\int_0^\infty e^{-x}dx$$
+            $$\sum_{i=1}^{N}x_i$$
+            $$A=\begin{bmatrix}1&0\\0&1\end{bmatrix}$$
+            """#,
+            vendorLoading: .lazy
+        )
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let katexURL = repositoryRoot
+            .appendingPathComponent("md-preview/Vendor/KaTeX/katex.min.js")
+        let katexJS = try String(contentsOf: katexURL, encoding: .utf8)
+            .replacingOccurrences(of: "</script", with: "<\\/script")
+        let html = """
+        <!DOCTYPE html>
+        <html><body><article>\(rendered.articleHTML)</article>
+        <script>\(katexJS)</script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+
+        webView.loadHTMLString(html, baseURL: repositoryRoot)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try await webView.evaluateJavaScript("""
+        document.querySelectorAll('.math').forEach((element) => {
+            katex.render(element.textContent, element, {
+                displayMode: element.classList.contains('math-display'),
+                throwOnError: false,
+                output: 'htmlAndMathml'
+            });
+        });
+        """)
+
+        let mathCount = try await webView.evaluateJavaScript(
+            "document.querySelectorAll('.math').length"
+        ) as? Int
+        let renderedCount = try await webView.evaluateJavaScript(
+            "document.querySelectorAll('.math .katex').length"
+        ) as? Int
+        let errorCount = try await webView.evaluateJavaScript(
+            "document.querySelectorAll('.katex-error').length"
+        ) as? Int
+
+        XCTAssertEqual(mathCount, 6)
+        XCTAssertEqual(renderedCount, 6)
+        XCTAssertEqual(errorCount, 0)
+    }
+
     func testFootnoteRemovalDoesNotShiftFollowingSourceLines() {
         let rendered = MarkdownHTML.render(
             markdown: """
