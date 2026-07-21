@@ -101,7 +101,19 @@ nonisolated enum MarkdownHTML {
             sourceLineOffset: sourceLineOffset
         )
         let headingsHTML = injectHeadingIDs(in: footnoteReferenceHTML + footnoteDefinitions.html)
-        let bodyHTML = injectRTLDirection(in: headingsHTML)
+        let renderedBodyHTML = injectRTLDirection(in: headingsHTML)
+        let frontmatterHTML: String
+        if let raw = frontmatter.raw,
+           let format = frontmatter.format {
+            frontmatterHTML = renderFrontmatter(
+                raw,
+                format: format,
+                sourceEndLine: sourceLineOffset
+            )
+        } else {
+            frontmatterHTML = ""
+        }
+        let bodyHTML = frontmatterHTML + renderedBodyHTML
         let containsMath = mathResult.containsMath || footnoteDefinitions.containsMath
         let containsMermaid = mermaidResult.containsMermaid || footnoteDefinitions.containsMermaid
         let containsCode = detectHighlightableCode(in: bodyHTML)
@@ -1784,6 +1796,28 @@ nonisolated enum MarkdownHTML {
         return out
     }
 
+    private static func renderFrontmatter(_ raw: String,
+                                          format: MarkdownFrontmatter.Format,
+                                          sourceEndLine: Int) -> String {
+        let entries = MarkdownFrontmatter.parse(raw, format: format)
+        guard !entries.isEmpty else { return "" }
+
+        let rows = entries.map { entry in
+            """
+            <tr><th scope="row" dir="auto">\(htmlEscape(entry.key))</th><td dir="auto">\(htmlEscape(entry.value))</td></tr>
+            """
+        }.joined(separator: "\n")
+
+        return """
+        <section class="md-frontmatter" data-source-line="1" data-source-start="1" data-source-end="\(max(1, sourceEndLine))">
+        <table><tbody>
+        \(rows)
+        </tbody></table>
+        </section>
+
+        """
+    }
+
     private static func javaScriptStringLiteral(_ string: String) -> String {
         guard let data = try? JSONSerialization.data(withJSONObject: [string]),
               let json = String(data: data, encoding: .utf8) else {
@@ -2417,6 +2451,26 @@ nonisolated enum MarkdownHTML {
         margin-right: auto;
     }
     article.markdown-body > *:first-child { margin-top: 0 !important; }
+
+    .md-frontmatter {
+        margin: 0 0 1.6em;
+    }
+    .md-frontmatter table {
+        display: table;
+        width: 100%;
+        table-layout: fixed;
+        margin: 0;
+        overflow: visible;
+    }
+    .md-frontmatter th,
+    .md-frontmatter td {
+        vertical-align: top;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+    }
+    .md-frontmatter th {
+        width: 32%;
+    }
 
     p {
         margin: 0.8em 0 0;

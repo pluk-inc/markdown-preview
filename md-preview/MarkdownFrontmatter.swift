@@ -12,8 +12,9 @@ struct FrontmatterEntry: Equatable, Identifiable {
 }
 
 // Swift-markdown is CommonMark: it has no frontmatter notion, so delimiter
-// blocks can be rendered as document content. We strip supported frontmatter
-// before parsing and surface the parsed entries in the Inspector instead.
+// blocks can be rendered as document content. We split supported frontmatter
+// from the Markdown body, then surface its parsed entries in the rendered page
+// and Inspector.
 nonisolated enum MarkdownFrontmatter {
 
     enum Format {

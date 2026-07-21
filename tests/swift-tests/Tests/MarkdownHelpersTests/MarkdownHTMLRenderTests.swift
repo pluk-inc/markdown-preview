@@ -3,6 +3,42 @@ import WebKit
 @testable import MarkdownHelpers
 
 final class MarkdownHTMLRenderTests: XCTestCase {
+    func testYamlFrontmatterRendersAsTableBeforeDocumentBody() {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ---
+            name: build-validator
+            description: Validate R&D < 5 & ship safely.
+            ---
+            You are a **build validator**.
+            """,
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(rendered.articleHTML.hasPrefix("<section class=\"md-frontmatter\""))
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "data-source-line=\"1\" data-source-start=\"1\" data-source-end=\"4\""
+        ))
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "<tr><th scope=\"row\" dir=\"auto\">name</th><td dir=\"auto\">build-validator</td></tr>"
+        ))
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "<td dir=\"auto\">Validate R&amp;D &lt; 5 &amp; ship safely.</td>"
+        ))
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "<p data-source-line=\"5\" data-source-start=\"5\" data-source-end=\"5\">You are a <strong>build validator</strong>.</p>"
+        ))
+    }
+
+    func testDocumentWithoutFrontmatterDoesNotRenderFrontmatterTable() {
+        let rendered = MarkdownHTML.render(
+            markdown: "# Plain document",
+            vendorLoading: .lazy
+        )
+
+        XCTAssertFalse(rendered.articleHTML.contains("md-frontmatter"))
+    }
+
     @MainActor
     func testScrollableLongTableKeepsWebKitViewportAndScrollsDocument() async throws {
         let rows = (1...750).map { "| \($0) | Function \($0) | 100.00% |" }
