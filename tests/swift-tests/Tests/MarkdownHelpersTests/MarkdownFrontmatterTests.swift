@@ -89,7 +89,77 @@ final class MarkdownFrontmatterTests: XCTestCase {
 
         XCTAssertEqual(entries, [
             FrontmatterEntry(id: 0, key: "title", value: "Draft"),
-            FrontmatterEntry(id: 1, key: "tags", value: "- markdown")
+            FrontmatterEntry(id: 1, key: "tags", value: "markdown", items: ["markdown"])
+        ])
+    }
+
+    func testUnquotesYamlScalars() {
+        let entries = MarkdownFrontmatter.parse("""
+        name: "openai-docs"
+        note: 'single'
+        """, format: .yaml)
+
+        XCTAssertEqual(entries, [
+            FrontmatterEntry(id: 0, key: "name", value: "openai-docs"),
+            FrontmatterEntry(id: 1, key: "note", value: "single")
+        ])
+    }
+
+    func testParsesYamlFlowSequenceAsItems() {
+        let entries = MarkdownFrontmatter.parse(
+            #"tags: [links, "core features", drafts]"#,
+            format: .yaml
+        )
+
+        XCTAssertEqual(entries, [
+            FrontmatterEntry(
+                id: 0,
+                key: "tags",
+                value: "links, core features, drafts",
+                items: ["links", "core features", "drafts"]
+            )
+        ])
+    }
+
+    func testParsesYamlBlockSequenceItemsAtKeyIndent() {
+        let entries = MarkdownFrontmatter.parse("""
+        tags:
+        - links
+        - "core features"
+        """, format: .yaml)
+
+        XCTAssertEqual(entries, [
+            FrontmatterEntry(
+                id: 0,
+                key: "tags",
+                value: "links, core features",
+                items: ["links", "core features"]
+            )
+        ])
+    }
+
+    func testFoldsYamlBlockScalarWithoutIndicatorLeak() {
+        let entries = MarkdownFrontmatter.parse("""
+        description: >-
+          Line one
+          line two.
+        """, format: .yaml)
+
+        XCTAssertEqual(entries, [
+            FrontmatterEntry(id: 0, key: "description", value: "Line one line two.")
+        ])
+    }
+
+    func testStripsYamlTrailingCommentsAndCommentLines() {
+        let entries = MarkdownFrontmatter.parse("""
+        # build metadata
+        status: shipped # since 0.0.38
+        url: https://example.com/#anchor
+        """, format: .yaml)
+
+        XCTAssertEqual(entries, [
+            FrontmatterEntry(id: 0, key: "status", value: "shipped"),
+            FrontmatterEntry(id: 1, key: "url", value: "https://example.com/#anchor")
         ])
     }
 
@@ -105,7 +175,12 @@ final class MarkdownFrontmatterTests: XCTestCase {
             FrontmatterEntry(id: 0, key: "title", value: "Draft"),
             FrontmatterEntry(id: 1, key: "date", value: "2026-05-21"),
             FrontmatterEntry(id: 2, key: "draft", value: "false"),
-            FrontmatterEntry(id: 3, key: "tags", value: #"["markdown", "frontmatter"]"#)
+            FrontmatterEntry(
+                id: 3,
+                key: "tags",
+                value: "markdown, frontmatter",
+                items: ["markdown", "frontmatter"]
+            )
         ])
     }
 }
