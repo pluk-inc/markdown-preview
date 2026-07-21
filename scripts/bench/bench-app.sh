@@ -130,12 +130,16 @@ emit_metrics() {
 
     # JS-side MdPreview.update duration — mean across all occurrences
     # (initial populate + any fast-path/edit-cycle updates during the window).
+    # The optional "(label)" infix matches variant markers like
+    # "MdPreview.update (morphdom) (+4.0ms)" so instrumented branches are
+    # counted the same as plain builds. The sed capture pulls only the
+    # timing digits — a bare [0-9.]+ grep would also match the dot in
+    # "MdPreview.update" and double-count every line.
     # Caveat: the launch-time warmup page fires one small update of its own
     # that can't be told apart in the log, so cold-open means blend it in —
     # compare update_count between runs and prefer edit-cycle runs (many
     # updates) when update_ms is the metric under test.
-    grep -oE 'MdPreview\.update \(\+[0-9.]+ms\)' "$logfile" \
-        | grep -oE '[0-9.]+' \
+    sed -nE 's/.*MdPreview\.update( \([a-z]+\))? \(\+([0-9.]+)ms\).*/\2/p' "$logfile" \
         | awk -v L="$LABEL" -v S="$name" '
             { sum += $1; n++ }
             END { if (n) printf "%s,%s,update_ms,%.1f\n%s,%s,update_count,%d\n",
