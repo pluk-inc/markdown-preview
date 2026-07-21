@@ -120,6 +120,20 @@ enum SearchMode {
 struct SourceScrollAnchor {
     /// Fractional one-based source line at the top of the viewport.
     let sourcePosition: CGFloat
+    /// CSS-px distance from the viewport top down to the anchor's rendered
+    /// top. Nonzero only near the document top, where the viewport sits
+    /// inside the page padding and the fractional line alone would restore
+    /// the position one padding too low.
+    let topGap: CGFloat
+
+    /// Decodes the `{position, gap}` dictionaries produced by the editor's
+    /// getScrollAnchor() and the preview's source-anchor script.
+    init?(scriptResult: Any?) {
+        guard let raw = scriptResult as? [String: Any],
+              let position = raw["position"] as? NSNumber else { return nil }
+        sourcePosition = CGFloat(truncating: position)
+        topGap = (raw["gap"] as? NSNumber).map { CGFloat(truncating: $0) } ?? 0
+    }
 }
 
 struct MarkdownTableEditRequest {
@@ -180,6 +194,11 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
 
     let webView: WKWebView
     var heightDidChange: ((CGFloat) -> Void)?
+    /// Fires when a display() call has put the fresh article into the DOM —
+    /// after the fast-path body swap completes, or after a full page load
+    /// finishes. Unlike heightDidChange, this also fires when the new
+    /// document happens to lay out at the same height as the old one.
+    var contentDidReplace: (() -> Void)?
     var zoomDidChange: ((CGFloat) -> Void)?
     var fragmentLinkActivated: ((String) -> Void)?
     var localMarkdownLinkActivated: ((URL) -> Void)?
@@ -392,7 +411,9 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         // subsequent file with any subset of renderers fast-paths into it.
         if isPageReady, let loaded = loadedFingerprint, loaded.covers(fingerprint) {
             let payload = javaScriptStringLiteral(rendered.articleHTML)
-            webView.evaluateJavaScript("window.MdPreview && MdPreview.update(\(payload));") { _, _ in }
+            webView.evaluateJavaScript("window.MdPreview && MdPreview.update(\(payload));") { [weak self] _, _ in
+                self?.contentDidReplace?()
+            }
             return
         }
 
@@ -699,6 +720,15 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             // Prefer the smallest rendered block containing the viewport
             // anchor. This selects a list item or paragraph over its parent
             // list/container when source ranges are nested.
+            // Above the first block — inside the page padding — no block
+            // contains the anchor; report the first block plus the pixel gap
+            // so the restore lands at the true viewport, not the block top.
+            // collectSourceLayout() returns blocks sorted by top already.
+            const topmost = layout[0];
+            if (y < topmost.top) {
+                return { position: topmost.start, gap: topmost.top - y };
+            }
+
             const containing = layout
                 .filter(block => block.top <= y + 0.5 && block.bottom >= y - 0.5)
                 .sort((a, b) => a.height - b.height || b.start - a.start)[0];
@@ -707,7 +737,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                     (y - containing.top) / containing.height, 0), 1);
                 return {
                     position: containing.start
-                        + progress * (containing.effectiveEnd - containing.start)
+                        + progress * (containing.effectiveEnd - containing.start),
+                    gap: 0
                 };
             }
 
@@ -728,14 +759,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         })();
         """
         webView.evaluateJavaScript(script) { result, _ in
-            guard let raw = result as? [String: Any],
-                  let position = raw["position"] as? NSNumber else {
-                completion(nil)
-                return
-            }
-            completion(SourceScrollAnchor(
-                sourcePosition: CGFloat(truncating: position)
-            ))
+            completion(SourceScrollAnchor(scriptResult: result))
         }
     }
 
@@ -1369,6 +1393,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         configureWebKitScrollView()
         isPageReady = true
+        contentDidReplace?()
     }
 
     private func sameDocumentFragmentID(from url: URL) -> String? {

@@ -51,7 +51,14 @@ nonisolated enum MarkdownHTML {
     static let pagePaddingHorizontal: CGFloat = 40
     static let pagePaddingBottom: CGFloat = 48
     static let sourceLineHeight = bodyFontSize * bodyLineHeight
+    // Block margin-top tokens. The editor bundle receives these through
+    // MDEditor.create's `spacing` option so both surfaces space blocks
+    // identically — change them here, never in entry-cm.js.
     static let paragraphSpacing = bodyFontSize * 0.8
+    static let quoteSpacing = bodyFontSize * 1.2
+    static let largeBlockSpacing = bodyFontSize * 1.6  // alerts, tables, mermaid
+    static let hrSpacing = bodyFontSize * 2.35
+    static let listItemSpacing = bodyFontSize * 0.4
 
     struct RenderedHTML: Sendable {
         let html: String
@@ -101,7 +108,19 @@ nonisolated enum MarkdownHTML {
             sourceLineOffset: sourceLineOffset
         )
         let headingsHTML = injectHeadingIDs(in: footnoteReferenceHTML + footnoteDefinitions.html)
-        let bodyHTML = injectRTLDirection(in: headingsHTML)
+        let renderedBodyHTML = injectRTLDirection(in: headingsHTML)
+        let frontmatterHTML: String
+        if let raw = frontmatter.raw,
+           let format = frontmatter.format {
+            frontmatterHTML = renderFrontmatter(
+                raw,
+                format: format,
+                sourceEndLine: sourceLineOffset
+            )
+        } else {
+            frontmatterHTML = ""
+        }
+        let bodyHTML = frontmatterHTML + renderedBodyHTML
         let containsMath = mathResult.containsMath || footnoteDefinitions.containsMath
         let containsMermaid = mermaidResult.containsMermaid || footnoteDefinitions.containsMermaid
         let containsCode = detectHighlightableCode(in: bodyHTML)
@@ -118,6 +137,7 @@ nonisolated enum MarkdownHTML {
         """ : ""
         let baseTag = assetBaseHref.map { "<base href=\"\($0)\">" } ?? ""
         let sanitizerBlock = dompurifyHead()
+        let morphBlock = morphdomHead()
         let mathBlock = containsMath ? katexHead(mode: vendorLoading) : ""
         let mermaidBlock = containsMermaid ? mermaidScript(mode: vendorLoading) : ""
         let highlightBlock = containsCode ? highlightHead(mode: vendorLoading) : ""
@@ -147,6 +167,7 @@ nonisolated enum MarkdownHTML {
         \(scrollOverride)
         \(contentWidthOverride)
         \(sanitizerBlock)
+        \(morphBlock)
         \(hostBridgeScript)
         \(mathBlock)
         \(mermaidBlock)
@@ -853,7 +874,10 @@ nonisolated enum MarkdownHTML {
     // Always-on host bridge: pushes the document height to the AppKit host via
     // a WKScriptMessageHandler instead of having the host poll. Quietly no-ops
     // when the bridge isn't installed (e.g. Quick Look render).
-    private static let hostBridgeScript: String = """
+    // Internal so the WebKit regression tests can exercise the exact
+    // `MdPreview.update` pipeline shipped by the app with the bundled
+    // DOMPurify and morphdom runtimes.
+    static let hostBridgeScript: String = """
     <script>
     (() => {
         const localized = {
@@ -975,8 +999,8 @@ nonisolated enum MarkdownHTML {
             }
         }, true);
 
-        function decorateCodeBlocks() {
-            document.querySelectorAll('pre > code').forEach((code) => {
+        function decorateCodeBlocks(root = document) {
+            root.querySelectorAll('pre > code').forEach((code) => {
                 const pre = code.parentElement;
                 if (!pre || pre.dataset.copyButtonReady === '1') return;
                 pre.dataset.copyButtonReady = '1';
@@ -1269,9 +1293,9 @@ nonisolated enum MarkdownHTML {
             });
         }
 
-        function enableTableEditing() {
+        function enableTableEditing(root = document) {
             if (!hasHostBridge) return;
-            document.querySelectorAll('table[data-source-start][data-source-end]').forEach((table) => {
+            root.querySelectorAll('table[data-source-start][data-source-end]').forEach((table) => {
                 if (table.closest('.md-table-editor')) return;
                 const editor = document.createElement('div');
                 editor.className = 'md-table-editor';
@@ -1538,6 +1562,82 @@ nonisolated enum MarkdownHTML {
         window.MdPreview.registerReapplier = (fn) => {
             if (typeof fn === 'function') reappliers.push(fn);
         };
+        function mdHash(s) {
+            let h = 5381;
+            for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+            return h.toString(36);
+        }
+
+        // Content-derived keys so morphdom re-pairs unchanged diagrams/math/
+        // code even when blocks are inserted above them. Live nodes hash the
+        // stashed __mdSrc (renderers replace textContent with their output);
+        // incoming nodes hash textContent — the same Swift emitter produced
+        // both strings, so identical source yields identical keys.
+        function keyExpensiveBlocks(root) {
+            const counts = new Map();
+            root.querySelectorAll('.mermaid-figure, .math, .md-code-wrap').forEach((el) => {
+                let srcNode = el;
+                let kind = 'math';
+                if (el.classList.contains('mermaid-figure')) {
+                    srcNode = el.querySelector('.mermaid');
+                    kind = 'mm';
+                } else if (el.classList.contains('md-code-wrap')) {
+                    srcNode = el.querySelector('pre > code');
+                    kind = 'code';
+                }
+                if (!srcNode) return;
+                const src = srcNode.__mdSrc !== undefined ? srcNode.__mdSrc : srcNode.textContent;
+                // Kind-prefixed so a hash collision can never pair blocks of
+                // different types (block math and code wraps are both <div>s).
+                const base = kind + '-' + mdHash(src);
+                const n = (counts.get(base) || 0) + 1;
+                counts.set(base, n);
+                el.setAttribute('data-md-key', 'k' + base + ':' + n);
+            });
+        }
+
+        // A preserved subtree keeps its pre-shift source metadata, which
+        // would desync scroll handoff and table edits after lines move.
+        // Copy the incoming line attributes onto the live node (for code
+        // wraps they live on the inner <pre>, not the wrapper div).
+        function syncSourceAttrs(fromEl, toEl) {
+            let from = fromEl;
+            let to = toEl;
+            if (fromEl.classList.contains('md-code-wrap')) {
+                from = fromEl.querySelector('pre');
+                to = toEl.querySelector('pre');
+                if (!from || !to) return;
+            }
+            for (const name of ['data-source-line', 'data-source-start', 'data-source-end']) {
+                const value = to.getAttribute(name);
+                if (value === null) from.removeAttribute(name);
+                else from.setAttribute(name, value);
+            }
+        }
+
+        // True when the live subtree holds finished renderer output for the
+        // exact source the incoming node carries — morphdom must then leave
+        // it untouched. Anything else (still rendering, changed source)
+        // morphs normally and the reappliers re-render it.
+        function shouldKeepRendered(fromEl, toEl) {
+            if (fromEl.classList.contains('math')) {
+                return fromEl.dataset.mathDone === '1' && fromEl.__mdSrc === toEl.textContent;
+            }
+            if (fromEl.classList.contains('mermaid-figure')) {
+                const live = fromEl.querySelector('.mermaid');
+                const incoming = toEl.querySelector('.mermaid');
+                return !!live && !!incoming && live.dataset.mmDone === '1'
+                    && live.__mdSrc === incoming.textContent;
+            }
+            if (fromEl.classList.contains('md-code-wrap')) {
+                const live = fromEl.querySelector('pre > code');
+                const incoming = toEl.querySelector('pre > code');
+                return !!live && !!incoming && live.dataset.hljsDone === '1'
+                    && live.__mdSrc === incoming.textContent;
+            }
+            return false;
+        }
+
         // `opts.keepHidden` preserves the warmup opacity so the synthetic
         // Mermaid pre-render doesn't flash on screen. The host then issues a
         // second update without the flag once the real document arrives,
@@ -1546,10 +1646,68 @@ nonisolated enum MarkdownHTML {
             const article = document.querySelector('.markdown-body');
             if (!article) return;
             const tStart = perfNow();
-            article.innerHTML = sanitize(articleHTML);
+            finishTableCellEdit(false);
+            clearTablePartSelection();
+            // DOM-diff fast path: morph the live article toward the incoming
+            // HTML so finished Mermaid SVGs, KaTeX output, and highlighted
+            // code survive the update instead of being re-rendered. Skipped
+            // for the first populate (empty article), the warmup article,
+            // and whenever morphdom or DOMPurify is missing; any throw
+            // falls back to the innerHTML swap below.
+            const canMorph = !!articleHTML && article.firstElementChild
+                && article.dataset.warmup !== '1'
+                && typeof morphdom === 'function'
+                && typeof DOMPurify !== 'undefined' && DOMPurify.sanitize;
+            let morphed = false;
+            if (canMorph) {
+                try {
+                    const frag = DOMPurify.sanitize(
+                        articleHTML,
+                        Object.assign({}, SANITIZE_CONFIG, { RETURN_DOM_FRAGMENT: true })
+                    );
+                    const next = document.createElement('article');
+                    next.appendChild(frag);
+                    // Pre-shape the incoming tree so the decorators' wrappers
+                    // pair one-to-one with the live DOM during the diff.
+                    decorateCodeBlocks(next);
+                    enableTableEditing(next);
+                    keyExpensiveBlocks(article);
+                    keyExpensiveBlocks(next);
+                    morphdom(article, next, {
+                        childrenOnly: true,
+                        getNodeKey: (node) => node.nodeType === 1
+                            ? (node.getAttribute('data-md-key') || node.id || undefined)
+                            : undefined,
+                        onBeforeElUpdated: (fromEl, toEl) => {
+                            if (fromEl.isEqualNode(toEl)) return false;
+                            // Skipping is all-or-nothing per subtree: letting
+                            // morphdom descend would strip the done markers
+                            // (incoming nodes lack them) and force a
+                            // destructive re-render on the next reapply.
+                            if (shouldKeepRendered(fromEl, toEl)) {
+                                syncSourceAttrs(fromEl, toEl);
+                                return false;
+                            }
+                            if (fromEl.tagName === 'DETAILS') toEl.toggleAttribute('open', fromEl.open);
+                            return true;
+                        }
+                    });
+                    morphed = true;
+                } catch (e) {
+                    perfLog('morphdom fallback', String(e && e.message || e));
+                }
+            }
+            if (!morphed) {
+                article.innerHTML = sanitize(articleHTML);
+            }
             if (!opts || !opts.keepHidden) {
                 article.style.opacity = '';
                 article.style.pointerEvents = '';
+                // Revealing means the synthetic warmup content is gone — the
+                // hidden populate keeps the flag so the first real document
+                // still takes the guaranteed innerHTML replace above, and
+                // every update after it may morph.
+                delete article.dataset.warmup;
             }
             if (articleHTML) {
                 decorateCodeBlocks();
@@ -1559,7 +1717,7 @@ nonisolated enum MarkdownHTML {
                     try { fn(); } catch (e) { /* one bad apple shouldn't block others */ }
                 }
             }
-            perfLog('MdPreview.update', '(+' + (perfNow() - tStart).toFixed(1) + 'ms)');
+            perfLog('MdPreview.update' + (morphed ? ' (morphdom)' : ''), '(+' + (perfNow() - tStart).toFixed(1) + 'ms)');
             pushHeight();
         };
 
@@ -1626,6 +1784,9 @@ nonisolated enum MarkdownHTML {
             if (el.dataset.mathDone === '1') return;
             const tex = el.textContent;
             const display = el.classList.contains('math-display');
+            // Pre-render source, stashed so MdPreview.update can pair
+            // unchanged math with its finished output during DOM diffs.
+            el.__mdSrc = tex;
             try {
                 katex.render(tex, el, {
                     displayMode: display,
@@ -1651,6 +1812,19 @@ nonisolated enum MarkdownHTML {
     /// empty article rather than shipping unsanitized HTML.
     private static func dompurifyHead() -> String {
         guard let js = bundledVendorResource("purify.min", ext: "js", subdir: "Vendor/DOMPurify") else {
+            return ""
+        }
+        let safeJS = js.replacingOccurrences(of: "</script", with: "<\\/script")
+        return "<script>\(safeJS)</script>"
+    }
+
+    /// Inline morphdom so `MdPreview.update` can DOM-diff fast-path updates
+    /// instead of replacing the whole article subtree — finished Mermaid
+    /// SVGs, KaTeX output, and highlighted code survive updates untouched.
+    /// If the vendored file is missing (SPM tests, Quick Look bundle), this
+    /// returns empty and `MdPreview.update` keeps its innerHTML fallback.
+    private static func morphdomHead() -> String {
+        guard let js = bundledVendorResource("morphdom.min", ext: "js", subdir: "Vendor/Morphdom") else {
             return ""
         }
         let safeJS = js.replacingOccurrences(of: "</script", with: "<\\/script")
@@ -1784,6 +1958,38 @@ nonisolated enum MarkdownHTML {
         return out
     }
 
+    private static func renderFrontmatter(_ raw: String,
+                                          format: MarkdownFrontmatter.Format,
+                                          sourceEndLine: Int) -> String {
+        let entries = MarkdownFrontmatter.parse(raw, format: format)
+        guard !entries.isEmpty else { return "" }
+
+        let rows = entries.map { entry in
+            let valueHTML: String
+            if let items = entry.items {
+                valueHTML = items.map {
+                    "<span class=\"md-fm-pill\" dir=\"auto\">\(htmlEscape($0))</span>"
+                }.joined()
+            } else if entry.value.isEmpty {
+                valueHTML = "<span class=\"md-fm-empty\" aria-hidden=\"true\"></span>"
+            } else {
+                valueHTML = htmlEscape(entry.value)
+            }
+            return """
+            <tr><th scope="row" dir="auto">\(htmlEscape(entry.key))</th><td dir="auto">\(valueHTML)</td></tr>
+            """
+        }.joined(separator: "\n")
+
+        return """
+        <section class="md-frontmatter" data-source-line="1" data-source-start="1" data-source-end="\(max(1, sourceEndLine))">
+        <table><tbody>
+        \(rows)
+        </tbody></table>
+        </section>
+
+        """
+    }
+
     private static func javaScriptStringLiteral(_ string: String) -> String {
         guard let data = try? JSONSerialization.data(withJSONObject: [string]),
               let json = String(data: data, encoding: .utf8) else {
@@ -1860,6 +2066,9 @@ nonisolated enum MarkdownHTML {
             const sliceStart = MdPreviewPerf.now();
             while (i < blocks.length) {
                 const block = blocks[i++];
+                // Pre-render source, stashed so MdPreview.update can pair
+                // unchanged blocks with their highlights during DOM diffs.
+                block.__mdSrc = block.textContent;
                 try {
                     hljs.highlightElement(block);
                     decorateShellOptions(block);
@@ -2049,6 +2258,9 @@ nonisolated enum MarkdownHTML {
                 ensureInit();
                 const node = figure.querySelector('.mermaid');
                 if (!node || node.dataset.mmDone === '1') return;
+                // Pre-render source, stashed so MdPreview.update can pair
+                // unchanged diagrams with their SVGs during DOM diffs.
+                node.__mdSrc = node.textContent;
                 try {
                     await mermaid.run({ nodes: [node], suppressErrors: true });
                 } catch (err) {
@@ -2418,14 +2630,61 @@ nonisolated enum MarkdownHTML {
     }
     article.markdown-body > *:first-child { margin-top: 0 !important; }
 
+    /* Frontmatter properties — Obsidian-style metadata panel. Deliberately
+       quieter than document content: no row borders (content tables own
+       horizontal rules), a muted key column, and a single hairline that
+       hands off to the document body. */
+    .md-frontmatter {
+        margin: 0 0 1.2em;
+        padding: 0 0 1em;
+        border-bottom: 1px solid var(--grid);
+    }
+    .md-frontmatter table {
+        display: table;
+        width: 100%;
+        table-layout: fixed;
+        margin: 0;
+        overflow: visible;
+        font-size: 0.92em;
+        line-height: 1.5;
+    }
+    .md-frontmatter th,
+    .md-frontmatter td {
+        padding: 0.28em 0;
+        border: 0;
+        vertical-align: baseline;
+        overflow-wrap: anywhere;
+        text-align: left;
+    }
+    .md-frontmatter th {
+        width: 26%;
+        padding-right: 1.4em;
+        font-weight: 500;
+        color: var(--secondary);
+    }
+    .md-frontmatter td {
+        white-space: pre-wrap;
+    }
+    .md-fm-pill {
+        display: inline-block;
+        margin: 0 0.4em 0.2em 0;
+        padding: 0.08em 0.7em;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--link) 12%, transparent);
+        color: var(--link);
+        font-size: 0.95em;
+        overflow-wrap: anywhere;
+    }
+    .md-fm-empty::before {
+        content: "—";
+        color: var(--secondary);
+    }
+
     p {
-        margin: 0.8em 0 0;
+        margin: \(paragraphSpacing)px 0 0;
     }
     .md-source-blank-line {
         height: \(sourceLineHeight)px;
-    }
-    .md-source-blank-line + * {
-        margin-top: 0 !important;
     }
 
     h1, h2, h3, h4, h5, h6 {
@@ -2502,7 +2761,7 @@ nonisolated enum MarkdownHTML {
     }
     pre {
         position: relative;
-        margin: 0.8em 0 0;
+        margin: \(paragraphSpacing)px 0 0;
         padding: 10px 14px;
         background: var(--code-bg);
         border-radius: 15px;
@@ -2541,7 +2800,9 @@ nonisolated enum MarkdownHTML {
     }
     .md-code-wrap {
         position: relative;
+        margin: \(paragraphSpacing)px 0 0;
     }
+    .md-code-wrap > pre { margin: 0; }
     .md-code-copy {
         position: absolute;
         top: 8px;
@@ -2588,7 +2849,7 @@ nonisolated enum MarkdownHTML {
     }
     .mermaid-figure {
         position: relative;
-        margin: 1.6em auto 0;
+        margin: \(largeBlockSpacing)px auto 0;
         background: var(--code-bg);
         border-radius: 15px;
         overflow: hidden;
@@ -2714,7 +2975,7 @@ nonisolated enum MarkdownHTML {
     .katex { direction: ltr !important; unicode-bidi: isolate; }
 
     blockquote {
-        margin: 1.2em 0 0;
+        margin: \(quoteSpacing)px 0 0;
         padding-inline-start: 1em;
         border-inline-start: 4px solid var(--quote-border);
         color: var(--secondary);
@@ -2722,7 +2983,7 @@ nonisolated enum MarkdownHTML {
     blockquote > *:first-child { margin-top: 0; }
 
     .markdown-alert {
-        margin: 1.6em 0 0;
+        margin: \(largeBlockSpacing)px 0 0;
         padding: 12px 16px;
         background: var(--aside-bg);
         border-left: 4px solid var(--aside-border);
@@ -2755,10 +3016,10 @@ nonisolated enum MarkdownHTML {
     .markdown-alert-caution { border-left-color: #d1242f; }
     .markdown-alert-caution .markdown-alert-title { color: #d1242f; }
 
-    ul, ol { margin: 0.8em 0 0; padding-left: 1.6em; }
-    li { margin-top: 0.4em; }
-    li:first-child { margin-top: 0.8em; }
-    li > ul, li > ol { margin-top: 0.4em; }
+    ul, ol { margin: \(paragraphSpacing)px 0 0; padding-left: 1.6em; }
+    li { margin-top: \(listItemSpacing)px; }
+    li:first-child { margin-top: 0; }
+    li > ul, li > ol { margin-top: \(listItemSpacing)px; }
     li > p:first-child { margin-top: 0; }
 
     li.task-list-item { list-style: none; }
@@ -2792,7 +3053,7 @@ nonisolated enum MarkdownHTML {
     }
 
     table {
-        margin: 1.6em 0 0;
+        margin: \(largeBlockSpacing)px 0 0;
         border-collapse: collapse;
         display: block;
         overflow-x: auto;
@@ -2810,7 +3071,7 @@ nonisolated enum MarkdownHTML {
         position: relative;
         display: inline-block;
         width: fit-content;
-        margin: 1.6em 0 0;
+        margin: \(largeBlockSpacing)px 0 0;
         max-width: 100%;
         overflow: visible;
     }
@@ -2867,7 +3128,7 @@ nonisolated enum MarkdownHTML {
         border: 0;
         height: 1px;
         background: var(--grid);
-        margin: 2.35em 0;
+        margin: \(hrSpacing)px 0;
     }
 
     img {

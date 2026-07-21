@@ -93,11 +93,12 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         let arguments: [String: Any] = [
             "progress": Double(clamped),
             "sourcePosition": sourceAnchor.map { Double($0.sourcePosition) } ?? NSNull(),
+            "sourceGap": sourceAnchor.map { Double($0.topGap) } ?? 0,
         ]
         webView.callAsyncJavaScript(
             """
             if (!window.__mdEditor) return false;
-            return await window.__mdEditor.setScrollPosition(progress, sourcePosition);
+            return await window.__mdEditor.setScrollPosition(progress, sourcePosition, sourceGap);
             """,
             arguments: arguments,
             in: nil,
@@ -111,14 +112,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         webView.evaluateJavaScript(
             "window.__mdEditor && window.__mdEditor.getScrollAnchor()"
         ) { result, _ in
-            guard let raw = result as? [String: Any],
-                  let position = raw["position"] as? NSNumber else {
-                completion(nil)
-                return
-            }
-            completion(SourceScrollAnchor(
-                sourcePosition: CGFloat(truncating: position)
-            ))
+            completion(SourceScrollAnchor(scriptResult: result))
         }
     }
 
@@ -325,17 +319,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             font-weight: 600;
             line-height: 1.18;
             padding-top: 1.6em;
-            /* Preview pushes the block after a heading down by its
-               0.8em margin-top (12px at body size); mirror it here. */
-            padding-bottom: \(MarkdownHTML.paragraphSpacing)px;
         }
         #editor .cm-md-h1 { font-size: 2em; padding-top: 0.8em; }
-        /* The preview preserves a source blank line before a heading as one
-           line box and suppresses the heading margin. Mirror that exact
-           height instead of substituting the heading's larger top spacing. */
-        #editor .cm-md-heading-after-blank {
-            padding-top: \(MarkdownHTML.sourceLineHeight)px;
-        }
         /* Mirror the preview's first-child margin reset so the document
            starts at the same height in both modes. */
         #editor .cm-content > .cm-line:first-child { padding-top: 0; }
@@ -344,9 +329,15 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         #editor .cm-md-h4 { font-size: 1.41em; line-height: 1.08; }
         #editor .cm-md-h5 { font-size: 1.29em; line-height: 1.09; }
         #editor .cm-md-h6 { font-size: 1em; line-height: 1.24; }
-        /* A rendered heading's top margin already represents the blank source
-           line before it. Do not count that source line a second time. */
-        #editor .cm-md-blank-before-heading {
+        /* A source line whose height another element owns collapses to
+           nothing: the blank separator before a heading (its padding-top
+           represents it), inactive code fence lines (the card transfers
+           their styling to the code lines), and a single blank opening the
+           document. Blank separators before other blocks resize instead —
+           .cm-md-block-separator lines carry an inline height matching the
+           preview margin of the block that follows. Additional blank lines
+           keep their natural height in both surfaces. */
+        #editor .cm-md-line-collapsed {
             height: 0;
             min-height: 0;
             line-height: 0;
@@ -402,7 +393,28 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
         .cm-md-link { color: var(--link); }
         .cm-md-url { color: var(--secondary); }
-        .cm-md-bullet { color: var(--secondary); }
+        /* Mirror the preview's list geometry: items indent by the ul/ol
+           1.6em padding with the marker hanging inside it, so item text and
+           wrapped lines align exactly like rendered <li>s. The bullet widget
+           replaces "- " as a fixed-width box ending where text starts, with
+           the dot sitting near its end like a ::marker. */
+        #editor .cm-md-list-item {
+            padding-inline-start: 1.6em;
+            text-indent: -1.6em;
+        }
+        .cm-md-bullet {
+            display: inline-block;
+            width: 1.6em;
+            text-indent: 0;
+            text-align: end;
+            padding-inline-end: 0.45em;
+            box-sizing: border-box;
+            color: var(--text);
+        }
+        /* Preview list items after the first carry a margin-top. */
+        #editor .cm-md-list-item-gap {
+            padding-top: \(MarkdownHTML.listItemSpacing)px;
+        }
         .cm-md-hr {
             display: inline-block;
             width: 100%;
@@ -413,26 +425,65 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             font-family: ui-monospace, "SF Mono", Menlo, monospace;
             font-size: 0.88em;
             line-height: 1.45;
-            /* CodeMirror paints full-document selection below content. Retain
-               the code-card surface while allowing that selection tint to
-               remain clearly visible through selected code. */
-            background: color-mix(in srgb, var(--code-bg) 50%, transparent);
+            position: relative;
             padding: 0 14px;
         }
+        /* CodeMirror paints the selection on a z:-1 layer, below line
+           backgrounds. Paint the code card on a z:-2 pseudo instead of the
+           line itself: it escapes to the same stacking context, so the card
+           matches the preview's opaque --code-bg while the selection tint
+           still shows between card and text. */
+        #editor .cm-md-codeblock::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: -2;
+            background: var(--code-bg);
+        }
         #editor .cm-md-codeblock-first {
-            border-radius: 15px 15px 0 0;
             padding-top: 10px;
         }
+        #editor .cm-md-codeblock-first::before {
+            border-radius: 15px 15px 0 0;
+        }
         #editor .cm-md-codeblock-last {
-            border-radius: 0 0 15px 15px;
             padding-bottom: 10px;
+        }
+        #editor .cm-md-codeblock-last::before {
+            border-radius: 0 0 15px 15px;
         }
         #editor .cm-md-code-fence-source-hidden {
             visibility: hidden;
         }
+        /* Frontmatter — a quiet metadata card above the document, echoing
+           the preview's properties panel. YAML stays editable; only the
+           --- delimiters are dimmed. */
+        #editor .cm-md-frontmatter {
+            font-family: ui-monospace, "SF Mono", Menlo, monospace;
+            font-size: 0.82em;
+            line-height: 1.6;
+            color: var(--secondary);
+            background: color-mix(in srgb, var(--code-bg) 50%, transparent);
+            padding: 0 14px;
+        }
+        /* Outranks the `.cm-line:first-child { padding-top: 0 }` reset so
+           the card keeps its inset when it opens the document. */
+        #editor .cm-content > .cm-line.cm-md-frontmatter-first {
+            border-radius: 15px 15px 0 0;
+            padding-top: 8px;
+        }
+        #editor .cm-md-frontmatter-last {
+            border-radius: 0 0 15px 15px;
+            padding-bottom: 8px;
+        }
+        .cm-md-frontmatter-delim {
+            opacity: 0.45;
+        }
         .cm-md-fence-info { color: var(--secondary); }
         .cm-md-mermaid-preview {
-            margin: 10px 0;
+            /* Outer spacing comes from the block separator lines, matching
+               the preview's .mermaid-figure margin. */
+            margin: 0;
             padding: 20px;
             border-radius: 15px;
             background: var(--code-bg);
@@ -460,12 +511,14 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         .cm-md-table-widget {
             position: relative;
             width: fit-content;
-            margin: 10px 0;
+            /* Outer spacing comes from the block separator lines, matching
+               the preview's .md-table-scroll margin. */
+            margin: 0;
             max-width: 100%;
             overflow: visible;
-            font-family: (MarkdownHTML.bodyFontFamily);
-            font-size: (MarkdownHTML.bodyFontSize)px;
-            line-height: (MarkdownHTML.bodyLineHeight);
+            font-family: \(MarkdownHTML.bodyFontFamily);
+            font-size: \(MarkdownHTML.bodyFontSize)px;
+            line-height: \(MarkdownHTML.bodyLineHeight);
         }
         .cm-md-table-widget:focus {
             outline: none;
@@ -577,14 +630,25 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                 editor = window.MDEditor.create(
                     document.getElementById("editor"),
                     markdown,
-                    { onDirty: function () { post("dirty"); } }
+                    {
+                        onDirty: function () { post("dirty"); },
+                        // Preview block margins (MarkdownHTML design tokens):
+                        // the bundle sizes blank-separator lines from these.
+                        spacing: {
+                            paragraph: \(MarkdownHTML.paragraphSpacing),
+                            quote: \(MarkdownHTML.quoteSpacing),
+                            alert: \(MarkdownHTML.largeBlockSpacing),
+                            table: \(MarkdownHTML.largeBlockSpacing),
+                            hr: \(MarkdownHTML.hrSpacing)
+                        }
+                    }
                 );
                 window.__mdEditor = {
                     getMarkdown: function () { return editor.getMarkdown(); },
                     getScrollAnchor: function () { return editor.getScrollAnchor(); },
                     focus: function () { editor.focus(); },
-                    setScrollPosition: function (progress, sourcePosition) {
-                        return editor.setScrollPosition(progress, sourcePosition);
+                    setScrollPosition: function (progress, sourcePosition, sourceGap) {
+                        return editor.setScrollPosition(progress, sourcePosition, sourceGap);
                     },
                     performTableContextAction: function (token, action) {
                         return editor.performTableContextAction(token, action);

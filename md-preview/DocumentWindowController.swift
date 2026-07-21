@@ -1032,6 +1032,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         editAccessory = nil
     }
 
+    /// Leaves edit-mode chrome as one operation: drops the formatting bar
+    /// and refreshes the toolbar pencil state.
+    private func dismissEditChrome() {
+        hideEditAccessory()
+        updateEditToolbarItem()
+    }
+
     @objc private func formatCommand(_ sender: NSButton) {
         guard let command = sender.identifier?.rawValue else { return }
         formatMarkdown(command)
@@ -1122,9 +1129,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 self.editorBaselineMarkdown = nil
             }
             self.markdownDocument?.replaceContents(markdown: markdown, fileURL: url)
-            self.renderCurrentDocument(text: markdown, fileURL: url)
-            self.hideEditAccessory()
-            self.exitEditMode(rerender: true, preserveUnsavedChanges: true) {}
+            // exitEditMode(rerender: true) renders the pending markdown once
+            // the editor's scroll anchor has been captured; rendering here as
+            // well raced the anchor hand-off and re-laid the preview out
+            // twice, which showed as jitter during the mode switch. The
+            // formatting accessory likewise stays mounted until the overlay
+            // has faded — removing it earlier reflows the content area in
+            // the middle of the crossfade.
+            self.exitEditMode(rerender: true,
+                              preserveUnsavedChanges: true,
+                              hidesAccessoryAfterFade: true) {}
         }
     }
 
@@ -1134,8 +1148,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     ) {
         let finish: (Bool) -> Void = { [weak self] success in
             if success, !keepAccessoryMounted {
-                self?.hideEditAccessory()
-                self?.updateEditToolbarItem()
+                self?.dismissEditChrome()
             }
             completion?(success)
         }
@@ -1403,6 +1416,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func exitEditMode(rerender: Bool,
                               preserveUnsavedChanges: Bool = false,
+                              hidesAccessoryAfterFade: Bool = false,
                               completion: @escaping () -> Void) {
         guard let split = mainSplit else {
             completion()
@@ -1411,7 +1425,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         split.editorViewController?.contentDidChange = nil
         split.editorViewController?.cancelRequested = nil
         documentWindow.makeFirstResponder(nil)
-        split.exitEditMode(waitForPreviewRender: rerender) { [weak self] in
+        let overlayHidden: (() -> Void)? = hidesAccessoryAfterFade
+            ? { [weak self] in self?.dismissEditChrome() }
+            : nil
+        split.exitEditMode(waitForPreviewRender: rerender,
+                           overlayHidden: overlayHidden) { [weak self] in
             guard let self else {
                 completion()
                 return
@@ -2994,8 +3012,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func applyLoadFailure(error: NSError, fileURL: URL, silentOnFailure: Bool) {
         if pendingEditModeURL == fileURL.standardizedFileURL {
             pendingEditModeURL = nil
-            hideEditAccessory()
-            updateEditToolbarItem()
+            dismissEditChrome()
         }
         guard !silentOnFailure else { return }
         NSAlert(error: error).beginSheetModal(for: documentWindow)
