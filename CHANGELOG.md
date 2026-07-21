@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.0.39] – 2026-07-21
+
+Editing large documents just got dramatically cheaper: the preview now updates in place instead of rebuilding from scratch, Quick Look shows your text before it loads diagram machinery, YAML frontmatter renders as a proper panel, and standard LaTeX math delimiters are supported.
+
+### Added
+
+- **YAML frontmatter renders in document previews.** Documents that start with a frontmatter block now show it as a formatted panel instead of raw text ([#219](https://github.com/pluk-inc/markdown-preview/pull/219), [#217](https://github.com/pluk-inc/markdown-preview/issues/217)).
+- **Standard LaTeX math delimiters are supported.** Math written as `\(...\)` and `\[...\]` — including Markdown-escaped forms — now renders alongside the existing `$...$` and `$$...$$` syntax ([#224](https://github.com/pluk-inc/markdown-preview/pull/224), [#226](https://github.com/pluk-inc/markdown-preview/pull/226), [#222](https://github.com/pluk-inc/markdown-preview/issues/222)).
+- **A CPU/memory benchmark harness for contributors.** `scripts/bench/` measures first paint, update times, and per-process RSS/CPU for the app and Quick Look, with a new Mermaid-heavy stress sample; it produced the numbers below ([#223](https://github.com/pluk-inc/markdown-preview/pull/223)).
+
+### Changed
+
+- **Preview updates are now incremental, cutting WebKit CPU by 37% and memory by 16% during editing.** Instead of rebuilding the whole page, updates DOM-diff it (via morphdom, the engine behind Phoenix LiveView), so finished Mermaid diagrams, KaTeX math, and highlighted code are left untouched when unrelated text changes — and scroll position and `<details>` open state survive. Measured while editing a 10-diagram document: WebKit process CPU fell 4.1% → 2.6% and memory 553 → 462 MB mean (568 → 498 MB peak) versus the previous full-rebuild path ([#214](https://github.com/pluk-inc/markdown-preview/pull/214), [#225](https://github.com/pluk-inc/markdown-preview/pull/225)).
+- **Quick Look shows your text before loading diagram machinery.** Previews paint the document text first and then light up Mermaid, math, and code highlighting, instead of stalling behind the 3.16 MB Mermaid bundle in documents that use diagrams ([#213](https://github.com/pluk-inc/markdown-preview/pull/213)).
+
+### Fixed
+
+- **Files opened from Finder no longer trigger a file-selection dialog.** Double-clicking a Markdown file opens it directly ([#220](https://github.com/pluk-inc/markdown-preview/pull/220), [#216](https://github.com/pluk-inc/markdown-preview/issues/216)).
+- **Vertical spacing between blocks is consistent again.** Paragraphs, lists, and headings no longer show irregular gaps in read mode ([#221](https://github.com/pluk-inc/markdown-preview/pull/221), [#211](https://github.com/pluk-inc/markdown-preview/issues/211)).
+
+### Contributors
+
+Thanks to the external reporters who helped improve this release:
+
+- [@mite404](https://github.com/mite404) — requested YAML frontmatter display ([#217](https://github.com/pluk-inc/markdown-preview/issues/217))
+- [@gabrielwhite](https://github.com/gabrielwhite) — reported the Finder file-dialog issue ([#216](https://github.com/pluk-inc/markdown-preview/issues/216))
+- [@gafiegarcia](https://github.com/gafiegarcia) — reported the irregular vertical spacing ([#211](https://github.com/pluk-inc/markdown-preview/issues/211))
+- [@Lowerce](https://github.com/Lowerce) — reported the LaTeX math delimiter gaps ([#222](https://github.com/pluk-inc/markdown-preview/issues/222))
+
 ## [0.0.38] – 2026-07-19
 
 Markdown Preview now speaks Simplified Chinese, and shell code blocks look the same in read mode as they do in the editor.
