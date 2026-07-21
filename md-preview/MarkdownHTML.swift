@@ -668,11 +668,21 @@ nonisolated enum MarkdownHTML {
         try! NSRegularExpression(pattern: #"\$\$([\s\S]+?)\$\$"#)
     }()
 
+    private static let bracketedBlockMathRegex: NSRegularExpression = {
+        // swiftlint:disable:next force_try
+        try! NSRegularExpression(pattern: #"(?<!\\)\\\[([\s\S]+?)\\\]"#)
+    }()
+
     // Reject leading `\$` (escaped) and require non-whitespace adjacent to
     // delimiters so prose like "$5 and $10" doesn't match.
     private static let inlineMathRegex: NSRegularExpression = {
         // swiftlint:disable:next force_try
         try! NSRegularExpression(pattern: #"(?<!\\)\$(?=\S)([^\$\n]+?)(?<=\S)\$"#)
+    }()
+
+    private static let parenthesizedInlineMathRegex: NSRegularExpression = {
+        // swiftlint:disable:next force_try
+        try! NSRegularExpression(pattern: #"(?<!\\)\\\(([^\n]+?)\\\)"#)
     }()
 
     // Fenced code block. Group 1 = backtick run, group 2 = info string, group 3 = body.
@@ -749,32 +759,49 @@ nonisolated enum MarkdownHTML {
             return "MdPreviewProtect\(protected.count - 1)Token"
         }
 
-        let nsAfterInlineCode = afterInlineCode as NSString
-        let blockMatches = blockMathRegex.matches(
-            in: afterInlineCode,
-            range: NSRange(location: 0, length: nsAfterInlineCode.length)
-        )
-        var afterBlockMath = ""
-        afterBlockMath.reserveCapacity(afterInlineCode.count)
-        var blockCursor = 0
-        for match in blockMatches {
-            afterBlockMath += nsAfterInlineCode.substring(with: NSRange(
-                location: blockCursor,
-                length: match.range.location - blockCursor
-            ))
-            let capture = nsAfterInlineCode.substring(with: match.range(at: 1))
-            let fullMatch = nsAfterInlineCode.substring(with: match.range)
-            blockLineCounts.append(fullMatch.count(where: \.isNewline) + 1)
-            afterBlockMath += "MdPreviewMathBlock\(blocks.count)Token"
-            afterBlockMath += String(
-                repeating: "\n",
-                count: fullMatch.count(where: \.isNewline)
+        func extractBlocks(matching regex: NSRegularExpression, from source: String) -> String {
+            let nsSource = source as NSString
+            let matches = regex.matches(
+                in: source,
+                range: NSRange(location: 0, length: nsSource.length)
             )
-            blocks.append(capture)
-            blockCursor = match.range.location + match.range.length
+            var result = ""
+            result.reserveCapacity(source.count)
+            var cursor = 0
+            for match in matches {
+                result += nsSource.substring(with: NSRange(
+                    location: cursor,
+                    length: match.range.location - cursor
+                ))
+                let capture = nsSource.substring(with: match.range(at: 1))
+                let fullMatch = nsSource.substring(with: match.range)
+                let newlineCount = fullMatch.count(where: \.isNewline)
+                blockLineCounts.append(newlineCount + 1)
+                result += "MdPreviewMathBlock\(blocks.count)Token"
+                result += String(repeating: "\n", count: newlineCount)
+                blocks.append(capture)
+                cursor = match.range.location + match.range.length
+            }
+            result += nsSource.substring(from: cursor)
+            return result
         }
-        afterBlockMath += nsAfterInlineCode.substring(from: blockCursor)
-        let afterInlineMath = replaceMatches(of: inlineMathRegex, in: afterBlockMath) { capture in
+
+        let afterDollarBlockMath = extractBlocks(matching: blockMathRegex, from: afterInlineCode)
+        let afterBlockMath = extractBlocks(
+            matching: bracketedBlockMathRegex,
+            from: afterDollarBlockMath
+        )
+        let afterDollarInlineMath = replaceMatches(
+            of: inlineMathRegex,
+            in: afterBlockMath
+        ) { capture in
+            defer { inlines.append(capture) }
+            return "MdPreviewMathInline\(inlines.count)Token"
+        }
+        let afterInlineMath = replaceMatches(
+            of: parenthesizedInlineMathRegex,
+            in: afterDollarInlineMath
+        ) { capture in
             defer { inlines.append(capture) }
             return "MdPreviewMathInline\(inlines.count)Token"
         }
