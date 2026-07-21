@@ -9,6 +9,17 @@ struct FrontmatterEntry: Equatable, Identifiable {
     let id: Int
     let key: String
     let value: String
+    /// Non-nil when the value is a sequence (`tags: [a, b]` or `- item`
+    /// lines). `value` then carries the items joined with ", " for
+    /// plain-text consumers like the Inspector.
+    let items: [String]?
+
+    nonisolated init(id: Int, key: String, value: String, items: [String]? = nil) {
+        self.id = id
+        self.key = key
+        self.value = value
+        self.items = items
+    }
 }
 
 // Swift-markdown is CommonMark: it has no frontmatter notion, so delimiter
@@ -41,8 +52,9 @@ nonisolated enum MarkdownFrontmatter {
     }
 
     // Best-effort parse: each top-level `key: value` line becomes an entry;
-    // indented continuation lines append to the previous value. We don't
-    // interpret YAML types — values are shown verbatim in the Inspector.
+    // indented continuation lines append to the previous value, `- item`
+    // lines and `[a, b]` flow sequences become the entry's items. We don't
+    // interpret other YAML types — scalars are shown verbatim (unquoted).
     static func parse(_ raw: String, format: Format = .yaml) -> [FrontmatterEntry] {
         switch format {
         case .yaml:
@@ -53,26 +65,56 @@ nonisolated enum MarkdownFrontmatter {
     }
 
     private static func parseYaml(_ raw: String) -> [FrontmatterEntry] {
-        var entries: [FrontmatterEntry] = []
+        var entries: [(key: String, value: String, items: [String])] = []
         for rawLine in raw.split(separator: "\n", omittingEmptySubsequences: false) {
             let line = String(rawLine)
-            if line.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty || trimmed.hasPrefix("#") { continue }
+
+            // Sequence items belong to the previous key. YAML allows them
+            // at the key's own indent or deeper, so match before the
+            // continuation-line rule below.
+            if trimmed == "-" || trimmed.hasPrefix("- "), !entries.isEmpty {
+                let item = unquote(String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces))
+                if !item.isEmpty { entries[entries.count - 1].items.append(item) }
+                continue
+            }
 
             if line.first == " " || line.first == "\t", !entries.isEmpty {
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                let prev = entries[entries.count - 1]
-                let combined = prev.value.isEmpty ? trimmed : "\(prev.value) \(trimmed)"
-                entries[entries.count - 1] = FrontmatterEntry(id: prev.id, key: prev.key, value: combined)
+                let prev = entries[entries.count - 1].value
+                entries[entries.count - 1].value = prev.isEmpty ? trimmed : "\(prev) \(trimmed)"
                 continue
             }
 
             guard let colon = line.firstIndex(of: ":") else { continue }
             let key = line[..<colon].trimmingCharacters(in: .whitespaces)
-            let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            var value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
             guard !key.isEmpty else { continue }
-            entries.append(FrontmatterEntry(id: entries.count, key: key, value: value))
+
+            if let flowItems = flowSequenceItems(value) {
+                entries.append((key, "", flowItems))
+                continue
+            }
+
+            if blockScalarIndicators.contains(value) {
+                // `key: >-` etc. — the value is the indented block that
+                // follows; continuation lines fill it in, folded with spaces.
+                value = ""
+            } else if value.first != "\"", value.first != "'",
+                      let comment = value.range(of: " #") {
+                value = value[..<comment.lowerBound].trimmingCharacters(in: .whitespaces)
+            }
+            entries.append((key, unquote(value), []))
         }
-        return entries
+        return entries.enumerated().map { index, entry in
+            let items = entry.items.isEmpty ? nil : entry.items
+            return FrontmatterEntry(
+                id: index,
+                key: entry.key,
+                value: items?.joined(separator: ", ") ?? entry.value,
+                items: items
+            )
+        }
     }
 
     private static func parseToml(_ raw: String) -> [FrontmatterEntry] {
@@ -86,12 +128,54 @@ nonisolated enum MarkdownFrontmatter {
             let key = line[..<equals].trimmingCharacters(in: .whitespaces)
             let value = line[line.index(after: equals)...].trimmingCharacters(in: .whitespaces)
             guard !key.isEmpty else { continue }
-            entries.append(FrontmatterEntry(id: entries.count, key: key, value: unquoteTomlValue(value)))
+
+            if let items = flowSequenceItems(value) {
+                entries.append(FrontmatterEntry(
+                    id: entries.count,
+                    key: key,
+                    value: items.joined(separator: ", "),
+                    items: items
+                ))
+            } else {
+                entries.append(FrontmatterEntry(id: entries.count, key: key, value: unquote(value)))
+            }
         }
         return entries
     }
 
-    private static func unquoteTomlValue(_ value: String) -> String {
+    private static let blockScalarIndicators: Set<String> = ["|", "|-", "|+", ">", ">-", ">+"]
+
+    /// `["a", "b"]` → `["a", "b"]`. Nil unless the value is a simple flow
+    /// sequence — nested collections stay verbatim scalars.
+    private static func flowSequenceItems(_ value: String) -> [String]? {
+        guard value.hasPrefix("["), value.hasSuffix("]") else { return nil }
+        let inner = String(value.dropFirst().dropLast())
+        guard !inner.contains("["), !inner.contains("{") else { return nil }
+
+        var items: [String] = []
+        var current = ""
+        var quote: Character?
+        for ch in inner {
+            if let q = quote {
+                current.append(ch)
+                if ch == q { quote = nil }
+            } else if ch == "\"" || ch == "'" {
+                quote = ch
+                current.append(ch)
+            } else if ch == "," {
+                items.append(current)
+                current = ""
+            } else {
+                current.append(ch)
+            }
+        }
+        items.append(current)
+        return items
+            .map { unquote($0.trimmingCharacters(in: .whitespaces)) }
+            .filter { !$0.isEmpty }
+    }
+
+    private static func unquote(_ value: String) -> String {
         guard value.count >= 2,
               let first = value.first,
               first == value.last,

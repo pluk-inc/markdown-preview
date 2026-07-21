@@ -1803,8 +1803,18 @@ nonisolated enum MarkdownHTML {
         guard !entries.isEmpty else { return "" }
 
         let rows = entries.map { entry in
-            """
-            <tr><th scope="row" dir="auto">\(htmlEscape(entry.key))</th><td dir="auto">\(htmlEscape(entry.value))</td></tr>
+            let valueHTML: String
+            if let items = entry.items {
+                valueHTML = items.map {
+                    "<span class=\"md-fm-pill\" dir=\"auto\">\(htmlEscape($0))</span>"
+                }.joined()
+            } else if entry.value.isEmpty {
+                valueHTML = "<span class=\"md-fm-empty\" aria-hidden=\"true\"></span>"
+            } else {
+                valueHTML = htmlEscape(entry.value)
+            }
+            return """
+            <tr><th scope="row" dir="auto">\(htmlEscape(entry.key))</th><td dir="auto">\(valueHTML)</td></tr>
             """
         }.joined(separator: "\n")
 
@@ -2452,8 +2462,14 @@ nonisolated enum MarkdownHTML {
     }
     article.markdown-body > *:first-child { margin-top: 0 !important; }
 
+    /* Frontmatter properties — Obsidian-style metadata panel. Deliberately
+       quieter than document content: no row borders (content tables own
+       horizontal rules), a muted key column, and a single hairline that
+       hands off to the document body. */
     .md-frontmatter {
-        margin: 0 0 1.6em;
+        margin: 0 0 1.2em;
+        padding: 0 0 1em;
+        border-bottom: 1px solid var(--grid);
     }
     .md-frontmatter table {
         display: table;
@@ -2461,15 +2477,39 @@ nonisolated enum MarkdownHTML {
         table-layout: fixed;
         margin: 0;
         overflow: visible;
+        font-size: 0.92em;
+        line-height: 1.5;
     }
     .md-frontmatter th,
     .md-frontmatter td {
-        vertical-align: top;
+        padding: 0.28em 0;
+        border: 0;
+        vertical-align: baseline;
         overflow-wrap: anywhere;
-        white-space: pre-wrap;
+        text-align: left;
     }
     .md-frontmatter th {
-        width: 32%;
+        width: 26%;
+        padding-right: 1.4em;
+        font-weight: 500;
+        color: var(--secondary);
+    }
+    .md-frontmatter td {
+        white-space: pre-wrap;
+    }
+    .md-fm-pill {
+        display: inline-block;
+        margin: 0 0.4em 0.2em 0;
+        padding: 0.08em 0.7em;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--link) 12%, transparent);
+        color: var(--link);
+        font-size: 0.95em;
+        overflow-wrap: anywhere;
+    }
+    .md-fm-empty::before {
+        content: "—";
+        color: var(--secondary);
     }
 
     p {

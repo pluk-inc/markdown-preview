@@ -30,6 +30,57 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         ))
     }
 
+    func testFrontmatterListValuesRenderAsPillsAndScalarsUnquote() {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ---
+            name: "openai-docs"
+            category: core features
+            tags:
+              - links
+              - "second tag"
+            empty:
+            ---
+            Body.
+            """,
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "<tr><th scope=\"row\" dir=\"auto\">name</th><td dir=\"auto\">openai-docs</td></tr>"
+        ))
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "<td dir=\"auto\"><span class=\"md-fm-pill\" dir=\"auto\">links</span>"
+            + "<span class=\"md-fm-pill\" dir=\"auto\">second tag</span></td>"
+        ))
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "<tr><th scope=\"row\" dir=\"auto\">empty</th>"
+            + "<td dir=\"auto\"><span class=\"md-fm-empty\" aria-hidden=\"true\"></span></td></tr>"
+        ))
+    }
+
+    func testTomlFrontmatterRendersAsTable() {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            +++
+            title = "Draft"
+            tags = ["markdown", "frontmatter"]
+            +++
+            Body.
+            """,
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(rendered.articleHTML.hasPrefix("<section class=\"md-frontmatter\""))
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "<tr><th scope=\"row\" dir=\"auto\">title</th><td dir=\"auto\">Draft</td></tr>"
+        ))
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "<span class=\"md-fm-pill\" dir=\"auto\">markdown</span>"
+            + "<span class=\"md-fm-pill\" dir=\"auto\">frontmatter</span>"
+        ))
+    }
+
     func testDocumentWithoutFrontmatterDoesNotRenderFrontmatterTable() {
         let rendered = MarkdownHTML.render(
             markdown: "# Plain document",

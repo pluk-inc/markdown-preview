@@ -10,7 +10,11 @@ const dom = new JSDOM("<!doctype html><body><div id='editor'></div></body>", {
 })
 globalThis.window = dom.window
 globalThis.document = dom.window.document
-globalThis.navigator = dom.window.navigator
+// Node 22+ ships a built-in getter-only `navigator`; assignment throws.
+Object.defineProperty(globalThis, "navigator", {
+  value: dom.window.navigator,
+  configurable: true,
+})
 for (const key of ["MutationObserver", "ResizeObserver", "requestAnimationFrame",
                    "cancelAnimationFrame", "getComputedStyle", "Range", "Text", "Node",
                    "HTMLElement", "Element", "Document", "DOMParser", "Selection", "Window"]) {
@@ -99,6 +103,24 @@ const bidiLines = Array.from(bidiHost.querySelectorAll(".cm-line"))
 check("every editor line derives its direction from its own text",
   bidiLines.length === 3 && bidiLines.every((line) => line.getAttribute("dir") === "auto"))
 bidiEditor.destroy()
+
+const frontmatterHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(frontmatterHost)
+const frontmatterDoc = "---\nname: \"openai-docs\"\ntags:\n  - links\n---\n# Body heading"
+const frontmatterEditor = dom.window.MDEditor.create(frontmatterHost, frontmatterDoc, {})
+check("frontmatter renders as a metadata card, not markdown blocks",
+  frontmatterHost.querySelectorAll(".cm-md-frontmatter").length === 5
+    && frontmatterHost.querySelector(".cm-md-frontmatter-first") != null
+    && frontmatterHost.querySelector(".cm-md-frontmatter-last") != null
+    && frontmatterHost.querySelector(".cm-md-h2") == null
+    && frontmatterHost.querySelector(".cm-md-hr") == null)
+check("frontmatter delimiters are dimmed",
+  frontmatterHost.querySelectorAll(".cm-md-frontmatter-delim").length === 2)
+check("body markdown still live-previews below frontmatter",
+  frontmatterHost.querySelector(".cm-md-h1") != null)
+check("frontmatter round-trips byte-faithfully",
+  frontmatterEditor.getMarkdown() === frontmatterDoc)
+frontmatterEditor.destroy()
 
 const headingHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(headingHost)
