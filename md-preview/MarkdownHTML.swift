@@ -56,6 +56,17 @@ nonisolated enum MarkdownHTML {
         case full
     }
 
+    /// Root (`<html>`) class carrying the content-width mode. The matching
+    /// rules live in the base stylesheet, so flipping the class at runtime
+    /// re-lays-out an already-loaded page without a reload.
+    static func rootClass(for contentWidth: ContentWidth) -> String {
+        switch contentWidth {
+        case .centered: return ""
+        case .hostCentered: return "md-host-centered"
+        case .full: return "md-full-width"
+        }
+    }
+
     /// Width the Quick Look panel requests for its preview window.
     static let preferredPageWidth: CGFloat = 900
     /// The centered article measure: `preferredPageWidth` minus the 40px
@@ -152,23 +163,16 @@ nonisolated enum MarkdownHTML {
         body { overflow: visible !important; }
         </style>
         """ : ""
-        let contentWidthOverride: String
-        switch contentWidth {
-        case .centered:
-            contentWidthOverride = ""
-        case .hostCentered:
-            contentWidthOverride = """
-            <style>
-            article.markdown-body { margin-left: 0; }
-            </style>
-            """
-        case .full:
-            contentWidthOverride = """
-            <style>
-            article.markdown-body { max-width: none; }
-            </style>
-            """
-        }
+        // The width mode rides on a root class (rules live in the base
+        // stylesheet) rather than a baked-in override <style>. The class set
+        // here gives first paint the right layout; the app re-asserts it at
+        // runtime (MarkdownWebView.applyContentWidth) from the same code
+        // path that owns the AppKit constraints, so a page whose head was
+        // rendered under an older setting can never keep a stale layout.
+        let contentWidthClass = Self.rootClass(for: contentWidth)
+        let htmlClassAttr = contentWidthClass.isEmpty
+            ? ""
+            : " class=\"\(contentWidthClass)\""
         let baseTag = assetBaseHref.map { "<base href=\"\($0)\">" } ?? ""
         let sanitizerBlock = dompurifyBlock
         let morphBlock = morphdomBlock
@@ -206,14 +210,13 @@ nonisolated enum MarkdownHTML {
         let safeBody = bodyHTML.replacingOccurrences(of: "</template", with: "<\\/template")
         let html = """
         <!DOCTYPE html>
-        <html>
+        <html\(htmlClassAttr)>
         <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         \(baseTag)
         <style>\(stylesheet)</style>
         \(scrollOverride)
-        \(contentWidthOverride)
         \(sanitizerBlock)
         \(morphBlock)
         \(hostBridgeScript)
@@ -2759,6 +2762,14 @@ nonisolated enum MarkdownHTML {
         margin-left: auto;
         margin-right: auto;
     }
+    /* Content-width modes, keyed off the root class so the app can flip
+       them at runtime (see MarkdownWebView.applyContentWidth).
+       - md-host-centered: the app centers the column by positioning the
+         web view; the article must hug the leading gutter so host-driven
+         width changes never re-center it asynchronously (#162).
+       - md-full-width: span the window. */
+    html.md-host-centered article.markdown-body { margin-left: 0; }
+    html.md-full-width article.markdown-body { max-width: none; }
     article.markdown-body > *:first-child { margin-top: 0 !important; }
 
     /* Frontmatter properties — Obsidian-style metadata panel. Deliberately

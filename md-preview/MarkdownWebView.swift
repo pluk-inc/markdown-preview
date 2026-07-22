@@ -410,6 +410,10 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         // bundles). The launch-time warmup loads both vendors, so any
         // subsequent file with any subset of renderers fast-paths into it.
         if isPageReady, let loaded = loadedFingerprint, loaded.covers(fingerprint) {
+            // The kept page head may predate the current content-width
+            // setting (e.g. it changed in another instance sharing the
+            // defaults) — re-assert the root class alongside the swap.
+            applyContentWidth(ContentWidthSetting.current.renderWidth)
             let payload = javaScriptStringLiteral(rendered.articleHTML)
             webView.evaluateJavaScript("window.MdPreview && MdPreview.update(\(payload));") { [weak self] _, _ in
                 self?.contentDidReplace?()
@@ -420,6 +424,21 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         webView.loadHTMLString(rendered.html, baseURL: nil)
         loadedFingerprint = fingerprint
         isPageReady = false
+    }
+
+    /// Sets the content-width root class on the loaded page. The class is
+    /// part of the rendered HTML for first paint; this runtime flip keeps
+    /// an already-loaded page in sync with the live setting so constraints
+    /// (AppKit) and column CSS (WebKit) can never disagree.
+    func applyContentWidth(_ width: MarkdownHTML.ContentWidth) {
+        let hostCentered = width == .hostCentered
+        let fullWidth = width == .full
+        let js = """
+        (() => { const c = document.documentElement.classList;
+            c.toggle('md-host-centered', \(hostCentered));
+            c.toggle('md-full-width', \(fullWidth)); })();
+        """
+        webView.evaluateJavaScript(js, completionHandler: nil)
     }
 
     func reloadPreview() {

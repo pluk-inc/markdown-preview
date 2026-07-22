@@ -179,9 +179,12 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                 .compactMap { $0.components(separatedBy: "</style>").first }
                 .map { "<style>\($0)</style>" }
                 .joined(separator: "\n")
+            let rootClass = MarkdownHTML.rootClass(for: contentWidth)
+            let classAttr = rootClass.isEmpty ? "" : " class=\"\(rootClass)\""
+            XCTAssertTrue(rendered.html.contains("<html\(classAttr)>"))
             let html = """
             <!DOCTYPE html>
-            <html><head>\(styleBlocks)</head>
+            <html\(classAttr)><head>\(styleBlocks)</head>
             <body><article class="markdown-body">\(rendered.articleHTML)</article></body></html>
             """
             let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1700, height: 600))
@@ -218,22 +221,68 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(full.width, 1700 - 80, accuracy: 1)
     }
 
-    func testContentWidthModesEmitExpectedArticleOverrides() {
+    @MainActor
+    func testRuntimeRootClassFlipRelaysOutStaleHead() async throws {
+        // A page whose head was rendered under hostCentered (column hugs the
+        // leading gutter) must re-lay-out to full width when the app flips
+        // the root class at runtime — the fix for stale-head windows that
+        // missed a content-width toggle.
+        let rendered = MarkdownHTML.render(
+            markdown: "# Doc\n\n" + String(repeating: "word ", count: 400),
+            allowsScroll: true,
+            vendorLoading: .lazy,
+            contentWidth: .hostCentered
+        )
+        let styleBlocks = rendered.html
+            .components(separatedBy: "<style>")
+            .dropFirst()
+            .compactMap { $0.components(separatedBy: "</style>").first }
+            .map { "<style>\($0)</style>" }
+            .joined(separator: "\n")
+        let html = """
+        <!DOCTYPE html>
+        <html class="md-host-centered"><head>\(styleBlocks)</head>
+        <body><article class="markdown-body">\(rendered.articleHTML)</article></body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1700, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        // Same script MarkdownWebView.applyContentWidth emits for .full.
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const c = document.documentElement.classList;
+            c.toggle('md-host-centered', false);
+            c.toggle('md-full-width', true);
+            const r = document.querySelector('article').getBoundingClientRect();
+            return JSON.stringify({ x: r.x, width: r.width });
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let rect = try JSONDecoder().decode([String: Double].self, from: Data(json.utf8))
+        XCTAssertEqual(try XCTUnwrap(rect["x"]), 40, accuracy: 1)
+        XCTAssertEqual(try XCTUnwrap(rect["width"]), 1700 - 80, accuracy: 1)
+    }
+
+    func testContentWidthModesEmitExpectedRootClass() {
+        // The mode rides on the <html> class; the rules for both classes are
+        // always in the base stylesheet so the app can flip modes at runtime
+        // without reloading (and a stale head can be corrected in place).
         let centered = MarkdownHTML.render(
             markdown: "# Doc", vendorLoading: .lazy, contentWidth: .centered)
-        XCTAssertFalse(centered.html.contains("article.markdown-body { margin-left: 0; }"))
-        XCTAssertFalse(centered.html.contains("article.markdown-body { max-width: none; }"))
+        XCTAssertTrue(centered.html.contains("<html>"))
+        XCTAssertTrue(centered.html.contains("html.md-host-centered article.markdown-body { margin-left: 0; }"))
+        XCTAssertTrue(centered.html.contains("html.md-full-width article.markdown-body { max-width: none; }"))
 
-        // The app centers the column by positioning the web view, so the
-        // article must stay glued to the leading gutter instead of
-        // re-centering when the web view's trailing edge tracks the window.
         let hostCentered = MarkdownHTML.render(
             markdown: "# Doc", vendorLoading: .lazy, contentWidth: .hostCentered)
-        XCTAssertTrue(hostCentered.html.contains("article.markdown-body { margin-left: 0; }"))
+        XCTAssertTrue(hostCentered.html.contains("<html class=\"md-host-centered\">"))
 
         let full = MarkdownHTML.render(
             markdown: "# Doc", vendorLoading: .lazy, contentWidth: .full)
-        XCTAssertTrue(full.html.contains("article.markdown-body { max-width: none; }"))
+        XCTAssertTrue(full.html.contains("<html class=\"md-full-width\">"))
     }
 
     @MainActor

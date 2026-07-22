@@ -294,7 +294,8 @@ final class ContentViewController: NSViewController {
     /// full-bleed layout. See the loadView comment for why centering lives
     /// at the constraint layer instead of CSS.
     private func applyContentWidthMode() {
-        switch ContentWidthSetting.current {
+        let setting = ContentWidthSetting.current
+        switch setting {
         case .normal:
             NSLayoutConstraint.deactivate(webViewFullWidthConstraints)
             NSLayoutConstraint.activate(webViewCenteredConstraints)
@@ -302,6 +303,11 @@ final class ContentViewController: NSViewController {
             NSLayoutConstraint.deactivate(webViewCenteredConstraints)
             NSLayoutConstraint.activate(webViewFullWidthConstraints)
         }
+        // Flip the column CSS in the same breath as the constraints so the
+        // loaded page can never keep the other mode's layout (stale heads
+        // happen when the setting changes without this web view reloading,
+        // e.g. from another app instance sharing the defaults).
+        webView.applyContentWidth(setting.renderWidth)
     }
 
     func scrollToHeading(index: Int) {
