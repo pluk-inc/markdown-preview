@@ -17,7 +17,7 @@ final class ContentViewController: NSViewController {
     private static let pageZoomDefaultsKey = "MarkdownPreview.pageZoom"
 
     private var webView: MarkdownWebView!
-    private var webViewPageWidthConstraint: NSLayoutConstraint?
+    private var webViewCenteredLeadingConstraint: NSLayoutConstraint?
     private var webViewCenteredConstraints: [NSLayoutConstraint] = []
     private var webViewFullWidthConstraints: [NSLayoutConstraint] = []
     private var pendingFlashWork: DispatchWorkItem?
@@ -103,7 +103,8 @@ final class ContentViewController: NSViewController {
             self?.tableEditRequested?(request)
         }
         webView.zoomDidChange = { [weak self] zoom in
-            self?.webViewPageWidthConstraint?.constant = MarkdownHTML.preferredPageWidth * zoom
+            self?.webViewCenteredLeadingConstraint?.constant =
+                -MarkdownHTML.preferredPageWidth * zoom / 2
         }
         webView.scrollDidChange = { [weak self] in
             self?.evaluateActiveHeading()
@@ -112,30 +113,35 @@ final class ContentViewController: NSViewController {
 
         container.addSubview(webView)
 
-        // Normal (centered) mode caps the web view at the page width and
-        // centers it in AppKit rather than letting CSS auto-margins center
-        // the column inside a full-width web view. A sidebar/inspector
-        // reveal then only *moves* the web view — applied synchronously
-        // with each animation frame — instead of resizing it, which forces
-        // the web process to re-run layout asynchronously and made the
-        // column jitter for the duration of the animation (#162). The
-        // width constant tracks pageZoom (zoomDidChange above) so the
-        // column keeps its 820 CSS-px measure at every zoom level.
-        let pageWidth = webView.widthAnchor.constraint(
-            equalToConstant: MarkdownHTML.preferredPageWidth * webView.pageZoom)
+        // Normal (centered) mode positions the web view in AppKit rather
+        // than letting CSS auto-margins center the column inside the web
+        // view. A sidebar/inspector reveal then *moves* the column —
+        // applied synchronously with each animation frame — instead of
+        // re-centering it, which forces the web process to re-run layout
+        // asynchronously and made the column jitter for the duration of
+        // the animation (#162). Only the leading edge is placed at the
+        // centered column's position; the trailing edge always reaches the
+        // container so WebKit's native overlay scrollbar sits at the
+        // preview edge. The rendered article is leading-anchored
+        // (ContentWidth.hostCentered), so the width the web view gains on
+        // the trailing side is inert gutter and mid-animation width
+        // changes cannot move the text. The leading constant tracks
+        // pageZoom (zoomDidChange above) so the column keeps its 820
+        // CSS-px measure at every zoom level.
+        let centeredLeading = webView.leadingAnchor.constraint(
+            equalTo: container.centerXAnchor,
+            constant: -MarkdownHTML.preferredPageWidth * webView.pageZoom / 2)
         // Stay below the split items' holding priorities (content 250,
         // sidebar 260) so window resizing breaks this page-width preference
         // before AppKit changes the user's chosen sidebar width.
-        pageWidth.priority = .init(249)
-        webViewPageWidthConstraint = pageWidth
+        centeredLeading.priority = .init(249)
+        webViewCenteredLeadingConstraint = centeredLeading
         webViewCenteredConstraints = [
-            webView.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            webView.widthAnchor.constraint(lessThanOrEqualTo: container.widthAnchor),
-            pageWidth
+            centeredLeading,
+            webView.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor)
         ]
         webViewFullWidthConstraints = [
-            webView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            webView.trailingAnchor.constraint(equalTo: container.trailingAnchor)
+            webView.leadingAnchor.constraint(equalTo: container.leadingAnchor)
         ]
 
         // Keep the WKWebView viewport-sized and let WebKit own vertical
@@ -143,7 +149,8 @@ final class ContentViewController: NSViewController {
         // enormous backing surface that loses Retina resolution on long docs.
         NSLayoutConstraint.activate([
             webView.topAnchor.constraint(equalTo: container.topAnchor),
-            webView.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+            webView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            webView.trailingAnchor.constraint(equalTo: container.trailingAnchor)
         ])
         applyContentWidthMode()
     }

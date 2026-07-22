@@ -39,13 +39,20 @@ nonisolated enum MarkdownHTML {
     }
 
     /// Layout of the rendered article column.
-    /// - centered: capped at `contentColumnWidth` and centered, so wide
-    ///   windows read like a paged document. Matches Quick Look, whose
-    ///   `preferredPageWidth` panel minus the body gutters is exactly one
+    /// - centered: capped at `contentColumnWidth` and centered by CSS auto
+    ///   margins, so wide windows read like a paged document. Quick Look,
+    ///   whose full-bleed panel minus the body gutters is exactly one
     ///   column.
+    /// - hostCentered: capped at `contentColumnWidth` but anchored to the
+    ///   leading gutter; the app centers the column by *positioning* the
+    ///   web view (see ContentViewController.loadView). Anchoring keeps the
+    ///   column glued to the web view's leading edge so host-driven width
+    ///   changes never re-center it asynchronously (#162), while the web
+    ///   view's trailing edge reaches the window for the native scrollbar.
     /// - full: span the whole window.
     enum ContentWidth {
         case centered
+        case hostCentered
         case full
     }
 
@@ -145,11 +152,23 @@ nonisolated enum MarkdownHTML {
         body { overflow: visible !important; }
         </style>
         """ : ""
-        let contentWidthOverride = contentWidth == .full ? """
-        <style>
-        article.markdown-body { max-width: none; }
-        </style>
-        """ : ""
+        let contentWidthOverride: String
+        switch contentWidth {
+        case .centered:
+            contentWidthOverride = ""
+        case .hostCentered:
+            contentWidthOverride = """
+            <style>
+            article.markdown-body { margin-left: 0; }
+            </style>
+            """
+        case .full:
+            contentWidthOverride = """
+            <style>
+            article.markdown-body { max-width: none; }
+            </style>
+            """
+        }
         let baseTag = assetBaseHref.map { "<base href=\"\($0)\">" } ?? ""
         let sanitizerBlock = dompurifyBlock
         let morphBlock = morphdomBlock
@@ -2715,7 +2734,12 @@ nonisolated enum MarkdownHTML {
         padding: 0;
         overflow: hidden;
     }
-    ::-webkit-scrollbar {
+    /* Hide inner scrollers' bars (tables, math) but never match the root:
+       any custom ::-webkit-scrollbar style on <html>/<body> — including a
+       later "restore" override — swaps the page's native macOS overlay
+       scrollbar for WebKit's legacy one. Zero specificity (:where) keeps
+       the pre::-webkit-scrollbar rules below winning for code blocks. */
+    :where(:not(html):not(body))::-webkit-scrollbar {
         display: none;
         width: 0;
         height: 0;
