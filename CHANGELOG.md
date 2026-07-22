@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.0.40] – 2026-07-22
+
+Scrollable previews get their scrollbar back, and the keyboard shortcuts no longer fight with macOS system shortcuts.
+
+### Changed
+
+- **Keyboard shortcuts realigned to macOS standards.** Inline Code moves to `⇧⌘M` (its old `⌘\`` shadowed the system's cycle-through-windows shortcut, leaving window cycling broken in one direction), Heading 1/2/3 move to `⌥⌘1/2/3` (the old `⇧⌘3` was swallowed by the system screenshot shortcut) with `⌥⌘0` for Body, and the Hide Sidebar / TOC / Project Navigator toggles move to `⌃⌘1/2/3` ([#233](https://github.com/pluk-inc/markdown-preview/pull/233), [#231](https://github.com/pluk-inc/markdown-preview/issues/231)).
+
+### Fixed
+
+- **The page scrollbar is back.** Scrollable previews once again show the native macOS overlay scrollbar at the window edge, in both the app and Quick Look, after a regression removed the scroll indicator ([#228](https://github.com/pluk-inc/markdown-preview/pull/228)).
+
+### Contributors
+
+Thanks to the external reporter who helped improve this release:
+
+- [@query](https://github.com/query) — reported the `⌘\`` shortcut conflict with window switching ([#231](https://github.com/pluk-inc/markdown-preview/issues/231))
+
 ## [0.0.39] – 2026-07-21
 
 Editing large documents just got dramatically cheaper: the preview now updates in place instead of rebuilding from scratch, Quick Look shows your text before it loads diagram machinery, YAML frontmatter renders as a proper panel, and standard LaTeX math delimiters are supported.
