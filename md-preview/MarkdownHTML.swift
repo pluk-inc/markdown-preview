@@ -2715,7 +2715,12 @@ nonisolated enum MarkdownHTML {
         padding: 0;
         overflow: hidden;
     }
-    ::-webkit-scrollbar {
+    /* Hide inner scrollers' bars (tables, math) but never match the root:
+       any custom ::-webkit-scrollbar style on <html>/<body> — including a
+       later "restore" override — swaps the page's native macOS overlay
+       scrollbar for WebKit's legacy one. Zero specificity (:where) keeps
+       the pre::-webkit-scrollbar rules below winning for code blocks. */
+    :where(:not(html):not(body))::-webkit-scrollbar {
         display: none;
         width: 0;
         height: 0;

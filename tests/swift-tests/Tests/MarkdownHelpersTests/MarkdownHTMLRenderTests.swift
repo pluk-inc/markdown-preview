@@ -103,6 +103,11 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             allowsScroll: true,
             vendorLoading: .lazy
         )
+        // The scrollbar hide must never match <html>/<body>: any custom
+        // ::-webkit-scrollbar style on the root replaces the native macOS
+        // overlay scrollbar with WebKit's legacy one.
+        XCTAssertFalse(rendered.html.contains("\n    ::-webkit-scrollbar {"))
+        XCTAssertTrue(rendered.html.contains(":where(:not(html):not(body))::-webkit-scrollbar"))
         let styleBlocks = rendered.html
             .components(separatedBy: "<style>")
             .dropFirst()
@@ -135,6 +140,9 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                 rowCount: document.querySelectorAll('tbody tr').length,
                 overflowY: getComputedStyle(document.documentElement).overflowY,
                 bodyOverflowY: getComputedStyle(document.body).overflowY,
+                rootScrollbarDisplay: getComputedStyle(document.documentElement, '::-webkit-scrollbar').display,
+                rootScrollbarWidth: getComputedStyle(document.documentElement, '::-webkit-scrollbar').width,
+                tableScrollbarDisplay: getComputedStyle(document.querySelector('table'), '::-webkit-scrollbar').display,
             });
         })()
         """)
@@ -151,6 +159,9 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertGreaterThan(metrics.scrollPosition, metrics.viewportHeight, json)
         XCTAssertEqual(metrics.overflowY, "auto")
         XCTAssertEqual(metrics.bodyOverflowY, "visible")
+        XCTAssertNotEqual(metrics.rootScrollbarDisplay, "none", json)
+        XCTAssertNotEqual(metrics.rootScrollbarWidth, "0px", json)
+        XCTAssertEqual(metrics.tableScrollbarDisplay, "none", json)
     }
 
     @MainActor
@@ -880,6 +891,9 @@ private struct LongDocumentScrollMetrics: Decodable {
     let rowCount: Int
     let overflowY: String
     let bodyOverflowY: String
+    let rootScrollbarDisplay: String
+    let rootScrollbarWidth: String
+    let tableScrollbarDisplay: String
 }
 
 private struct ShellHighlightValues: Decodable {
