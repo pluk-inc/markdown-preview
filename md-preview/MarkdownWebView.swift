@@ -175,7 +175,7 @@ enum ContentWidthSetting: String, CaseIterable {
 
     var renderWidth: MarkdownHTML.ContentWidth {
         switch self {
-        case .normal: return .centered
+        case .normal: return .hostCentered
         case .fullWidth: return .full
         }
     }

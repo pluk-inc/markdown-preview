@@ -165,6 +165,78 @@ final class MarkdownHTMLRenderTests: XCTestCase {
     }
 
     @MainActor
+    func testContentWidthModesLayOutDistinctArticleGeometry() async throws {
+        func articleRect(contentWidth: MarkdownHTML.ContentWidth) async throws -> (x: Double, width: Double) {
+            let rendered = MarkdownHTML.render(
+                markdown: "# Doc\n\n" + String(repeating: "word ", count: 400),
+                allowsScroll: true,
+                vendorLoading: .lazy,
+                contentWidth: contentWidth
+            )
+            let styleBlocks = rendered.html
+                .components(separatedBy: "<style>")
+                .dropFirst()
+                .compactMap { $0.components(separatedBy: "</style>").first }
+                .map { "<style>\($0)</style>" }
+                .joined(separator: "\n")
+            let html = """
+            <!DOCTYPE html>
+            <html><head>\(styleBlocks)</head>
+            <body><article class="markdown-body">\(rendered.articleHTML)</article></body></html>
+            """
+            let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1700, height: 600))
+            webView.loadHTMLString(html, baseURL: nil)
+            while webView.isLoading {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            let result = try await webView.evaluateJavaScript("""
+            (() => {
+                const r = document.querySelector('article').getBoundingClientRect();
+                return JSON.stringify({ x: r.x, width: r.width });
+            })()
+            """)
+            let json = try XCTUnwrap(result as? String)
+            let rect = try JSONDecoder().decode([String: Double].self, from: Data(json.utf8))
+            return (try XCTUnwrap(rect["x"]), try XCTUnwrap(rect["width"]))
+        }
+
+        // The app positions the web view so the column lands centered in
+        // the window; inside the web view the column must hug the leading
+        // gutter and keep the page measure.
+        let hostCentered = try await articleRect(contentWidth: .hostCentered)
+        XCTAssertEqual(hostCentered.x, 40, accuracy: 1)
+        XCTAssertEqual(hostCentered.width, 820, accuracy: 1)
+
+        // Quick Look centers the same measure with CSS auto margins.
+        let centered = try await articleRect(contentWidth: .centered)
+        XCTAssertEqual(centered.x, (1700 - 820) / 2, accuracy: 1)
+        XCTAssertEqual(centered.width, 820, accuracy: 1)
+
+        // Full width spans the viewport minus the body gutters.
+        let full = try await articleRect(contentWidth: .full)
+        XCTAssertEqual(full.x, 40, accuracy: 1)
+        XCTAssertEqual(full.width, 1700 - 80, accuracy: 1)
+    }
+
+    func testContentWidthModesEmitExpectedArticleOverrides() {
+        let centered = MarkdownHTML.render(
+            markdown: "# Doc", vendorLoading: .lazy, contentWidth: .centered)
+        XCTAssertFalse(centered.html.contains("article.markdown-body { margin-left: 0; }"))
+        XCTAssertFalse(centered.html.contains("article.markdown-body { max-width: none; }"))
+
+        // The app centers the column by positioning the web view, so the
+        // article must stay glued to the leading gutter instead of
+        // re-centering when the web view's trailing edge tracks the window.
+        let hostCentered = MarkdownHTML.render(
+            markdown: "# Doc", vendorLoading: .lazy, contentWidth: .hostCentered)
+        XCTAssertTrue(hostCentered.html.contains("article.markdown-body { margin-left: 0; }"))
+
+        let full = MarkdownHTML.render(
+            markdown: "# Doc", vendorLoading: .lazy, contentWidth: .full)
+        XCTAssertTrue(full.html.contains("article.markdown-body { max-width: none; }"))
+    }
+
+    @MainActor
     func testLongInlineCodeInHeadingStaysWithinViewport() async throws {
         let rendered = MarkdownHTML.render(
             markdown: "## 1. New port — `src/features/imageUpload/application/repositoryInterfaces/imageProcessedPublisherInterface.ts`",
