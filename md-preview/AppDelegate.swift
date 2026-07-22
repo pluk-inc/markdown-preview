@@ -963,15 +963,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let formatTitle = L("Format")
         let menu = NSMenu(title: formatTitle)
-        menu.addItem(item("Body", command: "h0"))
-        menu.addItem(item("Heading 1", command: "h1", key: "1", modifiers: [.shift, .command]))
-        menu.addItem(item("Heading 2", command: "h2", key: "2", modifiers: [.shift, .command]))
-        menu.addItem(item("Heading 3", command: "h3", key: "3", modifiers: [.shift, .command]))
+        // ⇧⌘3/4/5 are captured system-wide for screenshots and ⌘` cycles
+        // app windows (HIG), so headings live on ⌥⌘ and inline code on
+        // ⇧⌘M — Apple Notes' Monostyled shortcut.
+        menu.addItem(item("Body", command: "h0", key: "0", modifiers: [.option, .command]))
+        menu.addItem(item("Heading 1", command: "h1", key: "1", modifiers: [.option, .command]))
+        menu.addItem(item("Heading 2", command: "h2", key: "2", modifiers: [.option, .command]))
+        menu.addItem(item("Heading 3", command: "h3", key: "3", modifiers: [.option, .command]))
         menu.addItem(.separator())
         menu.addItem(item("Bold", command: "bold", key: "b"))
         menu.addItem(item("Italic", command: "italic", key: "i"))
         menu.addItem(item("Strikethrough", command: "strikethrough", key: "x", modifiers: [.shift, .command]))
-        menu.addItem(item("Inline Code", command: "code", key: "`"))
+        menu.addItem(item("Inline Code", command: "code", key: "m", modifiers: [.shift, .command]))
         menu.addItem(item("Link", command: "link", key: "k"))
         menu.addItem(.separator())
         menu.addItem(item("Bulleted List", command: "bulletList", key: "7", modifiers: [.shift, .command]))
@@ -997,7 +1000,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                          keyEquivalent: String,
                                          action: Selector) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: keyEquivalent)
-        item.keyEquivalentModifierMask = [.option, .command]
+        // ⌃⌘ like Safari's sidebar panes; ⌥⌘1–3 belong to Format headings.
+        item.keyEquivalentModifierMask = [.control, .command]
         item.target = self
         if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: title) {
             image.isTemplate = true
