@@ -112,11 +112,16 @@ appcast.xml         Sparkle update feed
 
 Releases are driven by [Amore](http://amore.computer/) — it handles building, code signing, notarization, DMG creation, S3 upload, and Sparkle appcast publishing in one shot.
 
-Bump `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `Version.xcconfig`, then:
+`Version.xcconfig` and `CHANGELOG.md` are the release source of truth. Bump `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION`, add a matching changelog section, then push a version tag:
 
 ```sh
-./scripts/release.sh
+git tag -a v0.0.2 -m "Release 0.0.2"
+git push origin v0.0.2
 ```
+
+The GitHub Action runs `AmoreComputer/release-action`, publishes through Amore, then creates the GitHub release with the DMG asset. Required repository secrets are `AMORE_TOKEN`, `CODESIGN_IDENTITY`, `DEV_ID_CERT_P12`, `DEV_ID_CERT_PASSWORD`, `SPARKLE_PRIVATE_KEY`, `ASC_API_KEY_ID`, `ASC_API_ISSUER`, and `ASC_API_KEY`.
+
+For a local release from this Mac, `./scripts/release.sh` remains available and also bumps the Homebrew tap.
 
 Use `./scripts/rollback-release.sh` to revert the appcast pointer if a release misbehaves.
 
