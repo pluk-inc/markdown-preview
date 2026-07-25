@@ -2296,6 +2296,7 @@ nonisolated enum MarkdownHTML {
         let resetZoom = htmlEscape(NSLocalizedString("Reset zoom", comment: "Mermaid diagram control"))
         let zoomIn = htmlEscape(NSLocalizedString("Zoom In", comment: "Mermaid diagram control"))
         let fillWidth = htmlEscape(NSLocalizedString("Fill width", comment: "Mermaid diagram control"))
+        let openWindow = htmlEscape(NSLocalizedString("Open in Window", comment: "Mermaid diagram control"))
         for match in matches {
             rendered += nsHTML.substring(with: NSRange(
                 location: cursor,
@@ -2313,6 +2314,7 @@ nonisolated enum MarkdownHTML {
             <button type="button" class="mermaid-hud-btn mermaid-hud-level" data-mm-act="reset" tabindex="-1" aria-label="\(resetZoom)">100%</button>
             <button type="button" class="mermaid-hud-btn" data-mm-act="in" tabindex="-1" aria-label="\(zoomIn)">+</button>
             <button type="button" class="mermaid-hud-btn mermaid-hud-width" data-mm-act="width" tabindex="-1" aria-label="\(fillWidth)" aria-pressed="false" title="\(fillWidth)">⤢</button>
+            <button type="button" class="mermaid-hud-btn mermaid-hud-popup" data-mm-act="popup" tabindex="-1" aria-label="\(openWindow)" title="\(openWindow)">⛶</button>
             </div>
             </figure>
             """
@@ -2342,7 +2344,9 @@ nonisolated enum MarkdownHTML {
     /// be) defined by the time DOMContentLoaded fires — true for both inline
     /// vendor `<script>` and `<script defer src=...>` delivery, since `defer`
     /// scripts run before DOMContentLoaded.
-    private static let mermaidInitWiring = """
+    /// Mermaid pan/zoom/HUD/popup wiring. Internal so SPM helper tests can
+    /// drive the real bootstrap path (with a stub `mermaid` + message host).
+    static let mermaidInitWiring = """
     (() => {
             const fillWidthLabel = \(javaScriptStringLiteral(
                 NSLocalizedString("Fill width", comment: "Mermaid diagram control")
@@ -2428,7 +2432,8 @@ nonisolated enum MarkdownHTML {
                 const state = {
                     tx: 0, ty: 0, scale: 1, min: 1, max: 8,
                     rect: null, raf: 0, dragging: false,
-                    lastX: 0, lastY: 0, surface
+                    lastX: 0, lastY: 0, surface,
+                    vbW, vbH, svg
                 };
                 states.set(figure, state);
                 cacheRect(figure);
@@ -2452,6 +2457,45 @@ nonisolated enum MarkdownHTML {
                     window.webkit?.messageHandlers?.mdPreviewHost?.postMessage({
                         kind: 'mermaidHover',
                         value
+                    });
+                } catch (_) {}
+            }
+
+            // Measure the diagram's natural (viewBox) size and current on-screen
+            // box, then ask the host to open a floating window sized to fit.
+            function openPopup(figure) {
+                const s = states.get(figure);
+                if (!s || !s.svg) return;
+                const svg = s.svg;
+                let naturalW = s.vbW;
+                let naturalH = s.vbH;
+                try {
+                    // getBBox reflects drawn content; prefer it when viewBox
+                    // is missing or clearly wrong.
+                    const bb = svg.getBBox();
+                    if (bb && bb.width > 1 && bb.height > 1) {
+                        if (!(naturalW > 1 && naturalH > 1)) {
+                            naturalW = bb.width;
+                            naturalH = bb.height;
+                        }
+                    }
+                } catch (_) {}
+                if (!s.rect) cacheRect(figure);
+                const r = s.rect || figure.getBoundingClientRect();
+                // Clone without the pan/zoom transform so the popup shows
+                // the pristine rendered diagram.
+                const clone = svg.cloneNode(true);
+                clone.removeAttribute('style');
+                clone.style.width = '100%';
+                clone.style.height = '100%';
+                try {
+                    window.webkit?.messageHandlers?.mdPreviewHost?.postMessage({
+                        kind: 'mermaidPopup',
+                        svg: clone.outerHTML,
+                        naturalWidth: naturalW,
+                        naturalHeight: naturalH,
+                        displayWidth: r.width,
+                        displayHeight: r.height
                     });
                 } catch (_) {}
             }
@@ -2564,15 +2608,7 @@ nonisolated enum MarkdownHTML {
             function onDoubleClick(e) {
                 const figure = e.currentTarget;
                 if (e.target.closest('.mermaid-hud')) return;
-                const s = states.get(figure);
-                if (!s) return;
-                if (s.scale > 1.001) {
-                    reset(figure);
-                } else {
-                    if (!s.rect) cacheRect(figure);
-                    const r = s.rect;
-                    zoomAt(figure, e.clientX - r.left, e.clientY - r.top, 2);
-                }
+                openPopup(figure);
             }
 
             function onHudClick(e) {
@@ -2587,6 +2623,7 @@ nonisolated enum MarkdownHTML {
                     case 'out':   step(figure, 0.8);  break;
                     case 'reset': reset(figure);      break;
                     case 'width': toggleWidth(figure); break;
+                    case 'popup': openPopup(figure);  break;
                 }
             }
 
@@ -3070,6 +3107,10 @@ nonisolated enum MarkdownHTML {
     .mermaid-hud-width {
         margin-left: 2px;
         font-size: 14px;
+    }
+    .mermaid-hud-popup {
+        margin-left: 2px;
+        font-size: 13px;
     }
     @media (prefers-reduced-motion: reduce) {
         .mermaid-hud { transition: none; }

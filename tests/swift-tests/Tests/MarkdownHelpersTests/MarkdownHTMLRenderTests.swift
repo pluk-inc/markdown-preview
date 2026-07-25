@@ -377,6 +377,178 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(rendered.articleHTML.contains("<code class=\"language-mermaid\""))
     }
 
+    func testMermaidPopupButtonIsEmitted() {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ```mermaid
+            flowchart LR
+                A --> B
+            ```
+            """,
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(
+            rendered.articleHTML.contains(
+                #"data-mm-act="popup" tabindex="-1" aria-label="Open in Window""#
+            ),
+            rendered.articleHTML
+        )
+        XCTAssertTrue(
+            rendered.articleHTML.contains(#"class="mermaid-hud-btn mermaid-hud-popup""#),
+            rendered.articleHTML
+        )
+        // SPM helper tests lack the Mermaid vendor bundle, so the page falls
+        // back to the "renderer unavailable" stub — assert the real wiring
+        // string (injected by the app when Vendor/Mermaid is present).
+        XCTAssertTrue(MarkdownHTML.mermaidInitWiring.contains("kind: 'mermaidPopup'"))
+        XCTAssertTrue(MarkdownHTML.mermaidInitWiring.contains("naturalWidth"))
+        XCTAssertTrue(MarkdownHTML.mermaidInitWiring.contains("function openPopup"))
+        XCTAssertTrue(MarkdownHTML.mermaidInitWiring.contains("case 'popup'"))
+        XCTAssertTrue(MarkdownHTML.mermaidInitWiring.contains("openPopup(figure)"))
+    }
+
+    @MainActor
+    func testMermaidPopupPostsMeasuredSizeMessage() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ```mermaid
+            flowchart LR
+                A --> B
+            ```
+            """,
+            vendorLoading: .lazy
+        )
+        let stylesheet = try XCTUnwrap(
+            rendered.html
+                .components(separatedBy: "<style>")
+                .dropFirst()
+                .first?
+                .components(separatedBy: "</style>")
+                .first
+        )
+
+        // Drive the real mermaidInitWiring with a stub renderer + host so the
+        // openPopup path posts a measured mermaidPopup message.
+        let html = """
+        <!DOCTYPE html>
+        <html><head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>\(stylesheet)</style>
+        <script>
+        window.__posted = [];
+        window.webkit = {
+            messageHandlers: {
+                mdPreviewHost: {
+                    postMessage(msg) { window.__posted.push(msg); }
+                }
+            }
+        };
+        window.mermaid = {
+            initialize() {},
+            async run({ nodes }) {
+                for (const node of nodes) {
+                    node.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200">'
+                        + '<rect width="400" height="200" fill="#4a90d9"/></svg>';
+                }
+            }
+        };
+        </script>
+        </head><body>
+        <article class="markdown-body">\(rendered.articleHTML)</article>
+        <script>
+        const __mdpMermaid = \(MarkdownHTML.mermaidInitWiring);
+        __mdpMermaid.bootstrap();
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        // Wait for IntersectionObserver → mock mermaid.run → attachZoom.
+        var renderedReady = false
+        for _ in 0..<100 {
+            let done = try await webView.evaluateJavaScript(
+                "document.querySelector('.mermaid')?.dataset?.mmDone || ''"
+            ) as? String
+            if done == "1" {
+                renderedReady = true
+                break
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertTrue(renderedReady, "mermaid figure should finish stub render")
+
+        // Clear hover noise if any, then open via HUD.
+        _ = try await webView.evaluateJavaScript("window.__posted = []; true")
+        _ = try await webView.evaluateJavaScript(
+            "document.querySelector('[data-mm-act=\"popup\"]').click(); true"
+        )
+
+        let hudPayload = try await waitForMermaidPopupMessage(in: webView)
+        XCTAssertEqual(hudPayload.kind, "mermaidPopup")
+        XCTAssertEqual(hudPayload.naturalWidth, 400, accuracy: 0.5)
+        XCTAssertEqual(hudPayload.naturalHeight, 200, accuracy: 0.5)
+        XCTAssertGreaterThan(hudPayload.displayWidth, 1)
+        XCTAssertGreaterThan(hudPayload.displayHeight, 1)
+        XCTAssertTrue(hudPayload.svg.contains("<svg"), hudPayload.svg)
+        XCTAssertTrue(hudPayload.svg.contains("viewBox"), hudPayload.svg)
+        // Clone should not carry pan/zoom transform styles from the surface.
+        XCTAssertFalse(hudPayload.svg.contains("transform:"), hudPayload.svg)
+
+        // Double-click on the figure also opens the popup (replaces zoom-toggle).
+        _ = try await webView.evaluateJavaScript("window.__posted = []; true")
+        _ = try await webView.evaluateJavaScript("""
+        (() => {
+            const figure = document.querySelector('.mermaid-figure');
+            figure.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+            return true;
+        })()
+        """)
+        let dblPayload = try await waitForMermaidPopupMessage(in: webView)
+        XCTAssertEqual(dblPayload.kind, "mermaidPopup")
+        XCTAssertEqual(dblPayload.naturalWidth, 400, accuracy: 0.5)
+        XCTAssertEqual(dblPayload.naturalHeight, 200, accuracy: 0.5)
+        XCTAssertTrue(dblPayload.svg.contains("<svg"), dblPayload.svg)
+    }
+
+    @MainActor
+    private func waitForMermaidPopupMessage(
+        in webView: WKWebView,
+        timeoutMs: Int = 2000
+    ) async throws -> MermaidPopupMessage {
+        let steps = max(timeoutMs / 20, 1)
+        for _ in 0..<steps {
+            let result = try await webView.evaluateJavaScript("""
+            (() => {
+                const msg = (window.__posted || []).find((m) => m && m.kind === 'mermaidPopup');
+                if (!msg) return null;
+                return JSON.stringify({
+                    kind: String(msg.kind || ''),
+                    svg: String(msg.svg || ''),
+                    naturalWidth: Number(msg.naturalWidth) || 0,
+                    naturalHeight: Number(msg.naturalHeight) || 0,
+                    displayWidth: Number(msg.displayWidth) || 0,
+                    displayHeight: Number(msg.displayHeight) || 0
+                });
+            })()
+            """)
+            if let json = result as? String {
+                return try JSONDecoder().decode(MermaidPopupMessage.self, from: Data(json.utf8))
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let dump = try await webView.evaluateJavaScript(
+            "JSON.stringify(window.__posted || [])"
+        ) as? String
+        struct Timeout: Error {}
+        XCTFail("timed out waiting for mermaidPopup; posted=\(dump ?? "nil")")
+        throw Timeout()
+    }
+
     @MainActor
     func testMermaidWidthToggleExpandsAndRestoresDiagram() async throws {
         let rendered = MarkdownHTML.render(
@@ -984,4 +1156,13 @@ private struct MermaidLayoutMetrics: Decodable {
     let svgWidth: CGFloat
     let expanded: Bool
     let buttonPressed: String
+}
+
+private struct MermaidPopupMessage: Decodable {
+    let kind: String
+    let svg: String
+    let naturalWidth: CGFloat
+    let naturalHeight: CGFloat
+    let displayWidth: CGFloat
+    let displayHeight: CGFloat
 }

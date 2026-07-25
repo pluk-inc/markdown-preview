@@ -20,6 +20,12 @@ checks = {
         and "classList.toggle('mermaid-width-expanded')" in source
         and ".mermaid-figure.mermaid-width-expanded" in source
     ),
+    "opens diagram popup with measured size": (
+        'data-mm-act="popup"' in source
+        and "kind: 'mermaidPopup'" in source
+        and "naturalWidth" in source
+        and "openPopup" in source
+    ),
 }
 failed = [name for name, ok in checks.items() if not ok]
 if failed:

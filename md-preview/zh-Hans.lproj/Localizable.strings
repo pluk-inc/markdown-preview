@@ -181,6 +181,7 @@
 "Reset zoom" = "重置缩放";
 "Fill width" = "填满宽度";
 "Fit diagram" = "适应图表";
+"Open in Window" = "在窗口中打开";
 "Mermaid renderer is unavailable.\n\n" = "Mermaid 渲染器不可用。\n\n";
 "Footnote %d" = "脚注 %d";
 "Back to reference %d" = "返回脚注引用 %d";
