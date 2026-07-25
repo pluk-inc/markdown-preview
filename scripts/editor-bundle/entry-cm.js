@@ -31,6 +31,7 @@ import { rust } from "@codemirror/legacy-modes/mode/rust"
 import { c, cpp, java, kotlin, objectiveC, csharp } from "@codemirror/legacy-modes/mode/clike"
 import { sql } from "@codemirror/legacy-modes/mode/sql"
 import { toml } from "@codemirror/legacy-modes/mode/toml"
+import { hcl } from "codemirror-lang-hcl"
 
 // ---------------------------------------------------------------------------
 // Fenced-code languages
@@ -56,6 +57,7 @@ const codeLanguages = [
   LanguageDescription.of({ name: "json", alias: ["jsonc"], support: json() }),
   LanguageDescription.of({ name: "css", alias: ["scss"], support: css() }),
   LanguageDescription.of({ name: "html", alias: ["htm", "xml"], support: html() }),
+  LanguageDescription.of({ name: "hcl", alias: ["terraform", "tf"], support: hcl() }),
   legacy("swift", [], swift),
   legacy("shell", ["sh", "bash", "zsh", "console"], shell),
   legacy("yaml", ["yml"], yaml),

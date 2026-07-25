@@ -18,7 +18,8 @@
     "@codemirror/legacy-modes": "^6",
     "@codemirror/state": "^6",
     "@codemirror/view": "^6",
-    "@lezer/highlight": "^1"
+    "@lezer/highlight": "^1",
+    "codemirror-lang-hcl": "0.1.0"
   },
   "devDependencies": {
     "esbuild": "^0.25",

@@ -524,6 +524,81 @@ final class MarkdownHTMLRenderTests: XCTestCase {
     }
 
     @MainActor
+    func testReadModeHighlightsHCLFenceAliases() async throws {
+        let hcl = """
+        terraform {
+          required_providers {
+            random = { source = "hashicorp/random", version = "~> 3.0" }
+            local  = { source = "hashicorp/local",  version = "~> 2.0" }
+          }
+        }
+
+        resource "random_pet" "name" {
+          length = 2
+        }
+        """
+        let markdown = ["hcl", "terraform", "tf"]
+            .map { "```\($0)\n\(hcl)\n```" }
+            .joined(separator: "\n\n")
+        let rendered = MarkdownHTML.render(markdown: markdown, vendorLoading: .lazy)
+        let highlightJS = try TestVendor.script(
+            "md-preview/Vendor/Highlight/highlight.min.js"
+        )
+        let html = """
+        <!DOCTYPE html>
+        <html><body>
+        \(rendered.articleHTML)
+        <script>\(highlightJS)</script>
+        <script>
+        const MdPreviewPerf = { log() {}, now: () => performance.now() };
+        window.requestAnimationFrame = (callback) => callback();
+        \(MarkdownHTML.highlightAllBody)
+        highlightAll();
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 700, height: 500))
+
+        webView.loadHTMLString(html, baseURL: TestVendor.repositoryRoot)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        for _ in 0..<100 {
+            let done = try await webView.evaluateJavaScript(
+                "Array.from(document.querySelectorAll('code')).every((code) => code.dataset.hljsDone === '1')"
+            ) as? Bool
+            if done == true { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let result = try await webView.evaluateJavaScript("""
+        JSON.stringify(Array.from(document.querySelectorAll('code')).map((block) => ({
+            language: Array.from(block.classList).find((name) => name.startsWith('language-')),
+            keywords: Array.from(block.querySelectorAll('.hljs-keyword')).map((node) => node.textContent),
+            strings: Array.from(block.querySelectorAll('.hljs-string')).map((node) => node.textContent),
+            numbers: Array.from(block.querySelectorAll('.hljs-number')).map((node) => node.textContent),
+            done: block.dataset.hljsDone === '1',
+        })))
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let values = try JSONDecoder().decode([HCLHighlightValues].self, from: Data(json.utf8))
+
+        XCTAssertEqual(values.map(\.language), ["language-hcl", "language-terraform", "language-tf"])
+        for value in values {
+            XCTAssertTrue(value.done)
+            let keywords = value.keywords.map {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            XCTAssertTrue(keywords.contains("terraform"), "\(value)")
+            XCTAssertTrue(keywords.contains("resource"), "\(value)")
+            XCTAssertTrue(value.strings.contains(where: {
+                $0.contains("hashicorp/random")
+            }), "\(value)")
+            XCTAssertTrue(value.numbers.contains("2"), "\(value)")
+        }
+    }
+
+    @MainActor
     func testReadModeHighlightsShellOptionsWithoutTouchingComments() async throws {
         let repositoryRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -973,6 +1048,18 @@ private struct ShellHighlightValues: Decodable {
     let commentOptions: [String]
     let metaOptions: [String]
     let html: String
+}
+
+private struct HCLHighlightValues: Decodable, CustomStringConvertible {
+    let language: String
+    let keywords: [String]
+    let strings: [String]
+    let numbers: [String]
+    let done: Bool
+
+    var description: String {
+        "\(language): keywords=\(keywords), strings=\(strings), numbers=\(numbers), done=\(done)"
+    }
 }
 
 private struct MermaidLayoutMetrics: Decodable {

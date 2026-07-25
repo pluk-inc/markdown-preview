@@ -251,6 +251,33 @@ check("bundled legacy language stays syntax highlighted",
   legacyCodeHost.querySelector(".hl-keyword")?.textContent === "let")
 legacyCodeEditor.destroy()
 
+const hclSource = `terraform {
+  required_providers {
+    random = { source = "hashicorp/random", version = "~> 3.0" }
+    local  = { source = "hashicorp/local",  version = "~> 2.0" }
+  }
+}
+
+resource "random_pet" "name" {
+  length = 2
+}`
+for (const language of ["hcl", "terraform", "tf"]) {
+  const hclHost = dom.window.document.createElement("div")
+  dom.window.document.body.appendChild(hclHost)
+  const hclEditor = dom.window.MDEditor.create(
+    hclHost, `intro\n\`\`\`${language}\n${hclSource}\n\`\`\``, {})
+  check(`${language} fence highlights HCL block keywords`,
+    Array.from(hclHost.querySelectorAll(".hl-keyword"))
+      .some((node) => node.textContent === "resource"))
+  check(`${language} fence highlights HCL strings`,
+    Array.from(hclHost.querySelectorAll(".hl-string"))
+      .some((node) => node.textContent.includes("hashicorp/random")))
+  check(`${language} fence highlights HCL numbers`,
+    Array.from(hclHost.querySelectorAll(".hl-number"))
+      .some((node) => node.textContent === "2"))
+  hclEditor.destroy()
+}
+
 const mermaidHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(mermaidHost)
 const mermaidEditor = dom.window.MDEditor.create(
