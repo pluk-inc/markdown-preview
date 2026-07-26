@@ -2,13 +2,15 @@
 
 ## [0.0.41] – 2026-07-26
 
-Documents can now leave the app: export to PDF, self-contained HTML, or a single tall PNG, with a printed font size you set yourself.
+Documents can now leave the app: export to PDF, self-contained HTML, or a single tall PNG.
 
 ### Added
 
-- **Export documents as PDF, HTML, or PNG.** File ▸ Export… and File ▸ Export as PDF… open the system print panel, using its own page thumbnails as the preview and a "Markdown Preview" pane for the options. Export as PDF… opens on PDF; Export… reopens on the last format you used. HTML is self-contained (math, diagrams, and highlighting inlined) and PNG is one continuous 2× image of the whole document. Both commands are also available as toolbar items in Customize Toolbar ([#239](https://github.com/pluk-inc/markdown-preview/pull/239)).
-- **A printed font size control, shared by Print… and the export commands.** The value is the literal printed point size, and changing it re-paginates the panel's thumbnails without reflowing the document on screen ([#239](https://github.com/pluk-inc/markdown-preview/pull/239)).
-- **A print stylesheet, which the app never had.** Exports and printouts force the light palette (dark-mode windows previously produced white text on black), drop screen-only affordances like copy-code buttons and search highlights, keep code blocks, tables, quotes, and alerts from splitting across pages, and set explicit page margins. Wide tables, code, and long words are constrained so WebKit no longer shrinks the whole page to fit — which used to silently export a requested 18pt at roughly 15pt ([#239](https://github.com/pluk-inc/markdown-preview/pull/239)).
+- **Export documents as PDF, HTML, or PNG.** File ▸ Export… and File ▸ Export as PDF… open the system print panel, with page thumbnails as the preview and a "Markdown Preview" pane for the options — including a printed font size, in real points, shared with Print…. HTML is self-contained (math, diagrams, and highlighting inlined) and PNG is one continuous 2× image of the whole document. Both commands are also available as toolbar items in Customize Toolbar ([#239](https://github.com/pluk-inc/markdown-preview/pull/239)).
+
+### Fixed
+
+- **Printing and exporting from a dark-mode window now produces a light document.** Exports previously came out white-on-black; they also drop copy-code buttons and search highlights, and no longer split code blocks, tables, quotes, or alerts across pages ([#239](https://github.com/pluk-inc/markdown-preview/pull/239)).
 
 ## [0.0.40] – 2026-07-22
 
