@@ -17,6 +17,8 @@ extension NSToolbarItem.Identifier {
     static let search = NSToolbarItem.Identifier("Search")
     static let sidebarMenu = NSToolbarItem.Identifier("SidebarMenu")
     static let printDocument = NSToolbarItem.Identifier("PrintDocument")
+    static let exportDocument = NSToolbarItem.Identifier("ExportDocument")
+    static let exportPDF = NSToolbarItem.Identifier("ExportPDF")
     static let copyMarkdown = NSToolbarItem.Identifier("CopyMarkdown")
     static let zoom = NSToolbarItem.Identifier("Zoom")
     static let editDocument = NSToolbarItem.Identifier("EditDocument")
@@ -490,6 +492,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             .share,
             .search,
             .printDocument,
+            .exportPDF,
+            .exportDocument,
             .copyMarkdown,
             .zoom
         ]
@@ -515,6 +519,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         case .share: return makeShareItem()
         case .search: return makeSearchItem()
         case .printDocument: return makePrintItem()
+        case .exportPDF: return makeExportPDFItem()
+        case .exportDocument: return makeExportItem()
         case .copyMarkdown: return makeCopyItem()
         case .zoom: return makeZoomItem()
         default: return nil
@@ -770,6 +776,36 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                              accessibilityDescription: print)
         item.isBordered = true
         item.action = #selector(MainSplitViewController.printMarkdown(_:))
+        return item
+    }
+
+    private func makeExportPDFItem() -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: .exportPDF)
+        let label = NSLocalizedString(
+            "Export PDF", comment: "Export as PDF toolbar item label")
+        item.label = label
+        item.paletteLabel = label
+        item.toolTip = NSLocalizedString(
+            "Export document as PDF", comment: "Export as PDF toolbar item tooltip")
+        item.image = NSImage(systemSymbolName: "arrow.up.document",
+                             accessibilityDescription: label)
+        item.isBordered = true
+        item.action = #selector(MainSplitViewController.exportMarkdownAsPDF(_:))
+        return item
+    }
+
+    private func makeExportItem() -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: .exportDocument)
+        let label = NSLocalizedString(
+            "Export", comment: "Export toolbar item label")
+        item.label = label
+        item.paletteLabel = label
+        item.toolTip = NSLocalizedString(
+            "Export document", comment: "Export toolbar item tooltip")
+        item.image = NSImage(systemSymbolName: "document.badge.arrow.up",
+                             accessibilityDescription: label)
+        item.isBordered = true
+        item.action = #selector(MainSplitViewController.exportMarkdownDocument(_:))
         return item
     }
 

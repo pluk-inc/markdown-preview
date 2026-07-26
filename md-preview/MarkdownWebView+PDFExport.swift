@@ -78,8 +78,6 @@ private struct FileExportSource {
     }
 }
 
-/// Row metrics shared by the accessory's rows. 52pt left the two controls
-/// looking marooned next to the panel's own tightly-set fields.
 private enum AccessoryRowMetrics {
     static let height: CGFloat = 30
     static let spacing: CGFloat = 8
@@ -616,8 +614,6 @@ private final class ExportPrintPanel: NSPrintPanel {
                 }
                 self.dismissAfterFileExport()
             case .png:
-                // Rasterising round-trips through the web content process, so
-                // the outer sheet only closes once the file is really written.
                 fileExportSource.writePNG(url) { [weak self] error in
                     if let error {
                         NSAlert(error: error).beginSheetModal(for: printSheetWindow)
@@ -893,11 +889,9 @@ extension MarkdownWebView {
         runPrintOperation(operation, from: window)
     }
 
-    /// Rasterises the document to a single tall PNG.
-    ///
-    /// `createPDF` captures the whole scrollable page as one unpaginated sheet,
-    /// which is what an image export wants — no letter-sized page breaks cutting
-    /// through the content. Screen media is used, so the image keeps the
+    /// Rasterises the document to a single tall PNG. `createPDF` captures the
+    /// whole scrollable page as one unpaginated sheet, so no page breaks cut
+    /// through the content, and it renders screen media — the image keeps the
     /// on-screen palette rather than the print stylesheet's forced light one.
     private func writePNG(to url: URL, completion: @escaping (Error?) -> Void) {
         webView.createPDF(configuration: WKPDFConfiguration()) { result in

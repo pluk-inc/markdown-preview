@@ -3334,11 +3334,6 @@ nonisolated enum MarkdownHTML {
             overflow: visible;
             background: #fff;
         }
-        /* WKWebView ignores NSPrintInfo's margins and falls back to its own 1in
-           default, so the page box has to be set here. The top is trimmed
-           relative to the sides because the first line contributes ~20pt of
-           its own leading above the glyphs; equal margins therefore read as a
-           noticeably deeper gap at the top of every page. */
         @page {
             margin: \(printPageMarginTop) \(printPageMarginSide) \(printPageMarginBottom);
         }
