@@ -134,6 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installEditModeMenuItem()
         installFormatMenu()
         installNewTabMenuItem()
+        installFileExportMenuItems()
         installGoMenu()
         installAppMenuItemIcons()
         installZoomMenuItemIcons()
@@ -643,6 +644,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let insertIndex = fileMenu.items
             .firstIndex { $0.action == #selector(openDocument(_:)) } ?? 0
         fileMenu.insertItem(item, at: insertIndex)
+    }
+
+    private func installFileExportMenuItems() {
+        guard let fileMenu = topLevelSubmenu(matching: Self.fileMenuTitles),
+              let pdfIndex = fileMenu.items.firstIndex(where: {
+                  $0.action == #selector(
+                      MainSplitViewController.exportMarkdownAsPDF(_:))
+              })
+        else { return }
+
+        let shareItem = NSDocumentController.shared.standardShareMenuItem()
+        fileMenu.insertItem(shareItem, at: pdfIndex + 1)
+
+        guard #available(macOS 26.0, *) else { return }
+        let icons: [(item: NSMenuItem?, symbol: String)] = [
+            (
+                fileMenu.items.first {
+                    $0.action == #selector(
+                        MainSplitViewController.exportMarkdownDocument(_:))
+                },
+                "square.and.arrow.up.on.square"
+            ),
+            (
+                fileMenu.items.first {
+                    $0.action == #selector(
+                        MainSplitViewController.exportMarkdownAsPDF(_:))
+                },
+                "arrow.up.document"
+            ),
+            (shareItem, "square.and.arrow.up"),
+            (
+                fileMenu.items.first {
+                    $0.action == #selector(
+                        MainSplitViewController.printMarkdown(_:))
+                },
+                "printer"
+            ),
+        ]
+        for (item, symbol) in icons {
+            guard let item,
+                  let image = NSImage(
+                      systemSymbolName: symbol,
+                      accessibilityDescription: item.title
+                  )
+            else { continue }
+            image.isTemplate = true
+            item.image = image
+        }
     }
 
     private func installGoMenu() {

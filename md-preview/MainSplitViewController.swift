@@ -63,7 +63,11 @@ final class MainSplitViewController: NSSplitViewController {
     }
 
     func display(markdown: String, fileName: String, url: URL?, assetBaseURL: URL?) {
-        contentViewController?.display(markdown: markdown, assetBaseURL: assetBaseURL)
+        contentViewController?.display(
+            markdown: markdown,
+            sourceURL: url,
+            assetBaseURL: assetBaseURL
+        )
         sidebarViewController?.display(markdown: markdown, fileName: fileName, fileURL: url)
         inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))
     }
@@ -72,6 +76,7 @@ final class MainSplitViewController: NSSplitViewController {
     /// the preview, scroll position, and active-heading highlight stay
     /// put.
     func openFileURLDidChange(_ newURL: URL, markdown: String) {
+        contentViewController?.sourceFileURLDidChange(newURL)
         sidebarViewController?.openFileURLDidChange(newURL)
         inspectorViewController?.display(metadata: DocumentMetadata.make(url: newURL, markdown: markdown))
     }
@@ -112,6 +117,16 @@ final class MainSplitViewController: NSSplitViewController {
         contentViewController?.printDocument()
     }
 
+    @IBAction func exportMarkdownDocument(_ sender: Any?) {
+        contentViewController?.exportDocument()
+    }
+
+    /// Custom selector for the same reason as `printMarkdown(_:)`: keep the
+    /// action distinct from AppKit's built-in document/window responders.
+    @IBAction func exportMarkdownAsPDF(_ sender: Any?) {
+        contentViewController?.exportPDF()
+    }
+
     @IBAction func zoomInDocument(_ sender: Any?) {
         contentViewController?.zoomIn()
     }
@@ -125,6 +140,14 @@ final class MainSplitViewController: NSSplitViewController {
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        let documentActions = [
+            #selector(exportMarkdownDocument(_:)),
+            #selector(exportMarkdownAsPDF(_:)),
+            #selector(printMarkdown(_:)),
+        ]
+        if let action = menuItem.action, documentActions.contains(action) {
+            return contentViewController?.hasExportableDocument == true
+        }
         if menuItem.action == #selector(resetDocumentZoom(_:)) {
             return abs((contentViewController?.pageZoom ?? 1.0) - 1.0) > 0.001
         }

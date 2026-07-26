@@ -17,6 +17,18 @@
 /* File menu */
 "New Tab" = "新建标签页";
 
+/* Print panel */
+"Font Size:" = "字体大小：";
+"Font Size" = "字体大小";
+"%d pt" = "%d 磅";
+"pt" = "磅";
+
+/* Export panel */
+"Export" = "导出";
+"Format:" = "格式：";
+"PDF Document" = "PDF 文稿";
+"HTML Document" = "HTML 文稿";
+
 /* Go menu */
 "Go" = "前往";
 "Up" = "向上";

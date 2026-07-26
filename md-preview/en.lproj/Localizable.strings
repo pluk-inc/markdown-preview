@@ -17,6 +17,18 @@
 /* File menu */
 "New Tab" = "New Tab";
 
+/* Print panel */
+"Font Size:" = "Font Size:";
+"Font Size" = "Font Size";
+"%d pt" = "%d pt";
+"pt" = "pt";
+
+/* Export panel */
+"Export" = "Export";
+"Format:" = "Format:";
+"PDF Document" = "PDF Document";
+"HTML Document" = "HTML Document";
+
 /* Go menu */
 "Go" = "Go";
 "Up" = "Up";

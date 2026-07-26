@@ -32,6 +32,11 @@ final class MarkdownDocument: NSDocument {
         false
     }
 
+    override var allowsDocumentSharing: Bool {
+        guard let fileURL else { return false }
+        return !fileURL.isExistingDirectory
+    }
+
     override func makeWindowControllers() {
         let controller = DocumentWindowController()
         addWindowController(controller)
