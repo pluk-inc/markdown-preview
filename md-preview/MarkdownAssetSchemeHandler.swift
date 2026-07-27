@@ -7,13 +7,15 @@ import Foundation
 import UniformTypeIdentifiers
 import WebKit
 
-/// Custom URL scheme handler that serves files relative to the document's
-/// parent folder. The host process holds the security-scoped extension for
-/// the folder, so FileManager reads succeed even though the WKWebView's
+/// Custom URL scheme handler that serves local files to the preview page.
+/// Request URLs carry the file's absolute filesystem path (the page's
+/// `<base>` mirrors the document folder — see `MarkdownAssetResolution`),
+/// so links and images may reference parent folders. The host process has
+/// read access, so FileManager reads succeed even though the WKWebView's
 /// content process is sandboxed separately.
 nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
 
-    nonisolated static let scheme = "md-asset"
+    nonisolated static let scheme = MarkdownAssetResolution.scheme
     /// URL path prefix reserved for app-bundled vendor scripts (lazy-loaded).
     nonisolated static let vendorPathPrefix = "/__vendor/"
 
@@ -43,22 +45,6 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
     private func currentBaseURL() -> URL? {
         lock.lock(); defer { lock.unlock() }
         return _baseURL
-    }
-
-    /// Resolves an `md-asset://…` URL against `base`, rejecting path-traversal
-    /// that escapes the granted folder. Returns `nil` for malformed input.
-    nonisolated static func resolve(_ assetURL: URL, against base: URL) -> URL? {
-        var path = assetURL.path
-        while path.hasPrefix("/") { path.removeFirst() }
-        guard !path.isEmpty else { return nil }
-
-        let candidate = base.appendingPathComponent(path).standardizedFileURL
-        let basePath = base.standardizedFileURL.path
-        guard candidate.path == basePath
-                || candidate.path.hasPrefix(basePath + "/") else {
-            return nil
-        }
-        return candidate
     }
 
     /// Resolves a `/__vendor/<file>` URL to a file inside the app bundle's
@@ -116,8 +102,11 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
                 return
             }
 
-            guard let base,
-                  let resolved = Self.resolve(requestURL, against: base) else {
+            // User files are only served while a document with a real file
+            // location is loaded — the base is nil for unsaved documents
+            // and the warmup page.
+            guard base != nil,
+                  let resolved = MarkdownAssetResolution.fileURL(for: requestURL) else {
                 wrapper.fail(with: URLError(.badURL))
                 return
             }

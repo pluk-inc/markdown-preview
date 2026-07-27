@@ -186,7 +186,14 @@ nonisolated enum MarkdownHTML {
             </style>
             """
         }
-        let baseTag = assetBaseHref.map { "<base href=\"\($0)\">" } ?? ""
+        // The href may carry a real folder path (percent-encoded, but `&`
+        // and `'` survive URL path encoding) — escape it for the attribute.
+        let baseTag = assetBaseHref.map {
+            let escaped = $0
+                .replacingOccurrences(of: "&", with: "&amp;")
+                .replacingOccurrences(of: "\"", with: "&quot;")
+            return "<base href=\"\(escaped)\">"
+        } ?? ""
         let sanitizerBlock = dompurifyBlock
         let morphBlock = morphdomBlock
         let mathBlock = containsMath ? katexHead(mode: vendorLoading) : VendorEmission()
@@ -1790,6 +1797,15 @@ nonisolated enum MarkdownHTML {
         // second update without the flag once the real document arrives,
         // which clears the inline style and reveals the article.
         window.MdPreview.update = (articleHTML, opts) => {
+            // Body swaps can carry a document from a different folder — move
+            // the page <base> first so the incoming content's relative URLs
+            // resolve against the right folder.
+            if (opts && opts.baseHref) {
+                const base = document.querySelector('base');
+                if (base && base.getAttribute('href') !== opts.baseHref) {
+                    base.setAttribute('href', opts.baseHref);
+                }
+            }
             const article = document.querySelector('.markdown-body');
             if (!article) return;
             const tStart = perfNow();

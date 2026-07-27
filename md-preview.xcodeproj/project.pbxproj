@@ -97,6 +97,7 @@
 			membershipExceptions = (
 				CodeFenceInfo.swift,
 				EscapingHTMLFormatter.swift,
+				MarkdownAssetResolution.swift,
 				MarkdownAssetSchemeHandler.swift,
 				MarkdownFrontmatter.swift,
 				MarkdownHTML.swift,

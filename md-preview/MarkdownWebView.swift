@@ -306,7 +306,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
 
     private func warmupVendors() {
         guard !isPageReady, loadedFingerprint == nil else { return }
-        let baseHref = "\(MarkdownAssetScheme.scheme):///"
+        let baseHref = MarkdownAssetResolution.rootBaseHref
         let markdown = Self.warmupMarkdown
         let contentWidth = ContentWidthSetting.current.renderWidth
         Task { @concurrent [weak self] in
@@ -350,12 +350,20 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         webView.evaluateJavaScript("window.MdPreview && MdPreview.update('');") { _, _ in }
     }
 
+    /// The page `<base>` mirrors the document folder's absolute path so
+    /// WebKit can resolve relative links — including `../` into parent
+    /// folders — before they reach the scheme handler.
+    private var currentBaseHref: String {
+        currentAssetBase.map { MarkdownAssetResolution.baseHref(forFolder: $0) }
+            ?? MarkdownAssetResolution.rootBaseHref
+    }
+
     func display(markdown: String, assetBaseURL: URL? = nil) {
         currentMarkdown = markdown
         isPointerOverMermaidFigure = false
         assetScheme.setBaseURL(assetBaseURL)
         currentAssetBase = assetBaseURL
-        let baseHref = "\(MarkdownAssetScheme.scheme):///"
+        let baseHref = currentBaseHref
         renderGeneration &+= 1
         let generation = renderGeneration
         let contentWidth = ContentWidthSetting.current.renderWidth
@@ -411,7 +419,11 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         // subsequent file with any subset of renderers fast-paths into it.
         if isPageReady, let loaded = loadedFingerprint, loaded.covers(fingerprint) {
             let payload = javaScriptStringLiteral(rendered.articleHTML)
-            webView.evaluateJavaScript("window.MdPreview && MdPreview.update(\(payload));") { [weak self] _, _ in
+            // The loaded page keeps its original <base> across body swaps —
+            // pass the current document's base along so relative links keep
+            // resolving against the right folder after switching files.
+            let base = javaScriptStringLiteral(currentBaseHref)
+            webView.evaluateJavaScript("window.MdPreview && MdPreview.update(\(payload), { baseHref: \(base) });") { [weak self] _, _ in
                 self?.contentDidReplace?()
             }
             return
@@ -1345,10 +1357,10 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             if let fragment = sameDocumentFragmentID(from: url) {
                 fragmentLinkActivated?(fragment)
             } else if url.scheme == MarkdownAssetScheme.scheme,
-               let base = currentAssetBase,
-               let resolved = MarkdownAssetScheme.resolve(url, against: base) {
+               currentAssetBase != nil,
+               let resolved = MarkdownAssetResolution.fileURL(for: url) {
                 if Self.isMarkdownDocument(resolved) {
-                    // resolve() works on the path alone and drops `#section`.
+                    // fileURL(for:) works on the path alone and drops `#section`.
                     localMarkdownLinkActivated?(Self.reattachingFragment(of: url, to: resolved))
                 } else {
                     NSWorkspace.shared.open(resolved)
@@ -1392,11 +1404,25 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             return fragment
         }
         if url.scheme == MarkdownAssetScheme.scheme,
-           (url.host == nil || url.host == ""),
-           (url.path.isEmpty || url.path == "/") {
-            return fragment
+           (url.host == nil || url.host == "") {
+            // A fragment-only href resolves against the page <base>, which
+            // names the document folder — so a URL whose path is the folder
+            // itself (or the bare root when there is no folder) points back
+            // at this document.
+            if url.path.isEmpty || url.path == "/" {
+                return fragment
+            }
+            if let folder = currentAssetBase,
+               Self.droppingTrailingSlash(url.path)
+                == Self.droppingTrailingSlash(folder.standardizedFileURL.path) {
+                return fragment
+            }
         }
         return nil
+    }
+
+    private static func droppingTrailingSlash(_ path: String) -> String {
+        path.count > 1 && path.hasSuffix("/") ? String(path.dropLast()) : path
     }
 }
 
