@@ -1358,6 +1358,10 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                 fragmentLinkActivated?(fragment)
             } else if url.scheme == MarkdownAssetScheme.scheme,
                currentAssetBase != nil,
+               // `/__vendor/` is a reserved namespace served from the app
+               // bundle by the scheme handler — never a filesystem path, so
+               // clicks on authored vendor links stay inert.
+               !url.path.hasPrefix(MarkdownAssetScheme.vendorPathPrefix),
                let resolved = MarkdownAssetResolution.fileURL(for: url) {
                 if Self.isMarkdownDocument(resolved) {
                     // fileURL(for:) works on the path alone and drops `#section`.
