@@ -52,6 +52,11 @@ final class MarkdownAssetResolutionTests: XCTestCase {
         XCTAssertNil(MarkdownAssetResolution.fileURL(for: URL(string: "md-asset://")!))
     }
 
+    func testFileURLRejectsNonEmptyHost() {
+        XCTAssertNil(MarkdownAssetResolution.fileURL(for: URL(string: "md-asset://example.com/etc/hosts")!))
+        XCTAssertNil(MarkdownAssetResolution.fileURL(for: URL(string: "md-asset://__vendor/katex.min.js")!))
+    }
+
     func testFileURLRejectsOtherSchemes() {
         XCTAssertNil(MarkdownAssetResolution.fileURL(for: URL(string: "file:///etc/hosts")!))
         XCTAssertNil(MarkdownAssetResolution.fileURL(for: URL(string: "https://example.com/a.md")!))

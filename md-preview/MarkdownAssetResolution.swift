@@ -41,10 +41,13 @@ nonisolated enum MarkdownAssetResolution {
     }
 
     /// Maps an `md-asset://…` URL to the file it names. Returns `nil` for
-    /// other schemes and for paths that don't name a filesystem location
-    /// (empty, or the bare root).
+    /// other schemes, for URLs with a host (well-formed `md-asset` URLs have
+    /// none — this keeps protocol-relative references like `//host/pic.png`
+    /// from aliasing local files), and for paths that don't name a
+    /// filesystem location (empty, or the bare root).
     static func fileURL(for assetURL: URL) -> URL? {
         guard assetURL.scheme == scheme else { return nil }
+        if let host = assetURL.host, !host.isEmpty { return nil }
         let path = assetURL.path
         guard path.count > 1, path.hasPrefix("/") else { return nil }
         return URL(fileURLWithPath: path).standardizedFileURL
