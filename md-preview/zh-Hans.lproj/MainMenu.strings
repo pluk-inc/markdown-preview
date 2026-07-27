@@ -55,6 +55,12 @@
 /* Class = "NSMenuItem"; title = "Close"; ObjectID = "DVo-aG-piG"; */
 "DVo-aG-piG.title" = "关闭";
 
+/* Class = "NSMenuItem"; title = "Export…"; ObjectID = "Ex0-fm-F00"; */
+"Ex0-fm-F00.title" = "导出…";
+
+/* Class = "NSMenuItem"; title = "Export as PDF…"; ObjectID = "Ex1-pd-F01"; */
+"Ex1-pd-F01.title" = "导出为 PDF…";
+
 /* Class = "NSMenuItem"; title = "Spelling and Grammar"; ObjectID = "Dv1-io-Yv7"; */
 "Dv1-io-Yv7.title" = "拼写和语法";
 
@@ -207,9 +213,6 @@
 
 /* Class = "NSMenuItem"; title = "Find Next"; ObjectID = "q09-fT-Sye"; */
 "q09-fT-Sye.title" = "查找下一个";
-
-/* Class = "NSMenuItem"; title = "Page Setup…"; ObjectID = "qIS-W8-SiK"; */
-"qIS-W8-SiK.title" = "页面设置…";
 
 /* Class = "NSMenuItem"; title = "Check Spelling While Typing"; ObjectID = "rbD-Rh-wIN"; */
 "rbD-Rh-wIN.title" = "键入时检查拼写";

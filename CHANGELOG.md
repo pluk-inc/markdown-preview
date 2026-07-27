@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.41] – 2026-07-26
+
+Documents can now leave the app: export to PDF, self-contained HTML, or a single tall PNG.
+
+### Added
+
+- **Export documents as PDF, HTML, or PNG.** File ▸ Export… and File ▸ Export as PDF… open the system print panel, with page thumbnails as the preview and a "Markdown Preview" pane for the options — including a printed font size, in real points, shared with Print…. HTML is self-contained (math, diagrams, and highlighting inlined) and PNG is one continuous 2× image of the whole document. Both commands are also available as toolbar items in Customize Toolbar ([#239](https://github.com/pluk-inc/markdown-preview/pull/239)).
+
+### Fixed
+
+- **Printing and exporting from a dark-mode window now produces a light document.** Exports previously came out white-on-black; they also drop copy-code buttons and search highlights, and no longer split code blocks, tables, quotes, or alerts across pages ([#239](https://github.com/pluk-inc/markdown-preview/pull/239)).
+
 ## [0.0.40] – 2026-07-22
 
 Scrollable previews get their scrollbar back, and the keyboard shortcuts no longer fight with macOS system shortcuts.

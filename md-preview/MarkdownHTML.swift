@@ -73,6 +73,23 @@ nonisolated enum MarkdownHTML {
     static let pagePaddingHorizontal: CGFloat = 40
     static let pagePaddingBottom: CGFloat = 48
     static let sourceLineHeight = bodyFontSize * bodyLineHeight
+
+    /// Body size, in points, used by the print stylesheet when the app hasn't
+    /// injected an explicit choice. CSS `pt` reaches paper 1:1, so this is the
+    /// literal printed size. The on-screen 15px body prints at 15 × 0.75 =
+    /// 11.25pt, so 12pt keeps the default output close to what it was before
+    /// the size became selectable.
+    static let defaultPrintPointSize = 12
+
+    /// Printed page box. WKWebView ignores `NSPrintInfo`'s margins and falls
+    /// back to its own 1in default, so these are the only knob. The top is
+    /// deliberately smaller than the sides: the first line of every page adds
+    /// roughly 20pt of its own leading above the glyphs, so equal margins make
+    /// the top read as a much deeper gap than the sides.
+    static let printPageMarginTop = "0.5in"
+    static let printPageMarginSide = "0.75in"
+    static let printPageMarginBottom = "0.6in"
+
     // Block margin-top tokens. The editor bundle receives these through
     // MDEditor.create's `spacing` option so both surfaces space blocks
     // identically — change them here, never in entry-cm.js.
@@ -3287,6 +3304,89 @@ nonisolated enum MarkdownHTML {
     em { font-style: italic; }
 
     [dir="rtl"] { text-align: right; }
+
+    /* ---------------------------------------------------------------------
+       Print / PDF export.
+
+       WebKit lays print out at a viewport of the printable width in CSS px
+       (96px per inch), and 1 CSS px maps to exactly 0.75pt on paper. Sizing
+       the body in `pt` here therefore lands at that literal point size, with
+       no scaling factor to compensate for. `md-print-size` (injected by the
+       app at print time) overrides the default below.
+
+       The on-screen palette is dark-mode aware; paper is not, so the light
+       values are restored unconditionally — otherwise a user printing in
+       dark mode gets white text on a black background.
+       --------------------------------------------------------------------- */
+    @media print {
+        :root {
+            color-scheme: light;
+            --text: #1d1d1f;
+            --secondary: #6e6e73;
+            --link: #0066cc;
+            --aside-bg: #f5f5f7;
+            --aside-border: #696969;
+            --quote-border: #d2d2d7;
+            --code-bg: #f5f5f7;
+            --grid: #d2d2d7;
+        }
+        html, body {
+            overflow: visible;
+            background: #fff;
+        }
+        @page {
+            margin: \(printPageMarginTop) \(printPageMarginSide) \(printPageMarginBottom);
+        }
+        body {
+            font-size: \(defaultPrintPointSize)pt;
+            padding: 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        /* NSPrintInfo owns the page margins, and the print viewport is
+           narrower than the on-screen measure, so the column just fills it. */
+        article.markdown-body {
+            max-width: none;
+            margin: 0;
+        }
+
+        /* Interaction affordances are screen-only. */
+        .md-code-copy,
+        .md-search-burst { display: none !important; }
+        mark.md-search-highlight,
+        mark.md-search-highlight-current {
+            background: transparent;
+            color: inherit;
+        }
+
+        /* Splitting these across a page break loses the reading order. */
+        pre, blockquote, table, figure, .md-frontmatter, .markdown-alert {
+            break-inside: avoid;
+        }
+        tr, li { break-inside: avoid; }
+        h1, h2, h3, h4, h5, h6 { break-after: avoid; }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        /* Inner scrollers can't scroll on paper — let them wrap instead of
+           clipping their overflow. */
+        .md-code-wrap, .md-table-scroll, table, pre {
+            overflow: visible !important;
+        }
+        img, svg {
+            max-width: 100% !important;
+            height: auto;
+        }
+        /* Anything wider than the printable area makes WebKit shrink the whole
+           document to fit, which silently overrides the chosen point size — a
+           request for 18pt came out at ~15pt. Keep every block inside the
+           measure so the size stays honest. */
+        body { overflow-wrap: break-word; }
+        table { width: 100%; }
+        th, td { overflow-wrap: anywhere; }
+        pre, code { overflow-wrap: anywhere; }
+    }
 
     """
 }
