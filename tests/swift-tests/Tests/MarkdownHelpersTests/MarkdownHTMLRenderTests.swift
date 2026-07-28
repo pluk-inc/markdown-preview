@@ -398,6 +398,18 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             rendered.articleHTML.contains(#"class="mermaid-hud-btn mermaid-hud-popup""#),
             rendered.articleHTML
         )
+        XCTAssertTrue(
+            rendered.articleHTML.contains(#"class="mermaid-hud-group mermaid-hud-zoom""#),
+            rendered.articleHTML
+        )
+        XCTAssertTrue(
+            rendered.articleHTML.contains(#"class="mermaid-hud-group mermaid-hud-actions""#),
+            rendered.articleHTML
+        )
+        XCTAssertTrue(
+            rendered.articleHTML.contains(#"class="mermaid-hud-width-symbol" aria-hidden="true">⤢</span>"#),
+            rendered.articleHTML
+        )
         // SPM helper tests lack the Mermaid vendor bundle, so the page falls
         // back to the "renderer unavailable" stub — assert the real wiring
         // string (injected by the app when Vendor/Mermaid is present).
@@ -686,6 +698,70 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(restored.expanded)
         XCTAssertEqual(restored.buttonPressed, "false")
         XCTAssertEqual(restored.figureWidth, initial.figureWidth, accuracy: 1)
+    }
+
+    @MainActor
+    func testMermaidHUDWrapsInsideNarrowDiagram() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ```mermaid
+            flowchart LR
+                A --> B
+            ```
+            """,
+            vendorLoading: .lazy
+        )
+        let stylesheet = try XCTUnwrap(
+            rendered.html
+                .components(separatedBy: "<style>")
+                .dropFirst()
+                .first?
+                .components(separatedBy: "</style>")
+                .first
+        )
+        let html = """
+        <!DOCTYPE html>
+        <html><head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>\(stylesheet)</style>
+        </head><body><article class="markdown-body">\(rendered.articleHTML)</article>
+        <script>
+        const figure = document.querySelector('.mermaid-figure');
+        figure.style.width = '200px';
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 600, height: 400))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const figure = document.querySelector('.mermaid-figure').getBoundingClientRect();
+            const hud = document.querySelector('.mermaid-hud').getBoundingClientRect();
+            const zoom = document.querySelector('.mermaid-hud-zoom').getBoundingClientRect();
+            const actions = document.querySelector('.mermaid-hud-actions').getBoundingClientRect();
+            return JSON.stringify({
+                figureLeft: figure.left,
+                figureRight: figure.right,
+                hudLeft: hud.left,
+                hudRight: hud.right,
+                zoomTop: zoom.top,
+                actionsTop: actions.top
+            });
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let metrics = try JSONDecoder().decode(
+            MermaidHUDMetrics.self,
+            from: Data(json.utf8)
+        )
+
+        XCTAssertGreaterThanOrEqual(metrics.hudLeft, metrics.figureLeft + 7)
+        XCTAssertLessThanOrEqual(metrics.hudRight, metrics.figureRight - 7)
+        XCTAssertGreaterThan(metrics.actionsTop, metrics.zoomTop)
     }
 
     func testCodeBlockLayoutMatchesDeferredHighlightingFromFirstPaint() throws {
@@ -1273,6 +1349,15 @@ private struct MermaidLayoutMetrics: Decodable {
     let svgWidth: CGFloat
     let expanded: Bool
     let buttonPressed: String
+}
+
+private struct MermaidHUDMetrics: Decodable {
+    let figureLeft: CGFloat
+    let figureRight: CGFloat
+    let hudLeft: CGFloat
+    let hudRight: CGFloat
+    let zoomTop: CGFloat
+    let actionsTop: CGFloat
 }
 
 private struct MermaidPopupMessage: Decodable {

@@ -2353,11 +2353,15 @@ nonisolated enum MarkdownHTML {
             \(diagram)
             </div></div>
             <div class="mermaid-hud" aria-hidden="true">
+            <div class="mermaid-hud-group mermaid-hud-zoom">
             <button type="button" class="mermaid-hud-btn" data-mm-act="out" tabindex="-1" aria-label="\(zoomOut)">−</button>
             <button type="button" class="mermaid-hud-btn mermaid-hud-level" data-mm-act="reset" tabindex="-1" aria-label="\(resetZoom)">100%</button>
             <button type="button" class="mermaid-hud-btn" data-mm-act="in" tabindex="-1" aria-label="\(zoomIn)">+</button>
-            <button type="button" class="mermaid-hud-btn mermaid-hud-width" data-mm-act="width" tabindex="-1" aria-label="\(fillWidth)" aria-pressed="false" title="\(fillWidth)">⤢</button>
+            </div>
+            <div class="mermaid-hud-group mermaid-hud-actions">
+            <button type="button" class="mermaid-hud-btn mermaid-hud-width" data-mm-act="width" tabindex="-1" aria-label="\(fillWidth)" aria-pressed="false" title="\(fillWidth)"><span class="mermaid-hud-width-symbol" aria-hidden="true">⤢</span></button>
             \(popupButton)
+            </div>
             </div>
             </figure>
             """
@@ -3136,12 +3140,10 @@ nonisolated enum MarkdownHTML {
         top: 8px;
         right: 8px;
         display: flex;
-        gap: 2px;
-        padding: 3px;
-        border-radius: 9px;
-        background: color-mix(in srgb, Canvas 75%, transparent);
-        backdrop-filter: blur(20px) saturate(160%);
-        -webkit-backdrop-filter: blur(20px) saturate(160%);
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 6px 8px;
+        max-width: calc(100% - 16px);
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.12s ease;
@@ -3149,6 +3151,15 @@ nonisolated enum MarkdownHTML {
         font-size: 12px;
         line-height: 1;
         color: var(--text);
+    }
+    .mermaid-hud-group {
+        display: flex;
+        gap: 2px;
+        padding: 3px;
+        border-radius: 9px;
+        background: color-mix(in srgb, Canvas 75%, transparent);
+        backdrop-filter: blur(20px) saturate(160%);
+        -webkit-backdrop-filter: blur(20px) saturate(160%);
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     }
     .mermaid-figure:hover .mermaid-hud,
@@ -3180,12 +3191,16 @@ nonisolated enum MarkdownHTML {
         font-variant-numeric: tabular-nums;
     }
     .mermaid-hud-width {
-        margin-left: 2px;
-        font-size: 14px;
+        line-height: 12px;
+    }
+    .mermaid-hud-width-symbol {
+        display: inline-block;
+        font-size: 22px;
+        font-weight: 600;
     }
     .mermaid-hud-popup {
-        margin-left: 2px;
-        font-size: 13px;
+        font-size: 16px;
+        line-height: 12px;
     }
     @media (prefers-reduced-motion: reduce) {
         .mermaid-hud { transition: none; }
