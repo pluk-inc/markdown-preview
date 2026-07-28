@@ -658,6 +658,7 @@ const hide = Decoration.replace({})
 const bulletDeco = Decoration.replace({ widget: new TextWidget("•", "cm-md-bullet") })
 const activeBulletDeco = Decoration.mark({ class: "cm-md-bullet-source" })
 const hrDeco = Decoration.replace({ widget: new RuleWidget() })
+const markdownListMarker = /^([ \t]*)([-+*]|\d+[.)])([ \t]+|$)/
 
 const joinDeco = Decoration.replace({ widget: new TextWidget(" ", "cm-md-join") })
 
@@ -890,6 +891,7 @@ function buildDecorations(view) {
   const isActiveFence = (node) => activeFence != null
     && node.from <= activeFence.from && node.to >= activeFence.to
   const decoratedLines = new Set()
+  const listDepthPositions = new Set()
   const lineOnce = (pos, deco) => {
     const line = state.doc.lineAt(pos)
     const key = deco.spec.class + "@" + line.from
@@ -904,6 +906,54 @@ function buildDecorations(view) {
       lineOnce(line.from, deco)
       if (line.to >= to) break
       pos = line.to + 1
+    }
+  }
+  const indentationColumns = (indentation) => {
+    let columns = 0
+    for (const character of indentation) {
+      columns = character === "\t"
+        ? columns + (4 - (columns % 4))
+        : columns + 1
+    }
+    return columns
+  }
+  // Repeated Tab can move a list-looking source line beyond the indentation
+  // depth that the CommonMark parser still recognizes as a ListItem. Keep the
+  // editor geometry stable at that boundary: ordinary indented code is left
+  // alone, while a line with an explicit list marker retains list styling.
+  const decorateRawIndentedListLine = (line, match) => {
+    const indentation = match[1]
+    const marker = match[2]
+    const separator = match[3]
+    const markerFrom = line.from + indentation.length
+    const markerTo = markerFrom + marker.length
+    const depth = Math.floor(indentationColumns(indentation) / 4) + 1
+
+    lineOnce(line.from, listItemLine)
+    lineOnce(line.from, listDepthLine(depth))
+    listDepthPositions.add(line.from)
+    if (line.number > 1
+        && markdownListMarker.test(state.doc.line(line.number - 1).text)) {
+      lineOnce(line.from, listItemGapLine)
+    }
+    if (indentation.length > 0) {
+      ranges.push(hide.range(line.from, markerFrom))
+    }
+
+    const isTask = /^[-+*]$/.test(marker)
+      && /^\s*\[[ xX]\](\s|$)/.test(line.text.slice(markerTo - line.from))
+    if (/^[-+*]$/.test(marker) && !isTask) {
+      if (touchesLineOf(markerFrom)) {
+        ranges.push(activeBulletDeco.range(markerFrom, markerTo))
+        if (separator.length > 0) {
+          ranges.push(hide.range(markerTo, markerTo + separator.length))
+        }
+      } else {
+        ranges.push(bulletDeco.range(
+          markerFrom,
+          markerTo + separator.length
+        ))
+      }
     }
   }
   // One blank source line between blocks is Markdown's normal separator; the
@@ -1163,6 +1213,7 @@ function buildDecorations(view) {
           if (!isFirstItem || isNested) lineOnce(node.from, listItemGapLine)
           eachLine(node.from, node.to, listItemLine)
           lineOnce(node.from, listDepthLine(listStack.length))
+          listDepthPositions.add(state.doc.lineAt(node.from).from)
           // Source indentation uses proportional-font space glyphs, which
           // does not equal the rendered list's 1.6em nesting step. Hide that
           // source-only prefix and let the semantic depth line own geometry.
@@ -1215,6 +1266,16 @@ function buildDecorations(view) {
           let pos = node.from
           while (pos <= node.to) {
             const line = state.doc.lineAt(pos)
+            const rawIndentedList = name === "CodeBlock"
+              && decoratedLines.has(`${listItemLine.spec.class}@${line.from}`)
+              ? line.text.match(markdownListMarker)
+              : null
+            if (rawIndentedList) {
+              decorateRawIndentedListLine(line, rawIndentedList)
+              if (line.to >= node.to) break
+              pos = line.to + 1
+              continue
+            }
             if ((hidesOpeningFence && line.from === first.from)
                 || (hidesClosingFence && line.from === last.from)) {
               lineOnce(line.from, collapsedLine)
@@ -1265,6 +1326,25 @@ function buildDecorations(view) {
         if (name === "BulletList" || name === "OrderedList") listStack.pop()
       },
     })
+    // A deeply indented marker may be parsed as continuation content inside
+    // its ancestor ListItem rather than as a standalone CodeBlock. The parent
+    // already gives that line list typography; fill in the missing depth,
+    // marker, and gap decorations so the third and later Tabs do not jump.
+    let rawPos = from
+    while (rawPos <= to) {
+      const line = state.doc.lineAt(rawPos)
+      const hasListTypography = decoratedLines.has(
+        `${listItemLine.spec.class}@${line.from}`
+      )
+      if (hasListTypography && !listDepthPositions.has(line.from)) {
+        const rawIndentedList = line.text.match(markdownListMarker)
+        if (rawIndentedList) {
+          decorateRawIndentedListLine(line, rawIndentedList)
+        }
+      }
+      if (line.to >= to) break
+      rawPos = line.to + 1
+    }
   }
   return Decoration.set(ranges, true)
 }
@@ -1529,8 +1609,7 @@ function indentMarkdownListItems(view) {
     lastLine = view.state.doc.line(lastLine.number - 1)
   }
 
-  const listMarker = /^([ \t]*)(?:[-+*]|\d+[.)])(?:[ \t]+|$)/
-  const firstMatch = firstLine.text.match(listMarker)
+  const firstMatch = firstLine.text.match(markdownListMarker)
   if (!firstMatch) {
     // Within ordinary text, behave like a text editor and insert a tab at the
     // caret. Guard the leading source margin:

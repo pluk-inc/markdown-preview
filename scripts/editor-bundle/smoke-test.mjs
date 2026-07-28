@@ -119,6 +119,11 @@ indentationContent?.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 }))
 check("repeated Tab does not impose a maximum list indentation depth",
   indentationEditor.getMarkdown() === "- Parent\n            - Alpha\n- Beta")
+check("deeply indented list source keeps list geometry across the parser boundary",
+  indentationHost.querySelector(".cm-md-list-depth-4.cm-md-list-item") != null
+    && indentationHost.querySelector(".cm-md-list-depth-4.cm-md-codeblock") == null)
+check("deeply indented list source keeps normal list-item spacing",
+  indentationHost.querySelector(".cm-md-list-depth-4.cm-md-list-item-gap") != null)
 for (let step = 0; step < 3; step++) {
   indentationContent?.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
     key: "Tab",
@@ -350,6 +355,15 @@ check("inactive indented code hides source indentation",
   indentedCodeLines[0]?.textContent === "<script>"
     && indentedCodeLines.at(-1)?.textContent === "</script>")
 indentedCodeEditor.destroy()
+
+const listLikeCodeHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(listLikeCodeHost)
+const listLikeCodeEditor = dom.window.MDEditor.create(
+  listLikeCodeHost, "    - literal code output", {})
+check("standalone indented code that starts with a dash remains code",
+  listLikeCodeHost.querySelector(".cm-md-codeblock") != null
+    && listLikeCodeHost.querySelector("[class*='cm-md-list-depth-']") == null)
+listLikeCodeEditor.destroy()
 
 const emphasisHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(emphasisHost)
