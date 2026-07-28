@@ -99,7 +99,11 @@ final class MermaidDiagramPopup: NSObject {
             defer: false
         )
         panel.isFloatingPanel = true
-        panel.level = .floating
+        // `.normal`, not `.floating`: a floating level keeps the panel above
+        // every *other* application's windows too, which is why AppKit pairs
+        // that level with `hidesOnDeactivate`. Reading the diagram alongside
+        // the document only needs it to outlive losing key focus.
+        panel.level = .normal
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.minSize = NSSize(width: MermaidPopupSizing.minimumWidth, height: MermaidPopupSizing.minimumHeight)

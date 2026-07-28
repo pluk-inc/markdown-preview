@@ -2313,7 +2313,17 @@ nonisolated enum MarkdownHTML {
         let resetZoom = htmlEscape(NSLocalizedString("Reset zoom", comment: "Mermaid diagram control"))
         let zoomIn = htmlEscape(NSLocalizedString("Zoom In", comment: "Mermaid diagram control"))
         let fillWidth = htmlEscape(NSLocalizedString("Fill width", comment: "Mermaid diagram control"))
+        // The popup is app-only — `MarkdownWebView` compiles its `mermaidPopup`
+        // handler out of the Quick Look extension, so emitting the button there
+        // would leave a control that does nothing when clicked.
+        #if QUICK_LOOK_EXTENSION
+        let popupButton = ""
+        #else
         let openWindow = htmlEscape(NSLocalizedString("Open in Window", comment: "Mermaid diagram control"))
+        let popupButton = """
+        <button type="button" class="mermaid-hud-btn mermaid-hud-popup" data-mm-act="popup" tabindex="-1" aria-label="\(openWindow)" title="\(openWindow)">⛶</button>
+        """
+        #endif
         for match in matches {
             rendered += nsHTML.substring(with: NSRange(
                 location: cursor,
@@ -2331,7 +2341,7 @@ nonisolated enum MarkdownHTML {
             <button type="button" class="mermaid-hud-btn mermaid-hud-level" data-mm-act="reset" tabindex="-1" aria-label="\(resetZoom)">100%</button>
             <button type="button" class="mermaid-hud-btn" data-mm-act="in" tabindex="-1" aria-label="\(zoomIn)">+</button>
             <button type="button" class="mermaid-hud-btn mermaid-hud-width" data-mm-act="width" tabindex="-1" aria-label="\(fillWidth)" aria-pressed="false" title="\(fillWidth)">⤢</button>
-            <button type="button" class="mermaid-hud-btn mermaid-hud-popup" data-mm-act="popup" tabindex="-1" aria-label="\(openWindow)" title="\(openWindow)">⛶</button>
+            \(popupButton)
             </div>
             </figure>
             """
