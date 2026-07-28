@@ -44,9 +44,12 @@ const check = (label, ok) => {
   if (!ok) failures++
 }
 
+let historyStatus
 let editor
 try {
-  editor = dom.window.MDEditor.create(dom.window.document.getElementById("editor"), doc, {})
+  editor = dom.window.MDEditor.create(dom.window.document.getElementById("editor"), doc, {
+    onHistoryChange: (canUndo, canRedo) => { historyStatus = { canUndo, canRedo } },
+  })
   check("editor constructs without throwing", true)
 } catch (error) {
   check("editor constructs without throwing (" + error + ")", false)
@@ -61,6 +64,14 @@ if (editor) {
       && dom.window.document.querySelector(".cm-selectionLayer") != null)
   editor.exec("bold")
   check("exec('bold') inserts markers", editor.getMarkdown().startsWith("****"))
+  check("history state enables Undo after a change",
+    historyStatus?.canUndo === true && historyStatus?.canRedo === false)
+  editor.exec("undo")
+  check("exec('undo') restores the document", editor.getMarkdown() === doc)
+  check("history state enables Redo after undo",
+    historyStatus?.canUndo === false && historyStatus?.canRedo === true)
+  editor.exec("redo")
+  check("exec('redo') restores the change", editor.getMarkdown().startsWith("****"))
 }
 
 const largeHost = dom.window.document.createElement("div")

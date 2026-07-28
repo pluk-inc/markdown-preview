@@ -25,6 +25,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     var cancelRequested: (() -> Void)?
 
     private(set) var hasChanges = false
+    private(set) var canUndo = false
+    private(set) var canRedo = false
 
     private var webView: WKWebView!
     private let bridge = EditorBridge()
@@ -43,6 +45,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
 
     func load(markdown: String) {
         hasChanges = false
+        canUndo = false
+        canRedo = false
         let needsMermaid = Self.containsMermaidFence(in: markdown)
         if hasLoadedEditorPage, pageSupportsMermaid || !needsMermaid {
             let script = "window.__mdLoadEditor && window.__mdLoadEditor(\(Self.jsStringLiteral(markdown)))"
@@ -143,8 +147,16 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
 
         guard let payload = message as? [String: Any],
-              payload["kind"] as? String == "tableContextMenu" else { return }
-        presentTableContextMenu(payload)
+              let kind = payload["kind"] as? String else { return }
+        switch kind {
+        case "history":
+            canUndo = (payload["canUndo"] as? NSNumber)?.boolValue ?? false
+            canRedo = (payload["canRedo"] as? NSNumber)?.boolValue ?? false
+        case "tableContextMenu":
+            presentTableContextMenu(payload)
+        default:
+            break
+        }
     }
 
     private func presentTableContextMenu(_ payload: [String: Any]) {
@@ -632,6 +644,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                     markdown,
                     {
                         onDirty: function () { post("dirty"); },
+                        onHistoryChange: function (canUndo, canRedo) {
+                            post({ kind: "history", canUndo: canUndo, canRedo: canRedo });
+                        },
                         // Preview block margins (MarkdownHTML design tokens):
                         // the bundle sizes blank-separator lines from these.
                         spacing: {

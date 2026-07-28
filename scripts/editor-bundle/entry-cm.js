@@ -9,7 +9,9 @@ import {
   drawSelection, dropCursor,
 } from "@codemirror/view"
 import { EditorState, EditorSelection, StateField } from "@codemirror/state"
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands"
+import {
+  defaultKeymap, history, historyKeymap, redo, redoDepth, undo, undoDepth,
+} from "@codemirror/commands"
 import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-markdown"
 import { yamlFrontmatter } from "@codemirror/lang-yaml"
 import {
@@ -1488,6 +1490,18 @@ function insertLink(view) {
 window.MDEditor = {
   create(parent, doc, callbacks) {
     const onDirty = callbacks && callbacks.onDirty
+    const onHistoryChange = callbacks && callbacks.onHistoryChange
+    let lastCanUndo = null
+    let lastCanRedo = null
+    const reportHistory = (state) => {
+      if (!onHistoryChange) return
+      const canUndo = undoDepth(state) > 0
+      const canRedo = redoDepth(state) > 0
+      if (canUndo === lastCanUndo && canRedo === lastCanRedo) return
+      lastCanUndo = canUndo
+      lastCanRedo = canRedo
+      onHistoryChange(canUndo, canRedo)
+    }
     // Live preview spacing tokens from the host stylesheet (MarkdownHTML
     // constants) — see METRICS for the headless defaults.
     Object.assign(METRICS, (callbacks && callbacks.spacing) || {})
@@ -1526,10 +1540,12 @@ window.MDEditor = {
           // Fires on every change; the host debounces for autosave.
           EditorView.updateListener.of((update) => {
             if (update.docChanged && onDirty) onDirty()
+            reportHistory(update.state)
           }),
         ],
       }),
     })
+    reportHistory(view.state)
     let preservedSourcePosition = null
     let preservedSourceGap = 0
     let didUserScroll = false
@@ -1588,6 +1604,8 @@ window.MDEditor = {
       orderedList,
       taskList: toggleBlockPrefix("- [ ] ", /^\s*[-*+]\s+\[[ xX]\]\s/),
       link: insertLink,
+      undo,
+      redo,
     }
     return {
       getMarkdown: () => view.state.doc.toString(),

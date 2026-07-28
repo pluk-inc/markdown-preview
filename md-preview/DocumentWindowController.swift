@@ -915,6 +915,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         mainSplit?.editorViewController?.exec(command)
     }
 
+    /// The editor owns Undo/Redo while editing, except when a field editor
+    /// (the toolbar search field) is active — that keeps its own undo stack.
+    var focusedEditorForUndo: EditorViewController? {
+        guard isEditing, !(documentWindow.firstResponder is NSTextView) else { return nil }
+        return mainSplit?.editorViewController
+    }
+
     var hasPendingEditorChanges: Bool {
         hasUnsavedEditorChanges || isEditorCommitInFlight
     }

@@ -93,7 +93,7 @@ private enum AppAppearanceMode: String, CaseIterable {
 }
 
 @main
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     @IBOutlet private weak var checkForUpdatesMenuItem: NSMenuItem?
 
@@ -111,6 +111,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private weak var darkAppearanceMenuItem: NSMenuItem?
     private weak var normalContentWidthMenuItem: NSMenuItem?
     private weak var fullContentWidthMenuItem: NSMenuItem?
+    private var undoMenuDefaultTitle = "Undo"
+    private var redoMenuDefaultTitle = "Redo"
     private var isPromptingForDocument = false
     private var isUntitledDocumentScheduled = false
     private var untitledDocumentScheduleGeneration = 0
@@ -126,6 +128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         CrashReporter.start()
         applyAppearanceMode(AppAppearanceMode.current, reloadPreviews: false)
+        installUndoMenuItems()
         installAppearanceMenuItems()
         installContentWidthMenuItems()
         installSidebarViewMenuItems()
@@ -259,6 +262,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         activeDocumentWindowController?.handleFindAction(sender)
     }
 
+    @objc private func performUndo(_ sender: Any?) {
+        if let editor = undoTargetEditor {
+            editor.exec("undo")
+        } else {
+            undoTargetManager?.undo()
+        }
+    }
+
+    @objc private func performRedo(_ sender: Any?) {
+        if let editor = undoTargetEditor {
+            editor.exec("redo")
+        } else {
+            undoTargetManager?.redo()
+        }
+    }
+
     @objc private func hideSidebarFromMenu(_ sender: Any?) {
         activeDocumentWindowController?.hideSidebarFromMenu(sender)
         syncSidebarViewMenuState()
@@ -314,6 +333,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return activeDocumentWindowController?.canToggleEditMode ?? false
         case #selector(formatMarkdownFromMenu(_:)):
             return activeDocumentWindowController?.canFormatMarkdown ?? false
+        case #selector(performUndo(_:)):
+            if let editor = undoTargetEditor {
+                menuItem.title = undoMenuDefaultTitle
+                return editor.canUndo
+            }
+            let undoManager = undoTargetManager
+            menuItem.title = undoManager?.undoMenuItemTitle ?? undoMenuDefaultTitle
+            return undoManager?.canUndo ?? false
+        case #selector(performRedo(_:)):
+            if let editor = undoTargetEditor {
+                menuItem.title = redoMenuDefaultTitle
+                return editor.canRedo
+            }
+            let redoManager = undoTargetManager
+            menuItem.title = redoManager?.redoMenuItemTitle ?? redoMenuDefaultTitle
+            return redoManager?.canRedo ?? false
         default:
             return true
         }
@@ -330,6 +365,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .flatMap(\.windowControllers)
             .compactMap { $0 as? DocumentWindowController }
             .first
+    }
+
+    /// The window that owns Undo/Redo. An attached sheet takes precedence over
+    /// the document blocked behind it, and `keyWindow` is nil while a menu tracks.
+    private var undoWindow: NSWindow? {
+        let window = NSApp.keyWindow ?? NSApp.mainWindow
+        return window?.attachedSheet ?? window
+    }
+
+    /// The editor that should receive Undo/Redo, or nil when AppKit's own
+    /// responder chain owns them (preview mode, a field editor, a sheet).
+    private var undoTargetEditor: EditorViewController? {
+        (undoWindow?.windowController as? DocumentWindowController)?.focusedEditorForUndo
+    }
+
+    private var undoTargetManager: UndoManager? {
+        guard let window = undoWindow else { return nil }
+        return window.firstResponder?.undoManager ?? window.undoManager
     }
 
     private func promptForDocument() {
@@ -618,6 +671,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ?? errorInfo.description
             throw CommandLineToolInstallError.terminalAutomationFailed(message)
         }
+    }
+
+    // The nib's Undo/Redo know only the window's native undo manager.
+    // Retarget them so a focused CodeMirror editor can expose its own history.
+    private func installUndoMenuItems() {
+        let undoAction = NSSelectorFromString("undo:")
+        let redoAction = NSSelectorFromString("redo:")
+        guard let editMenu = topLevelSubmenu(matching: Self.editMenuTitles),
+              let undoItem = editMenu.items.first(where: { $0.action == undoAction }),
+              let redoItem = editMenu.items.first(where: { $0.action == redoAction })
+        else { return }
+
+        undoMenuDefaultTitle = undoItem.title
+        redoMenuDefaultTitle = redoItem.title
+        undoItem.target = self
+        undoItem.action = #selector(performUndo(_:))
+        redoItem.target = self
+        redoItem.action = #selector(performRedo(_:))
     }
 
     private func installNewTabMenuItem() {
@@ -1074,6 +1145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         topLevelMenuItem(matching: titles)?.submenu
     }
 
+    private static let editMenuTitles: Set<String> = ["Edit", "编辑"]
     private static let fileMenuTitles: Set<String> = ["File", "文件"]
     private static let viewMenuTitles: Set<String> = ["View", "显示"]
     private static let windowMenuTitles: Set<String> = ["Window", "窗口"]
