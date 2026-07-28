@@ -9,12 +9,14 @@ import {
   drawSelection, dropCursor,
 } from "@codemirror/view"
 import { EditorState, EditorSelection, StateField } from "@codemirror/state"
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands"
+import {
+  defaultKeymap, history, historyKeymap, indentWithTab,
+} from "@codemirror/commands"
 import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-markdown"
 import { yamlFrontmatter } from "@codemirror/lang-yaml"
 import {
   syntaxTree, ensureSyntaxTree, syntaxHighlighting, HighlightStyle,
-  LanguageDescription, LanguageSupport, StreamLanguage,
+  indentUnit, LanguageDescription, LanguageSupport, StreamLanguage,
 } from "@codemirror/language"
 import { tags as t } from "@lezer/highlight"
 import { javascript } from "@codemirror/lang-javascript"
@@ -1505,6 +1507,7 @@ window.MDEditor = {
           dropCursor(),
           EditorView.lineWrapping,
           EditorView.perLineTextDirection.of(true),
+          indentUnit.of("    "),
           directionLines,
           // Parse a leading `---` block as YAML frontmatter so its lines
           // never surface as a thematic break plus setext heading.
@@ -1521,6 +1524,7 @@ window.MDEditor = {
           keymap.of([
             { key: "Mod-b", run: toggleInlineMark("**") },
             { key: "Mod-i", run: toggleInlineMark("*") },
+            indentWithTab,
             ...markdownKeymap,
             ...defaultKeymap,
             ...historyKeymap,

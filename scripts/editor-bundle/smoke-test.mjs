@@ -63,6 +63,44 @@ if (editor) {
   check("exec('bold') inserts markers", editor.getMarkdown().startsWith("****"))
 }
 
+const indentationHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(indentationHost)
+const indentationEditor = dom.window.MDEditor.create(
+  indentationHost, "alpha\nbeta\ngamma", {})
+const indentationContent = indentationHost.querySelector(".cm-content")
+indentationEditor.select(6, 16)
+const indentEvent = new dom.window.KeyboardEvent("keydown", {
+  key: "Tab",
+  code: "Tab",
+  bubbles: true,
+  cancelable: true,
+})
+indentationContent?.dispatchEvent(indentEvent)
+check("Tab indents every selected line by four spaces",
+  indentEvent.defaultPrevented
+    && indentationEditor.getMarkdown() === "alpha\n    beta\n    gamma")
+const outdentEvent = new dom.window.KeyboardEvent("keydown", {
+  key: "Tab",
+  code: "Tab",
+  shiftKey: true,
+  bubbles: true,
+  cancelable: true,
+})
+indentationContent?.dispatchEvent(outdentEvent)
+check("Shift-Tab outdents every selected line",
+  outdentEvent.defaultPrevented
+    && indentationEditor.getMarkdown() === "alpha\nbeta\ngamma")
+indentationEditor.select(1)
+indentationContent?.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+  key: "Tab",
+  code: "Tab",
+  bubbles: true,
+  cancelable: true,
+}))
+check("Tab indents the current line when there is no selection",
+  indentationEditor.getMarkdown() === "    alpha\nbeta\ngamma")
+indentationEditor.destroy()
+
 const largeHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(largeHost)
 const largeDoc = [
