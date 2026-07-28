@@ -393,11 +393,10 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
         .cm-md-link { color: var(--link); }
         .cm-md-url { color: var(--secondary); }
-        /* Mirror the preview's list geometry: items indent by the ul/ol
-           1.6em padding with the marker hanging inside it, so item text and
-           wrapped lines align exactly like rendered <li>s. The bullet widget
-           replaces "- " as a fixed-width box ending where text starts, with
-           the dot sitting near its end like a ::marker. */
+        /* Mirror the preview's list geometry. JavaScript adds an inline
+           padding value derived from semantic list depth, rather than relying
+           on proportional-font source spaces. The marker hangs inside the
+           final 1.6em step, so active and inactive item text stays aligned. */
         #editor .cm-md-list-item {
             padding-inline-start: 1.6em;
             text-indent: -1.6em;
@@ -410,6 +409,16 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             padding-inline-end: 0.45em;
             box-sizing: border-box;
             color: var(--text);
+        }
+        /* Keep the active raw "- " marker in the same hanging box as the
+           inactive bullet widget. Revealing Markdown source must not move the
+           item text or make a nested item appear to change indentation. */
+        .cm-md-bullet-source {
+            display: inline-block;
+            width: 1.6em;
+            text-indent: 0;
+            box-sizing: border-box;
+            color: var(--secondary);
         }
         /* Preview list items after the first carry a margin-top. */
         #editor .cm-md-list-item-gap {

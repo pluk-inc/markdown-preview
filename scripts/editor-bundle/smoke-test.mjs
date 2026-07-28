@@ -92,6 +92,7 @@ check("Shift-Tab outdents every selected nested list item",
   outdentEvent.defaultPrevented
     && indentationEditor.getMarkdown() === "- Parent\n- Alpha\n- Beta")
 indentationEditor.select(11)
+indentationContent?.focus()
 indentationContent?.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
   key: "Tab",
   code: "Tab",
@@ -100,7 +101,38 @@ indentationContent?.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 }))
 check("Tab nests the current list item when there is no selection",
   indentationEditor.getMarkdown() === "- Parent\n    - Alpha\n- Beta")
+check("active bullet source reserves the rendered marker width",
+  indentationHost.querySelector(".cm-md-bullet-source")?.textContent === "- ")
+check("nested list layout uses semantic depth instead of source-space width",
+  indentationHost.querySelector(".cm-md-list-depth-2") != null)
 indentationEditor.destroy()
+
+const inlineTabHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(inlineTabHost)
+const inlineTabEditor = dom.window.MDEditor.create(
+  inlineTabHost, "Plain paragraph", {})
+const inlineTabContent = inlineTabHost.querySelector(".cm-content")
+inlineTabEditor.select(5)
+const inlineTabEvent = new dom.window.KeyboardEvent("keydown", {
+  key: "Tab",
+  code: "Tab",
+  bubbles: true,
+  cancelable: true,
+})
+inlineTabContent?.dispatchEvent(inlineTabEvent)
+check("Tab inserts a tab inside ordinary text",
+  inlineTabEvent.defaultPrevented
+    && inlineTabEditor.getMarkdown() === "Plain\t paragraph")
+inlineTabEditor.select(0)
+inlineTabContent?.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+  key: "Tab",
+  code: "Tab",
+  bubbles: true,
+  cancelable: true,
+}))
+check("Tab at a paragraph's leading edge preserves its Markdown block type",
+  inlineTabEditor.getMarkdown() === "Plain\t paragraph")
+inlineTabEditor.destroy()
 
 const topLevelBlockCases = [
   ["ATX heading", "# Heading"],

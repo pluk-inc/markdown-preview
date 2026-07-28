@@ -10,7 +10,7 @@ import {
 } from "@codemirror/view"
 import { EditorState, EditorSelection, StateField } from "@codemirror/state"
 import {
-  defaultKeymap, history, historyKeymap, indentLess,
+  defaultKeymap, history, historyKeymap, indentLess, insertTab,
 } from "@codemirror/commands"
 import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-markdown"
 import { yamlFrontmatter } from "@codemirror/lang-yaml"
@@ -656,6 +656,7 @@ const tableEditors = StateField.define({
 
 const hide = Decoration.replace({})
 const bulletDeco = Decoration.replace({ widget: new TextWidget("•", "cm-md-bullet") })
+const activeBulletDeco = Decoration.mark({ class: "cm-md-bullet-source" })
 const hrDeco = Decoration.replace({ widget: new RuleWidget() })
 
 const joinDeco = Decoration.replace({ widget: new TextWidget(" ", "cm-md-join") })
@@ -710,6 +711,20 @@ const listItemGapLine = Decoration.line({ class: "cm-md-list-item-gap" })
 // Mirrors the preview's list geometry: ul/ol start padding with the marker
 // hanging inside it, so item text and wrapped lines align like rendered <li>s.
 const listItemLine = Decoration.line({ class: "cm-md-list-item" })
+const listDepthLineCache = new Map()
+const listDepthLine = (depth) => {
+  let deco = listDepthLineCache.get(depth)
+  if (!deco) {
+    deco = Decoration.line({
+      class: `cm-md-list-depth-${depth}`,
+      attributes: {
+        style: `padding-inline-start:${depth * 1.6}em;text-indent:-1.6em;`,
+      },
+    })
+    listDepthLineCache.set(depth, deco)
+  }
+  return deco
+}
 const fenceMark = Decoration.mark({ class: "cm-md-fence-info" })
 const hiddenCodeFenceSource = Decoration.mark({ class: "cm-md-code-fence-source-hidden" })
 const hiddenHeadingSource = Decoration.mark({ class: "cm-md-heading-source-hidden" })
@@ -1147,6 +1162,15 @@ function buildDecorations(view) {
           const isNested = listStack.length > 1
           if (!isFirstItem || isNested) lineOnce(node.from, listItemGapLine)
           eachLine(node.from, node.to, listItemLine)
+          lineOnce(node.from, listDepthLine(listStack.length))
+          // Source indentation uses proportional-font space glyphs, which
+          // does not equal the rendered list's 1.6em nesting step. Hide that
+          // source-only prefix and let the semantic depth line own geometry.
+          const line = state.doc.lineAt(node.from)
+          if (line.from < node.from
+              && /^[ \t]+$/.test(state.doc.sliceString(line.from, node.from))) {
+            ranges.push(hide.range(line.from, node.from))
+          }
           return
         }
         if (name === "ListMark") {
@@ -1155,11 +1179,14 @@ function buildDecorations(view) {
           // Task items (`- [ ]`) keep their literal marker; turning the dash
           // into a bullet dot leaves a confusing "• [ ]" hybrid.
           const isTask = /^\s*\[[ xX]\](\s|$)/.test(line.text.slice(node.to - line.from))
-          if ((mark === "-" || mark === "*" || mark === "+") && !isTask && !touchesLineOf(node.from)) {
-            // Swallow the following space too: the bullet widget is a fixed
-            // 1.6em box, so item text starts exactly at the list padding.
+          if ((mark === "-" || mark === "*" || mark === "+") && !isTask) {
+            // Include the following space in both active and inactive marker
+            // decorations. Each occupies the same fixed-width hanging box,
+            // so revealing raw Markdown never shifts the item text.
             const after = state.doc.sliceString(node.to, node.to + 1)
-            ranges.push(bulletDeco.range(node.from, node.to + (after === " " ? 1 : 0)))
+            const markerTo = node.to + (after === " " ? 1 : 0)
+            ranges.push((touchesLineOf(node.from) ? activeBulletDeco : bulletDeco)
+              .range(node.from, markerTo))
           }
           return
         }
@@ -1501,7 +1528,19 @@ function indentMarkdownListItems(view) {
 
   const listMarker = /^([ \t]*)(?:[-+*]|\d+[.)])(?:[ \t]+|$)/
   const firstMatch = firstLine.text.match(listMarker)
-  if (!firstMatch || firstLine.number === 1) return true
+  if (!firstMatch) {
+    // Within ordinary text, behave like a text editor and insert a tab at the
+    // caret. Guard the leading source margin:
+    // indenting a top-level Markdown block there would reinterpret it as an
+    // indented code block.
+    if (selection.empty) {
+      const offset = selection.head - firstLine.from
+      const leadingWhitespace = firstLine.text.match(/^[ \t]*/)?.[0].length || 0
+      if (offset > leadingWhitespace) return insertTab(view)
+    }
+    return true
+  }
+  if (firstLine.number === 1) return true
 
   const previousLine = view.state.doc.line(firstLine.number - 1)
   const previousMatch = previousLine.text.match(listMarker)
