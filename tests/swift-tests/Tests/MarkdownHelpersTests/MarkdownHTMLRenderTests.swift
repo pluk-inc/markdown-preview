@@ -361,6 +361,19 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(rendered.html.contains("margin: \(MarkdownHTML.paragraphSpacing)px 0 0;"))
     }
 
+    func testInlineTabsRemainVisibleInReadMode() {
+        let rendered = MarkdownHTML.render(
+            markdown: "Plain \tparagraph.",
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "Plain <span class=\"md-inline-tab\" aria-hidden=\"true\">&#9;</span>paragraph."
+        ))
+        XCTAssertTrue(rendered.html.contains(".md-inline-tab {"))
+        XCTAssertTrue(rendered.html.contains("tab-size: 4;"))
+    }
+
     func testMermaidPostProcessingAcceptsSourceMappedPreTag() {
         let rendered = MarkdownHTML.render(
             markdown: """

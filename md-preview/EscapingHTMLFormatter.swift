@@ -695,7 +695,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     }
 
     mutating func visitText(_ text: Text) {
-        result += escapeText(text.string)
+        result += escapeTextPreservingInlineTabs(text.string)
     }
 
     mutating func visitStrikethrough(_ strikethrough: Strikethrough) {
@@ -745,6 +745,14 @@ private nonisolated func escapeText(_ string: String) -> String {
         }
     }
     return out
+}
+
+private nonisolated func escapeTextPreservingInlineTabs(_ string: String) -> String {
+    guard string.contains("\t") else { return escapeText(string) }
+    return string
+        .split(separator: "\t", omittingEmptySubsequences: false)
+        .map { escapeText(String($0)) }
+        .joined(separator: "<span class=\"md-inline-tab\" aria-hidden=\"true\">&#9;</span>")
 }
 
 private nonisolated func escapeAttribute(_ string: String) -> String {

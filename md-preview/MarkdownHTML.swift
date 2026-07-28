@@ -2872,6 +2872,10 @@ nonisolated enum MarkdownHTML {
         margin-right: auto;
     }
     article.markdown-body > *:first-child { margin-top: 0 !important; }
+    .md-inline-tab {
+        white-space: pre;
+        tab-size: 4;
+    }
 
     /* Frontmatter properties — Obsidian-style metadata panel. Deliberately
        quieter than document content: no row borders (content tables own
