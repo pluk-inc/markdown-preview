@@ -1993,10 +1993,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let untitledName = NSLocalizedString(
             "Untitled", comment: "Window title when no document is open")
         panel.nameFieldStringValue = suggestedURL?.lastPathComponent ?? "\(untitledName).md"
-        panel.allowedContentTypes = [
-            UTType("net.daringfireball.markdown"),
-            UTType(filenameExtension: "md"),
-        ].compactMap { $0 }
+        panel.allowedContentTypes = (
+            [UTType("net.daringfireball.markdown")] +
+                Self.markdownFileExtensions.map { UTType(filenameExtension: $0) }
+        ).compactMap { $0 }
         panel.beginSheetModal(for: documentWindow) { [weak self] response in
             guard let self else {
                 completion(.cancelled)
