@@ -10,7 +10,7 @@ import {
 } from "@codemirror/view"
 import { EditorState, EditorSelection, StateField } from "@codemirror/state"
 import {
-  defaultKeymap, history, historyKeymap, indentWithTab,
+  defaultKeymap, history, historyKeymap, indentLess,
 } from "@codemirror/commands"
 import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-markdown"
 import { yamlFrontmatter } from "@codemirror/lang-yaml"
@@ -1485,6 +1485,36 @@ function insertLink(view) {
   return true
 }
 
+// Markdown assigns semantic meaning to four leading spaces: headings,
+// paragraphs, tables, fences, and other top-level blocks become code blocks.
+// Only indent list items when they have a preceding sibling at the same
+// indentation level, which gives the item a valid parent to nest under.
+function indentMarkdownListItems(view) {
+  const selection = view.state.selection.main
+  const firstLine = view.state.doc.lineAt(selection.from)
+  let lastLine = view.state.doc.lineAt(selection.to)
+  if (!selection.empty
+      && selection.to === lastLine.from
+      && lastLine.number > firstLine.number) {
+    lastLine = view.state.doc.line(lastLine.number - 1)
+  }
+
+  const listMarker = /^([ \t]*)(?:[-+*]|\d+[.)])(?:[ \t]+|$)/
+  const firstMatch = firstLine.text.match(listMarker)
+  if (!firstMatch || firstLine.number === 1) return true
+
+  const previousLine = view.state.doc.line(firstLine.number - 1)
+  const previousMatch = previousLine.text.match(listMarker)
+  if (!previousMatch || previousMatch[1] !== firstMatch[1]) return true
+
+  const changes = []
+  for (let number = firstLine.number; number <= lastLine.number; number++) {
+    changes.push({ from: view.state.doc.line(number).from, insert: "    " })
+  }
+  dispatchBlockChanges(view, changes)
+  return true
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -1524,7 +1554,7 @@ window.MDEditor = {
           keymap.of([
             { key: "Mod-b", run: toggleInlineMark("**") },
             { key: "Mod-i", run: toggleInlineMark("*") },
-            indentWithTab,
+            { key: "Tab", run: indentMarkdownListItems, shift: indentLess },
             ...markdownKeymap,
             ...defaultKeymap,
             ...historyKeymap,

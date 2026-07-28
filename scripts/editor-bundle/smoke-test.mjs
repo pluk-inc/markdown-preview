@@ -66,9 +66,9 @@ if (editor) {
 const indentationHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(indentationHost)
 const indentationEditor = dom.window.MDEditor.create(
-  indentationHost, "alpha\nbeta\ngamma", {})
+  indentationHost, "- Parent\n- Alpha\n- Beta", {})
 const indentationContent = indentationHost.querySelector(".cm-content")
-indentationEditor.select(6, 16)
+indentationEditor.select(9, 23)
 const indentEvent = new dom.window.KeyboardEvent("keydown", {
   key: "Tab",
   code: "Tab",
@@ -76,9 +76,10 @@ const indentEvent = new dom.window.KeyboardEvent("keydown", {
   cancelable: true,
 })
 indentationContent?.dispatchEvent(indentEvent)
-check("Tab indents every selected line by four spaces",
+check("Tab nests selected list items under their preceding sibling",
   indentEvent.defaultPrevented
-    && indentationEditor.getMarkdown() === "alpha\n    beta\n    gamma")
+    && indentationEditor.getMarkdown()
+      === "- Parent\n    - Alpha\n    - Beta")
 const outdentEvent = new dom.window.KeyboardEvent("keydown", {
   key: "Tab",
   code: "Tab",
@@ -87,19 +88,63 @@ const outdentEvent = new dom.window.KeyboardEvent("keydown", {
   cancelable: true,
 })
 indentationContent?.dispatchEvent(outdentEvent)
-check("Shift-Tab outdents every selected line",
+check("Shift-Tab outdents every selected nested list item",
   outdentEvent.defaultPrevented
-    && indentationEditor.getMarkdown() === "alpha\nbeta\ngamma")
-indentationEditor.select(1)
+    && indentationEditor.getMarkdown() === "- Parent\n- Alpha\n- Beta")
+indentationEditor.select(11)
 indentationContent?.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
   key: "Tab",
   code: "Tab",
   bubbles: true,
   cancelable: true,
 }))
-check("Tab indents the current line when there is no selection",
-  indentationEditor.getMarkdown() === "    alpha\nbeta\ngamma")
+check("Tab nests the current list item when there is no selection",
+  indentationEditor.getMarkdown() === "- Parent\n    - Alpha\n- Beta")
 indentationEditor.destroy()
+
+const topLevelBlockCases = [
+  ["ATX heading", "# Heading"],
+  ["Setext heading", "Heading\n======="],
+  ["paragraph", "Plain paragraph"],
+  ["first unordered list item", "- Item"],
+  ["first ordered list item", "1. Item"],
+  ["first task list item", "- [ ] Item"],
+  ["blockquote", "> Quote"],
+  ["fenced code", "```swift\nlet value = 1\n```"],
+  ["indented code", "    let value = 1", "let value = 1"],
+  ["table", "| A | B |\n| - | - |\n| 1 | 2 |"],
+  ["horizontal rule", "---"],
+  ["link paragraph", "[OpenAI](https://openai.com)"],
+  ["YAML frontmatter", "---\ntitle: Example\n---"],
+]
+for (const [label, source, expectedAfterShiftTab = source] of topLevelBlockCases) {
+  const host = dom.window.document.createElement("div")
+  dom.window.document.body.appendChild(host)
+  const blockEditor = dom.window.MDEditor.create(host, source, {})
+  const content = host.querySelector(".cm-content")
+  blockEditor.select(0, source.length)
+  const tabEvent = new dom.window.KeyboardEvent("keydown", {
+    key: "Tab",
+    code: "Tab",
+    bubbles: true,
+    cancelable: true,
+  })
+  content?.dispatchEvent(tabEvent)
+  check(`Tab preserves top-level ${label} Markdown`,
+    tabEvent.defaultPrevented && blockEditor.getMarkdown() === source)
+  const shiftTabEvent = new dom.window.KeyboardEvent("keydown", {
+    key: "Tab",
+    code: "Tab",
+    shiftKey: true,
+    bubbles: true,
+    cancelable: true,
+  })
+  content?.dispatchEvent(shiftTabEvent)
+  check(`Shift-Tab handles ${label} Markdown safely`,
+    shiftTabEvent.defaultPrevented
+      && blockEditor.getMarkdown() === expectedAfterShiftTab)
+  blockEditor.destroy()
+}
 
 const largeHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(largeHost)
