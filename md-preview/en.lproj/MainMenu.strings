@@ -42,6 +42,10 @@
 	<string>Close</string>
 	<key>Dv1-io-Yv7.title</key>
 	<string>Spelling and Grammar</string>
+	<key>Ex0-fm-F00.title</key>
+	<string>Export…</string>
+	<key>Ex1-pd-F01.title</key>
+	<string>Export as PDF…</string>
 	<key>F2S-fz-NVQ.title</key>
 	<string>Help</string>
 	<key>FKE-Sm-Kum.title</key>
@@ -142,8 +146,6 @@
 	<string>Save…</string>
 	<key>q09-fT-Sye.title</key>
 	<string>Find Next</string>
-	<key>qIS-W8-SiK.title</key>
-	<string>Page Setup…</string>
 	<key>rbD-Rh-wIN.title</key>
 	<string>Check Spelling While Typing</string>
 	<key>rgM-f4-ycn.title</key>

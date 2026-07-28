@@ -25,12 +25,19 @@ final class ContentViewController: NSViewController {
     private var shouldApplyPendingAnchorOnHeight = false
     private var pendingNavigationScrollTarget: NavigationScrollTarget?
     private var shouldApplyNavigationTargetOnHeight = false
+    private var exportSource: ExportSource?
     /// Early attempts run against the blanked page shown during a file
     /// switch, where the target can't resolve yet — retry on a short timer
     /// (height events accelerate it), giving up after ~2s.
     private var navigationTargetRetriesLeft = 0
     private static let navigationTargetMaxRetries = 25
     private static let navigationTargetRetryInterval: TimeInterval = 0.08
+
+    private struct ExportSource {
+        let markdown: String
+        let sourceURL: URL?
+        let assetBaseURL: URL?
+    }
 
     // Heading top offsets in CSS pixels, indexed by heading id. Compared in
     // CSS units so page zoom doesn't invalidate them.
@@ -155,7 +162,16 @@ final class ContentViewController: NSViewController {
         applyContentWidthMode()
     }
 
-    func display(markdown: String, assetBaseURL: URL? = nil) {
+    func display(
+        markdown: String,
+        sourceURL: URL?,
+        assetBaseURL: URL? = nil
+    ) {
+        exportSource = ExportSource(
+            markdown: markdown,
+            sourceURL: sourceURL,
+            assetBaseURL: assetBaseURL
+        )
         if pendingPreviewScrollAnchor != nil {
             shouldApplyPendingAnchorOnHeight = true
         }
@@ -171,8 +187,18 @@ final class ContentViewController: NSViewController {
     }
 
     func clearContent() {
+        exportSource = nil
         resetScrollspy()
         webView.clearContent()
+    }
+
+    func sourceFileURLDidChange(_ sourceURL: URL) {
+        guard let source = exportSource else { return }
+        exportSource = ExportSource(
+            markdown: source.markdown,
+            sourceURL: sourceURL,
+            assetBaseURL: sourceURL.deletingLastPathComponent()
+        )
     }
 
     /// Drops scrollspy state before a doc swap so the previous doc's
@@ -226,8 +252,32 @@ final class ContentViewController: NSViewController {
     }
 
     func printDocument() {
-        guard let window = view.window else { return }
+        guard let window = view.window, hasExportableDocument else { return }
         webView.printDocument(from: window)
+    }
+
+    var hasExportableDocument: Bool {
+        exportSource != nil
+    }
+
+    func exportDocument() {
+        guard let window = view.window, let source = exportSource else { return }
+        webView.exportDocument(
+            markdown: source.markdown,
+            sourceURL: source.sourceURL,
+            assetBaseURL: source.assetBaseURL,
+            from: window
+        )
+    }
+
+    func exportPDF() {
+        guard let window = view.window, let source = exportSource else { return }
+        webView.exportPDF(
+            markdown: source.markdown,
+            sourceURL: source.sourceURL,
+            assetBaseURL: source.assetBaseURL,
+            from: window
+        )
     }
 
     func zoomIn() { webView.zoomIn() }
