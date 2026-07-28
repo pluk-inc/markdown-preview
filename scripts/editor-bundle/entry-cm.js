@@ -1517,8 +1517,8 @@ function insertLink(view) {
 
 // Markdown assigns semantic meaning to four leading spaces: headings,
 // paragraphs, tables, fences, and other top-level blocks become code blocks.
-// Only indent list items when they have a preceding sibling at the same
-// indentation level, which gives the item a valid parent to nest under.
+// List items are different: keep each Tab as authored, including repeated
+// indentation, rather than imposing a maximum nesting depth in the editor.
 function indentMarkdownListItems(view) {
   const selection = view.state.selection.main
   const firstLine = view.state.doc.lineAt(selection.from)
@@ -1543,12 +1543,6 @@ function indentMarkdownListItems(view) {
     }
     return true
   }
-  if (firstLine.number === 1) return true
-
-  const previousLine = view.state.doc.line(firstLine.number - 1)
-  const previousMatch = previousLine.text.match(listMarker)
-  if (!previousMatch || previousMatch[1] !== firstMatch[1]) return true
-
   const changes = []
   for (let number = firstLine.number; number <= lastLine.number; number++) {
     changes.push({ from: view.state.doc.line(number).from, insert: "    " })

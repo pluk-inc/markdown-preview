@@ -105,6 +105,31 @@ check("active bullet source reserves the rendered marker width",
   indentationHost.querySelector(".cm-md-bullet-source")?.textContent === "-")
 check("nested list layout uses semantic depth instead of source-space width",
   indentationHost.querySelector(".cm-md-list-depth-2") != null)
+indentationContent?.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+  key: "Tab",
+  code: "Tab",
+  bubbles: true,
+  cancelable: true,
+}))
+indentationContent?.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+  key: "Tab",
+  code: "Tab",
+  bubbles: true,
+  cancelable: true,
+}))
+check("repeated Tab does not impose a maximum list indentation depth",
+  indentationEditor.getMarkdown() === "- Parent\n            - Alpha\n- Beta")
+for (let step = 0; step < 3; step++) {
+  indentationContent?.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    key: "Tab",
+    code: "Tab",
+    shiftKey: true,
+    bubbles: true,
+    cancelable: true,
+  }))
+}
+check("repeated Shift-Tab returns a deeply indented list item to its original depth",
+  indentationEditor.getMarkdown() === "- Parent\n- Alpha\n- Beta")
 indentationEditor.destroy()
 
 const inlineTabHost = dom.window.document.createElement("div")
@@ -138,9 +163,6 @@ const topLevelBlockCases = [
   ["ATX heading", "# Heading"],
   ["Setext heading", "Heading\n======="],
   ["paragraph", "Plain paragraph"],
-  ["first unordered list item", "- Item"],
-  ["first ordered list item", "1. Item"],
-  ["first task list item", "- [ ] Item"],
   ["blockquote", "> Quote"],
   ["fenced code", "```swift\nlet value = 1\n```"],
   ["indented code", "    let value = 1", "let value = 1"],
@@ -176,6 +198,36 @@ for (const [label, source, expectedAfterShiftTab = source] of topLevelBlockCases
     shiftTabEvent.defaultPrevented
       && blockEditor.getMarkdown() === expectedAfterShiftTab)
   blockEditor.destroy()
+}
+
+for (const [label, source] of [
+  ["unordered", "- Item"],
+  ["ordered", "1. Item"],
+  ["task", "- [ ] Item"],
+]) {
+  const host = dom.window.document.createElement("div")
+  dom.window.document.body.appendChild(host)
+  const listEditor = dom.window.MDEditor.create(host, source, {})
+  const content = host.querySelector(".cm-content")
+  listEditor.select(0, source.length)
+  content?.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    key: "Tab",
+    code: "Tab",
+    bubbles: true,
+    cancelable: true,
+  }))
+  check(`Tab indents a first ${label} list item`,
+    listEditor.getMarkdown() === `    ${source}`)
+  content?.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+    key: "Tab",
+    code: "Tab",
+    shiftKey: true,
+    bubbles: true,
+    cancelable: true,
+  }))
+  check(`Shift-Tab restores a first ${label} list item`,
+    listEditor.getMarkdown() === source)
+  listEditor.destroy()
 }
 
 const largeHost = dom.window.document.createElement("div")
