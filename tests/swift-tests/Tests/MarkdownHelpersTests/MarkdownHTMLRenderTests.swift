@@ -355,6 +355,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         )
 
         XCTAssertTrue(rendered.html.contains("li:first-child { margin-top: 0; }"))
+        XCTAssertTrue(rendered.html.contains("ul { list-style-type: \"•  \"; }"))
         XCTAssertTrue(rendered.html.contains(".md-code-wrap > pre { margin: 0; }"))
         XCTAssertTrue(rendered.html.contains(".md-code-wrap {"))
         XCTAssertTrue(rendered.html.contains("margin: \(MarkdownHTML.paragraphSpacing)px 0 0;"))

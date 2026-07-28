@@ -3264,6 +3264,7 @@ nonisolated enum MarkdownHTML {
     .markdown-alert-caution .markdown-alert-title { color: #d1242f; }
 
     ul, ol { margin: \(paragraphSpacing)px 0 0; padding-left: 1.6em; }
+    ul { list-style-type: "•  "; }
     li { margin-top: \(listItemSpacing)px; }
     li:first-child { margin-top: 0; }
     li > ul, li > ol { margin-top: \(listItemSpacing)px; }
