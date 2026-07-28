@@ -417,6 +417,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             display: inline-block;
             width: 1.6em;
             text-indent: 0;
+            text-align: end;
+            padding-inline-end: 0.45em;
             box-sizing: border-box;
             color: var(--secondary);
         }

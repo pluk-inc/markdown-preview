@@ -1180,13 +1180,16 @@ function buildDecorations(view) {
           // into a bullet dot leaves a confusing "• [ ]" hybrid.
           const isTask = /^\s*\[[ xX]\](\s|$)/.test(line.text.slice(node.to - line.from))
           if ((mark === "-" || mark === "*" || mark === "+") && !isTask) {
-            // Include the following space in both active and inactive marker
-            // decorations. Each occupies the same fixed-width hanging box,
-            // so revealing raw Markdown never shifts the item text.
+            // Both forms occupy the same fixed-width hanging box. Keep the
+            // active dash editable, but hide its source separator so the dash
+            // can sit at the rendered bullet position without moving text.
             const after = state.doc.sliceString(node.to, node.to + 1)
-            const markerTo = node.to + (after === " " ? 1 : 0)
-            ranges.push((touchesLineOf(node.from) ? activeBulletDeco : bulletDeco)
-              .range(node.from, markerTo))
+            if (touchesLineOf(node.from)) {
+              ranges.push(activeBulletDeco.range(node.from, node.to))
+              if (after === " ") ranges.push(hide.range(node.to, node.to + 1))
+            } else {
+              ranges.push(bulletDeco.range(node.from, node.to + (after === " " ? 1 : 0)))
+            }
           }
           return
         }

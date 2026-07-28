@@ -102,7 +102,7 @@ indentationContent?.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 check("Tab nests the current list item when there is no selection",
   indentationEditor.getMarkdown() === "- Parent\n    - Alpha\n- Beta")
 check("active bullet source reserves the rendered marker width",
-  indentationHost.querySelector(".cm-md-bullet-source")?.textContent === "- ")
+  indentationHost.querySelector(".cm-md-bullet-source")?.textContent === "-")
 check("nested list layout uses semantic depth instead of source-space width",
   indentationHost.querySelector(".cm-md-list-depth-2") != null)
 indentationEditor.destroy()
