@@ -73,3 +73,7 @@ fastlane/test_output
 
 # Editor bundle build (scripts/editor-bundle)
 node_modules/
+
+# Local design tooling
+.superpowers/
+.worktrees/
