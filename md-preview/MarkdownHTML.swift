@@ -2461,6 +2461,22 @@ nonisolated enum MarkdownHTML {
                 } catch (_) {}
             }
 
+            // Text of the closest heading before the figure in document
+            // order, so the popup window can carry some context instead of
+            // a title that's identical for every diagram in the document.
+            function nearestHeadingText(figure) {
+                const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+                let text = '';
+                for (const h of headings) {
+                    if (h.compareDocumentPosition(figure) & Node.DOCUMENT_POSITION_FOLLOWING) {
+                        text = (h.textContent || '').trim();
+                    } else {
+                        break;
+                    }
+                }
+                return text;
+            }
+
             // Measure the diagram's natural (viewBox) size and current on-screen
             // box, then ask the host to open a floating window sized to fit.
             function openPopup(figure) {
@@ -2483,15 +2499,23 @@ nonisolated enum MarkdownHTML {
                 if (!s.rect) cacheRect(figure);
                 const r = s.rect || figure.getBoundingClientRect();
                 // Clone without the pan/zoom transform so the popup shows
-                // the pristine rendered diagram.
+                // the pristine rendered diagram. Drive layout purely from
+                // viewBox so the popup's CSS width/height can stretch or
+                // shrink the graphic with the window — done here, before the
+                // SVG leaves the content process, so the popup document
+                // itself needs no script to finish sizing it.
                 const clone = svg.cloneNode(true);
                 clone.removeAttribute('style');
+                clone.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+                clone.removeAttribute('width');
+                clone.removeAttribute('height');
                 clone.style.width = '100%';
                 clone.style.height = '100%';
                 try {
                     window.webkit?.messageHandlers?.mdPreviewHost?.postMessage({
                         kind: 'mermaidPopup',
                         svg: clone.outerHTML,
+                        sectionTitle: nearestHeadingText(figure),
                         naturalWidth: naturalW,
                         naturalHeight: naturalH,
                         displayWidth: r.width,
@@ -2608,7 +2632,15 @@ nonisolated enum MarkdownHTML {
             function onDoubleClick(e) {
                 const figure = e.currentTarget;
                 if (e.target.closest('.mermaid-hud')) return;
-                openPopup(figure);
+                const s = states.get(figure);
+                if (!s) return;
+                if (s.scale > 1.001) {
+                    reset(figure);
+                } else {
+                    if (!s.rect) cacheRect(figure);
+                    const r = s.rect;
+                    zoomAt(figure, e.clientX - r.left, e.clientY - r.top, 2);
+                }
             }
 
             function onHudClick(e) {

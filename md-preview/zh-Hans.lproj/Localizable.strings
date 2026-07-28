@@ -178,6 +178,7 @@
 "Copy code" = "拷贝代码";
 "Code copied" = "代码已拷贝";
 "Mermaid diagram" = "Mermaid 图表";
+"%@ — Mermaid diagram" = "%@ — Mermaid 图表";
 "Reset zoom" = "重置缩放";
 "Fill width" = "填满宽度";
 "Fit diagram" = "适应图表";

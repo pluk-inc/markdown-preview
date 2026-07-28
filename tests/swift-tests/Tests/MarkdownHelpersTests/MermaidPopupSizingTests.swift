@@ -72,4 +72,15 @@ final class MermaidPopupSizingTests: XCTestCase {
         XCTAssertTrue(safe.hasPrefix("<svg>"))
         XCTAssertTrue(safe.hasSuffix("</svg>"))
     }
+
+    /// sanitizedSVGHTML is defense-in-depth only, not the primary guard: it
+    /// neutralizes `<script>` but deliberately leaves `on*` handlers alone.
+    /// The popup document's CSP (`default-src 'none'`) is what actually
+    /// blocks any script execution, inline or event-handler-based.
+    func testSanitizedSVGHTMLDoesNotStripEventHandlerAttributes() {
+        let raw = #"<svg onload="alert(1)"><rect onclick="alert(2)"/></svg>"#
+        let safe = MermaidPopupSizing.sanitizedSVGHTML(raw)
+        XCTAssertTrue(safe.contains(#"onload="alert(1)""#))
+        XCTAssertTrue(safe.contains(#"onclick="alert(2)""#))
+    }
 }

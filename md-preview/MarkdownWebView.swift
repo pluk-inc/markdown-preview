@@ -567,8 +567,9 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             width: (payload["displayWidth"] as? NSNumber).map { CGFloat(truncating: $0) } ?? 0,
             height: (payload["displayHeight"] as? NSNumber).map { CGFloat(truncating: $0) } ?? 0
         )
+        let sectionTitle = payload["sectionTitle"] as? String
         MermaidDiagramPopup.shared.present(
-            .init(svgHTML: svg, naturalSize: natural, displaySize: display),
+            .init(svgHTML: svg, naturalSize: natural, displaySize: display, sectionTitle: sectionTitle),
             relativeTo: window
         )
     }

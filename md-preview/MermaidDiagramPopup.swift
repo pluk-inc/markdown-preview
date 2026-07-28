@@ -3,7 +3,9 @@
 //  md-preview
 //
 //  Floating panel that shows a rendered Mermaid SVG at a measured size.
-//  Resizable — the diagram scales with the window. Closes on resign-key.
+//  Resizable — the diagram scales with the window. Behaves like a regular
+//  window: it stays open when it loses key focus and closes via its close
+//  button / ⌘W, so the diagram can be read alongside the document.
 //
 
 import AppKit
@@ -15,9 +17,6 @@ final class MermaidDiagramPopup: NSObject {
 
     private var panel: NSPanel?
     private var webView: WKWebView?
-    /// Ignores the first resign-key that can fire while the panel is still
-    /// being ordered front (e.g. parent briefly re-keying).
-    private var ignoreResignUntil: Date = .distantPast
 
     private override init() {
         super.init()
@@ -27,6 +26,10 @@ final class MermaidDiagramPopup: NSObject {
         let svgHTML: String
         let naturalSize: CGSize
         let displaySize: CGSize
+        /// Nearest preceding Markdown heading, if any — gives the window a
+        /// title that's more useful than the generic "Mermaid diagram" when
+        /// reopening the popup on a different diagram.
+        let sectionTitle: String?
     }
 
     func present(_ request: Request, relativeTo parentWindow: NSWindow?) {
@@ -57,8 +60,8 @@ final class MermaidDiagramPopup: NSObject {
             )
             frame.origin = clampedOrigin(frame.origin, size: frame.size, screen: screen)
             panel.setFrame(frame, display: false)
-            // Don't use addChildWindow — a child stays tied to the parent and
-            // complicates resign-key / focus. Keep it as an independent float.
+            // Don't use addChildWindow — a child stays tied to the parent's
+            // ordering/visibility. Keep it as an independent float.
         } else if let screen {
             panel.center()
             frame = panel.frame
@@ -66,10 +69,22 @@ final class MermaidDiagramPopup: NSObject {
             panel.setFrame(frame, display: false)
         }
 
-        load(svgHTML: request.svgHTML, in: panel)
-        ignoreResignUntil = Date().addingTimeInterval(0.25)
+        panel.title = Self.title(for: request.sectionTitle)
+        load(svgHTML: request.svgHTML)
         panel.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
+    }
+
+    private static func title(for sectionTitle: String?) -> String {
+        let base = NSLocalizedString("Mermaid diagram", comment: "Mermaid diagram popup window title")
+        guard let sectionTitle, !sectionTitle.isEmpty else { return base }
+        return String(
+            format: NSLocalizedString(
+                "%@ — Mermaid diagram",
+                comment: "Mermaid diagram popup window title with the nearest markdown heading for context"
+            ),
+            sectionTitle
+        )
     }
 
     private func ensurePanel() -> NSPanel {
@@ -79,20 +94,16 @@ final class MermaidDiagramPopup: NSObject {
 
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 640, height: 480),
-            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
+            styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
-        panel.title = NSLocalizedString("Mermaid diagram", comment: "Mermaid diagram popup window title")
         panel.isFloatingPanel = true
         panel.level = .floating
-        // We close ourselves on resign; don't leave a hidden panel around.
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
-        panel.minSize = NSSize(width: 280, height: 200)
+        panel.minSize = NSSize(width: MermaidPopupSizing.minimumWidth, height: MermaidPopupSizing.minimumHeight)
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
-        panel.titlebarAppearsTransparent = true
-        // Become key so didResignKey fires when the user clicks elsewhere.
         panel.becomesKeyOnlyIfNeeded = false
 
         let config = WKWebViewConfiguration()
@@ -112,18 +123,6 @@ final class MermaidDiagramPopup: NSObject {
             name: NSWindow.willCloseNotification,
             object: panel
         )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(panelDidResignKey(_:)),
-            name: NSWindow.didResignKeyNotification,
-            object: panel
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(appDidResignActive(_:)),
-            name: NSApplication.didResignActiveNotification,
-            object: nil
-        )
 
         return panel
     }
@@ -133,26 +132,14 @@ final class MermaidDiagramPopup: NSObject {
         webView?.loadHTMLString("", baseURL: nil)
     }
 
-    @objc private func panelDidResignKey(_ notification: Notification) {
-        closeIfUnfocused()
-    }
-
-    @objc private func appDidResignActive(_ notification: Notification) {
-        closeIfUnfocused()
-    }
-
-    private func closeIfUnfocused() {
-        guard let panel, panel.isVisible else { return }
-        if Date() < ignoreResignUntil { return }
-        panel.close()
-    }
-
-    private func load(svgHTML: String, in panel: NSPanel) {
-        let appearance = panel.effectiveAppearance
-        let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        let background = isDark ? "#1e1e1e" : "#ffffff"
+    private func load(svgHTML: String) {
         // Strip scripts just in case; mermaid SVGs are static markup.
         let safeSVG = MermaidPopupSizing.sanitizedSVGHTML(svgHTML)
+        // Same generic label the inline figure carries, so the popup is no
+        // less navigable than the diagram it was opened from.
+        let label = Self.htmlAttributeEscape(
+            NSLocalizedString("Mermaid diagram", comment: "Mermaid diagram popup window title")
+        )
 
         let html = """
         <!DOCTYPE html>
@@ -160,14 +147,20 @@ final class MermaidDiagramPopup: NSObject {
         <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
         <style>
+          /* Let the page follow the window's appearance on its own, so
+             toggling system dark mode restyles an open popup live. */
           html, body {
             margin: 0;
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background: \(background);
-            color-scheme: \(isDark ? "dark" : "light");
+            color-scheme: light dark;
+            background: #ffffff;
+          }
+          @media (prefers-color-scheme: dark) {
+            html, body { background: #1e1e1e; }
           }
           /* Fill the web view; diagram scales with window resize. */
           .stage {
@@ -189,26 +182,20 @@ final class MermaidDiagramPopup: NSObject {
         </style>
         </head>
         <body>
-        <div class="stage">\(safeSVG)</div>
-        <script>
-          (function () {
-            var svg = document.querySelector('.stage svg');
-            if (!svg) return;
-            // Drive layout purely from viewBox so CSS width/height can
-            // stretch/shrink the graphic with the window.
-            svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-            svg.removeAttribute('width');
-            svg.removeAttribute('height');
-            svg.style.width = '100%';
-            svg.style.height = '100%';
-            svg.style.maxWidth = '100%';
-            svg.style.maxHeight = '100%';
-          })();
-        </script>
+        <div class="stage" role="img" aria-label="\(label)">\(safeSVG)</div>
         </body>
         </html>
         """
         webView?.loadHTMLString(html, baseURL: nil)
+    }
+
+    private static func htmlAttributeEscape(_ string: String) -> String {
+        string
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&#39;")
     }
 
     private func clampedOrigin(_ origin: NSPoint, size: NSSize, screen: NSScreen?) -> NSPoint {

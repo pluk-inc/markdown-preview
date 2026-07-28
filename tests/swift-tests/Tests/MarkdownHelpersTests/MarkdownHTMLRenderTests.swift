@@ -410,8 +410,14 @@ final class MarkdownHTMLRenderTests: XCTestCase {
 
     @MainActor
     func testMermaidPopupPostsMeasuredSizeMessage() async throws {
+        // Headings before the figure exercise the popup's section-title
+        // lookup — the real documents this ships against always have them.
         let rendered = MarkdownHTML.render(
             markdown: """
+            # Architecture Notes
+
+            ## 1. System overview
+
             ```mermaid
             flowchart LR
                 A --> B
@@ -437,6 +443,9 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         <style>\(stylesheet)</style>
         <script>
         window.__posted = [];
+        // The test host WKWebView isn't attached to an on-screen window, so
+        // the display link never drives rAF — run callbacks synchronously.
+        window.requestAnimationFrame = (callback) => callback();
         window.webkit = {
             messageHandlers: {
                 mdPreviewHost: {
@@ -496,23 +505,43 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertGreaterThan(hudPayload.displayHeight, 1)
         XCTAssertTrue(hudPayload.svg.contains("<svg"), hudPayload.svg)
         XCTAssertTrue(hudPayload.svg.contains("viewBox"), hudPayload.svg)
+        // Nearest preceding heading, not the document title.
+        XCTAssertEqual(hudPayload.sectionTitle, "1. System overview")
         // Clone should not carry pan/zoom transform styles from the surface.
         XCTAssertFalse(hudPayload.svg.contains("transform:"), hudPayload.svg)
 
-        // Double-click on the figure also opens the popup (replaces zoom-toggle).
+        // Double-click still zooms (the HUD ⛶ button is the only popup trigger).
         _ = try await webView.evaluateJavaScript("window.__posted = []; true")
         _ = try await webView.evaluateJavaScript("""
         (() => {
             const figure = document.querySelector('.mermaid-figure');
-            figure.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+            const rect = figure.getBoundingClientRect();
+            figure.dispatchEvent(new MouseEvent('dblclick', {
+                bubbles: true, cancelable: true,
+                clientX: rect.left + rect.width / 2,
+                clientY: rect.top + rect.height / 2
+            }));
             return true;
         })()
         """)
-        let dblPayload = try await waitForMermaidPopupMessage(in: webView)
-        XCTAssertEqual(dblPayload.kind, "mermaidPopup")
-        XCTAssertEqual(dblPayload.naturalWidth, 400, accuracy: 0.5)
-        XCTAssertEqual(dblPayload.naturalHeight, 200, accuracy: 0.5)
-        XCTAssertTrue(dblPayload.svg.contains("<svg"), dblPayload.svg)
+
+        var zoomedIn = false
+        for _ in 0..<100 {
+            let level = try await webView.evaluateJavaScript(
+                "document.querySelector('[data-mm-act=\"reset\"]')?.textContent || ''"
+            ) as? String
+            if level == "200%" {
+                zoomedIn = true
+                break
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertTrue(zoomedIn, "double-click should zoom in, not open the popup")
+
+        let postedPopupOnDoubleClick = try await webView.evaluateJavaScript(
+            "(window.__posted || []).some((m) => m && m.kind === 'mermaidPopup')"
+        ) as? Bool
+        XCTAssertEqual(postedPopupOnDoubleClick, false, "double-click must not post a mermaidPopup message")
     }
 
     @MainActor
@@ -529,6 +558,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                 return JSON.stringify({
                     kind: String(msg.kind || ''),
                     svg: String(msg.svg || ''),
+                    sectionTitle: String(msg.sectionTitle || ''),
                     naturalWidth: Number(msg.naturalWidth) || 0,
                     naturalHeight: Number(msg.naturalHeight) || 0,
                     displayWidth: Number(msg.displayWidth) || 0,
@@ -1161,6 +1191,7 @@ private struct MermaidLayoutMetrics: Decodable {
 private struct MermaidPopupMessage: Decodable {
     let kind: String
     let svg: String
+    let sectionTitle: String
     let naturalWidth: CGFloat
     let naturalHeight: CGFloat
     let displayWidth: CGFloat
