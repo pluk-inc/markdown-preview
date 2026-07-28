@@ -565,14 +565,14 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         }
         for _ in 0..<100 {
             let done = try await webView.evaluateJavaScript(
-                "Array.from(document.querySelectorAll('code')).every((code) => code.dataset.hljsDone === '1')"
+                "Array.from(document.querySelectorAll('pre code[class*=\"language-\"]')).every((code) => code.dataset.hljsDone === '1')"
             ) as? Bool
             if done == true { break }
             try await Task.sleep(for: .milliseconds(10))
         }
 
         let result = try await webView.evaluateJavaScript("""
-        JSON.stringify(Array.from(document.querySelectorAll('code')).map((block) => ({
+        JSON.stringify(Array.from(document.querySelectorAll('pre code[class*="language-"]')).map((block) => ({
             language: Array.from(block.classList).find((name) => name.startsWith('language-')),
             keywords: Array.from(block.querySelectorAll('.hljs-keyword')).map((node) => node.textContent),
             strings: Array.from(block.querySelectorAll('.hljs-string')).map((node) => node.textContent),
