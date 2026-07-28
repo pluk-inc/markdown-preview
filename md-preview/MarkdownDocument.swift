@@ -83,9 +83,11 @@ final class MarkdownDocument: NSDocument {
         }
     }
 
-    func replaceContents(markdown: String, fileURL: URL) {
+    func replaceContents(markdown: String, fileURL: URL? = nil) {
         markdownStorage.withLock { $0 = markdown }
-        replaceFileURL(fileURL)
+        if let fileURL {
+            replaceFileURL(fileURL)
+        }
     }
 
     func replaceFileURL(_ fileURL: URL) {

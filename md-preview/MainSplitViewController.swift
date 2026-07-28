@@ -294,6 +294,7 @@ final class MainSplitViewController: NSSplitViewController {
                         guard let self, self.isEditorPreparing else { return }
                         self.isEditorPreparing = false
                         self.isEditorVisible = true
+                        editorVC.focusEditor()
                     }
                 }
             }
@@ -324,6 +325,19 @@ final class MainSplitViewController: NSSplitViewController {
             self.isEditorDOMReady = false
             self.isEditorPreparing = false
             self.isEditorVisible = false
+
+            guard editorVC.view.alphaValue > 0 else {
+                // The exit beat the reveal animation, so there is no fade to
+                // run — but the overlay is still unhidden and full-bleed, and
+                // would keep hit-testing over the preview. The editor never
+                // became visible, so it has no scroll position worth
+                // restoring either.
+                editorVC.view.isHidden = true
+                self.contentViewController?.pendingAnchorRestored = nil
+                overlayHidden?()
+                completion()
+                return
+            }
 
             let fadeOutEditor = { [weak self, weak editorVC] in
                 guard let self, let editorVC,
