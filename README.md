@@ -10,6 +10,12 @@
 
 <p align="center"><img alt="Platform" src="https://img.shields.io/badge/platform-macOS%2015%2B-blue" />&nbsp;<img alt="Swift" src="https://img.shields.io/badge/swift-6.0-orange" />&nbsp;<img alt="License" src="https://img.shields.io/badge/license-MIT-green" />&nbsp;<img alt="Latest release" src="https://img.shields.io/github/v/release/pluk-inc/markdown-preview" />&nbsp;<img alt="Homebrew cask" src="https://img.shields.io/homebrew/cask/v/markdown-preview" /></p>
 
+<p align="center">
+  <a href="https://buymeacoffee.com/pluk">
+    <img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=&slug=pluk&button_colour=FFDD00&font_colour=000000&font_family=Inter&outline_colour=000000&coffee_colour=ffffff" height="42" alt="Buy Me a Coffee" />
+  </a>
+</p>
+
 ---
 
 > Drop a `.md` on the icon (or set Markdown Preview as your default handler) and get a clean, scrollable preview with a real document outline — no Electron, no browser tab.
@@ -142,6 +148,10 @@ Pull requests are welcome. For larger changes, please open an issue first to dis
     <img src="docs/sponsors/amore-logo.png" height="54" alt="Amore" />
   </a>
 </p>
+
+## Support
+
+Markdown Preview is free and MIT-licensed. If it saved you a browser tab, you can [buy us a coffee](https://buymeacoffee.com/pluk).
 
 ## Acknowledgments
 - [Amore](http://amore.computer/) — MacOS release automation (signing, notarization, DMG, hosting, appcast)
