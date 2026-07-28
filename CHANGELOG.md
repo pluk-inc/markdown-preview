@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.0.42] – 2026-07-28
+
+Mermaid diagrams can now open in their own resizable windows, editing gains natural list indentation, and Markdown projects work better across nested folders and infrastructure code.
+
+### Added
+
+- **Open Mermaid diagrams in a separate window.** A new control opens a diagram in a resizable window titled from its nearest heading, making large diagrams easier to inspect beside the document. The control stays out of Quick Look, the window behaves normally alongside other apps, and the diagram toolbar adapts to narrow figures ([#237](https://github.com/pluk-inc/markdown-preview/pull/237), [#245](https://github.com/pluk-inc/markdown-preview/pull/245), [#247](https://github.com/pluk-inc/markdown-preview/pull/247)).
+- **Syntax highlighting for HCL and Terraform.** Fenced code blocks tagged `hcl`, `terraform`, or `tf` now highlight in both read and edit modes ([#238](https://github.com/pluk-inc/markdown-preview/pull/238)).
+
+### Changed
+
+- **Tab and Shift-Tab now indent and outdent Markdown lists.** List items can be nested to any depth directly from edit mode, while Tab still inserts a tab in ordinary text and avoids turning top-level Markdown blocks into code ([#246](https://github.com/pluk-inc/markdown-preview/pull/246), [#243](https://github.com/pluk-inc/markdown-preview/issues/243)).
+
+### Fixed
+
+- **Links and images can navigate to parent folders.** Relative paths such as `../notes.md` and `../images/diagram.png` now resolve correctly in both the app and Quick Look ([#242](https://github.com/pluk-inc/markdown-preview/pull/242)).
+
+### Contributors
+
+Thanks to the external contributors and reporter who helped improve this release:
+
+- [@kwokpia](https://github.com/kwokpia) — added separate windows for Mermaid diagrams ([#237](https://github.com/pluk-inc/markdown-preview/pull/237))
+- [@eshack94](https://github.com/eshack94) — added HCL and Terraform syntax highlighting ([#238](https://github.com/pluk-inc/markdown-preview/pull/238))
+- [@jurajpiar](https://github.com/jurajpiar) — fixed navigation to files in parent folders ([#242](https://github.com/pluk-inc/markdown-preview/pull/242))
+- [@leo-fengchao](https://github.com/leo-fengchao) — requested Tab and Shift-Tab list indentation ([#243](https://github.com/pluk-inc/markdown-preview/issues/243))
+
 ## [0.0.41] – 2026-07-26
 
 Documents can now leave the app: export to PDF, self-contained HTML, or a single tall PNG.
