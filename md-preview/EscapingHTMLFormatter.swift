@@ -340,7 +340,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         return " data-source-line=\"\(start)\" data-source-start=\"\(start)\" data-source-end=\"\(end)\""
     }
 
-    private func precedingExtraBlankLineCount(for markup: Markup) -> Int {
+    private func precedingBlankLineCount(for markup: Markup) -> Int {
         guard let line = markup.range?.lowerBound.line else { return 0 }
         var precedingLineIndex = line - 2
         var blankLineCount = 0
@@ -352,18 +352,14 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
             blankLineCount += 1
             precedingLineIndex -= 1
         }
-        // One blank line is Markdown's normal block separator. The semantic
-        // stylesheet owns that spacing; only additional blank source lines
-        // should create visible vertical space in the rendered document.
-        return max(0, blankLineCount - 1)
+        return blankLineCount
     }
 
     mutating func visitDocument(_ document: Document) {
         for child in document.children {
-            // CommonMark discards extra source blank lines between blocks.
-            // Restore only those beyond the normal separator so semantic
-            // heading, paragraph, list, and code margins remain in control.
-            for _ in 0..<precedingExtraBlankLineCount(for: child) {
+            // CommonMark discards source blank lines between blocks. Restore
+            // every authored line in addition to the blocks' semantic margins.
+            for _ in 0..<precedingBlankLineCount(for: child) {
                 result += "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n"
             }
             visit(child)

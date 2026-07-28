@@ -666,17 +666,17 @@ const HEADING_LINE = {}
 const for_ = (i) => Decoration.line({ class: "cm-md-h" + i })
 for (let i = 1; i <= 6; i++) HEADING_LINE[i] = for_(i)
 const inactiveHeadingLine = Decoration.line({ class: "cm-md-heading-inactive" })
-// A source line whose height another element owns (a heading's padding, a
-// fence card, the document's first-block margin reset) collapses to nothing.
+// Inactive fence source lines collapse because the rendered code card owns
+// their height.
 const collapsedLine = Decoration.line({ class: "cm-md-line-collapsed" })
 
 // Preview block margin-top values in CSS px. The host passes the live values
 // from MarkdownHTML.swift (the single source of truth) through
 // MDEditor.create's `spacing` option; these defaults only serve headless
-// harnesses. The preview swallows the single blank source line before each
-// block and expresses that separation as the block's own margin-top; the
-// editor mirrors it by resizing the blank separator line to the same height.
+// harnesses. Every authored blank line keeps its natural source-line height,
+// with the adjacent blocks' semantic margins added to the separator.
 const METRICS = {
+  line: 22.8,
   paragraph: 12,  // p / ul / ol / pre / .md-code-wrap
   quote: 18,      // blockquote
   alert: 24,      // .markdown-alert
@@ -956,12 +956,10 @@ function buildDecorations(view) {
       }
     }
   }
-  // One blank source line between blocks is Markdown's normal separator; the
-  // preview swallows it and lets the next block's margin-top own that space.
-  // Mirror it here: the blank line directly above each block collapses to
-  // zero before headings (their padding-top owns the space) or resizes to
-  // the following block's semantic margin otherwise. Additional blank lines
-  // keep their natural source-line height in both surfaces.
+  // The renderer restores every source blank line before applying semantic
+  // block margins. Keep the editor's final blank separator at one natural
+  // line plus those margins; earlier blank lines already retain their normal
+  // CodeMirror line height.
   const blankRunBefore = (pos) => {
     const line = state.doc.lineAt(pos)
     let first = line.number
@@ -970,11 +968,6 @@ function buildDecorations(view) {
     const stop = Math.max(first - 64, 1)
     while (first > stop && state.doc.line(first - 1).text.length === 0) first--
     return { line, first, count: line.number - first }
-  }
-  const collapseBlankBefore = (pos) => {
-    const run = blankRunBefore(pos)
-    if (run.count === 0) return
-    lineOnce(state.doc.line(run.line.number - 1).from, collapsedLine)
   }
   // iterate visits top-level blocks in document order, so the previous
   // block's name is a running variable; the tree is resolved only for the
@@ -1011,21 +1004,18 @@ function buildDecorations(view) {
     if (run.count === 0) return
     const separator = state.doc.line(run.line.number - 1)
     if (run.first === 1) {
-      // Blank lines open the document. The preview strips the first block's
-      // margin entirely, so a single leading blank occupies no height.
-      lineOnce(separator.from, run.count === 1
-        ? collapsedLine
-        : blockSeparatorLine(blockMarginTop(node)))
+      lineOnce(
+        separator.from,
+        blockSeparatorLine(METRICS.line + blockMarginTop(node))
+      )
       return
     }
-    // hr is the only block with a margin-bottom. Adjacent margins collapse in
-    // the preview (max); literal blank-line spacers between them do not.
+    // hr is the only block with a margin-bottom. A visible blank-line spacer
+    // prevents adjacent margins from collapsing, so both sides contribute.
     const marginBottom = topBlockNameBefore(run.first) === "HorizontalRule"
       ? METRICS.hr : 0
     const marginTop = blockMarginTop(node)
-    const height = run.count === 1
-      ? Math.max(marginBottom, marginTop)
-      : marginBottom + marginTop
+    const height = METRICS.line + marginBottom + marginTop
     lineOnce(separator.from, blockSeparatorLine(height))
   }
 
@@ -1076,14 +1066,12 @@ function buildDecorations(view) {
         // --- Headings ------------------------------------------------
         const atx = name.match(/^ATXHeading(\d)$/)
         if (atx) {
-          collapseBlankBefore(node.from)
           lineOnce(node.from, HEADING_LINE[+atx[1]])
           if (!touchesLineOf(node.from)) lineOnce(node.from, inactiveHeadingLine)
           return
         }
         const setext = name.match(/^SetextHeading(\d)$/)
         if (setext) {
-          collapseBlankBefore(node.from)
           lineOnce(node.from, HEADING_LINE[+setext[1]])
           return
         }

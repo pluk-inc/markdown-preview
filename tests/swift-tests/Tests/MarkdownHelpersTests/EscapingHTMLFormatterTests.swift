@@ -86,15 +86,15 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         )
     }
 
-    func testOnlyAdditionalPrecedingBlankSourceLinesAreRecorded() {
+    func testEveryPrecedingBlankSourceLineIsRecorded() {
         let html = EscapingHTMLFormatter.format("First paragraph.\n\n\nSecond paragraph.")
         XCTAssertTrue(
             html.contains(
-                "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<p data-source-line=\"4\" data-source-start=\"4\" data-source-end=\"4\">Second paragraph.</p>"
+                "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<p data-source-line=\"4\" data-source-start=\"4\" data-source-end=\"4\">Second paragraph.</p>"
             ),
-            "expected only the additional empty source line to be preserved: \(html)"
+            "expected every empty source line to be preserved: \(html)"
         )
-        XCTAssertEqual(html.components(separatedBy: "md-source-blank-line").count - 1, 1)
+        XCTAssertEqual(html.components(separatedBy: "md-source-blank-line").count - 1, 2)
     }
 
     func testSourceMarkdownExcludesRemovedContentFromBlankLineCount() {
@@ -105,7 +105,7 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         XCTAssertTrue(html.contains(
             "<p data-source-line=\"5\" data-source-start=\"5\" data-source-end=\"5\">After.</p>"
         ))
-        XCTAssertEqual(html.components(separatedBy: "md-source-blank-line").count - 1, 0)
+        XCTAssertEqual(html.components(separatedBy: "md-source-blank-line").count - 1, 1)
     }
 
     func testGitHubAlertTagIsCaseInsensitive() {

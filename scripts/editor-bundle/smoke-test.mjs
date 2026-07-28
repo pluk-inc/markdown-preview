@@ -314,24 +314,28 @@ check("inactive heading source reserves its width",
   inactiveHeadingHost.querySelector(".cm-md-heading-source-hidden")?.textContent === "### ")
 check("inactive heading line receives visual offset class",
   inactiveHeadingHost.querySelector(".cm-md-heading-inactive") != null)
-check("normal separator before heading collapses",
-  inactiveHeadingHost.querySelector(".cm-md-line-collapsed") != null)
+check("blank source line before heading remains visible",
+  inactiveHeadingHost.querySelector(".cm-md-line-collapsed") == null)
 inactiveHeadingEditor.destroy()
 
 const headingFollowHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(headingFollowHost)
 const headingFollowEditor = dom.window.MDEditor.create(
   headingFollowHost, "## Heading\n\nFollowing paragraph", {})
-check("separator after heading resizes to the paragraph's margin",
-  headingFollowHost.querySelector(".cm-md-block-separator") != null)
+check("separator after heading includes the blank line and paragraph margin",
+  Math.abs(
+    parseFloat(headingFollowHost.querySelector(".cm-md-block-separator")?.style.height)
+      - 34.8
+  ) < 0.01)
 headingFollowEditor.destroy()
 
 const paragraphGapHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(paragraphGapHost)
 const paragraphGapEditor = dom.window.MDEditor.create(
   paragraphGapHost, "First paragraph.\n\nSecond paragraph.\n\n\nThird paragraph.", {})
-check("single blank between paragraphs becomes one resized separator",
-  paragraphGapHost.querySelectorAll(".cm-md-block-separator").length === 2)
+check("blank paragraph separators retain line height plus semantic margin",
+  Array.from(paragraphGapHost.querySelectorAll(".cm-md-block-separator"))
+    .every((line) => Math.abs(parseFloat(line.style.height) - 34.8) < 0.01))
 paragraphGapEditor.destroy()
 
 const inlineCodeHost = dom.window.document.createElement("div")

@@ -646,6 +646,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                         // Preview block margins (MarkdownHTML design tokens):
                         // the bundle sizes blank-separator lines from these.
                         spacing: {
+                            line: \(MarkdownHTML.sourceLineHeight),
                             paragraph: \(MarkdownHTML.paragraphSpacing),
                             quote: \(MarkdownHTML.quoteSpacing),
                             alert: \(MarkdownHTML.largeBlockSpacing),

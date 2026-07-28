@@ -331,18 +331,22 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         ))
     }
 
-    func testReadOnlyRenderingUsesSemanticSpacingForNormalSeparators() {
+    func testReadOnlyRenderingPreservesEveryBlankSourceLine() {
         let rendered = MarkdownHTML.render(
             markdown: "First paragraph.\n\n\n## Heading\n\nSecond paragraph.",
             vendorLoading: .lazy
         )
 
         XCTAssertTrue(rendered.articleHTML.contains(
-            "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<h2 data-source-line=\"4\""
+            "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<h2 data-source-line=\"4\""
         ))
-        XCTAssertFalse(rendered.articleHTML.contains(
+        XCTAssertTrue(rendered.articleHTML.contains(
             "<div class=\"md-source-blank-line\" aria-hidden=\"true\"></div>\n<p data-source-line=\"6\""
         ))
+        XCTAssertEqual(
+            rendered.articleHTML.components(separatedBy: "md-source-blank-line").count - 1,
+            3
+        )
         XCTAssertTrue(rendered.html.contains(".md-source-blank-line {"))
         XCTAssertTrue(rendered.html.contains("height: 22.8px;"))
         XCTAssertFalse(rendered.html.contains(".md-source-blank-line + *"))
