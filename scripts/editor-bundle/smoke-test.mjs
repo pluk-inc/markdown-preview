@@ -105,6 +105,8 @@ check("active bullet source reserves the rendered marker width",
   indentationHost.querySelector(".cm-md-bullet-source")?.textContent === "-")
 check("nested list layout uses semantic depth instead of source-space width",
   indentationHost.querySelector(".cm-md-list-depth-2") != null)
+check("nested list source indentation does not occupy rendered layout",
+  !indentationHost.querySelector(".cm-md-list-depth-2")?.textContent.startsWith(" "))
 indentationContent?.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
   key: "Tab",
   code: "Tab",

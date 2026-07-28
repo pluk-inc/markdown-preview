@@ -1218,9 +1218,10 @@ function buildDecorations(view) {
           // does not equal the rendered list's 1.6em nesting step. Hide that
           // source-only prefix and let the semantic depth line own geometry.
           const line = state.doc.lineAt(node.from)
-          if (line.from < node.from
-              && /^[ \t]+$/.test(state.doc.sliceString(line.from, node.from))) {
-            ranges.push(hide.range(line.from, node.from))
+          const rawIndentedList = line.text.match(markdownListMarker)
+          const indentation = rawIndentedList?.[1] ?? ""
+          if (indentation.length > 0) {
+            ranges.push(hide.range(line.from, line.from + indentation.length))
           }
           return
         }
