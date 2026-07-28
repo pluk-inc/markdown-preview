@@ -374,6 +374,112 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(rendered.html.contains("tab-size: 4;"))
     }
 
+    func testDeepAuthoredListIndentationRemainsVisibleInReadMode() {
+        let source = """
+        - Parent
+            - Child
+                    - Deep bullet
+                    1. Deep ordered
+                    - [x] Deep task
+        """
+        let articleHTML = EscapingHTMLFormatter.format(
+            source,
+            sourceMarkdown: source
+        )
+
+        XCTAssertEqual(
+            articleHTML.components(separatedBy: "class=\"md-source-list-line\"").count - 1,
+            3
+        )
+        XCTAssertEqual(
+            articleHTML.components(separatedBy: "class=\"md-source-list-indent-step\"").count - 1,
+            6
+        )
+        XCTAssertTrue(articleHTML.contains(
+            "<span class=\"md-source-list-marker\" aria-hidden=\"true\">•</span>Deep bullet"
+        ))
+        XCTAssertTrue(articleHTML.contains(
+            "<span class=\"md-source-list-marker\" aria-hidden=\"true\">1.</span>Deep ordered"
+        ))
+        XCTAssertTrue(articleHTML.contains(
+            "class=\"task-list-item-checkbox\" disabled=\"\" checked=\"\""
+        ))
+        XCTAssertTrue(articleHTML.contains(" /></span>Deep task"))
+        XCTAssertFalse(articleHTML.contains("<br />\n- Deep bullet"))
+
+        let rendered = MarkdownHTML.makeHTML(from: source)
+        XCTAssertTrue(rendered.contains(".md-source-list-indent-step {"))
+        XCTAssertTrue(rendered.contains(".md-source-list-line {"))
+        XCTAssertTrue(rendered.contains(
+            "padding-inline-start: 1.6em;"
+        ))
+    }
+
+    func testStandaloneListLikeIndentedCodeRemainsCodeInReadMode() {
+        let source = "    - literal code output"
+        let articleHTML = EscapingHTMLFormatter.format(
+            source,
+            sourceMarkdown: source
+        )
+
+        XCTAssertTrue(articleHTML.contains("<pre"))
+        XCTAssertTrue(articleHTML.contains("- literal code output"))
+        XCTAssertFalse(articleHTML.contains("md-source-list-line"))
+    }
+
+    @MainActor
+    func testDeepAuthoredListIndentationHasExpectedReadModeGeometry() async throws {
+        let source = """
+        - Parent
+            - Child
+                    - Deep item
+        """
+        let rendered = MarkdownHTML.render(
+            markdown: source,
+            vendorLoading: .lazy
+        )
+        let styleBlocks = rendered.html
+            .components(separatedBy: "<style>")
+            .dropFirst()
+            .compactMap { $0.components(separatedBy: "</style>").first }
+            .map { "<style>\($0)</style>" }
+            .joined(separator: "\n")
+        let html = """
+        <!DOCTYPE html>
+        <html><head>\(styleBlocks)</head>
+        <body><article class="markdown-body">\(rendered.articleHTML)</article></body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const line = document.querySelector('.md-source-list-line');
+            const paragraph = line.closest('p');
+            const childRange = document.createRange();
+            childRange.selectNode(paragraph.firstChild);
+            const itemRange = document.createRange();
+            itemRange.selectNode(line.lastChild);
+            return JSON.stringify({
+                childTextX: childRange.getBoundingClientRect().x,
+                itemTextX: itemRange.getBoundingClientRect().x,
+            });
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let geometry = try JSONDecoder().decode(
+            [String: Double].self,
+            from: Data(json.utf8)
+        )
+
+        let childTextX = try XCTUnwrap(geometry["childTextX"])
+        let itemTextX = try XCTUnwrap(geometry["itemTextX"])
+        XCTAssertGreaterThan(itemTextX - childTextX, 40, json)
+    }
+
     func testMermaidPostProcessingAcceptsSourceMappedPreTag() {
         let rendered = MarkdownHTML.render(
             markdown: """

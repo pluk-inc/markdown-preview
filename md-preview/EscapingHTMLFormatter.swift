@@ -291,6 +291,16 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     private var tableSourceRows: [[String]]?
     private var currentTableColumn = 0
     private var currentTableRow = 0
+    private var listDepth = 0
+    private var sourceListPrefixToStrip: String?
+
+    private struct SourceIndentedListLine {
+        let sourceLine: Int
+        let extraDepth: Int
+        let displayMarker: String
+        let prefixToStrip: String
+        let taskChecked: Bool?
+    }
 
     init(options: HTMLFormatterOptions = [],
          sourceLineOffset: Int = 0,
@@ -540,20 +550,164 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
             start = ""
         }
         result += "<ol\(start)\(sourceLineAttribute(orderedList))>\n"
+        listDepth += 1
         descendInto(orderedList)
+        listDepth -= 1
         result += "</ol>\n"
     }
 
     mutating func visitUnorderedList(_ unorderedList: UnorderedList) {
         result += "<ul\(sourceLineAttribute(unorderedList))>\n"
+        listDepth += 1
         descendInto(unorderedList)
+        listDepth -= 1
         result += "</ul>\n"
     }
 
     mutating func visitParagraph(_ paragraph: Paragraph) {
         result += "<p\(sourceLineAttribute(paragraph))>"
-        descendInto(paragraph)
+        let children = Array(paragraph.children)
+        var sourceListLineOpen = false
+        var sourceListIndentWrappers = 0
+        for index in children.indices {
+            let child = children[index]
+            guard child is SoftBreak || child is LineBreak else {
+                visit(child)
+                continue
+            }
+
+            if sourceListLineOpen {
+                result += "</span>"
+                result += String(repeating: "</span>", count: sourceListIndentWrappers)
+                sourceListLineOpen = false
+                sourceListIndentWrappers = 0
+                sourceListPrefixToStrip = nil
+            }
+
+            let nextChild = children.index(after: index)
+            if nextChild < children.endIndex,
+               let line = sourceIndentedListLine(startingWith: children[nextChild]) {
+                let mappedLine = line.sourceLine + sourceLineOffset
+                result += String(
+                    repeating: "<span class=\"md-source-list-indent-step\">",
+                    count: line.extraDepth
+                )
+                result += "<span class=\"md-source-list-line\" role=\"listitem\""
+                result += " data-source-line=\"\(mappedLine)\" data-source-start=\"\(mappedLine)\" data-source-end=\"\(mappedLine)\""
+                result += ">"
+                if let checked = line.taskChecked {
+                    result += "<span class=\"md-source-list-marker md-source-task-marker\">"
+                    result += "<input type=\"checkbox\" class=\"task-list-item-checkbox\" disabled=\"\""
+                    if checked { result += " checked=\"\"" }
+                    result += " /></span>"
+                } else {
+                    result += "<span class=\"md-source-list-marker\" aria-hidden=\"true\">"
+                    result += escapeText(line.displayMarker)
+                    result += "</span>"
+                }
+                sourceListPrefixToStrip = line.prefixToStrip
+                sourceListLineOpen = true
+                sourceListIndentWrappers = line.extraDepth
+            } else {
+                result += "<br />\n"
+            }
+        }
+        if sourceListLineOpen {
+            result += "</span>"
+            result += String(repeating: "</span>", count: sourceListIndentWrappers)
+            sourceListPrefixToStrip = nil
+        }
         result += "</p>\n"
+    }
+
+    private func sourceIndentedListLine(startingWith markup: Markup) -> SourceIndentedListLine? {
+        guard listDepth > 0,
+              let sourceLine = firstSourceLine(in: markup),
+              sourceLines.indices.contains(sourceLine - 1) else {
+            return nil
+        }
+        let source = sourceLines[sourceLine - 1]
+        let characters = Array(source)
+        var index = 0
+        var columns = 0
+        while index < characters.count {
+            if characters[index] == " " {
+                columns += 1
+            } else if characters[index] == "\t" {
+                columns += 4 - (columns % 4)
+            } else {
+                break
+            }
+            index += 1
+        }
+
+        let desiredDepth = columns / 4 + 1
+        guard desiredDepth > listDepth, index < characters.count else { return nil }
+
+        let markerStart = index
+        let displayMarker: String
+        if ["-", "+", "*"].contains(characters[index]) {
+            displayMarker = "•"
+            index += 1
+        } else {
+            let digitStart = index
+            while index < characters.count, characters[index].isNumber {
+                index += 1
+            }
+            guard index > digitStart,
+                  index < characters.count,
+                  characters[index] == "." || characters[index] == ")" else {
+                return nil
+            }
+            index += 1
+            displayMarker = String(characters[digitStart..<index])
+        }
+
+        guard index == characters.count
+                || characters[index] == " "
+                || characters[index] == "\t" else {
+            return nil
+        }
+        while index < characters.count,
+              characters[index] == " " || characters[index] == "\t" {
+            index += 1
+        }
+
+        var taskChecked: Bool?
+        if displayMarker == "•",
+           index + 2 < characters.count,
+           characters[index] == "[",
+           characters[index + 2] == "]",
+           characters[index + 1] == " "
+            || characters[index + 1] == "x"
+            || characters[index + 1] == "X" {
+            taskChecked = characters[index + 1] != " "
+            index += 3
+            while index < characters.count,
+                  characters[index] == " " || characters[index] == "\t" {
+                index += 1
+            }
+        }
+
+        return SourceIndentedListLine(
+            sourceLine: sourceLine,
+            extraDepth: desiredDepth - listDepth,
+            displayMarker: displayMarker,
+            prefixToStrip: String(characters[markerStart..<index]),
+            taskChecked: taskChecked
+        )
+    }
+
+    private func firstSourceLine(in markup: Markup) -> Int? {
+        if let line = markup.range?.lowerBound.line {
+            return line
+        }
+        for child in markup.children {
+            if let line = firstSourceLine(in: child) {
+                return line
+            }
+        }
+        return nil
     }
 
     mutating func visitTable(_ table: Table) {
@@ -695,7 +849,15 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     }
 
     mutating func visitText(_ text: Text) {
-        result += escapeTextPreservingInlineTabs(text.string)
+        if let prefix = sourceListPrefixToStrip,
+           text.string.hasPrefix(prefix) {
+            result += escapeTextPreservingInlineTabs(
+                String(text.string.dropFirst(prefix.count))
+            )
+            sourceListPrefixToStrip = nil
+        } else {
+            result += escapeTextPreservingInlineTabs(text.string)
+        }
     }
 
     mutating func visitStrikethrough(_ strikethrough: Strikethrough) {

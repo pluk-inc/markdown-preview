@@ -2876,6 +2876,27 @@ nonisolated enum MarkdownHTML {
         white-space: pre;
         tab-size: 4;
     }
+    .md-source-list-indent-step {
+        display: block;
+        box-sizing: border-box;
+        padding-inline-start: 1.6em;
+    }
+    .md-source-list-line {
+        display: block;
+        margin-top: \(listItemSpacing)px;
+    }
+    .md-source-list-marker {
+        display: inline-block;
+        box-sizing: border-box;
+        width: 1.6em;
+        margin-inline-start: -1.6em;
+        padding-inline-end: 0.45em;
+        text-align: end;
+    }
+    .md-source-task-marker {
+        text-align: center;
+        padding-inline-end: 0.25em;
+    }
 
     /* Frontmatter properties — Obsidian-style metadata panel. Deliberately
        quieter than document content: no row borders (content tables own
