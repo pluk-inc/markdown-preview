@@ -331,6 +331,27 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         ))
     }
 
+    func testRTLDirectionRecognizesHebrewAndNumericCharacterReferences() {
+        let samples = [
+            "שלום עולם.",
+            "&#1513;&#1500;&#1493;&#1501;",
+            "&#x05E9;&#x05DC;&#x05D5;&#x05DD;",
+            "&#X05E9;&#X05DC;&#X05D5;&#X05DD;",
+        ]
+
+        for markdown in samples {
+            let rendered = MarkdownHTML.render(
+                markdown: markdown,
+                vendorLoading: .lazy
+            )
+
+            XCTAssertTrue(
+                rendered.articleHTML.contains(#" dir="rtl">"#),
+                "Expected RTL direction for \(markdown)"
+            )
+        }
+    }
+
     func testReadOnlyRenderingPreservesEveryBlankSourceLine() {
         let rendered = MarkdownHTML.render(
             markdown: "First paragraph.\n\n\n## Heading\n\nSecond paragraph.",

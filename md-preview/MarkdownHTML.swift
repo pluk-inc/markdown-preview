@@ -147,7 +147,12 @@ nonisolated enum MarkdownHTML {
             sourceLineOffset: sourceLineOffset
         )
         let headingsHTML = injectHeadingIDs(in: footnoteReferenceHTML + footnoteDefinitions.html)
-        let renderedBodyHTML = injectRTLDirection(in: headingsHTML)
+        // Direction inference scans every rendered block. Most documents
+        // contain no RTL text, so avoid walking the much larger generated
+        // HTML unless the Markdown could produce an RTL first character.
+        let renderedBodyHTML = sourceMayNeedRTLDirection(body)
+            ? injectRTLDirection(in: headingsHTML)
+            : headingsHTML
         let frontmatterHTML: String
         if let raw = frontmatter.raw,
            let format = frontmatter.format {
@@ -316,6 +321,26 @@ nonisolated enum MarkdownHTML {
         0x08A0...0x08FF, 0xFB50...0xFDFF, 0xFE70...0xFEFF
     ]
 
+    /// Over-inclusive by design: CommonMark decodes numeric character
+    /// references before formatting, so any `&#` might become RTL text.
+    /// False positives only take the existing slow path; false negatives
+    /// would skip direction inference.
+    private static func sourceMayNeedRTLDirection(_ source: String) -> Bool {
+        var previousWasAmpersand = false
+        for scalar in source.unicodeScalars {
+            if scalar.value >= 0x0590,
+               scalar.value <= 0xFEFF,
+               isRTL(scalar) {
+                return true
+            }
+            if previousWasAmpersand, scalar.value == 0x23 {
+                return true
+            }
+            previousWasAmpersand = scalar.value == 0x26
+        }
+        return false
+    }
+
     private static func injectRTLDirection(in html: String) -> String {
         let nsHtml = html as NSString
         let matches = rtlTagRegex.matches(in: html, range: NSRange(location: 0, length: nsHtml.length))
@@ -372,6 +397,10 @@ nonisolated enum MarkdownHTML {
 
     private static func isRTL(_ char: Character) -> Bool {
         guard let scalar = char.unicodeScalars.first else { return false }
+        return isRTL(scalar)
+    }
+
+    private static func isRTL(_ scalar: Unicode.Scalar) -> Bool {
         return rtlRanges.contains { $0.contains(scalar.value) }
     }
 

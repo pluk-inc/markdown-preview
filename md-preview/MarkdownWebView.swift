@@ -294,10 +294,9 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     private static let warmupMarkdown = ""
 
     private func warmupVendors() {
-        // Opening a real document during launch takes priority over speculative
-        // vendor warmup. Large documents otherwise give this tiny render enough
-        // time to win the race and make WebKit parse Mermaid + KaTeX +
-        // highlight.js before it can show the actual text.
+        // Opening a real document during launch takes priority over
+        // speculative WebKit work, which otherwise competes with the first
+        // Markdown render on cold open.
         guard renderGeneration == 0,
               !isPageReady,
               loadedFingerprint == nil else { return }
@@ -316,7 +315,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
 
     private func applyWarmup(_ rendered: MarkdownHTML.RenderedHTML) {
         // Another display() may have arrived during the off-main render and
-        // already swapped the page in — don't stomp it with the warmup doc.
+        // taken priority over the speculative shell.
         guard renderGeneration == 0,
               !isPageReady,
               loadedFingerprint == nil else { return }
@@ -369,7 +368,16 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                             markdown: markdown,
                                             assetBaseHref: baseHref,
                                             contentWidth: contentWidth)
+            #if DEBUG
+            let renderFinishedAt = DispatchTime.now().uptimeNanoseconds
+            await self?.applyDisplayDebug(
+                rendered,
+                generation: generation,
+                renderFinishedAt: renderFinishedAt
+            )
+            #else
             await self?.applyDisplay(rendered, generation: generation)
+            #endif
         }
     }
 
@@ -397,6 +405,22 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         )
         return rendered
     }
+
+    #if DEBUG
+    private func applyDisplayDebug(_ rendered: MarkdownHTML.RenderedHTML,
+                                   generation: UInt64,
+                                   renderFinishedAt: UInt64) {
+        let enteredAt = DispatchTime.now().uptimeNanoseconds
+        Logger.perf.debug(
+            "[mdp-perf-swift] render finish -> MainActor +\(Self.debugMilliseconds(from: renderFinishedAt, to: enteredAt), privacy: .public)ms"
+        )
+        applyDisplay(rendered, generation: generation)
+        let returnedAt = DispatchTime.now().uptimeNanoseconds
+        Logger.perf.debug(
+            "[mdp-perf-swift] applyDisplay sync +\(Self.debugMilliseconds(from: enteredAt, to: returnedAt), privacy: .public)ms"
+        )
+    }
+    #endif
 
     private func applyDisplay(_ rendered: MarkdownHTML.RenderedHTML,
                               generation: UInt64) {
@@ -435,7 +459,16 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             return
         }
 
+        #if DEBUG
+        let loadStartedAt = DispatchTime.now().uptimeNanoseconds
         webView.loadHTMLString(rendered.html, baseURL: nil)
+        let loadReturnedAt = DispatchTime.now().uptimeNanoseconds
+        Logger.perf.debug(
+            "[mdp-perf-swift] loadHTMLString call +\(Self.debugMilliseconds(from: loadStartedAt, to: loadReturnedAt), privacy: .public)ms"
+        )
+        #else
+        webView.loadHTMLString(rendered.html, baseURL: nil)
+        #endif
         loadedFingerprint = fingerprint
         isPageReady = false
     }
@@ -454,6 +487,13 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         isPageReady = false
         reloadPreview()
     }
+
+    #if DEBUG
+    private nonisolated static func debugMilliseconds(from start: UInt64,
+                                                      to end: UInt64) -> Int {
+        Int((Double(end - start) / 1_000_000).rounded())
+    }
+    #endif
 
     fileprivate func didReceiveHostMessage(_ body: Any) {
         guard let dict = body as? [String: Any],
