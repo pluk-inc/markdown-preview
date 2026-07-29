@@ -38,7 +38,7 @@ positional args to override. `--duration` (default 20 s) controls the
 sampling window per sample.
 
 CSV rows are `label,sample,metric,value` with metrics:
-`fcp_ms`, `render_ms`, `update_ms` (mean), `update_count`,
+`fcp_ms`, `render_ms`, `update_last_ms`, `update_ms` (mean), `update_count`,
 `rss_peak_kb_app`, `rss_mean_kb_app`, `rss_peak_kb_webcontent`,
 `rss_mean_kb_webcontent`, `cpu_mean_app`, `cpu_mean_webcontent`.
 
@@ -101,15 +101,19 @@ Measures the innerHTML-swap (or morphdom) update path under repeated edits:
   the launch-time vendor warmup and any restored windows emit earlier ones,
   and the freshly opened sample always renders after them. Don't interact
   with the app during timed opens.
-- `bench-app.sh` deletes the app's saved window state (in its sandbox
-  container) before each launch so macOS window restoration doesn't reopen
-  the previous sample and pollute RSS/CPU and update timings.
+- `bench-app.sh` launches with `open -F` and deletes the app's saved window
+  state (in its sandbox container) before each run so macOS window restoration
+  doesn't reopen previous samples and pollute RSS/CPU and update timings.
+- App log capture matches the built app's exact bundle id. Prefix matching
+  (`subsystem BEGINSWITH "doc.md-preview"`) can accidentally ingest Quick
+  Actions or extensions and assign their timings to the document under test.
 - `footprint` snapshots usually need sudo; the script degrades to ps-only
   RSS when unavailable.
 - `update_ms` blends in one small launch-warmup `MdPreview.update` that the
   log can't distinguish from the sample's own updates. On cold-open runs
-  (update_count ≈ 2) treat it as indicative only; edit-cycle runs dilute the
-  warmup to noise. Always compare `update_count` between baseline and
+  (update_count ≈ 2) use `update_last_ms`, which represents the displayed
+  document. `update_ms` remains useful for edit-cycle runs, where many updates
+  dilute warmup to noise. Always compare `update_count` between baseline and
   candidate to make sure you're averaging the same population.
 - `ps pcpu` is a decaying average, not an instantaneous reading — treat
   `cpu_mean_*` as relative between runs, not absolute utilization.

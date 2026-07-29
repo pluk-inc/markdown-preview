@@ -3,7 +3,7 @@
 # bench-app.sh — CPU/memory/first-paint benchmark for the Markdown Preview app.
 #
 # For each sample file it launches the built app cold, captures the debug
-# perf log lines (subsystem doc.md-preview*, category perf), samples RSS/CPU
+# perf log lines from the app's exact bundle-id subsystem, samples RSS/CPU
 # of the app process and its WebKit WebContent process(es) every 500 ms, and
 # writes one CSV of metrics per run.
 #
@@ -80,6 +80,9 @@ echo "==> Output: $OUT_DIR"
 
 APP_PROC_NAME="Markdown Preview"
 BUNDLE_ID="$(defaults read "$APP_PATH/Contents/Info" CFBundleIdentifier 2>/dev/null || true)"
+[[ -n "$BUNDLE_ID" ]] || { echo "bundle id not found in app: $APP_PATH" >&2; exit 1; }
+[[ "$BUNDLE_ID" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]] \
+    || { echo "invalid bundle id in app: $BUNDLE_ID" >&2; exit 1; }
 
 # Window restoration reopens documents from the previous run, polluting both
 # the perf log and RSS/CPU attribution — wipe saved state for a clean cold open.
@@ -106,7 +109,7 @@ webcontent_pids() {
 # Extract metrics from a captured `log stream` file and the raw ps samples,
 # append CSV rows. Args: sample-name, logfile, psfile.
 emit_metrics() {
-    local name="$1" logfile="$2" psfile="$3" v
+    local name="$1" logfile="$2" psfile="$3" v update_values
 
     # FCP: last occurrence wins — the launch warmup page can also emit one,
     # and the real document's paint always comes after it.
@@ -128,15 +131,20 @@ emit_metrics() {
     # counted the same as plain builds. The sed capture pulls only the
     # timing digits — a bare [0-9.]+ grep would also match the dot in
     # "MdPreview.update" and double-count every line.
-    # Caveat: the launch-time warmup page fires one small update of its own
-    # that can't be told apart in the log, so cold-open means blend it in —
-    # compare update_count between runs and prefer edit-cycle runs (many
-    # updates) when update_ms is the metric under test.
-    sed -nE 's/.*MdPreview\.update( \([a-z]+\))? \(\+([0-9.]+)ms\).*/\2/p' "$logfile" \
-        | awk -v L="$LABEL" -v S="$name" '
-            { sum += $1; n++ }
-            END { if (n) printf "%s,%s,update_ms,%.1f\n%s,%s,update_count,%d\n",
-                          L, S, sum/n, L, S, n }' >> "$CSV"
+    # Caveat: when the launch-time shell wins the race, it fires one small
+    # update that can't be told apart in the log. update_last_ms identifies the
+    # displayed document; update_ms remains useful for repeated edit cycles.
+    update_values="$(sed -nE \
+        's/.*MdPreview\.update( \([a-z]+\))? \(\+([0-9.]+)ms\).*/\2/p' \
+        "$logfile")"
+    if [[ -n "$update_values" ]]; then
+        v="$(printf '%s\n' "$update_values" | tail -1)"
+        echo "$LABEL,$name,update_last_ms,$v" >> "$CSV"
+        printf '%s\n' "$update_values" | awk -v L="$LABEL" -v S="$name" '
+                { sum += $1; n++ }
+                END { if (n) printf "%s,%s,update_ms,%.1f\n%s,%s,update_count,%d\n",
+                              L, S, sum/n, L, S, n }' >> "$CSV"
+    fi
 
     # RSS / CPU stats from the ps samples (columns: role rss_kb pcpu).
     awk -v L="$LABEL" -v S="$name" '
@@ -170,12 +178,14 @@ run_sample() {
 
     # Start the log capture before launch so early perf lines aren't missed.
     log stream --level debug --style compact \
-        --predicate 'subsystem BEGINSWITH "doc.md-preview"' \
+        --predicate "subsystem == \"$BUNDLE_ID\"" \
         > "$logfile" 2>/dev/null &
     local log_pid=$!
     sleep 1
 
-    open -a "$APP_PATH" "$sample"
+    # -F asks AppKit for a fresh launch, preventing restored document windows
+    # from adding unrelated renders and WebContent processes to this sample.
+    open -F -a "$APP_PATH" "$sample"
 
     local app_pid=""
     for _ in $(seq 1 20); do

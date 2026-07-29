@@ -35,12 +35,12 @@ nonisolated enum MarkdownFrontmatter {
 
     static func split(_ markdown: String) -> (raw: String?, format: Format?, body: String) {
         let stripped = markdown.first == "\u{FEFF}" ? String(markdown.dropFirst()) : markdown
+        let firstLineEnd = stripped.firstIndex(where: \.isNewline) ?? stripped.endIndex
+        guard let delimiter = Delimiter(openingLine: String(stripped[..<firstLineEnd]))
+        else { return (nil, nil, markdown) }
+
         var lines: [String] = []
         stripped.enumerateLines { line, _ in lines.append(line) }
-
-        guard let first = lines.first,
-              let delimiter = Delimiter(openingLine: first)
-        else { return (nil, nil, markdown) }
 
         guard let close = lines.dropFirst().firstIndex(where: {
             delimiter.closes($0)

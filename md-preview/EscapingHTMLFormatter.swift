@@ -562,6 +562,15 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
 
     mutating func visitParagraph(_ paragraph: Paragraph) {
         result += "<p\(sourceLineAttribute(paragraph))>"
+        // Source-indented pseudo-list lines only exist inside a parsed list.
+        // Keep the overwhelmingly common top-level paragraph path on the
+        // walker's direct traversal instead of materializing all children.
+        guard listDepth > 0 else {
+            descendInto(paragraph)
+            result += "</p>\n"
+            return
+        }
+
         let children = Array(paragraph.children)
         var sourceListLineOpen = false
         var sourceListIndentWrappers = 0

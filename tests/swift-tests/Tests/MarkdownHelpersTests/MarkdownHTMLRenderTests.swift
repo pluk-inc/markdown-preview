@@ -1363,6 +1363,24 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(rendered.articleHTML.contains("class=\"math"))
     }
 
+    func testProtectedCodeTokensRestoreInOnePassWithoutChangingContent() {
+        let codeSpans = (0..<100)
+            .map { "`literal-\($0)-$not-math$`" }
+            .joined(separator: " ")
+        let rendered = MarkdownHTML.render(
+            markdown: "MdPreviewProtectNotAToken \(codeSpans)",
+            vendorLoading: .lazy
+        )
+
+        XCTAssertFalse(rendered.containsMath)
+        XCTAssertTrue(rendered.articleHTML.contains("MdPreviewProtectNotAToken"))
+        XCTAssertTrue(rendered.articleHTML.contains("<code>literal-0-$not-math$</code>"))
+        XCTAssertTrue(rendered.articleHTML.contains("<code>literal-50-$not-math$</code>"))
+        XCTAssertTrue(rendered.articleHTML.contains("<code>literal-99-$not-math$</code>"))
+        XCTAssertFalse(rendered.articleHTML.contains("MdPreviewProtect0Token"))
+        XCTAssertFalse(rendered.articleHTML.contains("MdPreviewFootnoteProtect0Token"))
+    }
+
     @MainActor
     func testReportedLatexStructuresRenderWithBundledKatex() async throws {
         let rendered = MarkdownHTML.render(
@@ -1477,6 +1495,25 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(rendered.articleHTML.contains(
             "<p data-source-line=\"8\" data-source-start=\"8\" data-source-end=\"9\">First definition line."
         ))
+    }
+
+    func testMultipleFootnoteReferencesRestoreInSourceOrder() {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            First[^one], repeated[^one], and second[^two]. Literal `[^one]`.
+
+            [^one]: First note.
+            [^two]: Second note.
+            """,
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(rendered.articleHTML.contains("id=\"fnref-1\" href=\"#fn-1\""))
+        XCTAssertTrue(rendered.articleHTML.contains("id=\"fnref-1-2\" href=\"#fn-1\""))
+        XCTAssertTrue(rendered.articleHTML.contains("id=\"fnref-2\" href=\"#fn-2\""))
+        XCTAssertTrue(rendered.articleHTML.contains("<code>[^one]</code>"))
+        XCTAssertFalse(rendered.articleHTML.contains("MdPreviewFootnoteRef"))
+        XCTAssertFalse(rendered.articleHTML.contains("MdPreviewFootnoteProtect"))
     }
 
     func testTablesExposeSourceRangeAndStableCellCoordinates() {
