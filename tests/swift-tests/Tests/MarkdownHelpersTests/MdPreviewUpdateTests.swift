@@ -177,7 +177,10 @@ final class MdPreviewUpdateTests: XCTestCase {
 
     @MainActor
     func testTableHeaderPlaceholderAccessibilityUsesDelegatedUpdates() async throws {
-        let webView = try await loadHarness(articleAttributes: "", installsHostBridge: true)
+        let webView = try await loadHarness(
+            articleAttributes: "",
+            stubsWebKitMessageHandler: true
+        )
         let article = MarkdownHTML.render(
             markdown: """
             | | Name |
@@ -187,6 +190,49 @@ final class MdPreviewUpdateTests: XCTestCase {
             vendorLoading: .lazy
         ).articleHTML
         let document = MarkdownHTML.javaScriptStringLiteral(article)
+
+        // Instrument the WebKit APIs that caused the regression. Unlike a
+        // source-string assertion, these counters remain valid if functions
+        // or event-handler registration are reordered.
+        _ = try await webView.evaluateJavaScript("""
+        (() => {
+            window.__tableHeaderInnerTextReads = 0;
+            window.__tableCellInputListenerRegistrations = 0;
+
+            const innerText = Object.getOwnPropertyDescriptor(
+                HTMLElement.prototype,
+                'innerText'
+            );
+            if (!innerText || typeof innerText.get !== 'function') {
+                throw new Error('HTMLElement.innerText getter unavailable');
+            }
+            const patchedInnerText = {
+                configurable: innerText.configurable,
+                enumerable: innerText.enumerable,
+                get() {
+                    if (this.matches?.('th[data-table-column]')) {
+                        window.__tableHeaderInnerTextReads += 1;
+                    }
+                    return innerText.get.call(this);
+                }
+            };
+            if (innerText.set) {
+                patchedInnerText.set = function (value) {
+                    return innerText.set.call(this, value);
+                };
+            }
+            Object.defineProperty(HTMLElement.prototype, 'innerText', patchedInnerText);
+
+            const addEventListener = EventTarget.prototype.addEventListener;
+            EventTarget.prototype.addEventListener = function (type, listener, options) {
+                if (type === 'input' && this instanceof HTMLTableCellElement) {
+                    window.__tableCellInputListenerRegistrations += 1;
+                }
+                return addEventListener.call(this, type, listener, options);
+            };
+            return true;
+        })()
+        """)
 
         // Exercise both the initial populate and the morph path. Table setup
         // must stay idempotent and the delegated input handler must keep the
@@ -220,6 +266,9 @@ final class MdPreviewUpdateTests: XCTestCase {
                 editorCount: document.querySelectorAll('.md-table-editor').length,
                 scrollCount: document.querySelectorAll('.md-table-scroll').length,
                 headerCount: headers.length,
+                headerInnerTextReads: window.__tableHeaderInnerTextReads,
+                tableCellInputListenerRegistrations:
+                    window.__tableCellInputListenerRegistrations,
                 placeholder: empty.dataset.placeholder || '',
                 initialEmptyLabel,
                 initialNamedLabel,
@@ -234,26 +283,13 @@ final class MdPreviewUpdateTests: XCTestCase {
         XCTAssertEqual(state.editorCount, 1, json)
         XCTAssertEqual(state.scrollCount, 1, json)
         XCTAssertEqual(state.headerCount, 2, json)
+        XCTAssertEqual(state.headerInnerTextReads, 0, json)
+        XCTAssertEqual(state.tableCellInputListenerRegistrations, 0, json)
         XCTAssertEqual(state.placeholder, "Column 1", json)
         XCTAssertEqual(state.initialEmptyLabel, "Column 1", json)
         XCTAssertNil(state.initialNamedLabel, json)
         XCTAssertNil(state.renamedLabel, json)
         XCTAssertEqual(state.restoredLabel, "Column 1", json)
-    }
-
-    func testTableSetupAvoidsPerHeaderLayoutReadsAndListeners() throws {
-        let script = MarkdownHTML.hostBridgeScript
-        let start = try XCTUnwrap(script.range(of: "function enableTableEditing"))
-        let tableSetupTail = script[start.lowerBound...]
-        let end = try XCTUnwrap(
-            tableSetupTail.range(of: "document.addEventListener('mousedown'")
-        )
-        let tableSetup = tableSetupTail[..<end.lowerBound]
-
-        XCTAssertTrue(tableSetup.contains("cell.textContent"))
-        XCTAssertTrue(tableSetup.contains("document.addEventListener('input'"))
-        XCTAssertFalse(tableSetup.contains("cell.innerText"))
-        XCTAssertFalse(tableSetup.contains("cell.addEventListener('input'"))
     }
 
     /// Builds the harness page — bundled DOMPurify + morphdom, the shipped
@@ -264,11 +300,11 @@ final class MdPreviewUpdateTests: XCTestCase {
     @MainActor
     private func loadHarness(
         articleAttributes: String,
-        installsHostBridge: Bool = false
+        stubsWebKitMessageHandler: Bool = false
     ) async throws -> WKWebView {
         let purifyJS = try TestVendor.script("md-preview/Vendor/DOMPurify/purify.min.js")
         let morphdomJS = try TestVendor.script("md-preview/Vendor/Morphdom/morphdom.min.js")
-        let hostBridgeStub = installsHostBridge
+        let webKitMessageHandlerStub = stubsWebKitMessageHandler
             ? """
               <script>
               window.webkit = {
@@ -312,7 +348,7 @@ final class MdPreviewUpdateTests: XCTestCase {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <script>\(purifyJS)</script>
         <script>\(morphdomJS)</script>
-        \(hostBridgeStub)
+        \(webKitMessageHandlerStub)
         \(MarkdownHTML.hostBridgeScript)
         \(fakeRenderers)
         </head><body>
@@ -393,6 +429,8 @@ private struct TableHeaderPlaceholderState: Decodable {
     let editorCount: Int
     let scrollCount: Int
     let headerCount: Int
+    let headerInnerTextReads: Int
+    let tableCellInputListenerRegistrations: Int
     let placeholder: String
     let initialEmptyLabel: String?
     let initialNamedLabel: String?

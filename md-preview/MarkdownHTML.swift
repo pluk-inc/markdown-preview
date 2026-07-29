@@ -1453,13 +1453,15 @@ nonisolated enum MarkdownHTML {
             else cell.setAttribute('aria-label', placeholder);
         }
 
-        // One delegated listener covers both initial and morphed tables.
-        document.addEventListener('input', (event) => {
-            const cell = event.target.closest?.(
-                '.md-table-editor th[data-table-column]'
-            );
-            if (cell) updateTableHeaderAccessibilityLabel(cell);
-        });
+        if (hasHostBridge) {
+            // One delegated listener covers both initial and morphed tables.
+            document.addEventListener('input', (event) => {
+                const cell = event.target.closest?.(
+                    '.md-table-editor th[data-table-column]'
+                );
+                if (cell) updateTableHeaderAccessibilityLabel(cell);
+            });
+        }
 
         document.addEventListener('mousedown', (event) => {
             if (event.button !== 0) return;
