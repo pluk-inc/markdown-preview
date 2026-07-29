@@ -175,15 +175,110 @@ final class MdPreviewUpdateTests: XCTestCase {
         XCTAssertEqual(codeSurvived, true)
     }
 
+    @MainActor
+    func testTableHeaderPlaceholderAccessibilityUsesDelegatedUpdates() async throws {
+        let webView = try await loadHarness(articleAttributes: "", installsHostBridge: true)
+        let article = MarkdownHTML.render(
+            markdown: """
+            | | Name |
+            | --- | --- |
+            | First | Ada |
+            """,
+            vendorLoading: .lazy
+        ).articleHTML
+        let document = MarkdownHTML.javaScriptStringLiteral(article)
+
+        // Exercise both the initial populate and the morph path. Table setup
+        // must stay idempotent and the delegated input handler must keep the
+        // placeholder's accessibility label in sync.
+        _ = try await webView.evaluateJavaScript(
+            "window.MdPreview.update(\(document)); true"
+        )
+        _ = try await webView.evaluateJavaScript(
+            "window.MdPreview.update(\(document)); true"
+        )
+
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const headers = document.querySelectorAll(
+                '.md-table-editor th[data-table-column]'
+            );
+            const empty = headers[0];
+            const named = headers[1];
+            const initialEmptyLabel = empty.getAttribute('aria-label');
+            const initialNamedLabel = named.getAttribute('aria-label');
+
+            empty.textContent = 'Renamed';
+            empty.dispatchEvent(new Event('input', { bubbles: true }));
+            const renamedLabel = empty.getAttribute('aria-label');
+
+            empty.textContent = '';
+            empty.dispatchEvent(new Event('input', { bubbles: true }));
+            const restoredLabel = empty.getAttribute('aria-label');
+
+            return JSON.stringify({
+                editorCount: document.querySelectorAll('.md-table-editor').length,
+                scrollCount: document.querySelectorAll('.md-table-scroll').length,
+                headerCount: headers.length,
+                placeholder: empty.dataset.placeholder || '',
+                initialEmptyLabel,
+                initialNamedLabel,
+                renamedLabel,
+                restoredLabel,
+            });
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let state = try JSONDecoder().decode(TableHeaderPlaceholderState.self, from: Data(json.utf8))
+
+        XCTAssertEqual(state.editorCount, 1, json)
+        XCTAssertEqual(state.scrollCount, 1, json)
+        XCTAssertEqual(state.headerCount, 2, json)
+        XCTAssertEqual(state.placeholder, "Column 1", json)
+        XCTAssertEqual(state.initialEmptyLabel, "Column 1", json)
+        XCTAssertNil(state.initialNamedLabel, json)
+        XCTAssertNil(state.renamedLabel, json)
+        XCTAssertEqual(state.restoredLabel, "Column 1", json)
+    }
+
+    func testTableSetupAvoidsPerHeaderLayoutReadsAndListeners() throws {
+        let script = MarkdownHTML.hostBridgeScript
+        let start = try XCTUnwrap(script.range(of: "function enableTableEditing"))
+        let tableSetupTail = script[start.lowerBound...]
+        let end = try XCTUnwrap(
+            tableSetupTail.range(of: "document.addEventListener('mousedown'")
+        )
+        let tableSetup = tableSetupTail[..<end.lowerBound]
+
+        XCTAssertTrue(tableSetup.contains("cell.textContent"))
+        XCTAssertTrue(tableSetup.contains("document.addEventListener('input'"))
+        XCTAssertFalse(tableSetup.contains("cell.innerText"))
+        XCTAssertFalse(tableSetup.contains("cell.addEventListener('input'"))
+    }
+
     /// Builds the harness page — bundled DOMPurify + morphdom, the shipped
     /// host bridge, and fake renderers that mimic the real markers: stash
     /// `__mdSrc`, set the done flag, replace the children with a sentinel,
     /// and count runs so a destructive re-render (fresh node, count reset)
     /// is detectable.
     @MainActor
-    private func loadHarness(articleAttributes: String) async throws -> WKWebView {
+    private func loadHarness(
+        articleAttributes: String,
+        installsHostBridge: Bool = false
+    ) async throws -> WKWebView {
         let purifyJS = try TestVendor.script("md-preview/Vendor/DOMPurify/purify.min.js")
         let morphdomJS = try TestVendor.script("md-preview/Vendor/Morphdom/morphdom.min.js")
+        let hostBridgeStub = installsHostBridge
+            ? """
+              <script>
+              window.webkit = {
+                  messageHandlers: {
+                      mdPreviewHost: { postMessage() {} }
+                  }
+              };
+              </script>
+              """
+            : ""
         let fakeRenderers = """
         <script>
         (() => {
@@ -217,6 +312,7 @@ final class MdPreviewUpdateTests: XCTestCase {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <script>\(purifyJS)</script>
         <script>\(morphdomJS)</script>
+        \(hostBridgeStub)
         \(MarkdownHTML.hostBridgeScript)
         \(fakeRenderers)
         </head><body>
@@ -291,4 +387,15 @@ private struct WarmupArticleState: Decodable {
     private enum CodingKeys: String, CodingKey {
         case warmup, opacity, keyedBlocks, paragraphText
     }
+}
+
+private struct TableHeaderPlaceholderState: Decodable {
+    let editorCount: Int
+    let scrollCount: Int
+    let headerCount: Int
+    let placeholder: String
+    let initialEmptyLabel: String?
+    let initialNamedLabel: String?
+    let renamedLabel: String?
+    let restoredLabel: String?
 }

@@ -1437,16 +1437,29 @@ nonisolated enum MarkdownHTML {
                     const column = Number(cell.dataset.tableColumn);
                     const placeholder = `Column ${column + 1}`;
                     cell.dataset.placeholder = placeholder;
-                    if (!(cell.innerText || '').trim()) cell.textContent = '';
-                    const updateAccessibilityLabel = () => {
-                        if ((cell.innerText || '').trim()) cell.removeAttribute('aria-label');
-                        else cell.setAttribute('aria-label', placeholder);
-                    };
-                    updateAccessibilityLabel();
-                    cell.addEventListener('input', updateAccessibilityLabel);
+                    // `innerText` forces layout when the table is already in
+                    // the live document. Header emptiness only depends on the
+                    // authored content, so `textContent` is sufficient here.
+                    if (!(cell.textContent || '').trim()) cell.textContent = '';
+                    updateTableHeaderAccessibilityLabel(cell);
                 });
             });
         }
+
+        function updateTableHeaderAccessibilityLabel(cell) {
+            const placeholder = cell.dataset.placeholder;
+            if (!placeholder) return;
+            if ((cell.textContent || '').trim()) cell.removeAttribute('aria-label');
+            else cell.setAttribute('aria-label', placeholder);
+        }
+
+        // One delegated listener covers both initial and morphed tables.
+        document.addEventListener('input', (event) => {
+            const cell = event.target.closest?.(
+                '.md-table-editor th[data-table-column]'
+            );
+            if (cell) updateTableHeaderAccessibilityLabel(cell);
+        });
 
         document.addEventListener('mousedown', (event) => {
             if (event.button !== 0) return;
