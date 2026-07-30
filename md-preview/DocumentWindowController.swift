@@ -3078,6 +3078,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 }
 
 private final class FileWatcher {
+    private static let moveResolutionDelay: TimeInterval = 0.20
+
     private let url: URL
     private let onChange: () -> Void
     /// Fired when the watched file is renamed or moved (in Finder, by an
@@ -3088,6 +3090,7 @@ private final class FileWatcher {
     private var source: DispatchSourceFileSystemObject?
     private var fileDescriptor: Int32 = -1
     private var debounce: DispatchWorkItem?
+    private var moveResolution: DispatchWorkItem?
 
     init(url: URL, onChange: @escaping () -> Void) {
         self.url = url
@@ -3113,12 +3116,8 @@ private final class FileWatcher {
             // For an actual user-visible rename, the FD's resolved path
             // differs from the watcher's URL — surface that to the host.
             if !event.intersection([.delete, .rename, .revoke]).isEmpty {
-                if let newURL = self.currentPath(),
-                   newURL.standardizedFileURL != self.url.standardizedFileURL,
-                   !FileManager.default.fileExists(atPath: self.url.path) {
-                    self.onRename?(newURL)
-                }
-                self.reopen()
+                self.resolveMove(afterSettlingAt: self.currentPath())
+                return
             }
             self.scheduleChange()
         }
@@ -3131,6 +3130,37 @@ private final class FileWatcher {
         }
         self.source = source
         source.resume()
+    }
+
+    private func resolveMove(afterSettlingAt movedURL: URL?) {
+        moveResolution?.cancel()
+        debounce?.cancel()
+        source?.cancel()
+        source = nil
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.moveResolution = nil
+            let resolution = FileWatcherMoveResolution.resolve(
+                originalURL: self.url,
+                movedURL: movedURL,
+                fileExists: { FileManager.default.fileExists(atPath: $0.path) }
+            )
+            switch resolution {
+            case .reloadOriginal:
+                self.open()
+                self.scheduleChange()
+            case .followRename(let newURL):
+                self.onRename?(newURL)
+            case .unavailable:
+                self.reopen()
+            }
+        }
+        moveResolution = work
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.moveResolutionDelay,
+            execute: work
+        )
     }
 
     private func reopen() {
@@ -3159,6 +3189,7 @@ private final class FileWatcher {
 
     func cancel() {
         debounce?.cancel()
+        moveResolution?.cancel()
         source?.cancel()
         source = nil
     }
