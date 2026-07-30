@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.0.43] – 2026-07-30
+
+Large documents open dramatically faster, reading mode is properly white in light mode, and the preview stays on the file you opened while you edit.
+
+### Added
+
+- **Support link in the README.** A Support section and GitHub Sponsors button make it easier to back continued development ([#249](https://github.com/pluk-inc/markdown-preview/pull/249)).
+
+### Changed
+
+- **Large Markdown files render far faster.** Initial rendering no longer forces WebKit to resolve the growing document repeatedly, and table setup stops reading every header through layout-sensitive properties. A generated 1 MB prose file went from 17.5 seconds to 0.36 seconds on a cold launch, with a mixed 250 KB fixture improving 95% on DOM update and 91% on first contentful paint — at flat to slightly lower memory ([#250](https://github.com/pluk-inc/markdown-preview/pull/250)).
+- **Reading mode now paints a white page in light mode.** macOS 15 (Sequoia) and earlier previously showed grey, which left code blocks barely distinguishable from surrounding text ([#253](https://github.com/pluk-inc/markdown-preview/pull/253), [#251](https://github.com/pluk-inc/markdown-preview/issues/251)).
+
+### Fixed
+
+- **The preview stays on the original file during editor backup saves.** Automatic reloads no longer follow a temporary backup path, so the window keeps tracking the document you opened ([#254](https://github.com/pluk-inc/markdown-preview/pull/254), [#119](https://github.com/pluk-inc/markdown-preview/issues/119)).
+- **The Buy Me a Coffee button image renders in the README.** The badge URL was broken and showed as a missing image ([#252](https://github.com/pluk-inc/markdown-preview/pull/252)).
+
+### Contributors
+
+Thanks to the reporters who helped improve this release:
+
+- [@rblath](https://github.com/rblath) — requested a white background in preview mode ([#251](https://github.com/pluk-inc/markdown-preview/issues/251))
+- [@gglanzani](https://github.com/gglanzani) — reported automatic file reloading ([#119](https://github.com/pluk-inc/markdown-preview/issues/119))
+
 ## [0.0.42] – 2026-07-28
 
 Mermaid diagrams can now open in their own resizable windows, editing gains natural list indentation, and Markdown projects work better across nested folders and infrastructure code.
