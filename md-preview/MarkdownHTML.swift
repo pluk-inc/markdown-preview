@@ -2425,7 +2425,7 @@ nonisolated enum MarkdownHTML {
         // The popup is app-only — `MarkdownWebView` compiles its `mermaidPopup`
         // handler out of the Quick Look extension, so emitting the button there
         // would leave a control that does nothing when clicked.
-        #if QUICK_LOOK_EXTENSION
+        #if QUICK_LOOK_EXTENSION || EXPORT_ACTION_EXTENSION
         let popupButton = ""
         #else
         let openWindow = htmlEscape(NSLocalizedString("Open in Window", comment: "Mermaid diagram control"))

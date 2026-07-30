@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Each action names its own icon via FINDER_ACTION_ICON_NAME, resolved against
+	     the PNGs in this folder. See scripts/generate-action-icons.swift for how they
+	     are built to match Apple's built-in Finder actions. -->
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconName</key>
+			<string>$(FINDER_ACTION_ICON_NAME)</string>
+		</dict>
+	</dict>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<key>NSExtensionActivationRule</key>
+			<string>SUBQUERY (
+    extensionItems,
+    $extensionItem,
+    $extensionItem.attachments.@count == 1 AND
+    SUBQUERY (
+        $extensionItem.attachments,
+        $attachment,
+        ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "net.daringfireball.markdown" OR
+        ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.markdown" OR
+        ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "net.ia.markdown" OR
+        ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.unknown.md" OR
+        ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "doc.md-preview.mdown" OR
+        ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "doc.md-preview.mkd" OR
+        ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "doc.md-preview.mkdn" OR
+        ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "doc.md-preview.mdwn" OR
+        ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "doc.md-preview.mdtxt" OR
+        ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "doc.md-preview.mdtext"
+    ).@count == 1
+).@count == 1 AND extensionItems.@count == 1</string>
+			<!-- Both undocumented, both load-bearing, both verified by removing them:
+			     without AllowsFinderPreviewItem the action disappears from Finder's
+			     list entirely; without FinderPreviewIconName the row falls back to the
+			     containing app's icon instead of our own. -->
+			<key>NSExtensionServiceAllowsFinderPreviewItem</key>
+			<true/>
+			<key>NSExtensionServiceFinderPreviewIconName</key>
+			<string>$(FINDER_ACTION_ICON_NAME)</string>
+			<key>NSExtensionServiceRoleType</key>
+			<string>NSExtensionServiceRoleTypeEditor</string>
+			<key>NSExtensionServiceToolbarIconFile</key>
+			<string>$(FINDER_ACTION_ICON_NAME)</string>
+		</dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.ui-services</string>
+		<key>NSExtensionPrincipalClass</key>
+		<string>$(PRODUCT_MODULE_NAME).ActionViewController</string>
+	</dict>
+</dict>
+</plist>

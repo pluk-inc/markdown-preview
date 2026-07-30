@@ -2,8 +2,8 @@
 //  MarkdownWebView+PDFExport.swift
 //  md-preview
 //
-//  Printing and document export. App-only: the Quick Look extension compiles
-//  MarkdownWebView.swift but not this file.
+//  Printing and document export. Shared with the Finder Action extension; the
+//  Quick Look extension compiles MarkdownWebView.swift but not this file.
 //
 
 import Cocoa
@@ -14,7 +14,7 @@ import WebKit
 
 private let printSizeStyleElementID = "md-print-size"
 
-private enum DocumentExportFormat: String, CaseIterable {
+enum DocumentExportFormat: String, CaseIterable {
     case pdf
     case html
     case png
@@ -58,11 +58,52 @@ private enum DocumentExportFormat: String, CaseIterable {
     var usesPrintPipeline: Bool { self == .pdf }
 }
 
-/// Everything the panel needs to write the non-PDF formats itself.
+struct MarkdownExportOutput: Sendable {
+    let url: URL
+    let contentType: UTType
+}
+
+private struct ExportPanelOutcome {
+    let succeeded: Bool
+    let output: MarkdownExportOutput?
+}
+
+/// AppKit invokes an NSPrintOperation delegate through Objective-C rather than
+/// Swift concurrency. Keep that callback nonisolated and make the actor hop
+/// explicit before touching the panel or extension request.
+private nonisolated final class PrintOperationCompletionBridge:
+    NSObject, @unchecked Sendable
+{
+    private let completion: @MainActor @Sendable (Bool) -> Void
+    private var keepAlive: PrintOperationCompletionBridge?
+
+    init(completion: @escaping @MainActor @Sendable (Bool) -> Void) {
+        self.completion = completion
+    }
+
+    func retainUntilCallback() {
+        keepAlive = self
+    }
+
+    @objc func printOperationDidRun(
+        _ operation: NSPrintOperation,
+        success: Bool,
+        contextInfo: UnsafeMutableRawPointer?
+    ) {
+        let completion = completion
+        keepAlive = nil
+        Task { @MainActor in
+            completion(success)
+        }
+    }
+}
+
+/// Everything the panel needs to render and write an exported document.
 private struct FileExportSource {
     let markdown: String
     let sourceURL: URL?
     let assetBaseURL: URL?
+    let automaticOutputDirectory: URL?
     /// Supplied by `MarkdownWebView`, which owns the live page PNG is captured
     /// from. Reports `nil` on success.
     let writePNG: (URL, @escaping (Error?) -> Void) -> Void
@@ -75,6 +116,34 @@ private struct FileExportSource {
             vendorLoading: .inline
         )
         try html.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    func automaticOutput(
+        for format: DocumentExportFormat,
+        fallbackName: String?
+    ) -> MarkdownExportOutput? {
+        guard let automaticOutputDirectory else {
+            return nil
+        }
+        let sourceName =
+            sourceURL?.lastPathComponent
+                ?? fallbackName
+                ?? NSLocalizedString(
+                    "Untitled", comment: "Window title when no document is open")
+        let requestedBaseName =
+            (sourceName as NSString).deletingPathExtension
+        let baseName = requestedBaseName.isEmpty
+            ? "document"
+            : requestedBaseName
+        let fileExtension =
+            format.contentType.preferredFilenameExtension ?? format.rawValue
+        return MarkdownExportOutput(
+            url: automaticOutputDirectory.appendingPathComponent(
+                "\(baseName).\(fileExtension)",
+                isDirectory: false
+            ),
+            contentType: format.contentType
+        )
     }
 }
 
@@ -372,10 +441,10 @@ private final class PrintSizeAccessoryController: NSViewController, NSPrintPanel
 /// A print panel adapted for PDF and document export.
 ///
 /// AppKit publicly supports changing the default button title, but it has no
-/// option for hiding the printer/preset section. On current macOS that section
-/// is exposed by `PMPrintPanelController` as `printersSectionStackView`; look it
-/// up dynamically and guard every lookup so a future AppKit change cannot
-/// crash the app.
+/// option for hiding the printer/preset section. On current macOS the private
+/// print-panel controller exposes it as `printersSectionStackView`; look it up
+/// dynamically and guard every lookup so a future AppKit change cannot crash
+/// the app.
 ///
 /// The controller also owns the PDF-services action that the panel's “Save as
 /// PDF” menu item uses. Pointing the relabelled default button at that same
@@ -383,28 +452,65 @@ private final class PrintSizeAccessoryController: NSViewController, NSPrintPanel
 /// disposition (which would make `NSPrintOperation` skip this panel).
 private final class ExportPrintPanel: NSPrintPanel {
     private let fileExportSource: FileExportSource?
+    private let allowsFormatSelection: Bool
+    private let managesProgressPanelVisibility: Bool
     private(set) var selectedFormat: DocumentExportFormat
+    private var didExportFile = false
+    private var exportedOutput: MarkdownExportOutput?
+    private var pendingPDFOutput: MarkdownExportOutput?
 
     private weak var parentWindow: NSWindow?
     private weak var printSheetWindow: NSWindow?
     private weak var printSheetController: NSWindowController?
+    private weak var printOperation: NSPrintOperation?
     private var isObservingPrintSheet = false
     private var isShowingFileSavePanel = false
     private var didRemoveTopPocket = false
 
     /// `initialFormat` lets Export as PDF… open on PDF while still offering the
     /// other formats, rather than reopening on whatever was last exported.
-    init(fileExportSource: FileExportSource? = nil,
-         initialFormat: DocumentExportFormat? = nil) {
+    init(
+        fileExportSource: FileExportSource? = nil,
+        initialFormat: DocumentExportFormat? = nil,
+        allowsFormatSelection: Bool = true,
+        managesProgressPanelVisibility: Bool = false
+    ) {
         self.fileExportSource = fileExportSource
+        self.allowsFormatSelection = allowsFormatSelection
+        self.managesProgressPanelVisibility = managesProgressPanelVisibility
         selectedFormat = fileExportSource == nil
             ? .pdf
             : (initialFormat ?? DocumentExportFormat.selected)
         super.init()
     }
 
+    override func beginSheet(
+        using printInfo: NSPrintInfo,
+        on parentWindow: NSWindow,
+        completionHandler handler: ((NSPrintPanel.Result) -> Void)? = nil
+    ) {
+        super.beginSheet(
+            using: printInfo,
+            on: parentWindow
+        ) { [weak self] result in
+            if result == .printed,
+               let output = self?.pendingPDFOutput {
+                printInfo.jobDisposition = .save
+                printInfo.dictionary().setObject(
+                    output.url,
+                    forKey:
+                        NSPrintInfo.AttributeKey.jobSavingURL.rawValue
+                            as NSString
+                )
+            }
+            handler?(result)
+        }
+    }
+
     var formatForAccessory: DocumentExportFormat? {
-        fileExportSource == nil ? nil : selectedFormat
+        fileExportSource == nil || !allowsFormatSelection
+            ? nil
+            : selectedFormat
     }
 
     func selectExportFormat(_ format: DocumentExportFormat) {
@@ -416,19 +522,24 @@ private final class ExportPrintPanel: NSPrintPanel {
         }
     }
 
-    override func beginSheet(
-        using printInfo: NSPrintInfo,
-        on parentWindow: NSWindow,
-        completionHandler handler: ((NSPrintPanel.Result) -> Void)? = nil
-    ) {
+    func prepare(on parentWindow: NSWindow) {
         self.parentWindow = parentWindow
+        didExportFile = false
+        exportedOutput = nil
+        pendingPDFOutput = nil
         didRemoveTopPocket = false
         observePrintSheet()
+    }
 
-        super.beginSheet(using: printInfo, on: parentWindow) { [weak self] result in
-            self?.stopObservingPrintSheet()
-            handler?(result)
-        }
+    func attach(to operation: NSPrintOperation) {
+        printOperation = operation
+    }
+
+    func finishOperation(didRun: Bool) -> ExportPanelOutcome {
+        let succeeded = didRun || didExportFile
+        let output = exportedOutput ?? (didRun ? pendingPDFOutput : nil)
+        stopObservingPrintSheet()
+        return ExportPanelOutcome(succeeded: succeeded, output: output)
     }
 
     deinit {
@@ -452,6 +563,7 @@ private final class ExportPrintPanel: NSPrintPanel {
         parentWindow = nil
         printSheetWindow = nil
         printSheetController = nil
+        printOperation = nil
         isShowingFileSavePanel = false
         didRemoveTopPocket = false
         isObservingPrintSheet = false
@@ -462,12 +574,20 @@ private final class ExportPrintPanel: NSPrintPanel {
               window.isSheet,
               window.sheetParent === parentWindow,
               let controller = window.windowController,
-              NSStringFromClass(type(of: controller))
-                == "PMPrintPanelController"
+              privateObject(
+                named: "printButton",
+                on: controller
+              ) is NSButton
         else { return }
 
         printSheetWindow = window
         printSheetController = controller
+        if managesProgressPanelVisibility {
+            // The native print-operation progress panel is useful while
+            // WebKit prepares pagination, but duplicates the print sheet once
+            // that sheet is ready for input.
+            printOperation?.showsProgressPanel = false
+        }
 
         // PrintingUI posts its first update synchronously while the sheet is
         // still invisible and unordered, but after windowDidLoad has installed
@@ -534,7 +654,9 @@ private final class ExportPrintPanel: NSPrintPanel {
 
         saveButton.title = NSLocalizedString(
             "Save", comment: "Export button title")
-        if fileExportSource != nil, !selectedFormat.usesPrintPipeline {
+        if fileExportSource?.automaticOutputDirectory != nil
+            || (fileExportSource != nil
+                && !selectedFormat.usesPrintPipeline) {
             saveButton.target = self
             saveButton.action = #selector(saveExportedFile(_:))
         } else {
@@ -562,12 +684,29 @@ private final class ExportPrintPanel: NSPrintPanel {
     @objc private func saveExportedFile(_ sender: Any?) {
         let format = selectedFormat
         guard !isShowingFileSavePanel,
-              !format.usesPrintPipeline,
               let fileExportSource,
               let printSheetWindow
         else { return }
 
         isShowingFileSavePanel = true
+        if let output = fileExportSource.automaticOutput(
+            for: format,
+            fallbackName: parentWindow?.title
+        ) {
+            saveAutomatically(
+                output,
+                format: format,
+                source: fileExportSource,
+                printSheetWindow: printSheetWindow
+            )
+            return
+        }
+
+        guard !format.usesPrintPipeline else {
+            isShowingFileSavePanel = false
+            return
+        }
+
         let panel = NSSavePanel()
         panel.title = NSLocalizedString(
             "Export", comment: "Export panel title")
@@ -612,6 +751,7 @@ private final class ExportPrintPanel: NSPrintPanel {
                     NSAlert(error: error).beginSheetModal(for: printSheetWindow)
                     return
                 }
+                self.didExportFile = true
                 self.dismissAfterFileExport()
             case .png:
                 fileExportSource.writePNG(url) { [weak self] error in
@@ -619,10 +759,64 @@ private final class ExportPrintPanel: NSPrintPanel {
                         NSAlert(error: error).beginSheetModal(for: printSheetWindow)
                         return
                     }
+                    self?.didExportFile = true
                     self?.dismissAfterFileExport()
                 }
             case .pdf:
                 break
+            }
+        }
+    }
+
+    private func saveAutomatically(
+        _ output: MarkdownExportOutput,
+        format: DocumentExportFormat,
+        source: FileExportSource,
+        printSheetWindow: NSWindow
+    ) {
+        if managesProgressPanelVisibility {
+            // Bring AppKit's native progress UI back only for the final file
+            // generation and Finder handoff.
+            printOperation?.showsProgressPanel = true
+        }
+        switch format {
+        case .pdf:
+            guard let printOperation,
+                  let parent = printSheetWindow.sheetParent
+            else {
+                isShowingFileSavePanel = false
+                return
+            }
+            pendingPDFOutput = output
+            printOperation.printInfo.jobDisposition = .save
+            printOperation.printInfo.dictionary().setObject(
+                output.url,
+                forKey:
+                    NSPrintInfo.AttributeKey.jobSavingURL.rawValue as NSString
+            )
+            parent.endSheet(printSheetWindow, returnCode: .OK)
+        case .html:
+            do {
+                try source.writeHTML(to: output.url)
+            } catch {
+                isShowingFileSavePanel = false
+                NSAlert(error: error).beginSheetModal(for: printSheetWindow)
+                return
+            }
+            exportedOutput = output
+            didExportFile = true
+            dismissAfterFileExport()
+        case .png:
+            source.writePNG(output.url) { [weak self] error in
+                guard let self else { return }
+                if let error {
+                    self.isShowingFileSavePanel = false
+                    NSAlert(error: error).beginSheetModal(for: printSheetWindow)
+                    return
+                }
+                self.exportedOutput = output
+                self.didExportFile = true
+                self.dismissAfterFileExport()
             }
         }
     }
@@ -761,12 +955,14 @@ extension MarkdownWebView {
 
     private func configuredPrintOperation(
         from window: NSWindow,
-        panel: ExportPrintPanel? = nil
+        panel: ExportPrintPanel? = nil,
+        jobTitle: String? = nil
     ) -> NSPrintOperation {
         // The PDF save panel seeds its filename from the job title, so a window
         // titled "notes.md" would otherwise produce "notes.md.pdf".
+        let sourceTitle = jobTitle ?? window.title
         let operation = makePrintOperation(
-            jobTitle: (window.title as NSString).deletingPathExtension)
+            jobTitle: (sourceTitle as NSString).deletingPathExtension)
         if let panel {
             operation.printPanel = panel
         }
@@ -786,16 +982,32 @@ extension MarkdownWebView {
 
     private func runPrintOperation(
         _ operation: NSPrintOperation,
-        from window: NSWindow
+        from window: NSWindow,
+        completion: (@MainActor @Sendable (Bool) -> Void)? = nil
     ) {
         // Seed the stylesheet before the first thumbnail is generated.
         applyPrintPointSize(PrintSizeOptions.pointSize) {
-            operation.runModal(
-                for: window,
-                delegate: nil,
-                didRun: nil,
-                contextInfo: nil
-            )
+            if let completion {
+                let bridge = PrintOperationCompletionBridge(
+                    completion: completion)
+                bridge.retainUntilCallback()
+                operation.runModal(
+                    for: window,
+                    delegate: bridge,
+                    didRun: #selector(
+                        PrintOperationCompletionBridge
+                            .printOperationDidRun(
+                                _:success:contextInfo:)),
+                    contextInfo: nil
+                )
+            } else {
+                operation.runModal(
+                    for: window,
+                    delegate: nil,
+                    didRun: nil,
+                    contextInfo: nil
+                )
+            }
         }
     }
 
@@ -837,14 +1049,19 @@ extension MarkdownWebView {
         markdown: String,
         sourceURL: URL?,
         assetBaseURL: URL?,
-        from window: NSWindow
+        from window: NSWindow,
+        completion: (@MainActor @Sendable (Bool) -> Void)? = nil
     ) {
         presentExportPanel(
             markdown: markdown,
             sourceURL: sourceURL,
             assetBaseURL: assetBaseURL,
             initialFormat: nil,
-            from: window
+            automaticOutputDirectory: nil,
+            from: window,
+            completion: { outcome in
+                completion?(outcome.succeeded)
+            }
         )
     }
 
@@ -854,39 +1071,90 @@ extension MarkdownWebView {
         markdown: String,
         sourceURL: URL?,
         assetBaseURL: URL?,
-        from window: NSWindow
+        from window: NSWindow,
+        completion: (@MainActor @Sendable (Bool) -> Void)? = nil
     ) {
         presentExportPanel(
             markdown: markdown,
             sourceURL: sourceURL,
             assetBaseURL: assetBaseURL,
             initialFormat: .pdf,
-            from: window
+            automaticOutputDirectory: nil,
+            from: window,
+            completion: { outcome in
+                completion?(outcome.succeeded)
+            }
         )
     }
+
+#if EXPORT_ACTION_EXTENSION
+    /// Finder Action export. The result is staged in an item-replacement
+    /// directory and returned to Finder, which places it beside the input.
+    func exportDocumentForFinder(
+        markdown: String,
+        sourceURL: URL,
+        assetBaseURL: URL?,
+        outputDirectory: URL,
+        presetFormat: DocumentExportFormat?,
+        from window: NSWindow,
+        completion: @escaping @MainActor @Sendable (
+            MarkdownExportOutput?
+        ) -> Void
+    ) {
+        presentExportPanel(
+            markdown: markdown,
+            sourceURL: sourceURL,
+            assetBaseURL: assetBaseURL,
+            initialFormat: presetFormat,
+            automaticOutputDirectory: outputDirectory,
+            allowsFormatSelection: presetFormat == nil,
+            managesProgressPanelVisibility: true,
+            from: window,
+            completion: { outcome in
+                completion(outcome.output)
+            }
+        )
+    }
+#endif
 
     private func presentExportPanel(
         markdown: String,
         sourceURL: URL?,
         assetBaseURL: URL?,
         initialFormat: DocumentExportFormat?,
-        from window: NSWindow
+        automaticOutputDirectory: URL?,
+        allowsFormatSelection: Bool = true,
+        managesProgressPanelVisibility: Bool = false,
+        from window: NSWindow,
+        completion: @escaping @MainActor @Sendable (
+            ExportPanelOutcome
+        ) -> Void
     ) {
         let source = FileExportSource(
             markdown: markdown,
             sourceURL: sourceURL,
             assetBaseURL: assetBaseURL,
+            automaticOutputDirectory: automaticOutputDirectory,
             writePNG: { [weak self] url, completion in
                 self?.writePNG(to: url, completion: completion)
             }
         )
         let panel = ExportPrintPanel(
             fileExportSource: source,
-            initialFormat: initialFormat
+            initialFormat: initialFormat,
+            allowsFormatSelection: allowsFormatSelection,
+            managesProgressPanelVisibility: managesProgressPanelVisibility
         )
-        let operation = configuredPrintOperation(from: window, panel: panel)
+        panel.prepare(on: window)
+        let operation = configuredPrintOperation(
+            from: window,
+            panel: panel,
+            jobTitle: sourceURL?.lastPathComponent)
+        panel.attach(to: operation)
         prepareForPanelDrivenExport(operation)
-        runPrintOperation(operation, from: window)
+        runPrintOperation(operation, from: window) { didRun in
+            completion(panel.finishOperation(didRun: didRun))
+        }
     }
 
     /// Rasterises the document to a single tall PNG. `createPDF` captures the
@@ -966,7 +1234,7 @@ extension MarkdownWebView {
         guard let png = rep.representation(using: .png, properties: [:]) else {
             throw exportError("The image could not be encoded.")
         }
-        try png.write(to: url)
+        try png.write(to: url, options: .atomic)
     }
 
     private static func exportError(_ message: String) -> NSError {

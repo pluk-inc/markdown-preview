@@ -265,7 +265,9 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         ])
         DispatchQueue.main.async { [weak self] in
             self?.configureWebKitScrollView()
+            #if !EXPORT_ACTION_EXTENSION
             self?.warmupVendors()
+            #endif
         }
     }
 
@@ -518,7 +520,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         case "mermaidHover":
             guard let value = dict["value"] as? NSNumber else { return }
             isPointerOverMermaidFigure = value.boolValue
-        #if !QUICK_LOOK_EXTENSION
+        #if !QUICK_LOOK_EXTENSION && !EXPORT_ACTION_EXTENSION
         case "mermaidPopup":
             presentMermaidPopup(dict)
         #endif
@@ -614,7 +616,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         }
     }
 
-    #if !QUICK_LOOK_EXTENSION
+    #if !QUICK_LOOK_EXTENSION && !EXPORT_ACTION_EXTENSION
     private func presentMermaidPopup(_ payload: [String: Any]) {
         guard let svg = payload["svg"] as? String, !svg.isEmpty else { return }
         let natural = CGSize(

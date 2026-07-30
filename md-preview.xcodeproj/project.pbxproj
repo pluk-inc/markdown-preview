@@ -10,11 +10,67 @@
 		9A0209302FA10D4C00092060 /* Quartz.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A02092F2FA10D4C00092060 /* Quartz.framework */; };
 		9A02093C2FA10D4C00092060 /* quick-look.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9A02092D2FA10D4C00092060 /* quick-look.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9A0209C12FA1100200092060 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 9A0209C22FA1100200092060 /* Sparkle */; };
-		9A7B10012FB0000100010001 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 9A7B10032FB0000100010001 /* Sentry */; };
+		9A2040010000000000000001 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9A2040010000000000000004 /* Localizable.strings */; };
 		9A33940A2FA5AF500015D9A4 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 9A3394092FA5AF500015D9A4 /* Markdown */; };
 		9A33940C2FA5AF500015D9A4 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 9A33940B2FA5AF500015D9A4 /* Markdown */; };
-		9A2040010000000000000001 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9A2040010000000000000004 /* Localizable.strings */; };
-		9AC100010000000000000001 /* markdown-preview in Copy CLI Tool */ = {isa = PBXBuildFile; fileRef = 9AC100010000000000000002 /* markdown-preview */; };
+		9A7B10012FB0000100010001 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 9A7B10032FB0000100010001 /* Sentry */; };
+		9AA54E313019A3E6006EB486 /* ExportMarkdownAction.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9AA54E233019A3E6006EB486 /* ExportMarkdownAction.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		9AA54E383019A3E6006EB486 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 9AA54E373019A3E6006EB486 /* Markdown */; };
+		9AA54E393019A3E6006EB486 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9A2040010000000000000004 /* Localizable.strings */; };
+		9AA54E3A3019A3E6006EB486 /* mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000101 /* mermaid.min.js */; };
+		9AA54E3B3019A3E6006EB486 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000102 /* LICENSE */; };
+		9AA54E3C3019A3E6006EB486 /* katex.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000103 /* katex.min.js */; };
+		9AA54E3D3019A3E6006EB486 /* katex.min.css in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000104 /* katex.min.css */; };
+		9AA54E3E3019A3E6006EB486 /* copy-tex.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000105 /* copy-tex.min.js */; };
+		9AA54E3F3019A3E6006EB486 /* KaTeX-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000106 /* KaTeX-LICENSE.txt */; };
+		9AA54E403019A3E6006EB486 /* highlight.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000107 /* highlight.min.js */; };
+		9AA54E413019A3E6006EB486 /* highlight.min.css in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000108 /* highlight.min.css */; };
+		9AA54E423019A3E6006EB486 /* Highlight-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000109 /* Highlight-LICENSE.txt */; };
+		9AA54E433019A3E6006EB486 /* purify.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF00000000000000000010A /* purify.min.js */; };
+		9AA54E443019A3E6006EB486 /* DOMPurify-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF00000000000000000010B /* DOMPurify-LICENSE.txt */; };
+		9AE10001000000000000000A /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 9AA54E373019A3E6006EB486 /* Markdown */; };
+		9AE10001000000000000000D /* CreatePDFAction.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9AE100010000000000000002 /* CreatePDFAction.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		9AE100010000000000000010 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9A2040010000000000000004 /* Localizable.strings */; };
+		9AE100010000000000000011 /* mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000101 /* mermaid.min.js */; };
+		9AE100010000000000000012 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000102 /* LICENSE */; };
+		9AE100010000000000000013 /* katex.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000103 /* katex.min.js */; };
+		9AE100010000000000000014 /* katex.min.css in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000104 /* katex.min.css */; };
+		9AE100010000000000000015 /* copy-tex.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000105 /* copy-tex.min.js */; };
+		9AE100010000000000000016 /* KaTeX-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000106 /* KaTeX-LICENSE.txt */; };
+		9AE100010000000000000017 /* highlight.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000107 /* highlight.min.js */; };
+		9AE100010000000000000018 /* highlight.min.css in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000108 /* highlight.min.css */; };
+		9AE100010000000000000019 /* Highlight-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000109 /* Highlight-LICENSE.txt */; };
+		9AE10001000000000000001A /* purify.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF00000000000000000010A /* purify.min.js */; };
+		9AE10001000000000000001B /* DOMPurify-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF00000000000000000010B /* DOMPurify-LICENSE.txt */; };
+		9AE10002000000000000000A /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 9AA54E373019A3E6006EB486 /* Markdown */; };
+		9AE10002000000000000000D /* CreatePNGAction.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9AE100020000000000000002 /* CreatePNGAction.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		9AE100020000000000000010 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9A2040010000000000000004 /* Localizable.strings */; };
+		9AE100020000000000000011 /* mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000101 /* mermaid.min.js */; };
+		9AE100020000000000000012 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000102 /* LICENSE */; };
+		9AE100020000000000000013 /* katex.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000103 /* katex.min.js */; };
+		9AE100020000000000000014 /* katex.min.css in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000104 /* katex.min.css */; };
+		9AE100020000000000000015 /* copy-tex.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000105 /* copy-tex.min.js */; };
+		9AE100020000000000000016 /* KaTeX-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000106 /* KaTeX-LICENSE.txt */; };
+		9AE100020000000000000017 /* highlight.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000107 /* highlight.min.js */; };
+		9AE100020000000000000018 /* highlight.min.css in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000108 /* highlight.min.css */; };
+		9AE100020000000000000019 /* Highlight-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000109 /* Highlight-LICENSE.txt */; };
+		9AE10002000000000000001A /* purify.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF00000000000000000010A /* purify.min.js */; };
+		9AE10002000000000000001B /* DOMPurify-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF00000000000000000010B /* DOMPurify-LICENSE.txt */; };
+		9AE10003000000000000000A /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 9AA54E373019A3E6006EB486 /* Markdown */; };
+		9AE10003000000000000000D /* CreateHTMLAction.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9AE100030000000000000002 /* CreateHTMLAction.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		9AE100030000000000000010 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9A2040010000000000000004 /* Localizable.strings */; };
+		9AE100030000000000000011 /* mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000101 /* mermaid.min.js */; };
+		9AE100030000000000000012 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000102 /* LICENSE */; };
+		9AE100030000000000000013 /* katex.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000103 /* katex.min.js */; };
+		9AE100030000000000000014 /* katex.min.css in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000104 /* katex.min.css */; };
+		9AE100030000000000000015 /* copy-tex.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000105 /* copy-tex.min.js */; };
+		9AE100030000000000000016 /* KaTeX-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000106 /* KaTeX-LICENSE.txt */; };
+		9AE100030000000000000017 /* highlight.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000107 /* highlight.min.js */; };
+		9AE100030000000000000018 /* highlight.min.css in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000108 /* highlight.min.css */; };
+		9AE100030000000000000019 /* Highlight-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000109 /* Highlight-LICENSE.txt */; };
+		9AE10003000000000000001A /* purify.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF00000000000000000010A /* purify.min.js */; };
+		9AE10003000000000000001B /* DOMPurify-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF00000000000000000010B /* DOMPurify-LICENSE.txt */; };
+		9AC100010000000000000001 /* bin/markdown-preview in Copy CLI Tool */ = {isa = PBXBuildFile; fileRef = 9AC100010000000000000002 /* bin/markdown-preview */; };
 		9AF000000000000000000003 /* mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000101 /* mermaid.min.js */; };
 		9AF000000000000000000004 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000102 /* LICENSE */; };
 		9AF000000000000000000005 /* katex.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000103 /* katex.min.js */; };
@@ -36,20 +92,37 @@
 			remoteGlobalIDString = 9A02092C2FA10D4C00092060;
 			remoteInfo = "quick-look";
 		};
+		9AA54E2F3019A3E6006EB486 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9A0207B92FA0ED7C00092060 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9AA54E223019A3E6006EB486;
+			remoteInfo = ExportMarkdownAction;
+		};
+		9AE10001000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9A0207B92FA0ED7C00092060 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9AE100010000000000000001;
+			remoteInfo = CreatePDFAction;
+		};
+		9AE10002000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9A0207B92FA0ED7C00092060 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9AE100020000000000000001;
+			remoteInfo = CreatePNGAction;
+		};
+		9AE10003000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9A0207B92FA0ED7C00092060 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9AE100030000000000000001;
+			remoteInfo = CreateHTMLAction;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		9AC100010000000000000003 /* Copy CLI Tool */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = bin;
-			dstSubfolderSpec = 7;
-			files = (
-				9AC100010000000000000001 /* markdown-preview in Copy CLI Tool */,
-			);
-			name = "Copy CLI Tool";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		9A02093D2FA10D4C00092060 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -57,8 +130,23 @@
 			dstSubfolderSpec = 13;
 			files = (
 				9A02093C2FA10D4C00092060 /* quick-look.appex in Embed Foundation Extensions */,
+				9AA54E313019A3E6006EB486 /* ExportMarkdownAction.appex in Embed Foundation Extensions */,
+				9AE10001000000000000000D /* CreatePDFAction.appex in Embed Foundation Extensions */,
+				9AE10002000000000000000D /* CreatePNGAction.appex in Embed Foundation Extensions */,
+				9AE10003000000000000000D /* CreateHTMLAction.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9AC100010000000000000003 /* Copy CLI Tool */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = bin;
+			dstSubfolderSpec = 7;
+			files = (
+				9AC100010000000000000001 /* bin/markdown-preview in Copy CLI Tool */,
+			);
+			name = "Copy CLI Tool";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -68,7 +156,13 @@
 		9A02092D2FA10D4C00092060 /* quick-look.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "quick-look.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		9A02092F2FA10D4C00092060 /* Quartz.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Quartz.framework; path = System/Library/Frameworks/Quartz.framework; sourceTree = SDKROOT; };
 		9A0209A02FA1100100092060 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
-		9AC100010000000000000002 /* markdown-preview */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "bin/markdown-preview"; sourceTree = "<group>"; };
+		9A2040010000000000000002 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = "md-preview/en.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		9A2040010000000000000003 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "md-preview/zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		9AA54E233019A3E6006EB486 /* ExportMarkdownAction.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ExportMarkdownAction.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		9AE100010000000000000002 /* CreatePDFAction.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CreatePDFAction.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		9AE100020000000000000002 /* CreatePNGAction.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CreatePNGAction.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		9AE100030000000000000002 /* CreateHTMLAction.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CreateHTMLAction.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		9AC100010000000000000002 /* bin/markdown-preview */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "bin/markdown-preview"; sourceTree = "<group>"; };
 		9AF000000000000000000101 /* mermaid.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = mermaid.min.js; path = "md-preview/Vendor/Mermaid/mermaid.min.js"; sourceTree = "<group>"; };
 		9AF000000000000000000102 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE; path = "md-preview/Vendor/Mermaid/LICENSE"; sourceTree = "<group>"; };
 		9AF000000000000000000103 /* katex.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = katex.min.js; path = "md-preview/Vendor/KaTeX/katex.min.js"; sourceTree = "<group>"; };
@@ -80,8 +174,6 @@
 		9AF000000000000000000109 /* Highlight-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "Highlight-LICENSE.txt"; path = "md-preview/Vendor/Highlight/Highlight-LICENSE.txt"; sourceTree = "<group>"; };
 		9AF00000000000000000010A /* purify.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = purify.min.js; path = "md-preview/Vendor/DOMPurify/purify.min.js"; sourceTree = "<group>"; };
 		9AF00000000000000000010B /* DOMPurify-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "DOMPurify-LICENSE.txt"; path = "md-preview/Vendor/DOMPurify/DOMPurify-LICENSE.txt"; sourceTree = "<group>"; };
-		9A2040010000000000000002 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = "md-preview/en.lproj/Localizable.strings"; sourceTree = "<group>"; };
-		9A2040010000000000000003 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "md-preview/zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -106,6 +198,97 @@
 			);
 			target = 9A02092C2FA10D4C00092060 /* quick-look */;
 		};
+		9AA54E343019A3E6006EB486 /* Exceptions for "ExportMarkdownAction" folder in "ExportMarkdownAction" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 9AA54E223019A3E6006EB486 /* ExportMarkdownAction */;
+		};
+		9AA54E363019A3E6006EB486 /* Exceptions for "md-preview" folder in "ExportMarkdownAction" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				CodeFenceInfo.swift,
+				EscapingHTMLFormatter.swift,
+				MarkdownAssetResolution.swift,
+				MarkdownAssetSchemeHandler.swift,
+				MarkdownFrontmatter.swift,
+				MarkdownHTML.swift,
+				MarkdownWebView.swift,
+				"MarkdownWebView+PDFExport.swift",
+				URLSchemeTaskCallbackGate.swift,
+			);
+			target = 9AA54E223019A3E6006EB486 /* ExportMarkdownAction */;
+		};
+		9AE10001000000000000000E /* Exceptions for "ExportMarkdownAction" folder in "CreatePDFAction" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				ExportMarkdownAction.entitlements,
+				Info.plist,
+			);
+			target = 9AE100010000000000000001 /* CreatePDFAction */;
+		};
+		9AE10001000000000000000F /* Exceptions for "md-preview" folder in "CreatePDFAction" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				CodeFenceInfo.swift,
+				EscapingHTMLFormatter.swift,
+				MarkdownAssetResolution.swift,
+				MarkdownAssetSchemeHandler.swift,
+				MarkdownFrontmatter.swift,
+				MarkdownHTML.swift,
+				"MarkdownWebView+PDFExport.swift",
+				MarkdownWebView.swift,
+				URLSchemeTaskCallbackGate.swift,
+			);
+			target = 9AE100010000000000000001 /* CreatePDFAction */;
+		};
+		9AE10002000000000000000E /* Exceptions for "ExportMarkdownAction" folder in "CreatePNGAction" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				ExportMarkdownAction.entitlements,
+				Info.plist,
+			);
+			target = 9AE100020000000000000001 /* CreatePNGAction */;
+		};
+		9AE10002000000000000000F /* Exceptions for "md-preview" folder in "CreatePNGAction" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				CodeFenceInfo.swift,
+				EscapingHTMLFormatter.swift,
+				MarkdownAssetResolution.swift,
+				MarkdownAssetSchemeHandler.swift,
+				MarkdownFrontmatter.swift,
+				MarkdownHTML.swift,
+				"MarkdownWebView+PDFExport.swift",
+				MarkdownWebView.swift,
+				URLSchemeTaskCallbackGate.swift,
+			);
+			target = 9AE100020000000000000001 /* CreatePNGAction */;
+		};
+		9AE10003000000000000000E /* Exceptions for "ExportMarkdownAction" folder in "CreateHTMLAction" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				ExportMarkdownAction.entitlements,
+				Info.plist,
+			);
+			target = 9AE100030000000000000001 /* CreateHTMLAction */;
+		};
+		9AE10003000000000000000F /* Exceptions for "md-preview" folder in "CreateHTMLAction" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				CodeFenceInfo.swift,
+				EscapingHTMLFormatter.swift,
+				MarkdownAssetResolution.swift,
+				MarkdownAssetSchemeHandler.swift,
+				MarkdownFrontmatter.swift,
+				MarkdownHTML.swift,
+				"MarkdownWebView+PDFExport.swift",
+				MarkdownWebView.swift,
+				URLSchemeTaskCallbackGate.swift,
+			);
+			target = 9AE100030000000000000001 /* CreateHTMLAction */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -113,6 +296,10 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				9A0209432FA10E6600092060 /* Exceptions for "md-preview" folder in "quick-look" target */,
+				9AA54E363019A3E6006EB486 /* Exceptions for "md-preview" folder in "ExportMarkdownAction" target */,
+				9AE10001000000000000000F /* Exceptions for "md-preview" folder in "CreatePDFAction" target */,
+				9AE10002000000000000000F /* Exceptions for "md-preview" folder in "CreatePNGAction" target */,
+				9AE10003000000000000000F /* Exceptions for "md-preview" folder in "CreateHTMLAction" target */,
 			);
 			path = "md-preview";
 			sourceTree = "<group>";
@@ -123,6 +310,17 @@
 				9A0209402FA10D4C00092060 /* Exceptions for "quick-look" folder in "quick-look" target */,
 			);
 			path = "quick-look";
+			sourceTree = "<group>";
+		};
+		9AA54E243019A3E6006EB486 /* ExportMarkdownAction */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				9AA54E343019A3E6006EB486 /* Exceptions for "ExportMarkdownAction" folder in "ExportMarkdownAction" target */,
+				9AE10001000000000000000E /* Exceptions for "ExportMarkdownAction" folder in "CreatePDFAction" target */,
+				9AE10002000000000000000E /* Exceptions for "ExportMarkdownAction" folder in "CreatePNGAction" target */,
+				9AE10003000000000000000E /* Exceptions for "ExportMarkdownAction" folder in "CreateHTMLAction" target */,
+			);
+			path = ExportMarkdownAction;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -144,6 +342,38 @@
 			files = (
 				9A0209302FA10D4C00092060 /* Quartz.framework in Frameworks */,
 				9A33940C2FA5AF500015D9A4 /* Markdown in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9AA54E203019A3E6006EB486 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9AA54E383019A3E6006EB486 /* Markdown in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9AE100010000000000000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9AE10001000000000000000A /* Markdown in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9AE100020000000000000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9AE10002000000000000000A /* Markdown in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9AE100030000000000000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9AE10003000000000000000A /* Markdown in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -169,6 +399,7 @@
 				9AF00000000000000000010B /* DOMPurify-LICENSE.txt */,
 				9A0207C32FA0ED7C00092060 /* md-preview */,
 				9A0209312FA10D4C00092060 /* quick-look */,
+				9AA54E243019A3E6006EB486 /* ExportMarkdownAction */,
 				9A02092E2FA10D4C00092060 /* Frameworks */,
 				9A0207C22FA0ED7C00092060 /* Products */,
 			);
@@ -179,16 +410,12 @@
 			children = (
 				9A0207C12FA0ED7C00092060 /* Markdown Preview.app */,
 				9A02092D2FA10D4C00092060 /* quick-look.appex */,
+				9AA54E233019A3E6006EB486 /* ExportMarkdownAction.appex */,
+				9AE100010000000000000002 /* CreatePDFAction.appex */,
+				9AE100020000000000000002 /* CreatePNGAction.appex */,
+				9AE100030000000000000002 /* CreateHTMLAction.appex */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		9AC100010000000000000004 /* Resources */ = {
-			isa = PBXGroup;
-			children = (
-				9AC100010000000000000002 /* markdown-preview */,
-			);
-			path = Resources;
 			sourceTree = "<group>";
 		};
 		9A02092E2FA10D4C00092060 /* Frameworks */ = {
@@ -197,6 +424,14 @@
 				9A02092F2FA10D4C00092060 /* Quartz.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		9AC100010000000000000004 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				9AC100010000000000000002 /* bin/markdown-preview */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -217,6 +452,10 @@
 			);
 			dependencies = (
 				9A02093B2FA10D4C00092060 /* PBXTargetDependency */,
+				9AA54E303019A3E6006EB486 /* PBXTargetDependency */,
+				9AE10001000000000000000C /* PBXTargetDependency */,
+				9AE10002000000000000000C /* PBXTargetDependency */,
+				9AE10003000000000000000C /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				9A0207C32FA0ED7C00092060 /* md-preview */,
@@ -254,30 +493,99 @@
 			productReference = 9A02092D2FA10D4C00092060 /* quick-look.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-/* End PBXNativeTarget section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		9A7B10042FB0000100010001 /* Upload dSYMs to Sentry */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
+		9AA54E223019A3E6006EB486 /* ExportMarkdownAction */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9AA54E353019A3E6006EB486 /* Build configuration list for PBXNativeTarget "ExportMarkdownAction" */;
+			buildPhases = (
+				9AA54E1F3019A3E6006EB486 /* Sources */,
+				9AA54E203019A3E6006EB486 /* Frameworks */,
+				9AA54E213019A3E6006EB486 /* Resources */,
 			);
-			inputFileListPaths = (
+			buildRules = (
 			);
-			inputPaths = (
+			dependencies = (
 			);
-			name = "Upload dSYMs to Sentry";
-			outputFileListPaths = (
+			fileSystemSynchronizedGroups = (
+				9AA54E243019A3E6006EB486 /* ExportMarkdownAction */,
 			);
-			outputPaths = (
+			name = ExportMarkdownAction;
+			packageProductDependencies = (
+				9AA54E373019A3E6006EB486 /* Markdown */,
 			);
-			runOnlyForDeploymentPostprocessing = 1;
-			shellPath = /bin/sh;
-			shellScript = "set -eu\n\nSENTRY_CLI=\"$(command -v sentry-cli || true)\"\nif [ -z \"$SENTRY_CLI\" ] && [ -x /opt/homebrew/bin/sentry-cli ]; then\n    SENTRY_CLI=/opt/homebrew/bin/sentry-cli\nfi\nif [ -z \"$SENTRY_CLI\" ]; then\n    echo \"error: sentry-cli is required to upload release dSYMs\" >&2\n    exit 1\nfi\n\n\"$SENTRY_CLI\" debug-files upload \\\n    --org pluk-inc \\\n    --project markdown-preview \\\n    --type dsym \\\n    \"$DWARF_DSYM_FOLDER_PATH/$DWARF_DSYM_FILE_NAME\"\n";
-			showEnvVarsInLog = 0;
+			productName = ExportMarkdownAction;
+			productReference = 9AA54E233019A3E6006EB486 /* ExportMarkdownAction.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
-/* End PBXShellScriptBuildPhase section */
+		9AE100010000000000000001 /* CreatePDFAction */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9AE100010000000000000003 /* Build configuration list for PBXNativeTarget "CreatePDFAction" */;
+			buildPhases = (
+				9AE100010000000000000006 /* Sources */,
+				9AE100010000000000000007 /* Frameworks */,
+				9AE100010000000000000008 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				9AA54E243019A3E6006EB486 /* ExportMarkdownAction */,
+			);
+			name = CreatePDFAction;
+			packageProductDependencies = (
+				9AA54E373019A3E6006EB486 /* Markdown */,
+			);
+			productName = CreatePDFAction;
+			productReference = 9AE100010000000000000002 /* CreatePDFAction.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		9AE100020000000000000001 /* CreatePNGAction */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9AE100020000000000000003 /* Build configuration list for PBXNativeTarget "CreatePNGAction" */;
+			buildPhases = (
+				9AE100020000000000000006 /* Sources */,
+				9AE100020000000000000007 /* Frameworks */,
+				9AE100020000000000000008 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				9AA54E243019A3E6006EB486 /* ExportMarkdownAction */,
+			);
+			name = CreatePNGAction;
+			packageProductDependencies = (
+				9AA54E373019A3E6006EB486 /* Markdown */,
+			);
+			productName = CreatePNGAction;
+			productReference = 9AE100020000000000000002 /* CreatePNGAction.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		9AE100030000000000000001 /* CreateHTMLAction */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9AE100030000000000000003 /* Build configuration list for PBXNativeTarget "CreateHTMLAction" */;
+			buildPhases = (
+				9AE100030000000000000006 /* Sources */,
+				9AE100030000000000000007 /* Frameworks */,
+				9AE100030000000000000008 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				9AA54E243019A3E6006EB486 /* ExportMarkdownAction */,
+			);
+			name = CreateHTMLAction;
+			packageProductDependencies = (
+				9AA54E373019A3E6006EB486 /* Markdown */,
+			);
+			productName = CreateHTMLAction;
+			productReference = 9AE100030000000000000002 /* CreateHTMLAction.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
 		9A0207B92FA0ED7C00092060 /* Project object */ = {
@@ -292,6 +600,18 @@
 					};
 					9A02092C2FA10D4C00092060 = {
 						CreatedOnToolsVersion = 26.4.1;
+					};
+					9AA54E223019A3E6006EB486 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					9AE100010000000000000001 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					9AE100020000000000000001 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					9AE100030000000000000001 = {
+						CreatedOnToolsVersion = 26.6;
 					};
 				};
 			};
@@ -317,6 +637,10 @@
 			targets = (
 				9A0207C02FA0ED7C00092060 /* md-preview */,
 				9A02092C2FA10D4C00092060 /* quick-look */,
+				9AA54E223019A3E6006EB486 /* ExportMarkdownAction */,
+				9AE100010000000000000001 /* CreatePDFAction */,
+				9AE100020000000000000001 /* CreatePNGAction */,
+				9AE100030000000000000001 /* CreateHTMLAction */,
 			);
 		};
 /* End PBXProject section */
@@ -348,7 +672,106 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		9AA54E213019A3E6006EB486 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9AA54E393019A3E6006EB486 /* Localizable.strings in Resources */,
+				9AA54E3A3019A3E6006EB486 /* mermaid.min.js in Resources */,
+				9AA54E3B3019A3E6006EB486 /* LICENSE in Resources */,
+				9AA54E3C3019A3E6006EB486 /* katex.min.js in Resources */,
+				9AA54E3D3019A3E6006EB486 /* katex.min.css in Resources */,
+				9AA54E3E3019A3E6006EB486 /* copy-tex.min.js in Resources */,
+				9AA54E3F3019A3E6006EB486 /* KaTeX-LICENSE.txt in Resources */,
+				9AA54E403019A3E6006EB486 /* highlight.min.js in Resources */,
+				9AA54E413019A3E6006EB486 /* highlight.min.css in Resources */,
+				9AA54E423019A3E6006EB486 /* Highlight-LICENSE.txt in Resources */,
+				9AA54E433019A3E6006EB486 /* purify.min.js in Resources */,
+				9AA54E443019A3E6006EB486 /* DOMPurify-LICENSE.txt in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9AE100010000000000000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9AE100010000000000000010 /* Localizable.strings in Resources */,
+				9AE100010000000000000011 /* mermaid.min.js in Resources */,
+				9AE100010000000000000012 /* LICENSE in Resources */,
+				9AE100010000000000000013 /* katex.min.js in Resources */,
+				9AE100010000000000000014 /* katex.min.css in Resources */,
+				9AE100010000000000000015 /* copy-tex.min.js in Resources */,
+				9AE100010000000000000016 /* KaTeX-LICENSE.txt in Resources */,
+				9AE100010000000000000017 /* highlight.min.js in Resources */,
+				9AE100010000000000000018 /* highlight.min.css in Resources */,
+				9AE100010000000000000019 /* Highlight-LICENSE.txt in Resources */,
+				9AE10001000000000000001A /* purify.min.js in Resources */,
+				9AE10001000000000000001B /* DOMPurify-LICENSE.txt in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9AE100020000000000000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9AE100020000000000000010 /* Localizable.strings in Resources */,
+				9AE100020000000000000011 /* mermaid.min.js in Resources */,
+				9AE100020000000000000012 /* LICENSE in Resources */,
+				9AE100020000000000000013 /* katex.min.js in Resources */,
+				9AE100020000000000000014 /* katex.min.css in Resources */,
+				9AE100020000000000000015 /* copy-tex.min.js in Resources */,
+				9AE100020000000000000016 /* KaTeX-LICENSE.txt in Resources */,
+				9AE100020000000000000017 /* highlight.min.js in Resources */,
+				9AE100020000000000000018 /* highlight.min.css in Resources */,
+				9AE100020000000000000019 /* Highlight-LICENSE.txt in Resources */,
+				9AE10002000000000000001A /* purify.min.js in Resources */,
+				9AE10002000000000000001B /* DOMPurify-LICENSE.txt in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9AE100030000000000000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9AE100030000000000000010 /* Localizable.strings in Resources */,
+				9AE100030000000000000011 /* mermaid.min.js in Resources */,
+				9AE100030000000000000012 /* LICENSE in Resources */,
+				9AE100030000000000000013 /* katex.min.js in Resources */,
+				9AE100030000000000000014 /* katex.min.css in Resources */,
+				9AE100030000000000000015 /* copy-tex.min.js in Resources */,
+				9AE100030000000000000016 /* KaTeX-LICENSE.txt in Resources */,
+				9AE100030000000000000017 /* highlight.min.js in Resources */,
+				9AE100030000000000000018 /* highlight.min.css in Resources */,
+				9AE100030000000000000019 /* Highlight-LICENSE.txt in Resources */,
+				9AE10003000000000000001A /* purify.min.js in Resources */,
+				9AE10003000000000000001B /* DOMPurify-LICENSE.txt in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		9A7B10042FB0000100010001 /* Upload dSYMs to Sentry */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Upload dSYMs to Sentry";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+			shellPath = /bin/sh;
+			shellScript = "set -eu\n\nSENTRY_CLI=\"$(command -v sentry-cli || true)\"\nif [ -z \"$SENTRY_CLI\" ] && [ -x /opt/homebrew/bin/sentry-cli ]; then\n    SENTRY_CLI=/opt/homebrew/bin/sentry-cli\nfi\nif [ -z \"$SENTRY_CLI\" ]; then\n    echo \"error: sentry-cli is required to upload release dSYMs\" >&2\n    exit 1\nfi\n\n\"$SENTRY_CLI\" debug-files upload \\\n    --org pluk-inc \\\n    --project markdown-preview \\\n    --type dsym \\\n    \"$DWARF_DSYM_FOLDER_PATH/$DWARF_DSYM_FILE_NAME\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		9A0207BD2FA0ED7C00092060 /* Sources */ = {
@@ -365,7 +788,63 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		9AA54E1F3019A3E6006EB486 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9AE100010000000000000006 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9AE100020000000000000006 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9AE100030000000000000006 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		9A02093B2FA10D4C00092060 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9A02092C2FA10D4C00092060 /* quick-look */;
+			targetProxy = 9A02093A2FA10D4C00092060 /* PBXContainerItemProxy */;
+		};
+		9AA54E303019A3E6006EB486 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9AA54E223019A3E6006EB486 /* ExportMarkdownAction */;
+			targetProxy = 9AA54E2F3019A3E6006EB486 /* PBXContainerItemProxy */;
+		};
+		9AE10001000000000000000C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9AE100010000000000000001 /* CreatePDFAction */;
+			targetProxy = 9AE10001000000000000000B /* PBXContainerItemProxy */;
+		};
+		9AE10002000000000000000C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9AE100020000000000000001 /* CreatePNGAction */;
+			targetProxy = 9AE10002000000000000000B /* PBXContainerItemProxy */;
+		};
+		9AE10003000000000000000C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9AE100030000000000000001 /* CreateHTMLAction */;
+			targetProxy = 9AE10003000000000000000B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		9A2040010000000000000004 /* Localizable.strings */ = {
@@ -378,14 +857,6 @@
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */
-
-/* Begin PBXTargetDependency section */
-		9A02093B2FA10D4C00092060 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 9A02092C2FA10D4C00092060 /* quick-look */;
-			targetProxy = 9A02093A2FA10D4C00092060 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		9A0207CE2FA0ED7D00092060 /* Debug */ = {
@@ -615,8 +1086,8 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "QUICK_LOOK_EXTENSION $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
@@ -646,8 +1117,296 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "QUICK_LOOK_EXTENSION $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		9AA54E323019A3E6006EB486 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ExportMarkdownAction/ExportMarkdownAction.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				FINDER_ACTION_ICON_NAME = ExportMarkdownActionIcon;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ExportMarkdownAction/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Export Markdown";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-preview.dev.ExportMarkdownAction";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "EXPORT_ACTION_EXTENSION $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		9AA54E333019A3E6006EB486 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ExportMarkdownAction/ExportMarkdownAction.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				FINDER_ACTION_ICON_NAME = ExportMarkdownActionIcon;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ExportMarkdownAction/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Export Markdown";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-preview.ExportMarkdownAction";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "EXPORT_ACTION_EXTENSION $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		9AE100010000000000000004 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ExportMarkdownAction/ExportMarkdownAction.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				FINDER_ACTION_ICON_NAME = CreatePDFActionIcon;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ExportMarkdownAction/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Create PDF";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-preview.dev.CreatePDFAction";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "EXPORT_ACTION_EXTENSION FINDER_ACTION_PDF $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		9AE100010000000000000005 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ExportMarkdownAction/ExportMarkdownAction.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				FINDER_ACTION_ICON_NAME = CreatePDFActionIcon;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ExportMarkdownAction/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Create PDF";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-preview.CreatePDFAction";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "EXPORT_ACTION_EXTENSION FINDER_ACTION_PDF $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		9AE100020000000000000004 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ExportMarkdownAction/ExportMarkdownAction.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				FINDER_ACTION_ICON_NAME = CreatePNGActionIcon;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ExportMarkdownAction/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Create PNG";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-preview.dev.CreatePNGAction";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "EXPORT_ACTION_EXTENSION FINDER_ACTION_PNG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		9AE100020000000000000005 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ExportMarkdownAction/ExportMarkdownAction.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				FINDER_ACTION_ICON_NAME = CreatePNGActionIcon;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ExportMarkdownAction/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Create PNG";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-preview.CreatePNGAction";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "EXPORT_ACTION_EXTENSION FINDER_ACTION_PNG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		9AE100030000000000000004 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ExportMarkdownAction/ExportMarkdownAction.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				FINDER_ACTION_ICON_NAME = CreateHTMLActionIcon;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ExportMarkdownAction/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Create HTML";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-preview.dev.CreateHTMLAction";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "EXPORT_ACTION_EXTENSION FINDER_ACTION_HTML $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		9AE100030000000000000005 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = ExportMarkdownAction/ExportMarkdownAction.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				FINDER_ACTION_ICON_NAME = CreateHTMLActionIcon;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ExportMarkdownAction/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Create HTML";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-preview.CreateHTMLAction";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "EXPORT_ACTION_EXTENSION FINDER_ACTION_HTML $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
@@ -684,17 +1443,45 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		9AA54E353019A3E6006EB486 /* Build configuration list for PBXNativeTarget "ExportMarkdownAction" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9AA54E323019A3E6006EB486 /* Debug */,
+				9AA54E333019A3E6006EB486 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		9AE100010000000000000003 /* Build configuration list for PBXNativeTarget "CreatePDFAction" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9AE100010000000000000004 /* Debug */,
+				9AE100010000000000000005 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		9AE100020000000000000003 /* Build configuration list for PBXNativeTarget "CreatePNGAction" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9AE100020000000000000004 /* Debug */,
+				9AE100020000000000000005 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		9AE100030000000000000003 /* Build configuration list for PBXNativeTarget "CreateHTMLAction" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9AE100030000000000000004 /* Debug */,
+				9AE100030000000000000005 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		9A7B10022FB0000100010001 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/getsentry/sentry-cocoa";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 8.0.0;
-			};
-		};
 		9A0209C32FA1100200092060 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sparkle-project/Sparkle";
@@ -711,14 +1498,17 @@
 				minimumVersion = 0.7.3;
 			};
 		};
+		9A7B10022FB0000100010001 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		9A7B10032FB0000100010001 /* Sentry */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 9A7B10022FB0000100010001 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
-			productName = Sentry;
-		};
 		9A0209C22FA1100200092060 /* Sparkle */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 9A0209C32FA1100200092060 /* XCRemoteSwiftPackageReference "Sparkle" */;
@@ -730,6 +1520,16 @@
 			productName = Markdown;
 		};
 		9A33940B2FA5AF500015D9A4 /* Markdown */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9A3394082FA5AF500015D9A4 /* XCRemoteSwiftPackageReference "swift-markdown" */;
+			productName = Markdown;
+		};
+		9A7B10032FB0000100010001 /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9A7B10022FB0000100010001 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
+		};
+		9AA54E373019A3E6006EB486 /* Markdown */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 9A3394082FA5AF500015D9A4 /* XCRemoteSwiftPackageReference "swift-markdown" */;
 			productName = Markdown;
