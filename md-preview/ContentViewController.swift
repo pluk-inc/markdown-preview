@@ -75,7 +75,7 @@ final class ContentViewController: NSViewController {
     var pendingAnchorRestored: (() -> Void)?
 
     override func loadView() {
-        let container = NSView()
+        let container = DocumentBackgroundView(frame: .zero)
         container.translatesAutoresizingMaskIntoConstraints = false
         view = container
 
@@ -525,5 +525,38 @@ final class ContentViewController: NSViewController {
             if offset <= activationLine { active = index } else { break }
         }
         return active
+    }
+}
+
+/// The light-mode page white. The preview web view is non-opaque and the
+/// rendered page paints no background of its own, so the whole reading surface
+/// composites onto whatever sits behind it — and that used to be the window,
+/// whose `windowBackgroundColor` is grey on macOS 15 and white on 26, leaving
+/// code blocks barely distinguishable from the page on the older systems
+/// (#251). Painting it here covers the page and, in centered mode, the gutter
+/// the web view's leading edge leaves beside the column.
+///
+/// Dark mode paints nothing and keeps the window background, which already
+/// reads as a page.
+private final class DocumentBackgroundView: NSView {
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        wantsLayer = true
+    }
+
+    /// Layer-backed so the fill costs a compositor rect rather than a
+    /// full-window CPU redraw on every resize frame. AppKit re-invokes
+    /// `updateLayer` when the effective appearance changes.
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        layer?.backgroundColor = isDark ? nil : NSColor.white.cgColor
     }
 }
