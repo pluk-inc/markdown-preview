@@ -13,6 +13,7 @@ import UniformTypeIdentifiers
 import WebKit
 
 private let printSizeStyleElementID = "md-print-size"
+private let previewPrintStyleElementID = "md-preview-print-style"
 
 private enum DocumentExportFormat: String, CaseIterable {
     case pdf
@@ -280,9 +281,11 @@ private final class PrintSizeAccessoryController: NSViewController, NSPrintPanel
 
     private var pointSize = PrintSizeOptions.pointSize
     private var exportFormat: DocumentExportFormat?
+    private let showsPrintSize: Bool
 
     init(exportFormat: DocumentExportFormat? = nil) {
         self.exportFormat = exportFormat
+        showsPrintSize = exportFormat == nil
         super.init(nibName: nil, bundle: nil)
         title = NSLocalizedString("Markdown Preview",
                                   comment: "Print panel accessory pane title")
@@ -291,18 +294,21 @@ private final class PrintSizeAccessoryController: NSViewController, NSPrintPanel
     required init?(coder: NSCoder) { fatalError() }
 
     override func loadView() {
-        let sizeRow = PrintSizeRowView(width: 620)
-        sizeRow.onChange = { [weak self] size in
-            guard let self else { return }
-            self.willChangeValue(forKey: "localizedSummaryItems")
-            self.pointSize = size
-            self.didChangeValue(forKey: "localizedSummaryItems")
-            self.applySize?(size) { [weak self] in
-                self?.previewRevision += 1
+        var rows: [NSView] = []
+        if showsPrintSize {
+            let sizeRow = PrintSizeRowView(width: 620)
+            sizeRow.onChange = { [weak self] size in
+                guard let self else { return }
+                self.willChangeValue(forKey: "localizedSummaryItems")
+                self.pointSize = size
+                self.didChangeValue(forKey: "localizedSummaryItems")
+                self.applySize?(size) { [weak self] in
+                    self?.previewRevision += 1
+                }
             }
+            rows.append(sizeRow)
         }
 
-        var rows: [NSView] = []
         if let exportFormat {
             let formatRow = ExportFormatRowView(
                 width: 620,
@@ -315,9 +321,8 @@ private final class PrintSizeAccessoryController: NSViewController, NSPrintPanel
                 self.didChangeValue(forKey: "localizedSummaryItems")
                 self.exportFormatDidChange?(format)
             }
-            rows.append(formatRow)
+            rows.insert(formatRow, at: 0)
         }
-        rows.append(sizeRow)
 
         let stack = NSStackView(views: rows)
         stack.orientation = .vertical
@@ -349,11 +354,14 @@ private final class PrintSizeAccessoryController: NSViewController, NSPrintPanel
     // MARK: NSPrintPanelAccessorizing
 
     func localizedSummaryItems() -> [[NSPrintPanel.AccessorySummaryKey: String]] {
-        var items: [[NSPrintPanel.AccessorySummaryKey: String]] = [[
-            .itemName: NSLocalizedString("Font Size",
-                                         comment: "Print panel summary item name"),
-            .itemDescription: PrintSizeOptions.localizedLabel(for: pointSize),
-        ]]
+        var items: [[NSPrintPanel.AccessorySummaryKey: String]] = []
+        if showsPrintSize {
+            items.append([
+                .itemName: NSLocalizedString(
+                    "Font Size", comment: "Print panel summary item name"),
+                .itemDescription: PrintSizeOptions.localizedLabel(for: pointSize),
+            ])
+        }
         if let exportFormat {
             items.insert([
                 .itemName: NSLocalizedString(
@@ -786,10 +794,10 @@ extension MarkdownWebView {
 
     private func runPrintOperation(
         _ operation: NSPrintOperation,
-        from window: NSWindow
+        from window: NSWindow,
+        matchesPreview: Bool = false
     ) {
-        // Seed the stylesheet before the first thumbnail is generated.
-        applyPrintPointSize(PrintSizeOptions.pointSize) {
+        let run = {
             operation.runModal(
                 for: window,
                 delegate: nil,
@@ -797,6 +805,79 @@ extension MarkdownWebView {
                 contextInfo: nil
             )
         }
+
+        // Export keeps the live read-only stylesheet intact. Regular Print
+        // retains its paper-oriented size and pagination controls.
+        if matchesPreview {
+            applyPreviewPrintMode(completion: run)
+        } else {
+            applyPaperPrintMode {
+                self.applyPrintPointSize(
+                    PrintSizeOptions.pointSize,
+                    completion: run
+                )
+            }
+        }
+    }
+
+    /// Marks the live page so its paper-only CSS does not replace the
+    /// read-only typography, width, spacing, wrapping, or active palette.
+    /// WebKit still paginates it, but the pixels sent into that pagination are
+    /// the same ones the preview renderer owns.
+    private func applyPreviewPrintMode(completion: (() -> Void)? = nil) {
+        let script = """
+        (() => {
+            document.documentElement.classList.add(
+                '\(MarkdownHTML.previewPrintClass)'
+            );
+            document.getElementById('\(printSizeStyleElementID)')?.remove();
+            let style = document.getElementById('\(previewPrintStyleElementID)');
+            if (!style) {
+                style = document.createElement('style');
+                style.id = '\(previewPrintStyleElementID)';
+                document.head.appendChild(style);
+            }
+            style.textContent = \(Self.javaScriptStringLiteral(
+                MarkdownHTML.previewPrintOverrideCSS
+            ));
+            return true;
+        })()
+        """
+        evaluatePrintSetupScript(script, label: "preview print mode", completion: completion)
+    }
+
+    private func applyPaperPrintMode(completion: (() -> Void)? = nil) {
+        let script = """
+        (() => {
+            document.documentElement.classList.remove(
+                '\(MarkdownHTML.previewPrintClass)'
+            );
+            document.getElementById('\(previewPrintStyleElementID)')?.remove();
+            return true;
+        })()
+        """
+        evaluatePrintSetupScript(script, label: "paper print mode", completion: completion)
+    }
+
+    private func evaluatePrintSetupScript(
+        _ script: String,
+        label: String,
+        completion: (() -> Void)?
+    ) {
+        webView.evaluateJavaScript(script) { _, error in
+            if let error {
+                Logger.perf.debug(
+                    "\(label, privacy: .public) setup failed: \(error.localizedDescription, privacy: .public)"
+                )
+            }
+            completion?()
+        }
+    }
+
+    private nonisolated static func javaScriptStringLiteral(_ value: String) -> String {
+        let data = try? JSONSerialization.data(withJSONObject: [value])
+        let array = data.flatMap { String(data: $0, encoding: .utf8) } ?? "[\"\"]"
+        return String(array.dropFirst().dropLast())
     }
 
     /// Sets the printed body size by injecting a print-only rule into the
@@ -886,7 +967,7 @@ extension MarkdownWebView {
         )
         let operation = configuredPrintOperation(from: window, panel: panel)
         prepareForPanelDrivenExport(operation)
-        runPrintOperation(operation, from: window)
+        runPrintOperation(operation, from: window, matchesPreview: true)
     }
 
     /// Rasterises the document to a single tall PNG. `createPDF` captures the

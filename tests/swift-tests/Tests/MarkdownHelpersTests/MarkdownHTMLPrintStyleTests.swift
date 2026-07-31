@@ -1,10 +1,9 @@
 import XCTest
 @testable import MarkdownHelpers
 
-/// The print stylesheet ships inside the rendered page, and the app overrides
-/// only the body size at print time. These guard the parts the export path
-/// depends on: that a print block exists, that it is sized in `pt` (which
-/// reaches paper 1:1), and that the paper palette can't inherit dark mode.
+/// Regular Print keeps paper-oriented rules, while PDF export adds a class
+/// that leaves the read-only renderer in charge. These tests guard both sides
+/// of that contract.
 final class MarkdownHTMLPrintStyleTests: XCTestCase {
     private func printBlock() throws -> String {
         let html = MarkdownHTML.render(markdown: "text", vendorLoading: .lazy).html
@@ -30,11 +29,17 @@ final class MarkdownHTMLPrintStyleTests: XCTestCase {
             block.contains("font-size: \(MarkdownHTML.defaultPrintPointSize)pt"),
             "print body must be sized in pt so CSS maps 1:1 to paper points"
         )
+        XCTAssertTrue(block.contains(
+            ":root:not(.\(MarkdownHTML.previewPrintClass)) body"
+        ))
     }
 
     func testPrintForcesTheLightPaletteRegardlessOfSystemAppearance() throws {
         let block = try printBlock()
         XCTAssertTrue(block.contains("color-scheme: light"))
+        XCTAssertTrue(block.contains(
+            ":root:not(.\(MarkdownHTML.previewPrintClass))"
+        ))
         XCTAssertTrue(block.contains("--text: #1d1d1f"),
                       "dark mode must not carry into paper")
         XCTAssertTrue(block.contains("background: #fff"))
@@ -61,6 +66,27 @@ final class MarkdownHTMLPrintStyleTests: XCTestCase {
             html.range(of: "font-size: \(MarkdownHTML.bodyFontSize)px"))
         let printBlock = try XCTUnwrap(html.range(of: "@media print {"))
         XCTAssertLessThan(screenRule.lowerBound, printBlock.lowerBound)
+    }
+
+    func testPreviewFidelityExportUsesTheReadOnlyPageGeometry() {
+        let css = MarkdownHTML.previewPrintOverrideCSS
+        XCTAssertTrue(css.contains(
+            "margin: \(Int(MarkdownHTML.pagePaddingTop))px "
+                + "\(Int(MarkdownHTML.pagePaddingHorizontal))px "
+                + "\(Int(MarkdownHTML.pagePaddingBottom))px;"
+        ))
+        XCTAssertTrue(css.contains("html.\(MarkdownHTML.previewPrintClass)"))
+        XCTAssertTrue(css.contains("background: Canvas"))
+        XCTAssertTrue(css.contains(
+            "width: \(MarkdownHTML.contentColumnWidth)px"
+        ))
+        XCTAssertTrue(css.contains("box-sizing: border-box"))
+        XCTAssertTrue(css.contains("padding: 0"))
+
+        XCTAssertFalse(css.contains("font-size"))
+        XCTAssertFalse(css.contains("max-width"))
+        XCTAssertFalse(css.contains("overflow-wrap"))
+        XCTAssertFalse(css.contains("color-scheme"))
     }
 
 }

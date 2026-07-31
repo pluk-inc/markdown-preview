@@ -74,6 +74,33 @@ nonisolated enum MarkdownHTML {
     static let pagePaddingBottom: CGFloat = 48
     static let sourceLineHeight = bodyFontSize * bodyLineHeight
 
+    /// Exported PDFs opt out of the paper-specific restyling below so the
+    /// print pipeline paginates the same read-only page shown on screen.
+    static let previewPrintClass = "md-preview-print-fidelity"
+
+    /// The only export-specific print adjustments are mechanical: move the
+    /// read-only page padding into a real page margin so every PDF page gets
+    /// the same gutters, retain the same content measure, and paint the
+    /// otherwise-transparent WebKit page with the active Canvas color. The
+    /// print operation then fits that complete column to the selected paper
+    /// instead of reflowing it at the narrower print viewport.
+    static let previewPrintOverrideCSS = """
+    @media print {
+        @page {
+            margin: \(Int(pagePaddingTop))px \(Int(pagePaddingHorizontal))px \(Int(pagePaddingBottom))px;
+        }
+        html.\(previewPrintClass),
+        html.\(previewPrintClass) body {
+            background: Canvas;
+        }
+        html.\(previewPrintClass) body {
+            box-sizing: border-box;
+            width: \(contentColumnWidth)px;
+            padding: 0;
+        }
+    }
+    """
+
     /// Body size, in points, used by the print stylesheet when the app hasn't
     /// injected an explicit choice. CSS `pt` reaches paper 1:1, so this is the
     /// literal printed size. The on-screen 15px body prints at 15 × 0.75 =
@@ -3539,7 +3566,7 @@ nonisolated enum MarkdownHTML {
     [dir="rtl"] { text-align: right; }
 
     /* ---------------------------------------------------------------------
-       Print / PDF export.
+       Paper-optimized printing.
 
        WebKit lays print out at a viewport of the printable width in CSS px
        (96px per inch), and 1 CSS px maps to exactly 0.75pt on paper. Sizing
@@ -3547,12 +3574,13 @@ nonisolated enum MarkdownHTML {
        no scaling factor to compensate for. `md-print-size` (injected by the
        app at print time) overrides the default below.
 
-       The on-screen palette is dark-mode aware; paper is not, so the light
-       values are restored unconditionally — otherwise a user printing in
-       dark mode gets white text on a black background.
+       The on-screen palette is dark-mode aware; paper is not, so regular
+       printing restores the light values unconditionally. PDF export adds
+       `previewPrintClass` before entering WebKit's print pipeline, which
+       excludes these paper-only changes and preserves the read-only page.
        --------------------------------------------------------------------- */
     @media print {
-        :root {
+        :root:not(.\(previewPrintClass)) {
             color-scheme: light;
             --text: #1d1d1f;
             --secondary: #6e6e73;
@@ -3563,22 +3591,28 @@ nonisolated enum MarkdownHTML {
             --code-bg: #f5f5f7;
             --grid: #d2d2d7;
         }
-        html, body {
+        html,
+        body {
             overflow: visible;
+        }
+        :root:not(.\(previewPrintClass)),
+        :root:not(.\(previewPrintClass)) body {
             background: #fff;
         }
         @page {
             margin: \(printPageMarginTop) \(printPageMarginSide) \(printPageMarginBottom);
         }
         body {
-            font-size: \(defaultPrintPointSize)pt;
-            padding: 0;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
+        :root:not(.\(previewPrintClass)) body {
+            font-size: \(defaultPrintPointSize)pt;
+            padding: 0;
+        }
         /* NSPrintInfo owns the page margins, and the print viewport is
            narrower than the on-screen measure, so the column just fills it. */
-        article.markdown-body {
+        :root:not(.\(previewPrintClass)) article.markdown-body {
             max-width: none;
             margin: 0;
         }
@@ -3593,21 +3627,36 @@ nonisolated enum MarkdownHTML {
         }
 
         /* Splitting these across a page break loses the reading order. */
-        pre, blockquote, table, figure, .md-frontmatter, .markdown-alert {
+        :root:not(.\(previewPrintClass)) pre,
+        :root:not(.\(previewPrintClass)) blockquote,
+        :root:not(.\(previewPrintClass)) table,
+        :root:not(.\(previewPrintClass)) figure,
+        :root:not(.\(previewPrintClass)) .md-frontmatter,
+        :root:not(.\(previewPrintClass)) .markdown-alert {
             break-inside: avoid;
         }
-        tr, li { break-inside: avoid; }
-        h1, h2, h3, h4, h5, h6 { break-after: avoid; }
-        pre {
+        :root:not(.\(previewPrintClass)) tr,
+        :root:not(.\(previewPrintClass)) li { break-inside: avoid; }
+        :root:not(.\(previewPrintClass)) h1,
+        :root:not(.\(previewPrintClass)) h2,
+        :root:not(.\(previewPrintClass)) h3,
+        :root:not(.\(previewPrintClass)) h4,
+        :root:not(.\(previewPrintClass)) h5,
+        :root:not(.\(previewPrintClass)) h6 { break-after: avoid; }
+        :root:not(.\(previewPrintClass)) pre {
             white-space: pre-wrap;
             word-wrap: break-word;
         }
         /* Inner scrollers can't scroll on paper — let them wrap instead of
            clipping their overflow. */
-        .md-code-wrap, .md-table-scroll, table, pre {
+        :root:not(.\(previewPrintClass)) .md-code-wrap,
+        :root:not(.\(previewPrintClass)) .md-table-scroll,
+        :root:not(.\(previewPrintClass)) table,
+        :root:not(.\(previewPrintClass)) pre {
             overflow: visible !important;
         }
-        img, svg {
+        :root:not(.\(previewPrintClass)) img,
+        :root:not(.\(previewPrintClass)) svg {
             max-width: 100% !important;
             height: auto;
         }
@@ -3615,10 +3664,12 @@ nonisolated enum MarkdownHTML {
            document to fit, which silently overrides the chosen point size — a
            request for 18pt came out at ~15pt. Keep every block inside the
            measure so the size stays honest. */
-        body { overflow-wrap: break-word; }
-        table { width: 100%; }
-        th, td { overflow-wrap: anywhere; }
-        pre, code { overflow-wrap: anywhere; }
+        :root:not(.\(previewPrintClass)) body { overflow-wrap: break-word; }
+        :root:not(.\(previewPrintClass)) table { width: 100%; }
+        :root:not(.\(previewPrintClass)) th,
+        :root:not(.\(previewPrintClass)) td { overflow-wrap: anywhere; }
+        :root:not(.\(previewPrintClass)) pre,
+        :root:not(.\(previewPrintClass)) code { overflow-wrap: anywhere; }
     }
 
     """
