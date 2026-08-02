@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.44] – 2026-08-02
+
+Exported PDFs now look like the document you were reading.
+
+### Changed
+
+- **PDF export matches the read-only preview.** Exports keep the preview stylesheet and the active light or dark appearance, hold the same 820 px content measure, and turn the reading view's 32/40/48 px padding into real page margins so every page gets matching gutters. The print-only font-size control is hidden from the export panel, while File ▸ Print… keeps its existing paper-oriented sizing and pagination ([#258](https://github.com/pluk-inc/markdown-preview/pull/258)).
+
 ## [0.0.43] – 2026-07-30
 
 Large documents open dramatically faster, reading mode is properly white in light mode, and the preview stays on the file you opened while you edit.
