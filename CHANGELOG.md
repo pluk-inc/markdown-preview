@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.0.45] – 2026-08-05
+
+Mermaid diagrams in Quick Look now match the system appearance.
+
+### Fixed
+
+- **Mermaid diagrams respect dark mode in Quick Look.** Quick Look now passes its native macOS appearance into the rendered preview, so diagrams use a readable dark theme instead of light colors against a dark background ([#261](https://github.com/pluk-inc/markdown-preview/pull/261), [#260](https://github.com/pluk-inc/markdown-preview/issues/260)).
+
+### Contributors
+
+Thanks to the external reporter who helped improve this release:
+
+- [@GloryAlex](https://github.com/GloryAlex) — reported the Mermaid dark-mode mismatch in Quick Look ([#260](https://github.com/pluk-inc/markdown-preview/issues/260))
+
 ## [0.0.44] – 2026-08-02
 
 Exported PDFs now look like the document you were reading.
