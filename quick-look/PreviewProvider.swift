@@ -27,7 +27,17 @@ class PreviewProvider: QLPreviewProvider, QLPreviewingController {
         )
         #endif
         let text = try String(contentsOf: request.fileURL, encoding: .utf8)
-        let renderedHTML = MarkdownHTML.makeHTML(from: text, allowsScroll: true)
+        let colorScheme = await MainActor.run {
+            let appearance = NSApplication.shared.effectiveAppearance
+            return appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                ? MarkdownHTML.ColorScheme.dark
+                : MarkdownHTML.ColorScheme.light
+        }
+        let renderedHTML = MarkdownHTML.makeHTML(
+            from: text,
+            allowsScroll: true,
+            colorScheme: colorScheme
+        )
         let baseDirectory = request.fileURL.deletingLastPathComponent()
         let rewrite = InlineLocalAssets.rewriteRelativeImages(
             html: renderedHTML,

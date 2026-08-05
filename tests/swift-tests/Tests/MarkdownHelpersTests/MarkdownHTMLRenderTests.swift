@@ -722,6 +722,18 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(rendered.articleHTML.contains("<code class=\"language-mermaid\""))
     }
 
+    func testExplicitColorSchemeIsExposedToRendererScripts() {
+        let dark = MarkdownHTML.render(
+            markdown: "# Dark",
+            colorScheme: .dark
+        )
+        let automatic = MarkdownHTML.render(markdown: "# Automatic")
+
+        XCTAssertTrue(dark.html.contains(#"<html data-mdp-color-scheme="dark">"#))
+        XCTAssertTrue(automatic.html.contains("<html>"))
+        XCTAssertFalse(automatic.html.contains("data-mdp-color-scheme"))
+    }
+
     func testMermaidPopupButtonIsEmitted() {
         let rendered = MarkdownHTML.render(
             markdown: """
@@ -899,6 +911,82 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             "(window.__posted || []).some((m) => m && m.kind === 'mermaidPopup')"
         ) as? Bool
         XCTAssertEqual(postedPopupOnDoubleClick, false, "double-click must not post a mermaidPopup message")
+    }
+
+    @MainActor
+    func testMermaidNativeColorSchemeOverridesMatchMedia() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ```mermaid
+            journey
+                title My working day
+                section Go to work
+                  Make tea: 5: Me
+            ```
+            """,
+            vendorLoading: .lazy,
+            colorScheme: .dark
+        )
+
+        let html = """
+        <!DOCTYPE html>
+        <html data-mdp-color-scheme="dark"><head>
+        <script>
+        window.__themes = [];
+        window.__runs = 0;
+        Object.defineProperty(window, 'matchMedia', {
+            value: () => ({ matches: false }),
+            configurable: true
+        });
+        window.IntersectionObserver = class {
+            constructor(callback) { this.callback = callback; }
+            observe(target) { this.callback([{ target, isIntersecting: true }]); }
+            unobserve() {}
+        };
+        window.ResizeObserver = class {
+            constructor() {}
+            observe() {}
+        };
+        window.mermaid = {
+            initialize(options) { window.__themes.push(options.theme); },
+            async run({ nodes }) {
+                window.__runs += 1;
+                const theme = window.__themes[window.__themes.length - 1];
+                for (const node of nodes) {
+                    node.innerHTML = '<svg viewBox="0 0 400 200" data-theme="' + theme + '"></svg>';
+                }
+            }
+        };
+        </script></head><body>
+        <article class="markdown-body">\(rendered.articleHTML)</article>
+        <script>
+        const __mdpMermaid = \(MarkdownHTML.mermaidInitWiring);
+        __mdpMermaid.bootstrap();
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        var darkRenderReady = false
+        for _ in 0..<100 {
+            let state = try await webView.evaluateJavaScript("""
+            JSON.stringify({
+                themes: window.__themes,
+                runs: window.__runs,
+                renderedTheme: document.querySelector('.mermaid svg')?.dataset.theme || ''
+            })
+            """) as? String
+            if state == #"{"themes":["dark"],"runs":1,"renderedTheme":"dark"}"# {
+                darkRenderReady = true
+                break
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertTrue(darkRenderReady, "native dark appearance must win when matchMedia reports light")
     }
 
     @MainActor

@@ -56,6 +56,13 @@ nonisolated enum MarkdownHTML {
         case full
     }
 
+    /// Native appearance supplied by hosts whose WebKit media-query result
+    /// can disagree with the surface they render into (notably Quick Look).
+    enum ColorScheme: String {
+        case light
+        case dark
+    }
+
     /// Width the Quick Look panel requests for its preview window.
     static let preferredPageWidth: CGFloat = 900
     /// The centered article measure: `preferredPageWidth` minus the 40px
@@ -137,11 +144,13 @@ nonisolated enum MarkdownHTML {
     static func makeHTML(from markdown: String,
                          allowsScroll: Bool = false,
                          assetBaseHref: String? = nil,
-                         vendorLoading: VendorLoading = .inline) -> String {
+                         vendorLoading: VendorLoading = .inline,
+                         colorScheme: ColorScheme? = nil) -> String {
         render(markdown: markdown,
                allowsScroll: allowsScroll,
                assetBaseHref: assetBaseHref,
-               vendorLoading: vendorLoading).html
+               vendorLoading: vendorLoading,
+               colorScheme: colorScheme).html
     }
 
     static func render(markdown: String,
@@ -149,6 +158,7 @@ nonisolated enum MarkdownHTML {
                        assetBaseHref: String? = nil,
                        vendorLoading: VendorLoading = .inline,
                        contentWidth: ContentWidth = .centered,
+                       colorScheme: ColorScheme? = nil,
                        warmup: Bool = false) -> RenderedHTML {
         let frontmatter = MarkdownFrontmatter.split(markdown)
         let body = frontmatter.body
@@ -260,9 +270,12 @@ nonisolated enum MarkdownHTML {
         // The bootstrap then reads template.innerHTML, runs it through
         // DOMPurify, and assigns the sanitized result to article.innerHTML.
         let safeBody = bodyHTML.replacingOccurrences(of: "</template", with: "<\\/template")
+        let colorSchemeAttribute = colorScheme.map {
+            " data-mdp-color-scheme=\"\($0.rawValue)\""
+        } ?? ""
         let html = """
         <!DOCTYPE html>
-        <html>
+        <html\(colorSchemeAttribute)>
         <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -2526,13 +2539,20 @@ nonisolated enum MarkdownHTML {
             let draining = false;
             let initialized = false;
 
+            function selectedTheme() {
+                const nativeScheme = document.documentElement.dataset.mdpColorScheme;
+                if (nativeScheme) return nativeScheme === 'dark' ? 'dark' : 'default';
+                const dark = window.matchMedia
+                    && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                return dark ? 'dark' : 'default';
+            }
+
             function ensureInit() {
                 if (initialized) return;
                 initialized = true;
-                const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
                 mermaid.initialize({
                     startOnLoad: false,
-                    theme: dark ? 'dark' : 'default',
+                    theme: selectedTheme(),
                     securityLevel: 'strict',
                     fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif'
                 });
