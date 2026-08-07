@@ -27,11 +27,19 @@ class PreviewProvider: QLPreviewProvider, QLPreviewingController {
         )
         #endif
         let text = try String(contentsOf: request.fileURL, encoding: .utf8)
-        let colorScheme = await MainActor.run {
-            let appearance = NSApplication.shared.effectiveAppearance
-            return appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-                ? MarkdownHTML.ColorScheme.dark
-                : MarkdownHTML.ColorScheme.light
+        let appearanceMode = QuickLookAppearanceMode.current
+        let colorScheme: MarkdownHTML.ColorScheme
+        switch appearanceMode {
+        case .automatic:
+            colorScheme = await MainActor.run {
+                let appearance = NSApplication.shared.effectiveAppearance
+                let systemIsDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                return appearanceMode.resolvedColorScheme(systemIsDark: systemIsDark)
+            }
+        case .light:
+            colorScheme = .light
+        case .dark:
+            colorScheme = .dark
         }
         let renderedHTML = MarkdownHTML.makeHTML(
             from: text,
