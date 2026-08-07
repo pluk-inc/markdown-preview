@@ -73,6 +73,8 @@
 "Sidebar options" = "边栏选项";
 "Inspector" = "检查器";
 "Get Info" = "显示简介";
+"Always on Top" = "始终置顶";
+"Keep this window in front of other apps" = "让此窗口始终显示在其他 App 前面";
 "Show the inspector" = "显示检查器";
 "Share" = "共享";
 "Share document" = "共享文稿";

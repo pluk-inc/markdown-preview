@@ -118,7 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installFileExportMenuItems()
         installGoMenu()
         installAppMenuItemIcons()
-        installZoomMenuItemIcons()
+        installViewMenuItemIcons()
         hasFinishedLaunching = true
         if !didReceiveOpenURLsDuringLaunch {
             scheduleDocumentPrompt(requiresNoDocuments: true)
@@ -766,12 +766,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.insertItem(goItem, at: insertIndex)
     }
 
-    private func installZoomMenuItemIcons() {
+    private func installViewMenuItemIcons() {
         guard let viewMenu = topLevelSubmenu(matching: Self.viewMenuTitles) else { return }
         let icons: [(titles: Set<String>, symbol: String)] = [
             (["Actual Size", "实际大小"], "magnifyingglass"),
             (["Zoom In", "放大"], "plus.magnifyingglass"),
-            (["Zoom Out", "缩小"], "minus.magnifyingglass")
+            (["Zoom Out", "缩小"], "minus.magnifyingglass"),
+            (["Always on Top", "始终置顶"], "pin")
         ]
         for (titles, symbol) in icons {
             guard let item = viewMenu.items.first(where: { titles.contains($0.title) }),

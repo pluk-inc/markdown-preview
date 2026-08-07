@@ -23,6 +23,7 @@ extension NSToolbarItem.Identifier {
     static let zoom = NSToolbarItem.Identifier("Zoom")
     static let editDocument = NSToolbarItem.Identifier("EditDocument")
     static let navigation = NSToolbarItem.Identifier("Navigation")
+    static let alwaysOnTop = NSToolbarItem.Identifier("AlwaysOnTop")
 }
 
 private extension Array where Element == NSToolbarItem.Identifier {
@@ -81,6 +82,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private weak var openInLLMItem: NSMenuToolbarItem?
     private weak var inspectorItem: NSToolbarItem?
     private weak var inspectorButton: NSButton?
+    private var isAlwaysOnTop = false
+    private weak var alwaysOnTopButton: NSButton?
     private weak var editItem: NSToolbarItem?
     private weak var editButton: NSButton?
     private var editorChangeRevision = 0
@@ -495,7 +498,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             .exportPDF,
             .exportDocument,
             .copyMarkdown,
-            .zoom
+            .zoom,
+            .alwaysOnTop
         ]
         if hasLLMTargetsAvailable {
             identifiers.insertAfterOpenActions(.openInLLM)
@@ -516,6 +520,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             return makeOpenInLLMItem()
         case .editDocument: return makeEditItem()
         case .inspector: return makeInspectorItem()
+        case .alwaysOnTop: return makeAlwaysOnTopItem()
         case .share: return makeShareItem()
         case .search: return makeSearchItem()
         case .printDocument: return makePrintItem()
@@ -716,9 +721,34 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         syncSidebarMenuState()
     }
 
+    @objc func toggleAlwaysOnTop(_ sender: Any?) {
+        setAlwaysOnTop(!isAlwaysOnTop)
+    }
+
+    private func setAlwaysOnTop(_ pinned: Bool) {
+        let level = NSWindow.Level(rawValue: AlwaysOnTopPolicy.windowLevel(isPinned: pinned))
+        let windows = AlwaysOnTopPolicy.affectedWindows(toggling: documentWindow,
+                                                        tabGroup: documentWindow.tabbedWindows)
+        for window in windows {
+            window.level = level
+            (window.windowController as? DocumentWindowController)?.recordAlwaysOnTop(pinned)
+        }
+    }
+
+    /// Stores the pinned state and refreshes the toolbar toggle. Applied to
+    /// every window in the tab group so each tab agrees with the group's level.
+    private func recordAlwaysOnTop(_ pinned: Bool) {
+        isAlwaysOnTop = pinned
+        alwaysOnTopButton?.state = pinned ? .on : .off
+    }
+
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if menuItem.action == #selector(saveDocument(_:)) {
             return isEditing
+        }
+        if menuItem.action == #selector(toggleAlwaysOnTop(_:)) {
+            menuItem.state = isAlwaysOnTop ? .on : .off
+            return true
         }
         syncSidebarMenuState()
         return true
@@ -755,6 +785,47 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         inspectorItem = item
         refreshInspectorToggleItem()
         return item
+    }
+
+    private func makeAlwaysOnTopItem() -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: .alwaysOnTop)
+        let alwaysOnTop = NSLocalizedString("Always on Top", comment: "Always on Top toolbar item label")
+        item.label = alwaysOnTop
+        item.paletteLabel = alwaysOnTop
+        item.toolTip = NSLocalizedString("Keep this window in front of other apps",
+                                         comment: "Always on Top toolbar item tooltip")
+
+        let button = NSButton(image: alwaysOnTopImage(),
+                              target: self,
+                              action: #selector(toggleAlwaysOnTop(_:)))
+        button.setButtonType(.pushOnPushOff)
+        button.state = isAlwaysOnTop ? .on : .off
+        button.toolTip = item.toolTip
+        button.translatesAutoresizingMaskIntoConstraints = false
+
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(button)
+        NSLayoutConstraint.activate([
+            button.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 2),
+            button.topAnchor.constraint(equalTo: container.topAnchor),
+            button.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -2),
+            button.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            button.heightAnchor.constraint(equalToConstant: 32),
+            container.widthAnchor.constraint(equalToConstant: 36),
+            container.heightAnchor.constraint(equalToConstant: 32)
+        ])
+
+        item.view = container
+        alwaysOnTopButton = button
+        return item
+    }
+
+    private func alwaysOnTopImage() -> NSImage {
+        let image = NSImage(systemSymbolName: "pin",
+                            accessibilityDescription: NSLocalizedString("Always on Top", comment: "Always on Top toolbar image")) ?? NSImage()
+        image.isTemplate = true
+        return image
     }
 
     private func makeShareItem() -> NSToolbarItem {
