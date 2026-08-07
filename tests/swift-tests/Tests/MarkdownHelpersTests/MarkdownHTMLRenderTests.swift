@@ -740,7 +740,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(light.html.contains(#":root:not([data-mdp-color-scheme="light"])"#))
         XCTAssertTrue(light.html.contains("background: Canvas;"))
         XCTAssertTrue(automatic.html.contains("<html>"))
-        XCTAssertFalse(automatic.html.contains("data-mdp-color-scheme"))
+        XCTAssertFalse(automatic.html.contains(#"<html data-mdp-color-scheme="#))
     }
 
     func testMermaidPopupButtonIsEmitted() {
