@@ -723,13 +723,22 @@ final class MarkdownHTMLRenderTests: XCTestCase {
     }
 
     func testExplicitColorSchemeIsExposedToRendererScripts() {
+        let light = MarkdownHTML.render(
+            markdown: "# Light",
+            colorScheme: .light
+        )
         let dark = MarkdownHTML.render(
             markdown: "# Dark",
             colorScheme: .dark
         )
         let automatic = MarkdownHTML.render(markdown: "# Automatic")
 
+        XCTAssertTrue(light.html.contains(#"<html data-mdp-color-scheme="light">"#))
         XCTAssertTrue(dark.html.contains(#"<html data-mdp-color-scheme="dark">"#))
+        XCTAssertTrue(light.html.contains(#":root[data-mdp-color-scheme="light"]"#))
+        XCTAssertTrue(dark.html.contains(#":root[data-mdp-color-scheme="dark"]"#))
+        XCTAssertTrue(light.html.contains(#":root:not([data-mdp-color-scheme="light"])"#))
+        XCTAssertTrue(light.html.contains("background: Canvas;"))
         XCTAssertTrue(automatic.html.contains("<html>"))
         XCTAssertFalse(automatic.html.contains("data-mdp-color-scheme"))
     }
