@@ -54,27 +54,7 @@ private extension String {
     }
 }
 
-private enum AppAppearanceMode: String, CaseIterable {
-    case automatic
-    case light
-    case dark
-
-    private static let defaultsKey = "MarkdownPreview.appearance"
-
-    static var current: AppAppearanceMode {
-        get {
-            UserDefaults.standard.string(forKey: defaultsKey)
-                .flatMap(AppAppearanceMode.init(rawValue:)) ?? .automatic
-        }
-        set {
-            if newValue == .automatic {
-                UserDefaults.standard.removeObject(forKey: defaultsKey)
-            } else {
-                UserDefaults.standard.set(newValue.rawValue, forKey: defaultsKey)
-            }
-        }
-    }
-
+private extension AppearanceMode {
     var title: String {
         switch self {
         case .automatic: return NSLocalizedString("Automatic", comment: "Appearance mode")
@@ -88,16 +68,6 @@ private enum AppAppearanceMode: String, CaseIterable {
         case .automatic: return nil
         case .light: return NSAppearance(named: .aqua)
         case .dark: return NSAppearance(named: .darkAqua)
-        }
-    }
-}
-
-private extension QuickLookAppearanceMode {
-    var title: String {
-        switch self {
-        case .automatic: return NSLocalizedString("Automatic", comment: "Quick Look appearance mode")
-        case .light: return NSLocalizedString("Light", comment: "Quick Look appearance mode")
-        case .dark: return NSLocalizedString("Dark", comment: "Quick Look appearance mode")
         }
     }
 }
@@ -119,9 +89,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private weak var automaticAppearanceMenuItem: NSMenuItem?
     private weak var lightAppearanceMenuItem: NSMenuItem?
     private weak var darkAppearanceMenuItem: NSMenuItem?
-    private weak var automaticQuickLookAppearanceMenuItem: NSMenuItem?
-    private weak var lightQuickLookAppearanceMenuItem: NSMenuItem?
-    private weak var darkQuickLookAppearanceMenuItem: NSMenuItem?
     private weak var normalContentWidthMenuItem: NSMenuItem?
     private weak var fullContentWidthMenuItem: NSMenuItem?
     private var isOpeningDocumentFromPrompt = false
@@ -140,10 +107,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         CrashReporter.start()
-        applyAppearanceMode(AppAppearanceMode.current, reloadPreviews: false)
+        let appearanceMode = AppearanceMode.migrateLegacyValue()
+        applyAppearanceMode(appearanceMode, reloadPreviews: false)
         installAppearanceMenuItems()
         installContentWidthMenuItems()
-        installQuickLookAppearanceMenuItems()
         installSidebarViewMenuItems()
         installEditModeMenuItem()
         installFormatMenu()
@@ -292,20 +259,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func selectAppearanceMode(_ sender: NSMenuItem) {
         guard let rawValue = sender.representedObject as? String,
-              let mode = AppAppearanceMode(rawValue: rawValue),
-              mode != AppAppearanceMode.current else { return }
+              let mode = AppearanceMode(rawValue: rawValue),
+              mode != AppearanceMode.current else { return }
 
-        AppAppearanceMode.current = mode
+        AppearanceMode.current = mode
         applyAppearanceMode(mode, reloadPreviews: true)
-    }
-
-    @objc private func selectQuickLookAppearanceMode(_ sender: NSMenuItem) {
-        guard let rawValue = sender.representedObject as? String,
-              let mode = QuickLookAppearanceMode(rawValue: rawValue),
-              mode != QuickLookAppearanceMode.current else { return }
-
-        QuickLookAppearanceMode.current = mode
-        syncQuickLookAppearanceMenuState()
     }
 
     @objc private func selectContentWidthSetting(_ sender: NSMenuItem) {
@@ -321,7 +279,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         syncSidebarViewMenuState()
         syncAppearanceMenuState()
-        syncQuickLookAppearanceMenuState()
         syncContentWidthMenuState()
         switch menuItem.action {
         case #selector(hideSidebarFromMenu(_:)),
@@ -331,7 +288,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
              #selector(performTextFinderAction(_:)):
             return activeDocumentWindowController != nil
         case #selector(selectAppearanceMode(_:)),
-             #selector(selectQuickLookAppearanceMode(_:)),
              #selector(selectContentWidthSetting(_:)):
             return true
         case #selector(toggleCrashReporting(_:)):
@@ -836,7 +792,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let submenu = NSMenu(title: appearanceTitle)
-        for mode in AppAppearanceMode.allCases {
+        for mode in AppearanceMode.allCases {
             let item = NSMenuItem(title: mode.title,
                                   action: #selector(selectAppearanceMode(_:)),
                                   keyEquivalent: "")
@@ -897,47 +853,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         syncContentWidthMenuState()
     }
 
-    private func installQuickLookAppearanceMenuItems() {
-        guard let viewMenu = topLevelSubmenu(matching: Self.viewMenuTitles),
-              viewMenu.items.first(where: {
-                  Self.quickLookAppearanceMenuTitles.contains($0.title)
-              }) == nil else { return }
-
-        let appearanceTitle = L("Quick Look Appearance")
-        let appearanceItem = NSMenuItem(title: appearanceTitle, action: nil, keyEquivalent: "")
-        if let image = NSImage(systemSymbolName: "eye",
-                               accessibilityDescription: appearanceTitle) {
-            image.isTemplate = true
-            appearanceItem.image = image
-        }
-
-        let submenu = NSMenu(title: appearanceTitle)
-        for mode in QuickLookAppearanceMode.allCases {
-            let item = NSMenuItem(title: mode.title,
-                                  action: #selector(selectQuickLookAppearanceMode(_:)),
-                                  keyEquivalent: "")
-            item.target = self
-            item.representedObject = mode.rawValue
-            submenu.addItem(item)
-
-            switch mode {
-            case .automatic:
-                automaticQuickLookAppearanceMenuItem = item
-            case .light:
-                lightQuickLookAppearanceMenuItem = item
-            case .dark:
-                darkQuickLookAppearanceMenuItem = item
-            }
-        }
-        appearanceItem.submenu = submenu
-        let insertIndex = viewMenu.items
-            .firstIndex(where: { Self.appearanceMenuTitles.contains($0.title) })
-            .map { $0 + 1 } ?? 0
-        viewMenu.insertItem(appearanceItem, at: insertIndex)
-        syncQuickLookAppearanceMenuState()
-    }
-
-    private func applyAppearanceMode(_ mode: AppAppearanceMode, reloadPreviews: Bool) {
+    private func applyAppearanceMode(_ mode: AppearanceMode, reloadPreviews: Bool) {
         let appearance = mode.appearance
         NSApp.appearance = appearance
         for window in NSApp.windows {
@@ -950,17 +866,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func syncAppearanceMenuState() {
-        let mode = AppAppearanceMode.current
+        let mode = AppearanceMode.current
         automaticAppearanceMenuItem?.state = mode == .automatic ? .on : .off
         lightAppearanceMenuItem?.state = mode == .light ? .on : .off
         darkAppearanceMenuItem?.state = mode == .dark ? .on : .off
-    }
-
-    private func syncQuickLookAppearanceMenuState() {
-        let mode = QuickLookAppearanceMode.current
-        automaticQuickLookAppearanceMenuItem?.state = mode == .automatic ? .on : .off
-        lightQuickLookAppearanceMenuItem?.state = mode == .light ? .on : .off
-        darkQuickLookAppearanceMenuItem?.state = mode == .dark ? .on : .off
     }
 
     private func syncContentWidthMenuState() {
@@ -1161,9 +1070,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let formatMenuTitles: Set<String> = ["Format", "格式"]
     private static let goMenuTitles: Set<String> = ["Go", "前往"]
     private static let appearanceMenuTitles: Set<String> = ["Appearance", "外观"]
-    private static let quickLookAppearanceMenuTitles: Set<String> = [
-        "Quick Look Appearance", "Quick Look 外观"
-    ]
     private static let contentWidthMenuTitles: Set<String> = ["Content Width", "内容宽度"]
     private static let showSidebarMenuTitles: Set<String> = ["Show Sidebar", "显示边栏"]
     private static let actualSizeMenuTitles: Set<String> = ["Actual Size", "实际大小"]

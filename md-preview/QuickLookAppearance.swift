@@ -1,13 +1,13 @@
 import Foundation
 
-nonisolated enum QuickLookAppearanceMode: String, CaseIterable, Sendable {
+nonisolated enum AppearanceMode: String, CaseIterable, Sendable {
     case automatic
     case light
     case dark
 
-    static let defaultsKey = "MarkdownPreview.quickLookAppearance"
+    static let defaultsKey = "MarkdownPreview.appearance"
     static let appGroupInfoKey = "MarkdownPreviewAppGroupIdentifier"
-    static let defaultMode: Self = .light
+    static let defaultMode: Self = .automatic
 
     static var current: Self {
         get { read(from: sharedDefaults()) }
@@ -29,7 +29,26 @@ nonisolated enum QuickLookAppearanceMode: String, CaseIterable, Sendable {
     }
 
     static func write(_ mode: Self, to defaults: UserDefaults?) {
-        defaults?.set(mode.rawValue, forKey: defaultsKey)
+        if mode == .automatic {
+            defaults?.removeObject(forKey: defaultsKey)
+        } else {
+            defaults?.set(mode.rawValue, forKey: defaultsKey)
+        }
+    }
+
+    @discardableResult
+    static func migrateLegacyValue(
+        from legacyDefaults: UserDefaults = .standard,
+        to sharedDefaults: UserDefaults? = sharedDefaults()
+    ) -> Self {
+        if let rawValue = sharedDefaults?.string(forKey: defaultsKey),
+           let sharedMode = Self(rawValue: rawValue) {
+            return sharedMode
+        }
+
+        let legacyMode = read(from: legacyDefaults)
+        write(legacyMode, to: sharedDefaults)
+        return legacyMode
     }
 
     func resolvedColorScheme(systemIsDark: Bool) -> MarkdownHTML.ColorScheme {

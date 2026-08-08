@@ -2,43 +2,69 @@ import Foundation
 import XCTest
 @testable import MarkdownHelpers
 
-final class QuickLookAppearanceTests: XCTestCase {
-    func testMissingAndInvalidValuesDefaultToLight() throws {
+final class AppearanceModeTests: XCTestCase {
+    func testMissingAndInvalidValuesDefaultToAutomatic() throws {
         let (defaults, suiteName) = try makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        XCTAssertEqual(QuickLookAppearanceMode.read(from: defaults), .light)
+        XCTAssertEqual(AppearanceMode.read(from: defaults), .automatic)
 
-        defaults.set("sepia", forKey: QuickLookAppearanceMode.defaultsKey)
-        XCTAssertEqual(QuickLookAppearanceMode.read(from: defaults), .light)
-        XCTAssertEqual(QuickLookAppearanceMode.read(from: nil), .light)
+        defaults.set("sepia", forKey: AppearanceMode.defaultsKey)
+        XCTAssertEqual(AppearanceMode.read(from: defaults), .automatic)
+        XCTAssertEqual(AppearanceMode.read(from: nil), .automatic)
     }
 
     func testEveryModeRoundTripsThroughDefaults() throws {
         let (defaults, suiteName) = try makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        for mode in QuickLookAppearanceMode.allCases {
-            QuickLookAppearanceMode.write(mode, to: defaults)
-            XCTAssertEqual(QuickLookAppearanceMode.read(from: defaults), mode)
+        for mode in AppearanceMode.allCases {
+            AppearanceMode.write(mode, to: defaults)
+            XCTAssertEqual(AppearanceMode.read(from: defaults), mode)
         }
+
+        AppearanceMode.write(.automatic, to: defaults)
+        XCTAssertNil(defaults.object(forKey: AppearanceMode.defaultsKey))
+    }
+
+    func testLegacyValueMigratesOnlyWhenSharedValueIsMissing() throws {
+        let (legacy, legacySuiteName) = try makeDefaults()
+        let (shared, sharedSuiteName) = try makeDefaults()
+        defer {
+            legacy.removePersistentDomain(forName: legacySuiteName)
+            shared.removePersistentDomain(forName: sharedSuiteName)
+        }
+
+        legacy.set(AppearanceMode.light.rawValue, forKey: AppearanceMode.defaultsKey)
+        XCTAssertEqual(
+            AppearanceMode.migrateLegacyValue(from: legacy, to: shared),
+            .light
+        )
+        XCTAssertEqual(AppearanceMode.read(from: shared), .light)
+
+        shared.set(AppearanceMode.dark.rawValue, forKey: AppearanceMode.defaultsKey)
+        XCTAssertEqual(
+            AppearanceMode.migrateLegacyValue(from: legacy, to: shared),
+            .dark
+        )
+        XCTAssertEqual(AppearanceMode.read(from: shared), .dark)
     }
 
     func testModesResolveExpectedColorScheme() {
         XCTAssertEqual(
-            QuickLookAppearanceMode.light.resolvedColorScheme(systemIsDark: true),
+            AppearanceMode.light.resolvedColorScheme(systemIsDark: true),
             .light
         )
         XCTAssertEqual(
-            QuickLookAppearanceMode.dark.resolvedColorScheme(systemIsDark: false),
+            AppearanceMode.dark.resolvedColorScheme(systemIsDark: false),
             .dark
         )
         XCTAssertEqual(
-            QuickLookAppearanceMode.automatic.resolvedColorScheme(systemIsDark: false),
+            AppearanceMode.automatic.resolvedColorScheme(systemIsDark: false),
             .light
         )
         XCTAssertEqual(
-            QuickLookAppearanceMode.automatic.resolvedColorScheme(systemIsDark: true),
+            AppearanceMode.automatic.resolvedColorScheme(systemIsDark: true),
             .dark
         )
     }

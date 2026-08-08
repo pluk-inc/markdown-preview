@@ -27,7 +27,7 @@ class PreviewProvider: QLPreviewProvider, QLPreviewingController {
         )
         #endif
         let text = try String(contentsOf: request.fileURL, encoding: .utf8)
-        let appearanceMode = QuickLookAppearanceMode.current
+        let appearanceMode = AppearanceMode.current
         let colorScheme: MarkdownHTML.ColorScheme
         switch appearanceMode {
         case .automatic:
