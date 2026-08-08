@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.0.47] – 2026-08-08
+
+The Appearance setting now covers Finder previews too, so the app and Quick Look stop disagreeing about light and dark.
+
+### Changed
+
+- **View ▸ Appearance controls Quick Look as well.** The existing Automatic / Light / Dark choice was stored only in the app's own defaults, so the sandboxed Quick Look extension couldn't see it and kept following the system appearance. The setting now lives in storage shared by both targets — and is migrated over from the old location on first launch — so a fixed Light or Dark applies to the page surface, text, math errors, syntax highlighting, and Mermaid diagrams in Finder previews. Automatic still follows each host's native appearance ([#265](https://github.com/pluk-inc/markdown-preview/pull/265)).
+
+### Contributors
+
+Thanks to the external contributor who shipped in this release:
+
+- [@Avi7ii](https://github.com/Avi7ii) — shared the app's appearance setting with Quick Look ([#265](https://github.com/pluk-inc/markdown-preview/pull/265))
+
 ## [0.0.46] – 2026-08-08
 
 The sidebar gets a keyboard shortcut, and headings after blank lines no longer leave a gaping hole in the page.
