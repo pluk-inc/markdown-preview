@@ -2,17 +2,27 @@
 
 ## [0.0.47] – 2026-08-08
 
-The Appearance setting now covers Finder previews too, so the app and Quick Look stop disagreeing about light and dark.
+The Appearance setting now covers Finder previews too, so the app and Quick Look stop disagreeing about light and dark. Because 0.0.46 shipped only briefly, its sidebar shortcut and heading-spacing fix are listed here as well — most people will pick them up in this update.
+
+### Added
+
+- **⌘L toggles the sidebar.** A Toggle Sidebar item in the View menu shows and hides the sidebar from the keyboard ([#267](https://github.com/pluk-inc/markdown-preview/pull/267)).
 
 ### Changed
 
 - **View ▸ Appearance controls Quick Look as well.** The existing Automatic / Light / Dark choice was stored only in the app's own defaults, so the sandboxed Quick Look extension couldn't see it and kept following the system appearance. The setting now lives in storage shared by both targets — and is migrated over from the old location on first launch — so a fixed Light or Dark applies to the page surface, text, math errors, syntax highlighting, and Mermaid diagrams in Finder previews. Automatic still follows each host's native appearance ([#265](https://github.com/pluk-inc/markdown-preview/pull/265)).
 
+### Fixed
+
+- **Headings after blank lines use compact spacing.** A blank line already renders its own height, and the heading's margin stacked on top of it, producing oversized gaps. Authored blank lines are preserved, but the stacked margin above them drops to 4 px — in reading mode and for both ATX and Setext headings in edit mode ([#264](https://github.com/pluk-inc/markdown-preview/pull/264), [#263](https://github.com/pluk-inc/markdown-preview/issues/263)).
+
 ### Contributors
 
-Thanks to the external contributor who shipped in this release:
+Thanks to the external contributors who helped improve this release:
 
 - [@Avi7ii](https://github.com/Avi7ii) — shared the app's appearance setting with Quick Look ([#265](https://github.com/pluk-inc/markdown-preview/pull/265))
+- [@inceenes10](https://github.com/inceenes10) — added the ⌘L sidebar shortcut ([#267](https://github.com/pluk-inc/markdown-preview/pull/267))
+- [@t9mike](https://github.com/t9mike) — reported the excess vertical space around headings ([#263](https://github.com/pluk-inc/markdown-preview/issues/263))
 
 ## [0.0.46] – 2026-08-08
 
