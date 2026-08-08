@@ -261,6 +261,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         activeDocumentWindowController?.handleFindAction(sender)
     }
 
+    @objc private func toggleSidebarFromMenu(_ sender: Any?) {
+        activeDocumentWindowController?.toggleSidebarFromMenu(sender)
+        syncSidebarViewMenuState()
+    }
+
     @objc private func hideSidebarFromMenu(_ sender: Any?) {
         activeDocumentWindowController?.hideSidebarFromMenu(sender)
         syncSidebarViewMenuState()
@@ -300,7 +305,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         syncAppearanceMenuState()
         syncContentWidthMenuState()
         switch menuItem.action {
-        case #selector(hideSidebarFromMenu(_:)),
+        case #selector(toggleSidebarFromMenu(_:)),
+             #selector(hideSidebarFromMenu(_:)),
              #selector(selectOutlineMode(_:)),
              #selector(selectFilesMode(_:)),
              #selector(performFindPanelAction(_:)),
@@ -946,28 +952,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let insertIndex = (viewMenu.items.firstIndex(where: { $0.isSeparatorItem }) ?? -1) + 1
 
+        // Plain ⌘L: the panes below stay on ⌃⌘, and ⌘B — the chord this
+        // would otherwise want — belongs to Format › Bold, which swallows it
+        // even while disabled instead of falling through to this menu.
+        let toggle = makeSidebarViewMenuItem(title: L("Toggle Sidebar"),
+                                             symbol: "sidebar.leading",
+                                             keyEquivalent: "l",
+                                             modifiers: [.command],
+                                             action: #selector(toggleSidebarFromMenu(_:)))
+        viewMenu.insertItem(toggle, at: insertIndex)
+
         let hide = makeSidebarViewMenuItem(title: L("Hide Sidebar"),
                                            symbol: "sidebar.leading",
                                            keyEquivalent: "1",
                                            action: #selector(hideSidebarFromMenu(_:)))
-        viewMenu.insertItem(hide, at: insertIndex)
+        viewMenu.insertItem(hide, at: insertIndex + 1)
         hideSidebarMenuItem = hide
 
         let outline = makeSidebarViewMenuItem(title: L("Table of Contents"),
                                               symbol: "list.bullet.indent",
                                               keyEquivalent: "2",
                                               action: #selector(selectOutlineMode(_:)))
-        viewMenu.insertItem(outline, at: insertIndex + 1)
+        viewMenu.insertItem(outline, at: insertIndex + 2)
         outlineMenuItem = outline
 
         let files = makeSidebarViewMenuItem(title: L("Project Navigator"),
                                             symbol: "folder",
                                             keyEquivalent: "3",
                                             action: #selector(selectFilesMode(_:)))
-        viewMenu.insertItem(files, at: insertIndex + 2)
+        viewMenu.insertItem(files, at: insertIndex + 3)
         filesMenuItem = files
 
-        viewMenu.insertItem(.separator(), at: insertIndex + 3)
+        viewMenu.insertItem(.separator(), at: insertIndex + 4)
     }
 
     private func installEditModeMenuItem() {
@@ -1047,10 +1063,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func makeSidebarViewMenuItem(title: String,
                                          symbol: String,
                                          keyEquivalent: String,
+                                         modifiers: NSEvent.ModifierFlags = [.control, .command],
                                          action: Selector) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: keyEquivalent)
         // ⌃⌘ like Safari's sidebar panes; ⌥⌘1–3 belong to Format headings.
-        item.keyEquivalentModifierMask = [.control, .command]
+        item.keyEquivalentModifierMask = modifiers
         item.target = self
         if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: title) {
             image.isTemplate = true
