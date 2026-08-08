@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.0.46] – 2026-08-08
+
+The sidebar gets a keyboard shortcut, and headings after blank lines no longer leave a gaping hole in the page.
+
+### Added
+
+- **⌘L toggles the sidebar.** A Toggle Sidebar item in the View menu shows and hides the sidebar from the keyboard ([#267](https://github.com/pluk-inc/markdown-preview/pull/267)).
+
+### Fixed
+
+- **Headings after blank lines use compact spacing.** A blank line already renders its own height, and the heading's margin stacked on top of it, producing oversized gaps. Authored blank lines are preserved, but the stacked margin above them drops to 4 px — in reading mode and for both ATX and Setext headings in edit mode ([#264](https://github.com/pluk-inc/markdown-preview/pull/264), [#263](https://github.com/pluk-inc/markdown-preview/issues/263)).
+
+### Contributors
+
+Thanks to the external contributors who helped improve this release:
+
+- [@inceenes10](https://github.com/inceenes10) — added the ⌘L sidebar shortcut ([#267](https://github.com/pluk-inc/markdown-preview/pull/267))
+- [@t9mike](https://github.com/t9mike) — reported the excess vertical space around headings ([#263](https://github.com/pluk-inc/markdown-preview/issues/263))
+
 ## [0.0.45] – 2026-08-05
 
 Mermaid diagrams in Quick Look now match the system appearance.
