@@ -1001,6 +1001,181 @@ final class MarkdownHTMLRenderTests: XCTestCase {
     }
 
     @MainActor
+    func testMermaidRenderAllRendersFiguresTheObserverNeverReached() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ```mermaid
+            flowchart LR
+                A --> B
+            ```
+
+            ```mermaid
+            flowchart LR
+                C --> D
+            ```
+            """,
+            vendorLoading: .lazy
+        )
+
+        // The observer never fires, standing in for figures that stay far
+        // outside the viewport — print/export must still render them all.
+        let html = """
+        <!DOCTYPE html>
+        <html><head>
+        <script>
+        window.__runs = 0;
+        window.IntersectionObserver = class {
+            observe() {}
+            unobserve() {}
+        };
+        window.ResizeObserver = class {
+            observe() {}
+        };
+        window.mermaid = {
+            initialize() {},
+            async run({ nodes }) {
+                window.__runs += 1;
+                for (const node of nodes) {
+                    node.innerHTML = '<svg viewBox="0 0 400 200"></svg>';
+                }
+            }
+        };
+        </script></head><body>
+        <article class="markdown-body">\(rendered.articleHTML)</article>
+        <script>
+        const __mdpMermaid = \(MarkdownHTML.mermaidInitWiring);
+        __mdpMermaid.bootstrap();
+        window.__renderAllSettled = false;
+        window.MdPreview.mermaidRenderAll().then(() => {
+            window.__renderAllSettled = true;
+        });
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        var allRendered = false
+        for _ in 0..<100 {
+            let state = try await webView.evaluateJavaScript("""
+            JSON.stringify({
+                settled: window.__renderAllSettled,
+                runs: window.__runs,
+                done: Array.from(document.querySelectorAll('.mermaid'))
+                    .map((n) => n.dataset.mmDone || '')
+            })
+            """) as? String
+            if state == #"{"settled":true,"runs":2,"done":["1","1"]}"# {
+                allRendered = true
+                break
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertTrue(
+            allRendered,
+            "renderAll must render every unobserved figure and settle afterwards"
+        )
+    }
+
+    @MainActor
+    func testMermaidRenderAllRethemesForPaperPrintAndRestores() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ```mermaid
+            flowchart LR
+                A --> B
+            ```
+            """,
+            vendorLoading: .lazy,
+            colorScheme: .dark
+        )
+
+        let html = """
+        <!DOCTYPE html>
+        <html data-mdp-color-scheme="dark"><head>
+        <script>
+        window.__themes = [];
+        window.IntersectionObserver = class {
+            constructor(callback) { this.callback = callback; }
+            observe(target) { this.callback([{ target, isIntersecting: true }]); }
+            unobserve() {}
+        };
+        window.ResizeObserver = class {
+            observe() {}
+        };
+        window.mermaid = {
+            initialize(options) { window.__themes.push(options.theme); },
+            async run({ nodes }) {
+                const theme = window.__themes[window.__themes.length - 1];
+                for (const node of nodes) {
+                    node.innerHTML = '<svg viewBox="0 0 400 200" data-theme="' + theme + '"></svg>';
+                }
+            }
+        };
+        </script></head><body>
+        <article class="markdown-body">\(rendered.articleHTML)</article>
+        <script>
+        const __mdpMermaid = \(MarkdownHTML.mermaidInitWiring);
+        __mdpMermaid.bootstrap();
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        func diagramState() async throws -> String? {
+            try await webView.evaluateJavaScript("""
+            JSON.stringify({
+                themes: window.__themes,
+                mmTheme: document.querySelector('.mermaid')?.dataset.mmTheme || '',
+                svgTheme: document.querySelector('.mermaid svg')?.dataset.theme || ''
+            })
+            """) as? String
+        }
+
+        func waitFor(_ expected: String) async throws -> Bool {
+            for _ in 0..<100 {
+                if try await diagramState() == expected { return true }
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            return false
+        }
+
+        let renderedDark = try await waitFor(
+            #"{"themes":["dark"],"mmTheme":"dark","svgTheme":"dark"}"#
+        )
+        XCTAssertTrue(renderedDark, "initial render must use the native dark theme")
+
+        // Paper print: pin the light theme and re-render the finished figure.
+        _ = try await webView.evaluateJavaScript("""
+        window.__paperDone = false;
+        window.MdPreview.mermaidRenderAll('default').then(() => {
+            window.__paperDone = true;
+        });
+        true
+        """)
+        let rethemed = try await waitFor(
+            #"{"themes":["dark","default"],"mmTheme":"default","svgTheme":"default"}"#
+        )
+        XCTAssertTrue(rethemed, "a pinned theme must re-render already-finished figures")
+
+        // Panel dismissed: restore the on-screen theme.
+        _ = try await webView.evaluateJavaScript(
+            "window.MdPreview.mermaidRenderAll(); true"
+        )
+        let restored = try await waitFor(
+            #"{"themes":["dark","default","dark"],"mmTheme":"dark","svgTheme":"dark"}"#
+        )
+        XCTAssertTrue(restored, "a bare renderAll must restore the on-screen theme")
+    }
+
+    @MainActor
     private func waitForMermaidPopupMessage(
         in webView: WKWebView,
         timeoutMs: Int = 2000

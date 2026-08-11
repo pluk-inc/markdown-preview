@@ -105,6 +105,11 @@ nonisolated enum MarkdownHTML {
             width: \(contentColumnWidth)px;
             padding: 0;
         }
+        /* The figure clips an absolutely-positioned stage, so a page break
+           through it discards everything past the break. */
+        html.\(previewPrintClass) .mermaid-figure {
+            break-inside: avoid;
+        }
     }
     """
 
@@ -2626,8 +2631,9 @@ nonisolated enum MarkdownHTML {
             ));
             const states = new WeakMap();
             const queue = [];
-            let draining = false;
-            let initialized = false;
+            let drainPromise = null;
+            let initializedTheme = null;
+            let themeOverride = null;
 
             function selectedTheme() {
                 const nativeScheme = document.documentElement.dataset.mdpColorScheme;
@@ -2637,35 +2643,84 @@ nonisolated enum MarkdownHTML {
                 return dark ? 'dark' : 'default';
             }
 
-            function ensureInit() {
-                if (initialized) return;
-                initialized = true;
+            // Paper printing forces the light palette while mermaid bakes its
+            // theme into the SVG, so the host can pin a theme for the length
+            // of a print operation.
+            function activeTheme() {
+                return themeOverride || selectedTheme();
+            }
+
+            function ensureInit(theme) {
+                if (initializedTheme === theme) return;
+                initializedTheme = theme;
                 mermaid.initialize({
                     startOnLoad: false,
-                    theme: selectedTheme(),
+                    theme,
                     securityLevel: 'strict',
                     fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif'
                 });
             }
 
-            async function drain() {
-                if (draining) return;
-                draining = true;
-                while (queue.length) {
-                    const figure = queue.shift();
-                    await renderOne(figure);
+            function drain() {
+                if (drainPromise) return drainPromise;
+                drainPromise = (async () => {
+                    while (queue.length) {
+                        const figure = queue.shift();
+                        try {
+                            await renderOne(figure);
+                        } catch (err) {
+                            figure.classList.add('mermaid-error');
+                        }
+                    }
+                })().then(() => {
+                    drainPromise = null;
+                    if (queue.length) return drain();
+                    window.dispatchEvent(new Event('md-preview-mermaid-rendered'));
+                });
+                return drainPromise;
+            }
+
+            // Rendering is viewport-driven, so pagination (print/export) must
+            // force every remaining figure through the queue and wait for the
+            // drain to settle before the page is captured. Passing a theme
+            // pins it (and re-renders mismatched figures) until the next call
+            // without one restores the on-screen theme.
+            async function renderAll(theme) {
+                themeOverride = theme || null;
+                const want = activeTheme();
+                document.querySelectorAll('.mermaid-figure').forEach((figure) => {
+                    const node = figure.querySelector('.mermaid');
+                    if (!node || queue.includes(figure)) return;
+                    if (node.dataset.mmDone !== '1' || node.dataset.mmTheme !== want) {
+                        queue.push(figure);
+                    }
+                });
+                while (queue.length || drainPromise) {
+                    await drain();
                 }
-                draining = false;
-                window.dispatchEvent(new Event('md-preview-mermaid-rendered'));
             }
 
             async function renderOne(figure) {
-                ensureInit();
+                const theme = activeTheme();
+                ensureInit(theme);
                 const node = figure.querySelector('.mermaid');
-                if (!node || node.dataset.mmDone === '1') return;
-                // Pre-render source, stashed so MdPreview.update can pair
-                // unchanged diagrams with their SVGs during DOM diffs.
-                node.__mdSrc = node.textContent;
+                if (!node) return;
+                if (node.dataset.mmDone === '1') {
+                    if (node.dataset.mmTheme === theme) return;
+                    if (typeof node.__mdSrc !== 'string') return;
+                    // Theme change: put the stashed source back and clear any
+                    // pan/zoom transform now, so a pagination that starts
+                    // before the next frame never captures a stale state.
+                    const prior = states.get(figure);
+                    if (prior && prior.surface) prior.surface.style.transform = '';
+                    node.textContent = node.__mdSrc;
+                    node.removeAttribute('data-processed');
+                    delete node.dataset.mmDone;
+                } else {
+                    // Pre-render source, stashed so MdPreview.update can pair
+                    // unchanged diagrams with their SVGs during DOM diffs.
+                    node.__mdSrc = node.textContent;
+                }
                 try {
                     await mermaid.run({ nodes: [node], suppressErrors: true });
                 } catch (err) {
@@ -2678,6 +2733,7 @@ nonisolated enum MarkdownHTML {
                     return;
                 }
                 node.dataset.mmDone = '1';
+                node.dataset.mmTheme = theme;
                 attachZoom(figure, svg);
             }
 
@@ -2706,6 +2762,7 @@ nonisolated enum MarkdownHTML {
                     figure.style.setProperty('--mm-aspect', vbW + ' / ' + vbH);
                 }
 
+                const alreadyWired = states.has(figure);
                 const state = {
                     tx: 0, ty: 0, scale: 1, min: 1, max: 8,
                     rect: null, raf: 0, dragging: false,
@@ -2714,6 +2771,13 @@ nonisolated enum MarkdownHTML {
                 };
                 states.set(figure, state);
                 cacheRect(figure);
+
+                // A theme re-render reuses the figure and its listeners; only
+                // the state and HUD need resetting for the fresh SVG.
+                if (alreadyWired) {
+                    apply(figure, state);
+                    return;
+                }
 
                 figure.addEventListener('pointerenter', () => postMermaidHover(true));
                 figure.addEventListener('pointerleave', () => postMermaidHover(false));
@@ -2955,6 +3019,9 @@ nonisolated enum MarkdownHTML {
                 }, { rootMargin: '300px 0px' });
                 figures.forEach((f) => io.observe(f));
             }
+
+            window.MdPreview = window.MdPreview || {};
+            window.MdPreview.mermaidRenderAll = renderAll;
 
             return { bootstrap };
         })()
@@ -3760,7 +3827,8 @@ nonisolated enum MarkdownHTML {
 
         /* Interaction affordances are screen-only. */
         .md-code-copy,
-        .md-search-burst { display: none !important; }
+        .md-search-burst,
+        .mermaid-hud { display: none !important; }
         mark.md-search-highlight,
         mark.md-search-highlight-current {
             background: transparent;
