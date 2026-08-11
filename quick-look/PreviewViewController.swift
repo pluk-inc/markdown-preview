@@ -7,33 +7,83 @@
 
 import Cocoa
 import Quartz
+import WebKit
 
-class PreviewViewController: NSViewController, QLPreviewingController {
-
-    override var nibName: NSNib.Name? {
-        return NSNib.Name("PreviewViewController")
-    }
+final class PreviewViewController: NSViewController, QLPreviewingController, WKNavigationDelegate {
+    private var webView: WKWebView!
 
     override func loadView() {
-        super.loadView()
-        // Do any additional setup after loading the view.
+        webView = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        webView.navigationDelegate = self
+        view = webView
+        preferredContentSize = NSSize(
+            width: MarkdownHTML.preferredPageWidth,
+            height: MarkdownHTML.preferredPageWidth
+        )
     }
-
-    /*
-    func preparePreviewOfSearchableItem(identifier: String, queryString: String?) async throws {
-        // Implement this method and set QLSupportsSearchableItems to YES in the Info.plist of the extension if you support CoreSpotlight.
-
-        // Perform any setup necessary in order to prepare the view.
-        // Quick Look will display a loading spinner until this returns.
-    }
-    */
 
     func preparePreviewOfFile(at url: URL) async throws {
-        // Add the supported content types to the QLSupportedContentTypes array in the Info.plist of the extension.
+        let text = try String(contentsOf: url, encoding: .utf8)
+        let appearanceMode = AppearanceMode.current
+        let colorScheme: MarkdownHTML.ColorScheme
+        switch appearanceMode {
+        case .automatic:
+            let appearance = NSApplication.shared.effectiveAppearance
+            let systemIsDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            colorScheme = appearanceMode.resolvedColorScheme(systemIsDark: systemIsDark)
+        case .light:
+            colorScheme = .light
+        case .dark:
+            colorScheme = .dark
+        }
 
-        // Perform any setup necessary in order to prepare the view.
+        let renderedHTML = MarkdownHTML.makeHTML(
+            from: text,
+            allowsScroll: true,
+            colorScheme: colorScheme
+        )
+        let baseDirectory = url.deletingLastPathComponent()
+        let rewrite = InlineLocalAssets.rewriteRelativeImages(
+            html: renderedHTML,
+            baseDirectory: baseDirectory,
+            reader: { try Data(contentsOf: $0) }
+        )
 
-        // Quick Look will display a loading spinner until this returns.
+        loadViewIfNeeded()
+        webView.loadHTMLString(
+            InlineLocalAssets.dataURLHTML(from: rewrite),
+            // Admitted local images are already data URLs. A directory base
+            // would let WebKit fetch rejected or over-budget relative images.
+            baseURL: nil
+        )
     }
 
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationAction: WKNavigationAction,
+        decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void
+    ) {
+        guard navigationAction.navigationType == .linkActivated else {
+            decisionHandler(.allow)
+            return
+        }
+        guard let url = navigationAction.request.url else {
+            decisionHandler(.cancel)
+            return
+        }
+
+        let isPageFragment = url.scheme == "about"
+            && url.path == "blank"
+            && url.fragment != nil
+        if isPageFragment {
+            decisionHandler(.allow)
+            return
+        }
+
+        if let scheme = url.scheme?.lowercased(),
+           ["http", "https", "mailto"].contains(scheme) {
+            NSWorkspace.shared.open(url)
+        }
+        decisionHandler(.cancel)
+    }
 }
