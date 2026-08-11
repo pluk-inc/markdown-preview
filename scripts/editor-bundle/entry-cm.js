@@ -299,6 +299,17 @@ class TableEditorWidget extends WidgetType {
     table.className = "cm-md-table-grid"
     scroll.appendChild(table)
 
+    // Header-driven column widths: a <colgroup> carries one <col> per column.
+    // Widths are filled after mount (see measureHeaderWidths below) so the
+    // header text alone decides the layout once the table switches to fixed.
+    const headerColgroup = document.createElement("colgroup")
+    table.appendChild(headerColgroup)
+    const headerCols = model.alignments.map(() => {
+      const col = document.createElement("col")
+      headerColgroup.appendChild(col)
+      return col
+    })
+
     const focusCellAfterUpdate = (row, column) => {
       requestAnimationFrame(() => requestAnimationFrame(() => {
         const replacement = view.dom.querySelector(
@@ -465,6 +476,16 @@ class TableEditorWidget extends WidgetType {
           }
           updateAccessibilityLabel()
           editor.addEventListener("input", updateAccessibilityLabel)
+          // Keep this column tracking its header as it's typed. The widget
+          // isn't rebuilt until the cell commits (blur/Tab/Enter), so width
+          // changes while editing need a listener here.
+          editor.addEventListener("input", () => {
+            if (!headerCols[column]) return
+            const width = editor.getBoundingClientRect().width
+            if (width <= 0) return
+            headerCols[column].style.width = Math.ceil(width) + "px"
+            table.classList.add("cm-md-table-fixed")
+          })
         }
         if (model.alignments[column] !== "none") editor.style.textAlign = model.alignments[column]
         editor.addEventListener("focus", () => {
@@ -622,6 +643,28 @@ class TableEditorWidget extends WidgetType {
         selection.column
       )
     })
+
+    // Measure header cells now that CodeMirror has mounted the widget and
+    // apply their natural width to each <col>. getBoundingClientRect is 0
+    // until the node is live, so this runs after mount via rAF. Inert where
+    // the width can't be read (e.g. jsdom), leaving the table on auto layout.
+    const measureHeaderWidths = () => {
+      const liveTable = view.dom.querySelector(
+        `.cm-md-table-widget[data-table-from="${this.from}"] table.cm-md-table-grid`,
+      )
+      if (!liveTable) return
+      let applied = false
+      liveTable.querySelectorAll('[data-table-row="0"]').forEach((cell) => {
+        const headerColumn = Number(cell.dataset.tableColumn)
+        if (!headerCols[headerColumn]) return
+        const width = cell.getBoundingClientRect().width
+        if (width <= 0) return
+        headerCols[headerColumn].style.width = Math.ceil(width) + "px"
+        applied = true
+      })
+      if (applied) liveTable.classList.add("cm-md-table-fixed")
+    }
+    requestAnimationFrame(measureHeaderWidths)
     return root
   }
 

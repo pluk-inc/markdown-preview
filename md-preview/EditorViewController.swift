@@ -553,6 +553,11 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             border-collapse: collapse;
             table-layout: auto;
         }
+        /* Once JS measures header widths into <colgroup>, switch to fixed so
+           the header alone owns column widths (body cells wrap to fit). */
+        .cm-md-table-grid.cm-md-table-fixed {
+            table-layout: fixed;
+        }
         .cm-md-table-grid th,
         .cm-md-table-grid td {
             min-width: 72px;
@@ -567,7 +572,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             background: color-mix(in srgb, Canvas 94%, var(--grid));
         }
         .cm-md-table-cell {
-            min-height: calc((MarkdownHTML.bodyFontSize)px * (MarkdownHTML.bodyLineHeight));
+            min-height: calc(\(MarkdownHTML.bodyFontSize)px * \(MarkdownHTML.bodyLineHeight));
             padding: 8px 10px;
             outline: none;
             white-space: pre-wrap;
