@@ -772,12 +772,28 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         alwaysOnTopButton?.state = pinned ? .on : .off
     }
 
+    /// The pin icon doubles as the state indicator. An `NSMenuItem` draws its
+    /// image and its check mark in the same leading slot, so beside an icon the
+    /// tick is easy to miss and the item reads as neither on nor off. Filling
+    /// the pin makes the state legible at a glance; `state` is still set, so
+    /// VoiceOver and the menu's own semantics stay correct.
+    private static func alwaysOnTopMenuImage(isPinned: Bool) -> NSImage? {
+        let image = NSImage(
+            systemSymbolName: isPinned ? "pin.fill" : "pin",
+            accessibilityDescription: NSLocalizedString("Always on Top",
+                                                        comment: "Always on Top menu item")
+        )
+        image?.isTemplate = true
+        return image
+    }
+
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if menuItem.action == #selector(saveDocument(_:)) {
             return isEditing
         }
         if menuItem.action == #selector(toggleAlwaysOnTop(_:)) {
             menuItem.state = isAlwaysOnTop ? .on : .off
+            menuItem.image = Self.alwaysOnTopMenuImage(isPinned: isAlwaysOnTop)
             return true
         }
         syncSidebarMenuState()
