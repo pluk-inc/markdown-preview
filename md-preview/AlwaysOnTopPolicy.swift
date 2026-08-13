@@ -20,8 +20,20 @@ enum AlwaysOnTopPolicy {
     /// belongs to. Both choices are intentional: the diagram popup follows the
     /// document, whereas this window is one the reader has explicitly asked to
     /// keep in sight while working in something else.
-    static func windowLevel(isPinned: Bool) -> Int {
-        Int(CGWindowLevelForKey(isPinned ? .floatingWindow : .normalWindow))
+    /// - Parameters:
+    ///   - isPinned: Whether the reader has asked to keep this window in sight.
+    ///   - isFullScreen: Whether the window is currently full screen. AppKit
+    ///     will not let a window above the normal level go full screen, so a
+    ///     pinned window loses Enter Full Screen and its green traffic light.
+    ///     A full-screen window owns its own Space, where floating above other
+    ///     applications means nothing, so the pin is suspended for the duration
+    ///     rather than fought with. It is kept as *intent* by the controller and
+    ///     reapplied on the way out. Required rather than defaulted: a caller
+    ///     that forgets it reintroduces exactly the bug this parameter exists
+    ///     to prevent.
+    static func windowLevel(isPinned: Bool, isFullScreen: Bool) -> Int {
+        let floats = isPinned && !isFullScreen
+        return Int(CGWindowLevelForKey(floats ? .floatingWindow : .normalWindow))
     }
 
     /// The windows a single toggle applies to.

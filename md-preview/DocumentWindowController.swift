@@ -173,6 +173,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func setupWindow() {
         documentWindow.styleMask.insert(.fullSizeContentView)
+        // Declared explicitly rather than left to AppKit's implicit default,
+        // because Always on Top raises the window above the normal level and a
+        // window that has not stated its full-screen capability is the first
+        // thing AppKit stops offering Enter Full Screen to.
+        documentWindow.collectionBehavior.insert(.fullScreenPrimary)
         documentWindow.delegate = self
         documentWindow.tabbingIdentifier = "MarkdownDocumentWindow"
         documentWindow.tabbingMode = Self.nextWindowDeclinesTabbing ? .disallowed : .automatic
@@ -255,6 +260,14 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     func windowWillClose(_ notification: Notification) {
         fileWatcher?.cancel()
         fileWatcher = nil
+    }
+
+    func windowWillEnterFullScreen(_ notification: Notification) {
+        reapplyAlwaysOnTopLevel(isFullScreen: true)
+    }
+
+    func windowDidExitFullScreen(_ notification: Notification) {
+        reapplyAlwaysOnTopLevel(isFullScreen: false)
     }
 
     func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
@@ -726,13 +739,30 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func setAlwaysOnTop(_ pinned: Bool) {
-        let level = NSWindow.Level(rawValue: AlwaysOnTopPolicy.windowLevel(isPinned: pinned))
         let windows = AlwaysOnTopPolicy.affectedWindows(toggling: documentWindow,
                                                         tabGroup: documentWindow.tabbedWindows)
         for window in windows {
-            window.level = level
+            // Read each window's live full-screen state rather than assuming the
+            // reader pinned from a normal window: pinning while already in full
+            // screen must light the toggle without dropping out of full screen.
+            window.level = NSWindow.Level(
+                rawValue: AlwaysOnTopPolicy.windowLevel(
+                    isPinned: pinned,
+                    isFullScreen: window.styleMask.contains(.fullScreen)
+                )
+            )
             (window.windowController as? DocumentWindowController)?.recordAlwaysOnTop(pinned)
         }
+    }
+
+    /// Reapplies the level for a full-screen transition. `isAlwaysOnTop` is the
+    /// reader's intent and is deliberately left untouched, so the toolbar toggle
+    /// stays lit across the transition and the window floats again on the way out.
+    private func reapplyAlwaysOnTopLevel(isFullScreen: Bool) {
+        documentWindow.level = NSWindow.Level(
+            rawValue: AlwaysOnTopPolicy.windowLevel(isPinned: isAlwaysOnTop,
+                                                    isFullScreen: isFullScreen)
+        )
     }
 
     /// Stores the pinned state and refreshes the toolbar toggle. Applied to

@@ -4,18 +4,37 @@ import XCTest
 
 final class AlwaysOnTopPolicyTests: XCTestCase {
     func testPinnedWindowSitsAtTheFloatingLevel() {
-        XCTAssertEqual(AlwaysOnTopPolicy.windowLevel(isPinned: true),
+        XCTAssertEqual(AlwaysOnTopPolicy.windowLevel(isPinned: true, isFullScreen: false),
                        Int(CGWindowLevelForKey(.floatingWindow)))
     }
 
     func testUnpinnedWindowReturnsToTheNormalLevel() {
-        XCTAssertEqual(AlwaysOnTopPolicy.windowLevel(isPinned: false),
+        XCTAssertEqual(AlwaysOnTopPolicy.windowLevel(isPinned: false, isFullScreen: false),
                        Int(CGWindowLevelForKey(.normalWindow)))
     }
 
     func testPinningRaisesTheWindowAboveItsUnpinnedLevel() {
-        XCTAssertGreaterThan(AlwaysOnTopPolicy.windowLevel(isPinned: true),
-                             AlwaysOnTopPolicy.windowLevel(isPinned: false))
+        XCTAssertGreaterThan(AlwaysOnTopPolicy.windowLevel(isPinned: true, isFullScreen: false),
+                             AlwaysOnTopPolicy.windowLevel(isPinned: false, isFullScreen: false))
+    }
+
+    // AppKit refuses full screen to any window above the normal level, which is
+    // what silently greyed out Enter Full Screen once a window was pinned.
+    func testPinnedWindowDropsToTheNormalLevelInFullScreen() {
+        XCTAssertEqual(AlwaysOnTopPolicy.windowLevel(isPinned: true, isFullScreen: true),
+                       Int(CGWindowLevelForKey(.normalWindow)))
+    }
+
+    func testUnpinnedWindowStaysAtTheNormalLevelInFullScreen() {
+        XCTAssertEqual(AlwaysOnTopPolicy.windowLevel(isPinned: false, isFullScreen: true),
+                       Int(CGWindowLevelForKey(.normalWindow)))
+    }
+
+    // The pin is intent, not the level itself: leaving full screen while still
+    // pinned has to float the window again rather than strand it at normal.
+    func testLeavingFullScreenWhilePinnedFloatsTheWindowAgain() {
+        XCTAssertEqual(AlwaysOnTopPolicy.windowLevel(isPinned: true, isFullScreen: false),
+                       Int(CGWindowLevelForKey(.floatingWindow)))
     }
 
     func testUntabbedWindowIsTheOnlyOneAffected() {
