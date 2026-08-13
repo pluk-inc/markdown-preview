@@ -36,7 +36,11 @@ private extension Array where Element == NSToolbarItem.Identifier {
     }
 }
 
-final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate, NSSharingServicePickerToolbarItemDelegate, NSSearchFieldDelegate, NSMenuDelegate {
+// `NSMenuItemValidation` is load-bearing, not tidiness. `validateMenuItem` is only
+// reachable from AppKit through an @objc entry point, and `NSWindowController` has
+// no such method to override, so without this conformance the implementation below
+// is never called: no menu item ever gets its state, and the failure is silent.
+final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate, NSSharingServicePickerToolbarItemDelegate, NSSearchFieldDelegate, NSMenuDelegate, NSMenuItemValidation {
 
     private enum NavigationIntent {
         case normal
