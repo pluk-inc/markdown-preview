@@ -1528,8 +1528,16 @@ nonisolated enum MarkdownHTML {
         }
 
         // ---- Per-column resize (session-only, host app only) ----
+        // Key on the header row's text rather than data-source-start: source
+        // lines shift with edits above the table, and a different document
+        // can reuse this webview. Same headers ⇒ same session widths.
         function tableKeyFromTable(table) {
-            return table && table.dataset && String(table.dataset.sourceStart);
+            if (!table) return null;
+            const headerTexts = Array.from(
+                table.querySelectorAll('thead th')
+            ).map((th) => th.textContent);
+            if (!headerTexts.length) return null;
+            return headerTexts.join('\\u0000');
         }
         function ensureColgroup(table) {
             let colgroup = table.querySelector('colgroup');
@@ -1540,10 +1548,25 @@ nonisolated enum MarkdownHTML {
         }
         function writeColumnWidths(table, widths) {
             const colgroup = ensureColgroup(table);
+            // Restores run on every update for every resized table; skip the
+            // rebuild (and the reflow it forces) when nothing changed.
+            if (colgroup.children.length === widths.length) {
+                let unchanged = true;
+                for (let i = 0; i < widths.length; i++) {
+                    if (colgroup.children[i].style.width !== Math.round(widths[i]) + 'px') {
+                        unchanged = false;
+                        break;
+                    }
+                }
+                if (unchanged) {
+                    table.classList.add('md-table-resized');
+                    return;
+                }
+            }
             colgroup.innerHTML = '';
             widths.forEach((w) => {
                 const col = document.createElement('col');
-                col.style.width = w + 'px';
+                col.style.width = Math.round(w) + 'px';
                 colgroup.appendChild(col);
             });
             table.classList.add('md-table-resized');
@@ -1588,10 +1611,23 @@ nonisolated enum MarkdownHTML {
                 const ths = Array.from(table.querySelectorAll('thead th'));
                 const index = ths.indexOf(th);
                 if (index < 0) return;
+                const startWidths = ths.map((t) => Math.round(t.getBoundingClientRect().width));
+                // Materialize the colgroup up front so the auto→fixed switch
+                // on the first move has no jump, and mousemove only has to
+                // touch the dragged column's <col>.
+                const colgroup = ensureColgroup(table);
+                colgroup.innerHTML = '';
+                const cols = startWidths.map((w) => {
+                    const col = document.createElement('col');
+                    col.style.width = w + 'px';
+                    colgroup.appendChild(col);
+                    return col;
+                });
+                table.classList.add('md-table-resized');
                 colResizeDrag = {
-                    table,
+                    cols,
                     index,
-                    startWidths: ths.map((t) => Math.round(t.getBoundingClientRect().width)),
+                    startWidths,
                     startClientX: event.clientX,
                     key: tableKeyFromTable(table),
                 };
@@ -1600,10 +1636,13 @@ nonisolated enum MarkdownHTML {
             }, true);
             document.addEventListener('mousemove', (event) => {
                 if (!colResizeDrag) return;
-                const { table, index, startWidths, startClientX, key } = colResizeDrag;
+                // A release outside the webview never delivers a mouseup to
+                // this document — a button-less move means the drag is over.
+                if (!event.buttons) { colResizeDrag = null; return; }
+                const { cols, index, startWidths, startClientX, key } = colResizeDrag;
                 const next = startWidths.slice();
                 next[index] = Math.max(24, startWidths[index] + (event.clientX - startClientX));
-                writeColumnWidths(table, next);
+                cols[index].style.width = next[index] + 'px';
                 if (key) tableColumnWidths.set(key, next);
             }, true);
             document.addEventListener('mouseup', () => {
@@ -2017,6 +2056,10 @@ nonisolated enum MarkdownHTML {
                     // pair one-to-one with the live DOM during the diff.
                     decorateCodeBlocks(next);
                     enableTableEditing(next);
+                    // Pre-shape the resize decorations too, so an untouched
+                    // table stays isEqualNode-equal to its live counterpart
+                    // and morphdom can keep skipping it wholesale.
+                    applyTableColumnResize(next);
                     keyExpensiveBlocks(article);
                     keyExpensiveBlocks(next);
                     morphdom(article, next, MORPH_OPTIONS);
@@ -3775,7 +3818,20 @@ nonisolated enum MarkdownHTML {
        injects these; hasHostBridge gates the whole subsystem, so Quick Look
        never sees them). */
     .md-table-editor th { position: relative; }
-    .md-table-editor table.md-table-resized { table-layout: fixed; }
+    /* The base article CSS makes every table display:block (its scroll
+       mechanism), but table-layout only applies to table boxes — re-declare
+       display the same way the frontmatter table does before going fixed.
+       .md-table-scroll keeps ownership of horizontal scrolling, so the
+       table itself may exceed the viewport and scroll. */
+    .md-table-editor table.md-table-resized {
+        display: table;
+        table-layout: fixed;
+        width: auto;
+        max-width: none;
+    }
+    /* Fixed columns clip long unbreakable content without this (the print
+       sheet already sets it; the screen needs it too once layout is fixed). */
+    .md-table-editor table.md-table-resized td { overflow-wrap: anywhere; }
     .md-col-resize {
         position: absolute;
         top: 0;
