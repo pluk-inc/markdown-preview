@@ -7,6 +7,7 @@ import SwiftUI
 
 struct DocumentMetadata: Equatable {
     var fileName: String = ""
+    var fileURL: URL?
     var wordCount: Int = 0
     var characterCount: Int = 0
     var lineCount: Int = 0
@@ -21,6 +22,7 @@ struct DocumentMetadata: Equatable {
 extension DocumentMetadata {
     static func make(url: URL?, markdown: String) -> DocumentMetadata {
         var meta = DocumentMetadata()
+        meta.fileURL = url
         meta.fileName = url?.lastPathComponent
             ?? NSLocalizedString("Untitled", comment: "Inspector file name when no document is open")
 
@@ -106,6 +108,14 @@ struct InspectorView: View {
                     NSLocalizedString("File Name", comment: "Inspector field label"),
                     value: metadata.fileName
                 )
+                if let url = metadata.fileURL {
+                    LabeledContent(NSLocalizedString("Where", comment: "Inspector field label")) {
+                        Text(Self.displayLocation(for: url))
+                            .multilineTextAlignment(.trailing)
+                            .textSelection(.enabled)
+                    }
+                    .help(url.deletingLastPathComponent().path)
+                }
                 LabeledContent(
                     NSLocalizedString("Document Type", comment: "Inspector field label"),
                     value: NSLocalizedString("Markdown Document", comment: "Inspector document type")
@@ -175,6 +185,26 @@ struct InspectorView: View {
             }
             .formStyle(.grouped)
         }
+    }
+}
+
+extension InspectorView {
+    // The sandbox remaps NSHomeDirectory() to the app container, so resolve the
+    // user's real home for tilde abbreviation.
+    private static let realHomePath: String = {
+        if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
+            return String(cString: dir)
+        }
+        return NSHomeDirectory()
+    }()
+
+    static func displayLocation(for url: URL) -> String {
+        let path = url.deletingLastPathComponent().standardizedFileURL.path
+        if path == realHomePath { return "~" }
+        if path.hasPrefix(realHomePath + "/") {
+            return "~" + path.dropFirst(realHomePath.count)
+        }
+        return path
     }
 }
 
