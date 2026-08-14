@@ -86,6 +86,39 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         )
     }
 
+    func testOnlyDoubleTildesRenderAsStrikethrough() {
+        let html = EscapingHTMLFormatter.format("~single~ and ~~double~~")
+
+        XCTAssertTrue(
+            html.contains("~single~ and <del>double</del>"),
+            "expected single tildes to remain visible and double tildes to strike through: \(html)"
+        )
+        XCTAssertFalse(html.contains("<del>single</del>"), html)
+    }
+
+    func testSingleTildesPreserveNestedInlineFormatting() {
+        let html = EscapingHTMLFormatter.format("~**important**~ and ~~**obsolete**~~")
+
+        XCTAssertTrue(html.contains("~<strong>important</strong>~"), html)
+        XCTAssertTrue(html.contains("<del><strong>obsolete</strong></del>"), html)
+    }
+
+    func testTildeDelimiterDetectionUsesUTF8SourceColumns() {
+        let html = EscapingHTMLFormatter.format("中文 ~保留~，~~删除~~")
+
+        XCTAssertTrue(html.contains("中文 ~保留~，<del>删除</del>"), html)
+    }
+
+    func testTildeDelimiterDetectionUsesParsedMarkdown() {
+        let html = EscapingHTMLFormatter.format(
+            "~visible~",
+            sourceMarkdown: "source mapping without a tilde"
+        )
+
+        XCTAssertTrue(html.contains("~visible~"), html)
+        XCTAssertFalse(html.contains("<del>visible</del>"), html)
+    }
+
     func testEveryPrecedingBlankSourceLineIsRecorded() {
         let html = EscapingHTMLFormatter.format("First paragraph.\n\n\nSecond paragraph.")
         XCTAssertTrue(

@@ -285,6 +285,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     let options: HTMLFormatterOptions
     let sourceLineOffset: Int
     private let sourceLines: [String]
+    private let parsedSourceLines: [String]
 
     private var inTableHead = false
     private var tableColumnAlignments: [Table.ColumnAlignment?]?
@@ -304,10 +305,12 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
 
     init(options: HTMLFormatterOptions = [],
          sourceLineOffset: Int = 0,
-         sourceMarkdown: String = "") {
+         sourceMarkdown: String = "",
+         parsedMarkdown: String = "") {
         self.options = options
         self.sourceLineOffset = sourceLineOffset
         self.sourceLines = sourceMarkdown.components(separatedBy: "\n")
+        self.parsedSourceLines = parsedMarkdown.components(separatedBy: "\n")
     }
 
     static func format(_ markdown: String,
@@ -318,7 +321,8 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         var walker = EscapingHTMLFormatter(
             options: options,
             sourceLineOffset: sourceLineOffset,
-            sourceMarkdown: sourceMarkdown ?? markdown
+            sourceMarkdown: sourceMarkdown ?? markdown,
+            parsedMarkdown: markdown
         )
         walker.visit(document)
         return walker.result
@@ -353,6 +357,31 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
             precedingLineIndex -= 1
         }
         return blankLineCount
+    }
+
+    private func usesDoubleTildeDelimiter(_ strikethrough: Strikethrough) -> Bool {
+        guard let start = strikethrough.range?.lowerBound,
+              start.line > 0,
+              start.column > 0,
+              parsedSourceLines.indices.contains(start.line - 1) else {
+            // Parsed strikethrough nodes normally have a source range. Keep
+            // the established rendering if an upstream parser ever omits it.
+            return true
+        }
+
+        let line = parsedSourceLines[start.line - 1].utf8
+        guard let first = line.index(
+            line.startIndex,
+            offsetBy: start.column - 1,
+            limitedBy: line.endIndex
+        ),
+              first != line.endIndex,
+              line[first] == Character("~").asciiValue,
+              let second = line.index(first, offsetBy: 1, limitedBy: line.endIndex),
+              second != line.endIndex else {
+            return false
+        }
+        return line[second] == Character("~").asciiValue
     }
 
     mutating func visitDocument(_ document: Document) {
@@ -866,9 +895,10 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     }
 
     mutating func visitStrikethrough(_ strikethrough: Strikethrough) {
-        result += "<del>"
+        let delimiter = usesDoubleTildeDelimiter(strikethrough)
+        result += delimiter ? "<del>" : "~"
         descendInto(strikethrough)
-        result += "</del>"
+        result += delimiter ? "</del>" : "~"
     }
 
     mutating func visitSymbolLink(_ symbolLink: SymbolLink) {
