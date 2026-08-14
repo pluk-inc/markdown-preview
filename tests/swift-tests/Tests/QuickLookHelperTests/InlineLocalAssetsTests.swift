@@ -235,4 +235,58 @@ final class InlineLocalAssetsTests: XCTestCase {
             Set([red, blue])
         )
     }
+
+    func testAttachmentsCanBeEmbeddedAsDataURLsForViewBasedPreview() {
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: #"<img src="a.png"><img src="b">"#,
+            baseDirectory: baseDir,
+            reader: reader([
+                "/tmp/qltest-fixture/a.png": red,
+                "/tmp/qltest-fixture/b": blue,
+            ])
+        )
+
+        let html = InlineLocalAssets.dataURLHTML(from: result)
+
+        XCTAssertFalse(html.contains("cid:"))
+        XCTAssertTrue(html.contains("data:image/png;base64,\(red.base64EncodedString())"))
+        XCTAssertTrue(html.contains(
+            "data:application/octet-stream;base64,\(blue.base64EncodedString())"
+        ))
+    }
+
+    func testDataURLConversionKeepsOverlappingContentIDsDistinct() {
+        let sources = (0...10).map { "image-\($0).png" }
+        let html = sources.map { #"<img src="\#($0)">"# }.joined()
+        let files = Dictionary(uniqueKeysWithValues: sources.enumerated().map { index, source in
+            ("/tmp/qltest-fixture/\(source)", Data([UInt8(index)]))
+        })
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: html,
+            baseDirectory: baseDir,
+            reader: reader(files)
+        )
+
+        let converted = InlineLocalAssets.dataURLHTML(from: result)
+
+        XCTAssertEqual(result.attachments.count, 11)
+        XCTAssertFalse(converted.contains("cid:"))
+        for index in 0...10 {
+            let encoded = Data([UInt8(index)]).base64EncodedString()
+            XCTAssertTrue(converted.contains(#"src="data:image/png;base64,\#(encoded)""#))
+        }
+    }
+
+    func testDataURLConversionDoesNotReplaceCIDTextOutsideImageSources() {
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: #"<p>cid:md-asset-0</p><img src="a.png">"#,
+            baseDirectory: baseDir,
+            reader: reader(["/tmp/qltest-fixture/a.png": red])
+        )
+
+        let html = InlineLocalAssets.dataURLHTML(from: result)
+
+        XCTAssertTrue(html.contains("<p>cid:md-asset-0</p>"))
+        XCTAssertTrue(html.contains("data:image/png;base64,\(red.base64EncodedString())"))
+    }
 }
