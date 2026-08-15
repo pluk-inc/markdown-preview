@@ -1,5 +1,37 @@
 /* App menu */
 "Install CLI..." = "安装命令行工具…";
+"Settings…" = "设置…";
+
+/* Settings */
+"General" = "通用";
+"Privacy" = "隐私";
+"About" = "关于";
+"Appearance also applies to Quick Look previews." = "外观设置也会应用于“快速查看”预览。";
+"Layout" = "布局";
+"Text size" = "文本大小";
+"Size of rendered Markdown in document windows." = "文稿窗口中渲染的 Markdown 大小。";
+"Small" = "小";
+"Medium" = "中";
+"Large" = "大";
+"Content width" = "内容宽度";
+"Zooming a document window with ⌘+ and ⌘− changes this same size." = "使用 ⌘+ 和 ⌘− 缩放文稿窗口会更改同一大小设置。";
+"Hand-off" = "打开方式";
+"Open documents in" = "打开文稿时使用";
+"AI apps" = "AI App";
+"The app the Open button in the document toolbar uses first. Its menu still offers every other installed app." = "文稿工具栏中的“打开”按钮会优先使用此 App。菜单仍会列出所有其他已安装的 App。";
+"Command line tools" = "命令行工具";
+"Install…" = "安装…";
+"Adds mdp, md-preview, and markdown-preview to your PATH. Run it again after updating the app to refresh the commands." = "将 mdp、md-preview 和 markdown-preview 添加到 PATH。更新 App 后请再次运行，以刷新这些命令。";
+"Markdown Preview" = "Markdown Preview";
+"Version %@ (%@)" = "版本 %@（%@）";
+"Check for Updates" = "检查更新";
+"Automatically check for updates" = "自动检查更新";
+"Automatically download updates" = "自动下载更新";
+"Last checked" = "上次检查";
+"Never" = "从未";
+"Downloaded updates install the next time you quit Markdown Preview." = "已下载的更新将在下次退出 Markdown Preview 时安装。";
+"Send anonymous crash reports" = "发送匿名崩溃报告";
+"Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "崩溃报告包含堆栈跟踪、系统版本和 App 版本等诊断信息，可能包含技术文件路径；Markdown Preview 不会主动附加文稿内容或个人信息。";
 
 /* View menu */
 "Appearance" = "外观";

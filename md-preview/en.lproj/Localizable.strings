@@ -1,5 +1,37 @@
 /* App menu */
 "Install CLI..." = "Install CLI...";
+"Settings…" = "Settings…";
+
+/* Settings */
+"General" = "General";
+"Privacy" = "Privacy";
+"About" = "About";
+"Appearance also applies to Quick Look previews." = "Appearance also applies to Quick Look previews.";
+"Layout" = "Layout";
+"Text size" = "Text size";
+"Size of rendered Markdown in document windows." = "Size of rendered Markdown in document windows.";
+"Small" = "Small";
+"Medium" = "Medium";
+"Large" = "Large";
+"Content width" = "Content width";
+"Zooming a document window with ⌘+ and ⌘− changes this same size." = "Zooming a document window with ⌘+ and ⌘− changes this same size.";
+"Hand-off" = "Hand-off";
+"Open documents in" = "Open documents in";
+"AI apps" = "AI apps";
+"The app the Open button in the document toolbar uses first. Its menu still offers every other installed app." = "The app the Open button in the document toolbar uses first. Its menu still offers every other installed app.";
+"Command line tools" = "Command line tools";
+"Install…" = "Install…";
+"Adds mdp, md-preview, and markdown-preview to your PATH. Run it again after updating the app to refresh the commands." = "Adds mdp, md-preview, and markdown-preview to your PATH. Run it again after updating the app to refresh the commands.";
+"Markdown Preview" = "Markdown Preview";
+"Version %@ (%@)" = "Version %@ (%@)";
+"Check for Updates" = "Check for Updates";
+"Automatically check for updates" = "Automatically check for updates";
+"Automatically download updates" = "Automatically download updates";
+"Last checked" = "Last checked";
+"Never" = "Never";
+"Downloaded updates install the next time you quit Markdown Preview." = "Downloaded updates install the next time you quit Markdown Preview.";
+"Send anonymous crash reports" = "Send anonymous crash reports";
+"Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information.";
 
 /* View menu */
 "Appearance" = "Appearance";

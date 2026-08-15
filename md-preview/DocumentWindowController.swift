@@ -698,6 +698,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             .reloadPreviewForSettingChange()
     }
 
+    func applyTextSizeSetting() {
+        (documentWindow.contentViewController as? MainSplitViewController)?
+            .applyTextSizeSetting()
+    }
+
     private func currentSidebarMenuState() -> (sidebarVisible: Bool, mode: SidebarViewController.Mode) {
         let split = documentWindow.contentViewController as? MainSplitViewController
         let sidebarVisible = split?.isSidebarVisible ?? false
@@ -1954,16 +1959,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     // MARK: - Open
 
-    private static let defaultOpenActionKindKey = "MarkdownPreview.defaultOpenActionKind"
-
-    private enum OpenActionKind: String {
-        case editor
-        case llm
-    }
-
-    private enum OpenActionSelection {
-        case editor(EditorCandidate)
-        case llm(LLMCandidate)
+    /// Re-resolves the default hand-off app after Settings changes it.
+    func refreshOpenTargets() {
+        refreshOpenWithItem()
+        refreshOpenInLLMItem()
+        refreshOpenActionsItem()
     }
 
     private func makeOpenActionsItem() -> NSToolbarItem {
@@ -2037,33 +2037,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                                           defaultEditor: EditorCandidate?,
                                           llmApps: [LLMCandidate],
                                           defaultLLM: LLMCandidate?) -> OpenActionSelection? {
-        let persistedKind = UserDefaults.standard.string(forKey: Self.defaultOpenActionKindKey)
-            .flatMap(OpenActionKind.init(rawValue:))
-
-        switch persistedKind {
-        case .llm:
-            if let defaultLLM {
-                return .llm(defaultLLM)
-            }
-            if let defaultEditor {
-                return .editor(defaultEditor)
-            }
-        case .editor:
-            if let defaultEditor {
-                return .editor(defaultEditor)
-            }
-            if let defaultLLM {
-                return .llm(defaultLLM)
-            }
-        case nil:
-            if let defaultLLM {
-                return .llm(defaultLLM)
-            }
-            if let defaultEditor {
-                return .editor(defaultEditor)
-            }
-        }
-        return nil
+        OpenTargetCatalog.resolveDefaultOpenAction(editors: editors,
+                                                   defaultEditor: defaultEditor,
+                                                   llmApps: llmApps,
+                                                   defaultLLM: defaultLLM)
     }
 
     private func buildOpenActionsMenu(editorCandidates: [EditorCandidate],
@@ -2162,50 +2139,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     // MARK: - Open in LLM
 
-    private static let defaultLLMTargetIDKey = "MarkdownPreview.defaultLLMTargetID"
     private static let llmDeepLinkCharacterLimit = 12_000
     private static let claudeColdLaunchDeepLinkDelay: TimeInterval = 1.25
     private static let chatGPTColdLaunchFileOpenDelay: TimeInterval = 1.25
-
-    private enum LLMHandoff {
-        case codexDesktop
-        case claudeCodeDesktop
-        case chatGPTDocumentOpen
-        case copyAndOpen
-    }
-
-    private struct LLMTarget {
-        let id: String
-        let title: String
-        let bundleIDs: [String]
-        let handoff: LLMHandoff
-    }
-
-    private struct LLMCandidate {
-        let target: LLMTarget
-        let appURL: URL
-    }
-
-    private static let llmTargets: [LLMTarget] = [
-        LLMTarget(
-            id: "codex",
-            title: "Codex",
-            bundleIDs: ["com.openai.codex"],
-            handoff: .codexDesktop
-        ),
-        LLMTarget(
-            id: "claude",
-            title: "Claude",
-            bundleIDs: ["com.anthropic.claudefordesktop"],
-            handoff: .claudeCodeDesktop
-        ),
-        LLMTarget(
-            id: "chatgpt",
-            title: "ChatGPT",
-            bundleIDs: ["com.openai.chat"],
-            handoff: .chatGPTDocumentOpen
-        )
-    ]
 
     private var hasLLMTargetsAvailable: Bool {
         !llmCandidates().isEmpty
@@ -2262,21 +2198,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func llmCandidates() -> [LLMCandidate] {
-        Self.llmTargets.compactMap { target in
-            let appURL = target.bundleIDs.compactMap {
-                NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)
-            }.first
-            guard let appURL else { return nil }
-            return LLMCandidate(target: target, appURL: appURL)
-        }
+        OpenTargetCatalog.llmCandidates()
     }
 
     private func resolveDefaultLLM(among candidates: [LLMCandidate]) -> LLMCandidate? {
-        if let persistedID = UserDefaults.standard.string(forKey: Self.defaultLLMTargetIDKey),
-           let match = candidates.first(where: { $0.target.id == persistedID }) {
-            return match
-        }
-        return candidates.first
+        OpenTargetCatalog.resolveDefaultLLM(among: candidates)
     }
 
     private func buildOpenInLLMMenu(candidates: [LLMCandidate],
@@ -2330,8 +2256,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         guard let targetID = sender.representedObject as? String,
               let candidate = llmCandidates().first(where: { $0.target.id == targetID }),
               let fileURL = currentFileURL else { return }
-        UserDefaults.standard.set(candidate.target.id, forKey: Self.defaultLLMTargetIDKey)
-        UserDefaults.standard.set(OpenActionKind.llm.rawValue, forKey: Self.defaultOpenActionKindKey)
+        OpenTargetCatalog.setDefaultLLM(candidate)
         refreshOpenInLLMItem()
         refreshOpenActionsItem()
         openInLLM(candidate, fileURL: fileURL)
@@ -2714,47 +2639,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     // MARK: - Open With
 
     private static let markdownFileExtensions = ["md", "markdown", "mdown", "txt"]
-    private static let markdownDocTypeExtensions: Set<String> = ["md", "markdown", "mdown"]
-    private static let strongMarkdownUTIs: Set<String> = ["net.daringfireball.markdown"]
-    private static let plainTextUTIs: Set<String> = [
-        "public.plain-text", "public.text",
-        "public.utf8-plain-text", "public.utf16-plain-text"
-    ]
-    private static let textyUTIs: Set<String> = plainTextUTIs.union(strongMarkdownUTIs)
-    private static let defaultEditorBundleIDKey = "MarkdownPreview.defaultEditorBundleID"
-    private static let defaultEditorURLKey = "MarkdownPreview.defaultEditorURL"
-    private static let editorBundleIDPriority = [
-        "com.microsoft.VSCode",
-        "com.todesktop.230313mzl4w4u92",
-        "dev.zed.Zed",
-        "com.sublimetext.4",
-        "com.sublimetext.3",
-        "com.barebones.bbedit",
-        "com.panic.Nova",
-        "com.coteditor.CotEditor",
-        "com.apple.TextEdit",
-        "com.apple.dt.Xcode",
-        "com.macromates.TextMate",
-        "org.vim.MacVim"
-    ]
-    /// Editors we trust to open Markdown even when their Info.plist doesn't pass
-    /// `canEditMarkdown`. Markdown-first apps like iA Writer declare a custom
-    /// imported UTI (which only *conforms to* `net.daringfireball.markdown`) and
-    /// omit `CFBundleTypeExtensions`, so the heuristic can't see them. See #114.
-    private static let editorBundleIDAllowlist: Set<String> = [
-        "pro.writer.mac",           // iA Writer (Mac App Store / direct)
-        "pro.writer.mac-setapp",    // iA Writer (Setapp)
-        "abnerworks.Typora",        // Typora
-        "com.uranusjr.macdown",     // MacDown
-        "md.obsidian"
-    ]
-    /// Apps that claim a Markdown/plain-text document type but aren't useful as a
-    /// text editor — they pass `canEditMarkdown` only as noise. See #114.
-    private static let editorBundleIDDenylist: Set<String> = [
-        "com.microsoft.Word",
-        "com.ideasoncanvas.mindnode.macos",
-        "com.somac.subtitleburner"
-    ]
 
     private func makeOpenWithItem() -> NSToolbarItem {
         let item = NSMenuToolbarItem(itemIdentifier: .openWith)
@@ -2768,11 +2652,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         openWithItem = item
         refreshOpenWithItem()
         return item
-    }
-
-    private struct EditorCandidate {
-        let url: URL
-        let bundleID: String?
     }
 
     private func refreshOpenWithItem() {
@@ -2808,53 +2687,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func editorCandidates(for fileURL: URL) -> [EditorCandidate] {
-        let myBundleID = Bundle.main.bundleIdentifier
-        // Every URL Launch Services has registered for our bundle id — covers stale DerivedData /
-        // archive copies the sandbox can't introspect by reading their Info.plist.
-        var selfURLs: Set<URL> = [canonicalAppURL(Bundle.main.bundleURL)]
-        if let myBundleID {
-            for url in NSWorkspace.shared.urlsForApplications(withBundleIdentifier: myBundleID) {
-                selfURLs.insert(canonicalAppURL(url))
-            }
-        }
-
-        return NSWorkspace.shared.urlsForApplications(toOpen: fileURL).compactMap { appURL in
-            if selfURLs.contains(canonicalAppURL(appURL)) { return nil }
-            let plist = infoPlist(at: appURL)
-            let bundleID = (plist?["CFBundleIdentifier"] as? String)
-                ?? Bundle(url: appURL)?.bundleIdentifier
-            if let bundleID, Self.editorBundleIDDenylist.contains(bundleID) { return nil }
-            let isAllowlisted = bundleID.map(Self.editorBundleIDAllowlist.contains) ?? false
-            guard isAllowlisted || canEditMarkdown(plist: plist) else { return nil }
-            return EditorCandidate(url: appURL, bundleID: bundleID)
-        }
+        OpenTargetCatalog.editorCandidates(for: fileURL)
     }
 
     private func resolveDefaultEditor(among candidates: [EditorCandidate]) -> EditorCandidate? {
-        let myBundleID = Bundle.main.bundleIdentifier
-        if let persistedID = UserDefaults.standard.string(forKey: Self.defaultEditorBundleIDKey),
-           persistedID != myBundleID {
-            if let match = candidates.first(where: { $0.bundleID == persistedID }) {
-                return match
-            }
-            if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: persistedID) {
-                return EditorCandidate(url: url, bundleID: persistedID)
-            }
-        }
-
-        if let persistedPath = UserDefaults.standard.string(forKey: Self.defaultEditorURLKey) {
-            let persistedURL = canonicalAppURL(URL(fileURLWithPath: persistedPath))
-            if let match = candidates.first(where: { sameApplication($0.url, persistedURL) }) {
-                return match
-            }
-        }
-
-        for preferred in Self.editorBundleIDPriority {
-            if let match = candidates.first(where: { $0.bundleID == preferred }) {
-                return match
-            }
-        }
-        return candidates.first
+        OpenTargetCatalog.resolveDefaultEditor(among: candidates)
     }
 
     private func buildOpenWithMenu(candidates: [EditorCandidate],
@@ -2895,70 +2732,19 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func displayName(for appURL: URL) -> String {
-        FileManager.default.displayName(atPath: appURL.path)
-            .replacingOccurrences(of: ".app", with: "")
+        OpenTargetCatalog.displayName(for: appURL)
     }
 
     private func sameEditor(_ lhs: EditorCandidate, _ rhs: EditorCandidate) -> Bool {
-        if let leftID = lhs.bundleID, let rightID = rhs.bundleID {
-            return leftID == rightID
-        }
-        return sameApplication(lhs.url, rhs.url)
+        OpenTargetCatalog.sameEditor(lhs, rhs)
     }
 
     private func sameApplication(_ lhs: URL, _ rhs: URL) -> Bool {
-        canonicalAppURL(lhs) == canonicalAppURL(rhs)
+        OpenTargetCatalog.sameApplication(lhs, rhs)
     }
 
     private func canonicalAppURL(_ url: URL) -> URL {
-        url.resolvingSymlinksInPath().standardizedFileURL
-    }
-
-    private func infoPlist(at appURL: URL) -> [String: Any]? {
-        let plistURL = appURL.appendingPathComponent("Contents/Info.plist")
-        guard let data = try? Data(contentsOf: plistURL),
-              let plist = try? PropertyListSerialization.propertyList(from: data,
-                                                                       options: [],
-                                                                       format: nil) as? [String: Any] else {
-            return Bundle(url: appURL)?.infoDictionary
-        }
-        return plist
-    }
-
-    private func canEditMarkdown(plist: [String: Any]?) -> Bool {
-        guard let docTypes = plist?["CFBundleDocumentTypes"] as? [[String: Any]] else {
-            return true
-        }
-
-        var matchedAsEditor = false
-        var matchedAsViewer = false
-
-        for docType in docTypes {
-            let utis = Set((docType["LSItemContentTypes"] as? [String]) ?? [])
-            let extensions = Set(((docType["CFBundleTypeExtensions"] as? [String]) ?? [])
-                .map { $0.lowercased() })
-            let rank = (docType["LSHandlerRank"] as? String) ?? "Default"
-
-            let hasMarkdownUTI = !Self.strongMarkdownUTIs.isDisjoint(with: utis)
-            let hasMarkdownExtension = !Self.markdownDocTypeExtensions.isDisjoint(with: extensions)
-            // A generic plain-text claim only counts as "real text editor" when the entry's UTI
-            // list is purely text-flavored and isn't ranked Alternate. That filters Postico
-            // (Alternate) and Numbers (bundles public.plain-text with CSV/TSV import UTIs).
-            let isPureTextEntry = !utis.isEmpty && utis.isSubset(of: Self.textyUTIs)
-            let isPlainTextEditor = isPureTextEntry && rank != "Alternate"
-
-            guard hasMarkdownUTI || hasMarkdownExtension || isPlainTextEditor else { continue }
-
-            let role = (docType["CFBundleTypeRole"] as? String) ?? "Editor"
-            switch role {
-            case "Viewer", "QLGenerator": matchedAsViewer = true
-            default: matchedAsEditor = true
-            }
-        }
-
-        if matchedAsEditor { return true }
-        if matchedAsViewer { return false }
-        return false
+        OpenTargetCatalog.canonicalAppURL(url)
     }
 
     private func disabledItem(_ title: String) -> NSMenuItem {
@@ -2970,13 +2756,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc private func pickEditor(_ sender: NSMenuItem) {
         guard let candidate = sender.representedObject as? EditorCandidate,
               let fileURL = currentFileURL else { return }
-        if let bundleID = candidate.bundleID {
-            UserDefaults.standard.set(bundleID, forKey: Self.defaultEditorBundleIDKey)
-        } else {
-            UserDefaults.standard.removeObject(forKey: Self.defaultEditorBundleIDKey)
-        }
-        UserDefaults.standard.set(candidate.url.path, forKey: Self.defaultEditorURLKey)
-        UserDefaults.standard.set(OpenActionKind.editor.rawValue, forKey: Self.defaultOpenActionKindKey)
+        OpenTargetCatalog.setDefaultEditor(candidate)
         refreshOpenWithItem()
         refreshOpenActionsItem()
         launch(fileURL, with: candidate.url)

@@ -77,11 +77,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @IBOutlet private weak var checkForUpdatesMenuItem: NSMenuItem?
 
-    private let updaterController = SPUStandardUpdaterController(
+    let updaterController = SPUStandardUpdaterController(
         startingUpdater: true,
         updaterDelegate: nil,
         userDriverDelegate: nil
     )
+
+    private var settingsWindowController: SettingsWindowController?
 
     private weak var hideSidebarMenuItem: NSMenuItem?
     private weak var outlineMenuItem: NSMenuItem?
@@ -117,6 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installNewTabMenuItem()
         installFileExportMenuItems()
         installGoMenu()
+        installSettingsMenuItem()
         installAppMenuItemIcons()
         installViewMenuItemIcons()
         hasFinishedLaunching = true
@@ -214,7 +217,86 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @IBAction func toggleCrashReporting(_ sender: NSMenuItem) {
         CrashReporter.isEnabled.toggle()
+        SettingsModel.shared.refreshFromExternalSources()
         sender.state = CrashReporter.isEnabled ? .on : .off
+    }
+
+    // MARK: - Settings
+
+    /// Inserted after About, where macOS puts Settings, since MainMenu.xib
+    /// predates the window and has no item for it.
+    private func installSettingsMenuItem() {
+        // The app menu is always the first top-level item; its title is the
+        // localized app name, so it can't be matched the way the others are.
+        guard let appMenu = NSApp.mainMenu?.items.first?.submenu,
+              appMenu.items.first(where: {
+                  $0.action == #selector(showSettingsWindow(_:))
+              }) == nil else { return }
+
+        let item = NSMenuItem(title: L("Settings…"),
+                              action: #selector(showSettingsWindow(_:)),
+                              keyEquivalent: ",")
+        item.keyEquivalentModifierMask = [.command]
+        item.target = self
+        if let image = NSImage(systemSymbolName: "gearshape",
+                               accessibilityDescription: item.title) {
+            image.isTemplate = true
+            item.image = image
+        }
+
+        let aboutIndex = appMenu.items.firstIndex {
+            $0.action == #selector(NSApplication.orderFrontStandardAboutPanel(_:))
+        }
+        let insertIndex = aboutIndex.map { $0 + 1 } ?? 0
+        appMenu.insertItem(.separator(), at: insertIndex)
+        appMenu.insertItem(item, at: insertIndex + 1)
+    }
+
+    @objc func showSettingsWindow(_ sender: Any?) {
+        SettingsModel.shared.refreshFromExternalSources()
+        SettingsModel.shared.reloadOpenTargets()
+        let controller = settingsWindowController ?? SettingsWindowController()
+        settingsWindowController = controller
+        controller.show()
+    }
+
+    /// Applies an appearance chosen in Settings, keeping the View menu's check
+    /// marks and every open preview in step.
+    func applyAppearanceSetting(_ mode: AppearanceMode) {
+        guard mode != AppearanceMode.current else { return }
+        AppearanceMode.current = mode
+        applyAppearanceMode(mode, reloadPreviews: true)
+    }
+
+    func applyContentWidthSetting(_ setting: ContentWidthSetting) {
+        guard setting != ContentWidthSetting.current else { return }
+        ContentWidthSetting.current = setting
+        syncContentWidthMenuState()
+        reloadDocumentPreviewsForSettingChange()
+    }
+
+    /// Pushes a text size chosen in Settings into every open document. The
+    /// value is the same stored page zoom the windows already read, so this
+    /// only asks them to pick it up now instead of at next launch.
+    func applyTextSizeSetting(_ setting: TextSizeSetting) {
+        TextSizeSetting.store(setting)
+        NSDocumentController.shared.documents
+            .flatMap(\.windowControllers)
+            .compactMap { $0 as? DocumentWindowController }
+            .forEach { $0.applyTextSizeSetting() }
+    }
+
+    func installCommandLineToolsFromSettings() {
+        installCommandLineTools(nil)
+    }
+
+    /// Re-reads the persisted default so every open document's Open button
+    /// shows the app that was just picked in Settings.
+    func refreshOpenTargetsInOpenDocuments() {
+        NSDocumentController.shared.documents
+            .flatMap(\.windowControllers)
+            .compactMap { $0 as? DocumentWindowController }
+            .forEach { $0.refreshOpenTargets() }
     }
 
     @objc private func installCommandLineTools(_ sender: Any?) {
@@ -269,6 +351,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         AppearanceMode.current = mode
         applyAppearanceMode(mode, reloadPreviews: true)
+        SettingsModel.shared.refreshFromExternalSources()
     }
 
     @objc private func selectContentWidthSetting(_ sender: NSMenuItem) {
@@ -279,6 +362,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ContentWidthSetting.current = setting
         syncContentWidthMenuState()
         reloadDocumentPreviewsForSettingChange()
+        SettingsModel.shared.refreshFromExternalSources()
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {

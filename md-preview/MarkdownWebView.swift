@@ -721,6 +721,16 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         setPageZoom(CGFloat(truncating: stored), persist: false, notifyHeight: false)
     }
 
+    /// Re-reads the stored zoom after Settings changes it. Unlike
+    /// `enablePersistentZoom` this applies the absent-key case too, so picking
+    /// the default size — which clears the key — still resets an already-zoomed
+    /// window instead of leaving it where it was.
+    func applyPersistedZoom() {
+        guard let zoomDefaultsKey else { return }
+        let stored = UserDefaults.standard.object(forKey: zoomDefaultsKey) as? NSNumber
+        setPageZoom(stored.map { CGFloat(truncating: $0) } ?? 1.0, persist: false)
+    }
+
     private func nextZoomStep(from current: CGFloat, increasing: Bool) -> CGFloat {
         let steps = Self.zoomSteps
         if increasing {
