@@ -51,6 +51,29 @@ private final class QuickLookWebView: WKWebView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    // The Quick Look host has no Edit menu, so ⌘A/⌘C never arrive as menu
+    // key equivalents — claim them here and hand them to WebKit's standard
+    // responder actions, which act on the page's DOM selection.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.type == .keyDown,
+           let command = QuickLookEditingCommands.command(
+               forCharactersIgnoringModifiers: event.charactersIgnoringModifiers,
+               modifierFlags: event.modifierFlags.rawValue
+           ) {
+            let action: Selector
+            switch command {
+            case .selectAll:
+                action = #selector(NSResponder.selectAll(_:))
+            case .copy:
+                action = #selector(NSText.copy(_:))
+            }
+            if NSApp.sendAction(action, to: self, from: nil) {
+                return true
+            }
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
     override func resetCursorRects() {
         super.resetCursorRects()
         for region in cursorRegions {
@@ -426,6 +449,16 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
             // would let WebKit fetch rejected or over-budget relative images.
             baseURL: nil
         )
+    }
+
+    // Quick Look opens with keyboard focus in the host (Finder), so ⌘A/⌘C
+    // reach the preview only after the user clicks into it. Claiming first
+    // responder once the content loads propagates focus across the
+    // ViewBridge, making ⌘A/⌘C work immediately. The host still handles
+    // arrows (file navigation) and space (close panel) itself — verified
+    // against a focused preview.
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        view.window?.makeFirstResponder(self.webView)
     }
 
     func webView(
