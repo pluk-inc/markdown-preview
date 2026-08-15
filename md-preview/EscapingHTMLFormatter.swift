@@ -867,7 +867,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     }
 
     mutating func visitSoftBreak(_ softBreak: SoftBreak) {
-        // Obsidian-style breaks: a single newline in the source is a real
+        // Hard-break behavior: a single newline in the source is a real
         // line break, not a CommonMark soft-wrap space.
         result += "<br />\n"
     }

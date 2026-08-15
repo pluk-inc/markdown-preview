@@ -284,8 +284,17 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         let json = try XCTUnwrap(result as? String)
         let metrics = try JSONDecoder().decode(HeadingLayoutMetrics.self, from: Data(json.utf8))
 
-        XCTAssertLessThanOrEqual(metrics.headingScrollWidth, metrics.headingClientWidth)
-        XCTAssertLessThanOrEqual(metrics.codeRight, metrics.viewportRight)
+        // Some WebKit versions size emergency break fragments without the
+        // inline code's cloned padding, overshooting the line box by a few
+        // pixels. That sub-glyph overflow is invisible and version-dependent;
+        // the assertion guards against real overflow (an unwrapped path is
+        // hundreds of pixels wide).
+        let fragmentPaddingTolerance = 4.0
+        XCTAssertLessThanOrEqual(
+            metrics.headingScrollWidth,
+            metrics.headingClientWidth + fragmentPaddingTolerance
+        )
+        XCTAssertLessThanOrEqual(metrics.codeRight, metrics.viewportRight + fragmentPaddingTolerance)
         XCTAssertEqual(metrics.boxDecorationBreak, "clone")
     }
 
@@ -369,10 +378,12 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             3
         )
         XCTAssertTrue(rendered.html.contains(".md-source-blank-line {"))
+        XCTAssertTrue(rendered.html.contains("height: 4.0px;"))
+        XCTAssertTrue(rendered.html.contains(".md-source-blank-line:has(+ .md-source-blank-line)"))
         XCTAssertTrue(rendered.html.contains("height: 22.8px;"))
         XCTAssertFalse(rendered.html.contains(".md-source-blank-line + *"))
         XCTAssertTrue(rendered.html.contains(".md-source-blank-line + h3,"))
-        XCTAssertTrue(rendered.html.contains("margin-top: 4px;"))
+        XCTAssertTrue(rendered.html.contains("margin-top: 22.8px;"))
     }
 
     func testListsAndDecoratedCodeBlocksOwnTheirOuterSpacing() {
