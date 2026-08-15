@@ -2,14 +2,23 @@
 
 ## [0.0.48] – 2026-08-15
 
-Finder previews become properly selectable, preview windows can float above your editor, and diagrams no longer fall out of printed and exported documents.
+A typography pass tightens the vertical rhythm and rebalances headings, lists, and rules across both the preview and the editor. Alongside it, Finder previews become properly selectable, preview windows can float above your editor, and diagrams no longer fall out of printed and exported documents.
 
 ### Added
 
 - **Always on Top keeps a preview window in front.** A per-window toggle in the View menu (⌃⌘T) and an optional toolbar button pin a window above other applications, so a Markdown file stays visible while you work in an editor or terminal beside it. Pinning applies to a whole tab group, and the state is not carried across launches ([#266](https://github.com/pluk-inc/markdown-preview/pull/266)).
 - **Select and copy rendered text in Quick Look.** Finder previews now use a view-based `WKWebView`, so a selection belongs to the preview itself and ⌘C copies the rendered text instead of the Markdown file. Text and link cursors are reported to AppKit so they survive Finder's remote-window boundary, and local images, resource limits, and external link handling keep working as before ([#273](https://github.com/pluk-inc/markdown-preview/pull/273)).
+- **Completed task items are struck through.** A checked `- [x]` item renders with struck-through, muted text, so finished tasks read as done at a glance. Unchecked items are unchanged, and toggling a checkbox in the preview updates the style straight away ([#283](https://github.com/pluk-inc/markdown-preview/pull/283)).
+
+### Changed
+
+- **Headings follow a graded type scale.** H1 and H2 were nearly the same size, which made an outline hard to read. The levels now step down through 1.802 / 1.602 / 1.424 / 1.266 / 1.125 / 1em, with the document title alone at weight 700. The preview and the editor use the same scale ([#281](https://github.com/pluk-inc/markdown-preview/pull/281)).
+- **List bullets are large enough to see.** The `•` glyph rendered as a tiny dot. The text marker is now transparent — it still reserves the gutter and still survives copy and paste — and a 0.4em circle is painted in its place, with the same 0.5em gap to the item text in both surfaces. The circle is drawn as a border rather than a background, so PDF export keeps it even when backgrounds are not printed ([#282](https://github.com/pluk-inc/markdown-preview/pull/282)).
+- **Horizontal rules sit evenly in the page rhythm.** A rule carried a full margin above and below, and the next block's margin stacked under it, leaving roughly 39 px above and 51 px below. The rule now keeps a 12 px top margin only and lets the next block supply the space below, so both gaps match the normal paragraph gap ([#280](https://github.com/pluk-inc/markdown-preview/pull/280)).
 
 ### Fixed
+
+- **Paragraph spacing after a blank line is no longer oversized.** A single authored blank line rendered as a full 22.8 px source line, pushing the common paragraph gap to about 35 px. It now renders as a 4 px gap, bringing the paragraph gap to about 16 px and in line with other Markdown renderers. Extra blank lines still add a full line each, so deliberate source spacing is preserved, and headings keep the total gap shipped in 0.0.47 ([#279](https://github.com/pluk-inc/markdown-preview/pull/279), [#271](https://github.com/pluk-inc/markdown-preview/issues/271)).
 
 - **Mermaid diagrams render before printing and exporting.** Diagrams render lazily as they approach the viewport, but print and export capture the whole document at once, so any diagram you never scrolled to appeared as an empty box with its raw source text. Both File ▸ Print… and File ▸ Export… now wait for every diagram to finish. Printing to paper also pins the light Mermaid theme — the theme is baked into each diagram when it renders — and restores the on-screen theme afterwards, and a diagram is kept on a single page ([#275](https://github.com/pluk-inc/markdown-preview/pull/275), [#274](https://github.com/pluk-inc/markdown-preview/issues/274)).
 - **Strikethrough needs double tildes.** A single tilde pair such as `~text~` was struck through, which was surprising in prose that uses `~` for paths, versions, and approximations. Only `~~text~~` is strikethrough now, and single tildes stay literal ([#278](https://github.com/pluk-inc/markdown-preview/pull/278)).
@@ -22,6 +31,7 @@ Thanks to the external contributors who helped improve this release:
 - [@Avi7ii](https://github.com/Avi7ii) — brought native text selection and cursor feedback to Quick Look ([#273](https://github.com/pluk-inc/markdown-preview/pull/273))
 - [@Cuzeth](https://github.com/Cuzeth) — reported and fixed Mermaid diagrams exporting as raw source ([#275](https://github.com/pluk-inc/markdown-preview/pull/275), [#274](https://github.com/pluk-inc/markdown-preview/issues/274))
 - [@ray-zzzzz](https://github.com/ray-zzzzz) — required double tildes for strikethrough ([#278](https://github.com/pluk-inc/markdown-preview/pull/278))
+- [@t9mike](https://github.com/t9mike) — reported the remaining vertical space around paragraphs and headings ([#271](https://github.com/pluk-inc/markdown-preview/issues/271))
 
 ## [0.0.47] – 2026-08-08
 
