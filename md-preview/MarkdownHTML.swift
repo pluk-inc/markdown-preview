@@ -141,7 +141,10 @@ nonisolated enum MarkdownHTML {
     static let blankLineGap: CGFloat = 4
     static let quoteSpacing = bodyFontSize * 1.2
     static let largeBlockSpacing = bodyFontSize * 1.6  // alerts, tables, mermaid
-    static let hrSpacing = bodyFontSize * 2.35
+    /// hr margin-top only. The rule carries no margin-bottom: the following
+    /// block's own margin-top provides the space below, so the gaps above and
+    /// below a rule both equal the paragraph gap (blankLineGap + this).
+    static let hrSpacing = bodyFontSize * 0.8
     static let listItemSpacing = bodyFontSize * 0.4
 
     struct RenderedHTML: Sendable {
@@ -3758,7 +3761,7 @@ nonisolated enum MarkdownHTML {
         border: 0;
         height: 1px;
         background: var(--grid);
-        margin: \(hrSpacing)px 0;
+        margin: \(hrSpacing)px 0 0;
     }
 
     img {

@@ -685,7 +685,7 @@ const METRICS = {
   quote: 18,      // blockquote
   alert: 24,      // .markdown-alert
   table: 24,      // .md-table-scroll
-  hr: 35.25,      // hr (top and bottom)
+  hr: 12,         // hr (top only; the next block's margin supplies the bottom)
 }
 const SEPARATOR_BLOCKS = new Set([
   "Paragraph", "FencedCode", "CodeBlock", "Blockquote",
@@ -973,18 +973,6 @@ function buildDecorations(view) {
     while (first > stop && state.doc.line(first - 1).text.length === 0) first--
     return { line, first, count: line.number - first }
   }
-  // iterate visits top-level blocks in document order, so the previous
-  // block's name is a running variable; the tree is resolved only for the
-  // first block of a visible range, whose predecessor was never visited.
-  let lastTopBlockName = null
-  const topBlockNameBefore = (blankFirstLine) => {
-    if (lastTopBlockName != null) return lastTopBlockName
-    if (blankFirstLine <= 1) return null
-    const prev = state.doc.line(blankFirstLine - 1)
-    let n = syntaxTree(state).resolveInner(prev.from, 1)
-    while (n.parent && n.parent.name !== "Document") n = n.parent
-    return n.name
-  }
   const blockMarginTop = (node) => {
     switch (node.name) {
       case "Blockquote": {
@@ -1014,12 +1002,8 @@ function buildDecorations(view) {
       )
       return
     }
-    // hr is the only block with a margin-bottom. A visible blank-line spacer
-    // prevents adjacent margins from collapsing, so both sides contribute.
-    const marginBottom = topBlockNameBefore(run.first) === "HorizontalRule"
-      ? METRICS.hr : 0
     const marginTop = blockMarginTop(node)
-    const height = METRICS.blankGap + marginBottom + marginTop
+    const height = METRICS.blankGap + marginTop
     lineOnce(separator.from, blockSeparatorLine(height))
   }
 
@@ -1032,7 +1016,6 @@ function buildDecorations(view) {
   const listStack = []
 
   for (const { from, to } of view.visibleRanges) {
-    lastTopBlockName = null
     let contentDocumentDepth = null
     syntaxTree(state).iterate({
       from, to,
@@ -1040,13 +1023,11 @@ function buildDecorations(view) {
         depth++
         const name = node.name
 
-        if (depth === 2 && name === "Frontmatter") lastTopBlockName = name
         if (depth === 2 && name === "Document") contentDocumentDepth = depth
 
         // --- Block separators ------------------------------------------
         if (contentDocumentDepth != null && depth === contentDocumentDepth + 1) {
           if (SEPARATOR_BLOCKS.has(name)) separatorBlankBefore(node)
-          lastTopBlockName = name
         }
 
         // --- Frontmatter ----------------------------------------------
