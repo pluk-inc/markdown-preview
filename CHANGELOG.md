@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.49] – 2026-08-15
+
+This release adds a Settings window that collects all the preferences of the application in one place. It also makes the keyboard commands and a new Copy button work in a Finder preview.
+
+### Added
+
+- **The application has a Settings window.** Press ⌘, or use Markdown Preview ▸ Settings… to open it. The window has three panes: General, Privacy, and About. The panes contain the preferences that were only in the menus before: the appearance, the text size, the content width, the application that File ▸ Open in… uses, the crash reports, and the automatic update checks from Sparkle. The window uses the icons and the layout of macOS System Settings. A change in the window and a change in the menu stay equal, and the About pane shows the date of the last update check immediately. A new installation checks for updates automatically, but the application keeps your choice if you made one before. The window is available in English and in Simplified Chinese ([#287](https://github.com/pluk-inc/markdown-preview/pull/287)).
+- **A Finder preview has a Copy button.** The button is in the bottom-right corner of the preview. It copies the Markdown source text of the file to the pasteboard, and you do not select the text first. The button shows "Copied" immediately after you click it, and it stays clear of the content of the preview ([#289](https://github.com/pluk-inc/markdown-preview/pull/289)).
+
+### Fixed
+
+- **⌘A and ⌘C work in a Finder preview immediately.** The preview panel opened with the keyboard focus in Finder. Therefore ⌘A selected the files in the Finder window, and the two commands did nothing in the preview until you clicked in it. The preview now takes the keyboard focus when the content is complete, and it accepts ⌘A and ⌘C directly. Finder keeps the other keys: the arrow keys change the selected file, and the space key closes the panel ([#288](https://github.com/pluk-inc/markdown-preview/pull/288)).
+
 ## [0.0.48] – 2026-08-15
 
 This release changes the vertical gaps and the type sizes in the preview and in the editor. It also lets you select text in a Finder preview, keep a preview window in front of other applications, and print and export diagrams correctly.
