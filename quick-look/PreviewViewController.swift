@@ -399,19 +399,190 @@ private final class QuickLookWebView: WKWebView {
 }
 
 final class PreviewViewController: NSViewController, QLPreviewingController, WKNavigationDelegate {
+    private static let copyFeedbackDuration: TimeInterval = 1.0
+    private static let floatingButtonMinimumWidth: CGFloat = 70
+    private static let floatingButtonHeight: CGFloat = 26
+    private static let floatingButtonTrailingInset: CGFloat = 12
+    private static let floatingButtonBottomInset: CGFloat = 10
+    private static let floatingButtonHorizontalClearance: CGFloat = 90
+    private static let floatingButtonVerticalClearance: CGFloat = 44
+
     private var webView: QuickLookWebView!
+    private var copyButton: NSButton!
+    private var copyFeedbackWork: DispatchWorkItem?
+    private var currentNavigation: WKNavigation?
+    private var markdownSource: String?
+    private var isPreviewReady = false
+    private var isPreviewVisible = false
 
     override func loadView() {
+        let rootView = NSView()
+
         webView = QuickLookWebView(
             frame: .zero,
             configuration: WKWebViewConfiguration()
         )
+        webView.translatesAutoresizingMaskIntoConstraints = false
         webView.navigationDelegate = self
-        view = webView
+        rootView.addSubview(webView)
+
+        copyButton = makeCopyButton()
+        rootView.addSubview(copyButton, positioned: .above, relativeTo: webView)
+
+        NSLayoutConstraint.activate([
+            webView.topAnchor.constraint(equalTo: rootView.topAnchor),
+            webView.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
+            webView.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
+
+            copyButton.trailingAnchor.constraint(
+                equalTo: rootView.safeAreaLayoutGuide.trailingAnchor,
+                constant: -Self.floatingButtonTrailingInset
+            ),
+            copyButton.bottomAnchor.constraint(
+                equalTo: rootView.safeAreaLayoutGuide.bottomAnchor,
+                constant: -Self.floatingButtonBottomInset
+            ),
+            copyButton.widthAnchor.constraint(
+                greaterThanOrEqualToConstant: Self.floatingButtonMinimumWidth
+            ),
+            copyButton.heightAnchor.constraint(equalToConstant: Self.floatingButtonHeight)
+        ])
+
+        view = rootView
         preferredContentSize = NSSize(
             width: MarkdownHTML.preferredPageWidth,
             height: MarkdownHTML.preferredPageWidth
         )
+    }
+
+    private func makeCopyButton() -> NSButton {
+        let copyTitle = NSLocalizedString("Copy", comment: "Quick Look copy button")
+        let button = NSButton(
+            image: copyButtonImage(symbolName: "document.on.document", description: copyTitle),
+            target: self,
+            action: #selector(copyMarkdownSource(_:))
+        )
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.identifier = NSUserInterfaceItemIdentifier("QuickLookCopyMarkdown")
+        button.title = copyTitle
+        button.imagePosition = .imageLeading
+        button.imageHugsTitle = false
+        button.imageScaling = .scaleProportionallyDown
+        button.controlSize = .small
+        button.font = NSFont.systemFont(ofSize: 11, weight: .regular)
+        button.showsBorderOnlyWhileMouseInside = false
+        button.setContentHuggingPriority(.required, for: .horizontal)
+        button.setContentCompressionResistancePriority(.required, for: .horizontal)
+        if #available(macOS 26.0, *) {
+            button.bezelStyle = .glass
+            button.borderShape = .capsule
+            button.tintProminence = .none
+        } else {
+            button.bezelStyle = .accessoryBarAction
+        }
+        button.isEnabled = false
+        let copyMarkdownHelp = NSLocalizedString(
+            "Copy Markdown source to clipboard",
+            comment: "Quick Look copy-all accessibility help"
+        )
+        button.setAccessibilityLabel(copyTitle)
+        button.setAccessibilityHelp(copyMarkdownHelp)
+
+        return button
+    }
+
+    private func copyButtonImage(symbolName: String, description: String) -> NSImage {
+        let configuration = NSImage.SymbolConfiguration(pointSize: 10, weight: .regular)
+        return NSImage(systemSymbolName: symbolName, accessibilityDescription: description)?
+            .withSymbolConfiguration(configuration) ?? NSImage()
+    }
+
+    @objc private func copyMarkdownSource(_ _: NSButton) {
+        guard isPreviewVisible, isPreviewReady, let markdownSource else {
+            NSSound.beep()
+            return
+        }
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        guard pasteboard.setString(markdownSource, forType: .string) else {
+            NSSound.beep()
+            return
+        }
+        flashCopyConfirmation()
+    }
+
+    private func flashCopyConfirmation() {
+        copyFeedbackWork?.cancel()
+        let copied = NSLocalizedString("Copied", comment: "Quick Look copy confirmation")
+        copyButton.title = copied
+        copyButton.displayIfNeeded()
+        NSAccessibility.post(
+            element: NSApplication.shared,
+            notification: .announcementRequested,
+            userInfo: [
+                .announcement: copied,
+                .priority: NSAccessibilityPriorityLevel.medium.rawValue
+            ]
+        )
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.resetCopyButton()
+        }
+        copyFeedbackWork = work
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.copyFeedbackDuration,
+            execute: work
+        )
+    }
+
+    private func resetCopyButton() {
+        copyFeedbackWork?.cancel()
+        copyFeedbackWork = nil
+        let copyTitle = NSLocalizedString("Copy", comment: "Quick Look copy button")
+        copyButton.title = copyTitle
+        copyButton.setAccessibilityLabel(copyTitle)
+    }
+
+    override func viewWillAppear() {
+        super.viewWillAppear()
+        isPreviewVisible = true
+        activatePreviewIfReady()
+    }
+
+    override func viewWillDisappear() {
+        super.viewWillDisappear()
+        isPreviewVisible = false
+        copyButton.isEnabled = false
+        resetCopyButton()
+    }
+
+    private func activatePreviewIfReady() {
+        guard isPreviewVisible, isPreviewReady else { return }
+        copyButton.isEnabled = true
+        view.window?.makeFirstResponder(webView)
+    }
+
+    private func addingCopyButtonClearance(to html: String) -> String {
+        // Vendor scripts can contain `</head>` as data. The document's real
+        // closing tag is the final occurrence in MarkdownHTML's output.
+        guard let headEnd = html.range(of: "</head>", options: .backwards) else { return html }
+        let horizontalClearance = Int(Self.floatingButtonHorizontalClearance)
+        let verticalClearance = Int(Self.floatingButtonVerticalClearance)
+        let style = """
+        <style>
+        body {
+            padding-right: calc(\(horizontalClearance)px + env(safe-area-inset-right));
+            padding-bottom: calc(\(verticalClearance)px + env(safe-area-inset-bottom));
+        }
+        </style>
+
+        """
+        var result = html
+        result.insert(contentsOf: style, at: headEnd.lowerBound)
+        return result
     }
 
     func preparePreviewOfFile(at url: URL) async throws {
@@ -429,11 +600,11 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
             colorScheme = .dark
         }
 
-        let renderedHTML = MarkdownHTML.makeHTML(
+        let renderedHTML = addingCopyButtonClearance(to: MarkdownHTML.makeHTML(
             from: text,
             allowsScroll: true,
             colorScheme: colorScheme
-        )
+        ))
         let baseDirectory = url.deletingLastPathComponent()
         let rewrite = InlineLocalAssets.rewriteRelativeImages(
             html: renderedHTML,
@@ -442,8 +613,12 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
         )
 
         loadViewIfNeeded()
+        markdownSource = text
+        isPreviewReady = false
+        resetCopyButton()
+        copyButton.isEnabled = false
         webView.clearCursorRegions()
-        webView.loadHTMLString(
+        currentNavigation = webView.loadHTMLString(
             InlineLocalAssets.dataURLHTML(from: rewrite),
             // Admitted local images are already data URLs. A directory base
             // would let WebKit fetch rejected or over-budget relative images.
@@ -458,7 +633,10 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
     // arrows (file navigation) and space (close panel) itself — verified
     // against a focused preview.
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        view.window?.makeFirstResponder(self.webView)
+        guard let navigation, navigation === currentNavigation else { return }
+        currentNavigation = nil
+        isPreviewReady = true
+        activatePreviewIfReady()
     }
 
     func webView(
