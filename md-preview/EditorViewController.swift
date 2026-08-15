@@ -417,7 +417,23 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             text-align: end;
             padding-inline-end: 0.45em;
             box-sizing: border-box;
-            color: var(--text);
+            /* The glyph keeps its box for alignment but renders transparent;
+               the ::after circle below matches the preview's painted bullet. */
+            color: transparent;
+            position: relative;
+        }
+        .cm-md-bullet::after {
+            content: "";
+            position: absolute;
+            /* Match the preview's 0.5em gap between the circle and the
+               item text. */
+            inset-inline-end: 0.5em;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border: 0.2em solid var(--text);
+            border-radius: 50%;
         }
         /* Keep the active raw "- " marker in the same hanging box as the
            inactive bullet widget. Revealing Markdown source must not move the

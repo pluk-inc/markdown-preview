@@ -3652,6 +3652,22 @@ nonisolated enum MarkdownHTML {
 
     ul, ol { margin: \(paragraphSpacing)px 0 0; padding-left: 1.6em; }
     ul { list-style-type: "•  "; }
+    /* The text marker stays for copy/paste and for reserving the gutter,
+       but renders transparent; a 0.4em circle is painted in its place.
+       Drawn with a border, not a background, so PDF export keeps it even
+       when backgrounds are not printed. */
+    ul > li::marker { color: transparent; }
+    ul > li { position: relative; }
+    ul > li:not(.task-list-item)::before {
+        content: "";
+        position: absolute;
+        inset-inline-start: -0.9em;
+        top: 0.56em;
+        width: 0;
+        height: 0;
+        border: 0.2em solid var(--text);
+        border-radius: 50%;
+    }
     li { margin-top: \(listItemSpacing)px; }
     li:first-child { margin-top: 0; }
     li > ul, li > ol { margin-top: \(listItemSpacing)px; }
