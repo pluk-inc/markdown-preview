@@ -369,10 +369,12 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             3
         )
         XCTAssertTrue(rendered.html.contains(".md-source-blank-line {"))
+        XCTAssertTrue(rendered.html.contains("height: 4.0px;"))
+        XCTAssertTrue(rendered.html.contains(".md-source-blank-line:has(+ .md-source-blank-line)"))
         XCTAssertTrue(rendered.html.contains("height: 22.8px;"))
         XCTAssertFalse(rendered.html.contains(".md-source-blank-line + *"))
         XCTAssertTrue(rendered.html.contains(".md-source-blank-line + h3,"))
-        XCTAssertTrue(rendered.html.contains("margin-top: 4px;"))
+        XCTAssertTrue(rendered.html.contains("margin-top: 22.8px;"))
     }
 
     func testListsAndDecoratedCodeBlocksOwnTheirOuterSpacing() {

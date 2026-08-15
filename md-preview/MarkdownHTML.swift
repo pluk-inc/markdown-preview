@@ -133,6 +133,12 @@ nonisolated enum MarkdownHTML {
     // MDEditor.create's `spacing` option so both surfaces space blocks
     // identically — change them here, never in entry-cm.js.
     static let paragraphSpacing = bodyFontSize * 0.8
+    /// Height of the final blank line in a run of authored blanks. A single
+    /// blank between paragraphs then reads as blankLineGap + paragraphSpacing
+    /// (≈16px), matching the paragraph rhythm of other Markdown renderers,
+    /// while every additional authored blank still grows the gap by a full
+    /// source line.
+    static let blankLineGap: CGFloat = 4
     static let quoteSpacing = bodyFontSize * 1.2
     static let largeBlockSpacing = bodyFontSize * 1.6  // alerts, tables, mermaid
     static let hrSpacing = bodyFontSize * 2.35
@@ -3270,7 +3276,14 @@ nonisolated enum MarkdownHTML {
     p {
         margin: \(paragraphSpacing)px 0 0;
     }
+    /* The final blank of a run shrinks to a small gap so a single authored
+       blank plus the next block's margin matches other renderers' paragraph
+       rhythm. Earlier blanks in the run keep their natural line height, so
+       extra authored blanks still grow the gap. */
     .md-source-blank-line {
+        height: \(blankLineGap)px;
+    }
+    .md-source-blank-line:has(+ .md-source-blank-line) {
         height: \(sourceLineHeight)px;
     }
 
@@ -3285,15 +3298,16 @@ nonisolated enum MarkdownHTML {
     h4 { font-size: 1.41em; line-height: 1.08; }
     h5 { font-size: 1.29em; line-height: 1.09; }
     h6 { font-size: 1em; line-height: 1.24; }
-    /* An authored blank line already provides the heading's separation.
-       Keep only a small amount of extra breathing room above the title. */
+    /* The blank before a heading shrinks like every final blank; the
+       heading's own margin restores the one-line gap, keeping the total at
+       one source line plus the small breathing room (blank + margin). */
     .md-source-blank-line + h1,
     .md-source-blank-line + h2,
     .md-source-blank-line + h3,
     .md-source-blank-line + h4,
     .md-source-blank-line + h5,
     .md-source-blank-line + h6 {
-        margin-top: 4px;
+        margin-top: \(sourceLineHeight)px;
     }
 
     a { color: var(--link); text-decoration: none; }

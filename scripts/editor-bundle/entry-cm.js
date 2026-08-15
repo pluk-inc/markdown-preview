@@ -674,10 +674,13 @@ const collapsedLine = Decoration.line({ class: "cm-md-line-collapsed" })
 // Preview block margin-top values in CSS px. The host passes the live values
 // from MarkdownHTML.swift (the single source of truth) through
 // MDEditor.create's `spacing` option; these defaults only serve headless
-// harnesses. Every authored blank line keeps its natural source-line height,
-// with the adjacent blocks' semantic margins added to the separator.
+// harnesses. The final blank line of a run shrinks to `blankGap` (plus the
+// adjacent blocks' semantic margins) so a single authored blank reads like a
+// normal paragraph gap; earlier blanks in a run keep their natural
+// source-line height, so extra authored blanks still grow the gap.
 const METRICS = {
   line: 22.8,
+  blankGap: 4,    // final blank of a run (.md-source-blank-line)
   paragraph: 12,  // p / ul / ol / pre / .md-code-wrap
   quote: 18,      // blockquote
   alert: 24,      // .markdown-alert
@@ -957,10 +960,10 @@ function buildDecorations(view) {
       }
     }
   }
-  // The renderer restores every source blank line before applying semantic
-  // block margins. Keep the editor's final blank separator at one natural
-  // line plus those margins; earlier blank lines already retain their normal
-  // CodeMirror line height.
+  // The renderer shrinks the final source blank line of a run to blankGap
+  // before applying semantic block margins. Keep the editor's final blank
+  // separator at blankGap plus those margins; earlier blank lines already
+  // retain their normal CodeMirror line height.
   const blankRunBefore = (pos) => {
     const line = state.doc.lineAt(pos)
     let first = line.number
@@ -1007,7 +1010,7 @@ function buildDecorations(view) {
     if (run.first === 1) {
       lineOnce(
         separator.from,
-        blockSeparatorLine(METRICS.line + blockMarginTop(node))
+        blockSeparatorLine(METRICS.blankGap + blockMarginTop(node))
       )
       return
     }
@@ -1016,7 +1019,7 @@ function buildDecorations(view) {
     const marginBottom = topBlockNameBefore(run.first) === "HorizontalRule"
       ? METRICS.hr : 0
     const marginTop = blockMarginTop(node)
-    const height = METRICS.line + marginBottom + marginTop
+    const height = METRICS.blankGap + marginBottom + marginTop
     lineOnce(separator.from, blockSeparatorLine(height))
   }
 
