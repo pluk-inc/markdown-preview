@@ -3674,6 +3674,11 @@ nonisolated enum MarkdownHTML {
     li > p:first-child { margin-top: 0; }
 
     li.task-list-item { list-style: none; }
+    /* Completed tasks read as done — struck through and muted. */
+    li.task-list-item:has(input.task-list-item-checkbox:checked) {
+        color: var(--secondary);
+        text-decoration: line-through;
+    }
     li.task-list-item > p:first-of-type { display: inline; margin-top: 0; }
     .task-list-item-checkbox {
         -webkit-appearance: none;
