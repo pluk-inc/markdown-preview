@@ -3226,7 +3226,7 @@ nonisolated enum MarkdownHTML {
         padding-inline-end: 0.25em;
     }
 
-    /* Frontmatter properties — Obsidian-style metadata panel. Deliberately
+    /* Frontmatter properties — a quiet metadata panel. Deliberately
        quieter than document content: no row borders (content tables own
        horizontal rules), a muted key column, and a single hairline that
        hands off to the document body. */
@@ -3295,11 +3295,13 @@ nonisolated enum MarkdownHTML {
         line-height: 1.18;
         margin: 1.6em 0 0;
     }
-    h1 { font-size: 2em; margin-top: 0.8em; }
-    h2 { font-size: 1.88em; line-height: 1.06; }
-    h3 { font-size: 1.65em; line-height: 1.07; }
-    h4 { font-size: 1.41em; line-height: 1.08; }
-    h5 { font-size: 1.29em; line-height: 1.09; }
+    /* Minor-third heading scale: each level steps down visibly, and only
+       the document title carries the heavier weight. */
+    h1 { font-size: 1.802em; font-weight: 700; margin-top: 0.8em; }
+    h2 { font-size: 1.602em; line-height: 1.06; }
+    h3 { font-size: 1.424em; line-height: 1.07; }
+    h4 { font-size: 1.266em; line-height: 1.08; }
+    h5 { font-size: 1.125em; line-height: 1.09; }
     h6 { font-size: 1em; line-height: 1.24; }
     /* The blank before a heading shrinks like every final blank; the
        heading's own margin restores the one-line gap, keeping the total at

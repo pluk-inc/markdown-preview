@@ -320,14 +320,14 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             line-height: 1.18;
             padding-top: 1.6em;
         }
-        #editor .cm-md-h1 { font-size: 2em; padding-top: 0.8em; }
+        #editor .cm-md-h1 { font-size: 1.802em; font-weight: 700; padding-top: 0.8em; }
         /* Mirror the preview's first-child margin reset so the document
            starts at the same height in both modes. */
         #editor .cm-content > .cm-line:first-child { padding-top: 0; }
-        #editor .cm-md-h2 { font-size: 1.88em; line-height: 1.06; }
-        #editor .cm-md-h3 { font-size: 1.65em; line-height: 1.07; }
-        #editor .cm-md-h4 { font-size: 1.41em; line-height: 1.08; }
-        #editor .cm-md-h5 { font-size: 1.29em; line-height: 1.09; }
+        #editor .cm-md-h2 { font-size: 1.602em; line-height: 1.06; }
+        #editor .cm-md-h3 { font-size: 1.424em; line-height: 1.07; }
+        #editor .cm-md-h4 { font-size: 1.266em; line-height: 1.08; }
+        #editor .cm-md-h5 { font-size: 1.125em; line-height: 1.09; }
         #editor .cm-md-h6 { font-size: 1em; line-height: 1.24; }
         /* A visible source blank already owns the gap before the heading;
            retain the preview's small amount of extra breathing room. */
