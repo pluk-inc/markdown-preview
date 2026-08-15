@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.0.48] – 2026-08-15
+
+Finder previews become properly selectable, preview windows can float above your editor, and diagrams no longer fall out of printed and exported documents.
+
+### Added
+
+- **Always on Top keeps a preview window in front.** A per-window toggle in the View menu (⌃⌘T) and an optional toolbar button pin a window above other applications, so a Markdown file stays visible while you work in an editor or terminal beside it. Pinning applies to a whole tab group, and the state is not carried across launches ([#266](https://github.com/pluk-inc/markdown-preview/pull/266)).
+- **Select and copy rendered text in Quick Look.** Finder previews now use a view-based `WKWebView`, so a selection belongs to the preview itself and ⌘C copies the rendered text instead of the Markdown file. Text and link cursors are reported to AppKit so they survive Finder's remote-window boundary, and local images, resource limits, and external link handling keep working as before ([#273](https://github.com/pluk-inc/markdown-preview/pull/273)).
+
+### Fixed
+
+- **Mermaid diagrams render before printing and exporting.** Diagrams render lazily as they approach the viewport, but print and export capture the whole document at once, so any diagram you never scrolled to appeared as an empty box with its raw source text. Both File ▸ Print… and File ▸ Export… now wait for every diagram to finish. Printing to paper also pins the light Mermaid theme — the theme is baked into each diagram when it renders — and restores the on-screen theme afterwards, and a diagram is kept on a single page ([#275](https://github.com/pluk-inc/markdown-preview/pull/275), [#274](https://github.com/pluk-inc/markdown-preview/issues/274)).
+- **Strikethrough needs double tildes.** A single tilde pair such as `~text~` was struck through, which was surprising in prose that uses `~` for paths, versions, and approximations. Only `~~text~~` is strikethrough now, and single tildes stay literal ([#278](https://github.com/pluk-inc/markdown-preview/pull/278)).
+
+### Contributors
+
+Thanks to the external contributors who helped improve this release:
+
+- [@kud](https://github.com/kud) — added the Always on Top window toggle ([#266](https://github.com/pluk-inc/markdown-preview/pull/266))
+- [@Avi7ii](https://github.com/Avi7ii) — brought native text selection and cursor feedback to Quick Look ([#273](https://github.com/pluk-inc/markdown-preview/pull/273))
+- [@Cuzeth](https://github.com/Cuzeth) — reported and fixed Mermaid diagrams exporting as raw source ([#275](https://github.com/pluk-inc/markdown-preview/pull/275), [#274](https://github.com/pluk-inc/markdown-preview/issues/274))
+- [@ray-zzzzz](https://github.com/ray-zzzzz) — required double tildes for strikethrough ([#278](https://github.com/pluk-inc/markdown-preview/pull/278))
+
 ## [0.0.47] – 2026-08-08
 
 The Appearance setting now covers Finder previews too, so the app and Quick Look stop disagreeing about light and dark. Because 0.0.46 shipped only briefly, its sidebar shortcut and heading-spacing fix are listed here as well — most people will pick them up in this update.
