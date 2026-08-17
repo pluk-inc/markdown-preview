@@ -55,6 +55,7 @@ extension DocumentMetadata {
 struct InspectorView: View {
     let metadata: DocumentMetadata
     @State private var tab: Tab = .document
+    @State private var pathExpanded = false
 
     enum Tab: String, CaseIterable, Identifiable {
         case document = "Document"
@@ -110,25 +111,32 @@ struct InspectorView: View {
                     value: metadata.fileName
                 )
                 if let url = metadata.fileURL {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 6) {
-                            Text(NSLocalizedString("Full Path", comment: "Inspector field label"))
-                            Spacer()
-                            pathText(for: url)
-                                .lineLimit(1)
-                            revealButton(for: url)
-                        }
-                        VStack(spacing: 4) {
+                    Group {
+                        if pathExpanded {
+                            VStack(spacing: 4) {
+                                HStack(spacing: 6) {
+                                    Text(NSLocalizedString("Full Path", comment: "Inspector field label"))
+                                    Spacer()
+                                    revealButton(for: url)
+                                }
+                                pathText(for: url)
+                                    .textSelection(.enabled)
+                                    .multilineTextAlignment(.trailing)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
+                            }
+                        } else {
                             HStack(spacing: 6) {
                                 Text(NSLocalizedString("Full Path", comment: "Inspector field label"))
                                 Spacer()
+                                pathText(for: url)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
                                 revealButton(for: url)
                             }
-                            pathText(for: url)
-                                .multilineTextAlignment(.trailing)
-                                .frame(maxWidth: .infinity, alignment: .trailing)
                         }
                     }
+                    .contentShape(Rectangle())
+                    .onTapGesture { pathExpanded.toggle() }
                     .help(url.path)
                 }
                 LabeledContent(
@@ -184,9 +192,8 @@ struct InspectorView: View {
         .formStyle(.grouped)
     }
 
-    private func pathText(for url: URL) -> some View {
+    private func pathText(for url: URL) -> Text {
         Text(Self.displayPath(for: url))
-            .textSelection(.enabled)
             .foregroundStyle(.secondary)
     }
 
