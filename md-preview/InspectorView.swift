@@ -112,7 +112,7 @@ struct InspectorView: View {
                 if let url = metadata.fileURL {
                     LabeledContent(NSLocalizedString("Full Path", comment: "Inspector field label")) {
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text(url.path)
+                            Text(Self.displayPath(for: url))
                                 .multilineTextAlignment(.trailing)
                                 .textSelection(.enabled)
                             Button {
@@ -196,6 +196,25 @@ struct InspectorView: View {
             }
             .formStyle(.grouped)
         }
+    }
+}
+
+extension InspectorView {
+    // The sandbox remaps NSHomeDirectory() to the app container, so resolve the
+    // user's real home for tilde abbreviation.
+    private static let realHomePath: String = {
+        if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
+            return String(cString: dir)
+        }
+        return NSHomeDirectory()
+    }()
+
+    static func displayPath(for url: URL) -> String {
+        let path = url.standardizedFileURL.path
+        if path.hasPrefix(realHomePath + "/") {
+            return "~" + path.dropFirst(realHomePath.count)
+        }
+        return path
     }
 }
 
