@@ -110,20 +110,23 @@ struct InspectorView: View {
                     value: metadata.fileName
                 )
                 if let url = metadata.fileURL {
-                    LabeledContent(NSLocalizedString("Full Path", comment: "Inspector field label")) {
+                    ViewThatFits(in: .horizontal) {
                         HStack(spacing: 6) {
-                            Text(Self.displayPath(for: url))
+                            Text(NSLocalizedString("Full Path", comment: "Inspector field label"))
+                            Spacer()
+                            pathText(for: url)
                                 .lineLimit(1)
-                                .truncationMode(.tail)
-                            Button {
-                                NSWorkspace.shared.activateFileViewerSelecting([url])
-                            } label: {
-                                Image(systemName: "arrow.right.circle.fill")
-                                    .foregroundStyle(.secondary)
+                            revealButton(for: url)
+                        }
+                        VStack(spacing: 4) {
+                            HStack(spacing: 6) {
+                                Text(NSLocalizedString("Full Path", comment: "Inspector field label"))
+                                Spacer()
+                                revealButton(for: url)
                             }
-                            .buttonStyle(.plain)
-                            .help(NSLocalizedString("Show in Finder", comment: "Inspector reveal button tooltip"))
-                            .accessibilityLabel(NSLocalizedString("Show in Finder", comment: "Inspector reveal button tooltip"))
+                            pathText(for: url)
+                                .multilineTextAlignment(.trailing)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
                         }
                     }
                     .help(url.path)
@@ -179,6 +182,24 @@ struct InspectorView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func pathText(for url: URL) -> some View {
+        Text(Self.displayPath(for: url))
+            .textSelection(.enabled)
+            .foregroundStyle(.secondary)
+    }
+
+    private func revealButton(for url: URL) -> some View {
+        Button {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } label: {
+            Image(systemName: "arrow.right.circle.fill")
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .help(NSLocalizedString("Show in Finder", comment: "Inspector reveal button tooltip"))
+        .accessibilityLabel(NSLocalizedString("Show in Finder", comment: "Inspector reveal button tooltip"))
     }
 
     @ViewBuilder
