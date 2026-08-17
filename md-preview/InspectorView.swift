@@ -120,7 +120,6 @@ struct InspectorView: View {
                                     revealButton(for: url)
                                 }
                                 pathText(for: url)
-                                    .textSelection(.enabled)
                                     .multilineTextAlignment(.trailing)
                                     .frame(maxWidth: .infinity, alignment: .trailing)
                             }
@@ -137,6 +136,15 @@ struct InspectorView: View {
                     }
                     .contentShape(Rectangle())
                     .onTapGesture { pathExpanded.toggle() }
+                    .contextMenu {
+                        Button(NSLocalizedString("Copy Path", comment: "Inspector context menu item")) {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(url.path, forType: .string)
+                        }
+                        Button(NSLocalizedString("Show in Finder", comment: "Inspector reveal button tooltip")) {
+                            NSWorkspace.shared.activateFileViewerSelecting([url])
+                        }
+                    }
                     .help(url.path)
                 }
                 LabeledContent(
