@@ -55,7 +55,6 @@ extension DocumentMetadata {
 struct InspectorView: View {
     let metadata: DocumentMetadata
     @State private var tab: Tab = .document
-    @State private var pathExpanded = false
 
     enum Tab: String, CaseIterable, Identifiable {
         case document = "Document"
@@ -112,16 +111,10 @@ struct InspectorView: View {
                 )
                 if let url = metadata.fileURL {
                     LabeledContent(NSLocalizedString("Full Path", comment: "Inspector field label")) {
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            if pathExpanded {
-                                Text(Self.displayPath(for: url))
-                                    .multilineTextAlignment(.trailing)
-                                    .textSelection(.enabled)
-                            } else {
-                                Text(Self.displayPath(for: url))
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
+                        HStack(spacing: 6) {
+                            Text(Self.displayPath(for: url))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
                             Button {
                                 NSWorkspace.shared.activateFileViewerSelecting([url])
                             } label: {
@@ -132,8 +125,6 @@ struct InspectorView: View {
                             .help(NSLocalizedString("Show in Finder", comment: "Inspector reveal button tooltip"))
                             .accessibilityLabel(NSLocalizedString("Show in Finder", comment: "Inspector reveal button tooltip"))
                         }
-                        .contentShape(Rectangle())
-                        .onTapGesture { pathExpanded.toggle() }
                     }
                     .help(url.path)
                 }
