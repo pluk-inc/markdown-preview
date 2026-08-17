@@ -105,6 +105,11 @@ nonisolated enum MarkdownHTML {
             width: \(contentColumnWidth)px;
             padding: 0;
         }
+        /* The figure clips an absolutely-positioned stage, so a page break
+           through it discards everything past the break. */
+        html.\(previewPrintClass) .mermaid-figure {
+            break-inside: avoid;
+        }
     }
     """
 
@@ -128,9 +133,18 @@ nonisolated enum MarkdownHTML {
     // MDEditor.create's `spacing` option so both surfaces space blocks
     // identically — change them here, never in entry-cm.js.
     static let paragraphSpacing = bodyFontSize * 0.8
+    /// Height of the final blank line in a run of authored blanks. A single
+    /// blank between paragraphs then reads as blankLineGap + paragraphSpacing
+    /// (≈16px), matching the paragraph rhythm of other Markdown renderers,
+    /// while every additional authored blank still grows the gap by a full
+    /// source line.
+    static let blankLineGap: CGFloat = 4
     static let quoteSpacing = bodyFontSize * 1.2
     static let largeBlockSpacing = bodyFontSize * 1.6  // alerts, tables, mermaid
-    static let hrSpacing = bodyFontSize * 2.35
+    /// hr margin-top only. The rule carries no margin-bottom: the following
+    /// block's own margin-top provides the space below, so the gaps above and
+    /// below a rule both equal the paragraph gap (blankLineGap + this).
+    static let hrSpacing = bodyFontSize * 0.8
     static let listItemSpacing = bodyFontSize * 0.4
 
     struct RenderedHTML: Sendable {
@@ -2626,8 +2640,9 @@ nonisolated enum MarkdownHTML {
             ));
             const states = new WeakMap();
             const queue = [];
-            let draining = false;
-            let initialized = false;
+            let drainPromise = null;
+            let initializedTheme = null;
+            let themeOverride = null;
 
             function selectedTheme() {
                 const nativeScheme = document.documentElement.dataset.mdpColorScheme;
@@ -2637,35 +2652,84 @@ nonisolated enum MarkdownHTML {
                 return dark ? 'dark' : 'default';
             }
 
-            function ensureInit() {
-                if (initialized) return;
-                initialized = true;
+            // Paper printing forces the light palette while mermaid bakes its
+            // theme into the SVG, so the host can pin a theme for the length
+            // of a print operation.
+            function activeTheme() {
+                return themeOverride || selectedTheme();
+            }
+
+            function ensureInit(theme) {
+                if (initializedTheme === theme) return;
+                initializedTheme = theme;
                 mermaid.initialize({
                     startOnLoad: false,
-                    theme: selectedTheme(),
+                    theme,
                     securityLevel: 'strict',
                     fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif'
                 });
             }
 
-            async function drain() {
-                if (draining) return;
-                draining = true;
-                while (queue.length) {
-                    const figure = queue.shift();
-                    await renderOne(figure);
+            function drain() {
+                if (drainPromise) return drainPromise;
+                drainPromise = (async () => {
+                    while (queue.length) {
+                        const figure = queue.shift();
+                        try {
+                            await renderOne(figure);
+                        } catch (err) {
+                            figure.classList.add('mermaid-error');
+                        }
+                    }
+                })().then(() => {
+                    drainPromise = null;
+                    if (queue.length) return drain();
+                    window.dispatchEvent(new Event('md-preview-mermaid-rendered'));
+                });
+                return drainPromise;
+            }
+
+            // Rendering is viewport-driven, so pagination (print/export) must
+            // force every remaining figure through the queue and wait for the
+            // drain to settle before the page is captured. Passing a theme
+            // pins it (and re-renders mismatched figures) until the next call
+            // without one restores the on-screen theme.
+            async function renderAll(theme) {
+                themeOverride = theme || null;
+                const want = activeTheme();
+                document.querySelectorAll('.mermaid-figure').forEach((figure) => {
+                    const node = figure.querySelector('.mermaid');
+                    if (!node || queue.includes(figure)) return;
+                    if (node.dataset.mmDone !== '1' || node.dataset.mmTheme !== want) {
+                        queue.push(figure);
+                    }
+                });
+                while (queue.length || drainPromise) {
+                    await drain();
                 }
-                draining = false;
-                window.dispatchEvent(new Event('md-preview-mermaid-rendered'));
             }
 
             async function renderOne(figure) {
-                ensureInit();
+                const theme = activeTheme();
+                ensureInit(theme);
                 const node = figure.querySelector('.mermaid');
-                if (!node || node.dataset.mmDone === '1') return;
-                // Pre-render source, stashed so MdPreview.update can pair
-                // unchanged diagrams with their SVGs during DOM diffs.
-                node.__mdSrc = node.textContent;
+                if (!node) return;
+                if (node.dataset.mmDone === '1') {
+                    if (node.dataset.mmTheme === theme) return;
+                    if (typeof node.__mdSrc !== 'string') return;
+                    // Theme change: put the stashed source back and clear any
+                    // pan/zoom transform now, so a pagination that starts
+                    // before the next frame never captures a stale state.
+                    const prior = states.get(figure);
+                    if (prior && prior.surface) prior.surface.style.transform = '';
+                    node.textContent = node.__mdSrc;
+                    node.removeAttribute('data-processed');
+                    delete node.dataset.mmDone;
+                } else {
+                    // Pre-render source, stashed so MdPreview.update can pair
+                    // unchanged diagrams with their SVGs during DOM diffs.
+                    node.__mdSrc = node.textContent;
+                }
                 try {
                     await mermaid.run({ nodes: [node], suppressErrors: true });
                 } catch (err) {
@@ -2678,6 +2742,7 @@ nonisolated enum MarkdownHTML {
                     return;
                 }
                 node.dataset.mmDone = '1';
+                node.dataset.mmTheme = theme;
                 attachZoom(figure, svg);
             }
 
@@ -2706,6 +2771,7 @@ nonisolated enum MarkdownHTML {
                     figure.style.setProperty('--mm-aspect', vbW + ' / ' + vbH);
                 }
 
+                const alreadyWired = states.has(figure);
                 const state = {
                     tx: 0, ty: 0, scale: 1, min: 1, max: 8,
                     rect: null, raf: 0, dragging: false,
@@ -2714,6 +2780,13 @@ nonisolated enum MarkdownHTML {
                 };
                 states.set(figure, state);
                 cacheRect(figure);
+
+                // A theme re-render reuses the figure and its listeners; only
+                // the state and HUD need resetting for the fresh SVG.
+                if (alreadyWired) {
+                    apply(figure, state);
+                    return;
+                }
 
                 figure.addEventListener('pointerenter', () => postMermaidHover(true));
                 figure.addEventListener('pointerleave', () => postMermaidHover(false));
@@ -2956,6 +3029,9 @@ nonisolated enum MarkdownHTML {
                 figures.forEach((f) => io.observe(f));
             }
 
+            window.MdPreview = window.MdPreview || {};
+            window.MdPreview.mermaidRenderAll = renderAll;
+
             return { bootstrap };
         })()
     """
@@ -3150,7 +3226,7 @@ nonisolated enum MarkdownHTML {
         padding-inline-end: 0.25em;
     }
 
-    /* Frontmatter properties — Obsidian-style metadata panel. Deliberately
+    /* Frontmatter properties — a quiet metadata panel. Deliberately
        quieter than document content: no row borders (content tables own
        horizontal rules), a muted key column, and a single hairline that
        hands off to the document body. */
@@ -3203,7 +3279,14 @@ nonisolated enum MarkdownHTML {
     p {
         margin: \(paragraphSpacing)px 0 0;
     }
+    /* The final blank of a run shrinks to a small gap so a single authored
+       blank plus the next block's margin matches other renderers' paragraph
+       rhythm. Earlier blanks in the run keep their natural line height, so
+       extra authored blanks still grow the gap. */
     .md-source-blank-line {
+        height: \(blankLineGap)px;
+    }
+    .md-source-blank-line:has(+ .md-source-blank-line) {
         height: \(sourceLineHeight)px;
     }
 
@@ -3212,21 +3295,24 @@ nonisolated enum MarkdownHTML {
         line-height: 1.18;
         margin: 1.6em 0 0;
     }
-    h1 { font-size: 2em; margin-top: 0.8em; }
-    h2 { font-size: 1.88em; line-height: 1.06; }
-    h3 { font-size: 1.65em; line-height: 1.07; }
-    h4 { font-size: 1.41em; line-height: 1.08; }
-    h5 { font-size: 1.29em; line-height: 1.09; }
+    /* Minor-third heading scale: each level steps down visibly, and only
+       the document title carries the heavier weight. */
+    h1 { font-size: 1.802em; font-weight: 700; margin-top: 0.8em; }
+    h2 { font-size: 1.602em; line-height: 1.06; }
+    h3 { font-size: 1.424em; line-height: 1.07; }
+    h4 { font-size: 1.266em; line-height: 1.08; }
+    h5 { font-size: 1.125em; line-height: 1.09; }
     h6 { font-size: 1em; line-height: 1.24; }
-    /* An authored blank line already provides the heading's separation.
-       Keep only a small amount of extra breathing room above the title. */
+    /* The blank before a heading shrinks like every final blank; the
+       heading's own margin restores the one-line gap, keeping the total at
+       one source line plus the small breathing room (blank + margin). */
     .md-source-blank-line + h1,
     .md-source-blank-line + h2,
     .md-source-blank-line + h3,
     .md-source-blank-line + h4,
     .md-source-blank-line + h5,
     .md-source-blank-line + h6 {
-        margin-top: 4px;
+        margin-top: \(sourceLineHeight)px;
     }
 
     a { color: var(--link); text-decoration: none; }
@@ -3566,12 +3652,33 @@ nonisolated enum MarkdownHTML {
 
     ul, ol { margin: \(paragraphSpacing)px 0 0; padding-left: 1.6em; }
     ul { list-style-type: "•  "; }
+    /* The text marker stays for copy/paste and for reserving the gutter,
+       but renders transparent; a 0.4em circle is painted in its place.
+       Drawn with a border, not a background, so PDF export keeps it even
+       when backgrounds are not printed. */
+    ul > li::marker { color: transparent; }
+    ul > li { position: relative; }
+    ul > li:not(.task-list-item)::before {
+        content: "";
+        position: absolute;
+        inset-inline-start: -0.9em;
+        top: 0.56em;
+        width: 0;
+        height: 0;
+        border: 0.2em solid var(--text);
+        border-radius: 50%;
+    }
     li { margin-top: \(listItemSpacing)px; }
     li:first-child { margin-top: 0; }
     li > ul, li > ol { margin-top: \(listItemSpacing)px; }
     li > p:first-child { margin-top: 0; }
 
     li.task-list-item { list-style: none; }
+    /* Completed tasks read as done — struck through and muted. */
+    li.task-list-item:has(input.task-list-item-checkbox:checked) {
+        color: var(--secondary);
+        text-decoration: line-through;
+    }
     li.task-list-item > p:first-of-type { display: inline; margin-top: 0; }
     .task-list-item-checkbox {
         -webkit-appearance: none;
@@ -3677,7 +3784,7 @@ nonisolated enum MarkdownHTML {
         border: 0;
         height: 1px;
         background: var(--grid);
-        margin: \(hrSpacing)px 0;
+        margin: \(hrSpacing)px 0 0;
     }
 
     img {
@@ -3760,7 +3867,8 @@ nonisolated enum MarkdownHTML {
 
         /* Interaction affordances are screen-only. */
         .md-code-copy,
-        .md-search-burst { display: none !important; }
+        .md-search-burst,
+        .mermaid-hud { display: none !important; }
         mark.md-search-highlight,
         mark.md-search-highlight-current {
             background: transparent;

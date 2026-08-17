@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.0.49] – 2026-08-15
+
+This release adds a Settings window that collects all the preferences of the application in one place. It also makes the keyboard commands and a new Copy button work in a Finder preview.
+
+### Added
+
+- **The application has a Settings window.** Press ⌘, or use Markdown Preview ▸ Settings… to open it. The window has three panes: General, Privacy, and About. The panes contain the preferences that were only in the menus before: the appearance, the text size, the content width, the application that File ▸ Open in… uses, the crash reports, and the automatic update checks from Sparkle. The window uses the icons and the layout of macOS System Settings. A change in the window and a change in the menu stay equal, and the About pane shows the date of the last update check immediately. A new installation checks for updates automatically, but the application keeps your choice if you made one before. The window is available in English and in Simplified Chinese ([#287](https://github.com/pluk-inc/markdown-preview/pull/287)).
+- **A Finder preview has a Copy button.** The button is in the bottom-right corner of the preview. It copies the Markdown source text of the file to the pasteboard, and you do not select the text first. The button shows "Copied" immediately after you click it, and it stays clear of the content of the preview ([#289](https://github.com/pluk-inc/markdown-preview/pull/289)).
+
+### Fixed
+
+- **⌘A and ⌘C work in a Finder preview immediately.** The preview panel opened with the keyboard focus in Finder. Therefore ⌘A selected the files in the Finder window, and the two commands did nothing in the preview until you clicked in it. The preview now takes the keyboard focus when the content is complete, and it accepts ⌘A and ⌘C directly. Finder keeps the other keys: the arrow keys change the selected file, and the space key closes the panel ([#288](https://github.com/pluk-inc/markdown-preview/pull/288)).
+
+## [0.0.48] – 2026-08-15
+
+This release changes the vertical gaps and the type sizes in the preview and in the editor. It also lets you select text in a Finder preview, keep a preview window in front of other applications, and print and export diagrams correctly.
+
+### Added
+
+- **Always on Top keeps a preview window in front of other applications.** Use the item in the View menu, or press ⌃⌘T. A toolbar button is also available in Customize Toolbar. The setting applies to all the tabs in one window. The application does not keep the setting after you quit it ([#266](https://github.com/pluk-inc/markdown-preview/pull/266)).
+- **You can select and copy text in a Finder preview.** The Quick Look extension now uses a `WKWebView` view. Therefore the selection belongs to the preview, and ⌘C copies the text that you select. Before this release, ⌘C copied the Markdown file. The text cursor and the link cursor are also correct now. Local images, the resource limits, and external links do not change ([#273](https://github.com/pluk-inc/markdown-preview/pull/273)).
+- **The application applies strikethrough to a completed task item.** A task item with `- [x]` shows dim text with strikethrough. A task item with `- [ ]` does not change. If you click the checkbox in the preview, the style changes immediately ([#283](https://github.com/pluk-inc/markdown-preview/pull/283)).
+
+### Changed
+
+- **The headings have new sizes.** The size of the H1 heading and the size of the H2 heading were almost equal. This made the structure of a document difficult to read. The six heading levels now use these sizes: 1.802em, 1.602em, 1.424em, 1.266em, 1.125em, and 1em. Only the H1 heading uses weight 700. The preview and the editor use the same sizes ([#281](https://github.com/pluk-inc/markdown-preview/pull/281)).
+- **The list bullets are larger.** The `•` character was very small. The application now makes the character transparent, and draws a circle with a diameter of 0.4em in its position. The character keeps its space in the margin. If you copy the text, the character stays in the copy. The gap between the circle and the text is 0.5em in the preview and in the editor. The application draws the circle with a border and not with a background color. Therefore a PDF export keeps the circle when it does not print background colors ([#282](https://github.com/pluk-inc/markdown-preview/pull/282)).
+- **The gaps above and below a horizontal rule are equal.** A horizontal rule had a large margin above it and below it. The margin of the next block increased the gap below it to approximately 51 px, and the gap above it was approximately 39 px. The horizontal rule now has a margin of 12 px above it only, and the next block supplies the gap below it. Both gaps are now equal to the usual gap between two paragraphs ([#280](https://github.com/pluk-inc/markdown-preview/pull/280)).
+
+### Fixed
+
+- **A blank line makes a smaller gap.** One blank line in the source text made a gap of 22.8 px. Therefore the usual gap between two paragraphs was approximately 35 px. One blank line now makes a gap of 4 px, and the gap between two paragraphs is approximately 16 px. Other Markdown applications use approximately the same gap. Each additional blank line adds one more line of height. Therefore you keep larger gaps if you write them in the source text. The gaps above the headings do not change from release 0.0.47 ([#279](https://github.com/pluk-inc/markdown-preview/pull/279), [#271](https://github.com/pluk-inc/markdown-preview/issues/271)).
+- **The application renders all the diagrams before it prints or exports a document.** The application renders a diagram when you scroll near to it. But a print operation or an export operation uses the full document at one time. Therefore a diagram that you did not scroll to showed an empty box and its source text. File ▸ Print… and File ▸ Export… now wait until all the diagrams are complete. A print operation also uses the light theme for the diagrams, because the application puts the theme in the diagram when it renders it. The application returns to the theme on the screen after the print panel closes. A diagram also stays on one page ([#275](https://github.com/pluk-inc/markdown-preview/pull/275), [#274](https://github.com/pluk-inc/markdown-preview/issues/274)).
+- **Strikethrough needs two tilde characters.** The application applied strikethrough to text between two single tilde characters, for example `~text~`. This was not correct for text that contains paths, version numbers, or approximate values. The application now applies strikethrough only to text between two double tilde characters, for example `~~text~~`. A single tilde character stays as text ([#278](https://github.com/pluk-inc/markdown-preview/pull/278)).
+
+### Contributors
+
+Thank you to the external contributors of this release:
+
+- [@kud](https://github.com/kud) — added the Always on Top function ([#266](https://github.com/pluk-inc/markdown-preview/pull/266))
+- [@Avi7ii](https://github.com/Avi7ii) — added text selection and correct cursors to Finder previews ([#273](https://github.com/pluk-inc/markdown-preview/pull/273))
+- [@Cuzeth](https://github.com/Cuzeth) — reported and corrected the diagram export problem ([#275](https://github.com/pluk-inc/markdown-preview/pull/275), [#274](https://github.com/pluk-inc/markdown-preview/issues/274))
+- [@ray-zzzzz](https://github.com/ray-zzzzz) — changed strikethrough to use two tilde characters ([#278](https://github.com/pluk-inc/markdown-preview/pull/278))
+- [@t9mike](https://github.com/t9mike) — reported the large gaps above paragraphs and headings ([#271](https://github.com/pluk-inc/markdown-preview/issues/271))
+
 ## [0.0.47] – 2026-08-08
 
 The Appearance setting now covers Finder previews too, so the app and Quick Look stop disagreeing about light and dark. Because 0.0.46 shipped only briefly, its sidebar shortcut and heading-spacing fix are listed here as well — most people will pick them up in this update.

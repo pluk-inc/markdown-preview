@@ -400,6 +400,13 @@
                                     <action selector="toggleSidebar:" target="-1" id="iwa-gc-5KM"/>
                                 </connections>
                             </menuItem>
+                            <menuItem isSeparatorItem="YES" id="mdp-aot-sep"/>
+                            <menuItem title="Always on Top" keyEquivalent="t" id="mdp-aot-itm">
+                                <modifierMask key="keyEquivalentModifierMask" control="YES" command="YES"/>
+                                <connections>
+                                    <action selector="toggleAlwaysOnTop:" target="-1" id="mdp-aot-act"/>
+                                </connections>
+                            </menuItem>
                             <menuItem title="Enter Full Screen" keyEquivalent="f" id="4J7-dP-txa">
                                 <modifierMask key="keyEquivalentModifierMask" control="YES" command="YES"/>
                                 <connections>
