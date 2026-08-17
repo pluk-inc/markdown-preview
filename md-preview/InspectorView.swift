@@ -3,6 +3,7 @@
 //  md-preview
 //
 
+import AppKit
 import SwiftUI
 
 struct DocumentMetadata: Equatable {
@@ -109,12 +110,22 @@ struct InspectorView: View {
                     value: metadata.fileName
                 )
                 if let url = metadata.fileURL {
-                    LabeledContent(NSLocalizedString("Where", comment: "Inspector field label")) {
-                        Text(Self.displayLocation(for: url))
-                            .multilineTextAlignment(.trailing)
-                            .textSelection(.enabled)
+                    LabeledContent(NSLocalizedString("Full Path", comment: "Inspector field label")) {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(url.path)
+                                .multilineTextAlignment(.trailing)
+                                .textSelection(.enabled)
+                            Button {
+                                NSWorkspace.shared.activateFileViewerSelecting([url])
+                            } label: {
+                                Image(systemName: "arrow.right.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .help(NSLocalizedString("Show in Finder", comment: "Inspector reveal button tooltip"))
+                            .accessibilityLabel(NSLocalizedString("Show in Finder", comment: "Inspector reveal button tooltip"))
+                        }
                     }
-                    .help(url.deletingLastPathComponent().path)
                 }
                 LabeledContent(
                     NSLocalizedString("Document Type", comment: "Inspector field label"),
@@ -185,26 +196,6 @@ struct InspectorView: View {
             }
             .formStyle(.grouped)
         }
-    }
-}
-
-extension InspectorView {
-    // The sandbox remaps NSHomeDirectory() to the app container, so resolve the
-    // user's real home for tilde abbreviation.
-    private static let realHomePath: String = {
-        if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
-            return String(cString: dir)
-        }
-        return NSHomeDirectory()
-    }()
-
-    static func displayLocation(for url: URL) -> String {
-        let path = url.deletingLastPathComponent().standardizedFileURL.path
-        if path == realHomePath { return "~" }
-        if path.hasPrefix(realHomePath + "/") {
-            return "~" + path.dropFirst(realHomePath.count)
-        }
-        return path
     }
 }
 
