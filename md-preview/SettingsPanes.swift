@@ -53,6 +53,13 @@ final class SettingsModel {
         }
     }
 
+    var isAlwaysOnTop: Bool {
+        didSet {
+            guard !isRestoringExternalValues, isAlwaysOnTop != oldValue else { return }
+            appDelegate?.applyAlwaysOnTopSetting(isAlwaysOnTop)
+        }
+    }
+
     var sendsCrashReports: Bool {
         didSet {
             guard !isRestoringExternalValues, sendsCrashReports != oldValue else { return }
@@ -109,6 +116,7 @@ final class SettingsModel {
         appearance = AppearanceMode.current
         contentWidth = ContentWidthSetting.current
         textSize = TextSizeSetting.current
+        isAlwaysOnTop = AlwaysOnTopPolicy.isEnabled
         sendsCrashReports = CrashReporter.isEnabled
         checksForUpdatesAutomatically = updater?.automaticallyChecksForUpdates ?? true
         downloadsUpdatesAutomatically = updater?.automaticallyDownloadsUpdates ?? false
@@ -146,8 +154,9 @@ final class SettingsModel {
         isRestoringExternalValues = wasRestoringExternalValues
     }
 
-    /// Re-reads values that menus, document zoom, Sparkle, or the crash reporter
-    /// can change while the shared Settings model remains alive.
+    /// Re-reads values that menus, document zoom, a window's own toolbar,
+    /// Sparkle, or the crash reporter can change while the shared Settings
+    /// model remains alive.
     func refreshFromExternalSources() {
         isRestoringExternalValues = true
         defer { isRestoringExternalValues = false }
@@ -155,6 +164,7 @@ final class SettingsModel {
         appearance = AppearanceMode.current
         contentWidth = ContentWidthSetting.current
         textSize = TextSizeSetting.current
+        isAlwaysOnTop = AlwaysOnTopPolicy.isEnabled
         sendsCrashReports = CrashReporter.isEnabled
         if let updater { refreshUpdateSettings(from: updater) }
     }
@@ -272,6 +282,14 @@ struct GeneralSettingsView: View {
                 Text(L("Layout"))
             } footer: {
                 Text(L("Zooming a document window with ⌘+ and ⌘− changes this same size."))
+            }
+
+            Section {
+                Toggle(L("Always on Top"), isOn: $model.isAlwaysOnTop)
+            } header: {
+                Text(L("Windows"))
+            } footer: {
+                Text(L("Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out."))
             }
 
             Section {

@@ -280,10 +280,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// only asks them to pick it up now instead of at next launch.
     func applyTextSizeSetting(_ setting: TextSizeSetting) {
         TextSizeSetting.store(setting)
+        documentWindowControllers.forEach { $0.applyTextSizeSetting() }
+    }
+
+    private var documentWindowControllers: [DocumentWindowController] {
         NSDocumentController.shared.documents
             .flatMap(\.windowControllers)
             .compactMap { $0 as? DocumentWindowController }
-            .forEach { $0.applyTextSizeSetting() }
+    }
+
+    /// Applies the app-wide Always on Top preference. Every open preview window
+    /// takes the new level, and the Settings toggle, toolbar buttons and menu
+    /// item are all driven from the one stored value, so whichever of them the
+    /// reader used, the rest agree.
+    func applyAlwaysOnTopSetting(_ isEnabled: Bool) {
+        guard isEnabled != AlwaysOnTopPolicy.isEnabled else { return }
+        AlwaysOnTopPolicy.isEnabled = isEnabled
+        documentWindowControllers.forEach { $0.applyAlwaysOnTopSetting() }
+        SettingsModel.shared.refreshFromExternalSources()
     }
 
     func installCommandLineToolsFromSettings() {
@@ -293,10 +307,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Re-reads the persisted default so every open document's Open button
     /// shows the app that was just picked in Settings.
     func refreshOpenTargetsInOpenDocuments() {
-        NSDocumentController.shared.documents
-            .flatMap(\.windowControllers)
-            .compactMap { $0 as? DocumentWindowController }
-            .forEach { $0.refreshOpenTargets() }
+        documentWindowControllers.forEach { $0.refreshOpenTargets() }
     }
 
     @objc private func installCommandLineTools(_ sender: Any?) {
