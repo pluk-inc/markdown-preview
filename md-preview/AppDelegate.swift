@@ -275,6 +275,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         reloadDocumentPreviewsForSettingChange()
     }
 
+    /// Applies a font chosen in Settings. Open documents re-render rather than
+    /// waiting to be reopened; Quick Look picks the value up on its next
+    /// preview, since the setting lives in the app group.
+    func applyDocumentFontSetting(_ setting: DocumentFontSetting) {
+        guard setting != DocumentFontSetting.current else { return }
+        DocumentFontSetting.current = setting
+        reloadDocumentPreviewsForSettingChange()
+    }
+
     /// Pushes a text size chosen in Settings into every open document. The
     /// value is the same stored page zoom the windows already read, so this
     /// only asks them to pick it up now instead of at next launch.
