@@ -297,6 +297,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard isEnabled != AlwaysOnTopPolicy.isEnabled else { return }
         AlwaysOnTopPolicy.isEnabled = isEnabled
         documentWindowControllers.forEach { $0.applyAlwaysOnTopSetting() }
+        settingsWindowController?.applyWindowLevel()
         SettingsModel.shared.refreshFromExternalSources()
     }
 

@@ -36,6 +36,20 @@ enum AlwaysOnTopPolicy {
         return Int(CGWindowLevelForKey(floats ? .floatingWindow : .normalWindow))
     }
 
+    /// Raw `NSWindow.Level` value the Settings window takes.
+    ///
+    /// Settings sits one step above whatever the preview windows are using, so
+    /// the window you change a preference in cannot be buried by the windows
+    /// that preference applies to — which is otherwise exactly what happens the
+    /// moment Always on Top is on. It drops back to the normal level when the
+    /// pin is off: Settings floating above every other application is a side
+    /// effect nobody asked for, and this app only earns that while the reader
+    /// has explicitly asked its windows to stay in front.
+    static func settingsWindowLevel(isPinned: Bool) -> Int {
+        guard isPinned else { return Int(CGWindowLevelForKey(.normalWindow)) }
+        return windowLevel(isPinned: true, isFullScreen: false) + 1
+    }
+
     // MARK: - Storage
 
     /// Always on Top is a way of *reading*, not a property of one document:

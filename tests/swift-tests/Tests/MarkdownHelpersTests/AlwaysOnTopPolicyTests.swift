@@ -38,6 +38,18 @@ final class AlwaysOnTopPolicyTests: XCTestCase {
                        Int(CGWindowLevelForKey(.floatingWindow)))
     }
 
+    // Settings is where the pin is turned off again, so a floating document
+    // window that could cover it would leave no way back.
+    func testSettingsSitsAboveAPinnedPreviewWindow() {
+        XCTAssertGreaterThan(AlwaysOnTopPolicy.settingsWindowLevel(isPinned: true),
+                             AlwaysOnTopPolicy.windowLevel(isPinned: true, isFullScreen: false))
+    }
+
+    func testSettingsStaysAtTheNormalLevelWhileNothingIsPinned() {
+        XCTAssertEqual(AlwaysOnTopPolicy.settingsWindowLevel(isPinned: false),
+                       Int(CGWindowLevelForKey(.normalWindow)))
+    }
+
     func testSettingIsOffWhenNothingHasBeenStored() throws {
         let (defaults, suiteName) = try makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
