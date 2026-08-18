@@ -222,7 +222,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// makeWindowControllers, before showWindows), so the window is already
     /// visible and placement never happens on its own. Join the frontmost
     /// document window's tab group explicitly on first show instead — but
-    /// only when the open was an explicit tab request, or the system
+    /// only when the open was an explicit tab request, when this app's own
+    /// "Open documents in tabs" preference is on, or when the system
     /// "Prefer tabs when opening documents" setting asks for it. Plain
     /// opens (Finder, ⌘O, recents) otherwise get their own window.
     private func attachToExistingTabGroupIfNeeded() {
@@ -236,18 +237,20 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                           && $0.tabbingIdentifier == documentWindow.tabbingIdentifier
                   }) else { return }
 
-        let joins: Bool
-        if joinsTabGroupOnFirstShow {
-            joins = true
-        } else {
-            switch NSWindow.userTabbingPreference {
-            case .always: joins = true
-            case .inFullScreen: joins = host.styleMask.contains(.fullScreen)
-            case .manual: joins = false
-            @unknown default: joins = false
-            }
+        let systemPreference: TabOpeningPolicy.SystemPreference
+        switch NSWindow.userTabbingPreference {
+        case .always: systemPreference = .always
+        case .inFullScreen: systemPreference = .inFullScreen
+        case .manual: systemPreference = .manual
+        @unknown default: systemPreference = .manual
         }
-        guard joins else { return }
+
+        guard TabOpeningPolicy.joinsExistingTabGroup(
+            isExplicitTabRequest: joinsTabGroupOnFirstShow,
+            opensDocumentsInTabs: TabOpeningPolicy.isEnabled,
+            systemPreference: systemPreference,
+            hostIsFullScreen: host.styleMask.contains(.fullScreen)
+        ) else { return }
         host.addTabbedWindow(documentWindow, ordered: .above)
     }
 

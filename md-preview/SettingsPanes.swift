@@ -53,6 +53,15 @@ final class SettingsModel {
         }
     }
 
+    /// A plain stored default with nothing to apply: it is read the next time
+    /// a document opens, so unlike the settings above it has no fan-out.
+    var opensDocumentsInTabs: Bool {
+        didSet {
+            guard !isRestoringExternalValues, opensDocumentsInTabs != oldValue else { return }
+            TabOpeningPolicy.isEnabled = opensDocumentsInTabs
+        }
+    }
+
     var sendsCrashReports: Bool {
         didSet {
             guard !isRestoringExternalValues, sendsCrashReports != oldValue else { return }
@@ -109,6 +118,7 @@ final class SettingsModel {
         appearance = AppearanceMode.current
         contentWidth = ContentWidthSetting.current
         textSize = TextSizeSetting.current
+        opensDocumentsInTabs = TabOpeningPolicy.isEnabled
         sendsCrashReports = CrashReporter.isEnabled
         checksForUpdatesAutomatically = updater?.automaticallyChecksForUpdates ?? true
         downloadsUpdatesAutomatically = updater?.automaticallyDownloadsUpdates ?? false
@@ -155,6 +165,7 @@ final class SettingsModel {
         appearance = AppearanceMode.current
         contentWidth = ContentWidthSetting.current
         textSize = TextSizeSetting.current
+        opensDocumentsInTabs = TabOpeningPolicy.isEnabled
         sendsCrashReports = CrashReporter.isEnabled
         if let updater { refreshUpdateSettings(from: updater) }
     }
@@ -272,6 +283,14 @@ struct GeneralSettingsView: View {
                 Text(L("Layout"))
             } footer: {
                 Text(L("Zooming a document window with ⌘+ and ⌘− changes this same size."))
+            }
+
+            Section {
+                Toggle(L("Open documents in tabs"), isOn: $model.opensDocumentsInTabs)
+            } header: {
+                Text(L("Windows"))
+            } footer: {
+                Text(L("A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window."))
             }
 
             Section {
