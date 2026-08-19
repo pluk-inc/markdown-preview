@@ -195,6 +195,10 @@ final class MainSplitViewController: NSSplitViewController {
         contentViewController?.reloadPreviewForSettingChange()
     }
 
+    func applyTextSizeSetting() {
+        contentViewController?.applyTextSizeSetting()
+    }
+
     // MARK: - Edit mode
 
     /// Preview and editor stay attached to the same content surface. Keeping

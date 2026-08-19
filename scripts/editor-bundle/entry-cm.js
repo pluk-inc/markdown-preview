@@ -748,15 +748,18 @@ const collapsedLine = Decoration.line({ class: "cm-md-line-collapsed" })
 // Preview block margin-top values in CSS px. The host passes the live values
 // from MarkdownHTML.swift (the single source of truth) through
 // MDEditor.create's `spacing` option; these defaults only serve headless
-// harnesses. Every authored blank line keeps its natural source-line height,
-// with the adjacent blocks' semantic margins added to the separator.
+// harnesses. The final blank line of a run shrinks to `blankGap` (plus the
+// adjacent blocks' semantic margins) so a single authored blank reads like a
+// normal paragraph gap; earlier blanks in a run keep their natural
+// source-line height, so extra authored blanks still grow the gap.
 const METRICS = {
   line: 22.8,
+  blankGap: 4,    // final blank of a run (.md-source-blank-line)
   paragraph: 12,  // p / ul / ol / pre / .md-code-wrap
   quote: 18,      // blockquote
   alert: 24,      // .markdown-alert
   table: 24,      // .md-table-scroll
-  hr: 35.25,      // hr (top and bottom)
+  hr: 12,         // hr (top only; the next block's margin supplies the bottom)
 }
 const SEPARATOR_BLOCKS = new Set([
   "Paragraph", "FencedCode", "CodeBlock", "Blockquote",
@@ -1031,10 +1034,10 @@ function buildDecorations(view) {
       }
     }
   }
-  // The renderer restores every source blank line before applying semantic
-  // block margins. Keep the editor's final blank separator at one natural
-  // line plus those margins; earlier blank lines already retain their normal
-  // CodeMirror line height.
+  // The renderer shrinks the final source blank line of a run to blankGap
+  // before applying semantic block margins. Keep the editor's final blank
+  // separator at blankGap plus those margins; earlier blank lines already
+  // retain their normal CodeMirror line height.
   const blankRunBefore = (pos) => {
     const line = state.doc.lineAt(pos)
     let first = line.number
@@ -1043,18 +1046,6 @@ function buildDecorations(view) {
     const stop = Math.max(first - 64, 1)
     while (first > stop && state.doc.line(first - 1).text.length === 0) first--
     return { line, first, count: line.number - first }
-  }
-  // iterate visits top-level blocks in document order, so the previous
-  // block's name is a running variable; the tree is resolved only for the
-  // first block of a visible range, whose predecessor was never visited.
-  let lastTopBlockName = null
-  const topBlockNameBefore = (blankFirstLine) => {
-    if (lastTopBlockName != null) return lastTopBlockName
-    if (blankFirstLine <= 1) return null
-    const prev = state.doc.line(blankFirstLine - 1)
-    let n = syntaxTree(state).resolveInner(prev.from, 1)
-    while (n.parent && n.parent.name !== "Document") n = n.parent
-    return n.name
   }
   const blockMarginTop = (node) => {
     switch (node.name) {
@@ -1081,16 +1072,12 @@ function buildDecorations(view) {
     if (run.first === 1) {
       lineOnce(
         separator.from,
-        blockSeparatorLine(METRICS.line + blockMarginTop(node))
+        blockSeparatorLine(METRICS.blankGap + blockMarginTop(node))
       )
       return
     }
-    // hr is the only block with a margin-bottom. A visible blank-line spacer
-    // prevents adjacent margins from collapsing, so both sides contribute.
-    const marginBottom = topBlockNameBefore(run.first) === "HorizontalRule"
-      ? METRICS.hr : 0
     const marginTop = blockMarginTop(node)
-    const height = METRICS.line + marginBottom + marginTop
+    const height = METRICS.blankGap + marginTop
     lineOnce(separator.from, blockSeparatorLine(height))
   }
 
@@ -1103,7 +1090,6 @@ function buildDecorations(view) {
   const listStack = []
 
   for (const { from, to } of view.visibleRanges) {
-    lastTopBlockName = null
     let contentDocumentDepth = null
     syntaxTree(state).iterate({
       from, to,
@@ -1111,13 +1097,11 @@ function buildDecorations(view) {
         depth++
         const name = node.name
 
-        if (depth === 2 && name === "Frontmatter") lastTopBlockName = name
         if (depth === 2 && name === "Document") contentDocumentDepth = depth
 
         // --- Block separators ------------------------------------------
         if (contentDocumentDepth != null && depth === contentDocumentDepth + 1) {
           if (SEPARATOR_BLOCKS.has(name)) separatorBlankBefore(node)
-          lastTopBlockName = name
         }
 
         // --- Frontmatter ----------------------------------------------

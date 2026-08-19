@@ -193,6 +193,9 @@
 /* Class = "NSMenuItem"; title = "Check Grammar With Spelling"; ObjectID = "mK6-2p-4JG"; */
 "mK6-2p-4JG.title" = "检查拼写和语法";
 
+/* Class = "NSMenuItem"; title = "Always on Top"; ObjectID = "mdp-aot-itm"; */
+"mdp-aot-itm.title" = "始终置顶";
+
 /* Class = "NSMenuItem"; title = "Zoom In"; ObjectID = "mdp-zi-itm"; */
 "mdp-zi-itm.title" = "放大";
 

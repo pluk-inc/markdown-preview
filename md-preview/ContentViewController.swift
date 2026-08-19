@@ -14,7 +14,7 @@ enum NavigationScrollTarget {
 
 final class ContentViewController: NSViewController {
 
-    private static let pageZoomDefaultsKey = "MarkdownPreview.pageZoom"
+    private static let pageZoomDefaultsKey = TextSizeSetting.defaultsKey
 
     private var webView: MarkdownWebView!
     private var webViewCenteredLeadingConstraint: NSLayoutConstraint?
@@ -338,6 +338,10 @@ final class ContentViewController: NSViewController {
     func reloadPreviewForSettingChange() {
         applyContentWidthMode()
         webView.reloadPreviewForSettingChange()
+    }
+
+    func applyTextSizeSetting() {
+        webView.applyPersistedZoom()
     }
 
     /// Swaps the web view between the AppKit-centered page column and a

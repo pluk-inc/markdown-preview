@@ -792,31 +792,76 @@ extension MarkdownWebView {
         return operation
     }
 
+    /// Mermaid theme for paper printing. Diagrams bake their colors into the
+    /// SVG at render time, so the forced-light print stylesheet needs figures
+    /// re-rendered with mermaid's light theme.
+    private static let paperPrintMermaidTheme = "default"
+
     private func runPrintOperation(
         _ operation: NSPrintOperation,
         from window: NSWindow,
         matchesPreview: Bool = false
     ) {
-        let run = {
-            operation.runModal(
-                for: window,
-                delegate: nil,
-                didRun: nil,
-                contextInfo: nil
-            )
-        }
-
         // Export keeps the live read-only stylesheet intact. Regular Print
-        // retains its paper-oriented size and pagination controls.
+        // retains its paper-oriented size and pagination controls, forces the
+        // light palette, and restores the on-screen theme when the panel ends.
         if matchesPreview {
-            applyPreviewPrintMode(completion: run)
+            renderAllMermaidDiagrams {
+                self.applyPreviewPrintMode {
+                    operation.runModal(
+                        for: window,
+                        delegate: nil,
+                        didRun: nil,
+                        contextInfo: nil
+                    )
+                }
+            }
         } else {
-            applyPaperPrintMode {
-                self.applyPrintPointSize(
-                    PrintSizeOptions.pointSize,
-                    completion: run
+            renderAllMermaidDiagrams(forcedTheme: Self.paperPrintMermaidTheme) {
+                self.applyPaperPrintMode {
+                    self.applyPrintPointSize(PrintSizeOptions.pointSize) {
+                        operation.runModal(
+                            for: window,
+                            delegate: self,
+                            didRun: #selector(Self.paperPrintOperationDidRun(_:success:contextInfo:)),
+                            contextInfo: nil
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @objc private func paperPrintOperationDidRun(
+        _ operation: NSPrintOperation,
+        success: Bool,
+        contextInfo: UnsafeMutableRawPointer?
+    ) {
+        renderAllMermaidDiagrams {}
+    }
+
+    /// Mermaid renders lazily as figures scroll into view, but pagination
+    /// captures the whole document at once — a diagram that never got near
+    /// the viewport would print as its raw source text. `forcedTheme` pins the
+    /// mermaid theme (re-rendering mismatched figures); calling again without
+    /// one restores the on-screen theme.
+    private func renderAllMermaidDiagrams(
+        forcedTheme: String? = nil,
+        completion: @escaping () -> Void
+    ) {
+        let themeArgument = forcedTheme.map { "'\($0)'" } ?? ""
+        let script = """
+        if (window.MdPreview && typeof window.MdPreview.mermaidRenderAll === 'function') {
+            await window.MdPreview.mermaidRenderAll(\(themeArgument));
+        }
+        """
+        webView.callAsyncJavaScript(script, in: nil, in: .page) { result in
+            if case .failure(let error) = result {
+                Logger.perf.debug(
+                    "mermaid print pre-render failed: \(error.localizedDescription, privacy: .public)"
                 )
             }
+            completion()
         }
     }
 

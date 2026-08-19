@@ -1,4 +1,5 @@
 import Foundation
+import UniformTypeIdentifiers
 
 enum InlineLocalAssets {
 
@@ -72,6 +73,43 @@ enum InlineLocalAssets {
         output += nsHtml.substring(from: cursor)
 
         return Result(html: output, attachments: attachments)
+    }
+
+    static func dataURLHTML(from result: Result) -> String {
+        let nsHtml = result.html as NSString
+        let matches = imgSrcRegex.matches(
+            in: result.html,
+            range: NSRange(location: 0, length: nsHtml.length)
+        )
+        guard !matches.isEmpty else { return result.html }
+
+        var output = ""
+        output.reserveCapacity(result.html.count)
+        var cursor = 0
+
+        for match in matches {
+            output += nsHtml.substring(with: NSRange(
+                location: cursor,
+                length: match.range.location - cursor
+            ))
+
+            let src = nsHtml.substring(with: match.range(at: 2))
+            let contentID = src.hasPrefix("cid:") ? String(src.dropFirst(4)) : ""
+            if let attachment = result.attachments[contentID] {
+                let prefix = nsHtml.substring(with: match.range(at: 1))
+                let suffix = nsHtml.substring(with: match.range(at: 3))
+                let mimeType = UTType(filenameExtension: attachment.pathExtension)?.preferredMIMEType
+                    ?? "application/octet-stream"
+                let dataURL = "data:\(mimeType);base64,\(attachment.data.base64EncodedString())"
+                output += "\(prefix)\(dataURL)\(suffix)"
+            } else {
+                output += nsHtml.substring(with: match.range)
+            }
+
+            cursor = match.range.location + match.range.length
+        }
+        output += nsHtml.substring(from: cursor)
+        return output
     }
 
     // Matches the double-quoted image tags emitted by MarkdownHTML's renderer.
