@@ -1305,6 +1305,11 @@ nonisolated enum MarkdownHTML {
         let tableCellDrag = null;
         let suppressNextTableClick = false;
 
+        // Per-column resize, session-only. Keyed by the table's source-start
+        // line so widths survive morphdom re-renders within a session.
+        const tableColumnWidths = new Map();
+        let colResizeDrag = null;
+
         function tableMessage(cell, operation, value, pendingValue, pendingCell) {
             const table = cell && cell.closest('table[data-source-start][data-source-end]');
             if (!table || table.dataset.tableSaving === '1') return false;
@@ -1536,6 +1541,129 @@ nonisolated enum MarkdownHTML {
             else cell.setAttribute('aria-label', placeholder);
         }
 
+        // ---- Per-column resize (session-only, host app only) ----
+        // Key on the header row's text rather than data-source-start: source
+        // lines shift with edits above the table, and a different document
+        // can reuse this webview. Same headers ⇒ same session widths.
+        function tableKeyFromTable(table) {
+            if (!table) return null;
+            const headerTexts = Array.from(
+                table.querySelectorAll('thead th')
+            ).map((th) => th.textContent);
+            if (!headerTexts.length) return null;
+            return headerTexts.join('\\u0000');
+        }
+        function ensureColgroup(table) {
+            let colgroup = table.querySelector('colgroup');
+            if (colgroup) return colgroup;
+            colgroup = document.createElement('colgroup');
+            table.insertBefore(colgroup, table.firstChild);
+            return colgroup;
+        }
+        function writeColumnWidths(table, widths) {
+            const colgroup = ensureColgroup(table);
+            // Restores run on every update for every resized table; skip the
+            // rebuild (and the reflow it forces) when nothing changed.
+            if (colgroup.children.length === widths.length) {
+                let unchanged = true;
+                for (let i = 0; i < widths.length; i++) {
+                    if (colgroup.children[i].style.width !== Math.round(widths[i]) + 'px') {
+                        unchanged = false;
+                        break;
+                    }
+                }
+                if (unchanged) {
+                    table.classList.add('md-table-resized');
+                    return;
+                }
+            }
+            colgroup.innerHTML = '';
+            widths.forEach((w) => {
+                const col = document.createElement('col');
+                col.style.width = Math.round(w) + 'px';
+                colgroup.appendChild(col);
+            });
+            table.classList.add('md-table-resized');
+        }
+        // Idempotent: attach a resize handle to each header cell, and restore
+        // any saved widths for this table. Re-run after every MdPreview.update
+        // so morphdom (which strips client-only handles/colgroup) re-applies.
+        function applyTableColumnResize(root = document) {
+            if (!hasHostBridge) return;
+            root.querySelectorAll('.md-table-editor table[data-source-start]').forEach((table) => {
+                const ths = table.querySelectorAll('thead th');
+                if (!ths.length) return;
+                // Handles on every header cell (positioned decoration; does not
+                // force fixed layout on its own).
+                ths.forEach((th) => {
+                    if (th.querySelector('.md-col-resize')) return;
+                    const handle = document.createElement('span');
+                    handle.className = 'md-col-resize';
+                    handle.setAttribute('aria-hidden', 'true');
+                    th.appendChild(handle);
+                });
+                // Saved widths only for tables the user has resized.
+                const key = tableKeyFromTable(table);
+                const saved = key ? tableColumnWidths.get(key) : null;
+                if (saved && saved.length === ths.length) {
+                    writeColumnWidths(table, saved);
+                } else {
+                    table.classList.remove('md-table-resized');
+                }
+            });
+        }
+        if (hasHostBridge) {
+            // Start a column drag. Capture EVERY column's current width so the
+            // auto→fixed switch on the first mousemove has no visual jump.
+            document.addEventListener('mousedown', (event) => {
+                if (event.button !== 0) return;
+                const handle = event.target.closest && event.target.closest('.md-col-resize');
+                if (!handle) return;
+                const th = handle.closest('th');
+                const table = th && th.closest('table');
+                if (!table) return;
+                const ths = Array.from(table.querySelectorAll('thead th'));
+                const index = ths.indexOf(th);
+                if (index < 0) return;
+                const startWidths = ths.map((t) => Math.round(t.getBoundingClientRect().width));
+                // Materialize the colgroup up front so the auto→fixed switch
+                // on the first move has no jump, and mousemove only has to
+                // touch the dragged column's <col>.
+                const colgroup = ensureColgroup(table);
+                colgroup.innerHTML = '';
+                const cols = startWidths.map((w) => {
+                    const col = document.createElement('col');
+                    col.style.width = w + 'px';
+                    colgroup.appendChild(col);
+                    return col;
+                });
+                table.classList.add('md-table-resized');
+                colResizeDrag = {
+                    cols,
+                    index,
+                    startWidths,
+                    startClientX: event.clientX,
+                    key: tableKeyFromTable(table),
+                };
+                event.preventDefault();
+                suppressNextTableClick = true;
+            }, true);
+            document.addEventListener('mousemove', (event) => {
+                if (!colResizeDrag) return;
+                // A release outside the webview never delivers a mouseup to
+                // this document — a button-less move means the drag is over.
+                if (!event.buttons) { colResizeDrag = null; return; }
+                const { cols, index, startWidths, startClientX, key } = colResizeDrag;
+                const next = startWidths.slice();
+                next[index] = Math.max(24, startWidths[index] + (event.clientX - startClientX));
+                cols[index].style.width = next[index] + 'px';
+                if (key) tableColumnWidths.set(key, next);
+            }, true);
+            document.addEventListener('mouseup', () => {
+                colResizeDrag = null;
+            }, true);
+        }
+
         if (hasHostBridge) {
             // One delegated listener covers both initial and morphed tables.
             document.addEventListener('input', (event) => {
@@ -1548,6 +1676,8 @@ nonisolated enum MarkdownHTML {
 
         document.addEventListener('mousedown', (event) => {
             if (event.button !== 0) return;
+            // Column-resize handle owns the gesture; don't start a cell drag.
+            if (event.target.closest?.('.md-col-resize')) return;
             const cell = event.target.closest?.('.md-table-editor th, .md-table-editor td');
             if (!cell) return;
             const row = Number(cell.dataset.tableRow);
@@ -1565,6 +1695,8 @@ nonisolated enum MarkdownHTML {
 
         document.addEventListener('mousemove', (event) => {
             if (!tableCellDrag) return;
+            // A column resize drag in progress owns pointer move.
+            if (colResizeDrag) return;
             const hitTarget = document.elementFromPoint?.(event.clientX, event.clientY);
             const cell = hitTarget?.closest?.('.md-table-editor th, .md-table-editor td')
                 || event.target.closest?.('.md-table-editor th, .md-table-editor td');
@@ -1595,6 +1727,7 @@ nonisolated enum MarkdownHTML {
                 event.stopPropagation();
                 return;
             }
+            if (event.target.closest('.md-col-resize')) return;
             const cell = event.target.closest('.md-table-editor th, .md-table-editor td');
             if (!cell) {
                 clearTablePartSelection();
@@ -1606,6 +1739,7 @@ nonisolated enum MarkdownHTML {
         });
 
         document.addEventListener('contextmenu', (event) => {
+            if (event.target.closest('.md-col-resize')) return;
             const cell = event.target.closest('.md-table-editor th, .md-table-editor td');
             if (!cell) return;
             event.preventDefault();
@@ -1788,6 +1922,9 @@ nonisolated enum MarkdownHTML {
         window.MdPreview.registerReapplier = (fn) => {
             if (typeof fn === 'function') reappliers.push(fn);
         };
+        // Re-attach resize handles + restore saved column widths after every
+        // update (morphdom strips client-only handles/colgroup).
+        window.MdPreview.registerReapplier(applyTableColumnResize);
         function mdHash(s) {
             let h = 5381;
             for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
@@ -1933,6 +2070,10 @@ nonisolated enum MarkdownHTML {
                     // pair one-to-one with the live DOM during the diff.
                     decorateCodeBlocks(next);
                     enableTableEditing(next);
+                    // Pre-shape the resize decorations too, so an untouched
+                    // table stays isEqualNode-equal to its live counterpart
+                    // and morphdom can keep skipping it wholesale.
+                    applyTableColumnResize(next);
                     keyExpensiveBlocks(article);
                     keyExpensiveBlocks(next);
                     morphdom(article, next, MORPH_OPTIONS);
@@ -3779,6 +3920,40 @@ nonisolated enum MarkdownHTML {
         --table-selection-left-edge: inset 1px 0 color-mix(in srgb, #007aff 52%, transparent);
     }
     .md-table-editor.is-saving { opacity: 0.72; }
+
+    /* Per-column resize handles (host app only — applyTableColumnResize
+       injects these; hasHostBridge gates the whole subsystem, so Quick Look
+       never sees them). */
+    .md-table-editor th { position: relative; }
+    /* The base article CSS makes every table display:block (its scroll
+       mechanism), but table-layout only applies to table boxes — re-declare
+       display the same way the frontmatter table does before going fixed.
+       .md-table-scroll keeps ownership of horizontal scrolling, so the
+       table itself may exceed the viewport and scroll. */
+    .md-table-editor table.md-table-resized {
+        display: table;
+        table-layout: fixed;
+        width: auto;
+        max-width: none;
+    }
+    /* Fixed columns clip long unbreakable content without this (the print
+       sheet already sets it; the screen needs it too once layout is fixed). */
+    .md-table-editor table.md-table-resized td { overflow-wrap: anywhere; }
+    .md-col-resize {
+        position: absolute;
+        top: 0;
+        right: -3px;
+        width: 6px;
+        height: 100%;
+        cursor: col-resize;
+        user-select: none;
+        -webkit-user-select: none;
+        z-index: 1;
+    }
+    .md-col-resize:hover,
+    .md-col-resize:active {
+        background: color-mix(in srgb, #007aff 40%, transparent);
+    }
 
     hr {
         border: 0;

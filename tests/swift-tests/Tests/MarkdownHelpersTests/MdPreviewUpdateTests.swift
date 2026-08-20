@@ -292,6 +292,43 @@ final class MdPreviewUpdateTests: XCTestCase {
         XCTAssertEqual(state.restoredLabel, "Column 1", json)
     }
 
+    func testColumnResizeHandlesAttachToHeaderCells() async throws {
+        let webView = try await loadHarness(
+            articleAttributes: "",
+            stubsWebKitMessageHandler: true
+        )
+        let article = MarkdownHTML.render(
+            markdown: """
+            | Name | Status |
+            | --- | --- |
+            | Ada | Active |
+            """,
+            vendorLoading: .lazy
+        ).articleHTML
+        let document = MarkdownHTML.javaScriptStringLiteral(article)
+
+        // The resize reapplier attaches one handle per header cell on every
+        // update; an untouched table stays on auto layout (no md-table-resized).
+        _ = try await webView.evaluateJavaScript("window.MdPreview.update(\(document)); true")
+
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const table = document.querySelector('table[data-source-start]');
+            return JSON.stringify({
+                headerCount: table.querySelectorAll('thead th').length,
+                handleCount: table.querySelectorAll('thead th .md-col-resize').length,
+                isFixed: table.classList.contains('md-table-resized')
+            });
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let state = try JSONDecoder().decode(ColumnResizeState.self, from: Data(json.utf8))
+
+        XCTAssertEqual(state.headerCount, 2, json)
+        XCTAssertEqual(state.handleCount, state.headerCount, "one handle per header cell", json)
+        XCTAssertFalse(state.isFixed, "an untouched table stays on auto layout", json)
+    }
+
     /// Builds the harness page — bundled DOMPurify + morphdom, the shipped
     /// host bridge, and fake renderers that mimic the real markers: stash
     /// `__mdSrc`, set the done flag, replace the children with a sentinel,
@@ -423,6 +460,12 @@ private struct WarmupArticleState: Decodable {
     private enum CodingKeys: String, CodingKey {
         case warmup, opacity, keyedBlocks, paragraphText
     }
+}
+
+private struct ColumnResizeState: Decodable {
+    let headerCount: Int
+    let handleCount: Int
+    let isFixed: Bool
 }
 
 private struct TableHeaderPlaceholderState: Decodable {
