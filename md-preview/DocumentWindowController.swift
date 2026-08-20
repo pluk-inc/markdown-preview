@@ -112,6 +112,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
     }
     private weak var editAccessory: NSTitlebarAccessoryViewController?
+    /// The native-style line under the formatting bar while the window is
+    /// themed — the .hard scroll edge that normally draws it would paint an
+    /// opaque system strip over the theme color, so the line is drawn here
+    /// and the edge stays frosted.
+    private weak var editAccessoryHairline: NSView?
     private weak var copyItem: NSToolbarItem?
     private var copyFeedbackWork: DispatchWorkItem?
     private weak var searchField: NSSearchField?
@@ -214,7 +219,281 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         documentWindow.toolbar = toolbar
         documentWindow.toolbarStyle = .automatic
 
+        applyWindowBackgroundTheme()
         installFindBar()
+    }
+
+    /// Applies the user's theme colors to this window: the native window
+    /// background plus the preview and editor pages. Also run at setup so
+    /// new windows start themed.
+
+    func applyThemeColorsSetting() {
+        applyWindowBackgroundTheme()
+        mainSplit?.applyThemeColors()
+    }
+
+    /// The full-window background. `DocumentBackgroundView` paints the
+    /// content area; this covers what remains — the title-bar region and
+    /// resize flashes — with a dynamic color so Automatic appearance keeps
+    /// flipping it without another pass.
+    /// In full screen AppKit adds an opaque NSTitlebarBackgroundView over
+    /// the sidebar's strip of the reveal bar; titlebarAppearsTransparent
+    /// does not reach it, so it paints system-white over a themed window.
+    /// The themed window paints its own background, so these views are
+    /// hidden outright while a theme color is active. The reveal bar lives
+    /// in a separate overlay window that AppKit rebuilds on every reveal,
+    /// so a patrol timer re-hides new copies while in full screen.
+    private func setScrollPockets(hidden: Bool) {
+        func walk(_ view: NSView) {
+            for subview in view.subviews {
+                if NSStringFromClass(type(of: subview)).contains("ScrollPocket") {
+                    subview.isHidden = hidden
+                }
+                walk(subview)
+            }
+        }
+        if let frameView = documentWindow.contentView?.superview {
+            walk(frameView)
+        }
+        for window in NSApp.windows
+        where NSStringFromClass(type(of: window)).contains("ToolbarFullScreen") {
+            if let frameView = window.contentView?.superview {
+                walk(frameView)
+            }
+        }
+    }
+
+    /// The full-screen titlebar keeps an NSVisualEffectView sized to the
+    /// sidebar section (sharp 52pt strip) that renders opaque white over a
+    /// themed window. The toolbar's own glass capsules are
+    /// NSGlassEffectView, a different class, and stay untouched.
+    private func setTitlebarEffectViews(hidden: Bool) {
+        func walkTitlebar(_ view: NSView, inTitlebar: Bool) {
+            for subview in view.subviews {
+                let cls = NSStringFromClass(type(of: subview))
+                let nowIn = inTitlebar || cls.contains("NSTitlebarContainerView")
+                if nowIn, subview is NSVisualEffectView {
+                    subview.isHidden = hidden
+                }
+                walkTitlebar(subview, inTitlebar: nowIn)
+            }
+        }
+        if let frameView = documentWindow.contentView?.superview {
+            walkTitlebar(frameView, inTitlebar: false)
+        }
+        for window in NSApp.windows
+        where NSStringFromClass(type(of: window)).contains("ToolbarFullScreen") {
+            if let frameView = window.contentView?.superview {
+                walkTitlebar(frameView, inTitlebar: true)
+            }
+        }
+    }
+
+    /// The full-screen sidebar glass card carries a plain CALayer filled
+    /// solid white — the card's base fill, drawn above anything the app
+    /// can put in the view hierarchy. Repainting that fill with the theme
+    /// color keeps the original card (shape, material, content) while the
+    /// base matches the theme. Identified by being a plain CALayer, at
+    /// least card-sized, with a pure-white background.
+    private func retintSidebarGlassFill() {
+        guard let frameView = documentWindow.contentView?.superview,
+              let rootLayer = frameView.layer else { return }
+        let isDark = documentWindow.effectiveAppearance
+            .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        guard let tint = ThemeColorsSetting.current.color(
+            .windowBackground, isDark ? .dark : .light
+        )?.cgColor else { return }
+        func isWhite(_ color: CGColor?) -> Bool {
+            guard let color else { return false }
+            // Extended-range colorspaces can refuse conversion; fall back
+            // to raw components (gray or RGB, both with trailing alpha).
+            let source = color.converted(
+                to: CGColorSpace(name: CGColorSpace.sRGB)!,
+                intent: .defaultIntent, options: nil) ?? color
+            guard let parts = source.components, parts.count >= 2 else { return false }
+            let alpha = parts[parts.count - 1]
+            guard alpha > 0.98 else { return false }
+            return parts.dropLast().allSatisfy { $0 > 0.98 }
+        }
+        func walk(_ layer: CALayer) {
+            if layer.bounds.width > 150, layer.bounds.height > 30,
+               isWhite(layer.backgroundColor) {
+                layer.backgroundColor = tint
+            }
+            for sub in layer.sublayers ?? [] { walk(sub) }
+        }
+        walk(rootLayer)
+        // The full-screen reveal bar overlay carries its own copy of the
+        // white fill.
+        for window in NSApp.windows
+        where NSStringFromClass(type(of: window)).contains("ToolbarFullScreen") {
+            if let overlayRoot = window.contentView?.superview?.layer {
+                walk(overlayRoot)
+            }
+        }
+    }
+
+    private static func findView(withClassNameContaining fragment: String,
+                                 in root: NSView) -> NSView? {
+        for subview in root.subviews {
+            if NSStringFromClass(type(of: subview)).contains(fragment) {
+                return subview
+            }
+            if let hit = findView(withClassNameContaining: fragment, in: subview) {
+                return hit
+            }
+        }
+        return nil
+    }
+
+    private func setTitlebarBackgroundViews(hidden: Bool) {
+        let backgroundClass: AnyClass? = NSClassFromString("NSTitlebarBackgroundView")
+        func walk(_ view: NSView) {
+            for subview in view.subviews {
+                if let backgroundClass, subview.isKind(of: backgroundClass) {
+                    subview.isHidden = hidden
+                }
+                walk(subview)
+            }
+        }
+        if let frameView = documentWindow.contentView?.superview {
+            walk(frameView)
+        }
+        // The full-screen reveal overlay hosting the cloned titlebar.
+        for window in NSApp.windows
+        where NSStringFromClass(type(of: window)).contains("ToolbarFullScreen") {
+            if let frameView = window.contentView?.superview {
+                walk(frameView)
+            }
+        }
+    }
+
+    /// Theme-colored underlay pinned across the entire content view,
+    /// beneath the split view. The window's backgroundColor does not feed
+    /// full screen's sidebar glass/backdrop stack — over an unpainted
+    /// region the glass samples the space background and renders white.
+    /// A real view in the hierarchy gives it the theme color to sample
+    /// everywhere, in every window state.
+    private final class ThemeUnderlayView: NSView {
+        override var wantsUpdateLayer: Bool { true }
+
+        override func updateLayer() {
+            let isDark = effectiveAppearance
+                .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            layer?.backgroundColor = ThemeColorsSetting.current.color(
+                .windowBackground, isDark ? .dark : .light
+            )?.cgColor
+        }
+    }
+
+    private weak var themeUnderlay: ThemeUnderlayView?
+
+    private func setThemeUnderlayInstalled(_ installed: Bool) {
+        if installed {
+            guard themeUnderlay == nil,
+                  let contentView = documentWindow.contentView else {
+                themeUnderlay?.needsDisplay = true
+                return
+            }
+            let underlay = ThemeUnderlayView(frame: contentView.bounds)
+            underlay.wantsLayer = true
+            underlay.translatesAutoresizingMaskIntoConstraints = false
+            contentView.addSubview(underlay, positioned: .below,
+                                   relativeTo: contentView.subviews.first)
+            NSLayoutConstraint.activate([
+                underlay.topAnchor.constraint(equalTo: contentView.topAnchor),
+                underlay.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+                underlay.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+                underlay.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            ])
+            themeUnderlay = underlay
+        } else {
+            themeUnderlay?.removeFromSuperview()
+            themeUnderlay = nil
+        }
+    }
+
+    private var titlebarPatrolTimer: Timer?
+    private var lastKnownFullScreenState = false
+    private func setTitlebarPatrolActive(_ active: Bool) {
+        titlebarPatrolTimer?.invalidate()
+        titlebarPatrolTimer = nil
+        guard active else {
+            setTitlebarBackgroundViews(hidden: false)
+            return
+        }
+        let timer = Timer(timeInterval: 0.4, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let themed = ThemeColorsSetting.current.hasWindowBackgroundOverride
+                self.setTitlebarBackgroundViews(hidden: themed)
+                // The full-screen transition callbacks do not fire for a
+                // window RESTORED directly into full screen, so the patrol
+                // also watches the state and re-applies the themed chrome
+                // (sidebar item swap included) on every change.
+                let isFullScreen = self.documentWindow.styleMask.contains(.fullScreen)
+                if isFullScreen != self.lastKnownFullScreenState {
+                    self.lastKnownFullScreenState = isFullScreen
+                    self.applyThemeColorsSetting()
+                }
+                // The reveal bar is a separate overlay window with its
+                // own opaque titlebar chrome (effect views, white fill
+                // layers); these keep it themed. The in-window gap itself
+                // is prevented by dropping .fullSizeContentView in full
+                // screen (known Apple bug FB20291636).
+                self.setScrollPockets(hidden: themed && isFullScreen)
+                self.setTitlebarEffectViews(hidden: themed && isFullScreen)
+                if themed, isFullScreen {
+                    self.retintSidebarGlassFill()
+                }
+            }
+        }
+        timer.tolerance = 0.2
+        RunLoop.main.add(timer, forMode: .common)
+        titlebarPatrolTimer = timer
+    }
+
+    private func applyWindowBackgroundTheme() {
+        let colors = ThemeColorsSetting.current
+        let themed = colors.hasWindowBackgroundOverride
+        // A hidden accessory's scroll-edge preference still drives the
+        // titlebar backdrop, so the find bar's .hard must follow the theme
+        // while the bar is hidden — otherwise it paints an opaque strip over
+        // a themed background.
+        if #available(macOS 26.1, *) {
+            if let accessory = findBarAccessory, accessory.isHidden {
+                accessory.preferredScrollEdgeEffectStyle = themed ? .automatic : .hard
+            }
+            editAccessory?.preferredScrollEdgeEffectStyle = themed ? .automatic : .hard
+        }
+        editAccessoryHairline?.isHidden = !themed
+        // Automatic resolves to a shadow under the toolbar; over the flat
+        // theme color it renders as a clipped gray band between the toolbar
+        // and the formatting bar. The themed chrome draws its own hairlines.
+        documentWindow.titlebarSeparatorStyle = themed ? .none : .automatic
+        guard themed else {
+            documentWindow.titlebarAppearsTransparent = false
+            setTitlebarPatrolActive(false)
+            setThemeUnderlayInstalled(false)
+            documentWindow.backgroundColor = .windowBackgroundColor
+            return
+        }
+        // Safari's recipe: the titlebar goes transparent so the window
+        // background color runs to the top edge, and the web view is told
+        // (via obscuredContentInsets, in ContentViewController) which strip
+        // the toolbar obscures so WebKit lays out below it and frosts
+        // content that scrolls under.
+        documentWindow.titlebarAppearsTransparent = true
+        documentWindow.isOpaque = true
+        setTitlebarBackgroundViews(hidden: true)
+        setThemeUnderlayInstalled(true)
+        setTitlebarPatrolActive(true)
+        documentWindow.backgroundColor = NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            return ThemeColorsSetting.current.color(
+                .windowBackground, isDark ? .dark : .light
+            ) ?? .windowBackgroundColor
+        }
     }
 
     /// AppKit's automatic tab placement runs when NSDocument shows its
@@ -264,14 +543,31 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     func windowWillClose(_ notification: Notification) {
         fileWatcher?.cancel()
         fileWatcher = nil
+        setTitlebarPatrolActive(false)
     }
 
     func windowWillEnterFullScreen(_ notification: Notification) {
         reapplyAlwaysOnTopLevel(isFullScreen: true)
+        // Note: dropping .fullSizeContentView here would also avoid the
+        // known macOS 26 white-gap bug (FB20291636) with public API, but
+        // it makes the reveal bar push the content down. Safari's
+        // float-over behavior needs the flag, so the gap is neutralized by
+        // the layer treatments in the patrol instead.
+    }
+
+    func windowDidEnterFullScreen(_ notification: Notification) {
+        lastKnownFullScreenState = true
+        // Swaps the sidebar to its full-screen themed configuration.
+        applyThemeColorsSetting()
     }
 
     func windowDidExitFullScreen(_ notification: Notification) {
         reapplyAlwaysOnTopLevel(isFullScreen: false)
+        lastKnownFullScreenState = false
+        // Restore the pockets immediately; the patrol would also catch it.
+        setScrollPockets(hidden: false)
+        setTitlebarEffectViews(hidden: false)
+        applyThemeColorsSetting()
     }
 
     func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
@@ -1158,7 +1454,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         stack.edgeInsets = NSEdgeInsets(top: 4, left: 12, bottom: 6, right: 12)
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        let container = NSView()
+        // Translucent like the main toolbar: nothing can render behind the
+        // bar (the editor scroller clips text at its hairline and the pocket
+        // ends at the toolbar), so the bar needs no opaque backing — the
+        // flat theme color shows through. Without a theme the .hard edge
+        // still paints the classic opaque bar.
+        let container = EditAccessoryContainerView()
         container.addSubview(stack)
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
@@ -1166,15 +1467,31 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             stack.topAnchor.constraint(equalTo: container.topAnchor),
             stack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
+        let hairline = NSBox()
+        hairline.boxType = .separator
+        hairline.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(hairline)
+        NSLayoutConstraint.activate([
+            hairline.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            hairline.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            hairline.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+        hairline.isHidden = !ThemeColorsSetting.current.hasWindowBackgroundOverride
+        editAccessoryHairline = hairline
 
         let accessory = NSTitlebarAccessoryViewController()
         accessory.view = container
         accessory.layoutAttribute = .bottom
         accessory.fullScreenMinHeight = 34
         // macOS 26 replaced the titlebar separator with scroll edge
-        // effects; hard = the classic line under the bar.
+        // effects; hard = the classic line under the bar. With a themed
+        // window background the hard edge would paint an opaque system
+        // strip over the theme color, so the frosted automatic style is
+        // used instead.
         if #available(macOS 26.1, *) {
-            accessory.preferredScrollEdgeEffectStyle = .hard
+            accessory.preferredScrollEdgeEffectStyle =
+                ThemeColorsSetting.current.hasWindowBackgroundOverride
+                ? .automatic : .hard
         }
         documentWindow.addTitlebarAccessoryViewController(accessory)
         editAccessory = accessory
@@ -2563,6 +2880,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func setFindBarVisible(_ visible: Bool) {
         guard let accessory = findBarAccessory, accessory.isHidden == visible else { return }
         accessory.isHidden = !visible
+        if #available(macOS 26.1, *) {
+            // Visible bar always gets the hard backdrop; hidden, the
+            // preference must not leak a backdrop over a themed titlebar.
+            accessory.preferredScrollEdgeEffectStyle =
+                visible || !ThemeColorsSetting.current.hasWindowBackgroundOverride
+                ? .hard : .automatic
+        }
     }
 
     private func installFindBar() {
@@ -2575,11 +2899,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         bar.onDone = { [weak self] in self?.dismissFindBar() }
         bar.onModeChanged = { [weak self] mode in self?.searchModeDidChange(mode) }
         self.findBar = bar
-        self.findBarAccessory = addBottomTitlebarAccessory(bar) { accessory in
-            if #available(macOS 26.1, *) {
-                accessory.preferredScrollEdgeEffectStyle = .hard
-            }
-        }
+        // No .hard here: a hidden accessory's scroll-edge preference still
+        // applies, painting an opaque backdrop over a themed window background.
+        // setFindBarVisible flips it while the bar is actually shown.
+        self.findBarAccessory = addBottomTitlebarAccessory(bar)
     }
 
     private func dismissFindBar() {
@@ -2802,10 +3125,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
     }
 
-    /// Backs the "+" button in the native tab bar and File > New Tab.
-    /// There is no untitled-document concept here, so prompt for a file
-    /// and open it as a tab — an explicit tab request, unlike ⌘O.
-    override func newWindowForTab(_ sender: Any?) {
+    /// Backs File > New Tab. Deliberately NOT the NSResponder
+    /// `newWindowForTab(_:)` override: responding to that selector is what
+    /// makes AppKit show the "+" button in the tab bar, and the app hides
+    /// that button. There is no untitled-document concept here, so prompt
+    /// for a file and open it as a tab — an explicit tab request, unlike ⌘O.
+    @objc func newDocumentTab(_ sender: Any?) {
         promptForDocument(openAsTab: true)
     }
 
@@ -2961,6 +3286,44 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                      fileName: fileURL.lastPathComponent,
                      url: fileURL,
                      assetBaseURL: fileURL.deletingLastPathComponent())
+    }
+
+    /// The formatting bar floats over the editor web view, whose cursor
+    /// tracking (I-beam over text, hand over links) otherwise fights the
+    /// bar's buttons. The bar region always shows the plain arrow.
+    private final class EditAccessoryContainerView: NSView {
+        override func resetCursorRects() {
+            addCursorRect(bounds, cursor: .arrow)
+        }
+
+        // First install: the cursor rect is computed while the accessory
+        // has no frame yet and nothing re-invalidates it, so the web view's
+        // cursor wins between the buttons until the bar is reinstalled.
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            window?.invalidateCursorRects(for: self)
+        }
+
+        override func setFrameSize(_ newSize: NSSize) {
+            super.setFrameSize(newSize)
+            window?.invalidateCursorRects(for: self)
+        }
+
+        override func cursorUpdate(with event: NSEvent) {
+            NSCursor.arrow.set()
+        }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            for area in trackingAreas where area.owner === self {
+                removeTrackingArea(area)
+            }
+            addTrackingArea(NSTrackingArea(
+                rect: bounds,
+                options: [.cursorUpdate, .activeInKeyWindow, .inVisibleRect],
+                owner: self
+            ))
+        }
     }
 
     private func addBottomTitlebarAccessory(

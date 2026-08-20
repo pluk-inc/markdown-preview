@@ -286,6 +286,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .forEach { $0.applyTextSizeSetting() }
     }
 
+    /// Pushes theme colors chosen in Settings into every open document
+    /// window — native backgrounds plus the loaded preview/editor pages.
+    /// Cheap enough to run on every color-well tick.
+    func applyThemeColorsSetting() {
+        NSDocumentController.shared.documents
+            .flatMap(\.windowControllers)
+            .compactMap { $0 as? DocumentWindowController }
+            .forEach { $0.applyThemeColorsSetting() }
+    }
+
     func installCommandLineToolsFromSettings() {
         installCommandLineTools(nil)
     }
@@ -703,14 +713,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func installNewTabMenuItem() {
         guard let fileMenu = topLevelSubmenu(matching: Self.fileMenuTitles),
               fileMenu.items.first(where: {
-                  $0.action == #selector(NSResponder.newWindowForTab(_:))
+                  $0.action == #selector(DocumentWindowController.newDocumentTab(_:))
               }) == nil else { return }
 
         // nil target: resolves through the responder chain to the key
         // document window's controller, and disables itself when no
-        // document window is open.
+        // document window is open. Custom selector, not newWindowForTab —
+        // see DocumentWindowController.newDocumentTab.
         let item = NSMenuItem(title: L("New Tab"),
-                              action: #selector(NSResponder.newWindowForTab(_:)),
+                              action: #selector(DocumentWindowController.newDocumentTab(_:)),
                               keyEquivalent: "t")
         let insertIndex = fileMenu.items
             .firstIndex { $0.action == #selector(openDocument(_:)) } ?? 0

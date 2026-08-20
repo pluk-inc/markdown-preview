@@ -208,6 +208,37 @@ final class SidebarViewController: NSViewController {
         guard row >= 0, outlineView.selectedRow != row else { return }
         outlineView.selectRowIndexes(IndexSet(integer: row),
                                      byExtendingSelection: false)
+        refreshRowTextColors()
+    }
+
+    /// Theme accent for the active TOC row — the link color, so the
+    /// sidebar's highlight matches the page's primary color. Nil without a
+    /// link override; the system accent then applies.
+    private var themeAccent: NSColor? {
+        let isDark = view.effectiveAppearance
+            .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        return ThemeColorsSetting.current.color(.linkColor, isDark ? .dark : .light)
+    }
+
+    /// Re-applies text colors to visible rows: the selected heading gets
+    /// the theme accent (or the system accent), everything else the plain
+    /// label colors.
+    func refreshRowTextColors() {
+        guard isViewLoaded else { return }
+        view.needsDisplay = true
+        projectNavigator?.refreshRowTextColors()
+        let accent = themeAccent ?? .controlAccentColor
+        let selected = outlineView.selectedRow
+        for row in 0..<outlineView.numberOfRows {
+            guard let cell = outlineView.view(
+                atColumn: 0, row: row, makeIfNecessary: false
+            ) as? NSTableCellView, let textField = cell.textField else { continue }
+            if cell.identifier?.rawValue == "TitleCell" {
+                textField.textColor = .secondaryLabelColor
+                continue
+            }
+            textField.textColor = row == selected ? accent : .labelColor
+        }
     }
 
     private func findNode(withID id: Int, in nodes: [TOCNode]) -> TOCNode? {
@@ -318,11 +349,19 @@ extension SidebarViewController: NSOutlineViewDelegate {
         }
 
         cell.textField?.stringValue = node.title
+        let row = outlineView.row(forItem: node)
+        cell.textField?.textColor = row >= 0 && row == outlineView.selectedRow
+            ? (themeAccent ?? .controlAccentColor)
+            : .labelColor
         return cell
     }
 
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
         return item is TOCNode
+    }
+
+    func outlineViewSelectionDidChange(_ notification: Notification) {
+        refreshRowTextColors()
     }
 
     func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
@@ -597,6 +636,7 @@ final class ProjectNavigatorView: NSView {
             if row >= 0 {
                 outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
                 outlineView.scrollRowToVisible(row)
+                refreshRowTextColors()
             }
         }
     }
@@ -729,6 +769,25 @@ extension ProjectNavigatorView: NSMenuDelegate {
     private var documentWindowController: DocumentWindowController? {
         outlineView.window?.windowController as? DocumentWindowController
     }
+
+    /// Theme accent for the selected file row — the link color, matching
+    /// the TOC outline's treatment. Nil without a link override.
+    fileprivate var themeAccent: NSColor? {
+        let isDark = effectiveAppearance
+            .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        return ThemeColorsSetting.current.color(.linkColor, isDark ? .dark : .light)
+    }
+
+    func refreshRowTextColors() {
+        let accent = themeAccent ?? .controlAccentColor
+        let selected = outlineView.selectedRow
+        for row in 0..<outlineView.numberOfRows {
+            guard let cell = outlineView.view(
+                atColumn: 0, row: row, makeIfNecessary: false
+            ) as? NSTableCellView, let textField = cell.textField else { continue }
+            textField.textColor = row == selected ? accent : .labelColor
+        }
+    }
 }
 
 extension ProjectNavigatorView: NSOutlineViewDataSource {
@@ -792,11 +851,19 @@ extension ProjectNavigatorView: NSOutlineViewDelegate {
         let icon = NSWorkspace.shared.icon(forFile: node.url.path)
         icon.size = NSSize(width: 16, height: 16)
         cell.imageView?.image = icon
+        let row = outlineView.row(forItem: node)
+        cell.textField?.textColor = row >= 0 && row == outlineView.selectedRow
+            ? (themeAccent ?? .controlAccentColor)
+            : .labelColor
         return cell
     }
 
     func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
         return 24
+    }
+
+    func outlineViewSelectionDidChange(_ notification: Notification) {
+        refreshRowTextColors()
     }
 
     func outlineViewItemDidExpand(_ notification: Notification) {

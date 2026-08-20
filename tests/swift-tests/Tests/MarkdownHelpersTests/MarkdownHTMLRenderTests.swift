@@ -236,6 +236,58 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(full.html.contains("article.markdown-body { max-width: none; }"))
     }
 
+    func testThemeOverridesEmitSanitizedCodeBackgroundRules() {
+        let overrides = MarkdownHTML.ThemeOverrides(
+            lightCodeBackground: "#ABCDEF",
+            darkCodeBackground: "#123456"
+        )
+        let rendered = MarkdownHTML.render(
+            markdown: "# Doc", vendorLoading: .lazy, themeOverrides: overrides)
+        XCTAssertTrue(rendered.html.contains(
+            "<style id=\"\(MarkdownHTML.themeStyleElementID)\">"))
+        XCTAssertTrue(rendered.html.contains(":root { --code-bg: #ABCDEF; }"))
+        XCTAssertTrue(rendered.html.contains(
+            ":root[data-mdp-color-scheme=\"dark\"] { --code-bg: #123456; }"))
+
+        // Without overrides the element is still emitted (empty) so a live
+        // theme edit has a stable node to rewrite.
+        let plain = MarkdownHTML.render(markdown: "# Doc", vendorLoading: .lazy)
+        XCTAssertTrue(plain.html.contains(
+            "<style id=\"\(MarkdownHTML.themeStyleElementID)\"></style>"))
+    }
+
+    func testThemeOverridesEmitTextColorRules() {
+        let overrides = MarkdownHTML.ThemeOverrides(
+            lightText: "#101010",
+            darkText: "#EFEFEF"
+        )
+        let rendered = MarkdownHTML.render(
+            markdown: "# Doc", vendorLoading: .lazy, themeOverrides: overrides)
+        XCTAssertTrue(rendered.html.contains(":root { --text: #101010; }"))
+        XCTAssertTrue(rendered.html.contains(
+            ":root[data-mdp-color-scheme=\"dark\"] { --text: #EFEFEF; }"))
+        // The dark value also covers the system-dark media bucket.
+        XCTAssertTrue(rendered.html.contains(
+            ":root:not([data-mdp-color-scheme=\"light\"]) { --text: #EFEFEF; }"))
+    }
+
+    func testThemeOverridesRejectNonHexValues() {
+        XCTAssertEqual(MarkdownHTML.ThemeOverrides.sanitizedHexColor("#A1B2C3"), "#A1B2C3")
+        XCTAssertEqual(MarkdownHTML.ThemeOverrides.sanitizedHexColor("#A1B2C3D4"), "#A1B2C3D4")
+        XCTAssertNil(MarkdownHTML.ThemeOverrides.sanitizedHexColor(nil))
+        XCTAssertNil(MarkdownHTML.ThemeOverrides.sanitizedHexColor("#FFF"))
+        XCTAssertNil(MarkdownHTML.ThemeOverrides.sanitizedHexColor("red"))
+        XCTAssertNil(MarkdownHTML.ThemeOverrides.sanitizedHexColor(
+            "#FFFFFF; } </style><script>alert(1)</script>"))
+
+        // A malicious stored value never reaches the emitted page.
+        let hostile = MarkdownHTML.ThemeOverrides(
+            lightCodeBackground: "#FFFFFF}</style><script>alert(1)</script>",
+            darkCodeBackground: nil
+        )
+        XCTAssertEqual(hostile.css, "")
+    }
+
     @MainActor
     func testLongInlineCodeInHeadingStaysWithinViewport() async throws {
         let rendered = MarkdownHTML.render(
