@@ -160,6 +160,12 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         // Fresh opens always start on General.
         if window?.isVisible != true {
             splitViewController?.navigate(to: .general)
+            // The visible pane resets, so the back/forward history must
+            // reset with it — stale history made Back jump into the
+            // previous session's panes.
+            navigationHistory = SettingsNavigationHistory()
+            navigationHistory.push(.general)
+            updateToolbarButtons()
         }
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)

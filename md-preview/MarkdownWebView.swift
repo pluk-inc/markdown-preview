@@ -460,6 +460,9 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                 in: nil,
                 in: .page
             ) { [weak self] _ in
+                #if !QUICK_LOOK_EXTENSION
+                self?.applyThemeColors()
+                #endif
                 self?.contentDidReplace?()
             }
             return
@@ -1501,6 +1504,12 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         configureWebKitScrollView()
         isPageReady = true
+        #if !QUICK_LOOK_EXTENSION
+        // A render snapshots the theme before its concurrent pass; if the
+        // colors changed mid-flight, the navigation just installed stale
+        // CSS. Re-assert the current theme on the fresh page.
+        applyThemeColors()
+        #endif
         contentDidReplace?()
     }
 

@@ -104,32 +104,16 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         updateObscuredContentInsets()
     }
 
-    /// Height of the titlebar-and-toolbar strip, from the window's
-    /// contentLayoutRect (authoritative immediately, unlike safeAreaInsets
-    /// which lags the toolbar attach), minus visible bottom titlebar
-    /// accessories.
-    private var obscuredTopInset: CGFloat {
-        max(0, fullChromeTopInset - visibleBottomAccessoryHeight)
-    }
-
-    /// The whole obscured strip: titlebar, toolbar, and visible bottom
-    /// accessories.
+    /// The whole obscured strip — titlebar, toolbar, and visible bottom
+    /// accessories. contentLayoutRect already excludes the accessories, so
+    /// the gap alone is the full chrome height; adding accessory heights on
+    /// top double-counted them and left a blank band below the formatting
+    /// bar.
     private var fullChromeTopInset: CGFloat {
         guard let window = view.window, let contentView = window.contentView else {
             return view.safeAreaInsets.top
         }
-        return max(0, contentView.bounds.height - window.contentLayoutRect.maxY
-            + visibleBottomAccessoryHeight)
-    }
-
-    private var visibleBottomAccessoryHeight: CGFloat {
-        guard let window = view.window else { return 0 }
-        var height: CGFloat = 0
-        for accessory in window.titlebarAccessoryViewControllers
-        where accessory.layoutAttribute == .bottom && !accessory.isHidden {
-            height += accessory.view.frame.height
-        }
-        return height
+        return max(0, contentView.bounds.height - window.contentLayoutRect.maxY)
     }
 
     /// The editor page cannot use WebKit's obscured inset: the page is

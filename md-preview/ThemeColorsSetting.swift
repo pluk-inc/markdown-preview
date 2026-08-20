@@ -92,11 +92,20 @@ nonisolated struct ThemeColorsSetting: Equatable, Sendable {
         values.values.contains { !$0.isEmpty }
     }
 
-    /// True when either scheme overrides the window background — the gate
-    /// for the transparent-titlebar treatment.
+    /// True when either scheme overrides the window background. UI-level
+    /// checks (Settings rows, preset equality) use this; chrome treatment
+    /// must use the per-scheme variant below so a light-only override does
+    /// not activate broken dark chrome.
     var hasWindowBackgroundOverride: Bool {
         hexValue(.windowBackground, .light) != nil
             || hexValue(.windowBackground, .dark) != nil
+    }
+
+    /// The chrome gate: whether the ACTIVE scheme has a window background
+    /// override. Suppressing system chrome without a tint to replace it
+    /// exposes the stock fills.
+    func hasWindowBackgroundOverride(for scheme: ThemeColorScheme) -> Bool {
+        hexValue(.windowBackground, scheme) != nil
     }
 
     func hexValue(_ slot: ThemeColorSlot, _ scheme: ThemeColorScheme) -> String? {
@@ -219,11 +228,14 @@ nonisolated struct ThemeColorsSetting: Equatable, Sendable {
                 lines.append(":root { --link: \(link); }")
             }
             // The editor follows the window color unless it has its own
-            // override — one picked color themes both modes.
-            if let page = sanitizedHex(.editorBackground, scheme)
-                ?? sanitizedHex(.windowBackground, scheme) {
-                lines.append("html, body { background: \(page); }")
-            }
+            // override — one picked color themes both modes. Always emitted
+            // (Canvas when unthemed): the page template bakes the value
+            // present at load time into its base stylesheet, and a reset
+            // must override that baked value on the live page too.
+            let page = sanitizedHex(.editorBackground, scheme)
+                ?? sanitizedHex(.windowBackground, scheme)
+                ?? "Canvas"
+            lines.append("html, body { background: \(page); }")
             return lines.joined(separator: "\n")
         }
         let light = rules(for: .light)
@@ -269,13 +281,22 @@ nonisolated struct ThemeColorsSetting: Equatable, Sendable {
 
     static func color(fromHex hex: String) -> NSColor? {
         guard let sanitized = MarkdownHTML.ThemeOverrides.sanitizedHexColor(hex) else { return nil }
+        let digits = String(sanitized.dropFirst())
         var value: UInt64 = 0
-        guard Scanner(string: String(sanitized.dropFirst())).scanHexInt64(&value) else { return nil }
+        guard Scanner(string: digits).scanHexInt64(&value) else { return nil }
+        // #RRGGBBAA carries alpha in the low byte (CSS order).
+        let alpha: CGFloat
+        if digits.count == 8 {
+            alpha = CGFloat(value & 0xFF) / 255
+            value >>= 8
+        } else {
+            alpha = 1
+        }
         return NSColor(
             srgbRed: CGFloat((value >> 16) & 0xFF) / 255,
             green: CGFloat((value >> 8) & 0xFF) / 255,
             blue: CGFloat(value & 0xFF) / 255,
-            alpha: 1
+            alpha: alpha
         )
     }
 }

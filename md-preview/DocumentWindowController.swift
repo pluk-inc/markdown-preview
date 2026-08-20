@@ -255,8 +255,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if let frameView = documentWindow.contentView?.superview {
             walk(frameView)
         }
-        for window in NSApp.windows
-        where NSStringFromClass(type(of: window)).contains("ToolbarFullScreen") {
+        for window in ownedFullScreenOverlays {
             if let frameView = window.contentView?.superview {
                 walk(frameView)
             }
@@ -281,8 +280,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if let frameView = documentWindow.contentView?.superview {
             walkTitlebar(frameView, inTitlebar: false)
         }
-        for window in NSApp.windows
-        where NSStringFromClass(type(of: window)).contains("ToolbarFullScreen") {
+        for window in ownedFullScreenOverlays {
             if let frameView = window.contentView?.superview {
                 walkTitlebar(frameView, inTitlebar: true)
             }
@@ -319,18 +317,34 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             if layer.bounds.width > 150, layer.bounds.height > 30,
                isWhite(layer.backgroundColor) {
                 layer.backgroundColor = tint
+                tintedGlassLayers.add(layer)
             }
             for sub in layer.sublayers ?? [] { walk(sub) }
+        }
+        // Already-tinted layers no longer match the white search; keep
+        // them on the CURRENT tint so preset and appearance changes take.
+        for layer in tintedGlassLayers.allObjects {
+            layer.backgroundColor = tint
         }
         walk(rootLayer)
         // The full-screen reveal bar overlay carries its own copy of the
         // white fill.
-        for window in NSApp.windows
-        where NSStringFromClass(type(of: window)).contains("ToolbarFullScreen") {
+        for window in ownedFullScreenOverlays {
             if let overlayRoot = window.contentView?.superview?.layer {
                 walk(overlayRoot)
             }
         }
+    }
+
+    /// Puts every retinted glass fill back to its stock white — a theme
+    /// reset must not leave stale tint in the full-screen chrome.
+    private func restoreSidebarGlassFills() {
+        guard tintedGlassLayers.count > 0 else { return }
+        let white = CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)
+        for layer in tintedGlassLayers.allObjects {
+            layer.backgroundColor = white
+        }
+        tintedGlassLayers.removeAllObjects()
     }
 
     private static func findView(withClassNameContaining fragment: String,
@@ -360,8 +374,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             walk(frameView)
         }
         // The full-screen reveal overlay hosting the cloned titlebar.
-        for window in NSApp.windows
-        where NSStringFromClass(type(of: window)).contains("ToolbarFullScreen") {
+        for window in ownedFullScreenOverlays {
             if let frameView = window.contentView?.superview {
                 walk(frameView)
             }
@@ -415,36 +428,72 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private var titlebarPatrolTimer: Timer?
     private var lastKnownFullScreenState = false
+    private var lastKnownActiveThemedState = false
+
+    /// Whether the ACTIVE appearance scheme has a window background
+    /// override. Chrome suppression without a matching tint exposes the
+    /// stock fills, so every chrome treatment gates on this, not on
+    /// "either scheme customized".
+    private var activeSchemeThemed: Bool {
+        let isDark = documentWindow.effectiveAppearance
+            .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        return ThemeColorsSetting.current
+            .hasWindowBackgroundOverride(for: isDark ? .dark : .light)
+    }
+
+    /// The full-screen reveal overlays belonging to THIS window: only
+    /// while it is in full screen, and only overlays on its screen. Each
+    /// themed window runs its own patrol; without this scoping two
+    /// windows' patrols fight over the same overlay (alternating
+    /// hide/unhide flicker).
+    private var ownedFullScreenOverlays: [NSWindow] {
+        guard documentWindow.styleMask.contains(.fullScreen) else { return [] }
+        return NSApp.windows.filter {
+            NSStringFromClass(type(of: $0)).contains("ToolbarFullScreen")
+                && $0.screen === documentWindow.screen
+        }
+    }
+
+    /// Glass fill layers this window's patrol has retinted, kept weakly so
+    /// preset/appearance changes can re-tint them and a theme reset can
+    /// restore the original white (a tinted layer no longer matches the
+    /// pure-white search).
+    private let tintedGlassLayers = NSHashTable<CALayer>.weakObjects()
     private func setTitlebarPatrolActive(_ active: Bool) {
         titlebarPatrolTimer?.invalidate()
         titlebarPatrolTimer = nil
         guard active else {
             setTitlebarBackgroundViews(hidden: false)
+            setScrollPockets(hidden: false)
+            setTitlebarEffectViews(hidden: false)
+            restoreSidebarGlassFills()
             return
         }
         let timer = Timer(timeInterval: 0.4, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                let themed = ThemeColorsSetting.current.hasWindowBackgroundOverride
+                let themed = self.activeSchemeThemed
                 self.setTitlebarBackgroundViews(hidden: themed)
                 // The full-screen transition callbacks do not fire for a
-                // window RESTORED directly into full screen, so the patrol
-                // also watches the state and re-applies the themed chrome
-                // (sidebar item swap included) on every change.
+                // window RESTORED directly into full screen, and the active
+                // scheme can flip with an Automatic appearance change, so
+                // the patrol watches both and re-applies the chrome.
                 let isFullScreen = self.documentWindow.styleMask.contains(.fullScreen)
-                if isFullScreen != self.lastKnownFullScreenState {
+                if isFullScreen != self.lastKnownFullScreenState
+                    || themed != self.lastKnownActiveThemedState {
                     self.lastKnownFullScreenState = isFullScreen
+                    self.lastKnownActiveThemedState = themed
                     self.applyThemeColorsSetting()
                 }
                 // The reveal bar is a separate overlay window with its
                 // own opaque titlebar chrome (effect views, white fill
-                // layers); these keep it themed. The in-window gap itself
-                // is prevented by dropping .fullSizeContentView in full
-                // screen (known Apple bug FB20291636).
+                // layers); these keep it themed.
                 self.setScrollPockets(hidden: themed && isFullScreen)
                 self.setTitlebarEffectViews(hidden: themed && isFullScreen)
                 if themed, isFullScreen {
                     self.retintSidebarGlassFill()
+                } else {
+                    self.restoreSidebarGlassFills()
                 }
             }
         }
@@ -454,8 +503,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func applyWindowBackgroundTheme() {
-        let colors = ThemeColorsSetting.current
-        let themed = colors.hasWindowBackgroundOverride
+        let themed = activeSchemeThemed
         // A hidden accessory's scroll-edge preference still drives the
         // titlebar backdrop, so the find bar's .hard must follow the theme
         // while the bar is hidden — otherwise it paints an opaque strip over
@@ -1476,7 +1524,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             hairline.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             hairline.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
-        hairline.isHidden = !ThemeColorsSetting.current.hasWindowBackgroundOverride
+        hairline.isHidden = !activeSchemeThemed
         editAccessoryHairline = hairline
 
         let accessory = NSTitlebarAccessoryViewController()
@@ -1490,8 +1538,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // used instead.
         if #available(macOS 26.1, *) {
             accessory.preferredScrollEdgeEffectStyle =
-                ThemeColorsSetting.current.hasWindowBackgroundOverride
-                ? .automatic : .hard
+                activeSchemeThemed ? .automatic : .hard
         }
         documentWindow.addTitlebarAccessoryViewController(accessory)
         editAccessory = accessory
@@ -2884,8 +2931,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             // Visible bar always gets the hard backdrop; hidden, the
             // preference must not leak a backdrop over a themed titlebar.
             accessory.preferredScrollEdgeEffectStyle =
-                visible || !ThemeColorsSetting.current.hasWindowBackgroundOverride
-                ? .hard : .automatic
+                visible || !activeSchemeThemed ? .hard : .automatic
         }
     }
 

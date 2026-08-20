@@ -145,7 +145,11 @@ nonisolated enum MarkdownHTML {
                 }
                 """)
             }
-            return rules.joined(separator: "\n")
+            guard !rules.isEmpty else { return "" }
+            // Scoped to screen so the print stylesheet's forced-light
+            // palette is never overridden — dark theme text on white paper
+            // printed nearly invisible otherwise.
+            return "@media screen {\n" + rules.joined(separator: "\n") + "\n}"
         }
     }
 

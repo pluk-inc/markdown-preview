@@ -211,6 +211,20 @@ final class SidebarViewController: NSViewController {
         refreshRowTextColors()
     }
 
+    /// Rows keep concrete colors for the scheme they were styled under;
+    /// re-style them when the effective appearance flips (explicit switch
+    /// or an Automatic system transition).
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        let appearanceName = view.effectiveAppearance.name
+        if appearanceName != lastRowColorAppearance {
+            lastRowColorAppearance = appearanceName
+            refreshRowTextColors()
+        }
+    }
+
+    private var lastRowColorAppearance: NSAppearance.Name?
+
     /// Theme accent for the active TOC row — the link color, so the
     /// sidebar's highlight matches the page's primary color. Nil without a
     /// link override; the system accent then applies.

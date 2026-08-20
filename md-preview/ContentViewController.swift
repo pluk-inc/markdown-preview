@@ -388,14 +388,14 @@ final class ContentViewController: NSViewController {
         max(0, fullChromeTopInset - visibleBottomAccessoryHeight)
     }
 
-    /// The whole obscured strip: titlebar, toolbar, and visible bottom
-    /// accessories.
+    /// The whole obscured strip — titlebar, toolbar, and visible bottom
+    /// accessories. contentLayoutRect already excludes the accessories, so
+    /// the gap alone is the full chrome height.
     private var fullChromeTopInset: CGFloat {
         guard let window = view.window, let contentView = window.contentView else {
             return view.safeAreaInsets.top
         }
-        return max(0, contentView.bounds.height - window.contentLayoutRect.maxY
-            + visibleBottomAccessoryHeight)
+        return max(0, contentView.bounds.height - window.contentLayoutRect.maxY)
     }
 
     private var visibleBottomAccessoryHeight: CGFloat {

@@ -965,6 +965,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if reloadPreviews {
             reloadDocumentPreviewsForSettingChange()
         }
+        // Themed chrome (titlebar treatment, sidebar accents) is resolved
+        // per scheme; an appearance switch must re-apply it immediately.
+        applyThemeColorsSetting()
     }
 
     private func syncAppearanceMenuState() {

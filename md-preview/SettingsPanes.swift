@@ -467,6 +467,7 @@ struct ThemeSettingsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(L(preset.name)))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private static func color(hex: String) -> Color {
