@@ -113,7 +113,19 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         guard let window = view.window, let contentView = window.contentView else {
             return view.safeAreaInsets.top
         }
-        return max(0, contentView.bounds.height - window.contentLayoutRect.maxY)
+        // Whether contentLayoutRect excludes a bottom accessory depends on
+        // its scroll-edge style: .hard reserves layout, .automatic floats
+        // over the content. Measure the real bottom edge of every visible
+        // accessory instead of assuming either, so the buffer always lays
+        // out below the lowest piece of chrome.
+        var gap = contentView.bounds.height - window.contentLayoutRect.maxY
+        for accessory in window.titlebarAccessoryViewControllers
+        where accessory.layoutAttribute == .bottom && !accessory.isHidden
+            && accessory.view.window === window {
+            let rect = contentView.convert(accessory.view.bounds, from: accessory.view)
+            gap = max(gap, contentView.bounds.height - rect.minY)
+        }
+        return max(0, gap)
     }
 
     /// The editor page cannot use WebKit's obscured inset: the page is
