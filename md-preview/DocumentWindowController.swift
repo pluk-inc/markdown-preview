@@ -232,204 +232,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         mainSplit?.applyThemeColors()
     }
 
-    /// The full-window background. `DocumentBackgroundView` paints the
-    /// content area; this covers what remains — the title-bar region and
-    /// resize flashes — with a dynamic color so Automatic appearance keeps
-    /// flipping it without another pass.
-    /// In full screen AppKit adds an opaque NSTitlebarBackgroundView over
-    /// the sidebar's strip of the reveal bar; titlebarAppearsTransparent
-    /// does not reach it, so it paints system-white over a themed window.
-    /// The themed window paints its own background, so these views are
-    /// hidden outright while a theme color is active. The reveal bar lives
-    /// in a separate overlay window that AppKit rebuilds on every reveal,
-    /// so a patrol timer re-hides new copies while in full screen.
-    private func setScrollPockets(hidden: Bool) {
-        func walk(_ view: NSView) {
-            for subview in view.subviews {
-                if NSStringFromClass(type(of: subview)).contains("ScrollPocket") {
-                    subview.isHidden = hidden
-                }
-                walk(subview)
-            }
-        }
-        if let frameView = documentWindow.contentView?.superview {
-            walk(frameView)
-        }
-        for window in ownedFullScreenOverlays {
-            if let frameView = window.contentView?.superview {
-                walk(frameView)
-            }
-        }
-    }
-
-    /// The full-screen titlebar keeps an NSVisualEffectView sized to the
-    /// sidebar section (sharp 52pt strip) that renders opaque white over a
-    /// themed window. The toolbar's own glass capsules are
-    /// NSGlassEffectView, a different class, and stay untouched.
-    private func setTitlebarEffectViews(hidden: Bool) {
-        func walkTitlebar(_ view: NSView, inTitlebar: Bool) {
-            for subview in view.subviews {
-                let cls = NSStringFromClass(type(of: subview))
-                let nowIn = inTitlebar || cls.contains("NSTitlebarContainerView")
-                if nowIn, subview is NSVisualEffectView {
-                    subview.isHidden = hidden
-                }
-                walkTitlebar(subview, inTitlebar: nowIn)
-            }
-        }
-        if let frameView = documentWindow.contentView?.superview {
-            walkTitlebar(frameView, inTitlebar: false)
-        }
-        for window in ownedFullScreenOverlays {
-            if let frameView = window.contentView?.superview {
-                walkTitlebar(frameView, inTitlebar: true)
-            }
-        }
-    }
-
-    /// The full-screen sidebar glass card carries a plain CALayer filled
-    /// solid white — the card's base fill, drawn above anything the app
-    /// can put in the view hierarchy. Repainting that fill with the theme
-    /// color keeps the original card (shape, material, content) while the
-    /// base matches the theme. Identified by being a plain CALayer, at
-    /// least card-sized, with a pure-white background.
-    private func retintSidebarGlassFill() {
-        guard let frameView = documentWindow.contentView?.superview,
-              let rootLayer = frameView.layer else { return }
-        let isDark = documentWindow.effectiveAppearance
-            .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        guard let tint = ThemeColorsSetting.current.color(
-            .windowBackground, isDark ? .dark : .light
-        )?.cgColor else { return }
-        func isWhite(_ color: CGColor?) -> Bool {
-            guard let color else { return false }
-            // Extended-range colorspaces can refuse conversion; fall back
-            // to raw components (gray or RGB, both with trailing alpha).
-            let source = color.converted(
-                to: CGColorSpace(name: CGColorSpace.sRGB)!,
-                intent: .defaultIntent, options: nil) ?? color
-            guard let parts = source.components, parts.count >= 2 else { return false }
-            let alpha = parts[parts.count - 1]
-            guard alpha > 0.98 else { return false }
-            return parts.dropLast().allSatisfy { $0 > 0.98 }
-        }
-        func walk(_ layer: CALayer) {
-            if layer.bounds.width > 150, layer.bounds.height > 30,
-               isWhite(layer.backgroundColor) {
-                layer.backgroundColor = tint
-                tintedGlassLayers.add(layer)
-            }
-            for sub in layer.sublayers ?? [] { walk(sub) }
-        }
-        // Already-tinted layers no longer match the white search; keep
-        // them on the CURRENT tint so preset and appearance changes take.
-        for layer in tintedGlassLayers.allObjects {
-            layer.backgroundColor = tint
-        }
-        walk(rootLayer)
-        // The full-screen reveal bar overlay carries its own copy of the
-        // white fill.
-        for window in ownedFullScreenOverlays {
-            if let overlayRoot = window.contentView?.superview?.layer {
-                walk(overlayRoot)
-            }
-        }
-    }
-
-    /// Puts every retinted glass fill back to its stock white — a theme
-    /// reset must not leave stale tint in the full-screen chrome.
-    private func restoreSidebarGlassFills() {
-        guard tintedGlassLayers.count > 0 else { return }
-        let white = CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)
-        for layer in tintedGlassLayers.allObjects {
-            layer.backgroundColor = white
-        }
-        tintedGlassLayers.removeAllObjects()
-    }
-
-    private static func findView(withClassNameContaining fragment: String,
-                                 in root: NSView) -> NSView? {
-        for subview in root.subviews {
-            if NSStringFromClass(type(of: subview)).contains(fragment) {
-                return subview
-            }
-            if let hit = findView(withClassNameContaining: fragment, in: subview) {
-                return hit
-            }
-        }
-        return nil
-    }
-
-    private func setTitlebarBackgroundViews(hidden: Bool) {
-        let backgroundClass: AnyClass? = NSClassFromString("NSTitlebarBackgroundView")
-        func walk(_ view: NSView) {
-            for subview in view.subviews {
-                if let backgroundClass, subview.isKind(of: backgroundClass) {
-                    subview.isHidden = hidden
-                }
-                walk(subview)
-            }
-        }
-        if let frameView = documentWindow.contentView?.superview {
-            walk(frameView)
-        }
-        // The full-screen reveal overlay hosting the cloned titlebar.
-        for window in ownedFullScreenOverlays {
-            if let frameView = window.contentView?.superview {
-                walk(frameView)
-            }
-        }
-    }
-
-    /// Theme-colored underlay pinned across the entire content view,
-    /// beneath the split view. The window's backgroundColor does not feed
-    /// full screen's sidebar glass/backdrop stack — over an unpainted
-    /// region the glass samples the space background and renders white.
-    /// A real view in the hierarchy gives it the theme color to sample
-    /// everywhere, in every window state.
-    private final class ThemeUnderlayView: NSView {
-        override var wantsUpdateLayer: Bool { true }
-
-        override func updateLayer() {
-            let isDark = effectiveAppearance
-                .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            layer?.backgroundColor = ThemeColorsSetting.current.color(
-                .windowBackground, isDark ? .dark : .light
-            )?.cgColor
-        }
-    }
-
-    private weak var themeUnderlay: ThemeUnderlayView?
-
-    private func setThemeUnderlayInstalled(_ installed: Bool) {
-        if installed {
-            guard themeUnderlay == nil,
-                  let contentView = documentWindow.contentView else {
-                themeUnderlay?.needsDisplay = true
-                return
-            }
-            let underlay = ThemeUnderlayView(frame: contentView.bounds)
-            underlay.wantsLayer = true
-            underlay.translatesAutoresizingMaskIntoConstraints = false
-            contentView.addSubview(underlay, positioned: .below,
-                                   relativeTo: contentView.subviews.first)
-            NSLayoutConstraint.activate([
-                underlay.topAnchor.constraint(equalTo: contentView.topAnchor),
-                underlay.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-                underlay.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-                underlay.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            ])
-            themeUnderlay = underlay
-        } else {
-            themeUnderlay?.removeFromSuperview()
-            themeUnderlay = nil
-        }
-    }
-
-    private var titlebarPatrolTimer: Timer?
-    private var lastKnownFullScreenState = false
-    private var lastKnownActiveThemedState = false
-
     /// Whether the ACTIVE appearance scheme has a window background
     /// override. Chrome suppression without a matching tint exposes the
     /// stock fills, so every chrome treatment gates on this, not on
@@ -441,69 +243,21 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             .hasWindowBackgroundOverride(for: isDark ? .dark : .light)
     }
 
-    /// The full-screen reveal overlays belonging to THIS window: only
-    /// while it is in full screen, and only overlays on its screen. Each
-    /// themed window runs its own patrol; without this scoping two
-    /// windows' patrols fight over the same overlay (alternating
-    /// hide/unhide flicker).
-    private var ownedFullScreenOverlays: [NSWindow] {
-        guard documentWindow.styleMask.contains(.fullScreen) else { return [] }
-        return NSApp.windows.filter {
-            NSStringFromClass(type(of: $0)).contains("ToolbarFullScreen")
-                && $0.screen === documentWindow.screen
-        }
-    }
-
-    /// Glass fill layers this window's patrol has retinted, kept weakly so
-    /// preset/appearance changes can re-tint them and a theme reset can
-    /// restore the original white (a tinted layer no longer matches the
-    /// pure-white search).
-    private let tintedGlassLayers = NSHashTable<CALayer>.weakObjects()
-    private func setTitlebarPatrolActive(_ active: Bool) {
-        titlebarPatrolTimer?.invalidate()
-        titlebarPatrolTimer = nil
-        guard active else {
-            setTitlebarBackgroundViews(hidden: false)
-            setScrollPockets(hidden: false)
-            setTitlebarEffectViews(hidden: false)
-            restoreSidebarGlassFills()
-            return
-        }
-        let timer = Timer(timeInterval: 0.4, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                let themed = self.activeSchemeThemed
-                self.setTitlebarBackgroundViews(hidden: themed)
-                // The full-screen transition callbacks do not fire for a
-                // window RESTORED directly into full screen, and the active
-                // scheme can flip with an Automatic appearance change, so
-                // the patrol watches both and re-applies the chrome.
-                let isFullScreen = self.documentWindow.styleMask.contains(.fullScreen)
-                if isFullScreen != self.lastKnownFullScreenState
-                    || themed != self.lastKnownActiveThemedState {
-                    self.lastKnownFullScreenState = isFullScreen
-                    self.lastKnownActiveThemedState = themed
-                    self.applyThemeColorsSetting()
-                }
-                // The reveal bar is a separate overlay window with its
-                // own opaque titlebar chrome (effect views, white fill
-                // layers); these keep it themed.
-                self.setScrollPockets(hidden: themed && isFullScreen)
-                self.setTitlebarEffectViews(hidden: themed && isFullScreen)
-                if themed, isFullScreen {
-                    self.retintSidebarGlassFill()
-                } else {
-                    self.restoreSidebarGlassFills()
-                }
-            }
-        }
-        timer.tolerance = 0.2
-        RunLoop.main.add(timer, forMode: .common)
-        titlebarPatrolTimer = timer
-    }
-
+    /// The full-window background. `DocumentBackgroundView` paints the
+    /// content area; this covers what remains — the title-bar region and
+    /// resize flashes — with a dynamic color so Automatic appearance keeps
+    /// flipping it without another pass.
+    ///
+    /// Full screen deliberately keeps the STANDARD system chrome even when
+    /// themed: the full-screen glass surfaces (sidebar card, reveal bar)
+    /// sample the space wallpaper and render white over a transparent
+    /// themed titlebar (macOS 26, FB20291636 family), and neutralizing
+    /// that required patrolling private view classes and layer trees. Not
+    /// worth the fragility — the content and sidebar body stay themed in
+    /// full screen; only the chrome is native there.
     private func applyWindowBackgroundTheme() {
         let themed = activeSchemeThemed
+            && !documentWindow.styleMask.contains(.fullScreen)
         // A hidden accessory's scroll-edge preference still drives the
         // titlebar backdrop, so the find bar's .hard must follow the theme
         // while the bar is hidden — otherwise it paints an opaque strip over
@@ -521,8 +275,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         documentWindow.titlebarSeparatorStyle = themed ? .none : .automatic
         guard themed else {
             documentWindow.titlebarAppearsTransparent = false
-            setTitlebarPatrolActive(false)
-            setThemeUnderlayInstalled(false)
             documentWindow.backgroundColor = .windowBackgroundColor
             return
         }
@@ -532,10 +284,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // the toolbar obscures so WebKit lays out below it and frosts
         // content that scrolls under.
         documentWindow.titlebarAppearsTransparent = true
-        documentWindow.isOpaque = true
-        setTitlebarBackgroundViews(hidden: true)
-        setThemeUnderlayInstalled(true)
-        setTitlebarPatrolActive(true)
         documentWindow.backgroundColor = NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             return ThemeColorsSetting.current.color(
@@ -591,7 +339,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     func windowWillClose(_ notification: Notification) {
         fileWatcher?.cancel()
         fileWatcher = nil
-        setTitlebarPatrolActive(false)
     }
 
     func windowWillEnterFullScreen(_ notification: Notification) {
@@ -604,18 +351,15 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     func windowDidEnterFullScreen(_ notification: Notification) {
-        lastKnownFullScreenState = true
-        // Swaps the sidebar to its full-screen themed configuration.
-        applyThemeColorsSetting()
+        // Full screen switches to the standard chrome (see
+        // applyWindowBackgroundTheme).
+        applyWindowBackgroundTheme()
     }
 
     func windowDidExitFullScreen(_ notification: Notification) {
         reapplyAlwaysOnTopLevel(isFullScreen: false)
-        lastKnownFullScreenState = false
-        // Restore the pockets immediately; the patrol would also catch it.
-        setScrollPockets(hidden: false)
-        setTitlebarEffectViews(hidden: false)
-        applyThemeColorsSetting()
+        // Back to the themed chrome.
+        applyWindowBackgroundTheme()
     }
 
     func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
