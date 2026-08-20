@@ -627,10 +627,9 @@ final class ProjectNavigatorView: NSView {
         if !node.isDirectory {
             let requestedURL = node.url.standardizedFileURL
             guard requestedURL != currentFileURL else { return }
-            // NSOutlineView selects before dispatching its action. Restore the
-            // committed document immediately; display(markdown:fileURL:) will
-            // select the requested file only after navigation succeeds.
-            setCurrentFile(currentFileURL)
+            // `shouldSelectItem` keeps the highlight on the committed file,
+            // so there's no AppKit selection to undo here — display(markdown:)
+            // selects the requested file only after navigation succeeds.
             onSelectFile?(node.url)
         }
     }
@@ -797,6 +796,17 @@ extension ProjectNavigatorView: NSOutlineViewDelegate {
 
     func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
         return 24
+    }
+
+    /// A click must not move the selection away from the committed file:
+    /// the highlight only follows after navigation actually succeeds
+    /// (`setCurrentFile`). Preventing the native selection here is what
+    /// stops the O → X → O bounce on file switches. Directories stay
+    /// selectable — they have no navigation side effect.
+    func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
+        guard let node = item as? FileNode else { return false }
+        if node.isDirectory { return true }
+        return node.url.standardizedFileURL == currentFileURL?.standardizedFileURL
     }
 
     func outlineViewItemDidExpand(_ notification: Notification) {
