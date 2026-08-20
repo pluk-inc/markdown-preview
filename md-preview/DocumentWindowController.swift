@@ -256,6 +256,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// worth the fragility — the content and sidebar body stay themed in
     /// full screen; only the chrome is native there.
     private func applyWindowBackgroundTheme() {
+        // The dynamic background color is public API and applies in every
+        // window state — full screen included, where it tints whatever
+        // native surfaces sample the window. Only the CHROME treatment
+        // below is gated off in full screen.
+        documentWindow.backgroundColor = NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            return ThemeColorsSetting.current.color(
+                .windowBackground, isDark ? .dark : .light
+            ) ?? .windowBackgroundColor
+        }
         let themed = activeSchemeThemed
             && !documentWindow.styleMask.contains(.fullScreen)
         // A hidden accessory's scroll-edge preference still drives the
@@ -275,7 +285,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         documentWindow.titlebarSeparatorStyle = themed ? .none : .automatic
         guard themed else {
             documentWindow.titlebarAppearsTransparent = false
-            documentWindow.backgroundColor = .windowBackgroundColor
             return
         }
         // Safari's recipe: the titlebar goes transparent so the window
@@ -284,12 +293,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // the toolbar obscures so WebKit lays out below it and frosts
         // content that scrolls under.
         documentWindow.titlebarAppearsTransparent = true
-        documentWindow.backgroundColor = NSColor(name: nil) { appearance in
-            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            return ThemeColorsSetting.current.color(
-                .windowBackground, isDark ? .dark : .light
-            ) ?? .windowBackgroundColor
-        }
     }
 
     /// AppKit's automatic tab placement runs when NSDocument shows its
