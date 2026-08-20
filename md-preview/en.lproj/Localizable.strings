@@ -30,6 +30,25 @@
 "Last checked" = "Last checked";
 "Never" = "Never";
 "Downloaded updates install the next time you quit Markdown Preview." = "Downloaded updates install the next time you quit Markdown Preview.";
+"Colors" = "Colors";
+"Window background" = "Window background";
+"Editor background" = "Editor background";
+"Code block background" = "Code block background";
+"Text" = "Text";
+"Link" = "Link";
+"Presets" = "Presets";
+"Colors apply to the current appearance. Choose the Automatic appearance to set Light and Dark separately." = "Colors apply to the current appearance. Choose the Automatic appearance to set Light and Dark separately.";
+"A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards." = "A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards.";
+"Red Graphite" = "Red Graphite";
+"Dark Graphite" = "Dark Graphite";
+"High Contrast" = "High Contrast";
+"Charcoal" = "Charcoal";
+"Solarized Light" = "Solarized Light";
+"Solarized Dark" = "Solarized Dark";
+"Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override.";
+"Custom colors" = "Custom colors";
+"Reset Colors" = "Reset Colors";
+"Restores the default colors for both appearances." = "Restores the default colors for both appearances.";
 "Send anonymous crash reports" = "Send anonymous crash reports";
 "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information.";
 

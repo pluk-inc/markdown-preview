@@ -60,6 +60,34 @@ final class SettingsModel {
         }
     }
 
+    var themeColors: ThemeColorsSetting {
+        didSet {
+            guard !isRestoringExternalValues, themeColors != oldValue else { return }
+            ThemeColorsSetting.current = themeColors
+            appDelegate?.applyThemeColorsSetting()
+        }
+    }
+
+    func setThemeColor(_ color: NSColor,
+                       slot: ThemeColorSlot,
+                       scheme: ThemeColorScheme) {
+        var colors = themeColors
+        colors.setColor(color, slot, scheme)
+        themeColors = colors
+    }
+
+    func resetThemeColors() {
+        themeColors = ThemeColorsSetting()
+    }
+
+    /// Applies a preset: writes its palette into every slot for both
+    /// schemes and switches the app appearance to the preset's flavor so
+    /// the native chrome matches.
+    func applyPreset(_ preset: ThemePreset) {
+        themeColors = preset.setting
+        appearance = preset.isDark ? .dark : .light
+    }
+
     var checksForUpdatesAutomatically: Bool {
         didSet {
             guard !isRestoringExternalValues,
@@ -110,6 +138,7 @@ final class SettingsModel {
         contentWidth = ContentWidthSetting.current
         textSize = TextSizeSetting.current
         sendsCrashReports = CrashReporter.isEnabled
+        themeColors = ThemeColorsSetting.current
         checksForUpdatesAutomatically = updater?.automaticallyChecksForUpdates ?? true
         downloadsUpdatesAutomatically = updater?.automaticallyDownloadsUpdates ?? false
         lastUpdateCheckDate = updater?.lastUpdateCheckDate
@@ -156,6 +185,7 @@ final class SettingsModel {
         contentWidth = ContentWidthSetting.current
         textSize = TextSizeSetting.current
         sendsCrashReports = CrashReporter.isEnabled
+        themeColors = ThemeColorsSetting.current
         if let updater { refreshUpdateSettings(from: updater) }
     }
 
@@ -226,35 +256,6 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
-            Section {
-                HStack(alignment: .top) {
-                    Text(L("Appearance"))
-                        .fixedSize()
-                    Spacer(minLength: 16)
-                    HStack(spacing: 16) {
-                        ForEach(AppearanceMode.allCases, id: \.self) { mode in
-                            Button {
-                                model.appearance = mode
-                            } label: {
-                                AppearanceOptionView(
-                                    title: mode.settingsTitle,
-                                    mode: mode,
-                                    isSelected: model.appearance == mode
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(mode.settingsTitle)
-                            .accessibilityAddTraits(
-                                model.appearance == mode ? [.isSelected] : []
-                            )
-                        }
-                    }
-                }
-                .padding(.vertical, 4)
-            } footer: {
-                Text(L("Appearance also applies to Quick Look previews."))
-            }
-
             Section {
                 LabeledContent {
                     TextSizePicker(selection: $model.textSize)
@@ -338,6 +339,199 @@ struct GeneralSettingsView: View {
             Text(choice.title)
         }
         .tag(choice.id)
+    }
+}
+
+// MARK: - Theme
+
+/// Color overrides, one row per surface with a Light and a Dark well. A
+/// deliberately small first set — presets and more surfaces come later on
+/// the same storage.
+struct ThemeSettingsView: View {
+    @Bindable private var model = SettingsModel.shared
+
+    var body: some View {
+        Form {
+            Section {
+                HStack(alignment: .top) {
+                    Text(L("Appearance"))
+                        .fixedSize()
+                    Spacer(minLength: 16)
+                    HStack(spacing: 16) {
+                        ForEach(AppearanceMode.allCases, id: \.self) { mode in
+                            Button {
+                                model.appearance = mode
+                            } label: {
+                                AppearanceOptionView(
+                                    title: mode.settingsTitle,
+                                    mode: mode,
+                                    isSelected: model.appearance == mode
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(mode.settingsTitle)
+                            .accessibilityAddTraits(
+                                model.appearance == mode ? [.isSelected] : []
+                            )
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            } footer: {
+                Text(L("Appearance also applies to Quick Look previews."))
+            }
+
+            Section {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12),
+                                    GridItem(.flexible(), spacing: 12)],
+                          spacing: 12) {
+                    ForEach(ThemePreset.builtIn) { preset in
+                        presetCard(preset)
+                    }
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text(L("Presets"))
+            } footer: {
+                Text(L("A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards."))
+            }
+
+            Section {
+                colorRow(L("Window background"), slot: .windowBackground)
+                colorRow(L("Code block background"), slot: .codeBlockBackground)
+                colorRow(L("Text"), slot: .textColor)
+                colorRow(L("Link"), slot: .linkColor)
+            } header: {
+                Text(L("Colors"))
+            } footer: {
+                Text(model.appearance == .automatic
+                    ? L("Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override.")
+                    : L("Colors apply to the current appearance. Choose the Automatic appearance to set Light and Dark separately."))
+            }
+
+            Section {
+                LabeledContent(L("Custom colors")) {
+                    Button(L("Reset Colors")) {
+                        model.resetThemeColors()
+                    }
+                    .disabled(!model.themeColors.isCustomized)
+                }
+            } footer: {
+                Text(L("Restores the default colors for both appearances."))
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear {
+            model.refreshFromExternalSources()
+        }
+    }
+
+    private func presetCard(_ preset: ThemePreset) -> some View {
+        let page = Self.color(hex: preset.pageBackground)
+        let text = Self.color(hex: preset.text)
+        let accent = Self.color(hex: preset.accent)
+        let isSelected = model.themeColors == preset.setting
+        return Button {
+            model.applyPreset(preset)
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .top) {
+                    Text(L(preset.name))
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(text)
+                    Spacer(minLength: 4)
+                    Image(systemName: preset.isDark ? "moon.fill" : "sun.max.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(preset.isDark ? Color.indigo : Color.orange)
+                }
+                (Text("Lorem ipsum ").foregroundStyle(text.opacity(0.85))
+                    + Text("dolor").bold().foregroundStyle(text)
+                    + Text(" sit amet, ").foregroundStyle(text.opacity(0.85))
+                    + Text("semper").foregroundStyle(accent)
+                    + Text(" pharetra.").foregroundStyle(text.opacity(0.85)))
+                    .font(.system(size: 11))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(page)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(isSelected ? Color.accentColor : Color.primary.opacity(0.12),
+                            lineWidth: isSelected ? 2 : 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(L(preset.name)))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private static func color(hex: String) -> Color {
+        guard let nsColor = ThemeColorsSetting.color(fromHex: hex) else {
+            return .primary
+        }
+        return Color(nsColor: nsColor)
+    }
+
+    /// One well while the appearance is pinned (it edits the look on
+    /// screen); separate labeled Light/Dark wells only in Automatic, where
+    /// both schemes are reachable. Two always-visible wells confused more
+    /// than they helped.
+    private func colorRow(_ title: String, slot: ThemeColorSlot) -> some View {
+        LabeledContent {
+            HStack(spacing: 16) {
+                switch model.appearance {
+                case .light:
+                    colorWell(L("Light"), slot: slot, scheme: .light,
+                              showsLabel: false)
+                case .dark:
+                    colorWell(L("Dark"), slot: slot, scheme: .dark,
+                              showsLabel: false)
+                case .automatic:
+                    colorWell(L("Light"), slot: slot, scheme: .light)
+                    colorWell(L("Dark"), slot: slot, scheme: .dark)
+                }
+            }
+        } label: {
+            Text(title)
+        }
+    }
+
+    private func colorWell(_ label: String,
+                           slot: ThemeColorSlot,
+                           scheme: ThemeColorScheme,
+                           showsLabel: Bool = true) -> some View {
+        HStack(spacing: 6) {
+            if showsLabel {
+                Text(label)
+                    .foregroundStyle(.secondary)
+            }
+            ColorPicker(label, selection: colorBinding(slot: slot, scheme: scheme),
+                        supportsOpacity: false)
+                .labelsHidden()
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func colorBinding(slot: ThemeColorSlot,
+                              scheme: ThemeColorScheme) -> Binding<Color> {
+        Binding(
+            get: {
+                let model = SettingsModel.shared
+                let nsColor = model.themeColors.color(slot, scheme)
+                    ?? ThemeColorsSetting.defaultColor(slot, scheme)
+                return Color(nsColor: nsColor)
+            },
+            set: { newValue in
+                SettingsModel.shared.setThemeColor(
+                    NSColor(newValue), slot: slot, scheme: scheme
+                )
+            }
+        )
     }
 }
 

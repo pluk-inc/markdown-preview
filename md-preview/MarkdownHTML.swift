@@ -63,6 +63,96 @@ nonisolated enum MarkdownHTML {
         case dark
     }
 
+    /// id of the `<style>` element carrying user theme overrides. Emitted at
+    /// render time and rewritten in place by the host when the user edits a
+    /// color, so a live page restyles without a reload.
+    static let themeStyleElementID = "mdp-theme-overrides"
+
+    /// User color overrides injected after the stylesheet. Values are
+    /// sanitized hex colors — anything else is dropped, never emitted —
+    /// so stored strings can't break out of the style element.
+    struct ThemeOverrides: Equatable, Sendable {
+        var lightCodeBackground: String?
+        var darkCodeBackground: String?
+        /// Page (window background) overrides. Painted by the page itself —
+        /// not only the native view behind it — so WebKit's scroll-edge
+        /// pocket under a transparent titlebar frosts with the theme color.
+        var lightPageBackground: String?
+        var darkPageBackground: String?
+        /// Body text (`--text`) overrides.
+        var lightText: String?
+        var darkText: String?
+        /// Link (`--link`) overrides — the theme's primary accent.
+        var lightLink: String?
+        var darkLink: String?
+
+        /// "#RRGGBB" (or #RRGGBBAA), or nil for anything else.
+        static func sanitizedHexColor(_ value: String?) -> String? {
+            guard let value,
+                  value.range(
+                    of: "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$",
+                    options: .regularExpression
+                  ) != nil else { return nil }
+            return value
+        }
+
+        /// Override rules mirroring the stylesheet's three palette buckets:
+        /// bare `:root` (light), the host color-scheme attribute (Quick
+        /// Look), and the media query (app windows following the system).
+        var css: String {
+            var rules: [String] = []
+            if let light = Self.sanitizedHexColor(lightCodeBackground) {
+                rules.append(":root { --code-bg: \(light); }")
+            }
+            if let dark = Self.sanitizedHexColor(darkCodeBackground) {
+                rules.append(":root[data-mdp-color-scheme=\"dark\"] { --code-bg: \(dark); }")
+                rules.append("""
+                @media (prefers-color-scheme: dark) {
+                    :root:not([data-mdp-color-scheme="light"]) { --code-bg: \(dark); }
+                }
+                """)
+            }
+            if let light = Self.sanitizedHexColor(lightText) {
+                rules.append(":root { --text: \(light); }")
+            }
+            if let dark = Self.sanitizedHexColor(darkText) {
+                rules.append(":root[data-mdp-color-scheme=\"dark\"] { --text: \(dark); }")
+                rules.append("""
+                @media (prefers-color-scheme: dark) {
+                    :root:not([data-mdp-color-scheme="light"]) { --text: \(dark); }
+                }
+                """)
+            }
+            if let light = Self.sanitizedHexColor(lightLink) {
+                rules.append(":root { --link: \(light); }")
+            }
+            if let dark = Self.sanitizedHexColor(darkLink) {
+                rules.append(":root[data-mdp-color-scheme=\"dark\"] { --link: \(dark); }")
+                rules.append("""
+                @media (prefers-color-scheme: dark) {
+                    :root:not([data-mdp-color-scheme="light"]) { --link: \(dark); }
+                }
+                """)
+            }
+            if let light = Self.sanitizedHexColor(lightPageBackground) {
+                rules.append("html { background: \(light); }")
+            }
+            if let dark = Self.sanitizedHexColor(darkPageBackground) {
+                rules.append(":root[data-mdp-color-scheme=\"dark\"] { background: \(dark); }")
+                rules.append("""
+                @media (prefers-color-scheme: dark) {
+                    html:not([data-mdp-color-scheme="light"]) { background: \(dark); }
+                }
+                """)
+            }
+            guard !rules.isEmpty else { return "" }
+            // Scoped to screen so the print stylesheet's forced-light
+            // palette is never overridden — dark theme text on white paper
+            // printed nearly invisible otherwise.
+            return "@media screen {\n" + rules.joined(separator: "\n") + "\n}"
+        }
+    }
+
     /// Width the Quick Look panel requests for its preview window.
     static let preferredPageWidth: CGFloat = 900
     /// The centered article measure: `preferredPageWidth` minus the 40px
@@ -173,6 +263,7 @@ nonisolated enum MarkdownHTML {
                        vendorLoading: VendorLoading = .inline,
                        contentWidth: ContentWidth = .centered,
                        colorScheme: ColorScheme? = nil,
+                       themeOverrides: ThemeOverrides? = nil,
                        warmup: Bool = false) -> RenderedHTML {
         let frontmatter = MarkdownFrontmatter.split(markdown)
         let body = frontmatter.body
@@ -287,6 +378,10 @@ nonisolated enum MarkdownHTML {
         let colorSchemeAttribute = colorScheme.map {
             " data-mdp-color-scheme=\"\($0.rawValue)\""
         } ?? ""
+        // Always emitted (possibly empty) so a live theme edit has a stable
+        // element to rewrite instead of creating one per page variant.
+        let themeStyleBlock =
+            "<style id=\"\(themeStyleElementID)\">\(themeOverrides?.css ?? "")</style>"
         let html = """
         <!DOCTYPE html>
         <html\(colorSchemeAttribute)>
@@ -295,6 +390,7 @@ nonisolated enum MarkdownHTML {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         \(baseTag)
         <style>\(stylesheet)</style>
+        \(themeStyleBlock)
         \(scrollOverride)
         \(contentWidthOverride)
         \(sanitizerBlock)

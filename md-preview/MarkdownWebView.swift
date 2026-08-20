@@ -303,11 +303,13 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let baseHref = MarkdownAssetResolution.rootBaseHref
         let markdown = Self.warmupMarkdown
         let contentWidth = ContentWidthSetting.current.renderWidth
+        let themeOverrides = Self.currentThemeOverrides()
         Task { @concurrent [weak self] in
             let rendered = Self.timedRender(label: "warmup",
                                             markdown: markdown,
                                             assetBaseHref: baseHref,
                                             contentWidth: contentWidth,
+                                            themeOverrides: themeOverrides,
                                             warmup: true)
             await self?.applyWarmup(rendered)
         }
@@ -363,11 +365,13 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         renderGeneration &+= 1
         let generation = renderGeneration
         let contentWidth = ContentWidthSetting.current.renderWidth
+        let themeOverrides = Self.currentThemeOverrides()
         Task { @concurrent [weak self] in
             let rendered = Self.timedRender(label: "display",
                                             markdown: markdown,
                                             assetBaseHref: baseHref,
-                                            contentWidth: contentWidth)
+                                            contentWidth: contentWidth,
+                                            themeOverrides: themeOverrides)
             #if DEBUG
             let renderFinishedAt = DispatchTime.now().uptimeNanoseconds
             await self?.applyDisplayDebug(
@@ -388,6 +392,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                                 markdown: String,
                                                 assetBaseHref: String,
                                                 contentWidth: MarkdownHTML.ContentWidth,
+                                                themeOverrides: MarkdownHTML.ThemeOverrides? = nil,
                                                 warmup: Bool = false) -> MarkdownHTML.RenderedHTML {
         let t0 = DispatchTime.now()
         let rendered = MarkdownHTML.render(markdown: markdown,
@@ -395,6 +400,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                            assetBaseHref: assetBaseHref,
                                            vendorLoading: .lazy,
                                            contentWidth: contentWidth,
+                                           themeOverrides: themeOverrides,
                                            warmup: warmup)
         let elapsedMs = Int(
             (Double(DispatchTime.now().uptimeNanoseconds - t0.uptimeNanoseconds)
@@ -454,6 +460,9 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                 in: nil,
                 in: .page
             ) { [weak self] _ in
+                #if !QUICK_LOOK_EXTENSION
+                self?.applyThemeColors()
+                #endif
                 self?.contentDidReplace?()
             }
             return
@@ -487,6 +496,29 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         isPageReady = false
         reloadPreview()
     }
+
+    /// User theme colors read at render time. The Quick Look extension
+    /// compiles this file but not `ThemeColorsSetting` and keeps the default
+    /// palette for now.
+    private static func currentThemeOverrides() -> MarkdownHTML.ThemeOverrides? {
+        #if QUICK_LOOK_EXTENSION
+        return nil
+        #else
+        return ThemeColorsSetting.current.markdownThemeOverrides
+        #endif
+    }
+
+    #if !QUICK_LOOK_EXTENSION
+    /// Rewrites the theme override `<style>` in the loaded page so a color
+    /// edited in Settings restyles the preview live, without a reload. Fresh
+    /// renders embed the same CSS via `currentThemeOverrides`.
+    func applyThemeColors() {
+        let css = Self.currentThemeOverrides()?.css ?? ""
+        webView.evaluateJavaScript(
+            ThemeColorsSetting.styleUpdateScript(css: css)
+        ) { _, _ in }
+    }
+    #endif
 
     #if DEBUG
     private nonisolated static func debugMilliseconds(from start: UInt64,
@@ -1472,6 +1504,12 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         configureWebKitScrollView()
         isPageReady = true
+        #if !QUICK_LOOK_EXTENSION
+        // A render snapshots the theme before its concurrent pass; if the
+        // colors changed mid-flight, the navigation just installed stale
+        // CSS. Re-assert the current theme on the fresh page.
+        applyThemeColors()
+        #endif
         contentDidReplace?()
     }
 

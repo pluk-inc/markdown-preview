@@ -71,6 +71,109 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         webView.pageZoom = zoom
     }
 
+    /// Rewrites the theme override `<style>` so a color edited in Settings
+    /// restyles an open editor live. Fresh loads embed the same CSS in
+    /// `editorHTML`.
+    func applyThemeColors() {
+        updateUnderPageBackgroundColor()
+        updateObscuredContentInsets()
+        let script = ThemeColorsSetting.styleUpdateScript(
+            css: ThemeColorsSetting.current.editorOverrideCSS
+        )
+        webView.evaluateJavaScript(script) { _, _ in }
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        // The under-page color is resolved statically; re-resolve on the
+        // first pass and whenever the effective appearance flips.
+        let appearanceName = view.effectiveAppearance.name
+        if appearanceName != lastUnderPageAppearance {
+            lastUnderPageAppearance = appearanceName
+            updateUnderPageBackgroundColor()
+        }
+        updateObscuredContentInsets()
+    }
+
+    private var lastUnderPageAppearance: NSAppearance.Name?
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        // The chrome (toolbar, accessories) is final here; layout passes
+        // before it attaches see a smaller contentLayoutRect.
+        updateObscuredContentInsets()
+    }
+
+    /// The whole obscured strip — titlebar, toolbar, and visible bottom
+    /// accessories. contentLayoutRect already excludes the accessories, so
+    /// the gap alone is the full chrome height; adding accessory heights on
+    /// top double-counted them and left a blank band below the formatting
+    /// bar.
+    private var fullChromeTopInset: CGFloat {
+        guard let window = view.window, let contentView = window.contentView else {
+            return view.safeAreaInsets.top
+        }
+        return max(0, contentView.bounds.height - window.contentLayoutRect.maxY)
+    }
+
+    /// The editor page cannot use WebKit's obscured inset: the page is
+    /// non-scrollable (CodeMirror scrolls internally), and WebKit paints
+    /// the inset strip of such pages with the system background, ignoring
+    /// both the page CSS and underPageBackgroundColor — a near-black bar
+    /// over a themed window. Instead the inset stays 0 (the strip then
+    /// shows the themed window straight through) and #editor is padded by
+    /// the full chrome height so the buffer lays out below the bars.
+    private func updateObscuredContentInsets() {
+        guard #available(macOS 26.0, *) else { return }
+        guard view.window != nil else { return }
+        if webView.obscuredContentInsets.top != 0 {
+            webView.obscuredContentInsets = NSEdgeInsets(
+                top: 0, left: 0, bottom: 0, right: 0
+            )
+        }
+        let barsHeight = fullChromeTopInset
+        if lastAppliedTopPadding != barsHeight {
+            lastAppliedTopPadding = barsHeight
+            let value = barsHeight > 0
+                ? String(format: "%.3fpx", barsHeight)
+                : ""
+            let script = """
+            (function () {
+                var editor = document.getElementById('editor');
+                if (editor) {
+                    editor.style.paddingTop = '\(value)';
+                    // The padding strip sits under the native formatting
+                    // bar; report a plain cursor there so the bar never
+                    // shows the I-beam even if its own tracking loses a
+                    // race. CodeMirror's editable content keeps its own
+                    // text cursor.
+                    editor.style.cursor = '\(value.isEmpty ? "" : "default")';
+                }
+            })();
+            """
+            webView.evaluateJavaScript(script) { _, _ in }
+        }
+    }
+
+    private var lastAppliedTopPadding: CGFloat = -1
+
+    /// See ContentViewController.updateUnderPageBackgroundColor — set on
+    /// theme changes only, never per layout pass.
+    private func updateUnderPageBackgroundColor() {
+        guard #available(macOS 26.0, *) else { return }
+        // Resolved statically: WebKit serializes this color to the web
+        // process, and a dynamic provider resolved there loses the theme
+        // values — the toolbar strip then falls back to the stock editor
+        // dark. applyThemeColors and appearance changes re-run this.
+        let isDark = view.effectiveAppearance
+            .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let scheme: ThemeColorScheme = isDark ? .dark : .light
+        let colors = ThemeColorsSetting.current
+        webView.underPageBackgroundColor = colors.color(.editorBackground, scheme)
+            ?? colors.color(.windowBackground, scheme)
+            ?? ThemeColorsSetting.defaultColor(.editorBackground, scheme)
+    }
+
     /// Current buffer contents, or nil if the editor isn't ready.
     func fetchMarkdown(_ completion: @escaping (String?) -> Void) {
         webView.evaluateJavaScript("window.__mdEditor ? window.__mdEditor.getMarkdown() : null") { value, _ in
@@ -131,6 +234,13 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                 contentDidChange?()
             case "ready":
                 hasLoadedEditorPage = true
+                // Fresh page — the bar padding lives in the DOM and must be
+                // re-applied even when the tracked value hasn't changed,
+                // and WebKit re-derives the under-page color from the new
+                // page, clobbering the themed value.
+                lastAppliedTopPadding = -1
+                updateUnderPageBackgroundColor()
+                updateObscuredContentInsets()
                 editorDidBecomeReady?()
             case "cancel":
                 cancelRequested?()
@@ -205,6 +315,19 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         let columnMaxWidth = ContentWidthSetting.current == .fullWidth
             ? "none"
             : "\(MarkdownHTML.contentColumnWidth)px"
+        // Baked into the base stylesheet, not only the override element:
+        // WebKit derives the obscured-inset fill from the base stylesheet's
+        // html/body background, so a theme color only present in the later
+        // override <style> leaves the toolbar strip on stock Canvas (dark
+        // #1e1e1e) in edit mode.
+        let colors = ThemeColorsSetting.current
+        func pageBackground(_ scheme: ThemeColorScheme) -> String {
+            let hex = colors.hexValue(.editorBackground, scheme)
+                ?? colors.hexValue(.windowBackground, scheme)
+            return MarkdownHTML.ThemeOverrides.sanitizedHexColor(hex) ?? "Canvas"
+        }
+        let lightPageBackground = pageBackground(.light)
+        let darkPageBackground = pageBackground(.dark)
         return """
         <!DOCTYPE html>
         <html>
@@ -253,7 +376,10 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             padding: 0;
             height: 100%;
             overflow: hidden;
-            background: Canvas;
+            background: \(lightPageBackground);
+        }
+        @media (prefers-color-scheme: dark) {
+            html, body { background: \(darkPageBackground); }
         }
         body {
             font-family: \(MarkdownHTML.bodyFontFamily);
@@ -635,6 +761,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         .hl-property { color: var(--hl-property); }
         .hl-meta { color: var(--secondary); }
         </style>
+        <style id="\(MarkdownHTML.themeStyleElementID)">\(ThemeColorsSetting.current.editorOverrideCSS)</style>
         </head>
         <body>
         <div id="editor"></div>
