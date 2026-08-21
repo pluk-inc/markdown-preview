@@ -154,6 +154,7 @@
 "Document" = "Document";
 "Properties" = "Properties";
 "File Name" = "File Name";
+"Full Path" = "Full Path";
 "Document Type" = "Document Type";
 "Markdown Document" = "Markdown Document";
 "File Size" = "File Size";

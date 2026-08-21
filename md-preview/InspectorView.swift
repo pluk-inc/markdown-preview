@@ -3,10 +3,12 @@
 //  md-preview
 //
 
+import AppKit
 import SwiftUI
 
 struct DocumentMetadata: Equatable {
     var fileName: String = ""
+    var fileURL: URL?
     var wordCount: Int = 0
     var characterCount: Int = 0
     var lineCount: Int = 0
@@ -21,6 +23,7 @@ struct DocumentMetadata: Equatable {
 extension DocumentMetadata {
     static func make(url: URL?, markdown: String) -> DocumentMetadata {
         var meta = DocumentMetadata()
+        meta.fileURL = url
         meta.fileName = url?.lastPathComponent
             ?? NSLocalizedString("Untitled", comment: "Inspector file name when no document is open")
 
@@ -52,6 +55,7 @@ extension DocumentMetadata {
 struct InspectorView: View {
     let metadata: DocumentMetadata
     @State private var tab: Tab = .document
+    @State private var pathExpanded = false
 
     enum Tab: String, CaseIterable, Identifiable {
         case document = "Document"
@@ -106,6 +110,43 @@ struct InspectorView: View {
                     NSLocalizedString("File Name", comment: "Inspector field label"),
                     value: metadata.fileName
                 )
+                if let url = metadata.fileURL {
+                    Group {
+                        if pathExpanded {
+                            VStack(spacing: 4) {
+                                HStack(spacing: 6) {
+                                    Text(NSLocalizedString("Full Path", comment: "Inspector field label"))
+                                    Spacer()
+                                    revealButton(for: url)
+                                }
+                                pathText(for: url)
+                                    .multilineTextAlignment(.trailing)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
+                            }
+                        } else {
+                            HStack(spacing: 6) {
+                                Text(NSLocalizedString("Full Path", comment: "Inspector field label"))
+                                Spacer()
+                                pathText(for: url)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                revealButton(for: url)
+                            }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { pathExpanded.toggle() }
+                    .contextMenu {
+                        Button(NSLocalizedString("Copy Path", comment: "Inspector context menu item")) {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(url.path, forType: .string)
+                        }
+                        Button(NSLocalizedString("Show in Finder", comment: "Inspector reveal button tooltip")) {
+                            NSWorkspace.shared.activateFileViewerSelecting([url])
+                        }
+                    }
+                    .help(url.path)
+                }
                 LabeledContent(
                     NSLocalizedString("Document Type", comment: "Inspector field label"),
                     value: NSLocalizedString("Markdown Document", comment: "Inspector document type")
@@ -159,6 +200,23 @@ struct InspectorView: View {
         .formStyle(.grouped)
     }
 
+    private func pathText(for url: URL) -> Text {
+        Text(Self.displayPath(for: url))
+            .foregroundStyle(.secondary)
+    }
+
+    private func revealButton(for url: URL) -> some View {
+        Button {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } label: {
+            Image(systemName: "arrow.right.circle.fill")
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .help(NSLocalizedString("Show in Finder", comment: "Inspector reveal button tooltip"))
+        .accessibilityLabel(NSLocalizedString("Show in Finder", comment: "Inspector reveal button tooltip"))
+    }
+
     @ViewBuilder
     private var propertiesTab: some View {
         if metadata.frontmatter.isEmpty {
@@ -175,6 +233,25 @@ struct InspectorView: View {
             }
             .formStyle(.grouped)
         }
+    }
+}
+
+extension InspectorView {
+    // The sandbox remaps NSHomeDirectory() to the app container, so resolve the
+    // user's real home for tilde abbreviation.
+    private static let realHomePath: String = {
+        if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
+            return String(cString: dir)
+        }
+        return NSHomeDirectory()
+    }()
+
+    static func displayPath(for url: URL) -> String {
+        let path = url.standardizedFileURL.path
+        if path.hasPrefix(realHomePath + "/") {
+            return "~" + path.dropFirst(realHomePath.count)
+        }
+        return path
     }
 }
 

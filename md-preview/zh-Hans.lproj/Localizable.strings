@@ -154,6 +154,7 @@
 "Document" = "文稿";
 "Properties" = "属性";
 "File Name" = "文件名";
+"Full Path" = "完整路径";
 "Document Type" = "文稿类型";
 "Markdown Document" = "Markdown 文稿";
 "File Size" = "文件大小";
