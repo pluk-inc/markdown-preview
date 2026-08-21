@@ -86,7 +86,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private weak var openInLLMItem: NSMenuToolbarItem?
     private weak var inspectorItem: NSToolbarItem?
     private weak var inspectorButton: NSButton?
-    private var isAlwaysOnTop = false
     private weak var alwaysOnTopButton: NSButton?
     private weak var editItem: NSToolbarItem?
     private weak var editButton: NSButton?
@@ -182,6 +181,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // window that has not stated its full-screen capability is the first
         // thing AppKit stops offering Enter Full Screen to.
         documentWindow.collectionBehavior.insert(.fullScreenPrimary)
+        applyAlwaysOnTopLevel(isFullScreen: false)
         documentWindow.delegate = self
         documentWindow.tabbingIdentifier = "MarkdownDocumentWindow"
         documentWindow.tabbingMode = Self.nextWindowDeclinesTabbing ? .disallowed : .automatic
@@ -267,11 +267,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     func windowWillEnterFullScreen(_ notification: Notification) {
-        reapplyAlwaysOnTopLevel(isFullScreen: true)
+        applyAlwaysOnTopLevel(isFullScreen: true)
     }
 
     func windowDidExitFullScreen(_ notification: Notification) {
-        reapplyAlwaysOnTopLevel(isFullScreen: false)
+        applyAlwaysOnTopLevel(isFullScreen: false)
     }
 
     func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
@@ -743,43 +743,31 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         syncSidebarMenuState()
     }
 
+    /// The toolbar button and the menu item both drive the one app-wide
+    /// preference, so the toggle goes through the app delegate rather than
+    /// changing this window: every open window follows, not just this one.
     @objc func toggleAlwaysOnTop(_ sender: Any?) {
-        setAlwaysOnTop(!isAlwaysOnTop)
+        (NSApp.delegate as? AppDelegate)?.applyAlwaysOnTopSetting(!isAlwaysOnTop)
     }
 
-    private func setAlwaysOnTop(_ pinned: Bool) {
-        let windows = AlwaysOnTopPolicy.affectedWindows(toggling: documentWindow,
-                                                        tabGroup: documentWindow.tabbedWindows)
-        for window in windows {
-            // Read each window's live full-screen state rather than assuming the
-            // reader pinned from a normal window: pinning while already in full
-            // screen must light the toggle without dropping out of full screen.
-            window.level = NSWindow.Level(
-                rawValue: AlwaysOnTopPolicy.windowLevel(
-                    isPinned: pinned,
-                    isFullScreen: window.styleMask.contains(.fullScreen)
-                )
-            )
-            (window.windowController as? DocumentWindowController)?.recordAlwaysOnTop(pinned)
-        }
+    /// Takes the current setting: called on every open window when it changes,
+    /// and once on a window being created so it opens already floating.
+    func applyAlwaysOnTopSetting() {
+        applyAlwaysOnTopLevel(isFullScreen: documentWindow.styleMask.contains(.fullScreen))
+        alwaysOnTopButton?.state = isAlwaysOnTop ? .on : .off
     }
 
-    /// Reapplies the level for a full-screen transition. `isAlwaysOnTop` is the
-    /// reader's intent and is deliberately left untouched, so the toolbar toggle
-    /// stays lit across the transition and the window floats again on the way out.
-    private func reapplyAlwaysOnTopLevel(isFullScreen: Bool) {
+    /// The pin is intent, not the level itself: the level is recomputed on both
+    /// full-screen transitions, so the toolbar toggle stays lit across them and
+    /// the window floats again on the way out.
+    private func applyAlwaysOnTopLevel(isFullScreen: Bool) {
         documentWindow.level = NSWindow.Level(
             rawValue: AlwaysOnTopPolicy.windowLevel(isPinned: isAlwaysOnTop,
                                                     isFullScreen: isFullScreen)
         )
     }
 
-    /// Stores the pinned state and refreshes the toolbar toggle. Applied to
-    /// every window in the tab group so each tab agrees with the group's level.
-    private func recordAlwaysOnTop(_ pinned: Bool) {
-        isAlwaysOnTop = pinned
-        alwaysOnTopButton?.state = pinned ? .on : .off
-    }
+    private var isAlwaysOnTop: Bool { AlwaysOnTopPolicy.isEnabled }
 
     /// The pin icon doubles as the state indicator. An `NSMenuItem` draws its
     /// image and its check mark in the same leading slot, so beside an icon the
@@ -847,7 +835,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let alwaysOnTop = NSLocalizedString("Always on Top", comment: "Always on Top toolbar item label")
         item.label = alwaysOnTop
         item.paletteLabel = alwaysOnTop
-        item.toolTip = NSLocalizedString("Keep this window in front of other apps",
+        item.toolTip = NSLocalizedString("Keep Markdown Preview windows in front of other apps",
                                          comment: "Always on Top toolbar item tooltip")
 
         let button = NSButton(image: alwaysOnTopImage(),
