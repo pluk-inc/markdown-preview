@@ -159,17 +159,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             pendingOpenURLCount += 1
             NSDocumentController.shared.openDocument(withContentsOf: url,
-                                                     display: true) { [weak self] _, _, error in
+                                                     display: true) { [weak self] document, _, error in
                 if let error {
                     NSAlert(error: error).runModal()
                 }
                 guard let self else { return }
+                self.showWindowIfNeeded(for: document)
                 self.pendingOpenURLCount -= 1
                 if error != nil, self.pendingOpenURLCount == 0 {
                     self.scheduleDocumentPrompt(requiresNoDocuments: true)
                 }
             }
         }
+    }
+
+    /// `openDocument(withContentsOf:display:)` returns an existing document
+    /// unchanged. If its window was closed earlier (while the app kept
+    /// running), the document has no window controllers and `display: true`
+    /// does not create a window for it, so the file appears not to open.
+    /// Make and show a window in that case.
+    private func showWindowIfNeeded(for document: NSDocument?) {
+        guard let document, document.windowControllers.isEmpty else { return }
+        document.makeWindowControllers()
+        document.showWindows()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
