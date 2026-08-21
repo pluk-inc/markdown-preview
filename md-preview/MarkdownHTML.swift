@@ -74,6 +74,7 @@ nonisolated enum MarkdownHTML {
     // keep different renderers, but their page geometry and base typography
     // must come from one source of truth.
     static let bodyFontFamily = "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", system-ui, sans-serif"
+    static let codeFontFamily = "ui-monospace, \"SF Mono\", Menlo, monospace"
     static let bodyFontSize: CGFloat = 15
     static let bodyLineHeight: CGFloat = 1.52
     static let pagePaddingTop: CGFloat = 32
@@ -159,12 +160,14 @@ nonisolated enum MarkdownHTML {
                          allowsScroll: Bool = false,
                          assetBaseHref: String? = nil,
                          vendorLoading: VendorLoading = .inline,
-                         colorScheme: ColorScheme? = nil) -> String {
+                         colorScheme: ColorScheme? = nil,
+                         documentFont: DocumentFontSetting = .current) -> String {
         render(markdown: markdown,
                allowsScroll: allowsScroll,
                assetBaseHref: assetBaseHref,
                vendorLoading: vendorLoading,
-               colorScheme: colorScheme).html
+               colorScheme: colorScheme,
+               documentFont: documentFont).html
     }
 
     static func render(markdown: String,
@@ -173,6 +176,7 @@ nonisolated enum MarkdownHTML {
                        vendorLoading: VendorLoading = .inline,
                        contentWidth: ContentWidth = .centered,
                        colorScheme: ColorScheme? = nil,
+                       documentFont: DocumentFontSetting = .current,
                        warmup: Bool = false) -> RenderedHTML {
         let frontmatter = MarkdownFrontmatter.split(markdown)
         let body = frontmatter.body
@@ -242,6 +246,19 @@ nonisolated enum MarkdownHTML {
             </style>
             """
         }
+        // Headings inherit the family deliberately: the heading scale is a
+        // ratio off the body em, tuned against one x-height, so keeping system
+        // headings over a serif body would silently change how big each step
+        // looks. Code keeps its own face and takes only a size correction.
+        let documentFontOverride = """
+        <style>
+        :root {
+            --mdp-doc-font: \(documentFont.fontFamily);
+            --mdp-code-font-size: \(documentFont.codeFontSize);
+        }
+        </style>
+        """
+
         // The href may carry a real folder path (percent-encoded, but `&`
         // and `'` survive URL path encoding) — escape it for the attribute.
         let baseTag = assetBaseHref.map {
@@ -297,6 +314,7 @@ nonisolated enum MarkdownHTML {
         <style>\(stylesheet)</style>
         \(scrollOverride)
         \(contentWidthOverride)
+        \(documentFontOverride)
         \(sanitizerBlock)
         \(morphBlock)
         \(hostBridgeScript)
@@ -3185,7 +3203,7 @@ nonisolated enum MarkdownHTML {
         height: 0;
     }
     body {
-        font-family: \(bodyFontFamily);
+        font-family: var(--mdp-doc-font, \(bodyFontFamily));
         font-size: \(bodyFontSize)px;
         line-height: \(bodyLineHeight);
         color: var(--text);
@@ -3364,8 +3382,8 @@ nonisolated enum MarkdownHTML {
     }
 
     code {
-        font-family: ui-monospace, "SF Mono", Menlo, monospace;
-        font-size: 0.88em;
+        font-family: \(codeFontFamily);
+        font-size: var(--mdp-code-font-size, 0.88em);
         padding: 0.18em 0.42em;
         background: var(--code-bg);
         border-radius: 6px;
@@ -3412,7 +3430,7 @@ nonisolated enum MarkdownHTML {
         display: block;
         padding: 0;
         background: transparent;
-        font-size: 0.88em;
+        font-size: var(--mdp-code-font-size, 0.88em);
     }
     .md-code-wrap {
         position: relative;
@@ -3580,7 +3598,7 @@ nonisolated enum MarkdownHTML {
         padding: 12px 16px;
         text-align: left;
         white-space: pre-wrap;
-        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-family: \(codeFontFamily);
         font-size: 0.88em;
     }
     .math-display {
@@ -3596,7 +3614,7 @@ nonisolated enum MarkdownHTML {
         background: var(--code-bg);
         padding: 4px 8px;
         border-radius: 6px;
-        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-family: \(codeFontFamily);
         font-size: 0.88em;
         white-space: pre-wrap;
     }
