@@ -44,6 +44,19 @@ final class SettingsModel {
         }
     }
 
+    var autoSaveIntervalMinutes: Int {
+        didSet {
+            let normalized = AutoSaveSetting.clampedMinutes(autoSaveIntervalMinutes)
+            guard normalized == autoSaveIntervalMinutes else {
+                autoSaveIntervalMinutes = normalized
+                return
+            }
+            guard !isRestoringExternalValues,
+                  autoSaveIntervalMinutes != oldValue else { return }
+            appDelegate?.applyAutoSaveIntervalSetting(autoSaveIntervalMinutes)
+        }
+    }
+
     /// Optional because ⌘+ / ⌘− can leave the stored zoom between the named
     /// stops; the picker then shows nothing selected rather than lying.
     var textSize: TextSizeSetting? {
@@ -108,6 +121,7 @@ final class SettingsModel {
         let updater = (NSApp.delegate as? AppDelegate)?.updaterController.updater
         appearance = AppearanceMode.current
         contentWidth = ContentWidthSetting.current
+        autoSaveIntervalMinutes = AutoSaveSetting.currentMinutes
         textSize = TextSizeSetting.current
         sendsCrashReports = CrashReporter.isEnabled
         checksForUpdatesAutomatically = updater?.automaticallyChecksForUpdates ?? true
@@ -154,6 +168,7 @@ final class SettingsModel {
 
         appearance = AppearanceMode.current
         contentWidth = ContentWidthSetting.current
+        autoSaveIntervalMinutes = AutoSaveSetting.currentMinutes
         textSize = TextSizeSetting.current
         sendsCrashReports = CrashReporter.isEnabled
         if let updater { refreshUpdateSettings(from: updater) }
@@ -272,6 +287,30 @@ struct GeneralSettingsView: View {
                 Text(L("Layout"))
             } footer: {
                 Text(L("Zooming a document window with ⌘+ and ⌘− changes this same size."))
+            }
+
+            Section {
+                LabeledContent {
+                    Stepper(
+                        value: $model.autoSaveIntervalMinutes,
+                        in: AutoSaveSetting.minimumMinutes...AutoSaveSetting.maximumMinutes,
+                        step: 1
+                    ) {
+                        Text(String(
+                            format: L("%d minutes"),
+                            model.autoSaveIntervalMinutes
+                        ))
+                        .monospacedDigit()
+                        .frame(minWidth: 72, alignment: .trailing)
+                    }
+                } label: {
+                    Text(L("Automatic saving"))
+                    Text(L("Save edited documents periodically."))
+                }
+            } header: {
+                Text(L("Editing"))
+            } footer: {
+                Text(L("Automatic saving runs while a document has unsaved edits."))
             }
 
             Section {

@@ -67,6 +67,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         case cancel
     }
 
+    private enum AutoSaveFeedback: Equatable {
+        case interval
+        case saved
+        case failed
+    }
+
     private struct HistoryEntry {
         let url: URL
         /// Scroll offset when the user navigated away; restored on back/forward.
@@ -101,14 +107,24 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// When sidebar navigation starts from edit mode, the newly loaded file
     /// should return to edit mode instead of dropping the user into preview.
     private var pendingEditModeURL: URL?
-    /// Drives the native titlebar subtitle while the editor contains changes
-    /// that have not yet been written successfully.
+    private var autoSaveTimer: Timer?
+    private var autoSaveFeedbackResetWork: DispatchWorkItem?
+    private var autoSaveFeedback = AutoSaveFeedback.interval {
+        didSet { updateWindowSubtitle() }
+    }
+    /// Drives the native titlebar subtitle for the editor state and autosave
+    /// status. `NSWindow.subtitle` is rendered as quiet secondary text beside
+    /// the file name, which keeps the main toolbar unchanged.
     private var hasUnsavedEditorChanges = false {
         didSet {
             guard oldValue != hasUnsavedEditorChanges else { return }
-            documentWindow.subtitle = hasUnsavedEditorChanges
-                ? NSLocalizedString("Edited", comment: "Window subtitle for unsaved changes")
-                : ""
+            if hasUnsavedEditorChanges {
+                showAutoSaveFeedback(.interval)
+                startAutoSaveTimerIfNeeded()
+            } else if !isEditorCommitInFlight {
+                stopAutoSaveTimer()
+            }
+            updateWindowSubtitle()
         }
     }
     private weak var editAccessory: NSTitlebarAccessoryViewController?
@@ -264,6 +280,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     func windowWillClose(_ notification: Notification) {
         fileWatcher?.cancel()
         fileWatcher = nil
+        stopAutoSaveTimer()
+        autoSaveFeedbackResetWork?.cancel()
+        autoSaveFeedbackResetWork = nil
     }
 
     func windowWillEnterFullScreen(_ notification: Notification) {
@@ -282,8 +301,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         tableUndoManager.removeAllActions()
         currentFileURL = fileURL
         currentMarkdown = markdown
+        resetAutoSaveFeedback()
+        if fileURL == nil {
+            stopAutoSaveTimer()
+        }
         documentWindow.title = fileURL?.lastPathComponent
             ?? NSLocalizedString("Untitled", comment: "Window title when no document is open")
+        updateWindowSubtitle()
         attachToExistingTabGroupIfNeeded()
         documentWindow.makeKeyAndOrderFront(nil)
         // Tab placement is settled once the window is shown; a window opened
@@ -348,6 +372,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         pendingEditModeURL = preservingEditMode ? url.standardizedFileURL : nil
         markdownDocument?.replaceFileURL(url)
         documentWindow.title = url.lastPathComponent
+        resetAutoSaveFeedback()
+        updateWindowSubtitle()
         if isFileSwitch {
             split?.clearContent()
         }
@@ -444,6 +470,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         currentFileURL = newURL
         markdownDocument?.replaceFileURL(newURL)
         documentWindow.title = newURL.lastPathComponent
+        updateWindowSubtitle()
         NSDocumentController.shared.noteNewRecentDocumentURL(newURL)
         refreshOpenWithItem()
         refreshOpenActionsItem()
@@ -972,6 +999,128 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         copyFeedbackWork = work
         DispatchQueue.main.asyncAfter(
             deadline: .now() + Self.copyFeedbackDuration, execute: work
+        )
+    }
+
+    // MARK: - Autosave
+
+    func applyAutoSaveIntervalSetting() {
+        resetAutoSaveFeedback()
+        guard hasUnsavedEditorChanges else {
+            updateWindowSubtitle()
+            return
+        }
+        stopAutoSaveTimer()
+        startAutoSaveTimerIfNeeded()
+        updateWindowSubtitle()
+    }
+
+    private func startAutoSaveTimerIfNeeded() {
+        guard autoSaveTimer == nil,
+              currentFileURL != nil,
+              hasUnsavedEditorChanges else { return }
+        autoSaveTimer = Timer.scheduledTimer(
+            withTimeInterval: AutoSaveSetting.interval,
+            repeats: true
+        ) { [weak self] _ in
+            self?.performAutomaticSave()
+        }
+    }
+
+    private func stopAutoSaveTimer() {
+        autoSaveTimer?.invalidate()
+        autoSaveTimer = nil
+    }
+
+    private func performAutomaticSave() {
+        guard hasUnsavedEditorChanges,
+              !isEditorCommitInFlight,
+              currentFileURL != nil else { return }
+
+        commitEdits(exitAfter: false) { [weak self] success in
+            guard let self else { return }
+            if success {
+                if !self.hasUnsavedEditorChanges {
+                    self.showAutoSaveFeedback(.saved)
+                }
+            } else {
+                self.showAutoSaveFeedback(.failed)
+            }
+        }
+    }
+
+    private func showAutoSaveFeedback(_ feedback: AutoSaveFeedback) {
+        autoSaveFeedbackResetWork?.cancel()
+        autoSaveFeedbackResetWork = nil
+        autoSaveFeedback = feedback
+        guard feedback != .interval else { return }
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.autoSaveFeedbackResetWork = nil
+            self.autoSaveFeedback = .interval
+        }
+        autoSaveFeedbackResetWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
+    }
+
+    private func resetAutoSaveFeedback() {
+        autoSaveFeedbackResetWork?.cancel()
+        autoSaveFeedbackResetWork = nil
+        autoSaveFeedback = .interval
+    }
+
+    private func updateWindowSubtitle() {
+        guard currentFileURL != nil else {
+            documentWindow.subtitle = hasUnsavedEditorChanges
+                ? NSLocalizedString("Edited", comment: "Window subtitle for unsaved changes")
+                : ""
+            return
+        }
+
+        switch autoSaveFeedback {
+        case .saved:
+            documentWindow.subtitle = NSLocalizedString(
+                "Auto-saved", comment: "Window subtitle after an automatic save")
+        case .failed:
+            documentWindow.subtitle = NSLocalizedString(
+                "Auto-save failed", comment: "Window subtitle after an automatic save failure")
+        case .interval:
+            documentWindow.subtitle = hasUnsavedEditorChanges
+                ? editedAutoSaveSubtitle()
+                : autoSaveIntervalSubtitle()
+        }
+    }
+
+    private func autoSaveIntervalSubtitle() -> String {
+        let minutes = AutoSaveSetting.currentMinutes
+        if minutes == 1 {
+            return NSLocalizedString(
+                "Autosaves every minute", comment: "Window subtitle for the autosave interval")
+        }
+        return String(
+            format: NSLocalizedString(
+                "Autosaves every %d minutes",
+                comment: "Window subtitle for the autosave interval"
+            ),
+            minutes
+        )
+    }
+
+    private func editedAutoSaveSubtitle() -> String {
+        let minutes = AutoSaveSetting.currentMinutes
+        if minutes == 1 {
+            return NSLocalizedString(
+                "Edited; autosaves every minute",
+                comment: "Window subtitle for unsaved edits and autosave"
+            )
+        }
+        return String(
+            format: NSLocalizedString(
+                "Edited; autosaves every %d minutes",
+                comment: "Window subtitle for unsaved edits and autosave"
+            ),
+            minutes
         )
     }
 
@@ -1564,8 +1713,15 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func finishEditorCommit(success: Bool) {
         isEditorCommitInFlight = false
         if success, hasUnsavedEditorChanges || pendingCommitShouldExit {
+            startAutoSaveTimerIfNeeded()
             performPendingEditorCommit()
             return
+        }
+
+        if hasUnsavedEditorChanges {
+            startAutoSaveTimerIfNeeded()
+        } else {
+            stopAutoSaveTimer()
         }
 
         pendingCommitShouldExit = false
@@ -2813,6 +2969,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let folderURL = folderURL.standardizedFileURL
         if currentFileURL == nil {
             documentWindow.title = folderURL.lastPathComponent
+            updateWindowSubtitle()
         }
         (documentWindow.contentViewController as? MainSplitViewController)?
             .openFolder(folderURL, selectedFileURL: currentFileURL)
@@ -2936,6 +3093,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func applyLoadedMarkdown(_ text: String, fileURL: URL) {
         guard currentFileURL?.standardizedFileURL == fileURL.standardizedFileURL else { return }
         currentMarkdown = text
+        resetAutoSaveFeedback()
+        updateWindowSubtitle()
         refreshOpenInLLMItem()
         updateEditToolbarItem()
         markdownDocument?.replaceContents(markdown: text, fileURL: fileURL)

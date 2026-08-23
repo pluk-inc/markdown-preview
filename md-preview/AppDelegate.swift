@@ -286,6 +286,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .forEach { $0.applyTextSizeSetting() }
     }
 
+    func applyAutoSaveIntervalSetting(_ minutes: Int) {
+        AutoSaveSetting.store(minutes: minutes)
+        NSDocumentController.shared.documents
+            .flatMap(\.windowControllers)
+            .compactMap { $0 as? DocumentWindowController }
+            .forEach { $0.applyAutoSaveIntervalSetting() }
+    }
+
     func installCommandLineToolsFromSettings() {
         installCommandLineTools(nil)
     }

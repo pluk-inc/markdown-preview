@@ -15,6 +15,11 @@
 "Large" = "大";
 "Content width" = "内容宽度";
 "Zooming a document window with ⌘+ and ⌘− changes this same size." = "使用 ⌘+ 和 ⌘− 缩放文稿窗口会更改同一大小设置。";
+"Editing" = "编辑";
+"Automatic saving" = "自动保存";
+"Save edited documents periodically." = "定期保存编辑中的文稿。";
+"Automatic saving runs while a document has unsaved edits." = "文稿有未保存的编辑时，自动保存会运行。";
+"%d minutes" = "%d 分钟";
 "Hand-off" = "打开方式";
 "Open documents in" = "打开文稿时使用";
 "AI apps" = "AI App";
@@ -169,6 +174,12 @@
 
 /* Document state and save dialogs */
 "Edited" = "已编辑";
+"Autosaves every minute" = "每分钟自动保存";
+"Autosaves every %d minutes" = "每 %d 分钟自动保存";
+"Edited; autosaves every minute" = "已编辑；每分钟自动保存";
+"Edited; autosaves every %d minutes" = "已编辑；每 %d 分钟自动保存";
+"Auto-saved" = "已自动保存";
+"Auto-save failed" = "自动保存失败";
 "Do you want to save your changes?" = "要存储您的更改吗？";
 "this document" = "此文稿";
 "Your changes to %@ will be lost if you don’t save them." = "如果不存储，对 %@ 所做的更改将丢失。";
