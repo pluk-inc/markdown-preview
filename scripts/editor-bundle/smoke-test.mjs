@@ -139,6 +139,26 @@ check("repeated Shift-Tab returns a deeply indented list item to its original de
   indentationEditor.getMarkdown() === "- Parent\n- Alpha\n- Beta")
 indentationEditor.destroy()
 
+const bracketCases = [
+  ["paragraph", "Hello", 5, "(", ")", "Hello()", "Hello(x)"],
+  ["ATX heading", "# Heading", 9, "[", "]", "# Heading[]", "# Heading[x]"],
+  ["Setext heading", "Heading\n=======", 7, "{", "}", "Heading{}\n=======", "Heading{x}\n======="],
+  ["fenced code block", "```js\ncall\n```", 10, "(", ")", "```js\ncall()\n```", "```js\ncall(x)\n```"],
+]
+for (const [label, source, cursorPos, openBracket, closeBracket, expectedText, expectedAtCursor] of bracketCases) {
+  const bracketHost = dom.window.document.createElement("div")
+  dom.window.document.body.appendChild(bracketHost)
+  const bracketEditor = dom.window.MDEditor.create(bracketHost, source, {})
+  bracketEditor.select(cursorPos)
+  bracketEditor.insert(openBracket)
+  check(`typing ${openBracket} in ${label} auto-closes with ${closeBracket}`,
+    bracketEditor.getMarkdown() === expectedText)
+  bracketEditor.insert("x")
+  check(`cursor lands between ${openBracket}${closeBracket} in ${label}`,
+    bracketEditor.getMarkdown() === expectedAtCursor)
+  bracketEditor.destroy()
+}
+
 const inlineTabHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(inlineTabHost)
 const inlineTabEditor = dom.window.MDEditor.create(
