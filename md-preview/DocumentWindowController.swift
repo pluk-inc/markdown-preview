@@ -67,6 +67,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         case cancel
     }
 
+    private enum AutoSaveFeedback: Equatable {
+        case none
+        case failed
+    }
+
     private struct HistoryEntry {
         let url: URL
         /// Scroll offset when the user navigated away; restored on back/forward.
@@ -86,7 +91,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private weak var openInLLMItem: NSMenuToolbarItem?
     private weak var inspectorItem: NSToolbarItem?
     private weak var inspectorButton: NSButton?
-    private var isAlwaysOnTop = false
     private weak var alwaysOnTopButton: NSButton?
     private weak var editItem: NSToolbarItem?
     private weak var editButton: NSButton?
@@ -96,19 +100,30 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// Last known on-disk source, retained while preview displays a draft.
     private var editorBaselineMarkdown: String?
     private var isEditorCommitInFlight = false
+    private var pendingEditorCommitRequested = false
     private var pendingCommitShouldExit = false
     private var pendingCommitCompletions: [(Bool) -> Void] = []
     /// When sidebar navigation starts from edit mode, the newly loaded file
     /// should return to edit mode instead of dropping the user into preview.
     private var pendingEditModeURL: URL?
+    private var autoSaveTimer: Timer?
+    private var autoSaveTimerID: UUID?
+    private var isPerformingAutomaticSave = false
+    private var autoSaveFeedbackResetWork: DispatchWorkItem?
+    private var autoSaveFeedback = AutoSaveFeedback.none {
+        didSet { updateWindowSubtitle() }
+    }
     /// Drives the native titlebar subtitle while the editor contains changes
     /// that have not yet been written successfully.
     private var hasUnsavedEditorChanges = false {
         didSet {
             guard oldValue != hasUnsavedEditorChanges else { return }
-            documentWindow.subtitle = hasUnsavedEditorChanges
-                ? NSLocalizedString("Edited", comment: "Window subtitle for unsaved changes")
-                : ""
+            if hasUnsavedEditorChanges {
+                startAutoSaveTimerIfNeeded()
+            } else if !isEditorCommitInFlight {
+                stopAutoSaveTimer()
+            }
+            updateWindowSubtitle()
         }
     }
     private weak var editAccessory: NSTitlebarAccessoryViewController?
@@ -182,6 +197,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // window that has not stated its full-screen capability is the first
         // thing AppKit stops offering Enter Full Screen to.
         documentWindow.collectionBehavior.insert(.fullScreenPrimary)
+        applyAlwaysOnTopLevel(isFullScreen: false)
         documentWindow.delegate = self
         documentWindow.tabbingIdentifier = "MarkdownDocumentWindow"
         documentWindow.tabbingMode = Self.nextWindowDeclinesTabbing ? .disallowed : .automatic
@@ -222,7 +238,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// makeWindowControllers, before showWindows), so the window is already
     /// visible and placement never happens on its own. Join the frontmost
     /// document window's tab group explicitly on first show instead — but
-    /// only when the open was an explicit tab request, or the system
+    /// only when the open was an explicit tab request, when this app's own
+    /// "Open documents in tabs" preference is on, or when the system
     /// "Prefer tabs when opening documents" setting asks for it. Plain
     /// opens (Finder, ⌘O, recents) otherwise get their own window.
     private func attachToExistingTabGroupIfNeeded() {
@@ -236,18 +253,20 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                           && $0.tabbingIdentifier == documentWindow.tabbingIdentifier
                   }) else { return }
 
-        let joins: Bool
-        if joinsTabGroupOnFirstShow {
-            joins = true
-        } else {
-            switch NSWindow.userTabbingPreference {
-            case .always: joins = true
-            case .inFullScreen: joins = host.styleMask.contains(.fullScreen)
-            case .manual: joins = false
-            @unknown default: joins = false
-            }
+        let systemPreference: TabOpeningPolicy.SystemPreference
+        switch NSWindow.userTabbingPreference {
+        case .always: systemPreference = .always
+        case .inFullScreen: systemPreference = .inFullScreen
+        case .manual: systemPreference = .manual
+        @unknown default: systemPreference = .manual
         }
-        guard joins else { return }
+
+        guard TabOpeningPolicy.joinsExistingTabGroup(
+            isExplicitTabRequest: joinsTabGroupOnFirstShow,
+            opensDocumentsInTabs: TabOpeningPolicy.isEnabled,
+            systemPreference: systemPreference,
+            hostIsFullScreen: host.styleMask.contains(.fullScreen)
+        ) else { return }
         host.addTabbedWindow(documentWindow, ordered: .above)
     }
 
@@ -264,14 +283,17 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     func windowWillClose(_ notification: Notification) {
         fileWatcher?.cancel()
         fileWatcher = nil
+        stopAutoSaveTimer()
+        autoSaveFeedbackResetWork?.cancel()
+        autoSaveFeedbackResetWork = nil
     }
 
     func windowWillEnterFullScreen(_ notification: Notification) {
-        reapplyAlwaysOnTopLevel(isFullScreen: true)
+        applyAlwaysOnTopLevel(isFullScreen: true)
     }
 
     func windowDidExitFullScreen(_ notification: Notification) {
-        reapplyAlwaysOnTopLevel(isFullScreen: false)
+        applyAlwaysOnTopLevel(isFullScreen: false)
     }
 
     func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
@@ -282,8 +304,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         tableUndoManager.removeAllActions()
         currentFileURL = fileURL
         currentMarkdown = markdown
+        resetAutoSaveFeedback()
+        if fileURL == nil {
+            stopAutoSaveTimer()
+        }
         documentWindow.title = fileURL?.lastPathComponent
             ?? NSLocalizedString("Untitled", comment: "Window title when no document is open")
+        updateWindowSubtitle()
         attachToExistingTabGroupIfNeeded()
         documentWindow.makeKeyAndOrderFront(nil)
         // Tab placement is settled once the window is shown; a window opened
@@ -348,6 +375,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         pendingEditModeURL = preservingEditMode ? url.standardizedFileURL : nil
         markdownDocument?.replaceFileURL(url)
         documentWindow.title = url.lastPathComponent
+        resetAutoSaveFeedback()
+        updateWindowSubtitle()
         if isFileSwitch {
             split?.clearContent()
         }
@@ -444,6 +473,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         currentFileURL = newURL
         markdownDocument?.replaceFileURL(newURL)
         documentWindow.title = newURL.lastPathComponent
+        updateWindowSubtitle()
         NSDocumentController.shared.noteNewRecentDocumentURL(newURL)
         refreshOpenWithItem()
         refreshOpenActionsItem()
@@ -743,43 +773,31 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         syncSidebarMenuState()
     }
 
+    /// The toolbar button and the menu item both drive the one app-wide
+    /// preference, so the toggle goes through the app delegate rather than
+    /// changing this window: every open window follows, not just this one.
     @objc func toggleAlwaysOnTop(_ sender: Any?) {
-        setAlwaysOnTop(!isAlwaysOnTop)
+        (NSApp.delegate as? AppDelegate)?.applyAlwaysOnTopSetting(!isAlwaysOnTop)
     }
 
-    private func setAlwaysOnTop(_ pinned: Bool) {
-        let windows = AlwaysOnTopPolicy.affectedWindows(toggling: documentWindow,
-                                                        tabGroup: documentWindow.tabbedWindows)
-        for window in windows {
-            // Read each window's live full-screen state rather than assuming the
-            // reader pinned from a normal window: pinning while already in full
-            // screen must light the toggle without dropping out of full screen.
-            window.level = NSWindow.Level(
-                rawValue: AlwaysOnTopPolicy.windowLevel(
-                    isPinned: pinned,
-                    isFullScreen: window.styleMask.contains(.fullScreen)
-                )
-            )
-            (window.windowController as? DocumentWindowController)?.recordAlwaysOnTop(pinned)
-        }
+    /// Takes the current setting: called on every open window when it changes,
+    /// and once on a window being created so it opens already floating.
+    func applyAlwaysOnTopSetting() {
+        applyAlwaysOnTopLevel(isFullScreen: documentWindow.styleMask.contains(.fullScreen))
+        alwaysOnTopButton?.state = isAlwaysOnTop ? .on : .off
     }
 
-    /// Reapplies the level for a full-screen transition. `isAlwaysOnTop` is the
-    /// reader's intent and is deliberately left untouched, so the toolbar toggle
-    /// stays lit across the transition and the window floats again on the way out.
-    private func reapplyAlwaysOnTopLevel(isFullScreen: Bool) {
+    /// The pin is intent, not the level itself: the level is recomputed on both
+    /// full-screen transitions, so the toolbar toggle stays lit across them and
+    /// the window floats again on the way out.
+    private func applyAlwaysOnTopLevel(isFullScreen: Bool) {
         documentWindow.level = NSWindow.Level(
             rawValue: AlwaysOnTopPolicy.windowLevel(isPinned: isAlwaysOnTop,
                                                     isFullScreen: isFullScreen)
         )
     }
 
-    /// Stores the pinned state and refreshes the toolbar toggle. Applied to
-    /// every window in the tab group so each tab agrees with the group's level.
-    private func recordAlwaysOnTop(_ pinned: Bool) {
-        isAlwaysOnTop = pinned
-        alwaysOnTopButton?.state = pinned ? .on : .off
-    }
+    private var isAlwaysOnTop: Bool { AlwaysOnTopPolicy.isEnabled }
 
     /// The pin icon doubles as the state indicator. An `NSMenuItem` draws its
     /// image and its check mark in the same leading slot, so beside an icon the
@@ -847,7 +865,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let alwaysOnTop = NSLocalizedString("Always on Top", comment: "Always on Top toolbar item label")
         item.label = alwaysOnTop
         item.paletteLabel = alwaysOnTop
-        item.toolTip = NSLocalizedString("Keep this window in front of other apps",
+        item.toolTip = NSLocalizedString("Keep Markdown Preview windows in front of other apps",
                                          comment: "Always on Top toolbar item tooltip")
 
         let button = NSButton(image: alwaysOnTopImage(),
@@ -973,6 +991,86 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         DispatchQueue.main.asyncAfter(
             deadline: .now() + Self.copyFeedbackDuration, execute: work
         )
+    }
+
+    // MARK: - Autosave
+
+    func applyAutoSaveIntervalSetting() {
+        guard hasUnsavedEditorChanges else { return }
+        stopAutoSaveTimer()
+        startAutoSaveTimerIfNeeded()
+    }
+
+    private func startAutoSaveTimerIfNeeded() {
+        guard autoSaveTimer == nil,
+              currentFileURL != nil,
+              hasUnsavedEditorChanges,
+              let interval = AutoSaveSetting.interval else { return }
+        let timerID = UUID()
+        autoSaveTimerID = timerID
+        autoSaveTimer = Timer.scheduledTimer(
+            withTimeInterval: interval,
+            repeats: false
+        ) { [weak self, timerID] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.autoSaveTimerID == timerID else { return }
+                self.autoSaveTimer = nil
+                self.autoSaveTimerID = nil
+                self.performAutomaticSave()
+            }
+        }
+    }
+
+    private func stopAutoSaveTimer() {
+        autoSaveTimer?.invalidate()
+        autoSaveTimer = nil
+        autoSaveTimerID = nil
+    }
+
+    private func performAutomaticSave() {
+        guard hasUnsavedEditorChanges,
+              !isEditorCommitInFlight,
+              currentFileURL != nil else { return }
+
+        isPerformingAutomaticSave = true
+        commitEdits(exitAfter: false) { [weak self] success in
+            guard let self else { return }
+            self.isPerformingAutomaticSave = false
+            guard !success else { return }
+            self.showAutoSaveFailure()
+        }
+    }
+
+    private func showAutoSaveFailure() {
+        autoSaveFeedbackResetWork?.cancel()
+        autoSaveFeedbackResetWork = nil
+        autoSaveFeedback = .failed
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.autoSaveFeedbackResetWork = nil
+            self.autoSaveFeedback = .none
+        }
+        autoSaveFeedbackResetWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
+    }
+
+    private func resetAutoSaveFeedback() {
+        autoSaveFeedbackResetWork?.cancel()
+        autoSaveFeedbackResetWork = nil
+        autoSaveFeedback = .none
+    }
+
+    private func updateWindowSubtitle() {
+        switch autoSaveFeedback {
+        case .failed:
+            documentWindow.subtitle = NSLocalizedString(
+                "Auto-save failed", comment: "Window subtitle after an automatic save failure")
+        case .none:
+            documentWindow.subtitle = hasUnsavedEditorChanges
+                ? NSLocalizedString("Edited", comment: "Window subtitle for unsaved changes")
+                : ""
+        }
     }
 
     private func copyIdleImage() -> NSImage? {
@@ -1263,6 +1361,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         editor.contentDidChange = { [weak self] in
             self?.editorChangeRevision += 1
             self?.hasUnsavedEditorChanges = true
+            self?.stopAutoSaveTimer()
+            self?.startAutoSaveTimerIfNeeded()
         }
         if editorBaselineMarkdown == nil {
             editorBaselineMarkdown = currentMarkdown
@@ -1413,7 +1513,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if let completion {
             pendingCommitCompletions.append(completion)
         }
-        guard !isEditorCommitInFlight else { return }
+        guard !isEditorCommitInFlight else {
+            pendingEditorCommitRequested = true
+            return
+        }
         performPendingEditorCommit()
     }
 
@@ -1563,11 +1666,27 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func finishEditorCommit(success: Bool) {
         isEditorCommitInFlight = false
-        if success, hasUnsavedEditorChanges || pendingCommitShouldExit {
+        if pendingEditorCommitRequested {
+            pendingEditorCommitRequested = false
+            isPerformingAutomaticSave = false
+            performPendingEditorCommit()
+            return
+        }
+        if success,
+           pendingCommitShouldExit
+            || (hasUnsavedEditorChanges && !isPerformingAutomaticSave) {
+            startAutoSaveTimerIfNeeded()
             performPendingEditorCommit()
             return
         }
 
+        if hasUnsavedEditorChanges {
+            startAutoSaveTimerIfNeeded()
+        } else {
+            stopAutoSaveTimer()
+        }
+
+        pendingEditorCommitRequested = false
         pendingCommitShouldExit = false
         let completions = pendingCommitCompletions
         pendingCommitCompletions.removeAll()
@@ -1625,6 +1744,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         guard let url = currentFileURL else {
             completion(.cancelled)
             return
+        }
+        if isPerformingAutomaticSave {
+            guard case .unchanged = diskState else {
+                completion(.cancelled)
+                return
+            }
         }
         switch diskState {
         case .unchanged:
@@ -1914,6 +2039,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     ) {
         if write(text, to: url) {
             completion(.saved)
+            return
+        }
+        guard !isPerformingAutomaticSave else {
+            completion(.cancelled)
             return
         }
         // Sandbox denied the write — the file came in through the read-only
@@ -2813,6 +2942,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let folderURL = folderURL.standardizedFileURL
         if currentFileURL == nil {
             documentWindow.title = folderURL.lastPathComponent
+            updateWindowSubtitle()
         }
         (documentWindow.contentViewController as? MainSplitViewController)?
             .openFolder(folderURL, selectedFileURL: currentFileURL)
@@ -2936,6 +3066,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private func applyLoadedMarkdown(_ text: String, fileURL: URL) {
         guard currentFileURL?.standardizedFileURL == fileURL.standardizedFileURL else { return }
         currentMarkdown = text
+        resetAutoSaveFeedback()
+        updateWindowSubtitle()
         refreshOpenInLLMItem()
         updateEditToolbarItem()
         markdownDocument?.replaceContents(markdown: text, fileURL: fileURL)

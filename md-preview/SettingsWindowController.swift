@@ -119,9 +119,19 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     }
 
     func show() {
+        applyWindowLevel()
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Re-read on every show, and again whenever Always on Top changes while
+    /// this window is open, so Settings is above the preview windows in both
+    /// directions — rising with the pin and dropping back with it.
+    func applyWindowLevel() {
+        window?.level = NSWindow.Level(
+            rawValue: AlwaysOnTopPolicy.settingsWindowLevel(isPinned: AlwaysOnTopPolicy.isEnabled)
+        )
     }
 
     func show(pane: SettingsPane) {

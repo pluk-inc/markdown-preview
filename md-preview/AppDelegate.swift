@@ -159,17 +159,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             pendingOpenURLCount += 1
             NSDocumentController.shared.openDocument(withContentsOf: url,
-                                                     display: true) { [weak self] _, _, error in
+                                                     display: true) { [weak self] document, _, error in
                 if let error {
                     NSAlert(error: error).runModal()
                 }
                 guard let self else { return }
+                self.showWindowIfNeeded(for: document)
                 self.pendingOpenURLCount -= 1
                 if error != nil, self.pendingOpenURLCount == 0 {
                     self.scheduleDocumentPrompt(requiresNoDocuments: true)
                 }
             }
         }
+    }
+
+    /// `openDocument(withContentsOf:display:)` returns an existing document
+    /// unchanged. If its window was closed earlier (while the app kept
+    /// running), the document has no window controllers and `display: true`
+    /// does not create a window for it, so the file appears not to open.
+    /// Make and show a window in that case.
+    private func showWindowIfNeeded(for document: NSDocument?) {
+        guard let document, document.windowControllers.isEmpty else { return }
+        document.makeWindowControllers()
+        document.showWindows()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -275,15 +287,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         reloadDocumentPreviewsForSettingChange()
     }
 
+    /// Applies a font chosen in Settings. Open documents re-render rather than
+    /// waiting to be reopened; Quick Look picks the value up on its next
+    /// preview, since the setting lives in the app group.
+    func applyDocumentFontSetting(_ setting: DocumentFontSetting) {
+        guard setting != DocumentFontSetting.current else { return }
+        DocumentFontSetting.current = setting
+        reloadDocumentPreviewsForSettingChange()
+    }
+
     /// Pushes a text size chosen in Settings into every open document. The
     /// value is the same stored page zoom the windows already read, so this
     /// only asks them to pick it up now instead of at next launch.
     func applyTextSizeSetting(_ setting: TextSizeSetting) {
         TextSizeSetting.store(setting)
+        documentWindowControllers.forEach { $0.applyTextSizeSetting() }
+    }
+
+    private var documentWindowControllers: [DocumentWindowController] {
         NSDocumentController.shared.documents
             .flatMap(\.windowControllers)
             .compactMap { $0 as? DocumentWindowController }
-            .forEach { $0.applyTextSizeSetting() }
+    }
+
+    /// Applies the app-wide Always on Top preference. Every open preview window
+    /// takes the new level, and the Settings toggle, toolbar buttons and menu
+    /// item are all driven from the one stored value, so whichever of them the
+    /// reader used, the rest agree.
+    func applyAlwaysOnTopSetting(_ isEnabled: Bool) {
+        guard isEnabled != AlwaysOnTopPolicy.isEnabled else { return }
+        AlwaysOnTopPolicy.isEnabled = isEnabled
+        documentWindowControllers.forEach { $0.applyAlwaysOnTopSetting() }
+        settingsWindowController?.applyWindowLevel()
+        SettingsModel.shared.refreshFromExternalSources()
+    }
+
+    func applyAutoSaveIntervalSetting(_ minutes: Int) {
+        AutoSaveSetting.store(minutes: minutes)
+        NSDocumentController.shared.documents
+            .flatMap(\.windowControllers)
+            .compactMap { $0 as? DocumentWindowController }
+            .forEach { $0.applyAutoSaveIntervalSetting() }
     }
 
     func installCommandLineToolsFromSettings() {
@@ -293,10 +337,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Re-reads the persisted default so every open document's Open button
     /// shows the app that was just picked in Settings.
     func refreshOpenTargetsInOpenDocuments() {
-        NSDocumentController.shared.documents
-            .flatMap(\.windowControllers)
-            .compactMap { $0 as? DocumentWindowController }
-            .forEach { $0.refreshOpenTargets() }
+        documentWindowControllers.forEach { $0.refreshOpenTargets() }
     }
 
     @objc private func installCommandLineTools(_ sender: Any?) {

@@ -37,10 +37,30 @@ final class SettingsModel {
         }
     }
 
+    var documentFont: DocumentFontSetting {
+        didSet {
+            guard !isRestoringExternalValues, documentFont != oldValue else { return }
+            appDelegate?.applyDocumentFontSetting(documentFont)
+        }
+    }
+
     var contentWidth: ContentWidthSetting {
         didSet {
             guard !isRestoringExternalValues, contentWidth != oldValue else { return }
             appDelegate?.applyContentWidthSetting(contentWidth)
+        }
+    }
+
+    var autoSaveIntervalMinutes: Int {
+        didSet {
+            let normalized = AutoSaveSetting.clampedMinutes(autoSaveIntervalMinutes)
+            guard normalized == autoSaveIntervalMinutes else {
+                autoSaveIntervalMinutes = normalized
+                return
+            }
+            guard !isRestoringExternalValues,
+                  autoSaveIntervalMinutes != oldValue else { return }
+            appDelegate?.applyAutoSaveIntervalSetting(autoSaveIntervalMinutes)
         }
     }
 
@@ -50,6 +70,22 @@ final class SettingsModel {
         didSet {
             guard !isRestoringExternalValues, textSize != oldValue, let textSize else { return }
             appDelegate?.applyTextSizeSetting(textSize)
+        }
+    }
+
+    var isAlwaysOnTop: Bool {
+        didSet {
+            guard !isRestoringExternalValues, isAlwaysOnTop != oldValue else { return }
+            appDelegate?.applyAlwaysOnTopSetting(isAlwaysOnTop)
+        }
+    }
+
+    /// A plain stored default with nothing to apply: it is read the next time
+    /// a document opens, so unlike the settings above it has no fan-out.
+    var opensDocumentsInTabs: Bool {
+        didSet {
+            guard !isRestoringExternalValues, opensDocumentsInTabs != oldValue else { return }
+            TabOpeningPolicy.isEnabled = opensDocumentsInTabs
         }
     }
 
@@ -108,7 +144,11 @@ final class SettingsModel {
         let updater = (NSApp.delegate as? AppDelegate)?.updaterController.updater
         appearance = AppearanceMode.current
         contentWidth = ContentWidthSetting.current
+        autoSaveIntervalMinutes = AutoSaveSetting.currentMinutes
         textSize = TextSizeSetting.current
+        documentFont = DocumentFontSetting.current
+        isAlwaysOnTop = AlwaysOnTopPolicy.isEnabled
+        opensDocumentsInTabs = TabOpeningPolicy.isEnabled
         sendsCrashReports = CrashReporter.isEnabled
         checksForUpdatesAutomatically = updater?.automaticallyChecksForUpdates ?? true
         downloadsUpdatesAutomatically = updater?.automaticallyDownloadsUpdates ?? false
@@ -146,15 +186,20 @@ final class SettingsModel {
         isRestoringExternalValues = wasRestoringExternalValues
     }
 
-    /// Re-reads values that menus, document zoom, Sparkle, or the crash reporter
-    /// can change while the shared Settings model remains alive.
+    /// Re-reads values that menus, document zoom, a window's own toolbar,
+    /// Sparkle, or the crash reporter can change while the shared Settings
+    /// model remains alive.
     func refreshFromExternalSources() {
         isRestoringExternalValues = true
         defer { isRestoringExternalValues = false }
 
         appearance = AppearanceMode.current
         contentWidth = ContentWidthSetting.current
+        autoSaveIntervalMinutes = AutoSaveSetting.currentMinutes
         textSize = TextSizeSetting.current
+        documentFont = DocumentFontSetting.current
+        isAlwaysOnTop = AlwaysOnTopPolicy.isEnabled
+        opensDocumentsInTabs = TabOpeningPolicy.isEnabled
         sendsCrashReports = CrashReporter.isEnabled
         if let updater { refreshUpdateSettings(from: updater) }
     }
@@ -256,6 +301,12 @@ struct GeneralSettingsView: View {
             }
 
             Section {
+                Picker(L("Font"), selection: $model.documentFont) {
+                    ForEach(DocumentFontSetting.allCases, id: \.self) { setting in
+                        Text(setting.title).tag(setting)
+                    }
+                }
+
                 LabeledContent {
                     TextSizePicker(selection: $model.textSize)
                 } label: {
@@ -269,9 +320,46 @@ struct GeneralSettingsView: View {
                     }
                 }
             } header: {
-                Text(L("Layout"))
+                Text(L("Reading"))
             } footer: {
-                Text(L("Zooming a document window with ⌘+ and ⌘− changes this same size."))
+                Text(L("The font also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes the text size."))
+            }
+
+            Section {
+                Toggle(isOn: $model.isAlwaysOnTop) {
+                    Text(L("Always on Top"))
+                    Text(L("Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out."))
+                }
+
+                Toggle(isOn: $model.opensDocumentsInTabs) {
+                    Text(L("Open documents in tabs"))
+                    Text(L("A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window."))
+                }
+            } header: {
+                Text(L("Windows"))
+            }
+
+            Section {
+                LabeledContent {
+                    Picker("", selection: $model.autoSaveIntervalMinutes) {
+                        Text(L("Never")).tag(AutoSaveSetting.disabledMinutes)
+                        Text(L("30 seconds")).tag(AutoSaveSetting.thirtySeconds)
+                        Text(L("1 minute")).tag(1)
+                        ForEach([5, 10, 15, 30, 60], id: \.self) { minutes in
+                            Text(String(format: L("%d minutes"), minutes))
+                                .tag(minutes)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                } label: {
+                    Text(L("Automatic saving"))
+                    Text(L("Save edited documents periodically."))
+                }
+            } header: {
+                Text(L("Editing"))
+            } footer: {
+                Text(L("Automatic saving runs while a document has unsaved edits."))
             }
 
             Section {

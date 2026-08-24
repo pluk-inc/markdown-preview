@@ -15,6 +15,13 @@
 "Large" = "Large";
 "Content width" = "Content width";
 "Zooming a document window with ⌘+ and ⌘− changes this same size." = "Zooming a document window with ⌘+ and ⌘− changes this same size.";
+"Editing" = "Editing";
+"Automatic saving" = "Automatic saving";
+"Save edited documents periodically." = "Save edited documents periodically.";
+"Automatic saving runs while a document has unsaved edits." = "Automatic saving runs while a document has unsaved edits.";
+"30 seconds" = "30 seconds";
+"1 minute" = "1 minute";
+"%d minutes" = "%d minutes";
 "Hand-off" = "Hand-off";
 "Open documents in" = "Open documents in";
 "AI apps" = "AI apps";
@@ -106,7 +113,7 @@
 "Inspector" = "Inspector";
 "Get Info" = "Get Info";
 "Always on Top" = "Always on Top";
-"Keep this window in front of other apps" = "Keep this window in front of other apps";
+"Keep Markdown Preview windows in front of other apps" = "Keep Markdown Preview windows in front of other apps";
 "Show the inspector" = "Show the inspector";
 "Share" = "Share";
 "Share document" = "Share document";
@@ -170,6 +177,7 @@
 
 /* Document state and save dialogs */
 "Edited" = "Edited";
+"Auto-save failed" = "Auto-save failed";
 "Do you want to save your changes?" = "Do you want to save your changes?";
 "this document" = "this document";
 "Your changes to %@ will be lost if you don’t save them." = "Your changes to %@ will be lost if you don’t save them.";
@@ -241,3 +249,18 @@
 "Terminal automation failed." = "Terminal automation failed.";
 "Failed to write CLI installer script: %@" = "Failed to write CLI installer script: %@";
 "The bundled Markdown Preview CLI could not be found." = "The bundled Markdown Preview CLI could not be found.";
+
+/* Settings — Reading */
+"Reading" = "Reading";
+"Font" = "Font";
+"System" = "System";
+"Serif" = "Serif";
+"Rounded" = "Rounded";
+"Monospace" = "Monospace";
+"The font also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes the text size." = "The font also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes the text size.";
+
+/* Settings — Windows */
+"Windows" = "Windows";
+"Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out.";
+"Open documents in tabs" = "Open documents in tabs";
+"A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window.";
