@@ -32,6 +32,8 @@
 "Downloaded updates install the next time you quit Markdown Preview." = "已下载的更新将在下次退出 Markdown Preview 时安装。";
 "Send anonymous crash reports" = "发送匿名崩溃报告";
 "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "崩溃报告包含堆栈跟踪、系统版本和 App 版本等诊断信息，可能包含技术文件路径；Markdown Preview 不会主动附加文稿内容或个人信息。";
+"Share anonymous usage analytics" = "共享匿名使用情况分析";
+"When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. This is used only to count daily and monthly active installations. It does not send document contents, file names or paths, actions, screens, personal information, or advertising identifiers." = "启用后，Markdown Preview 在 App 进入活跃状态时每天最多发送一个事件，并关联一个随机安装标识符。此信息仅用于统计每日和每月活跃安装数，不会发送文稿内容、文件名或路径、操作、界面、个人信息或广告标识符。";
 
 /* View menu */
 "Appearance" = "外观";

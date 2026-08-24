@@ -32,6 +32,8 @@
 "Downloaded updates install the next time you quit Markdown Preview." = "Downloaded updates install the next time you quit Markdown Preview.";
 "Send anonymous crash reports" = "Send anonymous crash reports";
 "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information.";
+"Share anonymous usage analytics" = "Share anonymous usage analytics";
+"When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. This is used only to count daily and monthly active installations. It does not send document contents, file names or paths, actions, screens, personal information, or advertising identifiers." = "When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. This is used only to count daily and monthly active installations. It does not send document contents, file names or paths, actions, screens, personal information, or advertising identifiers.";
 
 /* View menu */
 "Appearance" = "Appearance";

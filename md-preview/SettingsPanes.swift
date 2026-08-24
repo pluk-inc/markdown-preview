@@ -8,8 +8,9 @@
 //  State goes through `SettingsModel` rather than `@AppStorage` because these
 //  preferences aren't plain defaults: appearance lives in the app group shared
 //  with the Quick Look extension, appearance and content width clear their key
-//  at the default value, and crash reporting starts and stops the Sentry SDK.
-//  Routing through the existing types keeps one source of truth.
+//  at the default value, crash reporting starts and stops the Sentry SDK, and
+//  anonymous usage analytics has its own capture lifecycle. Routing through
+//  the existing types keeps one source of truth.
 //
 
 import Sparkle
@@ -83,6 +84,14 @@ final class SettingsModel {
         }
     }
 
+    var sharesAnonymousUsageAnalytics: Bool {
+        didSet {
+            guard !isRestoringExternalValues,
+                  sharesAnonymousUsageAnalytics != oldValue else { return }
+            UsageAnalyticsReporter.isEnabled = sharesAnonymousUsageAnalytics
+        }
+    }
+
     var checksForUpdatesAutomatically: Bool {
         didSet {
             guard !isRestoringExternalValues,
@@ -136,6 +145,7 @@ final class SettingsModel {
         isAlwaysOnTop = AlwaysOnTopPolicy.isEnabled
         opensDocumentsInTabs = TabOpeningPolicy.isEnabled
         sendsCrashReports = CrashReporter.isEnabled
+        sharesAnonymousUsageAnalytics = UsageAnalyticsReporter.isEnabled
         checksForUpdatesAutomatically = updater?.automaticallyChecksForUpdates ?? true
         downloadsUpdatesAutomatically = updater?.automaticallyDownloadsUpdates ?? false
         lastUpdateCheckDate = updater?.lastUpdateCheckDate
@@ -173,8 +183,8 @@ final class SettingsModel {
     }
 
     /// Re-reads values that menus, document zoom, a window's own toolbar,
-    /// Sparkle, or the crash reporter can change while the shared Settings
-    /// model remains alive.
+    /// Sparkle, the crash reporter, or usage analytics can change while the
+    /// shared Settings model remains alive.
     func refreshFromExternalSources() {
         isRestoringExternalValues = true
         defer { isRestoringExternalValues = false }
@@ -186,6 +196,7 @@ final class SettingsModel {
         isAlwaysOnTop = AlwaysOnTopPolicy.isEnabled
         opensDocumentsInTabs = TabOpeningPolicy.isEnabled
         sendsCrashReports = CrashReporter.isEnabled
+        sharesAnonymousUsageAnalytics = UsageAnalyticsReporter.isEnabled
         if let updater { refreshUpdateSettings(from: updater) }
     }
 
@@ -471,6 +482,13 @@ struct PrivacySettingsView: View {
                 Toggle(L("Send anonymous crash reports"), isOn: $model.sendsCrashReports)
             } footer: {
                 Text(L("Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information."))
+            }
+
+            Section {
+                Toggle(L("Share anonymous usage analytics"),
+                       isOn: $model.sharesAnonymousUsageAnalytics)
+            } footer: {
+                Text(L("When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. This is used only to count daily and monthly active installations. It does not send document contents, file names or paths, actions, screens, personal information, or advertising identifiers."))
             }
         }
         .formStyle(.grouped)
