@@ -77,12 +77,14 @@ final class UsageAnalyticsReporterTests: XCTestCase {
 
         let properties = try XCTUnwrap(payload["properties"] as? [String: Any])
         XCTAssertEqual(Set(properties.keys), [
+            "$geoip_disable",
             "$process_person_profile",
             "app_version",
             "macos_major_version",
             "architecture",
             "locale_region"
         ])
+        XCTAssertEqual(properties["$geoip_disable"] as? Bool, true)
         XCTAssertEqual(properties["$process_person_profile"] as? Bool, false)
         XCTAssertEqual(properties["app_version"] as? String, "0.0.49")
         XCTAssertEqual(properties["macos_major_version"] as? Int, 26)

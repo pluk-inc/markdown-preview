@@ -89,6 +89,7 @@ enum UsageAnalyticsReporter {
             "event": eventName,
             "distinct_id": installationID,
             "properties": [
+                "$geoip_disable": true,
                 "$process_person_profile": false,
                 "app_version": appVersion,
                 "macos_major_version": macOSMajorVersion,
