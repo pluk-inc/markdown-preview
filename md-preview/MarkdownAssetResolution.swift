@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import Markdown
 
 /// Pure-Foundation path logic for the `md-asset` custom scheme, shared by
 /// the scheme handler (asset serving) and the web view's navigation
@@ -116,6 +117,10 @@ nonisolated enum MarkdownAssetResolution {
     static func replacingImagePath(in markdown: String,
                                    from oldPath: String,
                                    to newPath: String) -> String? {
+        var collector = MarkdownImageRangeCollector(source: markdown, matching: oldPath)
+        collector.visit(Document(parsing: markdown))
+        guard !collector.ranges.isEmpty else { return nil }
+
         let escapedPath = NSRegularExpression.escapedPattern(for: oldPath)
         let pattern = #"(!\[[^\r\n\]]*\]\(\s*<?)"# + "(" + escapedPath + ")"
             + #"(?=\s*(?:>|\)|["']))"#
@@ -124,7 +129,10 @@ nonisolated enum MarkdownAssetResolution {
         let matches = regex.matches(
             in: markdown,
             range: NSRange(location: 0, length: nsMarkdown.length)
-        )
+        ).filter { match in
+            let pathRange = match.range(at: 2)
+            return collector.ranges.contains { NSLocationInRange(pathRange.location, $0) }
+        }
         guard !matches.isEmpty else { return nil }
 
         var result = ""
@@ -167,5 +175,44 @@ nonisolated enum MarkdownAssetResolution {
         )
         try data.write(to: fileURL, options: .atomic)
         return fileURL
+    }
+}
+
+nonisolated private struct MarkdownImageRangeCollector: MarkupWalker {
+    let source: String
+    let matchingSource: String
+    private let lineStartOffsets: [Int]
+    private(set) var ranges: [NSRange] = []
+
+    init(source: String, matching matchingSource: String) {
+        self.source = source
+        self.matchingSource = matchingSource
+        var offsets = [0]
+        for (offset, byte) in source.utf8.enumerated() where byte == 0x0A {
+            offsets.append(offset + 1)
+        }
+        lineStartOffsets = offsets
+    }
+
+    mutating func visitImage(_ image: Image) {
+        guard image.source == matchingSource,
+              let sourceRange = image.range,
+              let lower = index(for: sourceRange.lowerBound),
+              let upper = index(for: sourceRange.upperBound),
+              lower <= upper else { return }
+        ranges.append(NSRange(lower..<upper, in: source))
+    }
+
+    private func index(for location: SourceLocation) -> String.Index? {
+        guard location.line > 0,
+              location.line <= lineStartOffsets.count,
+              location.column > 0 else { return nil }
+        let offset = lineStartOffsets[location.line - 1] + location.column - 1
+        guard let utf8Index = source.utf8.index(
+            source.utf8.startIndex,
+            offsetBy: offset,
+            limitedBy: source.utf8.endIndex
+        ) else { return nil }
+        return String.Index(utf8Index, within: source)
     }
 }

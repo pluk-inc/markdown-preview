@@ -308,4 +308,37 @@ final class MarkdownAssetResolutionTests: XCTestCase {
             "![one](notes/$draft-pictures/final.png)\n![two](<notes/$draft-pictures/final.png>)"
         )
     }
+
+    func testReplacingImagePathDoesNotChangeCodeExamples() {
+        let markdown = """
+        ![real](notes-pictures/1.png)
+
+        `![inline](notes-pictures/1.png)`
+
+        ```markdown
+        ![fenced](notes-pictures/1.png)
+        ```
+
+            ![indented](notes-pictures/1.png)
+        """
+
+        XCTAssertEqual(
+            MarkdownAssetResolution.replacingImagePath(
+                in: markdown,
+                from: "notes-pictures/1.png",
+                to: "notes-pictures/renamed.png"
+            ),
+            """
+            ![real](notes-pictures/renamed.png)
+
+            `![inline](notes-pictures/1.png)`
+
+            ```markdown
+            ![fenced](notes-pictures/1.png)
+            ```
+
+                ![indented](notes-pictures/1.png)
+            """
+        )
+    }
 }

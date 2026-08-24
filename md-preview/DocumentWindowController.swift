@@ -1174,10 +1174,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         accessory.view = container
         accessory.layoutAttribute = .bottom
         accessory.fullScreenMinHeight = 34
-        // macOS 26 replaced the titlebar separator with scroll edge
-        // effects; hard = the classic line under the bar.
+        // Let AppKit track the actual scroll edge. A hard effect stays painted
+        // over the editor's sibling WebView because WebKit owns the scroll.
         if #available(macOS 26.1, *) {
-            accessory.preferredScrollEdgeEffectStyle = .hard
+            accessory.preferredScrollEdgeEffectStyle = .automatic
         }
         documentWindow.addTitlebarAccessoryViewController(accessory)
         editAccessory = accessory
@@ -1259,7 +1259,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
         // Edit the complete source. Frontmatter is stripped only by the
         // read-only renderer; the editor must expose and preserve it.
-        let editor = split.enterEditMode(markdown: markdown)
+        let editor = split.enterEditMode(
+            markdown: markdown,
+            assetBaseURL: currentFileURL?.deletingLastPathComponent()
+        )
         editor.cancelRequested = { [weak self] in
             self?.previewPendingEdits()
         }
@@ -1269,6 +1272,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
         editor.pasteImageRequested = { [weak self] from, to in
             self?.pasteImage(at: from, replacing: to)
+        }
+        editor.imageClicked = { [weak self] url in
+            self?.renameImage(at: url)
         }
         if editorBaselineMarkdown == nil {
             editorBaselineMarkdown = currentMarkdown
@@ -1545,7 +1551,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             }
         }
         if !exitAfter {
-            editor?.load(markdown: markdown)
+            editor?.load(
+                markdown: markdown,
+                assetBaseURL: self.currentFileURL?.deletingLastPathComponent()
+            )
         }
         completeSuccessfulEditorCommit(exitAfter: exitAfter, rerender: true)
     }
@@ -1593,6 +1602,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         split.editorViewController?.contentDidChange = nil
         split.editorViewController?.cancelRequested = nil
         split.editorViewController?.pasteImageRequested = nil
+        split.editorViewController?.imageClicked = nil
         documentWindow.makeFirstResponder(nil)
         let overlayHidden: (() -> Void)? = hidesAccessoryAfterFade
             ? { [weak self] in self?.dismissEditChrome() }
@@ -2087,35 +2097,45 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func renameImage(at imageURL: URL) {
-        guard !isEditing,
-              let markdownURL = currentFileURL,
-              let markdown = currentMarkdown else { return }
+        guard let markdownURL = currentFileURL else { return }
         let picturesDirectory = MarkdownAssetResolution.picturesDirectory(
             forMarkdownFile: markdownURL
         ).standardizedFileURL
         guard imageURL.standardizedFileURL.deletingLastPathComponent() == picturesDirectory,
               FileManager.default.fileExists(atPath: imageURL.path) else { return }
 
-        let alert = NSAlert()
-        alert.messageText = NSLocalizedString("Rename Image", comment: "Image rename alert title")
-        alert.informativeText = NSLocalizedString(
-            "Choose a new name for this image.",
-            comment: "Image rename alert message"
-        )
-        let field = NSTextField(string: imageURL.deletingPathExtension().lastPathComponent)
-        field.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
-        alert.accessoryView = field
-        alert.addButton(withTitle: NSLocalizedString("Rename", comment: "Image rename button"))
-        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Alert button"))
-        alert.window.initialFirstResponder = field
-        alert.beginSheetModal(for: documentWindow) { [weak self] response in
-            guard let self, response == .alertFirstButtonReturn else { return }
-            self.applyImageRename(
-                imageURL,
-                newName: field.stringValue,
-                markdownURL: markdownURL,
-                markdown: markdown
+        let presentRename: (String) -> Void = { [weak self] markdown in
+            guard let self else { return }
+            let alert = NSAlert()
+            alert.messageText = NSLocalizedString("Rename Image", comment: "Image rename alert title")
+            alert.informativeText = NSLocalizedString(
+                "Choose a new name for this image.",
+                comment: "Image rename alert message"
             )
+            let field = NSTextField(string: imageURL.deletingPathExtension().lastPathComponent)
+            field.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
+            alert.accessoryView = field
+            alert.addButton(withTitle: NSLocalizedString("Rename", comment: "Image rename button"))
+            alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Alert button"))
+            alert.window.initialFirstResponder = field
+            alert.beginSheetModal(for: self.documentWindow) { [weak self] response in
+                guard let self, response == .alertFirstButtonReturn else { return }
+                self.applyImageRename(
+                    imageURL,
+                    newName: field.stringValue,
+                    markdownURL: markdownURL,
+                    markdown: markdown
+                )
+            }
+        }
+
+        if let editor = mainSplit?.editorViewController {
+            editor.fetchMarkdown { markdown in
+                guard let markdown else { return }
+                presentRename(markdown)
+            }
+        } else if let markdown = currentMarkdown {
+            presentRename(markdown)
         }
     }
 
@@ -2140,9 +2160,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let fileName = enteredExtension.isEmpty
             ? "\(trimmed).\(extensionName)"
             : trimmed
-        let destination = imageURL.deletingLastPathComponent()
+        let imageDirectory = imageURL.deletingLastPathComponent().standardizedFileURL
+        let destination = imageDirectory
             .appendingPathComponent(fileName, isDirectory: false)
         guard destination.standardizedFileURL != imageURL.standardizedFileURL,
+              destination.standardizedFileURL.deletingLastPathComponent() == imageDirectory,
               !FileManager.default.fileExists(atPath: destination.path),
               let oldPath = MarkdownAssetResolution.markdownPath(
                 for: imageURL,
@@ -2176,6 +2198,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             case .saved:
                 self.currentMarkdown = updated
                 self.markdownDocument?.replaceContents(markdown: updated, fileURL: markdownURL)
+                if let editor = self.mainSplit?.editorViewController {
+                    editor.replaceMarkdown(updated)
+                    self.editorDraftMarkdown = nil
+                    self.editorBaselineMarkdown = updated
+                    self.editorChangeRevision = 0
+                    self.hasUnsavedEditorChanges = false
+                }
                 self.renderCurrentDocument(text: updated, fileURL: markdownURL)
             case let .reloaded(externalMarkdown):
                 self.restoreRenamedImage(from: destination, to: imageURL)
@@ -2820,7 +2849,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         self.findBar = bar
         self.findBarAccessory = addBottomTitlebarAccessory(bar) { accessory in
             if #available(macOS 26.1, *) {
-                accessory.preferredScrollEdgeEffectStyle = .hard
+                accessory.preferredScrollEdgeEffectStyle = .automatic
             }
         }
     }
