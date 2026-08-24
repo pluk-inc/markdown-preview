@@ -201,6 +201,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         split.onEditTable = { [weak self] request in
             self?.applyTableEdit(request)
         }
+        split.onImageClick = { [weak self] url in
+            self?.renameImage(at: url)
+        }
         documentWindow.contentViewController = split
         documentWindow.setContentSize(NSSize(width: 1100, height: 720))
         documentWindow.center()
@@ -1264,6 +1267,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             self?.editorChangeRevision += 1
             self?.hasUnsavedEditorChanges = true
         }
+        editor.pasteImageRequested = { [weak self] from, to in
+            self?.pasteImage(at: from, replacing: to)
+        }
         if editorBaselineMarkdown == nil {
             editorBaselineMarkdown = currentMarkdown
             editorChangeRevision = 0
@@ -1586,6 +1592,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
         split.editorViewController?.contentDidChange = nil
         split.editorViewController?.cancelRequested = nil
+        split.editorViewController?.pasteImageRequested = nil
         documentWindow.makeFirstResponder(nil)
         let overlayHidden: (() -> Void)? = hidesAccessoryAfterFade
             ? { [weak self] in self?.dismissEditChrome() }
@@ -1954,6 +1961,242 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             } catch {
                 return false
             }
+        }
+    }
+
+    private func pasteImage(at from: Int, replacing to: Int) {
+        guard isEditing,
+              let markdownURL = currentFileURL,
+              let editor = mainSplit?.editorViewController else { return }
+        guard let data = clipboardPNGData() else {
+            presentImageError(
+                NSError(domain: "MarkdownPreview.ImagePaste", code: 1, userInfo: [
+                    NSLocalizedDescriptionKey: NSLocalizedString(
+                        "The clipboard does not contain an image.",
+                        comment: "Image paste error"
+                    )
+                ])
+            )
+            return
+        }
+
+        do {
+            try insertPastedImage(data,
+                                  forMarkdownFile: markdownURL,
+                                  editor: editor,
+                                  from: from,
+                                  to: to)
+        } catch {
+            presentImagePermissionPanel(data,
+                                        markdownURL: markdownURL,
+                                        editor: editor,
+                                        from: from,
+                                        to: to)
+        }
+    }
+
+    private func insertPastedImage(_ data: Data,
+                                   forMarkdownFile markdownURL: URL,
+                                   editor: EditorViewController,
+                                   from: Int,
+                                   to: Int) throws {
+        let imageURL = try MarkdownAssetResolution.savePastedImage(
+            data,
+            forMarkdownFile: markdownURL
+        )
+        guard let relativePath = MarkdownAssetResolution.markdownPath(
+            for: imageURL,
+            from: markdownURL
+        ) else {
+            try? FileManager.default.removeItem(at: imageURL)
+            throw NSError(domain: "MarkdownPreview.ImagePaste",
+                          code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: NSLocalizedString(
+                              "The pasted image could not be placed next to the Markdown file.",
+                              comment: "Image paste destination error"
+                          )])
+        }
+        let label = imageURL.deletingPathExtension().lastPathComponent
+        editor.insertMarkdown(
+            "![\(label)](\(relativePath))",
+            from: from,
+            to: to
+        )
+    }
+
+    private func presentImagePermissionPanel(_ data: Data,
+                                             markdownURL: URL,
+                                             editor: EditorViewController,
+                                             from: Int,
+                                             to: Int) {
+        let parentDirectory = markdownURL.deletingLastPathComponent().standardizedFileURL
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = parentDirectory
+        panel.message = NSLocalizedString(
+            "Choose the folder containing this Markdown file to save the pasted image.",
+            comment: "Image paste permission message"
+        )
+        panel.beginSheetModal(for: documentWindow) { [weak self] response in
+            guard let self, response == .OK, let chosen = panel.url else { return }
+            guard chosen.standardizedFileURL == parentDirectory else {
+                self.presentImageError(
+                    NSError(domain: "MarkdownPreview.ImagePaste",
+                            code: 3,
+                            userInfo: [NSLocalizedDescriptionKey: NSLocalizedString(
+                                "Choose the folder containing this Markdown file.",
+                                comment: "Image paste folder validation error"
+                            )])
+                )
+                return
+            }
+            do {
+                try self.insertPastedImage(data,
+                                           forMarkdownFile: markdownURL,
+                                           editor: editor,
+                                           from: from,
+                                           to: to)
+            } catch {
+                self.presentImageError(error)
+            }
+        }
+    }
+
+    private func clipboardPNGData() -> Data? {
+        let pasteboard = NSPasteboard.general
+        if let data = pasteboard.data(forType: .png) {
+            return data
+        }
+        if let tiff = pasteboard.data(forType: .tiff),
+           let bitmap = NSBitmapImageRep(data: tiff),
+           let png = bitmap.representation(using: .png, properties: [:]) {
+            return png
+        }
+        if let image = NSImage(pasteboard: pasteboard),
+           let tiff = image.tiffRepresentation,
+           let bitmap = NSBitmapImageRep(data: tiff) {
+            return bitmap.representation(using: .png, properties: [:])
+        }
+        return nil
+    }
+
+    private func presentImageError(_ error: Error) {
+        NSAlert(error: error).beginSheetModal(for: documentWindow)
+    }
+
+    private func renameImage(at imageURL: URL) {
+        guard !isEditing,
+              let markdownURL = currentFileURL,
+              let markdown = currentMarkdown else { return }
+        let picturesDirectory = MarkdownAssetResolution.picturesDirectory(
+            forMarkdownFile: markdownURL
+        ).standardizedFileURL
+        guard imageURL.standardizedFileURL.deletingLastPathComponent() == picturesDirectory,
+              FileManager.default.fileExists(atPath: imageURL.path) else { return }
+
+        let alert = NSAlert()
+        alert.messageText = NSLocalizedString("Rename Image", comment: "Image rename alert title")
+        alert.informativeText = NSLocalizedString(
+            "Choose a new name for this image.",
+            comment: "Image rename alert message"
+        )
+        let field = NSTextField(string: imageURL.deletingPathExtension().lastPathComponent)
+        field.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
+        alert.accessoryView = field
+        alert.addButton(withTitle: NSLocalizedString("Rename", comment: "Image rename button"))
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Alert button"))
+        alert.window.initialFirstResponder = field
+        alert.beginSheetModal(for: documentWindow) { [weak self] response in
+            guard let self, response == .alertFirstButtonReturn else { return }
+            self.applyImageRename(
+                imageURL,
+                newName: field.stringValue,
+                markdownURL: markdownURL,
+                markdown: markdown
+            )
+        }
+    }
+
+    private func applyImageRename(_ imageURL: URL,
+                                  newName: String,
+                                  markdownURL: URL,
+                                  markdown: String) {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              !trimmed.contains("/"),
+              !trimmed.contains("\\") else {
+            NSSound.beep()
+            return
+        }
+        let extensionName = imageURL.pathExtension
+        let enteredExtension = URL(fileURLWithPath: trimmed).pathExtension
+        guard enteredExtension.isEmpty
+                || enteredExtension.caseInsensitiveCompare(extensionName) == .orderedSame else {
+            NSSound.beep()
+            return
+        }
+        let fileName = enteredExtension.isEmpty
+            ? "\(trimmed).\(extensionName)"
+            : trimmed
+        let destination = imageURL.deletingLastPathComponent()
+            .appendingPathComponent(fileName, isDirectory: false)
+        guard destination.standardizedFileURL != imageURL.standardizedFileURL,
+              !FileManager.default.fileExists(atPath: destination.path),
+              let oldPath = MarkdownAssetResolution.markdownPath(
+                for: imageURL,
+                from: markdownURL
+              ),
+              let newPath = MarkdownAssetResolution.markdownPath(
+                for: destination,
+                from: markdownURL
+              ),
+              let updated = MarkdownAssetResolution.replacingImagePath(
+                in: markdown,
+                from: oldPath,
+                to: newPath
+              ),
+              updated != markdown else {
+            NSSound.beep()
+            return
+        }
+
+        do {
+            try FileManager.default.moveItem(at: imageURL, to: destination)
+        } catch {
+            presentImageError(error)
+            return
+        }
+
+        let diskState = diskFileState(for: currentFileURL, expectedMarkdown: markdown)
+        saveEditedMarkdown(updated, diskState: diskState) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .saved:
+                self.currentMarkdown = updated
+                self.markdownDocument?.replaceContents(markdown: updated, fileURL: markdownURL)
+                self.renderCurrentDocument(text: updated, fileURL: markdownURL)
+            case let .reloaded(externalMarkdown):
+                self.restoreRenamedImage(from: destination, to: imageURL)
+                self.currentMarkdown = externalMarkdown
+                self.markdownDocument?.replaceContents(
+                    markdown: externalMarkdown,
+                    fileURL: markdownURL
+                )
+                self.renderCurrentDocument(text: externalMarkdown, fileURL: markdownURL)
+            case .cancelled:
+                self.restoreRenamedImage(from: destination, to: imageURL)
+                self.rerenderCurrentPreview()
+            }
+        }
+    }
+
+    private func restoreRenamedImage(from destination: URL, to original: URL) {
+        do {
+            try FileManager.default.moveItem(at: destination, to: original)
+        } catch {
+            presentImageError(error)
         }
     }
 

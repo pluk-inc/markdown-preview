@@ -68,6 +68,7 @@ final class ContentViewController: NSViewController {
     var taskCheckboxToggled: ((Int, Bool) -> Void)?
     var tableEditRequested: ((MarkdownTableEditRequest) -> Void)?
     var localMarkdownLinkActivated: ((URL) -> Void)?
+    var imageClicked: ((URL) -> Void)?
     /// Fires once after a pending source scroll anchor (prepared via
     /// `prepareToRestoreSourceScrollAnchor`) has been applied to a fresh
     /// render. The edit-mode overlay uses it to hold its cross-fade until
@@ -102,6 +103,9 @@ final class ContentViewController: NSViewController {
         }
         webView.localMarkdownLinkActivated = { [weak self] url in
             self?.localMarkdownLinkActivated?(url)
+        }
+        webView.imageClicked = { [weak self] url in
+            self?.imageClicked?(url)
         }
         webView.taskCheckboxToggled = { [weak self] line, checked in
             self?.taskCheckboxToggled?(line, checked)

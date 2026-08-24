@@ -23,6 +23,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     /// Esc pressed in the editor — the host decides whether to confirm
     /// and discard.
     var cancelRequested: (() -> Void)?
+    /// A native image was pasted at the editor selection.
+    var pasteImageRequested: ((Int, Int) -> Void)?
 
     private(set) var hasChanges = false
 
@@ -123,6 +125,11 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         webView.evaluateJavaScript("window.__mdEditor && window.__mdEditor.exec(\(name))") { _, _ in }
     }
 
+    func insertMarkdown(_ markdown: String, from: Int, to: Int) {
+        let script = "window.__mdEditor && window.__mdEditor.insertTextAt(\(Self.jsStringLiteral(markdown)), \(from), \(to))"
+        webView.evaluateJavaScript(script) { _, _ in }
+    }
+
     fileprivate func handle(message: Any) {
         if let message = message as? String {
             switch message {
@@ -143,8 +150,17 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
 
         guard let payload = message as? [String: Any],
-              payload["kind"] as? String == "tableContextMenu" else { return }
-        presentTableContextMenu(payload)
+              let kind = payload["kind"] as? String else { return }
+        switch kind {
+        case "pasteImage":
+            guard let from = payload["from"] as? NSNumber,
+                  let to = payload["to"] as? NSNumber else { return }
+            pasteImageRequested?(from.intValue, to.intValue)
+        case "tableContextMenu":
+            presentTableContextMenu(payload)
+        default:
+            break
+        }
     }
 
     private func presentTableContextMenu(_ payload: [String: Any]) {
@@ -668,6 +684,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                     markdown,
                     {
                         onDirty: function () { post("dirty"); },
+                        onPasteImage: function (from, to) {
+                            post({ kind: "pasteImage", from: from, to: to });
+                        },
                         // Preview block margins (MarkdownHTML design tokens):
                         // the bundle sizes blank-separator lines from these.
                         spacing: {
@@ -687,6 +706,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                     focus: function () { editor.focus(); },
                     setScrollPosition: function (progress, sourcePosition, sourceGap) {
                         return editor.setScrollPosition(progress, sourcePosition, sourceGap);
+                    },
+                    insertTextAt: function (text, from, to) {
+                        return editor.insertTextAt(text, from, to);
                     },
                     performTableContextAction: function (token, action) {
                         return editor.performTableContextAction(token, action);

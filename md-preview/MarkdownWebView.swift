@@ -202,6 +202,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     var zoomDidChange: ((CGFloat) -> Void)?
     var fragmentLinkActivated: ((String) -> Void)?
     var localMarkdownLinkActivated: ((URL) -> Void)?
+    var imageClicked: ((URL) -> Void)?
     var taskCheckboxToggled: ((Int, Bool) -> Void)?
     var tableEditRequested: ((MarkdownTableEditRequest) -> Void)?
     var scrollDidChange: (() -> Void)?
@@ -527,6 +528,13 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.setString(text, forType: .string)
+        case "imageClick":
+            guard let source = dict["src"] as? String,
+                  let url = URL(string: source),
+                  url.scheme == MarkdownAssetScheme.scheme,
+                  currentAssetBase != nil,
+                  let resolved = MarkdownAssetResolution.fileURL(for: url) else { return }
+            imageClicked?(resolved)
         case "taskCheckbox":
             guard let line = dict["line"] as? NSNumber,
                   let checked = dict["checked"] as? NSNumber else { return }

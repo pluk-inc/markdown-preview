@@ -187,6 +187,13 @@
 "Unable to verify the document on disk" = "无法验证磁盘上的文稿";
 "%@ Cancel keeps your changes unsaved." = "%@选择“取消”会保留您的未存储更改。";
 "Markdown Preview needs your permission to save this file." = "Markdown Preview 需要您的权限才能存储此文件。";
+"The clipboard does not contain an image." = "剪贴板中不包含图像。";
+"The pasted image could not be placed next to the Markdown file." = "无法将粘贴的图像放置在 Markdown 文件旁。";
+"Choose the folder containing this Markdown file to save the pasted image." = "请选择包含此 Markdown 文件的文件夹，以存储粘贴的图像。";
+"Choose the folder containing this Markdown file." = "请选择包含此 Markdown 文件的文件夹。";
+"Rename Image" = "重命名图像";
+"Choose a new name for this image." = "为此图像输入新名称。";
+"Rename" = "重命名";
 
 /* Open menus */
 "No document open" = "未打开文稿";

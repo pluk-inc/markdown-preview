@@ -13,6 +13,7 @@ final class MainSplitViewController: NSSplitViewController {
     var onOpenMarkdownLink: ((URL) -> Void)?
     var onToggleTaskCheckbox: ((Int, Bool) -> Void)?
     var onEditTable: ((MarkdownTableEditRequest) -> Void)?
+    var onImageClick: ((URL) -> Void)?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -59,6 +60,9 @@ final class MainSplitViewController: NSSplitViewController {
         }
         contentViewController?.localMarkdownLinkActivated = { [weak self] url in
             self?.onOpenMarkdownLink?(url)
+        }
+        contentViewController?.imageClicked = { [weak self] url in
+            self?.onImageClick?(url)
         }
     }
 

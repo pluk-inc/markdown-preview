@@ -1617,6 +1617,7 @@ function indentMarkdownListItems(view) {
 window.MDEditor = {
   create(parent, doc, callbacks) {
     const onDirty = callbacks && callbacks.onDirty
+    const onPasteImage = callbacks && callbacks.onPasteImage
     // Live preview spacing tokens from the host stylesheet (MarkdownHTML
     // constants) — see METRICS for the headless defaults.
     Object.assign(METRICS, (callbacks && callbacks.spacing) || {})
@@ -1657,6 +1658,19 @@ window.MDEditor = {
           // Fires on every change; the host debounces for autosave.
           EditorView.updateListener.of((update) => {
             if (update.docChanged && onDirty) onDirty()
+          }),
+          EditorView.domEventHandlers({
+            paste(event, view) {
+              if (event.target instanceof Element
+                  && event.target.closest(".cm-md-table-cell")) return false
+              const items = Array.from(event.clipboardData?.items || [])
+              if (!items.some((item) => String(item.type || "").toLowerCase().startsWith("image/"))) return false
+              if (typeof onPasteImage !== "function") return false
+              event.preventDefault()
+              const selection = view.state.selection.main
+              onPasteImage(selection.from, selection.to)
+              return true
+            },
           }),
         ],
       }),
@@ -1722,6 +1736,18 @@ window.MDEditor = {
     }
     return {
       getMarkdown: () => view.state.doc.toString(),
+      insertTextAt: (text, from, to) => {
+        const length = view.state.doc.length
+        const start = Math.max(0, Math.min(Number(from) || 0, length))
+        const end = Math.max(start, Math.min(Number(to) || start, length))
+        view.dispatch({
+          changes: { from: start, to: end, insert: String(text || "") },
+          selection: { anchor: start + String(text || "").length },
+          userEvent: "input",
+          scrollIntoView: true,
+        })
+        view.focus()
+      },
       focus: () => view.focus(),
       getScrollAnchor: () => {
         if (!didUserScroll && Number.isFinite(preservedSourcePosition)) {

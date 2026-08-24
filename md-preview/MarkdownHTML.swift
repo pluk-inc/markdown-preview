@@ -1291,6 +1291,19 @@ nonisolated enum MarkdownHTML {
             copyCodeBlock(button);
         });
 
+        document.addEventListener('click', (event) => {
+            const target = elementForEventTarget(event.target);
+            const image = target && target.closest('img');
+            if (!image || image.closest('a')) return;
+            const src = image.currentSrc || image.getAttribute('src') || '';
+            if (!src.startsWith('md-asset:')) return;
+            image.classList.add('md-local-image');
+            if (post({ kind: 'imageClick', src })) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        });
+
         function enableTaskCheckboxes() {
             if (!hasHostBridge) return;
             document.querySelectorAll('.task-list-item-checkbox').forEach((checkbox) => {
@@ -3793,6 +3806,7 @@ nonisolated enum MarkdownHTML {
         margin: 1.6em auto;
         border-radius: 10px;
     }
+    .md-local-image { cursor: pointer; }
     /* Keep downscaled images proportional, but let explicit width/height
        attributes (e.g. GitHub-style <img height="54">) take effect. */
     img:not([width]):not([height]) {

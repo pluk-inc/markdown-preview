@@ -52,4 +52,120 @@ nonisolated enum MarkdownAssetResolution {
         guard path.count > 1, path.hasPrefix("/") else { return nil }
         return URL(fileURLWithPath: path).standardizedFileURL
     }
+
+    // MARK: - Image storage helpers
+
+    /// Directory for images pasted into a Markdown file.
+    static func picturesDirectory(forMarkdownFile fileURL: URL) -> URL {
+        let stem = fileURL.deletingPathExtension().lastPathComponent
+        return fileURL.deletingLastPathComponent()
+            .appendingPathComponent("\(stem)-pictures", isDirectory: true)
+    }
+
+    /// Returns the next integer name without reusing a number already present
+    /// in the pictures directory, regardless of its image extension.
+    static func nextIntegerFileName(
+        in directory: URL,
+        extension fileExtension: String
+    ) -> String {
+        let contents = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        let numbers = contents.compactMap { fileName -> Int? in
+            let stem = URL(fileURLWithPath: fileName).deletingPathExtension().lastPathComponent
+            guard !stem.isEmpty, stem.allSatisfy(\.isNumber) else { return nil }
+            return Int(stem)
+        }
+        return "\((numbers.max() ?? 0) + 1).\(fileExtension)"
+    }
+
+    static func savePastedImage(_ data: Data, forMarkdownFile fileURL: URL) throws -> URL {
+        let directory = picturesDirectory(forMarkdownFile: fileURL)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
+        let imageURL = directory.appendingPathComponent(
+            nextIntegerFileName(in: directory, extension: "png")
+        )
+        try atomicWrite(data, to: imageURL)
+        return imageURL
+    }
+
+    /// Returns a URL-safe relative Markdown destination.
+    static func markdownPath(for imageURL: URL, from markdownFile: URL) -> String? {
+        guard let path = relativePath(from: markdownFile, to: imageURL), !path.isEmpty else {
+            return nil
+        }
+        // Parentheses are valid URL path characters but can terminate an
+        // unbracketed Markdown destination when a filename contains only one
+        // side of the pair.
+        let allowedCharacters = CharacterSet.urlPathAllowed
+            .subtracting(CharacterSet(charactersIn: "()"))
+        return path
+            .split(separator: "/", omittingEmptySubsequences: false)
+            .map {
+                String($0).addingPercentEncoding(withAllowedCharacters: allowedCharacters)
+                    ?? String($0)
+            }
+            .joined(separator: "/")
+    }
+
+    /// Rewrites inline image destinations while leaving alt text and titles
+    /// untouched. This is intentionally scoped to image syntax, not arbitrary
+    /// prose or code containing the same path.
+    static func replacingImagePath(in markdown: String,
+                                   from oldPath: String,
+                                   to newPath: String) -> String? {
+        let escapedPath = NSRegularExpression.escapedPattern(for: oldPath)
+        let pattern = #"(!\[[^\r\n\]]*\]\(\s*<?)"# + "(" + escapedPath + ")"
+            + #"(?=\s*(?:>|\)|["']))"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let nsMarkdown = markdown as NSString
+        let matches = regex.matches(
+            in: markdown,
+            range: NSRange(location: 0, length: nsMarkdown.length)
+        )
+        guard !matches.isEmpty else { return nil }
+
+        var result = ""
+        result.reserveCapacity(markdown.count)
+        var cursor = 0
+        for match in matches {
+            let pathRange = match.range(at: 2)
+            result += nsMarkdown.substring(with: NSRange(
+                location: cursor,
+                length: pathRange.location - cursor
+            ))
+            result += newPath
+            cursor = pathRange.location + pathRange.length
+        }
+        result += nsMarkdown.substring(from: cursor)
+        return result
+    }
+
+    /// Computes the relative path from one file URL to another.
+    static func relativePath(from source: URL, to destination: URL) -> String? {
+        guard source.isFileURL, destination.isFileURL else { return nil }
+        let sourceComponents = source.standardizedFileURL.pathComponents
+        let destinationComponents = destination.standardizedFileURL.pathComponents
+        let commonLength = zip(sourceComponents, destinationComponents)
+            .prefix { $0.0 == $0.1 }
+            .count
+        let levelsUp = sourceComponents.count - commonLength - 1
+        guard levelsUp >= 0 else { return nil }
+        return (Array(repeating: "..", count: levelsUp)
+            + Array(destinationComponents.dropFirst(commonLength)))
+            .joined(separator: "/")
+    }
+
+    @discardableResult
+    static func atomicWrite(_ data: Data, to fileURL: URL) throws -> URL {
+        try FileManager.default.createDirectory(
+            at: fileURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
+        try data.write(to: fileURL, options: .atomic)
+        return fileURL
+    }
 }
