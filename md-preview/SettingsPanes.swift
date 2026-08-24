@@ -293,13 +293,15 @@ struct GeneralSettingsView: View {
                 LabeledContent {
                     Stepper(
                         value: $model.autoSaveIntervalMinutes,
-                        in: AutoSaveSetting.minimumMinutes...AutoSaveSetting.maximumMinutes,
+                        in: AutoSaveSetting.disabledMinutes...AutoSaveSetting.maximumMinutes,
                         step: 1
                     ) {
-                        Text(String(
-                            format: L("%d minutes"),
-                            model.autoSaveIntervalMinutes
-                        ))
+                        Text(model.autoSaveIntervalMinutes == AutoSaveSetting.disabledMinutes
+                             ? L("Never")
+                             : String(
+                                 format: L("%d minutes"),
+                                 model.autoSaveIntervalMinutes
+                             ))
                         .monospacedDigit()
                         .frame(minWidth: 72, alignment: .trailing)
                     }

@@ -3,17 +3,23 @@ import XCTest
 @testable import MarkdownHelpers
 
 final class AutoSaveSettingTests: XCTestCase {
-    func testMissingValueUsesFiveMinutes() throws {
+    func testMissingValueDisablesAutomaticSaving() throws {
         let defaults = try makeDefaults()
 
-        XCTAssertEqual(AutoSaveSetting.currentMinutes(from: defaults), 5)
+        XCTAssertEqual(
+            AutoSaveSetting.currentMinutes(from: defaults),
+            AutoSaveSetting.disabledMinutes
+        )
     }
 
     func testStoredValueIsClampedToSupportedRange() throws {
         let defaults = try makeDefaults()
 
         defaults.set(0, forKey: AutoSaveSetting.defaultsKey)
-        XCTAssertEqual(AutoSaveSetting.currentMinutes(from: defaults), 1)
+        XCTAssertEqual(
+            AutoSaveSetting.currentMinutes(from: defaults),
+            AutoSaveSetting.disabledMinutes
+        )
 
         defaults.set(120, forKey: AutoSaveSetting.defaultsKey)
         XCTAssertEqual(AutoSaveSetting.currentMinutes(from: defaults), 60)
@@ -23,7 +29,10 @@ final class AutoSaveSettingTests: XCTestCase {
         let defaults = try makeDefaults()
 
         AutoSaveSetting.store(minutes: 0, in: defaults)
-        XCTAssertEqual(defaults.integer(forKey: AutoSaveSetting.defaultsKey), 1)
+        XCTAssertEqual(
+            defaults.integer(forKey: AutoSaveSetting.defaultsKey),
+            AutoSaveSetting.disabledMinutes
+        )
 
         AutoSaveSetting.store(minutes: 12, in: defaults)
         XCTAssertEqual(AutoSaveSetting.currentMinutes(from: defaults), 12)
@@ -34,7 +43,7 @@ final class AutoSaveSettingTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         addTeardownBlock {
-            defaults.removePersistentDomain(forName: suiteName)
+            UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName)
         }
         return defaults
     }

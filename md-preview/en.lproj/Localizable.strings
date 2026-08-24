@@ -174,11 +174,6 @@
 
 /* Document state and save dialogs */
 "Edited" = "Edited";
-"Autosaves every minute" = "Autosaves every minute";
-"Autosaves every %d minutes" = "Autosaves every %d minutes";
-"Edited; autosaves every minute" = "Edited; autosaves every minute";
-"Edited; autosaves every %d minutes" = "Edited; autosaves every %d minutes";
-"Auto-saved" = "Auto-saved";
 "Auto-save failed" = "Auto-save failed";
 "Do you want to save your changes?" = "Do you want to save your changes?";
 "this document" = "this document";

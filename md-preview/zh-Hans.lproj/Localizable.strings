@@ -174,11 +174,6 @@
 
 /* Document state and save dialogs */
 "Edited" = "已编辑";
-"Autosaves every minute" = "每分钟自动保存";
-"Autosaves every %d minutes" = "每 %d 分钟自动保存";
-"Edited; autosaves every minute" = "已编辑；每分钟自动保存";
-"Edited; autosaves every %d minutes" = "已编辑；每 %d 分钟自动保存";
-"Auto-saved" = "已自动保存";
 "Auto-save failed" = "自动保存失败";
 "Do you want to save your changes?" = "要存储您的更改吗？";
 "this document" = "此文稿";

@@ -8,7 +8,7 @@ import Foundation
 /// Shared interval used by the editor's periodic save timer and Settings.
 enum AutoSaveSetting {
     static let defaultsKey = "MarkdownPreview.autoSaveIntervalMinutes"
-    static let defaultMinutes = 5
+    static let disabledMinutes = 0
     static let minimumMinutes = 1
     static let maximumMinutes = 60
 
@@ -18,7 +18,7 @@ enum AutoSaveSetting {
 
     static func currentMinutes(from defaults: UserDefaults) -> Int {
         guard let stored = defaults.object(forKey: defaultsKey) as? NSNumber else {
-            return defaultMinutes
+            return disabledMinutes
         }
         return clampedMinutes(stored.intValue)
     }
@@ -28,10 +28,13 @@ enum AutoSaveSetting {
     }
 
     static func clampedMinutes(_ minutes: Int) -> Int {
-        min(max(minutes, minimumMinutes), maximumMinutes)
+        guard minutes != disabledMinutes else { return disabledMinutes }
+        return min(max(minutes, minimumMinutes), maximumMinutes)
     }
 
-    static var interval: TimeInterval {
-        TimeInterval(currentMinutes * 60)
+    static var interval: TimeInterval? {
+        let minutes = currentMinutes
+        guard minutes != disabledMinutes else { return nil }
+        return TimeInterval(minutes * 60)
     }
 }
