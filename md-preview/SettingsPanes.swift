@@ -291,20 +291,16 @@ struct GeneralSettingsView: View {
 
             Section {
                 LabeledContent {
-                    Stepper(
-                        value: $model.autoSaveIntervalMinutes,
-                        in: AutoSaveSetting.disabledMinutes...AutoSaveSetting.maximumMinutes,
-                        step: 1
-                    ) {
-                        Text(model.autoSaveIntervalMinutes == AutoSaveSetting.disabledMinutes
-                             ? L("Never")
-                             : String(
-                                 format: L("%d minutes"),
-                                 model.autoSaveIntervalMinutes
-                             ))
-                        .monospacedDigit()
-                        .frame(minWidth: 72, alignment: .trailing)
+                    Picker("", selection: $model.autoSaveIntervalMinutes) {
+                        Text(L("Never")).tag(AutoSaveSetting.disabledMinutes)
+                        Text(L("1 minute")).tag(1)
+                        ForEach([5, 10, 15, 30, 60], id: \.self) { minutes in
+                            Text(String(format: L("%d minutes"), minutes))
+                                .tag(minutes)
+                        }
                     }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
                 } label: {
                     Text(L("Automatic saving"))
                     Text(L("Save edited documents periodically."))

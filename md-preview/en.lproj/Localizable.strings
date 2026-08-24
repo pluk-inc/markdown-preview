@@ -19,6 +19,7 @@
 "Automatic saving" = "Automatic saving";
 "Save edited documents periodically." = "Save edited documents periodically.";
 "Automatic saving runs while a document has unsaved edits." = "Automatic saving runs while a document has unsaved edits.";
+"1 minute" = "1 minute";
 "%d minutes" = "%d minutes";
 "Hand-off" = "Hand-off";
 "Open documents in" = "Open documents in";
