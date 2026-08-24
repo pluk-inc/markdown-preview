@@ -106,7 +106,7 @@
 "Inspector" = "Inspector";
 "Get Info" = "Get Info";
 "Always on Top" = "Always on Top";
-"Keep this window in front of other apps" = "Keep this window in front of other apps";
+"Keep Markdown Preview windows in front of other apps" = "Keep Markdown Preview windows in front of other apps";
 "Show the inspector" = "Show the inspector";
 "Share" = "Share";
 "Share document" = "Share document";
@@ -240,3 +240,7 @@
 "Terminal automation failed." = "Terminal automation failed.";
 "Failed to write CLI installer script: %@" = "Failed to write CLI installer script: %@";
 "The bundled Markdown Preview CLI could not be found." = "The bundled Markdown Preview CLI could not be found.";
+
+/* Settings — Windows */
+"Windows" = "Windows";
+"Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out.";
