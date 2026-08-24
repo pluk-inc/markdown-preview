@@ -440,6 +440,73 @@ check("bundled legacy language stays syntax highlighted",
   legacyCodeHost.querySelector(".hl-keyword")?.textContent === "let")
 legacyCodeEditor.destroy()
 
+const detectedCodeHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(detectedCodeHost)
+const detectedCodeEditor = dom.window.MDEditor.create(
+  detectedCodeHost, "intro\n```\nconst answer = 42\n```", {})
+const detectedLanguageInput = detectedCodeHost.querySelector(
+  ".cm-md-code-language-input"
+)
+check("untyped code block exposes a language input",
+  detectedLanguageInput != null
+    && detectedLanguageInput.value === ""
+    && detectedLanguageInput.placeholder === "javascript")
+detectedLanguageInput?.focus()
+if (detectedLanguageInput) {
+  detectedLanguageInput.value = "typescript"
+  detectedLanguageInput.dispatchEvent(new dom.window.Event("change", { bubbles: true }))
+}
+check("language input writes the explicit fence language",
+  detectedCodeEditor.getMarkdown() === "intro\n```typescript\nconst answer = 42\n```")
+detectedCodeEditor.destroy()
+
+const metadataCodeHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(metadataCodeHost)
+const metadataCodeEditor = dom.window.MDEditor.create(
+  metadataCodeHost, "```js title=\"answer.js\"\nconst answer = 42\n```", {})
+const metadataInput = metadataCodeHost.querySelector(".cm-md-code-language-input")
+metadataInput?.focus()
+if (metadataInput) {
+  metadataInput.value = "typescript"
+  metadataInput.dispatchEvent(new dom.window.Event("change", { bubbles: true }))
+}
+check("language edits preserve fence metadata",
+  metadataCodeEditor.getMarkdown() ===
+    "```typescript title=\"answer.js\"\nconst answer = 42\n```")
+metadataCodeEditor.destroy()
+
+const autoFenceHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(autoFenceHost)
+const autoFenceEditor = dom.window.MDEditor.create(autoFenceHost, "intro\n", {})
+autoFenceEditor.select(autoFenceEditor.getMarkdown().length)
+for (const character of "```") autoFenceEditor.insert(character)
+check("typing an opening fence inserts its own closing fence",
+  autoFenceEditor.getMarkdown() === "intro\n```\n\n```")
+autoFenceEditor.insert("body")
+check("auto-closed fence leaves the cursor in its content",
+  autoFenceEditor.getMarkdown() === "intro\n```\nbody\n```")
+autoFenceEditor.destroy()
+
+const unclosedFenceHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(unclosedFenceHost)
+const unclosedFenceEditor = dom.window.MDEditor.create(
+  unclosedFenceHost, "```\nbody\n", {})
+unclosedFenceEditor.select(unclosedFenceEditor.getMarkdown().length)
+for (const character of "```") unclosedFenceEditor.insert(character)
+check("typing an existing block's closing fence does not pair it again",
+  unclosedFenceEditor.getMarkdown() === "```\nbody\n```")
+unclosedFenceEditor.destroy()
+
+const emptyFenceHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(emptyFenceHost)
+const emptyFenceEditor = dom.window.MDEditor.create(
+  emptyFenceHost, "intro\n```\n```", {})
+check("empty fenced blocks keep their language input visible",
+  emptyFenceHost.querySelector(".cm-md-code-language-input") != null
+    && emptyFenceHost.querySelector(".cm-md-code-language-input")
+      .closest(".cm-line")?.classList.contains("cm-md-line-collapsed") !== true)
+emptyFenceEditor.destroy()
+
 const hclSource = `terraform {
   required_providers {
     random = { source = "hashicorp/random", version = "~> 3.0" }
@@ -489,12 +556,23 @@ dom.window.document.body.appendChild(authoredMermaidHost)
 const authoredMermaidEditor = dom.window.MDEditor.create(
   authoredMermaidHost, "intro\n", {})
 authoredMermaidEditor.select(authoredMermaidEditor.getMarkdown().length)
-for (const character of "```mermaid\nflowchart LR\n  A --> B\n```") {
+for (const character of "```") {
   authoredMermaidEditor.insert(character)
 }
+const authoredMermaidLanguage = authoredMermaidHost.querySelector(
+  ".cm-md-code-language-input"
+)
+if (authoredMermaidLanguage) {
+  authoredMermaidLanguage.value = "mermaid"
+  authoredMermaidLanguage.dispatchEvent(
+    new dom.window.Event("change", { bubbles: true })
+  )
+}
+authoredMermaidEditor.insert("flowchart LR\n  A --> B")
 check("newly typed Mermaid fence remains editable at the cursor",
   authoredMermaidHost.querySelector(".cm-md-mermaid-preview") == null
     && authoredMermaidHost.querySelector(".cm-md-code-fence-source-hidden") == null)
+authoredMermaidEditor.select(authoredMermaidEditor.getMarkdown().length)
 authoredMermaidEditor.insert("\n")
 check("newly typed Mermaid fence previews after the cursor leaves",
   authoredMermaidHost.querySelector(".cm-md-mermaid-preview") != null)

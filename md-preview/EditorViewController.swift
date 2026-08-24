@@ -478,6 +478,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
         #editor .cm-md-codeblock-first {
             padding-top: 10px;
+            position: relative;
+            padding-inline-end: 9em;
         }
         #editor .cm-md-codeblock-first::before {
             border-radius: 15px 15px 0 0;
@@ -490,6 +492,37 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
         #editor .cm-md-code-fence-source-hidden {
             visibility: hidden;
+        }
+        #editor .cm-md-code-language {
+            position: absolute;
+            inset-inline-end: 14px;
+            top: 7px;
+            z-index: 1;
+            line-height: 1;
+            white-space: nowrap;
+        }
+        #editor .cm-md-code-language-input {
+            width: 8em;
+            max-width: 28vw;
+            min-width: 4.5em;
+            box-sizing: border-box;
+            padding: 2px 6px;
+            border: 1px solid var(--grid);
+            border-radius: 5px;
+            background: var(--code-bg);
+            color: var(--text);
+            font-family: system-ui, -apple-system, sans-serif;
+            font-size: 0.8em;
+            line-height: 1.35;
+            outline: none;
+        }
+        #editor .cm-md-code-language-input::placeholder {
+            color: var(--secondary);
+            opacity: 0.8;
+        }
+        #editor .cm-md-code-language-input:focus {
+            border-color: var(--link);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--link) 22%, transparent);
         }
         /* Frontmatter — a quiet metadata card above the document, echoing
            the preview's properties panel. YAML stays editable; only the

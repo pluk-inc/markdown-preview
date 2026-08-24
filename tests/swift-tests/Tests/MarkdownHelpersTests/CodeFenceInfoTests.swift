@@ -66,4 +66,30 @@ final class CodeFenceInfoTests: XCTestCase {
         XCTAssertEqual(CodeFenceInfo(rawInfoString: "bash").highlightLanguage, "bash")
         XCTAssertEqual(CodeFenceInfo(rawInfoString: "swift").highlightLanguage, "swift")
     }
+
+    // MARK: - Content-based detection
+
+    func testDetectsCommonLanguagesWhenTheInfoStringIsMissing() {
+        XCTAssertEqual(
+            CodeFenceLanguageDetector.detect("const answer = 42"),
+            "javascript"
+        )
+        XCTAssertEqual(
+            CodeFenceLanguageDetector.detect("{\n  \"answer\": 42\n}"),
+            "json"
+        )
+        XCTAssertEqual(
+            CodeFenceLanguageDetector.detect("def answer():\n    return 42"),
+            "python"
+        )
+        XCTAssertEqual(
+            CodeFenceLanguageDetector.detect("resource \"bucket\" \"main\" {\n}"),
+            "hcl"
+        )
+    }
+
+    func testDetectionLeavesAmbiguousOrEmptyCodeUntyped() {
+        XCTAssertNil(CodeFenceLanguageDetector.detect(""))
+        XCTAssertNil(CodeFenceLanguageDetector.detect("just some prose"))
+    }
 }
