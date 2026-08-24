@@ -8,6 +8,16 @@ enum UsageAnalyticsReporter {
 
     private static let captureURL = URL(string: "https://us.i.posthog.com/i/v0/e/")!
 
+    static var currentArchitecture: String {
+#if arch(arm64)
+        "arm64"
+#elseif arch(x86_64)
+        "x86_64"
+#else
+        "unknown"
+#endif
+    }
+
     private static let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpCookieStorage = nil
@@ -61,7 +71,14 @@ enum UsageAnalyticsReporter {
         Int(floor(date.timeIntervalSince1970 / 86_400))
     }
 
-    static func makeRequest(projectToken: String, installationID: String) -> URLRequest? {
+    static func makeRequest(
+        projectToken: String,
+        installationID: String,
+        appVersion: String,
+        macOSMajorVersion: Int,
+        architecture: String,
+        localeRegion: String
+    ) -> URLRequest? {
         let token = projectToken.trimmingCharacters(in: .whitespacesAndNewlines)
         guard token.hasPrefix("phc_"), UUID(uuidString: installationID) != nil else {
             return nil
@@ -71,7 +88,13 @@ enum UsageAnalyticsReporter {
             "api_key": token,
             "event": eventName,
             "distinct_id": installationID,
-            "properties": ["$process_person_profile": false]
+            "properties": [
+                "$process_person_profile": false,
+                "app_version": appVersion,
+                "macos_major_version": macOSMajorVersion,
+                "architecture": architecture,
+                "locale_region": localeRegion
+            ]
         ]
         guard let body = try? JSONSerialization.data(withJSONObject: payload) else {
             return nil
@@ -97,7 +120,13 @@ enum UsageAnalyticsReporter {
               let token = bundle.object(forInfoDictionaryKey: "PostHogProjectToken") as? String,
               let request = makeRequest(
                   projectToken: token,
-                  installationID: installationID(defaults: defaults)
+                  installationID: installationID(defaults: defaults),
+                  appVersion: bundle.object(
+                      forInfoDictionaryKey: "CFBundleShortVersionString"
+                  ) as? String ?? "unknown",
+                  macOSMajorVersion: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
+                  architecture: currentArchitecture,
+                  localeRegion: Locale.current.region?.identifier ?? "unknown"
               ) else {
             return
         }

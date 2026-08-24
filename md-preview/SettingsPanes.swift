@@ -488,7 +488,7 @@ struct PrivacySettingsView: View {
                 Toggle(L("Share anonymous usage analytics"),
                        isOn: $model.sharesAnonymousUsageAnalytics)
             } footer: {
-                Text(L("When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. This is used only to count daily and monthly active installations. It does not send document contents, file names or paths, actions, screens, personal information, or advertising identifiers."))
+                Text(L("When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS major version, processor architecture, and locale country or region. This is used only to count daily and monthly active installations and understand basic platform compatibility. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers."))
             }
         }
         .formStyle(.grouped)
