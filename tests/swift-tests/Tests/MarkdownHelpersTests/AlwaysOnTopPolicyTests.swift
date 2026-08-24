@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import XCTest
 @testable import MarkdownHelpers
 
@@ -37,21 +38,54 @@ final class AlwaysOnTopPolicyTests: XCTestCase {
                        Int(CGWindowLevelForKey(.floatingWindow)))
     }
 
-    func testUntabbedWindowIsTheOnlyOneAffected() {
-        XCTAssertEqual(AlwaysOnTopPolicy.affectedWindows(toggling: "doc", tabGroup: nil),
-                       ["doc"])
+    // Settings is where the pin is turned off again, so a floating document
+    // window that could cover it would leave no way back.
+    func testSettingsSitsAboveAPinnedPreviewWindow() {
+        XCTAssertGreaterThan(AlwaysOnTopPolicy.settingsWindowLevel(isPinned: true),
+                             AlwaysOnTopPolicy.windowLevel(isPinned: true, isFullScreen: false))
     }
 
-    func testTabbedWindowPinsEveryWindowInItsGroup() {
-        let group = ["notes", "readme", "changelog"]
-        XCTAssertEqual(AlwaysOnTopPolicy.affectedWindows(toggling: "readme", tabGroup: group),
-                       group)
+    func testSettingsStaysAtTheNormalLevelWhileNothingIsPinned() {
+        XCTAssertEqual(AlwaysOnTopPolicy.settingsWindowLevel(isPinned: false),
+                       Int(CGWindowLevelForKey(.normalWindow)))
     }
 
-    // AppKit hands back an empty array rather than nil in some teardown
-    // orderings; the toggle must still reach the window the reader clicked.
-    func testEmptyTabGroupStillAffectsTheToggledWindow() {
-        XCTAssertEqual(AlwaysOnTopPolicy.affectedWindows(toggling: "doc", tabGroup: []),
-                       ["doc"])
+    func testSettingIsOffWhenNothingHasBeenStored() throws {
+        let (defaults, suiteName) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertFalse(AlwaysOnTopPolicy.read(from: defaults))
+        XCTAssertFalse(AlwaysOnTopPolicy.read(from: nil))
+    }
+
+    func testSettingRoundTripsThroughDefaults() throws {
+        let (defaults, suiteName) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        AlwaysOnTopPolicy.write(true, to: defaults)
+        XCTAssertTrue(AlwaysOnTopPolicy.read(from: defaults))
+
+        AlwaysOnTopPolicy.write(false, to: defaults)
+        XCTAssertFalse(AlwaysOnTopPolicy.read(from: defaults))
+    }
+
+    // Off is the default, so it leaves no key behind — the same shape as
+    // appearance and content width.
+    func testTurningTheSettingOffClearsItsKey() throws {
+        let (defaults, suiteName) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        AlwaysOnTopPolicy.write(true, to: defaults)
+        XCTAssertNotNil(defaults.object(forKey: AlwaysOnTopPolicy.defaultsKey))
+
+        AlwaysOnTopPolicy.write(false, to: defaults)
+        XCTAssertNil(defaults.object(forKey: AlwaysOnTopPolicy.defaultsKey))
+    }
+
+    private func makeDefaults() throws -> (UserDefaults, String) {
+        let suiteName = "doc.md-preview.tests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        return (defaults, suiteName)
     }
 }

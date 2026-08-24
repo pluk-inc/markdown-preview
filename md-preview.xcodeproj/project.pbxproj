@@ -96,6 +96,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				CodeFenceInfo.swift,
+				DocumentFontSetting.swift,
 				EscapingHTMLFormatter.swift,
 				MarkdownAssetResolution.swift,
 				MarkdownAssetSchemeHandler.swift,

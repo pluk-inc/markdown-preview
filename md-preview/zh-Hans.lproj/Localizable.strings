@@ -15,6 +15,13 @@
 "Large" = "大";
 "Content width" = "内容宽度";
 "Zooming a document window with ⌘+ and ⌘− changes this same size." = "使用 ⌘+ 和 ⌘− 缩放文稿窗口会更改同一大小设置。";
+"Editing" = "编辑";
+"Automatic saving" = "自动保存";
+"Save edited documents periodically." = "定期保存编辑中的文稿。";
+"Automatic saving runs while a document has unsaved edits." = "文稿有未保存的编辑时，自动保存会运行。";
+"30 seconds" = "30 秒";
+"1 minute" = "1 分钟";
+"%d minutes" = "%d 分钟";
 "Hand-off" = "打开方式";
 "Open documents in" = "打开文稿时使用";
 "AI apps" = "AI App";
@@ -106,7 +113,7 @@
 "Inspector" = "检查器";
 "Get Info" = "显示简介";
 "Always on Top" = "始终置顶";
-"Keep this window in front of other apps" = "让此窗口始终显示在其他 App 前面";
+"Keep Markdown Preview windows in front of other apps" = "让 Markdown Preview 窗口始终显示在其他 App 前面";
 "Show the inspector" = "显示检查器";
 "Share" = "共享";
 "Share document" = "共享文稿";
@@ -170,6 +177,7 @@
 
 /* Document state and save dialogs */
 "Edited" = "已编辑";
+"Auto-save failed" = "自动保存失败";
 "Do you want to save your changes?" = "要存储您的更改吗？";
 "this document" = "此文稿";
 "Your changes to %@ will be lost if you don’t save them." = "如果不存储，对 %@ 所做的更改将丢失。";
@@ -248,3 +256,18 @@
 "Terminal automation failed." = "终端自动化失败。";
 "Failed to write CLI installer script: %@" = "无法写入 CLI 安装脚本：%@";
 "The bundled Markdown Preview CLI could not be found." = "找不到随附的 Markdown Preview CLI。";
+
+/* Settings — Reading */
+"Reading" = "阅读";
+"Font" = "字体";
+"System" = "系统";
+"Serif" = "衬线";
+"Rounded" = "圆体";
+"Monospace" = "等宽";
+"The font also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes the text size." = "字体设置也会应用于“快速查看”预览。使用 ⌘+ 和 ⌘− 缩放文稿窗口会改变文字大小。";
+
+/* Settings — Windows */
+"Windows" = "窗口";
+"Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "让所有 Markdown Preview 窗口始终显示在其他 App 前面，包括之后打开的窗口。窗口进入全屏时不会置顶，退出全屏后会恢复。";
+"Open documents in tabs" = "以标签页打开文稿";
+"A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "从“访达”打开的文件会作为标签页加入最前面的窗口，而不是各自新建一个窗口——“在新窗口中打开”仍会打开新窗口。";

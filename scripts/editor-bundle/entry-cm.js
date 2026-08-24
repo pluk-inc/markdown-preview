@@ -12,6 +12,7 @@ import { EditorState, EditorSelection, StateField } from "@codemirror/state"
 import {
   defaultKeymap, history, historyKeymap, indentLess, insertTab,
 } from "@codemirror/commands"
+import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete"
 import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-markdown"
 import { yamlFrontmatter } from "@codemirror/lang-yaml"
 import {
@@ -1747,6 +1748,7 @@ window.MDEditor = {
           syntaxHighlighting(codeHighlight),
           livePreview,
           alignInactiveHeadings,
+          closeBrackets(),
           // paragraphReflow deliberately omitted: the preview renders
           // single newlines as hard breaks, so the
           // editor keeps them visible instead of joining lines.
@@ -1754,6 +1756,7 @@ window.MDEditor = {
             { key: "Mod-b", run: toggleInlineMark("**") },
             { key: "Mod-i", run: toggleInlineMark("*") },
             { key: "Tab", run: indentMarkdownListItems, shift: indentLess },
+            ...closeBracketsKeymap,
             ...markdownKeymap,
             ...defaultKeymap,
             ...historyKeymap,
@@ -1943,6 +1946,9 @@ window.MDEditor = {
       }),
       insert: (text) => {
         const range = view.state.selection.main
+        const handled = view.state.facet(EditorView.inputHandler)
+          .some((handler) => handler(view, range.from, range.to, text))
+        if (handled) return
         view.dispatch({
           changes: { from: range.from, to: range.to, insert: text },
           selection: { anchor: range.from + text.length },
