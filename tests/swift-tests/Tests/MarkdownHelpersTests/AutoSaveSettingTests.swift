@@ -38,6 +38,18 @@ final class AutoSaveSettingTests: XCTestCase {
         XCTAssertEqual(AutoSaveSetting.currentMinutes(from: defaults), 12)
     }
 
+    func testThirtySecondIntervalUsesDedicatedValue() throws {
+        let defaults = try makeDefaults()
+
+        defaults.set(AutoSaveSetting.thirtySeconds, forKey: AutoSaveSetting.defaultsKey)
+
+        XCTAssertEqual(
+            AutoSaveSetting.currentMinutes(from: defaults),
+            AutoSaveSetting.thirtySeconds
+        )
+        XCTAssertEqual(AutoSaveSetting.interval(for: AutoSaveSetting.thirtySeconds), 30)
+    }
+
     private func makeDefaults() throws -> UserDefaults {
         let suiteName = "AutoSaveSettingTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

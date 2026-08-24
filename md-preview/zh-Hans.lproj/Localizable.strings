@@ -19,6 +19,7 @@
 "Automatic saving" = "自动保存";
 "Save edited documents periodically." = "定期保存编辑中的文稿。";
 "Automatic saving runs while a document has unsaved edits." = "文稿有未保存的编辑时，自动保存会运行。";
+"30 seconds" = "30 秒";
 "1 minute" = "1 分钟";
 "%d minutes" = "%d 分钟";
 "Hand-off" = "打开方式";

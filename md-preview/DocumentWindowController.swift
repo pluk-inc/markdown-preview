@@ -101,12 +101,14 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// Last known on-disk source, retained while preview displays a draft.
     private var editorBaselineMarkdown: String?
     private var isEditorCommitInFlight = false
+    private var pendingEditorCommitRequested = false
     private var pendingCommitShouldExit = false
     private var pendingCommitCompletions: [(Bool) -> Void] = []
     /// When sidebar navigation starts from edit mode, the newly loaded file
     /// should return to edit mode instead of dropping the user into preview.
     private var pendingEditModeURL: URL?
     private var autoSaveTimer: Timer?
+    private var autoSaveTimerID: UUID?
     private var isPerformingAutomaticSave = false
     private var autoSaveFeedbackResetWork: DispatchWorkItem?
     private var autoSaveFeedback = AutoSaveFeedback.none {
@@ -1013,17 +1015,25 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
               currentFileURL != nil,
               hasUnsavedEditorChanges,
               let interval = AutoSaveSetting.interval else { return }
+        let timerID = UUID()
+        autoSaveTimerID = timerID
         autoSaveTimer = Timer.scheduledTimer(
             withTimeInterval: interval,
-            repeats: true
-        ) { [weak self] _ in
-            self?.performAutomaticSave()
+            repeats: false
+        ) { [weak self, timerID] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.autoSaveTimerID == timerID else { return }
+                self.autoSaveTimer = nil
+                self.autoSaveTimerID = nil
+                self.performAutomaticSave()
+            }
         }
     }
 
     private func stopAutoSaveTimer() {
         autoSaveTimer?.invalidate()
         autoSaveTimer = nil
+        autoSaveTimerID = nil
     }
 
     private func performAutomaticSave() {
@@ -1360,6 +1370,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         editor.contentDidChange = { [weak self] in
             self?.editorChangeRevision += 1
             self?.hasUnsavedEditorChanges = true
+            self?.stopAutoSaveTimer()
+            self?.startAutoSaveTimerIfNeeded()
         }
         if editorBaselineMarkdown == nil {
             editorBaselineMarkdown = currentMarkdown
@@ -1510,7 +1522,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if let completion {
             pendingCommitCompletions.append(completion)
         }
-        guard !isEditorCommitInFlight else { return }
+        guard !isEditorCommitInFlight else {
+            pendingEditorCommitRequested = true
+            return
+        }
         performPendingEditorCommit()
     }
 
@@ -1660,7 +1675,15 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func finishEditorCommit(success: Bool) {
         isEditorCommitInFlight = false
-        if success, hasUnsavedEditorChanges || pendingCommitShouldExit {
+        if pendingEditorCommitRequested {
+            pendingEditorCommitRequested = false
+            isPerformingAutomaticSave = false
+            performPendingEditorCommit()
+            return
+        }
+        if success,
+           pendingCommitShouldExit
+            || (hasUnsavedEditorChanges && !isPerformingAutomaticSave) {
             startAutoSaveTimerIfNeeded()
             performPendingEditorCommit()
             return
@@ -1672,6 +1695,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             stopAutoSaveTimer()
         }
 
+        pendingEditorCommitRequested = false
         pendingCommitShouldExit = false
         let completions = pendingCommitCompletions
         pendingCommitCompletions.removeAll()
