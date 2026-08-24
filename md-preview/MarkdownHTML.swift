@@ -2334,6 +2334,8 @@ nonisolated enum MarkdownHTML {
         if (/^\\s*(?:<!DOCTYPE\\s+html|<html\\b|<(?:div|span|section|article)\\b)/i.test(text)) return 'html';
         if (/^\\s*(?:async\\s+)?def\\s+\\w+\\s*\\(|^\\s*from\\s+\\w+[\\w.]*\\s+import\\b/m.test(text)) return 'python';
         if (/\\b(?:import\\s+Foundation|func\\s+\\w+\\s*\\(|@main)\\b|\\b(?:let|var)\\s+\\w+\\s*:\\s*(?:String|Int|Bool|Double|Float)\\b/.test(text)) return 'swift';
+        if (/^\\s*(?:#\\s*include\\s*<iostream>|(?:using\\s+namespace\\s+std|std::\\w+|(?:cout|cin)\\s*(?:<<|>>))\\b)/m.test(text)) return 'cpp';
+        if (/^\\s*(?:#\\s*include\\s*[<"](?:assert|ctype|errno|float|inttypes|limits|math|setjmp|signal|stdarg|stdbool|stddef|stdint|stdio|stdlib|string|time)\\.h[>"]|(?:int|void)\\s+main\\s*\\([^)]*\\)\\s*\\{)/m.test(text)) return 'c';
         if (/\\b(?:SELECT|INSERT|UPDATE|DELETE|CREATE\\s+(?:TABLE|VIEW|INDEX)|WITH)\\b[\\s\\S]*\\b(?:FROM|INTO|WHERE|AS)\\b/i.test(text)) return 'sql';
         if (/(?:^|\\n)\\s*(?:[#.]?[A-Za-z][\\w-]*)\\s*\\{[\\s\\S]*:[\\s\\S]*\\}/.test(text)
             || /@(?:media|keyframes|supports)\\b/.test(text)) return 'css';
@@ -2346,7 +2348,7 @@ nonisolated enum MarkdownHTML {
         // so only use highlight.js fallback with a curated language set.
         const candidates = [
             'javascript', 'typescript', 'python', 'json', 'css', 'xml',
-            'bash', 'swift', 'go', 'ruby', 'rust', 'cpp', 'java', 'kotlin',
+            'bash', 'swift', 'go', 'ruby', 'rust', 'c', 'cpp', 'java', 'kotlin',
             'csharp', 'sql', 'yaml', 'toml'
         ];
         const result = hljs.highlightAuto(text, candidates);

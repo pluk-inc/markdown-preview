@@ -18,7 +18,7 @@ import {
   syntaxTree, ensureSyntaxTree, syntaxHighlighting, HighlightStyle,
   indentUnit, LanguageDescription, LanguageSupport, StreamLanguage,
 } from "@codemirror/language"
-import { tags as t } from "@lezer/highlight"
+import { highlightTree, tags as t } from "@lezer/highlight"
 import { javascript } from "@codemirror/lang-javascript"
 import { python } from "@codemirror/lang-python"
 import { json } from "@codemirror/lang-json"
@@ -52,6 +52,8 @@ function detectLanguage(source) {
   if (/^\s*(?:<!DOCTYPE\s+html|<html\b|<(?:div|span|section|article)\b)/i.test(text)) return "html"
   if (/\b(?:resource|data|provider|variable|module)\s+["'][\w-]+["'](?:\s+["'][\w-]+["'])?\s*\{|\bterraform\s*\{/.test(text)) return "hcl"
   if (/\b(?:import\s+Foundation|func\s+\w+\s*\(|@main)\b|\b(?:let|var)\s+\w+\s*:\s*(?:String|Int|Bool|Double|Float)\b/.test(text)) return "swift"
+  if (/^\s*(?:#\s*include\s*<iostream>|(?:using\s+namespace\s+std|std::\w+|(?:cout|cin)\s*(?:<<|>>))\b)/m.test(text)) return "cpp"
+  if (/^\s*(?:#\s*include\s*[<"](?:assert|ctype|errno|float|inttypes|limits|math|setjmp|signal|stdarg|stdbool|stddef|stdint|stdio|stdlib|string|time)\.h[>"]|(?:int|void)\s+main\s*\([^)]*\)\s*\{)/m.test(text)) return "c"
   if (/^\s*(?:async\s+)?def\s+\w+\s*\(|^\s*from\s+\w+[\w.]*\s+import\b|^\s*class\s+\w+\s*[:(]/m.test(text)) return "python"
   if (/\b(?:SELECT|INSERT|UPDATE|DELETE|CREATE\s+(?:TABLE|VIEW|INDEX)|WITH)\b[\s\S]*\b(?:FROM|INTO|WHERE|AS)\b/i.test(text)) return "sql"
   if (/(?:^|\n)\s*(?:[#.]?[A-Za-z][\w-]*)\s*\{[\s\S]*:[\s\S]*\}/.test(text)
@@ -205,11 +207,12 @@ class CodeLanguageWidget extends WidgetType {
     input.autocomplete = "off"
     input.spellcheck = false
     input.value = this.language
-    input.placeholder = this.detectedLanguage || "language"
+    input.placeholder = "language"
     input.setAttribute("aria-label", "Code block language")
     input.dataset.fenceFrom = String(this.fenceFrom)
 
     const metadata = this.rawInfo.match(/^\S+([\s\S]*)$/)?.[1] || ""
+    const initialDisplayValue = input.value
     let commitOnBlur = true
     let dispatchingCommit = false
     const commit = () => {
@@ -218,6 +221,7 @@ class CodeLanguageWidget extends WidgetType {
         ? language + metadata
         : ""
       if (nextInfo === this.rawInfo) return
+      if (input.value === initialDisplayValue) return
       dispatchingCommit = true
       view.dispatch({
         changes: { from: this.infoFrom, to: this.infoTo, insert: nextInfo },
@@ -898,6 +902,7 @@ function fencedCodeDetails(state, node) {
     rawInfo: info,
     infoFrom,
     infoTo,
+    sourceFrom,
     source,
   }
 }
@@ -907,7 +912,13 @@ function fencedCodeAt(state, pos) {
   // not retain FencedCode as one of its parents.
   let node = syntaxTree(state).resolve(pos, -1)
   while (node) {
-    if (node.name === "FencedCode") return { from: node.from, to: node.to }
+    if (node.name === "FencedCode") {
+      return {
+        from: node.from,
+        to: node.to,
+        closed: node.node.lastChild?.name === "CodeMark",
+      }
+    }
     node = node.parent
   }
   return null
@@ -994,7 +1005,32 @@ const mermaidPreviews = StateField.define({
   provide: (field) => EditorView.decorations.from(field),
 })
 
-function buildDecorations(view) {
+function detectedCodeHighlights(details, cache) {
+  const cached = cache.get(details.sourceFrom)
+  if (cached?.language === details.detectedLanguage
+      && cached.source === details.source) {
+    return cached.tokens
+  }
+
+  const tokens = []
+  const language = LanguageDescription.matchLanguageName(
+    codeLanguages, details.detectedLanguage, false
+  )?.support?.language
+  if (language) {
+    highlightTree(language.parser.parse(details.source), codeHighlight,
+      (from, to, classes) => {
+        tokens.push({ from, to, mark: Decoration.mark({ class: classes }) })
+      })
+  }
+  cache.set(details.sourceFrom, {
+    language: details.detectedLanguage,
+    source: details.source,
+    tokens,
+  })
+  return tokens
+}
+
+function buildDecorations(view, detectedCodeCache) {
   const ranges = []
   const { state } = view
   const sel = state.selection.main
@@ -1369,16 +1405,24 @@ function buildDecorations(view) {
               : last
           if (name === "FencedCode") {
             const details = fencedCodeDetails(state, node)
+            if (details.detectedLanguage) {
+              for (const token of detectedCodeHighlights(details, detectedCodeCache)) {
+                ranges.push(token.mark.range(
+                  details.sourceFrom + token.from,
+                  details.sourceFrom + token.to,
+                ))
+              }
+            }
             ranges.push(Decoration.widget({
               widget: new CodeLanguageWidget({
                 fenceFrom: node.from,
-                language: details.explicitLanguage,
+                language: details.language,
                 detectedLanguage: details.detectedLanguage,
                 rawInfo: details.rawInfo,
                 infoFrom: details.infoFrom,
                 infoTo: details.infoTo,
               }),
-              side: 1,
+              side: -1,
             }).range(widgetLine.from))
           }
           let pos = node.from
@@ -1470,10 +1514,14 @@ function buildDecorations(view) {
 }
 
 const livePreview = ViewPlugin.fromClass(class {
-  constructor(view) { this.decorations = buildDecorations(view) }
+  constructor(view) {
+    this.detectedCodeCache = new Map()
+    this.decorations = buildDecorations(view, this.detectedCodeCache)
+  }
   update(update) {
+    if (update.docChanged) this.detectedCodeCache.clear()
     if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged) {
-      this.decorations = buildDecorations(update.view)
+      this.decorations = buildDecorations(update.view, this.detectedCodeCache)
     }
   }
 }, { decorations: (v) => v.decorations })
@@ -1787,6 +1835,18 @@ function indentMarkdownListItems(view) {
       && selection.to === lastLine.from
       && lastLine.number > firstLine.number) {
     lastLine = view.state.doc.line(lastLine.number - 1)
+  }
+
+  if (selection.empty) {
+    const fence = fencedCodeAt(view.state, selection.head)
+    if (fence) {
+      const openingLine = view.state.doc.lineAt(fence.from)
+      const closingLine = view.state.doc.lineAt(fence.to)
+      if (firstLine.number > openingLine.number
+          && (!fence.closed || firstLine.number < closingLine.number)) {
+        return insertTab(view)
+      }
+    }
   }
 
   const firstMatch = firstLine.text.match(markdownListMarker)

@@ -86,6 +86,14 @@ final class CodeFenceInfoTests: XCTestCase {
             CodeFenceLanguageDetector.detect("resource \"bucket\" \"main\" {\n}"),
             "hcl"
         )
+        XCTAssertEqual(
+            CodeFenceLanguageDetector.detect("int main(){\nreturn 0;\n}"),
+            "c"
+        )
+        XCTAssertEqual(
+            CodeFenceLanguageDetector.detect("#include <iostream>\nstd::cout << \"ok\";"),
+            "cpp"
+        )
     }
 
     func testDetectionLeavesAmbiguousOrEmptyCodeUntyped() {

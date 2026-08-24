@@ -78,6 +78,12 @@ nonisolated enum CodeFenceLanguageDetector {
         if matches(#"\b(?:import\s+Foundation|func\s+\w+\s*\(|@main)\b|\b(?:let|var)\s+\w+\s*:\s*(?:String|Int|Bool|Double|Float)\b"#, in: text) {
             return "swift"
         }
+        if matches(#"(?m)^\s*(?:#\s*include\s*<iostream>|(?:using\s+namespace\s+std|std::\w+|(?:cout|cin)\s*(?:<<|>>))\b)"#, in: text) {
+            return "cpp"
+        }
+        if matches(#"(?m)^\s*(?:#\s*include\s*[<"](?:assert|ctype|errno|float|inttypes|limits|math|setjmp|signal|stdarg|stdbool|stddef|stdint|stdio|stdlib|string|time)\.h[>"]|(?:int|void)\s+main\s*\([^)]*\)\s*\{)"#, in: text) {
+            return "c"
+        }
         if matches(#"(?m)^\s*(?:async\s+)?def\s+\w+\s*\(|^\s*from\s+\w+[\w.]*\s+import\b|^\s*class\s+\w+\s*[:(]"#, in: text) {
             return "python"
         }

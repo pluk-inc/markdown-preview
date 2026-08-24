@@ -1432,22 +1432,23 @@ final class MarkdownHTMLRenderTests: XCTestCase {
     }
 
     func testUntypedCodeBlockKeepsDetectedLanguageInRenderedHTML() {
-        let rendered = MarkdownHTML.render(
-            markdown: """
-            ```
-            const answer = 42
-            ```
-            """,
-            vendorLoading: .lazy
-        )
+        for (source, language) in [
+            ("const answer = 42", "javascript"),
+            ("int main(){\nreturn 0;\n}", "c"),
+        ] {
+            let rendered = MarkdownHTML.render(
+                markdown: "```\n\(source)\n```",
+                vendorLoading: .lazy
+            )
 
-        XCTAssertTrue(rendered.containsCode)
-        XCTAssertTrue(
-            rendered.articleHTML.contains(
-                #"<code class="language-javascript" data-md-detected-language="true">"#
-            ),
-            rendered.articleHTML
-        )
+            XCTAssertTrue(rendered.containsCode)
+            XCTAssertTrue(
+                rendered.articleHTML.contains(
+                    "<code class=\"language-\(language)\" data-md-detected-language=\"true\">"
+                ),
+                rendered.articleHTML
+            )
+        }
     }
 
     @MainActor
