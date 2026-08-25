@@ -76,16 +76,23 @@ final class SettingsModel {
         themeColors = colors
     }
 
+    /// Reset returns to the default preset, not to "no theme" — the app
+    /// always has a theme applied.
     func resetThemeColors() {
-        themeColors = ThemeColorsSetting()
+        applyPreset(.defaultPreset)
     }
 
     /// Applies a preset: writes its palette into every slot for both
     /// schemes and switches the app appearance to the preset's flavor so
-    /// the native chrome matches.
+    /// the native chrome matches. A `.system` preset keeps the Automatic
+    /// appearance instead — its palettes carry both schemes.
     func applyPreset(_ preset: ThemePreset) {
         themeColors = preset.setting
-        appearance = preset.isDark ? .dark : .light
+        switch preset.flavor {
+        case .light: appearance = .light
+        case .dark: appearance = .dark
+        case .system: appearance = .automatic
+        }
     }
 
     var checksForUpdatesAutomatically: Bool {
@@ -351,6 +358,9 @@ struct ThemeSettingsView: View {
     @Bindable private var model = SettingsModel.shared
 
     var body: some View {
+        // Resolved once per pass: the footer, the Reset button, and every
+        // card compare against it.
+        let selected = selectedPreset
         Form {
             Section {
                 HStack(alignment: .top) {
@@ -386,14 +396,18 @@ struct ThemeSettingsView: View {
                                     GridItem(.flexible(), spacing: 12)],
                           spacing: 12) {
                     ForEach(ThemePreset.builtIn) { preset in
-                        presetCard(preset)
+                        presetCard(preset, isSelected: selected == preset)
                     }
                 }
                 .padding(.vertical, 4)
             } header: {
                 Text(L("Presets"))
             } footer: {
-                Text(L("A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards."))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(String(format: L("Current theme: %@"),
+                                selected.map { L($0.name) } ?? L("Custom colors")))
+                    Text(L("A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards."))
+                }
             }
 
             Section {
@@ -414,10 +428,10 @@ struct ThemeSettingsView: View {
                     Button(L("Reset Colors")) {
                         model.resetThemeColors()
                     }
-                    .disabled(!model.themeColors.isCustomized)
+                    .disabled(selected == ThemePreset.defaultPreset)
                 }
             } footer: {
-                Text(L("Restores the default colors for both appearances."))
+                Text(L("Restores the default Normal theme."))
             }
         }
         .formStyle(.grouped)
@@ -426,11 +440,27 @@ struct ThemeSettingsView: View {
         }
     }
 
-    private func presetCard(_ preset: ThemePreset) -> some View {
-        let page = Self.color(hex: preset.pageBackground)
-        let text = Self.color(hex: preset.text)
-        let accent = Self.color(hex: preset.accent)
-        let isSelected = model.themeColors == preset.setting
+    /// The preset the stored colors correspond to. Colors that were never
+    /// customized count as the default preset — the app treats "no
+    /// overrides" as the default theme, so the gallery always marks an
+    /// active card. Hand-edited colors that match no preset return nil
+    /// ("Custom colors").
+    private var selectedPreset: ThemePreset? {
+        if let match = ThemePreset.builtIn.first(where: { model.themeColors == $0.setting }) {
+            return match
+        }
+        return model.themeColors.isCustomized ? nil : .defaultPreset
+    }
+
+    private func presetCard(_ preset: ThemePreset, isSelected: Bool) -> some View {
+        let page = Self.color(hex: preset.palette.pageBackground)
+        let text = Self.color(hex: preset.palette.text)
+        let accent = Self.color(hex: preset.palette.accent)
+        let badge: (symbol: String, color: Color) = switch preset.flavor {
+        case .light: ("sun.max.fill", .orange)
+        case .dark: ("moon.fill", .indigo)
+        case .system: ("circle.lefthalf.filled", .secondary)
+        }
         return Button {
             model.applyPreset(preset)
         } label: {
@@ -440,9 +470,9 @@ struct ThemeSettingsView: View {
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(text)
                     Spacer(minLength: 4)
-                    Image(systemName: preset.isDark ? "moon.fill" : "sun.max.fill")
+                    Image(systemName: badge.symbol)
                         .font(.system(size: 9))
-                        .foregroundStyle(preset.isDark ? Color.indigo : Color.orange)
+                        .foregroundStyle(badge.color)
                 }
                 (Text("Lorem ipsum ").foregroundStyle(text.opacity(0.85))
                     + Text("dolor").bold().foregroundStyle(text)

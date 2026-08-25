@@ -41,14 +41,16 @@
 "A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards." = "A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards.";
 "Red Graphite" = "Red Graphite";
 "Dark Graphite" = "Dark Graphite";
-"High Contrast" = "High Contrast";
+"Normal" = "Normal";
 "Charcoal" = "Charcoal";
 "Solarized Light" = "Solarized Light";
 "Solarized Dark" = "Solarized Dark";
+"Dracula" = "Dracula";
 "Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override.";
 "Custom colors" = "Custom colors";
 "Reset Colors" = "Reset Colors";
-"Restores the default colors for both appearances." = "Restores the default colors for both appearances.";
+"Restores the default Normal theme." = "Restores the default Normal theme.";
+"Current theme: %@" = "Current theme: %@";
 "Send anonymous crash reports" = "Send anonymous crash reports";
 "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information.";
 

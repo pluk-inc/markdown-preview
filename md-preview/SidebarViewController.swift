@@ -288,6 +288,19 @@ final class SidebarViewController: NSViewController {
     }
 }
 
+/// Row view whose selection never draws emphasized. While the mouse is
+/// down, AppKit emphasizes the pressed row and fills the selection pill
+/// with the system accent color — which fights the theme. Suppressing the
+/// emphasized state keeps the quiet source-list fill in every state; the
+/// theme accent lives in the row's text color instead. Stateless, so it
+/// is created directly rather than recycled.
+private final class QuietSelectionRowView: NSTableRowView {
+    override var isEmphasized: Bool {
+        get { false }
+        set {}
+    }
+}
+
 private final class TitleItem {
     let title: String
     init(title: String) { self.title = title }
@@ -368,6 +381,10 @@ extension SidebarViewController: NSOutlineViewDelegate {
             ? (themeAccent ?? .controlAccentColor)
             : .labelColor
         return cell
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+        QuietSelectionRowView()
     }
 
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
@@ -870,6 +887,10 @@ extension ProjectNavigatorView: NSOutlineViewDelegate {
             ? (themeAccent ?? .controlAccentColor)
             : .labelColor
         return cell
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+        QuietSelectionRowView()
     }
 
     func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
