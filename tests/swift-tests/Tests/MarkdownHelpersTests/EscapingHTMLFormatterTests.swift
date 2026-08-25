@@ -46,6 +46,31 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         )
     }
 
+    func testFencedCodeWithoutInfoStringGetsDetectedLanguageClass() {
+        let html = EscapingHTMLFormatter.format("""
+        ```
+        const answer = 42
+        ```
+        """)
+
+        XCTAssertTrue(
+            html.contains(#"<code class="language-javascript" data-md-detected-language="true">"#),
+            "expected detected language marker: \(html)"
+        )
+    }
+
+    func testFencedCodeWithAmbiguousSourceStaysWithoutLanguageClass() {
+        let html = EscapingHTMLFormatter.format("""
+        ```
+        just some prose
+        ```
+        """)
+
+        XCTAssertTrue(html.contains("<pre"), html)
+        XCTAssertTrue(html.contains("<code>just some prose"), html)
+        XCTAssertFalse(html.contains("class=\"language-"), html)
+    }
+
     func testGitHubAlertWithDefaultTitle() {
         let html = EscapingHTMLFormatter.format("""
         > [!IMPORTANT]

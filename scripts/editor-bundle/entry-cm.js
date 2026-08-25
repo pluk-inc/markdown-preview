@@ -8,7 +8,7 @@ import {
   EditorView, keymap, ViewPlugin, Decoration, WidgetType,
   drawSelection, dropCursor,
 } from "@codemirror/view"
-import { EditorState, EditorSelection, StateField } from "@codemirror/state"
+import { Annotation, EditorState, EditorSelection, StateField } from "@codemirror/state"
 import {
   defaultKeymap, history, historyKeymap, indentLess, insertTab,
 } from "@codemirror/commands"
@@ -19,7 +19,7 @@ import {
   syntaxTree, ensureSyntaxTree, syntaxHighlighting, HighlightStyle,
   indentUnit, LanguageDescription, LanguageSupport, StreamLanguage,
 } from "@codemirror/language"
-import { tags as t } from "@lezer/highlight"
+import { highlightTree, tags as t } from "@lezer/highlight"
 import { javascript } from "@codemirror/lang-javascript"
 import { python } from "@codemirror/lang-python"
 import { json } from "@codemirror/lang-json"
@@ -39,6 +39,33 @@ import { hcl } from "codemirror-lang-hcl"
 // ---------------------------------------------------------------------------
 // Fenced-code languages
 // ---------------------------------------------------------------------------
+
+// Keep automatic detection conservative. Explicit info-string languages
+// always remain the source of truth.
+function detectLanguage(source) {
+  const text = source.trim()
+  if (!text) return ""
+  if (/^#!.*\b(?:ba)?sh\b|^\s*\$\s+/.test(text)) return "bash"
+  if ((text.startsWith("{") && text.endsWith("}"))
+      || (text.startsWith("[") && text.endsWith("]"))) {
+    try { JSON.parse(text); return "json" } catch (_) {}
+  }
+  if (/^\s*(?:<!DOCTYPE\s+html|<html\b|<(?:div|span|section|article)\b)/i.test(text)) return "html"
+  if (/\b(?:resource|data|provider|variable|module)\s+["'][\w-]+["'](?:\s+["'][\w-]+["'])?\s*\{|\bterraform\s*\{/.test(text)) return "hcl"
+  if (/\b(?:import\s+Foundation|func\s+\w+\s*\(|@main)\b|\b(?:let|var)\s+\w+\s*:\s*(?:String|Int|Bool|Double|Float)\b/.test(text)) return "swift"
+  if (/^\s*(?:#\s*include\s*<iostream>|(?:using\s+namespace\s+std|std::\w+|(?:cout|cin)\s*(?:<<|>>))\b)/m.test(text)) return "cpp"
+  if (/^\s*(?:#\s*include\s*[<"](?:assert|ctype|errno|float|inttypes|limits|math|setjmp|signal|stdarg|stdbool|stddef|stdint|stdio|stdlib|string|time)\.h[>"]|(?:int|void)\s+main\s*\([^)]*\)\s*\{)/m.test(text)) return "c"
+  if (/^\s*(?:async\s+)?def\s+\w+\s*\(|^\s*from\s+\w+[\w.]*\s+import\b|^\s*class\s+\w+\s*[:(]/m.test(text)) return "python"
+  if (/\b(?:SELECT|INSERT|UPDATE|DELETE|CREATE\s+(?:TABLE|VIEW|INDEX)|WITH)\b[\s\S]*\b(?:FROM|INTO|WHERE|AS)\b/i.test(text)) return "sql"
+  if (/(?:^|\n)\s*(?:[#.]?[A-Za-z][\w-]*)\s*\{[\s\S]*:[\s\S]*\}/.test(text)
+      || /@(?:media|keyframes|supports)\b/.test(text)) return "css"
+  if (/^\s*(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*(?::[^=\n]+)?\s*=/m.test(text)
+      || /\b(?:function\s+\w+\s*\(|console\.(?:log|error|warn)|=>)/.test(text)) return "javascript"
+  if (/^\s*(?:[-A-Za-z_][\w-]*):\s*(?:[^:#\n]|$)/m.test(text)
+      && !/[{};]/.test(text)) return "yaml"
+  if (/^\s*(?:echo|printf|export|source|cd|mkdir|rm|cp|mv)\s+/m.test(text)) return "bash"
+  return ""
+}
 
 // Every parser is already part of this offline bundle, so register support
 // synchronously. Lazy Promise loaders only delayed highlighting on the first
@@ -215,6 +242,87 @@ class MermaidWidget extends WidgetType {
         view.requestMeasure()
       })
     return figure
+  }
+
+  ignoreEvent() { return true }
+}
+
+// Language input widget for every fenced block, including blocks without an
+// info string. The source range is rebuilt after each commit, so the widget
+// remains anchored while its input edits the opening line.
+class CodeLanguageWidget extends WidgetType {
+  constructor(details) {
+    super()
+    Object.assign(this, details)
+  }
+
+  eq(other) {
+    return other.fenceFrom === this.fenceFrom
+      && other.infoFrom === this.infoFrom
+      && other.infoTo === this.infoTo
+      && other.rawInfo === this.rawInfo
+      && other.detectedLanguage === this.detectedLanguage
+  }
+
+  toDOM(view) {
+    const container = document.createElement("span")
+    container.className = "cm-md-code-language"
+    container.contentEditable = "false"
+
+    const input = document.createElement("input")
+    input.type = "text"
+    input.className = "cm-md-code-language-input"
+    input.autocomplete = "off"
+    input.spellcheck = false
+    input.value = this.language
+    input.placeholder = "language"
+    input.setAttribute("aria-label", "Code block language")
+    input.dataset.fenceFrom = String(this.fenceFrom)
+
+    const metadata = this.rawInfo.match(/^\S+([\s\S]*)$/)?.[1] || ""
+    const initialDisplayValue = input.value
+    let commitOnBlur = true
+    let dispatchingCommit = false
+    const commit = () => {
+      const language = input.value.trim().split(/\s+/, 1)[0].toLowerCase()
+      const nextInfo = language
+        ? language + metadata
+        : ""
+      if (nextInfo === this.rawInfo) return
+      if (input.value === initialDisplayValue) return
+      dispatchingCommit = true
+      view.dispatch({
+        changes: { from: this.infoFrom, to: this.infoTo, insert: nextInfo },
+        userEvent: "input",
+      })
+    }
+
+    input.addEventListener("change", commit)
+    input.addEventListener("keydown", (event) => {
+      event.stopPropagation()
+      if (event.key === "Enter") {
+        event.preventDefault()
+        commit()
+        input.blur()
+        view.focus()
+      } else if (event.key === "Escape") {
+        event.preventDefault()
+        commitOnBlur = false
+        input.value = this.language
+        input.blur()
+        view.focus()
+      }
+    })
+    input.addEventListener("mousedown", (event) => event.stopPropagation())
+    input.addEventListener("click", (event) => event.stopPropagation())
+    input.addEventListener("blur", () => {
+      if (commitOnBlur && !dispatchingCommit) commit()
+      dispatchingCommit = false
+      commitOnBlur = true
+    })
+
+    container.appendChild(input)
+    return container
   }
 
   ignoreEvent() { return true }
@@ -833,20 +941,37 @@ const directionLines = StateField.define({
 
 function fencedCodeDetails(state, node) {
   let info = ""
+  let infoNode = null
   const codeMarks = []
   for (let child = node.node.firstChild; child; child = child.nextSibling) {
-    if (child.name === "CodeInfo") info = state.doc.sliceString(child.from, child.to)
+    if (child.name === "CodeInfo") {
+      infoNode = child
+      info = state.doc.sliceString(child.from, child.to)
+    }
     if (child.name === "CodeMark") codeMarks.push(child)
   }
 
-  const language = info.trim().split(/\s+/, 1)[0].toLowerCase()
+  const explicitLanguage = info.trim().split(/\s+/, 1)[0].toLowerCase()
   const openingLine = state.doc.lineAt(node.from)
+  const openingMark = codeMarks[0]
   const sourceFrom = openingLine.to < state.doc.length ? openingLine.to + 1 : openingLine.to
   let sourceTo = node.to
   if (codeMarks.length > 1) sourceTo = state.doc.lineAt(codeMarks[codeMarks.length - 1].from).from
+  const source = state.doc.sliceString(sourceFrom, sourceTo).replace(/\n$/, "")
+  const detectedLanguage = explicitLanguage ? "" : detectLanguage(source)
+  const infoFrom = infoNode?.from ?? openingMark?.to ?? openingLine.to
+  const infoTo = infoNode?.to ?? infoFrom
+
   return {
-    language,
-    source: state.doc.sliceString(sourceFrom, sourceTo).replace(/\n$/, ""),
+    explicitLanguage,
+    language: explicitLanguage || detectedLanguage,
+    detectedLanguage,
+    metadata: info.trim().split(/\s+/).slice(1).join(" "),
+    rawInfo: info,
+    infoFrom,
+    infoTo,
+    sourceFrom,
+    source,
   }
 }
 
@@ -855,7 +980,13 @@ function fencedCodeAt(state, pos) {
   // not retain FencedCode as one of its parents.
   let node = syntaxTree(state).resolve(pos, -1)
   while (node) {
-    if (node.name === "FencedCode") return { from: node.from, to: node.to }
+    if (node.name === "FencedCode") {
+      return {
+        from: node.from,
+        to: node.to,
+        closed: node.node.lastChild?.name === "CodeMark",
+      }
+    }
     node = node.parent
   }
   return null
@@ -942,7 +1073,32 @@ const mermaidPreviews = StateField.define({
   provide: (field) => EditorView.decorations.from(field),
 })
 
-function buildDecorations(view) {
+function detectedCodeHighlights(details, cache) {
+  const cached = cache.get(details.sourceFrom)
+  if (cached?.language === details.detectedLanguage
+      && cached.source === details.source) {
+    return cached.tokens
+  }
+
+  const tokens = []
+  const language = LanguageDescription.matchLanguageName(
+    codeLanguages, details.detectedLanguage, false
+  )?.support?.language
+  if (language) {
+    highlightTree(language.parser.parse(details.source), codeHighlight,
+      (from, to, classes) => {
+        tokens.push({ from, to, mark: Decoration.mark({ class: classes }) })
+      })
+  }
+  cache.set(details.sourceFrom, {
+    language: details.detectedLanguage,
+    source: details.source,
+    tokens,
+  })
+  return tokens
+}
+
+function buildDecorations(view, detectedCodeCache) {
   const ranges = []
   const { state } = view
   const sel = state.selection.main
@@ -1345,8 +1501,34 @@ function buildDecorations(view) {
           const hidesClosingFence = closed && !touchesLineOf(last.from)
           const codeFirst = hidesOpeningFence && hasInterior
             ? state.doc.line(first.number + 1) : first
-          const codeLast = hidesClosingFence && hasInterior
-            ? state.doc.line(last.number - 1) : last
+          const widgetLine = hasInterior ? codeFirst : first
+          const codeLast = !hasInterior && name === "FencedCode"
+            ? first
+            : hidesClosingFence
+              ? state.doc.line(last.number - 1)
+              : last
+          if (name === "FencedCode") {
+            const details = fencedCodeDetails(state, node)
+            if (details.detectedLanguage) {
+              for (const token of detectedCodeHighlights(details, detectedCodeCache)) {
+                ranges.push(token.mark.range(
+                  details.sourceFrom + token.from,
+                  details.sourceFrom + token.to,
+                ))
+              }
+            }
+            ranges.push(Decoration.widget({
+              widget: new CodeLanguageWidget({
+                fenceFrom: node.from,
+                language: details.language,
+                detectedLanguage: details.detectedLanguage,
+                rawInfo: details.rawInfo,
+                infoFrom: details.infoFrom,
+                infoTo: details.infoTo,
+              }),
+              side: -1,
+            }).range(widgetLine.from))
+          }
           let pos = node.from
           while (pos <= node.to) {
             const line = state.doc.lineAt(pos)
@@ -1360,11 +1542,14 @@ function buildDecorations(view) {
               pos = line.to + 1
               continue
             }
-            if ((hidesOpeningFence && line.from === first.from)
-                || (hidesClosingFence && line.from === last.from)) {
+            const isWidgetLine = name === "FencedCode"
+              && line.from === widgetLine.from
+            if (((hidesOpeningFence && line.from === first.from)
+                || (hidesClosingFence && line.from === last.from))
+                && !isWidgetLine) {
               lineOnce(line.from, collapsedLine)
             } else if (name === "FencedCode" && !hasInterior
-                && line.from !== first.from) {
+                && line.from !== first.from && !isWidgetLine) {
               lineOnce(line.from, collapsedLine)
             } else {
               const isFirst = line.from === codeFirst.from
@@ -1384,9 +1569,8 @@ function buildDecorations(view) {
         }
         if (name === "CodeInfo") {
           const parent = node.node.parent
-          if (!parent || touchesLineOf(parent.from)) {
-            ranges.push(fenceMark.range(node.from, node.to))
-          }
+          if (!parent) return
+          if (touchesLineOf(parent.from)) ranges.push(fenceMark.range(node.from, node.to))
           return
         }
 
@@ -1434,10 +1618,14 @@ function buildDecorations(view) {
 }
 
 const livePreview = ViewPlugin.fromClass(class {
-  constructor(view) { this.decorations = buildDecorations(view) }
+  constructor(view) {
+    this.detectedCodeCache = new Map()
+    this.decorations = buildDecorations(view, this.detectedCodeCache)
+  }
   update(update) {
+    if (update.docChanged) this.detectedCodeCache.clear()
     if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged) {
-      this.decorations = buildDecorations(update.view)
+      this.decorations = buildDecorations(update.view, this.detectedCodeCache)
     }
   }
 }, { decorations: (v) => v.decorations })
@@ -1679,6 +1867,66 @@ function insertLink(view) {
   return true
 }
 
+// A second fence typed inside an existing block is a deliberate closing mark,
+// so only a fence that starts its own line can be paired automatically.
+const autoClosedFence = Annotation.define()
+
+function fenceStartAt(state, pos) {
+  let node = syntaxTree(state).resolve(pos, -1)
+  while (node) {
+    if (node.name === "FencedCode") return node.from
+    node = node.parent
+  }
+  return null
+}
+
+const autoCloseFence = EditorState.transactionFilter.of((tr) => {
+  if (!tr.docChanged || !tr.isUserEvent("input") || tr.annotation(autoClosedFence)) {
+    return tr
+  }
+
+  const selection = tr.newSelection.main
+  if (!selection.empty) return tr
+
+  const line = tr.newDoc.lineAt(selection.head)
+  const offset = selection.head - line.from
+  if (line.text.slice(0, offset) !== "```" || line.text.slice(offset) !== "") {
+    return tr
+  }
+
+  let openedOnThisLine = false
+  let openingOldPos = null
+  tr.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
+    if (openedOnThisLine || fromB > selection.head || toB < selection.head) return
+    const oldLine = tr.startState.doc.lineAt(fromA)
+    const oldPrefix = oldLine.text.slice(0, fromA - oldLine.from)
+    const oldSuffix = oldLine.text.slice(toA - oldLine.from)
+    const insertedText = inserted.toString()
+    const completesFence = (oldPrefix === "" && insertedText === "```")
+      || (oldPrefix === "``" && insertedText === "`")
+    openedOnThisLine = oldSuffix === ""
+      && completesFence
+      && fromB <= line.from + 2
+      && toB >= line.from + 3
+    if (openedOnThisLine) openingOldPos = fromA
+  })
+  if (!openedOnThisLine) return tr
+
+  const oldLine = tr.startState.doc.lineAt(openingOldPos)
+  const existingFenceStart = fenceStartAt(tr.startState, openingOldPos)
+  if (existingFenceStart != null && existingFenceStart < oldLine.from) return tr
+
+  return [
+    tr,
+    {
+      changes: { from: selection.head, insert: "\n\n```" },
+      selection: { anchor: selection.head + 1 },
+      annotations: autoClosedFence.of(true),
+      sequential: true,
+    },
+  ]
+})
+
 // Markdown assigns semantic meaning to four leading spaces: headings,
 // paragraphs, tables, fences, and other top-level blocks become code blocks.
 // List items are different: keep each Tab as authored, including repeated
@@ -1691,6 +1939,18 @@ function indentMarkdownListItems(view) {
       && selection.to === lastLine.from
       && lastLine.number > firstLine.number) {
     lastLine = view.state.doc.line(lastLine.number - 1)
+  }
+
+  if (selection.empty) {
+    const fence = fencedCodeAt(view.state, selection.head)
+    if (fence) {
+      const openingLine = view.state.doc.lineAt(fence.from)
+      const closingLine = view.state.doc.lineAt(fence.to)
+      if (firstLine.number > openingLine.number
+          && (!fence.closed || firstLine.number < closingLine.number)) {
+        return insertTab(view)
+      }
+    }
   }
 
   const firstMatch = firstLine.text.match(markdownListMarker)
@@ -1748,6 +2008,7 @@ window.MDEditor = {
           syntaxHighlighting(codeHighlight),
           livePreview,
           alignInactiveHeadings,
+          autoCloseFence,
           closeBrackets(),
           // paragraphReflow deliberately omitted: the preview renders
           // single newlines as hard breaks, so the
