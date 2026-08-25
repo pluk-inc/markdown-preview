@@ -267,6 +267,10 @@
 "Back to reference %d" = "返回脚注引用 %d";
 "KaTeX renderer is unavailable.\n\n" = "KaTeX 渲染器不可用。\n\n";
 
+/* URL scheme errors */
+"Cannot open link" = "无法打开链接";
+"“%@” is not a link Markdown Preview understands. Use md-preview://file/ followed by the absolute path of the file, for example md-preview://file/Users/me/notes/README.md." = "Markdown Preview 无法识别链接“%@”。请使用 md-preview://file/ 加文件的绝对路径，例如 md-preview://file/Users/me/notes/README.md。";
+
 /* CLI installer errors */
 "Terminal automation failed: %@" = "终端自动化失败：%@";
 "Terminal automation failed." = "终端自动化失败。";

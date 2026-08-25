@@ -155,7 +155,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         cancelScheduledDocumentPrompt()
 
-        for url in urls {
+        for incoming in urls {
+            let url: URL
+            if ExternalOpenScheme.isSchemeURL(incoming) {
+                guard let resolved = ExternalOpenScheme.fileURL(from: incoming) else {
+                    presentUnsupportedSchemeURLAlert(incoming)
+                    if pendingOpenURLCount == 0 {
+                        scheduleDocumentPrompt(requiresNoDocuments: true)
+                    }
+                    continue
+                }
+                url = resolved
+            } else {
+                url = incoming
+            }
+
             if url.isExistingDirectory {
                 openFolder(url)
                 continue
@@ -175,6 +189,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+    }
+
+    /// A malformed md-preview:// link tells the reader what shape the app
+    /// expects instead of failing silently — the link usually comes from a
+    /// hand-written web page, so the author is the one looking at the alert.
+    private func presentUnsupportedSchemeURLAlert(_ url: URL) {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = NSLocalizedString("Cannot open link",
+                                              comment: "URL scheme error")
+        alert.informativeText = String(
+            format: NSLocalizedString(
+                "“%@” is not a link Markdown Preview understands. Use md-preview://file/ followed by the absolute path of the file, for example md-preview://file/Users/me/notes/README.md.",
+                comment: "URL scheme error"
+            ),
+            url.absoluteString
+        )
+        alert.runModal()
     }
 
     /// `openDocument(withContentsOf:display:)` returns an existing document

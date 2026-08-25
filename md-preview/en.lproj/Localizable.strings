@@ -267,6 +267,10 @@
 "Back to reference %d" = "Back to reference %d";
 "KaTeX renderer is unavailable.\n\n" = "KaTeX renderer is unavailable.\n\n";
 
+/* URL scheme errors */
+"Cannot open link" = "Cannot open link";
+"“%@” is not a link Markdown Preview understands. Use md-preview://file/ followed by the absolute path of the file, for example md-preview://file/Users/me/notes/README.md." = "“%@” is not a link Markdown Preview understands. Use md-preview://file/ followed by the absolute path of the file, for example md-preview://file/Users/me/notes/README.md.";
+
 /* CLI installer errors */
 "Terminal automation failed: %@" = "Terminal automation failed: %@";
 "Terminal automation failed." = "Terminal automation failed.";
