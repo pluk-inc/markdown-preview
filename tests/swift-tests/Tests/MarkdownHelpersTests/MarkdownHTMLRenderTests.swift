@@ -164,6 +164,21 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(metrics.tableScrollbarDisplay, "none", json)
     }
 
+    func testPreviewShipsPerColumnResizeSymbols() {
+        let rendered = MarkdownHTML.render(
+            markdown: "| A | B |\n| --- | --- |\n| 1 | 2 |",
+            allowsScroll: true,
+            vendorLoading: .lazy
+        )
+        // Feature B ships the per-column resize subsystem in the inline host
+        // bridge. hasHostBridge gates it at runtime (Quick Look and bare test
+        // webviews stay inert), but the symbols must be present in the bundle.
+        XCTAssertTrue(rendered.html.contains("applyTableColumnResize"))
+        XCTAssertTrue(rendered.html.contains("md-col-resize"))
+        XCTAssertTrue(rendered.html.contains("tableColumnWidths"))
+        XCTAssertTrue(rendered.html.contains("md-table-resized"))
+    }
+
     @MainActor
     func testContentWidthModesLayOutDistinctArticleGeometry() async throws {
         func articleRect(contentWidth: MarkdownHTML.ContentWidth) async throws -> (x: Double, width: Double) {
