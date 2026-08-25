@@ -1,1 +1,1 @@
-../../../../md-preview/AutoSaveSetting.swift
+../../../../md-preview/Preferences/AutoSaveSetting.swift

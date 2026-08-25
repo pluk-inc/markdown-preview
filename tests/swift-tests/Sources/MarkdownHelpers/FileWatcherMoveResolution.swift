@@ -1,1 +1,1 @@
-../../../../md-preview/FileWatcherMoveResolution.swift
+../../../../md-preview/Helpers/FileWatcherMoveResolution.swift
