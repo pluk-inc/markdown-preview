@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.0.50] – 2026-08-25
+
+This release gives you more control over how Markdown Preview opens, displays, and saves documents. Editing gains automatic saving, bracket pairing, and a more capable fenced-code experience, while several window and navigation problems are fixed.
+
+### Added
+
+- **The inspector shows where a document is stored.** The Document pane now includes a selectable Where row beneath the file name. Paths inside your home folder use `~`, and the complete path appears when you hold the pointer over the row ([#277](https://github.com/pluk-inc/markdown-preview/pull/277)).
+- **Rendered Markdown can use a different font.** Settings ▸ General now offers System, Serif, Rounded, and Monospace choices. Open documents update immediately, and the same choice applies to Finder previews ([#302](https://github.com/pluk-inc/markdown-preview/pull/302)).
+- **Documents can open as tabs by default.** Enable Open documents in tabs under Settings ▸ General ▸ Windows to place files opened from Finder, File ▸ Open…, or Open Recent into the front window. The existing behaviour remains the default, and Open in New Window still opens a separate window ([#303](https://github.com/pluk-inc/markdown-preview/pull/303), [#230](https://github.com/pluk-inc/markdown-preview/issues/230)).
+- **Edited documents can save automatically.** Settings ▸ General includes automatic-saving choices from 30 seconds to 60 minutes. It is off by default and runs only for file-backed documents with unsaved changes. Automatic saving uses the existing external-change protection and reports its status in the window subtitle ([#305](https://github.com/pluk-inc/markdown-preview/pull/305)).
+- **The editor pairs brackets automatically.** Typing an opening bracket, parenthesis, brace, quote, or backtick inserts its matching character and leaves the insertion point between the pair. Backspace removes an unused pair together ([#306](https://github.com/pluk-inc/markdown-preview/pull/306)).
+- **Anonymous active-install counts can be shared with the project.** Release builds send at most one event per installation per UTC day so the project can measure daily and monthly active installations. The event contains a random installation identifier and coarse compatibility information, but no document content, file names, paths, actions, screens, precise location, personal information, advertising identifiers, or person profile. You can disable it under Settings ▸ Privacy ([#309](https://github.com/pluk-inc/markdown-preview/pull/309)).
+
+### Changed
+
+- **Always on Top is now an application-wide preference.** Turning it on affects every open and future preview window, persists across launches, and stays synchronized between the toolbar, View menu, and Settings ▸ General ▸ Windows ([#301](https://github.com/pluk-inc/markdown-preview/pull/301)).
+- **Fenced code blocks are easier to edit.** Tab inserts indentation inside code without changing fence lines, unlabelled blocks can detect and highlight common languages without modifying the source, and an explicit language field lets you add or change the authored language. Typing an opening fence also creates its matching closing fence ([#308](https://github.com/pluk-inc/markdown-preview/pull/308)).
+
+### Fixed
+
+- **The Files sidebar changes selection without flickering.** Its highlight now stays on the current file until the requested document finishes loading, then moves once to the new file ([#296](https://github.com/pluk-inc/markdown-preview/pull/296), [#295](https://github.com/pluk-inc/markdown-preview/issues/295)).
+- **A file reopens after its window has been closed.** Opening the same file again from Finder, Open With, or the command-line tool now creates a new window even when its document remained loaded in the running application ([#299](https://github.com/pluk-inc/markdown-preview/pull/299), [#297](https://github.com/pluk-inc/markdown-preview/issues/297)).
+
+### Contributors
+
+Thank you to the external contributors and reporter who helped improve this release:
+
+- [@caic99](https://github.com/caic99) — added the document location to the inspector ([#277](https://github.com/pluk-inc/markdown-preview/pull/277))
+- [@zjy365](https://github.com/zjy365) — reported and fixed the Files sidebar selection flicker ([#296](https://github.com/pluk-inc/markdown-preview/pull/296), [#295](https://github.com/pluk-inc/markdown-preview/issues/295))
+- [@bosir](https://github.com/bosir) — reported and fixed reopening files whose windows were closed ([#299](https://github.com/pluk-inc/markdown-preview/pull/299), [#297](https://github.com/pluk-inc/markdown-preview/issues/297))
+- [@kud](https://github.com/kud) — made Always on Top persistent, added the rendered-document font choices, and added the tab-opening preference ([#301](https://github.com/pluk-inc/markdown-preview/pull/301), [#302](https://github.com/pluk-inc/markdown-preview/pull/302), [#303](https://github.com/pluk-inc/markdown-preview/pull/303))
+- [@wzz6423](https://github.com/wzz6423) — added automatic saving and bracket pairing, and improved fenced-code editing ([#305](https://github.com/pluk-inc/markdown-preview/pull/305), [#306](https://github.com/pluk-inc/markdown-preview/pull/306), [#308](https://github.com/pluk-inc/markdown-preview/pull/308))
+- [@andrew-hill](https://github.com/andrew-hill) — requested the option to open documents in tabs ([#230](https://github.com/pluk-inc/markdown-preview/issues/230))
+
 ## [0.0.49] – 2026-08-15
 
 This release adds a Settings window that collects all the preferences of the application in one place. It also makes the keyboard commands and a new Copy button work in a Finder preview.
