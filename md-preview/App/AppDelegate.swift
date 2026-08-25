@@ -155,19 +155,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         cancelScheduledDocumentPrompt()
 
+        var malformedSchemeURLs: [URL] = []
         for incoming in urls {
-            let url: URL
-            if ExternalOpenScheme.isSchemeURL(incoming) {
-                guard let resolved = ExternalOpenScheme.fileURL(from: incoming) else {
-                    presentUnsupportedSchemeURLAlert(incoming)
-                    if pendingOpenURLCount == 0 {
-                        scheduleDocumentPrompt(requiresNoDocuments: true)
-                    }
-                    continue
-                }
-                url = resolved
-            } else {
-                url = incoming
+            guard let url = ExternalOpenScheme.resolvedURL(opening: incoming) else {
+                malformedSchemeURLs.append(incoming)
+                continue
             }
 
             if url.isExistingDirectory {
@@ -184,18 +176,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 self.showWindowIfNeeded(for: document)
                 self.pendingOpenURLCount -= 1
-                if error != nil, self.pendingOpenURLCount == 0 {
-                    self.scheduleDocumentPrompt(requiresNoDocuments: true)
+                if error != nil {
+                    self.scheduleDocumentPromptIfIdle()
                 }
             }
         }
+
+        if !malformedSchemeURLs.isEmpty {
+            presentUnsupportedSchemeURLAlert(malformedSchemeURLs)
+            scheduleDocumentPromptIfIdle()
+        }
+    }
+
+    /// Re-offers the open panel once every open in the batch has failed —
+    /// without it the app would sit windowless after a bad link or a
+    /// vanished file.
+    private func scheduleDocumentPromptIfIdle() {
+        guard pendingOpenURLCount == 0 else { return }
+        scheduleDocumentPrompt(requiresNoDocuments: true)
     }
 
     /// A malformed md-preview:// link tells the reader what shape the app
     /// expects instead of failing silently — the link usually comes from a
     /// hand-written web page, so the author is the one looking at the alert.
-    private func presentUnsupportedSchemeURLAlert(_ url: URL) {
-        NSApp.activate(ignoringOtherApps: true)
+    private func presentUnsupportedSchemeURLAlert(_ urls: [URL]) {
         let alert = NSAlert()
         alert.messageText = NSLocalizedString("Cannot open link",
                                               comment: "URL scheme error")
@@ -204,7 +208,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 "“%@” is not a link Markdown Preview understands. Use md-preview://file/ followed by the absolute path of the file, for example md-preview://file/Users/me/notes/README.md.",
                 comment: "URL scheme error"
             ),
-            url.absoluteString
+            urls.map(\.absoluteString).joined(separator: "\n")
         )
         alert.runModal()
     }
