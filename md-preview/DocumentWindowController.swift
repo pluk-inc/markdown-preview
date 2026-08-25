@@ -217,9 +217,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         split.onEditTable = { [weak self] request in
             self?.applyTableEdit(request)
         }
-        split.onImageClick = { [weak self] url in
-            self?.renameImage(at: url)
-        }
         documentWindow.contentViewController = split
         documentWindow.setContentSize(NSSize(width: 1100, height: 720))
         documentWindow.center()

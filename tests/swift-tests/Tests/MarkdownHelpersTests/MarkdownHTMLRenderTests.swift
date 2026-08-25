@@ -3,7 +3,7 @@ import WebKit
 @testable import MarkdownHelpers
 
 final class MarkdownHTMLRenderTests: XCTestCase {
-    func testLocalMarkdownImagesKeepRelativeSourceAndClickBridge() {
+    func testLocalMarkdownImagesRemainReadOnlyInPreview() {
         let rendered = MarkdownHTML.render(
             markdown: "![1](notes-pictures/1.png)",
             assetBaseHref: "md-asset:///Users/me/notes/",
@@ -12,7 +12,8 @@ final class MarkdownHTMLRenderTests: XCTestCase {
 
         XCTAssertTrue(rendered.articleHTML.contains("<img src=\"notes-pictures/1.png\""))
         XCTAssertTrue(rendered.html.contains("<base href=\"md-asset:///Users/me/notes/\">"))
-        XCTAssertTrue(rendered.html.contains("kind: 'imageClick'"))
+        XCTAssertFalse(rendered.html.contains("kind: 'imageClick'"))
+        XCTAssertTrue(rendered.html.contains("a, button, input, img"))
     }
 
     func testYamlFrontmatterRendersAsTableBeforeDocumentBody() {
