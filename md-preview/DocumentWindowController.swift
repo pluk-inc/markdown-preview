@@ -219,8 +219,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         documentWindow.toolbar = toolbar
         documentWindow.toolbarStyle = .automatic
 
-        applyWindowBackgroundTheme()
+        // After installFindBar: the theme pass styles the find bar's
+        // scroll-edge preference (the hidden accessory's .hard is what
+        // draws the classic opaque toolbar backdrop when unthemed), and
+        // with no patrol re-applying it, ordering is the only chance.
         installFindBar()
+        applyWindowBackgroundTheme()
     }
 
     /// Applies the user's theme colors to this window: the native window
