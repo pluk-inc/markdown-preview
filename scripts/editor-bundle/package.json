@@ -6,6 +6,7 @@
     "build": "node build.mjs"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6",
     "@codemirror/commands": "^6",
     "@codemirror/lang-css": "^6",
     "@codemirror/lang-html": "^6",

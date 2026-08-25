@@ -139,6 +139,26 @@ check("repeated Shift-Tab returns a deeply indented list item to its original de
   indentationEditor.getMarkdown() === "- Parent\n- Alpha\n- Beta")
 indentationEditor.destroy()
 
+const bracketCases = [
+  ["paragraph", "Hello", 5, "(", ")", "Hello()", "Hello(x)"],
+  ["ATX heading", "# Heading", 9, "[", "]", "# Heading[]", "# Heading[x]"],
+  ["Setext heading", "Heading\n=======", 7, "{", "}", "Heading{}\n=======", "Heading{x}\n======="],
+  ["fenced code block", "```js\ncall\n```", 10, "(", ")", "```js\ncall()\n```", "```js\ncall(x)\n```"],
+]
+for (const [label, source, cursorPos, openBracket, closeBracket, expectedText, expectedAtCursor] of bracketCases) {
+  const bracketHost = dom.window.document.createElement("div")
+  dom.window.document.body.appendChild(bracketHost)
+  const bracketEditor = dom.window.MDEditor.create(bracketHost, source, {})
+  bracketEditor.select(cursorPos)
+  bracketEditor.insert(openBracket)
+  check(`typing ${openBracket} in ${label} auto-closes with ${closeBracket}`,
+    bracketEditor.getMarkdown() === expectedText)
+  bracketEditor.insert("x")
+  check(`cursor lands between ${openBracket}${closeBracket} in ${label}`,
+    bracketEditor.getMarkdown() === expectedAtCursor)
+  bracketEditor.destroy()
+}
+
 const inlineTabHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(inlineTabHost)
 const inlineTabEditor = dom.window.MDEditor.create(
@@ -165,6 +185,24 @@ inlineTabContent?.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 check("Tab at a paragraph's leading edge preserves its Markdown block type",
   inlineTabEditor.getMarkdown() === "Plain\t paragraph")
 inlineTabEditor.destroy()
+
+const fencedTabHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(fencedTabHost)
+const fencedTabEditor = dom.window.MDEditor.create(
+  fencedTabHost, "intro\n```c\nint main() {\nreturn 0;\n}\n```", {})
+const fencedTabContent = fencedTabHost.querySelector(".cm-content")
+fencedTabEditor.select(fencedTabEditor.getMarkdown().indexOf("return"))
+const fencedTabEvent = new dom.window.KeyboardEvent("keydown", {
+  key: "Tab",
+  code: "Tab",
+  bubbles: true,
+  cancelable: true,
+})
+fencedTabContent?.dispatchEvent(fencedTabEvent)
+check("Tab indents from the leading edge of fenced code content",
+  fencedTabEvent.defaultPrevented
+    && fencedTabEditor.getMarkdown().includes("\n\treturn 0;"))
+fencedTabEditor.destroy()
 
 const topLevelBlockCases = [
   ["ATX heading", "# Heading"],
@@ -440,6 +478,126 @@ check("bundled legacy language stays syntax highlighted",
   legacyCodeHost.querySelector(".hl-keyword")?.textContent === "let")
 legacyCodeEditor.destroy()
 
+const detectedCodeHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(detectedCodeHost)
+let detectedCodeDirtyCount = 0
+const detectedCodeSource = "intro\n```\nconst answer = 42\n```"
+const detectedCodeEditor = dom.window.MDEditor.create(
+  detectedCodeHost,
+  detectedCodeSource,
+  { onDirty: () => { detectedCodeDirtyCount++ } },
+)
+const detectedLanguageInput = detectedCodeHost.querySelector(
+  ".cm-md-code-language-input"
+)
+check("detected language is shown as the language input value",
+  detectedLanguageInput != null
+    && detectedLanguageInput.value === "javascript"
+    && detectedLanguageInput.placeholder === "language")
+check("detected language applies its CodeMirror highlighting rules",
+  detectedCodeHost.querySelector(".hl-keyword")?.textContent === "const")
+check("automatic language rendering leaves Markdown byte-faithful",
+  detectedCodeEditor.getMarkdown() === detectedCodeSource
+    && detectedCodeDirtyCount === 0)
+detectedLanguageInput?.focus()
+detectedLanguageInput?.blur()
+check("focusing and blurring a detected language does not write the fence",
+  detectedCodeEditor.getMarkdown() === detectedCodeSource
+    && detectedCodeDirtyCount === 0)
+const editableDetectedLanguageInput = detectedCodeHost.querySelector(
+  ".cm-md-code-language-input"
+)
+editableDetectedLanguageInput?.focus()
+if (editableDetectedLanguageInput) {
+  editableDetectedLanguageInput.value = "typescript"
+  editableDetectedLanguageInput.dispatchEvent(
+    new dom.window.Event("change", { bubbles: true })
+  )
+}
+check("language input writes the explicit fence language",
+  detectedCodeEditor.getMarkdown() === "intro\n```typescript\nconst answer = 42\n```")
+detectedCodeEditor.destroy()
+
+const detectedCHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(detectedCHost)
+const detectedCSource = "intro\n```\nint main(){\nreturn 0;\n}\n```"
+const detectedCEditor = dom.window.MDEditor.create(
+  detectedCHost, detectedCSource, {})
+const detectedCInput = detectedCHost.querySelector(".cm-md-code-language-input")
+check("C code is automatically marked as c",
+  detectedCInput?.value === "c"
+    && detectedCInput.placeholder === "language")
+check("automatically detected C uses the bundled C parser",
+  Array.from(detectedCHost.querySelectorAll(".hl-keyword"))
+    .some((node) => node.textContent === "int" || node.textContent === "return"))
+check("automatic C rendering does not rewrite the opening fence",
+  detectedCEditor.getMarkdown() === detectedCSource)
+detectedCEditor.destroy()
+
+const metadataCodeHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(metadataCodeHost)
+const metadataCodeEditor = dom.window.MDEditor.create(
+  metadataCodeHost, "```js title=\"answer.js\"\nconst answer = 42\n```", {})
+const metadataInput = metadataCodeHost.querySelector(".cm-md-code-language-input")
+metadataInput?.focus()
+if (metadataInput) {
+  metadataInput.value = "typescript"
+  metadataInput.dispatchEvent(new dom.window.Event("change", { bubbles: true }))
+}
+check("language edits preserve fence metadata",
+  metadataCodeEditor.getMarkdown() ===
+    "```typescript title=\"answer.js\"\nconst answer = 42\n```")
+metadataCodeEditor.destroy()
+
+const autoFenceHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(autoFenceHost)
+const autoFenceEditor = dom.window.MDEditor.create(autoFenceHost, "intro\n", {})
+autoFenceEditor.select(autoFenceEditor.getMarkdown().length)
+for (const character of "```") autoFenceEditor.insert(character)
+check("typing an opening fence inserts its own closing fence",
+  autoFenceEditor.getMarkdown() === "intro\n```\n\n```")
+const emptyCodeLine = autoFenceHost.querySelector(".cm-md-codeblock-first")
+check("auto-closed empty code line keeps its caret buffer after the language widget",
+  emptyCodeLine?.querySelector(".cm-md-code-language + .cm-widgetBuffer") != null)
+autoFenceEditor.insert("body")
+check("auto-closed fence leaves the cursor in its content",
+  autoFenceEditor.getMarkdown() === "intro\n```\nbody\n```")
+autoFenceEditor.destroy()
+
+const authoredCHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(authoredCHost)
+const authoredCEditor = dom.window.MDEditor.create(authoredCHost, "intro\n", {})
+authoredCEditor.select(authoredCEditor.getMarkdown().length)
+for (const character of "```") authoredCEditor.insert(character)
+authoredCEditor.insert("int main(){\nreturn 0;\n}")
+check("newly authored C code is detected and highlighted immediately",
+  authoredCHost.querySelector(".cm-md-code-language-input")?.value === "c"
+    && Array.from(authoredCHost.querySelectorAll(".hl-keyword"))
+      .some((node) => node.textContent === "int" || node.textContent === "return")
+    && authoredCEditor.getMarkdown() ===
+      "intro\n```\nint main(){\nreturn 0;\n}\n```")
+authoredCEditor.destroy()
+
+const unclosedFenceHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(unclosedFenceHost)
+const unclosedFenceEditor = dom.window.MDEditor.create(
+  unclosedFenceHost, "```\nbody\n", {})
+unclosedFenceEditor.select(unclosedFenceEditor.getMarkdown().length)
+for (const character of "```") unclosedFenceEditor.insert(character)
+check("typing an existing block's closing fence does not pair it again",
+  unclosedFenceEditor.getMarkdown() === "```\nbody\n```")
+unclosedFenceEditor.destroy()
+
+const emptyFenceHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(emptyFenceHost)
+const emptyFenceEditor = dom.window.MDEditor.create(
+  emptyFenceHost, "intro\n```\n```", {})
+check("empty fenced blocks keep their language input visible",
+  emptyFenceHost.querySelector(".cm-md-code-language-input") != null
+    && emptyFenceHost.querySelector(".cm-md-code-language-input")
+      .closest(".cm-line")?.classList.contains("cm-md-line-collapsed") !== true)
+emptyFenceEditor.destroy()
+
 const hclSource = `terraform {
   required_providers {
     random = { source = "hashicorp/random", version = "~> 3.0" }
@@ -489,12 +647,23 @@ dom.window.document.body.appendChild(authoredMermaidHost)
 const authoredMermaidEditor = dom.window.MDEditor.create(
   authoredMermaidHost, "intro\n", {})
 authoredMermaidEditor.select(authoredMermaidEditor.getMarkdown().length)
-for (const character of "```mermaid\nflowchart LR\n  A --> B\n```") {
+for (const character of "```") {
   authoredMermaidEditor.insert(character)
 }
+const authoredMermaidLanguage = authoredMermaidHost.querySelector(
+  ".cm-md-code-language-input"
+)
+if (authoredMermaidLanguage) {
+  authoredMermaidLanguage.value = "mermaid"
+  authoredMermaidLanguage.dispatchEvent(
+    new dom.window.Event("change", { bubbles: true })
+  )
+}
+authoredMermaidEditor.insert("flowchart LR\n  A --> B")
 check("newly typed Mermaid fence remains editable at the cursor",
   authoredMermaidHost.querySelector(".cm-md-mermaid-preview") == null
     && authoredMermaidHost.querySelector(".cm-md-code-fence-source-hidden") == null)
+authoredMermaidEditor.select(authoredMermaidEditor.getMarkdown().length)
 authoredMermaidEditor.insert("\n")
 check("newly typed Mermaid fence previews after the cursor leaves",
   authoredMermaidHost.querySelector(".cm-md-mermaid-preview") != null)

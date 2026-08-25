@@ -1483,6 +1483,83 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         }
     }
 
+    func testUntypedCodeBlockKeepsDetectedLanguageInRenderedHTML() {
+        for (source, language) in [
+            ("const answer = 42", "javascript"),
+            ("int main(){\nreturn 0;\n}", "c"),
+        ] {
+            let rendered = MarkdownHTML.render(
+                markdown: "```\n\(source)\n```",
+                vendorLoading: .lazy
+            )
+
+            XCTAssertTrue(rendered.containsCode)
+            XCTAssertTrue(
+                rendered.articleHTML.contains(
+                    "<code class=\"language-\(language)\" data-md-detected-language=\"true\">"
+                ),
+                rendered.articleHTML
+            )
+        }
+    }
+
+    @MainActor
+    func testReadModeAutoHighlightsUntypedJavaScript() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ```
+            const answer = 42
+            ```
+            """,
+            vendorLoading: .lazy
+        )
+        let highlightJS = try TestVendor.script(
+            "md-preview/Vendor/Highlight/highlight.min.js"
+        )
+        let html = """
+        <!DOCTYPE html>
+        <html><body>
+        \(rendered.articleHTML)
+        <script>\(highlightJS)</script>
+        <script>
+        const MdPreviewPerf = { log() {}, now: () => performance.now() };
+        window.requestAnimationFrame = (callback) => callback();
+        \(MarkdownHTML.highlightAllBody)
+        highlightAll();
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 700, height: 300))
+        webView.loadHTMLString(html, baseURL: TestVendor.repositoryRoot)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        for _ in 0..<100 {
+            let done = try await webView.evaluateJavaScript(
+                "document.querySelector('code').dataset.hljsDone === '1'"
+            ) as? Bool
+            if done == true { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let result = try await webView.evaluateJavaScript("""
+        JSON.stringify({
+            language: Array.from(document.querySelector('code').classList)
+                .find((name) => name.startsWith('language-')),
+            keyword: document.querySelector('.hljs-keyword')?.textContent,
+            done: document.querySelector('code').dataset.hljsDone === '1',
+        })
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let values = try JSONDecoder().decode(
+            AutoDetectedHighlightValues.self,
+            from: Data(json.utf8)
+        )
+        XCTAssertEqual(values.language, "language-javascript")
+        XCTAssertEqual(values.keyword, "const")
+        XCTAssertTrue(values.done)
+    }
+
     @MainActor
     func testReadModeHighlightsHCLFenceAliases() async throws {
         let hcl = """
@@ -2057,6 +2134,12 @@ private struct HCLHighlightValues: Decodable, CustomStringConvertible {
     var description: String {
         "\(language): keywords=\(keywords), strings=\(strings), numbers=\(numbers), done=\(done)"
     }
+}
+
+private struct AutoDetectedHighlightValues: Decodable {
+    let language: String?
+    let keyword: String?
+    let done: Bool
 }
 
 private struct MermaidLayoutMetrics: Decodable {

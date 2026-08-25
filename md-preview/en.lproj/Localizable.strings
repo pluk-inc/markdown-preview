@@ -15,6 +15,13 @@
 "Large" = "Large";
 "Content width" = "Content width";
 "Zooming a document window with ⌘+ and ⌘− changes this same size." = "Zooming a document window with ⌘+ and ⌘− changes this same size.";
+"Editing" = "Editing";
+"Automatic saving" = "Automatic saving";
+"Save edited documents periodically." = "Save edited documents periodically.";
+"Automatic saving runs while a document has unsaved edits." = "Automatic saving runs while a document has unsaved edits.";
+"30 seconds" = "30 seconds";
+"1 minute" = "1 minute";
+"%d minutes" = "%d minutes";
 "Hand-off" = "Hand-off";
 "Open documents in" = "Open documents in";
 "AI apps" = "AI apps";
@@ -53,6 +60,8 @@
 "Current theme: %@" = "Current theme: %@";
 "Send anonymous crash reports" = "Send anonymous crash reports";
 "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information.";
+"Share anonymous usage analytics" = "Share anonymous usage analytics";
+"When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS major version, processor architecture, and locale country or region. This is used only to count daily and monthly active installations and understand basic platform compatibility. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers." = "When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS major version, processor architecture, and locale country or region. This is used only to count daily and monthly active installations and understand basic platform compatibility. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers.";
 
 /* View menu */
 "Appearance" = "Appearance";
@@ -127,7 +136,7 @@
 "Inspector" = "Inspector";
 "Get Info" = "Get Info";
 "Always on Top" = "Always on Top";
-"Keep this window in front of other apps" = "Keep this window in front of other apps";
+"Keep Markdown Preview windows in front of other apps" = "Keep Markdown Preview windows in front of other apps";
 "Show the inspector" = "Show the inspector";
 "Share" = "Share";
 "Share document" = "Share document";
@@ -175,6 +184,7 @@
 "Document" = "Document";
 "Properties" = "Properties";
 "File Name" = "File Name";
+"Full Path" = "Full Path";
 "Document Type" = "Document Type";
 "Markdown Document" = "Markdown Document";
 "File Size" = "File Size";
@@ -190,6 +200,7 @@
 
 /* Document state and save dialogs */
 "Edited" = "Edited";
+"Auto-save failed" = "Auto-save failed";
 "Do you want to save your changes?" = "Do you want to save your changes?";
 "this document" = "this document";
 "Your changes to %@ will be lost if you don’t save them." = "Your changes to %@ will be lost if you don’t save them.";
@@ -261,3 +272,18 @@
 "Terminal automation failed." = "Terminal automation failed.";
 "Failed to write CLI installer script: %@" = "Failed to write CLI installer script: %@";
 "The bundled Markdown Preview CLI could not be found." = "The bundled Markdown Preview CLI could not be found.";
+
+/* Settings — Reading */
+"Reading" = "Reading";
+"Font" = "Font";
+"System" = "System";
+"Serif" = "Serif";
+"Rounded" = "Rounded";
+"Monospace" = "Monospace";
+"The font also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes the text size." = "The font also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes the text size.";
+
+/* Settings — Windows */
+"Windows" = "Windows";
+"Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out.";
+"Open documents in tabs" = "Open documents in tabs";
+"A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window.";
