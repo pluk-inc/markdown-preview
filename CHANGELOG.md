@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.0.51] – 2026-08-25
+
+This release lets you color the whole application with themes, and it lets a link in a browser or another application open a Markdown file directly.
+
+### Added
+
+- **Theme colors change the look of the whole window.** Settings ▸ Appearance offers six built-in presets — Red Graphite, Dark Graphite, High Contrast, Charcoal, Solarized Light, and Solarized Dark — and separate color wells for the window background, the code block background, the text, and the links. A theme reaches the page, the toolbar, the sidebar, edit mode, and full screen, in both light and dark appearance ([#294](https://github.com/pluk-inc/markdown-preview/pull/294)).
+- **A `md-preview://` link opens a file from a browser.** A link in the shape `md-preview://file/<absolute path>` opens the file in the application, like `cursor://file/…` does for Cursor. A folder path opens through the normal folder flow, and a malformed link shows an alert that explains the expected shape ([#312](https://github.com/pluk-inc/markdown-preview/pull/312), [#304](https://github.com/pluk-inc/markdown-preview/issues/304)).
+
+### Changed
+
+- **The Appearance pane in Settings replaces the Theme pane.** The Automatic, Light, and Dark picker moved there from the General pane, and the Settings window always opens on the General pane ([#294](https://github.com/pluk-inc/markdown-preview/pull/294)).
+- **The tab bar no longer shows a "+" button.** File ▸ New Tab and ⌘T still create a tab ([#294](https://github.com/pluk-inc/markdown-preview/pull/294)).
+
+### Contributors
+
+Thank you to the reporter who helped shape this release:
+
+- [@federicolarumbe](https://github.com/federicolarumbe) — requested the URL scheme that opens a file from a browser ([#304](https://github.com/pluk-inc/markdown-preview/issues/304))
+
 ## [0.0.50] – 2026-08-25
 
 This release gives you more control over how Markdown Preview opens, displays, and saves documents. Editing gains automatic saving, bracket pairing, and a more capable fenced-code experience, while several window and navigation problems are fixed.
