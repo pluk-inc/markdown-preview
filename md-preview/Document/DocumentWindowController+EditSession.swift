@@ -315,7 +315,10 @@ extension DocumentWindowController {
             }
         }
         if !exitAfter {
-            editor?.load(markdown: markdown)
+            editor?.load(
+                markdown: markdown,
+                assetBaseURL: currentFileURL?.deletingLastPathComponent()
+            )
         }
         completeSuccessfulEditorCommit(exitAfter: exitAfter, rerender: true)
     }
@@ -378,6 +381,8 @@ extension DocumentWindowController {
         }
         split.editorViewController?.contentDidChange = nil
         split.editorViewController?.cancelRequested = nil
+        split.editorViewController?.pasteImageRequested = nil
+        split.editorViewController?.imageClicked = nil
         documentWindow.makeFirstResponder(nil)
         let overlayHidden: (() -> Void)? = hidesAccessoryAfterFade
             ? { [weak self] in self?.dismissEditChrome() }
@@ -401,7 +406,7 @@ extension DocumentWindowController {
         }
     }
 
-    private func diskFileState(for url: URL?, expectedMarkdown: String?) -> DiskFileState {
+    func diskFileState(for url: URL?, expectedMarkdown: String?) -> DiskFileState {
         guard let url, let expectedMarkdown else { return .unreadable }
         do {
             let diskMarkdown = try String(contentsOf: url, encoding: .utf8)
@@ -411,9 +416,9 @@ extension DocumentWindowController {
         }
     }
 
-    private func saveEditedMarkdown(_ text: String,
-                                    diskState: DiskFileState,
-                                    completion: @escaping (EditedMarkdownSaveResult) -> Void) {
+    func saveEditedMarkdown(_ text: String,
+                            diskState: DiskFileState,
+                            completion: @escaping (EditedMarkdownSaveResult) -> Void) {
         guard let url = currentFileURL else {
             completion(.cancelled)
             return
@@ -624,7 +629,7 @@ extension DocumentWindowController {
         }
     }
 
-    private func rerenderCurrentPreview() {
+    func rerenderCurrentPreview() {
         guard let url = currentFileURL, let markdown = currentMarkdown else { return }
         renderCurrentDocument(text: markdown, fileURL: url)
     }
