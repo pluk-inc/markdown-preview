@@ -199,11 +199,12 @@ extension DocumentWindowController {
         NSAlert(error: error).beginSheetModal(for: documentWindow)
     }
 
-    func renderCurrentDocument(text: String, fileURL: URL) {
+    func renderCurrentDocument(text: String, fileURL: URL?) {
         (documentWindow.contentViewController as? MainSplitViewController)?
             .display(markdown: text,
-                     fileName: fileURL.lastPathComponent,
+                     fileName: fileURL?.lastPathComponent
+                         ?? NSLocalizedString("Untitled", comment: "Untitled document name"),
                      url: fileURL,
-                     assetBaseURL: fileURL.deletingLastPathComponent())
+                     assetBaseURL: fileURL?.deletingLastPathComponent())
     }
 }

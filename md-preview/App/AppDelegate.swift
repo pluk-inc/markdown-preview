@@ -84,6 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
 
     private var settingsWindowController: SettingsWindowController?
+    private var documentPickerWindowController: DocumentPickerWindowController?
 
     private weak var hideSidebarMenuItem: NSMenuItem?
     private weak var outlineMenuItem: NSMenuItem?
@@ -124,7 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installViewMenuItemIcons()
         hasFinishedLaunching = true
         if !didReceiveOpenURLsDuringLaunch {
-            scheduleDocumentPrompt(requiresNoDocuments: true)
+            scheduleDocumentPicker(requiresNoDocuments: true)
         }
     }
 
@@ -137,13 +138,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationOpenUntitledFile(_ sender: NSApplication) -> Bool {
-        scheduleDocumentPrompt(requiresNoDocuments: true)
+        scheduleDocumentPicker(requiresNoDocuments: true)
         return true
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag {
-            scheduleDocumentPrompt(requiresNoDocuments: true)
+            scheduleDocumentPicker(requiresNoDocuments: true)
             return false
         }
         return true
@@ -177,23 +178,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.showWindowIfNeeded(for: document)
                 self.pendingOpenURLCount -= 1
                 if error != nil {
-                    self.scheduleDocumentPromptIfIdle()
+                    self.scheduleDocumentPickerIfIdle()
                 }
             }
         }
 
         if !malformedSchemeURLs.isEmpty {
             presentUnsupportedSchemeURLAlert(malformedSchemeURLs)
-            scheduleDocumentPromptIfIdle()
+            scheduleDocumentPickerIfIdle()
         }
     }
 
-    /// Re-offers the open panel once every open in the batch has failed —
-    /// without it the app would sit windowless after a bad link or a
-    /// vanished file.
-    private func scheduleDocumentPromptIfIdle() {
+    /// Re-offers the document picker once every open in the batch has failed.
+    private func scheduleDocumentPickerIfIdle() {
         guard pendingOpenURLCount == 0 else { return }
-        scheduleDocumentPrompt(requiresNoDocuments: true)
+        scheduleDocumentPicker(requiresNoDocuments: true)
     }
 
     /// A malformed md-preview:// link tells the reader what shape the app
@@ -404,7 +403,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @IBAction func openDocument(_ sender: Any?) {
+        documentPickerWindowController?.close()
         promptForDocument()
+    }
+
+    @IBAction func newDocument(_ sender: Any?) {
+        documentPickerWindowController?.close()
+        if activeOpenPanel != nil {
+            activeOpenPanel?.cancel(nil)
+            DispatchQueue.main.async { [weak self] in
+                self?.newDocument(nil)
+            }
+            return
+        }
+
+        let document = MarkdownDocument()
+        NSDocumentController.shared.addDocument(document)
+        document.makeWindowControllers()
+        document.showWindows()
+        (document.windowControllers.first as? DocumentWindowController)?.enterEditMode()
     }
 
     @IBAction func performFindPanelAction(_ sender: Any?) {
@@ -499,27 +516,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func promptForDocument() {
         guard !isPromptingForDocument else { return }
         isPromptingForDocument = true
-        defer { isPromptingForDocument = false }
 
         let panel = makeOpenPanel()
         activeOpenPanel = panel
-        defer { activeOpenPanel = nil }
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        if url.isExistingDirectory {
-            openFolder(url)
-            return
-        }
+        panel.begin { [weak self] response in
+            guard let self else { return }
+            self.activeOpenPanel = nil
+            self.isPromptingForDocument = false
+            guard response == .OK, let url = panel.url else { return }
+            if url.isExistingDirectory {
+                self.openFolder(url)
+                return
+            }
 
-        isOpeningDocumentFromPrompt = true
-        NSDocumentController.shared.openDocument(withContentsOf: url,
-                                                 display: true) { [weak self] _, _, error in
-            self?.isOpeningDocumentFromPrompt = false
-            guard let error else { return }
-            NSAlert(error: error).runModal()
+            self.isOpeningDocumentFromPrompt = true
+            NSDocumentController.shared.openDocument(withContentsOf: url,
+                                                     display: true) { [weak self] _, _, error in
+                self?.isOpeningDocumentFromPrompt = false
+                guard let error else { return }
+                NSAlert(error: error).runModal()
+            }
         }
     }
 
-    private func scheduleDocumentPrompt(requiresNoDocuments: Bool = false) {
+    private func scheduleDocumentPicker(requiresNoDocuments: Bool = false) {
         guard !isPromptingForDocument,
               !isDocumentPromptScheduled else { return }
 
@@ -532,8 +552,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.isDocumentPromptScheduled = false
             guard !requiresNoDocuments || NSDocumentController.shared.documents.isEmpty else { return }
             NSApp.activate(ignoringOtherApps: true)
-            self.promptForDocument()
+            self.showDocumentPicker()
         }
+    }
+
+    private func showDocumentPicker() {
+        let controller = documentPickerWindowController ?? DocumentPickerWindowController(
+            onNewDocument: { [weak self] in self?.newDocument(nil) },
+            onOpenDocument: { [weak self] in self?.promptForDocument() },
+            onDismiss: { [weak self] in self?.documentPickerWindowController = nil }
+        )
+        documentPickerWindowController = controller
+        controller.show()
     }
 
     private func cancelScheduledDocumentPrompt() {
