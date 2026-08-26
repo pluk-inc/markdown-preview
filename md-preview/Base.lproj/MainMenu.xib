@@ -16,6 +16,7 @@
                 <outlet property="checkForUpdatesMenuItem" destination="spk-cu-itm" id="spk-cu-out"/>
             </connections>
         </customObject>
+        <customObject id="Mdc-Ns-001" userLabel="Document Controller" customClass="MarkdownDocumentController" customModule="Markdown_Preview" customModuleProvider="target"/>
         <menu title="Main Menu" systemMenu="main" id="AYu-sK-qS6">
             <items>
                 <menuItem title="Markdown Preview" id="1Xt-HY-uBw">

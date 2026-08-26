@@ -5,7 +5,6 @@
 
 import Cocoa
 import Sparkle
-import UniformTypeIdentifiers
 
 private enum CommandLineToolInstallError: LocalizedError {
     case terminalAutomationFailed(String?)
@@ -93,19 +92,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private weak var darkAppearanceMenuItem: NSMenuItem?
     private weak var normalContentWidthMenuItem: NSMenuItem?
     private weak var fullContentWidthMenuItem: NSMenuItem?
-    private var isOpeningDocumentFromPrompt = false
-    private var isPromptingForDocument = false
     private var isDocumentPromptScheduled = false
     private var documentPromptScheduleGeneration = 0
     private var didReceiveOpenURLsDuringLaunch = false
     private var hasFinishedLaunching = false
     private var pendingOpenURLCount = 0
-    private weak var activeOpenPanel: NSOpenPanel?
     private var isTerminationSaveInProgress = false
     private var pendingTerminationSaveCount = 0
     private var terminationSaveFailed = false
-
-    private static let markdownFileExtensions = ["md", "markdown", "mdown", "txt"]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         CrashReporter.start()
@@ -404,7 +398,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @IBAction func openDocument(_ sender: Any?) {
-        promptForDocument()
+        NSDocumentController.shared.openDocument(sender)
     }
 
     @IBAction func performFindPanelAction(_ sender: Any?) {
@@ -496,31 +490,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .first
     }
 
-    private func promptForDocument() {
-        guard !isPromptingForDocument else { return }
-        isPromptingForDocument = true
-        defer { isPromptingForDocument = false }
-
-        let panel = makeOpenPanel()
-        activeOpenPanel = panel
-        defer { activeOpenPanel = nil }
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        if url.isExistingDirectory {
-            openFolder(url)
-            return
-        }
-
-        isOpeningDocumentFromPrompt = true
-        NSDocumentController.shared.openDocument(withContentsOf: url,
-                                                 display: true) { [weak self] _, _, error in
-            self?.isOpeningDocumentFromPrompt = false
-            guard let error else { return }
-            NSAlert(error: error).runModal()
-        }
-    }
-
     private func scheduleDocumentPrompt(requiresNoDocuments: Bool = false) {
-        guard !isPromptingForDocument,
+        guard !isOpenPanelVisible,
               !isDocumentPromptScheduled else { return }
 
         isDocumentPromptScheduled = true
@@ -532,20 +503,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.isDocumentPromptScheduled = false
             guard !requiresNoDocuments || NSDocumentController.shared.documents.isEmpty else { return }
             NSApp.activate(ignoringOtherApps: true)
-            self.promptForDocument()
+            NSDocumentController.shared.openDocument(nil)
         }
     }
 
     private func cancelScheduledDocumentPrompt() {
-        // Dismiss a prompt that already made it past the generation check and
-        // is sitting in runModal() when the open event arrives.
-        activeOpenPanel?.cancel(nil)
+        NSApp.windows
+            .compactMap { $0 as? NSOpenPanel }
+            .forEach { $0.cancel(nil) }
         guard isDocumentPromptScheduled else { return }
         documentPromptScheduleGeneration += 1
         isDocumentPromptScheduled = false
     }
 
-    private func openFolder(_ url: URL) {
+    func openFolder(_ url: URL) {
         if let controller = activeDocumentWindowController {
             controller.openFolder(url)
             return
@@ -561,16 +532,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.openFolder(url)
     }
 
-    private func makeOpenPanel() -> NSOpenPanel {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = true
-        panel.message = NSLocalizedString("Choose a Markdown file or folder",
-                                          comment: "Open panel prompt")
-        panel.allowedContentTypes = Self.markdownFileExtensions
-            .compactMap { UTType(filenameExtension: $0) }
-        return panel
+    private var isOpenPanelVisible: Bool {
+        NSApp.windows.contains { $0 is NSOpenPanel && $0.isVisible }
     }
 
     private func makeCommandLineToolInstallerScript(commandLineToolURL: URL) -> String {

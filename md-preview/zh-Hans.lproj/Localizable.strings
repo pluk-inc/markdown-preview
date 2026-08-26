@@ -79,6 +79,7 @@
 
 /* File menu */
 "New Tab" = "新建标签页";
+"Choose a name and location for the new Markdown file." = "为新的 Markdown 文件选择名称和位置。";
 
 /* Print panel */
 "Font Size:" = "字体大小：";

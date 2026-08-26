@@ -79,6 +79,7 @@
 
 /* File menu */
 "New Tab" = "New Tab";
+"Choose a name and location for the new Markdown file." = "Choose a name and location for the new Markdown file.";
 
 /* Print panel */
 "Font Size:" = "Font Size:";

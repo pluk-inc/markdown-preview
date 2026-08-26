@@ -88,6 +88,11 @@ final class MarkdownDocument: NSDocument {
         replaceFileURL(fileURL)
     }
 
+    func replaceContents(markdown: String) {
+        markdownStorage.withLock { $0 = markdown }
+        updateChangeCount(.changeCleared)
+    }
+
     func replaceFileURL(_ fileURL: URL) {
         self.fileURL = fileURL
         updateChangeCount(.changeCleared)

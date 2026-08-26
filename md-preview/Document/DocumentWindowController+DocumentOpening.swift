@@ -44,8 +44,8 @@ extension DocumentWindowController {
     /// Backs File > New Tab. Deliberately NOT the NSResponder
     /// `newWindowForTab(_:)` override: responding to that selector is what
     /// makes AppKit show the "+" button in the tab bar, and the app hides
-    /// that button. There is no untitled-document concept here, so prompt
-    /// for a file and open it as a tab — an explicit tab request, unlike ⌘O.
+    /// that button. New tabs remain file-backed, so prompt for a file and
+    /// open it as a tab — an explicit tab request, unlike ⌘O.
     @objc func newDocumentTab(_ sender: Any?) {
         promptForDocument(openAsTab: true)
     }
@@ -199,11 +199,12 @@ extension DocumentWindowController {
         NSAlert(error: error).beginSheetModal(for: documentWindow)
     }
 
-    func renderCurrentDocument(text: String, fileURL: URL) {
+    func renderCurrentDocument(text: String, fileURL: URL?) {
         (documentWindow.contentViewController as? MainSplitViewController)?
             .display(markdown: text,
-                     fileName: fileURL.lastPathComponent,
+                     fileName: fileURL?.lastPathComponent
+                         ?? NSLocalizedString("Untitled", comment: "Untitled document name"),
                      url: fileURL,
-                     assetBaseURL: fileURL.deletingLastPathComponent())
+                     assetBaseURL: fileURL?.deletingLastPathComponent())
     }
 }

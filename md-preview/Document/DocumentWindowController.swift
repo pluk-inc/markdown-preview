@@ -515,7 +515,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         return components.url ?? url
     }
 
-    private func startWatching(_ url: URL) {
+    func startWatching(_ url: URL) {
         fileWatcher?.cancel()
         let watcher = FileWatcher(url: url) { [weak self] in
             // While editing, disk changes (including our own ⌘S writes)
