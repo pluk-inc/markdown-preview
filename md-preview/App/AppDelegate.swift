@@ -128,6 +128,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationDidBecomeActive(_ notification: Notification) {
+        UsageAnalyticsReporter.recordAppBecameActive()
+    }
+
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
         false
     }
@@ -151,7 +155,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         cancelScheduledDocumentPrompt()
 
-        for url in urls {
+        var malformedSchemeURLs: [URL] = []
+        for incoming in urls {
+            guard let url = ExternalOpenScheme.resolvedURL(opening: incoming) else {
+                malformedSchemeURLs.append(incoming)
+                continue
+            }
+
             if url.isExistingDirectory {
                 openFolder(url)
                 continue
@@ -166,11 +176,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 self.showWindowIfNeeded(for: document)
                 self.pendingOpenURLCount -= 1
-                if error != nil, self.pendingOpenURLCount == 0 {
-                    self.scheduleDocumentPrompt(requiresNoDocuments: true)
+                if error != nil {
+                    self.scheduleDocumentPromptIfIdle()
                 }
             }
         }
+
+        if !malformedSchemeURLs.isEmpty {
+            presentUnsupportedSchemeURLAlert(malformedSchemeURLs)
+            scheduleDocumentPromptIfIdle()
+        }
+    }
+
+    /// Re-offers the open panel once every open in the batch has failed —
+    /// without it the app would sit windowless after a bad link or a
+    /// vanished file.
+    private func scheduleDocumentPromptIfIdle() {
+        guard pendingOpenURLCount == 0 else { return }
+        scheduleDocumentPrompt(requiresNoDocuments: true)
+    }
+
+    /// A malformed md-preview:// link tells the reader what shape the app
+    /// expects instead of failing silently — the link usually comes from a
+    /// hand-written web page, so the author is the one looking at the alert.
+    private func presentUnsupportedSchemeURLAlert(_ urls: [URL]) {
+        let alert = NSAlert()
+        alert.messageText = NSLocalizedString("Cannot open link",
+                                              comment: "URL scheme error")
+        alert.informativeText = String(
+            format: NSLocalizedString(
+                "“%@” is not a link Markdown Preview understands. Use md-preview://file/ followed by the absolute path of the file, for example md-preview://file/Users/me/notes/README.md.",
+                comment: "URL scheme error"
+            ),
+            urls.map(\.absoluteString).joined(separator: "\n")
+        )
+        alert.runModal()
     }
 
     /// `openDocument(withContentsOf:display:)` returns an existing document
@@ -328,6 +368,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .flatMap(\.windowControllers)
             .compactMap { $0 as? DocumentWindowController }
             .forEach { $0.applyAutoSaveIntervalSetting() }
+    }
+
+    /// Pushes theme colors chosen in Settings into every open document
+    /// window — native backgrounds plus the loaded preview/editor pages.
+    /// Cheap enough to run on every color-well tick.
+    func applyThemeColorsSetting() {
+        NSDocumentController.shared.documents
+            .flatMap(\.windowControllers)
+            .compactMap { $0 as? DocumentWindowController }
+            .forEach { $0.applyThemeColorsSetting() }
     }
 
     func installCommandLineToolsFromSettings() {
@@ -744,14 +794,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func installNewTabMenuItem() {
         guard let fileMenu = topLevelSubmenu(matching: Self.fileMenuTitles),
               fileMenu.items.first(where: {
-                  $0.action == #selector(NSResponder.newWindowForTab(_:))
+                  $0.action == #selector(DocumentWindowController.newDocumentTab(_:))
               }) == nil else { return }
 
         // nil target: resolves through the responder chain to the key
         // document window's controller, and disables itself when no
-        // document window is open.
+        // document window is open. Custom selector, not newWindowForTab —
+        // see DocumentWindowController.newDocumentTab.
         let item = NSMenuItem(title: L("New Tab"),
-                              action: #selector(NSResponder.newWindowForTab(_:)),
+                              action: #selector(DocumentWindowController.newDocumentTab(_:)),
                               keyEquivalent: "t")
         let insertIndex = fileMenu.items
             .firstIndex { $0.action == #selector(openDocument(_:)) } ?? 0
@@ -995,6 +1046,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if reloadPreviews {
             reloadDocumentPreviewsForSettingChange()
         }
+        // Themed chrome (titlebar treatment, sidebar accents) is resolved
+        // per scheme; an appearance switch must re-apply it immediately.
+        applyThemeColorsSetting()
     }
 
     private func syncAppearanceMenuState() {

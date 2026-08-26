@@ -35,6 +35,7 @@ playground.xcworkspace
 .swiftpm/
 *.swiftpm/
 Package.resolved
+Secrets.xcconfig
 
 .build/
 

@@ -26,11 +26,7 @@ final class MainSplitViewController: NSSplitViewController {
         sidebarVC.onSelectFile = { [weak self] url in
             self?.onSelectFile?(url)
         }
-        let sidebar = NSSplitViewItem(sidebarWithViewController: sidebarVC)
-        sidebar.minimumThickness = 180
-        sidebar.maximumThickness = 400
-        sidebar.canCollapse = true
-        sidebar.canCollapseFromWindowResize = false
+        let sidebar = Self.makeSidebarItem(for: sidebarVC, themed: false)
 
         let content = NSSplitViewItem(viewController: LayeredContentViewController())
         content.minimumThickness = 420
@@ -46,6 +42,9 @@ final class MainSplitViewController: NSSplitViewController {
         addSplitViewItem(inspector)
 
         splitView.autosaveName = "MainSplitView"
+        DispatchQueue.main.async { [weak self] in
+            self?.normalizeSidebarWidthIfNeeded()
+        }
 
         // Wired after addSplitViewItem so the accessors are non-nil.
         contentViewController?.activeHeadingDidChange = { [weak self] headingID in
@@ -193,6 +192,43 @@ final class MainSplitViewController: NSSplitViewController {
 
     func reloadPreviewForSettingChange() {
         contentViewController?.reloadPreviewForSettingChange()
+    }
+
+    /// Pushes a theme color change into the preview and, when one exists,
+    /// the cached editor page — visible or kept warm for reuse.
+
+    func applyThemeColors() {
+        contentViewController?.applyThemeColors()
+        cachedEditorViewController?.applyThemeColors()
+        sidebarViewController?.refreshRowTextColors()
+    }
+
+    private static func makeSidebarItem(for viewController: SidebarViewController,
+                                        themed: Bool) -> NSSplitViewItem {
+        let item = themed
+            ? NSSplitViewItem(viewController: viewController)
+            : NSSplitViewItem(sidebarWithViewController: viewController)
+        item.minimumThickness = 180
+        item.maximumThickness = 400
+        item.canCollapse = true
+        item.canCollapseFromWindowResize = false
+        item.allowsFullHeightLayout = true
+        // Plain items default to a lower holding priority than sidebars;
+        // match the sidebar's so window resizes stretch the content pane,
+        // not the sidebar.
+        item.holdingPriority = NSLayoutConstraint.Priority(260)
+        return item
+    }
+
+    /// Recovers a sane sidebar width when the autosaved divider position is
+    /// degenerate — collapsed-to-zero or ballooned — which the sidebar item
+    /// swap can leave behind.
+    private func normalizeSidebarWidthIfNeeded() {
+        guard let sidebar = splitViewItems.first, !sidebar.isCollapsed else { return }
+        let width = sidebar.viewController.view.frame.width
+        if width < sidebar.minimumThickness || width > sidebar.maximumThickness {
+            splitView.setPosition(240, ofDividerAt: 0)
+        }
     }
 
     func applyTextSizeSetting() {

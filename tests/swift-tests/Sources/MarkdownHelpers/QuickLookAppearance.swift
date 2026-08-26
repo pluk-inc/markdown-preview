@@ -1,1 +1,1 @@
-../../../../md-preview/QuickLookAppearance.swift
+../../../../md-preview/Rendering/QuickLookAppearance.swift

@@ -37,8 +37,31 @@
 "Last checked" = "Last checked";
 "Never" = "Never";
 "Downloaded updates install the next time you quit Markdown Preview." = "Downloaded updates install the next time you quit Markdown Preview.";
+"Colors" = "Colors";
+"Window background" = "Window background";
+"Editor background" = "Editor background";
+"Code block background" = "Code block background";
+"Text" = "Text";
+"Link" = "Link";
+"Presets" = "Presets";
+"Colors apply to the current appearance. Choose the Automatic appearance to set Light and Dark separately." = "Colors apply to the current appearance. Choose the Automatic appearance to set Light and Dark separately.";
+"A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards." = "A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards.";
+"Red Graphite" = "Red Graphite";
+"Dark Graphite" = "Dark Graphite";
+"Normal" = "Normal";
+"Charcoal" = "Charcoal";
+"Solarized Light" = "Solarized Light";
+"Solarized Dark" = "Solarized Dark";
+"Dracula" = "Dracula";
+"Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override.";
+"Custom colors" = "Custom colors";
+"Reset Colors" = "Reset Colors";
+"Restores the default Normal theme." = "Restores the default Normal theme.";
+"Current theme: %@" = "Current theme: %@";
 "Send anonymous crash reports" = "Send anonymous crash reports";
 "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information.";
+"Share anonymous usage analytics" = "Share anonymous usage analytics";
+"When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS major version, processor architecture, and locale country or region. This is used only to count daily and monthly active installations and understand basic platform compatibility. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers." = "When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS major version, processor architecture, and locale country or region. This is used only to count daily and monthly active installations and understand basic platform compatibility. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers.";
 
 /* View menu */
 "Appearance" = "Appearance";
@@ -250,6 +273,10 @@
 "Footnote %d" = "Footnote %d";
 "Back to reference %d" = "Back to reference %d";
 "KaTeX renderer is unavailable.\n\n" = "KaTeX renderer is unavailable.\n\n";
+
+/* URL scheme errors */
+"Cannot open link" = "Cannot open link";
+"“%@” is not a link Markdown Preview understands. Use md-preview://file/ followed by the absolute path of the file, for example md-preview://file/Users/me/notes/README.md." = "“%@” is not a link Markdown Preview understands. Use md-preview://file/ followed by the absolute path of the file, for example md-preview://file/Users/me/notes/README.md.";
 
 /* CLI installer errors */
 "Terminal automation failed: %@" = "Terminal automation failed: %@";

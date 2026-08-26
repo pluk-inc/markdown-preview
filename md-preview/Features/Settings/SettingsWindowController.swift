@@ -15,6 +15,7 @@ import SwiftUI
 
 enum SettingsPane: String, CaseIterable, Identifiable {
     case general = "General"
+    case theme = "Appearance"
     case privacy = "Privacy"
     case about = "About"
 
@@ -24,10 +25,12 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
     /// Development-time exports of the icons rendered by each registered
     /// System Settings extension. They are bundled so the sandboxed app never
-    /// needs to call private IconServices at runtime.
-    var iconAssetName: String {
+    /// needs to call private IconServices at runtime. Panes without an export
+    /// (Theme) draw an equivalent tile in SwiftUI instead.
+    var iconAssetName: String? {
         switch self {
         case .general: "SettingsGeneral"
+        case .theme: nil
         case .privacy: "SettingsPrivacy"
         case .about: "SettingsAbout"
         }
@@ -41,12 +44,40 @@ struct SettingsPaneIcon: View {
     let pane: SettingsPane
 
     var body: some View {
-        Image(pane.iconAssetName)
-            .renderingMode(.original)
-            .resizable()
-            .interpolation(.high)
-            .frame(width: 24, height: 24)
-            .frame(width: 20, height: 20)
+        Group {
+            if let assetName = pane.iconAssetName {
+                Image(assetName)
+                    .renderingMode(.original)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 24, height: 24)
+            } else {
+                generatedTile
+                    .frame(width: 24, height: 24)
+            }
+        }
+        .frame(width: 20, height: 20)
+    }
+
+    /// System Settings-style tile matching the real Appearance pane icon:
+    /// a black rounded rect with the half-filled circle glyph.
+    private var generatedTile: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 4.4, style: .continuous)
+                .fill(LinearGradient(
+                    colors: [
+                        Color(red: 0.25, green: 0.25, blue: 0.27),
+                        Color(red: 0.05, green: 0.05, blue: 0.06)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ))
+                .frame(width: 20, height: 20)
+                .shadow(color: .black.opacity(0.22), radius: 0.6, y: 0.6)
+            Image(systemName: "circle.lefthalf.filled")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white)
+        }
     }
 }
 
@@ -75,7 +106,11 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         window.title = SettingsPane.general.title
         window.titleVisibility = .visible
         window.toolbarStyle = .automatic
-        window.titlebarAppearsTransparent = true
+        // Opaque, like System Settings: scrolled pane content passes
+        // beneath the solid titlebar and the automatic separator appears.
+        // A transparent titlebar let content collide with the window title,
+        // and no public mechanism frosts an AppKit-hosted SwiftUI form.
+        window.titlebarAppearsTransparent = false
         window.titlebarSeparatorStyle = .automatic
         window.contentMinSize = Self.minimumWindowSize
         window.isReleasedWhenClosed = false
@@ -87,6 +122,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = false
         window.toolbar = toolbar
+
 
         restoreWindowFrame(window)
 
@@ -119,6 +155,18 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     }
 
     func show() {
+        // The controller is cached for the app's lifetime, so without this
+        // a reopened window would resume on whatever pane was last visited.
+        // Fresh opens always start on General.
+        if window?.isVisible != true {
+            splitViewController?.navigate(to: .general)
+            // The visible pane resets, so the back/forward history must
+            // reset with it — stale history made Back jump into the
+            // previous session's panes.
+            navigationHistory = SettingsNavigationHistory()
+            navigationHistory.push(.general)
+            updateToolbarButtons()
+        }
         applyWindowLevel()
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
@@ -135,8 +183,9 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     }
 
     func show(pane: SettingsPane) {
-        splitViewController?.navigate(to: pane)
+        // After show(), which resets a fresh window to General.
         show()
+        splitViewController?.navigate(to: pane)
     }
 
     // MARK: - Back / forward
@@ -326,6 +375,7 @@ struct SettingsDetailView: View {
     var body: some View {
         switch viewModel.selectedPane {
         case .general: GeneralSettingsView()
+        case .theme: ThemeSettingsView()
         case .privacy: PrivacySettingsView()
         case .about: AboutSettingsView()
         }

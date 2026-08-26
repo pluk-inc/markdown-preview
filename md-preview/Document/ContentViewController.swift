@@ -4,6 +4,7 @@
 //
 
 import Cocoa
+import WebKit
 
 /// Where the preview should land after the next document render — a link
 /// fragment or a restored history scroll offset.
@@ -120,6 +121,7 @@ final class ContentViewController: NSViewController {
 
         container.addSubview(webView)
 
+
         // Normal (centered) mode positions the web view in AppKit rather
         // than letting CSS auto-margins center the column inside the web
         // view. A sidebar/inspector reveal then *moves* the column —
@@ -155,6 +157,7 @@ final class ContentViewController: NSViewController {
         // scrolling. Expanding it to the full document height creates an
         // enormous backing surface that loses Retina resolution on long docs.
         NSLayoutConstraint.activate([
+
             webView.topAnchor.constraint(equalTo: container.topAnchor),
             webView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             webView.trailingAnchor.constraint(equalTo: container.trailingAnchor)
@@ -338,6 +341,103 @@ final class ContentViewController: NSViewController {
     func reloadPreviewForSettingChange() {
         applyContentWidthMode()
         webView.reloadPreviewForSettingChange()
+    }
+
+    /// Repaints the native page background and restyles the loaded preview
+    /// page after a theme color change in Settings.
+
+    func applyThemeColors() {
+        view.needsDisplay = true
+        updateUnderPageBackgroundColor()
+        updateObscuredContentInsets()
+        webView.applyThemeColors()
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        // The under-page color is resolved statically; re-resolve on the
+        // first pass and whenever the effective appearance flips.
+        let appearanceName = view.effectiveAppearance.name
+        if appearanceName != lastUnderPageAppearance {
+            lastUnderPageAppearance = appearanceName
+            updateUnderPageBackgroundColor()
+        }
+        updateObscuredContentInsets()
+    }
+
+    private var lastUnderPageAppearance: NSAppearance.Name?
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        // The chrome (toolbar, accessories) is final here; layout passes
+        // before it attaches see a smaller contentLayoutRect.
+        updateObscuredContentInsets()
+    }
+
+    /// With a themed window background the titlebar is transparent and the
+    /// page runs to the window's top edge, so WebKit is told which strip the
+    /// toolbar obscures — it lays the page out below it and frosts content
+    /// that scrolls underneath, the way Safari's toolbar works. Without a
+    /// theme the titlebar is opaque and the inset must be zero.
+
+    /// Height of the titlebar-and-toolbar strip, from the window's
+    /// contentLayoutRect (authoritative immediately, unlike safeAreaInsets
+    /// which lags the toolbar attach), minus visible bottom titlebar
+    /// accessories.
+    private var obscuredTopInset: CGFloat {
+        max(0, fullChromeTopInset - visibleBottomAccessoryHeight)
+    }
+
+    /// The whole obscured strip — titlebar, toolbar, and visible bottom
+    /// accessories. contentLayoutRect already excludes the accessories, so
+    /// the gap alone is the full chrome height.
+    private var fullChromeTopInset: CGFloat {
+        guard let window = view.window, let contentView = window.contentView else {
+            return view.safeAreaInsets.top
+        }
+        return max(0, contentView.bounds.height - window.contentLayoutRect.maxY)
+    }
+
+    private var visibleBottomAccessoryHeight: CGFloat {
+        guard let window = view.window else { return 0 }
+        var height: CGFloat = 0
+        for accessory in window.titlebarAccessoryViewControllers
+        where accessory.layoutAttribute == .bottom && !accessory.isHidden {
+            height += accessory.view.frame.height
+        }
+        return height
+    }
+
+    private func updateObscuredContentInsets() {
+        guard #available(macOS 26.0, *) else { return }
+        // Theme-independent, and never 0: WebKit adopts the titlebar inset
+        // automatically on macOS 26 and an explicit 0 stomps that for the
+        // web view's lifetime — the page then collides with the toolbar
+        // until the window is recreated. Keeping the explicit value equal
+        // to the chrome strip matches the automatic behavior exactly.
+        let inset = obscuredTopInset
+        guard view.window != nil, inset > 0 else { return }
+        if webView.webView.obscuredContentInsets.top != inset {
+            webView.webView.obscuredContentInsets = NSEdgeInsets(
+                top: inset, left: 0, bottom: 0, right: 0
+            )
+        }
+    }
+
+    /// The scroll pocket WebKit draws for the obscured strip takes its color
+    /// from underPageBackgroundColor, not from the page CSS. Set on theme
+    /// changes only — assigning a fresh color object every layout pass makes
+    /// WebKit repaint during transitions. The provider closure reads the
+    /// current setting each time it resolves, so one assignment stays fresh.
+    private func updateUnderPageBackgroundColor() {
+        guard #available(macOS 26.0, *) else { return }
+        // Resolved statically — WebKit serializes the color to the web
+        // process, and dynamic providers can lose the theme values there.
+        let isDark = view.effectiveAppearance
+            .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        webView.webView.underPageBackgroundColor = ThemeColorsSetting.current.color(
+            .windowBackground, isDark ? .dark : .light
+        ) ?? .windowBackgroundColor
     }
 
     func applyTextSizeSetting() {
@@ -561,6 +661,14 @@ private final class DocumentBackgroundView: NSView {
 
     override func updateLayer() {
         let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        // A user theme color wins over both stock fills; it covers the page
+        // and the centered-mode gutters, so the whole content area follows.
+        if let custom = ThemeColorsSetting.current.color(
+            .windowBackground, isDark ? .dark : .light
+        ) {
+            layer?.backgroundColor = custom.cgColor
+            return
+        }
         layer?.backgroundColor = isDark ? nil : NSColor.white.cgColor
     }
 }

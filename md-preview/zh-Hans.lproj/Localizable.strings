@@ -37,8 +37,31 @@
 "Last checked" = "上次检查";
 "Never" = "从未";
 "Downloaded updates install the next time you quit Markdown Preview." = "已下载的更新将在下次退出 Markdown Preview 时安装。";
+"Colors" = "颜色";
+"Window background" = "窗口背景";
+"Editor background" = "编辑器背景";
+"Code block background" = "代码块背景";
+"Text" = "正文";
+"Link" = "链接";
+"Presets" = "预设";
+"Colors apply to the current appearance. Choose the Automatic appearance to set Light and Dark separately." = "颜色应用于当前外观。选择自动外观可分别设置浅色和深色。";
+"A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards." = "预设会填充所有颜色，并将应用切换为对应的浅色或深色外观。之后可在下方调整单个颜色。";
+"Red Graphite" = "红石墨";
+"Dark Graphite" = "暗石墨";
+"Normal" = "标准";
+"Charcoal" = "炭灰";
+"Solarized Light" = "Solarized 浅色";
+"Solarized Dark" = "Solarized 深色";
+"Dracula" = "Dracula";
+"Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "每种颜色在浅色和深色外观下分别设置。选择默认颜色即移除自定义。";
+"Custom colors" = "自定义颜色";
+"Reset Colors" = "重置颜色";
+"Restores the default Normal theme." = "恢复默认的“标准”主题。";
+"Current theme: %@" = "当前主题：%@";
 "Send anonymous crash reports" = "发送匿名崩溃报告";
 "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "崩溃报告包含堆栈跟踪、系统版本和 App 版本等诊断信息，可能包含技术文件路径；Markdown Preview 不会主动附加文稿内容或个人信息。";
+"Share anonymous usage analytics" = "共享匿名使用情况分析";
+"When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS major version, processor architecture, and locale country or region. This is used only to count daily and monthly active installations and understand basic platform compatibility. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers." = "启用后，Markdown Preview 在 App 进入活跃状态时每天最多发送一个事件，并关联一个随机安装标识符。该事件还会发送 App 版本、macOS 主版本、处理器架构以及区域设置中的国家或地区。此信息仅用于统计每日和每月活跃安装数并了解基本平台兼容性，不会发送文稿内容、文件名或路径、操作、界面、精确位置、个人信息或广告标识符。";
 
 /* View menu */
 "Appearance" = "外观";
@@ -250,6 +273,10 @@
 "Footnote %d" = "脚注 %d";
 "Back to reference %d" = "返回脚注引用 %d";
 "KaTeX renderer is unavailable.\n\n" = "KaTeX 渲染器不可用。\n\n";
+
+/* URL scheme errors */
+"Cannot open link" = "无法打开链接";
+"“%@” is not a link Markdown Preview understands. Use md-preview://file/ followed by the absolute path of the file, for example md-preview://file/Users/me/notes/README.md." = "Markdown Preview 无法识别链接“%@”。请使用 md-preview://file/ 加文件的绝对路径，例如 md-preview://file/Users/me/notes/README.md。";
 
 /* CLI installer errors */
 "Terminal automation failed: %@" = "终端自动化失败：%@";

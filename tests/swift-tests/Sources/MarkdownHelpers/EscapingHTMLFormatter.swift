@@ -1,1 +1,1 @@
-../../../../md-preview/EscapingHTMLFormatter.swift
+../../../../md-preview/Rendering/EscapingHTMLFormatter.swift

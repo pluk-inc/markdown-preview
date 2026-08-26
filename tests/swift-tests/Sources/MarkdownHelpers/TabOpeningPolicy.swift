@@ -1,1 +1,1 @@
-../../../../md-preview/TabOpeningPolicy.swift
+../../../../md-preview/Preferences/TabOpeningPolicy.swift

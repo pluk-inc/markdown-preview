@@ -1,1 +1,1 @@
-../../../../md-preview/MarkdownAssetResolution.swift
+../../../../md-preview/Rendering/MarkdownAssetResolution.swift
