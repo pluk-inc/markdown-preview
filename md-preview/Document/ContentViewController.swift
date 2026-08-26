@@ -120,6 +120,10 @@ final class ContentViewController: NSViewController {
         webView.enablePersistentZoom(defaultsKey: Self.pageZoomDefaultsKey)
 
         container.addSubview(webView)
+        // In normal-width mode the web view starts at the centered article's
+        // leading edge, leaving a native gutter between it and the split-view
+        // divider. Keep that gutter part of the page's scrolling surface.
+        container.scrollWheelTarget = webView.webView
 
 
         // Normal (centered) mode positions the web view in AppKit rather
@@ -644,6 +648,8 @@ final class ContentViewController: NSViewController {
 /// reads as a page.
 private final class DocumentBackgroundView: NSView {
 
+    weak var scrollWheelTarget: NSView?
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
@@ -670,5 +676,13 @@ private final class DocumentBackgroundView: NSView {
             return
         }
         layer?.backgroundColor = isDark ? nil : NSColor.white.cgColor
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        guard let scrollWheelTarget else {
+            super.scrollWheel(with: event)
+            return
+        }
+        scrollWheelTarget.scrollWheel(with: event)
     }
 }
