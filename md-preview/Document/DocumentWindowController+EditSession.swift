@@ -9,7 +9,7 @@ import Cocoa
 import UniformTypeIdentifiers
 
 extension DocumentWindowController {
-    func enterEditMode() {
+    func enterEditMode(autofocus: Bool = false) {
         guard let split = mainSplit, !split.isEditingDocument,
               let markdown = editorDraftMarkdown ?? currentMarkdown else {
             NSSound.beep()
@@ -18,7 +18,7 @@ extension DocumentWindowController {
 
         // Edit the complete source. Frontmatter is stripped only by the
         // read-only renderer; the editor must expose and preserve it.
-        let editor = split.enterEditMode(markdown: markdown)
+        let editor = split.enterEditMode(markdown: markdown, autofocus: autofocus)
         editor.cancelRequested = { [weak self] in
             self?.previewPendingEdits()
         }
@@ -99,6 +99,7 @@ extension DocumentWindowController {
             self.currentFileURL = url
             self.documentWindow.title = url.lastPathComponent
             self.markdownDocument?.replaceContents(markdown: text, fileURL: url)
+            self.mainSplit?.openFileURLDidChange(url, markdown: text)
             self.resetAutoSaveFeedback()
             self.refreshOpenWithItem()
             self.refreshOpenInLLMItem()

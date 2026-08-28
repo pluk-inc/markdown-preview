@@ -47,7 +47,8 @@ final class MarkdownDocumentController: NSDocumentController {
     override func openUntitledDocumentAndDisplay(_ displayDocument: Bool) throws -> NSDocument {
         let document = try super.openUntitledDocumentAndDisplay(displayDocument)
         if displayDocument {
-            (document.windowControllers.first as? DocumentWindowController)?.enterEditMode()
+            (document.windowControllers.first as? DocumentWindowController)?
+                .enterEditMode(autofocus: true)
         }
         return document
     }

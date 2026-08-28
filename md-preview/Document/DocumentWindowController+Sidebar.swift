@@ -120,6 +120,11 @@ extension DocumentWindowController {
         return (sidebarVisible, mode)
     }
 
+    func prepareSidebarForUntitledDocument() {
+        mainSplit?.hideSidebar()
+        syncSidebarMenuState()
+    }
+
     private func sidebarFaceImage() -> NSImage {
         let image = NSImage(systemSymbolName: "sidebar.leading",
                             accessibilityDescription: NSLocalizedString("Sidebar", comment: "Sidebar toolbar image")) ?? NSImage()

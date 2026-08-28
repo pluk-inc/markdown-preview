@@ -45,6 +45,9 @@ final class MarkdownDocument: NSDocument {
             controller.openFolder(folderURL)
             return
         }
+        if fileURL == nil {
+            controller.prepareSidebarForUntitledDocument()
+        }
         controller.display(markdown: markdown, fileURL: fileURL)
     }
 
