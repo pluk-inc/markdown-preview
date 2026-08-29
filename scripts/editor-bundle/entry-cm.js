@@ -120,6 +120,73 @@ class TextWidget extends WidgetType {
   ignoreEvent() { return false }
 }
 
+class ImageWidget extends WidgetType {
+  constructor(source, alt, raw, from, to) {
+    super()
+    this.source = source
+    this.alt = alt
+    this.raw = raw
+    this.from = from
+    this.to = to
+  }
+
+  eq(other) {
+    return other.source === this.source
+      && other.alt === this.alt
+      && other.raw === this.raw
+      && other.from === this.from
+      && other.to === this.to
+  }
+
+  toDOM(view) {
+    const root = document.createElement("span")
+    root.className = "cm-md-image-preview"
+    root.setAttribute("role", "figure")
+
+    const image = document.createElement("img")
+    image.src = this.source
+    image.alt = this.alt
+    image.draggable = false
+    image.addEventListener("error", () => root.classList.add("cm-md-image-error"), { once: true })
+
+    const source = document.createElement("code")
+    source.className = "cm-md-image-source"
+    source.textContent = this.raw
+    source.title = "Click to edit image source"
+
+    const revealSource = (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      view.focus()
+      view.dispatch({
+        selection: { anchor: Math.min(this.from + 2, this.to) },
+        userEvent: "select.pointer",
+      })
+    }
+    source.addEventListener("mousedown", revealSource)
+    source.addEventListener("click", revealSource)
+    image.addEventListener("mousedown", (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+    })
+    image.addEventListener("click", (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      const resolved = image.currentSrc || image.src
+      if (resolved.startsWith("md-asset:")) {
+        window.__mdRequestImageRename?.(resolved)
+      } else {
+        revealSource(event)
+      }
+    })
+
+    root.append(image, source)
+    return root
+  }
+
+  ignoreEvent() { return true }
+}
+
 class RuleWidget extends WidgetType {
   eq() { return true }
   toDOM() {
@@ -1304,6 +1371,42 @@ function buildDecorations(view, detectedCodeCache) {
           return
         }
 
+        // --- Images -------------------------------------------------------
+        // Render direct image destinations in place. Keeping the raw node
+        // active under the caret makes the source editable without a second
+        // editor surface; reference-style images stay as authored source.
+        if (name === "Image") {
+          const urlNode = node.node.getChild("URL")
+          if (!urlNode) return false
+          const rawSource = state.doc.sliceString(urlNode.from, urlNode.to).trim()
+          const source = rawSource.startsWith("<") && rawSource.endsWith(">")
+            ? rawSource.slice(1, -1)
+            : rawSource
+          if (!source || source.startsWith("//")) return false
+
+          let altEnd = node.from + 2
+          for (let child = node.node.firstChild; child; child = child.nextSibling) {
+            if (child.name === "LinkMark"
+                && state.doc.sliceString(child.from, child.to) === "]") {
+              altEnd = child.from
+              break
+            }
+          }
+          const alt = state.doc.sliceString(node.from + 2, altEnd)
+          if (!touches(node.from, node.to)) {
+            ranges.push(Decoration.replace({
+              widget: new ImageWidget(
+                source,
+                alt,
+                state.doc.sliceString(node.from, node.to),
+                node.from,
+                node.to,
+              ),
+            }).range(node.from, node.to))
+          }
+          return false
+        }
+
         // --- Links ------------------------------------------------------
         // Only real links (with a URL part) get link treatment. Footnote
         // references like [^first] also parse as Link nodes; leave their
@@ -1878,6 +1981,7 @@ function indentMarkdownListItems(view) {
 window.MDEditor = {
   create(parent, doc, callbacks) {
     const onDirty = callbacks && callbacks.onDirty
+    const onPasteImage = callbacks && callbacks.onPasteImage
     // Live preview spacing tokens from the host stylesheet (MarkdownHTML
     // constants) — see METRICS for the headless defaults.
     Object.assign(METRICS, (callbacks && callbacks.spacing) || {})
@@ -1920,7 +2024,23 @@ window.MDEditor = {
           ]),
           // Fires on every change; the host debounces for autosave.
           EditorView.updateListener.of((update) => {
-            if (update.docChanged && onDirty) onDirty()
+            if (update.docChanged && onDirty
+                && !update.transactions.some((transaction) => transaction.isUserEvent("rename"))) {
+              onDirty()
+            }
+          }),
+          EditorView.domEventHandlers({
+            paste(event, view) {
+              if (event.target instanceof Element
+                  && event.target.closest(".cm-md-table-cell")) return false
+              const items = Array.from(event.clipboardData?.items || [])
+              if (!items.some((item) => String(item.type || "").toLowerCase().startsWith("image/"))) return false
+              if (typeof onPasteImage !== "function") return false
+              event.preventDefault()
+              const selection = view.state.selection.main
+              onPasteImage(selection.from, selection.to)
+              return true
+            },
           }),
         ],
       }),
@@ -1986,6 +2106,35 @@ window.MDEditor = {
     }
     return {
       getMarkdown: () => view.state.doc.toString(),
+      replaceMarkdown: (markdown) => {
+        const text = String(markdown || "")
+        const length = text.length
+        const selection = view.state.selection.main
+        const anchor = Math.min(selection.anchor, length)
+        const head = Math.min(selection.head, length)
+        const scrollTop = view.scrollDOM.scrollTop
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: text },
+          selection: { anchor, head },
+          userEvent: "rename",
+        })
+        requestAnimationFrame(() => {
+          view.scrollDOM.scrollTop = scrollTop
+          view.requestMeasure()
+        })
+      },
+      insertTextAt: (text, from, to) => {
+        const length = view.state.doc.length
+        const start = Math.max(0, Math.min(Number(from) || 0, length))
+        const end = Math.max(start, Math.min(Number(to) || start, length))
+        view.dispatch({
+          changes: { from: start, to: end, insert: String(text || "") },
+          selection: { anchor: start + String(text || "").length },
+          userEvent: "input",
+          scrollIntoView: true,
+        })
+        view.focus()
+      },
       focus: () => view.focus(),
       getScrollAnchor: () => {
         if (!didUserScroll && Number.isFinite(preservedSourcePosition)) {

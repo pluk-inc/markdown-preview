@@ -219,6 +219,13 @@
 "Unable to verify the document on disk" = "Unable to verify the document on disk";
 "%@ Cancel keeps your changes unsaved." = "%@ Cancel keeps your changes unsaved.";
 "Markdown Preview needs your permission to save this file." = "Markdown Preview needs your permission to save this file.";
+"The clipboard does not contain an image." = "The clipboard does not contain an image.";
+"The pasted image could not be placed next to the Markdown file." = "The pasted image could not be placed next to the Markdown file.";
+"Choose the folder containing this Markdown file to save the pasted image." = "Choose the folder containing this Markdown file to save the pasted image.";
+"Choose the folder containing this Markdown file." = "Choose the folder containing this Markdown file.";
+"Rename Image" = "Rename Image";
+"Choose a new name for this image." = "Choose a new name for this image.";
+"Rename" = "Rename";
 
 /* Open menus */
 "No document open" = "No document open";

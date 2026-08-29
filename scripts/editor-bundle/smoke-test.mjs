@@ -389,6 +389,35 @@ check("inactive inline code hides both backtick markers",
   inlineCodeHost.querySelector(".cm-content")?.textContent === "before highlight after")
 inlineCodeEditor.destroy()
 
+const imageHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(imageHost)
+const imageMarkdown = "Before\n\n![Preview](md-asset:///test-pictures/1.png)\n\nAfter"
+let requestedImageRename = null
+dom.window.__mdRequestImageRename = (source) => { requestedImageRename = source }
+const imageEditor = dom.window.MDEditor.create(imageHost, imageMarkdown, {})
+const imagePreview = imageHost.querySelector(".cm-md-image-preview")
+const image = imagePreview?.querySelector("img")
+const imageSource = imagePreview?.querySelector(".cm-md-image-source")
+check("inactive Markdown image renders as a preview",
+  image?.getAttribute("src") === "md-asset:///test-pictures/1.png")
+check("image preview retains the exact Markdown source",
+  imageSource?.textContent === "![Preview](md-asset:///test-pictures/1.png)")
+image?.dispatchEvent(new dom.window.MouseEvent("click", {
+  bubbles: true,
+  cancelable: true,
+}))
+check("clicking a local image requests its native rename flow",
+  requestedImageRename === "md-asset:///test-pictures/1.png")
+imageSource?.dispatchEvent(new dom.window.MouseEvent("mousedown", {
+  bubbles: true,
+  cancelable: true,
+}))
+check("clicking image source restores editable Markdown without changing it",
+  imageHost.querySelector(".cm-md-image-preview") == null
+    && imageEditor.getMarkdown() === imageMarkdown)
+imageEditor.destroy()
+delete dom.window.__mdRequestImageRename
+
 const indentedCodeHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(indentedCodeHost)
 const indentedCodeEditor = dom.window.MDEditor.create(

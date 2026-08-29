@@ -23,43 +23,62 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     /// Esc pressed in the editor — the host decides whether to confirm
     /// and discard.
     var cancelRequested: (() -> Void)?
+    /// A native image was pasted at the editor selection.
+    var pasteImageRequested: ((Int, Int) -> Void)?
+    /// A rendered local image was clicked in the live editor preview.
+    var imageClicked: ((URL) -> Void)?
 
     private(set) var hasChanges = false
 
     private var webView: WKWebView!
     private let bridge = EditorBridge()
+    private let assetScheme = MarkdownAssetScheme()
     private var hasLoadedEditorPage = false
     private var pageSupportsMermaid = false
+    private var currentAssetBaseURL: URL?
 
     override func loadView() {
         let config = WKWebViewConfiguration()
+        config.setURLSchemeHandler(assetScheme, forURLScheme: MarkdownAssetScheme.scheme)
         config.userContentController.add(bridge, name: EditorBridge.name)
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
+        webView.underPageBackgroundColor = .windowBackgroundColor
         bridge.owner = self
         self.webView = webView
         view = webView
     }
 
-    func load(markdown: String) {
+    func load(markdown: String, assetBaseURL: URL? = nil) {
         hasChanges = false
+        currentAssetBaseURL = assetBaseURL?.standardizedFileURL
+        assetScheme.setBaseURL(currentAssetBaseURL)
         let needsMermaid = Self.containsMermaidFence(in: markdown)
         if hasLoadedEditorPage, pageSupportsMermaid || !needsMermaid {
-            let script = "window.__mdLoadEditor && window.__mdLoadEditor(\(Self.jsStringLiteral(markdown)))"
+            let baseHref = currentAssetBaseURL.map(MarkdownAssetResolution.baseHref(forFolder:)) ?? ""
+            let script = "window.__mdLoadEditor && window.__mdLoadEditor(\(Self.jsStringLiteral(markdown)), \(Self.jsStringLiteral(baseHref)))"
             webView.evaluateJavaScript(script) { [weak self] _, error in
                 guard let self, error != nil else { return }
-                self.loadEditorPage(markdown: markdown, includesMermaid: needsMermaid)
+                self.loadEditorPage(markdown: markdown,
+                                    includesMermaid: needsMermaid,
+                                    assetBaseURL: self.currentAssetBaseURL)
             }
             return
         }
-        loadEditorPage(markdown: markdown, includesMermaid: needsMermaid)
+        loadEditorPage(markdown: markdown,
+                       includesMermaid: needsMermaid,
+                       assetBaseURL: currentAssetBaseURL)
     }
 
-    private func loadEditorPage(markdown: String, includesMermaid: Bool) {
+    private func loadEditorPage(markdown: String,
+                                includesMermaid: Bool,
+                                assetBaseURL: URL?) {
         hasLoadedEditorPage = false
         pageSupportsMermaid = includesMermaid
         webView.loadHTMLString(
-            Self.editorHTML(markdown: markdown, includesMermaid: includesMermaid),
+            Self.editorHTML(markdown: markdown,
+                            includesMermaid: includesMermaid,
+                            assetBaseURL: assetBaseURL),
             baseURL: nil
         )
     }
@@ -238,6 +257,18 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         webView.evaluateJavaScript("window.__mdEditor && window.__mdEditor.exec(\(name))") { _, _ in }
     }
 
+    func insertMarkdown(_ markdown: String, from: Int, to: Int) {
+        let script = "window.__mdEditor && window.__mdEditor.insertTextAt(\(Self.jsStringLiteral(markdown)), \(from), \(to))"
+        webView.evaluateJavaScript(script) { _, _ in }
+    }
+
+    /// Replaces the source after an image rename without rebuilding the page,
+    /// preserving the editor's selection and scroll position.
+    func replaceMarkdown(_ markdown: String) {
+        let script = "window.__mdEditor && window.__mdEditor.replaceMarkdown(\(Self.jsStringLiteral(markdown)))"
+        webView.evaluateJavaScript(script) { _, _ in }
+    }
+
     fileprivate func handle(message: Any) {
         if let message = message as? String {
             switch message {
@@ -265,8 +296,22 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
 
         guard let payload = message as? [String: Any],
-              payload["kind"] as? String == "tableContextMenu" else { return }
-        presentTableContextMenu(payload)
+              let kind = payload["kind"] as? String else { return }
+        switch kind {
+        case "pasteImage":
+            guard let from = payload["from"] as? NSNumber,
+                  let to = payload["to"] as? NSNumber else { return }
+            pasteImageRequested?(from.intValue, to.intValue)
+        case "imageClick":
+            guard let source = payload["src"] as? String,
+                  let url = URL(string: source),
+                  let fileURL = MarkdownAssetResolution.fileURL(for: url) else { return }
+            imageClicked?(fileURL)
+        case "tableContextMenu":
+            presentTableContextMenu(payload)
+        default:
+            break
+        }
     }
 
     private func presentTableContextMenu(_ payload: [String: Any]) {
@@ -321,7 +366,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             .replacingOccurrences(of: "<", with: "\\u003c")
     }
 
-    private static func editorHTML(markdown: String, includesMermaid: Bool) -> String {
+    private static func editorHTML(markdown: String,
+                                   includesMermaid: Bool,
+                                   assetBaseURL: URL?) -> String {
         // Honor the preview's content-width setting: Normal caps the
         // column at the preview's measure, Full Width spans the window.
         let columnMaxWidth = ContentWidthSetting.current == .fullWidth
@@ -345,6 +392,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         <html>
         <head>
         <meta charset="UTF-8">
+        \(assetBaseURL.map { "<base href=\"\(htmlAttributeLiteral(MarkdownAssetResolution.baseHref(forFolder: $0)))\">" } ?? "")
         <style>
         /* Palette and type scale mirror MarkdownHTML.stylesheet so entering
            edit mode doesn't visually change the document. */
@@ -540,6 +588,40 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
         .cm-md-link { color: var(--link); }
         .cm-md-url { color: var(--secondary); }
+        .cm-md-image-preview {
+            display: inline-flex;
+            max-width: 100%;
+            flex-direction: column;
+            align-items: flex-start;
+            vertical-align: middle;
+            cursor: pointer;
+        }
+        .cm-md-image-preview img {
+            display: block;
+            max-width: 100%;
+            max-height: 70vh;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+        .cm-md-image-preview.cm-md-image-error img {
+            display: none;
+        }
+        .cm-md-image-source {
+            display: none;
+            max-width: 100%;
+            margin-top: 4px;
+            padding: 3px 6px;
+            overflow-wrap: anywhere;
+            color: var(--secondary);
+            background: color-mix(in srgb, var(--code-bg) 82%, transparent);
+            border-radius: 4px;
+            cursor: text;
+            white-space: pre-wrap;
+        }
+        .cm-md-image-preview:hover .cm-md-image-source,
+        .cm-md-image-preview:focus-within .cm-md-image-source {
+            display: block;
+        }
         /* Mirror the preview's list geometry. JavaScript adds an inline
            padding value derived from semantic list depth, rather than relying
            on proportional-font source spaces. The marker hangs inside the
@@ -831,15 +913,31 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             window.__mdRequestTableContextMenu = function (details) {
                 post(Object.assign({ kind: "tableContextMenu" }, details));
             };
+            window.__mdRequestImageRename = function (src) {
+                post({ kind: "imageClick", src: src });
+            };
             window.onerror = function (message) { post("error: " + message); };
             let editor = null;
-            window.__mdLoadEditor = function (markdown) {
+            window.__mdLoadEditor = function (markdown, baseHref) {
+                let base = document.querySelector("head > base");
+                if (baseHref) {
+                    if (!base) {
+                        base = document.createElement("base");
+                        document.head.prepend(base);
+                    }
+                    base.setAttribute("href", baseHref);
+                } else if (base) {
+                    base.remove();
+                }
                 if (editor) editor.destroy();
                 editor = window.MDEditor.create(
                     document.getElementById("editor"),
                     markdown,
                     {
                         onDirty: function () { post("dirty"); },
+                        onPasteImage: function (from, to) {
+                            post({ kind: "pasteImage", from: from, to: to });
+                        },
                         // Preview block margins (MarkdownHTML design tokens):
                         // the bundle sizes blank-separator lines from these.
                         spacing: {
@@ -855,10 +953,14 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                 );
                 window.__mdEditor = {
                     getMarkdown: function () { return editor.getMarkdown(); },
+                    replaceMarkdown: function (markdown) { return editor.replaceMarkdown(markdown); },
                     getScrollAnchor: function () { return editor.getScrollAnchor(); },
                     focus: function () { editor.focus(); },
                     setScrollPosition: function (progress, sourcePosition, sourceGap) {
                         return editor.setScrollPosition(progress, sourcePosition, sourceGap);
+                    },
+                    insertTextAt: function (text, from, to) {
+                        return editor.insertTextAt(text, from, to);
                     },
                     performTableContextAction: function (token, action) {
                         return editor.performTableContextAction(token, action);
@@ -870,12 +972,18 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             document.addEventListener("keydown", function (e) {
                 if (e.key === "Escape" && !e.defaultPrevented) post("cancel");
             });
-            window.__mdLoadEditor(\(jsStringLiteral(markdown)));
+            window.__mdLoadEditor(\(jsStringLiteral(markdown)), \(jsStringLiteral(assetBaseURL.map { MarkdownAssetResolution.baseHref(forFolder: $0) } ?? "")));
         })();
         </script>
         </body>
         </html>
         """
+    }
+
+    private static func htmlAttributeLiteral(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
     }
 
 }

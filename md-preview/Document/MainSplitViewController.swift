@@ -263,9 +263,11 @@ final class MainSplitViewController: NSSplitViewController {
     }
 
     @discardableResult
-    func enterEditMode(markdown: String, autofocus: Bool = false) -> EditorViewController {
+    func enterEditMode(markdown: String,
+                       assetBaseURL: URL? = nil,
+                       autofocus: Bool = false) -> EditorViewController {
         if let editor = editorViewController {
-            editor.load(markdown: markdown)
+            editor.load(markdown: markdown, assetBaseURL: assetBaseURL)
             if autofocus {
                 editor.focusEditor()
             }
@@ -302,6 +304,9 @@ final class MainSplitViewController: NSSplitViewController {
         // into the new editing session.
         contentViewController?.prepareToRestoreSourceScrollAnchor(nil)
         contentViewController?.pendingAnchorRestored = nil
+        // Ensure preview is visible during the prepare phase — a rapid mode
+        // toggle could leave it hidden from a previous edit session.
+        contentViewController?.view.isHidden = false
         editorVC.view.isHidden = false
         editorVC.editorDidBecomeReady = { [weak self, weak editorVC] in
             guard let self, let editorVC, self.isEditorPreparing else { return }
@@ -310,7 +315,7 @@ final class MainSplitViewController: NSSplitViewController {
             self.revealEditorIfPrepared(editorVC)
         }
         editorVC.applyPageZoom(previewZoom)
-        editorVC.load(markdown: markdown)
+        editorVC.load(markdown: markdown, assetBaseURL: assetBaseURL)
         contentViewController?.sourceScrollAnchor { [weak self, weak editorVC] anchor in
             guard let self, let editorVC, self.isEditorPreparing else { return }
             self.pendingSourceScrollAnchor = anchor
@@ -344,6 +349,10 @@ final class MainSplitViewController: NSSplitViewController {
                         guard let self, let editorVC, self.isEditorPreparing else { return }
                         self.isEditorPreparing = false
                         self.isEditorVisible = true
+                        // Hide the preview WebView so it no longer contributes to
+                        // titlebar material sampling. The editor overlay is now
+                        // fully opaque and covering it.
+                        self.contentViewController?.view.isHidden = true
                         if self.shouldAutofocusEditor {
                             self.shouldAutofocusEditor = false
                             editorVC.focusEditor()
@@ -385,6 +394,9 @@ final class MainSplitViewController: NSSplitViewController {
                       !self.isEditorPreparing, !self.isEditorVisible,
                       editorVC.view.alphaValue > 0 else { return }
                 self.contentViewController?.pendingAnchorRestored = nil
+                // Reveal the preview before fading out the editor so the preview
+                // is ready beneath it during the crossfade.
+                self.contentViewController?.view.isHidden = false
                 NSAnimationContext.runAnimationGroup { context in
                     context.duration = 0.10
                     context.timingFunction = CAMediaTimingFunction(name: .easeOut)

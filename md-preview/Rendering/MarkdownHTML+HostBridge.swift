@@ -574,7 +574,7 @@ nonisolated extension MarkdownHTML {
                 finishTableCellEdit(true);
                 return;
             }
-            if (event.target.closest('a, button, input')) return;
+            if (event.target.closest('a, button, input, img')) return;
             if (beginTableCellEdit(cell)) event.preventDefault();
         });
 
