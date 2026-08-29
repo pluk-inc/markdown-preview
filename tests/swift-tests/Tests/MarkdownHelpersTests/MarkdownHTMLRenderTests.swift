@@ -1786,6 +1786,65 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         )
     }
 
+    func testEscapedBracketsInLinkTextRemainLinkText() {
+        let rendered = MarkdownHTML.render(
+            markdown: #"""
+            Citation [\[4\]][source].
+            Related [see \[5\] for context](https://example.com/related).
+
+            [source]: https://example.com
+            """#,
+            vendorLoading: .lazy
+        )
+
+        XCTAssertFalse(rendered.containsMath)
+        XCTAssertTrue(rendered.articleHTML.contains(
+            #"Citation <a href="https://example.com">[4]</a>."#
+        ), rendered.articleHTML)
+        XCTAssertTrue(rendered.articleHTML.contains(
+            #"Related <a href="https://example.com/related">see [5] for context</a>."#
+        ), rendered.articleHTML)
+        XCTAssertFalse(rendered.articleHTML.contains("class=\"math"))
+    }
+
+    func testEscapedLinkBracketsDoNotHideAdjacentDisplayMath() {
+        let rendered = MarkdownHTML.render(
+            markdown: #"""
+            Résumé ✨ [\[4\]][source].
+
+            \[
+            x^2
+            \]
+
+            [source]: https://example.com
+            """#,
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(rendered.containsMath)
+        XCTAssertTrue(rendered.articleHTML.contains(
+            #"Résumé ✨ <a href="https://example.com">[4]</a>."#
+        ), rendered.articleHTML)
+        XCTAssertEqual(
+            rendered.articleHTML.components(separatedBy: "class=\"math math-display\"").count - 1,
+            1
+        )
+        XCTAssertTrue(rendered.articleHTML.contains("class=\"math math-display\">\nx^2\n</div>"))
+    }
+
+    func testEscapedBracketsInSeparateLinksCannotPairAsDisplayMath() {
+        let rendered = MarkdownHTML.render(
+            markdown: #"[open \[](https://a.example) prose [close \]](https://b.example)"#,
+            vendorLoading: .lazy
+        )
+
+        XCTAssertFalse(rendered.containsMath)
+        XCTAssertTrue(rendered.articleHTML.contains(
+            #"<a href="https://a.example">open [</a> prose <a href="https://b.example">close ]</a>"#
+        ), rendered.articleHTML)
+        XCTAssertFalse(rendered.articleHTML.contains("class=\"math"))
+    }
+
     func testLatexDelimitersInsideCodeRemainLiteral() {
         let rendered = MarkdownHTML.render(
             markdown: #"""

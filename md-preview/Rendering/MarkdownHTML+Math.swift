@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Markdown
 
 // `nonisolated` matters: the targets default to MainActor isolation, and
 // rendering runs off the main actor.
@@ -32,6 +33,11 @@ nonisolated extension MarkdownHTML {
     private static let bracketedBlockMathRegex: NSRegularExpression = {
         // swiftlint:disable:next force_try
         try! NSRegularExpression(pattern: #"(?<!\\)\\\[([\s\S]+?)\\\]"#)
+    }()
+
+    private static let singleBackslashBracketRegex: NSRegularExpression = {
+        // swiftlint:disable:next force_try
+        try! NSRegularExpression(pattern: #"(?<!\\)\\(?:\[|\])"#)
     }()
 
     // Markdown authors sometimes double the delimiter backslashes so the
@@ -78,13 +84,21 @@ nonisolated extension MarkdownHTML {
         var inlines: [String] = []
         var protected: [String] = []
 
-        let nsMarkdown = markdown as NSString
-        let fenceMatches = codeFenceRegex.matches(
+        // In a valid Markdown link label, `\[` and `\]` are bracket escapes,
+        // not display-math delimiters. Protect those ranges before the math
+        // pass, then restore them for swift-markdown to parse normally.
+        let afterLinkLabels = protectEscapedBracketsInLinks(
             in: markdown,
+            protected: &protected
+        )
+
+        let nsMarkdown = afterLinkLabels as NSString
+        let fenceMatches = codeFenceRegex.matches(
+            in: afterLinkLabels,
             range: NSRange(location: 0, length: nsMarkdown.length)
         )
         var afterFences = ""
-        afterFences.reserveCapacity(markdown.count)
+        afterFences.reserveCapacity(afterLinkLabels.count)
         var fenceCursor = 0
         for match in fenceMatches {
             afterFences += nsMarkdown.substring(with: NSRange(
@@ -192,6 +206,41 @@ nonisolated extension MarkdownHTML {
         )
     }
 
+    private static func protectEscapedBracketsInLinks(
+        in markdown: String,
+        protected: inout [String]
+    ) -> String {
+        let nsMarkdown = markdown as NSString
+        let fullRange = NSRange(location: 0, length: nsMarkdown.length)
+        let candidates = singleBackslashBracketRegex.matches(in: markdown, range: fullRange)
+        guard !candidates.isEmpty else { return markdown }
+
+        var collector = MarkdownLinkRangeCollector(source: markdown)
+        collector.visit(Document(parsing: markdown))
+        let matches = candidates.filter { candidate in
+            collector.ranges.contains { linkRange in
+                candidate.range.location >= linkRange.location
+                    && NSMaxRange(candidate.range) <= NSMaxRange(linkRange)
+            }
+        }
+        guard !matches.isEmpty else { return markdown }
+
+        var result = ""
+        result.reserveCapacity(markdown.count)
+        var cursor = 0
+        for match in matches where match.range.location >= cursor {
+            result += nsMarkdown.substring(with: NSRange(
+                location: cursor,
+                length: match.range.location - cursor
+            ))
+            protected.append(nsMarkdown.substring(with: match.range))
+            result += "MdPreviewProtect\(protected.count - 1)Token"
+            cursor = match.range.location + match.range.length
+        }
+        result += nsMarkdown.substring(from: cursor)
+        return result
+    }
+
     static func renderMathBlocks(in html: String,
                                          with math: MathExtraction) -> MathRenderResult {
         guard !math.blocks.isEmpty || !math.inlines.isEmpty else {
@@ -249,5 +298,41 @@ nonisolated extension MarkdownHTML {
             with: "data-source-end=\"\(end)\"",
             options: .regularExpression
         )
+    }
+}
+
+nonisolated private struct MarkdownLinkRangeCollector: MarkupWalker {
+    let source: String
+    private let lineStartOffsets: [Int]
+    private(set) var ranges: [NSRange] = []
+
+    init(source: String) {
+        self.source = source
+        var offsets = [0]
+        for (offset, byte) in source.utf8.enumerated() where byte == 0x0A {
+            offsets.append(offset + 1)
+        }
+        lineStartOffsets = offsets
+    }
+
+    mutating func visitLink(_ link: Link) {
+        guard let sourceRange = link.range,
+              let lower = index(for: sourceRange.lowerBound),
+              let upper = index(for: sourceRange.upperBound),
+              lower <= upper else { return }
+        ranges.append(NSRange(lower..<upper, in: source))
+    }
+
+    private func index(for location: SourceLocation) -> String.Index? {
+        guard location.line > 0,
+              location.line <= lineStartOffsets.count,
+              location.column > 0 else { return nil }
+        let offset = lineStartOffsets[location.line - 1] + location.column - 1
+        guard let utf8Index = source.utf8.index(
+            source.utf8.startIndex,
+            offsetBy: offset,
+            limitedBy: source.utf8.endIndex
+        ) else { return nil }
+        return String.Index(utf8Index, within: source)
     }
 }
