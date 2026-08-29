@@ -231,11 +231,21 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         findBarOverlay?.needsDisplay = true
     }
 
-    /// Whether the ACTIVE appearance scheme has a window background
-    /// override. Chrome suppression without a matching tint exposes the
-    /// stock fills, so every chrome treatment gates on this, not on
-    /// "either scheme customized".
-    var activeSchemeThemed: Bool {
+    /// Whether this window wears the themed chrome: a window background
+    /// override on the ACTIVE appearance scheme, and an OS that can
+    /// complete the recipe. Chrome suppression without a matching tint
+    /// exposes the stock fills, so every chrome treatment gates on this —
+    /// not on "either scheme customized", and not on theme state alone.
+    ///
+    /// The macOS 26 floor is not a preference. The transparent titlebar
+    /// only reads correctly because WebKit is told which strip the toolbar
+    /// obscures, and `WKWebView.obscuredContentInsets` is macOS 26.0+ — so
+    /// pre-Tahoe the page would run under an unlined toolbar with no inset
+    /// and no frost. The chrome stays native there, the same retreat full
+    /// screen makes below. Keep this version in step with the gate in
+    /// `ContentViewController.updateObscuredContentInsets()`.
+    var usesThemedChrome: Bool {
+        guard #available(macOS 26.0, *) else { return false }
         let isDark = documentWindow.effectiveAppearance
             .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         return ThemeColorsSetting.current
@@ -265,7 +275,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 .windowBackground, isDark ? .dark : .light
             ) ?? .windowBackgroundColor
         }
-        let themed = activeSchemeThemed
+        let themed = usesThemedChrome
             && !documentWindow.styleMask.contains(.fullScreen)
         // Automatic resolves to a shadow under the toolbar; over the flat
         // theme color it renders as a clipped gray band between the toolbar
