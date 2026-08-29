@@ -9,42 +9,31 @@ import Cocoa
 
 extension DocumentWindowController {
     func makeSidebarMenuItem(willBeInsertedIntoToolbar: Bool) -> NSToolbarItem {
-        let item = NSToolbarItem(itemIdentifier: .sidebarMenu)
+        // An AppKit-owned item rather than an NSPopUpButton in a custom view:
+        // the toolbar keeps its own drag regions only for items it draws
+        // itself, so a control view here costs the window its drag surface.
+        //
+        // The two objections to NSMenuToolbarItem both come from configuring
+        // it as a split button. Leaving `target`/`action` unset makes a click
+        // anywhere on the item open the menu, and setting `image` explicitly
+        // means no menu entry is promoted out of the dropdown to act as the
+        // face — so this behaves as the Preview-style pulldown it replaces.
+        let item = NSMenuToolbarItem(itemIdentifier: .sidebarMenu)
         item.label = NSLocalizedString("Sidebar", comment: "Sidebar toolbar item label")
         item.paletteLabel = NSLocalizedString("Sidebar", comment: "Sidebar toolbar palette label")
         item.toolTip = NSLocalizedString("Sidebar options", comment: "Sidebar toolbar item tooltip")
-
-        // NSPopUpButton (pull-down) so a single click anywhere on the button
-        // opens the menu and the chevron renders natively. NSMenuToolbarItem
-        // either splits the click (icon vs chevron) or auto-promotes the first
-        // item out of the dropdown — neither matches the Preview-style pulldown.
-        let popup = NSPopUpButton(frame: .zero, pullsDown: true)
-        popup.translatesAutoresizingMaskIntoConstraints = false
-        popup.bezelStyle = .toolbar
-        popup.imagePosition = .imageOnly
+        item.image = sidebarFaceImage()
+        item.showsIndicator = true
 
         let menu = NSMenu()
         menu.identifier = NSUserInterfaceItemIdentifier("SidebarMenu")
         menu.delegate = self
         menu.autoenablesItems = false
         rebuildSidebarMenu(menu)
-        popup.menu = menu
-        popup.sizeToFit()
+        item.menu = menu
 
-        let container = NSView()
-        container.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(popup)
-        NSLayoutConstraint.activate([
-            popup.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            popup.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            popup.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            container.heightAnchor.constraint(equalToConstant: 32)
-        ])
-
-        item.view = container
         if willBeInsertedIntoToolbar {
             sidebarMenu = menu
-            sidebarPopUpButton = popup
             syncSidebarMenuState()
         }
         return item
@@ -59,12 +48,10 @@ extension DocumentWindowController {
     private func rebuildSidebarMenu(_ menu: NSMenu) {
         menu.removeAllItems()
 
-        // Pull-down NSPopUpButton uses the first item as the always-visible
-        // button face (showing only the icon thanks to imagePosition). The
-        // dropdown shows items 2+, so the button face is reserved here.
-        let face = NSMenuItem()
-        face.image = sidebarFaceImage()
-        menu.addItem(face)
+        // NSMenuToolbarItem reserves the first menu item for its button face,
+        // even when the toolbar item supplies its own image. Keep that slot
+        // empty so every real command appears in the dropdown.
+        menu.addItem(NSMenuItem(title: "", action: nil, keyEquivalent: ""))
 
         let hide = NSMenuItem(title: NSLocalizedString("Hide Sidebar", comment: "Sidebar dropdown item"),
                               action: #selector(hideSidebarFromMenu(_:)),

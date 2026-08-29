@@ -84,15 +84,15 @@ extension DocumentWindowController {
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         switch itemIdentifier {
         case .sidebarMenu: return makeSidebarMenuItem(willBeInsertedIntoToolbar: flag)
-        case .navigation: return makeNavigationItem()
+        case .navigation: return makeNavigationItem(willBeInsertedIntoToolbar: flag)
         case .openActions: return makeOpenActionsItem()
         case .openWith: return makeOpenWithItem()
         case .openInLLM:
             guard hasLLMTargetsAvailable else { return nil }
             return makeOpenInLLMItem()
-        case .editDocument: return makeEditItem()
-        case .inspector: return makeInspectorItem()
-        case .alwaysOnTop: return makeAlwaysOnTopItem()
+        case .editDocument: return makeEditItem(willBeInsertedIntoToolbar: flag)
+        case .inspector: return makeInspectorItem(willBeInsertedIntoToolbar: flag)
+        case .alwaysOnTop: return makeAlwaysOnTopItem(willBeInsertedIntoToolbar: flag)
         case .share: return makeShareItem()
         case .search: return makeSearchItem()
         case .printDocument: return makePrintItem()
@@ -104,35 +104,38 @@ extension DocumentWindowController {
         }
     }
 
-    private func makeNavigationItem() -> NSToolbarItem {
-        let item = NSToolbarItem(itemIdentifier: .navigation)
+    /// Back and forward as an AppKit-owned group rather than an
+    /// `NSSegmentedControl` in a custom view. A toolbar only keeps window-drag
+    /// regions around items it draws itself, so hosting a control here is what
+    /// cost the toolbar its drag surface in the first place.
+    private func makeNavigationItem(willBeInsertedIntoToolbar: Bool) -> NSToolbarItem {
         let back = NSLocalizedString("Back", comment: "Navigation toolbar back button")
         let forward = NSLocalizedString("Forward", comment: "Navigation toolbar forward button")
+        let backImage = NSImage(systemSymbolName: "chevron.left", accessibilityDescription: back) ?? NSImage()
+        let forwardImage = NSImage(systemSymbolName: "chevron.right", accessibilityDescription: forward) ?? NSImage()
+
+        let item = NSToolbarItemGroup(itemIdentifier: .navigation,
+                                      images: [backImage, forwardImage],
+                                      selectionMode: .momentary,
+                                      labels: [back, forward],
+                                      target: self,
+                                      action: #selector(navigateHistory(_:)))
         item.label = NSLocalizedString("Navigation", comment: "Navigation toolbar item label")
         item.paletteLabel = NSLocalizedString("Back and Forward", comment: "Navigation toolbar palette label")
         item.isNavigational = true
         item.autovalidates = false
+        item.subitems.first?.toolTip = back
+        item.subitems.last?.toolTip = forward
 
-        let control = NSSegmentedControl(labels: ["", ""],
-                                         trackingMode: .momentary,
-                                         target: self,
-                                         action: #selector(navigateHistory(_:)))
-        control.segmentStyle = .automatic
-        control.setImage(NSImage(systemSymbolName: "chevron.left", accessibilityDescription: back),
-                         forSegment: 0)
-        control.setImage(NSImage(systemSymbolName: "chevron.right", accessibilityDescription: forward),
-                         forSegment: 1)
-        control.setToolTip(back, forSegment: 0)
-        control.setToolTip(forward, forSegment: 1)
-        item.view = control
-        navigationItem = item
-        navigationControl = control
-        updateNavigationControl()
+        if willBeInsertedIntoToolbar {
+            navigationItem = item
+        }
+        applyNavigationState(to: item)
         return item
     }
 
-    @objc private func navigateHistory(_ sender: NSSegmentedControl) {
-        switch sender.selectedSegment {
+    @objc private func navigateHistory(_ sender: NSToolbarItemGroup) {
+        switch sender.selectedIndex {
         case 0:
             guard let entry = backHistory.last else { return }
             present(url: entry.url, intent: .back)
@@ -144,79 +147,58 @@ extension DocumentWindowController {
         }
     }
 
-    func updateNavigationControl() {
-        let hasHistory = !backHistory.isEmpty || !forwardHistory.isEmpty
-        navigationItem?.isHidden = !hasHistory
-        navigationItem?.isEnabled = hasHistory
-        navigationControl?.isEnabled = hasHistory
-        navigationControl?.setEnabled(!backHistory.isEmpty, forSegment: 0)
-        navigationControl?.setEnabled(!forwardHistory.isEmpty, forSegment: 1)
+    func updateNavigationItem() {
+        guard let navigationItem else { return }
+        applyNavigationState(to: navigationItem)
     }
 
-    private func makeInspectorItem() -> NSToolbarItem {
-        let item = NSToolbarItem(itemIdentifier: .inspector)
+    private func applyNavigationState(to item: NSToolbarItemGroup) {
+        let hasHistory = !backHistory.isEmpty || !forwardHistory.isEmpty
+        item.isHidden = !hasHistory
+        item.isEnabled = hasHistory
+        item.subitems.first?.isEnabled = !backHistory.isEmpty
+        item.subitems.last?.isEnabled = !forwardHistory.isEmpty
+    }
+
+    private func makeInspectorItem(willBeInsertedIntoToolbar: Bool) -> NSToolbarItem {
+        let item = NSToolbarItemGroup(itemIdentifier: .inspector,
+                                      images: [inspectorImage()],
+                                      selectionMode: .selectAny,
+                                      labels: [NSLocalizedString("Inspector", comment: "Inspector toolbar item label")],
+                                      target: self,
+                                      action: #selector(toggleInspectorAction(_:)))
         item.label = NSLocalizedString("Inspector", comment: "Inspector toolbar item label")
         item.paletteLabel = NSLocalizedString("Get Info", comment: "Inspector toolbar palette label")
         item.toolTip = NSLocalizedString("Show the inspector", comment: "Inspector toolbar item tooltip")
+        item.subitems.first?.toolTip = item.toolTip
 
-        let button = NSButton(image: inspectorImage(),
-                              target: self,
-                              action: #selector(toggleInspectorAction(_:)))
-        button.setButtonType(.pushOnPushOff)
-        button.toolTip = item.toolTip
-        button.translatesAutoresizingMaskIntoConstraints = false
-
-        let container = NSView()
-        container.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(button)
-        NSLayoutConstraint.activate([
-            button.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 2),
-            button.topAnchor.constraint(equalTo: container.topAnchor),
-            button.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -2),
-            button.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            button.heightAnchor.constraint(equalToConstant: 32),
-            container.widthAnchor.constraint(equalToConstant: 36),
-            container.heightAnchor.constraint(equalToConstant: 32)
-        ])
-
-        item.view = container
-        inspectorButton = button
-        inspectorItem = item
-        refreshInspectorToggleItem()
+        if willBeInsertedIntoToolbar {
+            inspectorItem = item
+            refreshInspectorToggleItem()
+        } else {
+            item.setSelected(isInspectorToggleSelected, at: 0)
+        }
         return item
     }
 
-    private func makeAlwaysOnTopItem() -> NSToolbarItem {
-        let item = NSToolbarItem(itemIdentifier: .alwaysOnTop)
+    private func makeAlwaysOnTopItem(willBeInsertedIntoToolbar: Bool) -> NSToolbarItem {
         let alwaysOnTop = NSLocalizedString("Always on Top", comment: "Always on Top toolbar item label")
+        let item = NSToolbarItemGroup(itemIdentifier: .alwaysOnTop,
+                                      images: [alwaysOnTopImage()],
+                                      selectionMode: .selectAny,
+                                      labels: [alwaysOnTop],
+                                      target: self,
+                                      action: #selector(toggleAlwaysOnTop(_:)))
         item.label = alwaysOnTop
         item.paletteLabel = alwaysOnTop
         item.toolTip = NSLocalizedString("Keep Markdown Preview windows in front of other apps",
                                          comment: "Always on Top toolbar item tooltip")
+        item.subitems.first?.toolTip = item.toolTip
+        item.setSelected(isAlwaysOnTop, at: 0)
 
-        let button = NSButton(image: alwaysOnTopImage(),
-                              target: self,
-                              action: #selector(toggleAlwaysOnTop(_:)))
-        button.setButtonType(.pushOnPushOff)
-        button.state = isAlwaysOnTop ? .on : .off
-        button.toolTip = item.toolTip
-        button.translatesAutoresizingMaskIntoConstraints = false
-
-        let container = NSView()
-        container.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(button)
-        NSLayoutConstraint.activate([
-            button.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 2),
-            button.topAnchor.constraint(equalTo: container.topAnchor),
-            button.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -2),
-            button.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            button.heightAnchor.constraint(equalToConstant: 32),
-            container.widthAnchor.constraint(equalToConstant: 36),
-            container.heightAnchor.constraint(equalToConstant: 32)
-        ])
-
-        item.view = container
-        alwaysOnTopButton = button
+        if willBeInsertedIntoToolbar {
+            alwaysOnTopItem = item
+        }
         return item
     }
 
@@ -391,7 +373,7 @@ extension DocumentWindowController {
 
     private func setInspectorToggleSelected(_ isSelected: Bool) {
         isInspectorToggleSelected = isSelected
-        inspectorButton?.state = isSelected ? .on : .off
+        inspectorItem?.setSelected(isSelected, at: 0)
     }
 
     func items(for pickerToolbarItem: NSSharingServicePickerToolbarItem) -> [Any] {

@@ -19,7 +19,7 @@ extension DocumentWindowController {
     /// and once on a window being created so it opens already floating.
     func applyAlwaysOnTopSetting() {
         applyAlwaysOnTopLevel(isFullScreen: documentWindow.styleMask.contains(.fullScreen))
-        alwaysOnTopButton?.state = isAlwaysOnTop ? .on : .off
+        alwaysOnTopItem?.setSelected(isAlwaysOnTop, at: 0)
     }
 
     /// The pin is intent, not the level itself: the level is recomputed on both

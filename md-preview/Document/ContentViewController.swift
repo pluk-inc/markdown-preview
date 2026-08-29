@@ -18,6 +18,8 @@ final class ContentViewController: NSViewController {
     private static let pageZoomDefaultsKey = TextSizeSetting.defaultsKey
 
     private var webView: MarkdownWebView!
+    private var toolbarGutterView: PreviewToolbarGutterView!
+    private var toolbarGutterHeightConstraint: NSLayoutConstraint?
     private var webViewCenteredLeadingConstraint: NSLayoutConstraint?
     private var webViewCenteredConstraints: [NSLayoutConstraint] = []
     private var webViewFullWidthConstraints: [NSLayoutConstraint] = []
@@ -119,7 +121,18 @@ final class ContentViewController: NSViewController {
         }
         webView.enablePersistentZoom(defaultsKey: Self.pageZoomDefaultsKey)
 
+        // The WKWebView paints its obscured toolbar strip with
+        // underPageBackgroundColor. In centered mode the native gutter to
+        // its left would otherwise expose the document background there,
+        // producing a sharp color change at the web view's leading edge.
+        toolbarGutterView = PreviewToolbarGutterView()
+        toolbarGutterView.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(toolbarGutterView)
         container.addSubview(webView)
+        // In normal-width mode the web view starts at the centered article's
+        // leading edge, leaving a native gutter between it and the split-view
+        // divider. Keep that gutter part of the page's scrolling surface.
+        container.scrollWheelTarget = webView.webView
 
 
         // Normal (centered) mode positions the web view in AppKit rather
@@ -152,6 +165,15 @@ final class ContentViewController: NSViewController {
         webViewFullWidthConstraints = [
             webView.leadingAnchor.constraint(equalTo: container.leadingAnchor)
         ]
+
+        let toolbarGutterHeight = toolbarGutterView.heightAnchor.constraint(equalToConstant: 0)
+        toolbarGutterHeightConstraint = toolbarGutterHeight
+        NSLayoutConstraint.activate([
+            toolbarGutterView.topAnchor.constraint(equalTo: container.topAnchor),
+            toolbarGutterView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            toolbarGutterView.trailingAnchor.constraint(equalTo: webView.leadingAnchor),
+            toolbarGutterHeight,
+        ])
 
         // Keep the WKWebView viewport-sized and let WebKit own vertical
         // scrolling. Expanding it to the full document height creates an
@@ -348,6 +370,7 @@ final class ContentViewController: NSViewController {
 
     func applyThemeColors() {
         view.needsDisplay = true
+        toolbarGutterView.needsDisplay = true
         updateUnderPageBackgroundColor()
         updateObscuredContentInsets()
         webView.applyThemeColors()
@@ -409,13 +432,19 @@ final class ContentViewController: NSViewController {
     }
 
     private func updateObscuredContentInsets() {
-        guard #available(macOS 26.0, *) else { return }
+        guard #available(macOS 26.0, *) else {
+            toolbarGutterHeightConstraint?.constant = 0
+            return
+        }
         // Theme-independent, and never 0: WebKit adopts the titlebar inset
         // automatically on macOS 26 and an explicit 0 stomps that for the
         // web view's lifetime — the page then collides with the toolbar
         // until the window is recreated. Keeping the explicit value equal
         // to the chrome strip matches the automatic behavior exactly.
         let inset = obscuredTopInset
+        if toolbarGutterHeightConstraint?.constant != inset {
+            toolbarGutterHeightConstraint?.constant = inset
+        }
         guard view.window != nil, inset > 0 else { return }
         if webView.webView.obscuredContentInsets.top != inset {
             webView.webView.obscuredContentInsets = NSEdgeInsets(
@@ -632,6 +661,37 @@ final class ContentViewController: NSViewController {
     }
 }
 
+/// Continues WebKit's obscured toolbar backing across the native gutter that
+/// centered mode leaves to the web view's left. Its height is kept in sync
+/// with `WKWebView.obscuredContentInsets`; full-width mode naturally reduces
+/// its width to zero.
+private final class PreviewToolbarGutterView: NSView {
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        wantsLayer = true
+    }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    /// Purely visual: keep native toolbar hit-testing and window dragging
+    /// unchanged in the strip this view paints beneath.
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func updateLayer() {
+        let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let color = ThemeColorsSetting.current.color(
+            .windowBackground, isDark ? .dark : .light
+        ) ?? .windowBackgroundColor
+        layer?.backgroundColor = color.cgColor
+    }
+}
+
 /// The light-mode page white. The preview web view is non-opaque and the
 /// rendered page paints no background of its own, so the whole reading surface
 /// composites onto whatever sits behind it — and that used to be the window,
@@ -643,6 +703,8 @@ final class ContentViewController: NSViewController {
 /// Dark mode paints nothing and keeps the window background, which already
 /// reads as a page.
 private final class DocumentBackgroundView: NSView {
+
+    weak var scrollWheelTarget: NSView?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -670,5 +732,13 @@ private final class DocumentBackgroundView: NSView {
             return
         }
         layer?.backgroundColor = isDark ? nil : NSColor.white.cgColor
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        guard let scrollWheelTarget else {
+            super.scrollWheel(with: event)
+            return
+        }
+        scrollWheelTarget.scrollWheel(with: event)
     }
 }

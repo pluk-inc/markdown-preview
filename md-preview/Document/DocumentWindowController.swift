@@ -55,18 +55,15 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     var currentMarkdown: String?
     var backHistory: [HistoryEntry] = []
     var forwardHistory: [HistoryEntry] = []
-    weak var navigationItem: NSToolbarItem?
-    weak var navigationControl: NSSegmentedControl?
+    weak var navigationItem: NSToolbarItemGroup?
     private var fileWatcher: FileWatcher?
     var isInspectorToggleSelected = false
     weak var openActionsItem: NSMenuToolbarItem?
     weak var openWithItem: NSMenuToolbarItem?
     weak var openInLLMItem: NSMenuToolbarItem?
-    weak var inspectorItem: NSToolbarItem?
-    weak var inspectorButton: NSButton?
-    weak var alwaysOnTopButton: NSButton?
-    weak var editItem: NSToolbarItem?
-    weak var editButton: NSButton?
+    weak var inspectorItem: NSToolbarItemGroup?
+    weak var alwaysOnTopItem: NSToolbarItemGroup?
+    weak var editItem: NSToolbarItemGroup?
     var editorChangeRevision = 0
     /// In-memory source shown by preview before the user saves it.
     var editorDraftMarkdown: String?
@@ -109,7 +106,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     var copyFeedbackWork: DispatchWorkItem?
     weak var searchField: NSSearchField?
     weak var sidebarMenu: NSMenu?
-    weak var sidebarPopUpButton: NSPopUpButton?
     var findBar: FindBar?
     var findBarAccessory: NSTitlebarAccessoryViewController?
     var searchMode: SearchMode = .contains
@@ -478,7 +474,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             scrollPosition: (documentWindow.contentViewController as? MainSplitViewController)?
                 .previewScrollPosition ?? 0
         )
-        defer { updateNavigationControl() }
+        defer { updateNavigationItem() }
         switch intent {
         case .normal:
             Self.appendHistory(departed, to: &backHistory)
