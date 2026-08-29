@@ -20,6 +20,7 @@ final class ContentViewController: NSViewController {
     private var webView: MarkdownWebView!
     private var toolbarGutterView: PreviewToolbarGutterView!
     private var toolbarGutterHeightConstraint: NSLayoutConstraint?
+    private var webViewTopConstraint: NSLayoutConstraint?
     private var webViewCenteredLeadingConstraint: NSLayoutConstraint?
     private var webViewCenteredConstraints: [NSLayoutConstraint] = []
     private var webViewFullWidthConstraints: [NSLayoutConstraint] = []
@@ -178,9 +179,16 @@ final class ContentViewController: NSViewController {
         // Keep the WKWebView viewport-sized and let WebKit own vertical
         // scrolling. Expanding it to the full document height creates an
         // enormous backing surface that loses Retina resolution on long docs.
+        // Pinned to the container's top so macOS 26 can scroll content
+        // under the frosted titlebar. Pre-Tahoe there is no frost and no
+        // obscured inset to lay the page out below the bar, so the
+        // constant carries that inset instead — see
+        // updateObscuredContentInsets().
+        let webViewTop = webView.topAnchor.constraint(equalTo: container.topAnchor)
+        webViewTopConstraint = webViewTop
         NSLayoutConstraint.activate([
 
-            webView.topAnchor.constraint(equalTo: container.topAnchor),
+            webViewTop,
             webView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             webView.trailingAnchor.constraint(equalTo: container.trailingAnchor)
         ])
@@ -437,7 +445,17 @@ final class ContentViewController: NSViewController {
 
     private func updateObscuredContentInsets() {
         guard #available(macOS 26.0, *) else {
+            // No obscured-inset API and no frost pre-Tahoe, so the page
+            // must not run under the opaque titlebar: the toolbar's effect
+            // views blend within the window and would composite whatever
+            // scrolls beneath them. Lay the web view out below the chrome
+            // instead. The window keeps .fullSizeContentView so the sidebar
+            // still spans full height, the way Finder and Preview do.
             toolbarGutterHeightConstraint?.constant = 0
+            let inset = view.window == nil ? 0 : fullChromeTopInset
+            if webViewTopConstraint?.constant != inset {
+                webViewTopConstraint?.constant = inset
+            }
             return
         }
         // Theme-independent, and never 0: WebKit adopts the titlebar inset
