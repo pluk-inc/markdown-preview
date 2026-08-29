@@ -44,11 +44,8 @@ extension DocumentWindowController {
             .navigation,
             .flexibleSpace,
             .openActions,
-            .space,
             .zoom,
             .inspector,
-            .share,
-            .editDocument,
             .search
         ]
     }
@@ -62,9 +59,7 @@ extension DocumentWindowController {
             .space,
             .openActions,
             .openWith,
-            .editDocument,
             .inspector,
-            .share,
             .search,
             .printDocument,
             .exportPDF,
@@ -90,10 +85,10 @@ extension DocumentWindowController {
         case .openInLLM:
             guard hasLLMTargetsAvailable else { return nil }
             return makeOpenInLLMItem()
-        case .editDocument: return makeEditItem(willBeInsertedIntoToolbar: flag)
+        case .editDocument: return nil
         case .inspector: return makeInspectorItem(willBeInsertedIntoToolbar: flag)
         case .alwaysOnTop: return makeAlwaysOnTopItem(willBeInsertedIntoToolbar: flag)
-        case .share: return makeShareItem()
+        case .share: return nil
         case .search: return makeSearchItem()
         case .printDocument: return makePrintItem()
         case .exportPDF: return makeExportPDFItem()
@@ -161,22 +156,31 @@ extension DocumentWindowController {
     }
 
     private func makeInspectorItem(willBeInsertedIntoToolbar: Bool) -> NSToolbarItem {
-        let item = NSToolbarItemGroup(itemIdentifier: .inspector,
-                                      images: [inspectorImage()],
-                                      selectionMode: .selectAny,
-                                      labels: [NSLocalizedString("Inspector", comment: "Inspector toolbar item label")],
-                                      target: self,
-                                      action: #selector(toggleInspectorAction(_:)))
+        let inspector = NSLocalizedString("Inspector", comment: "Inspector toolbar item label")
+        let inspectorButton = NSToolbarItem(itemIdentifier: NSToolbarItem.Identifier("Inspector.Toggle"))
+        inspectorButton.label = inspector
+        inspectorButton.toolTip = NSLocalizedString("Show the inspector", comment: "Inspector toolbar item tooltip")
+        inspectorButton.image = inspectorImage()
+        inspectorButton.target = self
+        inspectorButton.action = #selector(toggleInspectorAction(_:))
+
+        // Keep the real sharing toolbar item so AppKit can present its picker
+        // on mouse-down, while grouping all three actions into one native unit.
+        let item = NSToolbarItemGroup(itemIdentifier: .inspector)
         item.label = NSLocalizedString("Inspector", comment: "Inspector toolbar item label")
         item.paletteLabel = NSLocalizedString("Get Info", comment: "Inspector toolbar palette label")
-        item.toolTip = NSLocalizedString("Show the inspector", comment: "Inspector toolbar item tooltip")
-        item.subitems.first?.toolTip = item.toolTip
+        item.subitems = [inspectorButton, makeShareItem(), makeEditSubitem()]
+        item.controlRepresentation = .expanded
+        item.selectionMode = .selectAny
 
         if willBeInsertedIntoToolbar {
             inspectorItem = item
+            editItem = item
             refreshInspectorToggleItem()
+            updateEditToolbarItem()
         } else {
             item.setSelected(isInspectorToggleSelected, at: 0)
+            applyEditToolbarState(to: item)
         }
         return item
     }

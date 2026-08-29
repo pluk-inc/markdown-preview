@@ -41,26 +41,19 @@ extension DocumentWindowController {
         requestEndEditing(completion: completion)
     }
 
-    func makeEditItem(willBeInsertedIntoToolbar: Bool) -> NSToolbarItem {
+    func makeEditSubitem() -> NSToolbarItem {
         let edit = NSLocalizedString("Edit", comment: "Edit toolbar item label")
         let image = NSImage(systemSymbolName: "highlighter",
                             accessibilityDescription: edit) ?? NSImage()
         image.isTemplate = true
 
-        let item = NSToolbarItemGroup(itemIdentifier: .editDocument,
-                                      images: [image],
-                                      selectionMode: .selectAny,
-                                      labels: [edit],
-                                      target: self,
-                                      action: #selector(toggleEditAction(_:)))
+        let item = NSToolbarItem(itemIdentifier: .editDocument)
         item.label = edit
-        item.paletteLabel = edit
+        item.toolTip = NSLocalizedString("Edit document", comment: "Edit toolbar item tooltip")
+        item.image = image
+        item.target = self
+        item.action = #selector(toggleEditAction(_:))
         item.autovalidates = false
-
-        if willBeInsertedIntoToolbar {
-            editItem = item
-        }
-        applyEditToolbarState(to: item)
         return item
     }
 
@@ -69,14 +62,14 @@ extension DocumentWindowController {
         applyEditToolbarState(to: editItem)
     }
 
-    private func applyEditToolbarState(to item: NSToolbarItemGroup) {
+    func applyEditToolbarState(to item: NSToolbarItemGroup) {
         let editing = isEditing
-        item.setSelected(editing, at: 0)
-        item.toolTip = editing
+        item.setSelected(editing, at: 2)
+        let toolTip = editing
             ? NSLocalizedString("Stop editing and return to preview", comment: "Edit toolbar item tooltip while editing")
             : NSLocalizedString("Edit document", comment: "Edit toolbar item tooltip")
-        item.subitems.first?.toolTip = item.toolTip
-        item.isEnabled = editing || currentMarkdown != nil
+        item.subitems[2].toolTip = toolTip
+        item.subitems[2].isEnabled = editing || currentMarkdown != nil
     }
 
     @objc private func toggleEditAction(_ sender: Any?) {
