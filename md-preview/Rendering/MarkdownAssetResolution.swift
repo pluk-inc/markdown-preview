@@ -97,6 +97,10 @@ nonisolated enum MarkdownAssetResolution {
         guard let path = relativePath(from: markdownFile, to: imageURL), !path.isEmpty else {
             return nil
         }
+        return encodedMarkdownPath(path)
+    }
+
+    fileprivate static func encodedMarkdownPath(_ path: String) -> String {
         // Parentheses are valid URL path characters but can terminate an
         // unbracketed Markdown destination when a filename contains only one
         // side of the pair.
@@ -121,25 +125,16 @@ nonisolated enum MarkdownAssetResolution {
         collector.visit(Document(parsing: markdown))
         guard !collector.ranges.isEmpty else { return nil }
 
-        let escapedPath = NSRegularExpression.escapedPattern(for: oldPath)
-        let pattern = #"(!\[[^\r\n\]]*\]\(\s*<?)"# + "(" + escapedPath + ")"
-            + #"(?=\s*(?:>|\)|["']))"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
         let nsMarkdown = markdown as NSString
-        let matches = regex.matches(
-            in: markdown,
-            range: NSRange(location: 0, length: nsMarkdown.length)
-        ).filter { match in
-            let pathRange = match.range(at: 2)
-            return collector.ranges.contains { NSLocationInRange(pathRange.location, $0) }
-        }
-        guard !matches.isEmpty else { return nil }
+        let destinationRanges = collector.ranges.compactMap {
+            imageDestinationRange(in: markdown, imageRange: $0)
+        }.sorted { $0.location < $1.location }
+        guard !destinationRanges.isEmpty else { return nil }
 
         var result = ""
         result.reserveCapacity(markdown.count)
         var cursor = 0
-        for match in matches {
-            let pathRange = match.range(at: 2)
+        for pathRange in destinationRanges {
             result += nsMarkdown.substring(with: NSRange(
                 location: cursor,
                 length: pathRange.location - cursor
@@ -149,6 +144,90 @@ nonisolated enum MarkdownAssetResolution {
         }
         result += nsMarkdown.substring(from: cursor)
         return result
+    }
+
+    private static func imageDestinationRange(in markdown: String,
+                                              imageRange: NSRange) -> NSRange? {
+        guard let range = Range(imageRange, in: markdown) else { return nil }
+        var index = range.lowerBound
+        guard index < range.upperBound, markdown[index] == "!" else { return nil }
+        index = markdown.index(after: index)
+        guard index < range.upperBound, markdown[index] == "[" else { return nil }
+        index = markdown.index(after: index)
+
+        var labelDepth = 1
+        while index < range.upperBound, labelDepth > 0 {
+            switch markdown[index] {
+            case "\\":
+                index = markdown.index(after: index)
+                if index < range.upperBound {
+                    index = markdown.index(after: index)
+                }
+            case "[":
+                labelDepth += 1
+                index = markdown.index(after: index)
+            case "]":
+                labelDepth -= 1
+                index = markdown.index(after: index)
+            default:
+                index = markdown.index(after: index)
+            }
+        }
+        guard labelDepth == 0,
+              index < range.upperBound,
+              markdown[index] == "(" else { return nil }
+        index = markdown.index(after: index)
+        while index < range.upperBound, markdown[index].isWhitespace {
+            index = markdown.index(after: index)
+        }
+        guard index < range.upperBound else { return nil }
+
+        if markdown[index] == "<" {
+            let destinationStart = markdown.index(after: index)
+            index = destinationStart
+            while index < range.upperBound {
+                if markdown[index] == "\\" {
+                    index = markdown.index(after: index)
+                    if index < range.upperBound {
+                        index = markdown.index(after: index)
+                    }
+                } else if markdown[index] == ">" {
+                    return NSRange(destinationStart..<index, in: markdown)
+                } else if markdown[index].isNewline {
+                    return nil
+                } else {
+                    index = markdown.index(after: index)
+                }
+            }
+            return nil
+        }
+
+        let destinationStart = index
+        var parenthesisDepth = 0
+        while index < range.upperBound {
+            switch markdown[index] {
+            case "\\":
+                index = markdown.index(after: index)
+                if index < range.upperBound {
+                    index = markdown.index(after: index)
+                }
+            case "(":
+                parenthesisDepth += 1
+                index = markdown.index(after: index)
+            case ")":
+                guard parenthesisDepth > 0 else {
+                    return NSRange(destinationStart..<index, in: markdown)
+                }
+                parenthesisDepth -= 1
+                index = markdown.index(after: index)
+            default:
+                guard !markdown[index].isWhitespace else {
+                    return NSRange(destinationStart..<index, in: markdown)
+                }
+                index = markdown.index(after: index)
+            }
+        }
+        return nil
     }
 
     /// Computes the relative path from one file URL to another.
@@ -195,7 +274,8 @@ nonisolated private struct MarkdownImageRangeCollector: MarkupWalker {
     }
 
     mutating func visitImage(_ image: Image) {
-        guard image.source == matchingSource,
+        guard let imageSource = image.source,
+              MarkdownAssetResolution.encodedMarkdownPath(imageSource) == matchingSource,
               let sourceRange = image.range,
               let lower = index(for: sourceRange.lowerBound),
               let upper = index(for: sourceRange.upperBound),

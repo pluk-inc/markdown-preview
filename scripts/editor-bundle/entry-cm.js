@@ -8,7 +8,7 @@ import {
   EditorView, keymap, ViewPlugin, Decoration, WidgetType,
   drawSelection, dropCursor,
 } from "@codemirror/view"
-import { Annotation, EditorState, EditorSelection, StateField } from "@codemirror/state"
+import { Annotation, EditorState, EditorSelection, StateField, Transaction } from "@codemirror/state"
 import {
   defaultKeymap, history, historyKeymap, indentLess, insertTab,
 } from "@codemirror/commands"
@@ -2117,6 +2117,7 @@ window.MDEditor = {
           changes: { from: 0, to: view.state.doc.length, insert: text },
           selection: { anchor, head },
           userEvent: "rename",
+          annotations: Transaction.addToHistory.of(false),
         })
         requestAnimationFrame(() => {
           view.scrollDOM.scrollTop = scrollTop

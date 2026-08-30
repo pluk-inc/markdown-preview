@@ -309,6 +309,42 @@ final class MarkdownAssetResolutionTests: XCTestCase {
         )
     }
 
+    func testReplacingImagePathSupportsAngleDestinationWithSpaces() {
+        let markdown = "![one](<notes-pictures/a b.png> \"caption\")"
+        XCTAssertEqual(
+            MarkdownAssetResolution.replacingImagePath(
+                in: markdown,
+                from: "notes-pictures/a%20b.png",
+                to: "notes-pictures/hero%20shot.png"
+            ),
+            "![one](<notes-pictures/hero%20shot.png> \"caption\")"
+        )
+    }
+
+    func testReplacingImagePathSupportsEscapedClosingParenthesis() {
+        let markdown = "![one](notes-pictures/a\\)b.png \"caption\")"
+        XCTAssertEqual(
+            MarkdownAssetResolution.replacingImagePath(
+                in: markdown,
+                from: "notes-pictures/a%29b.png",
+                to: "notes-pictures/hero%20shot.png"
+            ),
+            "![one](notes-pictures/hero%20shot.png \"caption\")"
+        )
+    }
+
+    func testReplacingImagePathSupportsBalancedParentheses() {
+        let markdown = "![one](notes-pictures/a(b).png \"caption\")"
+        XCTAssertEqual(
+            MarkdownAssetResolution.replacingImagePath(
+                in: markdown,
+                from: "notes-pictures/a%28b%29.png",
+                to: "notes-pictures/hero%20shot.png"
+            ),
+            "![one](notes-pictures/hero%20shot.png \"caption\")"
+        )
+    }
+
     func testReplacingImagePathDoesNotChangeCodeExamples() {
         let markdown = """
         ![real](notes-pictures/1.png)
