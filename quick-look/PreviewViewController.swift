@@ -21,6 +21,24 @@ private final class CursorRegionMessageProxy: NSObject, WKScriptMessageHandler {
     }
 }
 
+/// Receives `copyCode` messages from the code-block Copy button. The Quick
+/// Look page has no `mdPreviewHost` bridge (that would also enable task
+/// checkbox and table editing), and `navigator.clipboard` is rejected inside
+/// the extension sandbox, so the page posts here and the extension writes to
+/// the pasteboard natively — the same path the floating Copy button uses.
+private final class CopyCodeMessageProxy: NSObject, WKScriptMessageHandler {
+    func userContentController(
+        _ userContentController: WKUserContentController,
+        didReceive message: WKScriptMessage
+    ) {
+        guard message.frameInfo.isMainFrame,
+              let text = message.body as? String else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+}
+
 private final class QuickLookWebView: WKWebView {
     private struct CursorRegion {
         let rect: NSRect
@@ -28,6 +46,7 @@ private final class QuickLookWebView: WKWebView {
     }
 
     private static let cursorRegionMessageName = "mdPreviewCursorRegions"
+    static let copyCodeMessageName = "mdPreviewCopyCode"
     private static let maximumVisibleCursorRegions = 4_096
     private var cursorRegions: [CursorRegion] = []
 
@@ -36,6 +55,10 @@ private final class QuickLookWebView: WKWebView {
         configuration.userContentController.add(
             messageProxy,
             name: Self.cursorRegionMessageName
+        )
+        configuration.userContentController.add(
+            CopyCodeMessageProxy(),
+            name: Self.copyCodeMessageName
         )
         configuration.userContentController.addUserScript(WKUserScript(
             source: Self.cursorRegionReportingScript,

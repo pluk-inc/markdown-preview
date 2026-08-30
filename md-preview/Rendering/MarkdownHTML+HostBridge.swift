@@ -238,10 +238,37 @@ nonisolated extension MarkdownHTML {
             try {
                 copied = post({ kind: 'copyCode', value: text });
             } catch (e) {}
+            // Quick Look has no host bridge; it registers a dedicated
+            // pasteboard handler instead (see quick-look/PreviewViewController).
+            if (!copied) {
+                try {
+                    const handler = window.webkit?.messageHandlers?.mdPreviewCopyCode;
+                    if (handler) {
+                        handler.postMessage(text);
+                        copied = true;
+                    }
+                } catch (e) {}
+            }
             if (!copied && navigator.clipboard && navigator.clipboard.writeText) {
                 try {
                     await navigator.clipboard.writeText(text);
                     copied = true;
+                } catch (e) {}
+            }
+            if (!copied) {
+                // Last resort for non-secure contexts: execCommand works
+                // from a user gesture without clipboard permissions.
+                try {
+                    const selection = getSelection();
+                    const saved = selection && selection.rangeCount
+                        ? selection.getRangeAt(0).cloneRange() : null;
+                    const range = document.createRange();
+                    range.selectNodeContents(code);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    copied = document.execCommand('copy');
+                    selection.removeAllRanges();
+                    if (saved) selection.addRange(saved);
                 } catch (e) {}
             }
             if (!copied) return;
