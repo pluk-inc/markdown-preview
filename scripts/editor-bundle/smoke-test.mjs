@@ -418,6 +418,27 @@ check("clicking image source restores editable Markdown without changing it",
 imageEditor.destroy()
 delete dom.window.__mdRequestImageRename
 
+const renameHistoryHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(renameHistoryHost)
+const renameHistoryEditor = dom.window.MDEditor.create(
+  renameHistoryHost, "![Preview](test-pictures/1.png)", {})
+renameHistoryEditor.replaceMarkdown("![Preview](test-pictures/hero.png)")
+const renameHistoryContent = renameHistoryHost.querySelector(".cm-content")
+renameHistoryContent?.focus()
+// jsdom reports a non-macOS platform, so Mod maps to Ctrl in this test.
+const renameUndoEvent = new dom.window.KeyboardEvent("keydown", {
+  key: "z",
+  code: "KeyZ",
+  ctrlKey: true,
+  bubbles: true,
+  cancelable: true,
+})
+renameHistoryContent?.dispatchEvent(renameUndoEvent)
+check("Undo after image rename does not restore the old path",
+  renameUndoEvent.defaultPrevented
+    && renameHistoryEditor.getMarkdown() === "![Preview](test-pictures/hero.png)")
+renameHistoryEditor.destroy()
+
 const indentedCodeHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(indentedCodeHost)
 const indentedCodeEditor = dom.window.MDEditor.create(

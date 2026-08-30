@@ -63,7 +63,23 @@ extension DocumentWindowController {
             "![\(label)](\(relativePath))",
             from: from,
             to: to
-        )
+        ) { [weak self] inserted in
+            guard inserted else {
+                try? FileManager.default.removeItem(at: imageURL)
+                self?.presentImageError(
+                    NSError(domain: "MarkdownPreview.ImagePaste",
+                            code: 4,
+                            userInfo: [NSLocalizedDescriptionKey: NSLocalizedString(
+                                "The pasted image could not be inserted into the document.",
+                                comment: "Image paste insertion error"
+                            )])
+                )
+                return
+            }
+            guard let self else { return }
+            self.hasUnsavedEditorChanges = true
+            self.commitEdits(exitAfter: false)
+        }
     }
 
     private func presentImagePermissionPanel(_ data: Data,
@@ -129,6 +145,13 @@ extension DocumentWindowController {
     }
 
     func renameImage(at imageURL: URL) {
+        guard !isEditorCommitInFlight else {
+            commitEdits(exitAfter: false) { [weak self] success in
+                guard success else { return }
+                self?.renameImage(at: imageURL)
+            }
+            return
+        }
         guard let markdownURL = currentFileURL else { return }
         let picturesDirectory = MarkdownAssetResolution.picturesDirectory(
             forMarkdownFile: markdownURL
@@ -223,7 +246,10 @@ extension DocumentWindowController {
             return
         }
 
-        let diskState = diskFileState(for: currentFileURL, expectedMarkdown: markdown)
+        let diskState = diskFileState(
+            for: currentFileURL,
+            expectedMarkdown: editorBaselineMarkdown ?? currentMarkdown
+        )
         saveEditedMarkdown(updated, diskState: diskState) { [weak self] result in
             guard let self else { return }
             switch result {
@@ -240,12 +266,11 @@ extension DocumentWindowController {
                 self.renderCurrentDocument(text: updated, fileURL: markdownURL)
             case let .reloaded(externalMarkdown):
                 self.restoreRenamedImage(from: destination, to: imageURL)
-                self.currentMarkdown = externalMarkdown
-                self.markdownDocument?.replaceContents(
-                    markdown: externalMarkdown,
-                    fileURL: markdownURL
+                self.adoptExternalMarkdown(
+                    externalMarkdown,
+                    editor: self.mainSplit?.editorViewController,
+                    exitAfter: false
                 )
-                self.renderCurrentDocument(text: externalMarkdown, fileURL: markdownURL)
             case .cancelled:
                 self.restoreRenamedImage(from: destination, to: imageURL)
                 self.rerenderCurrentPreview()

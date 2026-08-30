@@ -257,9 +257,20 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         webView.evaluateJavaScript("window.__mdEditor && window.__mdEditor.exec(\(name))") { _, _ in }
     }
 
-    func insertMarkdown(_ markdown: String, from: Int, to: Int) {
-        let script = "window.__mdEditor && window.__mdEditor.insertTextAt(\(Self.jsStringLiteral(markdown)), \(from), \(to))"
-        webView.evaluateJavaScript(script) { _, _ in }
+    func insertMarkdown(_ markdown: String,
+                        from: Int,
+                        to: Int,
+                        completion: ((Bool) -> Void)? = nil) {
+        let script = """
+        (() => {
+            if (!window.__mdEditor) return false;
+            window.__mdEditor.insertTextAt(\(Self.jsStringLiteral(markdown)), \(from), \(to));
+            return true;
+        })()
+        """
+        webView.evaluateJavaScript(script) { result, error in
+            completion?(error == nil && (result as? Bool) == true)
+        }
     }
 
     /// Replaces the source after an image rename without rebuilding the page,

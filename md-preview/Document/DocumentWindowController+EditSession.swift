@@ -355,9 +355,9 @@ extension DocumentWindowController {
         }
     }
 
-    private func adoptExternalMarkdown(_ markdown: String,
-                                       editor: EditorViewController?,
-                                       exitAfter: Bool) {
+    func adoptExternalMarkdown(_ markdown: String,
+                              editor: EditorViewController?,
+                              exitAfter: Bool) {
         currentMarkdown = markdown
         editorDraftMarkdown = nil
         editorBaselineMarkdown = isEditing && !exitAfter ? markdown : nil
