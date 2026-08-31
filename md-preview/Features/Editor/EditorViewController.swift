@@ -41,7 +41,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         let config = WKWebViewConfiguration()
         config.setURLSchemeHandler(assetScheme, forURLScheme: MarkdownAssetScheme.scheme)
         config.userContentController.add(bridge, name: EditorBridge.name)
-        let webView = WKWebView(frame: .zero, configuration: config)
+        let webView = EditorWKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
         webView.underPageBackgroundColor = .windowBackgroundColor
         bridge.owner = self
@@ -1007,5 +1007,14 @@ private final class EditorBridge: NSObject, WKScriptMessageHandler {
                                didReceive message: WKScriptMessage) {
         guard message.name == EditorBridge.name else { return }
         owner?.handle(message: message.body)
+    }
+}
+
+private final class EditorWKWebView: WKWebView {
+    // Left clicks in the transparent titlebar strip stay native (window
+    // drag) instead of being consumed by WebKit — see ChromeStripClickThrough.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        if declinesChromeStripClick(at: point) { return nil }
+        return super.hitTest(point)
     }
 }

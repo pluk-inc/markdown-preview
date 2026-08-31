@@ -44,8 +44,11 @@ extension DocumentWindowController {
             .navigation,
             .flexibleSpace,
             .openActions,
+            .space,
             .zoom,
             .inspector,
+            .share,
+            .editDocument,
             .search
         ]
     }
@@ -59,7 +62,9 @@ extension DocumentWindowController {
             .space,
             .openActions,
             .openWith,
+            .editDocument,
             .inspector,
+            .share,
             .search,
             .printDocument,
             .exportPDF,
@@ -85,10 +90,10 @@ extension DocumentWindowController {
         case .openInLLM:
             guard hasLLMTargetsAvailable else { return nil }
             return makeOpenInLLMItem()
-        case .editDocument: return nil
+        case .editDocument: return makeEditItem(willBeInsertedIntoToolbar: flag)
         case .inspector: return makeInspectorItem(willBeInsertedIntoToolbar: flag)
         case .alwaysOnTop: return makeAlwaysOnTopItem(willBeInsertedIntoToolbar: flag)
-        case .share: return nil
+        case .share: return makeShareItem()
         case .search: return makeSearchItem()
         case .printDocument: return makePrintItem()
         case .exportPDF: return makeExportPDFItem()
@@ -155,53 +160,60 @@ extension DocumentWindowController {
         item.subitems.last?.isEnabled = !forwardHistory.isEmpty
     }
 
-    private func makeInspectorItem(willBeInsertedIntoToolbar: Bool) -> NSToolbarItem {
-        let inspector = NSLocalizedString("Inspector", comment: "Inspector toolbar item label")
-        let inspectorButton = NSToolbarItem(itemIdentifier: NSToolbarItem.Identifier("Inspector.Toggle"))
-        inspectorButton.label = inspector
-        inspectorButton.toolTip = NSLocalizedString("Show the inspector", comment: "Inspector toolbar item tooltip")
-        inspectorButton.image = inspectorImage()
-        inspectorButton.target = self
-        inspectorButton.action = #selector(toggleInspectorAction(_:))
+    /// A toggle as a plain NSButton hosted in a regular NSToolbarItem. On
+    /// macOS 26 AppKit merges adjacent button-type controls onto one piece
+    /// of glass but always gives an NSToolbarItemGroup its own, so a toggle
+    /// built as a single-item group can never share glass with its
+    /// neighbors. Built this way the toggles merge natively and stay
+    /// individually movable in the customize palette.
+    func makeToggleButtonItem(identifier: NSToolbarItem.Identifier,
+                              image: NSImage,
+                              label: String,
+                              action: Selector) -> (item: NSToolbarItem, button: NSButton) {
+        let item = NSToolbarItem(itemIdentifier: identifier)
+        let button = NSButton(image: image, target: self, action: action)
+        button.setButtonType(.pushOnPushOff)
+        button.isBordered = true
+        item.view = button
+        item.label = label
+        item.paletteLabel = label
+        return (item, button)
+    }
 
-        // Keep the real sharing toolbar item so AppKit can present its picker
-        // on mouse-down, while grouping all three actions into one native unit.
-        let item = NSToolbarItemGroup(itemIdentifier: .inspector)
-        item.label = NSLocalizedString("Inspector", comment: "Inspector toolbar item label")
+    private func makeInspectorItem(willBeInsertedIntoToolbar: Bool) -> NSToolbarItem {
+        let (item, button) = makeToggleButtonItem(
+            identifier: .inspector,
+            image: inspectorImage(),
+            label: NSLocalizedString("Inspector", comment: "Inspector toolbar item label"),
+            action: #selector(toggleInspectorAction(_:))
+        )
         item.paletteLabel = NSLocalizedString("Get Info", comment: "Inspector toolbar palette label")
-        item.subitems = [inspectorButton, makeShareItem(), makeEditSubitem()]
-        item.controlRepresentation = .expanded
-        item.selectionMode = .selectAny
+        item.toolTip = NSLocalizedString("Show the inspector", comment: "Inspector toolbar item tooltip")
+        button.toolTip = item.toolTip
 
         if willBeInsertedIntoToolbar {
-            inspectorItem = item
-            editItem = item
+            inspectorButton = button
             refreshInspectorToggleItem()
-            updateEditToolbarItem()
         } else {
-            item.setSelected(isInspectorToggleSelected, at: 0)
-            applyEditToolbarState(to: item)
+            button.state = isInspectorToggleSelected ? .on : .off
         }
         return item
     }
 
     private func makeAlwaysOnTopItem(willBeInsertedIntoToolbar: Bool) -> NSToolbarItem {
-        let alwaysOnTop = NSLocalizedString("Always on Top", comment: "Always on Top toolbar item label")
-        let item = NSToolbarItemGroup(itemIdentifier: .alwaysOnTop,
-                                      images: [alwaysOnTopImage()],
-                                      selectionMode: .selectAny,
-                                      labels: [alwaysOnTop],
-                                      target: self,
-                                      action: #selector(toggleAlwaysOnTop(_:)))
-        item.label = alwaysOnTop
-        item.paletteLabel = alwaysOnTop
+        let (item, button) = makeToggleButtonItem(
+            identifier: .alwaysOnTop,
+            image: alwaysOnTopImage(),
+            label: NSLocalizedString("Always on Top", comment: "Always on Top toolbar item label"),
+            action: #selector(toggleAlwaysOnTop(_:))
+        )
         item.toolTip = NSLocalizedString("Keep Markdown Preview windows in front of other apps",
                                          comment: "Always on Top toolbar item tooltip")
-        item.subitems.first?.toolTip = item.toolTip
-        item.setSelected(isAlwaysOnTop, at: 0)
+        button.toolTip = item.toolTip
+        button.state = isAlwaysOnTop ? .on : .off
 
         if willBeInsertedIntoToolbar {
-            alwaysOnTopItem = item
+            alwaysOnTopButton = button
         }
         return item
     }
@@ -377,7 +389,7 @@ extension DocumentWindowController {
 
     private func setInspectorToggleSelected(_ isSelected: Bool) {
         isInspectorToggleSelected = isSelected
-        inspectorItem?.setSelected(isSelected, at: 0)
+        inspectorButton?.state = isSelected ? .on : .off
     }
 
     func items(for pickerToolbarItem: NSSharingServicePickerToolbarItem) -> [Any] {

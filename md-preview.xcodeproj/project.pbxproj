@@ -95,6 +95,7 @@
 		9A0209432FA10E6600092060 /* Exceptions for "md-preview" folder in "quick-look" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Helpers/ChromeStripClickThrough.swift,
 				Rendering/CodeFenceInfo.swift,
 				Rendering/DocumentFontSetting.swift,
 				Rendering/EscapingHTMLFormatter.swift,

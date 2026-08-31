@@ -61,9 +61,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     weak var openActionsItem: NSMenuToolbarItem?
     weak var openWithItem: NSMenuToolbarItem?
     weak var openInLLMItem: NSMenuToolbarItem?
-    weak var inspectorItem: NSToolbarItemGroup?
-    weak var alwaysOnTopItem: NSToolbarItemGroup?
-    weak var editItem: NSToolbarItemGroup?
+    weak var inspectorButton: NSButton?
+    weak var alwaysOnTopButton: NSButton?
+    weak var editButton: NSButton?
     var editorChangeRevision = 0
     /// In-memory source shown by preview before the user saves it.
     var editorDraftMarkdown: String?
@@ -281,6 +281,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // (via obscuredContentInsets, in ContentViewController) which strip
         // the toolbar obscures so WebKit lays out below it and frosts
         // content that scrolls under.
+        //
+        // A transparent titlebar on macOS 26 re-dispatches clicks it did not
+        // handle (the padding between toolbar buttons) to the content view
+        // underneath instead of letting NSThemeFrame start the window drag.
+        // The web views give those clicks back — see
+        // NSView.declinesChromeStripClick(at:) in Helpers.
         documentWindow.titlebarAppearsTransparent = true
     }
 

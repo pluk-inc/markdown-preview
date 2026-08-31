@@ -1554,6 +1554,13 @@ private extension NSView {
 }
 
 private final class PreviewWKWebView: WKWebView {
+    // Left clicks in the transparent titlebar strip stay native (window
+    // drag) instead of being consumed by WebKit — see ChromeStripClickThrough.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        if declinesChromeStripClick(at: point) { return nil }
+        return super.hitTest(point)
+    }
+
     override func keyDown(with event: NSEvent) {
         if forwardHeadingKey(event) { return }
         if isStandardScrollKey(event) {
