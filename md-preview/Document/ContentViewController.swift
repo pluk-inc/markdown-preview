@@ -21,6 +21,7 @@ final class ContentViewController: NSViewController {
     private var toolbarGutterView: PreviewToolbarGutterView!
     private var toolbarGutterHeightConstraint: NSLayoutConstraint?
     private var webViewTopConstraint: NSLayoutConstraint?
+    private var webViewChromeTopConstraint: NSLayoutConstraint?
     private var webViewCenteredLeadingConstraint: NSLayoutConstraint?
     private var webViewCenteredConstraints: [NSLayoutConstraint] = []
     private var webViewFullWidthConstraints: [NSLayoutConstraint] = []
@@ -180,10 +181,9 @@ final class ContentViewController: NSViewController {
         // scrolling. Expanding it to the full document height creates an
         // enormous backing surface that loses Retina resolution on long docs.
         // Pinned to the container's top so macOS 26 can scroll content
-        // under the frosted titlebar. Pre-Tahoe there is no frost and no
-        // obscured inset to lay the page out below the bar, so the
-        // constant carries that inset instead — see
-        // updateObscuredContentInsets().
+        // under the frosted titlebar. Pre-Tahoe the page must stop below
+        // the opaque bar instead, so the top moves to the window's chrome
+        // boundary once there is a window — see pinWebViewBelowChrome().
         let webViewTop = webView.topAnchor.constraint(equalTo: container.topAnchor)
         webViewTopConstraint = webViewTop
         NSLayoutConstraint.activate([
@@ -443,19 +443,34 @@ final class ContentViewController: NSViewController {
         return height
     }
 
+    /// Pre-Tahoe there is no frost and no `obscuredContentInsets`, so the
+    /// page must not run under the opaque titlebar: the toolbar's effect
+    /// views blend within the window and would composite whatever scrolls
+    /// beneath them. The web view hangs off the window's contentLayoutGuide
+    /// — the bottom of all titlebar chrome, native tab bar included — the
+    /// same anchor the chrome overlays use, so the boundary tracks the
+    /// chrome instead of a measured constant that goes stale the moment
+    /// nothing forces another layout pass. Full screen follows for free:
+    /// the guide reaches the top of the screen there, so the page runs full
+    /// height and the revealed toolbar floats over it, the way it floats
+    /// over content in every native app.
+    ///
+    /// The window keeps .fullSizeContentView, so only the web view moves —
+    /// the sidebar still spans full height, the way Finder and Preview do.
+    /// Keep this gate in step with `DocumentWindowController.usesThemedChrome`.
+    private func pinWebViewBelowChrome() {
+        guard webViewChromeTopConstraint == nil,
+              let guide = view.window?.contentLayoutGuide as? NSLayoutGuide else { return }
+        webViewTopConstraint?.isActive = false
+        let top = webView.topAnchor.constraint(equalTo: guide.topAnchor)
+        top.isActive = true
+        webViewChromeTopConstraint = top
+    }
+
     private func updateObscuredContentInsets() {
         guard #available(macOS 26.0, *) else {
-            // No obscured-inset API and no frost pre-Tahoe, so the page
-            // must not run under the opaque titlebar: the toolbar's effect
-            // views blend within the window and would composite whatever
-            // scrolls beneath them. Lay the web view out below the chrome
-            // instead. The window keeps .fullSizeContentView so the sidebar
-            // still spans full height, the way Finder and Preview do.
             toolbarGutterHeightConstraint?.constant = 0
-            let inset = view.window == nil ? 0 : fullChromeTopInset
-            if webViewTopConstraint?.constant != inset {
-                webViewTopConstraint?.constant = inset
-            }
+            pinWebViewBelowChrome()
             return
         }
         // Theme-independent, and never 0: WebKit adopts the titlebar inset
