@@ -394,10 +394,33 @@ struct CustomizeThemeView: View {
     }
 }
 
-/// Escape reaches a sheet through `cancelOperation(_:)`, so the hosting
-/// controller forwards it to the view's own cancel — no key monitor needed.
+/// Escape cancels the sheet.
+///
+/// `cancelOperation(_:)` is the mechanism AppKit routes Escape through, but it
+/// starts at the first responder: once a control inside the SwiftUI content
+/// holds focus — a slider, a font row, a colour well — the keystroke can be
+/// swallowed before it reaches this controller. A key monitor scoped to this
+/// sheet's own window catches those, and `NSApp.keyWindow` identity keeps
+/// Escape typed into any other window out of it.
 private final class SheetHostingController: NSHostingController<CustomizeThemeView> {
     var cancelHandler: (() -> Void)?
+    private let escapeMonitor = EscapeKeyMonitor()
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        escapeMonitor.start { [weak self] in
+            guard let self, let window = view.window, NSApp.keyWindow === window else {
+                return false
+            }
+            cancelHandler?()
+            return true
+        }
+    }
+
+    override func viewWillDisappear() {
+        super.viewWillDisappear()
+        escapeMonitor.stop()
+    }
 
     override func cancelOperation(_ sender: Any?) {
         cancelHandler?()
