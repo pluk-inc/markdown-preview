@@ -272,11 +272,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // theme color it renders as a clipped gray band between the toolbar
         // and the formatting bar. The themed chrome draws its own hairlines.
         documentWindow.titlebarSeparatorStyle = themed ? .none : .automatic
-        // Keep AppKit's native titlebar hit testing. A transparent titlebar
-        // turns the margins inside toolbar item viewers into control-owned
-        // regions, so the visible gaps between buttons stop dragging the
-        // window even when the toolbar items themselves are standard.
-        documentWindow.titlebarAppearsTransparent = false
+        guard themed else {
+            documentWindow.titlebarAppearsTransparent = false
+            return
+        }
+        // Safari's recipe: the titlebar goes transparent so the window
+        // background color runs to the top edge, and the web view is told
+        // (via obscuredContentInsets, in ContentViewController) which strip
+        // the toolbar obscures so WebKit lays out below it and frosts
+        // content that scrolls under.
+        documentWindow.titlebarAppearsTransparent = true
     }
 
     /// AppKit's automatic tab placement runs when NSDocument shows its
