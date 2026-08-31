@@ -133,8 +133,15 @@ final class SettingsModel {
     private static let appliedPresetKey = "MarkdownPreview.theme.appliedPreset"
 
     var appliedPreset: ThemePreset {
-        let name = UserDefaults.standard.string(forKey: Self.appliedPresetKey)
-        return ThemePreset.builtIn.first { $0.name == name } ?? .defaultPreset
+        if let name = UserDefaults.standard.string(forKey: Self.appliedPresetKey),
+           let stored = ThemePreset.builtIn.first(where: { $0.name == name }) {
+            return stored
+        }
+        // No name recorded — the reader upgraded from a build that never
+        // wrote one. Fall back to whichever preset their stored colors
+        // match, so Reset returns them to the theme they are actually
+        // reading in rather than to the default one.
+        return selectedPreset ?? .defaultPreset
     }
 
     /// Applies a whole reading look at once — what the Customize Theme sheet
