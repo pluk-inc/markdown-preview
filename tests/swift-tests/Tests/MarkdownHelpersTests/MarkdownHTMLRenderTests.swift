@@ -389,8 +389,8 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         // `navigator.clipboard`, so the copy button must reach the extension's
         // dedicated pasteboard handler before giving up.
         let html = MarkdownHTML.render(markdown: "```sh\nls\n```", vendorLoading: .lazy)
-        XCTAssertTrue(html.contains("messageHandlers?.mdPreviewCopyCode"))
-        XCTAssertTrue(html.contains("document.execCommand('copy')"))
+        XCTAssertTrue(html.html.contains("messageHandlers?.mdPreviewCopyCode"))
+        XCTAssertTrue(html.html.contains("document.execCommand('copy')"))
     }
 
     func testBlockquoteUsesItsContentDirectionForLogicalBorder() {
