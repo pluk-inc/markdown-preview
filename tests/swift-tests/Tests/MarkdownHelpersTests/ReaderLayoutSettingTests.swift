@@ -103,6 +103,40 @@ final class ReaderLayoutSettingTests: XCTestCase {
         XCTAssertFalse(setting.cssVariables.contains(","))
     }
 
+    // The rewritable element is what makes a slider drag restyle the loaded
+    // page instead of re-rendering it, so it is always emitted — empty at the
+    // defaults — and the update script has to target that same id.
+    func testTheLayoutStyleElementIsAlwaysEmittedAndScriptable() {
+        let plain = MarkdownHTML.makeHTML(from: "Body.", readerLayout: ReaderLayoutSetting())
+        XCTAssertTrue(plain.contains("<style id=\"\(MarkdownHTML.readerLayoutStyleElementID)\"></style>"),
+                      "the element must exist even with nothing to override")
+        XCTAssertEqual(ReaderLayoutSetting().pageCSS, "")
+
+        var setting = ReaderLayoutSetting()
+        setting.isCustomized = true
+        setting.lineSpacing = 1.7
+        XCTAssertTrue(setting.pageCSS.contains(":root {"))
+        XCTAssertTrue(setting.pageCSS.contains("--mdp-line-height: 1.700;"))
+
+        let script = ReaderLayoutSetting.styleUpdateScript(css: setting.pageCSS)
+        XCTAssertTrue(script.contains(MarkdownHTML.readerLayoutStyleElementID))
+        XCTAssertTrue(script.contains("--mdp-line-height: 1.700;"))
+    }
+
+    // The element sits after the font block, so a live rewrite of it wins the
+    // cascade against the values rendered into the page.
+    func testTheLayoutElementComesAfterTheFontBlock() {
+        let html = MarkdownHTML.makeHTML(from: "Body.", documentFont: .georgia)
+        let fontRange = try? XCTUnwrap(html.range(of: "--mdp-doc-font"))
+        let layoutRange = try? XCTUnwrap(
+            html.range(of: "id=\"\(MarkdownHTML.readerLayoutStyleElementID)\"")
+        )
+        guard let fontRange = fontRange ?? nil, let layoutRange = layoutRange ?? nil else {
+            return XCTFail("expected both blocks in the rendered head")
+        }
+        XCTAssertLessThan(fontRange.lowerBound, layoutRange.lowerBound)
+    }
+
     func testRenderedHTMLCarriesTheLayoutVariables() {
         var setting = ReaderLayoutSetting()
         setting.boldText = true

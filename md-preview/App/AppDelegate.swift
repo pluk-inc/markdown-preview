@@ -343,13 +343,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Applies reading layout chosen in Customize Theme (bold text and the
-    /// spacing sliders). Same shape as the font: store to the app group,
-    /// re-render open documents, and Quick Look picks it up on its next
-    /// preview.
+    /// spacing sliders). The values are CSS custom properties, so open pages
+    /// are restyled in place rather than re-rendered — cheap enough to run on
+    /// every slider tick, which is what makes the document itself the
+    /// preview. Quick Look reads the stored value on its next preview.
     func applyReaderLayoutSetting(_ setting: ReaderLayoutSetting) {
         guard setting != ReaderLayoutSetting.current else { return }
         ReaderLayoutSetting.current = setting
-        reloadDocumentPreviewsForSettingChange()
+        documentWindowControllers.forEach { $0.applyReaderLayoutSetting() }
     }
 
     /// Pushes a text size chosen in Settings into every open document. The

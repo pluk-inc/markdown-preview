@@ -512,6 +512,14 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     /// Rewrites the theme override `<style>` in the loaded page so a color
     /// edited in Settings restyles the preview live, without a reload. Fresh
     /// renders embed the same CSS via `currentThemeOverrides`.
+    /// Restyles the loaded page for a reader-layout change without a reload,
+    /// the same way `applyThemeColors` handles a color edit.
+    func applyReaderLayout() {
+        webView.evaluateJavaScript(
+            ReaderLayoutSetting.styleUpdateScript(css: ReaderLayoutSetting.current.pageCSS)
+        ) { _, _ in }
+    }
+
     func applyThemeColors() {
         let css = Self.currentThemeOverrides()?.css ?? ""
         webView.evaluateJavaScript(

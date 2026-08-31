@@ -368,6 +368,10 @@ final class ContentViewController: NSViewController {
     /// Repaints the native page background and restyles the loaded preview
     /// page after a theme color change in Settings.
 
+    func applyReaderLayout() {
+        webView.applyReaderLayout()
+    }
+
     func applyThemeColors() {
         view.needsDisplay = true
         toolbarGutterView.needsDisplay = true

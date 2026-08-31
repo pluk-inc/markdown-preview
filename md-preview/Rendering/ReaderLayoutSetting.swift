@@ -74,6 +74,32 @@ nonisolated struct ReaderLayoutSetting: Equatable, Sendable {
         return lines.joined(separator: "\n    ")
     }
 
+    /// The whole `:root` rule for the page's reader-layout element, empty
+    /// when nothing differs from the stylesheet's tuned defaults.
+    var pageCSS: String {
+        let variables = cssVariables
+        guard !variables.isEmpty else { return "" }
+        return ":root {\n    \(variables)\n}"
+    }
+
+    /// Rewrites the page's reader-layout element in place. Cheap enough to
+    /// run on every slider tick, which is what makes the document itself the
+    /// preview rather than the sheet's approximation of it.
+    static func styleUpdateScript(css: String) -> String {
+        let literal = MarkdownHTML.javaScriptStringLiteral(css)
+        return """
+        (function () {
+            var el = document.getElementById('\(MarkdownHTML.readerLayoutStyleElementID)');
+            if (!el) {
+                el = document.createElement('style');
+                el.id = '\(MarkdownHTML.readerLayoutStyleElementID)';
+                document.head.appendChild(el);
+            }
+            el.textContent = \(literal);
+        })();
+        """
+    }
+
     private static func format(_ value: Double) -> String {
         String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), value)
     }

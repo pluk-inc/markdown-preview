@@ -13,11 +13,11 @@
 //  control changes what that document looks like, and the reader needs the
 //  page it belongs to still on screen behind it.
 //
-//  Font picks apply through SettingsModel immediately. Slider moves edit a
-//  local draft so the preview tracks the drag, and commit on release —
-//  every commit re-renders the open documents, which is too heavy per tick.
-//  Every change is live, so the header's ✗ restores the values the sheet
-//  opened with and ✓ keeps them.
+//  Every control writes straight through SettingsModel, so the document
+//  behind the sheet is the preview — including mid-drag, because reader
+//  layout is delivered as CSS custom properties that the page restyles in
+//  place rather than re-rendering. The header's ✗ restores the values the
+//  sheet opened with and ✓ keeps them.
 //
 
 import SwiftUI
@@ -26,7 +26,6 @@ struct CustomizeThemeView: View {
     @Bindable private var model = SettingsModel.shared
     @Environment(\.colorScheme) private var colorScheme
     @State private var showsFontList = false
-    @State private var draft = ReaderLayoutSetting.current
     /// What to put back if the reader cancels, as it stood when the sheet
     /// was built.
     private let snapshot: Snapshot
@@ -64,32 +63,30 @@ struct CustomizeThemeView: View {
                             fontRow(setting)
                         }
                     }
-                    Toggle(isOn: $draft.boldText) {
+                    Toggle(isOn: $model.readerLayout.boldText) {
                         Label(L("Bold Text"), systemImage: "bold")
                     }
-                    .onChange(of: draft.boldText) { commit() }
                 }
 
                 Section(L("Accessibility & Layout Options")) {
-                    Toggle(L("Customize"), isOn: $draft.isCustomized)
-                        .onChange(of: draft.isCustomized) { commit() }
-                    if draft.isCustomized {
+                    Toggle(L("Customize"), isOn: $model.readerLayout.isCustomized)
+                    if model.readerLayout.isCustomized {
                         sliderRow(L("Line Spacing"),
                                   systemImage: "arrow.up.and.down.text.horizontal",
-                                  value: $draft.lineSpacing,
+                                  value: $model.readerLayout.lineSpacing,
                                   range: ReaderLayoutSetting.lineSpacingRange,
                                   display: { String(format: "%.2f", $0) })
                         sliderRow(L("Character Spacing"),
                                   systemImage: "arrow.left.and.right.text.vertical",
-                                  value: $draft.characterSpacingPercent,
+                                  value: $model.readerLayout.characterSpacingPercent,
                                   range: ReaderLayoutSetting.characterSpacingRange)
                         sliderRow(L("Word Spacing"),
                                   systemImage: "text.word.spacing",
-                                  value: $draft.wordSpacingPercent,
+                                  value: $model.readerLayout.wordSpacingPercent,
                                   range: ReaderLayoutSetting.wordSpacingRange)
                         sliderRow(L("Margins"),
                                   systemImage: "inset.filled.center.rectangle",
-                                  value: $draft.marginsPercent,
+                                  value: $model.readerLayout.marginsPercent,
                                   range: ReaderLayoutSetting.marginsRange)
                     }
                 }
@@ -131,18 +128,7 @@ struct CustomizeThemeView: View {
         .frame(width: Self.contentSize.width, height: Self.contentSize.height)
         .onAppear {
             model.refreshFromExternalSources()
-            draft = model.readerLayout
         }
-        .onChange(of: model.readerLayout) {
-            // Skipped when this is the echo of our own commit: assigning an
-            // equal value still costs a whole body pass.
-            guard draft != model.readerLayout else { return }
-            draft = model.readerLayout
-        }
-    }
-
-    private func commit() {
-        model.readerLayout = draft
     }
 
     /// Restores what the sheet opened with and closes it. The ✗ button and
@@ -236,12 +222,12 @@ struct CustomizeThemeView: View {
             ?? ThemeColorsSetting.defaultColor(.windowBackground, scheme))
         let text = Color(nsColor: model.themeColors.color(.textColor, scheme)
             ?? ThemeColorsSetting.defaultColor(.textColor, scheme))
-        let weight: Font.Weight = draft.boldText ? .semibold : .regular
+        let weight: Font.Weight = model.readerLayout.boldText ? .semibold : .regular
         let bodySize: CGFloat = 13
         // Approximations of the page CSS: SwiftUI lineSpacing is the extra
         // points between lines, kerning maps the percent to points. Word
         // spacing has no SwiftUI counterpart; the documents show it.
-        let applied = draft.effective
+        let applied = model.readerLayout.effective
         let extraLeading = bodySize * CGFloat(applied.lineSpacing - 1.0)
         let kerning = bodySize * CGFloat(applied.characterSpacingPercent / 100)
         let marginInset = 28 + CGFloat(applied.pageInset)
@@ -251,7 +237,7 @@ struct CustomizeThemeView: View {
             header
             Text(verbatim: "Aa")
                 .font(model.documentFont.font(size: 34))
-                .fontWeight(draft.boldText ? .bold : .medium)
+                .fontWeight(model.readerLayout.boldText ? .bold : .medium)
                 .foregroundStyle(text)
                 .padding(.horizontal, 28)
             Text(L("Markdown reads the way you set it here — this paragraph previews the font, weight and spacing your documents will use."))
@@ -380,9 +366,7 @@ struct CustomizeThemeView: View {
                 Image(systemName: systemImage)
                     .frame(width: 20)
                     .foregroundStyle(.secondary)
-                Slider(value: value, in: range) { editing in
-                    if !editing { commit() }
-                }
+                Slider(value: value, in: range)
                 Text(display(value.wrappedValue))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)

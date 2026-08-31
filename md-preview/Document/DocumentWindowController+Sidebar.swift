@@ -90,6 +90,11 @@ extension DocumentWindowController {
         currentSidebarMenuState()
     }
 
+    func applyReaderLayoutSetting() {
+        (documentWindow.contentViewController as? MainSplitViewController)?
+            .applyReaderLayout()
+    }
+
     func reloadPreviewForSettingChange() {
         (documentWindow.contentViewController as? MainSplitViewController)?
             .reloadPreviewForSettingChange()

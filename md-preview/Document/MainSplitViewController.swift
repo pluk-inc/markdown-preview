@@ -221,6 +221,10 @@ final class MainSplitViewController: NSSplitViewController {
         sidebarViewController?.setMode(mode)
     }
 
+    func applyReaderLayout() {
+        contentViewController?.applyReaderLayout()
+    }
+
     func reloadPreviewForSettingChange() {
         contentViewController?.reloadPreviewForSettingChange()
     }

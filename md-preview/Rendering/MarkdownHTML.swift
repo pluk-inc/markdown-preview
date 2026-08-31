@@ -67,6 +67,10 @@ nonisolated enum MarkdownHTML {
     /// render time and rewritten in place by the host when the user edits a
     /// color, so a live page restyles without a reload.
     static let themeStyleElementID = "mdp-theme-overrides"
+    /// Reader layout lives in its own element, rewritten in place when the
+    /// Customize Theme sliders move — the same trick the theme colors use, so
+    /// a drag restyles the loaded page instead of re-rendering it.
+    static let readerLayoutStyleElementID = "mdp-reader-layout"
 
     /// User color overrides injected after the stylesheet. Values are
     /// sanitized hex colors — anything else is dropped, never emitted —
@@ -344,20 +348,19 @@ nonisolated enum MarkdownHTML {
         // ratio off the body em, tuned against one x-height, so keeping system
         // headings over a serif body would silently change how big each step
         // looks. Code keeps its own face and takes only a size correction.
-        // Reader layout rides along in the same :root block: bold text and
-        // the Customize Theme sliders emit CSS variables only when they
-        // differ from the stylesheet's tuned defaults.
-        let readerLayoutVariables = readerLayout.cssVariables
-        let readerLayoutBlock = readerLayoutVariables.isEmpty
-            ? ""
-            : "\n    \(readerLayoutVariables)"
         let documentFontOverride = """
         <style>
         :root {
             --mdp-doc-font: \(documentFont.fontFamily);
-            --mdp-code-font-size: \(documentFont.codeFontSize);\(readerLayoutBlock)
+            --mdp-code-font-size: \(documentFont.codeFontSize);
         }
         </style>
+        """
+        // Always emitted, possibly empty, and last of the style blocks: a
+        // live rewrite has a stable element to target and wins the cascade
+        // against the blocks above it.
+        let readerLayoutBlock = """
+        <style id="\(readerLayoutStyleElementID)">\(readerLayout.pageCSS)</style>
         """
 
         // The href may carry a real folder path (percent-encoded, but `&`
@@ -421,6 +424,7 @@ nonisolated enum MarkdownHTML {
         \(scrollOverride)
         \(contentWidthOverride)
         \(documentFontOverride)
+        \(readerLayoutBlock)
         \(sanitizerBlock)
         \(morphBlock)
         \(hostBridgeScript)
