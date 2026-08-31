@@ -37,6 +37,13 @@ final class SettingsModel {
         }
     }
 
+    var readerLayout: ReaderLayoutSetting {
+        didSet {
+            guard !isRestoringExternalValues, readerLayout != oldValue else { return }
+            appDelegate?.applyReaderLayoutSetting(readerLayout)
+        }
+    }
+
     var contentWidth: ContentWidthSetting {
         didSet {
             guard !isRestoringExternalValues, contentWidth != oldValue else { return }
@@ -119,6 +126,38 @@ final class SettingsModel {
         applyPreset(.defaultPreset)
     }
 
+    /// The theme the reader last applied from a gallery. Remembered so Reset
+    /// puts *that* theme back — hand-edited colors, a swapped face or moved
+    /// sliders undo to the theme they were built on, rather than dropping the
+    /// reader onto the default one.
+    private static let appliedPresetKey = "MarkdownPreview.theme.appliedPreset"
+
+    var appliedPreset: ThemePreset {
+        let name = UserDefaults.standard.string(forKey: Self.appliedPresetKey)
+        return ThemePreset.builtIn.first { $0.name == name } ?? .defaultPreset
+    }
+
+    /// True while anything the Customize Theme sheet can change differs from
+    /// the applied theme — colors, the reading face, or the layout sliders.
+    var isReadingLookCustomized: Bool {
+        let base = appliedPreset
+        return themeColors != base.setting
+            || documentFont != base.font
+            || readerLayout != ReaderLayoutSetting(boldText: base.boldText)
+    }
+
+    /// Restores the applied theme's colors, face and weight and clears the
+    /// layout sliders, as a single document re-render.
+    func resetReadingLook() {
+        let base = appliedPreset
+        let reset = {
+            self.applyPresetValues(base)
+            self.readerLayout = ReaderLayoutSetting(boldText: base.boldText)
+        }
+        guard let appDelegate else { return reset() }
+        appDelegate.withCoalescedPreviewReloads(reset)
+    }
+
     /// The preset the stored colors correspond to. Colors that were never
     /// customized count as the default preset — the app treats "no
     /// overrides" as the default theme, so preset galleries always mark an
@@ -136,12 +175,24 @@ final class SettingsModel {
     /// the native chrome matches. A `.system` preset keeps the Automatic
     /// appearance instead — its palettes carry both schemes.
     func applyPreset(_ preset: ThemePreset) {
+        guard let appDelegate else { return applyPresetValues(preset) }
+        // One re-render for the whole look rather than one per dimension.
+        appDelegate.withCoalescedPreviewReloads { applyPresetValues(preset) }
+    }
+
+    private func applyPresetValues(_ preset: ThemePreset) {
+        UserDefaults.standard.set(preset.name, forKey: Self.appliedPresetKey)
         themeColors = preset.setting
         switch preset.flavor {
         case .light: appearance = .light
         case .dark: appearance = .dark
         case .system: appearance = .automatic
         }
+        // A preset is a whole reading look, so it carries the face and the
+        // body weight with it. The spacing sliders are the reader's own and
+        // survive a preset change.
+        documentFont = preset.font
+        readerLayout.boldText = preset.boldText
     }
 
     var checksForUpdatesAutomatically: Bool {
@@ -195,6 +246,7 @@ final class SettingsModel {
         autoSaveIntervalMinutes = AutoSaveSetting.currentMinutes
         textSize = TextSizeSetting.current
         documentFont = DocumentFontSetting.current
+        readerLayout = ReaderLayoutSetting.current
         isAlwaysOnTop = AlwaysOnTopPolicy.isEnabled
         opensDocumentsInTabs = TabOpeningPolicy.isEnabled
         sendsCrashReports = CrashReporter.isEnabled
@@ -248,6 +300,7 @@ final class SettingsModel {
         autoSaveIntervalMinutes = AutoSaveSetting.currentMinutes
         textSize = TextSizeSetting.current
         documentFont = DocumentFontSetting.current
+        readerLayout = ReaderLayoutSetting.current
         isAlwaysOnTop = AlwaysOnTopPolicy.isEnabled
         opensDocumentsInTabs = TabOpeningPolicy.isEnabled
         sendsCrashReports = CrashReporter.isEnabled

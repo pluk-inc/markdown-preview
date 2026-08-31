@@ -116,17 +116,29 @@ nonisolated extension MarkdownHTML {
     body {
         font-family: var(--mdp-doc-font, \(bodyFontFamily));
         font-size: \(bodyFontSize)px;
-        line-height: \(bodyLineHeight);
+        font-weight: var(--mdp-body-weight, 400);
+        line-height: var(--mdp-line-height, \(bodyLineHeight));
+        letter-spacing: var(--mdp-letter-spacing, normal);
+        word-spacing: var(--mdp-word-spacing, normal);
         color: var(--text);
         background: transparent;
         padding: \(pagePaddingTop)px \(pagePaddingHorizontal)px \(pagePaddingBottom)px;
         -webkit-font-smoothing: antialiased;
+    }
+    /* Reader spacing tweaks stop at code — whitespace fidelity wins. */
+    pre, code {
+        letter-spacing: normal;
+        word-spacing: normal;
     }
 
     article.markdown-body {
         max-width: \(contentColumnWidth)px;
         margin-left: auto;
         margin-right: auto;
+        /* Reader margins: symmetric padding inside the column, so they hold
+           in every content-width mode instead of fighting max-width. */
+        padding-left: var(--mdp-page-inset, 0);
+        padding-right: var(--mdp-page-inset, 0);
     }
     article.markdown-body > *:first-child { margin-top: 0 !important; }
     .md-inline-tab {

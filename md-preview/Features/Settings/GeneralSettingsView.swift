@@ -13,12 +13,6 @@ struct GeneralSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Picker(L("Font"), selection: $model.documentFont) {
-                    ForEach(DocumentFontSetting.allCases, id: \.self) { setting in
-                        Text(setting.title).tag(setting)
-                    }
-                }
-
                 LabeledContent {
                     TextSizePicker(selection: $model.textSize)
                 } label: {
@@ -34,7 +28,7 @@ struct GeneralSettingsView: View {
             } header: {
                 Text(L("Reading"))
             } footer: {
-                Text(L("The font also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes the text size."))
+                Text(L("Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings."))
             }
 
             Section {

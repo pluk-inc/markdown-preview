@@ -83,6 +83,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
 
     private var settingsWindowController: SettingsWindowController?
+    /// Non-zero while `withCoalescedPreviewReloads` is holding reloads back.
+    private var coalescedReloadDepth = 0
+    private var needsCoalescedPreviewReload = false
 
     private weak var hideSidebarMenuItem: NSMenuItem?
     private weak var outlineMenuItem: NSMenuItem?
@@ -306,8 +309,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.show()
     }
 
-    /// Opens Settings directly on a pane — the toolbar popover's Customize
-    /// button lands on Appearance.
+    /// Opens Settings directly on a pane.
     func showSettingsWindow(pane: SettingsPane) {
         SettingsModel.shared.refreshFromExternalSources()
         SettingsModel.shared.reloadOpenTargets()
@@ -337,6 +339,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applyDocumentFontSetting(_ setting: DocumentFontSetting) {
         guard setting != DocumentFontSetting.current else { return }
         DocumentFontSetting.current = setting
+        reloadDocumentPreviewsForSettingChange()
+    }
+
+    /// Applies reading layout chosen in Customize Theme (bold text and the
+    /// spacing sliders). Same shape as the font: store to the app group,
+    /// re-render open documents, and Quick Look picks it up on its next
+    /// preview.
+    func applyReaderLayoutSetting(_ setting: ReaderLayoutSetting) {
+        guard setting != ReaderLayoutSetting.current else { return }
+        ReaderLayoutSetting.current = setting
         reloadDocumentPreviewsForSettingChange()
     }
 
@@ -1038,10 +1050,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func reloadDocumentPreviewsForSettingChange() {
+        guard coalescedReloadDepth == 0 else {
+            needsCoalescedPreviewReload = true
+            return
+        }
         NSDocumentController.shared.documents
             .flatMap(\.windowControllers)
             .compactMap { $0 as? DocumentWindowController }
             .forEach { $0.reloadPreviewForSettingChange() }
+    }
+
+    /// Runs `body` with preview reloads held back, then issues at most one.
+    /// Applying a theme preset changes colors, appearance, the reading face
+    /// and the body weight, and each of those would otherwise re-render
+    /// every open document on its own.
+    func withCoalescedPreviewReloads(_ body: () -> Void) {
+        coalescedReloadDepth += 1
+        body()
+        coalescedReloadDepth -= 1
+        guard coalescedReloadDepth == 0, needsCoalescedPreviewReload else { return }
+        needsCoalescedPreviewReload = false
+        reloadDocumentPreviewsForSettingChange()
     }
 
     private func installAppMenuItemIcons() {

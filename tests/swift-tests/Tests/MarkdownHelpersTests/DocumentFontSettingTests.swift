@@ -14,6 +14,17 @@ final class DocumentFontSettingTests: XCTestCase {
         XCTAssertEqual(DocumentFontSetting.read(from: defaults), .system)
     }
 
+    // The pre-list "Serif" option was the New York stack. A reader who chose
+    // it keeps the same face across the rename rather than snapping back to
+    // the system one.
+    func testTheLegacySerifValueMigratesToNewYork() throws {
+        let (defaults, suiteName) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        defaults.set("serif", forKey: DocumentFontSetting.defaultsKey)
+        XCTAssertEqual(DocumentFontSetting.read(from: defaults), .newYork)
+    }
+
     func testEveryFaceRoundTripsAndTheDefaultClearsItsKey() throws {
         let (defaults, suiteName) = try makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -54,17 +65,20 @@ final class DocumentFontSettingTests: XCTestCase {
     func testCodeSizeIsCorrectedPerFace() {
         XCTAssertEqual(DocumentFontSetting.system.codeFontSize, "0.88em")
         XCTAssertEqual(DocumentFontSetting.rounded.codeFontSize, "0.88em")
-        XCTAssertNotEqual(DocumentFontSetting.serif.codeFontSize,
-                          DocumentFontSetting.system.codeFontSize)
         XCTAssertEqual(DocumentFontSetting.monospace.codeFontSize, "1em")
+        for setting in DocumentFontSetting.allCases where setting.isSerif {
+            XCTAssertNotEqual(setting.codeFontSize,
+                              DocumentFontSetting.system.codeFontSize,
+                              "\(setting) reuses the sans correction")
+        }
     }
 
     func testRenderedHTMLCarriesTheChosenFace() {
         let html = MarkdownHTML.makeHTML(from: "# Title\n\nBody `code`.",
-                                         documentFont: .serif)
-        XCTAssertTrue(html.contains("--mdp-doc-font: \(DocumentFontSetting.serif.fontFamily);"),
+                                         documentFont: .newYork)
+        XCTAssertTrue(html.contains("--mdp-doc-font: \(DocumentFontSetting.newYork.fontFamily);"),
                       "the document font custom property is missing")
-        XCTAssertTrue(html.contains("--mdp-code-font-size: \(DocumentFontSetting.serif.codeFontSize);"),
+        XCTAssertTrue(html.contains("--mdp-code-font-size: \(DocumentFontSetting.newYork.codeFontSize);"),
                       "the code size correction is missing")
     }
 

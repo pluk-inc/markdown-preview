@@ -703,10 +703,18 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         webView.evaluateJavaScript(script) { _, _ in }
     }
 
-    // Discrete zoom stops, mirroring Safari's ⌘+/⌘− cadence.
-    private static let zoomSteps: [CGFloat] = [
+    // Discrete zoom stops, mirroring Safari's ⌘+/⌘− cadence. Not private:
+    // the toolbar popover draws one dot per stop to show where the current
+    // text size sits on the scale.
+    static let zoomSteps: [CGFloat] = [
         0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0
     ]
+
+    /// Which stop `zoom` sits at, for the popover's scale. Values between
+    /// stops (a trackpad pinch can leave one) round to the nearest.
+    static func zoomStepIndex(for zoom: CGFloat) -> Int {
+        zoomSteps.indices.min { abs(zoomSteps[$0] - zoom) < abs(zoomSteps[$1] - zoom) } ?? 0
+    }
 
     var pageZoom: CGFloat { webView.pageZoom }
 

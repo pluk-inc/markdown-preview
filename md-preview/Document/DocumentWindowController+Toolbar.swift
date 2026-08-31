@@ -48,6 +48,7 @@ extension DocumentWindowController {
             .openActions,
             .space,
             .themesAndSettings,
+            .space,
             .inspector,
             .share,
             .editDocument,
@@ -410,18 +411,43 @@ extension DocumentWindowController {
                 (self?.documentWindow.contentViewController as? MainSplitViewController)?
                     .zoomInDocument(nil)
             },
+            currentZoom: { [weak self] in
+                (self?.documentWindow.contentViewController as? MainSplitViewController)?
+                    .documentPageZoom ?? 1.0
+            },
             openCustomize: { [weak self] in
                 self?.themesPopover?.close()
-                (NSApp.delegate as? AppDelegate)?.showSettingsWindow(pane: .theme)
+                guard let window = self?.documentWindow else { return }
+                // Presented after the popover has actually gone: closing it is
+                // not synchronous, and a sheet raised while the popover's
+                // window still holds key arrives inactive.
+                DispatchQueue.main.async { CustomizeThemeSheet.present(on: window) }
             }
         ))
         host.sizingOptions = .preferredContentSize
         let popover = NSPopover()
         popover.behavior = .transient
         popover.contentViewController = host
+        popover.delegate = self
         themesPopover = popover
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
+        themesPopoverEscapeMonitor.start { [weak self] in
+            guard let popover = self?.themesPopover, popover.isShown else { return false }
+            popover.close()
+            return true
+        }
     }
+
+    /// However the popover went away — Escape, an outside click, the toolbar
+    /// button again, or Customize — the key monitor goes with it.
+    func popoverDidClose(_ notification: Notification) {
+        themesPopoverEscapeMonitor.stop()
+        // Dropped rather than kept for reuse: holding it retains the hosting
+        // controller and the whole card gallery for the window's lifetime,
+        // and the next press builds a fresh one anyway.
+        themesPopover = nil
+    }
+
 
     /// One-time swap for toolbars restored from an autosaved configuration
     /// that predates the Themes & Settings item: the zoom pair gives its
@@ -442,7 +468,7 @@ extension DocumentWindowController {
     }
 
     private func inspectorImage() -> NSImage {
-        let image = NSImage(systemSymbolName: "info.circle",
+        let image = NSImage(systemSymbolName: "info",
                             accessibilityDescription: NSLocalizedString("Inspector", comment: "Inspector toolbar image")) ?? NSImage()
         image.isTemplate = true
         return image

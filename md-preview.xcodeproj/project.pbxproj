@@ -114,6 +114,7 @@
 				"Rendering/MarkdownHTML+Utils.swift",
 				Rendering/MarkdownWebView.swift,
 				Rendering/QuickLookAppearance.swift,
+				Rendering/ReaderLayoutSetting.swift,
 				Rendering/URLSchemeTaskCallbackGate.swift,
 			);
 			target = 9A02092C2FA10D4C00092060 /* quick-look */;

@@ -146,6 +146,12 @@ final class MainSplitViewController: NSSplitViewController {
         contentViewController?.exportPDF()
     }
 
+    /// The document's current page zoom, for the toolbar popover's text-size
+    /// scale. 1.0 when there is no content view yet — the default stop.
+    var documentPageZoom: CGFloat {
+        contentViewController?.pageZoom ?? 1.0
+    }
+
     @IBAction func zoomInDocument(_ sender: Any?) {
         contentViewController?.zoomIn()
     }

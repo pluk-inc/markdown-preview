@@ -251,13 +251,15 @@ nonisolated enum MarkdownHTML {
                          assetBaseHref: String? = nil,
                          vendorLoading: VendorLoading = .inline,
                          colorScheme: ColorScheme? = nil,
-                         documentFont: DocumentFontSetting = .current) -> String {
+                         documentFont: DocumentFontSetting = .current,
+                         readerLayout: ReaderLayoutSetting = .current) -> String {
         render(markdown: markdown,
                allowsScroll: allowsScroll,
                assetBaseHref: assetBaseHref,
                vendorLoading: vendorLoading,
                colorScheme: colorScheme,
-               documentFont: documentFont).html
+               documentFont: documentFont,
+               readerLayout: readerLayout).html
     }
 
     static func render(markdown: String,
@@ -268,6 +270,7 @@ nonisolated enum MarkdownHTML {
                        colorScheme: ColorScheme? = nil,
                        themeOverrides: ThemeOverrides? = nil,
                        documentFont: DocumentFontSetting = .current,
+                       readerLayout: ReaderLayoutSetting = .current,
                        warmup: Bool = false) -> RenderedHTML {
         let frontmatter = MarkdownFrontmatter.split(markdown)
         let body = frontmatter.body
@@ -341,11 +344,18 @@ nonisolated enum MarkdownHTML {
         // ratio off the body em, tuned against one x-height, so keeping system
         // headings over a serif body would silently change how big each step
         // looks. Code keeps its own face and takes only a size correction.
+        // Reader layout rides along in the same :root block: bold text and
+        // the Customize Theme sliders emit CSS variables only when they
+        // differ from the stylesheet's tuned defaults.
+        let readerLayoutVariables = readerLayout.cssVariables
+        let readerLayoutBlock = readerLayoutVariables.isEmpty
+            ? ""
+            : "\n    \(readerLayoutVariables)"
         let documentFontOverride = """
         <style>
         :root {
             --mdp-doc-font: \(documentFont.fontFamily);
-            --mdp-code-font-size: \(documentFont.codeFontSize);
+            --mdp-code-font-size: \(documentFont.codeFontSize);\(readerLayoutBlock)
         }
         </style>
         """
