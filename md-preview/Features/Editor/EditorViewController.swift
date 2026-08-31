@@ -203,9 +203,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
         if overlays > 0 {
             gap += overlays
-            if window.tabGroup?.isTabBarVisible == true {
-                gap -= MainSplitViewController.formattingBarTabBarOverlap
-            }
+            gap -= MainSplitViewController.tabBarOverlap(for: window)
         }
         return max(0, gap)
     }

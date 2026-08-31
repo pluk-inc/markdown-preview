@@ -16,6 +16,19 @@ final class MainSplitViewController: NSSplitViewController {
     /// (EditorViewController.fullChromeTopInset).
     static let formattingBarTabBarOverlap: CGFloat = 6
 
+    /// Full screen draws the tab bar with a thinner bottom margin, so the
+    /// standard tuck overshoots and the bars crowd the tabs — back off.
+    static let formattingBarTabBarOverlapFullScreen: CGFloat = 2
+
+    /// The overlap currently in effect for `window`: zero without a
+    /// visible tab bar, reduced in full screen. The overlay constraints
+    /// and the editor's page padding must use the same value.
+    static func tabBarOverlap(for window: NSWindow?) -> CGFloat {
+        guard let window, window.tabGroup?.isTabBarVisible == true else { return 0 }
+        return window.styleMask.contains(.fullScreen)
+            ? formattingBarTabBarOverlapFullScreen : formattingBarTabBarOverlap
+    }
+
     var onSelectFile: ((URL) -> Void)?
     var onOpenMarkdownLink: ((URL) -> Void)?
     var onToggleTaskCheckbox: ((Int, Bool) -> Void)?
@@ -613,8 +626,7 @@ private final class LayeredContentViewController: NSViewController {
     /// chrome utility and inserts at the boundary, the way Apple's own
     /// find bars do.
     func updateChromeOverlayLayout() {
-        let overlap: CGFloat = (view.window?.tabGroup?.isTabBarVisible ?? false)
-            ? -MainSplitViewController.formattingBarTabBarOverlap : 0
+        let overlap = -MainSplitViewController.tabBarOverlap(for: view.window)
         if let top = findOverlayTopConstraint, top.constant != overlap {
             top.constant = overlap
         }
