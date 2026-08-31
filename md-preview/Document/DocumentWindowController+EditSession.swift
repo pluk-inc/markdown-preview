@@ -451,7 +451,7 @@ extension DocumentWindowController {
             if !preserveUnsavedChanges {
                 self.hasUnsavedEditorChanges = false
             }
-            if self.editAccessory == nil {
+            if self.editBar == nil {
                 self.updateEditToolbarItem()
             }
             if rerender, let markdown = self.currentMarkdown {

@@ -9,6 +9,13 @@ final class MainSplitViewController: NSSplitViewController {
 
     private static let didSeedKey = "MainSplitView.didSeedInitialState"
 
+    /// How far the chrome overlays (formatting bar, find bar) tuck up into
+    /// the native tab bar's empty bottom margin, closing the visual gap
+    /// between tabs and bar. Applied only while a tab bar is visible; the
+    /// editor's page padding subtracts the same amount
+    /// (EditorViewController.fullChromeTopInset).
+    static let formattingBarTabBarOverlap: CGFloat = 6
+
     var onSelectFile: ((URL) -> Void)?
     var onOpenMarkdownLink: ((URL) -> Void)?
     var onToggleTaskCheckbox: ((Int, Bool) -> Void)?
@@ -285,6 +292,7 @@ final class MainSplitViewController: NSSplitViewController {
             editorVC.view.translatesAutoresizingMaskIntoConstraints = false
             editorVC.view.alphaValue = 0
             contentHost.installEditorOverlay(editorVC)
+            editorVC.findOverlay = findOverlayView
             cachedEditorViewController = editorVC
         }
 
@@ -329,6 +337,39 @@ final class MainSplitViewController: NSSplitViewController {
             self.revealEditorIfPrepared(editorVC)
         }
         return editorVC
+    }
+
+    /// Mounts the formatting bar as a content overlay directly below the
+    /// titlebar chrome. See DocumentWindowController.editBar for why it is
+    /// not a titlebar accessory (the native tab bar always renders below
+    /// accessories, and would jump on every edit-mode toggle).
+    func installFormattingBar(_ bar: NSView) {
+        layeredContentViewController?.installFormattingBar(bar)
+        // The editor pads its page below the chrome; the bar is part of
+        // that chrome now, so it must be measured alongside the titlebar.
+        cachedEditorViewController?.formattingBar = bar
+    }
+
+    func removeFormattingBar() {
+        layeredContentViewController?.removeFormattingBar()
+        cachedEditorViewController?.formattingBar = nil
+    }
+
+    private weak var findOverlayView: NSView?
+
+    /// Mounts the find bar the same way — see installFormattingBar. Stays
+    /// mounted for the window's lifetime; visibility toggles via isHidden.
+    func installFindOverlay(_ bar: NSView) {
+        layeredContentViewController?.installFindOverlay(bar)
+        findOverlayView = bar
+        cachedEditorViewController?.findOverlay = bar
+    }
+
+    /// The find bar sits above the formatting bar, so toggling it moves
+    /// the bar below and changes the editor's page padding.
+    func findOverlayVisibilityChanged() {
+        layeredContentViewController?.updateChromeOverlayLayout()
+        cachedEditorViewController?.chromeOverlaysDidChange()
     }
 
     private func revealEditorIfPrepared(_ editorVC: EditorViewController) {
@@ -495,5 +536,94 @@ private final class LayeredContentViewController: NSViewController {
             editorView.topAnchor.constraint(equalTo: view.topAnchor),
             editorView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+    }
+
+    private weak var formattingBar: NSView?
+    private weak var findOverlay: NSView?
+    private var formattingBarTopConstraint: NSLayoutConstraint?
+    private var findOverlayTopConstraint: NSLayoutConstraint?
+    private var chromeObservation: NSKeyValueObservation?
+
+    /// The overlays top out at the window's contentLayoutGuide — the bottom
+    /// of all titlebar chrome, native tab bar included — so tabs appearing
+    /// or disappearing reposition them automatically. In full screen the
+    /// guide reaches the top of the screen and the revealed toolbar floats
+    /// over them, like it floats over the rest of the content.
+    func installFormattingBar(_ bar: NSView) {
+        guard bar.superview !== view else { return }
+        formattingBar = bar
+        formattingBarTopConstraint = installChromeOverlay(bar)
+        updateChromeOverlayLayout()
+    }
+
+    func removeFormattingBar() {
+        formattingBar?.removeFromSuperview()
+        formattingBar = nil
+        formattingBarTopConstraint = nil
+        updateChromeOverlayLayout()
+    }
+
+    /// The find bar stays mounted for the window's lifetime and toggles
+    /// via isHidden — an overlay never reflows the layout, so showing it
+    /// cannot move the tab bar the way a titlebar accessory did.
+    func installFindOverlay(_ bar: NSView) {
+        guard bar.superview !== view else { return }
+        findOverlay = bar
+        findOverlayTopConstraint = installChromeOverlay(bar)
+        updateChromeOverlayLayout()
+    }
+
+    private func installChromeOverlay(_ bar: NSView) -> NSLayoutConstraint? {
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(bar)
+        var constraints = [
+            bar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            bar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ]
+        var top: NSLayoutConstraint?
+        if let window = view.window,
+           let guide = window.contentLayoutGuide as? NSLayoutGuide {
+            top = bar.topAnchor.constraint(equalTo: guide.topAnchor)
+            observeChromeIfNeeded(window)
+        } else {
+            top = bar.topAnchor.constraint(equalTo: view.topAnchor)
+        }
+        constraints.append(top!)
+        NSLayoutConstraint.activate(constraints)
+        return top
+    }
+
+    /// The tab bar can appear or leave while an overlay is mounted;
+    /// contentLayoutRect moves with it. Only state is read here — forcing
+    /// layout from this observation re-enters the pass that changed the
+    /// rect and breaks the edit-mode reveal machinery.
+    private func observeChromeIfNeeded(_ window: NSWindow) {
+        guard chromeObservation == nil else { return }
+        chromeObservation = window.observe(\.contentLayoutRect) { [weak self] _, _ in
+            MainActor.assumeIsolated {
+                self?.updateChromeOverlayLayout()
+            }
+        }
+    }
+
+    /// Positions the overlay stack. The find bar sits at the chrome
+    /// boundary (directly below the tab bar, tucked into its empty margin
+    /// when tabs show) and the formatting bar below it — formatting acts on
+    /// the text, so it stays adjacent to the document; find is a transient
+    /// chrome utility and inserts at the boundary, the way Apple's own
+    /// find bars do.
+    func updateChromeOverlayLayout() {
+        let overlap: CGFloat = (view.window?.tabGroup?.isTabBarVisible ?? false)
+            ? -MainSplitViewController.formattingBarTabBarOverlap : 0
+        if let top = findOverlayTopConstraint, top.constant != overlap {
+            top.constant = overlap
+        }
+        var editTop = overlap
+        if let find = findOverlay, find.superview === view, !find.isHidden {
+            editTop += find.fittingSize.height
+        }
+        if let top = formattingBarTopConstraint, top.constant != editTop {
+            top.constant = editTop
+        }
     }
 }

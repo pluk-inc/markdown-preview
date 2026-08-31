@@ -80,30 +80,50 @@ extension DocumentWindowController {
     }
 
     private func setFindBarVisible(_ visible: Bool) {
-        guard let accessory = findBarAccessory, accessory.isHidden == visible else { return }
-        accessory.isHidden = !visible
-        if #available(macOS 26.1, *) {
-            // Visible bar always gets the hard backdrop; hidden, the
-            // preference must not leak a backdrop over a themed titlebar.
-            accessory.preferredScrollEdgeEffectStyle =
-                visible || !activeSchemeThemed ? .hard : .automatic
-        }
+        guard let overlay = findBarOverlay, overlay.isHidden == visible else { return }
+        overlay.isHidden = !visible
+        // The editor pads its page below every visible overlay.
+        mainSplit?.findOverlayVisibilityChanged()
     }
 
+    /// A content overlay like the formatting bar, not a titlebar accessory:
+    /// AppKit pins the native tab bar below every accessory, so an
+    /// accessory find bar sat above the tabs and shoved them down on every
+    /// appearance. The overlay never reflows the layout — see
+    /// DocumentWindowController.editBar.
     func installFindBar() {
         let bar = FindBar(
             frame: NSRect(x: 0, y: 0, width: 600, height: FindBar.preferredHeight)
         )
-        bar.autoresizingMask = [.width]
         bar.onPrevious = { [weak self] in self?.findFromToolbar(backwards: true) }
         bar.onNext = { [weak self] in self?.findFromToolbar(backwards: false) }
         bar.onDone = { [weak self] in self?.dismissFindBar() }
         bar.onModeChanged = { [weak self] mode in self?.searchModeDidChange(mode) }
         self.findBar = bar
-        // No .hard here: a hidden accessory's scroll-edge preference still
-        // applies, painting an opaque backdrop over a themed window background.
-        // setFindBarVisible flips it while the bar is actually shown.
-        self.findBarAccessory = addBottomTitlebarAccessory(bar)
+
+        let container = EditAccessoryContainerView()
+        // The find bar shows over the preview, whose backdrop follows the
+        // window background, not the editor color.
+        container.prefersWindowBackground = true
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(bar)
+        let hairline = NSBox()
+        hairline.boxType = .separator
+        hairline.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(hairline)
+        NSLayoutConstraint.activate([
+            bar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            bar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            bar.topAnchor.constraint(equalTo: container.topAnchor),
+            bar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            bar.heightAnchor.constraint(equalToConstant: FindBar.preferredHeight),
+            hairline.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            hairline.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            hairline.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+        container.isHidden = true
+        mainSplit?.installFindOverlay(container)
+        findBarOverlay = container
     }
 
     private func dismissFindBar() {
@@ -149,7 +169,7 @@ extension DocumentWindowController {
     private func searchModeDidChange(_ mode: SearchMode) {
         guard mode != searchMode else { return }
         searchMode = mode
-        guard findBarAccessory?.isHidden == false,
+        guard findBarOverlay?.isHidden == false,
               let query = searchField?.stringValue, !query.isEmpty else { return }
         runFind(query: query)
     }

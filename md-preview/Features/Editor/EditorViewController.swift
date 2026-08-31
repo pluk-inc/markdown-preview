@@ -121,13 +121,55 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         // The chrome (toolbar, accessories) is final here; layout passes
         // before it attaches see a smaller contentLayoutRect.
         updateObscuredContentInsets()
+        observeWindowChrome()
     }
 
-    /// The whole obscured strip — titlebar, toolbar, and visible bottom
-    /// accessories. contentLayoutRect already excludes the accessories, so
-    /// the gap alone is the full chrome height; adding accessory heights on
-    /// top double-counted them and left a blank band below the formatting
-    /// bar.
+    /// The formatting bar overlaying this editor (a content-view sibling,
+    /// not a titlebar accessory — see DocumentWindowController.editBar).
+    /// The page padding must clear it like any other chrome.
+    weak var formattingBar: NSView? {
+        didSet {
+            guard formattingBar !== oldValue else { return }
+            updateObscuredContentInsets()
+        }
+    }
+
+    /// The find bar overlay (permanent, toggled by isHidden) — like the
+    /// formatting bar, it hangs below the titlebar over this editor.
+    weak var findOverlay: NSView?
+
+    /// Reapplies the page padding; the window controller calls this when
+    /// the find overlay is shown or hidden.
+    func chromeOverlaysDidChange() {
+        updateObscuredContentInsets()
+    }
+
+    private var contentLayoutObservation: NSKeyValueObservation?
+
+    /// Titlebar chrome can change without this view getting a layout pass —
+    /// the native tab bar appears when another document joins the window's
+    /// tab group — so the padding follows contentLayoutRect directly. The
+    /// observation only reads state and reapplies the page padding: forcing
+    /// layout from here re-enters the layout pass that changed the rect and
+    /// breaks the edit-mode reveal machinery.
+    private func observeWindowChrome() {
+        guard let window = view.window else {
+            contentLayoutObservation = nil
+            return
+        }
+        guard contentLayoutObservation == nil else { return }
+        contentLayoutObservation = window.observe(\.contentLayoutRect) { [weak self] _, _ in
+            MainActor.assumeIsolated {
+                self?.updateObscuredContentInsets()
+            }
+        }
+    }
+
+    /// The whole obscured strip — titlebar, toolbar, tab bar, visible
+    /// bottom accessories, and the formatting bar overlay.
+    /// contentLayoutRect already excludes the titlebar chrome, so the gap
+    /// alone is that chrome's height; adding accessory heights on top
+    /// double-counted them and left a blank band below the formatting bar.
     private var fullChromeTopInset: CGFloat {
         guard let window = view.window, let contentView = window.contentView else {
             return view.safeAreaInsets.top
@@ -143,6 +185,27 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             && accessory.view.window === window {
             let rect = contentView.convert(accessory.view.bounds, from: accessory.view)
             gap = max(gap, contentView.bounds.height - rect.minY)
+        }
+        // The formatting bar and find overlay are content-view chrome
+        // hanging directly below the titlebar, so contentLayoutRect never
+        // accounts for them. fittingSize instead of the frame: the frame is
+        // unresolved between install and the next layout pass, and forcing
+        // layout from here would re-enter the pass that called us. With a
+        // visible tab bar the stack tucks up into the tab bar's margin
+        // (MainSplitViewController.formattingBarTabBarOverlap), so that
+        // amount comes back off once.
+        var overlays: CGFloat = 0
+        if let bar = formattingBar, bar.window === window, !bar.isHidden {
+            overlays += bar.fittingSize.height
+        }
+        if let find = findOverlay, find.window === window, !find.isHidden {
+            overlays += find.fittingSize.height
+        }
+        if overlays > 0 {
+            gap += overlays
+            if window.tabGroup?.isTabBarVisible == true {
+                gap -= MainSplitViewController.formattingBarTabBarOverlap
+            }
         }
         return max(0, gap)
     }

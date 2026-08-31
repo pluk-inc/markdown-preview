@@ -11,9 +11,12 @@ extension DocumentWindowController {
     // MARK: Formatting bar
 
     /// Second toolbar row with common markdown actions, shown while
-    /// editing — like Preview's markup bar.
+    /// editing — like Preview's markup bar. Mounted in the content host,
+    /// not the titlebar: the native tab bar always renders below every
+    /// titlebar accessory, so an accessory bar would sit above the tabs
+    /// and shove the tab bar up and down on every edit-mode toggle.
     func showEditAccessory() {
-        guard editAccessory == nil else { return }
+        guard editBar == nil else { return }
 
         let symbolConfig = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
         func formatButton(_ symbol: String, _ command: String, _ tip: String) -> NSButton {
@@ -86,14 +89,13 @@ extension DocumentWindowController {
             if index > 0 { stack.setCustomSpacing(8, after: views[index - 1]) }
             stack.setCustomSpacing(8, after: view)
         }
-        stack.edgeInsets = NSEdgeInsets(top: 4, left: 12, bottom: 6, right: 12)
+        stack.edgeInsets = NSEdgeInsets(top: 7, left: 12, bottom: 11, right: 12)
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        // Translucent like the main toolbar: nothing can render behind the
-        // bar (the editor scroller clips text at its hairline and the pocket
-        // ends at the toolbar), so the bar needs no opaque backing — the
-        // flat theme color shows through. Without a theme the .hard edge
-        // still paints the classic opaque bar.
+        // The container paints the editor page background itself (see
+        // EditAccessoryContainerView.draw): the editor scrolls its text
+        // under the bar, and the titlebar accessory this replaced hid that
+        // with the system chrome backdrop.
         let container = EditAccessoryContainerView()
         container.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -111,24 +113,9 @@ extension DocumentWindowController {
             hairline.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             hairline.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
-        hairline.isHidden = !activeSchemeThemed
-        editAccessoryHairline = hairline
 
-        let accessory = NSTitlebarAccessoryViewController()
-        accessory.view = container
-        accessory.layoutAttribute = .bottom
-        accessory.fullScreenMinHeight = 34
-        // macOS 26 replaced the titlebar separator with scroll edge
-        // effects; hard = the classic line under the bar. With a themed
-        // window background the hard edge would paint an opaque system
-        // strip over the theme color, so the frosted automatic style is
-        // used instead.
-        if #available(macOS 26.1, *) {
-            accessory.preferredScrollEdgeEffectStyle =
-                activeSchemeThemed ? .automatic : .hard
-        }
-        documentWindow.addTitlebarAccessoryViewController(accessory)
-        editAccessory = accessory
+        mainSplit?.installFormattingBar(container)
+        editBar = container
     }
 
     private func separatorView() -> NSView {
@@ -140,9 +127,9 @@ extension DocumentWindowController {
     }
 
     private func hideEditAccessory() {
-        guard let accessory = editAccessory else { return }
-        accessory.removeFromParent()
-        editAccessory = nil
+        guard editBar != nil else { return }
+        mainSplit?.removeFormattingBar()
+        editBar = nil
     }
 
     /// Leaves edit-mode chrome as one operation: drops the formatting bar

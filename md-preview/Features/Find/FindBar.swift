@@ -34,7 +34,6 @@ final class FindBar: NSView {
         target: nil,
         action: nil
     )
-    private let bottomSeparator = HairlineSeparator()
 
     private enum NavigationSegment: Int {
         case previous = 0
@@ -98,21 +97,10 @@ final class FindBar: NSView {
         trailingStack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(trailingStack)
 
-        // macOS 26 dropped the system-drawn separators around titlebar
-        // accessories, so we draw our own bottom rule. macOS 15 still draws
-        // them, so hiding ours avoids a doubled line there.
-        // NSBox(.separator) inside a bottom titlebar accessory triggers a macOS
-        // 26 layout regression that bypasses the window's contentMinSize and
-        // collapses the window to the toolbar's natural minimum width — use a
-        // plain NSView with a 1pt separator-colored layer instead.
-        let needsManualSeparator: Bool = {
-            if #available(macOS 26.0, *) { return true }
-            return false
-        }()
-
-        bottomSeparator.translatesAutoresizingMaskIntoConstraints = false
-        bottomSeparator.isHidden = !needsManualSeparator
-        addSubview(bottomSeparator)
+        // No separator of its own: the bar lives in a chrome-overlay
+        // container (DocumentWindowController.installFindBar) that draws
+        // the same NSBox hairline the formatting bar uses — drawing one
+        // here as well doubled the line.
 
         NSLayoutConstraint.activate([
             leadingStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
@@ -120,11 +108,6 @@ final class FindBar: NSView {
 
             trailingStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
             trailingStack.centerYAnchor.constraint(equalTo: centerYAnchor),
-
-            bottomSeparator.leadingAnchor.constraint(equalTo: leadingAnchor),
-            bottomSeparator.trailingAnchor.constraint(equalTo: trailingAnchor),
-            bottomSeparator.bottomAnchor.constraint(equalTo: bottomAnchor),
-            bottomSeparator.heightAnchor.constraint(equalToConstant: 1)
         ])
     }
 

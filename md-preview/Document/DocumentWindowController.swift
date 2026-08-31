@@ -96,18 +96,23 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             updateWindowSubtitle()
         }
     }
-    weak var editAccessory: NSTitlebarAccessoryViewController?
-    /// The native-style line under the formatting bar while the window is
-    /// themed — the .hard scroll edge that normally draws it would paint an
-    /// opaque system strip over the theme color, so the line is drawn here
-    /// and the edge stays frosted.
-    weak var editAccessoryHairline: NSView?
+    /// The formatting bar shown while editing. Not a titlebar accessory:
+    /// AppKit pins the native tab bar to the bottom of the titlebar, below
+    /// every accessory, so a bar mounted there sits above the tabs and its
+    /// mount/unmount shoves the tab bar up and down. Instead the bar is an
+    /// overlay in the content host, pinned to the window's
+    /// contentLayoutGuide — always directly below the tab bar (or the
+    /// toolbar when no tabs are shown), and the tab bar never moves.
+    weak var editBar: NSView?
     weak var copyItem: NSToolbarItem?
     var copyFeedbackWork: DispatchWorkItem?
     weak var searchField: NSSearchField?
     weak var sidebarMenu: NSMenu?
     var findBar: FindBar?
-    var findBarAccessory: NSTitlebarAccessoryViewController?
+    /// Container for the find bar. A content overlay like editBar — not a
+    /// titlebar accessory — so showing it never pushes the tab bar down.
+    /// Mounted once at setup and toggled via isHidden.
+    weak var findBarOverlay: NSView?
     var searchMode: SearchMode = .contains
     var pendingFindWork: DispatchWorkItem?
     static let findDebounceDelay: TimeInterval = 0.10
@@ -204,10 +209,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         documentWindow.toolbar = toolbar
         documentWindow.toolbarStyle = .automatic
 
-        // After installFindBar: the theme pass styles the find bar's
-        // scroll-edge preference (the hidden accessory's .hard is what
-        // draws the classic opaque toolbar backdrop when unthemed), and
-        // with no patrol re-applying it, ordering is the only chance.
         installFindBar()
         applyWindowBackgroundTheme()
     }
@@ -219,6 +220,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     func applyThemeColorsSetting() {
         applyWindowBackgroundTheme()
         mainSplit?.applyThemeColors()
+        // The bars paint the page backgrounds; a theme edit changes those
+        // colors without an appearance flip, so force a redraw.
+        editBar?.needsDisplay = true
+        findBarOverlay?.needsDisplay = true
     }
 
     /// Whether the ACTIVE appearance scheme has a window background
@@ -257,17 +262,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
         let themed = activeSchemeThemed
             && !documentWindow.styleMask.contains(.fullScreen)
-        // A hidden accessory's scroll-edge preference still drives the
-        // titlebar backdrop, so the find bar's .hard must follow the theme
-        // while the bar is hidden — otherwise it paints an opaque strip over
-        // a themed background.
-        if #available(macOS 26.1, *) {
-            if let accessory = findBarAccessory, accessory.isHidden {
-                accessory.preferredScrollEdgeEffectStyle = themed ? .automatic : .hard
-            }
-            editAccessory?.preferredScrollEdgeEffectStyle = themed ? .automatic : .hard
-        }
-        editAccessoryHairline?.isHidden = !themed
         // Automatic resolves to a shadow under the toolbar; over the flat
         // theme color it renders as a clipped gray band between the toolbar
         // and the formatting bar. The themed chrome draws its own hairlines.
@@ -581,10 +575,61 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
     }
 
-    /// The formatting bar floats over the editor web view, whose cursor
-    /// tracking (I-beam over text, hand over links) otherwise fights the
-    /// bar's buttons. The bar region always shows the plain arrow.
+    /// The chrome-overlay container (formatting bar, find bar) floats over
+    /// the web views, whose cursor tracking (I-beam over text, hand over
+    /// links) otherwise fights the bar's buttons. The bar region always
+    /// shows the plain arrow.
+    ///
+    /// Opaque: the pages scroll their content under the bars, so a bar must
+    /// paint the page's own background to hide it — the titlebar accessory
+    /// it replaced got that backdrop from the system chrome for free.
     final class EditAccessoryContainerView: NSView {
+        /// The editor page's background, resolved per appearance and read
+        /// from the live theme on every draw. Mirrors
+        /// EditorViewController.updateUnderPageBackgroundColor.
+        private static let editorPageBackground = NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let scheme: ThemeColorScheme = isDark ? .dark : .light
+            let colors = ThemeColorsSetting.current
+            return colors.color(.editorBackground, scheme)
+                ?? colors.color(.windowBackground, scheme)
+                ?? ThemeColorsSetting.defaultColor(.editorBackground, scheme)
+        }
+
+        /// The preview's backdrop — the same chain the window background
+        /// and the preview's under-page color use. The find bar shows over
+        /// the preview, so it paints this instead of the editor color.
+        private static let windowPageBackground = NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let scheme: ThemeColorScheme = isDark ? .dark : .light
+            return ThemeColorsSetting.current.color(.windowBackground, scheme)
+                ?? .windowBackgroundColor
+        }
+
+        /// True for bars that overlay the preview (find bar); false for
+        /// bars that overlay the editor (formatting bar).
+        var prefersWindowBackground = false
+
+        override init(frame frameRect: NSRect) {
+            super.init(frame: frameRect)
+            wantsLayer = true
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        // Layer-backed instead of draw(_:): custom drawing above the
+        // WKWebView interfered with its compositing and blanked the page.
+        override var wantsUpdateLayer: Bool { true }
+
+        override func updateLayer() {
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                let color = prefersWindowBackground
+                    ? Self.windowPageBackground : Self.editorPageBackground
+                layer?.backgroundColor = color.cgColor
+            }
+        }
         override func resetCursorRects() {
             addCursorRect(bounds, cursor: .arrow)
         }
@@ -617,19 +662,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 owner: self
             ))
         }
-    }
-
-    func addBottomTitlebarAccessory(
-        _ view: NSView,
-        configure: ((NSTitlebarAccessoryViewController) -> Void)? = nil
-    ) -> NSTitlebarAccessoryViewController {
-        let accessory = NSTitlebarAccessoryViewController()
-        accessory.layoutAttribute = .bottom
-        accessory.view = view
-        accessory.isHidden = true
-        configure?(accessory)
-        documentWindow.addTitlebarAccessoryViewController(accessory)
-        return accessory
     }
 
 }
