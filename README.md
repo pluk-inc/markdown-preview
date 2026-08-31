@@ -133,7 +133,8 @@ Bump `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `Version.xcconfig`, th
 
 Use `./scripts/rollback-release.sh` to revert the appcast pointer if a release misbehaves.
 
-## Contributing
+### Contributing
+
 
 Pull requests are welcome. For larger changes, please open an issue first to discuss what you'd like to change.
 
