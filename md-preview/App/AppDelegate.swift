@@ -306,6 +306,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.show()
     }
 
+    /// Opens Settings directly on a pane — the toolbar popover's Customize
+    /// button lands on Appearance.
+    func showSettingsWindow(pane: SettingsPane) {
+        SettingsModel.shared.refreshFromExternalSources()
+        SettingsModel.shared.reloadOpenTargets()
+        let controller = settingsWindowController ?? SettingsWindowController()
+        settingsWindowController = controller
+        controller.show(pane: pane)
+    }
+
     /// Applies an appearance chosen in Settings, keeping the View menu's check
     /// marks and every open preview in step.
     func applyAppearanceSetting(_ mode: AppearanceMode) {

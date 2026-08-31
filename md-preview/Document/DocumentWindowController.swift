@@ -106,6 +106,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     weak var editBar: NSView?
     weak var copyItem: NSToolbarItem?
     var copyFeedbackWork: DispatchWorkItem?
+    /// The Themes & Settings popover while it is on screen.
+    var themesPopover: NSPopover?
     weak var searchField: NSSearchField?
     weak var sidebarMenu: NSMenu?
     var findBar: FindBar?
@@ -208,6 +210,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         toolbar.autosavesConfiguration = true
         documentWindow.toolbar = toolbar
         documentWindow.toolbarStyle = .automatic
+        replaceZoomToolbarItemIfNeeded(in: toolbar)
 
         installFindBar()
         applyWindowBackgroundTheme()

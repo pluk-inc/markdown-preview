@@ -16,7 +16,7 @@ struct ThemeSettingsView: View {
     var body: some View {
         // Resolved once per pass: the footer, the Reset button, and every
         // card compare against it.
-        let selected = selectedPreset
+        let selected = model.selectedPreset
         Form {
             Section {
                 HStack(alignment: .top) {
@@ -94,18 +94,6 @@ struct ThemeSettingsView: View {
         .onAppear {
             model.refreshFromExternalSources()
         }
-    }
-
-    /// The preset the stored colors correspond to. Colors that were never
-    /// customized count as the default preset — the app treats "no
-    /// overrides" as the default theme, so the gallery always marks an
-    /// active card. Hand-edited colors that match no preset return nil
-    /// ("Custom colors").
-    private var selectedPreset: ThemePreset? {
-        if let match = ThemePreset.builtIn.first(where: { model.themeColors == $0.setting }) {
-            return match
-        }
-        return model.themeColors.isCustomized ? nil : .defaultPreset
     }
 
     private func presetCard(_ preset: ThemePreset, isSelected: Bool) -> some View {

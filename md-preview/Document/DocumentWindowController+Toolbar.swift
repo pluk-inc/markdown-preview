@@ -6,6 +6,7 @@
 //
 
 import Cocoa
+import SwiftUI
 
 extension NSToolbarItem.Identifier {
     static let openActions = NSToolbarItem.Identifier("OpenActions")
@@ -20,6 +21,7 @@ extension NSToolbarItem.Identifier {
     static let exportPDF = NSToolbarItem.Identifier("ExportPDF")
     static let copyMarkdown = NSToolbarItem.Identifier("CopyMarkdown")
     static let zoom = NSToolbarItem.Identifier("Zoom")
+    static let themesAndSettings = NSToolbarItem.Identifier("ThemesAndSettings")
     static let editDocument = NSToolbarItem.Identifier("EditDocument")
     static let navigation = NSToolbarItem.Identifier("Navigation")
     static let alwaysOnTop = NSToolbarItem.Identifier("AlwaysOnTop")
@@ -45,7 +47,7 @@ extension DocumentWindowController {
             .flexibleSpace,
             .openActions,
             .space,
-            .zoom,
+            .themesAndSettings,
             .inspector,
             .share,
             .editDocument,
@@ -70,6 +72,7 @@ extension DocumentWindowController {
             .exportPDF,
             .exportDocument,
             .copyMarkdown,
+            .themesAndSettings,
             .zoom,
             .alwaysOnTop
         ]
@@ -100,6 +103,7 @@ extension DocumentWindowController {
         case .exportDocument: return makeExportItem()
         case .copyMarkdown: return makeCopyItem()
         case .zoom: return makeZoomItem()
+        case .themesAndSettings: return makeThemesAndSettingsItem()
         default: return nil
         }
     }
@@ -366,6 +370,75 @@ extension DocumentWindowController {
         case 1: split.zoomInDocument(sender)
         default: break
         }
+    }
+
+    /// The "aA" button that replaced the zoom pair in the default set. It
+    /// opens a popover with text size, appearance, and the theme preset
+    /// gallery; Customize inside it leads to the Appearance settings pane.
+    /// A plain NSButton for the same reason as makeToggleButtonItem: on
+    /// macOS 26 it shares glass with its neighbors.
+    private func makeThemesAndSettingsItem() -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: .themesAndSettings)
+        let label = NSLocalizedString("Themes & Settings",
+                                      comment: "Themes & Settings toolbar item label")
+        let image = NSImage(systemSymbolName: "textformat.size",
+                            accessibilityDescription: label) ?? NSImage()
+        let button = NSButton(image: image, target: self,
+                              action: #selector(showThemesPopover(_:)))
+        button.setButtonType(.momentaryPushIn)
+        button.isBordered = true
+        button.toolTip = NSLocalizedString("Text size, appearance, and themes",
+                                           comment: "Themes & Settings toolbar item tooltip")
+        item.view = button
+        item.label = label
+        item.paletteLabel = label
+        item.toolTip = button.toolTip
+        return item
+    }
+
+    @objc private func showThemesPopover(_ sender: NSButton) {
+        if let popover = themesPopover, popover.isShown {
+            popover.close()
+            return
+        }
+        let host = NSHostingController(rootView: ThemesPopoverView(
+            decreaseTextSize: { [weak self] in
+                (self?.documentWindow.contentViewController as? MainSplitViewController)?
+                    .zoomOutDocument(nil)
+            },
+            increaseTextSize: { [weak self] in
+                (self?.documentWindow.contentViewController as? MainSplitViewController)?
+                    .zoomInDocument(nil)
+            },
+            openCustomize: { [weak self] in
+                self?.themesPopover?.close()
+                (NSApp.delegate as? AppDelegate)?.showSettingsWindow(pane: .theme)
+            }
+        ))
+        host.sizingOptions = .preferredContentSize
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentViewController = host
+        themesPopover = popover
+        popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
+    }
+
+    /// One-time swap for toolbars restored from an autosaved configuration
+    /// that predates the Themes & Settings item: the zoom pair gives its
+    /// place to the popover button. Guarded by a defaults flag so a user
+    /// who rearranges things in Customize Toolbar afterwards keeps their
+    /// layout on the next launch.
+    private static let didReplaceZoomItemKey = "Toolbar.DidReplaceZoomWithThemesAndSettings"
+
+    func replaceZoomToolbarItemIfNeeded(in toolbar: NSToolbar) {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.didReplaceZoomItemKey) else { return }
+        defaults.set(true, forKey: Self.didReplaceZoomItemKey)
+        guard !toolbar.items.contains(where: { $0.itemIdentifier == .themesAndSettings }),
+              let zoomIndex = toolbar.items.firstIndex(where: { $0.itemIdentifier == .zoom })
+        else { return }
+        toolbar.removeItem(at: zoomIndex)
+        toolbar.insertItem(withItemIdentifier: .themesAndSettings, at: zoomIndex)
     }
 
     private func inspectorImage() -> NSImage {

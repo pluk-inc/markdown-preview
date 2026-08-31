@@ -119,6 +119,18 @@ final class SettingsModel {
         applyPreset(.defaultPreset)
     }
 
+    /// The preset the stored colors correspond to. Colors that were never
+    /// customized count as the default preset — the app treats "no
+    /// overrides" as the default theme, so preset galleries always mark an
+    /// active card. Hand-edited colors that match no preset return nil
+    /// ("Custom colors").
+    var selectedPreset: ThemePreset? {
+        if let match = ThemePreset.builtIn.first(where: { themeColors == $0.setting }) {
+            return match
+        }
+        return themeColors.isCustomized ? nil : .defaultPreset
+    }
+
     /// Applies a preset: writes its palette into every slot for both
     /// schemes and switches the app appearance to the preset's flavor so
     /// the native chrome matches. A `.system` preset keeps the Automatic
