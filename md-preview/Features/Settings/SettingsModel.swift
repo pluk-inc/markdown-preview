@@ -137,25 +137,19 @@ final class SettingsModel {
         return ThemePreset.builtIn.first { $0.name == name } ?? .defaultPreset
     }
 
-    /// True while anything the Customize Theme sheet can change differs from
-    /// the applied theme — colors, the reading face, or the layout sliders.
-    var isReadingLookCustomized: Bool {
-        let base = appliedPreset
-        return themeColors != base.setting
-            || documentFont != base.font
-            || readerLayout != ReaderLayoutSetting(boldText: base.boldText)
-    }
-
-    /// Restores the applied theme's colors, face and weight and clears the
-    /// layout sliders, as a single document re-render.
-    func resetReadingLook() {
-        let base = appliedPreset
-        let reset = {
-            self.applyPresetValues(base)
-            self.readerLayout = ReaderLayoutSetting(boldText: base.boldText)
+    /// Applies a whole reading look at once — what the Customize Theme sheet
+    /// hands over when the reader saves. Coalesced, so the open documents
+    /// update once rather than once per dimension.
+    func applyReadingLook(themeColors newColors: ThemeColorsSetting,
+                          documentFont newFont: DocumentFontSetting,
+                          readerLayout newLayout: ReaderLayoutSetting) {
+        let apply = {
+            self.themeColors = newColors
+            self.documentFont = newFont
+            self.readerLayout = newLayout
         }
-        guard let appDelegate else { return reset() }
-        appDelegate.withCoalescedPreviewReloads(reset)
+        guard let appDelegate else { return apply() }
+        appDelegate.withCoalescedPreviewReloads(apply)
     }
 
     /// The preset the stored colors correspond to. Colors that were never

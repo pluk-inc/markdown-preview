@@ -9,15 +9,10 @@
 //  margin sliders. It also carries the per-surface color wells, which is
 //  where they moved when the Appearance settings pane went away.
 //
-//  A sheet on the document window rather than a separate window: every
-//  control changes what that document looks like, and the reader needs the
-//  page it belongs to still on screen behind it.
-//
-//  Every control writes straight through SettingsModel, so the document
-//  behind the sheet is the preview — including mid-drag, because reader
-//  layout is delivered as CSS custom properties that the page restyles in
-//  place rather than re-rendering. The header's ✗ restores the values the
-//  sheet opened with and ✓ keeps them.
+//  Every control edits a local draft, and the sample at the top of the
+//  sheet is what shows it — the open documents are left alone until ✓
+//  applies the draft in one step. ✗ and Escape simply close, so a reader
+//  can try faces and spacings without touching what they were reading.
 //
 
 import SwiftUI
@@ -26,29 +21,27 @@ struct CustomizeThemeView: View {
     @Bindable private var model = SettingsModel.shared
     @Environment(\.colorScheme) private var colorScheme
     @State private var showsFontList = false
-    /// What to put back if the reader cancels, as it stood when the sheet
-    /// was built.
-    private let snapshot: Snapshot
+    /// Everything the sheet can change, held locally until ✓.
+    @State private var draft: Draft
 
     /// The sheet's fixed size, shared with the hosting controller so it does
     /// not have to measure the content itself.
-    static let contentSize = CGSize(width: 660, height: 680)
+    static let contentSize = CGSize(width: 660, height: 760)
 
     private let dismiss: () -> Void
 
     init(dismiss: @escaping () -> Void) {
         self.dismiss = dismiss
         let model = SettingsModel.shared
-        snapshot = Snapshot(readerLayout: model.readerLayout,
-                            documentFont: model.documentFont,
-                            themeColors: model.themeColors)
+        _draft = State(initialValue: Draft(readerLayout: model.readerLayout,
+                                           documentFont: model.documentFont,
+                                           themeColors: model.themeColors))
     }
 
-    /// Everything the sheet can change, as it stood when the sheet opened.
-    private struct Snapshot {
-        let readerLayout: ReaderLayoutSetting
-        let documentFont: DocumentFontSetting
-        let themeColors: ThemeColorsSetting
+    struct Draft: Equatable {
+        var readerLayout: ReaderLayoutSetting
+        var documentFont: DocumentFontSetting
+        var themeColors: ThemeColorsSetting
     }
 
     var body: some View {
@@ -63,30 +56,30 @@ struct CustomizeThemeView: View {
                             fontRow(setting)
                         }
                     }
-                    Toggle(isOn: $model.readerLayout.boldText) {
+                    Toggle(isOn: $draft.readerLayout.boldText) {
                         Label(L("Bold Text"), systemImage: "bold")
                     }
                 }
 
                 Section(L("Accessibility & Layout Options")) {
-                    Toggle(L("Customize"), isOn: $model.readerLayout.isCustomized)
-                    if model.readerLayout.isCustomized {
+                    Toggle(L("Customize"), isOn: $draft.readerLayout.isCustomized)
+                    if draft.readerLayout.isCustomized {
                         sliderRow(L("Line Spacing"),
                                   systemImage: "arrow.up.and.down.text.horizontal",
-                                  value: $model.readerLayout.lineSpacing,
+                                  value: $draft.readerLayout.lineSpacing,
                                   range: ReaderLayoutSetting.lineSpacingRange,
                                   display: { String(format: "%.2f", $0) })
                         sliderRow(L("Character Spacing"),
                                   systemImage: "arrow.left.and.right.text.vertical",
-                                  value: $model.readerLayout.characterSpacingPercent,
+                                  value: $draft.readerLayout.characterSpacingPercent,
                                   range: ReaderLayoutSetting.characterSpacingRange)
                         sliderRow(L("Word Spacing"),
                                   systemImage: "text.word.spacing",
-                                  value: $model.readerLayout.wordSpacingPercent,
+                                  value: $draft.readerLayout.wordSpacingPercent,
                                   range: ReaderLayoutSetting.wordSpacingRange)
                         sliderRow(L("Margins"),
                                   systemImage: "inset.filled.center.rectangle",
-                                  value: $model.readerLayout.marginsPercent,
+                                  value: $draft.readerLayout.marginsPercent,
                                   range: ReaderLayoutSetting.marginsRange)
                     }
                 }
@@ -112,7 +105,7 @@ struct CustomizeThemeView: View {
                 // not just the colors above it.
                 Section {
                     Button {
-                        model.resetReadingLook()
+                        draft = Self.defaultDraft()
                     } label: {
                         Text(L("Reset Theme"))
                             .foregroundStyle(.red)
@@ -120,23 +113,35 @@ struct CustomizeThemeView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .disabled(!model.isReadingLookCustomized)
+                    .disabled(draft == Self.defaultDraft())
                 }
             }
             .formStyle(.grouped)
         }
         .frame(width: Self.contentSize.width, height: Self.contentSize.height)
-        .onAppear {
-            model.refreshFromExternalSources()
-        }
     }
 
-    /// Restores what the sheet opened with and closes it. The ✗ button and
-    /// Escape (via the hosting controller's `cancelOperation`) both land here.
+    /// The applied theme's look, which Reset Theme returns the draft to.
+    private static func defaultDraft() -> Draft {
+        let base = SettingsModel.shared.appliedPreset
+        return Draft(readerLayout: ReaderLayoutSetting(boldText: base.boldText),
+                     documentFont: base.font,
+                     themeColors: base.setting)
+    }
+
+    /// Closes without touching the documents — nothing was applied. The ✗
+    /// button and Escape (via the hosting controller's `cancelOperation`)
+    /// both land here.
     func cancel() {
-        model.readerLayout = snapshot.readerLayout
-        model.documentFont = snapshot.documentFont
-        model.themeColors = snapshot.themeColors
+        dismiss()
+    }
+
+    /// Writes the draft through in one step, so the open documents re-style
+    /// once rather than once per control.
+    private func save() {
+        model.applyReadingLook(themeColors: draft.themeColors,
+                               documentFont: draft.documentFont,
+                               readerLayout: draft.readerLayout)
         dismiss()
     }
 
@@ -153,7 +158,7 @@ struct CustomizeThemeView: View {
                              title: L("Cancel"), action: cancel)
                 Spacer()
                 circleButton("checkmark", prominent: true,
-                             title: L("Done"), action: dismiss)
+                             title: L("Done"), action: save)
             }
         }
         .padding(.horizontal, 18)
@@ -218,40 +223,83 @@ struct CustomizeThemeView: View {
         let scheme: ThemeColorScheme = colorScheme == .dark ? .dark : .light
         // Same fallback the colour wells below use, so with no overrides
         // stored the preview shows what the page actually renders.
-        let page = Color(nsColor: model.themeColors.color(.windowBackground, scheme)
+        let page = Color(nsColor: draft.themeColors.color(.windowBackground, scheme)
             ?? ThemeColorsSetting.defaultColor(.windowBackground, scheme))
-        let text = Color(nsColor: model.themeColors.color(.textColor, scheme)
+        let text = Color(nsColor: draft.themeColors.color(.textColor, scheme)
             ?? ThemeColorsSetting.defaultColor(.textColor, scheme))
-        let weight: Font.Weight = model.readerLayout.boldText ? .semibold : .regular
-        let bodySize: CGFloat = 13
-        // Approximations of the page CSS: SwiftUI lineSpacing is the extra
-        // points between lines, kerning maps the percent to points. Word
-        // spacing has no SwiftUI counterpart; the documents show it.
-        let applied = model.readerLayout.effective
-        let extraLeading = bodySize * CGFloat(applied.lineSpacing - 1.0)
-        let kerning = bodySize * CGFloat(applied.characterSpacingPercent / 100)
-        let marginInset = 28 + CGFloat(applied.pageInset)
         // The header rides on the page color rather than a chrome strip of
         // its own, the way Books runs the sample page up under its buttons.
-        return VStack(alignment: .leading, spacing: 14) {
+        return VStack(alignment: .leading, spacing: 16) {
             header
             Text(verbatim: "Aa")
-                .font(model.documentFont.font(size: 34))
-                .fontWeight(model.readerLayout.boldText ? .bold : .medium)
+                .font(draft.documentFont.font(size: Self.sampleTitleSize))
+                .fontWeight(draft.readerLayout.boldText ? .bold : .medium)
                 .foregroundStyle(text)
                 .padding(.horizontal, 28)
-            Text(L("Markdown reads the way you set it here — this paragraph previews the font, weight and spacing your documents will use."))
-                .font(model.documentFont.font(size: bodySize))
-                .fontWeight(weight)
-                .kerning(kerning)
-                .lineSpacing(extraLeading)
-                .foregroundStyle(text)
-                .padding(.horizontal, marginInset)
+            sampleColumns(text: text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.bottom, 24)
         .background(page)
     }
+
+    /// Two columns of prose, cut off by a fade at the bottom: reading size,
+    /// wrapped over enough lines that line spacing, word spacing and the
+    /// margins read as themselves. The page continues past the fade the way
+    /// a real page would.
+    private func sampleColumns(text: Color) -> some View {
+        let applied = draft.readerLayout.effective
+        let size = Self.sampleBodySize
+        let extraLeading = size * CGFloat(applied.lineSpacing - 1.0)
+        let kerning = size * CGFloat(applied.characterSpacingPercent / 100)
+        let inset = 28 + CGFloat(applied.pageInset)
+        return HStack(alignment: .top, spacing: 24) {
+            ForEach(Array(Self.sampleColumns.enumerated()), id: \.offset) { column in
+                Text(column.element)
+                    .font(draft.documentFont.font(size: size))
+                    .fontWeight(draft.readerLayout.boldText ? .semibold : .regular)
+                    .kerning(kerning)
+                    .lineSpacing(extraLeading)
+                    .foregroundStyle(text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, inset)
+        .frame(height: Self.sampleHeight, alignment: .top)
+        .clipped()
+        .mask(
+            LinearGradient(stops: [.init(color: .black, location: 0),
+                                   .init(color: .black, location: 0.55),
+                                   .init(color: .clear, location: 1)],
+                           startPoint: .top,
+                           endPoint: .bottom)
+        )
+    }
+
+    private static let sampleTitleSize: CGFloat = 40
+    private static let sampleBodySize: CGFloat = 18
+    private static let sampleHeight: CGFloat = 250
+
+    /// Reading prose rather than a description of the sheet: the point is to
+    /// judge a face and a spacing, which needs ordinary sentences.
+    private static let sampleColumns: [String] = [
+        L("""
+        The team looking after our recommendation system has been spiking out \
+        some new algorithms, and the results are promising enough that we are \
+        planning to put them in front of readers next month. Long paragraphs \
+        are what make a reading face show its character: the rhythm of the \
+        lines, how the spacing settles, where the eye lands when it returns \
+        from the end of one line to the start of the next.
+        """),
+        L("""
+        Nothing you change here reaches your open documents until you tap the \
+        check mark, so try a few faces and spacings, then close with the cross \
+        to leave everything exactly as you found it. The sample keeps going \
+        past the bottom of this panel, the way a page would, so the measure \
+        and the margins have somewhere to show themselves before you commit \
+        to them.
+        """)
+    ]
 
     // MARK: - Font list
 
@@ -262,7 +310,7 @@ struct CustomizeThemeView: View {
             HStack {
                 Label(L("Font"), systemImage: "textformat")
                 Spacer()
-                Text(model.documentFont.title)
+                Text(draft.documentFont.title)
                     .foregroundStyle(.secondary)
                 Image(systemName: showsFontList ? "chevron.down" : "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
@@ -275,13 +323,13 @@ struct CustomizeThemeView: View {
 
     private func fontRow(_ setting: DocumentFontSetting) -> some View {
         Button {
-            model.documentFont = setting
+            draft.documentFont = setting
         } label: {
             HStack {
                 Text(setting.title)
                     .font(setting.font(size: 14))
                 Spacer()
-                if model.documentFont == setting {
+                if draft.documentFont == setting {
                     Image(systemName: "checkmark")
                         .font(.system(size: 12, weight: .semibold))
                 }
@@ -290,7 +338,7 @@ struct CustomizeThemeView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityAddTraits(model.documentFont == setting ? .isSelected : [])
+        .accessibilityAddTraits(draft.documentFont == setting ? .isSelected : [])
     }
 
     // MARK: - Colors
@@ -337,18 +385,16 @@ struct CustomizeThemeView: View {
                               scheme: ThemeColorScheme) -> Binding<Color> {
         Binding(
             get: {
-                let model = SettingsModel.shared
-                let nsColor = model.themeColors.color(slot, scheme)
+                let nsColor = draft.themeColors.color(slot, scheme)
                     ?? ThemeColorsSetting.defaultColor(slot, scheme)
                 return Color(nsColor: nsColor)
             },
             set: { newValue in
-                SettingsModel.shared.setThemeColor(
-                    NSColor(newValue), slot: slot, scheme: scheme
-                )
+                draft.themeColors.setColor(NSColor(newValue), slot, scheme)
             }
         )
     }
+
 
     // MARK: - Sliders
 
