@@ -104,9 +104,14 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
 
             // User files are only served while a document with a real file
             // location is loaded — the base is nil for unsaved documents
-            // and the warmup page.
-            guard base != nil,
-                  let resolved = MarkdownAssetResolution.fileURL(for: requestURL) else {
+            // and the warmup page — and only from inside that document's
+            // folder. Document content chooses this path, so an unbounded
+            // resolve here is an arbitrary local file read.
+            guard let base,
+                  let resolved = MarkdownAssetResolution.fileURL(
+                      for: requestURL,
+                      containedIn: base
+                  ) else {
                 wrapper.fail(with: URLError(.badURL))
                 return
             }

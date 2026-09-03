@@ -377,7 +377,11 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         case "imageClick":
             guard let source = payload["src"] as? String,
                   let url = URL(string: source),
-                  let fileURL = MarkdownAssetResolution.fileURL(for: url) else { return }
+                  let assetBase = currentAssetBaseURL,
+                  let fileURL = MarkdownAssetResolution.fileURL(
+                      for: url,
+                      containedIn: assetBase
+                  ) else { return }
             imageClicked?(fileURL)
         case "tableContextMenu":
             presentTableContextMenu(payload)

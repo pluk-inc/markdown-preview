@@ -1484,12 +1484,19 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             if let fragment = sameDocumentFragmentID(from: url) {
                 fragmentLinkActivated?(fragment)
             } else if url.scheme == MarkdownAssetScheme.scheme,
-               currentAssetBase != nil,
+               let assetBase = currentAssetBase,
                // `/__vendor/` is a reserved namespace served from the app
                // bundle by the scheme handler — never a filesystem path, so
                // clicks on authored vendor links stay inert.
                !url.path.hasPrefix(MarkdownAssetScheme.vendorPathPrefix),
-               let resolved = MarkdownAssetResolution.fileURL(for: url) {
+               // Contained for the same reason asset loads are: the link
+               // target comes from document content, and the non-Markdown
+               // branch below hands it to NSWorkspace, which will open — or
+               // launch — whatever it names.
+               let resolved = MarkdownAssetResolution.fileURL(
+                   for: url,
+                   containedIn: assetBase
+               ) {
                 if Self.isMarkdownDocument(resolved) {
                     // fileURL(for:) works on the path alone and drops `#section`.
                     localMarkdownLinkActivated?(Self.reattachingFragment(of: url, to: resolved))

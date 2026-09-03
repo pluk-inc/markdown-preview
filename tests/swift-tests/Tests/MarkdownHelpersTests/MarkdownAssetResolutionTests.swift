@@ -21,68 +21,157 @@ final class MarkdownAssetResolutionTests: XCTestCase {
         )
     }
 
-    // MARK: fileURL(for:)
+    // MARK: fileURL(for:containedIn:)
+
+    private let documentFolder = URL(fileURLWithPath: "/Users/me/notes", isDirectory: true)
 
     func testFileURLMapsAssetPathToAbsoluteFilePath() {
         let asset = URL(string: "md-asset:///Users/me/notes/img.png")!
         XCTAssertEqual(
-            MarkdownAssetResolution.fileURL(for: asset)?.path,
+            MarkdownAssetResolution.fileURL(for: asset, containedIn: documentFolder)?.path,
             "/Users/me/notes/img.png"
         )
     }
 
     func testFileURLDecodesPercentEncoding() {
+        let folder = URL(fileURLWithPath: "/Users/me/My Notes", isDirectory: true)
         let asset = URL(string: "md-asset:///Users/me/My%20Notes/a%20b.md")!
         XCTAssertEqual(
-            MarkdownAssetResolution.fileURL(for: asset)?.path,
+            MarkdownAssetResolution.fileURL(for: asset, containedIn: folder)?.path,
             "/Users/me/My Notes/a b.md"
         )
     }
 
-    func testFileURLStandardizesTraversalSegments() {
-        let asset = URL(string: "md-asset:///Users/me/notes/sub/../sibling.md")!
+    /// `..` segments that stay inside the folder are still normalised away.
+    func testFileURLStandardizesTraversalSegmentsThatStayInside() {
+        let asset = URL(string: "md-asset:///Users/me/notes/sub/../img.png")!
         XCTAssertEqual(
-            MarkdownAssetResolution.fileURL(for: asset)?.path,
-            "/Users/me/notes/sibling.md"
+            MarkdownAssetResolution.fileURL(for: asset, containedIn: documentFolder)?.path,
+            "/Users/me/notes/img.png"
+        )
+    }
+
+    func testFileURLResolvesNestedSubfolders() {
+        let asset = URL(string: "md-asset:///Users/me/notes/images/deep/pic.png")!
+        XCTAssertEqual(
+            MarkdownAssetResolution.fileURL(for: asset, containedIn: documentFolder)?.path,
+            "/Users/me/notes/images/deep/pic.png"
         )
     }
 
     func testFileURLRejectsRootAndEmptyPaths() {
-        XCTAssertNil(MarkdownAssetResolution.fileURL(for: URL(string: "md-asset:///")!))
-        XCTAssertNil(MarkdownAssetResolution.fileURL(for: URL(string: "md-asset://")!))
+        XCTAssertNil(MarkdownAssetResolution.fileURL(
+            for: URL(string: "md-asset:///")!, containedIn: documentFolder))
+        XCTAssertNil(MarkdownAssetResolution.fileURL(
+            for: URL(string: "md-asset://")!, containedIn: documentFolder))
     }
 
     func testFileURLRejectsNonEmptyHost() {
-        XCTAssertNil(MarkdownAssetResolution.fileURL(for: URL(string: "md-asset://example.com/etc/hosts")!))
-        XCTAssertNil(MarkdownAssetResolution.fileURL(for: URL(string: "md-asset://__vendor/katex.min.js")!))
+        XCTAssertNil(MarkdownAssetResolution.fileURL(
+            for: URL(string: "md-asset://example.com/etc/hosts")!, containedIn: documentFolder))
+        XCTAssertNil(MarkdownAssetResolution.fileURL(
+            for: URL(string: "md-asset://__vendor/katex.min.js")!, containedIn: documentFolder))
     }
 
     func testFileURLRejectsOtherSchemes() {
-        XCTAssertNil(MarkdownAssetResolution.fileURL(for: URL(string: "file:///etc/hosts")!))
-        XCTAssertNil(MarkdownAssetResolution.fileURL(for: URL(string: "https://example.com/a.md")!))
+        XCTAssertNil(MarkdownAssetResolution.fileURL(
+            for: URL(string: "file:///etc/hosts")!, containedIn: documentFolder))
+        XCTAssertNil(MarkdownAssetResolution.fileURL(
+            for: URL(string: "https://example.com/a.md")!, containedIn: documentFolder))
     }
 
-    // MARK: End-to-end relative resolution
+    // MARK: - Containment (security)
+    //
+    // Every path below is one a Markdown document can name on its own. The
+    // app holds a read-only sandbox exception for the whole filesystem, so an
+    // unbounded resolve is an arbitrary local file read with no interaction.
 
-    /// Mirrors what WebKit does with a relative href against the page
-    /// `<base>`: a `../` link climbs into the parent folder and maps back to
-    /// the right file — the behaviour the base-href design exists to enable.
-    func testParentRelativeLinkResolvesAgainstBaseHref() {
+    /// Was `testParentRelativeLinkResolvesAgainstBaseHref`, which asserted the
+    /// opposite: that `../` climbing out of the document folder resolved. It
+    /// is now the primary regression test for the containment boundary.
+    ///
+    /// Widening the boundary by one level to make this pass again is the
+    /// tempting fix and the wrong one — see the note on
+    /// `MarkdownAssetResolution` for why a boundary derived from where the
+    /// document happens to sit is not a boundary.
+    func testParentRelativeLinkIsRejected() {
         let folder = URL(fileURLWithPath: "/Users/me/notes/sub", isDirectory: true)
         let base = URL(string: MarkdownAssetResolution.baseHref(forFolder: folder))!
         let clicked = URL(string: "../sibling.md", relativeTo: base)!.absoluteURL
-        XCTAssertEqual(
-            MarkdownAssetResolution.fileURL(for: clicked)?.path,
-            "/Users/me/notes/sibling.md"
-        )
+        XCTAssertNil(MarkdownAssetResolution.fileURL(for: clicked, containedIn: folder))
     }
+
+    func testDeepTraversalToSystemFileIsRejected() {
+        let asset = URL(string: "md-asset:///Users/me/notes/../../../etc/passwd")!
+        XCTAssertNil(MarkdownAssetResolution.fileURL(for: asset, containedIn: documentFolder))
+    }
+
+    func testUnrelatedAbsolutePathIsRejected() {
+        for path in ["/etc/hosts", "/Users/me/.ssh/id_rsa", "/Users/other/notes/img.png"] {
+            let asset = URL(string: "md-asset://\(path)")!
+            XCTAssertNil(
+                MarkdownAssetResolution.fileURL(for: asset, containedIn: documentFolder),
+                "\(path) resolved but lies outside the document folder"
+            )
+        }
+    }
+
+    /// A sibling directory sharing a name prefix is not a descendant. Without
+    /// a trailing separator in the containment check, `/Users/me/notes` would
+    /// also match `/Users/me/notes-private`.
+    func testSiblingDirectoryWithSharedPrefixIsRejected() {
+        let asset = URL(string: "md-asset:///Users/me/notes-private/secrets.png")!
+        XCTAssertNil(MarkdownAssetResolution.fileURL(for: asset, containedIn: documentFolder))
+    }
+
+    /// Real filesystem: a symlink inside the document folder pointing outside
+    /// it must not become an escape hatch. A purely textual containment check
+    /// passes this and hands back the target.
+    func testSymlinkOutOfTheDocumentFolderIsRejected() throws {
+        let temporary = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("md-asset-containment-\(UUID().uuidString)", isDirectory: true)
+        let folder = temporary.appendingPathComponent("notes", isDirectory: true)
+        let outside = temporary.appendingPathComponent("outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporary) }
+
+        let secret = outside.appendingPathComponent("secret.txt")
+        try Data("secret".utf8).write(to: secret)
+        let escape = folder.appendingPathComponent("escape")
+        try FileManager.default.createSymbolicLink(at: escape, withDestinationURL: outside)
+
+        let asset = URL(string: MarkdownAssetResolution.baseHref(forFolder: folder)
+            + "escape/secret.txt")!
+        XCTAssertNil(MarkdownAssetResolution.fileURL(for: asset, containedIn: folder))
+    }
+
+    /// The inverse of the symlink test: a symlinked *document folder* — which
+    /// `/tmp` already is on macOS — must still resolve its own contents.
+    func testSymlinkedDocumentFolderStillResolvesItsOwnFiles() throws {
+        let temporary = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("md-asset-symlinked-\(UUID().uuidString)", isDirectory: true)
+        let real = temporary.appendingPathComponent("real", isDirectory: true)
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporary) }
+
+        let image = real.appendingPathComponent("pic.png")
+        try Data("png".utf8).write(to: image)
+        let linked = temporary.appendingPathComponent("linked", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: linked, withDestinationURL: real)
+
+        let asset = URL(string: MarkdownAssetResolution.baseHref(forFolder: linked) + "pic.png")!
+        XCTAssertNotNil(MarkdownAssetResolution.fileURL(for: asset, containedIn: linked))
+    }
+
+    // MARK: End-to-end relative resolution
 
     func testSameFolderRelativeLinkResolvesAgainstBaseHref() {
         let folder = URL(fileURLWithPath: "/Users/me/notes/sub", isDirectory: true)
         let base = URL(string: MarkdownAssetResolution.baseHref(forFolder: folder))!
         let clicked = URL(string: "images/pic.png", relativeTo: base)!.absoluteURL
         XCTAssertEqual(
-            MarkdownAssetResolution.fileURL(for: clicked)?.path,
+            MarkdownAssetResolution.fileURL(for: clicked, containedIn: folder)?.path,
             "/Users/me/notes/sub/images/pic.png"
         )
     }

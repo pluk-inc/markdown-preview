@@ -12,11 +12,29 @@ import Markdown
 /// SPM helper package.
 ///
 /// The rendered page's `<base>` mirrors the document folder's absolute
-/// filesystem path, so WebKit resolves relative references — including
-/// `../` links into parent folders — before they ever reach the app. An
-/// `md-asset` URL's path therefore *is* the absolute path of the file it
-/// names. Reads outside the document folder are covered by the app's
-/// read-only absolute-path sandbox exception.
+/// filesystem path, so WebKit resolves relative references — including `../`
+/// climbs — before they ever reach the app. An `md-asset` URL's path
+/// therefore *is* an absolute path, supplied by document content.
+///
+/// Because document content controls that path, resolution is confined to the
+/// document's own folder (`fileURL(for:containedIn:)`). The app holds a
+/// read-only sandbox exception for the whole filesystem, so without that check
+/// an `<img>` in an untrusted document reads any file the user can read, with
+/// no interaction at all.
+///
+/// **Do not widen the boundary to the parent folder to restore `../` support.**
+/// It sounds like a small concession and is not one: the boundary would then
+/// be derived from wherever the document happens to sit, which an attacker
+/// influences. Someone sends you a `.md`; it lands in `~/Downloads`; the
+/// boundary is now your entire home directory, `.ssh` and credentials
+/// included. Save it to `/tmp` and the boundary becomes `/`. A boundary that
+/// widens depending on where a file is saved is not a boundary — and the
+/// common cases are the worst ones, because `~/Downloads` and `~/Documents`
+/// are exactly where untrusted Markdown arrives.
+///
+/// If cross-folder references are wanted back, scope them to something the
+/// user explicitly granted — a folder they chose to open — rather than to the
+/// document's location.
 nonisolated enum MarkdownAssetResolution {
 
     static let scheme = "md-asset"
@@ -41,17 +59,42 @@ nonisolated enum MarkdownAssetResolution {
         return components.string ?? rootBaseHref
     }
 
-    /// Maps an `md-asset://…` URL to the file it names. Returns `nil` for
-    /// other schemes, for URLs with a host (well-formed `md-asset` URLs have
-    /// none — this keeps protocol-relative references like `//host/pic.png`
-    /// from aliasing local files), and for paths that don't name a
-    /// filesystem location (empty, or the bare root).
-    static func fileURL(for assetURL: URL) -> URL? {
+    /// Maps an `md-asset://…` URL to the file it names, **only if that file
+    /// lies inside `documentFolder`**.
+    ///
+    /// Returns `nil` for other schemes, for URLs with a host (well-formed
+    /// `md-asset` URLs have none — this keeps protocol-relative references
+    /// like `//host/pic.png` from aliasing local files), for paths that don't
+    /// name a filesystem location (empty, or the bare root), and for anything
+    /// that resolves outside the document's own folder.
+    ///
+    /// `documentFolder` is required rather than optional on purpose: every
+    /// caller must state the boundary it is resolving against, so a new call
+    /// site cannot silently reintroduce unbounded resolution.
+    static func fileURL(for assetURL: URL, containedIn documentFolder: URL) -> URL? {
         guard assetURL.scheme == scheme else { return nil }
         if let host = assetURL.host, !host.isEmpty { return nil }
         let path = assetURL.path
         guard path.count > 1, path.hasPrefix("/") else { return nil }
-        return URL(fileURLWithPath: path).standardizedFileURL
+
+        let candidate = URL(fileURLWithPath: path).standardizedFileURL
+        guard isContained(candidate, in: documentFolder) else { return nil }
+        return candidate
+    }
+
+    /// Whether `candidate` is `folder` itself or something beneath it.
+    ///
+    /// Symlinks are resolved on both sides first: a link inside the document
+    /// folder pointing anywhere else would otherwise satisfy a purely textual
+    /// comparison and hand back a file from outside the boundary.
+    ///
+    /// The trailing separator in the prefix test is load-bearing. Without it
+    /// `/Users/me/notes` also matches `/Users/me/notes-private/secrets.png`,
+    /// which is a sibling directory, not a descendant.
+    private static func isContained(_ candidate: URL, in folder: URL) -> Bool {
+        let candidatePath = candidate.standardizedFileURL.resolvingSymlinksInPath().path
+        let folderPath = folder.standardizedFileURL.resolvingSymlinksInPath().path
+        return candidatePath == folderPath || candidatePath.hasPrefix(folderPath + "/")
     }
 
     // MARK: - Image storage helpers
