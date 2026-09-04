@@ -17,70 +17,44 @@ A macOS app for previewing Markdown files. AppKit, sandboxed, ships with a Quick
 
 Version is managed centrally in `Version.xcconfig` (`MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`). Both the app and the quick-look extension inherit from it.
 
-## Release pipeline
+## Signing & secrets — do not touch without asking
 
-One command:
+- `DEVELOPMENT_TEAM = 5P3TSMNV42` (`project.pbxproj`, both targets) is the
+  maintainer's Apple Developer Team ID, hardcoded in the shared Xcode project.
+  Never change it, regenerate signing, or let Xcode "fix" it automatically —
+  building locally without the team's certificates can make Xcode silently
+  rewrite `DEVELOPMENT_TEAM` to your own personal team on save. Check
+  `git diff` on `project.pbxproj` before committing anything and revert that
+  hunk if it shows up.
+- `CODE_SIGN_IDENTITY` / `CODE_SIGN_STYLE = Automatic` — same story, leave as-is.
+- Secrets (currently `POSTHOG_PROJECT_TOKEN`) live in `Secrets.xcconfig`,
+  gitignored — copy `Secrets.xcconfig.example` to `Secrets.xcconfig` locally.
+  Never hardcode a real token into a tracked file, Info.plist, or a commit.
+- The Sparkle/Amore signing material (EdDSA key, notary keychain profile) is
+  documented in the `release-process` skill. Don't touch `SUPublicEDKey` in
+  `Info.plist` or the entitlements' `mach-lookup` names without reading that
+  skill first — they're paired with private material outside the repo (login
+  Keychain / Amore), so an unmatched change breaks Sparkle updates silently.
+- `md-preview.entitlements` / `quick-look.entitlements` — the sandbox
+  `temporary-exception` entries (Sparkle XPC mach-lookup names, the read-only
+  filesystem exception) are narrowly scoped, notarization-review-sensitive
+  capabilities. Don't broaden or "clean up" them without understanding why
+  they're there (see the inline comments in each file).
+- `Version.xcconfig` (`MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`) is
+  bumped only by `scripts/release.sh` — don't hand-edit it.
 
-```bash
-./scripts/release.sh                     # release current Version.xcconfig
-./scripts/release.sh --version 0.0.2     # bump marketing version (auto-bumps build)
-./scripts/release.sh --version 0.0.2 --build 7
-./scripts/release.sh --beta              # amore --beta + GH prerelease
-./scripts/release.sh --draft             # amore --draft, no GH release
-./scripts/release.sh --skip-github       # local amore release only
-```
+## Releasing
 
-Before running, **add a `CHANGELOG.md` entry** for the version being shipped:
-
-```md
-## [0.0.2] – 2026-05-01
-
-Short narrative summary.
-
-- **Bullet for each change.**
-- Bug fix bullet.
-```
-
-The script:
-1. Validates the changelog entry exists for the resolved version
-2. Updates `Version.xcconfig` and commits as `Release X.Y.Z (N)` if it changed
-3. Runs `amore release --scheme md-preview --release-notes "$NOTES"` (full pipeline: archive → sign → DMG → notarize → EdDSA-sign → upload → publish appcast)
-4. Tags `vX.Y.Z`, pushes, creates GitHub release with DMG asset
-
-Source of truth: `Version.xcconfig` for the version numbers, `CHANGELOG.md` for the notes.
-
-## Rolling back a release
-
-```bash
-./scripts/rollback-release.sh --latest             # unpublish latest, delete GH release+tag
-./scripts/rollback-release.sh 0.0.2                # unpublish specific version
-./scripts/rollback-release.sh 0.0.2 --delete       # permanently delete on Amore
-./scripts/rollback-release.sh 0.0.2 --keep-github  # leave GitHub release in place
-./scripts/rollback-release.sh --latest --yes       # skip the confirmation prompt
-```
-
-Default is **unpublish** (reversible — flips `published=false` on Amore so it disappears from the appcast). Use `--delete` only when you're sure; it permanently removes the release. To re-publish after a non-destructive rollback: `amore releases update <version> -b doc.md-preview --published true`.
-
-## Amore configuration (already wired)
-
-- **Hosting**: Amore-managed with custom domain `storage.md-preview.app`
-- **Codesign identity**: `Developer ID Application: Mohamed Fauzaan (5P3TSMNV42)`
-- **Notary keychain profile**: `md-preview-notary`
-- **EdDSA public key** (in Info.plist `SUPublicEDKey`): `gIQjgqfjkIR+egQ4S1oBLxE/NCDxpXXGdZXSpn04VAY=` — private key in login Keychain
-
-To inspect or change: `amore config show --bundle-id doc.md-preview` / `amore config set ...`. CLI lives at `/usr/local/bin/amore`.
+See the `release-process` skill for branch/PR naming, exactly what `scripts/release.sh` and `scripts/rollback-release.sh` do, and the Amore config already wired for this project.
 
 ## Known issues
-
-- **`SUFeedURL` mismatch**. Info.plist points to `https://storage.md-preview.app/appcast.xml` but Amore actually publishes to `https://storage.md-preview.app/v1/apps/doc.md-preview/appcast.xml`. Fix Info.plist before any non-test release ships to real users — already-installed copies will check the wrong URL forever. Either change `SUFeedURL` to the `/v1/apps/...` path, or configure a CDN rewrite at `storage.md-preview.app` to map `/appcast.xml` → the real path.
+- **`SUFeedURL` mismatch**. Info.plist points to `https://storage.md-preview.app/appcast.xml` but Amore actually publishes to `https://storage.md-preview.app/v1/apps/doc.md-preview/appcast.xml`. This matters for **any release run that isn't `--draft`** — the default run, `--beta`, and `--skip-github` all publish to Amore's live appcast, which — due to the mismatch above — is not yet the URL already-installed copies poll; `--draft` is the only mode that doesn't publish. Fix Info.plist before any of those ship to real users — already-installed copies will check the wrong URL forever. Either change `SUFeedURL` to the `/v1/apps/...` path, or configure a CDN rewrite at `storage.md-preview.app` to map `/appcast.xml` → the real path.
 - **No git remote yet**. `git remote -v` is empty. Run `gh repo create` before relying on the GitHub release portion of `scripts/release.sh` (it auto-skips when no remote exists).
 
 ## Common Xcode tasks
-
 ```bash
 xcodebuild -project md-preview.xcodeproj -scheme md-preview -configuration Debug build
 xcodebuild -resolvePackageDependencies -project md-preview.xcodeproj
 ```
-
 Sparkle helper tools (sign_update / generate_keys / generate_appcast) live at:
 `~/Library/Developer/Xcode/DerivedData/md-preview-*/SourcePackages/artifacts/sparkle/Sparkle/bin/`
