@@ -103,6 +103,18 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(rendered.articleHTML.contains("md-frontmatter"))
     }
 
+    func testObsidianHighlightRendersInPreviewWithDedicatedStyling() {
+        let rendered = MarkdownHTML.render(
+            markdown: "==Highlighted **text**==",
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "<mark class=\"md-highlight\">Highlighted <strong>text</strong></mark>"
+        ))
+        XCTAssertTrue(rendered.html.contains("mark.md-highlight"))
+    }
+
     @MainActor
     func testScrollableLongTableKeepsWebKitViewportAndScrollsDocument() async throws {
         let rows = (1...750).map { "| \($0) | Function \($0) | 100.00% |" }

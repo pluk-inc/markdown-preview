@@ -239,4 +239,98 @@ final class EscapingHTMLFormatterTests: XCTestCase {
             "custom title plain text must be HTML-escaped: \(html)"
         )
     }
+
+    func testObsidianHighlightSyntaxRendersAsMark() {
+        let html = EscapingHTMLFormatter.format("before ==Highlighted text== after")
+        XCTAssertTrue(
+            html.contains("before <mark class=\"md-highlight\">Highlighted text</mark> after"),
+            "double-equals text should render as a semantic highlight: \(html)"
+        )
+    }
+
+    func testObsidianHighlightPreservesNestedInlineFormatting() {
+        let html = EscapingHTMLFormatter.format("==**bold** and *italic*==")
+        XCTAssertTrue(
+            html.contains("<mark class=\"md-highlight\"><strong>bold</strong> and <em>italic</em></mark>"),
+            "nested Markdown should remain inside the highlight: \(html)"
+        )
+    }
+
+    func testObsidianHighlightDoesNotRenderInsideCodeOrWithWhitespaceDelimiters() {
+        let html = EscapingHTMLFormatter.format("`==code==` and == open == and ==unclosed")
+        XCTAssertTrue(html.contains("<code>==code==</code>"), html)
+        XCTAssertTrue(html.contains("== open =="), html)
+        XCTAssertTrue(html.contains("==unclosed"), html)
+        XCTAssertFalse(html.contains("<mark class=\"md-highlight\">"), html)
+    }
+
+    func testObsidianHighlightDoesNotRenderInsideIndentedCode() {
+        let html = EscapingHTMLFormatter.format("    ==indented code==")
+
+        XCTAssertTrue(html.contains("<code>==indented code=="), html)
+        XCTAssertFalse(html.contains("<mark class=\"md-highlight\">"), html)
+    }
+
+    func testObsidianHighlightEscapesHTMLText() {
+        let html = EscapingHTMLFormatter.format("==R&D < 5==")
+        XCTAssertTrue(
+            html.contains("<mark class=\"md-highlight\">R&amp;D &lt; 5</mark>"),
+            "highlight contents must use the formatter's HTML escaping: \(html)"
+        )
+    }
+
+    func testObsidianHighlightSkipsFencedCodeLinksAndEscapedDelimiters() {
+        let html = EscapingHTMLFormatter.format("""
+        ```
+        ==inside code==
+        ```
+
+        [URL](https://example.com/?a==b==c)
+
+        \\==literal\\== and ==visible==
+        """)
+
+        XCTAssertTrue(html.contains("==inside code=="), html)
+        XCTAssertTrue(html.contains("href=\"https://example.com/?a==b==c\""), html)
+        XCTAssertTrue(html.contains("==literal=="), html)
+        XCTAssertTrue(html.contains("<mark class=\"md-highlight\">visible</mark>"), html)
+        XCTAssertEqual(html.components(separatedBy: "<mark class=\"md-highlight\">").count - 1, 1, html)
+    }
+
+    func testObsidianHighlightSupportsAdjacentAndRawHTMLBoundaries() {
+        let html = EscapingHTMLFormatter.format("""
+        <div>==raw HTML==</div>
+
+        ==one== ==two==
+        """)
+
+        XCTAssertTrue(html.contains("<div>==raw HTML==</div>"), html)
+        XCTAssertTrue(html.contains("<mark class=\"md-highlight\">one</mark> <mark class=\"md-highlight\">two</mark>"), html)
+        XCTAssertEqual(html.components(separatedBy: "<mark class=\"md-highlight\">").count - 1, 2, html)
+    }
+
+    func testObsidianHighlightDoesNotCrossAParagraphBoundary() {
+        let html = EscapingHTMLFormatter.format("""
+        ==opens here
+
+        closes here==
+        """)
+
+        XCTAssertFalse(html.contains("<mark class=\"md-highlight\">"), html)
+        XCTAssertTrue(html.contains("==opens here"), html)
+        XCTAssertTrue(html.contains("closes here=="), html)
+    }
+
+    func testObsidianHighlightDoesNotCrossAHeadingBoundary() {
+        let html = EscapingHTMLFormatter.format("""
+        ==opens here
+        # A heading
+        closes here==
+        """)
+
+        XCTAssertFalse(html.contains("<mark class=\"md-highlight\">"), html)
+        XCTAssertTrue(html.contains("<h1"), html)
+        XCTAssertTrue(html.contains("==opens here"), html)
+        XCTAssertTrue(html.contains("closes here=="), html)
+    }
 }

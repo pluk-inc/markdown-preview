@@ -105,6 +105,53 @@ const codeLanguages = [
 ]
 
 // ---------------------------------------------------------------------------
+// Obsidian-style text highlights
+// ---------------------------------------------------------------------------
+
+const highlightDelimiter = { resolve: "Highlight", mark: "HighlightMark" }
+const highlightPunctuation = /[\p{S}\p{P}]/u
+
+function highlightWhitespace(value) {
+  return !value || /\s/.test(value)
+}
+
+function highlightPunctuationAround(value) {
+  return !!value && highlightPunctuation.test(value)
+}
+
+// Lezer's delimiter resolver then handles nesting with emphasis, links, and
+// adjacent highlights. Keeping the parser extension here (rather than
+// matching the DOM after parsing) also means code spans and fenced code are
+// naturally excluded by the Markdown grammar.
+const obsidianHighlight = {
+  defineNodes: ["Highlight", "HighlightMark"],
+  parseInline: [{
+    name: "Highlight",
+    parse(cx, next, pos) {
+      if (next !== 61 || cx.char(pos + 1) !== 61 || cx.char(pos + 2) === 61) return -1
+      const before = cx.slice(pos - 1, pos)
+      const after = cx.slice(pos + 2, pos + 3)
+      const spaceBefore = highlightWhitespace(before)
+      const spaceAfter = highlightWhitespace(after)
+      const punctuationBefore = highlightPunctuationAround(before)
+      const punctuationAfter = highlightPunctuationAround(after)
+      const leftFlanking = !spaceAfter
+        && (!punctuationAfter || spaceBefore || punctuationBefore)
+      const rightFlanking = !spaceBefore
+        && (!punctuationBefore || spaceAfter || punctuationAfter)
+      return cx.addDelimiter(
+        highlightDelimiter,
+        pos,
+        pos + 2,
+        leftFlanking,
+        rightFlanking,
+      )
+    },
+    after: "Emphasis",
+  }],
+}
+
+// ---------------------------------------------------------------------------
 // Live preview decorations
 // ---------------------------------------------------------------------------
 
@@ -916,6 +963,7 @@ const urlMark = Decoration.mark({ class: "cm-md-url" })
 const strongMark = Decoration.mark({ class: "cm-md-strong" })
 const emphasisMark = Decoration.mark({ class: "cm-md-emphasis" })
 const strikethroughMark = Decoration.mark({ class: "cm-md-strikethrough" })
+const highlightMark = Decoration.mark({ class: "cm-md-highlight" })
 const frontmatterLine = Decoration.line({ class: "cm-md-frontmatter" })
 const frontmatterFirstLine = Decoration.line({ class: "cm-md-frontmatter-first" })
 const frontmatterLastLine = Decoration.line({ class: "cm-md-frontmatter-last" })
@@ -1332,6 +1380,25 @@ function buildDecorations(view, detectedCodeCache) {
         }
         if (name === "Strikethrough") {
           ranges.push(strikethroughMark.range(node.from, node.to))
+          return
+        }
+        if (name === "Highlight") {
+          const marks = []
+          for (let child = node.node.firstChild; child; child = child.nextSibling) {
+            if (child.name === "HighlightMark") marks.push(child)
+          }
+          const contentFrom = marks.length ? marks[0].to : node.from
+          const contentTo = marks.length > 1 ? marks[marks.length - 1].from : node.to
+          if (contentFrom < contentTo) {
+            ranges.push(highlightMark.range(contentFrom, contentTo))
+          }
+          return
+        }
+        if (name === "HighlightMark") {
+          const parent = node.node.parent
+          if (parent && parent.name === "Highlight" && !touches(parent.from, parent.to)) {
+            ranges.push(hide.range(node.from, node.to))
+          }
           return
         }
         if (name === "EmphasisMark" || name === "StrikethroughMark") {
@@ -2001,7 +2068,13 @@ window.MDEditor = {
           directionLines,
           // Parse a leading `---` block as YAML frontmatter so its lines
           // never surface as a thematic break plus setext heading.
-          yamlFrontmatter({ content: markdown({ base: markdownLanguage, codeLanguages }) }),
+          yamlFrontmatter({
+            content: markdown({
+              base: markdownLanguage,
+              codeLanguages,
+              extensions: obsidianHighlight,
+            }),
+          }),
           activeCodeBlock,
           mermaidPreviews,
           tableEditors,
@@ -2093,6 +2166,7 @@ window.MDEditor = {
       bold: toggleInlineMark("**"),
       italic: toggleInlineMark("*"),
       strikethrough: toggleInlineMark("~~"),
+      highlight: toggleInlineMark("=="),
       code: toggleInlineMark("`"),
       h0: setHeading(0),
       h1: setHeading(1),

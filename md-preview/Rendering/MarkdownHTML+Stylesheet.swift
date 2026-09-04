@@ -66,6 +66,12 @@ nonisolated extension MarkdownHTML {
     mark.md-search-highlight-current {
         background: #ffbf00;
     }
+    mark.md-highlight {
+        background: rgba(255, 216, 77, 0.55);
+        color: inherit;
+        -webkit-box-decoration-break: clone;
+        box-decoration-break: clone;
+    }
     .md-search-burst {
         position: absolute;
         pointer-events: none;

@@ -651,6 +651,12 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         .cm-md-strong { font-weight: 600; }
         .cm-md-emphasis { font-style: italic; }
         .cm-md-strikethrough { text-decoration: line-through; }
+        .cm-md-highlight {
+            background: rgba(255, 216, 77, 0.55);
+            border-radius: 2px;
+            box-decoration-break: clone;
+            -webkit-box-decoration-break: clone;
+        }
         .cm-md-inline-code {
             font-family: ui-monospace, "SF Mono", Menlo, monospace;
             font-size: 0.88em;
