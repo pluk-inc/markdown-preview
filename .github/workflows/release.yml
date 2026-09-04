@@ -1,0 +1,131 @@
+name: Release
+
+run-name: Release Markdown Preview
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      beta:
+        type: boolean
+        default: false
+        description: Publish to the beta channel
+      build-number:
+        type: string
+        default: ""
+        description: Build number override; defaults to Version.xcconfig
+      marketing-version:
+        type: string
+        default: ""
+        description: Marketing version override; defaults to Version.xcconfig
+
+permissions:
+  contents: write
+
+concurrency:
+  group: amore-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Amore release
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release metadata
+        id: metadata
+        env:
+          INPUT_BUILD_NUMBER: ${{ github.event.inputs['build-number'] || '' }}
+          INPUT_MARKETING_VERSION: ${{ github.event.inputs['marketing-version'] || '' }}
+        run: |
+          set -euo pipefail
+
+          read_xcconfig() {
+            grep "^$1" Version.xcconfig | sed -E 's/^[A-Z_]+ *= *//'
+          }
+
+          extract_notes() {
+            awk -v ver="$1" '
+              $0 ~ "^## \\[" ver "\\]" { flag=1; next }
+              flag && /^## \[/ { exit }
+              flag { print }
+            ' CHANGELOG.md | awk 'NF{found=1} found' | sed -E '$ { /^[[:space:]]*$/d; }'
+          }
+
+          config_version="$(read_xcconfig MARKETING_VERSION)"
+          config_build="$(read_xcconfig CURRENT_PROJECT_VERSION)"
+          marketing_version="${INPUT_MARKETING_VERSION:-$config_version}"
+          build_number="${INPUT_BUILD_NUMBER:-$config_build}"
+
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            tag_version="${GITHUB_REF_NAME#v}"
+            if [[ "$tag_version" != "$marketing_version" ]]; then
+              echo "Tag $GITHUB_REF_NAME does not match release version $marketing_version" >&2
+              exit 1
+            fi
+          fi
+
+          notes="$(extract_notes "$marketing_version")"
+          if [[ -z "$notes" ]]; then
+            echo "CHANGELOG.md has no notes for [$marketing_version]" >&2
+            exit 1
+          fi
+
+          {
+            echo "marketing-version=$marketing_version"
+            echo "build-number=$build_number"
+            echo "release-notes<<EOF"
+            echo "$notes"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          printf '%s\n' "$notes" > "$RUNNER_TEMP/release-notes.md"
+
+      - name: Release with Amore
+        id: amore
+        # Upstream documents @v1, but had not published that tag when this
+        # workflow was added. Move this to @v1 once the tag exists.
+        uses: AmoreComputer/release-action@2acfbc82a354461aea3ee2236a46cee07891c777
+        with:
+          xcode-path: /Applications/Xcode.app
+          path: md-preview.xcodeproj
+          scheme: md-preview
+          codesign-identity: ${{ secrets.CODESIGN_IDENTITY }}
+          dev-id-cert-p12: ${{ secrets.DEV_ID_CERT_P12 }}
+          dev-id-cert-password: ${{ secrets.DEV_ID_CERT_PASSWORD }}
+          sparkle-private-key: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          asc-api-key-id: ${{ secrets.ASC_API_KEY_ID }}
+          asc-api-issuer: ${{ secrets.ASC_API_ISSUER }}
+          asc-api-key: ${{ secrets.ASC_API_KEY }}
+          amore-token: ${{ secrets.AMORE_TOKEN }}
+          beta: ${{ github.event.inputs.beta || 'false' }}
+          build-number: ${{ steps.metadata.outputs.build-number }}
+          marketing-version: ${{ steps.metadata.outputs.marketing-version }}
+          release-notes: ${{ steps.metadata.outputs.release-notes }}
+
+      - name: Create GitHub release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DOWNLOAD_URL: ${{ steps.amore.outputs.download-url }}
+          VERSION: ${{ steps.metadata.outputs.marketing-version }}
+        run: |
+          set -euo pipefail
+
+          dmg_path="$RUNNER_TEMP/Markdown-Preview.dmg"
+          curl -fsSL -o "$dmg_path" "$DOWNLOAD_URL"
+
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" \
+              --title "Markdown Preview $VERSION" \
+              --notes-file "$RUNNER_TEMP/release-notes.md"
+            gh release upload "$GITHUB_REF_NAME" "$dmg_path" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$dmg_path" \
+              --title "Markdown Preview $VERSION" \
+              --notes-file "$RUNNER_TEMP/release-notes.md"
+          fi
