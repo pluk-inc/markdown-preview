@@ -30,7 +30,7 @@ nonisolated struct ReaderLayoutSetting: Equatable, Sendable {
     static let lineSpacingRange = 1.0...2.0
     static let characterSpacingRange = -5.0...12.0
     static let wordSpacingRange = -10.0...25.0
-    static let marginsRange = 0.0...100.0
+    static let marginsRange = -100.0...100.0
 
     // MARK: - Effective values
 
@@ -47,7 +47,7 @@ nonisolated struct ReaderLayoutSetting: Equatable, Sendable {
     /// nothing in Full Width and sit off-centre in the app's normal mode,
     /// where the article is host-centered with `margin-left: 0`.
     var pageInset: Int {
-        Int(0.9 * effective.marginsPercent)
+        Int(0.9 * max(0, effective.marginsPercent))
     }
 
     /// CSS custom-property declarations for the page `:root`. Only values
@@ -70,6 +70,8 @@ nonisolated struct ReaderLayoutSetting: Equatable, Sendable {
         }
         if applied.marginsPercent != 0 {
             lines.append("--mdp-page-inset: \(pageInset)px;")
+            let padding = MarkdownHTML.pagePaddingHorizontal * (1 + min(0, applied.marginsPercent) / 100)
+            lines.append("--mdp-page-padding: \(Int(padding))px;")
         }
         return lines.joined(separator: "\n    ")
     }

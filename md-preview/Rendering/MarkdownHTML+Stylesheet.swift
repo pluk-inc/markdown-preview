@@ -122,7 +122,7 @@ nonisolated extension MarkdownHTML {
         word-spacing: var(--mdp-word-spacing, normal);
         color: var(--text);
         background: transparent;
-        padding: \(pagePaddingTop)px \(pagePaddingHorizontal)px \(pagePaddingBottom)px;
+        padding: \(pagePaddingTop)px var(--mdp-page-padding, \(pagePaddingHorizontal)px) \(pagePaddingBottom)px;
         -webkit-font-smoothing: antialiased;
     }
     /* Reader spacing tweaks stop at code — whitespace fidelity wins. */

@@ -137,6 +137,18 @@ final class ReaderLayoutSettingTests: XCTestCase {
         XCTAssertLessThan(fontRange.lowerBound, layoutRange.lowerBound)
     }
 
+    func testTighterMarginsReduceOuterPaddingWithoutNegativeArticlePadding() {
+        var setting = ReaderLayoutSetting()
+        setting.isCustomized = true
+        setting.marginsPercent = -50
+        XCTAssertEqual(setting.pageInset, 0)
+        XCTAssertTrue(setting.cssVariables.contains("--mdp-page-padding: 20px;"))
+        setting.marginsPercent = -100
+        XCTAssertTrue(setting.cssVariables.contains("--mdp-page-padding: 0px;"))
+        setting.isCustomized = false
+        XCTAssertEqual(setting.cssVariables, "")
+    }
+
     func testRenderedHTMLCarriesTheLayoutVariables() {
         var setting = ReaderLayoutSetting()
         setting.boldText = true
