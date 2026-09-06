@@ -2,13 +2,32 @@
 
 ## [Unreleased]
 
+## [0.0.53] – 2026-09-06
+
+This release improves Mermaid diagram navigation and fixes Quick Look rendering, reader spacing, editor code blocks, and the document outline.
+
 ### Changed
 
-- Mermaid popups open with a screen-centered 16:9 viewport. Large diagrams fit the viewport; smaller diagrams retain their natural size. Scroll to zoom around the pointer, drag to pan, and press Space to restore the initial diagram view.
+- **Mermaid popups support zoom and pan.** Diagrams open in a screen-centered 16:9 window. Large diagrams fit the viewport and smaller diagrams retain their natural size. Scroll to zoom around the pointer, drag to pan, and press Space to restore the initial view ([#345](https://github.com/pluk-inc/markdown-preview/pull/345)).
+- **Editor code-block language labels have their own header row.** The muted, editable label leaves the full content width available for code ([#347](https://github.com/pluk-inc/markdown-preview/pull/347)).
 
 ### Fixed
 
-- Mermaid popup wheel zoom respects the web view's flipped coordinate system, keeping both axes anchored to the mouse position.
+- **Mermaid diagrams render in Quick Look again.** Copy-button spacing no longer corrupts the diagram renderer's scripts ([#343](https://github.com/pluk-inc/markdown-preview/pull/343), [#338](https://github.com/pluk-inc/markdown-preview/issues/338)).
+- **Quick Look uses balanced side margins.** The floating Copy button no longer reserves an empty strip along the entire right edge of the document ([#346](https://github.com/pluk-inc/markdown-preview/pull/346)).
+- **The reader stays below the toolbar on macOS 15.** Windows use native titlebar chrome, and the preview follows the toolbar and tab-bar boundary ([#329](https://github.com/pluk-inc/markdown-preview/pull/329)).
+- **Showing tabs preserves the reader's top spacing.** The document updates immediately when the tab bar appears or disappears ([#348](https://github.com/pluk-inc/markdown-preview/pull/348)).
+- **Single-line editor code blocks keep all four rounded corners.** Blocks at the start of a document also retain their top padding ([#347](https://github.com/pluk-inc/markdown-preview/pull/347)).
+- **Code blocks inside lists no longer break the outline.** Real headings remain visible, and heading-like text inside fenced code stays out of the table of contents ([#349](https://github.com/pluk-inc/markdown-preview/pull/349), [#336](https://github.com/pluk-inc/markdown-preview/issues/336)).
+- **Mermaid popup zoom stays anchored to the pointer on both axes** ([#345](https://github.com/pluk-inc/markdown-preview/pull/345)).
+
+### Contributors
+
+- [@cybito](https://github.com/cybito) — Mermaid popup navigation ([#345](https://github.com/pluk-inc/markdown-preview/pull/345)).
+- [@inquinity](https://github.com/inquinity) — reported and fixed Mermaid rendering in Quick Look ([#343](https://github.com/pluk-inc/markdown-preview/pull/343), [#338](https://github.com/pluk-inc/markdown-preview/issues/338)).
+- [@kud](https://github.com/kud) — native titlebar and reader layout on macOS 15 ([#329](https://github.com/pluk-inc/markdown-preview/pull/329)).
+- [@carlosypunto](https://github.com/carlosypunto) — contributor guidance for signing and secrets ([#342](https://github.com/pluk-inc/markdown-preview/pull/342)).
+- [@wyttime04](https://github.com/wyttime04) — reported the outline parsing bug ([#336](https://github.com/pluk-inc/markdown-preview/issues/336)).
 
 ## [0.0.52] – 2026-09-01
 
