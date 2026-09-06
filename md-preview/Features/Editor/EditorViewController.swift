@@ -798,7 +798,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             max-width: 28vw;
             min-width: 4.5em;
             box-sizing: border-box;
-            padding: 2px 6px;
+            padding: 2px 8px;
             border: 1px solid var(--grid);
             border-radius: 5px;
             background: var(--code-bg);
@@ -813,8 +813,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             opacity: 0.8;
         }
         #editor .cm-md-code-language-input:focus {
-            border-color: var(--link);
-            box-shadow: 0 0 0 2px color-mix(in srgb, var(--link) 22%, transparent);
+            border-color: color-mix(in srgb, var(--secondary) 40%, transparent);
+            box-shadow: none;
         }
         /* Frontmatter — a quiet metadata card above the document, echoing
            the preview's properties panel. YAML stays editable; only the

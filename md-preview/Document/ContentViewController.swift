@@ -407,40 +407,30 @@ final class ContentViewController: NSViewController {
         // The chrome (toolbar, accessories) is final here; layout passes
         // before it attaches see a smaller contentLayoutRect.
         updateObscuredContentInsets()
+        observeWindowChrome()
     }
 
-    /// With a themed window background the titlebar is transparent and the
-    /// page runs to the window's top edge, so WebKit is told which strip the
-    /// toolbar obscures — it lays the page out below it and frosts content
-    /// that scrolls underneath, the way Safari's toolbar works. Without a
-    /// theme the titlebar is opaque and the inset must be zero.
+    private var contentLayoutObservation: NSKeyValueObservation?
 
-    /// Height of the titlebar-and-toolbar strip, from the window's
-    /// contentLayoutRect (authoritative immediately, unlike safeAreaInsets
-    /// which lags the toolbar attach), minus visible bottom titlebar
-    /// accessories.
-    private var obscuredTopInset: CGFloat {
-        max(0, fullChromeTopInset - visibleBottomAccessoryHeight)
+    /// Showing or hiding the native tab bar can change the content area
+    /// without laying out this full-height view. Follow the window's chrome
+    /// directly, as the editor does, without forcing a nested layout pass.
+    private func observeWindowChrome() {
+        contentLayoutObservation = view.window?.observe(\.contentLayoutRect) { [weak self] _, _ in
+            MainActor.assumeIsolated {
+                self?.updateObscuredContentInsets()
+            }
+        }
     }
 
-    /// The whole obscured strip — titlebar, toolbar, and visible bottom
-    /// accessories. contentLayoutRect already excludes the accessories, so
-    /// the gap alone is the full chrome height.
+    /// The whole obscured strip, including the native tab bar. AppKit
+    /// exposes the tab bar as a bottom titlebar accessory; subtracting its
+    /// height would let it consume the page's top padding.
     private var fullChromeTopInset: CGFloat {
         guard let window = view.window, let contentView = window.contentView else {
             return view.safeAreaInsets.top
         }
         return max(0, contentView.bounds.height - window.contentLayoutRect.maxY)
-    }
-
-    private var visibleBottomAccessoryHeight: CGFloat {
-        guard let window = view.window else { return 0 }
-        var height: CGFloat = 0
-        for accessory in window.titlebarAccessoryViewControllers
-        where accessory.layoutAttribute == .bottom && !accessory.isHidden {
-            height += accessory.view.frame.height
-        }
-        return height
     }
 
     /// Pre-Tahoe there is no frost and no `obscuredContentInsets`, so the
@@ -478,7 +468,7 @@ final class ContentViewController: NSViewController {
         // web view's lifetime — the page then collides with the toolbar
         // until the window is recreated. Keeping the explicit value equal
         // to the chrome strip matches the automatic behavior exactly.
-        let inset = obscuredTopInset
+        let inset = fullChromeTopInset
         if toolbarGutterHeightConstraint?.constant != inset {
             toolbarGutterHeightConstraint?.constant = inset
         }
