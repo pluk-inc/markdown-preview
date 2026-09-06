@@ -201,6 +201,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     var contentDidReplace: (() -> Void)?
     var zoomDidChange: ((CGFloat) -> Void)?
     var fragmentLinkActivated: ((String) -> Void)?
+    var pointerDocumentYDidChange: ((CGFloat) -> Void)?
     var localMarkdownLinkActivated: ((URL) -> Void)?
     var taskCheckboxToggled: ((Int, Bool) -> Void)?
     var tableEditRequested: ((MarkdownTableEditRequest) -> Void)?
@@ -277,6 +278,21 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
 
     private static let disableContextMenuScript = WKUserScript(
         source: """
+        let pointerFrame = null;
+        let pointerY = 0;
+        const reportPointer = event => {
+            if (!window.mdPreviewPointerTracking || !event.target.closest('article.markdown-body')) return;
+            pointerY = event.clientY + window.scrollY;
+            if (pointerFrame !== null) return;
+            pointerFrame = requestAnimationFrame(() => {
+                pointerFrame = null;
+                if (!window.mdPreviewPointerTracking) return;
+                window.webkit.messageHandlers.mdPreviewHost.postMessage({
+                    kind: 'pointerPosition', value: pointerY
+                });
+            });
+        };
+        document.addEventListener('pointermove', reportPointer, {passive: true});
         document.addEventListener('contextmenu', event => {
             const link = event.target.closest('a[href]');
             if (link) {
@@ -553,6 +569,9 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             let raw = ceil(CGFloat(truncating: value))
             lastReportedDocumentHeight = raw
             heightDidChange?(raw * webView.pageZoom)
+        case "pointerPosition":
+            guard let value = dict["value"] as? NSNumber else { return }
+            pointerDocumentYDidChange?(CGFloat(truncating: value))
         case "linkContextMenu":
             guard let raw = dict["url"] as? String, let url = URL(string: raw) else { return }
             showLinkContextMenu(url)

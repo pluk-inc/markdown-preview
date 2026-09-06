@@ -8,6 +8,7 @@ import SwiftUI
 // MARK: - General
 
 struct GeneralSettingsView: View {
+    @AppStorage("MarkdownPreview.outlineFollowsPointer") private var outlineFollowsPointer = false
     @Bindable private var model = SettingsModel.shared
 
     var body: some View {
@@ -19,6 +20,8 @@ struct GeneralSettingsView: View {
                     Text(L("Text size"))
                     Text(L("Size of rendered Markdown in document windows."))
                 }
+
+                Toggle(L("Highlight outline section under the pointer"), isOn: $outlineFollowsPointer)
 
                 Picker(L("Content width"), selection: $model.contentWidth) {
                     ForEach(ContentWidthSetting.allCases, id: \.self) { setting in

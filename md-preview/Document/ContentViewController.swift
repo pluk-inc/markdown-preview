@@ -101,9 +101,19 @@ final class ContentViewController: NSViewController {
             // The fresh article is in the DOM; a same-height render never
             // fires heightDidChange, so this is the reliable signal.
             self?.applyPendingScrollAnchorIfNeeded()
+            self?.updatePointerTracking()
         }
+        NotificationCenter.default.addObserver(self, selector: #selector(updatePointerTracking),
+                                               name: UserDefaults.didChangeNotification, object: nil)
         webView.fragmentLinkActivated = { [weak self] fragment in
             self?.scrollToElement(id: fragment)
+        }
+        webView.pointerDocumentYDidChange = { [weak self] y in
+            guard let self,
+                  UserDefaults.standard.bool(forKey: "MarkdownPreview.outlineFollowsPointer") else { return }
+            self.pointerHeadingID = self.headingOffsetsCSS.lastIndex(where: { $0 <= y })
+            self.sticky = nil
+            self.notifyActiveHeading(self.pointerHeadingID)
         }
         webView.localMarkdownLinkActivated = { [weak self] url in
             self?.localMarkdownLinkActivated?(url)
@@ -236,7 +246,19 @@ final class ContentViewController: NSViewController {
 
     /// Drops scrollspy state before a doc swap so the previous doc's
     /// heading doesn't briefly stay marked.
+    @objc private func updatePointerTracking() {
+        let enabled = UserDefaults.standard.bool(forKey: "MarkdownPreview.outlineFollowsPointer")
+        webView.webView.evaluateJavaScript("window.mdPreviewPointerTracking = \(enabled ? "true" : "false");", completionHandler: nil)
+        if !enabled {
+            pointerHeadingID = nil
+            evaluateActiveHeading()
+        }
+    }
+
+    private var pointerHeadingID: Int?
+
     private func resetScrollspy() {
+        pointerHeadingID = nil
         headingOffsetsCSS = []
         sticky = nil
         notifyActiveHeading(nil)
@@ -658,6 +680,11 @@ final class ContentViewController: NSViewController {
     }
 
     private func evaluateActiveHeading() {
+        if UserDefaults.standard.bool(forKey: "MarkdownPreview.outlineFollowsPointer"),
+           let pointerHeadingID, sticky == nil {
+            notifyActiveHeading(pointerHeadingID)
+            return
+        }
         if let pin = sticky {
             if DispatchTime.now() < pin.holdUntil { return }
             if !hasMovedFar(from: pin.anchor) { return }
