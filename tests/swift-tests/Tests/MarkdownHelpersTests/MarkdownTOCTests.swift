@@ -80,4 +80,67 @@ final class MarkdownTOCTests: XCTestCase {
         XCTAssertEqual(roots.count, 1)
         XCTAssertEqual(roots[0].children.count, 4)
     }
+
+    func testCommonHeadingSyntaxAndNonHeadings() {
+        let markdown = """
+        # First ###
+        ### Skipped level
+        #\tTabbed marker
+           ## Three spaces
+
+            # Indented code
+
+        \\# Escaped marker
+        #No space
+        ####### Seven hashes
+
+        <!--
+        # Comment
+        -->
+
+        Last
+        ====
+        """.replacingOccurrences(of: "\n", with: "\r\n")
+        let items = flattened(MarkdownTOC.parse(markdown))
+        XCTAssertEqual(items.map(\.title), ["First", "Skipped level", "Tabbed marker", "Three spaces", "Last"])
+        XCTAssertEqual(items.map(\.level), [1, 3, 1, 2, 1])
+        XCTAssertTrue(MarkdownTOC.parse("").isEmpty)
+        XCTAssertTrue(MarkdownTOC.parse("Just a paragraph").isEmpty)
+    }
+
+    func testInlineFormattingPreservesLiteralTitleContent() {
+        let markdown = #"# **Bold** *italic* ~~deleted~~ [link](https://example.com) `a_b*` &amp; \*literal\* ![alt](image.png)"#
+        XCTAssertEqual(MarkdownTOC.parse(markdown).first?.title, "Bold italic deleted link a_b* & *literal* alt")
+    }
+
+    func testOutlineIDsAndLevelsMatchRenderedArticle() throws {
+        let markdown = """
+        ---
+        title: Example
+        ---
+        # Root
+        > ## Quoted heading
+
+        - ### List heading
+
+          ~~~~text
+          # Hidden
+          ```
+          ~~~~
+
+        Setext heading
+        --------------
+
+        ##
+        ## **Final** `a_b`
+        """
+        let items = flattened(MarkdownTOC.parse(markdown))
+        let html = MarkdownHTML.render(markdown: markdown, vendorLoading: .lazy).articleHTML as NSString
+        let regex = try NSRegularExpression(pattern: #"<h([1-6])[^>]* id="md-heading-(\d+)">"#)
+        let matches = regex.matches(in: html as String, range: NSRange(location: 0, length: html.length))
+        XCTAssertEqual(matches.count, 6)
+        XCTAssertEqual(items.map(\.level), matches.compactMap { Int(html.substring(with: $0.range(at: 1))) })
+        XCTAssertEqual(items.map(\.id), matches.compactMap { Int(html.substring(with: $0.range(at: 2))) })
+    }
+
 }
