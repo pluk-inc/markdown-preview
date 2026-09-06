@@ -89,6 +89,14 @@ final class SettingsModel {
         }
     }
 
+    var opensMarkdownLinksInNewWindows: Bool {
+        didSet {
+            guard !isRestoringExternalValues else { return }
+            UserDefaults.standard.set(opensMarkdownLinksInNewWindows,
+                                      forKey: "MarkdownPreview.opensMarkdownLinksInNewWindows")
+        }
+    }
+
     var sendsCrashReports: Bool {
         didSet {
             guard !isRestoringExternalValues, sendsCrashReports != oldValue else { return }
@@ -250,6 +258,7 @@ final class SettingsModel {
         readerLayout = ReaderLayoutSetting.current
         isAlwaysOnTop = AlwaysOnTopPolicy.isEnabled
         opensDocumentsInTabs = TabOpeningPolicy.isEnabled
+        opensMarkdownLinksInNewWindows = UserDefaults.standard.bool(forKey: "MarkdownPreview.opensMarkdownLinksInNewWindows")
         sendsCrashReports = CrashReporter.isEnabled
         themeColors = ThemeColorsSetting.current
         sharesAnonymousUsageAnalytics = UsageAnalyticsReporter.isEnabled
@@ -304,6 +313,7 @@ final class SettingsModel {
         readerLayout = ReaderLayoutSetting.current
         isAlwaysOnTop = AlwaysOnTopPolicy.isEnabled
         opensDocumentsInTabs = TabOpeningPolicy.isEnabled
+        opensMarkdownLinksInNewWindows = UserDefaults.standard.bool(forKey: "MarkdownPreview.opensMarkdownLinksInNewWindows")
         sendsCrashReports = CrashReporter.isEnabled
         themeColors = ThemeColorsSetting.current
         sharesAnonymousUsageAnalytics = UsageAnalyticsReporter.isEnabled

@@ -192,7 +192,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             self?.present(url: url)
         }
         split.onOpenMarkdownLink = { [weak self] url in
-            self?.present(url: url)
+            if SettingsModel.shared.opensMarkdownLinksInNewWindows {
+                self?.openInNewWindow(url)
+            } else {
+                self?.present(url: url)
+            }
         }
         split.onToggleTaskCheckbox = { [weak self] line, checked in
             self?.toggleTaskCheckbox(onLine: line, checked: checked)
@@ -520,7 +524,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
     }
 
-    private static func fileURLWithoutFragment(_ url: URL) -> URL {
+    static func fileURLWithoutFragment(_ url: URL) -> URL {
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               components.fragment != nil else { return url }
         components.fragment = nil
