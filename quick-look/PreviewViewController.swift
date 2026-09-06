@@ -427,7 +427,7 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
     private static let floatingButtonHeight: CGFloat = 26
     private static let floatingButtonTrailingInset: CGFloat = 12
     private static let floatingButtonBottomInset: CGFloat = 10
-    private static let floatingButtonHorizontalClearance: CGFloat = 90
+    // Reserve bottom space for the overlay without narrowing the whole page.
     private static let floatingButtonVerticalClearance: CGFloat = 44
 
     private var webView: QuickLookWebView!
@@ -592,12 +592,10 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
         // Vendor scripts can contain `</head>` as data. The document's real
         // closing tag is the final occurrence in MarkdownHTML's output.
         guard let headEnd = html.range(of: "</head>", options: .backwards) else { return html }
-        let horizontalClearance = Int(Self.floatingButtonHorizontalClearance)
         let verticalClearance = Int(Self.floatingButtonVerticalClearance)
         let style = """
         <style>
         body {
-            padding-right: calc(\(horizontalClearance)px + env(safe-area-inset-right));
             padding-bottom: calc(\(verticalClearance)px + env(safe-area-inset-bottom));
         }
         </style>
