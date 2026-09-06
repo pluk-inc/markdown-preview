@@ -42,6 +42,10 @@ struct AboutSettingsView: View {
             }
 
             Section {
+                Link(L("GitHub Project"), destination: URL(string: "https://github.com/pluk-inc/markdown-preview")!)
+            }
+
+            Section {
                 Toggle(L("Automatically check for updates"),
                        isOn: $model.checksForUpdatesAutomatically)
                 Toggle(L("Automatically download updates"),
