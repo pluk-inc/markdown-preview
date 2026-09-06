@@ -35,16 +35,12 @@ extension DocumentWindowController {
     private func openDocumentWindow(for fileURL: URL, completion: (() -> Void)? = nil) {
         let fragment = fileURL.fragment?.removingPercentEncoding
         NSDocumentController.shared.openDocument(withContentsOf: Self.fileURLWithoutFragment(fileURL),
-                                                 display: true) { [weak self] document, wasOpen, error in
+                                                 display: true) { [weak self] document, _, error in
             completion?()
             if let fragment,
                let controller = document?.windowControllers.first as? DocumentWindowController,
                let split = controller.documentWindow.contentViewController as? MainSplitViewController {
-                if wasOpen {
-                    split.scrollToAnchor(fragment)
-                } else {
-                    split.prepareToScrollAfterNavigation(to: .anchor(fragment))
-                }
+                split.scrollToAnchorWhenReady(fragment)
             }
             guard let self, let error else { return }
             NSAlert(error: error).beginSheetModal(for: self.documentWindow)

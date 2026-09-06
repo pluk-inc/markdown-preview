@@ -114,6 +114,10 @@ final class MainSplitViewController: NSSplitViewController {
         contentViewController?.prepareToScrollAfterNavigation(to: target)
     }
 
+    func scrollToAnchorWhenReady(_ fragment: String) {
+        contentViewController?.scrollToAnchorWhenReady(fragment)
+    }
+
     func scrollToAnchor(_ fragment: String) {
         contentViewController?.scrollToAnchor(fragment)
     }

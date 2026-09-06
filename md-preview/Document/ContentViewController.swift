@@ -556,6 +556,14 @@ final class ContentViewController: NSViewController {
         navigationTargetRetriesLeft = target == nil ? 0 : Self.navigationTargetMaxRetries
     }
 
+    /// Document opening can finish after display() has already started.
+    /// Arm the target immediately and retry until the new page has geometry.
+    func scrollToAnchorWhenReady(_ fragment: String) {
+        prepareToScrollAfterNavigation(to: .anchor(fragment))
+        shouldApplyNavigationTargetOnHeight = true
+        scheduleNavigationTargetAttempt()
+    }
+
     /// Immediate fragment scroll within the already-rendered document.
     func scrollToAnchor(_ fragment: String) {
         scrollToElement(id: fragment)
