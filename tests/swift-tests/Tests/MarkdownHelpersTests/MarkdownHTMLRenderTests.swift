@@ -867,14 +867,13 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         // back to the "renderer unavailable" stub — assert the real wiring
         // string (injected by the app when Vendor/Mermaid is present).
         XCTAssertTrue(MarkdownHTML.mermaidInitWiring.contains("kind: 'mermaidPopup'"))
-        XCTAssertTrue(MarkdownHTML.mermaidInitWiring.contains("naturalWidth"))
         XCTAssertTrue(MarkdownHTML.mermaidInitWiring.contains("function openPopup"))
         XCTAssertTrue(MarkdownHTML.mermaidInitWiring.contains("case 'popup'"))
         XCTAssertTrue(MarkdownHTML.mermaidInitWiring.contains("openPopup(figure)"))
     }
 
     @MainActor
-    func testMermaidPopupPostsMeasuredSizeMessage() async throws {
+    func testMermaidPopupPostsSVGAndSectionTitle() async throws {
         // Headings before the figure exercise the popup's section-title
         // lookup — the real documents this ships against always have them.
         let rendered = MarkdownHTML.render(
@@ -900,7 +899,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         )
 
         // Drive the real mermaidInitWiring with a stub renderer + host so the
-        // openPopup path posts a measured mermaidPopup message.
+        // openPopup path posts the diagram SVG and section title.
         let html = """
         <!DOCTYPE html>
         <html><head>
@@ -964,12 +963,8 @@ final class MarkdownHTMLRenderTests: XCTestCase {
 
         let hudPayload = try await waitForMermaidPopupMessage(in: webView)
         XCTAssertEqual(hudPayload.kind, "mermaidPopup")
-        XCTAssertEqual(hudPayload.naturalWidth, 400, accuracy: 0.5)
-        XCTAssertEqual(hudPayload.naturalHeight, 200, accuracy: 0.5)
-        XCTAssertGreaterThan(hudPayload.displayWidth, 1)
-        XCTAssertGreaterThan(hudPayload.displayHeight, 1)
         XCTAssertTrue(hudPayload.svg.contains("<svg"), hudPayload.svg)
-        XCTAssertTrue(hudPayload.svg.contains("viewBox"), hudPayload.svg)
+        XCTAssertTrue(hudPayload.svg.contains(#"viewBox="0 0 400 200""#), hudPayload.svg)
         // Nearest preceding heading, not the document title.
         XCTAssertEqual(hudPayload.sectionTitle, "1. System overview")
         // Clone should not carry pan/zoom transform styles from the surface.
@@ -1274,11 +1269,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                 return JSON.stringify({
                     kind: String(msg.kind || ''),
                     svg: String(msg.svg || ''),
-                    sectionTitle: String(msg.sectionTitle || ''),
-                    naturalWidth: Number(msg.naturalWidth) || 0,
-                    naturalHeight: Number(msg.naturalHeight) || 0,
-                    displayWidth: Number(msg.displayWidth) || 0,
-                    displayHeight: Number(msg.displayHeight) || 0
+                    sectionTitle: String(msg.sectionTitle || '')
                 });
             })()
             """)
@@ -2247,8 +2238,4 @@ private struct MermaidPopupMessage: Decodable {
     let kind: String
     let svg: String
     let sectionTitle: String
-    let naturalWidth: CGFloat
-    let naturalHeight: CGFloat
-    let displayWidth: CGFloat
-    let displayHeight: CGFloat
 }

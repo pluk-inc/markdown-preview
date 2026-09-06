@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Mermaid popups open with a screen-centered 16:9 viewport. Large diagrams fit the viewport; smaller diagrams retain their natural size. Scroll to zoom around the pointer, drag to pan, and press Space to restore the initial diagram view.
+
+### Fixed
+
+- Mermaid popup wheel zoom respects the web view's flipped coordinate system, keeping both axes anchored to the mouse position.
+
 ## [0.0.52] – 2026-09-01
 
 This release rebuilds the reading experience around a single "aA" control in the toolbar: a theme is now a complete reading look — page color, ink, reading face, and body weight — and a new Customize Theme sheet carries the fonts and the spacing controls. The toolbar is also a native window-drag surface again, editing gains pasted images and a native New Document flow, and a long list of layout and rendering faults are fixed.

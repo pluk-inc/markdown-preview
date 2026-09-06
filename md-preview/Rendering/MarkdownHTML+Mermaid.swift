@@ -306,33 +306,12 @@ nonisolated extension MarkdownHTML {
                 return text;
             }
 
-            // Measure the diagram's natural (viewBox) size and current on-screen
-            // box, then ask the host to open a floating window sized to fit.
+            // Clone without the pan/zoom transform so the popup starts with
+            // the pristine rendered diagram.
             function openPopup(figure) {
                 const s = states.get(figure);
                 if (!s || !s.svg) return;
                 const svg = s.svg;
-                let naturalW = s.vbW;
-                let naturalH = s.vbH;
-                try {
-                    // getBBox reflects drawn content; prefer it when viewBox
-                    // is missing or clearly wrong.
-                    const bb = svg.getBBox();
-                    if (bb && bb.width > 1 && bb.height > 1) {
-                        if (!(naturalW > 1 && naturalH > 1)) {
-                            naturalW = bb.width;
-                            naturalH = bb.height;
-                        }
-                    }
-                } catch (_) {}
-                if (!s.rect) cacheRect(figure);
-                const r = s.rect || figure.getBoundingClientRect();
-                // Clone without the pan/zoom transform so the popup shows
-                // the pristine rendered diagram. Drive layout purely from
-                // viewBox so the popup's CSS width/height can stretch or
-                // shrink the graphic with the window — done here, before the
-                // SVG leaves the content process, so the popup document
-                // itself needs no script to finish sizing it.
                 const clone = svg.cloneNode(true);
                 clone.removeAttribute('style');
                 clone.setAttribute('preserveAspectRatio', 'xMidYMid meet');
@@ -344,11 +323,7 @@ nonisolated extension MarkdownHTML {
                     window.webkit?.messageHandlers?.mdPreviewHost?.postMessage({
                         kind: 'mermaidPopup',
                         svg: clone.outerHTML,
-                        sectionTitle: nearestHeadingText(figure),
-                        naturalWidth: naturalW,
-                        naturalHeight: naturalH,
-                        displayWidth: r.width,
-                        displayHeight: r.height
+                        sectionTitle: nearestHeadingText(figure)
                     });
                 } catch (_) {}
             }

@@ -2,30 +2,74 @@
 //  MermaidDiagramPopup.swift
 //  md-preview
 //
-//  Floating panel that shows a rendered Mermaid SVG at a measured size.
-//  Resizable — the diagram scales with the window. Behaves like a regular
-//  window: it stays open when it loses key focus and closes via its close
-//  button / ⌘W, so the diagram can be read alongside the document.
+//  Floating panel with a stable 16:9 viewport. The diagram is fit only when
+//  larger than the viewport; smaller diagrams keep their natural size.
+//  Mouse-wheel zoom and pointer dragging navigate the diagram independently
+//  of the panel size. Space restores the initial diagram scale and position.
 //
 
 import AppKit
 import WebKit
 
 @MainActor
-final class MermaidDiagramPopup: NSObject {
+private final class MermaidPopupWebView: WKWebView {
+    private var pendingDeltaY = 0.0
+    private var pendingClientX = 0.0
+    private var pendingClientY = 0.0
+    private var flushScheduled = false
+
+    override func scrollWheel(with event: NSEvent) {
+        guard event.scrollingDeltaY != 0 else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        // Precise devices report points; coarse wheels report small line deltas.
+        pendingDeltaY += Double(event.scrollingDeltaY) * (event.hasPreciseScrollingDeltas ? 1 : 8)
+        pendingClientX = point.x
+        pendingClientY = isFlipped ? point.y : bounds.height - point.y
+        guard !flushScheduled else { return }
+        flushScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            self?.flushWheel()
+        }
+    }
+
+    private func flushWheel() {
+        guard pendingDeltaY != 0 else {
+            flushScheduled = false
+            return
+        }
+        let deltaY = pendingDeltaY
+        let clientX = pendingClientX
+        let clientY = pendingClientY
+        pendingDeltaY = 0
+        flushScheduled = false
+        evaluateJavaScript(
+            "window.mdPreviewZoom?.(\(deltaY), \(clientX), \(clientY));",
+            completionHandler: nil
+        )
+    }
+    override func keyDown(with event: NSEvent) {
+        guard event.keyCode == 49 else {
+            super.keyDown(with: event)
+            return
+        }
+        evaluateJavaScript("window.mdPreviewReset?.();", completionHandler: nil)
+    }
+}
+
+
+@MainActor
+final class MermaidDiagramPopup: NSObject, WKNavigationDelegate {
     static let shared = MermaidDiagramPopup()
 
     private var panel: NSPanel?
     private var webView: WKWebView?
+    private var pendingNavigation: WKNavigation?
 
     private override init() {
         super.init()
     }
-
     struct Request {
         let svgHTML: String
-        let naturalSize: CGSize
-        let displaySize: CGSize
         /// Nearest preceding Markdown heading, if any — gives the window a
         /// title that's more useful than the generic "Mermaid diagram" when
         /// reopening the popup on a different diagram.
@@ -37,34 +81,25 @@ final class MermaidDiagramPopup: NSObject {
 
         let screen = parentWindow?.screen ?? NSScreen.main
         let visible = screen?.visibleFrame.size ?? CGSize(width: 1280, height: 800)
-        let contentSize = MermaidPopupSizing.preferredContentSize(
-            natural: request.naturalSize,
-            display: request.displaySize,
-            screen: visible
-        )
+        let contentSize = MermaidPopupSizing.preferredContentSize(screen: visible)
 
         let panel = ensurePanel()
+        webView?.alphaValue = 0
         // Detach from a previous parent so re-opening re-centers correctly.
         if let currentParent = panel.parent {
             currentParent.removeChildWindow(panel)
         }
         panel.setContentSize(contentSize)
 
-        // Frame size after setContentSize includes chrome; use it for placement.
+        // Center on the hosting screen's visible frame, not on the document
+        // window. The document can be offset or partially off-screen.
         var frame = panel.frame
-        if let parent = parentWindow {
-            let parentFrame = parent.frame
+        if let screen {
+            let visibleFrame = screen.visibleFrame
             frame.origin = NSPoint(
-                x: parentFrame.midX - frame.width / 2,
-                y: parentFrame.midY - frame.height / 2
+                x: visibleFrame.midX - frame.width / 2,
+                y: visibleFrame.midY - frame.height / 2
             )
-            frame.origin = clampedOrigin(frame.origin, size: frame.size, screen: screen)
-            panel.setFrame(frame, display: false)
-            // Don't use addChildWindow — a child stays tied to the parent's
-            // ordering/visibility. Keep it as an independent float.
-        } else if let screen {
-            panel.center()
-            frame = panel.frame
             frame.origin = clampedOrigin(frame.origin, size: frame.size, screen: screen)
             panel.setFrame(frame, display: false)
         }
@@ -72,6 +107,7 @@ final class MermaidDiagramPopup: NSObject {
         panel.title = Self.title(for: request.sectionTitle)
         load(svgHTML: request.svgHTML)
         panel.makeKeyAndOrderFront(nil)
+        panel.makeFirstResponder(webView)
         NSApp.activate()
     }
 
@@ -111,9 +147,11 @@ final class MermaidDiagramPopup: NSObject {
         panel.becomesKeyOnlyIfNeeded = false
 
         let config = WKWebViewConfiguration()
-        let webView = WKWebView(frame: .zero, configuration: config)
+        let webView = MermaidPopupWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = self
+        // Wheel events are consumed by the native view and forwarded to the
+        // popup canvas, so macOS does not turn them into page scrolling.
         webView.setValue(false, forKey: "drawsBackground")
-        // Window resize is the zoom control; keep the page scale at 1.
         webView.allowsMagnification = false
         webView.autoresizingMask = [.width, .height]
         panel.contentView = webView
@@ -132,29 +170,26 @@ final class MermaidDiagramPopup: NSObject {
     }
 
     @objc private func panelWillClose(_ notification: Notification) {
+        pendingNavigation = nil
         // Drop the heavy SVG document when the user closes the panel.
         webView?.loadHTMLString("", baseURL: nil)
     }
 
     private func load(svgHTML: String) {
-        // Strip scripts just in case; mermaid SVGs are static markup.
         let safeSVG = MermaidPopupSizing.sanitizedSVGHTML(svgHTML)
-        // Same generic label the inline figure carries, so the popup is no
-        // less navigable than the diagram it was opened from.
         let label = Self.htmlAttributeEscape(
             NSLocalizedString("Mermaid diagram", comment: "Mermaid diagram popup window title")
         )
 
+        let scriptNonce = UUID().uuidString
         let html = """
         <!DOCTYPE html>
         <html>
         <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-\(scriptNonce)'; style-src 'unsafe-inline'; img-src data:">
         <style>
-          /* Let the page follow the window's appearance on its own, so
-             toggling system dark mode restyles an open popup live. */
           html, body {
             margin: 0;
             width: 100%;
@@ -166,31 +201,132 @@ final class MermaidDiagramPopup: NSObject {
           @media (prefers-color-scheme: dark) {
             html, body { background: #1e1e1e; }
           }
-          /* Fill the web view; diagram scales with window resize. */
           .stage {
             position: absolute;
             inset: 0;
-            box-sizing: border-box;
-            padding: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            overflow: hidden;
+            cursor: grab;
+            touch-action: none;
+            user-select: none;
           }
+          .stage.dragging { cursor: grabbing; }
           .stage svg {
+            position: absolute;
+            left: 0;
+            top: 0;
             display: block;
-            width: 100%;
-            height: 100%;
-            max-width: 100%;
-            max-height: 100%;
+            transform-origin: 0 0;
+            max-width: none;
           }
         </style>
         </head>
         <body>
         <div class="stage" role="img" aria-label="\(label)">\(safeSVG)</div>
+        <script nonce="\(scriptNonce)">
+        (() => {
+          const stage = document.querySelector('.stage');
+          const svg = stage.querySelector('svg');
+          if (!svg) return;
+          const vb = svg.viewBox.baseVal;
+          const naturalWidth = vb.width || parseFloat(svg.getAttribute('width')) || 1;
+          const naturalHeight = vb.height || parseFloat(svg.getAttribute('height')) || 1;
+          svg.setAttribute('width', naturalWidth + 'px');
+          svg.setAttribute('height', naturalHeight + 'px');
+          svg.removeAttribute('style');
+          let scale = 1;
+          let minimumScale = 0.1;
+          let tx = 0;
+          let ty = 0;
+          let drag;
+          const apply = () => {
+            svg.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+          };
+          const center = () => {
+            const availableWidth = Math.max(stage.clientWidth - 48, 1);
+            const availableHeight = Math.max(stage.clientHeight - 48, 1);
+            scale = Math.min(1, availableWidth / naturalWidth, availableHeight / naturalHeight);
+            minimumScale = Math.min(0.1, scale / 10);
+            tx = (stage.clientWidth - naturalWidth * scale) / 2;
+            ty = (stage.clientHeight - naturalHeight * scale) / 2;
+            apply();
+          };
+          window.mdPreviewReset = center;
+          window.addEventListener('keydown', (event) => {
+            if (event.code !== 'Space' && event.key !== ' ') return;
+            event.preventDefault();
+            center();
+          });
+          const zoomAt = (deltaY, x, y) => {
+            const oldScale = scale;
+            const magnitude = Math.min(Math.abs(deltaY), 40);
+            const nextScale = Math.max(
+              minimumScale,
+              Math.min(8, oldScale * Math.exp(-Math.sign(deltaY) * magnitude * 0.015))
+            );
+            tx = x - (x - tx) * nextScale / oldScale;
+            ty = y - (y - ty) * nextScale / oldScale;
+            scale = nextScale;
+            apply();
+          };
+          window.mdPreviewZoom = zoomAt;
+          stage.addEventListener('wheel', (event) => {
+            event.preventDefault();
+            const rect = stage.getBoundingClientRect();
+            const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? stage.clientHeight : 1;
+            zoomAt(event.deltaY * unit, event.clientX - rect.left, event.clientY - rect.top);
+          }, { passive: false });
+          stage.addEventListener('pointerdown', (event) => {
+            if (event.button !== 0) return;
+            stage.setPointerCapture(event.pointerId);
+            drag = { id: event.pointerId, x: event.clientX, y: event.clientY };
+            stage.classList.add('dragging');
+          });
+          stage.addEventListener('pointermove', (event) => {
+            if (!drag || drag.id !== event.pointerId) return;
+            tx += event.clientX - drag.x;
+            ty += event.clientY - drag.y;
+            drag.x = event.clientX;
+            drag.y = event.clientY;
+            apply();
+          });
+          const stop = (event) => {
+            if (!drag || drag.id !== event.pointerId) return;
+            drag = null;
+            stage.classList.remove('dragging');
+          };
+          stage.addEventListener('pointerup', stop);
+          stage.addEventListener('pointercancel', stop);
+          window.addEventListener('resize', center);
+          center();
+        })();
+        </script>
         </body>
         </html>
         """
-        webView?.loadHTMLString(html, baseURL: nil)
+        pendingNavigation = webView?.loadHTMLString(html, baseURL: nil)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard let navigation, navigation === pendingNavigation else { return }
+        Task { @MainActor [weak self] in
+            do {
+                _ = try await webView.callAsyncJavaScript(
+                    "await document.fonts.ready; window.mdPreviewReset();",
+                    arguments: [:], in: nil, contentWorld: .page
+                )
+                guard let self, navigation === self.pendingNavigation else { return }
+                // Wait for WebKit to render the prepared layout before revealing it.
+                _ = try await webView.takeSnapshot(configuration: nil)
+                guard navigation === self.pendingNavigation else { return }
+                self.pendingNavigation = nil
+                webView.alphaValue = 1
+            } catch {
+                guard let self, navigation === self.pendingNavigation else { return }
+                self.pendingNavigation = nil
+                self.panel?.close()
+                NSApp.presentError(error)
+            }
+        }
     }
 
     private static func htmlAttributeEscape(_ string: String) -> String {
