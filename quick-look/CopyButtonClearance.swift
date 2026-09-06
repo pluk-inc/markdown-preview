@@ -39,13 +39,12 @@ enum CopyButtonClearance {
 
     /// Returns `html` with the clearance rule inserted, or unchanged when the
     /// document has no `<head>` to insert into.
-    static func applying(to html: String, horizontal: Int, vertical: Int) -> String {
+    static func applying(to html: String, vertical: Int) -> String {
         guard let headStart = html.range(of: "<head>") else { return html }
         let style = """
 
         <style>
         html body {
-            padding-right: calc(\(horizontal)px + env(safe-area-inset-right));
             padding-bottom: calc(\(vertical)px + env(safe-area-inset-bottom));
         }
         </style>

@@ -55,7 +55,7 @@ final class CopyButtonClearanceTests: XCTestCase {
 
     func testVendorScriptContentIsNeverModified() {
         let input = page()
-        let output = CopyButtonClearance.applying(to: input, horizontal: 90, vertical: 44)
+        let output = CopyButtonClearance.applying(to: input, vertical: 44)
 
         XCTAssertEqual(
             scriptBodies(output),
@@ -70,7 +70,7 @@ final class CopyButtonClearanceTests: XCTestCase {
     }
 
     func testDOMPurifyLiteralSurvivesIntact() {
-        let output = CopyButtonClearance.applying(to: page(), horizontal: 90, vertical: 44)
+        let output = CopyButtonClearance.applying(to: page(), vertical: 44)
         XCTAssertEqual(
             output.components(separatedBy: purifyLiteral).count - 1, 2,
             "Both inlined copies of the DOMPurify literal should be byte-identical after the splice."
@@ -80,7 +80,7 @@ final class CopyButtonClearanceTests: XCTestCase {
     // MARK: - Correct placement
 
     func testStyleIsInsertedIntoTheDocumentHead() {
-        let output = CopyButtonClearance.applying(to: page(), horizontal: 90, vertical: 44)
+        let output = CopyButtonClearance.applying(to: page(), vertical: 44)
         let headOpen = output.range(of: "<head>")!
         let headClose = output.range(of: "</head>", range: headOpen.upperBound..<output.endIndex)!
         let styleRange = output.range(of: "html body {")
@@ -93,15 +93,15 @@ final class CopyButtonClearanceTests: XCTestCase {
     }
 
     func testClearanceValuesAreCarriedThrough() {
-        let output = CopyButtonClearance.applying(to: page(), horizontal: 90, vertical: 44)
-        XCTAssertTrue(output.contains("padding-right: calc(90px + env(safe-area-inset-right));"))
+        let output = CopyButtonClearance.applying(to: page(), vertical: 44)
+        XCTAssertFalse(output.contains("padding-right:"), "The floating button must not narrow the entire page.")
         XCTAssertTrue(output.contains("padding-bottom: calc(44px + env(safe-area-inset-bottom));"))
     }
 
     /// `html body` outranks the stylesheet's own `body` rules, which matters
     /// because this rule is now emitted *before* that stylesheet.
     func testSelectorOutranksPlainBodyRules() {
-        let output = CopyButtonClearance.applying(to: page(), horizontal: 90, vertical: 44)
+        let output = CopyButtonClearance.applying(to: page(), vertical: 44)
         XCTAssertTrue(
             output.contains("html body {"),
             """
@@ -117,7 +117,7 @@ final class CopyButtonClearanceTests: XCTestCase {
     func testDocumentWithoutHeadIsReturnedUnchanged() {
         let html = "<html><body><p>no head here</p></body></html>"
         XCTAssertEqual(
-            CopyButtonClearance.applying(to: html, horizontal: 90, vertical: 44),
+            CopyButtonClearance.applying(to: html, vertical: 44),
             html,
             "With nowhere safe to insert, the document must be returned untouched rather than guessed at."
         )

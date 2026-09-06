@@ -427,7 +427,7 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
     private static let floatingButtonHeight: CGFloat = 26
     private static let floatingButtonTrailingInset: CGFloat = 12
     private static let floatingButtonBottomInset: CGFloat = 10
-    private static let floatingButtonHorizontalClearance: CGFloat = 90
+    // Reserve bottom space for the overlay without narrowing the whole page.
     private static let floatingButtonVerticalClearance: CGFloat = 44
 
     private var webView: QuickLookWebView!
@@ -592,7 +592,6 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
         // Placement is subtle and load-bearing — see CopyButtonClearance.
         CopyButtonClearance.applying(
             to: html,
-            horizontal: Int(Self.floatingButtonHorizontalClearance),
             vertical: Int(Self.floatingButtonVerticalClearance)
         )
     }
