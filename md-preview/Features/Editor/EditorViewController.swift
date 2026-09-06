@@ -795,8 +795,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
         #editor .cm-md-code-language {
             position: absolute;
-            inset-inline-start: 14px;
-            max-width: calc(100% - 28px);
+            inset-inline-start: 7px;
+            max-width: calc(100% - 21px);
             top: 9px;
             z-index: 1;
             line-height: 1;
@@ -807,7 +807,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             max-width: 100%;
             min-width: 4.5em;
             box-sizing: border-box;
-            padding: 2px 0;
+            padding: 2px 6px;
             border: 1px solid transparent;
             border-radius: 5px;
             background: transparent;
@@ -825,10 +825,11 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             color: var(--text);
         }
         #editor .cm-md-code-language-input:focus {
-            background: var(--code-bg);
+            background: color-mix(in srgb, var(--text) 4%, var(--code-bg));
             color: var(--text);
-            border-color: var(--link);
-            box-shadow: 0 0 0 2px color-mix(in srgb, var(--link) 22%, transparent);
+            border-color: var(--grid);
+            caret-color: var(--link);
+            box-shadow: none;
         }
         /* Frontmatter — a quiet metadata card above the document, echoing
            the preview's properties panel. YAML stays editable; only the
