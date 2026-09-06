@@ -72,7 +72,7 @@ private extension AppearanceMode {
 }
 
 @main
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @IBOutlet private weak var checkForUpdatesMenuItem: NSMenuItem?
 
@@ -117,6 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installFileExportMenuItems()
         installGoMenu()
         installSettingsMenuItem()
+        NSApp.windowsMenu?.delegate = self
         installAppMenuItemIcons()
         installViewMenuItemIcons()
         hasFinishedLaunching = true
@@ -1273,4 +1274,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let contentWidthMenuTitles: Set<String> = ["Content Width", "内容宽度"]
     private static let showSidebarMenuTitles: Set<String> = ["Show Sidebar", "显示边栏"]
     private static let actualSizeMenuTitles: Set<String> = ["Actual Size", "实际大小"]
+}
+
+
+extension AppDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu === NSApp.windowsMenu else { return }
+        let entries = menu.items.compactMap { item -> (NSMenuItem, URL)? in
+            guard let window = item.target as? NSWindow,
+                  let controller = window.windowController as? DocumentWindowController,
+                  let url = controller.currentFileURL else { return nil }
+            return (item, url)
+        }
+        for (item, url) in entries {
+            let duplicates = entries.filter { $0.1.lastPathComponent == url.lastPathComponent }
+            guard duplicates.count > 1 else {
+                item.title = url.lastPathComponent
+                continue
+            }
+            let parents = url.deletingLastPathComponent().pathComponents.filter { $0 != "/" }
+            var count = 1
+            while count < parents.count {
+                let suffix = parents.suffix(count).joined(separator: "/")
+                let ambiguous = duplicates.contains { other in
+                    other.1 != url && other.1.deletingLastPathComponent().pathComponents
+                        .suffix(count).joined(separator: "/") == suffix
+                }
+                if !ambiguous { break }
+                count += 1
+            }
+            item.title = "\(url.lastPathComponent) (\(parents.suffix(count).joined(separator: "/")))"
+        }
+    }
 }
