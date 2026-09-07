@@ -2045,7 +2045,7 @@ window.MDEditor = {
         ],
       }),
     })
-    // On macOS 27 WebKit scrolls the page and owns the chrome backdrop.
+    // On macOS 26+ WebKit scrolls the page and owns the chrome backdrop.
     // Other hosts retain CodeMirror's internal scroll container.
     const pageScrolling = !!(callbacks && callbacks.pageScrolling)
     const scroller = pageScrolling ? document.scrollingElement : view.scrollDOM

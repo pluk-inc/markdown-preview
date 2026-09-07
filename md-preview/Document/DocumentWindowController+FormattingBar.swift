@@ -93,7 +93,7 @@ extension DocumentWindowController {
         stack.translatesAutoresizingMaskIntoConstraints = false
 
         // WebKit supplies one native scroll backdrop for the titlebar and this
-        // row on macOS 27. Older systems retain the page fill.
+        // row on macOS 26+. macOS 15 uses an AppKit visual-effect backdrop.
         let container = EditAccessoryContainerView()
         container.addSubview(stack)
         NSLayoutConstraint.activate([

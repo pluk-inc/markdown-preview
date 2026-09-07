@@ -449,7 +449,7 @@ final class ContentViewController: NSViewController {
     weak var findOverlay: NSView?
 
     func chromeOverlaysDidChange() {
-        if #available(macOS 27.0, *) {
+        if #available(macOS 26.0, *) {
             updateObscuredContentInsets()
         }
     }
@@ -462,7 +462,7 @@ final class ContentViewController: NSViewController {
             return view.safeAreaInsets.top
         }
         var inset = contentView.bounds.height - window.contentLayoutRect.maxY
-        if #available(macOS 27.0, *),
+        if #available(macOS 26.0, *),
            let find = findOverlay, find.window === window, !find.isHidden {
             inset += find.fittingSize.height - MainSplitViewController.tabBarOverlap(for: window)
         }
@@ -483,7 +483,6 @@ final class ContentViewController: NSViewController {
     ///
     /// The window keeps .fullSizeContentView, so only the web view moves —
     /// the sidebar still spans full height, the way Finder and Preview do.
-    /// Keep this gate in step with `DocumentWindowController.usesThemedChrome`.
     private func pinWebViewBelowChrome() {
         guard webViewChromeTopConstraint == nil,
               let guide = view.window?.contentLayoutGuide as? NSLayoutGuide else { return }

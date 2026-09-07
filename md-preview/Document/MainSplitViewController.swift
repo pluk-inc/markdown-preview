@@ -582,10 +582,6 @@ private final class LayeredContentViewController: NSViewController {
         guard bar.superview !== view else { return }
         formattingBar = bar
         formattingBarTopConstraint = installChromeOverlay(bar)
-        if #available(macOS 27.0, *) {
-            (bar as? DocumentWindowController.EditAccessoryContainerView)?
-                .usesScrollEdgeBackground = true
-        }
         updateChromeOverlayLayout()
     }
 
@@ -602,10 +598,6 @@ private final class LayeredContentViewController: NSViewController {
     func installFindOverlay(_ bar: NSView) {
         guard bar.superview !== view else { return }
         findOverlay = bar
-        if #available(macOS 27.0, *) {
-            (bar as? DocumentWindowController.EditAccessoryContainerView)?
-                .usesScrollEdgeBackground = true
-        }
         findOverlayTopConstraint = installChromeOverlay(bar)
         updateChromeOverlayLayout()
     }

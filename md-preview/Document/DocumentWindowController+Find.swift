@@ -104,7 +104,6 @@ extension DocumentWindowController {
         let container = EditAccessoryContainerView()
         // The find bar shows over the preview, whose backdrop follows the
         // window background, not the editor color.
-        container.prefersWindowBackground = true
         bar.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(bar)
         NSLayoutConstraint.activate([

@@ -208,51 +208,17 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         return max(0, gap)
     }
 
-    /// On macOS 27 CodeMirror participates in page scrolling, so WebKit
-    /// supplies the same native scroll-edge effect as the preview across
-    /// the whole chrome strip. Older systems retain their fixed viewport.
+    /// On macOS 26 and later, page scrolling lets WebKit supply the native
+    /// backdrop across the toolbar and visible chrome rows.
     private func updateObscuredContentInsets() {
-        guard #available(macOS 26.0, *) else { return }
-        guard view.window != nil else { return }
-        if #available(macOS 27.0, *) {
-            let inset = fullChromeTopInset
-            if webView.obscuredContentInsets.top != inset {
-                webView.obscuredContentInsets = NSEdgeInsets(
-                    top: inset, left: 0, bottom: 0, right: 0
-                )
-            }
-            return
-        }
-        if webView.obscuredContentInsets.top != 0 {
+        guard #available(macOS 26.0, *), view.window != nil else { return }
+        let inset = fullChromeTopInset
+        if webView.obscuredContentInsets.top != inset {
             webView.obscuredContentInsets = NSEdgeInsets(
-                top: 0, left: 0, bottom: 0, right: 0
+                top: inset, left: 0, bottom: 0, right: 0
             )
         }
-        let barsHeight = fullChromeTopInset
-        if lastAppliedTopPadding != barsHeight {
-            lastAppliedTopPadding = barsHeight
-            let value = barsHeight > 0
-                ? String(format: "%.3fpx", barsHeight)
-                : ""
-            let script = """
-            (function () {
-                var editor = document.getElementById('editor');
-                if (editor) {
-                    editor.style.paddingTop = '\(value)';
-                    // The padding strip sits under the native formatting
-                    // bar; report a plain cursor there so the bar never
-                    // shows the I-beam even if its own tracking loses a
-                    // race. CodeMirror's editable content keeps its own
-                    // text cursor.
-                    editor.style.cursor = '\(value.isEmpty ? "" : "default")';
-                }
-            })();
-            """
-            webView.evaluateJavaScript(script) { _, _ in }
-        }
     }
-
-    private var lastAppliedTopPadding: CGFloat = -1
 
     /// See ContentViewController.updateUnderPageBackgroundColor — set on
     /// theme changes only, never per layout pass.
@@ -358,7 +324,6 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                 // re-applied even when the tracked value hasn't changed,
                 // and WebKit re-derives the under-page color from the new
                 // page, clobbering the themed value.
-                lastAppliedTopPadding = -1
                 updateUnderPageBackgroundColor()
                 updateObscuredContentInsets()
                 editorDidBecomeReady?()
@@ -465,7 +430,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         let lightPageBackground = pageBackground(.light)
         let darkPageBackground = pageBackground(.dark)
         let usesPageScrolling: Bool
-        if #available(macOS 27.0, *) {
+        if #available(macOS 26.0, *) {
             usesPageScrolling = true
         } else {
             usesPageScrolling = false
@@ -978,7 +943,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             --table-selection-left-edge: inset 1px 0 color-mix(in srgb, #007aff 52%, transparent);
         }
         /* Page scrolling lets WebKit own the native toolbar backdrop.
-           The macOS 26 and earlier editor keeps its internal scroller. */
+           The macOS 15 editor keeps its internal scroller. */
         html[data-page-scrolling="true"],
         html[data-page-scrolling="true"] body {
             height: auto;
