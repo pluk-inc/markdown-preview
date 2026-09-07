@@ -4,7 +4,7 @@
 
 ## [0.0.54] – 2026-09-07
 
-This release improves the UI on macOS 15 Sequoia and theme handling on macOS 26 and later, alongside more control over document navigation and reader margins.
+This release improves macOS 15 Sequoia UI handling, theme handling on macOS 26 and later, and support for macOS 27. It fixes broken toolbar backgrounds and includes minor UI tweaks, alongside more control over document navigation and reader margins.
 
 ### Added
 
@@ -22,6 +22,8 @@ This release improves the UI on macOS 15 Sequoia and theme handling on macOS 26 
 - **Markdown links have working context-menu actions.** Open Link, Open Link in New Window, and Copy Link resolve relative file paths and preserve heading fragments, including links inside tables ([#357](https://github.com/pluk-inc/markdown-preview/pull/357)).
 - **Improved UI handling on macOS 15 Sequoia.** Search and formatting rows use native materials and leave document content visible, with clearer search selections, improved formatting-button hover states, and corrected toolbar and tab spacing ([#362](https://github.com/pluk-inc/markdown-preview/pull/362)).
 - **Better theme handling on macOS 26 and later.** Themed windows retain their toolbar backgrounds, with search and formatting rows adapted to each macOS version. Selecting Original clears saved theme color overrides so the default appearance is restored ([#362](https://github.com/pluk-inc/markdown-preview/pull/362), [#344](https://github.com/pluk-inc/markdown-preview/issues/344)).
+
+- **Better macOS 27 support.** Toolbar backgrounds retain the native scroll-edge appearance, editor scrolling works with the page scroller, and search and formatting rows keep a separator when both are visible ([#362](https://github.com/pluk-inc/markdown-preview/pull/362)).
 
 ### Contributors
 
