@@ -559,16 +559,24 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// Sequoia rows use the native titlebar material with unthemed controls.
     /// Newer systems provide their backdrop through native chrome.
     final class EditAccessoryContainerView: NSView {
+        private var fullscreenBackdrop: NSVisualEffectView?
+
         func updateFullscreenBackground() {
             guard #available(macOS 26.0, *) else { return }
             guard #unavailable(macOS 27.0) else { return }
             if window?.styleMask.contains(.fullScreen) == true {
-                wantsLayer = true
-                effectiveAppearance.performAsCurrentDrawingAppearance {
-                    layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+                if fullscreenBackdrop == nil {
+                    let backdrop = NSVisualEffectView(frame: bounds)
+                    backdrop.material = .titlebar
+                    backdrop.blendingMode = .withinWindow
+                    backdrop.state = .followsWindowActiveState
+                    backdrop.autoresizingMask = [.width, .height]
+                    addSubview(backdrop, positioned: .below, relativeTo: subviews.first)
+                    fullscreenBackdrop = backdrop
                 }
+                fullscreenBackdrop?.isHidden = false
             } else {
-                layer?.backgroundColor = nil
+                fullscreenBackdrop?.isHidden = true
             }
         }
 
