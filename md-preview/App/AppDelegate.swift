@@ -118,7 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         installGoMenu()
         installSettingsMenuItem()
         NSApp.windowsMenu?.delegate = self
-        installAppMenuItemIcons()
+        installAppMenuItems()
         installViewMenuItemIcons()
         hasFinishedLaunching = true
         if !didReceiveOpenURLsDuringLaunch {
@@ -265,12 +265,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updaterController.updater.checkForUpdates()
     }
 
-    @IBAction func toggleCrashReporting(_ sender: NSMenuItem) {
-        CrashReporter.isEnabled.toggle()
-        SettingsModel.shared.refreshFromExternalSources()
-        sender.state = CrashReporter.isEnabled ? .on : .off
-    }
-
     // MARK: - Settings
 
     /// Inserted after About, where macOS puts Settings, since MainMenu.xib
@@ -288,18 +282,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                               keyEquivalent: ",")
         item.keyEquivalentModifierMask = [.command]
         item.target = self
-        if let image = NSImage(systemSymbolName: "gearshape",
-                               accessibilityDescription: item.title) {
-            image.isTemplate = true
-            item.image = image
-        }
-
         let aboutIndex = appMenu.items.firstIndex {
             $0.action == #selector(NSApplication.orderFrontStandardAboutPanel(_:))
         }
-        let insertIndex = aboutIndex.map { $0 + 1 } ?? 0
-        appMenu.insertItem(.separator(), at: insertIndex)
-        appMenu.insertItem(item, at: insertIndex + 1)
+        // MainMenu.xib already separates About from the settings and tools group.
+        let insertIndex = aboutIndex.map { $0 + 2 } ?? 0
+        appMenu.insertItem(item, at: insertIndex)
     }
 
     @objc func showSettingsWindow(_ sender: Any?) {
@@ -488,9 +476,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return activeDocumentWindowController != nil
         case #selector(selectAppearanceMode(_:)),
              #selector(selectContentWidthSetting(_:)):
-            return true
-        case #selector(toggleCrashReporting(_:)):
-            menuItem.state = CrashReporter.isEnabled ? .on : .off
             return true
         case #selector(toggleEditModeFromMenu(_:)):
             return activeDocumentWindowController?.canToggleEditMode ?? false
@@ -1075,7 +1060,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         reloadDocumentPreviewsForSettingChange()
     }
 
-    private func installAppMenuItemIcons() {
+    private func installAppMenuItems() {
         checkForUpdatesMenuItem?.target = updaterController
         checkForUpdatesMenuItem?.action = #selector(SPUStandardUpdaterController.checkForUpdates(_:))
 
@@ -1087,20 +1072,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                  action: #selector(installCommandLineTools(_:)),
                                  keyEquivalent: "")
         cliItem.target = self
-        appMenu.insertItem(.separator(), at: appMenu.index(of: updatesItem) + 1)
-        appMenu.insertItem(cliItem, at: appMenu.index(of: updatesItem) + 2)
-
-        let icons: [(NSMenuItem, String)] = [
-            (updatesItem, "arrow.triangle.2.circlepath"),
-            (cliItem, "terminal")
-        ]
-        for (item, symbol) in icons {
-            guard let image = NSImage(systemSymbolName: symbol,
-                                      accessibilityDescription: item.title)
-            else { continue }
-            image.isTemplate = true
-            item.image = image
-        }
+        appMenu.insertItem(cliItem, at: appMenu.index(of: updatesItem) + 1)
     }
 
     private func installSidebarViewMenuItems() {
