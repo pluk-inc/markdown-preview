@@ -24,6 +24,9 @@ final class MainSplitViewController: NSSplitViewController {
     /// visible tab bar, reduced in full screen. The overlay constraints
     /// and the editor's page padding must use the same value.
     static func tabBarOverlap(for window: NSWindow?) -> CGFloat {
+        // Sequoia's tabs end at the content layout guide without Tahoe's
+        // extra margin. Tucking the rows upward clips the first row.
+        guard #available(macOS 26.0, *) else { return 0 }
         guard let window, window.tabGroup?.isTabBarVisible == true else { return 0 }
         return window.styleMask.contains(.fullScreen)
             ? formattingBarTabBarOverlapFullScreen : formattingBarTabBarOverlap
@@ -598,14 +601,24 @@ private final class LayeredContentViewController: NSViewController {
         let editorView = editorViewController.view
         editorView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(editorView, positioned: .above, relativeTo: previewViewController.view)
+        let editorTop: NSLayoutConstraint
+        if #unavailable(macOS 26.0),
+           let guide = view.window?.contentLayoutGuide as? NSLayoutGuide {
+            editorTop = editorView.topAnchor.constraint(equalTo: guide.topAnchor)
+            legacyEditorTopConstraint = editorTop
+        } else {
+            editorTop = editorView.topAnchor.constraint(equalTo: view.topAnchor)
+        }
         NSLayoutConstraint.activate([
             editorView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             editorView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            editorView.topAnchor.constraint(equalTo: view.topAnchor),
+            editorTop,
             editorView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+        updateChromeOverlayLayout()
     }
 
+    private var legacyEditorTopConstraint: NSLayoutConstraint?
     private weak var formattingBar: NSView?
     private weak var findOverlay: NSView?
     private var formattingBarTopConstraint: NSLayoutConstraint?
@@ -691,6 +704,13 @@ private final class LayeredContentViewController: NSViewController {
         }
         if let top = formattingBarTopConstraint, top.constant != editTop {
             top.constant = editTop
+        }
+        if #unavailable(macOS 26.0), let top = legacyEditorTopConstraint {
+            var contentTop: CGFloat = 0
+            if let find = findOverlay, !find.isHidden { contentTop += find.fittingSize.height }
+            if let bar = formattingBar, !bar.isHidden { contentTop += bar.fittingSize.height }
+            if contentTop > 0 { contentTop += overlap }
+            top.constant = max(0, contentTop)
         }
     }
 }

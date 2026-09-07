@@ -114,6 +114,9 @@ final class FindBar: NSView {
     private func configureModeButtons() {
         for button in [containsButton, beginsWithButton] {
             button.bezelStyle = .flexiblePush
+            if #unavailable(macOS 26.0) {
+                button.bezelStyle = .accessoryBar
+            }
             button.controlSize = .small
             button.showsBorderOnlyWhileMouseInside = true
             button.setButtonType(.pushOnPushOff)
@@ -124,6 +127,15 @@ final class FindBar: NSView {
         }
         containsButton.state = .on
         beginsWithButton.state = .off
+        updateLegacyModeAppearance()
+    }
+
+    private func updateLegacyModeAppearance() {
+        guard #unavailable(macOS 26.0) else { return }
+        // Keep the selected mode visible after the pointer leaves it.
+        for button in [containsButton, beginsWithButton] {
+            button.showsBorderOnlyWhileMouseInside = button.state != .on
+        }
     }
 
     private func configureNavigationControl() {
@@ -168,9 +180,12 @@ final class FindBar: NSView {
 
     @objc private func modeButtonTapped(_ sender: NSButton) {
         let mode: SearchMode = sender === beginsWithButton ? .beginsWith : .contains
-        guard containsButton.state != (mode == .contains ? .on : .off) else { return }
+        if #available(macOS 26.0, *) {
+            guard containsButton.state != (mode == .contains ? .on : .off) else { return }
+        }
         containsButton.state = mode == .contains ? .on : .off
         beginsWithButton.state = mode == .beginsWith ? .on : .off
+        updateLegacyModeAppearance()
         onModeChanged?(mode)
     }
 }

@@ -26,6 +26,9 @@ extension DocumentWindowController {
             button.identifier = NSUserInterfaceItemIdentifier(command)
             // Preview-style: small bare icons, bezel only under the pointer.
             button.bezelStyle = .accessoryBarAction
+            if #unavailable(macOS 26.0) {
+                button.bezelStyle = .accessoryBar
+            }
             button.controlSize = .small
             button.showsBorderOnlyWhileMouseInside = true
             button.toolTip = tip
@@ -60,6 +63,9 @@ extension DocumentWindowController {
         let headings = NSButton(image: headingFace, target: self,
                                 action: #selector(showHeadingMenu(_:)))
         headings.bezelStyle = .accessoryBarAction
+        if #unavailable(macOS 26.0) {
+            headings.bezelStyle = .accessoryBar
+        }
         headings.controlSize = .small
         headings.showsBorderOnlyWhileMouseInside = true
         headings.toolTip = headingTitle
@@ -93,7 +99,7 @@ extension DocumentWindowController {
         stack.translatesAutoresizingMaskIntoConstraints = false
 
         // WebKit supplies one native scroll backdrop for the titlebar and this
-        // row on macOS 26+. macOS 15 uses an AppKit visual-effect backdrop.
+        // row on macOS 26+. Older systems use the native titlebar material.
         let container = EditAccessoryContainerView()
         container.addSubview(stack)
         NSLayoutConstraint.activate([

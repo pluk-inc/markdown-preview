@@ -554,14 +554,14 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// links) otherwise fights the bar's buttons. The bar region always
     /// shows the plain arrow.
     ///
-    /// WebKit supplies the backdrop on macOS 26+. macOS 15 uses a native
-    /// visual-effect view because it lacks WebKit's obscured content insets.
+    /// Sequoia rows use the native titlebar material with unthemed controls.
+    /// Newer systems provide their backdrop through native chrome.
     final class EditAccessoryContainerView: NSView {
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
             if #unavailable(macOS 26.0) {
                 let backdrop = NSVisualEffectView(frame: bounds)
-                backdrop.material = .headerView
+                backdrop.material = .titlebar
                 backdrop.blendingMode = .withinWindow
                 backdrop.state = .followsWindowActiveState
                 backdrop.autoresizingMask = [.width, .height]

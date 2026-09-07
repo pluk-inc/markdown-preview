@@ -449,9 +449,7 @@ final class ContentViewController: NSViewController {
     weak var findOverlay: NSView?
 
     func chromeOverlaysDidChange() {
-        if #available(macOS 26.0, *) {
-            updateObscuredContentInsets()
-        }
+        updateObscuredContentInsets()
     }
 
     /// The whole obscured strip, including the native tab bar. AppKit
@@ -487,12 +485,20 @@ final class ContentViewController: NSViewController {
     /// The window keeps .fullSizeContentView, so only the web view moves —
     /// the sidebar still spans full height, the way Finder and Preview do.
     private func pinWebViewBelowChrome() {
-        guard webViewChromeTopConstraint == nil,
-              let guide = view.window?.contentLayoutGuide as? NSLayoutGuide else { return }
-        webViewTopConstraint?.isActive = false
-        let top = webView.topAnchor.constraint(equalTo: guide.topAnchor)
-        top.isActive = true
-        webViewChromeTopConstraint = top
+        if webViewChromeTopConstraint == nil,
+           let guide = view.window?.contentLayoutGuide as? NSLayoutGuide {
+            webViewTopConstraint?.isActive = false
+            let top = webView.topAnchor.constraint(equalTo: guide.topAnchor)
+            top.isActive = true
+            webViewChromeTopConstraint = top
+        }
+        let findHeight: CGFloat
+        if let find = findOverlay, find.window === view.window, !find.isHidden {
+            findHeight = max(0, find.fittingSize.height - MainSplitViewController.tabBarOverlap(for: view.window))
+        } else {
+            findHeight = 0
+        }
+        webViewChromeTopConstraint?.constant = findHeight
     }
 
     private func updateObscuredContentInsets() {

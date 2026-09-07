@@ -39,7 +39,7 @@ private extension Array where Element == NSToolbarItem.Identifier {
 
 extension DocumentWindowController {
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [
+        let identifiers: [NSToolbarItem.Identifier] = [
             .flexibleSpace,
             .sidebarMenu,
             .sidebarTrackingSeparator,
@@ -54,6 +54,10 @@ extension DocumentWindowController {
             .editDocument,
             .search
         ]
+        if #unavailable(macOS 26.0) {
+            return identifiers.filter { $0 != .space && $0 != .sidebarTrackingSeparator }
+        }
+        return identifiers
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
