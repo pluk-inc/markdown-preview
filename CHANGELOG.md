@@ -10,7 +10,6 @@ This release improves macOS 15 Sequoia UI handling, theme handling on macOS 26 a
 
 - **Open Markdown links in separate windows.** An optional General setting opens local Markdown links in new windows while preserving heading destinations, including when the destination is already open ([#355](https://github.com/pluk-inc/markdown-preview/pull/355)).
 - **Highlight outline sections under the pointer.** An optional General setting follows the section under the pointer and retains the last pointed-at section when the pointer leaves the document ([#358](https://github.com/pluk-inc/markdown-preview/pull/358)).
-- **Find the project from Settings.** About now includes a GitHub Project link for browsing the source and reporting issues ([#353](https://github.com/pluk-inc/markdown-preview/pull/353)).
 
 ### Changed
 
