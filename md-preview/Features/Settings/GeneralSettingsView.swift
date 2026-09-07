@@ -37,8 +37,10 @@ struct GeneralSettingsView: View {
                     Text(L("Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out."))
                 }
 
-                Toggle(L("Open Markdown links in new windows"),
-                       isOn: $model.opensMarkdownLinksInNewWindows)
+                Toggle(isOn: $model.opensMarkdownLinksInNewWindows) {
+                    Text(L("Open Markdown links in new windows"))
+                    Text(L("Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window."))
+                }
 
                 Toggle(isOn: $model.opensDocumentsInTabs) {
                     Text(L("Open documents in tabs"))
