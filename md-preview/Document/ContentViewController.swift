@@ -445,6 +445,15 @@ final class ContentViewController: NSViewController {
         }
     }
 
+    /// The search row sits in the content host beneath the native toolbar.
+    weak var findOverlay: NSView?
+
+    func chromeOverlaysDidChange() {
+        if #available(macOS 27.0, *) {
+            updateObscuredContentInsets()
+        }
+    }
+
     /// The whole obscured strip, including the native tab bar. AppKit
     /// exposes the tab bar as a bottom titlebar accessory; subtracting its
     /// height would let it consume the page's top padding.
@@ -452,7 +461,12 @@ final class ContentViewController: NSViewController {
         guard let window = view.window, let contentView = window.contentView else {
             return view.safeAreaInsets.top
         }
-        return max(0, contentView.bounds.height - window.contentLayoutRect.maxY)
+        var inset = contentView.bounds.height - window.contentLayoutRect.maxY
+        if #available(macOS 27.0, *),
+           let find = findOverlay, find.window === window, !find.isHidden {
+            inset += find.fittingSize.height - MainSplitViewController.tabBarOverlap(for: window)
+        }
+        return max(0, inset)
     }
 
     /// Pre-Tahoe there is no frost and no `obscuredContentInsets`, so the

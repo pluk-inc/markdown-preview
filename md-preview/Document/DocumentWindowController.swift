@@ -117,6 +117,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// titlebar accessory — so showing it never pushes the tab bar down.
     /// Mounted once at setup and toggled via isHidden.
     weak var findBarOverlay: NSView?
+    weak var findBarHairline: NSView?
     var searchMode: SearchMode = .contains
     var pendingFindWork: DispatchWorkItem?
     static let findDebounceDelay: TimeInterval = 0.10
@@ -281,19 +282,27 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
         let themed = usesThemedChrome
             && !documentWindow.styleMask.contains(.fullScreen)
-        // Automatic resolves to a shadow under the toolbar; over the flat
-        // theme color it renders as a clipped gray band between the toolbar
-        // and the formatting bar. The themed chrome draws its own hairlines.
+        if #available(macOS 27.0, *) {
+            // Let AppKit manage the separator for every theme.
+            documentWindow.titlebarSeparatorStyle = .automatic
+            // On macOS 27 a transparent titlebar also suppresses WebKit's
+            // scroll edge effect, even with explicit obscuredContentInsets.
+            // Keep the native backing so scrolled text cannot overlap the
+            // title and toolbar controls. The window background still tints it.
+            documentWindow.titlebarAppearsTransparent = false
+            return
+        }
+        // Preserve the older themed chrome treatment, which supplies its
+        // own hairlines instead of the automatic titlebar shadow.
         documentWindow.titlebarSeparatorStyle = themed ? .none : .automatic
         guard themed else {
             documentWindow.titlebarAppearsTransparent = false
             return
         }
-        // Safari's recipe: the titlebar goes transparent so the window
-        // background color runs to the top edge, and the web view is told
-        // (via obscuredContentInsets, in ContentViewController) which strip
-        // the toolbar obscures so WebKit lays out below it and frosts
-        // content that scrolls under.
+        // Preserve the macOS 26 theme treatment: the titlebar goes
+        // transparent so the window background reaches the top edge.
+        // ContentViewController supplies obscuredContentInsets so WebKit
+        // lays out the page below the toolbar.
         //
         // A transparent titlebar on macOS 26 re-dispatches clicks it did not
         // handle (the padding between toolbar buttons) to the content view
@@ -600,9 +609,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// links) otherwise fights the bar's buttons. The bar region always
     /// shows the plain arrow.
     ///
-    /// Opaque: the pages scroll their content under the bars, so a bar must
-    /// paint the page's own background to hide it — the titlebar accessory
-    /// it replaced got that backdrop from the system chrome for free.
+    /// Uses the page's background by default. During editing on macOS 27,
+    /// WebKit supplies the native scroll-edge backdrop behind the chrome.
     final class EditAccessoryContainerView: NSView {
         /// The editor page's background, resolved per appearance and read
         /// from the live theme on every draw. Mirrors
@@ -630,6 +638,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         /// bars that overlay the editor (formatting bar).
         var prefersWindowBackground = false
 
+        var usesScrollEdgeBackground = false {
+            didSet { needsDisplay = true }
+        }
+
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
             wantsLayer = true
@@ -644,6 +656,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         override var wantsUpdateLayer: Bool { true }
 
         override func updateLayer() {
+            if usesScrollEdgeBackground {
+                layer?.backgroundColor = nil
+                return
+            }
             effectiveAppearance.performAsCurrentDrawingAppearance {
                 let color = prefersWindowBackground
                     ? Self.windowPageBackground : Self.editorPageBackground

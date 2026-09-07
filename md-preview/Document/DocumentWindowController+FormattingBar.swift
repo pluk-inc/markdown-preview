@@ -92,10 +92,8 @@ extension DocumentWindowController {
         stack.edgeInsets = NSEdgeInsets(top: 7, left: 12, bottom: 11, right: 12)
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        // The container paints the editor page background itself (see
-        // EditAccessoryContainerView.draw): the editor scrolls its text
-        // under the bar, and the titlebar accessory this replaced hid that
-        // with the system chrome backdrop.
+        // WebKit supplies one native scroll backdrop for the titlebar and this
+        // row on macOS 27. Older systems retain the page fill.
         let container = EditAccessoryContainerView()
         container.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -104,18 +102,23 @@ extension DocumentWindowController {
             stack.topAnchor.constraint(equalTo: container.topAnchor),
             stack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
-        let hairline = NSBox()
-        hairline.boxType = .separator
-        hairline.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(hairline)
-        NSLayoutConstraint.activate([
-            hairline.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            hairline.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            hairline.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-        ])
+        if #unavailable(macOS 27.0) {
+            let hairline = NSBox()
+            hairline.boxType = .separator
+            hairline.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(hairline)
+            NSLayoutConstraint.activate([
+                hairline.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                hairline.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                hairline.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            ])
+        }
 
         mainSplit?.installFormattingBar(container)
         editBar = container
+        if #available(macOS 27.0, *) {
+            findBarHairline?.isHidden = false
+        }
     }
 
     private func separatorView() -> NSView {
@@ -130,6 +133,9 @@ extension DocumentWindowController {
         guard editBar != nil else { return }
         mainSplit?.removeFormattingBar()
         editBar = nil
+        if #available(macOS 27.0, *) {
+            findBarHairline?.isHidden = true
+        }
     }
 
     /// Leaves edit-mode chrome as one operation: drops the formatting bar

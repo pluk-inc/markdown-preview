@@ -2045,11 +2045,16 @@ window.MDEditor = {
         ],
       }),
     })
+    // On macOS 27 WebKit scrolls the page and owns the chrome backdrop.
+    // Other hosts retain CodeMirror's internal scroll container.
+    const pageScrolling = !!(callbacks && callbacks.pageScrolling)
+    const scroller = pageScrolling ? document.scrollingElement : view.scrollDOM
+    const scrollEvents = pageScrolling ? window : scroller
     let preservedSourcePosition = null
     let preservedSourceGap = 0
     let didUserScroll = false
     let userScrollIntent = false
-    let lastScrollTop = view.scrollDOM.scrollTop
+    let lastScrollTop = scroller.scrollTop
     const markScrollIntent = () => { userScrollIntent = true }
     const markKeyboardScrollIntent = (event) => {
       if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) {
@@ -2057,16 +2062,16 @@ window.MDEditor = {
       }
     }
     const observeScroll = () => {
-      const scrollTop = view.scrollDOM.scrollTop
+      const scrollTop = scroller.scrollTop
       if (userScrollIntent && Math.abs(scrollTop - lastScrollTop) > 0.5) {
         didUserScroll = true
       }
       lastScrollTop = scrollTop
     }
-    view.scrollDOM.addEventListener("wheel", markScrollIntent, { passive: true })
-    view.scrollDOM.addEventListener("pointerdown", markScrollIntent, { passive: true })
-    view.scrollDOM.addEventListener("keydown", markKeyboardScrollIntent)
-    view.scrollDOM.addEventListener("scroll", observeScroll, { passive: true })
+    scrollEvents.addEventListener("wheel", markScrollIntent, { passive: true })
+    scrollEvents.addEventListener("pointerdown", markScrollIntent, { passive: true })
+    scrollEvents.addEventListener("keydown", markKeyboardScrollIntent)
+    scrollEvents.addEventListener("scroll", observeScroll, { passive: true })
     const lineContentBlock = (position) => {
       const block = view.lineBlockAt(position)
       let paddingTop = 0
@@ -2112,7 +2117,7 @@ window.MDEditor = {
         const selection = view.state.selection.main
         const anchor = Math.min(selection.anchor, length)
         const head = Math.min(selection.head, length)
-        const scrollTop = view.scrollDOM.scrollTop
+        const scrollTop = scroller.scrollTop
         view.dispatch({
           changes: { from: 0, to: view.state.doc.length, insert: text },
           selection: { anchor, head },
@@ -2120,7 +2125,7 @@ window.MDEditor = {
           annotations: Transaction.addToHistory.of(false),
         })
         requestAnimationFrame(() => {
-          view.scrollDOM.scrollTop = scrollTop
+          scroller.scrollTop = scrollTop
           view.requestMeasure()
         })
       },
@@ -2141,7 +2146,7 @@ window.MDEditor = {
         if (!didUserScroll && Number.isFinite(preservedSourcePosition)) {
           return { position: preservedSourcePosition, gap: preservedSourceGap || 0 }
         }
-        const viewportY = view.scrollDOM.scrollTop
+        const viewportY = scroller.scrollTop
         const visibleLine = view.lineBlockAtHeight(viewportY)
         const line = view.state.doc.lineAt(visibleLine.from)
         const sourceLineBlock = lineContentBlock(line.from)
@@ -2156,7 +2161,6 @@ window.MDEditor = {
         return { position: line.number + progress, gap }
       },
       setScrollPosition: (progress, sourcePosition, sourceGap) => new Promise((resolve) => {
-        const scroller = view.scrollDOM
         const maximum = Math.max(scroller.scrollHeight - scroller.clientHeight, 0)
         let target = maximum * Math.min(Math.max(Number(progress) || 0, 0), 1)
         let linePosition = null
@@ -2188,7 +2192,7 @@ window.MDEditor = {
             target = measuredMaximum * Math.min(Math.max(Number(progress) || 0, 0), 1)
           }
           scroller.scrollTop = Math.min(Math.max(target, 0), measuredMaximum)
-          scroller.dispatchEvent(new Event("scroll"))
+          scrollEvents.dispatchEvent(new Event("scroll"))
           view.requestMeasure()
           requestAnimationFrame(() => {
             preservedSourcePosition = Number.isFinite(sourcePosition) ? sourcePosition : null
@@ -2229,10 +2233,10 @@ window.MDEditor = {
         return true
       },
       destroy: () => {
-        view.scrollDOM.removeEventListener("wheel", markScrollIntent)
-        view.scrollDOM.removeEventListener("pointerdown", markScrollIntent)
-        view.scrollDOM.removeEventListener("keydown", markKeyboardScrollIntent)
-        view.scrollDOM.removeEventListener("scroll", observeScroll)
+        scrollEvents.removeEventListener("wheel", markScrollIntent)
+        scrollEvents.removeEventListener("pointerdown", markScrollIntent)
+        scrollEvents.removeEventListener("keydown", markKeyboardScrollIntent)
+        scrollEvents.removeEventListener("scroll", observeScroll)
         view.destroy()
       },
     }

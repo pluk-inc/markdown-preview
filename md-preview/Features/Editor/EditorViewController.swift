@@ -208,16 +208,21 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         return max(0, gap)
     }
 
-    /// The editor page cannot use WebKit's obscured inset: the page is
-    /// non-scrollable (CodeMirror scrolls internally), and WebKit paints
-    /// the inset strip of such pages with the system background, ignoring
-    /// both the page CSS and underPageBackgroundColor — a near-black bar
-    /// over a themed window. Instead the inset stays 0 (the strip then
-    /// shows the themed window straight through) and #editor is padded by
-    /// the full chrome height so the buffer lays out below the bars.
+    /// On macOS 27 CodeMirror participates in page scrolling, so WebKit
+    /// supplies the same native scroll-edge effect as the preview across
+    /// the whole chrome strip. Older systems retain their fixed viewport.
     private func updateObscuredContentInsets() {
         guard #available(macOS 26.0, *) else { return }
         guard view.window != nil else { return }
+        if #available(macOS 27.0, *) {
+            let inset = fullChromeTopInset
+            if webView.obscuredContentInsets.top != inset {
+                webView.obscuredContentInsets = NSEdgeInsets(
+                    top: inset, left: 0, bottom: 0, right: 0
+                )
+            }
+            return
+        }
         if webView.obscuredContentInsets.top != 0 {
             webView.obscuredContentInsets = NSEdgeInsets(
                 top: 0, left: 0, bottom: 0, right: 0
@@ -459,9 +464,15 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
         let lightPageBackground = pageBackground(.light)
         let darkPageBackground = pageBackground(.dark)
+        let usesPageScrolling: Bool
+        if #available(macOS 27.0, *) {
+            usesPageScrolling = true
+        } else {
+            usesPageScrolling = false
+        }
         return """
         <!DOCTYPE html>
-        <html>
+        <html data-page-scrolling="\(usesPageScrolling)">
         <head>
         <meta charset="UTF-8">
         \(assetBaseURL.map { "<base href=\"\(htmlAttributeLiteral(MarkdownAssetResolution.baseHref(forFolder: $0)))\">" } ?? "")
@@ -966,6 +977,16 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         .cm-md-table-cell.is-table-selection-left {
             --table-selection-left-edge: inset 1px 0 color-mix(in srgb, #007aff 52%, transparent);
         }
+        /* Page scrolling lets WebKit own the native toolbar backdrop.
+           The macOS 26 and earlier editor keeps its internal scroller. */
+        html[data-page-scrolling="true"],
+        html[data-page-scrolling="true"] body {
+            height: auto;
+            overflow: visible;
+        }
+        html[data-page-scrolling="true"] #editor,
+        html[data-page-scrolling="true"] .cm-editor { height: auto; }
+        html[data-page-scrolling="true"] #editor .cm-scroller { overflow: visible; }
         .hl-keyword { color: var(--hl-keyword); }
         .hl-string { color: var(--hl-string); }
         .hl-comment { color: var(--hl-comment); }
@@ -1021,6 +1042,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                     document.getElementById("editor"),
                     markdown,
                     {
+                        pageScrolling: \(usesPageScrolling),
                         onDirty: function () { post("dirty"); },
                         onPasteImage: function (from, to) {
                             post({ kind: "pasteImage", from: from, to: to });
