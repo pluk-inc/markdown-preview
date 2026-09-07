@@ -250,6 +250,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // edge on macOS 26+. Earlier systems also use native window chrome.
         documentWindow.titlebarSeparatorStyle = .automatic
         documentWindow.titlebarAppearsTransparent = false
+        if #available(macOS 26.0, *) {
+            if #unavailable(macOS 27.0) {
+                documentWindow.titlebarAppearsTransparent = true
+            }
+        }
     }
 
     /// AppKit's automatic tab placement runs when NSDocument shows its

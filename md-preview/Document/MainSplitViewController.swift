@@ -371,23 +371,59 @@ final class MainSplitViewController: NSSplitViewController {
     /// not a titlebar accessory (the native tab bar always renders below
     /// accessories, and would jump on every edit-mode toggle).
     func installFormattingBar(_ bar: NSView) {
-        layeredContentViewController?.installFormattingBar(bar)
+        if Self.usesNativeChromeAccessories {
+            formattingAccessory = installNativeChromeAccessory(bar)
+        } else {
+            layeredContentViewController?.installFormattingBar(bar)
+        }
         // The editor pads its page below the chrome; the bar is part of
         // that chrome now, so it must be measured alongside the titlebar.
         cachedEditorViewController?.formattingBar = bar
     }
 
     func removeFormattingBar() {
-        layeredContentViewController?.removeFormattingBar()
+        if #available(macOS 26.1, *), Self.usesNativeChromeAccessories,
+           let item = splitViewItems.dropFirst().first,
+           let index = item.topAlignedAccessoryViewControllers.firstIndex(where: { $0 === formattingAccessory }) {
+            item.removeTopAlignedAccessoryViewController(at: index)
+            formattingAccessory = nil
+        } else {
+            layeredContentViewController?.removeFormattingBar()
+        }
         cachedEditorViewController?.formattingBar = nil
     }
 
     private weak var findOverlayView: NSView?
+    private var formattingAccessory: NSViewController?
+    private var findAccessory: NSViewController?
+
+    static var usesNativeChromeAccessories: Bool {
+        if #available(macOS 27.0, *) { return false }
+        if #available(macOS 26.1, *) { return true }
+        return false
+    }
+
+    private func installNativeChromeAccessory(_ bar: NSView) -> NSViewController? {
+        guard #available(macOS 26.1, *),
+              let item = splitViewItems.dropFirst().first else { return nil }
+        let accessory = NSSplitViewItemAccessoryViewController()
+        accessory.automaticallyAppliesContentInsets = false
+        accessory.preferredScrollEdgeEffectStyle = .soft
+        accessory.view = bar
+        bar.setFrameSize(bar.fittingSize)
+        accessory.isHidden = bar.isHidden
+        item.addTopAlignedAccessoryViewController(accessory)
+        return accessory
+    }
 
     /// Mounts the find bar the same way — see installFormattingBar. Stays
     /// mounted for the window's lifetime; visibility toggles via isHidden.
     func installFindOverlay(_ bar: NSView) {
-        layeredContentViewController?.installFindOverlay(bar)
+        if Self.usesNativeChromeAccessories {
+            findAccessory = installNativeChromeAccessory(bar)
+        } else {
+            layeredContentViewController?.installFindOverlay(bar)
+        }
         findOverlayView = bar
         cachedEditorViewController?.findOverlay = bar
         contentViewController?.findOverlay = bar
@@ -396,6 +432,9 @@ final class MainSplitViewController: NSSplitViewController {
     /// The find bar sits above the formatting bar, so toggling it moves
     /// the bar below and changes the editor's page padding.
     func findOverlayVisibilityChanged() {
+        if #available(macOS 26.1, *), Self.usesNativeChromeAccessories {
+            (findAccessory as? NSSplitViewItemAccessoryViewController)?.isHidden = findOverlayView?.isHidden ?? true
+        }
         layeredContentViewController?.updateChromeOverlayLayout()
         cachedEditorViewController?.chromeOverlaysDidChange()
         contentViewController?.chromeOverlaysDidChange()

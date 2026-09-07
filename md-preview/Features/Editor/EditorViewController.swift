@@ -180,6 +180,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         // accessory instead of assuming either, so the buffer always lays
         // out below the lowest piece of chrome.
         var gap = contentView.bounds.height - window.contentLayoutRect.maxY
+        if MainSplitViewController.usesNativeChromeAccessories {
+            return max(gap, view.safeAreaInsets.top)
+        }
         for accessory in window.titlebarAccessoryViewControllers
         where accessory.layoutAttribute == .bottom && !accessory.isHidden
             && accessory.view.window === window {

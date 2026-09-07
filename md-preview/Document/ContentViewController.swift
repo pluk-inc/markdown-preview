@@ -462,6 +462,9 @@ final class ContentViewController: NSViewController {
             return view.safeAreaInsets.top
         }
         var inset = contentView.bounds.height - window.contentLayoutRect.maxY
+        if MainSplitViewController.usesNativeChromeAccessories {
+            return max(inset, view.safeAreaInsets.top)
+        }
         if #available(macOS 26.0, *),
            let find = findOverlay, find.window === window, !find.isHidden {
             inset += find.fittingSize.height - MainSplitViewController.tabBarOverlap(for: window)
