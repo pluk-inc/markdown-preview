@@ -450,7 +450,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
     }
 
     func testTypographyFollowsTheSystemTextStyles() {
-        XCTAssertEqual(MarkdownHTML.bodyFontSize, 13.8)
+        XCTAssertEqual(MarkdownHTML.bodyFontSize, 14)
         let css = MarkdownHTML.stylesheet
         XCTAssertTrue(css.contains("--text: -apple-system-label;"))
         XCTAssertTrue(css.contains("--secondary: -apple-system-secondary-label;"))

@@ -174,7 +174,7 @@ nonisolated enum MarkdownHTML {
     /// through the system title styles (Large Title 26, Title 1 22, Title 2
     /// 17, Title 3 15, Headline 13, Subheadline 11) as em ratios of the body
     /// size, so it scales with this value.
-    static let bodyFontSize: CGFloat = 13.8
+    static let bodyFontSize: CGFloat = 14
     static let bodyLineHeight: CGFloat = 1.5
     static let pagePaddingTop: CGFloat = 32
     static let pagePaddingHorizontal: CGFloat = 40
@@ -215,8 +215,8 @@ nonisolated enum MarkdownHTML {
 
     /// Body size, in points, used by the print stylesheet when the app hasn't
     /// injected an explicit choice. CSS `pt` reaches paper 1:1, so this is the
-    /// literal printed size. The on-screen 13.8px body would print at about
-    /// 10pt, small for paper, so the print default stays at 12pt.
+    /// literal printed size. The on-screen 14px body would print at 10.5pt,
+    /// small for paper, so the print default stays at 12pt.
     static let defaultPrintPointSize = 12
 
     /// Printed page box. WKWebView ignores `NSPrintInfo`'s margins and falls
