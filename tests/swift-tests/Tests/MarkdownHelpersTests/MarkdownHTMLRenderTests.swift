@@ -450,7 +450,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
     }
 
     func testTypographyFollowsTheSystemTextStyles() {
-        XCTAssertEqual(MarkdownHTML.bodyFontSize, 13)
+        XCTAssertEqual(MarkdownHTML.bodyFontSize, 13.5)
         let css = MarkdownHTML.stylesheet
         XCTAssertTrue(css.contains("--text: -apple-system-label;"))
         XCTAssertTrue(css.contains("--secondary: -apple-system-secondary-label;"))
@@ -504,7 +504,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertNotEqual(light["bullet"], light["text"], "bullets use the accent color")
         XCTAssertEqual(metrics["display"] as? String, "flex")
         XCTAssertEqual(metrics["direction"] as? String, "column")
-        XCTAssertEqual(try XCTUnwrap(metrics["h1"] as? Double), 26, accuracy: 0.1)
+        XCTAssertEqual(try XCTUnwrap(metrics["h1"] as? Double), MarkdownHTML.bodyFontSize * 2, accuracy: 0.1)
     }
 
     func testCodeCopyButtonFallsBackToQuickLookPasteboardHandler() {

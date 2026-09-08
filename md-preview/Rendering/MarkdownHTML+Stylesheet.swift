@@ -297,7 +297,7 @@ nonisolated extension MarkdownHTML {
         margin: calc(0.6rem + 0.5em) 0 0.3em;
         overflow-wrap: anywhere;
     }
-    /* System title scale as ratios of the 13px body: Large Title 26, Title 1
+    /* System title scale as ratios of a 13px body: Large Title 26, Title 1
        22, Title 2 17, Title 3 15, Headline 13, Subheadline 11. */
     h1 { font-size: 2em; }
     h2 { font-size: 1.692em; }
