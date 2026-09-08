@@ -17,6 +17,33 @@ A macOS app for previewing Markdown files. AppKit, sandboxed, ships with a Quick
 
 Version is managed centrally in `Version.xcconfig` (`MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`). Both the app and the quick-look extension inherit from it.
 
+## Documentation that describes behaviour is part of the behaviour
+
+**If a change makes a documented claim false, updating that claim is part of the
+change — same commit, not a follow-up.** This applies to `README.md`, sample and
+fixture files, and any comment that tells a reader what to expect on screen.
+
+The reason is not tidiness. A stale claim asserts the *opposite* of what the
+code does, and people trust it, so it is worse than saying nothing at all. It
+produces two specific failures:
+
+- A correct result gets reported as a bug, because the documentation says
+  something else should happen.
+- A real regression gets waved through as a known limitation, because the
+  documentation says it never worked.
+
+The second one is not hypothetical here. `README.md` said Mermaid diagrams
+render in both the app and Quick Look previews. They had stopped rendering in
+Quick Look, and the mismatch was read as documentation drift rather than as the
+bug it was — which is part of why it survived several releases before anyone
+chased it (#338, fixed in #343).
+
+So when you change what the reader sees, grep for what says otherwise:
+
+```bash
+grep -rn "<the behaviour you changed>" README.md samples/ tests/fixtures/ docs/
+```
+
 ## Signing & secrets — do not touch without asking
 
 - `DEVELOPMENT_TEAM = 5P3TSMNV42` (`project.pbxproj`, both targets) is the
