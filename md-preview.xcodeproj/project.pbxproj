@@ -22,7 +22,6 @@
 		9AF000000000000000000007 /* copy-tex.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000105 /* copy-tex.min.js */; };
 		9AF000000000000000000008 /* KaTeX-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000106 /* KaTeX-LICENSE.txt */; };
 		9AF000000000000000000009 /* highlight.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000107 /* highlight.min.js */; };
-		9AF00000000000000000000A /* highlight.min.css in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000108 /* highlight.min.css */; };
 		9AF00000000000000000000B /* Highlight-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000109 /* Highlight-LICENSE.txt */; };
 		9AF00000000000000000000C /* purify.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF00000000000000000010A /* purify.min.js */; };
 		9AF00000000000000000000D /* DOMPurify-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF00000000000000000010B /* DOMPurify-LICENSE.txt */; };
@@ -78,7 +77,6 @@
 		9AF000000000000000000105 /* copy-tex.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "copy-tex.min.js"; path = "md-preview/Vendor/KaTeX/copy-tex.min.js"; sourceTree = "<group>"; };
 		9AF000000000000000000106 /* KaTeX-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "KaTeX-LICENSE.txt"; path = "md-preview/Vendor/KaTeX/KaTeX-LICENSE.txt"; sourceTree = "<group>"; };
 		9AF000000000000000000107 /* highlight.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = highlight.min.js; path = "md-preview/Vendor/Highlight/highlight.min.js"; sourceTree = "<group>"; };
-		9AF000000000000000000108 /* highlight.min.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; name = highlight.min.css; path = "md-preview/Vendor/Highlight/highlight.min.css"; sourceTree = "<group>"; };
 		9AF000000000000000000109 /* Highlight-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "Highlight-LICENSE.txt"; path = "md-preview/Vendor/Highlight/Highlight-LICENSE.txt"; sourceTree = "<group>"; };
 		9AF00000000000000000010A /* purify.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = purify.min.js; path = "md-preview/Vendor/DOMPurify/purify.min.js"; sourceTree = "<group>"; };
 		9AF00000000000000000010B /* DOMPurify-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "DOMPurify-LICENSE.txt"; path = "md-preview/Vendor/DOMPurify/DOMPurify-LICENSE.txt"; sourceTree = "<group>"; };
@@ -176,7 +174,6 @@
 				9AF000000000000000000105 /* copy-tex.min.js */,
 				9AF000000000000000000106 /* KaTeX-LICENSE.txt */,
 				9AF000000000000000000107 /* highlight.min.js */,
-				9AF000000000000000000108 /* highlight.min.css */,
 				9AF000000000000000000109 /* Highlight-LICENSE.txt */,
 				9AF00000000000000000010A /* purify.min.js */,
 				9AF00000000000000000010B /* DOMPurify-LICENSE.txt */,
@@ -331,7 +328,6 @@
 				9AF000000000000000000007 /* copy-tex.min.js in Resources */,
 				9AF000000000000000000008 /* KaTeX-LICENSE.txt in Resources */,
 				9AF000000000000000000009 /* highlight.min.js in Resources */,
-				9AF00000000000000000000A /* highlight.min.css in Resources */,
 				9AF00000000000000000000B /* Highlight-LICENSE.txt in Resources */,
 				9AF00000000000000000000C /* purify.min.js in Resources */,
 				9AF00000000000000000000D /* DOMPurify-LICENSE.txt in Resources */,

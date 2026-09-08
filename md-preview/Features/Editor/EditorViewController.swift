@@ -453,37 +453,36 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
            edit mode doesn't visually change the document. */
         :root {
             color-scheme: light dark;
-            --text: #1d1d1f;
-            --secondary: #6e6e73;
-            --link: #0066cc;
-            --quote-border: #d2d2d7;
-            --code-bg: #f5f5f7;
-            --grid: #d2d2d7;
-            /* GitHub Light — matches the preview's highlight.js theme. */
-            --hl-keyword: #d73a49;
-            --hl-string: #032f62;
-            --hl-comment: #6a737d;
-            --hl-number: #005cc5;
-            --hl-type: #6f42c1;
-            --hl-function: #6f42c1;
-            --hl-property: #005cc5;
+            /* Semantic system colors resolve per appearance on their own. */
+            --text: -apple-system-label;
+            --secondary: -apple-system-secondary-label;
+            --quote-border: -apple-system-quaternary-label;
+            --grid: -apple-system-separator;
+            --accent: -apple-system-control-accent;
+            --link: rgb(0, 104, 218);
+            --code-bg: #f9f9f9;
+            --code-border: #f0f0f0;
+            /* Same code palette as the preview stylesheet. */
+            --hl-keyword: #9b2393;
+            --hl-string: #c41a16;
+            --hl-comment: #5d6c79;
+            --hl-number: #1c00cf;
+            --hl-type: #3900a0;
+            --hl-function: #326d74;
+            --hl-property: #326d74;
         }
         @media (prefers-color-scheme: dark) {
             :root {
-                --text: #f5f5f7;
-                --secondary: #86868b;
-                --link: #2997ff;
-                --quote-border: #6e6e73;
-                --code-bg: #2A2828;
-                --grid: #424245;
-                /* GitHub Dark — matches the preview's highlight.js theme. */
-                --hl-keyword: #ff7b72;
-                --hl-string: #a5d6ff;
-                --hl-comment: #8b949e;
-                --hl-number: #79c0ff;
-                --hl-type: #d2a8ff;
-                --hl-function: #d2a8ff;
-                --hl-property: #79c0ff;
+                --link: rgb(65, 156, 255);
+                --code-bg: #262626;
+                --code-border: #323232;
+                --hl-keyword: #fc5fa3;
+                --hl-string: #fc6a5d;
+                --hl-comment: #6c7986;
+                --hl-number: #d0bf69;
+                --hl-type: #d0a8ff;
+                --hl-function: #67b7a4;
+                --hl-property: #67b7a4;
             }
         }
         html, body {
@@ -558,18 +557,18 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         #editor .cm-md-h1, #editor .cm-md-h2, #editor .cm-md-h3,
         #editor .cm-md-h4, #editor .cm-md-h5, #editor .cm-md-h6 {
             font-weight: 600;
-            line-height: 1.18;
+            line-height: 1.25;
             padding-top: 1.6em;
         }
-        #editor .cm-md-h1 { font-size: 1.802em; font-weight: 700; padding-top: 0.8em; }
+        #editor .cm-md-h1 { font-size: 2em; padding-top: 0.8em; }
         /* Mirror the preview's first-child margin reset so the document
            starts at the same height in both modes. */
         #editor .cm-content > .cm-line:first-child { padding-top: 0; }
-        #editor .cm-md-h2 { font-size: 1.602em; line-height: 1.06; }
-        #editor .cm-md-h3 { font-size: 1.424em; line-height: 1.07; }
-        #editor .cm-md-h4 { font-size: 1.266em; line-height: 1.08; }
-        #editor .cm-md-h5 { font-size: 1.125em; line-height: 1.09; }
-        #editor .cm-md-h6 { font-size: 1em; line-height: 1.24; }
+        #editor .cm-md-h2 { font-size: 1.692em; }
+        #editor .cm-md-h3 { font-size: 1.308em; }
+        #editor .cm-md-h4 { font-size: 1.154em; }
+        #editor .cm-md-h5 { font-size: 1em; }
+        #editor .cm-md-h6 { font-size: 0.846em; }
         /* A visible source blank already owns the gap before the heading;
            retain the preview's small amount of extra breathing room. */
         #editor .cm-md-h1.cm-md-heading-after-blank,
@@ -642,10 +641,11 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
         .cm-md-inline-code {
             font-family: ui-monospace, "SF Mono", Menlo, monospace;
-            font-size: 0.88em;
+            font-size: 0.9em;
             background: var(--code-bg);
-            border-radius: 6px;
-            padding: 0.18em 0.42em;
+            border: 0.5px solid var(--code-border);
+            border-radius: 5px;
+            padding: 0.15em 0.3em;
         }
         .cm-md-link { color: var(--link); }
         .cm-md-url { color: var(--secondary); }
@@ -740,8 +740,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
         #editor .cm-md-codeblock {
             font-family: ui-monospace, "SF Mono", Menlo, monospace;
-            font-size: 0.88em;
-            line-height: 1.45;
+            font-size: 1em;
+            line-height: 1.3;
             position: relative;
             padding: 0 14px;
         }
@@ -927,16 +927,16 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             pointer-events: none;
         }
         .cm-md-table-cell:focus {
-            outline: 2px solid #007aff;
+            outline: 2px solid var(--accent);
             outline-offset: -2px;
-            background: color-mix(in srgb, #007aff 8%, transparent);
+            background: color-mix(in srgb, var(--accent) 8%, transparent);
         }
         .cm-md-table-cell.is-table-part-selected {
             --table-selection-top-edge: 0 0 transparent;
             --table-selection-right-edge: 0 0 transparent;
             --table-selection-bottom-edge: 0 0 transparent;
             --table-selection-left-edge: 0 0 transparent;
-            background: color-mix(in srgb, #007aff 14%, Canvas);
+            background: color-mix(in srgb, var(--accent) 14%, Canvas);
             box-shadow:
                 var(--table-selection-top-edge),
                 var(--table-selection-right-edge),
@@ -944,16 +944,16 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                 var(--table-selection-left-edge);
         }
         .cm-md-table-cell.is-table-selection-top {
-            --table-selection-top-edge: inset 0 1px color-mix(in srgb, #007aff 52%, transparent);
+            --table-selection-top-edge: inset 0 1px color-mix(in srgb, var(--accent) 52%, transparent);
         }
         .cm-md-table-cell.is-table-selection-right {
-            --table-selection-right-edge: inset -1px 0 color-mix(in srgb, #007aff 52%, transparent);
+            --table-selection-right-edge: inset -1px 0 color-mix(in srgb, var(--accent) 52%, transparent);
         }
         .cm-md-table-cell.is-table-selection-bottom {
-            --table-selection-bottom-edge: inset 0 -1px color-mix(in srgb, #007aff 52%, transparent);
+            --table-selection-bottom-edge: inset 0 -1px color-mix(in srgb, var(--accent) 52%, transparent);
         }
         .cm-md-table-cell.is-table-selection-left {
-            --table-selection-left-edge: inset 1px 0 color-mix(in srgb, #007aff 52%, transparent);
+            --table-selection-left-edge: inset 1px 0 color-mix(in srgb, var(--accent) 52%, transparent);
         }
         /* Page scrolling lets WebKit own the native toolbar backdrop.
            The macOS 15 editor keeps its internal scroller. */

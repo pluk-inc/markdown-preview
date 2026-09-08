@@ -449,6 +449,64 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(metrics["rtlTrailingPadding"] as? Double), 0, accuracy: 0.1)
     }
 
+    func testTypographyFollowsTheSystemTextStyles() {
+        XCTAssertEqual(MarkdownHTML.bodyFontSize, 13)
+        let css = MarkdownHTML.stylesheet
+        XCTAssertTrue(css.contains("--text: -apple-system-label;"))
+        XCTAssertTrue(css.contains("--secondary: -apple-system-secondary-label;"))
+        XCTAssertTrue(css.contains("--grid: -apple-system-separator;"))
+        XCTAssertTrue(css.contains("--accent: -apple-system-control-accent;"))
+        XCTAssertTrue(css.contains("h1 { font-size: 2em; }"))
+        XCTAssertTrue(css.contains("h6 { font-size: 0.846em; }"))
+        // The highlighting palette is declared once and consumed by class rules.
+        XCTAssertTrue(css.contains("--hl-keyword:"))
+        XCTAssertTrue(MarkdownHTML.highlightThemeCSS.contains(".hljs-keyword"))
+        XCTAssertTrue(MarkdownHTML.highlightThemeCSS.contains("var(--hl-keyword)"))
+        XCTAssertFalse(MarkdownHTML.highlightThemeCSS.contains("#"))
+    }
+
+    @MainActor
+    func testSystemColorsFollowTheForcedColorSchemeAndSelectionStaysOnText() async throws {
+        let article = EscapingHTMLFormatter.format("# Title\n\nBody text.\n\n- item\n")
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 420, height: 400))
+        webView.loadHTMLString("""
+        <!doctype html><meta charset="utf-8">
+        <style>\(MarkdownHTML.stylesheet)</style>
+        <article class="markdown-body">\(article)</article>
+        """, baseURL: nil)
+        for _ in 0..<200 where webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(webView.isLoading)
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const root = document.documentElement;
+            const read = () => {
+                const body = getComputedStyle(document.querySelector('p'));
+                const bullet = getComputedStyle(document.querySelector('li'), '::before');
+                return { text: body.color, bullet: bullet.borderTopColor };
+            };
+            root.setAttribute('data-mdp-color-scheme', 'light');
+            const light = read();
+            root.setAttribute('data-mdp-color-scheme', 'dark');
+            const dark = read();
+            const article = getComputedStyle(document.querySelector('article'));
+            return { light, dark, display: article.display, direction: article.flexDirection,
+                     h1: parseFloat(getComputedStyle(document.querySelector('h1')).fontSize) };
+        })()
+        """)
+        let metrics = try XCTUnwrap(result as? [String: Any])
+        let light = try XCTUnwrap(metrics["light"] as? [String: String])
+        let dark = try XCTUnwrap(metrics["dark"] as? [String: String])
+        // Label colors: 85% black on light, 85% white on dark.
+        XCTAssertTrue(light["text"]?.hasPrefix("rgba(0, 0, 0, 0.8") == true, light["text"] ?? "")
+        XCTAssertTrue(dark["text"]?.hasPrefix("rgba(255, 255, 255, 0.8") == true, dark["text"] ?? "")
+        XCTAssertNotEqual(light["bullet"], light["text"], "bullets use the accent color")
+        XCTAssertEqual(metrics["display"] as? String, "flex")
+        XCTAssertEqual(metrics["direction"] as? String, "column")
+        XCTAssertEqual(try XCTUnwrap(metrics["h1"] as? Double), 26, accuracy: 0.1)
+    }
+
     func testCodeCopyButtonFallsBackToQuickLookPasteboardHandler() {
         // Quick Look has no `mdPreviewHost` bridge and its sandbox rejects
         // `navigator.clipboard`, so the copy button must reach the extension's
@@ -519,10 +577,10 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(rendered.html.contains(".md-source-blank-line {"))
         XCTAssertTrue(rendered.html.contains("height: 4.0px;"))
         XCTAssertTrue(rendered.html.contains(".md-source-blank-line:has(+ .md-source-blank-line)"))
-        XCTAssertTrue(rendered.html.contains("height: 22.8px;"))
+        XCTAssertTrue(rendered.html.contains("height: \(MarkdownHTML.sourceLineHeight)px;"))
         XCTAssertFalse(rendered.html.contains(".md-source-blank-line + *"))
         XCTAssertTrue(rendered.html.contains(".md-source-blank-line + h3,"))
-        XCTAssertTrue(rendered.html.contains("margin-top: 22.8px;"))
+        XCTAssertTrue(rendered.html.contains("margin-top: \(MarkdownHTML.sourceLineHeight)px;"))
     }
 
     func testListsAndDecoratedCodeBlocksOwnTheirOuterSpacing() {

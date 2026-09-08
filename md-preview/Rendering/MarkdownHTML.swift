@@ -169,8 +169,12 @@ nonisolated enum MarkdownHTML {
     // must come from one source of truth.
     static let bodyFontFamily = "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", system-ui, sans-serif"
     static let codeFontFamily = "ui-monospace, \"SF Mono\", Menlo, monospace"
-    static let bodyFontSize: CGFloat = 15
-    static let bodyLineHeight: CGFloat = 1.52
+    /// Body text matches the system Body text style (13pt on macOS); the
+    /// heading scale in the stylesheet steps through the system title styles
+    /// (Large Title 26, Title 1 22, Title 2 17, Title 3 15, Headline 13,
+    /// Subheadline 11) as em ratios of this size.
+    static let bodyFontSize: CGFloat = 13
+    static let bodyLineHeight: CGFloat = 1.5
     static let pagePaddingTop: CGFloat = 32
     static let pagePaddingHorizontal: CGFloat = 40
     static let pagePaddingBottom: CGFloat = 48
@@ -210,9 +214,8 @@ nonisolated enum MarkdownHTML {
 
     /// Body size, in points, used by the print stylesheet when the app hasn't
     /// injected an explicit choice. CSS `pt` reaches paper 1:1, so this is the
-    /// literal printed size. The on-screen 15px body prints at 15 × 0.75 =
-    /// 11.25pt, so 12pt keeps the default output close to what it was before
-    /// the size became selectable.
+    /// literal printed size. The on-screen 13px body would print at 13 × 0.75
+    /// = 9.75pt, too small for paper, so the print default stays at 12pt.
     static let defaultPrintPointSize = 12
 
     /// Printed page box. WKWebView ignores `NSPrintInfo`'s margins and falls
