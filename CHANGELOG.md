@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.0.56] – 2026-09-08
+
+A small follow-up to 0.0.55 that fixes the frosted strip behind the search and formatting rows on macOS 26.1 and later, keeps those rows consistent with the toolbar in full screen on macOS 27, and adds a documentation practice to the agent guide.
+
+### Changed
+
+- **Documentation that describes behaviour is part of the behaviour.** The agent guide now asks that a change which makes a documented claim false updates that claim in the same commit, with the Mermaid-in-Quick-Look regression as the motivating case ([#368](https://github.com/pluk-inc/markdown-preview/pull/368)).
+
+### Fixed
+
+- **Search and formatting rows no longer leave a stale frosted band on macOS 26.1 and later.** The frosted strip above the page was sized from the safe area, which updates one layout pass late. The page showed through a freshly opened search bar, and the band stayed at the old height after dismissing search or leaving edit mode, in windows and in full screen. The strip is now measured from the rows themselves ([#371](https://github.com/pluk-inc/markdown-preview/pull/371)).
+- **Full-screen search and formatting rows match the toolbar on macOS 27.** Both rows use the native titlebar material in full screen, as they already did on macOS 26, instead of frosting the page beneath an opaque toolbar ([#371](https://github.com/pluk-inc/markdown-preview/pull/371)).
+
+### Contributors
+
+- [@inquinity](https://github.com/inquinity) — wrote the documentation-as-behaviour practice for the agent guide ([#368](https://github.com/pluk-inc/markdown-preview/pull/368)).
+
 ## [0.0.55] – 2026-09-07
 
 This release brings together the improvements introduced in 0.0.54 with new full-screen fixes on macOS 26 and a simpler application menu. It improves macOS 15 Sequoia UI handling, theme handling on macOS 26 and later, and macOS 27 support, alongside toolbar fixes, minor UI tweaks, and more control over document navigation and reader margins.
