@@ -169,12 +169,12 @@ nonisolated enum MarkdownHTML {
     // must come from one source of truth.
     static let bodyFontFamily = "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", system-ui, sans-serif"
     static let codeFontFamily = "ui-monospace, \"SF Mono\", Menlo, monospace"
-    /// Body text sits half a point above the system Body text style (13pt on
-    /// macOS) for comfortable reading; the heading scale in the stylesheet
-    /// steps through the system title styles (Large Title 26, Title 1 22,
-    /// Title 2 17, Title 3 15, Headline 13, Subheadline 11) as em ratios of
-    /// the body size, so it scales with this value.
-    static let bodyFontSize: CGFloat = 13.5
+    /// Body text sits just above the system Body text style (13pt on macOS)
+    /// for comfortable reading; the heading scale in the stylesheet steps
+    /// through the system title styles (Large Title 26, Title 1 22, Title 2
+    /// 17, Title 3 15, Headline 13, Subheadline 11) as em ratios of the body
+    /// size, so it scales with this value.
+    static let bodyFontSize: CGFloat = 13.8
     static let bodyLineHeight: CGFloat = 1.5
     static let pagePaddingTop: CGFloat = 32
     static let pagePaddingHorizontal: CGFloat = 40
@@ -215,7 +215,7 @@ nonisolated enum MarkdownHTML {
 
     /// Body size, in points, used by the print stylesheet when the app hasn't
     /// injected an explicit choice. CSS `pt` reaches paper 1:1, so this is the
-    /// literal printed size. The on-screen 13.5px body would print at about
+    /// literal printed size. The on-screen 13.8px body would print at about
     /// 10pt, small for paper, so the print default stays at 12pt.
     static let defaultPrintPointSize = 12
 
