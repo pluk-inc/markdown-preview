@@ -384,6 +384,59 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(nonSelectableRules[0].contains(".md-code-copy"))
     }
 
+    @MainActor
+    func testReadingLayoutKeepsHeadingCodeAndDirectionalAlignment() async throws {
+        let markdown = """
+        ## A heading with `inline code` that wraps on a narrow page
+
+        | Left | Center | Right |
+        | :--- | :---: | ---: |
+        | Name | Ready | 1024 |
+
+        <div dir="rtl">
+
+        - العنصر الأول
+        - العنصر الثاني
+
+        </div>
+        """
+        let article = EscapingHTMLFormatter.format(markdown)
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 420, height: 600))
+        webView.loadHTMLString("""
+        <!doctype html><meta charset="utf-8">
+        <style>\(MarkdownHTML.stylesheet)</style>
+        <article class="markdown-body">\(article)</article>
+        """, baseURL: nil)
+        for _ in 0..<200 where webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(webView.isLoading)
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const heading = getComputedStyle(document.querySelector('h2'));
+            const code = getComputedStyle(document.querySelector('h2 code'));
+            const list = getComputedStyle(document.querySelector('[dir=rtl] ul'));
+            return {
+                headingFont: parseFloat(heading.fontSize),
+                codeFont: parseFloat(code.fontSize),
+                headingLineHeight: parseFloat(heading.lineHeight),
+                alignments: Array.from(document.querySelectorAll('tbody td'), td => getComputedStyle(td).textAlign),
+                rtlLeadingPadding: parseFloat(list.paddingRight),
+                rtlTrailingPadding: parseFloat(list.paddingLeft)
+            };
+        })()
+        """)
+        let metrics = try XCTUnwrap(result as? [String: Any])
+        let headingFont = try XCTUnwrap(metrics["headingFont"] as? Double)
+        let codeFont = try XCTUnwrap(metrics["codeFont"] as? Double)
+        let lineHeight = try XCTUnwrap(metrics["headingLineHeight"] as? Double)
+        XCTAssertEqual(codeFont, headingFont, accuracy: 0.1)
+        XCTAssertGreaterThanOrEqual(lineHeight / headingFont, 1.2)
+        XCTAssertEqual(metrics["alignments"] as? [String], ["left", "center", "right"])
+        XCTAssertGreaterThan(try XCTUnwrap(metrics["rtlLeadingPadding"] as? Double), 0)
+        XCTAssertEqual(try XCTUnwrap(metrics["rtlTrailingPadding"] as? Double), 0, accuracy: 0.1)
+    }
+
     func testCodeCopyButtonFallsBackToQuickLookPasteboardHandler() {
         // Quick Look has no `mdPreviewHost` bridge and its sandbox rejects
         // `navigator.clipboard`, so the copy button must reach the extension's
@@ -573,7 +626,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(rendered.contains(".md-source-list-indent-step {"))
         XCTAssertTrue(rendered.contains(".md-source-list-line {"))
         XCTAssertTrue(rendered.contains(
-            "padding-inline-start: 1.6em;"
+            "padding-inline-start: var(--mdp-list-indent);"
         ))
     }
 

@@ -240,7 +240,7 @@ nonisolated enum MarkdownHTML {
     /// block's own margin-top provides the space below, so the gaps above and
     /// below a rule both equal the paragraph gap (blankLineGap + this).
     static let hrSpacing = bodyFontSize * 0.8
-    static let listItemSpacing = bodyFontSize * 0.4
+    static let listItemSpacing = bodyFontSize * 0.2
 
     struct RenderedHTML: Sendable {
         let html: String

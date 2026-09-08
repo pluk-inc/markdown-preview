@@ -10,10 +10,8 @@ import Foundation
 // `nonisolated` matters: the targets default to MainActor isolation, and
 // rendering runs off the main actor.
 nonisolated extension MarkdownHTML {
-    // Mirrors MarkdownUI's Theme.docC. Top-only margins (bottom: 0), Apple SF
-    // palette (text #1d1d1f / #f5f5f7, link #0066cc / #2997ff, grid #d2d2d7 /
-    // #424245, code bg #f5f5f7 / #2A2828, aside bg #f5f5f7 / #323232), 15px continuous container
-    // radius, horizontal-only table borders.
+    // Shared document typography, spacing, and controls. Logical positioning
+    // keeps lists, quotations, and table alignment consistent in both directions.
     static let stylesheet = """
     :root {
         color-scheme: light dark;
@@ -25,6 +23,8 @@ nonisolated extension MarkdownHTML {
         --quote-border: #d2d2d7;
         --code-bg: #f5f5f7;
         --grid: #d2d2d7;
+        --mdp-list-indent: 2.1em;
+        --mdp-list-gap: 0.5em;
     }
     :root[data-mdp-color-scheme="light"] {
         color-scheme: light;
@@ -148,7 +148,7 @@ nonisolated extension MarkdownHTML {
     .md-source-list-indent-step {
         display: block;
         box-sizing: border-box;
-        padding-inline-start: 1.6em;
+        padding-inline-start: var(--mdp-list-indent);
     }
     .md-source-list-line {
         display: block;
@@ -157,9 +157,9 @@ nonisolated extension MarkdownHTML {
     .md-source-list-marker {
         display: inline-block;
         box-sizing: border-box;
-        width: 1.6em;
-        margin-inline-start: -1.6em;
-        padding-inline-end: 0.45em;
+        width: var(--mdp-list-indent);
+        margin-inline-start: calc(-1 * var(--mdp-list-indent));
+        padding-inline-end: var(--mdp-list-gap);
         text-align: end;
     }
     .md-source-task-marker {
@@ -233,17 +233,18 @@ nonisolated extension MarkdownHTML {
 
     h1, h2, h3, h4, h5, h6 {
         font-weight: 600;
-        line-height: 1.18;
-        margin: 1.6em 0 0;
+        line-height: 1.25;
+        margin: calc(0.6rem + 0.5em) 0 0.3em;
+        overflow-wrap: anywhere;
     }
-    /* Minor-third heading scale: each level steps down visibly, and only
-       the document title carries the heavier weight. */
-    h1 { font-size: 1.802em; font-weight: 700; margin-top: 0.8em; }
-    h2 { font-size: 1.602em; line-height: 1.06; }
-    h3 { font-size: 1.424em; line-height: 1.07; }
-    h4 { font-size: 1.266em; line-height: 1.08; }
-    h5 { font-size: 1.125em; line-height: 1.09; }
-    h6 { font-size: 1em; line-height: 1.24; }
+    /* Keep our heading scale and give every level the same wrapping rhythm. */
+    h1 { font-size: 1.802em; }
+    h2 { font-size: 1.602em; }
+    h3 { font-size: 1.424em; }
+    h4 { font-size: 1.266em; }
+    h5 { font-size: 1.125em; }
+    h6 { font-size: 1em; }
+    :is(h1, h2, h3, h4, h5, h6) code { font-size: inherit; }
     /* The blank before a heading shrinks like every final blank; the
        heading's own margin restores the one-line gap, keeping the total at
        one source line plus the small breathing room (blank + margin). */
@@ -307,9 +308,9 @@ nonisolated extension MarkdownHTML {
     code {
         font-family: \(codeFontFamily);
         font-size: var(--mdp-code-font-size, 0.88em);
-        padding: 0.18em 0.42em;
+        padding: 0.15em 0.3em;
         background: var(--code-bg);
-        border-radius: 6px;
+        border-radius: 5px;
     }
     :not(pre) > code {
         overflow-wrap: anywhere;
@@ -319,11 +320,11 @@ nonisolated extension MarkdownHTML {
     pre {
         position: relative;
         margin: \(paragraphSpacing)px 0 0;
-        padding: 10px 14px;
+        padding: 16px;
         background: var(--code-bg);
-        border-radius: 15px;
+        border-radius: 8px;
         overflow-x: auto;
-        line-height: 1.45;
+        line-height: 1.3;
     }
     pre::-webkit-scrollbar {
         display: block;
@@ -550,10 +551,21 @@ nonisolated extension MarkdownHTML {
     .katex { direction: ltr !important; unicode-bidi: isolate; }
 
     blockquote {
+        position: relative;
         margin: \(quoteSpacing)px 0 0;
-        padding-inline-start: 1em;
-        border-inline-start: 4px solid var(--quote-border);
+        padding: 0.4em 1em;
+        padding-inline-start: 1.5em;
         color: var(--secondary);
+    }
+    blockquote::before {
+        content: "";
+        position: absolute;
+        inset-inline-start: 0.3em;
+        top: 0.4em;
+        bottom: 0.4em;
+        border-inline-start: 4px solid var(--quote-border);
+        border-radius: 999px;
+        pointer-events: none;
     }
     blockquote > *:first-child { margin-top: 0; }
 
@@ -591,7 +603,12 @@ nonisolated extension MarkdownHTML {
     .markdown-alert-caution { border-left-color: #d1242f; }
     .markdown-alert-caution .markdown-alert-title { color: #d1242f; }
 
-    ul, ol { margin: \(paragraphSpacing)px 0 0; padding-left: 1.6em; }
+    ul, ol {
+        margin: \(paragraphSpacing)px 0 0;
+        padding-inline-start: var(--mdp-list-indent);
+        padding-inline-end: 0;
+    }
+    ol > li::marker { font-variant-numeric: tabular-nums; }
     ul { list-style-type: "•  "; }
     /* The text marker stays for copy/paste and for reserving the gutter,
        but renders transparent; a 0.4em circle is painted in its place.
@@ -602,8 +619,8 @@ nonisolated extension MarkdownHTML {
     ul > li:not(.task-list-item)::before {
         content: "";
         position: absolute;
-        inset-inline-start: -0.9em;
-        top: 0.56em;
+        inset-inline-start: calc(-1 * var(--mdp-list-gap) - 0.4em);
+        top: calc(0.5lh - 0.2em);
         width: 0;
         height: 0;
         border: 0.2em solid var(--text);
@@ -624,12 +641,15 @@ nonisolated extension MarkdownHTML {
     .task-list-item-checkbox {
         -webkit-appearance: none;
         appearance: none;
-        width: 1.55em;
-        height: 1.55em;
-        margin: 0 0.3em 0.1em -1.85em;
-        vertical-align: middle;
+        font: inherit;
+        width: 0.9em;
+        height: 0.9em;
+        margin: 0;
+        margin-inline-start: calc(-0.9em - var(--mdp-list-gap));
+        margin-inline-end: var(--mdp-list-gap);
+        vertical-align: calc(0.5cap - 0.45em);
         border: 1.5px solid var(--grid);
-        border-radius: 50%;
+        border-radius: 25%;
         background: transparent;
         position: relative;
         flex: 0 0 auto;
@@ -657,12 +677,16 @@ nonisolated extension MarkdownHTML {
         max-width: 100%;
     }
     th, td {
-        padding: 9px 10px;
+        padding: 8px 12px;
         border-top: 1px solid var(--grid);
         border-bottom: 1px solid var(--grid);
-        text-align: left;
+        text-align: start;
+        vertical-align: top;
     }
     th { font-weight: 600; }
+    :is(th, td)[align="center"] { text-align: center; }
+    :is(th, td)[align="right"] { text-align: right; }
+    :is(th, td)[align="left"] { text-align: left; }
 
     .md-table-editor {
         position: relative;
