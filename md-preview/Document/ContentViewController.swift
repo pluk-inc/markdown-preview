@@ -448,6 +448,11 @@ final class ContentViewController: NSViewController {
     /// The search row sits in the content host beneath the native toolbar.
     weak var findOverlay: NSView?
 
+    /// The formatting row (macOS 26.1+ native accessory path only). The
+    /// preview is hidden while editing, but it shows again beneath the bar
+    /// during the exit crossfade and must keep the same page padding.
+    weak var formattingBar: NSView?
+
     func chromeOverlaysDidChange() {
         updateObscuredContentInsets()
     }
@@ -461,7 +466,14 @@ final class ContentViewController: NSViewController {
         }
         var inset = contentView.bounds.height - window.contentLayoutRect.maxY
         if MainSplitViewController.usesNativeChromeAccessories {
-            return max(inset, view.safeAreaInsets.top)
+            // Measured from the bars, not `view.safeAreaInsets`: the safe
+            // area follows an accessory show, hide, or removal only on the
+            // next layout pass, and this view may not get one — the frost
+            // then lagged one step behind the strip (missing while it was
+            // shown, still covering the page after it was gone).
+            inset += MainSplitViewController.nativeAccessoryHeight(findOverlay, in: window)
+            inset += MainSplitViewController.nativeAccessoryHeight(formattingBar, in: window)
+            return max(0, inset)
         }
         if #available(macOS 26.0, *),
            let find = findOverlay, find.window === window, !find.isHidden {

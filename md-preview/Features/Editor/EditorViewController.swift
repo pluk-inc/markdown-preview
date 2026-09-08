@@ -181,7 +181,11 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         // out below the lowest piece of chrome.
         var gap = contentView.bounds.height - window.contentLayoutRect.maxY
         if MainSplitViewController.usesNativeChromeAccessories {
-            return max(gap, view.safeAreaInsets.top)
+            // See ContentViewController.fullChromeTopInset: the safe area
+            // lags accessory changes by a layout pass, so measure the bars.
+            gap += MainSplitViewController.nativeAccessoryHeight(findOverlay, in: window)
+            gap += MainSplitViewController.nativeAccessoryHeight(formattingBar, in: window)
+            return max(0, gap)
         }
         for accessory in window.titlebarAccessoryViewControllers
         where accessory.layoutAttribute == .bottom && !accessory.isHidden

@@ -561,9 +561,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     final class EditAccessoryContainerView: NSView {
         private var fullscreenBackdrop: NSVisualEffectView?
 
+        /// Full screen on macOS 26 and later draws the toolbar on an opaque
+        /// native strip instead of frosting the page, so the rows below it
+        /// take the same titlebar material to read as one piece of chrome.
         func updateFullscreenBackground() {
             guard #available(macOS 26.0, *) else { return }
-            guard #unavailable(macOS 27.0) else { return }
             if window?.styleMask.contains(.fullScreen) == true {
                 if fullscreenBackdrop == nil {
                     let backdrop = NSVisualEffectView(frame: bounds)
