@@ -15,7 +15,10 @@ extension NSToolbarItem.Identifier {
     static let inspector = NSToolbarItem.Identifier("Inspector")
     static let share = NSToolbarItem.Identifier("Share")
     static let search = NSToolbarItem.Identifier("Search")
+    /// The sidebar show/hide toggle. The raw value predates the mode picker
+    /// and is kept so saved toolbar layouts still resolve.
     static let sidebarMenu = NSToolbarItem.Identifier("SidebarMenu")
+    static let sidebarMode = NSToolbarItem.Identifier("SidebarMode")
     static let printDocument = NSToolbarItem.Identifier("PrintDocument")
     static let exportDocument = NSToolbarItem.Identifier("ExportDocument")
     static let exportPDF = NSToolbarItem.Identifier("ExportPDF")
@@ -39,10 +42,21 @@ private extension Array where Element == NSToolbarItem.Identifier {
 
 extension DocumentWindowController {
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        let identifiers: [NSToolbarItem.Identifier] = [
-            .flexibleSpace,
-            .sidebarMenu,
-            .sidebarTrackingSeparator,
+        // Inside the sidebar's titlebar area: the pane picker at the leading
+        // edge, the show/hide toggle at the trailing edge next to the
+        // separator. Pre-26 there is no sidebar-tracking region, so the two
+        // sit together at the leading edge instead.
+        // The toggle is the system item: AppKit lays it out correctly when
+        // the sidebar section collapses, and it reaches
+        // MainSplitViewController.toggleSidebar(_:) through the responder
+        // chain.
+        let leading: [NSToolbarItem.Identifier]
+        if #available(macOS 26.0, *) {
+            leading = [.sidebarMode, .flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator]
+        } else {
+            leading = [.toggleSidebar, .sidebarMode]
+        }
+        let identifiers: [NSToolbarItem.Identifier] = leading + [
             .navigation,
             .flexibleSpace,
             .openActions,
@@ -55,14 +69,16 @@ extension DocumentWindowController {
             .search
         ]
         if #unavailable(macOS 26.0) {
-            return identifiers.filter { $0 != .space && $0 != .sidebarTrackingSeparator }
+            return identifiers.filter { $0 != .space }
         }
         return identifiers
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         var identifiers: [NSToolbarItem.Identifier] = [
+            .toggleSidebar,
             .sidebarMenu,
+            .sidebarMode,
             .sidebarTrackingSeparator,
             .navigation,
             .flexibleSpace,
@@ -91,7 +107,8 @@ extension DocumentWindowController {
                  itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         switch itemIdentifier {
-        case .sidebarMenu: return makeSidebarMenuItem(willBeInsertedIntoToolbar: flag)
+        case .sidebarMenu: return makeSidebarToggleItem()
+        case .sidebarMode: return makeSidebarModeItem(willBeInsertedIntoToolbar: flag)
         case .navigation: return makeNavigationItem(willBeInsertedIntoToolbar: flag)
         case .openActions: return makeOpenActionsItem()
         case .openWith: return makeOpenWithItem()

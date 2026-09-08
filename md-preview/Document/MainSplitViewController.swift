@@ -202,6 +202,15 @@ final class MainSplitViewController: NSSplitViewController {
         !(splitViewItems.first?.isCollapsed ?? true)
     }
 
+    /// Target of the system `.toggleSidebar` toolbar item. The themed layout
+    /// uses a plain split view item, which the stock implementation ignores,
+    /// so both layouts go through the app's own toggle and the toolbar's
+    /// pane picker is kept in step.
+    override func toggleSidebar(_ sender: Any?) {
+        toggleSidebar()
+        (view.window?.windowController as? DocumentWindowController)?.syncSidebarToolbarState()
+    }
+
     @discardableResult
     func toggleSidebar() -> Bool {
         guard let sidebar = splitViewItems.first else { return false }

@@ -58,7 +58,7 @@ extension DocumentWindowController {
             menuItem.image = Self.alwaysOnTopMenuImage(isPinned: isAlwaysOnTop)
             return true
         }
-        syncSidebarMenuState()
+        syncSidebarToolbarState()
         return true
     }
 }

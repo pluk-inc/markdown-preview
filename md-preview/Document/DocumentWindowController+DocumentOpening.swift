@@ -66,7 +66,7 @@ extension DocumentWindowController {
             .openFolder(folderURL, selectedFileURL: currentFileURL)
         documentWindow.makeKeyAndOrderFront(nil)
         NSApp.activate()
-        syncSidebarMenuState()
+        syncSidebarToolbarState()
     }
 
     func contextMenuEditorItems(for fileURL: URL) -> [NSMenuItem] {
