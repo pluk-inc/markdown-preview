@@ -56,9 +56,11 @@ if (editor) {
   check("round-trip is byte-faithful", editor.getMarkdown() === doc)
   const text = dom.window.document.querySelector(".cm-content")?.textContent ?? ""
   check("document text renders", text.includes("Sample Markdown Cheat Sheet"))
-  check("virtualized documents use CodeMirror selection painting",
-    dom.window.document.querySelector(".cm-cursorLayer") != null
-      && dom.window.document.querySelector(".cm-selectionLayer") != null)
+  // Native selection: no drawSelection() layers, so WebKit paints only text
+  // once the host lays .cm-content out as a flex column.
+  check("documents use the native selection, not CodeMirror's layers",
+    dom.window.document.querySelector(".cm-selectionLayer") == null
+      && dom.window.document.querySelector(".cm-cursorLayer") == null)
   editor.exec("bold")
   check("exec('bold') inserts markers", editor.getMarkdown().startsWith("****"))
 }
@@ -447,10 +449,12 @@ const headingFollowHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(headingFollowHost)
 const headingFollowEditor = dom.window.MDEditor.create(
   headingFollowHost, "## Heading\n\nFollowing paragraph", {})
-check("separator after heading includes the blank line and paragraph margin",
+// The final blank of a run shrinks to blankGap plus the next block's margin
+// (headless defaults: 4 + 12).
+check("separator after heading is the blank gap plus the paragraph margin",
   Math.abs(
     parseFloat(headingFollowHost.querySelector(".cm-md-block-separator")?.style.height)
-      - 34.8
+      - 16
   ) < 0.01)
 headingFollowEditor.destroy()
 
@@ -458,10 +462,41 @@ const paragraphGapHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(paragraphGapHost)
 const paragraphGapEditor = dom.window.MDEditor.create(
   paragraphGapHost, "First paragraph.\n\nSecond paragraph.\n\n\nThird paragraph.", {})
-check("blank paragraph separators retain line height plus semantic margin",
+check("blank paragraph separators are the blank gap plus the paragraph margin",
   Array.from(paragraphGapHost.querySelectorAll(".cm-md-block-separator"))
-    .every((line) => Math.abs(parseFloat(line.style.height) - 34.8) < 0.01))
+    .every((line) => Math.abs(parseFloat(line.style.height) - 16) < 0.01))
 paragraphGapEditor.destroy()
+
+// A block right under a heading (no blank line) gets the preview's margin as
+// bottom padding on the heading line.
+const adjacentHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(adjacentHost)
+const adjacentEditor = dom.window.MDEditor.create(
+  adjacentHost, "## Heading\nParagraph right under it", {})
+check("adjacent block adds the paragraph margin below the heading line",
+  adjacentHost.querySelector(".cm-md-block-gap")?.style.paddingBottom === "12px")
+adjacentEditor.destroy()
+
+// Ordered markers share the bullet's hanging box; continuation lines drop the
+// hanging indent; nested quotations carry their depth.
+const structureHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(structureHost)
+const structureEditor = dom.window.MDEditor.create(
+  structureHost,
+  "1. First\n2. Second\n\n- Item\n\n  Continuation line\n\n> outer\n>> inner",
+  {})
+const orderedMarkers = Array.from(structureHost.querySelectorAll(".cm-md-ordered"))
+check("inactive ordered markers render in the hanging marker box",
+  orderedMarkers.map((el) => el.textContent).join("|") === "1.|2.")
+check("continuation line inside a list item drops the hanging indent",
+  structureHost.querySelector(".cm-md-list-continuation")?.textContent.includes("Continuation line") === true)
+const quoteLines = Array.from(structureHost.querySelectorAll(".cm-md-quote"))
+check("nested quotation lines carry one rule per depth",
+  quoteLines.length === 2
+    && quoteLines[0].style.paddingInlineStart === "1.5em"
+    && quoteLines[1].style.paddingInlineStart === "3em"
+    && quoteLines[1].style.backgroundImage.split("linear-gradient").length === 3)
+structureEditor.destroy()
 
 const inlineCodeHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(inlineCodeHost)

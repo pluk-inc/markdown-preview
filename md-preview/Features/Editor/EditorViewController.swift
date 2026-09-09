@@ -618,24 +618,15 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             white-space: pre;
         }
 
+        /* The bundle sets the depth-dependent start padding and one 4px
+           rule per nesting level as background images (positions inline).
+           The rule stops above the block gap the bundle adds when another
+           block follows the quotation without a blank line. */
         #editor .cm-md-quote {
-            position: relative;
-            padding-inline: 1.5em 1em;
+            padding-inline-end: 1em;
             color: var(--secondary);
-        }
-        /* The preview's rounded rule, drawn per line so it stays continuous
-           across a multi-line quotation. */
-        #editor .cm-md-quote::before {
-            content: "";
-            position: absolute;
-            inset-inline-start: 0.3em;
-            top: 0;
-            /* Stop above the block gap the bundle adds when another block
-               follows the quotation without a blank line. */
-            bottom: var(--cm-md-block-gap, 0px);
-            width: 4px;
-            background: var(--quote-border);
-            pointer-events: none;
+            background-repeat: no-repeat;
+            background-size: 4px calc(100% - var(--cm-md-block-gap, 0px));
         }
         .cm-md-strong { font-weight: 600; }
         .cm-md-emphasis { font-style: italic; }
@@ -734,6 +725,26 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             padding-inline-end: 0.5em;
             box-sizing: border-box;
             color: var(--secondary);
+        }
+        /* Ordered markers share the bullet's hanging box: right-aligned,
+           tabular digits, accent color; the active source marker keeps the
+           same box so item text never moves. */
+        .cm-md-ordered,
+        .cm-md-ordered-source {
+            display: inline-block;
+            width: 2.1em;
+            text-indent: 0;
+            text-align: end;
+            padding-inline-end: 0.5em;
+            box-sizing: border-box;
+            font-variant-numeric: tabular-nums;
+        }
+        .cm-md-ordered { color: var(--accent); }
+        .cm-md-ordered-source { color: var(--secondary); }
+        /* Continuation lines of an item keep the depth padding but no hanging
+           indent, so they align with the item text like the preview. */
+        #editor .cm-md-list-continuation {
+            text-indent: 0 !important;
         }
         /* Preview list items after the first carry a margin-top. */
         #editor .cm-md-list-item-gap {
