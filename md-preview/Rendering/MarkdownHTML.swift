@@ -249,6 +249,9 @@ nonisolated enum MarkdownHTML {
     struct RenderedHTML: Sendable {
         let html: String
         let articleHTML: String
+        /// The Markdown the article was rendered from; the page keeps it for
+        /// copy-as-source and body swaps pass it along with the article.
+        let markdown: String
         let containsMath: Bool
         let containsMermaid: Bool
         let containsCode: Bool
@@ -411,6 +414,12 @@ nonisolated enum MarkdownHTML {
         // The bootstrap then reads template.innerHTML, runs it through
         // DOMPurify, and assigns the sanitized result to article.innerHTML.
         let safeBody = bodyHTML.replacingOccurrences(of: "</template", with: "<\\/template")
+        // The Markdown source rides along for copy-as-source. `</` is escaped
+        // inside the string literal so a fence containing `</script>` cannot
+        // end the element.
+        let sourceBlock = warmup ? "" : """
+        <script>window.MdPreview = window.MdPreview || {}; window.MdPreview.source = \(javaScriptStringLiteral(markdown).replacingOccurrences(of: "</", with: "<\\/"));</script>
+        """
         let colorSchemeAttribute = colorScheme.map {
             " data-mdp-color-scheme=\"\($0.rawValue)\""
         } ?? ""
@@ -434,6 +443,7 @@ nonisolated enum MarkdownHTML {
         \(sanitizerBlock)
         \(morphBlock)
         \(hostBridgeScript)
+        \(sourceBlock)
         \(mathBlock.head)
         \(mermaidBlock.head)
         \(highlightBlock.head)
@@ -447,6 +457,7 @@ nonisolated enum MarkdownHTML {
         return RenderedHTML(
             html: html,
             articleHTML: bodyHTML,
+            markdown: markdown,
             containsMath: containsMath,
             containsMermaid: containsMermaid,
             containsCode: containsCode

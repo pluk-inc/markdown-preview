@@ -183,6 +183,69 @@ final class MdPreviewUpdateTests: XCTestCase {
     }
 
     @MainActor
+    func testCopyOfWholeBlocksYieldsTheMarkdownSource() async throws {
+        let webView = try await loadHarness(articleAttributes: "")
+        let markdown = """
+        # Title
+
+        Intro paragraph with a [link](https://example.com).
+
+        - first item
+        - second `item`
+
+        Closing paragraph.
+        """
+        let rendered = MarkdownHTML.render(markdown: markdown, vendorLoading: .lazy)
+        _ = try await webView.evaluateJavaScript("""
+        window.MdPreview.update(\(MarkdownHTML.javaScriptStringLiteral(rendered.articleHTML)),
+            { source: \(MarkdownHTML.javaScriptStringLiteral(markdown)) }); true
+        """)
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const article = document.querySelector('.markdown-body');
+            const selection = window.getSelection();
+            const pick = () => window.MdPreview.markdownForSelection(selection);
+            const out = {};
+            selection.selectAllChildren(article);
+            out.all = pick();
+            // Whole blocks: from the paragraph through the list.
+            let range = document.createRange();
+            range.setStartBefore(document.querySelector('p'));
+            range.setEndAfter(document.querySelector('ul'));
+            selection.removeAllRanges(); selection.addRange(range);
+            out.blocks = pick();
+            // Partial inside one paragraph stays plain text (null here).
+            const text = document.querySelector('p').firstChild;
+            range = document.createRange();
+            range.setStart(text, 6); range.setEnd(text, 15);
+            selection.removeAllRanges(); selection.addRange(range);
+            out.partial = pick();
+            // Partial start, whole end: selected text, then source lines.
+            range = document.createRange();
+            range.setStart(text, 6);
+            range.setEndAfter(document.querySelector('ul'));
+            selection.removeAllRanges(); selection.addRange(range);
+            out.mixed = pick();
+            return JSON.stringify(out);
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let values = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any]
+        )
+        XCTAssertEqual(values["all"] as? String, markdown)
+        XCTAssertEqual(
+            values["blocks"] as? String,
+            "Intro paragraph with a [link](https://example.com).\n\n- first item\n- second `item`"
+        )
+        XCTAssertTrue(values["partial"] is NSNull, json)
+        XCTAssertEqual(
+            values["mixed"] as? String,
+            "paragraph with a link.\n\n- first item\n- second `item`"
+        )
+    }
+
+    @MainActor
     func testTableHeaderPlaceholderAccessibilityUsesDelegatedUpdates() async throws {
         let webView = try await loadHarness(
             articleAttributes: "",

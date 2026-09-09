@@ -206,15 +206,108 @@ nonisolated extension MarkdownHTML {
             });
         }
 
-        function cloneSelectionWithoutCopyButtons(selection) {
+        function selectionFragment(selection) {
             const fragment = document.createDocumentFragment();
             for (let i = 0; i < selection.rangeCount; i += 1) {
                 fragment.appendChild(selection.getRangeAt(i).cloneContents());
             }
-            const buttons = fragment.querySelectorAll('.md-code-copy');
-            if (buttons.length === 0) return null;
-            buttons.forEach((button) => button.remove());
+            fragment.querySelectorAll('.md-code-copy').forEach((button) => button.remove());
             return fragment;
+        }
+
+        // Copy as Markdown. The host keeps `window.MdPreview.source` (the
+        // document's Markdown) current, and block elements carry their
+        // source line range. A selection that covers whole blocks copies
+        // those source lines, so lists keep their bullets, links their
+        // targets, and code its fences. Partial first or last blocks
+        // contribute their selected text; a selection inside one block
+        // returns null and copies as text.
+        let sourceLineCache = null;
+        function sourceLines() {
+            const source = window.MdPreview.source;
+            if (typeof source !== 'string') return null;
+            if (!sourceLineCache || sourceLineCache.source !== source) {
+                sourceLineCache = { source, lines: source.split('\\n') };
+            }
+            return sourceLineCache.lines;
+        }
+        function firstSourceBlockIn(node, fromEnd) {
+            if (node.nodeType !== Node.ELEMENT_NODE) return null;
+            if (node.hasAttribute('data-source-line')) return node;
+            const blocks = node.querySelectorAll('[data-source-line]');
+            return blocks.length ? blocks[fromEnd ? blocks.length - 1 : 0] : null;
+        }
+        function sourceBlockFor(container, offset, atEnd) {
+            const element = container.nodeType === Node.ELEMENT_NODE ? container : container.parentElement;
+            const enclosing = element ? element.closest('[data-source-line]') : null;
+            if (enclosing || container.nodeType !== Node.ELEMENT_NODE) return enclosing;
+            // The boundary sits between blocks (e.g. select-all lands on the
+            // article itself): walk the children from the boundary inward.
+            const children = container.childNodes;
+            if (atEnd) {
+                for (let i = offset - 1; i >= 0; i -= 1) {
+                    const block = firstSourceBlockIn(children[i], true);
+                    if (block) return block;
+                }
+            } else {
+                for (let i = offset; i < children.length; i += 1) {
+                    const block = firstSourceBlockIn(children[i], false);
+                    if (block) return block;
+                }
+            }
+            return null;
+        }
+        function sourceSpan(block) {
+            const start = Number(block.dataset.sourceStart || block.dataset.sourceLine);
+            const end = Number(block.dataset.sourceEnd || block.dataset.sourceLine);
+            return Number.isInteger(start) && Number.isInteger(end) && start > 0 && end >= start
+                ? { start, end } : null;
+        }
+        function coversBlockEdge(range, block, edge) {
+            const probe = document.createRange();
+            probe.selectNodeContents(block);
+            if (edge === 'start') probe.setEnd(range.startContainer, range.startOffset);
+            else probe.setStart(range.endContainer, range.endOffset);
+            return probe.toString().trim() === '';
+        }
+        function selectedTextWithin(range, block) {
+            const clipped = document.createRange();
+            clipped.selectNodeContents(block);
+            if (clipped.compareBoundaryPoints(Range.START_TO_START, range) < 0) {
+                clipped.setStart(range.startContainer, range.startOffset);
+            }
+            if (clipped.compareBoundaryPoints(Range.END_TO_END, range) > 0) {
+                clipped.setEnd(range.endContainer, range.endOffset);
+            }
+            return clipped.toString();
+        }
+        function markdownForSelection(selection) {
+            selection = selection || window.getSelection();
+            const lines = sourceLines();
+            if (!lines || !selection || selection.rangeCount !== 1) return null;
+            const range = selection.getRangeAt(0);
+            if (range.collapsed) return null;
+            const article = document.querySelector('.markdown-body');
+            if (!article || !article.contains(range.commonAncestorContainer)) return null;
+            const startBlock = sourceBlockFor(range.startContainer, range.startOffset, false);
+            const endBlock = sourceBlockFor(range.endContainer, range.endOffset, true);
+            if (!startBlock || !endBlock) return null;
+            const first = sourceSpan(startBlock);
+            const last = sourceSpan(endBlock);
+            if (!first || !last || last.end < first.start) return null;
+            const slice = (from, to) => lines.slice(from - 1, to).join('\\n');
+            const startWhole = coversBlockEdge(range, startBlock, 'start');
+            const endWhole = coversBlockEdge(range, endBlock, 'end');
+            if (startBlock === endBlock || startBlock.contains(endBlock) || endBlock.contains(startBlock)) {
+                if (!startWhole || !endWhole) return null;
+                return slice(Math.min(first.start, last.start), Math.max(first.end, last.end));
+            }
+            if (last.start <= first.end) return null;
+            const parts = [];
+            parts.push(startWhole ? slice(first.start, first.end) : selectedTextWithin(range, startBlock));
+            if (last.start > first.end + 1) parts.push(slice(first.end + 1, last.start - 1));
+            parts.push(endWhole ? slice(last.start, last.end) : selectedTextWithin(range, endBlock));
+            return parts.join('\\n');
         }
 
         function plainTextFromFragment(fragment) {
@@ -667,9 +760,11 @@ nonisolated extension MarkdownHTML {
         document.addEventListener('copy', (event) => {
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0 || !event.clipboardData) return;
-            const fragment = cloneSelectionWithoutCopyButtons(selection);
-            if (!fragment) return;
-            event.clipboardData.setData('text/plain', plainTextFromFragment(fragment));
+            // A cell being edited copies its own text like any text field.
+            if (activeTableCell) return;
+            const fragment = selectionFragment(selection);
+            const markdown = markdownForSelection(selection);
+            event.clipboardData.setData('text/plain', markdown || plainTextFromFragment(fragment));
             event.clipboardData.setData('text/html', htmlFromFragment(fragment));
             event.preventDefault();
         });
@@ -898,7 +993,13 @@ nonisolated extension MarkdownHTML {
         // Mermaid pre-render doesn't flash on screen. The host then issues a
         // second update without the flag once the real document arrives,
         // which clears the inline style and reveals the article.
+        window.MdPreview.markdownForSelection = markdownForSelection;
+
         window.MdPreview.update = (articleHTML, opts) => {
+            // The Markdown behind the article, for copy-as-source.
+            if (opts && typeof opts.source === 'string') {
+                window.MdPreview.source = opts.source;
+            }
             // Body swaps can carry a document from a different folder — move
             // the page <base> first so the incoming content's relative URLs
             // resolve against the right folder.

@@ -552,7 +552,6 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             font-weight: 600;
             line-height: 1.25;
             padding-top: calc(0.6rem + 0.5em);
-            padding-bottom: 0.3em;
         }
         #editor .cm-md-h1 { font-size: 2em; }
         /* Mirror the preview's first-child margin reset so the document

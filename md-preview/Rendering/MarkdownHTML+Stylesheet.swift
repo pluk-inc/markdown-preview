@@ -303,7 +303,10 @@ nonisolated extension MarkdownHTML {
     h1, h2, h3, h4, h5, h6 {
         font-weight: 600;
         line-height: 1.25;
-        margin: calc(0.6rem + 0.5em) 0 0.3em;
+        /* Top-only, like every block: the next block's own top margin is the
+           gap below a heading. In the flex column margins no longer collapse,
+           so a bottom margin here would add to it. */
+        margin: calc(0.6rem + 0.5em) 0 0;
         overflow-wrap: anywhere;
     }
     /* System title scale as ratios of a 13px body: Large Title 26, Title 1
@@ -683,12 +686,12 @@ nonisolated extension MarkdownHTML {
         padding-inline-end: 0;
     }
     ol > li::marker { color: var(--accent); font-variant-numeric: tabular-nums; }
-    ul { list-style-type: "•  "; }
-    /* The text marker stays for copy/paste and for reserving the gutter,
-       but renders transparent; a 0.4em circle is painted in its place.
-       Drawn with a border, not a background, so PDF export keeps it even
-       when backgrounds are not printed. */
-    ul > li::marker { color: transparent; }
+    /* No text marker: it would paint as a selected box beside every item.
+       The gutter comes from the list padding, a 0.4em circle is painted in
+       its place, and copying a list yields its Markdown source, bullets
+       included. Drawn with a border, not a background, so PDF export keeps
+       it even when backgrounds are not printed. */
+    ul { list-style: none; }
     ul > li { position: relative; }
     ul > li:not(.task-list-item)::before {
         content: "";

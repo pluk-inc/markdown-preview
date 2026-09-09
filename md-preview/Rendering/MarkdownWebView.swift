@@ -475,12 +475,13 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             webView.callAsyncJavaScript(
                 """
                 if (!window.MdPreview) return false;
-                window.MdPreview.update(articleHTML, { baseHref });
+                window.MdPreview.update(articleHTML, { baseHref, source });
                 return true;
                 """,
                 arguments: [
                     "articleHTML": rendered.articleHTML,
                     "baseHref": currentBaseHref,
+                    "source": rendered.markdown,
                 ],
                 in: nil,
                 in: .page
