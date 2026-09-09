@@ -360,6 +360,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                 codeRight: code.getBoundingClientRect().right,
                 viewportRight: document.documentElement.clientWidth,
                 boxDecorationBreak: style.webkitBoxDecorationBreak,
+                fragmentEndDecoration: parseFloat(style.paddingRight) + parseFloat(style.borderRightWidth),
             });
         })()
         """)
@@ -367,11 +368,12 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         let metrics = try JSONDecoder().decode(HeadingLayoutMetrics.self, from: Data(json.utf8))
 
         // Some WebKit versions size emergency break fragments without the
-        // inline code's cloned padding, overshooting the line box by a few
-        // pixels. That sub-glyph overflow is invisible and version-dependent;
-        // the assertion guards against real overflow (an unwrapped path is
-        // hundreds of pixels wide).
-        let fragmentPaddingTolerance = 4.0
+        // inline code's cloned end decoration (padding plus border), so a
+        // fragment can overshoot the line box by that much. That sub-glyph
+        // overflow is invisible and version-dependent; the assertion guards
+        // against real overflow (an unwrapped path is hundreds of pixels
+        // wide), so the tolerance is one fragment's end decoration.
+        let fragmentPaddingTolerance = metrics.fragmentEndDecoration + 1
         XCTAssertLessThanOrEqual(
             metrics.headingScrollWidth,
             metrics.headingClientWidth + fragmentPaddingTolerance
@@ -2303,6 +2305,7 @@ private struct HeadingLayoutMetrics: Decodable {
     let codeRight: CGFloat
     let viewportRight: CGFloat
     let boxDecorationBreak: String
+    let fragmentEndDecoration: Double
 }
 
 private struct LongDocumentScrollMetrics: Decodable {
