@@ -193,7 +193,15 @@ final class MdPreviewUpdateTests: XCTestCase {
         - first item
         - second `item`
 
-        Closing paragraph.
+        Closing paragraph with a footnote.[^n]
+
+        ## Later section
+
+        Text after the reference.
+
+        [^n]: The note renders at the end of the article.
+
+        [link]: https://example.com "renders nothing"
         """
         let rendered = MarkdownHTML.render(markdown: markdown, vendorLoading: .lazy)
         _ = try await webView.evaluateJavaScript("""
@@ -208,6 +216,9 @@ final class MdPreviewUpdateTests: XCTestCase {
             const out = {};
             selection.selectAllChildren(article);
             out.all = pick();
+            // Command-A selects the whole body, outside the article.
+            selection.selectAllChildren(document.body);
+            out.selectAll = pick();
             // Whole blocks: from the paragraph through the list.
             let range = document.createRange();
             range.setStartBefore(document.querySelector('p'));
@@ -234,6 +245,7 @@ final class MdPreviewUpdateTests: XCTestCase {
             JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any]
         )
         XCTAssertEqual(values["all"] as? String, markdown)
+        XCTAssertEqual(values["selectAll"] as? String, markdown)
         XCTAssertEqual(
             values["blocks"] as? String,
             "Intro paragraph with a [link](https://example.com).\n\n- first item\n- second `item`"

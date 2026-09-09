@@ -211,8 +211,9 @@ nonisolated extension MarkdownHTML {
             for (let i = 0; i < selection.rangeCount; i += 1) {
                 fragment.appendChild(selection.getRangeAt(i).cloneContents());
             }
-            fragment.querySelectorAll('.md-code-copy').forEach((button) => button.remove());
-            return fragment;
+            const buttons = fragment.querySelectorAll('.md-code-copy');
+            buttons.forEach((button) => button.remove());
+            return { fragment, removedButtons: buttons.length > 0 };
         }
 
         // Copy as Markdown. The host keeps `window.MdPreview.source` (the
@@ -230,32 +231,6 @@ nonisolated extension MarkdownHTML {
                 sourceLineCache = { source, lines: source.split('\\n') };
             }
             return sourceLineCache.lines;
-        }
-        function firstSourceBlockIn(node, fromEnd) {
-            if (node.nodeType !== Node.ELEMENT_NODE) return null;
-            if (node.hasAttribute('data-source-line')) return node;
-            const blocks = node.querySelectorAll('[data-source-line]');
-            return blocks.length ? blocks[fromEnd ? blocks.length - 1 : 0] : null;
-        }
-        function sourceBlockFor(container, offset, atEnd) {
-            const element = container.nodeType === Node.ELEMENT_NODE ? container : container.parentElement;
-            const enclosing = element ? element.closest('[data-source-line]') : null;
-            if (enclosing || container.nodeType !== Node.ELEMENT_NODE) return enclosing;
-            // The boundary sits between blocks (e.g. select-all lands on the
-            // article itself): walk the children from the boundary inward.
-            const children = container.childNodes;
-            if (atEnd) {
-                for (let i = offset - 1; i >= 0; i -= 1) {
-                    const block = firstSourceBlockIn(children[i], true);
-                    if (block) return block;
-                }
-            } else {
-                for (let i = offset; i < children.length; i += 1) {
-                    const block = firstSourceBlockIn(children[i], false);
-                    if (block) return block;
-                }
-            }
-            return null;
         }
         function sourceSpan(block) {
             const start = Number(block.dataset.sourceStart || block.dataset.sourceLine);
@@ -287,17 +262,34 @@ nonisolated extension MarkdownHTML {
             if (!lines || !selection || selection.rangeCount !== 1) return null;
             const range = selection.getRangeAt(0);
             if (range.collapsed) return null;
+            // Select All ranges over the whole body, so ask for overlap, not
+            // containment; the block lookups below stay inside the article.
             const article = document.querySelector('.markdown-body');
-            if (!article || !article.contains(range.commonAncestorContainer)) return null;
-            const startBlock = sourceBlockFor(range.startContainer, range.startOffset, false);
-            const endBlock = sourceBlockFor(range.endContainer, range.endOffset, true);
+            if (!article || !range.intersectsNode(article)) return null;
+            // DOM order is not source order: footnote definitions render at
+            // the end of the article. Take the earliest source start and the
+            // latest source end over every block the selection touches,
+            // preferring the innermost block on ties so a partial list item
+            // contributes its text while the rest of the list copies as source.
+            let startBlock = null, endBlock = null, first = null, last = null;
+            for (const block of article.querySelectorAll('[data-source-line]')) {
+                if (!range.intersectsNode(block)) continue;
+                const span = sourceSpan(block);
+                if (!span) continue;
+                if (!first || span.start <= first.start) { first = span; startBlock = block; }
+                if (!last || span.end >= last.end) { last = span; endBlock = block; }
+            }
             if (!startBlock || !endBlock) return null;
-            const first = sourceSpan(startBlock);
-            const last = sourceSpan(endBlock);
-            if (!first || !last || last.end < first.start) return null;
+            if (last.end < first.start) return null;
             const slice = (from, to) => lines.slice(from - 1, to).join('\\n');
             const startWhole = coversBlockEdge(range, startBlock, 'start');
             const endWhole = coversBlockEdge(range, endBlock, 'end');
+            // Nothing rendered lies outside the selection at an edge: extend
+            // that edge to the document boundary, so a whole-document copy
+            // also carries what renders nothing, such as link reference
+            // definitions at the end.
+            if (startWhole && coversBlockEdge(range, article, 'start')) first = { start: 1, end: first.end };
+            if (endWhole && coversBlockEdge(range, article, 'end')) last = { start: last.start, end: lines.length };
             if (startBlock === endBlock || startBlock.contains(endBlock) || endBlock.contains(startBlock)) {
                 if (!startWhole || !endWhole) return null;
                 return slice(Math.min(first.start, last.start), Math.max(first.end, last.end));
@@ -757,14 +749,28 @@ nonisolated extension MarkdownHTML {
             }
         });
 
-        document.addEventListener('copy', (event) => {
+        // Registered on window so it runs after every document-level copy
+        // handler, including the math copy helper that rewrites the plain
+        // text of selections containing formulas; the Markdown source
+        // already carries the formula source, so it wins when available.
+        window.addEventListener('copy', (event) => {
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0 || !event.clipboardData) return;
             // A cell being edited copies its own text like any text field.
             if (activeTableCell) return;
-            const fragment = selectionFragment(selection);
+            const { fragment, removedButtons } = selectionFragment(selection);
             const markdown = markdownForSelection(selection);
-            event.clipboardData.setData('text/plain', markdown || plainTextFromFragment(fragment));
+            if (markdown !== null) {
+                event.clipboardData.setData('text/plain', markdown);
+                event.clipboardData.setData('text/html', htmlFromFragment(fragment));
+                event.preventDefault();
+                return;
+            }
+            // Another handler already wrote the pasteboard: leave it alone.
+            if (event.defaultPrevented) return;
+            // Otherwise only step in to keep code copy buttons out of the text.
+            if (!removedButtons) return;
+            event.clipboardData.setData('text/plain', plainTextFromFragment(fragment));
             event.clipboardData.setData('text/html', htmlFromFragment(fragment));
             event.preventDefault();
         });
