@@ -30,7 +30,7 @@ final class MarkdownHTMLVendorPlacementTests: XCTestCase {
     private let earlyPopulateCall = "MdPreview.populateNow && MdPreview.populateNow()"
 
     func testInlineModeEmitsEarlyPopulateAfterTemplate() throws {
-        let rendered = MarkdownHTML.render(markdown: sample, vendorLoading: .inline)
+        let rendered = MarkdownHTML.render(markdown: sample, vendorLoading: .inline, highlightsCode: false)
         XCTAssertTrue(rendered.containsMath)
         XCTAssertTrue(rendered.containsMermaid)
         XCTAssertTrue(rendered.containsCode)
@@ -49,7 +49,7 @@ final class MarkdownHTMLVendorPlacementTests: XCTestCase {
     }
 
     func testLazyModeKeepsBodyFreeOfVendorScripts() throws {
-        let rendered = MarkdownHTML.render(markdown: sample, vendorLoading: .lazy)
+        let rendered = MarkdownHTML.render(markdown: sample, vendorLoading: .lazy, highlightsCode: false)
         XCTAssertTrue(rendered.containsMath)
         XCTAssertTrue(rendered.containsMermaid)
         XCTAssertTrue(rendered.containsCode)

@@ -3,6 +3,11 @@ import WebKit
 @testable import MarkdownHelpers
 
 final class MarkdownHTMLRenderTests: XCTestCase {
+    override class func setUp() {
+        super.setUp()
+        TestVendor.installHighlighterGrammar()
+    }
+
     func testLocalMarkdownImagesRemainReadOnlyInPreview() {
         let rendered = MarkdownHTML.render(
             markdown: "![1](notes-pictures/1.png)",
@@ -1613,7 +1618,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             )
 
             XCTAssertTrue(
-                rendered.articleHTML.contains("<code class=\"language-bash\">"),
+                rendered.articleHTML.contains("<code class=\"language-bash\" data-hljs-done=\"1\">"),
                 "\(language): \(rendered.articleHTML)"
             )
         }
@@ -1629,10 +1634,11 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                 vendorLoading: .lazy
             )
 
-            XCTAssertTrue(rendered.containsCode)
+            // Highlighted at render time, so the page needs no in-page runtime.
+            XCTAssertFalse(rendered.containsCode)
             XCTAssertTrue(
                 rendered.articleHTML.contains(
-                    "<code class=\"language-\(language)\" data-md-detected-language=\"true\">"
+                    "<code class=\"language-\(language)\" data-md-detected-language=\"true\" data-hljs-done=\"1\">"
                 ),
                 rendered.articleHTML
             )

@@ -279,7 +279,8 @@ nonisolated enum MarkdownHTML {
                        themeOverrides: ThemeOverrides? = nil,
                        documentFont: DocumentFontSetting = .current,
                        readerLayout: ReaderLayoutSetting = .current,
-                       warmup: Bool = false) -> RenderedHTML {
+                       warmup: Bool = false,
+                       highlightsCode: Bool = true) -> RenderedHTML {
         let frontmatter = MarkdownFrontmatter.split(markdown)
         let body = frontmatter.body
         let sourceLineOffset: Int
@@ -294,7 +295,8 @@ nonisolated enum MarkdownHTML {
         let formatted = EscapingHTMLFormatter.format(
             math.processedMarkdown,
             sourceLineOffset: sourceLineOffset,
-            sourceMarkdown: body
+            sourceMarkdown: body,
+            highlightsCode: highlightsCode
         )
         let mermaidResult = renderMermaidBlocks(in: formatted)
         let mathResult = renderMathBlocks(in: mermaidResult.html, with: math)

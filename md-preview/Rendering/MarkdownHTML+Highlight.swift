@@ -13,13 +13,15 @@ nonisolated extension MarkdownHTML {
     // MARK: - Code highlighting (highlight.js)
 
     // Excludes `language-mermaid` since renderMermaidBlocks already lifted
-    // those into `<figure>` containers before this runs.
+    // those into `<figure>` containers before this runs, and blocks the
+    // render-time highlighter already finished (`data-hljs-done`), so a page
+    // whose code arrived highlighted never loads the in-page runtime.
     private static let highlightableCodeRegex: NSRegularExpression = {
         // swiftlint:disable:next force_try
         try! NSRegularExpression(
             // Block elements now carry source-line attributes for scroll
             // handoff, so do not require <pre> and <code> to be bare tags.
-            pattern: #"<pre\b[^>]*>\s*<code\b(?![^>]*\blanguage-mermaid\b)[^>]*>"#
+            pattern: #"<pre\b[^>]*>\s*<code\b(?![^>]*\blanguage-mermaid\b)(?![^>]*\bdata-hljs-done\b)[^>]*>"#
         )
     }()
 

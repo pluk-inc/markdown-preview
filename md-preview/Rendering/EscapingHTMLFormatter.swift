@@ -980,6 +980,10 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
 
     let options: HTMLFormatterOptions
     let sourceLineOffset: Int
+    /// Pre-render fenced code with `CodeHighlighter` so the page paints its
+    /// syntax colors on the first frame. Off, the deferred in-page pass
+    /// highlights after load.
+    let highlightsCode: Bool
     private let sourceLines: [String]
     private let parsedSourceLines: [String]
 
@@ -1002,9 +1006,11 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     init(options: HTMLFormatterOptions = [],
          sourceLineOffset: Int = 0,
          sourceMarkdown: String = "",
-         parsedMarkdown: String = "") {
+         parsedMarkdown: String = "",
+         highlightsCode: Bool = true) {
         self.options = options
         self.sourceLineOffset = sourceLineOffset
+        self.highlightsCode = highlightsCode
         self.sourceLines = sourceMarkdown.components(separatedBy: "\n")
         self.parsedSourceLines = parsedMarkdown.components(separatedBy: "\n")
     }
@@ -1012,14 +1018,16 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     static func format(_ markdown: String,
                        options: HTMLFormatterOptions = [],
                        sourceLineOffset: Int = 0,
-                       sourceMarkdown: String? = nil) -> String {
+                       sourceMarkdown: String? = nil,
+                       highlightsCode: Bool = true) -> String {
         let preparedMarkdown = MarkdownHighlightSource.preparing(markdown)
         let document = Document(parsing: preparedMarkdown)
         var walker = EscapingHTMLFormatter(
             options: options,
             sourceLineOffset: sourceLineOffset,
             sourceMarkdown: sourceMarkdown ?? markdown,
-            parsedMarkdown: preparedMarkdown
+            parsedMarkdown: preparedMarkdown,
+            highlightsCode: highlightsCode
         )
         walker.visit(document)
         return walker.result
@@ -1228,11 +1236,17 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
 
     mutating func visitCodeBlock(_ codeBlock: CodeBlock) {
         let info = CodeFenceInfo(rawInfoString: codeBlock.language)
-        let detectedLanguage = info.language.isEmpty
+        var detectedLanguage = info.language.isEmpty
             ? CodeFenceLanguageDetector.detect(codeBlock.code)
             : nil
+        let highlighter = highlightsCode && CodeHighlighter.isAvailable
+        if highlighter, info.language.isEmpty, detectedLanguage == nil {
+            // Same grammar-based fallback the in-page pass uses, so an
+            // untyped fence gets its language before the first paint.
+            detectedLanguage = CodeHighlighter.detectLanguage(codeBlock.code)
+        }
         let language = info.language.isEmpty ? detectedLanguage : info.highlightLanguage
-        let languageAttr: String
+        var languageAttr: String
         if let language, !language.isEmpty {
             let detectedAttr = detectedLanguage == nil
                 ? ""
@@ -1241,7 +1255,19 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         } else {
             languageAttr = ""
         }
-        result += "<pre\(sourceLineAttribute(codeBlock))><code\(languageAttr)>\(escapeText(codeBlock.code))</code></pre>\n"
+        // Mermaid fences become figures later in the pipeline and math is
+        // extracted before the walker runs, so every other fence is ours.
+        var body = escapeText(codeBlock.code)
+        if highlighter, language != "mermaid" {
+            if let language, !language.isEmpty,
+               let highlighted = CodeHighlighter.highlight(codeBlock.code, language: language) {
+                body = highlighted
+            }
+            // Stamped done even when no grammar matched: the page then has
+            // nothing left for the deferred pass, so it never loads it.
+            languageAttr += " data-hljs-done=\"1\""
+        }
+        result += "<pre\(sourceLineAttribute(codeBlock))><code\(languageAttr)>\(body)</code></pre>\n"
     }
 
     mutating func visitHeading(_ heading: Heading) {

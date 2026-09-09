@@ -5,6 +5,11 @@ import XCTest
 // confirms the formatter wires that parser into the `language-` class so the
 // trailing metadata (e.g. ```mermaid some-name) does not leak into HTML.
 final class EscapingHTMLFormatterTests: XCTestCase {
+    override class func setUp() {
+        super.setUp()
+        TestVendor.installHighlighterGrammar()
+    }
+
 
     func testTaskCheckboxSourceTogglesExactSourceLine() {
         let markdown = "- [ ] Same\n  - [x] Nested\n- [ ] Same\n"
@@ -54,7 +59,7 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         """)
 
         XCTAssertTrue(
-            html.contains(#"<code class="language-javascript" data-md-detected-language="true">"#),
+            html.contains(#"<code class="language-javascript" data-md-detected-language="true" data-hljs-done="1">"#),
             "expected detected language marker: \(html)"
         )
     }
@@ -67,7 +72,8 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         """)
 
         XCTAssertTrue(html.contains("<pre"), html)
-        XCTAssertTrue(html.contains("<code>just some prose"), html)
+        // Stamped done so the page skips the deferred pass, but no language.
+        XCTAssertTrue(html.contains("<code data-hljs-done=\"1\">just some prose"), html)
         XCTAssertFalse(html.contains("class=\"language-"), html)
     }
 

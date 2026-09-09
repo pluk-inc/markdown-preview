@@ -9,6 +9,11 @@ import WebKit
 /// touches unrelated prose, while the warmup article keeps taking the
 /// innerHTML replace.
 final class MdPreviewUpdateTests: XCTestCase {
+    override class func setUp() {
+        super.setUp()
+        TestVendor.installHighlighterGrammar()
+    }
+
     @MainActor
     func testMorphdomUpdatePreservesRenderedBlocksAndDetailsState() async throws {
         let webView = try await loadHarness(articleAttributes: "")
@@ -83,7 +88,7 @@ final class MdPreviewUpdateTests: XCTestCase {
                 codeIdent: code.__ident || 0,
                 codeRenders: code.__renderCount || 0,
                 codeDone: code.dataset.hljsDone || '',
-                codeSentinel: !!code.querySelector('.fake-hljs'),
+                codeSentinel: !!code.querySelector('.hljs-keyword'),
                 paragraphText: article.querySelector('p').textContent,
                 detailsOpen: article.querySelector('details').open,
                 keyedBlocks: article.querySelectorAll('[data-md-key]').length,
@@ -101,7 +106,8 @@ final class MdPreviewUpdateTests: XCTestCase {
         XCTAssertEqual(state.codeIdent, 3, json)
         XCTAssertEqual(state.mathRenders, 1, json)
         XCTAssertEqual(state.mermaidRenders, 1, json)
-        XCTAssertEqual(state.codeRenders, 1, json)
+        // Code arrives highlighted from the renderer, so no in-page pass runs.
+        XCTAssertEqual(state.codeRenders, 0, json)
         XCTAssertEqual(state.mathDone, "1")
         XCTAssertEqual(state.mermaidDone, "1")
         XCTAssertEqual(state.codeDone, "1")
@@ -169,7 +175,8 @@ final class MdPreviewUpdateTests: XCTestCase {
         let codeSurvived = try await webView.evaluateJavaScript("""
         (() => {
             const code = document.querySelector('pre > code');
-            return code.dataset.hljsDone === '1' && (code.__renderCount || 0) === 1;
+            return code.dataset.hljsDone === '1' && (code.__renderCount || 0) === 0
+                && !!code.querySelector('.hljs-keyword');
         })()
         """) as? Bool
         XCTAssertEqual(codeSurvived, true)
