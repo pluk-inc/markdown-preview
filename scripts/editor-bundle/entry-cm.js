@@ -940,6 +940,23 @@ const blockSeparatorLine = (height) => {
   }
   return deco
 }
+// A block that starts on the line right after another block (no authored
+// blank between them) still gets its margin-top in the preview. Mirror it as
+// padding-bottom on the previous block's last line; padding, not margin, so
+// CodeMirror's per-line height measurement stays exact. The same value is
+// exposed as a variable so pseudo-element bars can stop above the gap.
+const blockGapLineCache = new Map()
+const blockGapLine = (height) => {
+  let deco = blockGapLineCache.get(height)
+  if (!deco) {
+    deco = Decoration.line({
+      class: "cm-md-block-gap",
+      attributes: { style: `padding-bottom:${height}px;--cm-md-block-gap:${height}px;` },
+    })
+    blockGapLineCache.set(height, deco)
+  }
+  return deco
+}
 const quoteLine = Decoration.line({ class: "cm-md-quote" })
 const codeLine = Decoration.line({ class: "cm-md-codeblock" })
 const codeLineFirst = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-first" })
@@ -1275,6 +1292,16 @@ function buildDecorations(view, detectedCodeCache) {
       default: return METRICS.paragraph
     }
   }
+  // Adjacent blocks: the preview gives the second block its margin-top even
+  // without a blank line (a paragraph right under a heading, a fence right
+  // after a paragraph). Put that gap on the previous block's last line.
+  let frontmatterTo = -1
+  const gapBeforeAdjacent = (node) => {
+    const line = state.doc.lineAt(node.from)
+    if (line.number === 1 || line.from <= frontmatterTo) return
+    if (blankRunBefore(node.from).count !== 0) return
+    lineOnce(state.doc.line(line.number - 1).from, blockGapLine(blockMarginTop(node)))
+  }
   const separatorBlankBefore = (node) => {
     const run = blankRunBefore(node.from)
     if (run.count === 0) return
@@ -1311,7 +1338,10 @@ function buildDecorations(view, detectedCodeCache) {
 
         // --- Block separators ------------------------------------------
         if (contentDocumentDepth != null && depth === contentDocumentDepth + 1) {
-          if (SEPARATOR_BLOCKS.has(name)) separatorBlankBefore(node)
+          if (SEPARATOR_BLOCKS.has(name)) {
+            separatorBlankBefore(node)
+            gapBeforeAdjacent(node)
+          }
         }
 
         // --- Frontmatter ----------------------------------------------
@@ -1322,6 +1352,7 @@ function buildDecorations(view, detectedCodeCache) {
           // step back so the card never bleeds onto the first body line.
           const end = node.to > node.from && state.doc.lineAt(node.to).from === node.to
             ? node.to - 1 : node.to
+          frontmatterTo = end
           eachLine(node.from, end, frontmatterLine)
           lineOnce(node.from, frontmatterFirstLine)
           lineOnce(state.doc.lineAt(end).from, frontmatterLastLine)

@@ -630,7 +630,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             position: absolute;
             inset-inline-start: 0.3em;
             top: 0;
-            bottom: 0;
+            /* Stop above the block gap the bundle adds when another block
+               follows the quotation without a blank line. */
+            bottom: var(--cm-md-block-gap, 0px);
             width: 4px;
             background: var(--quote-border);
             pointer-events: none;
