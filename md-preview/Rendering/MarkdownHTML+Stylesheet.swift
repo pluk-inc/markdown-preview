@@ -191,11 +191,20 @@ nonisolated extension MarkdownHTML {
     }
     article.markdown-body > *:first-child { margin-top: 0 !important; }
     /* A flex column keeps WebKit from painting the selection across the gaps
-       between blocks, so a selection highlights text, not empty space. Screen
-       only: flex containers do not fragment across printed pages. Blocks keep
-       their top-only margins, so nothing relied on margin collapsing. */
+       between blocks, so a selection highlights text, not empty space. The
+       same applies inside every block container that holds other blocks:
+       lists, quotations, alerts, and code blocks. List items stay list items, so their
+       markers survive copy and paste. Screen only: flex containers do not
+       fragment across printed pages. Blocks keep their top-only margins, so
+       nothing relied on margin collapsing. */
     @media screen {
-        article.markdown-body {
+        article.markdown-body,
+        article.markdown-body ul,
+        article.markdown-body ol,
+        article.markdown-body blockquote,
+        article.markdown-body .markdown-alert,
+        article.markdown-body .md-code-wrap,
+        article.markdown-body pre {
             display: flex;
             flex-direction: column;
             align-items: stretch;

@@ -529,26 +529,19 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             box-sizing: border-box;
             caret-color: var(--text);
             cursor: text;
+            /* A flex column keeps WebKit from painting the native selection
+               across the gaps between lines, so a selection follows the text
+               like the preview. Lines carry padding, never margins, so the
+               layout is unchanged. */
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
         }
         #editor .cm-line {
             padding: 0;
         }
         #editor .cm-line[dir="rtl"] { text-align: right; }
         #editor .cm-line[dir="ltr"] { text-align: left; }
-        #editor .cm-selectionBackground,
-        #editor .cm-focused .cm-selectionBackground {
-            /* Match WebKit's native selection tint in read-only mode. */
-            background: Highlight !important;
-        }
-        /* CodeMirror draws its own caret via drawSelection (a bordered div),
-           so `caret-color` on .cm-content above never reaches it. The bundled
-           theme paints the caret literal black and only switches to a light
-           color when the EditorView is constructed with dark:true — which we
-           don't do (we theme through prefers-color-scheme). Tie the primary
-           caret to our palette so it's white in dark mode, black in light. */
-        #editor .cm-cursor-primary {
-            border-left-color: var(--text) !important;
-        }
 
         /* Headings — preview's scale, padding instead of margin so
            CodeMirror's per-line height measurement stays exact.
@@ -558,9 +551,10 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         #editor .cm-md-h4, #editor .cm-md-h5, #editor .cm-md-h6 {
             font-weight: 600;
             line-height: 1.25;
-            padding-top: 1.6em;
+            padding-top: calc(0.6rem + 0.5em);
+            padding-bottom: 0.3em;
         }
-        #editor .cm-md-h1 { font-size: 2em; padding-top: 0.8em; }
+        #editor .cm-md-h1 { font-size: 2em; }
         /* Mirror the preview's first-child margin reset so the document
            starts at the same height in both modes. */
         #editor .cm-content > .cm-line:first-child { padding-top: 0; }
@@ -598,11 +592,11 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         #editor .cm-md-heading-source-hidden {
             visibility: hidden;
         }
+        /* Pull only the first line back by the hidden prefix width, so the
+           visible text starts at the column edge and wrapped lines start
+           there too. A transform would shift every line of a long heading. */
         #editor .cm-md-heading-inactive {
-            transform: translateX(calc(-1 * var(--cm-md-heading-prefix-width, 0px)));
-        }
-        #editor .cm-line[dir="rtl"].cm-md-heading-inactive {
-            transform: translateX(var(--cm-md-heading-prefix-width, 0px));
+            text-indent: calc(-1 * var(--cm-md-heading-prefix-width, 0px));
         }
         /* Setext underline source remains editable, but Markdown consumes its
            physical line when rendering the heading. Collapse that line and
@@ -626,9 +620,21 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
 
         #editor .cm-md-quote {
-            border-inline-start: 4px solid var(--quote-border);
-            padding-inline-start: 1em;
+            position: relative;
+            padding-inline: 1.5em 1em;
             color: var(--secondary);
+        }
+        /* The preview's rounded rule, drawn per line so it stays continuous
+           across a multi-line quotation. */
+        #editor .cm-md-quote::before {
+            content: "";
+            position: absolute;
+            inset-inline-start: 0.3em;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: var(--quote-border);
+            pointer-events: none;
         }
         .cm-md-strong { font-weight: 600; }
         .cm-md-emphasis { font-style: italic; }
@@ -686,17 +692,17 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         /* Mirror the preview's list geometry. JavaScript adds an inline
            padding value derived from semantic list depth, rather than relying
            on proportional-font source spaces. The marker hangs inside the
-           final 1.6em step, so active and inactive item text stays aligned. */
+           final 2.1em step, so active and inactive item text stays aligned. */
         #editor .cm-md-list-item {
-            padding-inline-start: 1.6em;
-            text-indent: -1.6em;
+            padding-inline-start: 2.1em;
+            text-indent: -2.1em;
         }
         .cm-md-bullet {
             display: inline-block;
-            width: 1.6em;
+            width: 2.1em;
             text-indent: 0;
             text-align: end;
-            padding-inline-end: 0.45em;
+            padding-inline-end: 0.5em;
             box-sizing: border-box;
             /* The glyph keeps its box for alignment but renders transparent;
                the ::after circle below matches the preview's painted bullet. */
@@ -713,7 +719,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             transform: translateY(-50%);
             width: 0;
             height: 0;
-            border: 0.2em solid var(--text);
+            border: 0.2em solid var(--accent);
             border-radius: 50%;
         }
         /* Keep the active raw "- " marker in the same hanging box as the
@@ -721,10 +727,10 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
            item text or make a nested item appear to change indentation. */
         .cm-md-bullet-source {
             display: inline-block;
-            width: 1.6em;
+            width: 2.1em;
             text-indent: 0;
             text-align: end;
-            padding-inline-end: 0.45em;
+            padding-inline-end: 0.5em;
             box-sizing: border-box;
             color: var(--secondary);
         }
@@ -743,13 +749,11 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             font-size: 1em;
             line-height: 1.3;
             position: relative;
-            padding: 0 14px;
+            padding: 0 16px;
         }
-        /* CodeMirror paints the selection on a z:-1 layer, below line
-           backgrounds. Paint the code card on a z:-2 pseudo instead of the
-           line itself: it escapes to the same stacking context, so the card
-           matches the preview's opaque --code-bg while the selection tint
-           still shows between card and text. */
+        /* The code card is painted on a z:-2 pseudo instead of the line
+           itself, so it matches the preview's opaque --code-bg and never
+           covers the native selection or the caret. */
         #editor .cm-md-codeblock::before {
             content: "";
             position: absolute;
@@ -758,21 +762,21 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             background: var(--code-bg);
         }
         #editor .cm-content > .cm-line.cm-md-codeblock-first {
-            padding-top: 10px;
+            padding-top: 16px;
             position: relative;
         }
         #editor .cm-md-codeblock-first::before {
-            border-radius: 15px 15px 0 0;
+            border-radius: 8px 8px 0 0;
         }
         #editor .cm-md-codeblock-last {
-            padding-bottom: 10px;
+            padding-bottom: 16px;
         }
         #editor .cm-md-codeblock-last::before {
-            border-radius: 0 0 15px 15px;
+            border-radius: 0 0 8px 8px;
         }
         /* A single content line owns both ends of the card. */
         #editor .cm-md-codeblock-first.cm-md-codeblock-last::before {
-            border-radius: 15px;
+            border-radius: 8px;
         }
         /* Reserve a header row so the language never competes with code,
            including wrapped lines and blocks at the start of a document. */
@@ -912,8 +916,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             background: color-mix(in srgb, Canvas 94%, var(--grid));
         }
         .cm-md-table-cell {
-            min-height: calc((MarkdownHTML.bodyFontSize)px * (MarkdownHTML.bodyLineHeight));
-            padding: 8px 10px;
+            min-height: calc(\(MarkdownHTML.bodyFontSize)px * \(MarkdownHTML.bodyLineHeight));
+            padding: 8px 12px;
             outline: none;
             white-space: pre-wrap;
             overflow-wrap: anywhere;

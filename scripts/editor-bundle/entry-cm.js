@@ -5,8 +5,7 @@
 // themselves unless the cursor is inside the construct.
 
 import {
-  EditorView, keymap, ViewPlugin, Decoration, WidgetType,
-  drawSelection, dropCursor,
+  EditorView, keymap, ViewPlugin, Decoration, WidgetType, dropCursor,
 } from "@codemirror/view"
 import { Annotation, EditorState, EditorSelection, StateField, Transaction } from "@codemirror/state"
 import {
@@ -959,7 +958,7 @@ const listDepthLine = (depth) => {
     deco = Decoration.line({
       class: `cm-md-list-depth-${depth}`,
       attributes: {
-        style: `padding-inline-start:${depth * 1.6}em;text-indent:-1.6em;`,
+        style: `padding-inline-start:${depth * 2.1}em;text-indent:-2.1em;`,
       },
     })
     listDepthLineCache.set(depth, deco)
@@ -1534,7 +1533,7 @@ function buildDecorations(view, detectedCodeCache) {
           lineOnce(node.from, listDepthLine(listStack.length))
           listDepthPositions.add(state.doc.lineAt(node.from).from)
           // Source indentation uses proportional-font space glyphs, which
-          // does not equal the rendered list's 1.6em nesting step. Hide that
+          // does not equal the rendered list's 2.1em nesting step. Hide that
           // source-only prefix and let the semantic depth line own geometry.
           const line = state.doc.lineAt(node.from)
           const rawIndentedList = line.text.match(markdownListMarker)
@@ -2071,9 +2070,11 @@ window.MDEditor = {
         doc,
         extensions: [
           history(),
-          // CodeMirror virtualizes long documents. Its selection layer keeps
-          // a full-document Cmd-A range visible as the viewport moves.
-          drawSelection(),
+          // Native selection, not drawSelection(): the selection layer paints
+          // every selected line edge to edge, while WebKit's own selection
+          // follows the text once the host styles .cm-content as a flex
+          // column (see EditorViewController). CodeMirror re-syncs the DOM
+          // selection to the rendered viewport as the document virtualizes.
           dropCursor(),
           EditorView.lineWrapping,
           EditorView.perLineTextDirection.of(true),
