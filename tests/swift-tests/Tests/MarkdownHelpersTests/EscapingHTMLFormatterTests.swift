@@ -273,7 +273,7 @@ final class EscapingHTMLFormatterTests: XCTestCase {
     func testObsidianHighlightDoesNotRenderInsideIndentedCode() {
         let html = EscapingHTMLFormatter.format("    ==indented code==")
 
-        XCTAssertTrue(html.contains("<code>==indented code=="), html)
+        XCTAssertTrue(html.contains("<code data-hljs-done=\"1\">==indented code=="), html)
         XCTAssertFalse(html.contains("<mark class=\"md-highlight\">"), html)
     }
 
@@ -353,7 +353,7 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         for prefix in ["\t", " \t", "  \t", "   \t"] {
             let html = EscapingHTMLFormatter.format("\(prefix)==literal==")
 
-            XCTAssertTrue(html.contains("<code>==literal=="), html)
+            XCTAssertTrue(html.contains("<code data-hljs-done=\"1\">==literal=="), html)
             XCTAssertFalse(html.contains("<mark class=\"md-highlight\">"), html)
         }
     }
