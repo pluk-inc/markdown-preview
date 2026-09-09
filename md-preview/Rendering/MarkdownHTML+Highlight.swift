@@ -151,10 +151,10 @@ nonisolated extension MarkdownHTML {
     }
     """
 
-    /// Code highlighting theme. Every color is a `--hl-*` variable declared
-    /// in `MarkdownHTML.stylesheet`, so the light, forced-dark, and
-    /// system-dark buckets there switch the palette in one place and the
-    /// editor page can share the same values.
+    /// Code highlighting class rules, appended to `MarkdownHTML.stylesheet`.
+    /// Every color is a `--hl-*` variable declared there, so the light,
+    /// forced-dark, and system-dark buckets switch the palette in one place
+    /// and the editor page can share the same values.
     static let highlightThemeCSS = """
     .hljs { color: var(--hl-plain); background: transparent; }
     .hljs-keyword,
@@ -213,8 +213,6 @@ nonisolated extension MarkdownHTML {
         guard bundledVendorURL("highlight.min", ext: "js", subdir: "Vendor/Highlight") != nil else {
             return VendorEmission()
         }
-        let themedCSS = highlightThemeCSS
-
         let initScript = """
         <script>
         (function() {
@@ -236,16 +234,13 @@ nonisolated extension MarkdownHTML {
             let js = bundledVendorResource("highlight.min", ext: "js", subdir: "Vendor/Highlight") ?? ""
             let safeJS = js.replacingOccurrences(of: "</script", with: "<\\/script")
             return VendorEmission(
-                head: "<style>\(themedCSS)</style>",
                 body: """
                 <script>\(safeJS)</script>
                 \(initScript)
                 """
             )
         case .lazy:
-            // CSS stays inline so layout doesn't shift when the JS arrives.
             return VendorEmission(head: """
-            <style>\(themedCSS)</style>
             <script>
             (function() {
                 \(highlightAllBody)
