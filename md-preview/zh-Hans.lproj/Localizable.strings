@@ -19,6 +19,8 @@
 "Automatic saving" = "自动保存";
 "Save edited documents periodically." = "定期保存编辑中的文稿。";
 "Automatic saving runs while a document has unsaved edits." = "文稿有未保存的编辑时，自动保存会运行。";
+"Leave edit mode without asking to save" = "退出编辑模式时不询问是否存储";
+"Unsaved changes stay in the window until you save or close it." = "未存储的更改会保留在窗口中，直到您存储或关闭它。";
 "30 seconds" = "30 秒";
 "1 minute" = "1 分钟";
 "%d minutes" = "%d 分钟";
@@ -208,6 +210,14 @@
 "Save" = "存储";
 "Cancel" = "取消";
 "Don’t Save" = "不存储";
+"Continue" = "继续";
+"Revert…" = "复原…";
+"Revert" = "复原";
+"Continue keeps your changes to %@ without saving them, so you can save later. Revert… discards them." = "“继续”会保留对 %@ 的更改但不存储，您可以稍后再存储。“复原…”会丢弃这些更改。";
+"Revert to the last saved version of %@?" = "要将 %@ 复原到上次存储的版本吗？";
+"Your unsaved changes will be lost. You can’t undo this action." = "未存储的更改将会丢失。此操作无法撤销。";
+"Save changes" = "存储更改";
+"No unsaved changes" = "没有未存储的更改";
 "The file was removed while it was open." = "文件在打开期间被移除。";
 "Recreate File" = "重新创建文件";
 "The file could not be read to verify that it is unchanged." = "无法读取文件，因此无法确认文件是否已更改。";

@@ -26,6 +26,7 @@ extension NSToolbarItem.Identifier {
     static let zoom = NSToolbarItem.Identifier("Zoom")
     static let themesAndSettings = NSToolbarItem.Identifier("ThemesAndSettings")
     static let editDocument = NSToolbarItem.Identifier("EditDocument")
+    static let saveDocument = NSToolbarItem.Identifier("SaveDocument")
     static let navigation = NSToolbarItem.Identifier("Navigation")
     static let alwaysOnTop = NSToolbarItem.Identifier("AlwaysOnTop")
 }
@@ -65,6 +66,7 @@ extension DocumentWindowController {
             .space,
             .inspector,
             .share,
+            .saveDocument,
             .editDocument,
             .search
         ]
@@ -85,6 +87,7 @@ extension DocumentWindowController {
             .space,
             .openActions,
             .openWith,
+            .saveDocument,
             .editDocument,
             .inspector,
             .share,
@@ -116,6 +119,7 @@ extension DocumentWindowController {
             guard hasLLMTargetsAvailable else { return nil }
             return makeOpenInLLMItem()
         case .editDocument: return makeEditItem(willBeInsertedIntoToolbar: flag)
+        case .saveDocument: return makeSaveItem(willBeInsertedIntoToolbar: flag)
         case .inspector: return makeInspectorItem(willBeInsertedIntoToolbar: flag)
         case .alwaysOnTop: return makeAlwaysOnTopItem(willBeInsertedIntoToolbar: flag)
         case .share: return makeShareItem()
@@ -258,6 +262,55 @@ extension DocumentWindowController {
         item.toolTip = NSLocalizedString("Share document", comment: "Share toolbar item tooltip")
         item.delegate = self
         return item
+    }
+
+    /// Always present, enabled only while there is something to save, so it
+    /// doubles as the unsaved-changes indicator. It saves through
+    /// saveDocument(_:), the same path as ⌘S, including after edit mode has
+    /// been left with the changes kept.
+    ///
+    /// Icon and word together, matching File › Save… in the menu. The icon on
+    /// its own, square.and.arrow.down, is the Share icon with its arrow flipped
+    /// and sits right next to Share; the word is what makes it unambiguous. A
+    /// custom view, like the Edit item, because a bordered image item shows
+    /// the image or the title, never both.
+    private func makeSaveItem(willBeInsertedIntoToolbar: Bool) -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: .saveDocument)
+        let save = NSLocalizedString("Save", comment: "Save toolbar item label")
+        item.label = save
+        item.paletteLabel = save
+        let image = NSImage(systemSymbolName: "square.and.arrow.down",
+                            accessibilityDescription: nil) ?? NSImage()
+        image.isTemplate = true
+        let button = NSButton(title: save, image: image,
+                              target: self, action: #selector(saveDocument(_:)))
+        button.imagePosition = .imageLeading
+        button.isBordered = true
+        item.view = button
+        // State comes from updateSaveToolbarItem(), not from validation.
+        item.autovalidates = false
+        if willBeInsertedIntoToolbar {
+            saveItem = item
+        }
+        applySaveToolbarState(to: item)
+        return item
+    }
+
+    func updateSaveToolbarItem() {
+        guard let saveItem else { return }
+        applySaveToolbarState(to: saveItem)
+    }
+
+    private func applySaveToolbarState(to item: NSToolbarItem) {
+        let enabled = EditExitPolicy.isSaveCommandEnabled(hasUnsavedChanges: hasUnsavedEditorChanges)
+        let tip = enabled
+            ? NSLocalizedString("Save changes", comment: "Save toolbar item tooltip")
+            : NSLocalizedString("No unsaved changes", comment: "Save toolbar item tooltip when disabled")
+        item.isEnabled = enabled
+        item.toolTip = tip
+        // A view-based item's control carries its own state.
+        (item.view as? NSButton)?.isEnabled = enabled
+        item.view?.toolTip = tip
     }
 
     private func makePrintItem() -> NSToolbarItem {
@@ -476,6 +529,23 @@ extension DocumentWindowController {
     /// who rearranges things in Customize Toolbar afterwards keeps their
     /// layout on the next launch.
     private static let didReplaceZoomItemKey = "Toolbar.DidReplaceZoomWithThemesAndSettings"
+
+    /// One-time insertion for toolbars restored from an autosaved
+    /// configuration that predates the Save item -- without it, everyone who
+    /// already has the app would never see the button. Guarded by a defaults
+    /// flag, like the zoom swap below, so a reader who removes it in Customize
+    /// Toolbar keeps it removed.
+    private static let didInsertSaveItemKey = "Toolbar.DidInsertSaveItem"
+
+    func insertSaveToolbarItemIfNeeded(in toolbar: NSToolbar) {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.didInsertSaveItemKey) else { return }
+        defaults.set(true, forKey: Self.didInsertSaveItemKey)
+        guard !toolbar.items.contains(where: { $0.itemIdentifier == .saveDocument }) else { return }
+        let index = toolbar.items.firstIndex(where: { $0.itemIdentifier == .editDocument })
+            ?? toolbar.items.count
+        toolbar.insertItem(withItemIdentifier: .saveDocument, at: index)
+    }
 
     func replaceZoomToolbarItemIfNeeded(in toolbar: NSToolbar) {
         let defaults = UserDefaults.standard

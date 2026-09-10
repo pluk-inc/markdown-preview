@@ -70,6 +70,10 @@ struct GeneralSettingsView: View {
                     Text(L("Automatic saving"))
                     Text(L("Save edited documents periodically."))
                 }
+                Toggle(isOn: $model.exitsEditModeSilently) {
+                    Text(L("Leave edit mode without asking to save"))
+                    Text(L("Unsaved changes stay in the window until you save or close it."))
+                }
             } header: {
                 Text(L("Editing"))
             } footer: {
