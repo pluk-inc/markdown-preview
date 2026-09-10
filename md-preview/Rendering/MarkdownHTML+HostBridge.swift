@@ -850,12 +850,60 @@ nonisolated extension MarkdownHTML {
         // `md-asset:` so markdown image references that resolve to the
         // document's base directory (![alt](relative/path.png)) keep working.
         const SANITIZE_CONFIG = {
+            // Forbidding 'form' alone is not enough. DOMPurify defaults to
+            // KEEP_CONTENT: true, which unwraps a forbidden element and
+            // reparents its children -- so <form><input></form> loses the form
+            // and keeps a working text field, and a document can put a
+            // password box on the page.
+            //
+            // 'button' is deliberately NOT in this list. MarkdownHTML+Mermaid
+            // emits the diagram HUD (zoom out, reset, zoom in, fill width,
+            // open in window) as article HTML, so it passes through here like
+            // document content; forbidding the tag deletes the app's own
+            // controls. Distinguishing them by class would not work either --
+            // the class comes from the document. A button with no form behind
+            // it and no script that can run is inert, so this is a fair trade:
+            // the tag that matters is 'input', because a field is what invites
+            // typing.
             FORBID_TAGS: ['style', 'form', 'iframe', 'object',
-                          'embed', 'meta', 'link', 'base'],
+                          'embed', 'meta', 'link', 'base',
+                          'select', 'textarea', 'option', 'optgroup',
+                          'fieldset', 'legend', 'label', 'datalist', 'output'],
             FORBID_ATTR: ['style'],
             ADD_ATTR: ['target'],
             ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|md-asset):|[^a-z]|[a-z+.\\-]+(?:[^a-z+.\\-:]|$))/i
         };
+        // <input> cannot simply be forbidden: EscapingHTMLFormatter emits one
+        // per task-list item. Allow exactly that shape and drop every other
+        // input, so task lists keep rendering while document content cannot
+        // place a text or password field on the page.
+        //
+        // The hook is installed for both sanitize paths. MdPreview.update
+        // calls DOMPurify.sanitize directly with SANITIZE_DOM_CONFIG rather
+        // than going through sanitize() below, so hooking only the latter
+        // would leave the hot path -- every file change and editor exit --
+        // unprotected. DOMPurify hooks are global, so installing once covers
+        // both.
+        //
+        // The rule deliberately does not require `disabled`. The formatter
+        // emits `disabled=""` on task checkboxes and DOMPurify preserves it;
+        // enableTaskCheckboxes() clears it afterwards, and only when a host
+        // bridge exists, which is why the checkboxes stay inert in Quick Look.
+        // Matching on the attribute would therefore depend on which side of
+        // that call the sanitizer happens to run.
+        let sanitizerHooked = false;
+        function configureSanitizer() {
+            if (sanitizerHooked || typeof DOMPurify === 'undefined' || !DOMPurify.addHook) return;
+            sanitizerHooked = true;
+            DOMPurify.addHook('uponSanitizeElement', (node, data) => {
+                if (data.tagName !== 'input') return;
+                const type = (node.getAttribute && node.getAttribute('type') || '').toLowerCase();
+                if (type !== 'checkbox' && node.parentNode) {
+                    node.parentNode.removeChild(node);
+                }
+            });
+        }
+
         function sanitize(html) {
             if (typeof html !== 'string') return '';
             if (typeof DOMPurify === 'undefined' || !DOMPurify.sanitize) {
@@ -867,6 +915,7 @@ nonisolated extension MarkdownHTML {
                 }
                 return '';
             }
+            configureSanitizer();
             return DOMPurify.sanitize(html, SANITIZE_CONFIG);
         }
 
@@ -1033,6 +1082,7 @@ nonisolated extension MarkdownHTML {
             let morphed = false;
             if (canMorph) {
                 try {
+                    configureSanitizer();
                     const frag = DOMPurify.sanitize(articleHTML, SANITIZE_DOM_CONFIG);
                     const next = document.createElement('article');
                     next.appendChild(frag);
