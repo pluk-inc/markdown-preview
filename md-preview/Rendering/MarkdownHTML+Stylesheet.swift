@@ -495,12 +495,22 @@ nonisolated extension MarkdownHTML {
         border-radius: 15px;
         overflow: hidden;
         outline: none;
+        /* The stage is absolutely positioned, so the figure has no width of
+           its own. Left to its auto margins inside the article's flex column
+           it shrinks to 0 wide, and the aspect ratio then makes it 0 tall.
+           The max-width is the height cap carried through the aspect ratio,
+           which block layout derived by itself: a tall diagram narrows and
+           stays centred rather than filling the column with empty sides. */
+        --mm-max-height: min(70vh, 720px);
+        width: 100%;
+        max-width: calc(var(--mm-max-height) * (var(--mm-aspect, 4 / 3)));
         aspect-ratio: var(--mm-aspect, 4 / 3);
-        max-height: min(70vh, 720px);
+        max-height: var(--mm-max-height);
         contain: layout paint;
     }
     .mermaid-figure.mermaid-width-expanded {
         width: 100%;
+        max-width: none;
         max-height: none;
     }
     .mermaid-figure:focus-visible {

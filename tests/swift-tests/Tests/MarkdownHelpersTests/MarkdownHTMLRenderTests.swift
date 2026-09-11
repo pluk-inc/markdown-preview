@@ -1478,6 +1478,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                 articleWidth: article.clientWidth,
                 articleLeft: article.getBoundingClientRect().left,
                 figureWidth: figure.getBoundingClientRect().width,
+                figureHeight: figure.getBoundingClientRect().height,
                 figureLeft: figure.getBoundingClientRect().left,
                 availableWidth: host.clientWidth
                     - parseFloat(style.paddingLeft)
@@ -1494,6 +1495,11 @@ final class MarkdownHTMLRenderTests: XCTestCase {
 
         XCTAssertFalse(initial.expanded)
         XCTAssertEqual(initial.buttonPressed, "false")
+        // Pin the size, not just "narrower and centred": a figure collapsed to
+        // 0 x 0 satisfies both of those. The height cap is 70vh of the 600pt
+        // view, and the 1:4 aspect ratio carries it through to the width.
+        XCTAssertEqual(initial.figureHeight, 420, accuracy: 1)
+        XCTAssertEqual(initial.figureWidth, 105, accuracy: 1)
         XCTAssertLessThan(initial.figureWidth, initial.articleWidth)
         XCTAssertEqual(
             initial.figureLeft - initial.articleLeft,
@@ -1523,6 +1529,66 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(restored.expanded)
         XCTAssertEqual(restored.buttonPressed, "false")
         XCTAssertEqual(restored.figureWidth, initial.figureWidth, accuracy: 1)
+    }
+
+    @MainActor
+    func testWideMermaidDiagramFillsTheColumnInTheScreenLayout() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ```mermaid
+            flowchart LR
+                A --> B
+            ```
+            """,
+            vendorLoading: .lazy
+        )
+        let stylesheet = try XCTUnwrap(
+            rendered.html
+                .components(separatedBy: "<style>")
+                .dropFirst()
+                .first?
+                .components(separatedBy: "</style>")
+                .first
+        )
+        // On screen the article is a flex column. The figure's contents are
+        // all absolutely positioned, so a figure sized by its content alone
+        // lays out at 0 x 0 and the diagram draws nowhere.
+        let html = """
+        <!DOCTYPE html>
+        <html><head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>\(stylesheet)</style>
+        </head><body><article class="markdown-body">\(rendered.articleHTML)</article>
+        <script>
+        document.querySelector('.mermaid-figure').style.setProperty('--mm-aspect', '2 / 1');
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const article = document.querySelector('.markdown-body');
+            const figure = document.querySelector('.mermaid-figure').getBoundingClientRect();
+            return JSON.stringify({
+                display: getComputedStyle(article).display,
+                articleWidth: article.clientWidth,
+                figureWidth: figure.width,
+                figureHeight: figure.height,
+            });
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let metrics = try JSONDecoder().decode(WideMermaidMetrics.self, from: Data(json.utf8))
+
+        XCTAssertEqual(metrics.display, "flex")
+        XCTAssertGreaterThan(metrics.articleWidth, 0)
+        XCTAssertEqual(metrics.figureWidth, metrics.articleWidth, accuracy: 1)
+        XCTAssertEqual(metrics.figureHeight, metrics.articleWidth / 2, accuracy: 1)
     }
 
     @MainActor
@@ -2350,11 +2416,19 @@ private struct MermaidLayoutMetrics: Decodable {
     let articleWidth: CGFloat
     let articleLeft: CGFloat
     let figureWidth: CGFloat
+    let figureHeight: CGFloat
     let figureLeft: CGFloat
     let availableWidth: CGFloat
     let svgWidth: CGFloat
     let expanded: Bool
     let buttonPressed: String
+}
+
+private struct WideMermaidMetrics: Decodable {
+    let display: String
+    let articleWidth: CGFloat
+    let figureWidth: CGFloat
+    let figureHeight: CGFloat
 }
 
 private struct MermaidHUDMetrics: Decodable {
