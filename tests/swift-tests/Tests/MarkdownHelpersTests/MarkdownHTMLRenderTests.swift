@@ -517,7 +517,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
     @MainActor
     func testUnorderedListMarkersStayClearOfTextForEveryDocumentFont() async throws {
         let article = EscapingHTMLFormatter.format("""
-        <details open>
+        <details>
         <summary>Expanded details</summary>
 
         - [Every list marker needs visible clearance.](example.md)
@@ -540,6 +540,8 @@ final class MarkdownHTMLRenderTests: XCTestCase {
 
             let result = try await webView.evaluateJavaScript("""
             (() => {
+                const details = document.querySelector('details');
+                details.querySelector('summary').click();
                 const item = document.querySelector('ul > li');
                 const text = item.querySelector('a').firstChild;
                 const firstCharacter = document.createRange();
@@ -552,6 +554,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                     + parseFloat(marker.borderLeftWidth) + parseFloat(marker.width)
                     + parseFloat(marker.borderRightWidth);
                 return {
+                    open: details.open,
                     fontSize: parseFloat(getComputedStyle(item).fontSize),
                     gap: textBox.left - markerRight,
                     left: marker.left,
@@ -562,6 +565,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             })()
             """)
             let metrics = try XCTUnwrap(result as? [String: Any], font.rawValue)
+            XCTAssertEqual(metrics["open"] as? Bool, true, font.rawValue)
             let fontSize = try XCTUnwrap(metrics["fontSize"] as? Double, font.rawValue)
             let gap = try XCTUnwrap(metrics["gap"] as? Double, "\(font.rawValue): \(metrics)")
             XCTAssertGreaterThanOrEqual(
