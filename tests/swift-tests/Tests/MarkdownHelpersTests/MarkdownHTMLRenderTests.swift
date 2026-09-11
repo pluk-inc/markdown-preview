@@ -514,6 +514,64 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(metrics["h1"] as? Double), MarkdownHTML.bodyFontSize * 2, accuracy: 0.1)
     }
 
+    @MainActor
+    func testUnorderedListMarkersStayClearOfTextForEveryDocumentFont() async throws {
+        let article = EscapingHTMLFormatter.format("""
+        <details open>
+        <summary>Expanded details</summary>
+
+        - [Every list marker needs visible clearance.](example.md)
+
+        </details>
+        """)
+
+        for font in DocumentFontSetting.allCases {
+            let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 400))
+            webView.loadHTMLString("""
+            <!doctype html><meta charset="utf-8">
+            <style>\(MarkdownHTML.stylesheet)</style>
+            <style>:root { --mdp-doc-font: \(font.fontFamily); }</style>
+            <article class="markdown-body">\(article)</article>
+            """, baseURL: nil)
+            for _ in 0..<200 where webView.isLoading {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            XCTAssertFalse(webView.isLoading, font.rawValue)
+
+            let result = try await webView.evaluateJavaScript("""
+            (() => {
+                const item = document.querySelector('ul > li');
+                const text = item.querySelector('a').firstChild;
+                const firstCharacter = document.createRange();
+                firstCharacter.setStart(text, 0);
+                firstCharacter.setEnd(text, 1);
+                const itemBox = item.getBoundingClientRect();
+                const textBox = firstCharacter.getBoundingClientRect();
+                const marker = getComputedStyle(item, '::before');
+                const markerRight = itemBox.left + parseFloat(marker.left)
+                    + parseFloat(marker.borderLeftWidth) + parseFloat(marker.width)
+                    + parseFloat(marker.borderRightWidth);
+                return {
+                    fontSize: parseFloat(getComputedStyle(item).fontSize),
+                    gap: textBox.left - markerRight,
+                    left: marker.left,
+                    inlineStart: marker.insetInlineStart,
+                    width: marker.width,
+                    border: marker.borderLeftWidth
+                };
+            })()
+            """)
+            let metrics = try XCTUnwrap(result as? [String: Any], font.rawValue)
+            let fontSize = try XCTUnwrap(metrics["fontSize"] as? Double, font.rawValue)
+            let gap = try XCTUnwrap(metrics["gap"] as? Double, "\(font.rawValue): \(metrics)")
+            XCTAssertGreaterThanOrEqual(
+                gap,
+                fontSize * 0.75,
+                "\(font.rawValue): \(metrics)"
+            )
+        }
+    }
+
     func testCodeCopyButtonFallsBackToQuickLookPasteboardHandler() {
         // Quick Look has no `mdPreviewHost` bridge and its sandbox rejects
         // `navigator.clipboard`, so the copy button must reach the extension's

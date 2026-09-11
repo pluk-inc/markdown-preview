@@ -53,7 +53,7 @@ nonisolated extension MarkdownHTML {
         --hl-attribute: #815f03;
         --hl-url: #0e0eff;
         --mdp-list-indent: 2.1em;
-        --mdp-list-gap: 0.5em;
+        --mdp-list-gap: 0.75em;
     }
     :root[data-mdp-color-scheme="light"] {
         color-scheme: light;
