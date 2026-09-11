@@ -122,7 +122,7 @@ enum OpenTargetCatalog {
 
     // MARK: - Editors
 
-    private static let markdownDocTypeExtensions: Set<String> = ["md", "markdown", "mdown"]
+    private static let markdownDocTypeExtensions: Set<String> = ["md", "markdown", "mdown", "mdx"]
     private static let strongMarkdownUTIs: Set<String> = ["net.daringfireball.markdown"]
     private static let plainTextUTIs: Set<String> = [
         "public.plain-text", "public.text",

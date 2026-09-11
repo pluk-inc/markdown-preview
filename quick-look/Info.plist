@@ -20,6 +20,7 @@
 				<string>doc.md-preview.mdwn</string>
 				<string>doc.md-preview.mdtxt</string>
 				<string>doc.md-preview.mdtext</string>
+				<string>doc.md-preview.mdx</string>
 			</array>
 			<key>QLSupportsSearchableItems</key>
 			<false/>

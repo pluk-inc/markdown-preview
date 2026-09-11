@@ -1582,7 +1582,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     }
 
     private static func isMarkdownDocument(_ url: URL) -> Bool {
-        ["md", "markdown", "mdown", "mkdn", "mkd"].contains(url.pathExtension.lowercased())
+        ["md", "markdown", "mdown", "mkdn", "mkd", "mdx"].contains(url.pathExtension.lowercased())
     }
 
     private static func reattachingFragment(of source: URL, to target: URL) -> URL {

@@ -42,6 +42,7 @@
 				<string>doc.md-preview.mdwn</string>
 				<string>doc.md-preview.mdtxt</string>
 				<string>doc.md-preview.mdtext</string>
+				<string>doc.md-preview.mdx</string>
 			</array>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MarkdownDocument</string>
@@ -156,6 +157,23 @@
 				<key>public.filename-extension</key>
 				<array>
 					<string>mdtext</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>net.daringfireball.markdown</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Markdown Document (mdx)</string>
+			<key>UTTypeIdentifier</key>
+			<string>doc.md-preview.mdx</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>mdx</string>
 				</array>
 			</dict>
 		</dict>

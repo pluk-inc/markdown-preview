@@ -81,7 +81,7 @@ Or grab the latest signed and notarized DMG from the [Releases](https://github.c
 
 ## Supported file types
 
-`.md`, `.markdown`, `.mdown`, `.txt`
+`.md`, `.markdown`, `.mdown`, `.mdx`, `.txt`
 UTI: `net.daringfireball.markdown`
 
 ## Requirements
