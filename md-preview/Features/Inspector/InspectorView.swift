@@ -18,6 +18,14 @@ struct DocumentMetadata: Equatable {
     var modifiedDate: Date?
     var fileSize: Int64?
     var frontmatter: [FrontmatterEntry] = []
+    /// The folder this document may read images and links from, and whether
+    /// that is a folder the reader opened rather than the document's own.
+    var folderAccess: FolderAccess?
+
+    struct FolderAccess: Equatable {
+        let folder: URL
+        let isOpenedFolder: Bool
+    }
 }
 
 extension DocumentMetadata {
@@ -156,6 +164,25 @@ struct InspectorView: View {
                         NSLocalizedString("File Size", comment: "Inspector field label"),
                         value: size.formatted(.byteCount(style: .file))
                     )
+                }
+                // A boundary that is too narrow announces itself: something
+                // fails to load. One that is wide — a large folder opened as
+                // a project — never would, so it is stated here.
+                if let access = metadata.folderAccess {
+                    LabeledContent(
+                        NSLocalizedString("Folder Access", comment: "Inspector field label")
+                    ) {
+                        Text(access.folder.path)
+                            .lineLimit(1)
+                            .truncationMode(.head)
+                    }
+                    .help(access.isOpenedFolder
+                          ? NSLocalizedString(
+                            "This document reads images and links from the folder you opened. Anything outside it is blocked.",
+                            comment: "Inspector folder access help, opened folder")
+                          : NSLocalizedString(
+                            "This document reads images and links from its own folder. Open a project folder to widen this.",
+                            comment: "Inspector folder access help, document folder"))
                 }
             }
 

@@ -52,6 +52,19 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     var currentFileURL: URL?
+    /// A folder the reader opened in this window, which bounds documents
+    /// inside it. Set only by `openFolder(_:)` — rendering a document must
+    /// never move it — and dropped when a document outside it is loaded, at
+    /// the same moment the file navigator re-roots. See `MarkdownAccessPolicy`.
+    var openedFolderRoot: URL?
+    /// The folder the open document may read from: the folder opened in this
+    /// window when the document sits inside it, otherwise its own folder.
+    var currentContainmentRoot: URL? {
+        MarkdownAccessPolicy.containmentRoot(
+            documentFolder: currentFileURL?.deletingLastPathComponent(),
+            openedFolder: openedFolderRoot
+        )
+    }
     var currentMarkdown: String?
     var backHistory: [HistoryEntry] = []
     var forwardHistory: [HistoryEntry] = []
@@ -196,11 +209,19 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             self?.present(url: url)
         }
         split.onOpenMarkdownLink = { [weak self] url in
+            // `present(url:)` opens a directory as this window's folder root,
+            // which widens what a document may read. A link comes from
+            // document content, so it never gets to do that — only an
+            // explicit Open Folder does.
+            guard !url.isExistingDirectory else { return }
             if SettingsModel.shared.opensMarkdownLinksInNewWindows {
                 self?.openInNewWindow(url)
             } else {
                 self?.present(url: url)
             }
+        }
+        split.onSaveDocumentRequested = { [weak self] in
+            self?.saveDocumentForLinkResolution()
         }
         split.onToggleTaskCheckbox = { [weak self] line, checked in
             self?.toggleTaskCheckbox(onLine: line, checked: checked)

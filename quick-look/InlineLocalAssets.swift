@@ -153,9 +153,13 @@ enum InlineLocalAssets {
         }
     }
 
+    /// Symlinks are resolved on both sides before comparing: a link inside the
+    /// document folder pointing anywhere else satisfies a purely textual test
+    /// and would hand back a file from outside the boundary. Unzipping an
+    /// archive that contains one is enough to set that up.
     private static func isDescendantOrSame(_ candidate: URL, of baseDirectory: URL) -> Bool {
-        let candidatePath = candidate.standardizedFileURL.path
-        let basePath = baseDirectory.standardizedFileURL.path
+        let candidatePath = candidate.standardizedFileURL.resolvingSymlinksInPath().path
+        let basePath = baseDirectory.standardizedFileURL.resolvingSymlinksInPath().path
         return candidatePath == basePath || candidatePath.hasPrefix(basePath + "/")
     }
 }

@@ -299,3 +299,20 @@
 "Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "让所有 Markdown Preview 窗口始终显示在其他 App 前面，包括之后打开的窗口。窗口进入全屏时不会置顶，退出全屏后会恢复。";
 "Open documents in tabs" = "以标签页打开文稿";
 "A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "从“访达”打开的文件会作为标签页加入最前面的窗口，而不是各自新建一个窗口——“在新窗口中打开”仍会打开新窗口。";
+
+/* Links pointing outside the folder a document may read */
+"“%@” is outside the folder this document can read." = "“%@”不在此文稿可读取的文件夹内。";
+"This document can read files in “%@”." = "此文稿可以读取“%@”中的文件。";
+"It will be shown in Finder rather than opened." = "该文件将在“访达”中显示，而不会被打开。";
+"Save this document to follow links to other files." = "请先存储此文稿，才能跟随指向其他文件的链接。";
+"A document that has never been saved has no folder, so a relative link has nothing to point at." = "从未存储过的文稿没有所在文件夹，相对链接也就无处可指。";
+"Save…" = "存储…";
+
+/* Inspector — folder access */
+"Folder Access" = "文件夹访问范围";
+"This document reads images and links from the folder you opened. Anything outside it is blocked." = "此文稿从你打开的文件夹中读取图像和链接，该文件夹以外的内容会被阻止。";
+"This document reads images and links from its own folder. Open a project folder to widen this." = "此文稿仅从自身所在的文件夹读取图像和链接。打开项目文件夹可扩大范围。";
+
+/* A link to something the system would run */
+"“%@” would be run, not opened." = "“%@”会被运行，而不是打开。";
+"This document links to a program or installer. It will be shown in Finder instead." = "此文稿链接到一个程序或安装包。该文件将在“访达”中显示，而不会被打开。";

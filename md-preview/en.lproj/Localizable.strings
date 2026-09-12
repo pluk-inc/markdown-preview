@@ -299,3 +299,20 @@
 "Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out.";
 "Open documents in tabs" = "Open documents in tabs";
 "A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window.";
+
+/* Links pointing outside the folder a document may read */
+"“%@” is outside the folder this document can read." = "“%@” is outside the folder this document can read.";
+"This document can read files in “%@”." = "This document can read files in “%@”.";
+"It will be shown in Finder rather than opened." = "It will be shown in Finder rather than opened.";
+"Save this document to follow links to other files." = "Save this document to follow links to other files.";
+"A document that has never been saved has no folder, so a relative link has nothing to point at." = "A document that has never been saved has no folder, so a relative link has nothing to point at.";
+"Save…" = "Save…";
+
+/* Inspector — folder access */
+"Folder Access" = "Folder Access";
+"This document reads images and links from the folder you opened. Anything outside it is blocked." = "This document reads images and links from the folder you opened. Anything outside it is blocked.";
+"This document reads images and links from its own folder. Open a project folder to widen this." = "This document reads images and links from its own folder. Open a project folder to widen this.";
+
+/* A link to something the system would run */
+"“%@” would be run, not opened." = "“%@” would be run, not opened.";
+"This document links to a program or installer. It will be shown in Finder instead." = "This document links to a program or installer. It will be shown in Finder instead.";

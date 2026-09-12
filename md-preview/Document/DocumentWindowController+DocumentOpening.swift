@@ -58,6 +58,10 @@ extension DocumentWindowController {
 
     func openFolder(_ folderURL: URL) {
         let folderURL = folderURL.standardizedFileURL
+        // The one act that widens what a document may read. Every other path
+        // into the navigator — opening a file, renaming one — leaves it alone.
+        openedFolderRoot = folderURL
+        rerenderForBoundaryChange()
         if currentFileURL == nil {
             documentWindow.title = folderURL.lastPathComponent
             updateWindowSubtitle()
@@ -206,11 +210,25 @@ extension DocumentWindowController {
     }
 
     func renderCurrentDocument(text: String, fileURL: URL?) {
+        let documentFolder = fileURL?.deletingLastPathComponent()
+        openedFolderRoot = MarkdownAccessPolicy.openedFolder(openedFolderRoot,
+                                                             afterLoading: documentFolder)
         (documentWindow.contentViewController as? MainSplitViewController)?
             .display(markdown: text,
                      fileName: fileURL?.lastPathComponent
                          ?? NSLocalizedString("Untitled", comment: "Untitled document name"),
                      url: fileURL,
-                     assetBaseURL: fileURL?.deletingLastPathComponent())
+                     assetBaseURL: documentFolder,
+                     containmentRoot: MarkdownAccessPolicy.containmentRoot(
+                         documentFolder: documentFolder,
+                         openedFolder: openedFolderRoot
+                     ))
+    }
+
+    /// Re-renders the open document after the boundary changes, so opening a
+    /// folder makes its images resolve without the reader reopening the file.
+    private func rerenderForBoundaryChange() {
+        guard let currentMarkdown, !isEditing else { return }
+        renderCurrentDocument(text: currentMarkdown, fileURL: currentFileURL)
     }
 }

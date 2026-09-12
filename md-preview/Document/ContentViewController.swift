@@ -42,6 +42,7 @@ final class ContentViewController: NSViewController {
         let markdown: String
         let sourceURL: URL?
         let assetBaseURL: URL?
+        let containmentRoot: URL?
     }
 
     // Heading top offsets in CSS pixels, indexed by heading id. Compared in
@@ -73,6 +74,7 @@ final class ContentViewController: NSViewController {
     var taskCheckboxToggled: ((Int, Bool) -> Void)?
     var tableEditRequested: ((MarkdownTableEditRequest) -> Void)?
     var localMarkdownLinkActivated: ((URL) -> Void)?
+    var saveDocumentRequested: (() -> Void)?
     /// Fires once after a pending source scroll anchor (prepared via
     /// `prepareToRestoreSourceScrollAnchor`) has been applied to a fresh
     /// render. The edit-mode overlay uses it to hold its cross-fade until
@@ -117,6 +119,9 @@ final class ContentViewController: NSViewController {
         }
         webView.localMarkdownLinkActivated = { [weak self] url in
             self?.localMarkdownLinkActivated?(url)
+        }
+        webView.saveDocumentRequested = { [weak self] in
+            self?.saveDocumentRequested?()
         }
         webView.taskCheckboxToggled = { [weak self] line, checked in
             self?.taskCheckboxToggled?(line, checked)
@@ -208,12 +213,14 @@ final class ContentViewController: NSViewController {
     func display(
         markdown: String,
         sourceURL: URL?,
-        assetBaseURL: URL? = nil
+        assetBaseURL: URL? = nil,
+        containmentRoot: URL? = nil
     ) {
         exportSource = ExportSource(
             markdown: markdown,
             sourceURL: sourceURL,
-            assetBaseURL: assetBaseURL
+            assetBaseURL: assetBaseURL,
+            containmentRoot: containmentRoot
         )
         if pendingPreviewScrollAnchor != nil {
             shouldApplyPendingAnchorOnHeight = true
@@ -225,7 +232,9 @@ final class ContentViewController: NSViewController {
             scheduleNavigationTargetAttempt()
         }
         resetScrollspy()
-        webView.display(markdown: markdown, assetBaseURL: assetBaseURL)
+        webView.display(markdown: markdown,
+                        assetBaseURL: assetBaseURL,
+                        containmentRoot: containmentRoot)
         scheduleHeadingOffsetsRefresh()
     }
 
@@ -240,7 +249,8 @@ final class ContentViewController: NSViewController {
         exportSource = ExportSource(
             markdown: source.markdown,
             sourceURL: sourceURL,
-            assetBaseURL: sourceURL.deletingLastPathComponent()
+            assetBaseURL: sourceURL.deletingLastPathComponent(),
+            containmentRoot: source.containmentRoot
         )
     }
 
