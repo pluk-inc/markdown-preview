@@ -1525,6 +1525,57 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(restored.figureWidth, initial.figureWidth, accuracy: 1)
     }
 
+    /// The article is a flex column on screen, which stretches its children.
+    /// Block content should span the column; an inline-level element left at
+    /// the top level should not. A `<button>` whose `<form>` the sanitiser
+    /// removed lands there, and drawn edge to edge it reads as a working
+    /// control instead of the inert leftover it is.
+    @MainActor
+    func testTopLevelInlineElementsKeepTheirOwnWidth() async throws {
+        let rendered = MarkdownHTML.render(markdown: "Paragraph.\n", vendorLoading: .lazy)
+        let stylesheet = try XCTUnwrap(
+            rendered.html
+                .components(separatedBy: "<style>")
+                .dropFirst()
+                .first?
+                .components(separatedBy: "</style>")
+                .first
+        )
+        let html = """
+        <!DOCTYPE html>
+        <html><head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>\(stylesheet)</style>
+        </head><body><article class="markdown-body">
+        <p id="para">Paragraph.</p>
+        <button id="control">Sign in</button>
+        </article></body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const article = document.querySelector('.markdown-body');
+            return JSON.stringify({
+                articleWidth: article.clientWidth,
+                paragraphWidth: document.getElementById('para').getBoundingClientRect().width,
+                buttonWidth: document.getElementById('control').getBoundingClientRect().width,
+            });
+        })()
+        """)
+        let metrics = try JSONDecoder().decode(
+            TopLevelInlineMetrics.self,
+            from: Data(try XCTUnwrap(result as? String).utf8)
+        )
+
+        XCTAssertEqual(metrics.paragraphWidth, metrics.articleWidth, accuracy: 1)
+        XCTAssertLessThan(metrics.buttonWidth, metrics.articleWidth / 3)
+    }
+
     @MainActor
     func testMermaidHUDWrapsInsideNarrowDiagram() async throws {
         let rendered = MarkdownHTML.render(
@@ -2355,6 +2406,12 @@ private struct MermaidLayoutMetrics: Decodable {
     let svgWidth: CGFloat
     let expanded: Bool
     let buttonPressed: String
+}
+
+private struct TopLevelInlineMetrics: Decodable {
+    let articleWidth: CGFloat
+    let paragraphWidth: CGFloat
+    let buttonWidth: CGFloat
 }
 
 private struct MermaidHUDMetrics: Decodable {

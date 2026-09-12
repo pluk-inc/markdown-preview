@@ -215,6 +215,22 @@ nonisolated extension MarkdownHTML {
             flex-direction: column;
             align-items: stretch;
         }
+        /* Stretching suits block content, but an inline-level element sitting
+           at the top level gets stretched too, and a <button> drawn edge to
+           edge reads as a real control rather than the inert leftover it is:
+           DOMPurify removes a <form> and keeps its children, so a credential
+           prompt's button lands here. Media keeps its own width for the same
+           reason — a raw <img> should not be widened to the column. */
+        article.markdown-body > button,
+        article.markdown-body > input,
+        article.markdown-body > select,
+        article.markdown-body > textarea,
+        article.markdown-body > img,
+        article.markdown-body > svg,
+        article.markdown-body > video,
+        article.markdown-body > audio {
+            align-self: flex-start;
+        }
     }
     .md-inline-tab {
         white-space: pre;
