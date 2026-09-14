@@ -8,6 +8,31 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         TestVendor.installHighlighterGrammar()
     }
 
+    @MainActor
+    func testBareURLsBecomeNavigableDOMLinksInBothRenderModes() async throws {
+        for vendorLoading: MarkdownHTML.VendorLoading in [.inline, .lazy] {
+            let html = MarkdownHTML.makeHTML(
+                from: "* https://apple.com/\n* https://github.com/",
+                vendorLoading: vendorLoading
+            )
+            let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 640, height: 300))
+            // The SPM test bundle has no resources; load the real sanitizer
+            // from the checkout so this exercises the production bootstrap.
+            let purifier = try TestVendor.script("md-preview/Vendor/DOMPurify/purify.min.js")
+            let page = html.replacingOccurrences(of: "<head>", with: "<head><script>\(purifier)</script>")
+            webView.loadHTMLString(page, baseURL: nil)
+            let deadline = Date().addingTimeInterval(10)
+            while webView.isLoading && Date() < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            XCTAssertFalse(webView.isLoading)
+            let links = try await webView.evaluateJavaScript("""
+                Array.from(document.querySelectorAll('article li a')).map(a => a.href)
+                """) as? [String]
+            XCTAssertEqual(links, ["https://apple.com/", "https://github.com/"])
+        }
+    }
+
     func testLocalMarkdownImagesRemainReadOnlyInPreview() {
         let rendered = MarkdownHTML.render(
             markdown: "![1](notes-pictures/1.png)",

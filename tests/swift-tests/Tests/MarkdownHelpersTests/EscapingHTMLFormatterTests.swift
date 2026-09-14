@@ -11,6 +11,50 @@ final class EscapingHTMLFormatterTests: XCTestCase {
     }
 
 
+    func testBareURLsInIssue390ListBecomeLinks() {
+        let html = EscapingHTMLFormatter.format("* https://apple.com/\n* https://github.com/")
+        XCTAssertTrue(html.contains(#"<a href="https://apple.com/">https://apple.com/</a>"#), html)
+        XCTAssertTrue(html.contains(#"<a href="https://github.com/">https://github.com/</a>"#), html)
+    }
+
+    func testBareURLsPreservePunctuationUnicodeAndEscapeQueries() {
+        let html = EscapingHTMLFormatter.format("文 😀 (https://example.com/path). http://example.org/?a=1&b=2")
+        XCTAssertTrue(html.contains(#"(<a href="https://example.com/path">https://example.com/path</a>)."#), html)
+        XCTAssertTrue(html.contains(#"<a href="http://example.org/?a=1&amp;b=2">http://example.org/?a=1&amp;b=2</a>"#), html)
+    }
+
+    func testBareURLsDoNotNestInsideExistingLinksOrCode() {
+        for markdown in [
+            "[https://apple.com/](https://github.com/)",
+            "<https://apple.com/>",
+            #"<a href="https://github.com/"><em>https://apple.com/</em></a>"#,
+        ] {
+            let html = EscapingHTMLFormatter.format(markdown)
+            XCTAssertEqual(html.components(separatedBy: "<a ").count - 1, 1, html)
+        }
+        for markdown in [
+            "`https://apple.com/`", "```\nhttps://apple.com/\n```",
+            "<code>https://apple.com/</code>",
+            "![https://apple.com/](image.png)", "javascript:alert(1)",
+        ] {
+            let html = EscapingHTMLFormatter.format(markdown)
+            XCTAssertFalse(html.contains("<a "), html)
+        }
+        let html = EscapingHTMLFormatter.format("<code>https://apple.com/</code> https://github.com/")
+        XCTAssertTrue(html.contains(#"<a href="https://github.com/">"#), html)
+    }
+
+    func testBareURLsInEmphasisQuotesTablesAndHighlights() {
+        for markdown in [
+            "**https://apple.com/**", "> https://apple.com/",
+            "| URL |\n| --- |\n| https://apple.com/ |",
+            "==https://apple.com/==",
+        ] {
+            let html = EscapingHTMLFormatter.format(markdown)
+            XCTAssertTrue(html.contains(#"<a href="https://apple.com/">https://apple.com/</a>"#), html)
+        }
+    }
+
     func testTaskCheckboxSourceTogglesExactSourceLine() {
         let markdown = "- [ ] Same\n  - [x] Nested\n- [ ] Same\n"
         XCTAssertEqual(
