@@ -86,7 +86,7 @@ See the `release-process` skill for branch/PR naming, exactly what `scripts/rele
 ## Release references
 
 - `Info.plist` currently sets `SUFeedURL` to `https://release.md-preview.app/v1/apps/doc.md-preview/appcast.xml`. Check the current plist and Amore configuration before releasing; do not assume an old hostname or mismatch still applies.
-- The canonical GitHub repository is `pluk-inc/md-preview.app`. Check `git remote -v` in the current checkout before publishing.
+- The canonical GitHub repository is `pluk-inc/markdown-preview`. Older remotes may redirect from `pluk-inc/md-preview.app`; check `git remote -v` and `gh repo view` before publishing.
 
 ## Common Xcode tasks
 ```bash
