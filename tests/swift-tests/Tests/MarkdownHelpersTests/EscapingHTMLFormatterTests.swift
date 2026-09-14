@@ -11,6 +11,15 @@ final class EscapingHTMLFormatterTests: XCTestCase {
     }
 
 
+    func testBareURLFastPathHandlesUppercaseAndDecodedEntities() {
+        for markdown in ["HTTPS://example.com/", "h&#116;tp://example.com/", #"http\://example.com/"#] {
+            let html = EscapingHTMLFormatter.format(markdown)
+            XCTAssertTrue(html.contains("<a href="), html)
+        }
+        let html = EscapingHTMLFormatter.format("Ordinary prose with **bold text** and no URLs.")
+        XCTAssertFalse(html.contains("<a "), html)
+    }
+
     func testBareURLsInIssue390ListBecomeLinks() {
         let html = EscapingHTMLFormatter.format("* https://apple.com/\n* https://github.com/")
         XCTAssertTrue(html.contains(#"<a href="https://apple.com/">https://apple.com/</a>"#), html)
