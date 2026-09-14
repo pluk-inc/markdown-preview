@@ -597,7 +597,6 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
     }
 
     func preparePreviewOfFile(at url: URL) async throws {
-        let text = try String(contentsOf: url, encoding: .utf8)
         let appearanceMode = AppearanceMode.current
         let colorScheme: MarkdownHTML.ColorScheme
         switch appearanceMode {
@@ -609,6 +608,22 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
             colorScheme = .light
         case .dark:
             colorScheme = .dark
+        }
+
+        let text: String
+        do {
+            text = try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            // Surfacing the concrete reason beats throwing, which leaves the
+            // panel blank while the user wonders what went wrong.
+            loadErrorPage(
+                MarkdownHTML.makeHTML(
+                    from: QuickLookErrorPage.makeMarkdown(for: error, fileURL: url),
+                    allowsScroll: true,
+                    colorScheme: colorScheme
+                )
+            )
+            return
         }
 
         let renderedHTML = addingCopyButtonClearance(to: MarkdownHTML.makeHTML(
@@ -635,6 +650,19 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
             // would let WebKit fetch rejected or over-budget relative images.
             baseURL: nil
         )
+    }
+
+    /// Loads a rendered error page instead of the document. The copy button
+    /// stays disabled (there is no source to copy) and cursor regions are
+    /// cleared so the previous document's hover regions don't leak through.
+    private func loadErrorPage(_ html: String) {
+        loadViewIfNeeded()
+        markdownSource = nil
+        isPreviewReady = false
+        resetCopyButton()
+        copyButton.isEnabled = false
+        webView.clearCursorRegions()
+        currentNavigation = webView.loadHTMLString(html, baseURL: nil)
     }
 
     // Quick Look opens with keyboard focus in the host (Finder), so ⌘A/⌘C
