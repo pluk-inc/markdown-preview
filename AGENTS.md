@@ -76,8 +76,11 @@ grep -rn "<the behaviour you changed>" README.md samples/ tests/fixtures/ docs/
   filesystem exception) are narrowly scoped, notarization-review-sensitive
   capabilities. Don't broaden or "clean up" them without understanding why
   they're there (see the inline comments in each file).
-- `Version.xcconfig` (`MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`) is
-  bumped only by `scripts/release.sh` — don't hand-edit it.
+- A release PR must update **both** `MARKETING_VERSION` and
+  `CURRENT_PROJECT_VERSION` in `Version.xcconfig`, together with the matching
+  `CHANGELOG.md` entry. Edit the version file directly during PR preparation.
+  `scripts/release.sh` builds and publishes; run it only when release execution
+  is requested, not merely to create the PR.
 
 ## Releasing
 
