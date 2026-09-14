@@ -57,6 +57,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     var forwardHistory: [HistoryEntry] = []
     weak var navigationItem: NSToolbarItemGroup?
     private var fileWatcher: FileWatcher?
+    private let fullscreenToolbarTheme = FullscreenToolbarTheme()
     var isInspectorToggleSelected = false
     weak var openActionsItem: NSMenuToolbarItem?
     weak var openWithItem: NSMenuToolbarItem?
@@ -241,8 +242,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     /// Tint the window using the current theme while preserving native chrome.
     private func applyWindowBackgroundTheme() {
-        // The dynamic background color is public API and applies in every
-        // window state, including full screen.
+        // This colors the document window. AppKit moves the full-screen
+        // toolbar to a separate window, which needs its own theme treatment.
         documentWindow.backgroundColor = NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             return ThemeColorsSetting.current.color(
@@ -260,6 +261,22 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
         (editBar as? EditAccessoryContainerView)?.updateFullscreenBackground()
         (findBarOverlay as? EditAccessoryContainerView)?.updateFullscreenBackground()
+        updateFullscreenToolbarTheme()
+    }
+
+    private func updateFullscreenToolbarTheme() {
+        let scheme: ThemeColorScheme = documentWindow.effectiveAppearance
+            .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .dark : .light
+        fullscreenToolbarTheme.update(
+            window: documentWindow,
+            color: ThemeColorsSetting.current.color(.windowBackground, scheme)
+        )
+    }
+
+    func windowDidUpdate(_ notification: Notification) {
+        // AppKit can create or replace the detached toolbar after the full-screen
+        // notification. Refresh at window updates, with no timer or global scan.
+        updateFullscreenToolbarTheme()
     }
 
     /// AppKit's automatic tab placement runs when NSDocument shows its
@@ -310,6 +327,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     func windowWillClose(_ notification: Notification) {
+        fullscreenToolbarTheme.restore()
         fileWatcher?.cancel()
         fileWatcher = nil
         themesPopoverEscapeMonitor.stop()
@@ -320,16 +338,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     func windowWillEnterFullScreen(_ notification: Notification) {
         applyAlwaysOnTopLevel(isFullScreen: true)
-        // Note: dropping .fullSizeContentView here would also avoid the
-        // known macOS 26 white-gap bug (FB20291636) with public API, but
-        // it makes the reveal bar push the content down. Safari's
-        // float-over behavior needs the flag, so the gap is neutralized by
-        // the layer treatments in the patrol instead.
+        // Keep fullSizeContentView so the reveal bar floats over the content.
     }
 
     func windowDidEnterFullScreen(_ notification: Notification) {
-        // Full screen switches to the standard chrome (see
-        // applyWindowBackgroundTheme).
+        // The toolbar now has a separate AppKit host window.
         applyWindowBackgroundTheme()
     }
 
@@ -563,13 +576,31 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// Newer systems provide their backdrop through native chrome.
     final class EditAccessoryContainerView: NSView {
         private var fullscreenBackdrop: NSVisualEffectView?
+        private var fullscreenThemeFill: NSView?
 
         /// Full screen on macOS 26 and later draws the toolbar on an opaque
         /// native strip instead of frosting the page, so the rows below it
-        /// take the same titlebar material to read as one piece of chrome.
+        /// use the same solid theme color as the toolbar workaround. Without a
+        /// custom background, retain the native titlebar material.
         func updateFullscreenBackground() {
             guard #available(macOS 26.0, *) else { return }
             if window?.styleMask.contains(.fullScreen) == true {
+                let scheme: ThemeColorScheme = effectiveAppearance
+                    .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .dark : .light
+                if let color = ThemeColorsSetting.current.color(.windowBackground, scheme) {
+                    if fullscreenThemeFill == nil {
+                        let fill = NSView(frame: bounds)
+                        fill.wantsLayer = true
+                        fill.autoresizingMask = [.width, .height]
+                        addSubview(fill, positioned: .below, relativeTo: subviews.first)
+                        fullscreenThemeFill = fill
+                    }
+                    fullscreenThemeFill?.layer?.backgroundColor = color.cgColor
+                    fullscreenThemeFill?.isHidden = false
+                    fullscreenBackdrop?.isHidden = true
+                    return
+                }
+                fullscreenThemeFill?.isHidden = true
                 if fullscreenBackdrop == nil {
                     let backdrop = NSVisualEffectView(frame: bounds)
                     backdrop.material = .titlebar
@@ -582,6 +613,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 fullscreenBackdrop?.isHidden = false
             } else {
                 fullscreenBackdrop?.isHidden = true
+                fullscreenThemeFill?.isHidden = true
             }
         }
 
