@@ -6,7 +6,7 @@
 import Cocoa
 
 private final class FileNode {
-    static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mdwn"]
+    static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mdwn", "mdx"]
 
     let url: URL
     let isDirectory: Bool
