@@ -27,7 +27,7 @@ Read this before running it — the script ships the update, it doesn't just pre
 1. Resolves the version and build number (see the flag reference below).
 2. If `Version.xcconfig` doesn't already match the resolved version/build, updates it and commits **directly on whatever branch is currently checked out**, as `Release X.Y.Z (N)`.
 3. Extracts that version's release notes from `CHANGELOG.md`.
-4. Runs `amore release` — archives, signs, builds the DMG, notarizes, uploads, and — unless `--draft` was passed — **publishes the update to Amore's live appcast** (see the `SUFeedURL` mismatch in AGENTS.md's Known Issues — that's not yet the appcast already-installed copies poll). This is the actual "ship it" step.
+4. Runs `amore release` — archives, signs, builds the DMG, notarizes, uploads, and — unless `--draft` was passed — **publishes the update to Amore's live appcast** (check the current `SUFeedURL` and Amore configuration as described in AGENTS.md's Release references). This is the actual "ship it" step.
 5. Unless `--skip-github` or `--draft`: downloads the DMG, creates and pushes the `vX.Y.Z` tag, and creates the GitHub release (or, if a release for that tag already exists, uploads the DMG to it as an asset).
 
 **The script never pushes the branch itself and never opens or merges the PR.** That remains a separate, manual step.
@@ -52,7 +52,7 @@ This has a consequence worth being explicit about: **unless you pass `--draft`, 
 ./scripts/release.sh --skip-github              # local amore release only (still publishes live; skips tag + GH release)
 ```
 
-Before running, **add a `CHANGELOG.md` entry** for the version being shipped **and commit it** — the script refuses to run on a dirty working tree. **Always invoke the `changelog-maintenance` skill** via the Skill tool whenever the user asks you to write, generate, or update a changelog entry — do not draft freeform. The skill enforces the project's house format, the Keep-a-Changelog category split (Added / Changed / Fixed / Security), and contributor crediting (it always inspects `git log` and `gh pr list` for non-maintainer authors and adds a `### Contributors` block with `@username` GitHub tags when any are found).
+Before running, **add a `CHANGELOG.md` entry** for the version being shipped **and commit it** — the script refuses to run on a dirty working tree. **Always invoke the `changelog-maintenance` skill** by reading its `SKILL.md` and following its instructions whenever the user asks you to write, generate, or update a changelog entry — do not draft freeform. The skill enforces the project's house format, the Keep-a-Changelog category split (Added / Changed / Fixed / Security), and contributor crediting (it always inspects `git log` and `gh pr list` for non-maintainer authors and adds a `### Contributors` block with `@username` GitHub tags when any are found).
 
 Entry shape:
 ```md
@@ -76,7 +76,7 @@ Source of truth: `Version.xcconfig` for the version numbers, `CHANGELOG.md` for 
 Default is **unpublish** (reversible — flips `published=false` on Amore so it disappears from the appcast). Use `--delete` only when you're sure; it permanently removes the release. To re-publish after a non-destructive rollback: `amore releases update <version> -b doc.md-preview --published true`.
 
 ## Amore configuration (already wired)
-- **Hosting**: Amore-managed with custom domain `storage.md-preview.app`
+- **Hosting**: Amore-managed; `Info.plist` currently uses `https://release.md-preview.app/v1/apps/doc.md-preview/appcast.xml`. Verify the current Amore hosting configuration before releasing.
 - **Codesign identity**: `Developer ID Application: Mohamed Fauzaan (5P3TSMNV42)`
 - **Notary keychain profile**: `md-preview-notary`
 - **EdDSA public key** (in Info.plist `SUPublicEDKey`): `gIQjgqfjkIR+egQ4S1oBLxE/NCDxpXXGdZXSpn04VAY=` — private key in login Keychain
