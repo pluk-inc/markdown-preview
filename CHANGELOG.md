@@ -2,6 +2,39 @@
 
 ## [Unreleased]
 
+## [0.0.57] – 2026-09-14
+
+This release improves reading and editing layout, adds Obsidian highlights and MDX file support, and makes navigation and copying Markdown more convenient.
+
+### Added
+
+- **Obsidian-style highlights.** Render `==highlighted text==` in previews and edit mode, with a matching formatting command ([#340](https://github.com/pluk-inc/markdown-preview/pull/340)).
+- **Open MDX files as Markdown.** `.mdx` files are recognized by the app, Quick Look, file navigator, and local document links. JSX is not compiled or executed ([#384](https://github.com/pluk-inc/markdown-preview/pull/384)).
+- **Bare web addresses are clickable.** HTTP and HTTPS URLs become links in the app and Quick Look, including inside lists and tables ([#392](https://github.com/pluk-inc/markdown-preview/pull/392)).
+
+### Changed
+
+- **A more consistent reading and editing layout.** Headings share a system-based type scale, colors follow system appearance and contrast settings, and lists, quotations, tables, and code blocks have refined spacing. Tables respect column alignment and lists support right-to-left indentation ([#375](https://github.com/pluk-inc/markdown-preview/pull/375), [#376](https://github.com/pluk-inc/markdown-preview/pull/376)).
+- **Code is highlighted on the first rendered frame.** Syntax colors are prepared while generating the preview ([#376](https://github.com/pluk-inc/markdown-preview/pull/376)).
+- **Copy complete blocks as Markdown.** Copying whole blocks preserves list markers, link destinations, and code fences; selections within a single block remain plain text. Selection highlighting follows the text without filling gaps between blocks ([#376](https://github.com/pluk-inc/markdown-preview/pull/376)).
+- **Simpler sidebar controls.** Switch between the table of contents and project navigator with a pane picker, and show or hide the sidebar with the system toggle ([#373](https://github.com/pluk-inc/markdown-preview/pull/373)).
+- **Click folder rows to expand or collapse them.** The project navigator now responds to clicks on folder names and icons as well as disclosure triangles ([#393](https://github.com/pluk-inc/markdown-preview/pull/393)).
+
+### Fixed
+
+- **Bullet markers keep their spacing.** Unordered lists retain the gap between markers and text in preview and edit mode, including after expanding a details section ([#386](https://github.com/pluk-inc/markdown-preview/pull/386)).
+- **Mermaid diagrams stay visible with the updated reading layout.** Diagram containers keep their size, with wide diagrams filling the column and tall diagrams centered within the height limit ([#388](https://github.com/pluk-inc/markdown-preview/pull/388)).
+
+### Contributors
+
+- [@NicolasDangg](https://github.com/NicolasDangg) — Obsidian highlight support ([#340](https://github.com/pluk-inc/markdown-preview/pull/340)).
+- [@nexmoe](https://github.com/nexmoe) — MDX file support ([#384](https://github.com/pluk-inc/markdown-preview/pull/384)).
+- [@detunized](https://github.com/detunized) — bullet marker spacing ([#386](https://github.com/pluk-inc/markdown-preview/pull/386)).
+- [@inquinity](https://github.com/inquinity) — reported and fixed disappearing Mermaid diagrams ([#387](https://github.com/pluk-inc/markdown-preview/issues/387), [#388](https://github.com/pluk-inc/markdown-preview/pull/388)).
+- [@Kijomimi](https://github.com/Kijomimi) — reported bullet spacing after expanding details ([#385](https://github.com/pluk-inc/markdown-preview/issues/385)).
+- [@todbot](https://github.com/todbot) — reported unlinked bare URLs ([#390](https://github.com/pluk-inc/markdown-preview/issues/390)).
+- [@zjy365](https://github.com/zjy365) — requested folder-row expansion ([#382](https://github.com/pluk-inc/markdown-preview/issues/382)).
+
 ## [0.0.56] – 2026-09-08
 
 A small follow-up to 0.0.55 that fixes the frosted strip behind the search and formatting rows on macOS 26.1 and later, and keeps those rows consistent with the toolbar in full screen on macOS 27.
