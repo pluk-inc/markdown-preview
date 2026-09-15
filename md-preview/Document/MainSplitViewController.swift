@@ -8,6 +8,8 @@ import Cocoa
 final class MainSplitViewController: NSSplitViewController {
 
     private static let didSeedKey = "MainSplitView.didSeedInitialState"
+    /// Keeps the pane picker and sidebar toggle visible beside the window controls.
+    private static let minimumSidebarWidth: CGFloat = 230
 
     /// How far the chrome overlays (formatting bar, find bar) tuck up into
     /// the native tab bar's empty bottom margin, closing the visual gap
@@ -259,7 +261,7 @@ final class MainSplitViewController: NSSplitViewController {
         let item = themed
             ? NSSplitViewItem(viewController: viewController)
             : NSSplitViewItem(sidebarWithViewController: viewController)
-        item.minimumThickness = 180
+        item.minimumThickness = minimumSidebarWidth
         item.maximumThickness = 400
         item.canCollapse = true
         item.canCollapseFromWindowResize = false
@@ -271,14 +273,13 @@ final class MainSplitViewController: NSSplitViewController {
         return item
     }
 
-    /// Recovers a sane sidebar width when the autosaved divider position is
-    /// degenerate — collapsed-to-zero or ballooned — which the sidebar item
-    /// swap can leave behind.
+    /// Brings restored widths into the supported range, including narrow
+    /// widths saved before the sidebar gained its pane picker.
     private func normalizeSidebarWidthIfNeeded() {
         guard let sidebar = splitViewItems.first, !sidebar.isCollapsed else { return }
         let width = sidebar.viewController.view.frame.width
         if width < sidebar.minimumThickness || width > sidebar.maximumThickness {
-            splitView.setPosition(240, ofDividerAt: 0)
+            splitView.setPosition(Self.minimumSidebarWidth, ofDividerAt: 0)
         }
     }
 
@@ -594,7 +595,7 @@ final class MainSplitViewController: NSSplitViewController {
 
         // Seed the expanded width so the toolbar toggle opens to a sensible size,
         // then start collapsed (Preview-style for single-item docs).
-        splitView.setPosition(240, ofDividerAt: 0)
+        splitView.setPosition(Self.minimumSidebarWidth, ofDividerAt: 0)
         splitViewItems.first?.isCollapsed = true
         defaults.set(true, forKey: Self.didSeedKey)
     }

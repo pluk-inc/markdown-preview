@@ -862,9 +862,10 @@ nonisolated extension MarkdownHTML {
     }
 
     img {
-        display: block;
+        /* Follow the surrounding text, including explicit HTML alignment. */
+        display: inline-block;
         max-width: 100%;
-        margin: 1.6em auto;
+        margin: 1.6em 0;
         border-radius: 8px;
     }
     /* Keep downscaled images proportional, but let explicit width/height
@@ -878,8 +879,7 @@ nonisolated extension MarkdownHTML {
         margin: 0 0.35em 0.35em 0;
     }
     p > img:only-child {
-        display: block;
-        margin: 1.6em auto;
+        margin: 1.6em 0;
     }
 
     strong { font-weight: 600; }
