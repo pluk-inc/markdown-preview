@@ -89,6 +89,15 @@ final class SettingsModel {
         }
     }
 
+    /// Read each time a document leaves edit mode, so like the setting above
+    /// it has nothing to apply to open windows.
+    var exitsEditModeSilently: Bool {
+        didSet {
+            guard !isRestoringExternalValues, exitsEditModeSilently != oldValue else { return }
+            EditExitPolicy.exitsSilently = exitsEditModeSilently
+        }
+    }
+
     var opensMarkdownLinksInNewWindows: Bool {
         didSet {
             guard !isRestoringExternalValues else { return }
@@ -257,6 +266,7 @@ final class SettingsModel {
         readerLayout = ReaderLayoutSetting.current
         isAlwaysOnTop = AlwaysOnTopPolicy.isEnabled
         opensDocumentsInTabs = TabOpeningPolicy.isEnabled
+        exitsEditModeSilently = EditExitPolicy.exitsSilently
         opensMarkdownLinksInNewWindows = UserDefaults.standard.bool(forKey: "MarkdownPreview.opensMarkdownLinksInNewWindows")
         sendsCrashReports = CrashReporter.isEnabled
         themeColors = ThemeColorsSetting.current
@@ -312,6 +322,7 @@ final class SettingsModel {
         readerLayout = ReaderLayoutSetting.current
         isAlwaysOnTop = AlwaysOnTopPolicy.isEnabled
         opensDocumentsInTabs = TabOpeningPolicy.isEnabled
+        exitsEditModeSilently = EditExitPolicy.exitsSilently
         opensMarkdownLinksInNewWindows = UserDefaults.standard.bool(forKey: "MarkdownPreview.opensMarkdownLinksInNewWindows")
         sendsCrashReports = CrashReporter.isEnabled
         themeColors = ThemeColorsSetting.current

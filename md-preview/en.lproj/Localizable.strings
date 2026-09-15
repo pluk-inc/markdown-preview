@@ -19,6 +19,8 @@
 "Automatic saving" = "Automatic saving";
 "Save edited documents periodically." = "Save edited documents periodically.";
 "Automatic saving runs while a document has unsaved edits." = "Automatic saving runs while a document has unsaved edits.";
+"Leave edit mode without asking to save" = "Leave edit mode without asking to save";
+"Unsaved changes stay in the window until you save or close it." = "Unsaved changes stay in the window until you save or close it.";
 "30 seconds" = "30 seconds";
 "1 minute" = "1 minute";
 "%d minutes" = "%d minutes";
@@ -208,6 +210,14 @@
 "Save" = "Save";
 "Cancel" = "Cancel";
 "Don’t Save" = "Don’t Save";
+"Continue" = "Continue";
+"Revert…" = "Revert…";
+"Revert" = "Revert";
+"Continue keeps your changes to %@ without saving them, so you can save later. Revert… discards them." = "Continue keeps your changes to %@ without saving them, so you can save later. Revert… discards them.";
+"Revert to the last saved version of %@?" = "Revert to the last saved version of %@?";
+"Your unsaved changes will be lost. You can’t undo this action." = "Your unsaved changes will be lost. You can’t undo this action.";
+"Save changes" = "Save changes";
+"No unsaved changes" = "No unsaved changes";
 "The file was removed while it was open." = "The file was removed while it was open.";
 "Recreate File" = "Recreate File";
 "The file could not be read to verify that it is unchanged." = "The file could not be read to verify that it is unchanged.";

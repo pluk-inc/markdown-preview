@@ -80,7 +80,7 @@ extension DocumentWindowController {
 
     func toggleEditMode() {
         if isEditing {
-            previewPendingEdits()
+            requestExitEditMode()
         } else {
             enterEditMode()
         }
