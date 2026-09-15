@@ -520,6 +520,8 @@ const image = imagePreview?.querySelector("img")
 const imageSource = imagePreview?.querySelector(".cm-md-image-source")
 check("inactive Markdown image renders as a preview",
   image?.getAttribute("src") === "md-asset:///test-pictures/1.png")
+check("standalone image uses a line without extra baseline spacing",
+  imagePreview?.closest(".cm-line")?.classList.contains("cm-md-image-line"))
 check("image preview retains the exact Markdown source",
   imageSource?.textContent === "![Preview](md-asset:///test-pictures/1.png)")
 image?.dispatchEvent(new dom.window.MouseEvent("click", {
@@ -534,9 +536,20 @@ imageSource?.dispatchEvent(new dom.window.MouseEvent("mousedown", {
 }))
 check("clicking image source restores editable Markdown without changing it",
   imageHost.querySelector(".cm-md-image-preview") == null
+    && imageHost.querySelector(".cm-md-image-line") == null
     && imageEditor.getMarkdown() === imageMarkdown)
 imageEditor.destroy()
 delete dom.window.__mdRequestImageRename
+
+const inlineImageHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(inlineImageHost)
+const inlineImageMarkdown = "Before ![Preview](image.png) after"
+const inlineImageEditor = dom.window.MDEditor.create(inlineImageHost, inlineImageMarkdown, {})
+check("an image surrounded by text keeps its inline alignment",
+  inlineImageHost.querySelector(".cm-md-image-preview") != null
+    && inlineImageHost.querySelector(".cm-md-image-line") == null
+    && inlineImageEditor.getMarkdown() === inlineImageMarkdown)
+inlineImageEditor.destroy()
 
 const renameHistoryHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(renameHistoryHost)

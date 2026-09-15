@@ -12,7 +12,13 @@ final class MarkdownImageLayoutTests: XCTestCase {
         """
         let source = "data:image/svg+xml;base64,\(Data(svg.utf8).base64EncodedString())"
         let markdown = """
+        First paragraph.
+
+        Paragraph before the image.
+
         ![plain](\(source))
+
+        Paragraph after the image.
 
         [![linked](\(source))](https://example.com)
 
@@ -53,6 +59,27 @@ final class MarkdownImageLayoutTests: XCTestCase {
             }
             XCTAssertTrue(ready, "Image fixtures did not load")
             guard ready else { continue }
+
+            let spacing = try await webView.evaluateJavaScript("""
+                (() => {
+                    const paragraphs = document.querySelectorAll('article > p');
+                    const first = paragraphs[0].getBoundingClientRect();
+                    const before = paragraphs[1].getBoundingClientRect();
+                    const image = paragraphs[2].querySelector('img').getBoundingClientRect();
+                    const after = paragraphs[3].getBoundingClientRect();
+                    return {
+                        paragraph: before.top - first.bottom,
+                        aboveImage: image.top - before.bottom,
+                        belowImage: after.top - image.bottom
+                    };
+                })()
+                """)
+            let gaps = try XCTUnwrap(spacing as? [String: Double])
+            let paragraphGap = try XCTUnwrap(gaps["paragraph"])
+            for side in ["aboveImage", "belowImage"] {
+                XCTAssertLessThanOrEqual(try XCTUnwrap(gaps[side]), paragraphGap + 4,
+                                         "Image spacing should match paragraphs, allowing for inline leading")
+            }
 
             let result = try await webView.evaluateJavaScript("""
                 [...document.querySelectorAll('article img')].map((img, index) => {

@@ -662,6 +662,11 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             object-fit: contain;
             border-radius: 8px;
         }
+        /* A standalone image fills its line; aligning its top avoids the
+           extra text-baseline space below CodeMirror's inline widget. */
+        .cm-md-image-line .cm-md-image-preview {
+            vertical-align: top;
+        }
         .cm-md-image-preview.cm-md-image-error img {
             display: none;
         }

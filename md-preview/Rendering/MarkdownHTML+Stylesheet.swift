@@ -865,7 +865,7 @@ nonisolated extension MarkdownHTML {
         /* Follow the surrounding text, including explicit HTML alignment. */
         display: inline-block;
         max-width: 100%;
-        margin: 1.6em 0;
+        margin: \(paragraphSpacing)px 0 0;
         border-radius: 8px;
     }
     /* Keep downscaled images proportional, but let explicit width/height
@@ -873,13 +873,14 @@ nonisolated extension MarkdownHTML {
     img:not([width]):not([height]) {
         height: auto;
     }
+    /* The paragraph owns the block gap; image margins must not add to it. */
     p img {
         display: inline-block;
         vertical-align: middle;
-        margin: 0 0.35em 0.35em 0;
+        margin: 0 0.35em 0 0;
     }
     p > img:only-child {
-        margin: 1.6em 0;
+        margin: 0;
     }
 
     strong { font-weight: 600; }

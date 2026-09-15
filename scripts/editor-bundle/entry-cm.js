@@ -915,6 +915,7 @@ const for_ = (i) => Decoration.line({ class: "cm-md-h" + i })
 for (let i = 1; i <= 6; i++) HEADING_LINE[i] = for_(i)
 const inactiveHeadingLine = Decoration.line({ class: "cm-md-heading-inactive" })
 const headingAfterBlankLine = Decoration.line({ class: "cm-md-heading-after-blank" })
+const imageLine = Decoration.line({ class: "cm-md-image-line" })
 // Inactive fence source lines collapse because the rendered code card owns
 // their height.
 const collapsedLine = Decoration.line({ class: "cm-md-line-collapsed" })
@@ -1556,6 +1557,10 @@ function buildDecorations(view, detectedCodeCache) {
           }
           const alt = state.doc.sliceString(node.from + 2, altEnd)
           if (!touches(node.from, node.to)) {
+            const line = state.doc.lineAt(node.from)
+            if (line.text.trim() === state.doc.sliceString(node.from, node.to)) {
+              lineOnce(line.from, imageLine)
+            }
             ranges.push(Decoration.replace({
               widget: new ImageWidget(
                 source,
