@@ -7,7 +7,7 @@
 import {
   EditorView, keymap, ViewPlugin, Decoration, WidgetType, dropCursor,
 } from "@codemirror/view"
-import { Annotation, EditorState, EditorSelection, StateField, Transaction } from "@codemirror/state"
+import { Annotation, EditorState, EditorSelection, StateEffect, StateField, Transaction } from "@codemirror/state"
 import {
   defaultKeymap, history, historyKeymap, indentLess, insertTab,
 } from "@codemirror/commands"
@@ -863,12 +863,59 @@ class TableEditorWidget extends WidgetType {
   ignoreEvent() { return true }
 }
 
+// Search the source buffer, including lines outside CodeMirror's mounted DOM.
+// Decorations keep highlights visible while the native toolbar owns focus.
+const setFind = StateEffect.define()
+function findState(doc, query, beginsWith, index = 0) {
+  const matches = []
+  if (query) {
+    const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu")
+    const text = doc.toString()
+    for (const match of text.matchAll(pattern)) {
+      const from = match.index
+      if (!beginsWith || from === 0 || !/[A-Za-z0-9_]/.test(text[from - 1])) {
+        matches.push({ from, to: from + match[0].length })
+      }
+    }
+  }
+  index = matches.length ? Math.min(Math.max(index, 0), matches.length - 1) : -1
+  const decorations = Decoration.set(matches.map((match, i) =>
+    Decoration.mark({ class: i === index ? "cm-find-match cm-find-current" : "cm-find-match" })
+      .range(match.from, match.to)))
+  return { query, beginsWith, matches, index, decorations }
+}
+const documentFind = StateField.define({
+  create: (state) => findState(state.doc, "", false),
+  update(value, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(setFind)) {
+        const { query, beginsWith, index } = effect.value
+        return findState(tr.state.doc, query, beginsWith, index)
+      }
+    }
+    return tr.docChanged
+      ? findState(tr.state.doc, value.query, value.beginsWith, value.index)
+      : value
+  },
+  provide: (field) => EditorView.decorations.from(field, (value) => value.decorations),
+})
+function currentFindTouches(state, from, to) {
+  const search = state.field(documentFind)
+  const match = search.matches[search.index]
+  return !!match && match.from < to && match.to > from
+}
+const findTheme = EditorView.baseTheme({
+  ".cm-find-match": { backgroundColor: "#ffe58a", color: "#201800", borderRadius: "2px" },
+  ".cm-find-current": { backgroundColor: "#ffad33", outline: "1px solid #9b5700" },
+})
+
 function buildTableEditors(state) {
   const ranges = []
   const tree = ensureSyntaxTree(state, state.doc.length, 80) || syntaxTree(state)
   tree.iterate({
     enter(node) {
       if (node.name !== "Table") return
+      if (currentFindTouches(state, node.from, node.to)) return false
       const source = state.doc.sliceString(node.from, node.to)
       if (!parseTableSource(source)) return
       ranges.push(Decoration.replace({
@@ -883,7 +930,7 @@ function buildTableEditors(state) {
 
 const tableEditors = StateField.define({
   create: buildTableEditors,
-  update: (value, transaction) => transaction.docChanged
+  update: (value, transaction) => transaction.docChanged || transaction.effects.some((effect) => effect.is(setFind))
     ? buildTableEditors(transaction.state)
     : value,
   provide: (field) => EditorView.decorations.from(field),
@@ -1155,7 +1202,7 @@ function buildMermaidPreviews(state) {
       const details = fencedCodeDetails(state, node)
       const isActive = activeFence != null
         && node.from <= activeFence.from && node.to >= activeFence.to
-      if (details.language === "mermaid" && !isActive) {
+      if (details.language === "mermaid" && !isActive && !currentFindTouches(state, node.from, node.to)) {
         ranges.push(Decoration.replace({
           block: true,
           widget: new MermaidWidget(details.source),
@@ -1187,7 +1234,8 @@ const mermaidPreviews = StateField.define({
       })
     }
 
-    if (activeChanged || fenceSyntaxChanged) return buildMermaidPreviews(tr.state)
+    if (activeChanged || fenceSyntaxChanged || tr.effects.some((effect) => effect.is(setFind))
+        || (tr.docChanged && tr.state.field(documentFind).query)) return buildMermaidPreviews(tr.state)
     if (tr.docChanged) return value.map(tr.changes)
     return value
   },
@@ -1231,14 +1279,14 @@ function buildDecorations(view, detectedCodeCache) {
   // A range selection is an operation on rendered content, not a request to
   // reveal every Markdown marker it spans. Only a caret activates source
   // syntax; this keeps Cmd-A and long drag selections in live-preview form.
-  const touches = (from, to) => view.hasFocus && sel.empty
-    && sel.head >= from && sel.head <= to
+  const touches = (from, to) => currentFindTouches(state, from, to)
+    || (view.hasFocus && sel.empty && sel.head >= from && sel.head <= to)
   const touchesLineOf = (pos) => {
     const line = state.doc.lineAt(pos)
     return touches(line.from, line.to)
   }
-  const isActiveFence = (node) => activeFence != null
-    && node.from <= activeFence.from && node.to >= activeFence.to
+  const isActiveFence = (node) => currentFindTouches(state, node.from, node.to)
+    || (activeFence != null && node.from <= activeFence.from && node.to >= activeFence.to)
   const decoratedLines = new Set()
   const listDepthPositions = new Set()
   const lineOnce = (pos, deco) => {
@@ -1825,7 +1873,8 @@ const livePreview = ViewPlugin.fromClass(class {
   }
   update(update) {
     if (update.docChanged) this.detectedCodeCache.clear()
-    if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged) {
+    if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged
+        || update.startState.field(documentFind) !== update.state.field(documentFind)) {
       this.decorations = buildDecorations(update.view, this.detectedCodeCache)
     }
   }
@@ -2192,6 +2241,8 @@ window.MDEditor = {
         doc,
         extensions: [
           history(),
+          documentFind,
+          findTheme,
           // Native selection, not drawSelection(): the selection layer paints
           // every selected line edge to edge, while WebKit's own selection
           // follows the text once the host styles .cm-content as a flex
@@ -2233,6 +2284,10 @@ window.MDEditor = {
           ]),
           // Fires on every change; the host debounces for autosave.
           EditorView.updateListener.of((update) => {
+            if (update.docChanged && callbacks?.onSearchChange) {
+              const search = update.state.field(documentFind)
+              callbacks.onSearchChange({ index: search.index + 1, total: search.matches.length })
+            }
             if (update.docChanged && onDirty
                 && !update.transactions.some((transaction) => transaction.isUserEvent("rename"))) {
               onDirty()
@@ -2321,6 +2376,25 @@ window.MDEditor = {
     }
     return {
       getMarkdown: () => view.state.doc.toString(),
+      find: (query, backwards = false, beginsWith = false) => {
+        const previous = view.state.field(documentFind)
+        const same = previous.query === query && previous.beginsWith === beginsWith
+        let index = 0
+        if (same && previous.matches.length) {
+          index = (previous.index + (backwards ? -1 : 1) + previous.matches.length) % previous.matches.length
+        } else if (backwards) {
+          index = Number.MAX_SAFE_INTEGER
+        }
+        view.dispatch({ effects: setFind.of({ query, beginsWith, index }) })
+        const search = view.state.field(documentFind)
+        const match = search.matches[search.index]
+        if (match) {
+          preservedSourcePosition = null
+          didUserScroll = true
+          view.dispatch({ effects: EditorView.scrollIntoView(match.from, { y: "center" }) })
+        }
+        return { index: search.index + 1, total: search.matches.length }
+      },
       replaceMarkdown: (markdown) => {
         const text = String(markdown || "")
         const length = text.length
