@@ -279,6 +279,11 @@
 "Cannot open link" = "无法打开链接";
 "“%@” is not a link Markdown Preview understands. Use md-preview://file/ followed by the absolute path of the file, for example md-preview://file/Users/me/notes/README.md." = "Markdown Preview 无法识别链接“%@”。请使用 md-preview://file/ 加文件的绝对路径，例如 md-preview://file/Users/me/notes/README.md。";
 
+/* Link safety */
+"“%@” would be run, not opened." = "“%@”会被运行，而不是打开。";
+"This document links to a program or installer. It will be shown in Finder instead." = "此文稿链接到一个程序或安装包。该文件将在“访达”中显示，而不会被打开。";
+"Show in Finder" = "在“访达”中显示";
+
 /* CLI installer errors */
 "Terminal automation failed: %@" = "终端自动化失败：%@";
 "Terminal automation failed." = "终端自动化失败。";
