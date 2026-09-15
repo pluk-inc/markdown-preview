@@ -36,6 +36,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     private var hasLoadedEditorPage = false
     private var pageSupportsMermaid = false
     private var currentAssetBaseURL: URL?
+    private var findCompletion: ((FindResult) -> Void)?
 
     override func loadView() {
         let config = WKWebViewConfiguration()
@@ -251,6 +252,23 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
     }
 
+    func find(_ query: String,
+              backwards: Bool = false,
+              mode: SearchMode = .contains,
+              completion: ((FindResult) -> Void)? = nil) {
+        findCompletion = completion
+        let script = "window.__mdEditor?.find(\(Self.jsStringLiteral(query)), \(backwards), \(mode == .beginsWith))"
+        webView.evaluateJavaScript(script) { result, _ in
+            guard let result = result as? [String: Any],
+                  let index = result["index"] as? Int,
+                  let total = result["total"] as? Int else {
+                completion?(.none)
+                return
+            }
+            completion?(FindResult(top: nil, bottom: nil, index: index, total: total))
+        }
+    }
+
     func focusEditor() {
         view.window?.makeFirstResponder(webView)
         webView.evaluateJavaScript("window.__mdEditor && window.__mdEditor.focus()") { _, _ in }
@@ -347,6 +365,10 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         guard let payload = message as? [String: Any],
               let kind = payload["kind"] as? String else { return }
         switch kind {
+        case "findResult":
+            guard let index = payload["index"] as? Int,
+                  let total = payload["total"] as? Int else { return }
+            findCompletion?(FindResult(top: nil, bottom: nil, index: index, total: total))
         case "pasteImage":
             guard let from = payload["from"] as? NSNumber,
                   let to = payload["to"] as? NSNumber else { return }
@@ -1043,6 +1065,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                     {
                         pageScrolling: \(usesPageScrolling),
                         onDirty: function () { post("dirty"); },
+                        onSearchChange: function (result) {
+                            post({ kind: "findResult", index: result.index, total: result.total });
+                        },
                         onPasteImage: function (from, to) {
                             post({ kind: "pasteImage", from: from, to: to });
                         },
@@ -1060,6 +1085,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                     }
                 );
                 window.__mdEditor = {
+                    find: function (query, backwards, beginsWith) {
+                        return editor.find(query, backwards, beginsWith);
+                    },
                     getMarkdown: function () { return editor.getMarkdown(); },
                     replaceMarkdown: function (markdown) { return editor.replaceMarkdown(markdown); },
                     getScrollAnchor: function () { return editor.getScrollAnchor(); },
