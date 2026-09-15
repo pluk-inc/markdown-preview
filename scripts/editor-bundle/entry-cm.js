@@ -1539,6 +1539,9 @@ function buildDecorations(view, detectedCodeCache) {
         // active under the caret makes the source editable without a second
         // editor surface; reference-style images stay as authored source.
         if (name === "Image") {
+          // Pruning this node also skips Lezer's leave callback. Balance the
+          // depth here so later top-level blocks still get paragraph spacing.
+          depth--
           const urlNode = node.node.getChild("URL")
           if (!urlNode) return false
           const rawSource = state.doc.sliceString(urlNode.from, urlNode.to).trim()

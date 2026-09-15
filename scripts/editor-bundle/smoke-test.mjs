@@ -551,6 +551,27 @@ check("an image surrounded by text keeps its inline alignment",
     && inlineImageEditor.getMarkdown() === inlineImageMarkdown)
 inlineImageEditor.destroy()
 
+for (const imageSource of [
+  "![Preview](image.png)",
+  "[![Preview](image.png)](https://example.com)",
+  "Before ![Preview](image.png) after",
+  "![Preview][reference]\n\n[reference]: image.png",
+  "![Preview](//example.com/image.png)",
+  "> ![Preview](image.png)",
+]) {
+  const host = dom.window.document.createElement("div")
+  dom.window.document.body.appendChild(host)
+  const source = `Before\n\n${imageSource}\n\nAfter image\n\nFinal paragraph`
+  const instance = dom.window.MDEditor.create(host, source, {})
+  const lines = Array.from(host.querySelectorAll(".cm-line"))
+  for (const text of ["After image", "Final paragraph"]) {
+    const line = lines.find((line) => line.textContent === text)
+    check(`paragraph spacing survives ${imageSource.split("\n")[0]} before ${text}`,
+      parseFloat(line?.previousElementSibling?.style.height) === 16)
+  }
+  instance.destroy()
+}
+
 const renameHistoryHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(renameHistoryHost)
 const renameHistoryEditor = dom.window.MDEditor.create(
