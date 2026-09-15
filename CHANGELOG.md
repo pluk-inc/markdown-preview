@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [0.0.58] – 2026-09-15
+
+This release keeps Finder navigation responsive in Quick Look, improves image and sidebar layout, preserves custom themes in full screen, and closes a renderer sanitization bypass.
+
+### Changed
+
+- **Custom themes now extend through the full-screen toolbar.** The toolbar, search row, and formatting row keep the selected theme color when entering full screen and restore the system appearance when switching back to Original ([#397](https://github.com/pluk-inc/markdown-preview/pull/397)).
+- **Sidebar controls remain available at narrow widths.** The sidebar stops shrinking before its pane picker would overflow, and older saved widths recover to the same usable minimum ([#401](https://github.com/pluk-inc/markdown-preview/pull/401)).
+
+### Fixed
+
+- **Quick Look no longer takes over Finder's arrow keys.** Previewing a Markdown file keeps keyboard focus with Finder, so the arrow keys continue moving between files and Space still closes the preview. Click inside the preview before using its text-selection and copy commands; the Copy button remains available without a click ([#370](https://github.com/pluk-inc/markdown-preview/pull/370), [#292](https://github.com/pluk-inc/markdown-preview/issues/292)).
+- **Images align with surrounding text and use normal paragraph spacing.** Read and edit modes now agree on ordinary image alignment and spacing, including linked, inline, reference-style, and quoted images, while preserving explicit HTML alignment ([#401](https://github.com/pluk-inc/markdown-preview/pull/401)).
+- **Top-level controls and media keep their natural width.** Inline elements left behind when unsafe containers are removed no longer stretch across the reading column ([#389](https://github.com/pluk-inc/markdown-preview/pull/389)).
+
+### Security
+
+- **Markdown cannot escape the renderer's inert article template with mixed-case HTML.** Template end tags are now escaped case-insensitively before sanitization, preventing content after a crafted tag from reaching the live document ([#398](https://github.com/pluk-inc/markdown-preview/pull/398), [GHSA-42qg-98g7-78q4](https://github.com/pluk-inc/markdown-preview/security/advisories/GHSA-42qg-98g7-78q4)).
+
+### Contributors
+
+- [@inquinity](https://github.com/inquinity) — Quick Look keyboard navigation, natural-width inline elements, and the renderer sanitization fix ([#370](https://github.com/pluk-inc/markdown-preview/pull/370), [#389](https://github.com/pluk-inc/markdown-preview/pull/389), [#398](https://github.com/pluk-inc/markdown-preview/pull/398)).
+- [@cxen](https://github.com/cxen) — reported Quick Look interfering with Finder navigation ([#292](https://github.com/pluk-inc/markdown-preview/issues/292)).
+
 ## [0.0.57] – 2026-09-14
 
 This release improves reading and editing layout, adds Obsidian highlights and MDX file support, and makes navigation and copying Markdown more convenient.
