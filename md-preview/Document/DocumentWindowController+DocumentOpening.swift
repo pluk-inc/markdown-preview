@@ -58,6 +58,10 @@ extension DocumentWindowController {
 
     func openFolder(_ folderURL: URL) {
         let folderURL = folderURL.standardizedFileURL
+        // The one act that widens what a document may read. Every other path
+        // into the navigator — opening a file, renaming one — leaves it alone.
+        openedFolderRoot = folderURL
+        rerenderForBoundaryChange()
         if currentFileURL == nil {
             documentWindow.title = folderURL.lastPathComponent
             updateWindowSubtitle()
@@ -205,12 +209,45 @@ extension DocumentWindowController {
         NSAlert(error: error).beginSheetModal(for: documentWindow)
     }
 
+    /// Loading a genuinely new document reconsiders whether the opened
+    /// folder still bounds it — see `MarkdownAccessPolicy.openedFolder(_:
+    /// afterLoading:)`. `rerenderForBoundaryChange()` below must not go
+    /// through this: it re-displays the *same* document that is already on
+    /// screen, and re-evaluating the opened folder against that unchanged
+    /// document would drop a folder root the reader just opened before any
+    /// document from it was ever loaded.
     func renderCurrentDocument(text: String, fileURL: URL?) {
+        let documentFolder = fileURL?.deletingLastPathComponent()
+        openedFolderRoot = MarkdownAccessPolicy.openedFolder(openedFolderRoot,
+                                                             afterLoading: documentFolder)
+        displayCurrentDocument(text: text, fileURL: fileURL)
+    }
+
+    private func displayCurrentDocument(text: String, fileURL: URL?) {
+        let documentFolder = fileURL?.deletingLastPathComponent()
         (documentWindow.contentViewController as? MainSplitViewController)?
             .display(markdown: text,
                      fileName: fileURL?.lastPathComponent
                          ?? NSLocalizedString("Untitled", comment: "Untitled document name"),
                      url: fileURL,
-                     assetBaseURL: fileURL?.deletingLastPathComponent())
+                     assetBaseURL: documentFolder,
+                     containmentRoot: MarkdownAccessPolicy.containmentRoot(
+                         documentFolder: documentFolder,
+                         openedFolder: openedFolderRoot
+                     ))
+    }
+
+    /// Re-renders the open document after the boundary changes, so opening a
+    /// folder makes its images resolve without the reader reopening the file.
+    ///
+    /// Goes through `displayCurrentDocument`, not `renderCurrentDocument`:
+    /// the document on screen has not changed, only the boundary around it,
+    /// so `openedFolderRoot` — just set by `openFolder(_:)` — must not be
+    /// re-evaluated here. It was dropping the newly opened root immediately,
+    /// because the still-visible document from the *previous* folder is
+    /// (correctly) not contained in it.
+    private func rerenderForBoundaryChange() {
+        guard let currentMarkdown, !isEditing else { return }
+        displayCurrentDocument(text: currentMarkdown, fileURL: currentFileURL)
     }
 }

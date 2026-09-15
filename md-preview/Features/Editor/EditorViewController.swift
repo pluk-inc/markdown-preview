@@ -36,6 +36,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     private var hasLoadedEditorPage = false
     private var pageSupportsMermaid = false
     private var currentAssetBaseURL: URL?
+    /// Wider than the document's folder only when the reader opened a folder
+    /// containing it — see `MarkdownAccessPolicy`.
+    private var currentContainmentRoot: URL?
 
     override func loadView() {
         let config = WKWebViewConfiguration()
@@ -49,10 +52,12 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         view = webView
     }
 
-    func load(markdown: String, assetBaseURL: URL? = nil) {
+    func load(markdown: String, assetBaseURL: URL? = nil, containmentRoot: URL? = nil) {
         hasChanges = false
         currentAssetBaseURL = assetBaseURL?.standardizedFileURL
+        currentContainmentRoot = containmentRoot?.standardizedFileURL
         assetScheme.setBaseURL(currentAssetBaseURL)
+        assetScheme.setContainmentRoot(currentContainmentRoot)
         let needsMermaid = Self.containsMermaidFence(in: markdown)
         if hasLoadedEditorPage, pageSupportsMermaid || !needsMermaid {
             let baseHref = currentAssetBaseURL.map(MarkdownAssetResolution.baseHref(forFolder:)) ?? ""
@@ -354,7 +359,11 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         case "imageClick":
             guard let source = payload["src"] as? String,
                   let url = URL(string: source),
-                  let fileURL = MarkdownAssetResolution.fileURL(for: url) else { return }
+                  let boundary = currentContainmentRoot ?? currentAssetBaseURL,
+                  let fileURL = MarkdownAssetResolution.fileURL(
+                      for: url,
+                      containedIn: boundary
+                  ) else { return }
             imageClicked?(fileURL)
         case "tableContextMenu":
             presentTableContextMenu(payload)

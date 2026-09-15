@@ -21,6 +21,7 @@ extension DocumentWindowController {
         let editor = split.enterEditMode(
             markdown: markdown,
             assetBaseURL: currentFileURL?.deletingLastPathComponent(),
+            containmentRoot: currentContainmentRoot,
             autofocus: autofocus
         )
         editor.cancelRequested = { [weak self] in
@@ -372,7 +373,8 @@ extension DocumentWindowController {
         if !exitAfter {
             editor?.load(
                 markdown: markdown,
-                assetBaseURL: currentFileURL?.deletingLastPathComponent()
+                assetBaseURL: currentFileURL?.deletingLastPathComponent(),
+                containmentRoot: currentContainmentRoot
             )
         }
         completeSuccessfulEditorCommit(exitAfter: exitAfter, rerender: true)
