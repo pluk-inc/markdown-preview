@@ -161,13 +161,13 @@ private struct PerformanceProbe {
                     : MarkdownHTML.render(markdown: markdown, vendorLoading: .inline,
                                           documentFont: .system, readerLayout: ReaderLayoutSetting()).html
                 var opens: [Double] = []
+                let openingPage = BenchmarkPage()
                 for index in -2..<samples {
-                    let page = BenchmarkPage()
                     let start = ContinuousClock.now
-                    try await page.load(html, isEditor: isEditor, media: mediaCase)
+                    try await openingPage.load(html, isEditor: isEditor, media: mediaCase)
                     if index >= 0 { opens.append(milliseconds(since: start)) }
-                    page.close()
                 }
+                openingPage.close()
                 append("\(surface)-open-\(name)", opens, source: markdown)
                 guard !mediaCase else { continue }
                 let page = BenchmarkPage()
@@ -322,7 +322,8 @@ private final class BenchmarkPage {
             }
             try await Task.sleep(for: .milliseconds(5))
         }
-        throw BenchmarkError("WebKit renderers did not settle")
+        let visibility = try? await webView.evaluateJavaScript("document.visibilityState")
+        throw BenchmarkError("WebKit renderers did not settle (page visibility: \(String(describing: visibility))). Keep the benchmark window visible and unobstructed.")
     }
 
     func editorEdits(markdown: String, samples: Int) async throws -> [Double] {

@@ -14,7 +14,7 @@ There are **18 metrics**:
 | --- | --- |
 | Prose at 100 KB and 1 MB; code, bare links, and mixed Markdown at 100 KB | Swift renderer wall time and process CPU time (10 metrics) |
 | The same Swift workloads | Renderer process peak RSS before creating WebKit (1 metric) |
-| A 100 KB mixed file and a small file containing an image, math, highlighted code, and Mermaid | Read/editor page opening through ready DOM, assets, and layout (4 metrics) |
+| A 100 KB mixed file and a small file containing an image, math, highlighted code, and Mermaid | Warmed read/editor page loads through ready DOM, assets, and layout (4 metrics) |
 | A 100 KB mixed file | Editor insert/delete cycle, editor document replacement, and read-mode DOM update (3 metrics) |
 
 The probe uses actual production Swift sources and vendored CodeMirror,
@@ -78,8 +78,12 @@ performance score. Both pages use a fixed 900 × 600 viewport, default typograph
 and the macOS 15 editor scrolling path. Inputs and assets are offline.
 
 WebKit views run in a foreground AppKit window to avoid background throttling.
-Local runs briefly show this benchmark window. The probe explicitly drives
-production animation callbacks. Open timings include page navigation, vendor parsing, and
+Local runs briefly show this benchmark window; keep the desktop unlocked and
+the window visible and unobstructed. Occluded pages fail instead of yielding
+misleading timings. The probe explicitly drives
+production animation callbacks. Page-load samples reuse one WebView per workload
+after two warmups, excluding variable WebContent process startup. Each sample
+still loads a fresh document, including navigation, vendor parsing, and
 readiness polling driven from Swift, avoiding hidden-page JavaScript timer
 clamping in the test loop. Edit/update timings include synchronous work, scheduled frame
 callbacks, and forced WebKit layout; timer waiting is excluded. They do **not**
@@ -89,7 +93,7 @@ Mermaid output. Mixed-file opening keeps normal viewport virtualization.
 
 Peak RSS is the **Swift renderer process**, including its in-process highlighter,
 before WKWebView is created. It excludes WebContent and total application memory.
-Native app launch, idle CPU, memory leaks, file I/O/autosave, Quick Look host
+Cold WebContent/native app launch, idle CPU, memory leaks, file I/O/autosave, Quick Look host
 startup, and interactive scrolling still need the manual app/Quick Look harness
 in [`scripts/bench/README.md`](../../scripts/bench/README.md) or Instruments.
 
