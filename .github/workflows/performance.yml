@@ -19,7 +19,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -53,7 +53,7 @@ jobs:
 
       - name: Upload benchmark results and logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: performance-comparison-${{ github.run_attempt }}
           retention-days: 14
@@ -72,7 +72,7 @@ jobs:
 
       - name: Upload PR report
         if: always() && github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: performance-pr-report-${{ github.run_attempt }}
           retention-days: 14
