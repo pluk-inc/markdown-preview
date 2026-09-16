@@ -1,0 +1,39 @@
+name: Performance report
+
+on:
+  workflow_run:
+    workflows: [Performance]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
+concurrency:
+  group: performance-report-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+  cancel-in-progress: false
+
+jobs:
+  comment:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Only trusted default-branch code runs with the comment token. The PR's
+      # artifact is read as data; no PR source is checked out or executed here.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Post performance report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PERFORMANCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          PERFORMANCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: >-
+          python3 scripts/bench/post_performance_report.py
+          --repository "$GITHUB_REPOSITORY"
+          --run-id "$PERFORMANCE_RUN_ID"
+          --attempt "$PERFORMANCE_RUN_ATTEMPT"

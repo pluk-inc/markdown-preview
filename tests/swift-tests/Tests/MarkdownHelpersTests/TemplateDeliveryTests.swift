@@ -56,15 +56,14 @@ final class TemplateDeliveryTests: XCTestCase {
 
     @MainActor
     private func loadAndReportExecution(markdown: String) async throws -> Bool {
-        let purifyJS = try TestVendor.script("md-preview/Vendor/DOMPurify/purify.min.js")
         let rendered = MarkdownHTML.render(markdown: markdown)
-        let html = rendered.html.replacingOccurrences(
-            of: "<head>",
-            with: "<head>\n<script>\(purifyJS)</script>"
-        )
         let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
-        webView.loadHTMLString(html, baseURL: nil)
-        while webView.isLoading { try await Task.sleep(for: .milliseconds(10)) }
+        webView.loadHTMLString(rendered.html, baseURL: nil)
+        let deadline = Date().addingTimeInterval(10)
+        while webView.isLoading && Date() < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        guard !webView.isLoading else { throw WebViewLayoutHarness.Failure("Template page navigation timed out") }
         // The handler fires on the parser's own timeline, not the bootstrap's.
         try await Task.sleep(for: .milliseconds(200))
         let result = try await webView.evaluateJavaScript("window.__executed === true")

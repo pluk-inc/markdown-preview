@@ -15,7 +15,7 @@ import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete"
 import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-markdown"
 import { yamlFrontmatter } from "@codemirror/lang-yaml"
 import {
-  syntaxTree, ensureSyntaxTree, syntaxHighlighting, HighlightStyle,
+  syntaxTree, syntaxTreeAvailable, ensureSyntaxTree, syntaxHighlighting, HighlightStyle,
   indentUnit, LanguageDescription, LanguageSupport, StreamLanguage,
 } from "@codemirror/language"
 import { highlightTree, tags as t } from "@lezer/highlight"
@@ -293,6 +293,16 @@ class MermaidWidget extends WidgetType {
     Promise.resolve(mermaid.render(id, this.source))
       .then(({ svg }) => {
         stage.innerHTML = svg
+        const diagram = stage.querySelector("svg")
+        const box = diagram?.viewBox?.baseVal
+        if (diagram && box?.width > 0 && box?.height > 0) {
+          figure.style.setProperty("--mm-aspect", `${box.width} / ${box.height}`)
+          diagram.removeAttribute("width")
+          diagram.removeAttribute("height")
+          diagram.setAttribute("preserveAspectRatio", "xMidYMid meet")
+          diagram.style.width = "100%"
+          diagram.style.height = "100%"
+        }
         view.requestMeasure()
       })
       .catch(() => {
@@ -953,6 +963,7 @@ const orderedDeco = (mark) => {
 }
 const activeOrderedDeco = Decoration.mark({ class: "cm-md-ordered-source" })
 const hrDeco = Decoration.replace({ widget: new RuleWidget() })
+const ruleLine = Decoration.line({ class: "cm-md-rule-line" })
 const markdownListMarker = /^([ \t]*)([-+*]|\d+[.)])([ \t]+|$)/
 
 const joinDeco = Decoration.replace({ widget: new TextWidget(" ", "cm-md-join") })
@@ -1023,24 +1034,26 @@ const blockGapLine = (height) => {
 // resolved per line after the tree walk, so a line inside two blockquotes
 // gets one decoration at depth 2 rather than two competing ones.
 const quoteLineCache = new Map()
-const quoteLine = (depth) => {
-  let deco = quoteLineCache.get(depth)
+const quoteLine = (depth, starts, ends, gap) => {
+  const key = `${depth}:${starts}:${ends}:${gap}`
+  let deco = quoteLineCache.get(key)
   if (!deco) {
     const positions = []
     const images = []
     for (let level = 0; level < depth; level++) {
-      positions.push(`calc(0.3em + ${level * 1.5}em) 0`)
+      positions.push(`calc(0.3em + ${level * 1.5}em) var(--cm-md-quote-top)`)
       images.push("linear-gradient(var(--quote-border), var(--quote-border))")
     }
     deco = Decoration.line({
       class: "cm-md-quote",
       attributes: {
         style: `padding-inline-start:${depth * 1.5}em;`
+          + `--cm-md-quote-top:calc(${starts * 0.4}em + ${gap}px);--cm-md-quote-bottom:${ends * 0.4}em;`
           + `background-image:${images.join(",")};`
           + `background-position:${positions.join(",")};`,
       },
     })
-    quoteLineCache.set(depth, deco)
+    quoteLineCache.set(key, deco)
   }
   return deco
 }
@@ -1418,7 +1431,7 @@ function buildDecorations(view, detectedCodeCache) {
   let depth = 0
   const listStack = []
   const quoteStack = []
-  const quoteDepthByLine = new Map()
+  const quoteLines = new Map()
 
   for (const { from, to } of view.visibleRanges) {
     let contentDocumentDepth = null
@@ -1496,10 +1509,24 @@ function buildDecorations(view, detectedCodeCache) {
         // --- Blockquotes ----------------------------------------------
         if (name === "Blockquote") {
           quoteStack.push(node.from)
+          const quoteFirst = state.doc.lineAt(node.from)
+          const parentQuote = node.node.parent?.name === "Blockquote"
+          let previous = node.node.prevSibling
+          while (previous?.name === "QuoteMark") previous = previous.prevSibling
+          const nestedGap = parentQuote && previous ? METRICS.quote : 0
           let pos = node.from
           while (pos <= node.to) {
             const line = state.doc.lineAt(pos)
-            quoteDepthByLine.set(line.from, Math.max(quoteDepthByLine.get(line.from) || 0, quoteStack.length))
+            const edges = quoteLines.get(line.from) || { depth: 0, starts: 0, ends: 0, gap: 0 }
+            edges.depth = Math.max(edges.depth, quoteStack.length)
+            // Match the preview's 0.4em padding once per quote boundary,
+            // not once per source line (which may wrap or soft-join).
+            if (line.from === quoteFirst.from) {
+              edges.starts++
+              edges.gap += nestedGap
+            }
+            if (line.to >= node.to) edges.ends++
+            quoteLines.set(line.from, edges)
             if (line.to >= node.to) break
             pos = line.to + 1
           }
@@ -1510,6 +1537,25 @@ function buildDecorations(view, detectedCodeCache) {
             const after = state.doc.sliceString(node.to, node.to + 1)
             ranges.push(hide.range(node.from, node.to + (after === " " ? 1 : 0)))
           }
+          return
+        }
+
+        // Container paragraphs use their own semantic margin. Their blank
+        // source lines are not top-level authored spacers in the preview.
+        if (name === "Paragraph" && /^(Blockquote|ListItem)$/.test(node.node.parent?.name || "")) {
+          const first = state.doc.lineAt(node.from)
+          if (first.number > state.doc.lineAt(node.node.parent.from).number) {
+            const previous = state.doc.line(first.number - 1)
+            if (/^(?:[ >]*)$/.test(previous.text)) {
+              lineOnce(previous.from, blockSeparatorLine(METRICS.paragraph))
+            }
+          }
+        }
+
+        // Escape markers disappear in live preview; the literal character
+        // still belongs to the original editable source.
+        if (name === "Escape" && !touches(node.from, node.to)) {
+          ranges.push(hide.range(node.from, node.from + 1))
           return
         }
 
@@ -1667,6 +1713,13 @@ function buildDecorations(view, detectedCodeCache) {
           // list starts at its first item, so "first" is a position check.
           const isFirstItem = node.from === listStack[listStack.length - 1]
           const isNested = listStack.length > 1
+          if (!isFirstItem) {
+            let number = state.doc.lineAt(node.from).number - 1
+            while (number > 0 && state.doc.line(number).text.trim() === "") {
+              lineOnce(state.doc.line(number).from, blockSeparatorLine(0))
+              number--
+            }
+          }
           if (!isFirstItem || isNested) lineOnce(node.from, listItemGapLine)
           eachLine(node.from, node.to, listItemLine)
           lineOnce(node.from, listDepthLine(listStack.length))
@@ -1827,6 +1880,7 @@ function buildDecorations(view, detectedCodeCache) {
         // --- Horizontal rule ----------------------------------------------
         if (name === "HorizontalRule") {
           if (!touchesLineOf(node.from)) {
+            lineOnce(node.from, ruleLine)
             ranges.push(hrDeco.range(node.from, node.to))
           }
           return
@@ -1839,10 +1893,10 @@ function buildDecorations(view, detectedCodeCache) {
         if (name === "Blockquote") quoteStack.pop()
       },
     })
-    for (const [lineFrom, quoteDepth] of quoteDepthByLine) {
-      lineOnce(lineFrom, quoteLine(quoteDepth))
+    for (const [lineFrom, edges] of quoteLines) {
+      lineOnce(lineFrom, quoteLine(edges.depth, edges.starts, edges.ends, edges.gap))
     }
-    quoteDepthByLine.clear()
+    quoteLines.clear()
     // A deeply indented marker may be parsed as continuation content inside
     // its ancestor ListItem rather than as a standalone CodeBlock. The parent
     // already gives that line list typography; fill in the missing depth,
@@ -1873,7 +1927,10 @@ const livePreview = ViewPlugin.fromClass(class {
   }
   update(update) {
     if (update.docChanged) this.detectedCodeCache.clear()
+    // Background parsing can finish without a document, selection, or viewport
+    // change. Refresh widgets then too, or images can stay as source until input.
     if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged
+        || syntaxTree(update.startState) !== syntaxTree(update.state)
         || update.startState.field(documentFind) !== update.state.field(documentFind)) {
       this.decorations = buildDecorations(update.view, this.detectedCodeCache)
     }
@@ -2395,6 +2452,7 @@ window.MDEditor = {
         }
         return { index: search.index + 1, total: search.matches.length }
       },
+      isSyntaxReady: () => syntaxTreeAvailable(view.state, view.state.doc.length),
       replaceMarkdown: (markdown) => {
         const text = String(markdown || "")
         const length = text.length

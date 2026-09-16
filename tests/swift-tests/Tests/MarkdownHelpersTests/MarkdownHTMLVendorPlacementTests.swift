@@ -7,12 +7,20 @@ import XCTest
 /// early populate call so text paints before the bundles parse; `.lazy`
 /// (app) keeps its head-only stub layout.
 ///
-/// The SPM test bundle can't resolve the vendored KaTeX/Mermaid/Highlight
-/// resources (they live in the Xcode targets), so the emitters fall back —
-/// these tests cover the assembly contract `render()` owns: where the early
-/// populate call lands, that `.lazy` bodies stay script-free, and that the
-/// populate hook actually fills the article at body-parse time.
+/// These tests load the real vendor resources and cover the assembly contract
+/// `render()` owns: where early population lands, whether `.lazy` bodies stay
+/// script-free, and whether the article fills at body-parse time.
 final class MarkdownHTMLVendorPlacementTests: XCTestCase {
+    func testProductionVendorResourcesResolve() throws {
+        for (name, directory) in [("purify.min", "DOMPurify"), ("mermaid.min", "Mermaid"),
+                                  ("katex.min", "KaTeX"), ("highlight.min", "Highlight"),
+                                  ("morphdom.min", "Morphdom"), ("mdedit.min", "CodeMirror")] {
+            let source = try XCTUnwrap(MarkdownHTML.bundledVendorResource(name, ext: "js", subdir: "Vendor/\(directory)"),
+                                      "Missing production asset \(directory)/\(name).js")
+            XCTAssertGreaterThan(source.utf8.count, 1000)
+        }
+    }
+
     private let sample = """
     # Title
 
@@ -36,7 +44,8 @@ final class MarkdownHTMLVendorPlacementTests: XCTestCase {
         XCTAssertTrue(rendered.containsCode)
 
         let html = rendered.html
-        let headEnd = try XCTUnwrap(html.range(of: "</head>"))
+        // DOMPurify contains its own HTML-document string inside JavaScript.
+        let headEnd = try XCTUnwrap(html.range(of: "\n</head>\n<body>"))
         let templateEnd = try XCTUnwrap(html.range(of: "</template>"))
         let head = html[..<headEnd.lowerBound]
         let bodyEnd = html[templateEnd.upperBound...]
@@ -84,22 +93,16 @@ final class MarkdownHTMLVendorPlacementTests: XCTestCase {
         let opacity: String
     }
 
-    /// Renders the sample in `.inline` mode and loads it in a web view. The
-    /// SPM bundle has no vendored DOMPurify, so the sanitizer (which the
-    /// bootstrap requires before it will populate) is injected from the
-    /// repository checkout, together with a probe that snapshots the article
+    /// Loads the real `.inline` page with a probe that snapshots the article
     /// state at DOMContentLoaded.
     @MainActor
     private func loadInlineDocument(warmup: Bool) async throws -> PopulateMetrics {
-        let purifyJS = try TestVendor.script("md-preview/Vendor/DOMPurify/purify.min.js")
-
         let rendered = MarkdownHTML.render(
             markdown: sample,
             vendorLoading: .inline,
             warmup: warmup
         )
         let probe = """
-        <script>\(purifyJS)</script>
         <script>
         document.addEventListener('DOMContentLoaded', () => {
             const article = document.querySelector('.markdown-body');
@@ -107,16 +110,18 @@ final class MarkdownHTMLVendorPlacementTests: XCTestCase {
         }, { once: true });
         </script>
         """
-        let html = rendered.html.replacingOccurrences(
-            of: "<head>",
-            with: "<head>\n\(probe)"
-        )
+        // Replace only the actual opening tag. Vendor JavaScript also contains
+        // literal "<head>" strings; global replacement corrupts those scripts.
+        let head = try XCTUnwrap(rendered.html.range(of: "<head>"))
+        let html = rendered.html.replacingCharacters(in: head, with: "<head>\n\(probe)")
         let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
 
         webView.loadHTMLString(html, baseURL: nil)
-        while webView.isLoading {
+        let deadline = Date().addingTimeInterval(10)
+        while webView.isLoading && Date() < deadline {
             try await Task.sleep(for: .milliseconds(10))
         }
+        guard !webView.isLoading else { throw WebViewLayoutHarness.Failure("Inline page navigation timed out") }
 
         let result = try await webView.evaluateJavaScript("""
         (() => {
