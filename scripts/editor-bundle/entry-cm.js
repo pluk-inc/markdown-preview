@@ -1879,7 +1879,10 @@ const livePreview = ViewPlugin.fromClass(class {
   }
   update(update) {
     if (update.docChanged) this.detectedCodeCache.clear()
-    if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged) {
+    // Background parsing can finish without a document, selection, or viewport
+    // change. Refresh widgets then too, or images can stay as source until input.
+    if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged
+        || syntaxTree(update.startState) !== syntaxTree(update.state)) {
       this.decorations = buildDecorations(update.view, this.detectedCodeCache)
     }
   }

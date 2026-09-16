@@ -68,7 +68,8 @@ the exact original Markdown.
 
 ### Readiness and diagnostics
 
-Navigation completion is insufficient. The harness waits for the renderer,
+Navigation completion is insufficient. The harness waits for completed editor
+syntax parsing, the renderer,
 `document.fonts.ready`, decoded images, expected rendered feature counts (including
 async Mermaid/KaTeX output), and stable geometry across several samples.
 CodeMirror schedules measurement in animation callbacks. WebKit can suspend those
@@ -105,7 +106,9 @@ quote-edge padding, which is now applied once per quote boundary in the editor.
 Expanding to complete documents exposed and fixed trailing-space wrapping,
 nested quote and loose-list gaps, code-card border offsets, horizontal-rule
 height/position, narrow table sizing, Mermaid aspect/scale, and visible escape
-markers. The focused cases retain each regression alongside the complete files.
+markers. The comprehensive fixture also caught images staying as source after
+background parsing completed; live-preview decorations now refresh when the
+syntax tree changes. The focused cases retain each regression alongside the complete files.
 
 ### Research references
 
