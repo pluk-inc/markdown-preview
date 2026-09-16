@@ -16,11 +16,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                 vendorLoading: vendorLoading
             )
             let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 640, height: 300))
-            // The SPM test bundle has no resources; load the real sanitizer
-            // from the checkout so this exercises the production bootstrap.
-            let purifier = try TestVendor.script("md-preview/Vendor/DOMPurify/purify.min.js")
-            let page = html.replacingOccurrences(of: "<head>", with: "<head><script>\(purifier)</script>")
-            webView.loadHTMLString(page, baseURL: nil)
+            webView.loadHTMLString(html, baseURL: nil)
             let deadline = Date().addingTimeInterval(10)
             while webView.isLoading && Date() < deadline {
                 try await Task.sleep(for: .milliseconds(10))
@@ -1080,9 +1076,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             rendered.articleHTML.contains(#"class="mermaid-hud-width-symbol" aria-hidden="true">⤢</span>"#),
             rendered.articleHTML
         )
-        // SPM helper tests lack the Mermaid vendor bundle, so the page falls
-        // back to the "renderer unavailable" stub — assert the real wiring
-        // string (injected by the app when Vendor/Mermaid is present).
+        // Assert the shared production wiring as well as the emitted controls.
         XCTAssertTrue(MarkdownHTML.mermaidInitWiring.contains("kind: 'mermaidPopup'"))
         XCTAssertTrue(MarkdownHTML.mermaidInitWiring.contains("function openPopup"))
         XCTAssertTrue(MarkdownHTML.mermaidInitWiring.contains("case 'popup'"))

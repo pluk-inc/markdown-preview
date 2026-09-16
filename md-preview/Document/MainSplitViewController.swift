@@ -131,11 +131,39 @@ final class MainSplitViewController: NSSplitViewController {
         contentViewController?.currentScrollPosition ?? 0
     }
 
+    private var activeFindQuery = ""
+    private var activeFindMode: SearchMode = .contains
+    private var activeFindCompletion: ((FindResult) -> Void)?
+
     func find(_ query: String,
               backwards: Bool = false,
               mode: SearchMode = .contains,
               completion: ((FindResult) -> Void)? = nil) {
-        contentViewController?.find(query, backwards: backwards, mode: mode, completion: completion)
+        activeFindQuery = query
+        activeFindMode = mode
+        activeFindCompletion = completion
+        let pasteboard = NSPasteboard(name: .find)
+        pasteboard.clearContents()
+        pasteboard.setString(query, forType: .string)
+        if isEditorPreparing { return } // Replay once the editor and scroll position are ready.
+        if let editor = editorViewController {
+            editor.find(query, backwards: backwards, mode: mode, completion: completion)
+        } else {
+            contentViewController?.find(query, backwards: backwards, mode: mode, completion: completion)
+        }
+    }
+
+    private func refreshFindAfterModeChange() {
+        guard !activeFindQuery.isEmpty else { return }
+        if let editor = editorViewController {
+            editor.find(activeFindQuery, mode: activeFindMode, completion: activeFindCompletion)
+        } else {
+            contentViewController?.find("") { [weak self] _ in
+                guard let self, !self.isEditingDocument else { return }
+                self.contentViewController?.find(self.activeFindQuery, mode: self.activeFindMode,
+                                                 completion: self.activeFindCompletion)
+            }
+        }
     }
 
     // Custom selector (instead of `print:`) so AppKit's inherited
@@ -492,6 +520,7 @@ final class MainSplitViewController: NSSplitViewController {
                         // titlebar material sampling. The editor overlay is now
                         // fully opaque and covering it.
                         self.contentViewController?.view.isHidden = true
+                        self.refreshFindAfterModeChange()
                         if self.shouldAutofocusEditor {
                             self.shouldAutofocusEditor = false
                             editorVC.focusEditor()
@@ -545,6 +574,7 @@ final class MainSplitViewController: NSSplitViewController {
                         guard let self, let editorVC,
                               !self.isEditorPreparing, !self.isEditorVisible else { return }
                         editorVC.view.isHidden = true
+                        self.refreshFindAfterModeChange()
                         overlayHidden?()
                     }
                 }

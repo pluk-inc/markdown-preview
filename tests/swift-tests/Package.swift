@@ -1,6 +1,6 @@
 // swift-tools-version:6.0
 //
-// Local test scaffold for pure-Foundation helpers from the app and the
+// Test scaffold for rendering, WebKit layout, and helpers from the app and the
 // Quick Look extension. The Xcode project is the source of truth — source
 // files live under `quick-look/` and `md-preview/` and are symlinked into
 // `Sources/<Target>/` so SPM can compile them without duplication.
@@ -28,7 +28,11 @@ let package = Package(
             name: "MarkdownHelpers",
             dependencies: [
                 .product(name: "Markdown", package: "swift-markdown"),
-            ]
+            ],
+            // Copy real child directories; copying the Vendor symlink itself
+            // leaves a dangling relative link with SwiftPM's native build system.
+            resources: ["CodeMirror", "DOMPurify", "Highlight", "KaTeX", "Mermaid", "Morphdom"]
+                .map { .copy("Vendor/\($0)") }
         ),
         .testTarget(
             name: "MarkdownHelpersTests",
