@@ -15,7 +15,7 @@ import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete"
 import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-markdown"
 import { yamlFrontmatter } from "@codemirror/lang-yaml"
 import {
-  syntaxTree, ensureSyntaxTree, syntaxHighlighting, HighlightStyle,
+  syntaxTree, syntaxTreeAvailable, ensureSyntaxTree, syntaxHighlighting, HighlightStyle,
   indentUnit, LanguageDescription, LanguageSupport, StreamLanguage,
 } from "@codemirror/language"
 import { highlightTree, tags as t } from "@lezer/highlight"
@@ -2375,6 +2375,7 @@ window.MDEditor = {
     }
     return {
       getMarkdown: () => view.state.doc.toString(),
+      isSyntaxReady: () => syntaxTreeAvailable(view.state, view.state.doc.length),
       replaceMarkdown: (markdown) => {
         const text = String(markdown || "")
         const length = text.length

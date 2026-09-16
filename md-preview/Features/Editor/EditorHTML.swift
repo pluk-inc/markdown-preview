@@ -359,8 +359,10 @@ nonisolated enum EditorHTML {
             font-size: 1em;
             line-height: 1.3;
             position: relative;
-            /* Include the read-mode card's 0.5px border in its 16px inset. */
-            padding: 0 16.5px;
+            /* Use real borders so WebKit snaps the same 0.5px width as the
+               read-mode card on both Retina and standard-density displays. */
+            padding: 0 16px;
+            border-inline: 0.5px solid transparent;
         }
         /* The code card is painted on a z:-2 pseudo instead of the line
            itself, so it matches the preview's opaque --code-bg and never
@@ -373,14 +375,16 @@ nonisolated enum EditorHTML {
             background: var(--code-bg);
         }
         #editor .cm-content > .cm-line.cm-md-codeblock-first {
-            padding-top: 16.5px;
+            padding-top: 16px;
+            border-top: 0.5px solid transparent;
             position: relative;
         }
         #editor .cm-md-codeblock-first::before {
             border-radius: 8px 8px 0 0;
         }
         #editor .cm-md-codeblock-last {
-            padding-bottom: 16.5px;
+            padding-bottom: 16px;
+            border-bottom: 0.5px solid transparent;
         }
         #editor .cm-md-codeblock-last::before {
             border-radius: 0 0 8px 8px;
@@ -392,7 +396,7 @@ nonisolated enum EditorHTML {
         /* Reserve a header row so the language never competes with code,
            including wrapped lines and blocks at the start of a document. */
         #editor .cm-content > .cm-line.cm-md-codeblock-first:has(.cm-md-code-language) {
-            padding-top: calc(16.5px + \(codeLanguageHeaderHeight)px);
+            padding-top: calc(16px + \(codeLanguageHeaderHeight)px);
         }
         #editor .cm-md-code-fence-source-hidden {
             visibility: hidden;
@@ -665,6 +669,7 @@ nonisolated enum EditorHTML {
                 );
                 window.__mdEditor = {
                     getMarkdown: function () { return editor.getMarkdown(); },
+                    isSyntaxReady: function () { return editor.isSyntaxReady(); },
                     replaceMarkdown: function (markdown) { return editor.replaceMarkdown(markdown); },
                     getScrollAnchor: function () { return editor.getScrollAnchor(); },
                     focus: function () { editor.focus(); },

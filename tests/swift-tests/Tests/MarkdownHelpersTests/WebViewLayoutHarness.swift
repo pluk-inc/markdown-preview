@@ -88,7 +88,8 @@ final class WebViewLayoutHarness {
             const imageSelector = isEditor ? '.cm-md-image-preview img' : 'article img';
             const ready = async () => {
                 while (!document.querySelector(rootSelector) ||
-                       (isEditor && !window.__mdEditor)) {
+                       (isEditor && (!window.__mdEditor || !window.__mdEditor.isSyntaxReady()))) {
+                    window.__layoutTestFrame();
                     if (Date.now() > deadline) throw new Error('Renderer did not become ready');
                     await delay(20);
                 }
@@ -105,11 +106,12 @@ final class WebViewLayoutHarness {
                     if (!content.includes(source)) throw new Error('Missing visible source fallback: ' + source);
                 }
                 await document.fonts.ready;
-                const images = [...document.querySelectorAll(imageSelector)];
-                if (images.length !== imageCount) {
-                    throw new Error(`Expected ${imageCount} images, found ${images.length}`);
+                while (document.querySelectorAll(imageSelector).length !== imageCount) {
+                    window.__layoutTestFrame();
+                    if (Date.now() > deadline) throw new Error(`Expected ${imageCount} images, found ${document.querySelectorAll(imageSelector).length}`);
+                    await delay(20);
                 }
-                await Promise.all(images.map(image => image.decode()));
+                await Promise.all([...document.querySelectorAll(imageSelector)].map(image => image.decode()));
             };
             await Promise.race([
                 ready(),
