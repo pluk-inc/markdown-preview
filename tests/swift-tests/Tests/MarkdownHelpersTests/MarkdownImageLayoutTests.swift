@@ -4,7 +4,7 @@ import XCTest
 
 final class MarkdownImageLayoutTests: XCTestCase {
     @MainActor
-    func testImagesFollowTextAlignmentInBothRenderModes() async throws {
+    func testReadModeImagesFollowTextAlignmentWithBothVendorLoadingStrategies() async throws {
         let svg = """
         <svg xmlns="http://www.w3.org/2000/svg" width="120" height="40">
         <rect width="120" height="40" fill="royalblue"/>

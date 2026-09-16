@@ -976,24 +976,26 @@ const blockGapLine = (height) => {
 // resolved per line after the tree walk, so a line inside two blockquotes
 // gets one decoration at depth 2 rather than two competing ones.
 const quoteLineCache = new Map()
-const quoteLine = (depth) => {
-  let deco = quoteLineCache.get(depth)
+const quoteLine = (depth, starts, ends) => {
+  const key = `${depth}:${starts}:${ends}`
+  let deco = quoteLineCache.get(key)
   if (!deco) {
     const positions = []
     const images = []
     for (let level = 0; level < depth; level++) {
-      positions.push(`calc(0.3em + ${level * 1.5}em) 0`)
+      positions.push(`calc(0.3em + ${level * 1.5}em) var(--cm-md-quote-top)`)
       images.push("linear-gradient(var(--quote-border), var(--quote-border))")
     }
     deco = Decoration.line({
       class: "cm-md-quote",
       attributes: {
         style: `padding-inline-start:${depth * 1.5}em;`
+          + `--cm-md-quote-top:${starts * 0.4}em;--cm-md-quote-bottom:${ends * 0.4}em;`
           + `background-image:${images.join(",")};`
           + `background-position:${positions.join(",")};`,
       },
     })
-    quoteLineCache.set(depth, deco)
+    quoteLineCache.set(key, deco)
   }
   return deco
 }
@@ -1370,7 +1372,7 @@ function buildDecorations(view, detectedCodeCache) {
   let depth = 0
   const listStack = []
   const quoteStack = []
-  const quoteDepthByLine = new Map()
+  const quoteLines = new Map()
 
   for (const { from, to } of view.visibleRanges) {
     let contentDocumentDepth = null
@@ -1451,7 +1453,13 @@ function buildDecorations(view, detectedCodeCache) {
           let pos = node.from
           while (pos <= node.to) {
             const line = state.doc.lineAt(pos)
-            quoteDepthByLine.set(line.from, Math.max(quoteDepthByLine.get(line.from) || 0, quoteStack.length))
+            const edges = quoteLines.get(line.from) || { depth: 0, starts: 0, ends: 0 }
+            edges.depth = Math.max(edges.depth, quoteStack.length)
+            // Match the preview's 0.4em padding once per quote boundary,
+            // not once per source line (which may wrap or soft-join).
+            if (line.from === state.doc.lineAt(node.from).from) edges.starts++
+            if (line.to >= node.to) edges.ends++
+            quoteLines.set(line.from, edges)
             if (line.to >= node.to) break
             pos = line.to + 1
           }
@@ -1791,10 +1799,10 @@ function buildDecorations(view, detectedCodeCache) {
         if (name === "Blockquote") quoteStack.pop()
       },
     })
-    for (const [lineFrom, quoteDepth] of quoteDepthByLine) {
-      lineOnce(lineFrom, quoteLine(quoteDepth))
+    for (const [lineFrom, edges] of quoteLines) {
+      lineOnce(lineFrom, quoteLine(edges.depth, edges.starts, edges.ends))
     }
-    quoteDepthByLine.clear()
+    quoteLines.clear()
     // A deeply indented marker may be parsed as continuation content inside
     // its ancestor ListItem rather than as a standalone CodeBlock. The parent
     // already gives that line list typography; fill in the missing depth,

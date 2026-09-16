@@ -16,4 +16,14 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode.app
 
       - name: Run tests
+        env:
+          MDP_LAYOUT_ARTIFACTS: ${{ runner.temp }}/md-preview-layout-failures
         run: swift test --package-path tests/swift-tests
+
+      - name: Upload WebKit layout diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webkit-layout-failures
+          path: ${{ runner.temp }}/md-preview-layout-failures
+          if-no-files-found: ignore
