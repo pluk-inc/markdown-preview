@@ -73,9 +73,11 @@ def compare(baselines: list[dict], candidates: list[dict]) -> tuple[str, bool, l
         floor = 16.0 if unit == "MiB" else (20.0 if "-open-" in name else 5.0)
         regressions = []
         material_changes = []
+        round_changes = []
         for base, candidate in zip(baselines, candidates):
             old, old_mad = median_mad(base["metrics"][name]["samples"])
             new, new_mad = median_mad(candidate["metrics"][name]["samples"])
+            round_changes.append(f"{(new / old - 1) * 100:+.1f}%")
             threshold = max(old * 0.25, floor, 3 * (old_mad + new_mad))
             regressions.append(new - old > threshold)
             material_changes.append(new - old > max(old * 0.25, floor))
@@ -85,13 +87,15 @@ def compare(baselines: list[dict], candidates: list[dict]) -> tuple[str, bool, l
         failed |= all(regressions)
         if any(material_changes) and not all(regressions):
             warnings.append(f"{name}: slowdown was noisy or not repeated in both rounds; rerun to investigate")
-        rows.append(f"| {name} | {old:.2f} | {new:.2f} | {(new / old - 1) * 100:+.1f}% | {unit} | {status} |")
+        rounds = " / ".join(round_changes)
+        rows.append(f"| {name} | {old:.2f} | {new:.2f} | {(new / old - 1) * 100:+.1f}% | {rounds} | {unit} | {status} |")
     summary = "\n".join([
         "# Performance comparison", "",
         f"Base: `{baselines[0]['revision'][:12]}` · Candidate: `{candidates[0]['revision'][:12]}`", "",
         "**FAIL — confirmed regression**" if failed else "**PASS — no confirmed regression**", "",
-        "| Metric | Base median | Candidate median | Change | Unit | Result |",
-        "| --- | ---: | ---: | ---: | --- | --- |", *rows, "",
+        "| Metric | Base median | Candidate median | Combined change | Rounds 1 / 2 | Unit | Result |",
+        "| --- | ---: | ---: | ---: | --- | --- | --- |", *rows, "",
+        "Combined medians pool both rounds; per-round changes determine the gate and expose runner drift.", "",
         "Gate: both independent rounds must exceed 25%, the absolute floor, and the noise allowance.",
         "Floors: 5 ms for rendering/edit work, 20 ms for page opening, 16 MiB for renderer peak RSS.",
         "Noise allowance: 3 × the sum of the two median absolute deviations. Lower is better.", "",

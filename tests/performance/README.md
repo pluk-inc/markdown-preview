@@ -48,7 +48,8 @@ must exceed all three thresholds in each round:
 
 An isolated/noisy slowdown produces a visible warning and a `check variability`
 row instead of a confirmed-regression failure. Rerun that job before drawing a
-conclusion. Missing metrics, changed fixture hashes, invalid samples, build
+conclusion. The table shows pooled medians and each round's percentage change so
+runner drift is visible. Missing metrics, changed fixture hashes, invalid samples, build
 failures, crashes, and timeouts fail the job; they cannot silently pass as faster
 results. Changes smaller than the gate still appear in the comparison table.
 
@@ -78,7 +79,8 @@ and the macOS 15 editor scrolling path. Inputs and assets are offline.
 
 Hidden WebKit views suspend animation frames, so the probe explicitly drives
 production callbacks. Open timings include page navigation, vendor parsing, and
-readiness polling. Edit/update timings include synchronous work, scheduled frame
+readiness polling driven from Swift, avoiding hidden-page JavaScript timer
+clamping in the test loop. Edit/update timings include synchronous work, scheduled frame
 callbacks, and forced WebKit layout; timer waiting is excluded. They do **not**
 measure native display paint, scroll smoothness, frame pacing, or all deferred
 background work. The media page waits for actual image decoding, KaTeX, and

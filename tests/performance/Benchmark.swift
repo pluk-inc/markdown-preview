@@ -254,25 +254,36 @@ private final class BenchmarkPage {
         let deadline = Date().addingTimeInterval(20)
         while webView.isLoading && Date() < deadline { try await Task.sleep(for: .milliseconds(5)) }
         guard !webView.isLoading else { throw BenchmarkError("WebKit navigation timed out") }
+        let arguments: [String: Any] = ["isEditor": isEditor, "media": media]
         _ = try await webView.callAsyncJavaScript("""
-            const deadline = performance.now() + 15000;
             const root = document.querySelector(isEditor ? '.cm-content' : 'article.markdown-body');
             if (!root || !root.textContent.trim()) throw new Error('Document did not render');
-            await document.fonts.ready;
             const images = [...root.querySelectorAll(isEditor ? '.cm-md-image-preview img' : 'img')];
-            await Promise.all(images.map(image => image.decode()));
             if (media && images.length !== 1) throw new Error('Media fixture image missing');
-            let quiet = 0;
-            while (performance.now() < deadline) {
+            window.__benchAssetsReady = false;
+            window.__benchAssetError = null;
+            Promise.all([document.fonts.ready, ...images.map(image => image.decode())])
+                .then(() => { window.__benchAssetsReady = true; })
+                .catch(error => { window.__benchAssetError = String(error); });
+            """, arguments: arguments, in: nil, contentWorld: .page)
+        // Hidden WebKit timers can clamp a 5 ms test poll to a full second.
+        // Poll from Swift so page-open measurements include real readiness work
+        // without that variable, test-only delay. Production timers stay intact.
+        var quiet = 0
+        while Date() < deadline {
+            let settled = try await webView.callAsyncJavaScript("""
+                if (window.__benchAssetError) throw new Error(window.__benchAssetError);
+                const root = document.querySelector(isEditor ? '.cm-content' : 'article.markdown-body');
                 const pending = window.__benchFrame();
                 const diagramReady = !media || root.querySelector(isEditor ? '.cm-md-mermaid-stage svg' : '.mermaid svg');
                 const mathReady = !media || isEditor || root.querySelector('.katex');
-                quiet = pending || !diagramReady || !mathReady ? 0 : quiet + 1;
-                if (quiet >= 3) return true;
-                await new Promise(resolve => setTimeout(resolve, 5));
-            }
-            throw new Error('WebKit renderers did not settle');
-            """, arguments: ["isEditor": isEditor, "media": media], in: nil, contentWorld: .page)
+                return Boolean(window.__benchAssetsReady && !pending && diagramReady && mathReady);
+                """, arguments: arguments, in: nil, contentWorld: .page)
+            quiet = (settled as? Bool) == true ? quiet + 1 : 0
+            if quiet >= 3 { return }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        throw BenchmarkError("WebKit renderers did not settle")
     }
 
     func editorEdits(markdown: String, samples: Int) async throws -> [Double] {
