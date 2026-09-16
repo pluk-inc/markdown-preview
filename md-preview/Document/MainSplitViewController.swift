@@ -571,6 +571,10 @@ final class MainSplitViewController: NSSplitViewController {
         }
     }
 
+    /// The project the sidebar has mounted, which the document search
+    /// palette searches.
+    var projectRootURL: URL? { sidebarViewController?.projectRootURL }
+
     private var sidebarViewController: SidebarViewController? {
         splitViewItems.first?.viewController as? SidebarViewController
     }

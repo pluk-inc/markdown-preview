@@ -13,7 +13,7 @@ import UniformTypeIdentifiers
 // reachable from AppKit through an @objc entry point, and `NSWindowController` has
 // no such method to override, so without this conformance the implementation below
 // is never called: no menu item ever gets its state, and the failure is silent.
-final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate, NSSharingServicePickerToolbarItemDelegate, NSSearchFieldDelegate, NSMenuDelegate, NSMenuItemValidation, NSPopoverDelegate {
+final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate, NSSharingServicePickerToolbarItemDelegate, NSSearchFieldDelegate, NSMenuDelegate, NSMenuItemValidation, NSToolbarItemValidation, NSPopoverDelegate {
 
     enum NavigationIntent {
         case normal
