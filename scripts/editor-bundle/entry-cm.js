@@ -293,6 +293,16 @@ class MermaidWidget extends WidgetType {
     Promise.resolve(mermaid.render(id, this.source))
       .then(({ svg }) => {
         stage.innerHTML = svg
+        const diagram = stage.querySelector("svg")
+        const box = diagram?.viewBox?.baseVal
+        if (diagram && box?.width > 0 && box?.height > 0) {
+          figure.style.setProperty("--mm-aspect", `${box.width} / ${box.height}`)
+          diagram.removeAttribute("width")
+          diagram.removeAttribute("height")
+          diagram.setAttribute("preserveAspectRatio", "xMidYMid meet")
+          diagram.style.width = "100%"
+          diagram.style.height = "100%"
+        }
         view.requestMeasure()
       })
       .catch(() => {
@@ -906,6 +916,7 @@ const orderedDeco = (mark) => {
 }
 const activeOrderedDeco = Decoration.mark({ class: "cm-md-ordered-source" })
 const hrDeco = Decoration.replace({ widget: new RuleWidget() })
+const ruleLine = Decoration.line({ class: "cm-md-rule-line" })
 const markdownListMarker = /^([ \t]*)([-+*]|\d+[.)])([ \t]+|$)/
 
 const joinDeco = Decoration.replace({ widget: new TextWidget(" ", "cm-md-join") })
@@ -976,8 +987,8 @@ const blockGapLine = (height) => {
 // resolved per line after the tree walk, so a line inside two blockquotes
 // gets one decoration at depth 2 rather than two competing ones.
 const quoteLineCache = new Map()
-const quoteLine = (depth, starts, ends) => {
-  const key = `${depth}:${starts}:${ends}`
+const quoteLine = (depth, starts, ends, gap) => {
+  const key = `${depth}:${starts}:${ends}:${gap}`
   let deco = quoteLineCache.get(key)
   if (!deco) {
     const positions = []
@@ -990,7 +1001,7 @@ const quoteLine = (depth, starts, ends) => {
       class: "cm-md-quote",
       attributes: {
         style: `padding-inline-start:${depth * 1.5}em;`
-          + `--cm-md-quote-top:${starts * 0.4}em;--cm-md-quote-bottom:${ends * 0.4}em;`
+          + `--cm-md-quote-top:calc(${starts * 0.4}em + ${gap}px);--cm-md-quote-bottom:${ends * 0.4}em;`
           + `background-image:${images.join(",")};`
           + `background-position:${positions.join(",")};`,
       },
@@ -1450,14 +1461,22 @@ function buildDecorations(view, detectedCodeCache) {
         // --- Blockquotes ----------------------------------------------
         if (name === "Blockquote") {
           quoteStack.push(node.from)
+          const quoteFirst = state.doc.lineAt(node.from)
+          const parentQuote = node.node.parent?.name === "Blockquote"
+          let previous = node.node.prevSibling
+          while (previous?.name === "QuoteMark") previous = previous.prevSibling
+          const nestedGap = parentQuote && previous ? METRICS.quote : 0
           let pos = node.from
           while (pos <= node.to) {
             const line = state.doc.lineAt(pos)
-            const edges = quoteLines.get(line.from) || { depth: 0, starts: 0, ends: 0 }
+            const edges = quoteLines.get(line.from) || { depth: 0, starts: 0, ends: 0, gap: 0 }
             edges.depth = Math.max(edges.depth, quoteStack.length)
             // Match the preview's 0.4em padding once per quote boundary,
             // not once per source line (which may wrap or soft-join).
-            if (line.from === state.doc.lineAt(node.from).from) edges.starts++
+            if (line.from === quoteFirst.from) {
+              edges.starts++
+              edges.gap += nestedGap
+            }
             if (line.to >= node.to) edges.ends++
             quoteLines.set(line.from, edges)
             if (line.to >= node.to) break
@@ -1470,6 +1489,25 @@ function buildDecorations(view, detectedCodeCache) {
             const after = state.doc.sliceString(node.to, node.to + 1)
             ranges.push(hide.range(node.from, node.to + (after === " " ? 1 : 0)))
           }
+          return
+        }
+
+        // Container paragraphs use their own semantic margin. Their blank
+        // source lines are not top-level authored spacers in the preview.
+        if (name === "Paragraph" && /^(Blockquote|ListItem)$/.test(node.node.parent?.name || "")) {
+          const first = state.doc.lineAt(node.from)
+          if (first.number > state.doc.lineAt(node.node.parent.from).number) {
+            const previous = state.doc.line(first.number - 1)
+            if (/^(?:[ >]*)$/.test(previous.text)) {
+              lineOnce(previous.from, blockSeparatorLine(METRICS.paragraph))
+            }
+          }
+        }
+
+        // Escape markers disappear in live preview; the literal character
+        // still belongs to the original editable source.
+        if (name === "Escape" && !touches(node.from, node.to)) {
+          ranges.push(hide.range(node.from, node.from + 1))
           return
         }
 
@@ -1627,6 +1665,13 @@ function buildDecorations(view, detectedCodeCache) {
           // list starts at its first item, so "first" is a position check.
           const isFirstItem = node.from === listStack[listStack.length - 1]
           const isNested = listStack.length > 1
+          if (!isFirstItem) {
+            let number = state.doc.lineAt(node.from).number - 1
+            while (number > 0 && state.doc.line(number).text.trim() === "") {
+              lineOnce(state.doc.line(number).from, blockSeparatorLine(0))
+              number--
+            }
+          }
           if (!isFirstItem || isNested) lineOnce(node.from, listItemGapLine)
           eachLine(node.from, node.to, listItemLine)
           lineOnce(node.from, listDepthLine(listStack.length))
@@ -1787,6 +1832,7 @@ function buildDecorations(view, detectedCodeCache) {
         // --- Horizontal rule ----------------------------------------------
         if (name === "HorizontalRule") {
           if (!touchesLineOf(node.from)) {
+            lineOnce(node.from, ruleLine)
             ranges.push(hrDeco.range(node.from, node.to))
           }
           return
@@ -1800,7 +1846,7 @@ function buildDecorations(view, detectedCodeCache) {
       },
     })
     for (const [lineFrom, edges] of quoteLines) {
-      lineOnce(lineFrom, quoteLine(edges.depth, edges.starts, edges.ends))
+      lineOnce(lineFrom, quoteLine(edges.depth, edges.starts, edges.ends, edges.gap))
     }
     quoteLines.clear()
     // A deeply indented marker may be parsed as continuation content inside

@@ -1,9 +1,9 @@
 import Foundation
 @testable import MarkdownHelpers
 
-/// Access to the repository checkout for tests that need real vendored JS —
-/// the SPM test bundle carries no vendor resources, so WKWebView harnesses
-/// inject them from the source tree instead.
+/// Access to production assets and fixtures in the repository checkout.
+/// MarkdownHelpers also bundles Vendor resources so renderer bootstrap paths
+/// (including KaTeX and Mermaid) are the same in tests and the app.
 enum TestVendor {
     /// Repository root, derived from this file's location at
     /// `tests/swift-tests/Tests/MarkdownHelpersTests/` (five levels deep).
@@ -14,11 +14,9 @@ enum TestVendor {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
 
-    /// Contents of a repo-relative vendored JS file, escaped for embedding
-    /// inside an inline `<script>` block.
     /// Points the render-time highlighter at the repository's grammar bundle.
-    /// The test package has no app bundle, so without this `CodeHighlighter`
-    /// reports itself unavailable and fences render for the deferred pass.
+    /// CodeHighlighter has its own app-bundle lookup; install the same
+    /// grammar explicitly for tests that exercise render-time highlighting.
     /// Call from `class func setUp()` in every suite that asserts on
     /// highlighted or `data-hljs-done` output.
     static func installHighlighterGrammar() {
@@ -29,6 +27,7 @@ enum TestVendor {
         CodeHighlighter.useGrammar(source: source)
     }
 
+    /// Repo-relative vendored JS escaped for an inline `<script>` block.
     static func script(_ relativePath: String) throws -> String {
         try String(
             contentsOf: repositoryRoot.appendingPathComponent(relativePath),

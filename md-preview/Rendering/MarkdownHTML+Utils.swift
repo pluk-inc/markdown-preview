@@ -13,7 +13,10 @@ nonisolated extension MarkdownHTML {
     static func bundledVendorURL(_ name: String,
                                          ext: String,
                                          subdir: String) -> URL? {
-        let bundles = [Bundle.main, Bundle(for: MarkdownHTMLBundleToken.self)]
+        var bundles = [Bundle.main, Bundle(for: MarkdownHTMLBundleToken.self)]
+        #if SWIFT_PACKAGE
+        bundles.append(Bundle.module)
+        #endif
         for bundle in bundles {
             if let url = bundle.url(forResource: name, withExtension: ext, subdirectory: subdir) {
                 return url

@@ -34,15 +34,10 @@ final class MarkdownImageLayoutTests: XCTestCase {
 
         <p>Before <img alt="inline" src="\(source)"> after</p>
         """
-        let purifier = try TestVendor.script("md-preview/Vendor/DOMPurify/purify.min.js")
-
         for mode: MarkdownHTML.VendorLoading in [.inline, .lazy] {
             let rendered = MarkdownHTML.render(markdown: markdown, vendorLoading: mode)
-            let html = rendered.html.replacingOccurrences(
-                of: "<head>", with: "<head><script>\(purifier)</script>"
-            )
             let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
-            webView.loadHTMLString(html, baseURL: nil)
+            webView.loadHTMLString(rendered.html, baseURL: nil)
             let deadline = Date().addingTimeInterval(10)
             var ready = false
             while Date() < deadline {

@@ -2,6 +2,9 @@
 import Foundation
 
 nonisolated enum EditorHTML {
+    /// Space reserved for the editable language control above fenced code.
+    static let codeLanguageHeaderHeight: CGFloat = 20
+
     struct Configuration {
         var fullWidth = false
         var lightPageBackground = "Canvas"
@@ -120,6 +123,9 @@ nonisolated enum EditorHTML {
         #editor .cm-line {
             padding: 0;
         }
+        /* Hanging trailing spaces must not push the last word onto a new
+           line. Match read-mode wrapping while preserving editable spaces. */
+        #editor .cm-content.cm-lineWrapping { white-space: pre-wrap; }
         #editor .cm-line[dir="rtl"] { text-align: right; }
         #editor .cm-line[dir="ltr"] { text-align: left; }
 
@@ -337,18 +343,24 @@ nonisolated enum EditorHTML {
         #editor .cm-md-list-item-gap {
             padding-top: \(MarkdownHTML.listItemSpacing)px;
         }
+        #editor .cm-md-rule-line {
+            height: 1px;
+            min-height: 0;
+            line-height: 0;
+        }
         .cm-md-hr {
             display: inline-block;
             width: 100%;
             border-top: 1px solid var(--grid);
-            vertical-align: middle;
+            vertical-align: top;
         }
         #editor .cm-md-codeblock {
             font-family: ui-monospace, "SF Mono", Menlo, monospace;
             font-size: 1em;
             line-height: 1.3;
             position: relative;
-            padding: 0 16px;
+            /* Include the read-mode card's 0.5px border in its 16px inset. */
+            padding: 0 16.5px;
         }
         /* The code card is painted on a z:-2 pseudo instead of the line
            itself, so it matches the preview's opaque --code-bg and never
@@ -361,14 +373,14 @@ nonisolated enum EditorHTML {
             background: var(--code-bg);
         }
         #editor .cm-content > .cm-line.cm-md-codeblock-first {
-            padding-top: 16px;
+            padding-top: 16.5px;
             position: relative;
         }
         #editor .cm-md-codeblock-first::before {
             border-radius: 8px 8px 0 0;
         }
         #editor .cm-md-codeblock-last {
-            padding-bottom: 16px;
+            padding-bottom: 16.5px;
         }
         #editor .cm-md-codeblock-last::before {
             border-radius: 0 0 8px 8px;
@@ -380,7 +392,7 @@ nonisolated enum EditorHTML {
         /* Reserve a header row so the language never competes with code,
            including wrapped lines and blocks at the start of a document. */
         #editor .cm-content > .cm-line.cm-md-codeblock-first:has(.cm-md-code-language) {
-            padding-top: 36px;
+            padding-top: calc(16.5px + \(codeLanguageHeaderHeight)px);
         }
         #editor .cm-md-code-fence-source-hidden {
             visibility: hidden;
@@ -451,23 +463,34 @@ nonisolated enum EditorHTML {
         .cm-md-mermaid-preview {
             /* Outer spacing comes from the block separator lines, matching
                the preview's .mermaid-figure margin. */
-            margin: 0;
-            padding: 20px;
+            position: relative;
+            margin: 0 auto;
+            width: 100%;
+            --mm-max-height: min(70vh, 720px);
+            max-width: calc(var(--mm-max-height) * (var(--mm-aspect, 4 / 3)));
+            aspect-ratio: var(--mm-aspect, 4 / 3);
+            max-height: var(--mm-max-height);
+            overflow: hidden;
             border-radius: 15px;
             background: var(--code-bg);
             cursor: text;
             box-sizing: border-box;
         }
         .cm-md-mermaid-stage {
+            position: absolute;
+            inset: 0;
+            padding: 16px;
+            box-sizing: border-box;
             display: flex;
+            align-items: center;
             justify-content: center;
-            min-height: 48px;
             color: var(--secondary);
         }
         .cm-md-mermaid-stage svg {
             display: block;
-            max-width: 100%;
-            height: auto;
+            width: 100%;
+            max-width: none !important;
+            height: 100%;
         }
         .cm-md-mermaid-error {
             border: 1px solid color-mix(in srgb, #d1242f 45%, transparent);
@@ -503,7 +526,6 @@ nonisolated enum EditorHTML {
         }
         .cm-md-table-grid th,
         .cm-md-table-grid td {
-            min-width: 72px;
             padding: 0;
             border-top: 1px solid var(--grid);
             border-bottom: 1px solid var(--grid);

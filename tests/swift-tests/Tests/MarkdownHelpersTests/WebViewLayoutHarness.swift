@@ -18,6 +18,7 @@ final class WebViewLayoutHarness {
         let name: String
         let rect: Rect
         let lines: [Rect]
+        let editorHeadersAbove: Int
     }
 
     struct Layout: Codable, Equatable {
@@ -31,7 +32,7 @@ final class WebViewLayoutHarness {
     private let html: String
     private let isEditor: Bool
 
-    init(html: String, width: CGFloat, isEditor: Bool, zoom: CGFloat = 1) {
+    init(html: String, width: CGFloat, isEditor: Bool, zoom: CGFloat = 1, height: CGFloat = 1800) {
         self.html = html
         self.isEditor = isEditor
         let configuration = WKWebViewConfiguration()
@@ -61,7 +62,7 @@ final class WebViewLayoutHarness {
                 };
             })();
             """, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        webView = WKWebView(frame: CGRect(x: 0, y: 0, width: width, height: 1800),
+        webView = WKWebView(frame: CGRect(x: 0, y: 0, width: width, height: height),
                             configuration: configuration)
         webView.pageZoom = zoom
         webView.loadHTMLString(html, baseURL: nil)
@@ -71,7 +72,9 @@ final class WebViewLayoutHarness {
         webView.stopLoading()
     }
 
-    func layout(texts: [String], imageCount: Int) async throws -> Layout {
+    func layout(texts: [String], imageCount: Int,
+                selectors: [String: Int] = [:], boxes: [String: String] = [:],
+                styles: [String: [String: String]] = [:], sourceSnippets: [String] = []) async throws -> Layout {
         let deadline = Date().addingTimeInterval(10)
         while webView.isLoading && Date() < deadline {
             try await Task.sleep(for: .milliseconds(10))
@@ -80,7 +83,7 @@ final class WebViewLayoutHarness {
 
         let result = try await webView.callAsyncJavaScript("""
             const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-            const deadline = Date.now() + 8000;
+            const deadline = Date.now() + 7000;
             const rootSelector = isEditor ? '.cm-content' : 'article.markdown-body';
             const imageSelector = isEditor ? '.cm-md-image-preview img' : 'article img';
             const ready = async () => {
@@ -88,6 +91,18 @@ final class WebViewLayoutHarness {
                        (isEditor && !window.__mdEditor)) {
                     if (Date.now() > deadline) throw new Error('Renderer did not become ready');
                     await delay(20);
+                }
+                while (Object.entries(selectors).some(([selector, count]) =>
+                    document.querySelectorAll(rootSelector + ' ' + selector).length !== count)) {
+                    window.__layoutTestFrame();
+                    if (Date.now() > deadline) throw new Error('Rendered feature counts: ' + JSON.stringify(
+                        Object.entries(selectors).map(([selector, count]) => ({ selector, expected: count,
+                            actual: document.querySelectorAll(rootSelector + ' ' + selector).length }))));
+                    await delay(20);
+                }
+                const content = document.querySelector(rootSelector).textContent;
+                for (const source of sourceSnippets) {
+                    if (!content.includes(source)) throw new Error('Missing visible source fallback: ' + source);
                 }
                 await document.fonts.ready;
                 const images = [...document.querySelectorAll(imageSelector)];
@@ -111,53 +126,83 @@ final class WebViewLayoutHarness {
                     x: box.left - originX, y: box.top - originY,
                     width: box.width, height: box.height
                 });
+                const headers = isEditor ? [...root.querySelectorAll('.cm-md-codeblock-first:has(.cm-md-code-language)')]
+                    .map(header => header.getBoundingClientRect().top - originY) : [];
+                const headerCount = y => headers.filter(top => top < y).length;
+                // Build one visible text stream so probes can span emphasis,
+                // links, syntax-highlighting spans, and soft-joined lines.
+                const characters = [];
+                const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+                let node;
+                while ((node = walker.nextNode())) {
+                    if (node.parentElement.closest('script, style, .cm-md-image-source')) continue;
+                    const style = getComputedStyle(node.parentElement);
+                    if (style.visibility === 'hidden' || style.display === 'none') continue;
+                    let offset = 0;
+                    for (const character of node.textContent) {
+                        characters.push({ character, node, offset });
+                        offset += character.length;
+                    }
+                }
+                // Indices remain UTF-16, matching DOM Range and String.indexOf.
+                const stream = characters.map(item => item.character).join('');
+                const offsets = [];
+                let streamOffset = 0;
+                for (const item of characters) {
+                    offsets.push(streamOffset);
+                    streamOffset += item.character.length;
+                }
                 const elements = texts.map(text => {
-                    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-                    let node;
-                    while ((node = walker.nextNode())) {
-                        if (node.parentElement.closest('.cm-md-image-source')) continue;
-                        const offset = node.textContent.indexOf(text);
-                        if (offset < 0) continue;
-                        const range = document.createRange();
-                        range.setStart(node, offset);
-                        range.setEnd(node, offset + text.length);
-                        // pre-wrap retains trailing spaces at line breaks;
-                        // normal white-space trims them. Compare the visible
-                        // character bounds rather than that invisible advance.
-                        const lineBoxes = [];
-                        let position = offset;
-                        for (const character of text) {
-                            range.setStart(node, position);
-                            position += character.length;
-                            range.setEnd(node, position);
-                            if (/\\s/u.test(character)) continue;
-                            // At a wrapped boundary WebKit can also return
-                            // a zero-width caret on the preceding line.
-                            for (const clientRect of range.getClientRects()) {
-                                if (clientRect.width === 0) continue;
-                                const box = rect(clientRect);
-                                let line = lineBoxes.find(line => Math.abs(line.y - box.y) < 0.5);
-                                if (!line) lineBoxes.push({ ...box });
-                                else {
-                                    const right = Math.max(line.x + line.width, box.x + box.width);
-                                    line.x = Math.min(line.x, box.x);
-                                    line.width = right - line.x;
-                                    line.height = Math.max(line.height, box.height);
-                                }
+                    const offset = stream.indexOf(text);
+                    if (offset < 0) throw new Error(`Missing rendered text: ${text}`);
+                    const firstCharacter = characters[offsets.indexOf(offset)];
+                    const computed = getComputedStyle(firstCharacter.node.parentElement);
+                    for (const [property, expected] of Object.entries(styles[text] || {})) {
+                        const actual = computed.getPropertyValue(property);
+                        if (actual !== expected) throw new Error(`${text}: ${property} expected ${expected}, found ${actual}`);
+                    }
+                    const range = document.createRange();
+                    const lineBoxes = [];
+                    for (let index = 0; index < characters.length; index++) {
+                        if (offsets[index] < offset || offsets[index] >= offset + text.length) continue;
+                        const item = characters[index];
+                        if (/\\s/u.test(item.character)) continue;
+                        range.setStart(item.node, item.offset);
+                        range.setEnd(item.node, item.offset + item.character.length);
+                        // Ignore trailing spaces and the zero-width caret
+                        // rectangle WebKit adds at some wrapped boundaries.
+                        for (const clientRect of range.getClientRects()) {
+                            if (clientRect.width === 0 || clientRect.height === 0) continue;
+                            const box = rect(clientRect);
+                            let line = lineBoxes.find(line => Math.abs(line.y - box.y) < 0.5);
+                            if (!line) lineBoxes.push({ ...box });
+                            else {
+                                const right = Math.max(line.x + line.width, box.x + box.width);
+                                line.x = Math.min(line.x, box.x);
+                                line.width = right - line.x;
+                                line.height = Math.max(line.height, box.height);
                             }
                         }
-                        const left = Math.min(...lineBoxes.map(box => box.x));
-                        const top = Math.min(...lineBoxes.map(box => box.y));
-                        const right = Math.max(...lineBoxes.map(box => box.x + box.width));
-                        const bottom = Math.max(...lineBoxes.map(box => box.y + box.height));
-                        return { name: text, rect: { x: left, y: top, width: right - left, height: bottom - top },
-                                 lines: lineBoxes };
                     }
-                    throw new Error(`Missing rendered text: ${text}`);
+                    if (!lineBoxes.length) throw new Error(`Text is not visibly laid out: ${text}`);
+                    const left = Math.min(...lineBoxes.map(box => box.x));
+                    const top = Math.min(...lineBoxes.map(box => box.y));
+                    const right = Math.max(...lineBoxes.map(box => box.x + box.width));
+                    const bottom = Math.max(...lineBoxes.map(box => box.y + box.height));
+                    return { name: text, rect: { x: left, y: top, width: right - left, height: bottom - top },
+                             lines: lineBoxes, editorHeadersAbove: headerCount(top) };
                 });
                 document.querySelectorAll(imageSelector).forEach((image, index) => {
-                    elements.push({name: `image-${index}`, rect: rect(image.getBoundingClientRect()), lines: []});
+                    const box = rect(image.getBoundingClientRect());
+                    elements.push({name: `image-${index}`, rect: box, lines: [], editorHeadersAbove: headerCount(box.y)});
                 });
+                for (const [name, selector] of Object.entries(boxes).sort()) {
+                    const matches = root.querySelectorAll(selector);
+                    if (matches.length !== 1) throw new Error(`${name}: expected one ${selector}, found ${matches.length}`);
+                    const box = rect(matches[0].getBoundingClientRect());
+                    if (box.width <= 0 || box.height <= 0) throw new Error(`${name} is not visibly laid out`);
+                    elements.push({ name, rect: box, lines: [], editorHeadersAbove: headerCount(box.y) });
+                }
                 return {
                     columnX: originX, columnY: originY,
                     columnWidth: bounds.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
@@ -181,7 +226,8 @@ final class WebViewLayoutHarness {
                 previous = current;
             }
             throw new Error('Rendered geometry did not settle');
-            """, arguments: ["texts": texts, "imageCount": imageCount, "isEditor": isEditor],
+            """, arguments: ["texts": texts, "imageCount": imageCount, "isEditor": isEditor,
+                                 "selectors": selectors, "boxes": boxes, "styles": styles, "sourceSnippets": sourceSnippets],
             in: nil, contentWorld: .page)
         let json = try XCTUnwrap(result as? String)
         return try JSONDecoder().decode(Layout.self, from: Data(json.utf8))

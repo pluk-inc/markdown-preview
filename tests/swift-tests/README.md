@@ -13,29 +13,58 @@ swift test --package-path tests/swift-tests --filter EditorPreviewLayoutTests
 ```
 
 These tests load the production `MarkdownHTML` and `EditorHTML` pages into two
-real `WKWebView` instances. The editor uses the checked-in CodeMirror bundle;
-images are local data URLs and DOMPurify is loaded from the vendored script.
-There is no network dependency or duplicate test stylesheet.
+real `WKWebView` instances. The editor, DOMPurify, syntax highlighting, Mermaid,
+and KaTeX use the actual vendored resources. Images use local data URLs. There
+is no network dependency, renderer stub, or duplicate test stylesheet.
 
-Nine fixtures run at 500, 900, and 1280 points, including a 1280-point full-width
-column. Both editor scrolling configurations are covered. The fixtures check:
+**21 test cases run in four configurations: 84 paired WebKit runs.** The matrix
+uses 500, 900, and 1280-point viewports, including a 1280-point full-width column,
+and both editor scrolling configurations.
 
-- Paragraphs, ATX/Setext headings, and wrapped text.
-- Plain, linked, repeated, and oversized images, plus paragraphs before and after
-  them. Cumulative vertical positions catch gaps that grow after each image.
-- Bullet/ordered list text, quote boundaries, hard line breaks, and quotes at the
-  start of the document.
-- Replacing editor content and resizing an existing view.
+### Complete documents and focused regressions
 
-The assertions compare column origins/widths, visible text lines, and image
-rectangles within **1 CSS pixel**. They compare both horizontal and vertical
-positions, widths, heights, and wrapped line counts. Text probes ignore invisible
-trailing spaces and zero-width caret rectangles at wrapped boundaries.
+The offline files in `tests/fixtures/layout/` are deliberately mixed documents.
+The harness replaces `{{IMAGE}}` with an embedded SVG fixture:
+
+| Fixture | Coverage |
+| --- | --- |
+| `mixed-common.md` | All six ATX heading levels, both Setext levels, paragraphs, combined bold/italic/strike/highlight/code/links, nested lists and quotes, fenced/unlabelled/indented code, aligned and wrapping tables, direct and linked images, real Mermaid, Unicode/RTL, escapes, hard/soft breaks, and authored blank lines. |
+| `mixed-source-features.md` | YAML frontmatter, task lists, inline/display/fenced math, all five GitHub alerts, reference links/images, autolinks, repeated footnotes, raw HTML/details, explicit HTML image alignment/size, and formatted table cells. |
+| `mixed-everything.md` | Both sets of features in one complete document, so renderer interactions and surrounding shared content are exercised together. |
+
+Focused cases additionally cover loose list paragraphs, oversized/repeated images,
+quotes at the document start, TOML frontmatter, source replacement, and resizing.
+The common mixed document probes text throughout the file, not just its first
+screen or a few images. Tall WebKit views keep the entire fixture materialized
+instead of skipping content outside CodeMirror's virtualized viewport.
+
+### What equality means
+
+**18 cases (72 runs)** compare cumulative geometry: column origins/widths, visible
+text lines, image rectangles, table rows, horizontal rules, and Mermaid figures
+and SVGs, within **1 CSS pixel**. They compare X/Y, width/height, wrapped line
+counts, and selected computed emphasis styles. Text probes cross DOM nodes, so
+formatting and highlighting spans do not hide wrapping differences. Invisible
+trailing spaces and zero-width caret rectangles are excluded.
+
+Fenced code retains the editor's language-editing row. The tests account for
+exactly its declared **20 CSS pixels per header** when comparing downstream Y
+positions; they never subtract a measured discrepancy or relax other geometry.
+
+**Three cases (12 runs)** also include features that intentionally remain source
+in the editor: metadata, tasks, math, alerts, reference syntax, footnotes, HTML,
+and formatting inside table cells. They assert actual reader feature counts,
+visible editor source, unchanged Markdown, column alignment, and local alignment
+and wrapping of shared text around those features. They do **not** claim equal
+block heights for a rendered equation versus its editable source. Editor-only source cues (such as Setext underline markers) are not a claim of
+pixel-identical screenshots. Every fixture also verifies that rendering preserves
+the exact original Markdown.
 
 ### Readiness and diagnostics
 
 Navigation completion is insufficient. The harness waits for the renderer,
-`document.fonts.ready`, decoded images, and stable geometry across several samples.
+`document.fonts.ready`, decoded images, expected rendered feature counts (including
+async Mermaid/KaTeX output), and stable geometry across several samples.
 CodeMirror schedules measurement in animation callbacks. WebKit can suspend those
 callbacks in a command-line test's hidden view, so a test-only document-start script
 queues them and the harness explicitly advances frames. **Only the frame clock is
@@ -51,18 +80,15 @@ fragile pixel baselines across macOS font-rendering changes.
 ### Scope and remaining gaps
 
 The default suite covers the system font/default reader layout at 100% zoom and
-unfocused live-preview blocks. It does not establish parity for every Markdown
-construct, custom font/reader-spacing preference, caret-active source syntax,
-native toolbar/sidebar offsets, or Quick Look. Add a fixture at the real boundary
-when extending coverage.
+unfocused live-preview blocks. The corpus covers supported syntax categories,
+not every possible nesting/permutation. It does not establish parity for custom
+font/reader-spacing preferences, caret-active syntax, long-document scrolling or
+virtualization, native toolbar/sidebar offsets, or Quick Look.
 
-Exploratory checks at 125% page zoom found remaining differences at a 900-point
-viewport: wrapped paragraphs can break at a different word, and ordered-list text
-can differ horizontally by about 3.4 CSS pixels. These are not covered by the
-passing default matrix. Run the same geometry checks at another zoom with
-`MDP_LAYOUT_ZOOM=1.25` in the environment to investigate them. CodeMirror's
-`break-spaces` wrapping differs from read mode's normal whitespace handling;
-the ordered-list offset still needs a separate diagnosis.
+Run the same geometry checks at another zoom with `MDP_LAYOUT_ZOOM=1.25` in the
+environment. A follow-up check at 125% confirms wrapped paragraphs now match,
+but ordered-list text is still about 3.4 CSS pixels farther right in the editor
+at each viewport. Non-default zoom remains outside the passing default matrix.
 
 ### Regression proof
 
@@ -70,6 +96,10 @@ During development, removing the image parser's `depth--` balance (the historica
 post-image spacing bug) made the paired image test fail on paragraph/image Y
 positions. Restoring the fix made it pass again. The suite also exposed missing
 quote-edge padding, which is now applied once per quote boundary in the editor.
+Expanding to complete documents exposed and fixed trailing-space wrapping,
+nested quote and loose-list gaps, code-card border offsets, horizontal-rule
+height/position, narrow table sizing, Mermaid aspect/scale, and visible escape
+markers. The focused cases retain each regression alongside the complete files.
 
 ### Research references
 

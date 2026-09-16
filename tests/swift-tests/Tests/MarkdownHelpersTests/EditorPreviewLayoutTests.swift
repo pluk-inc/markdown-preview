@@ -4,14 +4,26 @@ import XCTest
 
 @MainActor
 final class EditorPreviewLayoutTests: XCTestCase {
-    private struct Fixture {
+    struct Fixture {
         let name: String
         let markdown: String
         let texts: [String]
         var imageCount = 0
+        var editorImageCount: Int? = nil
+        var readSelectors: [String: Int] = [:]
+        var editorSelectors: [String: Int] = [:]
+        var readBoxes: [String: String] = [:]
+        var editorBoxes: [String: String] = [:]
+        var styles: [String: [String: String]] = [:]
+        var editorSourceSnippets: [String] = []
+        /// A documented source-editing contract, not a claim of visual parity.
+        var sourceRepresentationReason: String? = nil
+        /// Shared text still has to match horizontally and within each block.
+        var localParityTexts: [String] = []
+        var height: CGFloat = 1800
     }
 
-    private var image: String {
+    var image: String {
         let svg = """
         <svg xmlns="http://www.w3.org/2000/svg" width="240" height="80">
         <rect width="240" height="80" fill="royalblue"/></svg>
@@ -126,10 +138,12 @@ final class EditorPreviewLayoutTests: XCTestCase {
         try await check(updated, updatingFrom: initial)
     }
 
-    private func check(_ fixture: Fixture, updatingFrom initial: Fixture? = nil,
+    func check(_ fixture: Fixture, updatingFrom initial: Fixture? = nil,
                        file: StaticString = #filePath, line: UInt = #line) async throws {
         let editorScript = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
-        let purifier = try TestVendor.script("md-preview/Vendor/DOMPurify/purify.min.js")
+        TestVendor.installHighlighterGrammar()
+        let mermaid = fixture.markdown.contains("```mermaid")
+            ? try TestVendor.script("md-preview/Vendor/Mermaid/mermaid.min.js") : nil
         let zoom = try XCTUnwrap(Double(ProcessInfo.processInfo.environment["MDP_LAYOUT_ZOOM"] ?? "1"))
         guard zoom > 0 else { throw WebViewLayoutHarness.Failure("Page zoom must be positive") }
         for (width, fullWidth, pageScrolling) in [
@@ -141,14 +155,15 @@ final class EditorPreviewLayoutTests: XCTestCase {
                 markdown: fixture.markdown, allowsScroll: true,
                 contentWidth: fullWidth ? .full : .centered,
                 documentFont: .system, readerLayout: ReaderLayoutSetting()
-            ).html.replacingOccurrences(of: "<head>", with: "<head><script>\(purifier)</script>")
+            ).html
             let editorHTML = EditorHTML.render(
                 markdown: (initial ?? fixture).markdown, editorJavaScript: editorScript,
+                mermaidJavaScript: mermaid,
                 configuration: .init(fullWidth: fullWidth, usesPageScrolling: pageScrolling)
             )
-            let reader = WebViewLayoutHarness(html: readerHTML, width: width, isEditor: false, zoom: zoom)
+            let reader = WebViewLayoutHarness(html: readerHTML, width: width, isEditor: false, zoom: zoom, height: fixture.height)
             let editor = WebViewLayoutHarness(html: editorHTML, width: initial == nil ? width : 1100,
-                                              isEditor: true, zoom: zoom)
+                                              isEditor: true, zoom: zoom, height: fixture.height)
             defer { reader.close(); editor.close() }
             var readLayout: WebViewLayoutHarness.Layout?
             var editLayout: WebViewLayoutHarness.Layout?
@@ -161,33 +176,68 @@ final class EditorPreviewLayoutTests: XCTestCase {
                         arguments: ["markdown": fixture.markdown], in: nil, contentWorld: .page
                     )
                 }
-                readLayout = try await reader.layout(texts: fixture.texts, imageCount: fixture.imageCount)
-                editLayout = try await editor.layout(texts: fixture.texts, imageCount: fixture.imageCount)
+                readLayout = try await reader.layout(texts: fixture.texts, imageCount: fixture.imageCount,
+                                                     selectors: fixture.readSelectors, boxes: fixture.readBoxes, styles: fixture.styles)
+                editLayout = try await editor.layout(texts: fixture.texts,
+                                                     imageCount: fixture.editorImageCount ?? fixture.imageCount,
+                                                     selectors: fixture.editorSelectors, boxes: fixture.editorBoxes, styles: fixture.styles,
+                                                     sourceSnippets: fixture.editorSourceSnippets)
+                let source = try await editor.webView.evaluateJavaScript("window.__mdEditor.getMarkdown()")
+                guard source as? String == fixture.markdown else {
+                    throw WebViewLayoutHarness.Failure("Rendering changed the Markdown source")
+                }
                 let read = try XCTUnwrap(readLayout)
                 let edit = try XCTUnwrap(editLayout)
                 var differences: [String] = []
                 func compare(_ label: String, _ lhs: Double, _ rhs: Double) {
                     if abs(lhs - rhs) > 1 { differences.append("\(label): read=\(lhs), editor=\(rhs)") }
                 }
-                func compareRect(_ label: String, _ lhs: WebViewLayoutHarness.Rect, _ rhs: WebViewLayoutHarness.Rect) {
+                func compareRect(_ label: String, _ lhs: WebViewLayoutHarness.Rect, _ rhs: WebViewLayoutHarness.Rect,
+                                 editorHeaders: Int = 0) {
                     compare("\(label).x", lhs.x, rhs.x)
-                    compare("\(label).y", lhs.y, rhs.y)
+                    // The language-editing row is editor-only UI. Account for
+                    // exactly its fixed height, never an observed block delta.
+                    compare("\(label).y", lhs.y, rhs.y - Double(editorHeaders) * EditorHTML.codeLanguageHeaderHeight)
                     compare("\(label).width", lhs.width, rhs.width)
                     compare("\(label).height", lhs.height, rhs.height)
                 }
                 compare("column x", read.columnX, edit.columnX)
                 compare("column y", read.columnY, edit.columnY)
                 compare("column width", read.columnWidth, edit.columnWidth)
+                if fixture.sourceRepresentationReason != nil {
+                    // Source-only features have intentionally different block
+                    // heights. Shared paragraphs must still wrap and align;
+                    // compare their lines relative to each paragraph's top.
+                    for name in fixture.localParityTexts {
+                        let lhs = try XCTUnwrap(read.elements.first { $0.name == name })
+                        let rhs = try XCTUnwrap(edit.elements.first { $0.name == name })
+                        compare("\(name).x", lhs.rect.x, rhs.rect.x)
+                        compare("\(name).width", lhs.rect.width, rhs.rect.width)
+                        compare("\(name).height", lhs.rect.height, rhs.rect.height)
+                        if lhs.lines.count != rhs.lines.count {
+                            differences.append("\(name): different wrapped line count")
+                        }
+                        for (index, pair) in zip(lhs.lines, rhs.lines).enumerated() {
+                            let label = "\(name) line \(index)"
+                            compare("\(label).x", pair.0.x, pair.1.x)
+                            compare("\(label).y within block", pair.0.y - lhs.rect.y, pair.1.y - rhs.rect.y)
+                            compare("\(label).width", pair.0.width, pair.1.width)
+                            compare("\(label).height", pair.0.height, pair.1.height)
+                        }
+                    }
+                    if !differences.isEmpty { throw WebViewLayoutHarness.Failure(differences.joined(separator: "\n")) }
+                    continue
+                }
                 if read.elements.map(\.name) != edit.elements.map(\.name) {
                     differences.append("Different rendered elements or order")
                 }
                 for (lhs, rhs) in zip(read.elements, edit.elements) {
-                    compareRect(lhs.name, lhs.rect, rhs.rect)
+                    compareRect(lhs.name, lhs.rect, rhs.rect, editorHeaders: rhs.editorHeadersAbove)
                     if lhs.lines.count != rhs.lines.count {
                         differences.append("\(lhs.name): different wrapped line count")
                     }
                     for (index, pair) in zip(lhs.lines, rhs.lines).enumerated() {
-                        compareRect("\(lhs.name) line \(index)", pair.0, pair.1)
+                        compareRect("\(lhs.name) line \(index)", pair.0, pair.1, editorHeaders: rhs.editorHeadersAbove)
                     }
                 }
                 if !differences.isEmpty { throw WebViewLayoutHarness.Failure(differences.joined(separator: "\n")) }
