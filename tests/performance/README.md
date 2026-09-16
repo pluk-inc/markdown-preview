@@ -4,7 +4,22 @@ The **Performance → performance regression** GitHub check compares each PR wit
 its merge base on the same `macos-15` runner. Pushes to `main` compare with the
 previous commit from the push event; manual runs compare with the parent commit.
 The job publishes a table in the Actions summary and retains raw measurements,
-revision IDs, toolchain details, fixture bytes, and build/run logs as `performance-comparison`.
+revision IDs, toolchain details, fixture bytes, and build/run logs as
+`performance-comparison-<attempt>`.
+
+Each completed PR run also posts a **new comment in the PR conversation**, with
+the comparison table, commit, run attempt, and link to the logs/artifacts. This
+includes successful runs, regressions, and failures/cancellations; if a run ends
+before producing measurements, the comment says the table is unavailable.
+Rerunning Performance creates another comment. Retrying only the reporting
+workflow does not duplicate an existing bot comment for the same attempt.
+
+The separate **Performance report** workflow runs from the default branch after
+Performance completes, including for fork PRs. It reads the attempt's
+`performance-pr-report-<attempt>` artifact as data and verifies the destination
+PR against GitHub's run metadata. Only this trusted reporting job has permission
+to write comments. Automatic comments start once the reporting workflow is on
+`main`; push/manual benchmark runs without a PR do not post comments.
 
 ## What is measured
 
@@ -62,7 +77,7 @@ From the repository root, with a **new** output directory:
 
 ```sh
 python3 scripts/bench/run_performance.py --base origin/main --candidate HEAD --out /tmp/md-preview-performance
-python3 -m unittest discover -s scripts/bench -p 'test_performance.py'
+python3 -m unittest discover -s scripts/bench -p 'test_*.py'
 ```
 
 The benchmark snapshots committed revisions. Commit production changes before
@@ -101,3 +116,4 @@ in [`scripts/bench/README.md`](../../scripts/bench/README.md) or Instruments.
 
 - [Apple: writing and running performance tests](https://developer.apple.com/documentation/xcode/writing-and-running-performance-tests)
 - [GitHub: job summaries](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#adding-a-job-summary)
+- [GitHub: reporting on completed workflow runs](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run)

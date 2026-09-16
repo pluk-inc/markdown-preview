@@ -24,11 +24,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Initialize report
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/performance-report"
+          printf '%s\n' "$PR_NUMBER" > "$RUNNER_TEMP/performance-report/pr-number.txt"
+
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app
 
-      - name: Test the regression detector
-        run: python3 -m unittest discover -s scripts/bench -p 'test_performance.py'
+      - name: Test comparison and reporting
+        run: python3 -m unittest discover -s scripts/bench -p 'test_*.py'
 
       - name: Compare base and candidate in Release
         env:
@@ -48,10 +55,26 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: performance-comparison
+          name: performance-comparison-${{ github.run_attempt }}
           retention-days: 14
           path: |
             ${{ runner.temp }}/performance/*.json
             ${{ runner.temp }}/performance/*.md
             ${{ runner.temp }}/performance/*.log
+          if-no-files-found: warn
+
+      - name: Prepare PR report
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/performance/summary.md" ]; then
+            cp "$RUNNER_TEMP/performance/summary.md" "$RUNNER_TEMP/performance-report/summary.md"
+          fi
+
+      - name: Upload PR report
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-pr-report-${{ github.run_attempt }}
+          retention-days: 14
+          path: ${{ runner.temp }}/performance-report/
           if-no-files-found: warn
