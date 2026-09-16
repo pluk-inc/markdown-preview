@@ -29,7 +29,10 @@ let package = Package(
             dependencies: [
                 .product(name: "Markdown", package: "swift-markdown"),
             ],
-            resources: [.copy("Vendor")]
+            // Copy real child directories; copying the Vendor symlink itself
+            // leaves a dangling relative link with SwiftPM's native build system.
+            resources: ["CodeMirror", "DOMPurify", "Highlight", "KaTeX", "Mermaid", "Morphdom"]
+                .map { .copy("Vendor/\($0)") }
         ),
         .testTarget(
             name: "MarkdownHelpersTests",

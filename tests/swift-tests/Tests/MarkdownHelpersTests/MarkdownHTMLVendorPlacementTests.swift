@@ -11,6 +11,16 @@ import XCTest
 /// `render()` owns: where early population lands, whether `.lazy` bodies stay
 /// script-free, and whether the article fills at body-parse time.
 final class MarkdownHTMLVendorPlacementTests: XCTestCase {
+    func testProductionVendorResourcesResolve() throws {
+        for (name, directory) in [("purify.min", "DOMPurify"), ("mermaid.min", "Mermaid"),
+                                  ("katex.min", "KaTeX"), ("highlight.min", "Highlight"),
+                                  ("morphdom.min", "Morphdom"), ("mdedit.min", "CodeMirror")] {
+            let source = try XCTUnwrap(MarkdownHTML.bundledVendorResource(name, ext: "js", subdir: "Vendor/\(directory)"),
+                                      "Missing production asset \(directory)/\(name).js")
+            XCTAssertGreaterThan(source.utf8.count, 1000)
+        }
+    }
+
     private let sample = """
     # Title
 
