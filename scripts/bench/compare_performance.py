@@ -62,7 +62,7 @@ def compare(baselines: list[dict], candidates: list[dict]) -> tuple[str, bool, l
         if group[0]["revision"] != group[1]["revision"]:
             raise InvalidReport("Revision changed between rounds")
     rows, warnings = [], []
-    failed = False
+    improved_count = regressed_count = 0
     for name in sorted(names):
         entries = [report["metrics"][name] for report in reports]
         if len({(entry["unit"], entry["inputSHA256"]) for entry in entries}) != 1:
@@ -72,6 +72,7 @@ def compare(baselines: list[dict], candidates: list[dict]) -> tuple[str, bool, l
         # from being interpreted as convincing evidence of a slowdown.
         floor = 16.0 if unit == "MiB" else (20.0 if "-open-" in name else 5.0)
         regressions = []
+        improvements = []
         material_changes = []
         round_changes = []
         for base, candidate in zip(baselines, candidates):
@@ -80,23 +81,36 @@ def compare(baselines: list[dict], candidates: list[dict]) -> tuple[str, bool, l
             round_changes.append(f"{(new / old - 1) * 100:+.1f}%")
             threshold = max(old * 0.25, floor, 3 * (old_mad + new_mad))
             regressions.append(new - old > threshold)
+            improvements.append(old - new > threshold)
             material_changes.append(new - old > max(old * 0.25, floor))
         old = statistics.median(x for report in baselines for x in report["metrics"][name]["samples"])
         new = statistics.median(x for report in candidates for x in report["metrics"][name]["samples"])
-        status = "REGRESSION" if all(regressions) else "check variability" if any(material_changes) else "pass"
-        failed |= all(regressions)
-        if any(material_changes) and not all(regressions):
+        regressed = all(regressions)
+        improved = all(improvements)
+        regressed_count += regressed
+        improved_count += improved
+        if any(material_changes) and not regressed:
             warnings.append(f"{name}: slowdown was noisy or not repeated in both rounds; rerun to investigate")
-        rounds = " / ".join(round_changes)
-        rows.append(f"| {name} | {old:.2f} | {new:.2f} | {(new / old - 1) * 100:+.1f}% | {rounds} | {unit} | {status} |")
+        if regressed or improved:
+            status = "Regressed" if regressed else "Improved"
+            rounds = " / ".join(round_changes)
+            rows.append(f"| {name} | {old:.2f} | {new:.2f} | {(new / old - 1) * 100:+.1f}% | {rounds} | {unit} | **{status}** |")
+    failed = regressed_count > 0
+    table = [
+        "| Metric | Base median | Candidate median | Combined change | Rounds 1 / 2 | Unit | Result |",
+        "| --- | ---: | ---: | ---: | --- | --- | --- |", *rows,
+    ] if rows else ["No confirmed improvements or regressions."]
+    unchanged_count = len(names) - improved_count - regressed_count
     summary = "\n".join([
         "# Performance comparison", "",
         f"Base: `{baselines[0]['revision'][:12]}` · Candidate: `{candidates[0]['revision'][:12]}`", "",
         "**FAIL — confirmed regression**" if failed else "**PASS — no confirmed regression**", "",
-        "| Metric | Base median | Candidate median | Combined change | Rounds 1 / 2 | Unit | Result |",
-        "| --- | ---: | ---: | ---: | --- | --- | --- |", *rows, "",
+        f"{len(names)} metrics checked: **{improved_count} improved**, **{regressed_count} regressed**, "
+        f"{unchanged_count} without a confirmed change (omitted from the table).", "",
+        *table, "",
+        "All measurements remain available in the raw benchmark artifacts.", "",
         "Combined medians pool both rounds; per-round changes determine the gate and expose runner drift.", "",
-        "Gate: both independent rounds must exceed 25%, the absolute floor, and the noise allowance.",
+        "Improvements and regressions must exceed 25% of baseline, the absolute floor, and the noise allowance in both rounds.",
         "Floors: 5 ms for rendering/edit work, 20 ms for page opening, 16 MiB for renderer peak RSS.",
         "Noise allowance: 3 × the sum of the two median absolute deviations. Lower is better.", "",
         "WebKit work includes real DOM/layout and driven animation callbacks; it does not measure display paint or frame pacing.",

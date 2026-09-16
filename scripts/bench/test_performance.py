@@ -24,7 +24,7 @@ class PerformanceComparisonTests(unittest.TestCase):
     def test_confirmed_regression_fails(self):
         summary, failed, warnings = self.compare_samples([98, 100, 102], [138, 140, 142])
         self.assertTrue(failed)
-        self.assertIn("REGRESSION", summary)
+        self.assertIn("**Regressed**", summary)
         self.assertFalse(warnings)
 
     def test_outlier_does_not_fail_the_median(self):
@@ -41,7 +41,61 @@ class PerformanceComparisonTests(unittest.TestCase):
                                            [report([140] * 3, revision="head"), report([100] * 3, revision="head")])
         self.assertFalse(failed)
         self.assertTrue(warnings)
-        self.assertIn("check variability", summary)
+        self.assertIn("- Warning: render-prose-100k-wall:", summary)
+        self.assertNotIn("| render-prose-100k-wall |", summary)
+
+    def test_confirmed_improvement_is_highlighted(self):
+        summary, failed, warnings = self.compare_samples([98, 100, 102], [58, 60, 62])
+        self.assertFalse(failed)
+        self.assertFalse(warnings)
+        self.assertIn("**Improved**", summary)
+        self.assertIn("-40.0%", summary)
+        self.assertIn("**1 improved**, **0 regressed**", summary)
+
+    def test_small_noisy_or_one_round_improvements_are_omitted(self):
+        cases = [
+            ([[100] * 3] * 2, [[95] * 3] * 2),
+            ([[10] * 3] * 2, [[6] * 3] * 2),
+            ([[50, 100, 150]] * 2, [[30, 60, 90]] * 2),
+            ([[100] * 3] * 2, [[60] * 3, [100] * 3]),
+        ]
+        for baseline, candidate in cases:
+            with self.subTest(baseline=baseline, candidate=candidate):
+                summary, failed, _ = compare([report(values) for values in baseline],
+                                             [report(values, revision="head") for values in candidate])
+                self.assertFalse(failed)
+                self.assertNotIn("| render-prose-100k-wall |", summary)
+                self.assertIn("No confirmed improvements or regressions.", summary)
+
+    def test_unchanged_run_has_counts_and_no_empty_table(self):
+        summary, failed, warnings = self.compare_samples([100] * 3, [100] * 3)
+        self.assertFalse(failed)
+        self.assertFalse(warnings)
+        self.assertIn("1 metrics checked: **0 improved**, **0 regressed**, 1 without a confirmed change", summary)
+        self.assertNotIn("| Metric |", summary)
+
+    def test_mixed_table_only_shows_confirmed_changes(self):
+        names = ["render-code-100k-wall", "render-links-100k-wall", "render-mixed-100k-wall"]
+        baseline = report([100] * 3, name=names[0])
+        candidate = report([60] * 3, name=names[0], revision="head")
+        for name, samples in zip(names[1:], [[140] * 3, [102] * 3]):
+            baseline["metrics"].update(report([100] * 3, name=name)["metrics"])
+            candidate["metrics"].update(report(samples, name=name)["metrics"])
+        summary, failed, warnings = compare([baseline] * 2, [candidate] * 2)
+        self.assertTrue(failed)
+        self.assertFalse(warnings)
+        self.assertIn(f"| {names[0]} |", summary)
+        self.assertIn(f"| {names[1]} |", summary)
+        self.assertNotIn(f"| {names[2]} |", summary)
+        self.assertIn("3 metrics checked: **1 improved**, **1 regressed**, 1 without a confirmed change", summary)
+
+    def test_memory_improvement_uses_memory_floor(self):
+        base = report([60], name="renderer-peak-rss", unit="MiB")
+        for value, visible in [(44, False), (40, True)]:
+            head = report([value], revision="head", name="renderer-peak-rss", unit="MiB")
+            summary, failed, _ = compare([base] * 2, [head] * 2)
+            self.assertFalse(failed)
+            self.assertEqual("**Improved**" in summary, visible)
 
     def test_memory_has_an_absolute_floor(self):
         base = report([20], name="renderer-peak-rss", unit="MiB")

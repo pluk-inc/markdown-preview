@@ -3,7 +3,10 @@
 The **Performance → performance regression** GitHub check compares each PR with
 its merge base on the same `macos-15` runner. Pushes to `main` compare with the
 previous commit from the push event; manual runs compare with the parent commit.
-The job publishes a table in the Actions summary and retains raw measurements,
+The job publishes a table of **confirmed improvements and regressions only** in
+the Actions summary and PR comment. A count summarizes all checked metrics and
+those with no confirmed change; when nothing qualifies, the report says so
+without an empty table. The job retains all raw measurements,
 revision IDs, toolchain details, fixture bytes, and build/run logs as
 `performance-comparison-<attempt>`.
 
@@ -61,12 +64,15 @@ must exceed all three thresholds in each round:
 3. Three times the sum of both batches' median absolute deviations, to account
    for measurement noise. Peak RSS has one high-water sample per process.
 
-An isolated/noisy slowdown produces a visible warning and a `check variability`
-row instead of a confirmed-regression failure. Rerun that job before drawing a
-conclusion. The table shows pooled medians and each round's percentage change so
+Improvements use the same thresholds, requiring a decrease in both rounds.
+Qualifying rows are labelled **Improved** or **Regressed**. Small, noisy, or
+one-round changes are omitted from the table. An isolated/noisy slowdown still
+produces a visible warning below it. Rerun that job before drawing a
+conclusion. Shown rows include pooled medians and each round's percentage change so
 runner drift is visible. Missing metrics, changed fixture hashes, invalid samples, build
 failures, crashes, and timeouts fail the job; they cannot silently pass as faster
-results. Changes smaller than the gate still appear in the comparison table.
+results. Every measurement, including changes smaller than the gate, remains in
+the raw JSON artifacts.
 
 The check reports failures on the PR. Repository branch protection must mark
 `performance regression` as required if merges should be blocked by it.
