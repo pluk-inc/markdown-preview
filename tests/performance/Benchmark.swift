@@ -27,8 +27,25 @@ private struct BenchmarkError: Error, CustomStringConvertible {
 @main
 private struct PerformanceProbe {
     @MainActor
-    static func main() async throws {
-        _ = NSApplication.shared
+    static func main() {
+        let application = NSApplication.shared
+        application.setActivationPolicy(.accessory)
+        Task { @MainActor in
+            do {
+                try await run()
+                application.terminate(nil)
+            } catch {
+                FileHandle.standardError.write(Data("Performance probe failed: \(error)\n".utf8))
+                exit(EXIT_FAILURE)
+            }
+        }
+        // AppKit must process window/activation events for WebKit to regard
+        // the page as foreground. An async command-line main alone does not.
+        application.run()
+    }
+
+    @MainActor
+    static func run() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let output = environment["MDP_BENCH_OUTPUT"],
               let root = environment["MDP_BENCH_ROOT"],
@@ -202,14 +219,24 @@ private struct PerformanceProbe {
 
 @MainActor
 private final class BenchmarkPage {
+    // Headless/occluded WKWebViews can add one-second background scheduling
+    // delays. Use one real foreground window for both revisions and all samples.
+    private static let window: NSWindow = {
+        let window = NSWindow(contentRect: CGRect(x: 40, y: 40, width: 900, height: 600),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.title = "Markdown Preview performance probe"
+        window.isReleasedWhenClosed = false
+        return window
+    }()
+
     let webView: WKWebView
 
     init() {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
         configuration.preferences.inactiveSchedulingPolicy = .none
-        // Hidden CI views suspend native rAF. Measure the actual callbacks and
-        // WebKit layout work, explicitly excluding frame pacing / display paint.
+        // Measure actual callbacks and WebKit layout work explicitly. Native
+        // frame pacing and display paint are outside these work metrics.
         configuration.userContentController.addUserScript(WKUserScript(source: """
         (() => {
             let next = 0;
@@ -244,16 +271,24 @@ private final class BenchmarkPage {
             };
         })();
         """, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 1200), configuration: configuration)
+        webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600), configuration: configuration)
+        Self.window.contentView = webView
+        Self.window.makeKeyAndOrderFront(nil)
+        NSApplication.shared.activate()
     }
 
-    func close() { webView.stopLoading() }
+    func close() {
+        webView.stopLoading()
+        if Self.window.contentView === webView { Self.window.contentView = nil }
+    }
 
     func load(_ html: String, isEditor: Bool, media: Bool) async throws {
+        let started = Date()
         webView.loadHTMLString(html, baseURL: nil)
         let deadline = Date().addingTimeInterval(20)
         while webView.isLoading && Date() < deadline { try await Task.sleep(for: .milliseconds(5)) }
         guard !webView.isLoading else { throw BenchmarkError("WebKit navigation timed out") }
+        let navigationMilliseconds = Date().timeIntervalSince(started) * 1000
         let arguments: [String: Any] = ["isEditor": isEditor, "media": media]
         _ = try await webView.callAsyncJavaScript("""
             const root = document.querySelector(isEditor ? '.cm-content' : 'article.markdown-body');
@@ -277,10 +312,14 @@ private final class BenchmarkPage {
                 const pending = window.__benchFrame();
                 const diagramReady = !media || root.querySelector(isEditor ? '.cm-md-mermaid-stage svg' : '.mermaid svg');
                 const mathReady = !media || isEditor || root.querySelector('.katex');
-                return Boolean(window.__benchAssetsReady && !pending && diagramReady && mathReady);
+                return Boolean(document.visibilityState === 'visible' && window.__benchAssetsReady && !pending && diagramReady && mathReady);
                 """, arguments: arguments, in: nil, contentWorld: .page)
             quiet = (settled as? Bool) == true ? quiet + 1 : 0
-            if quiet >= 3 { return }
+            if quiet >= 3 {
+                let totalMilliseconds = Date().timeIntervalSince(started) * 1000
+                print("page=\(isEditor ? "editor" : "read") media=\(media) navigation_ms=\(Int(navigationMilliseconds)) readiness_ms=\(Int(totalMilliseconds - navigationMilliseconds))")
+                return
+            }
             try await Task.sleep(for: .milliseconds(5))
         }
         throw BenchmarkError("WebKit renderers did not settle")

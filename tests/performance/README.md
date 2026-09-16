@@ -74,11 +74,12 @@ Do not run builds, tests, or other heavy work concurrently with timed runs.
 ## Boundaries
 
 These are regression signals for the tested workloads, not a complete app
-performance score. Both pages use a fixed 900 × 1200 viewport, default typography,
+performance score. Both pages use a fixed 900 × 600 viewport, default typography,
 and the macOS 15 editor scrolling path. Inputs and assets are offline.
 
-Hidden WebKit views suspend animation frames, so the probe explicitly drives
-production callbacks. Open timings include page navigation, vendor parsing, and
+WebKit views run in a foreground AppKit window to avoid background throttling.
+Local runs briefly show this benchmark window. The probe explicitly drives
+production animation callbacks. Open timings include page navigation, vendor parsing, and
 readiness polling driven from Swift, avoiding hidden-page JavaScript timer
 clamping in the test loop. Edit/update timings include synchronous work, scheduled frame
 callbacks, and forced WebKit layout; timer waiting is excluded. They do **not**
