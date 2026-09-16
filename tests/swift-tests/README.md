@@ -6,6 +6,12 @@ Run all tests on macOS:
 swift test --package-path tests/swift-tests
 ```
 
+## Performance regression gate
+
+Release performance comparisons run separately from correctness tests so neither
+suite distorts the other's timings. See [performance coverage, thresholds, and
+local commands](../performance/README.md).
+
 ## Editor/read-mode layout parity
 
 ```sh
