@@ -57,16 +57,16 @@ def validate_pull(pull, run, repository):
 def comment_body(run, summary):
     attempt = run["run_attempt"]
     marker = f"<!-- performance-report:{run['id']}:{attempt} -->"
-    conclusion = run["conclusion"].replace("_", " ").upper()
+    conclusion = run["conclusion"].replace("_", " ")
     link = f"{run['html_url']}/attempts/{attempt}"
     if not summary:
         summary = "No comparison table is available for this attempt. See the run logs for benchmark or artifact-upload errors."
     return "\n\n".join([
         marker,
-        f"## Performance report — {conclusion}",
+        "## Performance report",
         f"Commit: `{run['head_sha'][:12]}` · [Run #{run['run_number']}, attempt {attempt}]({link})",
         summary,
-        f"[Full run, logs, and downloadable measurements]({link})",
+        f"Run status: {conclusion}. [Full run, logs, and downloadable measurements]({link})",
     ])
 
 

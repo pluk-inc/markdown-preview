@@ -45,7 +45,8 @@ class PerformanceReportTests(unittest.TestCase):
         for conclusion in ["failure", "cancelled", "timed_out"]:
             body = comment_body(workflow_run(conclusion=conclusion), "")
             self.assertIn("No comparison table is available", body)
-            self.assertIn(conclusion.replace("_", " ").upper(), body)
+            self.assertIn(f"Run status: {conclusion.replace('_', ' ')}.", body)
+            self.assertEqual(body.splitlines()[2], "## Performance report")
 
     def test_each_attempt_has_its_own_marker_and_link(self):
         for attempt in [1, 2]:
