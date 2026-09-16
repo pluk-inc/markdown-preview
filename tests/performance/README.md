@@ -11,9 +11,12 @@ revision IDs, toolchain details, fixture bytes, and build/run logs as
 `performance-comparison-<attempt>`.
 
 Each completed PR run also posts a **new comment in the PR conversation**, with
-the comparison table, commit, run attempt, and link to the logs/artifacts. This
-includes successful runs, regressions, and failures/cancellations; if a run ends
-before producing measurements, the comment says the table is unavailable.
+one line of result counts, changed metric rows, and a single full-report link
+beside the commit and run status. Warnings appear as a count. Per-round details,
+thresholds, methodology, warning explanations, and logs stay in the linked
+Actions report. This includes successful runs, regressions, and
+failures/cancellations; if a run ends before producing measurements, the comment
+says “Benchmark incomplete.”
 Rerunning Performance creates another comment. Retrying only the reporting
 workflow does not duplicate an existing bot comment for the same attempt.
 
@@ -67,7 +70,8 @@ must exceed all three thresholds in each round:
 Improvements use the same thresholds, requiring a decrease in both rounds.
 Qualifying rows are labelled **Improved** or **Regressed**. Small, noisy, or
 one-round changes are omitted from the table. An isolated/noisy slowdown still
-produces a visible warning below it. Rerun that job before drawing a
+produces a visible warning below the Actions table and adds to the PR comment's
+warning count. Rerun that job before drawing a
 conclusion. Shown rows include pooled medians and each round's percentage change so
 runner drift is visible. Missing metrics, changed fixture hashes, invalid samples, build
 failures, crashes, and timeouts fail the job; they cannot silently pass as faster

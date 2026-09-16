@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import re
 import subprocess
 import zipfile
 from urllib.parse import urlencode
@@ -54,19 +55,48 @@ def validate_pull(pull, run, repository):
         raise ValueError("PR does not match the performance run")
 
 
+def compact_summary(summary):
+    counts = re.search(r"(?m)^(\d+) metrics checked: \*\*(\d+) improved\*\*, \*\*(\d+) regressed\*\*", summary)
+    if counts:
+        total, improved, regressed = counts.groups()
+        result = f"{total} checked · **{improved} improved** · **{regressed} regressed**"
+    elif "**FAIL — confirmed regression**" in summary:
+        result = "Performance regression detected."
+    elif "**PASS — no confirmed regression**" in summary:
+        result = "No confirmed regressions."
+    else:
+        result = "Benchmark incomplete."
+
+    warnings = sum(line.startswith("- Warning:") for line in summary.splitlines())
+    if warnings:
+        result += f" · **{warnings} {'warning' if warnings == 1 else 'warnings'}**"
+
+    rows = []
+    for line in summary.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if len(cells) == 7 and cells[-1].strip("*") in {"Improved", "Regressed", "REGRESSION"}:
+            name, base, candidate, change, _, unit, status = cells
+            rows.append(f"| {name} | {base} {unit} | {candidate} {unit} | {change} | {status} |")
+    if rows:
+        result += "\n\n" + "\n".join([
+            "| Metric | Base | PR | Change | Result |",
+            "| --- | ---: | ---: | ---: | --- |", *rows,
+        ])
+    return result
+
+
 def comment_body(run, summary):
     attempt = run["run_attempt"]
     marker = f"<!-- performance-report:{run['id']}:{attempt} -->"
     conclusion = run["conclusion"].replace("_", " ")
     link = f"{run['html_url']}/attempts/{attempt}"
-    if not summary:
-        summary = "No comparison table is available for this attempt. See the run logs for benchmark or artifact-upload errors."
     return "\n\n".join([
         marker,
         "## Performance report",
-        f"Commit: `{run['head_sha'][:12]}` · [Run #{run['run_number']}, attempt {attempt}]({link})",
-        summary,
-        f"Run status: {conclusion}. [Full run, logs, and downloadable measurements]({link})",
+        compact_summary(summary),
+        f"`{run['head_sha'][:8]}` · {conclusion} · [Full report]({link})",
     ])
 
 

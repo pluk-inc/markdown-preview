@@ -4,7 +4,9 @@ import unittest
 import zipfile
 from unittest.mock import patch
 
-from post_performance_report import comment_body, post_report, read_report, validate_pull
+from compare_performance import compare
+from post_performance_report import comment_body, compact_summary, post_report, read_report, validate_pull
+from test_performance import report
 
 
 def workflow_run(**changes):
@@ -44,16 +46,54 @@ class PerformanceReportTests(unittest.TestCase):
         self.assertEqual(read_report(archive({"pr-number.txt": "9"})), (9, ""))
         for conclusion in ["failure", "cancelled", "timed_out"]:
             body = comment_body(workflow_run(conclusion=conclusion), "")
-            self.assertIn("No comparison table is available", body)
-            self.assertIn(f"Run status: {conclusion.replace('_', ' ')}.", body)
+            self.assertIn("Benchmark incomplete.", body)
+            self.assertIn(f"· {conclusion.replace('_', ' ')} ·", body)
             self.assertEqual(body.splitlines()[2], "## Performance report")
 
     def test_each_attempt_has_its_own_marker_and_link(self):
         for attempt in [1, 2]:
-            body = comment_body(workflow_run(run_attempt=attempt), "| Metric | Base | PR |")
+            body = comment_body(workflow_run(run_attempt=attempt), "**PASS — no confirmed regression**")
             self.assertIn(f"<!-- performance-report:42:{attempt} -->", body)
             self.assertIn(f"/attempts/{attempt})", body)
-            self.assertIn("| Metric | Base | PR |", body)
+            self.assertIn("No confirmed regressions.", body)
+
+    def test_quiet_run_is_one_line_without_methodology_or_duplicate_headings(self):
+        summary, _, _ = compare([report([100] * 3)] * 2, [report([100] * 3, revision="head")] * 2)
+        body = comment_body(workflow_run(), summary)
+        self.assertIn("1 checked · **0 improved** · **0 regressed**", body)
+        self.assertEqual(body.count("[Full report]"), 1)
+        self.assertEqual(body.count("#"), 2)
+        self.assertNotIn("noise allowance", body)
+        self.assertNotIn("without a confirmed change", body)
+        self.assertNotIn("| Metric |", body)
+        self.assertLess(len(body), 300)
+
+    def test_changed_rows_retain_measurements_but_omit_per_round_detail(self):
+        base = report([100] * 3)
+        candidate = report([60] * 3, revision="head")
+        base["metrics"].update(report([100] * 3, name="render-code-100k-wall")["metrics"])
+        candidate["metrics"].update(report([140] * 3, name="render-code-100k-wall")["metrics"])
+        summary, _, _ = compare([base] * 2, [candidate] * 2)
+        compact = compact_summary(summary)
+        self.assertIn("2 checked · **1 improved** · **1 regressed**", compact)
+        self.assertIn("| render-prose-100k-wall | 100.00 ms | 60.00 ms | -40.0% | **Improved** |", compact)
+        self.assertIn("| render-code-100k-wall | 100.00 ms | 140.00 ms | +40.0% | **Regressed** |", compact)
+        self.assertNotIn("Rounds 1 / 2", compact)
+        self.assertNotIn("Floors:", compact)
+
+    def test_warning_count_stays_visible_without_long_warning_text(self):
+        summary, _, _ = compare([report([100] * 3)] * 2,
+                                 [report([140] * 3, revision="head"), report([100] * 3, revision="head")])
+        compact = compact_summary(summary)
+        self.assertEqual(compact, "1 checked · **0 improved** · **0 regressed** · **1 warning**")
+
+    def test_error_report_and_missing_report_remain_incomplete(self):
+        for summary in ["", "# Performance comparison\n\n**ERROR — no valid comparison**\n\nMissing metrics"]:
+            self.assertEqual(compact_summary(summary), "Benchmark incomplete.")
+
+    def test_old_passing_rows_do_not_reappear_in_compact_table(self):
+        summary = "**PASS — no confirmed regression**\n| metric | 100 | 100 | +0.0% | +0% / +0% | ms | pass |"
+        self.assertEqual(compact_summary(summary), "No confirmed regressions.")
 
     def test_validates_fork_destination_and_allows_a_newer_pr_head(self):
         validate_pull(pull_request(), workflow_run(pull_requests=[]), "owner/repo")
@@ -97,17 +137,17 @@ class PerformanceReportTests(unittest.TestCase):
                                     artifacts=[{"name": "performance-pr-report-1", "expired": False,
                                                 "size_in_bytes": 100, "id": 123}])
         self.assertEqual(len(bodies), 1)
-        self.assertIn("FAIL — confirmed regression", bodies[0])
+        self.assertIn("Performance regression detected.", bodies[0])
 
     def test_early_fork_failure_without_an_artifact_still_comments(self):
         bodies = self.exercise_post(run=workflow_run(conclusion="failure", pull_requests=[]))
         self.assertEqual(len(bodies), 1)
-        self.assertIn("No comparison table is available", bodies[0])
+        self.assertIn("Benchmark incomplete.", bodies[0])
 
     def test_later_attempt_cannot_reuse_an_earlier_report(self):
         bodies = self.exercise_post(run=workflow_run(run_attempt=2, conclusion="cancelled"),
                                     artifacts=[{"name": "performance-pr-report-1", "expired": False}])
-        self.assertIn("No comparison table is available", bodies[0])
+        self.assertIn("Benchmark incomplete.", bodies[0])
         self.assertIn("performance-report:42:2", bodies[0])
 
     def test_retrying_reporter_does_not_duplicate_a_bot_comment(self):
