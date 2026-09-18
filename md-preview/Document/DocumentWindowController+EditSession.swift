@@ -24,7 +24,7 @@ extension DocumentWindowController {
             autofocus: autofocus
         )
         editor.cancelRequested = { [weak self] in
-            self?.previewPendingEdits()
+            self?.requestExitEditMode()
         }
         editor.contentDidChange = { [weak self] in
             self?.editorChangeRevision += 1
@@ -82,7 +82,169 @@ extension DocumentWindowController {
         }
     }
 
-    private func saveUntitledMarkdown(
+    /// Leaving edit mode from the toolbar, ⌘E or Escape in the editor. With
+    /// unsaved changes this asks whether to save them, keep them as a draft,
+    /// or revert them -- unless the reader has turned the prompt off, in which
+    /// case the edits stay pending exactly as they did before the prompt.
+    /// Closing, navigating away and quitting keep their own decision in
+    /// resolveUnsavedEdits.
+    func requestExitEditMode() {
+        guard let editor = mainSplit?.editorViewController,
+              documentWindow.attachedSheet == nil else { return }
+        // Let a save that is already running finish first, as
+        // resolveUnsavedEdits does, rather than comparing against a baseline
+        // that is about to move.
+        if isEditorCommitInFlight {
+            commitEdits(exitAfter: false) { [weak self] success in
+                guard success else { return }
+                self?.requestExitEditMode()
+            }
+            return
+        }
+        editor.fetchMarkdown { [weak self] markdown in
+            guard let self else { return }
+            guard let markdown else {
+                NSSound.beep()
+                return
+            }
+            guard EditExitPolicy.needsExitPrompt(
+                currentSource: markdown,
+                savedSource: self.editorBaselineMarkdown,
+                exitsSilently: EditExitPolicy.exitsSilently
+            ) else {
+                self.previewPendingEdits()
+                return
+            }
+            self.presentExitEditModePrompt()
+        }
+    }
+
+    private func presentExitEditModePrompt() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = NSLocalizedString(
+            "Do you want to save your changes?",
+            comment: "Unsaved changes alert title"
+        )
+        let fileName = currentFileURL?.lastPathComponent
+            ?? NSLocalizedString("this document", comment: "Fallback document name in alerts")
+        alert.informativeText = String(
+            format: NSLocalizedString(
+                "Continue keeps your changes to %@ without saving them, so you can save later. Revert… discards them.",
+                comment: "Leave edit mode alert message"
+            ),
+            fileName
+        )
+        for choice in EditExitPolicy.exitButtonOrder {
+            let button = alert.addButton(withTitle: exitChoiceTitle(choice))
+            if choice == EditExitPolicy.escapeChoice {
+                button.keyEquivalent = "\u{1b}"
+            }
+        }
+        alert.beginSheetModal(for: documentWindow) { [weak self] response in
+            guard let self else { return }
+            let index = response.rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
+            switch EditExitPolicy.exitChoice(forButtonAt: index) {
+            case .save:
+                self.commitEdits(exitAfter: true) { [weak self] success in
+                    if success { self?.dismissEditChrome() }
+                }
+            case .continueUnsaved:
+                self.previewPendingEdits()
+            case .revert:
+                self.confirmRevertingEdits { [weak self] in
+                    self?.exitEditModeWithoutSaving { [weak self] in
+                        self?.dismissEditChrome()
+                    }
+                }
+            }
+        }
+    }
+
+    private func exitChoiceTitle(_ choice: EditExitPolicy.ExitChoice) -> String {
+        switch choice {
+        case .save:
+            return NSLocalizedString("Save", comment: "Alert button")
+        case .continueUnsaved:
+            return NSLocalizedString("Continue", comment: "Leave edit mode alert button")
+        case .revert:
+            return NSLocalizedString("Revert…", comment: "Leave edit mode alert button")
+        }
+    }
+
+    /// Reverting discards edits that cannot be recovered, so it gets its own
+    /// confirmation. Cancel, on Escape, leaves everything as it was. Shared by
+    /// the leave-edit-mode prompt's Revert… and File › Revert to Saved, which
+    /// differ only in what happens afterwards.
+    private func confirmRevertingEdits(then revert: @escaping () -> Void) {
+        let alert = NSAlert()
+        alert.alertStyle = .critical
+        let fileName = currentFileURL?.lastPathComponent
+            ?? NSLocalizedString("this document", comment: "Fallback document name in alerts")
+        alert.messageText = String(
+            format: NSLocalizedString(
+                "Revert to the last saved version of %@?",
+                comment: "Revert confirmation title"
+            ),
+            fileName
+        )
+        alert.informativeText = NSLocalizedString(
+            "Your unsaved changes will be lost. You can’t undo this action.",
+            comment: "Revert confirmation message"
+        )
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Alert button"))
+        let revertButton = alert.addButton(withTitle: NSLocalizedString("Revert", comment: "Revert confirmation button"))
+        revertButton.hasDestructiveAction = true
+        alert.beginSheetModal(for: documentWindow) { response in
+            guard response == .alertSecondButtonReturn else { return }
+            revert()
+        }
+    }
+
+    /// File › Save As… (⇧⌘S): write the current source to a file chosen in a
+    /// save panel, then follow that file. Available for any open document,
+    /// changed or not.
+    @IBAction func saveDocumentAs(_ sender: Any?) {
+        guard EditExitPolicy.isSaveAsCommandEnabled(hasDocument: canToggleEditMode) else {
+            NSSound.beep()
+            return
+        }
+        pendingCommitSavesAs = true
+        commitEdits(exitAfter: false)
+    }
+
+    /// File › Revert to Saved (⌘R): go back to the version on disk, after the
+    /// same confirmation the leave-edit-mode prompt uses. While editing, the
+    /// saved version is loaded into the editor and editing continues; outside
+    /// edit mode the kept draft is dropped. Like Save, only with unsaved
+    /// changes, and only for a document with a file to go back to.
+    @IBAction func revertDocumentToSaved(_ sender: Any?) {
+        guard EditExitPolicy.isRevertCommandEnabled(hasUnsavedChanges: hasUnsavedEditorChanges,
+                                                    hasFile: currentFileURL != nil),
+              !isEditorCommitInFlight,
+              documentWindow.attachedSheet == nil else {
+            NSSound.beep()
+            return
+        }
+        confirmRevertingEdits { [weak self] in
+            self?.revertToSavedVersion()
+        }
+    }
+
+    private func revertToSavedVersion() {
+        guard let url = currentFileURL,
+              let saved = try? String(contentsOf: url, encoding: .utf8) else {
+            NSSound.beep()
+            return
+        }
+        adoptExternalMarkdown(saved,
+                              editor: isEditing ? mainSplit?.editorViewController : nil,
+                              exitAfter: false)
+    }
+
+    /// Writes through a save panel: the only way to save an untitled
+    /// document, and what Save As… does for one that already has a file.
+    private func saveMarkdownThroughPanel(
         _ text: String,
         completion: @escaping (EditedMarkdownSaveResult) -> Void
     ) {
@@ -90,11 +252,16 @@ extension DocumentWindowController {
         panel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .plainText]
         panel.allowsOtherFileTypes = false
         panel.canCreateDirectories = true
-        panel.nameFieldStringValue = "Untitled.md"
-        panel.message = NSLocalizedString(
-            "Choose a name and location for the new Markdown file.",
-            comment: "New Markdown file panel prompt"
-        )
+        if let existing = currentFileURL {
+            panel.directoryURL = existing.deletingLastPathComponent()
+            panel.nameFieldStringValue = existing.lastPathComponent
+        } else {
+            panel.nameFieldStringValue = "Untitled.md"
+            panel.message = NSLocalizedString(
+                "Choose a name and location for the new Markdown file.",
+                comment: "New Markdown file panel prompt"
+            )
+        }
         panel.prompt = NSLocalizedString("Save", comment: "Untitled Markdown file save panel button")
         panel.beginSheetModal(for: documentWindow) { [weak self] response in
             guard let self, response == .OK, let url = panel.url else {
@@ -103,6 +270,14 @@ extension DocumentWindowController {
             }
             guard self.write(text, to: url) else {
                 completion(.cancelled)
+                return
+            }
+            if self.currentFileURL != nil {
+                // Save As…: the window follows the new file, and the one it
+                // came from stays exactly as it was on disk.
+                self.currentMarkdown = text
+                self.handleRename(to: url)
+                completion(.saved)
                 return
             }
 
@@ -240,12 +415,17 @@ extension DocumentWindowController {
     private func performPendingEditorCommit() {
         let exitAfter = pendingCommitShouldExit
         pendingCommitShouldExit = false
+        let savesAs = pendingCommitSavesAs
+        pendingCommitSavesAs = false
         guard let split = mainSplit else {
             finishEditorCommit(success: false)
             return
         }
-        if !isEditing, let body = editorDraftMarkdown {
-            performPendingEditorCommit(body: body, editor: nil, exitAfter: exitAfter)
+        // Out of edit mode the source is the kept draft -- or, for Save As…
+        // with nothing changed, the document as it stands.
+        if !isEditing, let body = editorDraftMarkdown ?? (savesAs ? currentMarkdown : nil) {
+            performPendingEditorCommit(body: body, editor: nil, exitAfter: exitAfter,
+                                       savesAs: savesAs)
             return
         }
         guard let editor = split.editorViewController else {
@@ -264,17 +444,19 @@ extension DocumentWindowController {
                 return
             }
             self.performPendingEditorCommit(body: body, editor: editor,
-                                            revision: revision, exitAfter: exitAfter)
+                                            revision: revision, exitAfter: exitAfter,
+                                            savesAs: savesAs)
         }
     }
 
     private func performPendingEditorCommit(body: String,
                                             editor: EditorViewController?,
                                             revision: Int? = nil,
-                                            exitAfter: Bool) {
+                                            exitAfter: Bool,
+                                            savesAs: Bool = false) {
         isEditorCommitInFlight = true
-        if currentFileURL == nil {
-            saveUntitledMarkdown(body) { result in
+        if currentFileURL == nil || savesAs {
+            saveMarkdownThroughPanel(body) { result in
                 self.handleEditedMarkdownSaveResult(result,
                                                     body: body,
                                                     editor: editor,
