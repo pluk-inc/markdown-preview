@@ -299,3 +299,14 @@
 "Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out.";
 "Open documents in tabs" = "Open documents in tabs";
 "A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window.";
+
+/* Search for Document */
+"Search for Document…" = "Search for Document…";
+"Search files by name" = "Search files by name";
+"No matching files" = "No matching files";
+"Open a folder to search its files" = "Open a folder to search its files";
+"Open Folder…" = "Open Folder…";
+"Showing the first %d files in this project" = "Showing the first %d files in this project";
+"↩ open · ⌘↩ new tab · ⌥↩ new window" = "↩ open · ⌘↩ new tab · ⌥↩ new window";
+"Search for Document" = "Search for Document";
+"Search for a file by name" = "Search for a file by name";

@@ -15,6 +15,7 @@ extension NSToolbarItem.Identifier {
     static let inspector = NSToolbarItem.Identifier("Inspector")
     static let share = NSToolbarItem.Identifier("Share")
     static let search = NSToolbarItem.Identifier("Search")
+    static let searchForDocument = NSToolbarItem.Identifier("SearchForDocument")
     /// The sidebar show/hide toggle. The raw value predates the mode picker
     /// and is kept so saved toolbar layouts still resolve.
     static let sidebarMenu = NSToolbarItem.Identifier("SidebarMenu")
@@ -89,6 +90,7 @@ extension DocumentWindowController {
             .inspector,
             .share,
             .search,
+            .searchForDocument,
             .printDocument,
             .exportPDF,
             .exportDocument,
@@ -120,6 +122,7 @@ extension DocumentWindowController {
         case .alwaysOnTop: return makeAlwaysOnTopItem(willBeInsertedIntoToolbar: flag)
         case .share: return makeShareItem()
         case .search: return makeSearchItem()
+        case .searchForDocument: return makeSearchForDocumentItem()
         case .printDocument: return makePrintItem()
         case .exportPDF: return makeExportPDFItem()
         case .exportDocument: return makeExportItem()

@@ -6,8 +6,6 @@
 import Cocoa
 
 private final class FileNode {
-    static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mdwn", "mdx"]
-
     let url: URL
     let isDirectory: Bool
     private var loadedChildren: [FileNode]?
@@ -37,7 +35,7 @@ private final class FileNode {
         let nodes: [FileNode] = entries.compactMap { entry in
             let isDir = (try? entry.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
             if isDir { return FileNode(url: entry, isDirectory: true) }
-            guard FileNode.markdownExtensions.contains(entry.pathExtension.lowercased()) else { return nil }
+            guard ProjectFileIndex.markdownExtensions.contains(entry.pathExtension.lowercased()) else { return nil }
             return FileNode(url: entry, isDirectory: false)
         }
         let sorted = nodes.sorted { lhs, rhs in

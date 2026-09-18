@@ -114,6 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         installEditModeMenuItem()
         installFormatMenu()
         installNewTabMenuItem()
+        installSearchForDocumentMenuItem()
         installFileExportMenuItems()
         installGoMenu()
         installSettingsMenuItem()
@@ -779,6 +780,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let insertIndex = fileMenu.items
             .firstIndex { $0.action == #selector(openDocument(_:)) } ?? 0
         fileMenu.insertItem(item, at: insertIndex)
+    }
+
+    private func installSearchForDocumentMenuItem() {
+        guard let fileMenu = topLevelSubmenu(matching: Self.fileMenuTitles),
+              fileMenu.items.first(where: {
+                  $0.action == #selector(DocumentWindowController.searchForDocument(_:))
+              }) == nil else { return }
+
+        // nil target, as with New Tab: resolves through the responder chain to
+        // the key document window's controller, which decides whether there is
+        // a project to search.
+        let item = NSMenuItem(title: L("Search for Document…"),
+                              action: #selector(DocumentWindowController.searchForDocument(_:)),
+                              keyEquivalent: "o")
+        item.keyEquivalentModifierMask = [.command, .shift]
+        let openIndex = fileMenu.items
+            .firstIndex { $0.action == #selector(openDocument(_:)) }
+        fileMenu.insertItem(item, at: openIndex.map { $0 + 1 } ?? 0)
     }
 
     private func installFileExportMenuItems() {

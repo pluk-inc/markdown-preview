@@ -157,6 +157,12 @@ final class SidebarViewController: NSViewController {
         setOpenFileURL(newURL)
     }
 
+    /// The folder the Project Navigator is rooted at — the closest thing the
+    /// app has to "the current project". Read from `pendingFolderURL` rather
+    /// than `loadedFolderURL` so it is right even in TOC mode, where the tree
+    /// has not been enumerated yet.
+    var projectRootURL: URL? { pendingFolderURL }
+
     /// Mounts an explicitly chosen folder as the Project Navigator root.
     /// If the current document is inside that folder, keep it selected.
     func openFolder(_ folderURL: URL, selectedFileURL: URL?) {

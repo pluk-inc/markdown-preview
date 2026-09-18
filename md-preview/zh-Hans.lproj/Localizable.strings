@@ -299,3 +299,14 @@
 "Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "让所有 Markdown Preview 窗口始终显示在其他 App 前面，包括之后打开的窗口。窗口进入全屏时不会置顶，退出全屏后会恢复。";
 "Open documents in tabs" = "以标签页打开文稿";
 "A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "从“访达”打开的文件会作为标签页加入最前面的窗口，而不是各自新建一个窗口——“在新窗口中打开”仍会打开新窗口。";
+
+/* Search for Document */
+"Search for Document…" = "搜索文稿…";
+"Search files by name" = "按名称搜索文件";
+"No matching files" = "没有匹配的文件";
+"Open a folder to search its files" = "打开一个文件夹以搜索其中的文件";
+"Open Folder…" = "打开文件夹…";
+"Showing the first %d files in this project" = "仅显示此项目中的前 %d 个文件";
+"↩ open · ⌘↩ new tab · ⌥↩ new window" = "↩ 打开 · ⌘↩ 新标签页 · ⌥↩ 新窗口";
+"Search for Document" = "搜索文稿";
+"Search for a file by name" = "按名称搜索文件";
