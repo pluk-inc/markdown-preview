@@ -50,7 +50,7 @@ class PreviewProvider: QLPreviewProvider, QLPreviewingController {
         let rewrite = InlineLocalAssets.rewriteRelativeImages(
             html: renderedHTML,
             baseDirectory: baseDirectory,
-            reader: { try Data(contentsOf: $0) }
+            reader: { try InlineLocalAssets.safeReadContainedFile(at: $0, containedIn: baseDirectory) }
         )
 
         let replyAttachments: [String: QLPreviewReplyAttachment] = rewrite.attachments

@@ -86,11 +86,16 @@ final class MainSplitViewController: NSSplitViewController {
         }
     }
 
-    func display(markdown: String, fileName: String, url: URL?, assetBaseURL: URL?) {
+    func display(markdown: String,
+                 fileName: String,
+                 url: URL?,
+                 assetBaseURL: URL?,
+                 containmentRoot: URL? = nil) {
         contentViewController?.display(
             markdown: markdown,
             sourceURL: url,
-            assetBaseURL: assetBaseURL
+            assetBaseURL: assetBaseURL,
+            containmentRoot: containmentRoot
         )
         sidebarViewController?.display(markdown: markdown, fileName: fileName, fileURL: url)
         inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))
@@ -340,9 +345,12 @@ final class MainSplitViewController: NSSplitViewController {
     @discardableResult
     func enterEditMode(markdown: String,
                        assetBaseURL: URL? = nil,
+                       containmentRoot: URL? = nil,
                        autofocus: Bool = false) -> EditorViewController {
         if let editor = editorViewController {
-            editor.load(markdown: markdown, assetBaseURL: assetBaseURL)
+            editor.load(markdown: markdown,
+                        assetBaseURL: assetBaseURL,
+                        containmentRoot: containmentRoot)
             if autofocus {
                 editor.focusEditor()
             }
@@ -391,7 +399,7 @@ final class MainSplitViewController: NSSplitViewController {
             self.revealEditorIfPrepared(editorVC)
         }
         editorVC.applyPageZoom(previewZoom)
-        editorVC.load(markdown: markdown, assetBaseURL: assetBaseURL)
+        editorVC.load(markdown: markdown, assetBaseURL: assetBaseURL, containmentRoot: containmentRoot)
         contentViewController?.sourceScrollAnchor { [weak self, weak editorVC] anchor in
             guard let self, let editorVC, self.isEditorPreparing else { return }
             self.pendingSourceScrollAnchor = anchor

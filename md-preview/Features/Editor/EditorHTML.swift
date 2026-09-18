@@ -633,7 +633,7 @@ nonisolated enum EditorHTML {
             };
             window.onerror = function (message) { post("error: " + message); };
             let editor = null;
-            window.__mdLoadEditor = function (markdown, baseHref) {
+            window.__mdSetBaseHref = function (baseHref) {
                 let base = document.querySelector("head > base");
                 if (baseHref) {
                     if (!base) {
@@ -644,6 +644,9 @@ nonisolated enum EditorHTML {
                 } else if (base) {
                     base.remove();
                 }
+            };
+            window.__mdLoadEditor = function (markdown, baseHref) {
+                window.__mdSetBaseHref(baseHref);
                 if (editor) editor.destroy();
                 editor = window.MDEditor.create(
                     document.getElementById("editor"),

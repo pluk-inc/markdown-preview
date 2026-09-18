@@ -98,6 +98,7 @@
 				Rendering/CodeHighlighter.swift,
 				Rendering/DocumentFontSetting.swift,
 				Rendering/EscapingHTMLFormatter.swift,
+				Rendering/MarkdownAccessPolicy.swift,
 				Rendering/MarkdownAssetResolution.swift,
 				Rendering/MarkdownAssetSchemeHandler.swift,
 				Rendering/MarkdownFrontmatter.swift,

@@ -208,7 +208,8 @@ final class ContentViewController: NSViewController {
     func display(
         markdown: String,
         sourceURL: URL?,
-        assetBaseURL: URL? = nil
+        assetBaseURL: URL? = nil,
+        containmentRoot: URL? = nil
     ) {
         exportSource = ExportSource(
             markdown: markdown,
@@ -225,7 +226,9 @@ final class ContentViewController: NSViewController {
             scheduleNavigationTargetAttempt()
         }
         resetScrollspy()
-        webView.display(markdown: markdown, assetBaseURL: assetBaseURL)
+        webView.display(markdown: markdown,
+                        assetBaseURL: assetBaseURL,
+                        containmentRoot: containmentRoot)
         scheduleHeadingOffsetsRefresh()
     }
 

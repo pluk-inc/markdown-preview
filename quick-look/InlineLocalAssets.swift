@@ -1,7 +1,17 @@
+import Darwin
 import Foundation
 import UniformTypeIdentifiers
 
 enum InlineLocalAssets {
+
+    /// Errors from `safeReadContainedFile`, distinct from whatever
+    /// `Data(contentsOf:)` would throw so a caller can tell "outside the
+    /// boundary" apart from "unreadable" if it ever needs to.
+    enum ContainmentError: Error {
+        case outsideBoundary
+        case notAFile
+        case unreadable
+    }
 
     struct Attachment: Equatable {
         let data: Data
@@ -153,9 +163,60 @@ enum InlineLocalAssets {
         }
     }
 
+    /// Symlinks are resolved on both sides before comparing: a link inside the
+    /// document folder pointing anywhere else satisfies a purely textual test
+    /// and would hand back a file from outside the boundary. Unzipping an
+    /// archive that contains one is enough to set that up.
     private static func isDescendantOrSame(_ candidate: URL, of baseDirectory: URL) -> Bool {
-        let candidatePath = candidate.standardizedFileURL.path
-        let basePath = baseDirectory.standardizedFileURL.path
-        return candidatePath == basePath || candidatePath.hasPrefix(basePath + "/")
+        let candidatePath = candidate.standardizedFileURL.resolvingSymlinksInPath().path
+        let basePath = baseDirectory.standardizedFileURL.resolvingSymlinksInPath().path
+        if candidatePath == basePath { return true }
+        // baseDirectory is "/" at the volume root, which already ends in the
+        // separator — appending another would require a descendant path to
+        // start with "//" and reject every real one.
+        let prefix = basePath.hasSuffix("/") ? basePath : basePath + "/"
+        return candidatePath.hasPrefix(prefix)
+    }
+
+    /// Opens, validates, and reads `candidate` as one operation, so the file
+    /// whose containment is checked is exactly the file whose bytes come
+    /// back — never a path that is checked and then reopened elsewhere as a
+    /// second, possibly different filesystem object by the time that happens.
+    ///
+    /// A symlink swapped between validating a path string (here, or in
+    /// `resolveRelative`'s own check) and later handing that same string to
+    /// `Data(contentsOf:)` is a classic time-of-check-to-time-of-use gap.
+    /// `open` below resolves the whole symlink chain once, atomically, to a
+    /// fixed file; `fcntl(F_GETPATH)` reads back what that open actually
+    /// resolved to, and both the containment check and the read act on that
+    /// one open file — nothing that happens to the path afterward can
+    /// matter, because the descriptor no longer refers to a path, it refers
+    /// to the inode `open` found. This is what production callers pass as
+    /// `rewriteRelativeImages`'s `reader`, in place of a bare
+    /// `Data(contentsOf:)`; `resolveRelative`'s own check stays in place as
+    /// a cheap first filter, not a substitute for this.
+    static func safeReadContainedFile(at candidate: URL, containedIn baseDirectory: URL) throws -> Data {
+        let fd = candidate.path.withCString { open($0, O_RDONLY) }
+        guard fd >= 0 else { throw ContainmentError.unreadable }
+        defer { close(fd) }
+
+        var info = stat()
+        guard fstat(fd, &info) == 0, info.st_mode & S_IFMT == S_IFREG else {
+            throw ContainmentError.notAFile
+        }
+
+        var pathBuffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        guard fcntl(fd, F_GETPATH, &pathBuffer) == 0 else { throw ContainmentError.unreadable }
+        let resolved = URL(fileURLWithPath: pathBuffer.withUnsafeBufferPointer {
+            String(cString: $0.baseAddress!)
+        })
+        guard isDescendantOrSame(resolved, of: baseDirectory) else {
+            throw ContainmentError.outsideBoundary
+        }
+
+        guard let data = try? FileHandle(fileDescriptor: fd, closeOnDealloc: false).readToEnd() else {
+            throw ContainmentError.unreadable
+        }
+        return data
     }
 }
