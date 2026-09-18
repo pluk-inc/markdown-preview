@@ -49,20 +49,14 @@ def legacy_editor(snapshot: Path) -> str:
     return template[:current_start] + body + template[current_end:]
 
 
-def prepare(label: str, commit: str, out: Path) -> tuple[Path, Path]:
-    snapshot = out / "work" / label / "repo"
-    package = out / "work" / label / "probe"
-    snapshot.mkdir(parents=True)
-    archive = out / f"{label}.tar"
-    run(["git", "archive", "--format=tar", "--output", str(archive), commit], cwd=ROOT)
-    run(["tar", "-xf", str(archive), "-C", str(snapshot)])
-    archive.unlink()
-    sources = package / "Sources"
+def prepare_sources(snapshot: Path, sources: Path) -> None:
+    """Use each revision's helper source set, including its own links and stubs."""
+    snapshot = snapshot.resolve()
     sources.mkdir(parents=True)
-    for source in (ROOT / "tests/swift-tests/Sources/MarkdownHelpers").glob("*.swift"):
+    for source in (snapshot / "tests/swift-tests/Sources/MarkdownHelpers").glob("*.swift"):
         destination = sources / source.name
         if source.is_symlink():
-            relative = source.resolve().relative_to(ROOT)
+            relative = source.resolve().relative_to(snapshot)
             production = snapshot / relative
             if production.exists():
                 # Older checkouts need only the test bundle lookup. Production
@@ -87,6 +81,21 @@ def prepare(label: str, commit: str, out: Path) -> tuple[Path, Path]:
                 raise ValueError(f"Production source missing: {production}")
         else:
             shutil.copy2(source, destination)
+    # Baselines from before EditorHTML was extracted have no helper symlink.
+    if not (sources / "EditorHTML.swift").exists():
+        (sources / "EditorHTML.swift").write_text(legacy_editor(snapshot))
+
+
+def prepare(label: str, commit: str, out: Path) -> tuple[Path, Path]:
+    snapshot = out / "work" / label / "repo"
+    package = out / "work" / label / "probe"
+    snapshot.mkdir(parents=True)
+    archive = out / f"{label}.tar"
+    run(["git", "archive", "--format=tar", "--output", str(archive), commit], cwd=ROOT)
+    run(["tar", "-xf", str(archive), "-C", str(snapshot)])
+    archive.unlink()
+    sources = package / "Sources"
+    prepare_sources(snapshot, sources)
     (sources / "Vendor").symlink_to(snapshot / "md-preview/Vendor", target_is_directory=True)
     shutil.copy2(ROOT / "tests/performance/Benchmark.swift", sources / "Benchmark.swift")
     # The app currently ignores Package.resolved. Keep explicit parser pins in

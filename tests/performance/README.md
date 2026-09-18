@@ -43,8 +43,11 @@ DOMPurify, Highlight, KaTeX, Mermaid, and Morphdom from each revision. It checks
 that edits/updates apply and preserves the original source after each edit cycle.
 It runs in **Release** with two warmups and seven measured samples per timing metric.
 
-Both revisions use the same benchmark source and fixture. Builds finish before
-measurements start. Two rounds run in **base, candidate, candidate, base** order
+Both revisions use the same benchmark source and fixture. Each probe uses the
+helper source list, symlink targets, and stubs from its own revision, so a PR can
+add, remove, or move helper sources without requiring them to exist on `main`.
+Missing production targets referenced by that revision still fail the build setup.
+Builds finish before measurements start. Two rounds run in **base, candidate, candidate, base** order
 to balance cache warming and runner drift. They never run concurrently.
 
 `dependencies.json` pins the parser revisions currently resolved by the app and
