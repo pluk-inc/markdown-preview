@@ -189,4 +189,59 @@ final class FileSearchMatcherTests: XCTestCase {
         let characters = Array(name)
         XCTAssertEqual(String(characters[0..<3]), "🚀la")
     }
+
+    // MARK: - Cancellation and cost
+
+    /// A project at the index's file cap, with names that make short queries
+    /// match a large share of it, the expensive case for the palette.
+    private func projectAtTheFileCap() -> [Candidate] {
+        let names = ["readme", "guide", "notes", "Markdown-Helpers", "changelog",
+                     "api", "setup", "design_doc", "meeting", "todo"]
+        return (0..<ProjectFileIndex.maximumFileCount).map { index in
+            candidate("docs/section\(index % 40)/part\(index % 7)/\(names[index % names.count])-\(index).md")
+        }
+    }
+
+    /// Ranks inside a task that has already been cancelled, so the outcome
+    /// does not depend on how quickly the task gets scheduled.
+    private func rankInCancelledTask(_ query: String, _ candidates: [Candidate]) async -> Result<[Int], Error> {
+        let task = Task { () throws -> [Int] in
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try FileSearchMatcher.rankCancellably(query: query, candidates: candidates)
+        }
+        return await task.result
+    }
+
+    func testTheCancellableRankingAgreesWithThePlainOne() throws {
+        let candidates = ["README.md", "docs/readme-old.md", "guide.md", "Markdown-Helpers.md", "xmhy.md"]
+            .map(candidate)
+        for query in ["", "r", "mh", "docs/", "zzz"] {
+            XCTAssertEqual(try FileSearchMatcher.rankCancellably(query: query, candidates: candidates),
+                           FileSearchMatcher.rank(query: query, candidates: candidates),
+                           "query \(query.debugDescription)")
+        }
+    }
+
+    func testACancelledRankingStopsInsteadOfReturningAPartialList() async {
+        let candidates = projectAtTheFileCap()
+        for query in ["md", "docs/sec", ""] {
+            let outcome = await rankInCancelledTask(query, candidates)
+            guard case .failure(let error) = outcome else {
+                return XCTFail("query \(query.debugDescription) finished despite cancellation")
+            }
+            XCTAssertTrue(error is CancellationError, "query \(query.debugDescription) threw \(error)")
+        }
+    }
+
+    /// Records the cost of one pass at the file cap. There is no baseline, so
+    /// this reports rather than gates; the palette keeps this work off the
+    /// main actor because a release build still takes tens of milliseconds.
+    func testRankingAProjectAtTheFileCap() {
+        let candidates = projectAtTheFileCap()
+        let options = XCTMeasureOptions()
+        options.iterationCount = 3
+        measure(options: options) {
+            XCTAssertEqual(FileSearchMatcher.rank(query: "md", candidates: candidates).count, candidates.count)
+        }
+    }
 }

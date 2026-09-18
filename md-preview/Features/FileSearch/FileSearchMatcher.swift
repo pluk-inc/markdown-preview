@@ -65,24 +65,44 @@ nonisolated enum FileSearchMatcher {
     /// A blank query matches everything, which is what makes the palette show
     /// the project before anything is typed.
     static func rank(query: String, candidates: [Candidate]) -> [Int] {
+        // Outside a cancelled task the cancellable variant never throws.
+        (try? rankCancellably(query: query, candidates: candidates)) ?? []
+    }
+
+    /// `rank(query:candidates:)` for callers running it inside a task that a
+    /// newer query can cancel. At the 20,000-file cap one pass takes tens of
+    /// milliseconds in a release build, so the palette ranks off the main
+    /// actor and abandons a pass as soon as the reader types again, rather
+    /// than finishing work nobody will see.
+    static func rankCancellably(query: String, candidates: [Candidate]) throws -> [Int] {
         let prepared = PreparedQuery(query)
 
         guard !prepared.isBlank else {
+            try Task.checkCancellation()
             return candidates.indices.sorted { isOrderedBefore(candidates[$0], candidates[$1]) }
         }
 
         var scored: [(index: Int, score: Int)] = []
         scored.reserveCapacity(candidates.count)
         for index in candidates.indices {
+            // Checked in batches: the check is cheap, but not free per file.
+            if index % cancellationCheckInterval == 0 {
+                try Task.checkCancellation()
+            }
             guard let match = match(query: prepared, against: candidates[index]) else { continue }
             scored.append((index, match.score))
         }
+        try Task.checkCancellation()
 
         return scored.sorted { lhs, rhs in
             if lhs.score != rhs.score { return lhs.score > rhs.score }
             return isOrderedBefore(candidates[lhs.index], candidates[rhs.index])
         }.map(\.index)
     }
+
+    /// How many candidates `rankCancellably` scores between cancellation
+    /// checks.
+    static let cancellationCheckInterval = 256
 
     // MARK: - Query preparation
 

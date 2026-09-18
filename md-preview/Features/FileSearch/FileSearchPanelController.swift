@@ -38,7 +38,16 @@ final class FileSearchPanelController: NSViewController {
     private var snapshot: ProjectFileIndex.Snapshot?
     /// Indices into `snapshot.candidates`, best first.
     private var results: [Int] = []
+    /// The field text `results` were ranked for. Nil until the first ranking
+    /// lands. When it differs from the field, what is on screen belongs to
+    /// an earlier query.
+    private var rankedQuery: String?
     private var debounce: DispatchWorkItem?
+    private var rankTask: Task<Void, Never>?
+    /// A Return pressed while the list was still catching up with the field.
+    /// Honoured once the ranking for the current text lands, so the file
+    /// opened is the one the reader was about to see at the top.
+    private var pendingActivation: OpenTarget?
 
     init(projectRoot: URL?, index: ProjectFileIndex = .shared) {
         self.projectRoot = projectRoot
@@ -144,6 +153,15 @@ final class FileSearchPanelController: NSViewController {
         loadIndex()
     }
 
+    override func viewWillDisappear() {
+        super.viewWillDisappear()
+        debounce?.cancel()
+        debounce = nil
+        rankTask?.cancel()
+        rankTask = nil
+        pendingActivation = nil
+    }
+
     // MARK: - Index
 
     private func loadIndex() {
@@ -178,15 +196,53 @@ final class FileSearchPanelController: NSViewController {
                                       execute: work)
     }
 
+    /// Ranks the current field text off the main actor. A full pass over a
+    /// large project costs tens of milliseconds, which would stall typing if
+    /// it ran here; a newer query cancels the pass in flight instead of
+    /// queueing behind it.
     private func refreshResults() {
+        debounce?.cancel()
+        debounce = nil
         guard let snapshot else { return }
-        results = FileSearchMatcher.rank(query: searchField.stringValue, candidates: snapshot.candidates)
+        let query = searchField.stringValue
+        let candidates = snapshot.candidates
+        rankTask?.cancel()
+        rankTask = Task { [weak self] in
+            guard let ranked = try? await Self.rank(query: query, candidates: candidates),
+                  let self, !Task.isCancelled else { return }
+            self.apply(ranked, for: query)
+        }
+    }
+
+    @concurrent
+    private nonisolated static func rank(query: String,
+                                         candidates: [FileSearchMatcher.Candidate]) async throws -> [Int] {
+        try FileSearchMatcher.rankCancellably(query: query, candidates: candidates)
+    }
+
+    private func apply(_ ranked: [Int], for query: String) {
+        // Superseded while the pass was finishing: the field has moved on and
+        // a newer ranking is already on its way.
+        guard query == searchField.stringValue else { return }
+        results = ranked
+        rankedQuery = query
+        rankTask = nil
         tableView.reloadData()
         if !results.isEmpty {
             tableView.selectRowIndexes([0], byExtendingSelection: false)
             tableView.scrollRowToVisible(0)
         }
         updateStatus()
+        if let target = pendingActivation {
+            pendingActivation = nil
+            activateSelection(target: target)
+        }
+    }
+
+    /// True when the rows on screen were ranked for exactly what is in the
+    /// field, with nothing newer scheduled or in flight.
+    private var resultsAreCurrent: Bool {
+        rankedQuery == searchField.stringValue && debounce == nil && rankTask == nil
     }
 
     private func updateStatus() {
@@ -224,12 +280,31 @@ final class FileSearchPanelController: NSViewController {
         return snapshot?.url(at: results[row])
     }
 
+    /// The keyboard path. Return is often pressed straight after the last
+    /// keystroke, before the debounced ranking for it has run; opening the
+    /// highlighted row then would open the previous query's top hit. So when
+    /// the list is behind the field, flush the ranking now and act on its
+    /// result instead. Returns true whenever the key is consumed.
+    @discardableResult
+    private func activateSelection(target: OpenTarget) -> Bool {
+        guard resultsAreCurrent else {
+            // Before the index has loaded there is nothing to rank yet;
+            // `loadIndex` ranks once it arrives and honours this then.
+            pendingActivation = target
+            if debounce != nil || rankTask == nil {
+                refreshResults()
+            }
+            return true
+        }
+        return openSelectedRow(target: target)
+    }
+
     /// Dismisses *before* handing the URL back. `present(url:)` can raise a
     /// Save/Don't Save sheet, and AppKit will not stack a second sheet on a
     /// window that already has one — opening from edit mode is a silent no-op
     /// if the palette is still up.
     @discardableResult
-    private func activateSelection(target: OpenTarget) -> Bool {
+    private func openSelectedRow(target: OpenTarget) -> Bool {
         guard let url = selectedURL else { return false }
         let onOpen = onOpen
         dismiss(self)
@@ -237,8 +312,10 @@ final class FileSearchPanelController: NSViewController {
         return true
     }
 
+    /// A double-click names a row the reader can see, so it opens that row
+    /// even if a newer ranking is on its way.
     @objc private func rowDoubleClicked() {
-        activateSelection(target: .currentTab)
+        openSelectedRow(target: .currentTab)
     }
 
     @objc private func openFolderTapped() {
@@ -253,6 +330,8 @@ final class FileSearchPanelController: NSViewController {
 extension FileSearchPanelController: NSSearchFieldDelegate {
 
     func controlTextDidChange(_ obj: Notification) {
+        // A Return waiting on the old text must not fire on the new one.
+        pendingActivation = nil
         scheduleRefresh()
     }
 
