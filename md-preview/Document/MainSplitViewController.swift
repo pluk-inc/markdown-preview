@@ -10,6 +10,7 @@ final class MainSplitViewController: NSSplitViewController {
     private static let didSeedKey = "MainSplitView.didSeedInitialState"
     /// Keeps the pane picker and sidebar toggle visible beside the window controls.
     private static let minimumSidebarWidth: CGFloat = 230
+    private var sidebarCollapseObservation: NSKeyValueObservation?
 
     /// How far the chrome overlays (formatting bar, find bar) tuck up into
     /// the native tab bar's empty bottom margin, closing the visual gap
@@ -65,6 +66,11 @@ final class MainSplitViewController: NSSplitViewController {
         addSplitViewItem(sidebar)
         addSplitViewItem(content)
         addSplitViewItem(inspector)
+
+        sidebarCollapseObservation = sidebar.observe(\.isCollapsed, options: [.new]) { [weak self] _, _ in
+            guard let self else { return }
+            (self.view.window?.windowController as? DocumentWindowController)?.syncSidebarToolbarState()
+        }
 
         splitView.autosaveName = "MainSplitView"
         DispatchQueue.main.async { [weak self] in
@@ -232,10 +238,7 @@ final class MainSplitViewController: NSSplitViewController {
         !(splitViewItems.first?.isCollapsed ?? true)
     }
 
-    /// Target of the system `.toggleSidebar` toolbar item. The themed layout
-    /// uses a plain split view item, which the stock implementation ignores,
-    /// so both layouts go through the app's own toggle and the toolbar's
-    /// pane picker is kept in step.
+    /// Keep pane selection in sync while AppKit owns the sidebar and toolbar transition.
     override func toggleSidebar(_ sender: Any?) {
         toggleSidebar()
         (view.window?.windowController as? DocumentWindowController)?.syncSidebarToolbarState()
@@ -245,13 +248,13 @@ final class MainSplitViewController: NSSplitViewController {
     func toggleSidebar() -> Bool {
         guard let sidebar = splitViewItems.first else { return false }
         let shouldShow = sidebar.isCollapsed
-        sidebar.animator().isCollapsed = !shouldShow
+        super.toggleSidebar(nil)
         return shouldShow
     }
 
     func showSidebar() {
         guard let sidebar = splitViewItems.first, sidebar.isCollapsed else { return }
-        sidebar.animator().isCollapsed = false
+        toggleSidebar()
     }
 
     func hideSidebar() {
@@ -619,6 +622,9 @@ final class MainSplitViewController: NSSplitViewController {
 
     override func viewDidAppear() {
         super.viewDidAppear()
+        defer {
+            (view.window?.windowController as? DocumentWindowController)?.syncSidebarToolbarState()
+        }
 
         let defaults = UserDefaults.standard
         guard !defaults.bool(forKey: Self.didSeedKey) else { return }

@@ -43,8 +43,8 @@ private extension Array where Element == NSToolbarItem.Identifier {
 extension DocumentWindowController {
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         // Inside the sidebar's titlebar area: the pane picker at the leading
-        // edge, the show/hide toggle at the trailing edge next to the
-        // separator. Pre-26 there is no sidebar-tracking region, so the two
+        // edge and the show/hide toggle at the trailing edge. Pre-26 there
+        // is no sidebar-tracking region, so the two
         // sit together at the leading edge instead.
         // The toggle is the system item: AppKit lays it out correctly when
         // the sidebar section collapses, and it reaches

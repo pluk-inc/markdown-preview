@@ -22,6 +22,10 @@ extension DocumentWindowController {
     /// navigation group — the toolbar keeps window-drag regions only around
     /// items it draws itself.
     func makeSidebarModeItem(willBeInsertedIntoToolbar: Bool) -> NSToolbarItem {
+        if willBeInsertedIntoToolbar, let sidebarModeItem {
+            applySidebarModeSelection(to: sidebarModeItem)
+            return sidebarModeItem
+        }
         let outlineLabel = NSLocalizedString("Table of Contents", comment: "Sidebar mode toolbar segment label")
         let filesLabel = NSLocalizedString("Project Navigator", comment: "Sidebar mode toolbar segment label")
 
@@ -134,8 +138,37 @@ extension DocumentWindowController {
     }
 
     /// Mirrors the split view into the mode picker: the visible pane is
-    /// selected, and nothing is selected while the sidebar is hidden.
+    /// selected, and the mode picker is hidden while the sidebar is collapsed.
     func syncSidebarToolbarState() {
+        let visible = currentSidebarMenuState().sidebarVisible
+        if let toolbar = documentWindow.toolbar {
+            // Hidden groups still reserve width ahead of the tracking separator.
+            // Remove the mode picker and its spacer; AppKit keeps the system toggle and
+            // separator in place and animates their layout with the split view.
+            // This transient removal must not overwrite the saved toolbar layout.
+            let autosaves = toolbar.autosavesConfiguration
+            toolbar.autosavesConfiguration = false
+            defer { toolbar.autosavesConfiguration = autosaves }
+            if visible, let index = collapsedSidebarModeIndex {
+                collapsedSidebarModeIndex = nil
+                toolbar.insertItem(withItemIdentifier: .sidebarMode, at: min(index, toolbar.items.count))
+            }
+            if visible,
+               let index = toolbar.items.firstIndex(where: { $0.itemIdentifier == .sidebarMode }),
+               toolbar.items.dropFirst(index + 1).first?.itemIdentifier == .toggleSidebar,
+               toolbar.items.dropFirst(index + 2).first?.itemIdentifier == .sidebarTrackingSeparator {
+                // Also handles saved layouts from before the spacer was restored.
+                toolbar.insertItem(withItemIdentifier: .flexibleSpace, at: index + 1)
+            } else if !visible, let index = toolbar.items.firstIndex(where: { $0.itemIdentifier == .sidebarMode }) {
+                collapsedSidebarModeIndex = index
+                if toolbar.items.dropFirst(index + 1).first?.itemIdentifier == .flexibleSpace,
+                   toolbar.items.dropFirst(index + 2).first?.itemIdentifier == .toggleSidebar,
+                   toolbar.items.dropFirst(index + 3).first?.itemIdentifier == .sidebarTrackingSeparator {
+                    toolbar.removeItem(at: index + 1)
+                }
+                toolbar.removeItem(at: index)
+            }
+        }
         if let sidebarModeItem {
             applySidebarModeSelection(to: sidebarModeItem)
         }

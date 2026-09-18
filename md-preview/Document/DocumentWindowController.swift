@@ -112,8 +112,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// Armed only while the themes popover is open.
     let themesPopoverEscapeMonitor = EscapeKeyMonitor()
     weak var searchField: NSSearchField?
-    /// The Table of Contents / Project Navigator picker in the toolbar.
-    weak var sidebarModeItem: NSToolbarItemGroup?
+    /// Retain the picker while collapsed so expansion reuses the same item.
+    var sidebarModeItem: NSToolbarItemGroup?
+    var collapsedSidebarModeIndex: Int?
     /// Timestamp of the last click handled by the sidebar mode picker.
     var sidebarToolbarHandledEventTimestamp: TimeInterval?
     var findBar: FindBar?
