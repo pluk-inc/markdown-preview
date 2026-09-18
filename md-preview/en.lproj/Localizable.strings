@@ -279,6 +279,11 @@
 "Cannot open link" = "Cannot open link";
 "“%@” is not a link Markdown Preview understands. Use md-preview://file/ followed by the absolute path of the file, for example md-preview://file/Users/me/notes/README.md." = "“%@” is not a link Markdown Preview understands. Use md-preview://file/ followed by the absolute path of the file, for example md-preview://file/Users/me/notes/README.md.";
 
+/* Link safety */
+"“%@” would be run, not opened." = "“%@” would be run, not opened.";
+"This document links to a program or installer. It will be shown in Finder instead." = "This document links to a program or installer. It will be shown in Finder instead.";
+"Show in Finder" = "Show in Finder";
+
 /* CLI installer errors */
 "Terminal automation failed: %@" = "Terminal automation failed: %@";
 "Terminal automation failed." = "Terminal automation failed.";

@@ -5,6 +5,7 @@
 
 import Cocoa
 import os
+import UniformTypeIdentifiers
 import WebKit
 
 /// Presents table operations with a real AppKit context menu. The web views
@@ -1525,12 +1526,57 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                 if Self.isMarkdownDocument(resolved) {
                     // fileURL(for:) works on the path alone and drops `#section`.
                     localMarkdownLinkActivated?(Self.reattachingFragment(of: url, to: resolved))
+                } else if Self.isExecutableTarget(resolved) {
+                    confirmRevealingExecutable(resolved)
                 } else {
                     NSWorkspace.shared.open(resolved)
                 }
             } else if url.scheme != MarkdownAssetScheme.scheme {
-                NSWorkspace.shared.open(url)
+                if url.isFileURL, Self.isExecutableTarget(url) {
+                    confirmRevealingExecutable(url)
+                } else {
+                    NSWorkspace.shared.open(url)
+                }
             }
+    }
+
+    /// A document names a target; that is not the same as asking to start it.
+    /// Without this, a relative link to `./setup.command` ran on one click —
+    /// the same click that, for any other file, only opens it.
+    private static func isExecutableTarget(_ url: URL) -> Bool {
+        if let type = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType {
+            let runs: [UTType] = [.application, .applicationBundle, .unixExecutable, .diskImage]
+            if runs.contains(where: type.conforms(to:)) { return true }
+            if type.identifier == "com.apple.installer-package-archive" { return true }
+        }
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+        return exists && !isDirectory.boolValue
+            && FileManager.default.isExecutableFile(atPath: url.path)
+    }
+
+    /// A program named by document content is shown, never started.
+    private func confirmRevealingExecutable(_ target: URL) {
+        #if !QUICK_LOOK_EXTENSION
+        guard let window else { return }
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = String(
+            format: NSLocalizedString("“%@” would be run, not opened.",
+                                      comment: "Executable link alert title"),
+            target.lastPathComponent
+        )
+        alert.informativeText = NSLocalizedString(
+            "This document links to a program or installer. It will be shown in Finder instead.",
+            comment: "Executable link alert message"
+        )
+        alert.addButton(withTitle: NSLocalizedString("Show in Finder", comment: "Executable link alert button"))
+        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Executable link alert button"))
+        alert.beginSheetModal(for: window) { response in
+            guard response == .alertFirstButtonReturn else { return }
+            NSWorkspace.shared.activateFileViewerSelecting([target])
+        }
+        #endif
     }
 
     private func showLinkContextMenu(_ source: URL) {
