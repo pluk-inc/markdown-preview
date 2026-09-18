@@ -12,8 +12,13 @@ import Foundation
 actor ProjectFileIndex {
 
     /// The extensions a project surfaces. This is the one list — the project
-    /// navigator filters its rows with it too, so the palette can never offer
-    /// a file the tree hides, or hide one it shows.
+    /// navigator filters its rows with it too, so the two agree on which
+    /// *kinds* of file belong to a project.
+    ///
+    /// They do not agree on which *folders* to look in. The walk below prunes
+    /// dependency and build directories, package contents, and anything past
+    /// `maximumDepth`, none of which the navigator hides. README.md lists
+    /// these exclusions; keep it in step when changing them.
     ///
     /// Note this is deliberately *not* the list the open panel accepts, which
     /// also takes `.txt` and does not take `.mkd` or `.mdwn`. Reconciling the
