@@ -291,14 +291,11 @@ private final class BenchmarkPage {
         let navigationMilliseconds = Date().timeIntervalSince(started) * 1000
         let arguments: [String: Any] = ["isEditor": isEditor, "media": media]
         _ = try await webView.callAsyncJavaScript("""
-            const root = document.querySelector(isEditor ? '.cm-content' : 'article.markdown-body');
-            if (!root || !root.textContent.trim()) throw new Error('Document did not render');
-            const images = [...root.querySelectorAll(isEditor ? '.cm-md-image-preview img' : 'img')];
-            if (media && images.length !== 1) throw new Error('Media fixture image missing');
-            window.__benchAssetsReady = false;
+            window.__benchFontsReady = false;
+            window.__benchImageDecodes = new WeakMap();
             window.__benchAssetError = null;
-            Promise.all([document.fonts.ready, ...images.map(image => image.decode())])
-                .then(() => { window.__benchAssetsReady = true; })
+            document.fonts.ready
+                .then(() => { window.__benchFontsReady = true; })
                 .catch(error => { window.__benchAssetError = String(error); });
             """, arguments: arguments, in: nil, contentWorld: .page)
         // Hidden WebKit timers can clamp a 5 ms test poll to a full second.
@@ -308,11 +305,25 @@ private final class BenchmarkPage {
         while Date() < deadline {
             let settled = try await webView.callAsyncJavaScript("""
                 if (window.__benchAssetError) throw new Error(window.__benchAssetError);
-                const root = document.querySelector(isEditor ? '.cm-content' : 'article.markdown-body');
                 const pending = window.__benchFrame();
+                const root = document.querySelector(isEditor ? '.cm-content' : 'article.markdown-body');
+                if (!root || !root.textContent.trim()) return false;
+                // Editor image widgets can appear after navigation and initial layout.
+                // Discover them on every poll, and decode replacements as well.
+                const images = [...root.querySelectorAll(isEditor ? '.cm-md-image-preview img' : 'img')];
+                window.__benchImageCount = images.length;
+                for (const image of images) {
+                    if (window.__benchImageDecodes.has(image)) continue;
+                    window.__benchImageDecodes.set(image, false);
+                    image.decode()
+                        .then(() => { window.__benchImageDecodes.set(image, true); })
+                        .catch(error => { window.__benchAssetError = String(error); });
+                }
+                const imagesReady = (!media || images.length === 1)
+                    && images.every(image => window.__benchImageDecodes.get(image));
                 const diagramReady = !media || root.querySelector(isEditor ? '.cm-md-mermaid-stage svg' : '.mermaid svg');
                 const mathReady = !media || isEditor || root.querySelector('.katex');
-                return Boolean(document.visibilityState === 'visible' && window.__benchAssetsReady && !pending && diagramReady && mathReady);
+                return Boolean(document.visibilityState === 'visible' && window.__benchFontsReady && imagesReady && !pending && diagramReady && mathReady);
                 """, arguments: arguments, in: nil, contentWorld: .page)
             quiet = (settled as? Bool) == true ? quiet + 1 : 0
             if quiet >= 3 {
@@ -323,7 +334,8 @@ private final class BenchmarkPage {
             try await Task.sleep(for: .milliseconds(5))
         }
         let visibility = try? await webView.evaluateJavaScript("document.visibilityState")
-        throw BenchmarkError("WebKit renderers did not settle (page visibility: \(String(describing: visibility))). Keep the benchmark window visible and unobstructed.")
+        let imageCount = try? await webView.evaluateJavaScript("window.__benchImageCount")
+        throw BenchmarkError("WebKit renderers did not settle (media: \(media), images: \(String(describing: imageCount)), page visibility: \(String(describing: visibility))). Keep the benchmark window visible and unobstructed.")
     }
 
     func editorEdits(markdown: String, samples: Int) async throws -> [Double] {
