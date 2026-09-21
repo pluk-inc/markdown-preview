@@ -28,7 +28,7 @@ final class FileSearchPanelController: NSViewController {
     private let projectRoot: URL?
     private let index: ProjectFileIndex
 
-    private let queryField = NSTextField()
+    private let queryField = PlainQueryField()
     private let fieldSeparator = HairlineSeparator()
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
@@ -80,7 +80,6 @@ final class FileSearchPanelController: NSViewController {
         queryField.font = .systemFont(ofSize: 19)
         queryField.isBordered = false
         queryField.drawsBackground = false
-        queryField.focusRingType = .none
         queryField.lineBreakMode = .byTruncatingTail
 
         fieldSeparator.translatesAutoresizingMaskIntoConstraints = false
@@ -543,6 +542,56 @@ private final class FileSearchRowView: NSTableCellView {
     private static let nameMatchFont = NSFont.systemFont(ofSize: 13, weight: .bold)
     private static let pathFont = NSFont.systemFont(ofSize: 11)
     private static let pathMatchFont = NSFont.systemFont(ofSize: 11, weight: .bold)
+}
+
+/// A text field that never draws a focus ring.
+///
+/// Setting `focusRingType` on the field alone is not enough: that is the
+/// `NSView` property, while the ring is drawn by the field's *cell*, which
+/// carries a separate `focusRingType` of its own. Both are cleared here, and
+/// `drawFocusRingMask()` is overridden as well so nothing can put it back.
+///
+/// The palette is a sheet whose field is focused the moment it opens and never
+/// gives focus up, so a ring saying "this is focused" tells the reader nothing
+/// and just boxes in the one element that should read as plain text.
+private final class PlainQueryField: NSTextField {
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        suppressFocusRing()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        suppressFocusRing()
+    }
+
+    private func suppressFocusRing() {
+        focusRingType = .none
+        cell?.focusRingType = .none
+    }
+
+    override var focusRingType: NSFocusRingType {
+        get { .none }
+        set { }
+    }
+
+    override func drawFocusRingMask() {}
+
+    override var focusRingMaskBounds: NSRect { .zero }
+
+    /// While the field is being edited it is not really the field on screen
+    /// but the window's shared field editor, which carries its own ring
+    /// setting that nothing above reaches. It is handed over on focus, so
+    /// this is where to clear it.
+    override func becomeFirstResponder() -> Bool {
+        let accepted = super.becomeFirstResponder()
+        if accepted, let editor = currentEditor() as? NSTextView {
+            editor.focusRingType = .none
+            editor.drawsBackground = false
+        }
+        return accepted
+    }
 }
 
 /// Catches the Command-modified Return that never reaches the search field:
