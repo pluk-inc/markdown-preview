@@ -82,7 +82,9 @@ extension DocumentWindowController {
         if isEditing {
             previewPendingEdits()
         } else {
-            enterEditMode()
+            // Transfer focus after the editor is ready and the preview is hidden.
+            // Otherwise AppKit can select the toolbar search field on first entry.
+            enterEditMode(autofocus: true)
         }
     }
 }
