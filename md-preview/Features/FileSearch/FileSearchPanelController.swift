@@ -66,8 +66,7 @@ final class FileSearchPanelController: NSViewController {
         // Sized by frame rather than by self-constraints: AppKit owns a view
         // controller's root view frame, and a sheet takes its size from it.
         let container = KeyEquivalentView(frame: NSRect(x: 0, y: 0, width: 560, height: 420))
-        container.onCommandReturn = { [weak self] in self?.activateSelection(target: .newTab) ?? false }
-        container.onOptionReturn = { [weak self] in self?.activateSelection(target: .newWindow) ?? false }
+        container.onKey = { [weak self] event in self?.handleNavigationKey(event) ?? false }
         view = container
 
         // A large, unbezelled field with a hairline under it, the way Xcode's
@@ -293,6 +292,47 @@ final class FileSearchPanelController: NSViewController {
         tableView.scrollRowToVisible(clamped)
     }
 
+    /// Drives the list from the raw key event.
+    ///
+    /// This runs from `performKeyEquivalent`, which the window offers every
+    /// key-down before the first responder sees it. The delegate route below
+    /// does the same job, but only while the field editor is active and
+    /// forwarding; going through the window as well means navigation does not
+    /// depend on that being true. Whichever runs first consumes the key, so
+    /// the two cannot both act on one press.
+    private func handleNavigationKey(_ event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard !modifiers.contains(.control) else { return false }
+
+        switch event.keyCode {
+        case Key.upArrow: moveSelection(by: -1)
+        case Key.downArrow: moveSelection(by: 1)
+        case Key.home: selectRow(0)
+        case Key.end: selectRow(results.count - 1)
+        case Key.pageUp: moveSelection(by: -visibleRowCount)
+        case Key.pageDown: moveSelection(by: visibleRowCount)
+        case Key.escape: dismiss(self)
+        case Key.return, Key.keypadEnter:
+            if modifiers.contains(.command) { return activateSelection(target: .newTab) }
+            if modifiers.contains(.option) { return activateSelection(target: .newWindow) }
+            return activateSelection(target: .currentTab)
+        default: return false
+        }
+        return true
+    }
+
+    private enum Key {
+        static let `return`: UInt16 = 36
+        static let keypadEnter: UInt16 = 76
+        static let escape: UInt16 = 53
+        static let pageUp: UInt16 = 116
+        static let pageDown: UInt16 = 121
+        static let home: UInt16 = 115
+        static let end: UInt16 = 119
+        static let upArrow: UInt16 = 126
+        static let downArrow: UInt16 = 125
+    }
+
     private func moveSelection(by offset: Int) {
         guard !results.isEmpty else { return }
         let next = min(max(tableView.selectedRow + offset, 0), results.count - 1)
@@ -371,13 +411,15 @@ extension FileSearchPanelController: NSTextFieldDelegate {
         case #selector(NSResponder.moveDown(_:)):
             moveSelection(by: 1)
             return true
-        // In a one-line field these would only shunt the caret to either end
-        // of the text, which is never what someone driving a result list
-        // means by Home and End.
-        case #selector(NSResponder.moveToBeginningOfDocument(_:)):
+        // A one-line field sends `scroll…`, not `move…`, for Home and End —
+        // verified against a live field editor rather than assumed. Both
+        // spellings are accepted so neither keyboard layout loses the key.
+        case #selector(NSResponder.moveToBeginningOfDocument(_:)),
+             #selector(NSResponder.scrollToBeginningOfDocument(_:)):
             selectRow(0)
             return true
-        case #selector(NSResponder.moveToEndOfDocument(_:)):
+        case #selector(NSResponder.moveToEndOfDocument(_:)),
+             #selector(NSResponder.scrollToEndOfDocument(_:)):
             selectRow(results.count - 1)
             return true
         case #selector(NSResponder.pageUp(_:)), #selector(NSResponder.scrollPageUp(_:)):
@@ -594,19 +636,19 @@ private final class PlainQueryField: NSTextField {
     }
 }
 
-/// Catches the Command-modified Return that never reaches the search field:
-/// AppKit routes ⌘-combinations through `performKeyEquivalent(_:)` first.
+/// Offers the palette every key-down before the first responder gets it.
+///
+/// The window walks this method down the view tree for each key press, which
+/// is how a default button answers Return. Handling the palette's keys here
+/// covers the ones the field editor would never forward anyway — ⌘Return is
+/// resolved as a key equivalent long before the field sees it — and does not
+/// rely on the field being mid-edit for the rest.
 private final class KeyEquivalentView: NSView {
 
-    var onCommandReturn: (() -> Bool)?
-    var onOptionReturn: (() -> Bool)?
+    var onKey: ((NSEvent) -> Bool)?
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        let isReturn = event.keyCode == 36 || event.keyCode == 76
-        guard isReturn else { return super.performKeyEquivalent(with: event) }
-        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if modifiers.contains(.command) { return onCommandReturn?() ?? false }
-        if modifiers.contains(.option) { return onOptionReturn?() ?? false }
+        if onKey?(event) == true { return true }
         return super.performKeyEquivalent(with: event)
     }
 }
