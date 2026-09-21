@@ -60,10 +60,6 @@ nonisolated enum FileSearchMatcher {
         match(query: PreparedQuery(query), against: candidate)
     }
 
-    /// Indices into `candidates`, best first. Non-matches are dropped.
-    ///
-    /// A blank query matches everything, which is what makes the palette show
-    /// the project before anything is typed.
     /// Converts the `Character` offsets in a `Match` into `NSRange`s over the
     /// same string, for attributing the matched characters in the UI.
     ///
@@ -79,6 +75,10 @@ nonisolated enum FileSearchMatcher {
         }
     }
 
+    /// Indices into `candidates`, best first. Non-matches are dropped.
+    ///
+    /// A blank query matches everything, which is what makes the palette show
+    /// the project before anything is typed.
     static func rank(query: String, candidates: [Candidate]) -> [Int] {
         // Outside a cancelled task the cancellable variant never throws.
         (try? rankCancellably(query: query, candidates: candidates)) ?? []
