@@ -169,8 +169,13 @@ nonisolated enum MarkdownHTML {
     // must come from one source of truth.
     static let bodyFontFamily = "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", system-ui, sans-serif"
     static let codeFontFamily = "ui-monospace, \"SF Mono\", Menlo, monospace"
-    static let bodyFontSize: CGFloat = 15
-    static let bodyLineHeight: CGFloat = 1.52
+    /// Body text sits just above the system Body text style (13pt on macOS)
+    /// for comfortable reading; the heading scale in the stylesheet steps
+    /// through the system title styles (Large Title 26, Title 1 22, Title 2
+    /// 17, Title 3 15, Headline 13, Subheadline 11) as em ratios of the body
+    /// size, so it scales with this value.
+    static let bodyFontSize: CGFloat = 14
+    static let bodyLineHeight: CGFloat = 1.5
     static let pagePaddingTop: CGFloat = 32
     static let pagePaddingHorizontal: CGFloat = 40
     static let pagePaddingBottom: CGFloat = 48
@@ -210,9 +215,8 @@ nonisolated enum MarkdownHTML {
 
     /// Body size, in points, used by the print stylesheet when the app hasn't
     /// injected an explicit choice. CSS `pt` reaches paper 1:1, so this is the
-    /// literal printed size. The on-screen 15px body prints at 15 × 0.75 =
-    /// 11.25pt, so 12pt keeps the default output close to what it was before
-    /// the size became selectable.
+    /// literal printed size. The on-screen 14px body would print at 10.5pt,
+    /// small for paper, so the print default stays at 12pt.
     static let defaultPrintPointSize = 12
 
     /// Printed page box. WKWebView ignores `NSPrintInfo`'s margins and falls
@@ -240,11 +244,14 @@ nonisolated enum MarkdownHTML {
     /// block's own margin-top provides the space below, so the gaps above and
     /// below a rule both equal the paragraph gap (blankLineGap + this).
     static let hrSpacing = bodyFontSize * 0.8
-    static let listItemSpacing = bodyFontSize * 0.4
+    static let listItemSpacing = bodyFontSize * 0.2
 
     struct RenderedHTML: Sendable {
         let html: String
         let articleHTML: String
+        /// The Markdown the article was rendered from; the page keeps it for
+        /// copy-as-source and body swaps pass it along with the article.
+        let markdown: String
         let containsMath: Bool
         let containsMermaid: Bool
         let containsCode: Bool
@@ -275,7 +282,8 @@ nonisolated enum MarkdownHTML {
                        themeOverrides: ThemeOverrides? = nil,
                        documentFont: DocumentFontSetting = .current,
                        readerLayout: ReaderLayoutSetting = .current,
-                       warmup: Bool = false) -> RenderedHTML {
+                       warmup: Bool = false,
+                       highlightsCode: Bool = true) -> RenderedHTML {
         let frontmatter = MarkdownFrontmatter.split(markdown)
         let body = frontmatter.body
         let sourceLineOffset: Int
@@ -290,7 +298,8 @@ nonisolated enum MarkdownHTML {
         let formatted = EscapingHTMLFormatter.format(
             math.processedMarkdown,
             sourceLineOffset: sourceLineOffset,
-            sourceMarkdown: body
+            sourceMarkdown: body,
+            highlightsCode: highlightsCode
         )
         let mermaidResult = renderMermaidBlocks(in: formatted)
         let mathResult = renderMathBlocks(in: mermaidResult.html, with: math)
@@ -404,7 +413,25 @@ nonisolated enum MarkdownHTML {
         // execute, images don't fetch, and event-handler attributes never fire.
         // The bootstrap then reads template.innerHTML, runs it through
         // DOMPurify, and assigns the sanitized result to article.innerHTML.
-        let safeBody = bodyHTML.replacingOccurrences(of: "</template", with: "<\\/template")
+        //
+        // That inertness lasts exactly as long as the element does, so a
+        // document must not be able to close it early. Raw HTML reaches here
+        // unescaped, and end tags are case-insensitive: matching only the
+        // lowercase spelling let `</TEMPLATE>` terminate the element, putting
+        // everything after it straight into the live document, where the
+        // parser fires event-handler attributes before the sanitizer has seen
+        // them. Match the terminator the way the HTML parser does.
+        let safeBody = bodyHTML.replacingOccurrences(
+            of: "</template",
+            with: "<\\/template",
+            options: [.caseInsensitive]
+        )
+        // The Markdown source rides along for copy-as-source. `</` is escaped
+        // inside the string literal so a fence containing `</script>` cannot
+        // end the element.
+        let sourceBlock = warmup ? "" : """
+        <script>window.MdPreview = window.MdPreview || {}; window.MdPreview.source = \(javaScriptStringLiteral(markdown).replacingOccurrences(of: "</", with: "<\\/"));</script>
+        """
         let colorSchemeAttribute = colorScheme.map {
             " data-mdp-color-scheme=\"\($0.rawValue)\""
         } ?? ""
@@ -428,6 +455,7 @@ nonisolated enum MarkdownHTML {
         \(sanitizerBlock)
         \(morphBlock)
         \(hostBridgeScript)
+        \(sourceBlock)
         \(mathBlock.head)
         \(mermaidBlock.head)
         \(highlightBlock.head)
@@ -441,6 +469,7 @@ nonisolated enum MarkdownHTML {
         return RenderedHTML(
             html: html,
             articleHTML: bodyHTML,
+            markdown: markdown,
             containsMath: containsMath,
             containsMermaid: containsMermaid,
             containsCode: containsCode

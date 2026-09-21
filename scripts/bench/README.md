@@ -1,8 +1,9 @@
 # Benchmark harness
 
 Pragmatic CPU/memory/first-paint benchmarking for the Markdown Preview app
-and its Quick Look extension. Built for the morphdom/first-paint performance
-experiment — baseline vs candidate comparisons, not CI.
+and its Quick Look extension. The app/Quick Look scripts below are manual
+profiling tools. Automated Release comparisons and failure thresholds run in
+GitHub Actions; see [the performance check](../../tests/performance/README.md).
 
 ## What's here
 

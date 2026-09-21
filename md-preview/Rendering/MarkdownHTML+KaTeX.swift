@@ -79,7 +79,7 @@ nonisolated extension MarkdownHTML {
     /// Inline morphdom so `MdPreview.update` can DOM-diff fast-path updates
     /// instead of replacing the whole article subtree — finished Mermaid
     /// SVGs, KaTeX output, and highlighted code survive updates untouched.
-    /// If the vendored file is missing (SPM tests, Quick Look bundle), this
+    /// If the vendored file is missing (for example, a minimal host bundle), this
     /// is empty and `MdPreview.update` keeps its innerHTML fallback. Cached
     /// for the same reason as `dompurifyBlock`.
     static let morphdomBlock = bundledVendorScriptTag("morphdom.min", subdir: "Vendor/Morphdom")

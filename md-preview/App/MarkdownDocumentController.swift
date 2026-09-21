@@ -7,7 +7,7 @@ import Cocoa
 import UniformTypeIdentifiers
 
 final class MarkdownDocumentController: NSDocumentController {
-    private static let markdownFileExtensions = ["md", "markdown", "mdown", "txt"]
+    private static let markdownFileExtensions = ["md", "markdown", "mdown", "mdx", "txt"]
 
     override func beginOpenPanel(
         _ openPanel: NSOpenPanel,

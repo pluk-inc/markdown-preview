@@ -104,23 +104,36 @@ extension DocumentWindowController {
         let container = EditAccessoryContainerView()
         // The find bar shows over the preview, whose backdrop follows the
         // window background, not the editor color.
-        container.prefersWindowBackground = true
         bar.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(bar)
-        let hairline = NSBox()
-        hairline.boxType = .separator
-        hairline.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(hairline)
         NSLayoutConstraint.activate([
             bar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             bar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             bar.topAnchor.constraint(equalTo: container.topAnchor),
             bar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             bar.heightAnchor.constraint(equalToConstant: FindBar.preferredHeight),
+        ])
+        let hairline: NSView
+        if #available(macOS 27.0, *) {
+            hairline = SearchHairlineSeparator()
+        } else {
+            let separator = NSBox()
+            separator.boxType = .separator
+            hairline = separator
+        }
+        hairline.translatesAutoresizingMaskIntoConstraints = false
+        if #available(macOS 27.0, *) {
+            // The native edge covers the outer chrome boundary. A custom
+            // divider separates search from the formatting row in edit mode.
+            hairline.isHidden = true
+        }
+        container.addSubview(hairline)
+        NSLayoutConstraint.activate([
             hairline.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             hairline.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             hairline.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
+        findBarHairline = hairline
         container.isHidden = true
         mainSplit?.installFindOverlay(container)
         findBarOverlay = container
@@ -178,5 +191,47 @@ extension DocumentWindowController {
         guard let searchField else { return }
         documentWindow.makeFirstResponder(searchField)
         searchField.selectText(nil)
+    }
+}
+
+/// A single device pixel filled with the unmodified system separator color.
+private final class SearchHairlineSeparator: NSView {
+    private var pixelHeight: NSLayoutConstraint!
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        pixelHeight = heightAnchor.constraint(equalToConstant: 1)
+        pixelHeight.isActive = true
+    }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        layer?.backgroundColor = NSColor.separatorColor.cgColor
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private func updatePixelHeight() {
+        let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 1
+        pixelHeight.constant = 1 / scale
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        updatePixelHeight()
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        updatePixelHeight()
     }
 }

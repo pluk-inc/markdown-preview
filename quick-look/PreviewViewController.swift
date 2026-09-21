@@ -76,7 +76,9 @@ private final class QuickLookWebView: WKWebView {
 
     // The Quick Look host has no Edit menu, so ⌘A/⌘C never arrive as menu
     // key equivalents — claim them here and hand them to WebKit's standard
-    // responder actions, which act on the page's DOM selection.
+    // responder actions, which act on the page's DOM selection. This only
+    // runs once the preview has keyboard focus, i.e. after the user has
+    // clicked into it; see QuickLookFirstResponderPolicy.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if event.type == .keyDown,
            let command = QuickLookEditingCommands.command(
@@ -585,7 +587,10 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
     private func activatePreviewIfReady() {
         guard isPreviewVisible, isPreviewReady else { return }
         copyButton.isEnabled = true
-        view.window?.makeFirstResponder(webView)
+        // Deliberately no `makeFirstResponder(webView)` here: the Quick Look
+        // host owns keyboard navigation, and stealing focus on load breaks
+        // arrow-key file navigation. See QuickLookFirstResponderPolicy.
+        assert(QuickLookFirstResponderPolicy.claimsFirstResponderOnLoad == false)
     }
 
     private func addingCopyButtonClearance(to html: String) -> String {
@@ -637,12 +642,19 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
         )
     }
 
-    // Quick Look opens with keyboard focus in the host (Finder), so ⌘A/⌘C
-    // reach the preview only after the user clicks into it. Claiming first
-    // responder once the content loads propagates focus across the
-    // ViewBridge, making ⌘A/⌘C work immediately. The host still handles
-    // arrows (file navigation) and space (close panel) itself — verified
-    // against a focused preview.
+    // Quick Look opens with keyboard focus in the host (Finder), and it
+    // stays there: the host handles arrows (file navigation) and space
+    // (close panel), and the preview only becomes first responder once the
+    // user clicks into it — matching Apple's text and PDF previews, and
+    // keeping arrow-key file navigation working (pluk-inc/markdown-preview#292).
+    //
+    // The cost is that ⌘A/⌘C need that click first. Key events reach this
+    // extension only while its view holds focus in the host, so until the
+    // user clicks, those chords never reach the preview and copy nothing
+    // from it. Apple's text and PDF previews behave the same way.
+    // Claiming focus on load (#288) is what made them work immediately, and
+    // it is also what took the arrow keys away. The Copy button still copies
+    // the Markdown source without any click into the page.
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         guard let navigation, navigation === currentNavigation else { return }
         currentNavigation = nil

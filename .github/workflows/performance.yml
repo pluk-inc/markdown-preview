@@ -1,0 +1,80 @@
+name: Performance
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  performance:
+    name: performance regression
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Initialize report
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/performance-report"
+          printf '%s\n' "$PR_NUMBER" > "$RUNNER_TEMP/performance-report/pr-number.txt"
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Test comparison and reporting
+        run: python3 -m unittest discover -s scripts/bench -p 'test_*.py'
+
+      - name: Compare base and candidate in Release
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            BASE_SHA=$(git rev-parse "$CANDIDATE_SHA^")
+          fi
+          BASE_SHA=$(git merge-base "$BASE_SHA" "$CANDIDATE_SHA")
+          python3 scripts/bench/run_performance.py \
+            --base "$BASE_SHA" \
+            --candidate "$CANDIDATE_SHA" \
+            --out "$RUNNER_TEMP/performance"
+
+      - name: Upload benchmark results and logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: performance-comparison-${{ github.run_attempt }}
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/performance/*.json
+            ${{ runner.temp }}/performance/*.md
+            ${{ runner.temp }}/performance/*.log
+          if-no-files-found: warn
+
+      - name: Prepare PR report
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/performance/summary.md" ]; then
+            cp "$RUNNER_TEMP/performance/summary.md" "$RUNNER_TEMP/performance-report/summary.md"
+          fi
+
+      - name: Upload PR report
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: performance-pr-report-${{ github.run_attempt }}
+          retention-days: 14
+          path: ${{ runner.temp }}/performance-report/
+          if-no-files-found: warn

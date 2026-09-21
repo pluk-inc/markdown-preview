@@ -2,9 +2,10 @@
 //  ThemePreset.swift
 //  md-preview
 //
-//  Named built-in theme presets. A preset is a fixed palette written into
-//  every ThemeColorsSetting slot; applying one also switches the app's
-//  appearance to the preset's flavor so the native chrome (sidebar,
+//  Named built-in theme presets. Original restores the app's default colors;
+//  other presets write a fixed palette into ThemeColorsSetting slots.
+//  Applying a preset also switches the app's appearance to the preset's
+//  flavor so the native chrome (sidebar,
 //  toolbar) matches. A `.system` preset keeps the Automatic appearance and
 //  carries a separate dark palette, so both schemes stay readable while
 //  the app keeps tracking the system look. The accent color maps to the
@@ -57,13 +58,18 @@ nonisolated struct ThemePreset: Identifiable, Equatable, Sendable {
     let setting: ThemeColorsSetting
 
     init(name: String, flavor: Flavor, palette: Palette, darkPalette: Palette? = nil,
-         font: DocumentFontSetting = .system, boldText: Bool = false) {
+         font: DocumentFontSetting = .system, boldText: Bool = false,
+         usesDefaultColors: Bool = false) {
         self.name = name
         self.flavor = flavor
         self.font = font
         self.boldText = boldText
         self.palette = palette
         self.darkPalette = darkPalette
+        if usesDefaultColors {
+            self.setting = ThemeColorsSetting()
+            return
+        }
         var setting = ThemeColorsSetting()
         for scheme in ThemeColorScheme.allCases {
             let colors = scheme == .dark ? (darkPalette ?? palette) : palette
@@ -96,16 +102,15 @@ nonisolated struct ThemePreset: Identifiable, Equatable, Sendable {
     /// (editor page, inline-code pill, body text, link color) so the two
     /// apps render the same look side by side.
     static let builtIn: [ThemePreset] = [
-        // The default: native macOS blue accents (light systemBlue
-        // #007AFF, dark #0A84FF) on plain white / near-black pages. The
-        // values are deliberately pinned — not derived from the stock
-        // stylesheet — and follow the system appearance, so Reset returns
-        // to the system look.
+        // These swatches preview the default stylesheet in the gallery.
+        // Applying Original clears overrides instead of pinning a palette:
+        // choosing it must leave the same native chrome as a fresh install.
         ThemePreset(name: "Original", flavor: .system,
-                    palette: Palette(pageBackground: "#FFFFFF", codeBackground: "#F2F2F2",
-                                     text: "#000000", accent: "#007AFF"),
+                    palette: Palette(pageBackground: "#FFFFFF", codeBackground: "#F5F5F7",
+                                     text: "#1D1D1F", accent: "#0066CC"),
                     darkPalette: Palette(pageBackground: "#1E1E1E", codeBackground: "#2A2828",
-                                         text: "#F5F5F7", accent: "#0A84FF")),
+                                         text: "#F5F5F7", accent: "#2997FF"),
+                    usesDefaultColors: true),
         // Apple Books "Quiet": soft dark gray with bright ink — sampled from
         // a reading page, not from the gallery card, whose label is muted.
         ThemePreset(name: "Quiet", flavor: .dark,

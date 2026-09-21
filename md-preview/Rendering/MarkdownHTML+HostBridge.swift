@@ -206,15 +206,100 @@ nonisolated extension MarkdownHTML {
             });
         }
 
-        function cloneSelectionWithoutCopyButtons(selection) {
+        function selectionFragment(selection) {
             const fragment = document.createDocumentFragment();
             for (let i = 0; i < selection.rangeCount; i += 1) {
                 fragment.appendChild(selection.getRangeAt(i).cloneContents());
             }
             const buttons = fragment.querySelectorAll('.md-code-copy');
-            if (buttons.length === 0) return null;
             buttons.forEach((button) => button.remove());
-            return fragment;
+            return { fragment, removedButtons: buttons.length > 0 };
+        }
+
+        // Copy as Markdown. The host keeps `window.MdPreview.source` (the
+        // document's Markdown) current, and block elements carry their
+        // source line range. A selection that covers whole blocks copies
+        // those source lines, so lists keep their bullets, links their
+        // targets, and code its fences. Partial first or last blocks
+        // contribute their selected text; a selection inside one block
+        // returns null and copies as text.
+        let sourceLineCache = null;
+        function sourceLines() {
+            const source = window.MdPreview.source;
+            if (typeof source !== 'string') return null;
+            if (!sourceLineCache || sourceLineCache.source !== source) {
+                sourceLineCache = { source, lines: source.split('\\n') };
+            }
+            return sourceLineCache.lines;
+        }
+        function sourceSpan(block) {
+            const start = Number(block.dataset.sourceStart || block.dataset.sourceLine);
+            const end = Number(block.dataset.sourceEnd || block.dataset.sourceLine);
+            return Number.isInteger(start) && Number.isInteger(end) && start > 0 && end >= start
+                ? { start, end } : null;
+        }
+        function coversBlockEdge(range, block, edge) {
+            const probe = document.createRange();
+            probe.selectNodeContents(block);
+            if (edge === 'start') probe.setEnd(range.startContainer, range.startOffset);
+            else probe.setStart(range.endContainer, range.endOffset);
+            return probe.toString().trim() === '';
+        }
+        function selectedTextWithin(range, block) {
+            const clipped = document.createRange();
+            clipped.selectNodeContents(block);
+            if (clipped.compareBoundaryPoints(Range.START_TO_START, range) < 0) {
+                clipped.setStart(range.startContainer, range.startOffset);
+            }
+            if (clipped.compareBoundaryPoints(Range.END_TO_END, range) > 0) {
+                clipped.setEnd(range.endContainer, range.endOffset);
+            }
+            return clipped.toString();
+        }
+        function markdownForSelection(selection) {
+            selection = selection || window.getSelection();
+            const lines = sourceLines();
+            if (!lines || !selection || selection.rangeCount !== 1) return null;
+            const range = selection.getRangeAt(0);
+            if (range.collapsed) return null;
+            // Select All ranges over the whole body, so ask for overlap, not
+            // containment; the block lookups below stay inside the article.
+            const article = document.querySelector('.markdown-body');
+            if (!article || !range.intersectsNode(article)) return null;
+            // DOM order is not source order: footnote definitions render at
+            // the end of the article. Take the earliest source start and the
+            // latest source end over every block the selection touches,
+            // preferring the innermost block on ties so a partial list item
+            // contributes its text while the rest of the list copies as source.
+            let startBlock = null, endBlock = null, first = null, last = null;
+            for (const block of article.querySelectorAll('[data-source-line]')) {
+                if (!range.intersectsNode(block)) continue;
+                const span = sourceSpan(block);
+                if (!span) continue;
+                if (!first || span.start <= first.start) { first = span; startBlock = block; }
+                if (!last || span.end >= last.end) { last = span; endBlock = block; }
+            }
+            if (!startBlock || !endBlock) return null;
+            if (last.end < first.start) return null;
+            const slice = (from, to) => lines.slice(from - 1, to).join('\\n');
+            const startWhole = coversBlockEdge(range, startBlock, 'start');
+            const endWhole = coversBlockEdge(range, endBlock, 'end');
+            // Nothing rendered lies outside the selection at an edge: extend
+            // that edge to the document boundary, so a whole-document copy
+            // also carries what renders nothing, such as link reference
+            // definitions at the end.
+            if (startWhole && coversBlockEdge(range, article, 'start')) first = { start: 1, end: first.end };
+            if (endWhole && coversBlockEdge(range, article, 'end')) last = { start: last.start, end: lines.length };
+            if (startBlock === endBlock || startBlock.contains(endBlock) || endBlock.contains(startBlock)) {
+                if (!startWhole || !endWhole) return null;
+                return slice(Math.min(first.start, last.start), Math.max(first.end, last.end));
+            }
+            if (last.start <= first.end) return null;
+            const parts = [];
+            parts.push(startWhole ? slice(first.start, first.end) : selectedTextWithin(range, startBlock));
+            if (last.start > first.end + 1) parts.push(slice(first.end + 1, last.start - 1));
+            parts.push(endWhole ? slice(last.start, last.end) : selectedTextWithin(range, endBlock));
+            return parts.join('\\n');
         }
 
         function plainTextFromFragment(fragment) {
@@ -664,11 +749,27 @@ nonisolated extension MarkdownHTML {
             }
         });
 
-        document.addEventListener('copy', (event) => {
+        // Registered on window so it runs after every document-level copy
+        // handler, including the math copy helper that rewrites the plain
+        // text of selections containing formulas; the Markdown source
+        // already carries the formula source, so it wins when available.
+        window.addEventListener('copy', (event) => {
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0 || !event.clipboardData) return;
-            const fragment = cloneSelectionWithoutCopyButtons(selection);
-            if (!fragment) return;
+            // A cell being edited copies its own text like any text field.
+            if (activeTableCell) return;
+            const { fragment, removedButtons } = selectionFragment(selection);
+            const markdown = markdownForSelection(selection);
+            if (markdown !== null) {
+                event.clipboardData.setData('text/plain', markdown);
+                event.clipboardData.setData('text/html', htmlFromFragment(fragment));
+                event.preventDefault();
+                return;
+            }
+            // Another handler already wrote the pasteboard: leave it alone.
+            if (event.defaultPrevented) return;
+            // Otherwise only step in to keep code copy buttons out of the text.
+            if (!removedButtons) return;
             event.clipboardData.setData('text/plain', plainTextFromFragment(fragment));
             event.clipboardData.setData('text/html', htmlFromFragment(fragment));
             event.preventDefault();
@@ -898,7 +999,13 @@ nonisolated extension MarkdownHTML {
         // Mermaid pre-render doesn't flash on screen. The host then issues a
         // second update without the flag once the real document arrives,
         // which clears the inline style and reveals the article.
+        window.MdPreview.markdownForSelection = markdownForSelection;
+
         window.MdPreview.update = (articleHTML, opts) => {
+            // The Markdown behind the article, for copy-as-source.
+            if (opts && typeof opts.source === 'string') {
+                window.MdPreview.source = opts.source;
+            }
             // Body swaps can carry a document from a different folder — move
             // the page <base> first so the incoming content's relative URLs
             // resolve against the right folder.

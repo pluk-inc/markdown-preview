@@ -46,9 +46,6 @@
 /* Class = "NSMenu"; title = "Main Menu"; ObjectID = "AYu-sK-qS6"; */
 "AYu-sK-qS6.title" = "主菜单";
 
-/* Class = "NSMenuItem"; title = "Send Anonymous Crash Reports"; ObjectID = "BOF-NM-1cW"; */
-"BOF-NM-1cW.title" = "发送匿名崩溃报告";
-
 /* Class = "NSMenuItem"; title = "Save As…"; ObjectID = "Bw7-FT-i3A"; */
 "Bw7-FT-i3A.title" = "存储为…";
 

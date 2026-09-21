@@ -59,12 +59,12 @@ final class DocumentFontSettingTests: XCTestCase {
         XCTAssertEqual(DocumentFontSetting.monospace.fontFamily, MarkdownHTML.codeFontFamily)
     }
 
-    // 0.88em is tuned against the system face's x-height, so a face with a
+    // 0.9em is tuned against the system face's x-height, so a face with a
     // different one needs its own correction or code stops reading as smaller
     // than the prose around it.
     func testCodeSizeIsCorrectedPerFace() {
-        XCTAssertEqual(DocumentFontSetting.system.codeFontSize, "0.88em")
-        XCTAssertEqual(DocumentFontSetting.rounded.codeFontSize, "0.88em")
+        XCTAssertEqual(DocumentFontSetting.system.codeFontSize, "0.9em")
+        XCTAssertEqual(DocumentFontSetting.rounded.codeFontSize, "0.9em")
         XCTAssertEqual(DocumentFontSetting.monospace.codeFontSize, "1em")
         for setting in DocumentFontSetting.allCases where setting.isSerif {
             XCTAssertNotEqual(setting.codeFontSize,

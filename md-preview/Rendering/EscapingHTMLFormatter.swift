@@ -6,6 +6,702 @@
 import Foundation
 import Markdown
 
+/// Rewrites matched Obsidian-style `==text==` delimiters into control-character
+/// sentinels before cmark parses the document. The sentinels deliberately have
+/// the same Character width as the two source delimiters, so source line and
+/// column mapping remains stable while the normal Markdown parser still gets
+/// to parse nested emphasis, links, and other inline content.
+nonisolated enum MarkdownHighlightSource {
+    // Cmark source locations use UTF-8 byte columns. Each sentinel is an
+    // ASCII control character, so replacing a two-byte `==` delimiter keeps
+    // every later source offset stable, including lines containing Unicode.
+    static let openingToken = "\u{001C}\u{001D}"
+    static let closingToken = "\u{001E}\u{001F}"
+
+    private struct Delimiter {
+        let start: Int
+        let canOpen: Bool
+        let canClose: Bool
+        let scope: Int
+    }
+
+    private struct HighlightPair {
+        let opening: Int
+        let closing: Int
+    }
+
+    private struct ParsedTextScope {
+        let range: Range<Int>
+        let id: Int
+    }
+
+    private struct SourceOffsetMap {
+        let lineByteStarts: [Int]
+        let characterByteOffsets: [Int]
+
+        init(characters: [Character]) {
+            var lineByteStarts = [0]
+            var characterByteOffsets: [Int] = []
+            characterByteOffsets.reserveCapacity(characters.count + 1)
+
+            var byteOffset = 0
+            for character in characters {
+                characterByteOffsets.append(byteOffset)
+                byteOffset += String(character).utf8.count
+                let lineEnding = character.unicodeScalars.last?.value
+                if lineEnding == 0x0A || lineEnding == 0x0D {
+                    lineByteStarts.append(byteOffset)
+                }
+            }
+            characterByteOffsets.append(byteOffset)
+            self.lineByteStarts = lineByteStarts
+            self.characterByteOffsets = characterByteOffsets
+        }
+
+        func characterOffset(for location: SourceLocation) -> Int? {
+            guard location.line > 0,
+                  location.line <= lineByteStarts.count,
+                  location.column > 0 else {
+                return nil
+            }
+
+            let target = lineByteStarts[location.line - 1] + location.column - 1
+            var lowerBound = 0
+            var upperBound = characterByteOffsets.count
+            while lowerBound < upperBound {
+                let middle = lowerBound + (upperBound - lowerBound) / 2
+                let candidate = characterByteOffsets[middle]
+                if target < candidate {
+                    upperBound = middle
+                } else if target > candidate {
+                    lowerBound = middle + 1
+                } else {
+                    return middle
+                }
+            }
+            return nil
+        }
+    }
+
+    private static let htmlBlockTags: Set<String> = [
+        "address", "article", "aside", "base", "basefont", "blockquote",
+        "body", "caption", "center", "col", "colgroup", "dd", "details",
+        "dialog", "dir", "div", "dl", "dt", "fieldset", "figcaption",
+        "figure", "footer", "form", "frame", "frameset", "h1", "h2", "h3",
+        "h4", "h5", "h6", "head", "header", "hr", "html", "iframe",
+        "legend", "li", "link", "main", "menu", "menuitem", "nav",
+        "noframes", "ol", "optgroup", "option", "p", "param", "section",
+        "source", "summary", "table", "tbody", "td", "tfoot", "th",
+        "thead", "title", "tr", "track", "ul", "pre", "script", "style"
+    ]
+
+    static func preparing(_ markdown: String) -> String {
+        let characters = Array(markdown)
+        guard characters.contains("=") else { return markdown }
+
+        var protected = Array(repeating: false, count: characters.count)
+        var blockBoundaries = Array(repeating: false, count: characters.count)
+        protectFencedCode(
+            in: characters,
+            protected: &protected,
+            blockBoundaries: &blockBoundaries
+        )
+        protectIndentedCode(
+            in: characters,
+            protected: &protected,
+            blockBoundaries: &blockBoundaries
+        )
+        protectInlineCode(in: characters, protected: &protected)
+        protectLinkDestinations(in: characters, protected: &protected)
+        protectHTML(
+            in: characters,
+            protected: &protected,
+            blockBoundaries: &blockBoundaries
+        )
+
+        // Delimiters must be paired within the parser's text containers. A
+        // line-based scope splits soft-wrapped quote/list paragraphs, while
+        // pairing globally can consume a both-sided delimiter from a later
+        // block before AST validation gets a chance to reject it.
+        let sourceScopes = parsedTextScopes(in: characters)
+
+        var delimiters: [Delimiter] = []
+        var index = 0
+        while index < characters.count {
+            if blockBoundaries[index] {
+                while index < characters.count, blockBoundaries[index] {
+                    index += 1
+                }
+                continue
+            }
+            guard characters[index] == "=", !protected[index] else {
+                index += 1
+                continue
+            }
+
+            let start = index
+            while index < characters.count,
+                  characters[index] == "=",
+                  !protected[index] {
+                index += 1
+            }
+            let end = index
+            guard !isEscaped(characters, at: start) else { continue }
+            let length = end - start
+            guard length >= 2 else { continue }
+
+            let before = start > 0 ? characters[start - 1] : nil
+            let after = end < characters.count ? characters[end] : nil
+            let spaceBefore = isWhitespace(before)
+            let spaceAfter = isWhitespace(after)
+            let punctuationBefore = isPunctuation(before)
+            let punctuationAfter = isPunctuation(after)
+            let leftFlanking = !spaceAfter
+                && (!punctuationAfter || spaceBefore || punctuationBefore)
+            let rightFlanking = !spaceBefore
+                && (!punctuationBefore || spaceAfter || punctuationAfter)
+
+            // Match markdown-it-mark's useful behavior for equal runs: an odd
+            // run leaves one literal `=` before the pairs, and each pair can
+            // participate in delimiter matching independently.
+            var pairStart = start + (length.isMultiple(of: 2) ? 0 : 1)
+            while pairStart + 1 < end {
+                if let scope = scope(containing: pairStart, in: sourceScopes) {
+                    delimiters.append(
+                        Delimiter(
+                            start: pairStart,
+                            canOpen: leftFlanking,
+                            canClose: rightFlanking,
+                            scope: scope
+                        )
+                    )
+                }
+                pairStart += 2
+            }
+        }
+
+        guard !delimiters.isEmpty else { return markdown }
+
+        var openDelimiters: [Delimiter] = []
+        var replacements: [Int: String] = [:]
+        var pairs: [HighlightPair] = []
+        for delimiter in delimiters {
+            while let opener = openDelimiters.last,
+                  opener.scope != delimiter.scope {
+                openDelimiters.removeLast()
+            }
+            if delimiter.canClose, let opener = openDelimiters.popLast() {
+                replacements[opener.start] = openingToken
+                replacements[delimiter.start] = closingToken
+                pairs.append(HighlightPair(opening: opener.start, closing: delimiter.start))
+                continue
+            }
+            if delimiter.canOpen {
+                openDelimiters.append(delimiter)
+            }
+        }
+
+        guard !replacements.isEmpty else { return markdown }
+        var rewritten = characters
+        for (start, token) in replacements {
+            let tokenCharacters = Array(token)
+            guard tokenCharacters.count == 2,
+                  rewritten.indices.contains(start),
+                  rewritten.indices.contains(start + 1) else {
+                continue
+            }
+            rewritten[start] = tokenCharacters[0]
+            rewritten[start + 1] = tokenCharacters[1]
+        }
+        return restoringRejectedPairs(in: rewritten, pairs: pairs)
+    }
+
+    private static func restoringRejectedPairs(in characters: [Character],
+                                               pairs: [HighlightPair]) -> String {
+        let scopes = parsedTextScopes(in: characters)
+        var restored = characters
+        for pair in pairs {
+            let openingScope = scope(containing: pair.opening, in: scopes)
+            let closingScope = scope(containing: pair.closing, in: scopes)
+            guard let openingScope, openingScope == closingScope else {
+                restoreDelimiter(at: pair.opening, in: &restored)
+                restoreDelimiter(at: pair.closing, in: &restored)
+                continue
+            }
+        }
+        return String(restored)
+    }
+
+    private static func parsedTextScopes(in characters: [Character]) -> [ParsedTextScope] {
+        let document = Document(parsing: String(characters))
+        let offsetMap = SourceOffsetMap(characters: characters)
+        var scopes: [ParsedTextScope] = []
+        var nextScope = 0
+        collectTextScopes(
+            from: document,
+            offsetMap: offsetMap,
+            scopes: &scopes,
+            nextScope: &nextScope
+        )
+        scopes.sort { $0.range.lowerBound < $1.range.lowerBound }
+        return scopes
+    }
+
+    @discardableResult
+    private static func collectTextScopes(from markup: Markup,
+                                          offsetMap: SourceOffsetMap,
+                                          scopes: inout [ParsedTextScope],
+                                          nextScope: inout Int) -> Bool {
+        if markup is CodeBlock
+            || markup is HTMLBlock
+            || markup is Image
+            || markup is InlineCode
+            || markup is InlineHTML
+            || markup is SymbolLink {
+            return markup is InlineHTML
+        }
+
+        var scope = nextScope
+        var containsInlineHTML = false
+        nextScope += 1
+        for child in markup.children {
+            if child is InlineHTML {
+                containsInlineHTML = true
+                scope = nextScope
+                nextScope += 1
+            } else if let text = child as? Text,
+                      let range = text.range,
+                      let lowerBound = offsetMap.characterOffset(for: range.lowerBound),
+                      let upperBound = offsetMap.characterOffset(for: range.upperBound),
+                      lowerBound < upperBound {
+                scopes.append(
+                    ParsedTextScope(range: lowerBound..<upperBound, id: scope)
+                )
+            } else if collectTextScopes(
+                from: child,
+                offsetMap: offsetMap,
+                scopes: &scopes,
+                nextScope: &nextScope
+            ) {
+                containsInlineHTML = true
+                scope = nextScope
+                nextScope += 1
+            }
+        }
+        return containsInlineHTML
+    }
+
+    private static func scope(containing delimiter: Int,
+                              in scopes: [ParsedTextScope]) -> Int? {
+        var lowerBound = 0
+        var upperBound = scopes.count
+        while lowerBound < upperBound {
+            let middle = lowerBound + (upperBound - lowerBound) / 2
+            let candidate = scopes[middle]
+            if delimiter < candidate.range.lowerBound {
+                upperBound = middle
+            } else if delimiter + 1 >= candidate.range.upperBound {
+                lowerBound = middle + 1
+            } else {
+                return candidate.id
+            }
+        }
+        return nil
+    }
+
+    private static func restoreDelimiter(at start: Int,
+                                         in characters: inout [Character]) {
+        guard characters.indices.contains(start),
+              characters.indices.contains(start + 1) else {
+            return
+        }
+        characters[start] = "="
+        characters[start + 1] = "="
+    }
+
+    private static func protectFencedCode(in characters: [Character],
+                                          protected: inout [Bool],
+                                          blockBoundaries: inout [Bool]) {
+        let lines = lineRanges(in: characters)
+        var lineIndex = 0
+        while lineIndex < lines.count {
+            let line = lines[lineIndex]
+            guard let fence = fence(at: line, in: characters) else {
+                lineIndex += 1
+                continue
+            }
+
+            var closingLine = lines.count - 1
+            if lineIndex + 1 < lines.count {
+                for candidateIndex in (lineIndex + 1)..<lines.count {
+                    if isClosingFence(
+                        at: lines[candidateIndex],
+                        in: characters,
+                        character: fence.character,
+                        minimumLength: fence.length
+                    ) {
+                        closingLine = candidateIndex
+                        break
+                    }
+                }
+            }
+
+            let end = lines[closingLine].to
+            for position in line.from..<end {
+                protected[position] = true
+                blockBoundaries[position] = true
+            }
+            lineIndex = closingLine + 1
+        }
+    }
+
+    private static func protectInlineCode(in characters: [Character],
+                                          protected: inout [Bool]) {
+        // Let the block/inline parser decide which backtick runs form a code
+        // span. A source-wide scan can incorrectly pair runs from separate
+        // paragraphs, while these ranges preserve valid multiline spans in a
+        // single paragraph.
+        guard characters.contains("`") else { return }
+        let document = Document(parsing: String(characters))
+        let offsetMap = SourceOffsetMap(characters: characters)
+        protectInlineCode(
+            in: document,
+            offsetMap: offsetMap,
+            protected: &protected
+        )
+    }
+
+    private static func protectInlineCode(in markup: Markup,
+                                          offsetMap: SourceOffsetMap,
+                                          protected: inout [Bool]) {
+        if let inlineCode = markup as? InlineCode,
+           let range = inlineCode.range,
+           let lowerBound = offsetMap.characterOffset(for: range.lowerBound),
+           let upperBound = offsetMap.characterOffset(for: range.upperBound),
+           lowerBound < upperBound {
+            for position in lowerBound..<upperBound {
+                protected[position] = true
+            }
+            return
+        }
+
+        for child in markup.children {
+            protectInlineCode(
+                in: child,
+                offsetMap: offsetMap,
+                protected: &protected
+            )
+        }
+    }
+
+    private static func protectIndentedCode(in characters: [Character],
+                                            protected: inout [Bool],
+                                            blockBoundaries: inout [Bool]) {
+        let lines = lineRanges(in: characters)
+        var lineIndex = 0
+        while lineIndex < lines.count {
+            let previousLine = lineIndex > 0 ? lines[lineIndex - 1] : nil
+            let previousLineIsBlank = previousLine.map {
+                characters[$0.from..<$0.to].allSatisfy {
+                    $0 == " " || $0 == "\t"
+                }
+            } ?? true
+            let startsAfterBlank = lineIndex == 0 || previousLineIsBlank
+            guard startsAfterBlank,
+                  hasIndentedCodePrefix(at: lines[lineIndex], in: characters) else {
+                lineIndex += 1
+                continue
+            }
+
+            var lastLine = lineIndex
+            while lastLine < lines.count {
+                let line = lines[lastLine]
+                let blank = characters[line.from..<line.to].allSatisfy {
+                    $0 == " " || $0 == "\t"
+                }
+                if blank || hasIndentedCodePrefix(at: line, in: characters) {
+                    lastLine += 1
+                } else {
+                    break
+                }
+            }
+
+            let end = lines[lastLine - 1].to
+            for position in lines[lineIndex].from..<end {
+                protected[position] = true
+                blockBoundaries[position] = true
+            }
+            lineIndex = lastLine
+        }
+    }
+
+    private static func hasIndentedCodePrefix(at line: (from: Int, to: Int),
+                                              in characters: [Character]) -> Bool {
+        var index = line.from
+        var spaces = 0
+        while index < line.to, characters[index] == " " {
+            index += 1
+            spaces += 1
+        }
+        return spaces >= 4 || (index < line.to && characters[index] == "\t")
+    }
+
+    private static func protectLinkDestinations(in characters: [Character],
+                                                protected: inout [Bool]) {
+        var index = 0
+        while index < characters.count {
+            guard characters[index] == "]", !protected[index] else {
+                index += 1
+                continue
+            }
+
+            var opening = index + 1
+            while opening < characters.count,
+                  characters[opening] == " ",
+                  !protected[opening] {
+                opening += 1
+            }
+            guard opening < characters.count, characters[opening] == "(" else {
+                index += 1
+                continue
+            }
+
+            var cursor = opening
+            var depth = 0
+            var escaped = false
+            var closing: Int?
+            while cursor < characters.count {
+                if protected[cursor] {
+                    cursor += 1
+                    continue
+                }
+                let character = characters[cursor]
+                if escaped {
+                    escaped = false
+                } else if character == "\\" {
+                    escaped = true
+                } else if character == "(" {
+                    depth += 1
+                } else if character == ")" {
+                    depth -= 1
+                    if depth == 0 {
+                        closing = cursor
+                        break
+                    }
+                } else if character == "\n" {
+                    break
+                }
+                cursor += 1
+            }
+
+            if let closing {
+                for position in opening...closing {
+                    protected[position] = true
+                }
+                index = closing + 1
+            } else {
+                index = opening + 1
+            }
+        }
+    }
+
+    private static func protectHTML(in characters: [Character],
+                                    protected: inout [Bool],
+                                    blockBoundaries: inout [Bool]) {
+        let lines = lineRanges(in: characters)
+        var lineIndex = 0
+        while lineIndex < lines.count {
+            let line = lines[lineIndex]
+            guard let tag = htmlBlockTag(at: line, in: characters) else {
+                lineIndex += 1
+                continue
+            }
+
+            var closingLine = lineIndex
+            if tag == "!--" {
+                for candidateIndex in lineIndex..<lines.count {
+                    if String(characters[lines[candidateIndex].from..<lines[candidateIndex].to])
+                        .contains("-->") {
+                        closingLine = candidateIndex
+                        break
+                    }
+                }
+            } else {
+                let closingMarker = "</\(tag)"
+                var foundClosingTag = false
+                for candidateIndex in lineIndex..<lines.count {
+                    let text = String(characters[lines[candidateIndex].from..<lines[candidateIndex].to])
+                        .lowercased()
+                    if text.contains(closingMarker) {
+                        closingLine = candidateIndex
+                        foundClosingTag = true
+                        break
+                    }
+                    if candidateIndex > lineIndex,
+                       text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        closingLine = candidateIndex - 1
+                        foundClosingTag = true
+                        break
+                    }
+                }
+                if !foundClosingTag {
+                    closingLine = lines.count - 1
+                }
+            }
+
+            let end = lines[closingLine].to
+            for position in line.from..<end {
+                protected[position] = true
+                blockBoundaries[position] = true
+            }
+            lineIndex = closingLine + 1
+        }
+
+        // Inline HTML tags and autolinks protect their attributes/destinations
+        // without suppressing Markdown in ordinary text between the tags.
+        var index = 0
+        while index < characters.count {
+            guard characters[index] == "<", !protected[index] else {
+                index += 1
+                continue
+            }
+            var cursor = index + 1
+            var quote: Character?
+            while cursor < characters.count {
+                let character = characters[cursor]
+                if quote != nil {
+                    if character == quote { quote = nil }
+                } else if character == "\"" || character == "'" {
+                    quote = character
+                } else if character == ">" {
+                    for position in index...cursor {
+                        protected[position] = true
+                    }
+                    index = cursor + 1
+                    break
+                } else if character == "\n" {
+                    index = cursor
+                    break
+                }
+                cursor += 1
+            }
+            if cursor >= characters.count {
+                index = characters.count
+            }
+        }
+    }
+
+
+    private static func lineRanges(in characters: [Character]) -> [(from: Int, to: Int)] {
+        guard !characters.isEmpty else { return [] }
+        var ranges: [(from: Int, to: Int)] = []
+        var start = 0
+        for index in characters.indices where characters[index] == "\n" {
+            ranges.append((from: start, to: index))
+            start = index + 1
+        }
+        if start < characters.count {
+            ranges.append((from: start, to: characters.count))
+        }
+        return ranges
+    }
+
+    private static func fence(at line: (from: Int, to: Int),
+                              in characters: [Character])
+        -> (character: Character, length: Int)? {
+        var index = line.from
+        var indentation = 0
+        while index < line.to, characters[index] == " ", indentation < 4 {
+            index += 1
+            indentation += 1
+        }
+        guard index < line.to,
+              characters[index] == "`" || characters[index] == "~" else {
+            return nil
+        }
+        let character = characters[index]
+        let start = index
+        while index < line.to, characters[index] == character {
+            index += 1
+        }
+        let length = index - start
+        return length >= 3 ? (character: character, length: length) : nil
+    }
+
+    private static func isClosingFence(at line: (from: Int, to: Int),
+                                       in characters: [Character],
+                                       character: Character,
+                                       minimumLength: Int) -> Bool {
+        var index = line.from
+        var indentation = 0
+        while index < line.to, characters[index] == " ", indentation < 4 {
+            index += 1
+            indentation += 1
+        }
+        let start = index
+        while index < line.to, characters[index] == character {
+            index += 1
+        }
+        guard index - start >= minimumLength else { return false }
+        return characters[index..<line.to].allSatisfy {
+            $0 == " " || $0 == "\t"
+        }
+    }
+
+    private static func htmlBlockTag(at line: (from: Int, to: Int),
+                                     in characters: [Character]) -> String? {
+        var index = line.from
+        var indentation = 0
+        while index < line.to, characters[index] == " ", indentation < 4 {
+            index += 1
+            indentation += 1
+        }
+        guard index < line.to, characters[index] == "<" else { return nil }
+        if characters[index..<line.to].starts(with: ["<", "!", "-", "-"]) {
+            return "!--"
+        }
+        index += 1
+        guard index < line.to, characters[index].isLetter else { return nil }
+        let nameStart = index
+        while index < line.to, characters[index].isLetter {
+            index += 1
+        }
+        let name = String(characters[nameStart..<index]).lowercased()
+        guard htmlBlockTags.contains(name) else { return nil }
+        guard index == line.to
+                || characters[index] == " "
+                || characters[index] == "\t"
+                || characters[index] == ">"
+                || characters[index] == "/" else {
+            return nil
+        }
+        return name
+    }
+
+    private static func isEscaped(_ characters: [Character], at index: Int) -> Bool {
+        var backslashes = 0
+        var cursor = index
+        while cursor > 0, characters[cursor - 1] == "\\" {
+            backslashes += 1
+            cursor -= 1
+        }
+        return !backslashes.isMultiple(of: 2)
+    }
+
+    private static func isWhitespace(_ character: Character?) -> Bool {
+        guard let character else { return true }
+        return character.unicodeScalars.allSatisfy {
+            CharacterSet.whitespacesAndNewlines.contains($0)
+        }
+    }
+
+    private static func isPunctuation(_ character: Character?) -> Bool {
+        guard let character else { return false }
+        let punctuation = CharacterSet.punctuationCharacters.union(.symbols)
+        return character.unicodeScalars.allSatisfy { punctuation.contains($0) }
+    }
+}
+
 nonisolated enum TaskCheckboxSource {
     private static let markerRegex: NSRegularExpression = {
         // swiftlint:disable:next force_try
@@ -284,9 +980,18 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
 
     let options: HTMLFormatterOptions
     let sourceLineOffset: Int
+    /// Pre-render fenced code with `CodeHighlighter` so the page paints its
+    /// syntax colors on the first frame. Off, the deferred in-page pass
+    /// highlights after load.
+    let highlightsCode: Bool
     private let sourceLines: [String]
     private let parsedSourceLines: [String]
 
+    private let detectsBareURLs: Bool
+
+    private static let linkDetector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+    private var markdownLinkDepth = 0
+    private var rawHTMLLinkExclusions: [String] = []
     private var inTableHead = false
     private var tableColumnAlignments: [Table.ColumnAlignment?]?
     private var tableSourceRows: [[String]]?
@@ -306,9 +1011,13 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     init(options: HTMLFormatterOptions = [],
          sourceLineOffset: Int = 0,
          sourceMarkdown: String = "",
-         parsedMarkdown: String = "") {
+         parsedMarkdown: String = "",
+         highlightsCode: Bool = true) {
         self.options = options
         self.sourceLineOffset = sourceLineOffset
+        self.highlightsCode = highlightsCode
+        // Escapes/entities can decode into a URL even without a literal scheme.
+        self.detectsBareURLs = Self.mayContainHTTP(parsedMarkdown, includesMarkdownEscapes: true)
         self.sourceLines = sourceMarkdown.components(separatedBy: "\n")
         self.parsedSourceLines = parsedMarkdown.components(separatedBy: "\n")
     }
@@ -316,13 +1025,16 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     static func format(_ markdown: String,
                        options: HTMLFormatterOptions = [],
                        sourceLineOffset: Int = 0,
-                       sourceMarkdown: String? = nil) -> String {
-        let document = Document(parsing: markdown)
+                       sourceMarkdown: String? = nil,
+                       highlightsCode: Bool = true) -> String {
+        let preparedMarkdown = MarkdownHighlightSource.preparing(markdown)
+        let document = Document(parsing: preparedMarkdown)
         var walker = EscapingHTMLFormatter(
             options: options,
             sourceLineOffset: sourceLineOffset,
             sourceMarkdown: sourceMarkdown ?? markdown,
-            parsedMarkdown: markdown
+            parsedMarkdown: preparedMarkdown,
+            highlightsCode: highlightsCode
         )
         walker.visit(document)
         return walker.result
@@ -531,11 +1243,17 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
 
     mutating func visitCodeBlock(_ codeBlock: CodeBlock) {
         let info = CodeFenceInfo(rawInfoString: codeBlock.language)
-        let detectedLanguage = info.language.isEmpty
+        var detectedLanguage = info.language.isEmpty
             ? CodeFenceLanguageDetector.detect(codeBlock.code)
             : nil
+        let highlighter = highlightsCode && CodeHighlighter.isAvailable
+        if highlighter, info.language.isEmpty, detectedLanguage == nil {
+            // Same grammar-based fallback the in-page pass uses, so an
+            // untyped fence gets its language before the first paint.
+            detectedLanguage = CodeHighlighter.detectLanguage(codeBlock.code)
+        }
         let language = info.language.isEmpty ? detectedLanguage : info.highlightLanguage
-        let languageAttr: String
+        var languageAttr: String
         if let language, !language.isEmpty {
             let detectedAttr = detectedLanguage == nil
                 ? ""
@@ -544,7 +1262,19 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         } else {
             languageAttr = ""
         }
-        result += "<pre\(sourceLineAttribute(codeBlock))><code\(languageAttr)>\(escapeText(codeBlock.code))</code></pre>\n"
+        // Mermaid fences become figures later in the pipeline and math is
+        // extracted before the walker runs, so every other fence is ours.
+        var body = escapeText(codeBlock.code)
+        if highlighter, language != "mermaid" {
+            if let language, !language.isEmpty,
+               let highlighted = CodeHighlighter.highlight(codeBlock.code, language: language) {
+                body = highlighted
+            }
+            // Stamped done even when no grammar matched: the page then has
+            // nothing left for the deferred pass, so it never loads it.
+            languageAttr += " data-hljs-done=\"1\""
+        }
+        result += "<pre\(sourceLineAttribute(codeBlock))><code\(languageAttr)>\(body)</code></pre>\n"
     }
 
     mutating func visitHeading(_ heading: Heading) {
@@ -869,6 +1599,21 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     }
 
     mutating func visitInlineHTML(_ inlineHTML: InlineHTML) {
+        // Inline HTML arrives as separate opening/closing nodes. Keep raw
+        // anchors and code literal even when their contents are Markdown Text.
+        guard detectsBareURLs else {
+            result += inlineHTML.rawHTML
+            return
+        }
+        let tag = inlineHTML.rawHTML.lowercased()
+        for name in ["a", "code", "pre", "script", "style", "textarea"] {
+            if tag.range(of: "^<" + name + "(?:\\s|>)", options: .regularExpression) != nil {
+                rawHTMLLinkExclusions.append(name)
+            } else if tag.range(of: "^</" + name + "\\s*>", options: .regularExpression) != nil,
+                      let index = rawHTMLLinkExclusions.lastIndex(of: name) {
+                rawHTMLLinkExclusions.removeSubrange(index...)
+            }
+        }
         result += inlineHTML.rawHTML
     }
 
@@ -888,20 +1633,67 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
             result += " href=\"\(escapeAttribute(destination))\""
         }
         result += ">"
+        markdownLinkDepth += 1
         descendInto(link)
+        markdownLinkDepth -= 1
         result += "</a>"
     }
 
     mutating func visitText(_ text: Text) {
         if let prefix = sourceListPrefixToStrip,
            text.string.hasPrefix(prefix) {
-            result += escapeTextPreservingInlineTabs(
+            result += renderText(
                 String(text.string.dropFirst(prefix.count))
             )
             sourceListPrefixToStrip = nil
         } else {
-            result += escapeTextPreservingInlineTabs(text.string)
+            result += renderText(text.string)
         }
+    }
+
+    /// ASCII-only candidate check: no Foundation bridging, Unicode case folding,
+    /// or temporary lowercase strings. Detection still determines URL boundaries.
+    private static func mayContainHTTP(_ string: String, includesMarkdownEscapes: Bool = false) -> Bool {
+        var matched = 0
+        for byte in string.utf8 {
+            if includesMarkdownEscapes && (byte == 38 || byte == 92) { return true }
+            let folded = byte | 0x20
+            switch (matched, folded) {
+            case (_, 104): matched = 1 // h
+            case (1, 116): matched = 2 // t
+            case (2, 116): matched = 3 // t
+            case (3, 112): return true // p
+            default: matched = 0
+            }
+        }
+        return false
+    }
+
+    private func renderText(_ string: String) -> String {
+        guard detectsBareURLs, markdownLinkDepth == 0, rawHTMLLinkExclusions.isEmpty,
+              Self.mayContainHTTP(string),
+              let detector = Self.linkDetector else {
+            return escapeTextWithHighlights(string)
+        }
+        var html = ""
+        var cursor = string.startIndex
+        // Highlight sentinels are not prose. Mask them without changing UTF-16
+        // offsets so detection stops at the highlight boundary.
+        let detectionText = string
+            .replacingOccurrences(of: MarkdownHighlightSource.openingToken, with: "  ")
+            .replacingOccurrences(of: MarkdownHighlightSource.closingToken, with: "  ")
+        for match in detector.matches(in: detectionText, range: NSRange(detectionText.startIndex..., in: detectionText)) {
+            guard let range = Range(match.range, in: string),
+                  let url = match.url,
+                  ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+                  string[range].lowercased().hasPrefix("http://")
+                    || string[range].lowercased().hasPrefix("https://") else { continue }
+            html += escapeTextWithHighlights(String(string[cursor..<range.lowerBound]))
+            html += "<a href=\"\(escapeAttribute(url.absoluteString))\">\(escapeText(String(string[range])))</a>"
+            cursor = range.upperBound
+        }
+        html += escapeTextWithHighlights(String(string[cursor...]))
+        return html
     }
 
     mutating func visitStrikethrough(_ strikethrough: Strikethrough) {
@@ -938,6 +1730,42 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         descendInto(attributes)
         result += "</span>"
     }
+}
+
+private nonisolated func escapeTextWithHighlights(_ string: String) -> String {
+    let openingToken = MarkdownHighlightSource.openingToken
+    let closingToken = MarkdownHighlightSource.closingToken
+    var result = ""
+    result.reserveCapacity(string.count)
+    var cursor = string.startIndex
+
+    while cursor < string.endIndex {
+        let searchRange = cursor..<string.endIndex
+        let opening = string.range(of: openingToken, range: searchRange)
+        let closing = string.range(of: closingToken, range: searchRange)
+        let next: (range: Range<String.Index>, isOpening: Bool)?
+        switch (opening, closing) {
+        case let (opening?, closing?):
+            next = opening.lowerBound < closing.lowerBound
+                ? (opening, true)
+                : (closing, false)
+        case let (opening?, nil):
+            next = (opening, true)
+        case let (nil, closing?):
+            next = (closing, false)
+        case (nil, nil):
+            result += escapeTextPreservingInlineTabs(String(string[cursor...]))
+            return result
+        }
+
+        guard let next else { break }
+        result += escapeTextPreservingInlineTabs(String(string[cursor..<next.range.lowerBound]))
+        result += next.isOpening
+            ? "<mark class=\"md-highlight\">"
+            : "</mark>"
+        cursor = next.range.upperBound
+    }
+    return result
 }
 
 private nonisolated func escapeText(_ string: String) -> String {

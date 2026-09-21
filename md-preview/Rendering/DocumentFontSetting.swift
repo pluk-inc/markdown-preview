@@ -72,15 +72,15 @@ nonisolated enum DocumentFontSetting: String, CaseIterable, Sendable {
     /// Code stays monospaced whatever the document font is — alignment,
     /// diffs and whitespace fidelity are the reason it is monospaced at all,
     /// and the document face does not get a vote on that. What does move is
-    /// the size it sits at: `0.88em` is tuned against the system face's
+    /// the size it sits at: `0.9em` is tuned against the system face's
     /// x-height, and the same declaration reads *larger* than its surroundings
     /// against a serif's smaller one. Monospace documents take `1em`, where
-    /// code at 0.88em would read as the same font at a slightly wrong size;
+    /// code at 0.9em would read as the same font at a slightly wrong size;
     /// the background chip is what marks it as code there.
     var codeFontSize: String {
         switch self {
         case .monospace: return "1em"
-        default: return isSerif ? "0.84em" : "0.88em"
+        default: return isSerif ? "0.86em" : "0.9em"
         }
     }
 

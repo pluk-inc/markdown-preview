@@ -8,6 +8,8 @@ import Cocoa
 final class MainSplitViewController: NSSplitViewController {
 
     private static let didSeedKey = "MainSplitView.didSeedInitialState"
+    /// Keeps the pane picker and sidebar toggle visible beside the window controls.
+    private static let minimumSidebarWidth: CGFloat = 230
 
     /// How far the chrome overlays (formatting bar, find bar) tuck up into
     /// the native tab bar's empty bottom margin, closing the visual gap
@@ -24,6 +26,9 @@ final class MainSplitViewController: NSSplitViewController {
     /// visible tab bar, reduced in full screen. The overlay constraints
     /// and the editor's page padding must use the same value.
     static func tabBarOverlap(for window: NSWindow?) -> CGFloat {
+        // Sequoia's tabs end at the content layout guide without Tahoe's
+        // extra margin. Tucking the rows upward clips the first row.
+        guard #available(macOS 26.0, *) else { return 0 }
         guard let window, window.tabGroup?.isTabBarVisible == true else { return 0 }
         return window.styleMask.contains(.fullScreen)
             ? formattingBarTabBarOverlapFullScreen : formattingBarTabBarOverlap
@@ -126,11 +131,39 @@ final class MainSplitViewController: NSSplitViewController {
         contentViewController?.currentScrollPosition ?? 0
     }
 
+    private var activeFindQuery = ""
+    private var activeFindMode: SearchMode = .contains
+    private var activeFindCompletion: ((FindResult) -> Void)?
+
     func find(_ query: String,
               backwards: Bool = false,
               mode: SearchMode = .contains,
               completion: ((FindResult) -> Void)? = nil) {
-        contentViewController?.find(query, backwards: backwards, mode: mode, completion: completion)
+        activeFindQuery = query
+        activeFindMode = mode
+        activeFindCompletion = completion
+        let pasteboard = NSPasteboard(name: .find)
+        pasteboard.clearContents()
+        pasteboard.setString(query, forType: .string)
+        if isEditorPreparing { return } // Replay once the editor and scroll position are ready.
+        if let editor = editorViewController {
+            editor.find(query, backwards: backwards, mode: mode, completion: completion)
+        } else {
+            contentViewController?.find(query, backwards: backwards, mode: mode, completion: completion)
+        }
+    }
+
+    private func refreshFindAfterModeChange() {
+        guard !activeFindQuery.isEmpty else { return }
+        if let editor = editorViewController {
+            editor.find(activeFindQuery, mode: activeFindMode, completion: activeFindCompletion)
+        } else {
+            contentViewController?.find("") { [weak self] _ in
+                guard let self, !self.isEditingDocument else { return }
+                self.contentViewController?.find(self.activeFindQuery, mode: self.activeFindMode,
+                                                 completion: self.activeFindCompletion)
+            }
+        }
     }
 
     // Custom selector (instead of `print:`) so AppKit's inherited
@@ -199,6 +232,15 @@ final class MainSplitViewController: NSSplitViewController {
         !(splitViewItems.first?.isCollapsed ?? true)
     }
 
+    /// Target of the system `.toggleSidebar` toolbar item. The themed layout
+    /// uses a plain split view item, which the stock implementation ignores,
+    /// so both layouts go through the app's own toggle and the toolbar's
+    /// pane picker is kept in step.
+    override func toggleSidebar(_ sender: Any?) {
+        toggleSidebar()
+        (view.window?.windowController as? DocumentWindowController)?.syncSidebarToolbarState()
+    }
+
     @discardableResult
     func toggleSidebar() -> Bool {
         guard let sidebar = splitViewItems.first else { return false }
@@ -247,7 +289,7 @@ final class MainSplitViewController: NSSplitViewController {
         let item = themed
             ? NSSplitViewItem(viewController: viewController)
             : NSSplitViewItem(sidebarWithViewController: viewController)
-        item.minimumThickness = 180
+        item.minimumThickness = minimumSidebarWidth
         item.maximumThickness = 400
         item.canCollapse = true
         item.canCollapseFromWindowResize = false
@@ -259,14 +301,13 @@ final class MainSplitViewController: NSSplitViewController {
         return item
     }
 
-    /// Recovers a sane sidebar width when the autosaved divider position is
-    /// degenerate — collapsed-to-zero or ballooned — which the sidebar item
-    /// swap can leave behind.
+    /// Brings restored widths into the supported range, including narrow
+    /// widths saved before the sidebar gained its pane picker.
     private func normalizeSidebarWidthIfNeeded() {
         guard let sidebar = splitViewItems.first, !sidebar.isCollapsed else { return }
         let width = sidebar.viewController.view.frame.width
         if width < sidebar.minimumThickness || width > sidebar.maximumThickness {
-            splitView.setPosition(240, ofDividerAt: 0)
+            splitView.setPosition(Self.minimumSidebarWidth, ofDividerAt: 0)
         }
     }
 
@@ -371,32 +412,90 @@ final class MainSplitViewController: NSSplitViewController {
     /// not a titlebar accessory (the native tab bar always renders below
     /// accessories, and would jump on every edit-mode toggle).
     func installFormattingBar(_ bar: NSView) {
-        layeredContentViewController?.installFormattingBar(bar)
+        if Self.usesNativeChromeAccessories {
+            formattingAccessory = installNativeChromeAccessory(bar)
+        } else {
+            layeredContentViewController?.installFormattingBar(bar)
+        }
         // The editor pads its page below the chrome; the bar is part of
         // that chrome now, so it must be measured alongside the titlebar.
         cachedEditorViewController?.formattingBar = bar
+        if Self.usesNativeChromeAccessories {
+            contentViewController?.formattingBar = bar
+            contentViewController?.chromeOverlaysDidChange()
+        }
     }
 
     func removeFormattingBar() {
-        layeredContentViewController?.removeFormattingBar()
+        if #available(macOS 26.1, *), Self.usesNativeChromeAccessories,
+           let item = splitViewItems.dropFirst().first,
+           let index = item.topAlignedAccessoryViewControllers.firstIndex(where: { $0 === formattingAccessory }) {
+            item.removeTopAlignedAccessoryViewController(at: index)
+            formattingAccessory = nil
+        } else {
+            layeredContentViewController?.removeFormattingBar()
+        }
         cachedEditorViewController?.formattingBar = nil
+        if Self.usesNativeChromeAccessories {
+            contentViewController?.formattingBar = nil
+            contentViewController?.chromeOverlaysDidChange()
+        }
     }
 
     private weak var findOverlayView: NSView?
+    private var formattingAccessory: NSViewController?
+    private var findAccessory: NSViewController?
+
+    static var usesNativeChromeAccessories: Bool {
+        if #available(macOS 27.0, *) { return false }
+        if #available(macOS 26.1, *) { return true }
+        return false
+    }
+
+    /// Height a native chrome accessory (find bar, formatting bar) adds to
+    /// the obscured strip above the page, or 0 when it is absent or hidden.
+    /// fittingSize rather than the frame: the frame is unresolved between
+    /// install and the next layout pass, exactly when callers ask.
+    static func nativeAccessoryHeight(_ bar: NSView?, in window: NSWindow) -> CGFloat {
+        guard let bar, bar.window === window, !bar.isHidden else { return 0 }
+        return bar.fittingSize.height
+    }
+
+    private func installNativeChromeAccessory(_ bar: NSView) -> NSViewController? {
+        guard #available(macOS 26.1, *),
+              let item = splitViewItems.dropFirst().first else { return nil }
+        let accessory = NSSplitViewItemAccessoryViewController()
+        accessory.automaticallyAppliesContentInsets = false
+        accessory.preferredScrollEdgeEffectStyle = .soft
+        accessory.view = bar
+        bar.setFrameSize(bar.fittingSize)
+        accessory.isHidden = bar.isHidden
+        item.addTopAlignedAccessoryViewController(accessory)
+        return accessory
+    }
 
     /// Mounts the find bar the same way — see installFormattingBar. Stays
     /// mounted for the window's lifetime; visibility toggles via isHidden.
     func installFindOverlay(_ bar: NSView) {
-        layeredContentViewController?.installFindOverlay(bar)
+        if Self.usesNativeChromeAccessories {
+            findAccessory = installNativeChromeAccessory(bar)
+        } else {
+            layeredContentViewController?.installFindOverlay(bar)
+        }
         findOverlayView = bar
         cachedEditorViewController?.findOverlay = bar
+        contentViewController?.findOverlay = bar
     }
 
     /// The find bar sits above the formatting bar, so toggling it moves
     /// the bar below and changes the editor's page padding.
     func findOverlayVisibilityChanged() {
+        if #available(macOS 26.1, *), Self.usesNativeChromeAccessories {
+            (findAccessory as? NSSplitViewItemAccessoryViewController)?.isHidden = findOverlayView?.isHidden ?? true
+        }
         layeredContentViewController?.updateChromeOverlayLayout()
         cachedEditorViewController?.chromeOverlaysDidChange()
+        contentViewController?.chromeOverlaysDidChange()
     }
 
     private func revealEditorIfPrepared(_ editorVC: EditorViewController) {
@@ -421,6 +520,7 @@ final class MainSplitViewController: NSSplitViewController {
                         // titlebar material sampling. The editor overlay is now
                         // fully opaque and covering it.
                         self.contentViewController?.view.isHidden = true
+                        self.refreshFindAfterModeChange()
                         if self.shouldAutofocusEditor {
                             self.shouldAutofocusEditor = false
                             editorVC.focusEditor()
@@ -474,6 +574,7 @@ final class MainSplitViewController: NSSplitViewController {
                         guard let self, let editorVC,
                               !self.isEditorPreparing, !self.isEditorVisible else { return }
                         editorVC.view.isHidden = true
+                        self.refreshFindAfterModeChange()
                         overlayHidden?()
                     }
                 }
@@ -524,7 +625,7 @@ final class MainSplitViewController: NSSplitViewController {
 
         // Seed the expanded width so the toolbar toggle opens to a sensible size,
         // then start collapsed (Preview-style for single-item docs).
-        splitView.setPosition(240, ofDividerAt: 0)
+        splitView.setPosition(Self.minimumSidebarWidth, ofDividerAt: 0)
         splitViewItems.first?.isCollapsed = true
         defaults.set(true, forKey: Self.didSeedKey)
     }
@@ -557,14 +658,24 @@ private final class LayeredContentViewController: NSViewController {
         let editorView = editorViewController.view
         editorView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(editorView, positioned: .above, relativeTo: previewViewController.view)
+        let editorTop: NSLayoutConstraint
+        if #unavailable(macOS 26.0),
+           let guide = view.window?.contentLayoutGuide as? NSLayoutGuide {
+            editorTop = editorView.topAnchor.constraint(equalTo: guide.topAnchor)
+            legacyEditorTopConstraint = editorTop
+        } else {
+            editorTop = editorView.topAnchor.constraint(equalTo: view.topAnchor)
+        }
         NSLayoutConstraint.activate([
             editorView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             editorView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            editorView.topAnchor.constraint(equalTo: view.topAnchor),
+            editorTop,
             editorView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+        updateChromeOverlayLayout()
     }
 
+    private var legacyEditorTopConstraint: NSLayoutConstraint?
     private weak var formattingBar: NSView?
     private weak var findOverlay: NSView?
     private var formattingBarTopConstraint: NSLayoutConstraint?
@@ -650,6 +761,13 @@ private final class LayeredContentViewController: NSViewController {
         }
         if let top = formattingBarTopConstraint, top.constant != editTop {
             top.constant = editTop
+        }
+        if #unavailable(macOS 26.0), let top = legacyEditorTopConstraint {
+            var contentTop: CGFloat = 0
+            if let find = findOverlay, !find.isHidden { contentTop += find.fittingSize.height }
+            if let bar = formattingBar, !bar.isHidden { contentTop += bar.fittingSize.height }
+            if contentTop > 0 { contentTop += overlap }
+            top.constant = max(0, contentTop)
         }
     }
 }

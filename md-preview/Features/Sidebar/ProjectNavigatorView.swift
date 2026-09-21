@@ -6,7 +6,7 @@
 import Cocoa
 
 private final class FileNode {
-    static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mdwn"]
+    static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd", "mdwn", "mdx"]
 
     let url: URL
     let isDirectory: Bool
@@ -268,7 +268,15 @@ final class ProjectNavigatorView: NSView {
     @objc private func rowClicked() {
         let row = outlineView.clickedRow
         guard row >= 0, let node = outlineView.item(atRow: row) as? FileNode else { return }
-        if !node.isDirectory {
+        if node.isDirectory {
+            // Disclosure buttons handle their own clicks in AppKit; this
+            // action covers the folder's name, icon, and remaining row area.
+            if outlineView.isItemExpanded(node) {
+                outlineView.collapseItem(node)
+            } else {
+                outlineView.expandItem(node)
+            }
+        } else {
             let requestedURL = node.url.standardizedFileURL
             guard requestedURL != currentFileURL else { return }
             // `shouldSelectItem` keeps the highlight on the committed file,

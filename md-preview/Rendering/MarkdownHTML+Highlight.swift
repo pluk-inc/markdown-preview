@@ -13,13 +13,15 @@ nonisolated extension MarkdownHTML {
     // MARK: - Code highlighting (highlight.js)
 
     // Excludes `language-mermaid` since renderMermaidBlocks already lifted
-    // those into `<figure>` containers before this runs.
+    // those into `<figure>` containers before this runs, and blocks the
+    // render-time highlighter already finished (`data-hljs-done`), so a page
+    // whose code arrived highlighted never loads the in-page runtime.
     private static let highlightableCodeRegex: NSRegularExpression = {
         // swiftlint:disable:next force_try
         try! NSRegularExpression(
             // Block elements now carry source-line attributes for scroll
             // handoff, so do not require <pre> and <code> to be bare tags.
-            pattern: #"<pre\b[^>]*>\s*<code\b(?![^>]*\blanguage-mermaid\b)[^>]*>"#
+            pattern: #"<pre\b[^>]*>\s*<code\b(?![^>]*\blanguage-mermaid\b)(?![^>]*\bdata-hljs-done\b)[^>]*>"#
         )
     }()
 
@@ -149,102 +151,68 @@ nonisolated extension MarkdownHTML {
     }
     """
 
-    /// highlight.js ships light rules plus a system-dark media query. These
-    /// higher-specificity rules let an explicit Quick Look mode override that
-    /// media query without changing automatic mode in the document app.
-    private static let highlightForcedColorSchemeStyles = """
-    html[data-mdp-color-scheme="light"] .hljs { color: #24292e; }
-    html[data-mdp-color-scheme="light"] .hljs-doctag,
-    html[data-mdp-color-scheme="light"] .hljs-keyword,
-    html[data-mdp-color-scheme="light"] .hljs-meta .hljs-keyword,
-    html[data-mdp-color-scheme="light"] .hljs-template-tag,
-    html[data-mdp-color-scheme="light"] .hljs-template-variable,
-    html[data-mdp-color-scheme="light"] .hljs-type,
-    html[data-mdp-color-scheme="light"] .hljs-variable.language_ { color: #d73a49; }
-    html[data-mdp-color-scheme="light"] .hljs-title,
-    html[data-mdp-color-scheme="light"] .hljs-title.class_,
-    html[data-mdp-color-scheme="light"] .hljs-title.class_.inherited__,
-    html[data-mdp-color-scheme="light"] .hljs-title.function { color: #6f42c1; }
-    html[data-mdp-color-scheme="light"] .hljs-attr,
-    html[data-mdp-color-scheme="light"] .hljs-attribute,
-    html[data-mdp-color-scheme="light"] .hljs-literal,
-    html[data-mdp-color-scheme="light"] .hljs-meta,
-    html[data-mdp-color-scheme="light"] .hljs-number,
-    html[data-mdp-color-scheme="light"] .hljs-operator,
-    html[data-mdp-color-scheme="light"] .hljs-selector-attr,
-    html[data-mdp-color-scheme="light"] .hljs-selector-class,
-    html[data-mdp-color-scheme="light"] .hljs-selector-id,
-    html[data-mdp-color-scheme="light"] .hljs-variable { color: #005cc5; }
-    html[data-mdp-color-scheme="light"] .hljs-meta .hljs-string,
-    html[data-mdp-color-scheme="light"] .hljs-regexp,
-    html[data-mdp-color-scheme="light"] .hljs-string { color: #032f62; }
-    html[data-mdp-color-scheme="light"] .hljs-built_in,
-    html[data-mdp-color-scheme="light"] .hljs-symbol { color: #e36209; }
-    html[data-mdp-color-scheme="light"] .hljs-code,
-    html[data-mdp-color-scheme="light"] .hljs-comment,
-    html[data-mdp-color-scheme="light"] .hljs-formula { color: #6a737d; }
-    html[data-mdp-color-scheme="light"] .hljs-name,
-    html[data-mdp-color-scheme="light"] .hljs-quote,
-    html[data-mdp-color-scheme="light"] .hljs-selector-pseudo,
-    html[data-mdp-color-scheme="light"] .hljs-selector-tag { color: #22863a; }
-    html[data-mdp-color-scheme="light"] .hljs-subst,
-    html[data-mdp-color-scheme="light"] .hljs-emphasis,
-    html[data-mdp-color-scheme="light"] .hljs-strong { color: #24292e; }
-    html[data-mdp-color-scheme="light"] .hljs-section { color: #005cc5; }
-    html[data-mdp-color-scheme="light"] .hljs-bullet { color: #735c0f; }
-    html[data-mdp-color-scheme="light"] .hljs-addition { color: #22863a; background-color: #f0fff4; }
-    html[data-mdp-color-scheme="light"] .hljs-deletion { color: #b31d28; background-color: #ffeef0; }
-
-    html[data-mdp-color-scheme="dark"] .hljs { color: #c9d1d9; }
-    html[data-mdp-color-scheme="dark"] .hljs-doctag,
-    html[data-mdp-color-scheme="dark"] .hljs-keyword,
-    html[data-mdp-color-scheme="dark"] .hljs-meta .hljs-keyword,
-    html[data-mdp-color-scheme="dark"] .hljs-template-tag,
-    html[data-mdp-color-scheme="dark"] .hljs-template-variable,
-    html[data-mdp-color-scheme="dark"] .hljs-type,
-    html[data-mdp-color-scheme="dark"] .hljs-variable.language_ { color: #ff7b72; }
-    html[data-mdp-color-scheme="dark"] .hljs-title,
-    html[data-mdp-color-scheme="dark"] .hljs-title.class_,
-    html[data-mdp-color-scheme="dark"] .hljs-title.class_.inherited__,
-    html[data-mdp-color-scheme="dark"] .hljs-title.function { color: #d2a8ff; }
-    html[data-mdp-color-scheme="dark"] .hljs-attr,
-    html[data-mdp-color-scheme="dark"] .hljs-attribute,
-    html[data-mdp-color-scheme="dark"] .hljs-literal,
-    html[data-mdp-color-scheme="dark"] .hljs-meta,
-    html[data-mdp-color-scheme="dark"] .hljs-number,
-    html[data-mdp-color-scheme="dark"] .hljs-operator,
-    html[data-mdp-color-scheme="dark"] .hljs-selector-attr,
-    html[data-mdp-color-scheme="dark"] .hljs-selector-class,
-    html[data-mdp-color-scheme="dark"] .hljs-selector-id,
-    html[data-mdp-color-scheme="dark"] .hljs-variable { color: #79c0ff; }
-    html[data-mdp-color-scheme="dark"] .hljs-meta .hljs-string,
-    html[data-mdp-color-scheme="dark"] .hljs-regexp,
-    html[data-mdp-color-scheme="dark"] .hljs-string { color: #a5d6ff; }
-    html[data-mdp-color-scheme="dark"] .hljs-built_in,
-    html[data-mdp-color-scheme="dark"] .hljs-symbol { color: #ffa657; }
-    html[data-mdp-color-scheme="dark"] .hljs-code,
-    html[data-mdp-color-scheme="dark"] .hljs-comment,
-    html[data-mdp-color-scheme="dark"] .hljs-formula { color: #8b949e; }
-    html[data-mdp-color-scheme="dark"] .hljs-name,
-    html[data-mdp-color-scheme="dark"] .hljs-quote,
-    html[data-mdp-color-scheme="dark"] .hljs-selector-pseudo,
-    html[data-mdp-color-scheme="dark"] .hljs-selector-tag { color: #7ee787; }
-    html[data-mdp-color-scheme="dark"] .hljs-subst,
-    html[data-mdp-color-scheme="dark"] .hljs-emphasis,
-    html[data-mdp-color-scheme="dark"] .hljs-strong { color: #c9d1d9; }
-    html[data-mdp-color-scheme="dark"] .hljs-section { color: #1f6feb; }
-    html[data-mdp-color-scheme="dark"] .hljs-bullet { color: #f2cc60; }
-    html[data-mdp-color-scheme="dark"] .hljs-addition { color: #aff5b4; background-color: #033a16; }
-    html[data-mdp-color-scheme="dark"] .hljs-deletion { color: #ffdcd7; background-color: #67060c; }
+    /// Code highlighting class rules, appended to `MarkdownHTML.stylesheet`.
+    /// Every color is a `--hl-*` variable declared there, so the light,
+    /// forced-dark, and system-dark buckets switch the palette in one place
+    /// and the editor page can share the same values.
+    static let highlightThemeCSS = """
+    .hljs { color: var(--hl-plain); background: transparent; }
+    .hljs-keyword,
+    .hljs-literal,
+    .hljs-variable.language_,
+    .hljs-template-tag,
+    .hljs-name,
+    .hljs-selector-tag,
+    .hljs-section,
+    .hljs-bullet { color: var(--hl-keyword); }
+    .hljs-string,
+    .hljs-regexp,
+    .hljs-meta .hljs-string { color: var(--hl-string); }
+    .hljs-number,
+    .hljs-char,
+    .hljs-symbol { color: var(--hl-number); }
+    .hljs-comment,
+    .hljs-quote,
+    .hljs-formula { color: var(--hl-comment); }
+    .hljs-doctag { color: var(--hl-doc-keyword); }
+    .hljs-type { color: var(--hl-type); }
+    .hljs-built_in { color: var(--hl-builtin); }
+    .hljs-title.class_,
+    .hljs-title.class_.inherited__ { color: var(--hl-declaration); }
+    .hljs-title,
+    .hljs-title.function_ { color: var(--hl-function); }
+    .hljs-variable,
+    .hljs-template-variable,
+    .hljs-property,
+    .hljs-selector-class,
+    .hljs-selector-id,
+    .hljs-selector-attr,
+    .hljs-selector-pseudo { color: var(--hl-variable); }
+    .hljs-meta,
+    .hljs-meta .hljs-keyword { color: var(--hl-preprocessor); }
+    .hljs-attr,
+    .hljs-attribute { color: var(--hl-attribute); }
+    .hljs-link { color: var(--hl-url); }
+    .hljs-subst,
+    .hljs-operator,
+    .hljs-punctuation,
+    .hljs-params { color: var(--hl-plain); }
+    .hljs-emphasis { font-style: italic; }
+    .hljs-strong { font-weight: 600; }
+    .hljs-addition {
+        color: var(--hl-variable);
+        background-color: color-mix(in srgb, var(--hl-variable) 12%, transparent);
+    }
+    .hljs-deletion {
+        color: var(--hl-string);
+        background-color: color-mix(in srgb, var(--hl-string) 12%, transparent);
+    }
     """
 
     static func highlightHead(mode: VendorLoading) -> VendorEmission {
         guard bundledVendorURL("highlight.min", ext: "js", subdir: "Vendor/Highlight") != nil else {
             return VendorEmission()
         }
-        let css = bundledVendorResource("highlight.min", ext: "css", subdir: "Vendor/Highlight") ?? ""
-        let themedCSS = css + "\n" + highlightForcedColorSchemeStyles
-
         let initScript = """
         <script>
         (function() {
@@ -266,16 +234,13 @@ nonisolated extension MarkdownHTML {
             let js = bundledVendorResource("highlight.min", ext: "js", subdir: "Vendor/Highlight") ?? ""
             let safeJS = js.replacingOccurrences(of: "</script", with: "<\\/script")
             return VendorEmission(
-                head: "<style>\(themedCSS)</style>",
                 body: """
                 <script>\(safeJS)</script>
                 \(initScript)
                 """
             )
         case .lazy:
-            // CSS stays inline so layout doesn't shift when the JS arrives.
             return VendorEmission(head: """
-            <style>\(themedCSS)</style>
             <script>
             (function() {
                 \(highlightAllBody)

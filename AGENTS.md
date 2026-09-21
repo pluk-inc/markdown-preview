@@ -13,9 +13,45 @@ A macOS app for previewing Markdown files. AppKit, sandboxed, ships with a Quick
 | Min macOS         | 15.0                                                        |
 | Sandboxed         | yes — uses Sparkle XPC services for updates                 |
 | Auto-updater      | Sparkle 2.x (Swift package)                                 |
-| Distribution      | Amore (managed) with custom domain `storage.md-preview.app` |
+| Distribution      | Amore (managed); appcast at `release.md-preview.app` |
 
 Version is managed centrally in `Version.xcconfig` (`MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`). Both the app and the quick-look extension inherit from it.
+
+## Codex development workflow
+
+- `.codex/config.toml` pins `gpt-6-astra` with `medium` reasoning for trusted project sessions. Explicit session overrides can take precedence. This config controls the coding agent; the app's Open in LLM action delegates to external apps.
+- Open PRs ready for review, never as drafts. Never use a `codex/` branch prefix.
+- The maintainer uses Nushell and has `gh` authentication available. Match shell syntax to the actual execution shell.
+- Complete work authorized by the user's request, making reasonable routine implementation choices. A request for a plan authorizes planning only.
+- Apply skills within their stated scope. If an instruction blocks authorized work, identify the exact file and instruction rather than inferring an extra approval requirement.
+- Keep verification proportional: config and documentation changes need validation and diff review; Swift changes need relevant tests and an app build; visible behavior changes need runtime verification.
+
+## Documentation that describes behaviour is part of the behaviour
+
+**If a change makes a documented claim false, updating that claim is part of the
+change — same commit, not a follow-up.** This applies to `README.md`, sample and
+fixture files, and any comment that tells a reader what to expect on screen.
+
+The reason is not tidiness. A stale claim asserts the *opposite* of what the
+code does, and people trust it, so it is worse than saying nothing at all. It
+produces two specific failures:
+
+- A correct result gets reported as a bug, because the documentation says
+  something else should happen.
+- A real regression gets waved through as a known limitation, because the
+  documentation says it never worked.
+
+The second one is not hypothetical here. `README.md` said Mermaid diagrams
+render in both the app and Quick Look previews. They had stopped rendering in
+Quick Look, and the mismatch was read as documentation drift rather than as the
+bug it was — which is part of why it survived several releases before anyone
+chased it (#338, fixed in #343).
+
+So when you change what the reader sees, grep for what says otherwise:
+
+```bash
+grep -rn "<the behaviour you changed>" README.md samples/ tests/fixtures/ docs/
+```
 
 ## Signing & secrets — do not touch without asking
 
@@ -40,16 +76,20 @@ Version is managed centrally in `Version.xcconfig` (`MARKETING_VERSION`, `CURREN
   filesystem exception) are narrowly scoped, notarization-review-sensitive
   capabilities. Don't broaden or "clean up" them without understanding why
   they're there (see the inline comments in each file).
-- `Version.xcconfig` (`MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`) is
-  bumped only by `scripts/release.sh` — don't hand-edit it.
+- A release PR must update **both** `MARKETING_VERSION` and
+  `CURRENT_PROJECT_VERSION` in `Version.xcconfig`, together with the matching
+  `CHANGELOG.md` entry. Edit the version file directly during PR preparation.
+  `scripts/release.sh` builds and publishes; run it only when release execution
+  is requested, not merely to create the PR.
 
 ## Releasing
 
 See the `release-process` skill for branch/PR naming, exactly what `scripts/release.sh` and `scripts/rollback-release.sh` do, and the Amore config already wired for this project.
 
-## Known issues
-- **`SUFeedURL` mismatch**. Info.plist points to `https://storage.md-preview.app/appcast.xml` but Amore actually publishes to `https://storage.md-preview.app/v1/apps/doc.md-preview/appcast.xml`. This matters for **any release run that isn't `--draft`** — the default run, `--beta`, and `--skip-github` all publish to Amore's live appcast, which — due to the mismatch above — is not yet the URL already-installed copies poll; `--draft` is the only mode that doesn't publish. Fix Info.plist before any of those ship to real users — already-installed copies will check the wrong URL forever. Either change `SUFeedURL` to the `/v1/apps/...` path, or configure a CDN rewrite at `storage.md-preview.app` to map `/appcast.xml` → the real path.
-- **No git remote yet**. `git remote -v` is empty. Run `gh repo create` before relying on the GitHub release portion of `scripts/release.sh` (it auto-skips when no remote exists).
+## Release references
+
+- `Info.plist` currently sets `SUFeedURL` to `https://release.md-preview.app/v1/apps/doc.md-preview/appcast.xml`. Check the current plist and Amore configuration before releasing; do not assume an old hostname or mismatch still applies.
+- The canonical GitHub repository is `pluk-inc/markdown-preview`. Older remotes may redirect from `pluk-inc/md-preview.app`; check `git remote -v` and `gh repo view` before publishing.
 
 ## Common Xcode tasks
 ```bash

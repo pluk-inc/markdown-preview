@@ -3,6 +3,32 @@ import WebKit
 @testable import MarkdownHelpers
 
 final class MarkdownHTMLRenderTests: XCTestCase {
+    override class func setUp() {
+        super.setUp()
+        TestVendor.installHighlighterGrammar()
+    }
+
+    @MainActor
+    func testBareURLsBecomeNavigableDOMLinksInBothRenderModes() async throws {
+        for vendorLoading: MarkdownHTML.VendorLoading in [.inline, .lazy] {
+            let html = MarkdownHTML.makeHTML(
+                from: "* https://apple.com/\n* https://github.com/",
+                vendorLoading: vendorLoading
+            )
+            let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 640, height: 300))
+            webView.loadHTMLString(html, baseURL: nil)
+            let deadline = Date().addingTimeInterval(10)
+            while webView.isLoading && Date() < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            XCTAssertFalse(webView.isLoading)
+            let links = try await webView.evaluateJavaScript("""
+                Array.from(document.querySelectorAll('article li a')).map(a => a.href)
+                """) as? [String]
+            XCTAssertEqual(links, ["https://apple.com/", "https://github.com/"])
+        }
+    }
+
     func testLocalMarkdownImagesRemainReadOnlyInPreview() {
         let rendered = MarkdownHTML.render(
             markdown: "![1](notes-pictures/1.png)",
@@ -101,6 +127,18 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         )
 
         XCTAssertFalse(rendered.articleHTML.contains("md-frontmatter"))
+    }
+
+    func testObsidianHighlightRendersInPreviewWithDedicatedStyling() {
+        let rendered = MarkdownHTML.render(
+            markdown: "==Highlighted **text**==",
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "<mark class=\"md-highlight\">Highlighted <strong>text</strong></mark>"
+        ))
+        XCTAssertTrue(rendered.html.contains("mark.md-highlight"))
     }
 
     @MainActor
@@ -343,6 +381,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                 codeRight: code.getBoundingClientRect().right,
                 viewportRight: document.documentElement.clientWidth,
                 boxDecorationBreak: style.webkitBoxDecorationBreak,
+                fragmentEndDecoration: parseFloat(style.paddingRight) + parseFloat(style.borderRightWidth),
             });
         })()
         """)
@@ -350,11 +389,12 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         let metrics = try JSONDecoder().decode(HeadingLayoutMetrics.self, from: Data(json.utf8))
 
         // Some WebKit versions size emergency break fragments without the
-        // inline code's cloned padding, overshooting the line box by a few
-        // pixels. That sub-glyph overflow is invisible and version-dependent;
-        // the assertion guards against real overflow (an unwrapped path is
-        // hundreds of pixels wide).
-        let fragmentPaddingTolerance = 4.0
+        // inline code's cloned end decoration (padding plus border), so a
+        // fragment can overshoot the line box by that much. That sub-glyph
+        // overflow is invisible and version-dependent; the assertion guards
+        // against real overflow (an unwrapped path is hundreds of pixels
+        // wide), so the tolerance is one fragment's end decoration.
+        let fragmentPaddingTolerance = metrics.fragmentEndDecoration + 1
         XCTAssertLessThanOrEqual(
             metrics.headingScrollWidth,
             metrics.headingClientWidth + fragmentPaddingTolerance
@@ -382,6 +422,179 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(stylesheet.contains("::-moz-selection"))
         XCTAssertEqual(nonSelectableRules.count, 1)
         XCTAssertTrue(nonSelectableRules[0].contains(".md-code-copy"))
+    }
+
+    @MainActor
+    func testReadingLayoutKeepsHeadingCodeAndDirectionalAlignment() async throws {
+        let markdown = """
+        ## A heading with `inline code` that wraps on a narrow page
+
+        | Left | Center | Right |
+        | :--- | :---: | ---: |
+        | Name | Ready | 1024 |
+
+        <div dir="rtl">
+
+        - العنصر الأول
+        - العنصر الثاني
+
+        </div>
+        """
+        let article = EscapingHTMLFormatter.format(markdown)
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 420, height: 600))
+        webView.loadHTMLString("""
+        <!doctype html><meta charset="utf-8">
+        <style>\(MarkdownHTML.stylesheet)</style>
+        <article class="markdown-body">\(article)</article>
+        """, baseURL: nil)
+        for _ in 0..<200 where webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(webView.isLoading)
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const heading = getComputedStyle(document.querySelector('h2'));
+            const code = getComputedStyle(document.querySelector('h2 code'));
+            const list = getComputedStyle(document.querySelector('[dir=rtl] ul'));
+            return {
+                headingFont: parseFloat(heading.fontSize),
+                codeFont: parseFloat(code.fontSize),
+                headingLineHeight: parseFloat(heading.lineHeight),
+                alignments: Array.from(document.querySelectorAll('tbody td'), td => getComputedStyle(td).textAlign),
+                rtlLeadingPadding: parseFloat(list.paddingRight),
+                rtlTrailingPadding: parseFloat(list.paddingLeft)
+            };
+        })()
+        """)
+        let metrics = try XCTUnwrap(result as? [String: Any])
+        let headingFont = try XCTUnwrap(metrics["headingFont"] as? Double)
+        let codeFont = try XCTUnwrap(metrics["codeFont"] as? Double)
+        let lineHeight = try XCTUnwrap(metrics["headingLineHeight"] as? Double)
+        XCTAssertEqual(codeFont, headingFont, accuracy: 0.1)
+        XCTAssertGreaterThanOrEqual(lineHeight / headingFont, 1.2)
+        XCTAssertEqual(metrics["alignments"] as? [String], ["left", "center", "right"])
+        XCTAssertGreaterThan(try XCTUnwrap(metrics["rtlLeadingPadding"] as? Double), 0)
+        XCTAssertEqual(try XCTUnwrap(metrics["rtlTrailingPadding"] as? Double), 0, accuracy: 0.1)
+    }
+
+    func testTypographyFollowsTheSystemTextStyles() {
+        XCTAssertEqual(MarkdownHTML.bodyFontSize, 14)
+        let css = MarkdownHTML.stylesheet
+        XCTAssertTrue(css.contains("--text: -apple-system-label;"))
+        XCTAssertTrue(css.contains("--secondary: -apple-system-secondary-label;"))
+        XCTAssertTrue(css.contains("--grid: -apple-system-separator;"))
+        XCTAssertTrue(css.contains("--accent: -apple-system-control-accent;"))
+        XCTAssertTrue(css.contains("h1 { font-size: 2em; }"))
+        XCTAssertTrue(css.contains("h6 { font-size: 0.846em; }"))
+        // The highlighting palette is declared once and consumed by class rules.
+        XCTAssertTrue(css.contains("--hl-keyword:"))
+        XCTAssertTrue(MarkdownHTML.highlightThemeCSS.contains(".hljs-keyword"))
+        XCTAssertTrue(MarkdownHTML.highlightThemeCSS.contains("var(--hl-keyword)"))
+        XCTAssertFalse(MarkdownHTML.highlightThemeCSS.contains("#"))
+    }
+
+    @MainActor
+    func testSystemColorsFollowTheForcedColorSchemeAndSelectionStaysOnText() async throws {
+        let article = EscapingHTMLFormatter.format("# Title\n\nBody text.\n\n- item\n")
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 420, height: 400))
+        webView.loadHTMLString("""
+        <!doctype html><meta charset="utf-8">
+        <style>\(MarkdownHTML.stylesheet)</style>
+        <article class="markdown-body">\(article)</article>
+        """, baseURL: nil)
+        for _ in 0..<200 where webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(webView.isLoading)
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const root = document.documentElement;
+            const read = () => {
+                const body = getComputedStyle(document.querySelector('p'));
+                const bullet = getComputedStyle(document.querySelector('li'), '::before');
+                return { text: body.color, bullet: bullet.borderTopColor };
+            };
+            root.setAttribute('data-mdp-color-scheme', 'light');
+            const light = read();
+            root.setAttribute('data-mdp-color-scheme', 'dark');
+            const dark = read();
+            const article = getComputedStyle(document.querySelector('article'));
+            return { light, dark, display: article.display, direction: article.flexDirection,
+                     h1: parseFloat(getComputedStyle(document.querySelector('h1')).fontSize) };
+        })()
+        """)
+        let metrics = try XCTUnwrap(result as? [String: Any])
+        let light = try XCTUnwrap(metrics["light"] as? [String: String])
+        let dark = try XCTUnwrap(metrics["dark"] as? [String: String])
+        // Label colors: 85% black on light, 85% white on dark.
+        XCTAssertTrue(light["text"]?.hasPrefix("rgba(0, 0, 0, 0.8") == true, light["text"] ?? "")
+        XCTAssertTrue(dark["text"]?.hasPrefix("rgba(255, 255, 255, 0.8") == true, dark["text"] ?? "")
+        XCTAssertNotEqual(light["bullet"], light["text"], "bullets use the accent color")
+        XCTAssertEqual(metrics["display"] as? String, "flex")
+        XCTAssertEqual(metrics["direction"] as? String, "column")
+        XCTAssertEqual(try XCTUnwrap(metrics["h1"] as? Double), MarkdownHTML.bodyFontSize * 2, accuracy: 0.1)
+    }
+
+    @MainActor
+    func testUnorderedListMarkersStayClearOfTextForEveryDocumentFont() async throws {
+        let article = EscapingHTMLFormatter.format("""
+        <details>
+        <summary>Expanded details</summary>
+
+        - [Every list marker needs visible clearance.](example.md)
+
+        </details>
+        """)
+
+        for font in DocumentFontSetting.allCases {
+            let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 400))
+            webView.loadHTMLString("""
+            <!doctype html><meta charset="utf-8">
+            <style>\(MarkdownHTML.stylesheet)</style>
+            <style>:root { --mdp-doc-font: \(font.fontFamily); }</style>
+            <article class="markdown-body">\(article)</article>
+            """, baseURL: nil)
+            for _ in 0..<200 where webView.isLoading {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            XCTAssertFalse(webView.isLoading, font.rawValue)
+
+            let result = try await webView.evaluateJavaScript("""
+            (() => {
+                const details = document.querySelector('details');
+                details.querySelector('summary').click();
+                const item = document.querySelector('ul > li');
+                const text = item.querySelector('a').firstChild;
+                const firstCharacter = document.createRange();
+                firstCharacter.setStart(text, 0);
+                firstCharacter.setEnd(text, 1);
+                const itemBox = item.getBoundingClientRect();
+                const textBox = firstCharacter.getBoundingClientRect();
+                const marker = getComputedStyle(item, '::before');
+                const markerRight = itemBox.left + parseFloat(marker.left)
+                    + parseFloat(marker.borderLeftWidth) + parseFloat(marker.width)
+                    + parseFloat(marker.borderRightWidth);
+                return {
+                    open: details.open,
+                    fontSize: parseFloat(getComputedStyle(item).fontSize),
+                    gap: textBox.left - markerRight,
+                    left: marker.left,
+                    inlineStart: marker.insetInlineStart,
+                    width: marker.width,
+                    border: marker.borderLeftWidth
+                };
+            })()
+            """)
+            let metrics = try XCTUnwrap(result as? [String: Any], font.rawValue)
+            XCTAssertEqual(metrics["open"] as? Bool, true, font.rawValue)
+            let fontSize = try XCTUnwrap(metrics["fontSize"] as? Double, font.rawValue)
+            let gap = try XCTUnwrap(metrics["gap"] as? Double, "\(font.rawValue): \(metrics)")
+            XCTAssertGreaterThanOrEqual(
+                gap,
+                fontSize * 0.75,
+                "\(font.rawValue): \(metrics)"
+            )
+        }
     }
 
     func testCodeCopyButtonFallsBackToQuickLookPasteboardHandler() {
@@ -454,10 +667,10 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(rendered.html.contains(".md-source-blank-line {"))
         XCTAssertTrue(rendered.html.contains("height: 4.0px;"))
         XCTAssertTrue(rendered.html.contains(".md-source-blank-line:has(+ .md-source-blank-line)"))
-        XCTAssertTrue(rendered.html.contains("height: 22.8px;"))
+        XCTAssertTrue(rendered.html.contains("height: \(MarkdownHTML.sourceLineHeight)px;"))
         XCTAssertFalse(rendered.html.contains(".md-source-blank-line + *"))
         XCTAssertTrue(rendered.html.contains(".md-source-blank-line + h3,"))
-        XCTAssertTrue(rendered.html.contains("margin-top: 22.8px;"))
+        XCTAssertTrue(rendered.html.contains("margin-top: \(MarkdownHTML.sourceLineHeight)px;"))
     }
 
     func testListsAndDecoratedCodeBlocksOwnTheirOuterSpacing() {
@@ -467,7 +680,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         )
 
         XCTAssertTrue(rendered.html.contains("li:first-child { margin-top: 0; }"))
-        XCTAssertTrue(rendered.html.contains("ul { list-style-type: \"•  \"; }"))
+        XCTAssertTrue(rendered.html.contains("ul { list-style: none; }"))
         XCTAssertTrue(rendered.html.contains(".md-code-wrap > pre { margin: 0; }"))
         XCTAssertTrue(rendered.html.contains(".md-code-wrap {"))
         XCTAssertTrue(rendered.html.contains("margin: \(MarkdownHTML.paragraphSpacing)px 0 0;"))
@@ -573,7 +786,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(rendered.contains(".md-source-list-indent-step {"))
         XCTAssertTrue(rendered.contains(".md-source-list-line {"))
         XCTAssertTrue(rendered.contains(
-            "padding-inline-start: 1.6em;"
+            "padding-inline-start: var(--mdp-list-indent);"
         ))
     }
 
@@ -863,9 +1076,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             rendered.articleHTML.contains(#"class="mermaid-hud-width-symbol" aria-hidden="true">⤢</span>"#),
             rendered.articleHTML
         )
-        // SPM helper tests lack the Mermaid vendor bundle, so the page falls
-        // back to the "renderer unavailable" stub — assert the real wiring
-        // string (injected by the app when Vendor/Mermaid is present).
+        // Assert the shared production wiring as well as the emitted controls.
         XCTAssertTrue(MarkdownHTML.mermaidInitWiring.contains("kind: 'mermaidPopup'"))
         XCTAssertTrue(MarkdownHTML.mermaidInitWiring.contains("function openPopup"))
         XCTAssertTrue(MarkdownHTML.mermaidInitWiring.contains("case 'popup'"))
@@ -1348,6 +1559,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                 articleWidth: article.clientWidth,
                 articleLeft: article.getBoundingClientRect().left,
                 figureWidth: figure.getBoundingClientRect().width,
+                figureHeight: figure.getBoundingClientRect().height,
                 figureLeft: figure.getBoundingClientRect().left,
                 availableWidth: host.clientWidth
                     - parseFloat(style.paddingLeft)
@@ -1364,6 +1576,11 @@ final class MarkdownHTMLRenderTests: XCTestCase {
 
         XCTAssertFalse(initial.expanded)
         XCTAssertEqual(initial.buttonPressed, "false")
+        // Pin the size, not just "narrower and centred": a figure collapsed to
+        // 0 x 0 satisfies both of those. The height cap is 70vh of the 600pt
+        // view, and the 1:4 aspect ratio carries it through to the width.
+        XCTAssertEqual(initial.figureHeight, 420, accuracy: 1)
+        XCTAssertEqual(initial.figureWidth, 105, accuracy: 1)
         XCTAssertLessThan(initial.figureWidth, initial.articleWidth)
         XCTAssertEqual(
             initial.figureLeft - initial.articleLeft,
@@ -1393,6 +1610,117 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(restored.expanded)
         XCTAssertEqual(restored.buttonPressed, "false")
         XCTAssertEqual(restored.figureWidth, initial.figureWidth, accuracy: 1)
+    }
+
+    /// The article is a flex column on screen, which stretches its children.
+    /// Block content should span the column; an inline-level element left at
+    /// the top level should not. A `<button>` whose `<form>` the sanitiser
+    /// removed lands there, and drawn edge to edge it reads as a working
+    /// control instead of the inert leftover it is.
+    @MainActor
+    func testTopLevelInlineElementsKeepTheirOwnWidth() async throws {
+        let rendered = MarkdownHTML.render(markdown: "Paragraph.\n", vendorLoading: .lazy)
+        let stylesheet = try XCTUnwrap(
+            rendered.html
+                .components(separatedBy: "<style>")
+                .dropFirst()
+                .first?
+                .components(separatedBy: "</style>")
+                .first
+        )
+        let html = """
+        <!DOCTYPE html>
+        <html><head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>\(stylesheet)</style>
+        </head><body><article class="markdown-body">
+        <p id="para">Paragraph.</p>
+        <button id="control">Sign in</button>
+        </article></body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const article = document.querySelector('.markdown-body');
+            return JSON.stringify({
+                articleWidth: article.clientWidth,
+                paragraphWidth: document.getElementById('para').getBoundingClientRect().width,
+                buttonWidth: document.getElementById('control').getBoundingClientRect().width,
+            });
+        })()
+        """)
+        let metrics = try JSONDecoder().decode(
+            TopLevelInlineMetrics.self,
+            from: Data(try XCTUnwrap(result as? String).utf8)
+        )
+
+        XCTAssertEqual(metrics.paragraphWidth, metrics.articleWidth, accuracy: 1)
+        XCTAssertLessThan(metrics.buttonWidth, metrics.articleWidth / 3)
+    }
+
+    @MainActor
+    func testWideMermaidDiagramFillsTheColumnInTheScreenLayout() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ```mermaid
+            flowchart LR
+                A --> B
+            ```
+            """,
+            vendorLoading: .lazy
+        )
+        let stylesheet = try XCTUnwrap(
+            rendered.html
+                .components(separatedBy: "<style>")
+                .dropFirst()
+                .first?
+                .components(separatedBy: "</style>")
+                .first
+        )
+        // On screen the article is a flex column. The figure's contents are
+        // all absolutely positioned, so a figure sized by its content alone
+        // lays out at 0 x 0 and the diagram draws nowhere.
+        let html = """
+        <!DOCTYPE html>
+        <html><head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>\(stylesheet)</style>
+        </head><body><article class="markdown-body">\(rendered.articleHTML)</article>
+        <script>
+        document.querySelector('.mermaid-figure').style.setProperty('--mm-aspect', '2 / 1');
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const article = document.querySelector('.markdown-body');
+            const figure = document.querySelector('.mermaid-figure').getBoundingClientRect();
+            return JSON.stringify({
+                display: getComputedStyle(article).display,
+                articleWidth: article.clientWidth,
+                figureWidth: figure.width,
+                figureHeight: figure.height,
+            });
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let metrics = try JSONDecoder().decode(WideMermaidMetrics.self, from: Data(json.utf8))
+
+        XCTAssertEqual(metrics.display, "flex")
+        XCTAssertGreaterThan(metrics.articleWidth, 0)
+        XCTAssertEqual(metrics.figureWidth, metrics.articleWidth, accuracy: 1)
+        XCTAssertEqual(metrics.figureHeight, metrics.articleWidth / 2, accuracy: 1)
     }
 
     @MainActor
@@ -1490,7 +1818,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             )
 
             XCTAssertTrue(
-                rendered.articleHTML.contains("<code class=\"language-bash\">"),
+                rendered.articleHTML.contains("<code class=\"language-bash\" data-hljs-done=\"1\">"),
                 "\(language): \(rendered.articleHTML)"
             )
         }
@@ -1506,10 +1834,11 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                 vendorLoading: .lazy
             )
 
-            XCTAssertTrue(rendered.containsCode)
+            // Highlighted at render time, so the page needs no in-page runtime.
+            XCTAssertFalse(rendered.containsCode)
             XCTAssertTrue(
                 rendered.articleHTML.contains(
-                    "<code class=\"language-\(language)\" data-md-detected-language=\"true\">"
+                    "<code class=\"language-\(language)\" data-md-detected-language=\"true\" data-hljs-done=\"1\">"
                 ),
                 rendered.articleHTML
             )
@@ -2174,6 +2503,7 @@ private struct HeadingLayoutMetrics: Decodable {
     let codeRight: CGFloat
     let viewportRight: CGFloat
     let boxDecorationBreak: String
+    let fragmentEndDecoration: Double
 }
 
 private struct LongDocumentScrollMetrics: Decodable {
@@ -2218,11 +2548,25 @@ private struct MermaidLayoutMetrics: Decodable {
     let articleWidth: CGFloat
     let articleLeft: CGFloat
     let figureWidth: CGFloat
+    let figureHeight: CGFloat
     let figureLeft: CGFloat
     let availableWidth: CGFloat
     let svgWidth: CGFloat
     let expanded: Bool
     let buttonPressed: String
+}
+
+private struct TopLevelInlineMetrics: Decodable {
+    let articleWidth: CGFloat
+    let paragraphWidth: CGFloat
+    let buttonWidth: CGFloat
+}
+
+private struct WideMermaidMetrics: Decodable {
+    let display: String
+    let articleWidth: CGFloat
+    let figureWidth: CGFloat
+    let figureHeight: CGFloat
 }
 
 private struct MermaidHUDMetrics: Decodable {

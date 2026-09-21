@@ -57,6 +57,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     var forwardHistory: [HistoryEntry] = []
     weak var navigationItem: NSToolbarItemGroup?
     private var fileWatcher: FileWatcher?
+    private let fullscreenToolbarTheme = FullscreenToolbarTheme()
     var isInspectorToggleSelected = false
     weak var openActionsItem: NSMenuToolbarItem?
     weak var openWithItem: NSMenuToolbarItem?
@@ -111,12 +112,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// Armed only while the themes popover is open.
     let themesPopoverEscapeMonitor = EscapeKeyMonitor()
     weak var searchField: NSSearchField?
-    weak var sidebarMenu: NSMenu?
+    /// The Table of Contents / Project Navigator picker in the toolbar.
+    weak var sidebarModeItem: NSToolbarItemGroup?
+    /// Timestamp of the last click handled by the sidebar mode picker.
+    var sidebarToolbarHandledEventTimestamp: TimeInterval?
     var findBar: FindBar?
     /// Container for the find bar. A content overlay like editBar — not a
     /// titlebar accessory — so showing it never pushes the tab bar down.
     /// Mounted once at setup and toggled via isHidden.
     weak var findBarOverlay: NSView?
+    weak var findBarHairline: NSView?
     var searchMode: SearchMode = .contains
     var pendingFindWork: DispatchWorkItem?
     static let findDebounceDelay: TimeInterval = 0.10
@@ -235,72 +240,43 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         findBarOverlay?.needsDisplay = true
     }
 
-    /// Whether this window wears the themed chrome: a window background
-    /// override on the ACTIVE appearance scheme, and an OS that can
-    /// complete the recipe. Chrome suppression without a matching tint
-    /// exposes the stock fills, so every chrome treatment gates on this —
-    /// not on "either scheme customized", and not on theme state alone.
-    ///
-    /// The macOS 26 floor is not a preference. The transparent titlebar
-    /// only reads correctly because WebKit is told which strip the toolbar
-    /// obscures, and `WKWebView.obscuredContentInsets` is macOS 26.0+ — so
-    /// pre-Tahoe the page would run under an unlined toolbar with no inset
-    /// and no frost. The chrome stays native there, the same retreat full
-    /// screen makes below. Keep this version in step with the gate in
-    /// `ContentViewController.updateObscuredContentInsets()`.
-    var usesThemedChrome: Bool {
-        guard #available(macOS 26.0, *) else { return false }
-        let isDark = documentWindow.effectiveAppearance
-            .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        return ThemeColorsSetting.current
-            .hasWindowBackgroundOverride(for: isDark ? .dark : .light)
-    }
-
-    /// The full-window background. `DocumentBackgroundView` paints the
-    /// content area; this covers what remains — the title-bar region and
-    /// resize flashes — with a dynamic color so Automatic appearance keeps
-    /// flipping it without another pass.
-    ///
-    /// Full screen deliberately keeps the STANDARD system chrome even when
-    /// themed: the full-screen glass surfaces (sidebar card, reveal bar)
-    /// sample the space wallpaper and render white over a transparent
-    /// themed titlebar (macOS 26, FB20291636 family), and neutralizing
-    /// that required patrolling private view classes and layer trees. Not
-    /// worth the fragility — the content and sidebar body stay themed in
-    /// full screen; only the chrome is native there.
+    /// Tint the window using the current theme while preserving native chrome.
     private func applyWindowBackgroundTheme() {
-        // The dynamic background color is public API and applies in every
-        // window state — full screen included, where it tints whatever
-        // native surfaces sample the window. Only the CHROME treatment
-        // below is gated off in full screen.
+        // This colors the document window. AppKit moves the full-screen
+        // toolbar to a separate window, which needs its own theme treatment.
         documentWindow.backgroundColor = NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             return ThemeColorsSetting.current.color(
                 .windowBackground, isDark ? .dark : .light
             ) ?? .windowBackgroundColor
         }
-        let themed = usesThemedChrome
-            && !documentWindow.styleMask.contains(.fullScreen)
-        // Automatic resolves to a shadow under the toolbar; over the flat
-        // theme color it renders as a clipped gray band between the toolbar
-        // and the formatting bar. The themed chrome draws its own hairlines.
-        documentWindow.titlebarSeparatorStyle = themed ? .none : .automatic
-        guard themed else {
-            documentWindow.titlebarAppearsTransparent = false
-            return
+        // Preserve native titlebar backing so WebKit can supply the scroll
+        // edge on macOS 26+. Earlier systems also use native window chrome.
+        documentWindow.titlebarSeparatorStyle = .automatic
+        documentWindow.titlebarAppearsTransparent = false
+        if #available(macOS 26.0, *) {
+            if #unavailable(macOS 27.0) {
+                documentWindow.titlebarAppearsTransparent = true
+            }
         }
-        // Safari's recipe: the titlebar goes transparent so the window
-        // background color runs to the top edge, and the web view is told
-        // (via obscuredContentInsets, in ContentViewController) which strip
-        // the toolbar obscures so WebKit lays out below it and frosts
-        // content that scrolls under.
-        //
-        // A transparent titlebar on macOS 26 re-dispatches clicks it did not
-        // handle (the padding between toolbar buttons) to the content view
-        // underneath instead of letting NSThemeFrame start the window drag.
-        // The web views give those clicks back — see
-        // NSView.declinesChromeStripClick(at:) in Helpers.
-        documentWindow.titlebarAppearsTransparent = true
+        (editBar as? EditAccessoryContainerView)?.updateFullscreenBackground()
+        (findBarOverlay as? EditAccessoryContainerView)?.updateFullscreenBackground()
+        updateFullscreenToolbarTheme()
+    }
+
+    private func updateFullscreenToolbarTheme() {
+        let scheme: ThemeColorScheme = documentWindow.effectiveAppearance
+            .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .dark : .light
+        fullscreenToolbarTheme.update(
+            window: documentWindow,
+            color: ThemeColorsSetting.current.color(.windowBackground, scheme)
+        )
+    }
+
+    func windowDidUpdate(_ notification: Notification) {
+        // AppKit can create or replace the detached toolbar after the full-screen
+        // notification. Refresh at window updates, with no timer or global scan.
+        updateFullscreenToolbarTheme()
     }
 
     /// AppKit's automatic tab placement runs when NSDocument shows its
@@ -351,6 +327,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     func windowWillClose(_ notification: Notification) {
+        fullscreenToolbarTheme.restore()
         fileWatcher?.cancel()
         fileWatcher = nil
         themesPopoverEscapeMonitor.stop()
@@ -361,16 +338,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     func windowWillEnterFullScreen(_ notification: Notification) {
         applyAlwaysOnTopLevel(isFullScreen: true)
-        // Note: dropping .fullSizeContentView here would also avoid the
-        // known macOS 26 white-gap bug (FB20291636) with public API, but
-        // it makes the reveal bar push the content down. Safari's
-        // float-over behavior needs the flag, so the gap is neutralized by
-        // the layer treatments in the patrol instead.
+        // Keep fullSizeContentView so the reveal bar floats over the content.
     }
 
     func windowDidEnterFullScreen(_ notification: Notification) {
-        // Full screen switches to the standard chrome (see
-        // applyWindowBackgroundTheme).
+        // The toolbar now has a separate AppKit host window.
         applyWindowBackgroundTheme()
     }
 
@@ -600,56 +572,72 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// links) otherwise fights the bar's buttons. The bar region always
     /// shows the plain arrow.
     ///
-    /// Opaque: the pages scroll their content under the bars, so a bar must
-    /// paint the page's own background to hide it — the titlebar accessory
-    /// it replaced got that backdrop from the system chrome for free.
+    /// Sequoia rows use the native titlebar material with unthemed controls.
+    /// Newer systems provide their backdrop through native chrome.
     final class EditAccessoryContainerView: NSView {
-        /// The editor page's background, resolved per appearance and read
-        /// from the live theme on every draw. Mirrors
-        /// EditorViewController.updateUnderPageBackgroundColor.
-        private static let editorPageBackground = NSColor(name: nil) { appearance in
-            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            let scheme: ThemeColorScheme = isDark ? .dark : .light
-            let colors = ThemeColorsSetting.current
-            return colors.color(.editorBackground, scheme)
-                ?? colors.color(.windowBackground, scheme)
-                ?? ThemeColorsSetting.defaultColor(.editorBackground, scheme)
+        private var fullscreenBackdrop: NSVisualEffectView?
+        private var fullscreenThemeFill: NSView?
+
+        /// Full screen on macOS 26 and later draws the toolbar on an opaque
+        /// native strip instead of frosting the page, so the rows below it
+        /// use the same solid theme color as the toolbar workaround. Without a
+        /// custom background, retain the native titlebar material.
+        func updateFullscreenBackground() {
+            guard #available(macOS 26.0, *) else { return }
+            if window?.styleMask.contains(.fullScreen) == true {
+                let scheme: ThemeColorScheme = effectiveAppearance
+                    .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .dark : .light
+                if let color = ThemeColorsSetting.current.color(.windowBackground, scheme) {
+                    if fullscreenThemeFill == nil {
+                        let fill = NSView(frame: bounds)
+                        fill.wantsLayer = true
+                        fill.autoresizingMask = [.width, .height]
+                        addSubview(fill, positioned: .below, relativeTo: subviews.first)
+                        fullscreenThemeFill = fill
+                    }
+                    fullscreenThemeFill?.layer?.backgroundColor = color.cgColor
+                    fullscreenThemeFill?.isHidden = false
+                    fullscreenBackdrop?.isHidden = true
+                    return
+                }
+                fullscreenThemeFill?.isHidden = true
+                if fullscreenBackdrop == nil {
+                    let backdrop = NSVisualEffectView(frame: bounds)
+                    backdrop.material = .titlebar
+                    backdrop.blendingMode = .withinWindow
+                    backdrop.state = .followsWindowActiveState
+                    backdrop.autoresizingMask = [.width, .height]
+                    addSubview(backdrop, positioned: .below, relativeTo: subviews.first)
+                    fullscreenBackdrop = backdrop
+                }
+                fullscreenBackdrop?.isHidden = false
+            } else {
+                fullscreenBackdrop?.isHidden = true
+                fullscreenThemeFill?.isHidden = true
+            }
         }
 
-        /// The preview's backdrop — the same chain the window background
-        /// and the preview's under-page color use. The find bar shows over
-        /// the preview, so it paints this instead of the editor color.
-        private static let windowPageBackground = NSColor(name: nil) { appearance in
-            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            let scheme: ThemeColorScheme = isDark ? .dark : .light
-            return ThemeColorsSetting.current.color(.windowBackground, scheme)
-                ?? .windowBackgroundColor
+        override func viewDidChangeEffectiveAppearance() {
+            super.viewDidChangeEffectiveAppearance()
+            updateFullscreenBackground()
         }
-
-        /// True for bars that overlay the preview (find bar); false for
-        /// bars that overlay the editor (formatting bar).
-        var prefersWindowBackground = false
 
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
-            wantsLayer = true
+            if #unavailable(macOS 26.0) {
+                let backdrop = NSVisualEffectView(frame: bounds)
+                backdrop.material = .titlebar
+                backdrop.blendingMode = .withinWindow
+                backdrop.state = .followsWindowActiveState
+                backdrop.autoresizingMask = [.width, .height]
+                addSubview(backdrop)
+            }
         }
 
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
 
-        // Layer-backed instead of draw(_:): custom drawing above the
-        // WKWebView interfered with its compositing and blanked the page.
-        override var wantsUpdateLayer: Bool { true }
-
-        override func updateLayer() {
-            effectiveAppearance.performAsCurrentDrawingAppearance {
-                let color = prefersWindowBackground
-                    ? Self.windowPageBackground : Self.editorPageBackground
-                layer?.backgroundColor = color.cgColor
-            }
-        }
         override func resetCursorRects() {
             addCursorRect(bounds, cursor: .arrow)
         }
@@ -659,6 +647,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // cursor wins between the buttons until the bar is reinstalled.
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            updateFullscreenBackground()
             window?.invalidateCursorRects(for: self)
         }
 

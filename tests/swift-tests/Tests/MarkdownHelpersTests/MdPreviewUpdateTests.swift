@@ -9,6 +9,11 @@ import WebKit
 /// touches unrelated prose, while the warmup article keeps taking the
 /// innerHTML replace.
 final class MdPreviewUpdateTests: XCTestCase {
+    override class func setUp() {
+        super.setUp()
+        TestVendor.installHighlighterGrammar()
+    }
+
     @MainActor
     func testMorphdomUpdatePreservesRenderedBlocksAndDetailsState() async throws {
         let webView = try await loadHarness(articleAttributes: "")
@@ -83,7 +88,7 @@ final class MdPreviewUpdateTests: XCTestCase {
                 codeIdent: code.__ident || 0,
                 codeRenders: code.__renderCount || 0,
                 codeDone: code.dataset.hljsDone || '',
-                codeSentinel: !!code.querySelector('.fake-hljs'),
+                codeSentinel: !!code.querySelector('.hljs-keyword'),
                 paragraphText: article.querySelector('p').textContent,
                 detailsOpen: article.querySelector('details').open,
                 keyedBlocks: article.querySelectorAll('[data-md-key]').length,
@@ -101,7 +106,8 @@ final class MdPreviewUpdateTests: XCTestCase {
         XCTAssertEqual(state.codeIdent, 3, json)
         XCTAssertEqual(state.mathRenders, 1, json)
         XCTAssertEqual(state.mermaidRenders, 1, json)
-        XCTAssertEqual(state.codeRenders, 1, json)
+        // Code arrives highlighted from the renderer, so no in-page pass runs.
+        XCTAssertEqual(state.codeRenders, 0, json)
         XCTAssertEqual(state.mathDone, "1")
         XCTAssertEqual(state.mermaidDone, "1")
         XCTAssertEqual(state.codeDone, "1")
@@ -169,10 +175,86 @@ final class MdPreviewUpdateTests: XCTestCase {
         let codeSurvived = try await webView.evaluateJavaScript("""
         (() => {
             const code = document.querySelector('pre > code');
-            return code.dataset.hljsDone === '1' && (code.__renderCount || 0) === 1;
+            return code.dataset.hljsDone === '1' && (code.__renderCount || 0) === 0
+                && !!code.querySelector('.hljs-keyword');
         })()
         """) as? Bool
         XCTAssertEqual(codeSurvived, true)
+    }
+
+    @MainActor
+    func testCopyOfWholeBlocksYieldsTheMarkdownSource() async throws {
+        let webView = try await loadHarness(articleAttributes: "")
+        let markdown = """
+        # Title
+
+        Intro paragraph with a [link](https://example.com).
+
+        - first item
+        - second `item`
+
+        Closing paragraph with a footnote.[^n]
+
+        ## Later section
+
+        Text after the reference.
+
+        [^n]: The note renders at the end of the article.
+
+        [link]: https://example.com "renders nothing"
+        """
+        let rendered = MarkdownHTML.render(markdown: markdown, vendorLoading: .lazy)
+        _ = try await webView.evaluateJavaScript("""
+        window.MdPreview.update(\(MarkdownHTML.javaScriptStringLiteral(rendered.articleHTML)),
+            { source: \(MarkdownHTML.javaScriptStringLiteral(markdown)) }); true
+        """)
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const article = document.querySelector('.markdown-body');
+            const selection = window.getSelection();
+            const pick = () => window.MdPreview.markdownForSelection(selection);
+            const out = {};
+            selection.selectAllChildren(article);
+            out.all = pick();
+            // Command-A selects the whole body, outside the article.
+            selection.selectAllChildren(document.body);
+            out.selectAll = pick();
+            // Whole blocks: from the paragraph through the list.
+            let range = document.createRange();
+            range.setStartBefore(document.querySelector('p'));
+            range.setEndAfter(document.querySelector('ul'));
+            selection.removeAllRanges(); selection.addRange(range);
+            out.blocks = pick();
+            // Partial inside one paragraph stays plain text (null here).
+            const text = document.querySelector('p').firstChild;
+            range = document.createRange();
+            range.setStart(text, 6); range.setEnd(text, 15);
+            selection.removeAllRanges(); selection.addRange(range);
+            out.partial = pick();
+            // Partial start, whole end: selected text, then source lines.
+            range = document.createRange();
+            range.setStart(text, 6);
+            range.setEndAfter(document.querySelector('ul'));
+            selection.removeAllRanges(); selection.addRange(range);
+            out.mixed = pick();
+            return JSON.stringify(out);
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let values = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any]
+        )
+        XCTAssertEqual(values["all"] as? String, markdown)
+        XCTAssertEqual(values["selectAll"] as? String, markdown)
+        XCTAssertEqual(
+            values["blocks"] as? String,
+            "Intro paragraph with a [link](https://example.com).\n\n- first item\n- second `item`"
+        )
+        XCTAssertTrue(values["partial"] is NSNull, json)
+        XCTAssertEqual(
+            values["mixed"] as? String,
+            "paragraph with a link.\n\n- first item\n- second `item`"
+        )
     }
 
     @MainActor
