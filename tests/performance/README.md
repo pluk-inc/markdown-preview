@@ -116,8 +116,11 @@ readiness polling driven from Swift, avoiding hidden-page JavaScript timer
 clamping in the test loop. Edit/update timings include synchronous work, scheduled frame
 callbacks, and forced WebKit layout; timer waiting is excluded. They do **not**
 measure native display paint, scroll smoothness, frame pacing, or all deferred
-background work. The media page waits for actual image decoding, KaTeX, and
-Mermaid output. Mixed-file opening keeps normal viewport virtualization.
+background work. The media page waits for the image widget to appear and decode,
+KaTeX, and Mermaid output within the 20-second readiness deadline. Each poll
+checks the current image nodes, so a delayed or replaced editor widget cannot
+pass before decoding; missing images still fail when the deadline expires.
+Mixed-file opening keeps normal viewport virtualization.
 
 Peak RSS is the **Swift renderer process**, including its in-process highlighter,
 before WKWebView is created. It excludes WebContent and total application memory.
