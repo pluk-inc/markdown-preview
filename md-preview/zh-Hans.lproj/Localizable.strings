@@ -307,6 +307,6 @@
 "Open a folder to search its files" = "打开一个文件夹以搜索其中的文件";
 "Open Folder…" = "打开文件夹…";
 "Showing the first %d files in this project" = "仅显示此项目中的前 %d 个文件";
-"↩ open · ⌘↩ new tab · ⌥↩ new window" = "↩ 打开 · ⌘↩ 新标签页 · ⌥↩ 新窗口";
+"↑↓ browse · ↩ open · ⌘↩ new tab · ⌥↩ new window" = "↑↓ 浏览 · ↩ 打开 · ⌘↩ 新标签页 · ⌥↩ 新窗口";
 "Search for Document" = "搜索文稿";
 "Search for a file by name" = "按名称搜索文件";

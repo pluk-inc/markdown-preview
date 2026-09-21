@@ -64,6 +64,21 @@ nonisolated enum FileSearchMatcher {
     ///
     /// A blank query matches everything, which is what makes the palette show
     /// the project before anything is typed.
+    /// Converts the `Character` offsets in a `Match` into `NSRange`s over the
+    /// same string, for attributing the matched characters in the UI.
+    ///
+    /// Lives here rather than in the view so the conversion is covered by the
+    /// SPM suite: a file name with an emoji or a combining mark has more UTF-16
+    /// units than characters, and getting that wrong bolds the wrong letters.
+    static func nsRanges(_ ranges: [Range<Int>], in string: String) -> [NSRange] {
+        ranges.compactMap { range in
+            guard let lower = string.index(string.startIndex, offsetBy: range.lowerBound, limitedBy: string.endIndex),
+                  let upper = string.index(string.startIndex, offsetBy: range.upperBound, limitedBy: string.endIndex),
+                  lower <= upper else { return nil }
+            return NSRange(lower..<upper, in: string)
+        }
+    }
+
     static func rank(query: String, candidates: [Candidate]) -> [Int] {
         // Outside a cancelled task the cancellable variant never throws.
         (try? rankCancellably(query: query, candidates: candidates)) ?? []

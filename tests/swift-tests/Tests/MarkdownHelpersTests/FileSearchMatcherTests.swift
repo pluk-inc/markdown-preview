@@ -245,3 +245,46 @@ final class FileSearchMatcherTests: XCTestCase {
         }
     }
 }
+
+// MARK: - Range conversion for the UI
+
+extension FileSearchMatcherTests {
+
+    private func nsRanges(_ query: String, _ name: String) -> [NSRange] {
+        guard let match = FileSearchMatcher.match(query: query, against: Candidate(relativePath: name)) else {
+            return []
+        }
+        return FileSearchMatcher.nsRanges(match.nameRanges, in: name)
+    }
+
+    func testMatchedRangesConvertToUTF16Offsets() {
+        XCTAssertEqual(nsRanges("rdm", "README.md"), [NSRange(location: 0, length: 1),
+                                                      NSRange(location: 3, length: 2)])
+    }
+
+    func testConversionAccountsForCharactersWiderThanOneUTF16Unit() {
+        // "🚀" is two UTF-16 units, so a naive offset would bold one unit short
+        // and land mid-character.
+        let name = "🚀launch.md"
+        XCTAssertEqual(nsRanges("la", name), [NSRange(location: 2, length: 2)])
+        let text = name as NSString
+        XCTAssertEqual(text.substring(with: NSRange(location: 2, length: 2)), "la")
+    }
+
+    func testConvertedRangesAlwaysLieInsideTheString() {
+        for name in ["README.md", "Übersicht.md", "🚀launch.md", "a.md"] {
+            for query in ["r", "e", "a", "m", "d", "ü", "🚀"] {
+                for range in nsRanges(query, name) {
+                    XCTAssertLessThanOrEqual(range.location + range.length,
+                                             (name as NSString).length,
+                                             "\(query) in \(name)")
+                }
+            }
+        }
+    }
+
+    func testOutOfBoundsOffsetsAreDroppedRatherThanCrashing() {
+        XCTAssertEqual(FileSearchMatcher.nsRanges([0..<99], in: "ab"), [])
+        XCTAssertEqual(FileSearchMatcher.nsRanges([], in: "ab"), [])
+    }
+}

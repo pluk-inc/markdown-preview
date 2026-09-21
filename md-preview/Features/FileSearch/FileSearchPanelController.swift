@@ -28,7 +28,8 @@ final class FileSearchPanelController: NSViewController {
     private let projectRoot: URL?
     private let index: ProjectFileIndex
 
-    private let searchField = NSSearchField()
+    private let queryField = NSTextField()
+    private let fieldSeparator = HairlineSeparator()
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
     private let statusLabel = NSTextField(labelWithString: "")
@@ -69,16 +70,24 @@ final class FileSearchPanelController: NSViewController {
         container.onOptionReturn = { [weak self] in self?.activateSelection(target: .newWindow) ?? false }
         view = container
 
-        searchField.translatesAutoresizingMaskIntoConstraints = false
-        searchField.placeholderString = NSLocalizedString("Search files by name",
-                                                          comment: "Search for Document field placeholder")
-        searchField.delegate = self
-        searchField.sendsWholeSearchString = false
-        searchField.sendsSearchStringImmediately = true
+        // A large, unbezelled field with a hairline under it, the way Xcode's
+        // Open Quickly presents it: in a palette the field is the whole point,
+        // so it reads as the subject rather than as one control among several.
+        queryField.translatesAutoresizingMaskIntoConstraints = false
+        queryField.placeholderString = NSLocalizedString("Search files by name",
+                                                         comment: "Search for Document field placeholder")
+        queryField.delegate = self
+        queryField.font = .systemFont(ofSize: 19)
+        queryField.isBordered = false
+        queryField.drawsBackground = false
+        queryField.focusRingType = .none
+        queryField.lineBreakMode = .byTruncatingTail
+
+        fieldSeparator.translatesAutoresizingMaskIntoConstraints = false
 
         tableView.headerView = nil
         tableView.style = .inset
-        tableView.rowHeight = 38
+        tableView.rowHeight = 40
         tableView.allowsMultipleSelection = false
         tableView.allowsEmptySelection = false
         tableView.dataSource = self
@@ -109,7 +118,7 @@ final class FileSearchPanelController: NSViewController {
         hintLabel.font = .preferredFont(forTextStyle: .caption1)
         hintLabel.textColor = .tertiaryLabelColor
         // A keyboard-only affordance nobody mentions is undiscoverable.
-        hintLabel.stringValue = NSLocalizedString("↩ open · ⌘↩ new tab · ⌥↩ new window",
+        hintLabel.stringValue = NSLocalizedString("↑↓ browse · ↩ open · ⌘↩ new tab · ⌥↩ new window",
                                                   comment: "Search for Document keyboard hint")
 
         openFolderButton.translatesAutoresizingMaskIntoConstraints = false
@@ -119,16 +128,21 @@ final class FileSearchPanelController: NSViewController {
         openFolderButton.action = #selector(openFolderTapped)
         openFolderButton.isHidden = true
 
-        for subview in [searchField, scrollView, statusLabel, hintLabel, openFolderButton] {
+        for subview in [queryField, fieldSeparator, scrollView, statusLabel, hintLabel, openFolderButton] {
             container.addSubview(subview)
         }
 
         NSLayoutConstraint.activate([
-            searchField.topAnchor.constraint(equalTo: container.topAnchor, constant: 16),
-            searchField.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            searchField.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            queryField.topAnchor.constraint(equalTo: container.topAnchor, constant: 18),
+            queryField.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 18),
+            queryField.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -18),
 
-            scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 10),
+            fieldSeparator.topAnchor.constraint(equalTo: queryField.bottomAnchor, constant: 14),
+            fieldSeparator.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            fieldSeparator.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            fieldSeparator.heightAnchor.constraint(equalToConstant: 1),
+
+            scrollView.topAnchor.constraint(equalTo: fieldSeparator.bottomAnchor, constant: 4),
             scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
             scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
             scrollView.bottomAnchor.constraint(equalTo: hintLabel.topAnchor, constant: -8),
@@ -149,7 +163,7 @@ final class FileSearchPanelController: NSViewController {
 
     override func viewDidAppear() {
         super.viewDidAppear()
-        view.window?.makeFirstResponder(searchField)
+        view.window?.makeFirstResponder(queryField)
         loadIndex()
     }
 
@@ -204,7 +218,7 @@ final class FileSearchPanelController: NSViewController {
         debounce?.cancel()
         debounce = nil
         guard let snapshot else { return }
-        let query = searchField.stringValue
+        let query = queryField.stringValue
         let candidates = snapshot.candidates
         rankTask?.cancel()
         rankTask = Task { [weak self] in
@@ -223,7 +237,7 @@ final class FileSearchPanelController: NSViewController {
     private func apply(_ ranked: [Int], for query: String) {
         // Superseded while the pass was finishing: the field has moved on and
         // a newer ranking is already on its way.
-        guard query == searchField.stringValue else { return }
+        guard query == queryField.stringValue else { return }
         results = ranked
         rankedQuery = query
         rankTask = nil
@@ -242,7 +256,7 @@ final class FileSearchPanelController: NSViewController {
     /// True when the rows on screen were ranked for exactly what is in the
     /// field, with nothing newer scheduled or in flight.
     private var resultsAreCurrent: Bool {
-        rankedQuery == searchField.stringValue && debounce == nil && rankTask == nil
+        rankedQuery == queryField.stringValue && debounce == nil && rankTask == nil
     }
 
     private func updateStatus() {
@@ -266,6 +280,19 @@ final class FileSearchPanelController: NSViewController {
     }
 
     // MARK: - Selection
+
+    /// How far a page key moves. Read from the table rather than assumed, so
+    /// it stays right when the sheet is resized or the row height changes.
+    private var visibleRowCount: Int {
+        max(1, tableView.rows(in: tableView.visibleRect).length - 1)
+    }
+
+    private func selectRow(_ row: Int) {
+        guard !results.isEmpty else { return }
+        let clamped = min(max(row, 0), results.count - 1)
+        tableView.selectRowIndexes([clamped], byExtendingSelection: false)
+        tableView.scrollRowToVisible(clamped)
+    }
 
     private func moveSelection(by offset: Int) {
         guard !results.isEmpty else { return }
@@ -327,7 +354,7 @@ final class FileSearchPanelController: NSViewController {
 
 // MARK: - Key handling
 
-extension FileSearchPanelController: NSSearchFieldDelegate {
+extension FileSearchPanelController: NSTextFieldDelegate {
 
     func controlTextDidChange(_ obj: Notification) {
         // A Return waiting on the old text must not fire on the new one.
@@ -344,6 +371,21 @@ extension FileSearchPanelController: NSSearchFieldDelegate {
             return true
         case #selector(NSResponder.moveDown(_:)):
             moveSelection(by: 1)
+            return true
+        // In a one-line field these would only shunt the caret to either end
+        // of the text, which is never what someone driving a result list
+        // means by Home and End.
+        case #selector(NSResponder.moveToBeginningOfDocument(_:)):
+            selectRow(0)
+            return true
+        case #selector(NSResponder.moveToEndOfDocument(_:)):
+            selectRow(results.count - 1)
+            return true
+        case #selector(NSResponder.pageUp(_:)), #selector(NSResponder.scrollPageUp(_:)):
+            moveSelection(by: -visibleRowCount)
+            return true
+        case #selector(NSResponder.pageDown(_:)), #selector(NSResponder.scrollPageDown(_:)):
+            moveSelection(by: visibleRowCount)
             return true
         case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertLineBreak(_:)):
             // Option-Return arrives as a line break rather than a newline, so
@@ -379,12 +421,34 @@ extension FileSearchPanelController: NSTableViewDataSource, NSTableViewDelegate 
         let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? FileSearchRowView
             ?? FileSearchRowView(identifier: identifier)
 
+        // Ranges for the query these rows were actually ranked for, so the
+        // emphasis can never describe an older query than the list does.
+        let match = FileSearchMatcher.match(query: rankedQuery ?? "", against: candidate)
         cell.configure(fileName: candidate.fileName,
                        relativePath: candidate.relativePath,
+                       nameRanges: match?.nameRanges ?? [],
+                       pathRanges: match?.pathRanges ?? [],
                        icon: snapshot.url(at: results[row]).map {
                            NSWorkspace.shared.icon(forFile: $0.path)
                        })
         return cell
+    }
+
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        EmphasizedRowView()
+    }
+}
+
+/// Draws the selection in the accent colour even though the table is not the
+/// first responder.
+///
+/// The field keeps focus so typing carries on, and an unfocused `NSTableView`
+/// normally renders its selection in a muted grey. The arrow keys were moving
+/// the selection all along; it just did not look like anything was happening.
+private final class EmphasizedRowView: NSTableRowView {
+    override var isEmphasized: Bool {
+        get { true }
+        set { }
     }
 }
 
@@ -403,10 +467,7 @@ private final class FileSearchRowView: NSTableCellView {
         name.translatesAutoresizingMaskIntoConstraints = false
         path.translatesAutoresizingMaskIntoConstraints = false
 
-        name.font = .preferredFont(forTextStyle: .body)
         name.lineBreakMode = .byTruncatingTail
-        path.font = .preferredFont(forTextStyle: .caption1)
-        path.textColor = .secondaryLabelColor
         path.lineBreakMode = .byTruncatingHead
 
         addSubview(icon)
@@ -417,8 +478,8 @@ private final class FileSearchRowView: NSTableCellView {
         NSLayoutConstraint.activate([
             icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
-            icon.widthAnchor.constraint(equalToConstant: 20),
-            icon.heightAnchor.constraint(equalToConstant: 20),
+            icon.widthAnchor.constraint(equalToConstant: 22),
+            icon.heightAnchor.constraint(equalToConstant: 22),
 
             name.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
             name.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -8),
@@ -434,14 +495,54 @@ private final class FileSearchRowView: NSTableCellView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func configure(fileName: String, relativePath: String, icon iconImage: NSImage?) {
-        name.stringValue = fileName
-        // The name is already the last component; showing it twice is noise.
-        let parent = (relativePath as NSString).deletingLastPathComponent
-        path.stringValue = parent.isEmpty ? "" : parent
-        iconImage?.size = NSSize(width: 20, height: 20)
+    func configure(fileName: String,
+                   relativePath: String,
+                   nameRanges: [Range<Int>],
+                   pathRanges: [Range<Int>],
+                   icon iconImage: NSImage?) {
+        name.attributedStringValue = Self.emphasising(nameRanges,
+                                                      in: fileName,
+                                                      base: Self.nameFont,
+                                                      emphasis: Self.nameMatchFont,
+                                                      color: .labelColor)
+
+        // A slash in the query matches the path, so show the whole path for
+        // the emphasis to sit on. Otherwise the name above already is the last
+        // component, and repeating it would be noise.
+        let subtitle = pathRanges.isEmpty
+            ? (relativePath as NSString).deletingLastPathComponent
+            : relativePath
+        path.attributedStringValue = Self.emphasising(pathRanges.isEmpty ? [] : pathRanges,
+                                                      in: subtitle,
+                                                      base: Self.pathFont,
+                                                      emphasis: Self.pathMatchFont,
+                                                      color: .secondaryLabelColor)
+
+        iconImage?.size = NSSize(width: 22, height: 22)
         icon.image = iconImage
     }
+
+    /// Bolds the characters the query matched — the thing that makes a fuzzy
+    /// result legible, because it shows *why* this file matched what was typed.
+    private static func emphasising(_ ranges: [Range<Int>],
+                                    in string: String,
+                                    base: NSFont,
+                                    emphasis: NSFont,
+                                    color: NSColor) -> NSAttributedString {
+        let attributed = NSMutableAttributedString(
+            string: string,
+            attributes: [.font: base, .foregroundColor: color]
+        )
+        for range in FileSearchMatcher.nsRanges(ranges, in: string) {
+            attributed.addAttribute(.font, value: emphasis, range: range)
+        }
+        return attributed
+    }
+
+    private static let nameFont = NSFont.systemFont(ofSize: 13)
+    private static let nameMatchFont = NSFont.systemFont(ofSize: 13, weight: .bold)
+    private static let pathFont = NSFont.systemFont(ofSize: 11)
+    private static let pathMatchFont = NSFont.systemFont(ofSize: 11, weight: .bold)
 }
 
 /// Catches the Command-modified Return that never reaches the search field:
