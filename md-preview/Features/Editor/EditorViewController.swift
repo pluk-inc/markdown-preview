@@ -48,6 +48,10 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         bridge.owner = self
         self.webView = webView
         view = webView
+        webView.appearanceDidChange = { [weak self] in
+            self?.updateUnderPageBackgroundColor()
+        }
+        updateUnderPageBackgroundColor()
     }
 
     func load(markdown: String, assetBaseURL: URL? = nil) {
@@ -105,17 +109,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
 
     override func viewDidLayout() {
         super.viewDidLayout()
-        // The under-page color is resolved statically; re-resolve on the
-        // first pass and whenever the effective appearance flips.
-        let appearanceName = view.effectiveAppearance.name
-        if appearanceName != lastUnderPageAppearance {
-            lastUnderPageAppearance = appearanceName
-            updateUnderPageBackgroundColor()
-        }
         updateObscuredContentInsets()
     }
-
-    private var lastUnderPageAppearance: NSAppearance.Name?
 
     override func viewDidAppear() {
         super.viewDidAppear()
@@ -229,13 +224,11 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     }
 
     /// See ContentViewController.updateUnderPageBackgroundColor — set on
-    /// theme changes only, never per layout pass.
+    /// theme and appearance changes only, never per layout pass.
     private func updateUnderPageBackgroundColor() {
         guard #available(macOS 26.0, *) else { return }
-        // Resolved statically: WebKit serializes this color to the web
-        // process, and a dynamic provider resolved there loses the theme
-        // values — the toolbar strip then falls back to the stock editor
-        // dark. applyThemeColors and appearance changes re-run this.
+        // WebKit snapshots the color in the setter. These explicit palette
+        // and fallback colors must be reassigned when the appearance changes.
         let isDark = view.effectiveAppearance
             .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         let scheme: ThemeColorScheme = isDark ? .dark : .light
@@ -479,6 +472,13 @@ private final class EditorBridge: NSObject, WKScriptMessageHandler {
 }
 
 private final class EditorWKWebView: WKWebView {
+    var appearanceDidChange: (() -> Void)?
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        appearanceDidChange?()
+    }
+
     // Left clicks in the transparent titlebar strip stay native (window
     // drag) instead of being consumed by WebKit — see ChromeStripClickThrough.
     override func hitTest(_ point: NSPoint) -> NSView? {

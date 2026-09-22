@@ -203,6 +203,10 @@ final class ContentViewController: NSViewController {
             webView.trailingAnchor.constraint(equalTo: container.trailingAnchor)
         ])
         applyContentWidthMode()
+        container.appearanceDidChange = { [weak self] in
+            self?.updateUnderPageBackgroundColor()
+        }
+        updateUnderPageBackgroundColor()
     }
 
     func display(
@@ -412,17 +416,8 @@ final class ContentViewController: NSViewController {
 
     override func viewDidLayout() {
         super.viewDidLayout()
-        // The under-page color is resolved statically; re-resolve on the
-        // first pass and whenever the effective appearance flips.
-        let appearanceName = view.effectiveAppearance.name
-        if appearanceName != lastUnderPageAppearance {
-            lastUnderPageAppearance = appearanceName
-            updateUnderPageBackgroundColor()
-        }
         updateObscuredContentInsets()
     }
-
-    private var lastUnderPageAppearance: NSAppearance.Name?
 
     override func viewDidAppear() {
         super.viewDidAppear()
@@ -538,18 +533,20 @@ final class ContentViewController: NSViewController {
 
     /// The scroll pocket WebKit draws for the obscured strip takes its color
     /// from underPageBackgroundColor, not from the page CSS. Set on theme
-    /// changes only — assigning a fresh color object every layout pass makes
-    /// WebKit repaint during transitions. The provider closure reads the
-    /// current setting each time it resolves, so one assignment stays fresh.
+    /// and appearance changes only — a system appearance change need not
+    /// trigger layout, and assigning every layout pass repaints transitions.
     private func updateUnderPageBackgroundColor() {
         guard #available(macOS 26.0, *) else { return }
-        // Resolved statically — WebKit serializes the color to the web
-        // process, and dynamic providers can lose the theme values there.
+        // WebKit snapshots a CGColor in the setter. Resolve even the system
+        // fallback against this view's appearance, then reassign when it changes.
         let isDark = view.effectiveAppearance
             .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        webView.webView.underPageBackgroundColor = ThemeColorsSetting.current.color(
+        let color = ThemeColorsSetting.current.color(
             .windowBackground, isDark ? .dark : .light
         ) ?? .windowBackgroundColor
+        view.effectiveAppearance.performAsCurrentDrawingAppearance {
+            webView.webView.underPageBackgroundColor = color.usingColorSpace(.sRGB) ?? color
+        }
     }
 
     func applyTextSizeSetting() {
@@ -801,6 +798,12 @@ private final class PreviewToolbarGutterView: NSView {
 private final class DocumentBackgroundView: NSView {
 
     weak var scrollWheelTarget: NSView?
+    var appearanceDidChange: (() -> Void)?
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        appearanceDidChange?()
+    }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
