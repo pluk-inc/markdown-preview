@@ -172,14 +172,17 @@ nonisolated enum EditorHTML {
             overflow: hidden;
         }
 
-        /* Hidden heading syntax still occupies its exact inline width.
-           Revealing it on the active line therefore cannot rewrap the line. */
+        #editor .cm-md-heading-marker,
+        #editor .cm-md-heading-marker * {
+            color: var(--secondary);
+        }
+
+        /* Keep hidden syntax measurable for inactive heading alignment. */
         #editor .cm-md-heading-source-hidden {
             visibility: hidden;
         }
-        /* Pull only the first line back by the hidden prefix width, so the
-           visible text starts at the column edge and wrapped lines start
-           there too. A transform would shift every line of a long heading. */
+        /* Inactive heading text aligns with the document column;
+           active headings show their prefix inline. */
         #editor .cm-md-heading-inactive {
             text-indent: calc(-1 * var(--cm-md-heading-prefix-width, 0px));
         }
@@ -674,6 +677,7 @@ nonisolated enum EditorHTML {
                     find: function (query, backwards, beginsWith) {
                         return editor.find(query, backwards, beginsWith);
                     },
+                    getLinkSelection: function () { return editor.getLinkSelection(); },
                     getMarkdown: function () { return editor.getMarkdown(); },
                     isSyntaxReady: function () { return editor.isSyntaxReady(); },
                     replaceMarkdown: function (markdown) { return editor.replaceMarkdown(markdown); },

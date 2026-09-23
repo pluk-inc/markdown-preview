@@ -7,7 +7,7 @@
 import {
   EditorView, keymap, ViewPlugin, Decoration, WidgetType, dropCursor,
 } from "@codemirror/view"
-import { Annotation, EditorState, EditorSelection, StateEffect, StateField, Transaction } from "@codemirror/state"
+import { Annotation, EditorState, EditorSelection, Prec, StateEffect, StateField, Transaction } from "@codemirror/state"
 import {
   defaultKeymap, history, historyKeymap, indentLess, insertTab,
 } from "@codemirror/commands"
@@ -1089,6 +1089,8 @@ const listDepthLine = (depth) => {
 const fenceMark = Decoration.mark({ class: "cm-md-fence-info" })
 const hiddenCodeFenceSource = Decoration.mark({ class: "cm-md-code-fence-source-hidden" })
 const hiddenHeadingSource = Decoration.mark({ class: "cm-md-heading-source-hidden" })
+const headingPrefix = Decoration.mark({ class: "cm-md-heading-prefix" })
+const headingMarker = Decoration.mark({ class: "cm-md-heading-marker" })
 const setextMarkerLine = Decoration.line({ class: "cm-md-setext-marker-line" })
 const setextSource = Decoration.mark({ class: "cm-md-setext-source" })
 const linkMark = Decoration.mark({ class: "cm-md-link" })
@@ -1173,6 +1175,92 @@ function fencedCodeAt(state, pos) {
   return null
 }
 
+// Snapshot only the state that controls source visibility during a gesture.
+const setPointerPreview = StateEffect.define()
+const pointerPreview = StateField.define({
+  create: () => null,
+  update(value, tr) {
+    // Typing, paste, or an external document update ends the visual snapshot.
+    if (tr.docChanged) return null
+    for (const effect of tr.effects) {
+      if (effect.is(setPointerPreview)) return effect.value
+    }
+    if (value?.activateOnSelection && tr.isUserEvent('select.pointer')) {
+      return { selection: tr.state.selection.main, focused: true,
+        fence: tr.state.field(activeCodeBlock), activateOnSelection: false }
+    }
+    return value
+  },
+})
+
+// Capture before CodeMirror focuses the editor or changes its selection.
+// Keep source-reveal decisions stable, not the entire decoration set: viewport
+// changes during auto-scroll must still render newly visible content.
+const stablePointerPreview = ViewPlugin.fromClass(class {
+  constructor(view) {
+    this.view = view
+    this.releaseTimer = null
+    this.down = (event) => {
+      if (event.button !== 0 || event.target.closest('input, textarea, button, select, .cm-md-table-cell')) return
+      clearTimeout(this.releaseTimer)
+      if (view.state.field(pointerPreview)) return
+      view.dispatch({ effects: setPointerPreview.of({
+        selection: view.state.selection.main,
+        focused: view.hasFocus,
+        fence: view.state.field(activeCodeBlock),
+        activateOnSelection: event.detail === 1 && !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey,
+      }) })
+    }
+    this.finish = () => {
+      if (!view.state.field(pointerPreview)) return
+      clearTimeout(this.releaseTimer)
+      // CodeMirror's document mouseup listener must finish selecting first.
+      this.releaseTimer = setTimeout(() => this.release(), 0)
+    }
+    this.release = () => {
+      clearTimeout(this.releaseTimer)
+      if (view.state.field(pointerPreview)) {
+        view.dispatch({ effects: setPointerPreview.of(null) })
+      }
+    }
+    this.move = (event) => { if (event.buttons === 0) this.finish() }
+    view.contentDOM.addEventListener('mousedown', this.down, true)
+    view.contentDOM.addEventListener('keydown', this.release, true)
+    view.dom.ownerDocument.addEventListener('mouseup', this.finish)
+    view.dom.ownerDocument.addEventListener('mousemove', this.move)
+    view.dom.ownerDocument.addEventListener('dragend', this.finish)
+    view.win.addEventListener('blur', this.finish)
+  }
+  destroy() {
+    clearTimeout(this.releaseTimer)
+    const view = this.view
+    view.contentDOM.removeEventListener('mousedown', this.down, true)
+    view.contentDOM.removeEventListener('keydown', this.release, true)
+    view.dom.ownerDocument.removeEventListener('mouseup', this.finish)
+    view.dom.ownerDocument.removeEventListener('mousemove', this.move)
+    view.dom.ownerDocument.removeEventListener('dragend', this.finish)
+    view.win.removeEventListener('blur', this.finish)
+  }
+})
+
+// Capture the source position before the first selection reveals syntax.
+// Reusing the same screen coordinates after that reveal would hit a different
+// character. Only real dragging should start hit-testing the new layout.
+const anchoredPointerSelection = EditorView.mouseSelectionStyle.of((view, event) => {
+  if (event.button !== 0 || event.detail !== 1 || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return null
+  let anchor = view.posAtCoords({ x: event.clientX, y: event.clientY })
+  if (anchor == null) return null
+  let dragged = false
+  return {
+    update(update) { anchor = update.changes.mapPos(anchor) },
+    get(current) {
+      dragged ||= Math.hypot(current.clientX - event.clientX, current.clientY - event.clientY) > 3
+      const head = dragged ? view.posAtCoords({ x: current.clientX, y: current.clientY }, false) ?? anchor : anchor
+      return EditorSelection.single(anchor, head)
+    },
+  }
+})
+
 // A cursor exists at offset zero as soon as CodeMirror is created. Do not let
 // that implicit cursor put a leading code block into source mode. A fenced
 // block becomes active only after a pointer selection lands inside it.
@@ -1232,6 +1320,12 @@ function buildMermaidPreviews(state) {
 const mermaidPreviews = StateField.define({
   create: (state) => buildMermaidPreviews(state),
   update: (value, tr) => {
+    if (tr.state.field(pointerPreview)) {
+      if (tr.startState.field(pointerPreview)?.activateOnSelection
+          && !tr.state.field(pointerPreview).activateOnSelection) return buildMermaidPreviews(tr.state)
+      return value
+    }
+    if (tr.startState.field(pointerPreview)) return buildMermaidPreviews(tr.state)
     const previousActive = tr.startState.field(activeCodeBlock)
     const nextActive = tr.state.field(activeCodeBlock)
     const activeChanged = previousActive?.from !== nextActive?.from
@@ -1283,8 +1377,10 @@ function detectedCodeHighlights(details, cache) {
 function buildDecorations(view, detectedCodeCache) {
   const ranges = []
   const { state } = view
-  const sel = state.selection.main
-  const activeFence = state.field(activeCodeBlock)
+  const pointer = state.field(pointerPreview)
+  const sel = pointer?.selection ?? state.selection.main
+  const activeFence = pointer ? pointer.fence : state.field(activeCodeBlock)
+  const focused = pointer ? pointer.focused : view.hasFocus
 
   // CodeMirror always owns a selection at offset zero, even before the user
   // clicks the editor. Only reveal source syntax when the editor truly has
@@ -1293,7 +1389,7 @@ function buildDecorations(view, detectedCodeCache) {
   // reveal every Markdown marker it spans. Only a caret activates source
   // syntax; this keeps Cmd-A and long drag selections in live-preview form.
   const touches = (from, to) => currentFindTouches(state, from, to)
-    || (view.hasFocus && sel.empty && sel.head >= from && sel.head <= to)
+    || (focused && sel.empty && sel.head >= from && sel.head <= to)
   const touchesLineOf = (pos) => {
     const line = state.doc.lineAt(pos)
     return touches(line.from, line.to)
@@ -1491,12 +1587,13 @@ function buildDecorations(view, detectedCodeCache) {
         if (name === "HeaderMark") {
           const parent = node.node.parent
           if (parent && /^ATXHeading/.test(parent.name)) {
+            ranges.push(headingMarker.range(node.from, node.to))
             const after = state.doc.sliceString(node.to, node.to + 1)
             const markTo = node.to + (after === " " ? 1 : 0)
+            if (node.from === parent.from) ranges.push(headingPrefix.range(node.from, markTo))
             if (!touchesLineOf(node.from)) {
-              // Keep the source prefix in layout while hiding it. Its exact
-              // width is therefore already reserved before the line becomes
-              // active, so revealing it cannot alter wrapping or height.
+              // Keep the hidden source prefix measurable for alignment.
+              // Pointer selection keeps its source anchor across activation.
               ranges.push(hiddenHeadingSource.range(node.from, markTo))
             }
           } else if (parent && /^SetextHeading/.test(parent.name)) {
@@ -1930,6 +2027,8 @@ const livePreview = ViewPlugin.fromClass(class {
     // Background parsing can finish without a document, selection, or viewport
     // change. Refresh widgets then too, or images can stay as source until input.
     if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged
+        || update.startState.field(pointerPreview) !== update.state.field(pointerPreview)
+
         || syntaxTree(update.startState) !== syntaxTree(update.state)
         || update.startState.field(documentFind) !== update.state.field(documentFind)) {
       this.decorations = buildDecorations(update.view, this.detectedCodeCache)
@@ -1937,10 +2036,8 @@ const livePreview = ViewPlugin.fromClass(class {
   }
 }, { decorations: (v) => v.decorations })
 
-// Inactive ATX markers keep their width in layout so line wrapping remains
-// stable. Measure that reserved width and translate the whole inactive line
-// left by the same amount. Activating the line removes only the transform,
-// producing the intended horizontal source reveal without changing height.
+// Align inactive headings with the document column. Active headings show
+// their source prefix inline, with pointer selection anchored in source space.
 const alignInactiveHeadings = ViewPlugin.fromClass(class {
   constructor(view) { this.schedule(view) }
 
@@ -1957,7 +2054,7 @@ const alignInactiveHeadings = ViewPlugin.fromClass(class {
     view.requestMeasure({
       key: this,
       read(view) {
-        return Array.from(view.dom.querySelectorAll(".cm-md-heading-source-hidden"))
+        return Array.from(view.dom.querySelectorAll(".cm-md-heading-prefix"))
           .map((marker) => {
             const line = marker.closest(".cm-line")
             return line ? { line, width: marker.getBoundingClientRect().width } : null
@@ -2320,10 +2417,14 @@ window.MDEditor = {
             }),
           }),
           activeCodeBlock,
+          pointerPreview,
+          stablePointerPreview,
+          anchoredPointerSelection,
           mermaidPreviews,
           tableEditors,
           syntaxHighlighting(codeHighlight),
-          livePreview,
+          Prec.lowest(livePreview),
+
           alignInactiveHeadings,
           autoCloseFence,
           closeBrackets(),
@@ -2432,6 +2533,10 @@ window.MDEditor = {
       link: insertLink,
     }
     return {
+      getLinkSelection: () => {
+        const { from, to } = view.state.selection.main
+        return { from, to, text: view.state.sliceDoc(from, to) }
+      },
       getMarkdown: () => view.state.doc.toString(),
       find: (query, backwards = false, beginsWith = false) => {
         const previous = view.state.field(documentFind)
