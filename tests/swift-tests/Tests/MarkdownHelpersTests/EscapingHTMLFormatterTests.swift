@@ -212,6 +212,15 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         XCTAssertFalse(html.contains("<del>visible</del>"), html)
     }
 
+    func testFenceLanguageLabelUsesParsedMarkdown() {
+        for fence in ["```", "~~~"] {
+            let html = EscapingHTMLFormatter.format(
+                "\(fence)swift\nlet value = 1\n\(fence)",
+                sourceMarkdown: "Different source mapping\nlet value = 1\nend")
+            XCTAssertTrue(html.contains("data-code-language=\"swift\""), html)
+        }
+    }
+
     func testEveryPrecedingBlankSourceLineIsRecorded() {
         let html = EscapingHTMLFormatter.format("First paragraph.\n\n\nSecond paragraph.")
         XCTAssertTrue(

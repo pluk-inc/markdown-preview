@@ -123,9 +123,9 @@ nonisolated extension MarkdownHTML {
     /* Hide inner scrollers' bars (tables, math) but never match the root:
        any custom ::-webkit-scrollbar style on <html>/<body> — including a
        later "restore" override — swaps the page's native macOS overlay
-       scrollbar for WebKit's legacy one. Zero specificity (:where) keeps
-       the pre::-webkit-scrollbar rules below winning for code blocks. */
-    :where(:not(html):not(body))::-webkit-scrollbar {
+       scrollbar for WebKit's legacy one. Exclude code blocks as well so
+       horizontal overflow retains its native scrollbar. */
+    :where(:not(html):not(body):not(pre))::-webkit-scrollbar {
         display: none;
         width: 0;
         height: 0;

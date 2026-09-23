@@ -4,6 +4,22 @@ import XCTest
 
 @MainActor
 final class EditorScrollAnchorTests: XCTestCase {
+    func testPreviewCodeScrollbarIsNotHiddenByInnerScrollerRule() async throws {
+        let html = "<style>\(MarkdownHTML.stylesheet)</style><article class='markdown-body'><pre><code>"
+            + String(repeating: "long_argument_", count: 100) + "</code></pre></article>"
+        let preview = WebViewLayoutHarness(html: html, width: 650, isEditor: false, height: 400)
+        defer { preview.close() }
+        _ = try await preview.layout(texts: [], imageCount: 0)
+        let result = try await preview.webView.evaluateJavaScript("""
+            (() => {
+                const pre = document.querySelector('pre');
+                return pre.scrollWidth > pre.clientWidth
+                    && getComputedStyle(pre, '::-webkit-scrollbar').display !== 'none';
+            })()
+            """)
+        XCTAssertEqual(result as? Bool, true)
+    }
+
     func testOriginalClearsAnOpenEditorsCustomPageBackground() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let editor = WebViewLayoutHarness(html: EditorHTML.render(
@@ -130,9 +146,19 @@ final class EditorScrollAnchorTests: XCTestCase {
             const lineHeight = parseFloat(getComputedStyle(first).lineHeight);
             first.scrollLeft = 120;
             first.dispatchEvent(new Event('scroll'));
+            const originalSource = window.__mdEditor.getMarkdown();
+            // Editing before the block changes its group key. Editing inside
+            // it must also preserve the shared horizontal position.
+            window.__mdEditor.insertTextAt('x', 0, 0);
+            for (let i = 0; i < 12; i++) { window.__layoutTestFrame(); await Promise.resolve(); }
+            const inside = window.__mdEditor.getMarkdown().indexOf('long_argument_') + 30;
+            window.__mdEditor.insertTextAt('x', inside, inside);
+            for (let i = 0; i < 12; i++) { window.__layoutTestFrame(); await Promise.resolve(); }
+            const updated = [...document.querySelectorAll('[data-code-scroll-group]')];
             return { count: lines.length, overflow: first.scrollWidth - first.clientWidth,
                 height, lineHeight, firstOffset: first.scrollLeft, lastOffset: last.scrollLeft,
-                source: window.__mdEditor.getMarkdown() };
+                updatedOffsets: updated.map(line => line.scrollLeft),
+                source: originalSource };
             """, arguments: [:], in: nil, contentWorld: .page)
         let values = try XCTUnwrap(result as? [String: Any])
         XCTAssertEqual(values["count"] as? Int, 2)
@@ -141,6 +167,9 @@ final class EditorScrollAnchorTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(values["firstOffset"] as? Double), 120, accuracy: 1)
         XCTAssertEqual(try XCTUnwrap(values["lastOffset"] as? Double), 120, accuracy: 1)
         XCTAssertEqual(values["source"] as? String, markdown)
+        for offset in try XCTUnwrap(values["updatedOffsets"] as? [Double]) {
+            XCTAssertEqual(offset, 120, accuracy: 1)
+        }
     }
 
     func testSmallScrollPreservesPagePaddingInBothScrollModes() async throws {

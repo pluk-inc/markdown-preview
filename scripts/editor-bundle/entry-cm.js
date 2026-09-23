@@ -1120,7 +1120,6 @@ const codeBlockScrolling = ViewPlugin.fromClass(class {
     this.measure()
   }
   update(update) {
-    if (update.docChanged) this.offsets.clear()
     if (update.docChanged || update.viewportChanged || update.geometryChanged) this.measure()
   }
   measure() {
@@ -1130,8 +1129,9 @@ const codeBlockScrolling = ViewPlugin.fromClass(class {
         const groups = new Map()
         for (const line of view.contentDOM.querySelectorAll('[data-code-scroll-group]')) {
           const key = line.dataset.codeScrollGroup
-          if (!groups.has(key)) groups.set(key, { lines: [], width: 0 })
+          if (!groups.has(key)) groups.set(key, { lines: [], width: 0, offset: 0 })
           const group = groups.get(key)
+          group.offset = Math.max(group.offset, line.scrollLeft)
           let left = Infinity, right = -Infinity
           for (const text of line.querySelectorAll('.cm-md-code-scroll-text')) {
             const range = document.createRange()
@@ -1147,14 +1147,17 @@ const codeBlockScrolling = ViewPlugin.fromClass(class {
         return groups
       },
       write: (groups) => {
+        this.offsets.clear()
         for (const [key, group] of groups) {
           const width = `${Math.ceil(group.width)}px`
           for (const { line } of group.lines) {
             if (line.style.getPropertyValue('--code-scroll-width') !== width) {
               line.style.setProperty('--code-scroll-width', width)
             }
-            line.scrollLeft = this.offsets.get(key) || 0
+            line.scrollLeft = group.offset
+            line.style.setProperty('--code-scroll-offset', `${line.scrollLeft}px`)
           }
+          this.offsets.set(key, group.offset)
         }
       },
     })

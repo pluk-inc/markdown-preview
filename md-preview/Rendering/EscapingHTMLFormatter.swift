@@ -1276,8 +1276,8 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         }
         let label = info.language.isEmpty ? (detectedLanguage ?? "code") : info.language
         let opening = codeBlock.range.map { range -> String in
-            guard sourceLines.indices.contains(range.lowerBound.line - 1) else { return "" }
-            return String(decoding: sourceLines[range.lowerBound.line - 1].utf8.dropFirst(range.lowerBound.column - 1), as: UTF8.self)
+            guard parsedSourceLines.indices.contains(range.lowerBound.line - 1) else { return "" }
+            return String(decoding: parsedSourceLines[range.lowerBound.line - 1].utf8.dropFirst(range.lowerBound.column - 1), as: UTF8.self)
         } ?? ""
         let isFenced = opening.hasPrefix("```") || opening.hasPrefix("~~~")
         let labelAttribute = isFenced && language != "mermaid"
