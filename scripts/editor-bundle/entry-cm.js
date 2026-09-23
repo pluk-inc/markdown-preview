@@ -2393,9 +2393,22 @@ function listPrefix(text) {
   }
 }
 
+function enclosingNode(state, position, names) {
+  for (let node = syntaxTree(state).resolve(position, 1); node; node = node.parent) {
+    if (names.includes(node.name)) return node
+  }
+  return null
+}
+
+function editableListLines(state) {
+  return selectedListLines(state).filter(line =>
+    !/^[ \t>]*$/.test(line.text)
+    && !enclosingNode(state, line.from + line.text.search(/\S/), ['FencedCode', 'CodeBlock']))
+}
+
 function applyListStyle(view, style) {
   if (!['none', 'bullet', 'ordered', 'task'].includes(style)) return false
-  const changes = selectedListLines(view.state).map((line, index) => {
+  const changes = editableListLines(view.state).map((line, index) => {
     const current = listPrefix(line.text)
     if (current.style === style) return null
     const marker = style === 'none' ? '' : style === 'bullet' ? '- ' : style === 'task' ? '- [ ] ' : `${index + 1}. `
@@ -2421,7 +2434,7 @@ function setHeading(level) {
 
 function stylingContext(state) {
   const styles = { InlineCode: 'code', FencedCode: 'fenced', CodeBlock: 'plain', Blockquote: 'quote', Table: 'table' }
-  for (let node = syntaxTree(state).resolve(state.selection.main.head, 1); node; node = node.parent) {
+  for (let node = syntaxTree(state).resolve(state.selection.main.head, state.selection.main.empty ? 1 : -1); node; node = node.parent) {
     if (styles[node.name]) return { style: styles[node.name], node }
   }
   return { style: 'none', node: null }
@@ -2431,19 +2444,31 @@ function applyBlockStyle(view, style, language = '') {
   if (!['none', 'quote', 'code', 'plain', 'fenced', 'table'].includes(style)) return false
   const state = view.state, selection = state.selection.main
   const context = stylingContext(state)
-  if (style === 'code') {
+  const containsSelection = context.node && selection.from >= context.node.from && selection.to <= context.node.to
+  if (style === 'code' && (!containsSelection || context.style === 'code')) {
     if (context.style !== 'code') toggleInlineMark('`')(view)
     view.focus()
     return true
   }
   if (style === 'table') {
-    const end = state.doc.lineAt(selection.to).to
-    const insert = '\n\n| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n'
+    const fence = enclosingNode(state, selection.to, ['FencedCode'])
+    const end = fence ? fence.to : state.doc.lineAt(selection.to).to
+    const close = fence && fence.lastChild?.name !== 'CodeMark'
+      ? '\n' + state.sliceDoc(fence.firstChild.from, fence.firstChild.to) : ''
+    const insert = close + '\n\n| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n'
     view.dispatch({ changes: { from: end, insert }, selection: { anchor: end + insert.length }, userEvent: 'input' })
     view.focus()
     return true
   }
-  if (style === context.style && style !== 'fenced') return true
+  if (style === context.style && containsSelection && style !== 'fenced') return true
+  if (style === 'quote' && !containsSelection) {
+    const changes = selectedListLines(state).filter(line =>
+      !enclosingNode(state, line.from + Math.max(0, line.text.search(/\S/)), ['Blockquote']))
+      .map(line => ({ from: line.from, insert: '> ' }))
+    if (changes.length) dispatchBlockChanges(view, changes)
+    view.focus()
+    return true
+  }
   const lines = selectedListLines(state)
   let from = lines[0].from, to = lines[lines.length - 1].to
   let source = state.sliceDoc(from, to)
@@ -2467,6 +2492,13 @@ function applyBlockStyle(view, style, language = '') {
     }
   }
   let insert = source, caretOffset = 0
+  if (style === 'code') {
+    source = source.replace(/\n/g, ' ')
+    const fence = '`'.repeat(Math.max(1, ...(source.match(/`+/g) || []).map(run => run.length + 1)))
+    const pad = /^`|`$/.test(source) || (/^ .* $/.test(source) && /\S/.test(source)) ? ' ' : ''
+    insert = fence + pad + source + pad + fence
+    caretOffset = fence.length + pad.length
+  }
   if (style === 'quote') { insert = source.split('\n').map(line => '> ' + line).join('\n'); caretOffset = 2 }
   if (style === 'plain') { insert = source.split('\n').map(line => '    ' + line).join('\n'); caretOffset = 4 }
   if (style === 'fenced') {
@@ -2762,21 +2794,30 @@ window.MDEditor = {
       getBlockStyle: () => stylingContext(view.state).style,
       setBlockStyle: (style, language) => applyBlockStyle(view, style, language),
       getListStyle: () => {
-        const styles = selectedListLines(view.state).map(line => listPrefix(line.text).style)
+        const styles = editableListLines(view.state).map(line => listPrefix(line.text).style)
+        if (!styles.length) return 'none'
         return styles.every(style => style === styles[0]) ? styles[0] : 'mixed'
       },
       setListStyle: style => applyListStyle(view, style),
-      getLinkSelection: () => {
+      getLinkSelection: (expandLink = false) => {
         const { from, to } = view.state.selection.main
+        const link = enclosingNode(view.state, from, ['Link'])
+        if (expandLink && link && to <= link.to) {
+          const marks = link.getChildren('LinkMark')
+          return { from: link.from, to: link.to,
+            text: view.state.sliceDoc(marks[0].to, marks[1].from) }
+        }
         return { from, to, text: view.state.sliceDoc(from, to) }
       },
       insertLinkFromPopover: (text, url, from, to) => {
         const destination = String(url).trim()
         if (!destination || /[\r\n]/.test(destination)
             || from < 0 || to < from || to > view.state.doc.length) return false
+        const link = enclosingNode(view.state, from, ['Link'])
+        if (link && (from > link.from || to < link.to)) return false
         const label = (String(text) || destination).replace(/\\/g, '\\\\').replace(/([\[\]])/g, '\\$1').replace(/[\r\n]+/g, ' ')
         const target = destination.replace(/[\s<>\\()]/g, character =>
-          '%' + character.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'))
+          /[()]/.test(character) ? '%' + character.charCodeAt(0).toString(16).toUpperCase() : encodeURIComponent(character))
         const insert = `[${label}](${target})`
         view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length }, userEvent: 'input' })
         view.focus()

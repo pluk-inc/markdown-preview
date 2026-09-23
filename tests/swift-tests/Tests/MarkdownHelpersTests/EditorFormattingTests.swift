@@ -4,6 +4,48 @@ import XCTest
 
 @MainActor
 final class EditorFormattingTests: XCTestCase {
+    func testPopoverReviewRegressions() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let cases: [(String, String, String, String)] = [
+            ("```swift\nhello\nworld\n```", "hello", "setBlockStyle('code')", "`hello world`"),
+            ("    hello", "hello", "setBlockStyle('code')", "`hello`"),
+            ("> hello", "hello", "setBlockStyle('code')", "`hello`"),
+            ("> a`b", "a`b", "setBlockStyle('code')", "``a`b``"),
+            ("| Name |\n| --- |\n| value |", "value", "setBlockStyle('code')", "`Name value`"),
+            ("plain\n\n> quoted", "plain\n\n> quoted", "setBlockStyle('quote')", "> plain\n> \n> quoted"),
+            ("one\n\ntwo", "one\n\ntwo", "setListStyle('ordered')", "1. one\n\n2. two"),
+            ("```text\n- item\n```", "- item", "setListStyle('none')", "```text\n- item\n```"),
+            ("    - item", "- item", "setListStyle('bullet')", "    - item"),
+            ("```text\nhello\n```", "hello", "setBlockStyle('table')", "```text\nhello\n```\n\n| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n")
+        ]
+        for (source, selection, command, expected) in cases {
+            let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: source, editorJavaScript: script),
+                                              width: 650, isEditor: true, height: 400)
+            _ = try await editor.layout(texts: [], imageCount: 0)
+            _ = try await editor.webView.callAsyncJavaScript("const from = window.__mdEditor.getMarkdown().indexOf(query); window.__mdEditor.select(from, query.includes('\\n') ? from + query.length : from);",
+                                                            arguments: ["query": selection], in: nil, contentWorld: .page)
+            _ = try await editor.webView.evaluateJavaScript("window.__mdEditor.\(command)")
+            let actual = try await editor.webView.evaluateJavaScript("window.__mdEditor.getMarkdown()") as? String
+            XCTAssertEqual(actual, expected, command + " in " + source)
+            editor.close()
+        }
+    }
+
+    func testLinkPopoverReplacesExistingLinkAndEncodesUnicodeWhitespace() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: "[hello](old)", editorJavaScript: script),
+                                          width: 650, isEditor: true, height: 400)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        let result = try await editor.webView.evaluateJavaScript("""
+            window.__mdEditor.insertTextAt('', 3, 3);
+            const selection = window.__mdEditor.getLinkSelection(true);
+            window.__mdEditor.insertLinkFromPopover(selection.text, 'https://example.com/a\\u00a0b\\u2003c(x)', selection.from, selection.to);
+            window.__mdEditor.getMarkdown();
+            """) as? String
+        XCTAssertEqual(result, "[hello](https://example.com/a%C2%A0b%E2%80%83c%28x%29)")
+    }
+
     func testFormattingStateIsPublishedSynchronouslyOnSelectionAndCommands() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let editor = WebViewLayoutHarness(

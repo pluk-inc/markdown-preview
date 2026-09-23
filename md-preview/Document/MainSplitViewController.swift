@@ -413,6 +413,9 @@ final class MainSplitViewController: NSSplitViewController {
     /// accessories, and would jump on every edit-mode toggle).
     func installFormattingBar(_ bar: NSView) {
         if Self.usesFloatingFormattingBar {
+            if Self.usesNativeChromeAccessories {
+                layeredContentViewController?.nativeFindOverlay = findOverlayView
+            }
             layeredContentViewController?.installFormattingBar(bar)
         } else if Self.usesNativeChromeAccessories {
             formattingAccessory = installNativeChromeAccessory(bar)
@@ -492,6 +495,9 @@ final class MainSplitViewController: NSSplitViewController {
             layeredContentViewController?.installFindOverlay(bar)
         }
         findOverlayView = bar
+        if Self.usesNativeChromeAccessories {
+            layeredContentViewController?.nativeFindOverlay = bar
+        }
         cachedEditorViewController?.findOverlay = bar
         contentViewController?.findOverlay = bar
     }
@@ -687,6 +693,7 @@ private final class LayeredContentViewController: NSViewController {
     private var legacyEditorTopConstraint: NSLayoutConstraint?
     private weak var formattingBar: NSView?
     private weak var findOverlay: NSView?
+    weak var nativeFindOverlay: NSView?
     private var formattingBarTopConstraint: NSLayoutConstraint?
     private var findOverlayTopConstraint: NSLayoutConstraint?
     private var chromeObservation: NSKeyValueObservation?
@@ -765,6 +772,9 @@ private final class LayeredContentViewController: NSViewController {
             top.constant = overlap
         }
         var editTop = overlap
+        if let find = nativeFindOverlay, !find.isHidden {
+            editTop += find.fittingSize.height
+        }
         if let find = findOverlay, find.superview === view, !find.isHidden {
             editTop += find.fittingSize.height
         }

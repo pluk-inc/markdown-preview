@@ -95,6 +95,12 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     /// the 900px column and the body gutters track the preview exactly.
     func applyPageZoom(_ zoom: CGFloat) {
         webView.pageZoom = zoom
+        updateChromeZoom()
+    }
+
+    private func updateChromeZoom() {
+        guard #available(macOS 26.0, *) else { return }
+        webView.evaluateJavaScript("document.documentElement.style.setProperty('--mdp-chrome-zoom', '\(max(webView.pageZoom, 0.001))')", completionHandler: nil)
     }
 
     /// Rewrites the theme override `<style>` so a color edited in Settings
@@ -346,7 +352,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     }
 
     func fetchLinkSelection(_ completion: @escaping (LinkSelection?) -> Void) {
-        webView.evaluateJavaScript("window.__mdEditor && window.__mdEditor.getLinkSelection()") { result, _ in
+        webView.evaluateJavaScript("window.__mdEditor && window.__mdEditor.getLinkSelection(true)") { result, _ in
             guard let value = result as? [String: Any], let text = value["text"] as? String,
                   let from = value["from"] as? Int, let to = value["to"] as? Int else {
                 completion(nil)
@@ -392,6 +398,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                 contentDidChange?()
             case "ready":
                 hasLoadedEditorPage = true
+                updateChromeZoom()
                 // Fresh page — the bar padding lives in the DOM and must be
                 // re-applied even when the tracked value hasn't changed,
                 // and WebKit re-derives the under-page color from the new

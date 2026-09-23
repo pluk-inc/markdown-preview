@@ -4,6 +4,27 @@ import XCTest
 
 @MainActor
 final class EditorScrollAnchorTests: XCTestCase {
+    func testFloatingToolbarClearanceRemainsConstantAcrossZoom() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        for zoom in [0.5, 1.0, 2.0] {
+            for editing in [false, true] {
+                let html = editing
+                    ? EditorHTML.render(markdown: "Text", editorJavaScript: script,
+                                        configuration: .init(usesPageScrolling: true))
+                    : "<style>\(MarkdownHTML.stylesheet)</style><style>:root { --mdp-page-top-clearance: \(MarkdownHTML.appPageTopClearance)px; }</style><article class='markdown-body'>Text</article>"
+                let page = WebViewLayoutHarness(html: html, width: 650, isEditor: editing, zoom: zoom, height: 400)
+                _ = try await page.layout(texts: [], imageCount: 0)
+                let value = try await page.webView.callAsyncJavaScript("""
+                    document.documentElement.style.setProperty('--mdp-chrome-zoom', zoom);
+                    return parseFloat(getComputedStyle(document.querySelector(editing ? '.cm-scroller' : 'body')).paddingTop) * zoom;
+                    """, arguments: ["zoom": zoom, "editing": editing], in: nil, contentWorld: .page)
+                XCTAssertEqual(try XCTUnwrap(value as? Double),
+                               Double(MarkdownHTML.pagePaddingTop + MarkdownHTML.appPageTopClearance), accuracy: 1)
+                page.close()
+            }
+        }
+    }
+
     func testPreviewCodeScrollbarIsNotHiddenByInnerScrollerRule() async throws {
         let html = "<style>\(MarkdownHTML.stylesheet)</style><article class='markdown-body'><pre><code>"
             + String(repeating: "long_argument_", count: 100) + "</code></pre></article>"

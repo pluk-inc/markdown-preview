@@ -478,9 +478,11 @@ extension DocumentWindowController {
                   self.isEditing, self.formattingPopover === popover else { return }
             self.updateHeadingButton(sender, level: level)
             self.editBar?.layoutSubtreeIfNeeded()
+            let selectedLevel = level
             let host = NSHostingController(rootView: HeadingFormatPopover(selectedLevel: level) { [weak self, weak sender] level in
                 self?.formattingPopover?.close()
                 self?.formattingPopover = nil
+                guard level != selectedLevel else { return }
                 if let sender { self?.updateHeadingButton(sender, level: level) }
                 self?.formatMarkdown("h\(level)")
             })

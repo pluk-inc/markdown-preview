@@ -88,7 +88,7 @@ nonisolated enum EditorHTML {
             padding-inline: \(MarkdownHTML.pagePaddingHorizontal)px;
             /* Document clearance is outside contenteditable and scrolls
                away naturally; it must not be a fixed interaction shield. */
-            padding-top: \(MarkdownHTML.pagePaddingTop + (usesPageScrolling ? MarkdownHTML.appPageTopClearance : 0))px;
+            padding-top: calc(\(MarkdownHTML.pagePaddingTop + (usesPageScrolling ? MarkdownHTML.appPageTopClearance : 0))px / var(--mdp-chrome-zoom, 1));
             cursor: default;
             box-sizing: border-box;
             font-family: \(MarkdownHTML.bodyFontFamily) !important;
@@ -696,7 +696,8 @@ nonisolated enum EditorHTML {
                     getBlockStyle: function () { return editor.getBlockStyle(); },
                     setBlockStyle: function (style, language) { return editor.setBlockStyle(style, language); },
                     setListStyle: function (style) { return editor.setListStyle(style); },
-                    getLinkSelection: function () { return editor.getLinkSelection(); },
+                    getLinkSelection: function (expandLink) { return editor.getLinkSelection(expandLink); },
+                    select: function (anchor, head) { editor.select(anchor, head); },
                     insertLinkFromPopover: function (text, url, from, to) {
                         return editor.insertLinkFromPopover(text, url, from, to);
                     },
