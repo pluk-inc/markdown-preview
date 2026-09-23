@@ -4,6 +4,52 @@ import XCTest
 
 @MainActor
 final class EditorScrollAnchorTests: XCTestCase {
+    func testCodeCardCopyRespectsParsedIndentation() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        for (source, expected) in [("  ```\n  x\n  ```", "x"),
+                                   ("        x\n    y", "    x\ny"),
+                                   ("```\n\nx\n\n```", "\nx\n")] {
+            let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: source, editorJavaScript: script),
+                                              width: 650, isEditor: true, height: 400)
+            _ = try await editor.layout(texts: [], imageCount: 0)
+            let copied = try await editor.webView.callAsyncJavaScript("""
+                let copied = null;
+                Object.defineProperty(window, 'webkit', { configurable: true, value: { messageHandlers: {
+                    mdEditorHost: { postMessage: message => { if (message.kind === 'copyCode') copied = message.value; } }
+                } } });
+                document.querySelector('.cm-md-code-copy').click();
+                await Promise.resolve();
+                return copied;
+                """, arguments: [:], in: nil, contentWorld: .page) as? String
+            XCTAssertEqual(copied, expected)
+            editor.close()
+        }
+    }
+
+    func testCodeWrappingFollowsInsertionAndDoesNotSurviveDeletion() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        for source in ["```text\nlong code\n```", "    long code"] {
+            let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: source, editorJavaScript: script),
+                                              width: 650, isEditor: true, height: 400)
+            _ = try await editor.layout(texts: [], imageCount: 0)
+            let result = try await editor.webView.callAsyncJavaScript("""
+                const settle = async () => { for(let i=0;i<12;i++) { window.__layoutTestFrame(); await Promise.resolve(); } };
+                const wrapped = () => document.querySelector('.cm-md-code-toggle-wrap')?.getAttribute('aria-pressed');
+                document.querySelector('.cm-md-code-toggle-wrap').click();
+                await settle();
+                window.__mdEditor.insertTextAt('Before\\n\\n', 0, 0);
+                await settle();
+                const preserved = wrapped() === 'true';
+                window.__mdEditor.insertTextAt('', 0, window.__mdEditor.getMarkdown().length);
+                window.__mdEditor.insertTextAt(source, 0, 0);
+                await settle();
+                return preserved && wrapped() === 'false';
+                """, arguments: ["source": source], in: nil, contentWorld: .page) as? Bool
+            XCTAssertEqual(result, true)
+            editor.close()
+        }
+    }
+
     func testFloatingToolbarClearanceRemainsConstantAcrossZoom() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         for zoom in [0.5, 1.0, 2.0] {
@@ -87,7 +133,9 @@ final class EditorScrollAnchorTests: XCTestCase {
                 copy().click();
                 await settle();
                 const exactCopy = copied !== null && copied.replace(/\\n$/, '') === code;
-                const height = line().getBoundingClientRect().height;
+                // Compare the content box: legacy/overlay scrollbar visibility
+                // can change the border-box height after horizontal scrolling.
+                const height = line().clientHeight;
                 const buttonX = copy().getBoundingClientRect().x;
                 line().scrollLeft = 80;
                 await settle();
@@ -100,7 +148,7 @@ final class EditorScrollAnchorTests: XCTestCase {
                 toggle().click();
                 await settle();
                 return { pinned, wrapped, exactCopy,
-                    restored: Math.abs(line().getBoundingClientRect().height - height) < 1,
+                    restored: Math.abs(line().clientHeight - height) < 1,
                     unchanged: before === (isEditor ? window.__mdEditor.getMarkdown() : line().textContent),
                     iconOnly: copy().textContent === '' && !!copy().querySelector('svg'),
                     unwrapped: toggle().getAttribute('aria-pressed') === 'false' };

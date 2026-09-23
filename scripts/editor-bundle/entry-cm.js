@@ -7,7 +7,7 @@
 import {
   EditorView, keymap, ViewPlugin, Decoration, WidgetType, dropCursor,
 } from "@codemirror/view"
-import { Annotation, EditorState, EditorSelection, Prec, StateEffect, StateField, Transaction } from "@codemirror/state"
+import { Annotation, EditorState, EditorSelection, MapMode, Prec, StateEffect, StateField, Transaction } from "@codemirror/state"
 import {
   defaultKeymap, history, historyKeymap, indentLess, insertTab,
 } from "@codemirror/commands"
@@ -320,12 +320,12 @@ class MermaidWidget extends WidgetType {
 // info string. The source range is rebuilt after each commit, so the widget
 // remains anchored while its input edits the opening line.
 const codeCopyHandlers = new WeakMap()
-const toggleCodeWrap = StateEffect.define({ map: (pos, changes) => changes.mapPos(pos) })
+const toggleCodeWrap = StateEffect.define({ map: (pos, changes) => changes.mapPos(pos, 1, MapMode.TrackAfter) ?? undefined })
 const wrappedCodeBlocks = StateField.define({
   create: () => new Set(),
   update(value, tr) {
     if (!tr.docChanged && !tr.effects.some(e => e.is(toggleCodeWrap))) return value
-    const next = new Set([...value].map(pos => tr.changes.mapPos(pos)))
+    const next = new Set([...value].map(pos => tr.changes.mapPos(pos, 1, MapMode.TrackAfter)).filter(pos => pos != null))
     for (const effect of tr.effects) if (effect.is(toggleCodeWrap)) {
       if (next.has(effect.value)) next.delete(effect.value)
       else next.add(effect.value)
@@ -439,7 +439,7 @@ class CodeLanguageWidget extends WidgetType {
       while (node && node.name !== (this.plain ? 'CodeBlock' : 'FencedCode')) node = node.parent
       if (!node) return
       const source = this.plain
-        ? view.state.doc.sliceString(node.from, node.to).replace(/^(?: {4}|\t)/gm, '')
+        ? node.getChildren('CodeText').map(text => view.state.sliceDoc(text.from, text.to)).join('')
         : fencedCodeDetails(view.state, node).source
       try {
         const handler = codeCopyHandlers.get(view)
@@ -1308,7 +1308,13 @@ function fencedCodeDetails(state, node) {
   const sourceFrom = openingLine.to < state.doc.length ? openingLine.to + 1 : openingLine.to
   let sourceTo = node.to
   if (codeMarks.length > 1) sourceTo = state.doc.lineAt(codeMarks[codeMarks.length - 1].from).from
-  const source = state.doc.sliceString(sourceFrom, sourceTo).replace(/\n$/, "")
+  const prefix = state.sliceDoc(openingLine.from, node.from)
+  const indentation = /^ {0,3}$/.test(prefix) ? prefix.length : 0
+  const textNodes = node.node.getChildren('CodeText')
+  const source = textNodes.map((text, index) => {
+    const gap = index ? state.doc.lineAt(text.from).number - state.doc.lineAt(textNodes[index - 1].to).number : 0
+    return '\n'.repeat(gap) + state.sliceDoc(text.from, text.to)
+  }).join('').replace(new RegExp('^ {0,' + indentation + '}', 'gm'), '')
   const detectedLanguage = explicitLanguage ? "" : detectLanguage(source)
   const infoFrom = infoNode?.from ?? openingMark?.to ?? openingLine.to
   const infoTo = infoNode?.to ?? infoFrom

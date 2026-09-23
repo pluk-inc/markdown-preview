@@ -877,7 +877,7 @@ nonisolated extension MarkdownHTML {
         }
 
         /* Interaction affordances are screen-only. */
-        .md-code-header,
+        .md-code-action,
         .md-search-burst,
         .mermaid-hud { display: none !important; }
         mark.md-search-highlight,
