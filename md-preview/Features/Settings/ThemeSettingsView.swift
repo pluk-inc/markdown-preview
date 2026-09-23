@@ -37,6 +37,7 @@ struct ThemeSettingsView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .disabled(model.isAppearanceLocked)
                             .accessibilityLabel(mode.settingsTitle)
                             .accessibilityAddTraits(
                                 model.appearance == mode ? [.isSelected] : []
@@ -46,7 +47,9 @@ struct ThemeSettingsView: View {
                 }
                 .padding(.vertical, 4)
             } footer: {
-                Text(L("Appearance also applies to Quick Look previews."))
+                Text(model.isAppearanceLocked
+                    ? L("This theme uses a fixed appearance. Choose Original to change it.")
+                    : L("Appearance also applies to Quick Look previews."))
             }
 
             Section {

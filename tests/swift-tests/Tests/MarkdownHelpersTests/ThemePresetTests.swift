@@ -10,6 +10,17 @@ final class ThemePresetTests: XCTestCase {
         XCTAssertFalse(ThemePreset.defaultPreset.setting.isCustomized)
     }
 
+    func testEveryFixedPresetLocksItsAppearanceAndOriginalRemainsAdjustable() {
+        let light = Set(["Paper", "Bold", "Calm", "Focus"])
+        let dark = Set(["Quiet", "Graphite", "Dusk", "Midnight"])
+        for preset in ThemePreset.builtIn {
+            let required = ThemePreset.requiredAppearance(for: preset.setting)
+            if light.contains(preset.name) { XCTAssertEqual(required, .light, preset.name) }
+            else if dark.contains(preset.name) { XCTAssertEqual(required, .dark, preset.name) }
+            else { XCTAssertEqual(preset.name, "Original"); XCTAssertNil(required) }
+        }
+    }
+
     func testOriginalLeavesPageBackgroundToNativeWindow() throws {
         let original = ThemePreset.defaultPreset.setting
         XCTAssertFalse(original.isCustomized)

@@ -4,7 +4,7 @@
 //
 //  Named built-in theme presets. Original restores the app's default colors;
 //  other presets write a fixed palette into ThemeColorsSetting slots.
-//  Applying a preset also switches the app's appearance to the preset's
+//  Applying a fixed preset also locks the app's appearance to the preset's
 //  flavor so the native chrome (sidebar,
 //  toolbar) matches. A `.system` preset keeps the Automatic appearance and
 //  carries a separate dark palette, so both schemes stay readable while
@@ -86,6 +86,20 @@ nonisolated struct ThemePreset: Identifiable, Equatable, Sendable {
     }
 
     var id: String { name }
+
+    /// Fixed palettes must keep matching native chrome. Original follows the
+    /// user's appearance choice; custom palettes remain independently editable.
+    var requiredAppearance: AppearanceMode? {
+        switch flavor {
+        case .light: .light
+        case .dark: .dark
+        case .system: nil
+        }
+    }
+
+    static func requiredAppearance(for colors: ThemeColorsSetting) -> AppearanceMode? {
+        builtIn.first(where: { $0.setting == colors })?.requiredAppearance
+    }
 
     /// The default theme: Reset Colors returns to it, and it leads the
     /// gallery.

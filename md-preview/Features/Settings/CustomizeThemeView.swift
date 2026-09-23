@@ -97,7 +97,7 @@ struct CustomizeThemeView: View {
                 } footer: {
                     Text(model.appearance == .automatic
                         ? L("Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override.")
-                        : L("Colors apply to the current appearance. Choose the Automatic appearance to set Light and Dark separately."))
+                        : L("Colors apply to the current appearance. Start with Original and choose Automatic to set Light and Dark separately."))
                 }
 
                 // A full-width destructive row rather than a trailing button:

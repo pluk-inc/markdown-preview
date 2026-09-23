@@ -7,8 +7,8 @@
 //
 //  State goes through `SettingsModel` rather than `@AppStorage` because these
 //  preferences aren't plain defaults: appearance lives in the app group shared
-//  with the Quick Look extension, appearance and content width clear their key
-//  at the default value, crash reporting starts and stops the Sentry SDK, and
+//  with the Quick Look extension, fixed themes lock their appearance, content
+//  width clears its default key, crash reporting starts and stops the Sentry SDK, and
 //  anonymous usage analytics has its own capture lifecycle. Routing through
 //  the existing types keeps one source of truth.
 //
@@ -28,6 +28,10 @@ final class SettingsModel {
             guard !isRestoringExternalValues, appearance != oldValue else { return }
             appDelegate?.applyAppearanceSetting(appearance)
         }
+    }
+
+    var isAppearanceLocked: Bool {
+        ThemePreset.requiredAppearance(for: themeColors) != nil
     }
 
     var documentFont: DocumentFontSetting {

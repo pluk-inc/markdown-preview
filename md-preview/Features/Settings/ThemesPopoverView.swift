@@ -181,7 +181,8 @@ struct ThemesPopoverView: View {
         }
         .buttonStyle(.plain)
         .background(Capsule().fill(Color.primary.opacity(0.06)))
-        .help(title)
+        .disabled(model.isAppearanceLocked)
+        .help(model.isAppearanceLocked ? L("This theme uses a fixed appearance. Choose Original to change it.") : title)
         .accessibilityLabel(title)
     }
 

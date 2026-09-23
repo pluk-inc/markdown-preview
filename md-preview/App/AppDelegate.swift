@@ -106,7 +106,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         CrashReporter.start()
-        let appearanceMode = AppearanceMode.migrateLegacyValue()
+        let storedAppearance = AppearanceMode.migrateLegacyValue()
+        let appearanceMode = ThemePreset.requiredAppearance(for: ThemeColorsSetting.current) ?? storedAppearance
+        if appearanceMode != storedAppearance { AppearanceMode.current = appearanceMode }
         applyAppearanceMode(appearanceMode, reloadPreviews: false)
         installAppearanceMenuItems()
         installContentWidthMenuItems()
@@ -310,9 +312,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Applies an appearance chosen in Settings, keeping the View menu's check
     /// marks and every open preview in step.
     func applyAppearanceSetting(_ mode: AppearanceMode) {
-        guard mode != AppearanceMode.current else { return }
-        AppearanceMode.current = mode
-        applyAppearanceMode(mode, reloadPreviews: true)
+        let resolved = ThemePreset.requiredAppearance(for: ThemeColorsSetting.current) ?? mode
+        AppearanceMode.current = resolved
+        applyAppearanceMode(resolved, reloadPreviews: true)
     }
 
     func applyContentWidthSetting(_ setting: ContentWidthSetting) {
@@ -442,6 +444,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func selectAppearanceMode(_ sender: NSMenuItem) {
+        guard ThemePreset.requiredAppearance(for: ThemeColorsSetting.current) == nil else { return }
         guard let rawValue = sender.representedObject as? String,
               let mode = AppearanceMode(rawValue: rawValue),
               mode != AppearanceMode.current else { return }
@@ -474,8 +477,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
              #selector(performFindPanelAction(_:)),
              #selector(performTextFinderAction(_:)):
             return activeDocumentWindowController != nil
-        case #selector(selectAppearanceMode(_:)),
-             #selector(selectContentWidthSetting(_:)):
+        case #selector(selectAppearanceMode(_:)):
+            return ThemePreset.requiredAppearance(for: ThemeColorsSetting.current) == nil
+        case #selector(selectContentWidthSetting(_:)):
             return true
         case #selector(toggleEditModeFromMenu(_:)):
             return activeDocumentWindowController?.canToggleEditMode ?? false
