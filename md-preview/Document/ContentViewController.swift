@@ -543,7 +543,7 @@ final class ContentViewController: NSViewController {
             .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         let color = ThemeColorsSetting.current.color(
             .windowBackground, isDark ? .dark : .light
-        ) ?? .windowBackgroundColor
+        ) ?? .clear
         view.effectiveAppearance.performAsCurrentDrawingAppearance {
             webView.webView.underPageBackgroundColor = color.usingColorSpace(.sRGB) ?? color
         }
@@ -778,10 +778,11 @@ private final class PreviewToolbarGutterView: NSView {
 
     override func updateLayer() {
         let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let scheme: ThemeColorScheme = isDark ? .dark : .light
         let color = ThemeColorsSetting.current.color(
-            .windowBackground, isDark ? .dark : .light
-        ) ?? .windowBackgroundColor
-        layer?.backgroundColor = color.cgColor
+            .windowBackground, scheme
+        )
+        layer?.backgroundColor = color?.cgColor
     }
 }
 
@@ -793,8 +794,8 @@ private final class PreviewToolbarGutterView: NSView {
 /// (#251). Painting it here covers the page and, in centered mode, the gutter
 /// the web view's leading edge leaves beside the column.
 ///
-/// Dark mode paints nothing and keeps the window background, which already
-/// reads as a page.
+/// Original dark mode leaves the native window background visible, including
+/// the centered-layout margin. Custom themes explicitly paint both surfaces.
 private final class DocumentBackgroundView: NSView {
 
     weak var scrollWheelTarget: NSView?

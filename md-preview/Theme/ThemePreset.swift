@@ -108,7 +108,7 @@ nonisolated struct ThemePreset: Identifiable, Equatable, Sendable {
         ThemePreset(name: "Original", flavor: .system,
                     palette: Palette(pageBackground: "#FFFFFF", codeBackground: "#F5F5F7",
                                      text: "#1D1D1F", accent: "#0066CC"),
-                    darkPalette: Palette(pageBackground: "#1E1E1E", codeBackground: "#2A2828",
+                    darkPalette: Palette(pageBackground: "#1C1C1C", codeBackground: "#2A2828",
                                          text: "#F5F5F7", accent: "#2997FF"),
                     usesDefaultColors: true),
         // Apple Books "Quiet": soft dark gray with bright ink — sampled from

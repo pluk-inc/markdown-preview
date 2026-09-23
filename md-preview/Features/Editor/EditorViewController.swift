@@ -44,7 +44,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         config.userContentController.add(bridge, name: EditorBridge.name)
         let webView = EditorWKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
-        webView.underPageBackgroundColor = .windowBackgroundColor
+        webView.setValue(false, forKey: "drawsBackground")
+        webView.underPageBackgroundColor = .clear
         bridge.owner = self
         self.webView = webView
         view = webView
@@ -235,7 +236,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         let colors = ThemeColorsSetting.current
         webView.underPageBackgroundColor = colors.color(.editorBackground, scheme)
             ?? colors.color(.windowBackground, scheme)
-            ?? ThemeColorsSetting.defaultColor(.editorBackground, scheme)
+            ?? .clear
     }
 
     /// Current buffer contents, or nil if the editor isn't ready.
@@ -433,7 +434,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         func pageBackground(_ scheme: ThemeColorScheme) -> String {
             let hex = colors.hexValue(.editorBackground, scheme)
                 ?? colors.hexValue(.windowBackground, scheme)
-            return MarkdownHTML.ThemeOverrides.sanitizedHexColor(hex) ?? "Canvas"
+            return MarkdownHTML.ThemeOverrides.sanitizedHexColor(hex) ?? "transparent"
         }
         let lightPageBackground = pageBackground(.light)
         let darkPageBackground = pageBackground(.dark)

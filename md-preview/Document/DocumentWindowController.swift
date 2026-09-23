@@ -248,7 +248,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             return ThemeColorsSetting.current.color(
                 .windowBackground, isDark ? .dark : .light
-            ) ?? .windowBackgroundColor
+            ) ?? (isDark ? ThemeColorsSetting.defaultColor(.windowBackground, .dark) : .windowBackgroundColor)
         }
         // Preserve native titlebar backing so WebKit can supply the scroll
         // edge on macOS 26+. Earlier systems also use native window chrome.

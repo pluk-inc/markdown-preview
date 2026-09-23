@@ -7,8 +7,8 @@ nonisolated enum EditorHTML {
 
     struct Configuration {
         var fullWidth = false
-        var lightPageBackground = "Canvas"
-        var darkPageBackground = "Canvas"
+        var lightPageBackground = "transparent"
+        var darkPageBackground = "transparent"
         var themeOverrideCSS = ""
         var usesPageScrolling = false
         var bridgeName = "mdEditorHost"

@@ -3,6 +3,30 @@ import XCTest
 @testable import MarkdownHelpers
 
 final class ThemePresetTests: XCTestCase {
+    func testOriginalDarkBackgroundMatchesRequestedRGB() {
+        XCTAssertEqual(ThemeColorsSetting.hexString(from: ThemeColorsSetting.defaultColor(.windowBackground, .dark)), "#1C1C1C")
+        XCTAssertEqual(ThemeColorsSetting.hexString(from: ThemeColorsSetting.defaultColor(.editorBackground, .dark)), "#1C1C1C")
+        XCTAssertEqual(ThemePreset.defaultPreset.darkPalette?.pageBackground, "#1C1C1C")
+        XCTAssertFalse(ThemePreset.defaultPreset.setting.isCustomized)
+    }
+
+    func testOriginalLeavesPageBackgroundToNativeWindow() throws {
+        let original = ThemePreset.defaultPreset.setting
+        XCTAssertFalse(original.isCustomized)
+        XCTAssertNil(original.markdownThemeOverrides)
+        XCTAssertEqual(EditorHTML.Configuration().lightPageBackground, "transparent")
+        XCTAssertEqual(EditorHTML.Configuration().darkPageBackground, "transparent")
+        XCTAssertEqual(original.editorOverrideCSS.components(separatedBy: "background: transparent").count - 1, 2)
+        for preset in ThemePreset.builtIn where preset != .defaultPreset {
+            XCTAssertEqual(preset.setting.markdownThemeOverrides?.darkPageBackground,
+                           preset.setting.hexValue(.windowBackground, .dark))
+            for scheme in ThemeColorScheme.allCases {
+                let background = try XCTUnwrap(preset.setting.hexValue(.windowBackground, scheme))
+                XCTAssertTrue(preset.setting.editorOverrideCSS.contains("background: \(background)"))
+            }
+        }
+    }
+
     func testOriginalClearsEveryStoredColorOverride() throws {
         let suite = "doc.md-preview.tests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

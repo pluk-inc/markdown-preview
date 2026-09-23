@@ -29,11 +29,9 @@ nonisolated enum AppearanceMode: String, CaseIterable, Sendable {
     }
 
     static func write(_ mode: Self, to defaults: UserDefaults?) {
-        if mode == .automatic {
-            defaults?.removeObject(forKey: defaultsKey)
-        } else {
-            defaults?.set(mode.rawValue, forKey: defaultsKey)
-        }
+        // Automatic is an explicit choice, not an unmigrated preference.
+        // Removing it lets the next launch resurrect a legacy Light/Dark value.
+        defaults?.set(mode.rawValue, forKey: defaultsKey)
     }
 
     @discardableResult
