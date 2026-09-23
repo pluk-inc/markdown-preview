@@ -21,7 +21,7 @@
 
 import Foundation
 
-nonisolated enum DocumentFontSetting: String, CaseIterable, Sendable {
+nonisolated enum DocumentFontSetting: String, CaseIterable, Codable, Sendable {
     case system
     case athelas
     case avenirNext

@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum AppearanceMode: String, CaseIterable, Sendable {
+nonisolated enum AppearanceMode: String, CaseIterable, Codable, Sendable {
     case automatic
     case light
     case dark

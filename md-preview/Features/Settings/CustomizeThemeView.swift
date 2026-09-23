@@ -35,13 +35,15 @@ struct CustomizeThemeView: View {
         let model = SettingsModel.shared
         _draft = State(initialValue: Draft(readerLayout: model.readerLayout,
                                            documentFont: model.documentFont,
-                                           themeColors: model.themeColors))
+                                           themeColors: model.themeColors,
+                                           appearance: model.appearance))
     }
 
     struct Draft: Equatable {
         var readerLayout: ReaderLayoutSetting
         var documentFont: DocumentFontSetting
         var themeColors: ThemeColorsSetting
+        var appearance: AppearanceMode
     }
 
     var body: some View {
@@ -126,7 +128,8 @@ struct CustomizeThemeView: View {
         let base = SettingsModel.shared.appliedPreset
         return Draft(readerLayout: ReaderLayoutSetting(boldText: base.boldText),
                      documentFont: base.font,
-                     themeColors: base.setting)
+                     themeColors: base.setting,
+                     appearance: base.requiredAppearance ?? .automatic)
     }
 
     /// Closes without touching the documents — nothing was applied. The ✗
@@ -141,7 +144,8 @@ struct CustomizeThemeView: View {
     private func save() {
         model.applyReadingLook(themeColors: draft.themeColors,
                                documentFont: draft.documentFont,
-                               readerLayout: draft.readerLayout)
+                               readerLayout: draft.readerLayout,
+                               appearance: draft.appearance)
         dismiss()
     }
 

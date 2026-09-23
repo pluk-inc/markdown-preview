@@ -13,7 +13,7 @@
 
 import Foundation
 
-nonisolated struct ReaderLayoutSetting: Equatable, Sendable {
+nonisolated struct ReaderLayoutSetting: Equatable, Codable, Sendable {
 
     var boldText = false
     /// The Books-style gate: sliders only take effect while this is on, and

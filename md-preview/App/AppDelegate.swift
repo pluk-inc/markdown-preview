@@ -107,7 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         CrashReporter.start()
         let storedAppearance = AppearanceMode.migrateLegacyValue()
-        let appearanceMode = ThemePreset.requiredAppearance(for: ThemeColorsSetting.current) ?? storedAppearance
+        let appearanceMode = ThemePreset.applied().requiredAppearance ?? storedAppearance
         if appearanceMode != storedAppearance { AppearanceMode.current = appearanceMode }
         applyAppearanceMode(appearanceMode, reloadPreviews: false)
         installAppearanceMenuItems()
@@ -312,7 +312,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Applies an appearance chosen in Settings, keeping the View menu's check
     /// marks and every open preview in step.
     func applyAppearanceSetting(_ mode: AppearanceMode) {
-        let resolved = ThemePreset.requiredAppearance(for: ThemeColorsSetting.current) ?? mode
+        let resolved = ThemePreset.applied().requiredAppearance ?? mode
         AppearanceMode.current = resolved
         applyAppearanceMode(resolved, reloadPreviews: true)
     }
@@ -444,7 +444,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func selectAppearanceMode(_ sender: NSMenuItem) {
-        guard ThemePreset.requiredAppearance(for: ThemeColorsSetting.current) == nil else { return }
+        guard ThemePreset.applied().requiredAppearance == nil else { return }
         guard let rawValue = sender.representedObject as? String,
               let mode = AppearanceMode(rawValue: rawValue),
               mode != AppearanceMode.current else { return }
@@ -478,7 +478,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
              #selector(performTextFinderAction(_:)):
             return activeDocumentWindowController != nil
         case #selector(selectAppearanceMode(_:)):
-            return ThemePreset.requiredAppearance(for: ThemeColorsSetting.current) == nil
+            return ThemePreset.applied().requiredAppearance == nil
         case #selector(selectContentWidthSetting(_:)):
             return true
         case #selector(toggleEditModeFromMenu(_:)):

@@ -14,11 +14,53 @@ final class ThemePresetTests: XCTestCase {
         let light = Set(["Paper", "Bold", "Calm", "Focus"])
         let dark = Set(["Quiet", "Graphite", "Dusk", "Midnight"])
         for preset in ThemePreset.builtIn {
-            let required = ThemePreset.requiredAppearance(for: preset.setting)
+            let required = preset.requiredAppearance
             if light.contains(preset.name) { XCTAssertEqual(required, .light, preset.name) }
             else if dark.contains(preset.name) { XCTAssertEqual(required, .dark, preset.name) }
             else { XCTAssertEqual(preset.name, "Original"); XCTAssertNil(required) }
         }
+    }
+
+    func testThemeIdentityDoesNotDependOnCustomColors() throws {
+        let suite = "doc.md-preview.tests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let graphite = try XCTUnwrap(ThemePreset.builtIn.first { $0.name == "Graphite" })
+        ThemeColorsSetting.write(graphite.setting, to: defaults)
+        XCTAssertEqual(ThemePreset.applied(in: defaults), .defaultPreset)
+        XCTAssertNil(ThemePreset.applied(in: defaults).requiredAppearance)
+        defaults.set(graphite.id, forKey: ThemePreset.appliedPresetKey)
+        ThemeColorsSetting.write(ThemeColorsSetting(), to: defaults)
+        XCTAssertEqual(ThemePreset.applied(in: defaults).requiredAppearance, .dark)
+    }
+
+    func testSavedLooksSurviveSwitchingAndReopeningDefaults() throws {
+        let suite = "doc.md-preview.tests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let original = ThemePreset.defaultPreset
+        let graphite = try XCTUnwrap(ThemePreset.builtIn.first { $0.name == "Graphite" })
+        var look = original.restoredLook(in: defaults)
+        XCTAssertEqual(look.appearance, .automatic)
+        look.appearance = .light
+        look.colors = graphite.setting // A matching custom palette is still Original.
+        look.layout.isCustomized = true
+        look.layout.marginsPercent = 25
+        look.font = try XCTUnwrap(DocumentFontSetting.allCases.last)
+        original.save(look, in: defaults)
+        var darkLook = graphite.restoredLook(in: defaults)
+        darkLook.layout.lineSpacing = 1.8
+        darkLook.appearance = .light // Fixed themes must reconcile obsolete saved values.
+        graphite.save(darkLook, in: defaults)
+        let reopened = try XCTUnwrap(UserDefaults(suiteName: suite))
+        XCTAssertEqual(original.restoredLook(in: reopened), look)
+        XCTAssertEqual(graphite.restoredLook(in: reopened).appearance, .dark)
+        XCTAssertEqual(graphite.restoredLook(in: reopened).layout.lineSpacing, 1.8)
+        let reset = ThemePreset.SavedLook(colors: original.setting, font: original.font,
+                                         layout: ReaderLayoutSetting(), appearance: .automatic)
+        original.save(reset, in: reopened)
+        XCTAssertEqual(original.restoredLook(in: defaults), reset)
+        XCTAssertEqual(graphite.restoredLook(in: defaults).layout.lineSpacing, 1.8)
     }
 
     func testOriginalLeavesPageBackgroundToNativeWindow() throws {

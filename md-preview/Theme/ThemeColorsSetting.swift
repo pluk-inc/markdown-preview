@@ -12,12 +12,12 @@
 
 import AppKit
 
-nonisolated enum ThemeColorScheme: String, CaseIterable, Sendable {
+nonisolated enum ThemeColorScheme: String, CaseIterable, Codable, Sendable {
     case light
     case dark
 }
 
-nonisolated enum ThemeColorSlot: String, CaseIterable, Sendable {
+nonisolated enum ThemeColorSlot: String, CaseIterable, Codable, Sendable {
     /// The whole document window: the native window background, the surface
     /// behind the rendered page, and the gutters beside the centered column.
     case windowBackground
@@ -35,7 +35,7 @@ nonisolated enum ThemeColorSlot: String, CaseIterable, Sendable {
     case linkColor
 }
 
-nonisolated struct ThemeColorsSetting: Equatable, Sendable {
+nonisolated struct ThemeColorsSetting: Equatable, Codable, Sendable {
 
     /// "#RRGGBB" per scheme and slot. A missing entry means the default.
     private var values: [ThemeColorScheme: [ThemeColorSlot: String]] = [:]

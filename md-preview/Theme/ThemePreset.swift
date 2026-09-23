@@ -2,11 +2,11 @@
 //  ThemePreset.swift
 //  md-preview
 //
-//  Named built-in theme presets. Original restores the app's default colors;
-//  other presets write a fixed palette into ThemeColorsSetting slots.
+//  Named built-in theme presets. Each theme remembers its customized look.
+//  First selection uses the built-in defaults; Reset restores those defaults.
 //  Applying a fixed preset also locks the app's appearance to the preset's
 //  flavor so the native chrome (sidebar,
-//  toolbar) matches. A `.system` preset keeps the Automatic appearance and
+//  toolbar) matches. Original remembers its adjustable appearance and
 //  carries a separate dark palette, so both schemes stay readable while
 //  the app keeps tracking the system look. The accent color maps to the
 //  link slot — syntax highlighting keeps its own colors.
@@ -88,7 +88,7 @@ nonisolated struct ThemePreset: Identifiable, Equatable, Sendable {
     var id: String { name }
 
     /// Fixed palettes must keep matching native chrome. Original follows the
-    /// user's appearance choice; custom palettes remain independently editable.
+    /// user's appearance choice. Editing colors never changes theme identity.
     var requiredAppearance: AppearanceMode? {
         switch flavor {
         case .light: .light
@@ -97,8 +97,37 @@ nonisolated struct ThemePreset: Identifiable, Equatable, Sendable {
         }
     }
 
-    static func requiredAppearance(for colors: ThemeColorsSetting) -> AppearanceMode? {
-        builtIn.first(where: { $0.setting == colors })?.requiredAppearance
+    static let appliedPresetKey = "MarkdownPreview.theme.appliedPreset"
+
+    /// Identity is explicit: custom colors never select a preset by coincidence.
+    /// Older installs with no gallery selection belong to Original.
+    static func applied(in defaults: UserDefaults = .standard) -> ThemePreset {
+        builtIn.first { $0.id == defaults.string(forKey: appliedPresetKey) } ?? defaultPreset
+    }
+
+    struct SavedLook: Codable, Equatable {
+        var colors: ThemeColorsSetting
+        var font: DocumentFontSetting
+        var layout: ReaderLayoutSetting
+        var appearance: AppearanceMode
+    }
+
+    private var savedLookKey: String { "MarkdownPreview.theme.savedLook.v1.\(id)" }
+
+    func save(_ look: SavedLook, in defaults: UserDefaults = .standard) {
+        guard let data = try? JSONEncoder().encode(look) else { return }
+        defaults.set(data, forKey: savedLookKey)
+    }
+
+    func restoredLook(in defaults: UserDefaults = .standard) -> SavedLook {
+        if let data = defaults.data(forKey: savedLookKey),
+           var look = try? JSONDecoder().decode(SavedLook.self, from: data) {
+            look.appearance = requiredAppearance ?? look.appearance
+            return look
+        }
+        return SavedLook(colors: setting, font: font,
+                         layout: ReaderLayoutSetting(boldText: boldText),
+                         appearance: requiredAppearance ?? .automatic)
     }
 
     /// The default theme: Reset Colors returns to it, and it leads the
