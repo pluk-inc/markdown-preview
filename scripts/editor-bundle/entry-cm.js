@@ -319,6 +319,27 @@ class MermaidWidget extends WidgetType {
 // Language input widget for every fenced block, including blocks without an
 // info string. The source range is rebuilt after each commit, so the widget
 // remains anchored while its input edits the opening line.
+const codeCopyHandlers = new WeakMap()
+const toggleCodeWrap = StateEffect.define({ map: (pos, changes) => changes.mapPos(pos) })
+const wrappedCodeBlocks = StateField.define({
+  create: () => new Set(),
+  update(value, tr) {
+    if (!tr.docChanged && !tr.effects.some(e => e.is(toggleCodeWrap))) return value
+    const next = new Set([...value].map(pos => tr.changes.mapPos(pos)))
+    for (const effect of tr.effects) if (effect.is(toggleCodeWrap)) {
+      if (next.has(effect.value)) next.delete(effect.value)
+      else next.add(effect.value)
+    }
+    return next
+  },
+})
+const codeActionIcon = (kind) => '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ({
+  copy: '<rect x="4" y="8" width="12" height="13" rx="3"/><path d="M8 8V6a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-1"/>',
+  check: '<path d="m5 12 4 4L19 6"/>',
+  wrap: '<path d="M4 6h16M4 11h12a4 4 0 0 1 0 8h-5m3-3-3 3 3 3M4 16h3"/>',
+  unwrap: '<path d="M4 6h16M4 12h16m-4-4 4 4-4 4M4 18h7"/>'
+})[kind] + '</svg>'
+
 class CodeLanguageWidget extends WidgetType {
   constructor(details) {
     super()
@@ -331,6 +352,8 @@ class CodeLanguageWidget extends WidgetType {
       && other.infoTo === this.infoTo
       && other.rawInfo === this.rawInfo
       && other.detectedLanguage === this.detectedLanguage
+      && other.wrapped === this.wrapped
+      && other.plain === this.plain
   }
 
   toDOM(view) {
@@ -344,6 +367,7 @@ class CodeLanguageWidget extends WidgetType {
     input.autocomplete = "off"
     input.spellcheck = false
     input.value = this.language
+    input.readOnly = !!this.plain
     input.placeholder = "language"
     input.setAttribute("aria-label", "Code block language")
     input.dataset.fenceFrom = String(this.fenceFrom)
@@ -353,6 +377,7 @@ class CodeLanguageWidget extends WidgetType {
     let commitOnBlur = true
     let dispatchingCommit = false
     const commit = () => {
+      if (this.plain) return
       const language = input.value.trim().split(/\s+/, 1)[0].toLowerCase()
       const nextInfo = language
         ? language + metadata
@@ -391,6 +416,46 @@ class CodeLanguageWidget extends WidgetType {
     })
 
     container.appendChild(input)
+    const action = (label, icon, className, run) => {
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = `cm-md-code-action ${className}`
+      button.title = label
+      button.setAttribute('aria-label', label)
+      button.innerHTML = codeActionIcon(icon)
+      button.addEventListener('mousedown', event => { event.preventDefault(); event.stopPropagation() })
+      button.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); run(button) })
+      container.appendChild(button)
+      return button
+    }
+    const toggle = action(this.wrapped ? 'Unwrap code' : 'Wrap code', this.wrapped ? 'unwrap' : 'wrap',
+      'cm-md-code-toggle-wrap', () => view.dispatch({
+        effects: toggleCodeWrap.of(view.state.doc.lineAt(this.fenceFrom).from),
+      }))
+    toggle.setAttribute('aria-pressed', String(this.wrapped))
+    action('Copy code', 'copy', 'cm-md-code-copy', async button => {
+      const line = view.state.doc.lineAt(this.fenceFrom)
+      let node = syntaxTree(view.state).resolve(this.plain ? line.to : this.fenceFrom + 1, -1)
+      while (node && node.name !== (this.plain ? 'CodeBlock' : 'FencedCode')) node = node.parent
+      if (!node) return
+      const source = this.plain
+        ? view.state.doc.sliceString(node.from, node.to).replace(/^(?: {4}|\t)/gm, '')
+        : fencedCodeDetails(view.state, node).source
+      try {
+        const handler = codeCopyHandlers.get(view)
+        if (handler) handler(source)
+        else await navigator.clipboard.writeText(source)
+        button.innerHTML = codeActionIcon('check')
+        button.title = 'Code copied'
+        button.setAttribute('aria-label', button.title)
+        clearTimeout(button.copyTimer)
+        button.copyTimer = setTimeout(() => {
+          button.innerHTML = codeActionIcon('copy')
+          button.title = 'Copy code'
+          button.setAttribute('aria-label', button.title)
+        }, 1100)
+      } catch (_) { /* Leave the copy action available when the clipboard is unavailable. */ }
+    })
     return container
   }
 
@@ -1120,7 +1185,8 @@ const codeBlockScrolling = ViewPlugin.fromClass(class {
     this.measure()
   }
   update(update) {
-    if (update.docChanged || update.viewportChanged || update.geometryChanged) this.measure()
+    if (update.docChanged || update.viewportChanged || update.geometryChanged
+        || update.startState.field(wrappedCodeBlocks) !== update.state.field(wrappedCodeBlocks)) this.measure()
   }
   measure() {
     this.view.requestMeasure({
@@ -1128,6 +1194,7 @@ const codeBlockScrolling = ViewPlugin.fromClass(class {
       read: (view) => {
         const groups = new Map()
         for (const line of view.contentDOM.querySelectorAll('[data-code-scroll-group]')) {
+          if (line.classList.contains('cm-md-code-wrapped')) continue
           const key = line.dataset.codeScrollGroup
           if (!groups.has(key)) groups.set(key, { lines: [], width: 0, offset: 0 })
           const group = groups.get(key)
@@ -2021,6 +2088,7 @@ function buildDecorations(view, detectedCodeCache) {
             }
             ranges.push(Decoration.widget({
               widget: new CodeLanguageWidget({
+                wrapped: state.field(wrappedCodeBlocks).has(first.from),
                 fenceFrom: node.from,
                 language: details.language,
                 detectedLanguage: details.detectedLanguage,
@@ -2028,6 +2096,12 @@ function buildDecorations(view, detectedCodeCache) {
                 infoFrom: details.infoFrom,
                 infoTo: details.infoTo,
               }),
+              side: -1,
+            }).range(widgetLine.from))
+          } else {
+            ranges.push(Decoration.widget({
+              widget: new CodeLanguageWidget({ fenceFrom: first.from, language: 'text',
+                rawInfo: '', plain: true, wrapped: state.field(wrappedCodeBlocks).has(first.from) }),
               side: -1,
             }).range(widgetLine.from))
           }
@@ -2061,6 +2135,7 @@ function buildDecorations(view, detectedCodeCache) {
               if (!isFirst && !isLast) lineOnce(line.from, codeLine)
               ranges.push(Decoration.line({ attributes: {
                 'data-code-scroll-group': String(first.from),
+                class: state.field(wrappedCodeBlocks).has(first.from) ? 'cm-md-code-wrapped' : '',
               } }).range(line.from))
               if (line.length) ranges.push(codeScrollText.range(line.from, line.to))
             }
@@ -2157,7 +2232,7 @@ const livePreview = ViewPlugin.fromClass(class {
     // change. Refresh widgets then too, or images can stay as source until input.
     if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged
         || update.startState.field(pointerPreview) !== update.state.field(pointerPreview)
-
+        || update.startState.field(wrappedCodeBlocks) !== update.state.field(wrappedCodeBlocks)
         || syntaxTree(update.startState) !== syntaxTree(update.state)
         || update.startState.field(documentFind) !== update.state.field(documentFind)) {
       this.decorations = buildDecorations(update.view, this.detectedCodeCache)
@@ -2678,6 +2753,7 @@ window.MDEditor = {
             }),
           }),
           activeCodeBlock,
+          wrappedCodeBlocks,
           pointerPreview,
           stablePointerPreview,
           anchoredPointerSelection,
@@ -2788,6 +2864,7 @@ window.MDEditor = {
       taskList: toggleBlockPrefix("- [ ] ", /^\s*[-*+]\s+\[[ xX]\]\s/),
       link: insertLink,
     }
+    if (callbacks?.onCopyCode) codeCopyHandlers.set(view, callbacks.onCopyCode)
     callbacks?.onFormattingChange?.(formattingState(view.state))
     return {
       getMarkdown: () => view.state.doc.toString(),

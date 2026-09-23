@@ -410,52 +410,35 @@ nonisolated extension MarkdownHTML {
     .md-code-wrap {
         position: relative;
         margin: \(paragraphSpacing)px 0 0;
+        background: var(--code-bg);
+        border: 0.5px solid var(--code-border);
+        border-radius: 16px;
+        overflow: hidden;
     }
-    .md-code-wrap > pre { margin: 0; }
-    .md-code-copy {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        appearance: none;
-        min-width: 56px;
-        height: 24px;
-        padding: 0 10px;
-        border: none;
-        border-radius: 8px;
-        color: var(--secondary);
-        background: color-mix(in srgb, var(--text) 10%, var(--code-bg));
-        font: 500 11px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-        cursor: pointer;
-        opacity: 0;
-        transition: opacity 120ms ease,
-                    color 120ms ease,
-                    background-color 120ms ease,
-                    transform 120ms ease;
+    .md-code-wrap > pre { margin: 0; border: 0; border-radius: 0; padding-top: 8px; }
+    .md-code-wrap > pre::before { display: none; }
+    .md-code-wrap.is-wrapped > pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .md-code-header {
+        box-sizing: content-box;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        height: 28px;
+        padding: 8px 10px 0 16px;
         user-select: none;
         -webkit-user-select: none;
-        z-index: 2;
+        cursor: default;
     }
-    .md-code-wrap:hover .md-code-copy,
-    .md-code-wrap:focus-within .md-code-copy,
-    .md-code-copy.is-copied {
-        opacity: 1;
+    .md-code-language { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+        color: var(--secondary); font: 11px/14px -apple-system, BlinkMacSystemFont, sans-serif; }
+    .md-code-action {
+        display: inline-flex; align-items: center; justify-content: center;
+        flex: none; width: 28px; height: 28px; padding: 0;
+        appearance: none; border: 0; border-radius: 50%;
+        color: var(--secondary); background: transparent; cursor: pointer;
     }
-    .md-code-copy:hover {
-        color: var(--text);
-        background: color-mix(in srgb, var(--text) 16%, var(--code-bg));
-    }
-    .md-code-copy:active {
-        background: color-mix(in srgb, var(--text) 22%, var(--code-bg));
-        transform: scale(0.97);
-    }
-    .md-code-copy:focus-visible {
-        outline: none;
-        box-shadow: 0 0 0 3px color-mix(in srgb, AccentColor 60%, transparent);
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .md-code-copy { transition: none; }
-        .md-code-copy:active { transform: none; }
-    }
+    .md-code-action:hover { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
+    .md-code-action:focus-visible { outline: 2px solid AccentColor; outline-offset: 1px; }
     .mermaid-figure {
         position: relative;
         margin: \(largeBlockSpacing)px auto 0;
@@ -894,7 +877,7 @@ nonisolated extension MarkdownHTML {
         }
 
         /* Interaction affordances are screen-only. */
-        .md-code-copy,
+        .md-code-header,
         .md-search-burst,
         .mermaid-hud { display: none !important; }
         mark.md-search-highlight,

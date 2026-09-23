@@ -3,7 +3,7 @@ import Foundation
 
 nonisolated enum EditorHTML {
     /// Space reserved for the editable language control above fenced code.
-    static let codeLanguageHeaderHeight: CGFloat = 20
+    static let codeLanguageHeaderHeight: CGFloat = 28
 
     struct Configuration {
         var fullWidth = false
@@ -388,18 +388,18 @@ nonisolated enum EditorHTML {
             position: relative;
         }
         #editor .cm-md-codeblock-first::before {
-            border-radius: 8px 8px 0 0;
+            border-radius: 16px 16px 0 0;
         }
         #editor .cm-md-codeblock-last {
             padding-bottom: 16px;
             border-bottom: 0.5px solid transparent;
         }
         #editor .cm-md-codeblock-last::before {
-            border-radius: 0 0 8px 8px;
+            border-radius: 0 0 16px 16px;
         }
         /* A single content line owns both ends of the card. */
         #editor .cm-md-codeblock-first.cm-md-codeblock-last::before {
-            border-radius: 8px;
+            border-radius: 16px;
         }
         /* Reserve a header row so the language never competes with code,
            including wrapped lines and blocks at the start of a document. */
@@ -415,7 +415,15 @@ nonisolated enum EditorHTML {
                subtract the input's padding and 1px border. */
             inset-inline-start: 9px;
             max-width: calc(100% - 21px);
-            top: 9px;
+            top: 8px;
+            width: calc(100% - 19px);
+            max-width: none;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transform: translateX(var(--code-scroll-offset, 0px));
+            cursor: default;
             z-index: 1;
             line-height: 1;
             white-space: nowrap;
@@ -423,6 +431,8 @@ nonisolated enum EditorHTML {
         #editor .cm-md-code-language-input {
             display: block;
             width: 14em;
+            flex: 0 1 14em;
+            margin-inline-end: auto;
             max-width: 100%;
             min-width: 4.5em;
             box-sizing: border-box;
@@ -434,6 +444,18 @@ nonisolated enum EditorHTML {
             font: 11px/14px -apple-system, BlinkMacSystemFont, sans-serif;
             outline: none;
         }
+        #editor .cm-md-code-action {
+            display: inline-flex; align-items: center; justify-content: center;
+            flex: none; width: 28px; height: 28px; padding: 0;
+            appearance: none; border: 0; border-radius: 50%;
+            color: var(--secondary); background: transparent; cursor: pointer;
+        }
+        #editor .cm-md-code-action:hover { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
+        #editor .cm-md-code-action:focus-visible { outline: 2px solid AccentColor; outline-offset: 1px; }
+        #editor .cm-content.cm-lineWrapping > .cm-md-code-wrapped { white-space: pre-wrap; overflow-wrap: anywhere; }
+        #editor .cm-md-code-wrapped .cm-md-code-scroll-text { display: inline; min-width: 0; }
+        #editor .cm-md-code-wrapped::before { min-width: 0; }
+        #editor .cm-md-code-wrapped .cm-md-code-language { transform: none; }
         #editor .cm-md-code-language-input::placeholder {
             color: var(--secondary);
             opacity: 0.8;
@@ -664,6 +686,7 @@ nonisolated enum EditorHTML {
                     {
                         pageScrolling: \(usesPageScrolling),
                         onDirty: function () { post("dirty"); },
+                        onCopyCode: function (text) { post({ kind: "copyCode", value: text }); },
                         onFormattingChange: function (state) {
                             post({ kind: "formattingState", heading: state.heading, commands: state.commands });
                         },

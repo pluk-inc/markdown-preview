@@ -419,6 +419,10 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         guard let payload = message as? [String: Any],
               let kind = payload["kind"] as? String else { return }
         switch kind {
+        case "copyCode":
+            guard let text = payload["value"] as? String else { return }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
         case "formattingState":
             guard let heading = payload["heading"] as? Int,
                   (0...6).contains(heading),

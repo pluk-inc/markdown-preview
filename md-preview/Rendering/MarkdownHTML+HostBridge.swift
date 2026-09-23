@@ -66,8 +66,8 @@ nonisolated extension MarkdownHTML {
     <script>
     (() => {
         const localized = {
-            copy: \(javaScriptStringLiteral(NSLocalizedString("Copy", comment: "Code block copy button"))),
-            copied: \(javaScriptStringLiteral(NSLocalizedString("Copied", comment: "Code block copy confirmation"))),
+            wrapCode: \(javaScriptStringLiteral(NSLocalizedString("Wrap code", comment: "Code block wrap button"))),
+            unwrapCode: \(javaScriptStringLiteral(NSLocalizedString("Unwrap code", comment: "Code block unwrap button"))),
             copyCode: \(javaScriptStringLiteral(NSLocalizedString("Copy code", comment: "Code block copy button accessibility label"))),
             codeCopied: \(javaScriptStringLiteral(NSLocalizedString("Code copied", comment: "Code block copy confirmation accessibility label")))
         };
@@ -184,6 +184,13 @@ nonisolated extension MarkdownHTML {
             }
         }, true);
 
+        const codeIcon = (kind) => '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ({
+            copy: '<rect x="4" y="8" width="12" height="13" rx="3"/><path d="M8 8V6a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-1"/>',
+            check: '<path d="m5 12 4 4L19 6"/>',
+            wrap: '<path d="M4 6h16M4 11h12a4 4 0 0 1 0 8h-5m3-3-3 3 3 3M4 16h3"/>',
+            unwrap: '<path d="M4 6h16M4 12h16m-4-4 4 4-4 4M4 18h7"/>'
+        })[kind] + '</svg>';
+
         function decorateCodeBlocks(root = document) {
             root.querySelectorAll('pre > code').forEach((code) => {
                 const pre = code.parentElement;
@@ -197,12 +204,28 @@ nonisolated extension MarkdownHTML {
                 pre.parentNode.insertBefore(wrap, pre);
                 wrap.appendChild(pre);
 
+                const header = document.createElement('div');
+                header.className = 'md-code-header';
+                const language = document.createElement('span');
+                language.className = 'md-code-language';
+                language.textContent = pre.dataset.codeLanguage || 'text';
+                header.appendChild(language);
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'md-code-action md-code-toggle-wrap';
+                toggle.innerHTML = codeIcon('wrap');
+                toggle.title = localized.wrapCode;
+                toggle.setAttribute('aria-label', toggle.title);
+                toggle.setAttribute('aria-pressed', 'false');
+                header.appendChild(toggle);
                 const button = document.createElement('button');
                 button.type = 'button';
-                button.className = 'md-code-copy';
-                button.textContent = localized.copy;
+                button.className = 'md-code-action md-code-copy';
+                button.innerHTML = codeIcon('copy');
+                button.title = localized.copyCode;
                 button.setAttribute('aria-label', localized.copyCode);
-                wrap.appendChild(button);
+                header.appendChild(button);
+                wrap.insertBefore(header, pre);
             });
         }
 
@@ -211,7 +234,7 @@ nonisolated extension MarkdownHTML {
             for (let i = 0; i < selection.rangeCount; i += 1) {
                 fragment.appendChild(selection.getRangeAt(i).cloneContents());
             }
-            const buttons = fragment.querySelectorAll('.md-code-copy');
+            const buttons = fragment.querySelectorAll('.md-code-header');
             buttons.forEach((button) => button.remove());
             return { fragment, removedButtons: buttons.length > 0 };
         }
@@ -315,7 +338,7 @@ nonisolated extension MarkdownHTML {
         }
 
         async function copyCodeBlock(button) {
-            const wrap = button.parentElement;
+            const wrap = button.closest('.md-code-wrap');
             const code = wrap && wrap.querySelector('pre > code');
             if (!code) return;
             const text = code.textContent || '';
@@ -357,18 +380,31 @@ nonisolated extension MarkdownHTML {
                 } catch (e) {}
             }
             if (!copied) return;
-            button.textContent = localized.copied;
+            button.innerHTML = codeIcon('check');
+            button.title = localized.codeCopied;
             button.setAttribute('aria-label', localized.codeCopied);
             button.classList.add('is-copied');
             clearTimeout(button.__mdCopyTimer);
             button.__mdCopyTimer = setTimeout(() => {
-                button.textContent = localized.copy;
+                button.innerHTML = codeIcon('copy');
+                button.title = localized.copyCode;
                 button.setAttribute('aria-label', localized.copyCode);
                 button.classList.remove('is-copied');
             }, 1100);
         }
 
         document.addEventListener('click', (event) => {
+            const toggle = event.target.closest('.md-code-toggle-wrap');
+            if (toggle) {
+                event.preventDefault();
+                event.stopPropagation();
+                const wrapped = toggle.closest('.md-code-wrap').classList.toggle('is-wrapped');
+                toggle.setAttribute('aria-pressed', String(wrapped));
+                toggle.title = wrapped ? localized.unwrapCode : localized.wrapCode;
+                toggle.setAttribute('aria-label', toggle.title);
+                toggle.innerHTML = codeIcon(wrapped ? 'unwrap' : 'wrap');
+                return;
+            }
             const button = event.target.closest('.md-code-copy');
             if (!button) return;
             event.preventDefault();
