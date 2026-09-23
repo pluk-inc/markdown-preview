@@ -93,8 +93,9 @@ final class EditorFormattingTests: XCTestCase {
 
     func testHeadingMarkersRevealInlineAfterActivation() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
-        for level in 1...6 {
-            let source = "Paragraph\n\n" + String(repeating: "#", count: level) + " Heading text that wraps onto another line with more words\n\nAfter"
+        for sample in (1...6).flatMap({ level in (0...3).map { (level, $0) } }) {
+            let (level, indentation) = sample
+            let source = "Paragraph\n\n" + String(repeating: " ", count: indentation) + String(repeating: "#", count: level) + " Heading text that wraps onto another line with more words ###\n\nAfter"
             let editor = WebViewLayoutHarness(
                 html: EditorHTML.render(markdown: source, editorJavaScript: script),
                 width: 360, isEditor: true, height: 400)
@@ -129,13 +130,15 @@ final class EditorFormattingTests: XCTestCase {
                 const after = rects();
                 const prefixWidth = document.querySelector('.cm-md-heading-prefix').getBoundingClientRect().width;
                 return { before, after, prefixWidth, hidden: !!document.querySelector('.cm-md-heading-source-hidden') };
-                """, arguments: ["position": 11 + level + 4], in: nil, contentWorld: .page)
+                """, arguments: ["position": 11 + indentation + level + 4], in: nil, contentWorld: .page)
             let values = try XCTUnwrap(result as? [String: Any])
             let before = try XCTUnwrap(values["before"] as? [[Double]])
             let after = try XCTUnwrap(values["after"] as? [[Double]])
             XCTAssertFalse(before.isEmpty)
             XCTAssertEqual(before.count, after.count)
             let prefixWidth = try XCTUnwrap(values["prefixWidth"] as? Double)
+            XCTAssertEqual(before[0][0], before[1][0], accuracy: 1,
+                           "Inactive heading level \(level), indentation \(indentation) must align to its column")
             // WebKit rounds text-indent placement to CSS pixels.
             XCTAssertEqual(after[0][0] - before[0][0], prefixWidth, accuracy: 1,
                            "Heading level \(level) should reveal its markers inline")

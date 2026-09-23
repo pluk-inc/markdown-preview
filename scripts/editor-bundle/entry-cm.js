@@ -1590,11 +1590,18 @@ function buildDecorations(view, detectedCodeCache) {
             ranges.push(headingMarker.range(node.from, node.to))
             const after = state.doc.sliceString(node.to, node.to + 1)
             const markTo = node.to + (after === " " ? 1 : 0)
-            if (node.from === parent.from) ranges.push(headingPrefix.range(node.from, markTo))
+            const opening = node.from === parent.from
+            const line = state.doc.lineAt(node.from)
+            // ATX nodes start at '#', excluding up to three valid leading
+            // spaces. Include that indentation in the measured prefix, but
+            // never consume a surrounding list or blockquote marker.
+            const prefixFrom = opening && /^ {0,3}$/.test(state.doc.sliceString(line.from, node.from))
+              ? line.from : node.from
+            if (opening) ranges.push(headingPrefix.range(prefixFrom, markTo))
             if (!touchesLineOf(node.from)) {
               // Keep the hidden source prefix measurable for alignment.
               // Pointer selection keeps its source anchor across activation.
-              ranges.push(hiddenHeadingSource.range(node.from, markTo))
+              ranges.push(hiddenHeadingSource.range(prefixFrom, markTo))
             }
           } else if (parent && /^SetextHeading/.test(parent.name)) {
             lineOnce(node.from, setextMarkerLine)
