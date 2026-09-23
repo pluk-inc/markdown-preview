@@ -158,7 +158,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         // ::-webkit-scrollbar style on the root replaces the native macOS
         // overlay scrollbar with WebKit's legacy one.
         XCTAssertFalse(rendered.html.contains("\n    ::-webkit-scrollbar {"))
-        XCTAssertTrue(rendered.html.contains(":where(:not(html):not(body))::-webkit-scrollbar"))
+        XCTAssertTrue(rendered.html.contains(":where(:not(html):not(body):not(pre))::-webkit-scrollbar"))
         let styleBlocks = rendered.html
             .components(separatedBy: "<style>")
             .dropFirst()
@@ -420,8 +420,13 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(stylesheet.contains("::selection"))
         XCTAssertFalse(stylesheet.contains("::-webkit-selection"))
         XCTAssertFalse(stylesheet.contains("::-moz-selection"))
-        XCTAssertEqual(nonSelectableRules.count, 1)
-        XCTAssertTrue(nonSelectableRules[0].contains(".md-code-copy"))
+        // Code UI is not document text. The generated language label and
+        // copy control may opt out, but the Markdown content must not.
+        let allowedSelectors = ["pre[data-code-language]::before", ".md-code-copy"]
+        XCTAssertEqual(nonSelectableRules.count, allowedSelectors.count)
+        for selector in allowedSelectors {
+            XCTAssertTrue(nonSelectableRules.contains { $0.contains(selector) }, selector)
+        }
     }
 
     @MainActor
