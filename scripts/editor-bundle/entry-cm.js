@@ -2815,6 +2815,8 @@ window.MDEditor = {
             || from < 0 || to < from || to > view.state.doc.length) return false
         const link = enclosingNode(view.state, from, ['Link'])
         if (link && (from > link.from || to < link.to)) return false
+        const endLink = to > from ? enclosingNode(view.state, to - 1, ['Link']) : null
+        if (endLink && (from > endLink.from || to < endLink.to)) return false
         const label = (String(text) || destination).replace(/\\/g, '\\\\').replace(/([\[\]])/g, '\\$1').replace(/[\r\n]+/g, ' ')
         const target = destination.replace(/[\s<>\\()]/g, character =>
           /[()]/.test(character) ? '%' + character.charCodeAt(0).toString(16).toUpperCase() : encodeURIComponent(character))

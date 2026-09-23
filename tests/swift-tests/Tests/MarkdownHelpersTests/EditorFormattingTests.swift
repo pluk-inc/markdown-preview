@@ -4,6 +4,31 @@ import XCTest
 
 @MainActor
 final class EditorFormattingTests: XCTestCase {
+    func testLinkPopoverRejectsPartialOverlapAtEitherSelectionEdge() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let source = "Before [hello](https://example.com) after"
+        let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: source, editorJavaScript: script),
+                                          width: 650, isEditor: true, height: 400)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        let result = try await editor.webView.evaluateJavaScript("""
+            (() => {
+                const api = window.__mdEditor, source = api.getMarkdown();
+                const start = source.indexOf('['), end = source.indexOf(')') + 1;
+                const ranges = [[0, start + 3], [0, source.indexOf('example') + 2],
+                                [start + 2, source.length], [start, end - 1]];
+                const rejected = ranges.every(([from, to]) =>
+                    api.insertLinkFromPopover('new', 'https://new.example', from, to) === false
+                    && api.getMarkdown() === source);
+                const replaced = api.insertLinkFromPopover('new', 'https://new.example', start, end);
+                return { rejected, replaced, source: api.getMarkdown() };
+            })()
+            """) as? [String: Any]
+        XCTAssertEqual(result?["rejected"] as? Bool, true)
+        XCTAssertEqual(result?["replaced"] as? Bool, true)
+        XCTAssertEqual(result?["source"] as? String, "Before [new](https://new.example) after")
+    }
+
     func testPopoverReviewRegressions() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let cases: [(String, String, String, String)] = [
