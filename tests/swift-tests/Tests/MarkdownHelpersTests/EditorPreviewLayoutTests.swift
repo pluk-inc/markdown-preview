@@ -162,7 +162,8 @@ final class EditorPreviewLayoutTests: XCTestCase {
             let readerHTML = MarkdownHTML.render(
                 markdown: fixture.markdown, allowsScroll: true,
                 contentWidth: fullWidth ? .full : .centered,
-                documentFont: .system, readerLayout: ReaderLayoutSetting()
+                documentFont: .system, readerLayout: ReaderLayoutSetting(),
+                pageTopClearance: pageScrolling ? MarkdownHTML.appPageTopClearance : 0
             ).html
             let editorHTML = EditorHTML.render(
                 markdown: (initial ?? fixture).markdown, editorJavaScript: editorScript,

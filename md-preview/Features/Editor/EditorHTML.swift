@@ -86,6 +86,10 @@ nonisolated enum EditorHTML {
             overflow: auto;
             /* Keep page gutters outside the editable content column. */
             padding-inline: \(MarkdownHTML.pagePaddingHorizontal)px;
+            /* Document clearance is outside contenteditable and scrolls
+               away naturally; it must not be a fixed interaction shield. */
+            padding-top: \(MarkdownHTML.pagePaddingTop + (usesPageScrolling ? MarkdownHTML.appPageTopClearance : 0))px;
+            cursor: default;
             box-sizing: border-box;
             font-family: \(MarkdownHTML.bodyFontFamily) !important;
             font-size: \(MarkdownHTML.bodyFontSize)px;
@@ -96,7 +100,7 @@ nonisolated enum EditorHTML {
             max-width: \(columnMaxWidth);
             min-height: 100%;
             margin: 0 auto;
-            padding: \(MarkdownHTML.pagePaddingTop)px 0 \(MarkdownHTML.pagePaddingBottom)px;
+            padding: 0 0 \(MarkdownHTML.pagePaddingBottom)px;
             box-sizing: border-box;
             caret-color: var(--text);
             cursor: text;
@@ -660,6 +664,9 @@ nonisolated enum EditorHTML {
                     {
                         pageScrolling: \(usesPageScrolling),
                         onDirty: function () { post("dirty"); },
+                        onFormattingChange: function (state) {
+                            post({ kind: "formattingState", heading: state.heading, commands: state.commands });
+                        },
                         onSearchChange: function (result) {
                             post({ kind: "findResult", index: result.index, total: result.total });
                         },
@@ -683,8 +690,16 @@ nonisolated enum EditorHTML {
                     find: function (query, backwards, beginsWith) {
                         return editor.find(query, backwards, beginsWith);
                     },
-                    getLinkSelection: function () { return editor.getLinkSelection(); },
                     getMarkdown: function () { return editor.getMarkdown(); },
+                    getHeadingLevel: function () { return editor.getHeadingLevel(); },
+                    getListStyle: function () { return editor.getListStyle(); },
+                    getBlockStyle: function () { return editor.getBlockStyle(); },
+                    setBlockStyle: function (style, language) { return editor.setBlockStyle(style, language); },
+                    setListStyle: function (style) { return editor.setListStyle(style); },
+                    getLinkSelection: function () { return editor.getLinkSelection(); },
+                    insertLinkFromPopover: function (text, url, from, to) {
+                        return editor.insertLinkFromPopover(text, url, from, to);
+                    },
                     isSyntaxReady: function () { return editor.isSyntaxReady(); },
                     replaceMarkdown: function (markdown) { return editor.replaceMarkdown(markdown); },
                     getScrollAnchor: function () { return editor.getScrollAnchor(); },

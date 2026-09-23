@@ -99,6 +99,34 @@ final class EditorScrollAnchorTests: XCTestCase {
         XCTAssertEqual(result as? Bool, true)
     }
 
+    func testTopClearanceIsNonEditingAndScrollsAwayWithDocument() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let markdown = String(repeating: "Editable text under the floating controls.\n\n", count: 80)
+        let editor = WebViewLayoutHarness(
+            html: EditorHTML.render(markdown: markdown, editorJavaScript: script,
+                                    configuration: .init(usesPageScrolling: true)),
+            width: 900, isEditor: true, height: 400)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        let result = try await editor.webView.callAsyncJavaScript("""
+            const top = document.elementFromPoint(450, 18);
+            const nonEditingTop = !top.isContentEditable && getComputedStyle(top).cursor === 'default';
+            document.scrollingElement.scrollTop = 150;
+            for (let i = 0; i < 8; i++) { window.__layoutTestFrame(); await Promise.resolve(); }
+            const line = [...document.querySelectorAll('.cm-line')].find(el => {
+                const r = el.getBoundingClientRect();
+                return r.top >= 0 && r.top < 36;
+            });
+            if (!line) return false;
+            const rect = line.getBoundingClientRect();
+            const target = document.elementFromPoint(rect.left + 5, rect.top + 2);
+            return nonEditingTop && target.isContentEditable
+                && getComputedStyle(target).cursor === 'text'
+                && !document.getElementById('formatting-cursor-shield');
+            """, arguments: [:], in: nil, contentWorld: .page)
+        XCTAssertEqual(result as? Bool, true)
+    }
+
     func testTableAnchorUsesItsWholeSourceRange() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let markdown = "Before\n\n| Key | Value |\n| --- | --- |\n"

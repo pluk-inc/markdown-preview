@@ -426,7 +426,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                            vendorLoading: .lazy,
                                            contentWidth: contentWidth,
                                            themeOverrides: themeOverrides,
-                                           warmup: warmup)
+                                           warmup: warmup,
+                                           pageTopClearance: MarkdownHTML.appPageTopClearance)
         let elapsedMs = Int(
             (Double(DispatchTime.now().uptimeNanoseconds - t0.uptimeNanoseconds)
              / 1_000_000).rounded()

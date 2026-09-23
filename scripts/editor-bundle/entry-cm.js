@@ -2129,6 +2129,23 @@ function buildDecorations(view, detectedCodeCache) {
   return Decoration.set(ranges, true)
 }
 
+function formattingState(state) {
+  const selection = state.selection.main
+  const commands = new Set()
+  let heading = 0
+  for (let node = syntaxTree(state).resolveInner(selection.from, 1); node; node = node.parent) {
+    if (node.to < selection.to) continue
+    const match = /^(?:ATX|Setext)Heading([1-6])$/.exec(node.name)
+    if (match) heading = Number(match[1])
+    const command = { StrongEmphasis: 'bold', Emphasis: 'italic',
+      Strikethrough: 'strikethrough', Link: 'link', InlineCode: 'code',
+      BulletList: 'list', OrderedList: 'list', Blockquote: 'quote',
+      FencedCode: 'fenced', CodeBlock: 'plain', Table: 'table' }[node.name]
+    if (command) commands.add(command)
+  }
+  return { heading, commands: [...commands].sort() }
+}
+
 const livePreview = ViewPlugin.fromClass(class {
   constructor(view) {
     this.detectedCodeCache = new Map()
@@ -2361,6 +2378,34 @@ function orderedList(view) {
   return true
 }
 
+function selectedListLines(state) {
+  const selection = state.selection.main
+  const start = state.doc.lineAt(selection.from).number
+  const end = state.doc.lineAt(selection.empty ? selection.to : selection.to - 1).number
+  return Array.from({ length: end - start + 1 }, (_, index) => state.doc.line(start + index))
+}
+
+function listPrefix(text) {
+  const match = /^([ \t]*(?:>[ \t]*)*)(?:([-+*]|\d+[.)])([ \t]+)(\[[ xX]\][ \t]+)?)?/.exec(text)
+  return {
+    prefix: match[0], indent: match[1],
+    style: !match[2] ? 'none' : match[4] ? 'task' : /^\d/.test(match[2]) ? 'ordered' : 'bullet',
+  }
+}
+
+function applyListStyle(view, style) {
+  if (!['none', 'bullet', 'ordered', 'task'].includes(style)) return false
+  const changes = selectedListLines(view.state).map((line, index) => {
+    const current = listPrefix(line.text)
+    if (current.style === style) return null
+    const marker = style === 'none' ? '' : style === 'bullet' ? '- ' : style === 'task' ? '- [ ] ' : `${index + 1}. `
+    return { from: line.from, to: line.from + current.prefix.length, insert: current.indent + marker }
+  }).filter(Boolean)
+  if (changes.length) dispatchBlockChanges(view, changes)
+  view.focus()
+  return true
+}
+
 function setHeading(level) {
   return (view) => {
     const changes = eachSelectedLine(view.state, (lines) => lines.map((line) => {
@@ -2372,6 +2417,73 @@ function setHeading(level) {
     view.dispatch({ changes, userEvent: "input" })
     return true
   }
+}
+
+function stylingContext(state) {
+  const styles = { InlineCode: 'code', FencedCode: 'fenced', CodeBlock: 'plain', Blockquote: 'quote', Table: 'table' }
+  for (let node = syntaxTree(state).resolve(state.selection.main.head, 1); node; node = node.parent) {
+    if (styles[node.name]) return { style: styles[node.name], node }
+  }
+  return { style: 'none', node: null }
+}
+
+function applyBlockStyle(view, style, language = '') {
+  if (!['none', 'quote', 'code', 'plain', 'fenced', 'table'].includes(style)) return false
+  const state = view.state, selection = state.selection.main
+  const context = stylingContext(state)
+  if (style === 'code') {
+    if (context.style !== 'code') toggleInlineMark('`')(view)
+    view.focus()
+    return true
+  }
+  if (style === 'table') {
+    const end = state.doc.lineAt(selection.to).to
+    const insert = '\n\n| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n'
+    view.dispatch({ changes: { from: end, insert }, selection: { anchor: end + insert.length }, userEvent: 'input' })
+    view.focus()
+    return true
+  }
+  if (style === context.style && style !== 'fenced') return true
+  const lines = selectedListLines(state)
+  let from = lines[0].from, to = lines[lines.length - 1].to
+  let source = state.sliceDoc(from, to)
+  const node = context.node
+  if (node && selection.from >= node.from && selection.to <= node.to
+      && (context.style !== 'code' || style === 'none')) {
+    from = context.style === 'code' ? node.from : state.doc.lineAt(node.from).from
+    to = node.to
+    source = state.sliceDoc(from, to)
+    if (context.style === 'fenced') {
+      const opening = state.doc.lineAt(node.from)
+      const last = state.doc.lineAt(node.to)
+      const closed = node.lastChild?.name === 'CodeMark'
+      source = state.sliceDoc(Math.min(opening.to + 1, node.to), closed ? last.from : node.to).replace(/\n$/, '')
+    } else if (context.style === 'plain') source = source.replace(/^(?: {4}|\t)/gm, '')
+    else if (context.style === 'quote') source = source.replace(/^ {0,3}> ?/gm, '')
+    else if (context.style === 'code') source = state.sliceDoc(node.firstChild.to, node.lastChild.from)
+    else if (context.style === 'table') {
+      const model = parseTableSource(source)
+      if (model) source = model.rows.map(row => row.join('\t')).join('\n')
+    }
+  }
+  let insert = source, caretOffset = 0
+  if (style === 'quote') { insert = source.split('\n').map(line => '> ' + line).join('\n'); caretOffset = 2 }
+  if (style === 'plain') { insert = source.split('\n').map(line => '    ' + line).join('\n'); caretOffset = 4 }
+  if (style === 'fenced') {
+    const runs = source.match(/`+/g) || []
+    const fence = '`'.repeat(Math.max(3, ...runs.map(run => run.length + 1)))
+    const info = String(language).replace(/[^\w+-]/g, '')
+    const opening = fence + info + '\n'
+    insert = opening + source + '\n' + fence
+    caretOffset = opening.length
+  }
+  if (style === 'plain' && from > 0 && state.doc.lineAt(from - 1).text.trim()) {
+    insert = '\n' + insert
+    caretOffset++
+  }
+  view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + caretOffset }, userEvent: 'input' })
+  view.focus()
+  return true
 }
 
 function insertLink(view) {
@@ -2559,6 +2671,10 @@ window.MDEditor = {
           ]),
           // Fires on every change; the host debounces for autosave.
           EditorView.updateListener.of((update) => {
+            if (callbacks?.onFormattingChange && (update.selectionSet || update.docChanged
+                || update.focusChanged || syntaxTree(update.startState) !== syntaxTree(update.state))) {
+              callbacks.onFormattingChange(formattingState(update.state))
+            }
             if (update.docChanged && callbacks?.onSearchChange) {
               const search = update.state.field(documentFind)
               callbacks.onSearchChange({ index: search.index + 1, total: search.matches.length })
@@ -2631,18 +2747,48 @@ window.MDEditor = {
       h1: setHeading(1),
       h2: setHeading(2),
       h3: setHeading(3),
+      h4: setHeading(4),
+      h5: setHeading(5),
+      h6: setHeading(6),
       quote: toggleBlockPrefix("> ", /^>\s?/),
       bulletList: toggleBlockPrefix("- ", /^\s*[-*+]\s/),
       orderedList,
       taskList: toggleBlockPrefix("- [ ] ", /^\s*[-*+]\s+\[[ xX]\]\s/),
       link: insertLink,
     }
+    callbacks?.onFormattingChange?.(formattingState(view.state))
     return {
+      getMarkdown: () => view.state.doc.toString(),
+      getBlockStyle: () => stylingContext(view.state).style,
+      setBlockStyle: (style, language) => applyBlockStyle(view, style, language),
+      getListStyle: () => {
+        const styles = selectedListLines(view.state).map(line => listPrefix(line.text).style)
+        return styles.every(style => style === styles[0]) ? styles[0] : 'mixed'
+      },
+      setListStyle: style => applyListStyle(view, style),
       getLinkSelection: () => {
         const { from, to } = view.state.selection.main
         return { from, to, text: view.state.sliceDoc(from, to) }
       },
-      getMarkdown: () => view.state.doc.toString(),
+      insertLinkFromPopover: (text, url, from, to) => {
+        const destination = String(url).trim()
+        if (!destination || /[\r\n]/.test(destination)
+            || from < 0 || to < from || to > view.state.doc.length) return false
+        const label = (String(text) || destination).replace(/\\/g, '\\\\').replace(/([\[\]])/g, '\\$1').replace(/[\r\n]+/g, ' ')
+        const target = destination.replace(/[\s<>\\()]/g, character =>
+          '%' + character.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'))
+        const insert = `[${label}](${target})`
+        view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length }, userEvent: 'input' })
+        view.focus()
+        return true
+      },
+      getHeadingLevel: () => {
+        for (let node = syntaxTree(view.state).resolveInner(view.state.selection.main.head, 1); node; node = node.parent) {
+          const heading = /^(?:ATX|Setext)Heading([1-6])$/.exec(node.name)
+          if (heading) return Number(heading[1])
+        }
+        return 0
+      },
       find: (query, backwards = false, beginsWith = false) => {
         const previous = view.state.field(documentFind)
         const same = previous.query === query && previous.beginsWith === beginsWith

@@ -32,6 +32,9 @@ extension DocumentWindowController {
             self?.stopAutoSaveTimer()
             self?.startAutoSaveTimerIfNeeded()
         }
+        editor.formattingDidChange = { [weak self] heading, commands in
+            self?.updateFormattingSelection(heading: heading, commands: commands)
+        }
         editor.pasteImageRequested = { [weak self] from, to in
             self?.pasteImage(at: from, replacing: to)
         }
@@ -435,6 +438,7 @@ extension DocumentWindowController {
             return
         }
         split.editorViewController?.contentDidChange = nil
+        split.editorViewController?.formattingDidChange = nil
         split.editorViewController?.cancelRequested = nil
         split.editorViewController?.pasteImageRequested = nil
         split.editorViewController?.imageClicked = nil

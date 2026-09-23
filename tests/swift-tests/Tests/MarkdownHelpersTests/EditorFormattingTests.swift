@@ -4,6 +4,42 @@ import XCTest
 
 @MainActor
 final class EditorFormattingTests: XCTestCase {
+    func testFormattingStateIsPublishedSynchronouslyOnSelectionAndCommands() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let editor = WebViewLayoutHarness(
+            html: EditorHTML.render(markdown: "", editorJavaScript: script),
+            width: 600, isEditor: true, height: 400)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        let result = try await editor.webView.evaluateJavaScript("""
+            (() => {
+                const host = document.createElement('div');
+                document.body.append(host);
+                const source = '# Heading\\n\\n**bold** *italic* ~~strike~~ [link](https://example.com)\\n\\nBody';
+                let latest;
+                const api = MDEditor.create(host, source, {
+                    onFormattingChange: state => { latest = state; }
+                });
+                const initial = latest.heading === 1;
+                const cases = [['bold', 'bold'], ['italic', 'italic'], ['strike', 'strikethrough'], ['link', 'link']];
+                const inline = cases.every(([text, command]) => {
+                    api.select(source.indexOf(text) + 1);
+                    return latest.heading === 0 && latest.commands.includes(command);
+                });
+                api.select(source.indexOf('Body') + 1);
+                const body = latest.heading === 0 && latest.commands.length === 0;
+                api.exec('h3');
+                const command = latest.heading === 3;
+                api.select(2);
+                const heading = latest.heading === 1;
+                api.select(2, source.indexOf('bold') + 2);
+                const mixed = latest.heading === 0 && latest.commands.length === 0;
+                return initial && inline && body && command && heading && mixed;
+            })()
+            """) as? Bool
+        XCTAssertEqual(result, true)
+    }
+
     func testPointerGestureAnchorsClicksAndRevealsSyntaxImmediately() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let sources = ["Before **target words** after", "Before *target words* after",
@@ -147,4 +183,112 @@ final class EditorFormattingTests: XCTestCase {
         }
     }
 
+    func testStylingPopoverConvertsBlocksWithoutLosingText() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let editor = WebViewLayoutHarness(
+            html: EditorHTML.render(markdown: "Example", editorJavaScript: script),
+            width: 900, isEditor: true, height: 400)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        for (style, language, source) in [
+            ("quote", "", "> Example"), ("none", "", "Example"),
+            ("plain", "", "    Example"), ("none", "", "Example"),
+            ("fenced", "swift", "```swift\nExample\n```"),
+            ("fenced", "python", "```python\nExample\n```"), ("none", "", "Example")
+        ] {
+            let result = try await editor.webView.callAsyncJavaScript("""
+                window.__mdEditor.setBlockStyle(style, language);
+                for (let i = 0; i < 8; i++) { window.__layoutTestFrame(); await Promise.resolve(); }
+                return { style: window.__mdEditor.getBlockStyle(), source: window.__mdEditor.getMarkdown() };
+                """, arguments: ["style": style, "language": language], in: nil, contentWorld: .page)
+            let values = try XCTUnwrap(result as? [String: String])
+            XCTAssertEqual(values["style"], style)
+            XCTAssertEqual(values["source"], source)
+        }
+        _ = try await editor.webView.evaluateJavaScript("window.__mdEditor.setBlockStyle('table', '')")
+        let source = try await editor.webView.evaluateJavaScript("window.__mdEditor.getMarkdown()") as? String
+        XCTAssertEqual(source, "Example\n\n| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n")
+    }
+
+    func testListPopoverReplacesMarkersAndPreservesIndentation() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let editor = WebViewLayoutHarness(
+            html: EditorHTML.render(markdown: "  - [x] Item", editorJavaScript: script),
+            width: 900, isEditor: true, height: 400)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        for (style, source) in [("task", "  - [x] Item"), ("bullet", "  - Item"),
+                                ("ordered", "  1. Item"), ("task", "  - [ ] Item"), ("none", "  Item")] {
+            let result = try await editor.webView.callAsyncJavaScript("""
+                window.__mdEditor.setListStyle(style);
+                for (let i = 0; i < 8; i++) { window.__layoutTestFrame(); await Promise.resolve(); }
+                return { style: window.__mdEditor.getListStyle(), source: window.__mdEditor.getMarkdown() };
+                """, arguments: ["style": style], in: nil, contentWorld: .page)
+            let values = try XCTUnwrap(result as? [String: String])
+            XCTAssertEqual(values["style"], style)
+            XCTAssertEqual(values["source"], source)
+        }
+    }
+
+    func testLinkPopoverInsertionEscapingAndEmptyURL() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let editor = WebViewLayoutHarness(
+            html: EditorHTML.render(markdown: "Before selected after", editorJavaScript: script),
+            width: 900, isEditor: true, height: 400)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        let result = try await editor.webView.callAsyncJavaScript("""
+            const api = window.__mdEditor;
+            const before = api.getMarkdown();
+            const selection = api.getLinkSelection();
+            const untouched = api.getMarkdown() === before;
+            const rejected = !api.insertLinkFromPopover('text', ' ', 7, 15) && api.getMarkdown() === before;
+            api.insertLinkFromPopover('A [label]', 'https://example.com/a (b)', 7, 15);
+            const linked = api.getMarkdown();
+            api.insertLinkFromPopover('', 'https://example.org', 0, 0);
+            return { untouched, rejected, linked, fallback: api.getMarkdown(), selection };
+            """, arguments: [:], in: nil, contentWorld: .page)
+        let values = try XCTUnwrap(result as? [String: Any])
+        XCTAssertEqual(values["untouched"] as? Bool, true)
+        XCTAssertEqual(values["rejected"] as? Bool, true)
+        let linked = "Before [A \\[label\\]](https://example.com/a%20%28b%29) after"
+        XCTAssertEqual(values["linked"] as? String, linked)
+        XCTAssertEqual(values["fallback"] as? String, "[https://example.org](https://example.org)" + linked)
+    }
+
+    func testHeadingPopoverCommandsAndSelectedStyle() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let editor = WebViewLayoutHarness(
+            html: EditorHTML.render(markdown: "Example", editorJavaScript: script),
+            width: 900, isEditor: true, height: 400)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        for level in Array(1...6) + [0] {
+            let result = try await editor.webView.callAsyncJavaScript("""
+                window.__mdEditor.exec('h' + level);
+                for (let i = 0; i < 8; i++) { window.__layoutTestFrame(); await Promise.resolve(); }
+                return { heading: window.__mdEditor.getHeadingLevel(), source: window.__mdEditor.getMarkdown() };
+                """, arguments: ["level": level], in: nil, contentWorld: .page)
+            let values = try XCTUnwrap(result as? [String: Any])
+            XCTAssertEqual(values["heading"] as? Int, level)
+            XCTAssertEqual(values["source"] as? String,
+                           (level == 0 ? "" : String(repeating: "#", count: level) + " ") + "Example")
+            if level > 0 {
+                let isGray = try await editor.webView.evaluateJavaScript("""
+                    (() => {
+                        const marker = document.querySelector('.cm-md-heading-marker');
+                        const probe = document.createElement('span');
+                        probe.style.color = 'var(--secondary)';
+                        document.querySelector('#editor').append(probe);
+                        const expected = getComputedStyle(probe).color;
+                        const matches = marker && [marker, ...marker.querySelectorAll('*')]
+                            .every(element => getComputedStyle(element).color === expected);
+                        probe.remove();
+                        return !!matches;
+                    })()
+                    """) as? Bool
+                XCTAssertEqual(isGray, true, "Heading markers should use secondary gray at level \(level)")
+            }
+        }
+    }
 }
