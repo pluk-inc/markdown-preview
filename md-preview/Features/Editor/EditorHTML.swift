@@ -46,26 +46,14 @@ nonisolated enum EditorHTML {
             --code-bg: #f9f9f9;
             --code-border: #f0f0f0;
             /* Same code palette as the preview stylesheet. */
-            --hl-keyword: #9b2393;
-            --hl-string: #c41a16;
-            --hl-comment: #5d6c79;
-            --hl-number: #1c00cf;
-            --hl-type: #3900a0;
-            --hl-function: #326d74;
-            --hl-property: #326d74;
+            \(MarkdownHTML.lightCodePaletteCSS)
         }
         @media (prefers-color-scheme: dark) {
             :root {
                 --link: rgb(65, 156, 255);
                 --code-bg: #262626;
                 --code-border: #323232;
-                --hl-keyword: #fc5fa3;
-                --hl-string: #fc6a5d;
-                --hl-comment: #6c7986;
-                --hl-number: #d0bf69;
-                --hl-type: #d0a8ff;
-                --hl-function: #67b7a4;
-                --hl-property: #67b7a4;
+                \(MarkdownHTML.darkCodePaletteCSS)
             }
         }
         html, body {
@@ -235,6 +223,9 @@ nonisolated enum EditorHTML {
             border: 0.5px solid var(--code-border);
             border-radius: 5px;
             padding: 0.15em 0.3em;
+            overflow-wrap: anywhere;
+            -webkit-box-decoration-break: clone;
+            box-decoration-break: clone;
         }
         .cm-md-link { color: var(--link); }
         .cm-md-url { color: var(--secondary); }
@@ -366,7 +357,16 @@ nonisolated enum EditorHTML {
                read-mode card on both Retina and standard-density displays. */
             padding: 0 16px;
             border-inline: 0.5px solid transparent;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
         }
+        #editor .cm-content.cm-lineWrapping > .cm-md-codeblock { white-space: pre; }
+        #editor .cm-md-code-scroll-text {
+            display: inline-block;
+            min-width: var(--code-scroll-width, 0px);
+        }
+        #editor .cm-md-codeblock-last { scrollbar-width: thin; }
         /* The code card is painted on a z:-2 pseudo instead of the line
            itself, so it matches the preview's opaque --code-bg and never
            covers the native selection or the caret. */
@@ -376,6 +376,7 @@ nonisolated enum EditorHTML {
             inset: 0;
             z-index: -2;
             background: var(--code-bg);
+            min-width: calc(var(--code-scroll-width, 0px) + 32px);
         }
         #editor .cm-content > .cm-line.cm-md-codeblock-first {
             padding-top: 16px;
@@ -406,7 +407,9 @@ nonisolated enum EditorHTML {
         }
         #editor .cm-md-code-language {
             position: absolute;
-            inset-inline-start: 7px;
+            /* Text starts at the same 16px inset as the read-only label:
+               subtract the input's padding and 1px border. */
+            inset-inline-start: 9px;
             max-width: calc(100% - 21px);
             top: 9px;
             z-index: 1;
@@ -414,6 +417,7 @@ nonisolated enum EditorHTML {
             white-space: nowrap;
         }
         #editor .cm-md-code-language-input {
+            display: block;
             width: 14em;
             max-width: 100%;
             min-width: 4.5em;
@@ -423,9 +427,7 @@ nonisolated enum EditorHTML {
             border-radius: 5px;
             background: transparent;
             color: var(--secondary);
-            font-family: system-ui, -apple-system, sans-serif;
-            font-size: 0.8em;
-            line-height: 1.35;
+            font: 11px/14px -apple-system, BlinkMacSystemFont, sans-serif;
             outline: none;
         }
         #editor .cm-md-code-language-input::placeholder {
@@ -603,8 +605,12 @@ nonisolated enum EditorHTML {
         .hl-number { color: var(--hl-number); }
         .hl-type { color: var(--hl-type); }
         .hl-function { color: var(--hl-function); }
-        .hl-property { color: var(--hl-property); }
-        .hl-meta { color: var(--secondary); }
+        .hl-property { color: var(--hl-variable); }
+        .hl-attribute { color: var(--hl-attribute); }
+        .hl-builtin { color: var(--hl-builtin); }
+        .hl-declaration { color: var(--hl-declaration); }
+        .hl-meta { color: var(--hl-preprocessor); }
+        .hl-plain { color: var(--hl-plain); }
         </style>
         <style id="\(MarkdownHTML.themeStyleElementID)">\(configuration.themeOverrideCSS)</style>
         </head>

@@ -10,6 +10,40 @@ import Foundation
 // `nonisolated` matters: the targets default to MainActor isolation, and
 // rendering runs off the main actor.
 nonisolated extension MarkdownHTML {
+    // One palette for the read-only and editable code renderers.
+    static let lightCodePaletteCSS = """
+    --hl-plain: var(--text);
+    --hl-keyword: #9b2393;
+    --hl-string: #c41a16;
+    --hl-comment: #5d6c79;
+    --hl-doc-keyword: #4a5560;
+    --hl-number: #1c00cf;
+    --hl-type: #3900a0;
+    --hl-builtin: #6c36a9;
+    --hl-declaration: #0b4f79;
+    --hl-function: #0f68a0;
+    --hl-variable: #326d74;
+    --hl-preprocessor: #643820;
+    --hl-attribute: #815f03;
+    --hl-url: #0e0eff;
+    """
+
+    static let darkCodePaletteCSS = """
+    --hl-keyword: #fc5fa3;
+    --hl-string: #fc6a5d;
+    --hl-comment: #6c7986;
+    --hl-doc-keyword: #92a1b1;
+    --hl-number: #d0bf69;
+    --hl-type: #d0a8ff;
+    --hl-builtin: #a167e6;
+    --hl-declaration: #5dd8ff;
+    --hl-function: #41a1c0;
+    --hl-variable: #67b7a4;
+    --hl-preprocessor: #fd8f3f;
+    --hl-attribute: #bf8555;
+    --hl-url: #5482ff;
+    """
+
     // MARK: - Code highlighting (highlight.js)
 
     // Excludes `language-mermaid` since renderMermaidBlocks already lifted

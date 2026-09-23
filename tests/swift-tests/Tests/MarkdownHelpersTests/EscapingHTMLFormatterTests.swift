@@ -115,6 +115,15 @@ final class EscapingHTMLFormatterTests: XCTestCase {
             html.contains(#"<code class="language-javascript" data-md-detected-language="true" data-hljs-done="1">"#),
             "expected detected language marker: \(html)"
         )
+        XCTAssertTrue(html.contains(#"data-code-language="javascript""#))
+    }
+
+    func testCodeLanguageLabelPreservesExplicitAliasAndEscapesHTML() {
+        let shell = EscapingHTMLFormatter.format("```sh\necho hello\n```")
+        XCTAssertTrue(shell.contains(#"data-code-language="sh""#))
+        XCTAssertTrue(shell.contains(#"class="language-bash""#))
+        let escaped = EscapingHTMLFormatter.format("```a\"b\ntext\n```")
+        XCTAssertTrue(escaped.contains(#"data-code-language="a&quot;b""#))
     }
 
     func testFencedCodeWithAmbiguousSourceStaysWithoutLanguageClass() {

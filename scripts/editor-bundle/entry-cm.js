@@ -514,6 +514,28 @@ function serializeTable(model) {
 let nextTableContextToken = 1
 let pendingTableContextAction = null
 
+// Inactive cells render code spans; focused cells expose their original
+// Markdown. Build DOM nodes rather than interpreting cell contents as HTML.
+function renderTableCellCode(element, source) {
+  element.replaceChildren()
+  let offset = 0
+  if (source.includes('`')) markdownLanguage.parser.parse(source).iterate({
+    enter(node) {
+      if (node.name !== 'InlineCode') return
+      element.append(document.createTextNode(source.slice(offset, node.from)))
+      const code = document.createElement('code')
+      code.className = 'cm-md-inline-code'
+      let text = source.slice(node.node.firstChild.to, node.node.lastChild.from).replace(/\n/g, ' ')
+      if (text.startsWith(' ') && text.endsWith(' ') && /[^ ]/.test(text)) text = text.slice(1, -1)
+      code.textContent = text
+      element.append(code)
+      offset = node.to
+      return false
+    },
+  })
+  element.append(document.createTextNode(source.slice(offset)))
+}
+
 class TableEditorWidget extends WidgetType {
   constructor(source, from) {
     super()
@@ -575,7 +597,7 @@ class TableEditorWidget extends WidgetType {
     }
 
     const captureActiveValue = () => {
-      if (!active) return
+      if (!active || active.element.dataset.tableEditing !== 'true') return
       model.rows[active.row][active.column] = active.element.innerText || ""
     }
 
@@ -698,7 +720,7 @@ class TableEditorWidget extends WidgetType {
         editor.className = "cm-md-table-cell"
         editor.contentEditable = "plaintext-only"
         editor.spellcheck = true
-        editor.textContent = value
+        renderTableCellCode(editor, value)
         editor.dataset.tableRow = String(row)
         editor.dataset.tableColumn = String(column)
         if (row === 0) {
@@ -714,6 +736,8 @@ class TableEditorWidget extends WidgetType {
         if (model.alignments[column] !== "none") editor.style.textAlign = model.alignments[column]
         editor.addEventListener("focus", () => {
           clearPartSelection()
+          editor.textContent = model.rows[row][column]
+          editor.dataset.tableEditing = 'true'
           active = { row, column, element: editor }
         })
         editor.addEventListener("contextmenu", (event) => {
@@ -735,16 +759,21 @@ class TableEditorWidget extends WidgetType {
         })
         editor.addEventListener("blur", () => {
           if (!active || active.element !== editor) return
-          model.rows[row][column] = editor.innerText || ""
+          const value = editor.innerText || ""
+          const changed = value !== model.rows[row][column]
+          model.rows[row][column] = value
           active = null
-          applyModel()
+          delete editor.dataset.tableEditing
+          renderTableCellCode(editor, model.rows[row][column])
+          if (changed) applyModel()
         })
         editor.addEventListener("keydown", (event) => {
           if (event.key === "Escape") {
             event.preventDefault()
-            editor.textContent = model.rows[row][column]
             active = null
             editor.blur()
+            delete editor.dataset.tableEditing
+            renderTableCellCode(editor, model.rows[row][column])
             view.focus()
             return
           }
@@ -1065,6 +1094,75 @@ const listContinuationLine = Decoration.line({ class: "cm-md-list-continuation" 
 const codeLine = Decoration.line({ class: "cm-md-codeblock" })
 const codeLineFirst = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-first" })
 const codeLineLast = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-last" })
+const codeScrollText = Decoration.mark({ class: "cm-md-code-scroll-text" })
+
+// Keep CodeMirror's editable lines (and source selection) intact, while each
+// code card shares one horizontal offset and one scrollbar on its last line.
+const codeBlockScrolling = ViewPlugin.fromClass(class {
+  constructor(view) {
+    this.view = view
+    this.offsets = new Map()
+    this.onScroll = (event) => {
+      const line = event.target
+      if (!(line instanceof HTMLElement) || !line.dataset.codeScrollGroup) return
+      const group = line.dataset.codeScrollGroup
+      const offset = line.scrollLeft
+      if (this.offsets.get(group) === offset) return
+      this.offsets.set(group, offset)
+      for (const other of view.contentDOM.querySelectorAll('[data-code-scroll-group]')) {
+        if (other.dataset.codeScrollGroup === group) {
+          other.scrollLeft = offset
+          other.style.setProperty('--code-scroll-offset', `${offset}px`)
+        }
+      }
+    }
+    view.contentDOM.addEventListener('scroll', this.onScroll, true)
+    this.measure()
+  }
+  update(update) {
+    if (update.docChanged) this.offsets.clear()
+    if (update.docChanged || update.viewportChanged || update.geometryChanged) this.measure()
+  }
+  measure() {
+    this.view.requestMeasure({
+      key: this,
+      read: (view) => {
+        const groups = new Map()
+        for (const line of view.contentDOM.querySelectorAll('[data-code-scroll-group]')) {
+          const key = line.dataset.codeScrollGroup
+          if (!groups.has(key)) groups.set(key, { lines: [], width: 0 })
+          const group = groups.get(key)
+          let left = Infinity, right = -Infinity
+          for (const text of line.querySelectorAll('.cm-md-code-scroll-text')) {
+            const range = document.createRange()
+            range.selectNodeContents(text)
+            const bounds = range.getBoundingClientRect()
+            left = Math.min(left, bounds.left)
+            right = Math.max(right, bounds.right)
+          }
+          const width = Number.isFinite(left) ? right - left : 0
+          group.lines.push({ line, width })
+          group.width = Math.max(group.width, width)
+        }
+        return groups
+      },
+      write: (groups) => {
+        for (const [key, group] of groups) {
+          const width = `${Math.ceil(group.width)}px`
+          for (const { line } of group.lines) {
+            if (line.style.getPropertyValue('--code-scroll-width') !== width) {
+              line.style.setProperty('--code-scroll-width', width)
+            }
+            line.scrollLeft = this.offsets.get(key) || 0
+          }
+        }
+      },
+    })
+  }
+  destroy() {
+    this.view.contentDOM.removeEventListener('scroll', this.onScroll, true)
+  }
+})
 const tableLine = Decoration.line({ class: "cm-md-table" })
 // Preview gives every list item after the first a 0.4em margin-top (and a
 // nested list the same via li > ul). Mirror it on the item's first line.
@@ -1958,6 +2056,10 @@ function buildDecorations(view, detectedCodeCache) {
               if (isFirst) lineOnce(line.from, codeLineFirst)
               if (isLast) lineOnce(line.from, codeLineLast)
               if (!isFirst && !isLast) lineOnce(line.from, codeLine)
+              ranges.push(Decoration.line({ attributes: {
+                'data-code-scroll-group': String(first.from),
+              } }).range(line.from))
+              if (line.length) ranges.push(codeScrollText.range(line.from, line.to))
             }
             if (name === "CodeBlock" && !touchesLineOf(line.from)) {
               const indent = line.text.match(/^(?: {4}|\t)/)?.[0]
@@ -2137,13 +2239,18 @@ const paragraphReflow = StateField.define({
 
 const codeHighlight = HighlightStyle.define([
   { tag: [t.keyword, t.modifier, t.operatorKeyword, t.controlKeyword, t.definitionKeyword, t.moduleKeyword], class: "hl-keyword" },
-  { tag: [t.string, t.special(t.string), t.character], class: "hl-string" },
+  { tag: [t.string, t.special(t.string), t.regexp], class: "hl-string" },
   { tag: [t.comment, t.blockComment, t.lineComment], class: "hl-comment" },
-  { tag: [t.number, t.integer, t.float, t.bool, t.atom, t.null], class: "hl-number" },
-  { tag: [t.typeName, t.className, t.namespace], class: "hl-type" },
+  { tag: [t.number, t.integer, t.float, t.character], class: "hl-number" },
+  { tag: [t.bool, t.atom, t.null], class: "hl-keyword" },
+  { tag: [t.typeName, t.namespace], class: "hl-type" },
+  { tag: [t.className, t.definition(t.typeName)], class: "hl-declaration" },
   { tag: [t.function(t.variableName), t.function(t.propertyName), t.macroName], class: "hl-function" },
-  { tag: [t.propertyName, t.attributeName, t.labelName], class: "hl-property" },
-  { tag: [t.meta, t.processingInstruction, t.punctuation], class: "hl-meta" },
+  { tag: [t.propertyName, t.labelName], class: "hl-property" },
+  { tag: t.attributeName, class: "hl-attribute" },
+  { tag: [t.standard(t.variableName), t.standard(t.typeName)], class: "hl-builtin" },
+  { tag: [t.meta, t.processingInstruction], class: "hl-meta" },
+  { tag: [t.punctuation, t.operator], class: "hl-plain" },
 ])
 
 // ---------------------------------------------------------------------------
@@ -2431,7 +2538,7 @@ window.MDEditor = {
           tableEditors,
           syntaxHighlighting(codeHighlight),
           Prec.lowest(livePreview),
-
+          codeBlockScrolling,
           alignInactiveHeadings,
           autoCloseFence,
           closeBrackets(),
@@ -2481,26 +2588,12 @@ window.MDEditor = {
     const scrollEvents = pageScrolling ? window : scroller
     let preservedSourcePosition = null
     let preservedSourceGap = 0
-    let didUserScroll = false
-    let userScrollIntent = false
-    let lastScrollTop = scroller.scrollTop
-    const markScrollIntent = () => { userScrollIntent = true }
-    const markKeyboardScrollIntent = (event) => {
-      if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) {
-        userScrollIntent = true
-      }
-    }
-    const observeScroll = () => {
-      const scrollTop = scroller.scrollTop
-      if (userScrollIntent && Math.abs(scrollTop - lastScrollTop) > 0.5) {
-        didUserScroll = true
-      }
-      lastScrollTop = scrollTop
-    }
-    scrollEvents.addEventListener("wheel", markScrollIntent, { passive: true })
-    scrollEvents.addEventListener("pointerdown", markScrollIntent, { passive: true })
-    scrollEvents.addEventListener("keydown", markKeyboardScrollIntent)
-    scrollEvents.addEventListener("scroll", observeScroll, { passive: true })
+    let preservedScrollTop = null
+    // CodeMirror block heights start at the first line, after content padding.
+    // Scroll offsets start at the scroll container's origin instead. Convert
+    // both ways so page padding is preserved during read/edit hand-offs.
+    const documentScrollOrigin = () => view.documentTop + scroller.scrollTop
+      - (pageScrolling ? 0 : scroller.getBoundingClientRect().top)
     const lineContentBlock = (position) => {
       const block = view.lineBlockAt(position)
       let paddingTop = 0
@@ -2521,6 +2614,8 @@ window.MDEditor = {
       return {
         top: block.top + paddingTop,
         height: Math.max(block.height - paddingTop - paddingBottom, 1),
+        sourceStart: view.state.doc.lineAt(block.from).number,
+        sourceEnd: view.state.doc.lineAt(block.to).number + 1,
       }
     }
     const commands = {
@@ -2597,10 +2692,13 @@ window.MDEditor = {
       },
       focus: () => view.focus(),
       getScrollAnchor: () => {
-        if (!didUserScroll && Number.isFinite(preservedSourcePosition)) {
+        // Native WebKit/scrollbar scrolling need not deliver a DOM wheel or
+        // pointer event. Reuse the incoming anchor only at its actual offset.
+        if (Number.isFinite(preservedSourcePosition)
+            && Math.abs(scroller.scrollTop - preservedScrollTop) <= 0.5) {
           return { position: preservedSourcePosition, gap: preservedSourceGap || 0 }
         }
-        const viewportY = scroller.scrollTop
+        const viewportY = scroller.scrollTop - documentScrollOrigin()
         const visibleLine = view.lineBlockAtHeight(viewportY)
         const line = view.state.doc.lineAt(visibleLine.from)
         const sourceLineBlock = lineContentBlock(line.from)
@@ -2612,22 +2710,25 @@ window.MDEditor = {
         // express. Carry that remaining pixel gap so the other surface can
         // reproduce the exact viewport, not just the line.
         const gap = Math.max(sourceLineBlock.top - viewportY, 0)
-        return { position: line.number + progress, gap }
+        return {
+          position: sourceLineBlock.sourceStart
+            + progress * (sourceLineBlock.sourceEnd - sourceLineBlock.sourceStart),
+          gap,
+        }
       },
       setScrollPosition: (progress, sourcePosition, sourceGap) => new Promise((resolve) => {
         const maximum = Math.max(scroller.scrollHeight - scroller.clientHeight, 0)
         let target = maximum * Math.min(Math.max(Number(progress) || 0, 0), 1)
         let linePosition = null
-        let lineProgress = 0
         const gap = Number.isFinite(sourceGap) ? Math.max(sourceGap, 0) : 0
 
         if (Number.isFinite(sourcePosition) && sourcePosition >= 1) {
           const sourceLine = Math.min(Math.floor(sourcePosition), view.state.doc.lines)
-          lineProgress = Math.min(Math.max(sourcePosition - sourceLine, 0), 1)
           linePosition = view.state.doc.line(sourceLine).from
           if (linePosition != null) {
             const block = lineContentBlock(linePosition)
-            target = block.top + block.height * lineProgress - gap
+            const fraction = (sourcePosition - block.sourceStart) / (block.sourceEnd - block.sourceStart)
+            target = documentScrollOrigin() + block.top + block.height * fraction - gap
             // Let CodeMirror create the viewport around the target before
             // applying the precise within-block offset. Directly assigning a
             // distant scrollTop can briefly leave its virtualized DOM empty.
@@ -2641,7 +2742,8 @@ window.MDEditor = {
           const measuredMaximum = Math.max(scroller.scrollHeight - scroller.clientHeight, 0)
           if (linePosition != null) {
             const block = lineContentBlock(linePosition)
-            target = block.top + block.height * lineProgress - gap
+            const fraction = (sourcePosition - block.sourceStart) / (block.sourceEnd - block.sourceStart)
+            target = documentScrollOrigin() + block.top + block.height * fraction - gap
           } else {
             target = measuredMaximum * Math.min(Math.max(Number(progress) || 0, 0), 1)
           }
@@ -2651,9 +2753,7 @@ window.MDEditor = {
           requestAnimationFrame(() => {
             preservedSourcePosition = Number.isFinite(sourcePosition) ? sourcePosition : null
             preservedSourceGap = Number.isFinite(sourcePosition) ? gap : 0
-            didUserScroll = false
-            userScrollIntent = false
-            lastScrollTop = scroller.scrollTop
+            preservedScrollTop = scroller.scrollTop
             resolve(true)
           })
         })
@@ -2687,10 +2787,6 @@ window.MDEditor = {
         return true
       },
       destroy: () => {
-        scrollEvents.removeEventListener("wheel", markScrollIntent)
-        scrollEvents.removeEventListener("pointerdown", markScrollIntent)
-        scrollEvents.removeEventListener("keydown", markKeyboardScrollIntent)
-        scrollEvents.removeEventListener("scroll", observeScroll)
         view.destroy()
       },
     }

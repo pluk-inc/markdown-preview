@@ -36,22 +36,8 @@ nonisolated extension MarkdownHTML {
         --aside-border: #696969;
         --code-bg: #f9f9f9;
         --code-border: #f0f0f0;
-        /* Code highlighting palette; the class mapping lives in
-           MarkdownHTML+Highlight.swift and the editor mirrors these values. */
-        --hl-plain: var(--text);
-        --hl-keyword: #9b2393;
-        --hl-string: #c41a16;
-        --hl-comment: #5d6c79;
-        --hl-doc-keyword: #4a5560;
-        --hl-number: #1c00cf;
-        --hl-type: #3900a0;
-        --hl-builtin: #6c36a9;
-        --hl-declaration: #0b4f79;
-        --hl-function: #0f68a0;
-        --hl-variable: #326d74;
-        --hl-preprocessor: #643820;
-        --hl-attribute: #815f03;
-        --hl-url: #0e0eff;
+        /* Shared with the editor; class mappings live in MarkdownHTML+Highlight.swift. */
+        \(lightCodePaletteCSS)
         --mdp-list-indent: 2.1em;
         --mdp-list-gap: 0.75em;
     }
@@ -65,19 +51,7 @@ nonisolated extension MarkdownHTML {
         --aside-border: #9a9a9e;
         --code-bg: #262626;
         --code-border: #323232;
-        --hl-keyword: #fc5fa3;
-        --hl-string: #fc6a5d;
-        --hl-comment: #6c7986;
-        --hl-doc-keyword: #92a1b1;
-        --hl-number: #d0bf69;
-        --hl-type: #d0a8ff;
-        --hl-builtin: #a167e6;
-        --hl-declaration: #5dd8ff;
-        --hl-function: #41a1c0;
-        --hl-variable: #67b7a4;
-        --hl-preprocessor: #fd8f3f;
-        --hl-attribute: #bf8555;
-        --hl-url: #5482ff;
+        \(darkCodePaletteCSS)
     }
     :root[data-mdp-color-scheme],
     :root[data-mdp-color-scheme] body {
@@ -90,19 +64,7 @@ nonisolated extension MarkdownHTML {
             --aside-border: #9a9a9e;
             --code-bg: #262626;
             --code-border: #323232;
-            --hl-keyword: #fc5fa3;
-            --hl-string: #fc6a5d;
-            --hl-comment: #6c7986;
-            --hl-doc-keyword: #92a1b1;
-            --hl-number: #d0bf69;
-            --hl-type: #d0a8ff;
-            --hl-builtin: #a167e6;
-            --hl-declaration: #5dd8ff;
-            --hl-function: #41a1c0;
-            --hl-variable: #67b7a4;
-            --hl-preprocessor: #fd8f3f;
-            --hl-attribute: #bf8555;
-            --hl-url: #5482ff;
+            \(darkCodePaletteCSS)
         }
     }
 
@@ -423,26 +385,16 @@ nonisolated extension MarkdownHTML {
         overflow-x: auto;
         line-height: 1.3;
     }
-    pre::-webkit-scrollbar {
+    pre[data-code-language]::before {
+        content: attr(data-code-language);
         display: block;
-        height: 10px;
-        width: 0;
-    }
-    pre::-webkit-scrollbar-track {
-        background: transparent;
-    }
-    pre::-webkit-scrollbar-thumb {
-        background-color: color-mix(in srgb, var(--text) 22%, transparent);
-        border-radius: 10px;
-        border: 3px solid transparent;
-        background-clip: padding-box;
-    }
-    pre:hover::-webkit-scrollbar-thumb {
-        background-color: color-mix(in srgb, var(--text) 38%, transparent);
-    }
-    pre::-webkit-scrollbar-thumb:hover,
-    pre::-webkit-scrollbar-thumb:active {
-        background-color: color-mix(in srgb, var(--text) 55%, transparent);
+        position: sticky;
+        left: 0;
+        height: 20px;
+        color: var(--secondary);
+        font: 11px/14px -apple-system, BlinkMacSystemFont, sans-serif;
+        user-select: none;
+        -webkit-user-select: none;
     }
     pre code {
         /* highlight.js adds display:block with the .hljs class after its
