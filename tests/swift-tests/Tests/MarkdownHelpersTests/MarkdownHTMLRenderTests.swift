@@ -421,8 +421,8 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(stylesheet.contains("::-webkit-selection"))
         XCTAssertFalse(stylesheet.contains("::-moz-selection"))
         // Code UI is not document text. The generated language label and
-        // copy control may opt out, but the Markdown content must not.
-        let allowedSelectors = ["pre[data-code-language]::before", ".md-code-copy"]
+        // card header may opt out, but the Markdown content must not.
+        let allowedSelectors = ["pre[data-code-language]::before", ".md-code-header"]
         XCTAssertEqual(nonSelectableRules.count, allowedSelectors.count)
         for selector in allowedSelectors {
             XCTAssertTrue(nonSelectableRules.contains { $0.contains(selector) }, selector)
