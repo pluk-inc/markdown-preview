@@ -467,17 +467,25 @@ final class FileSearchPanelController: NSViewController {
     @discardableResult
     private func openSelectedRow(target: OpenTarget) -> Bool {
         guard resultsAreCurrent, let url = selectedURL else { return false }
+        openFile(at: url, target: target)
+        return true
+    }
+
+    private func openFile(at url: URL, target: OpenTarget) {
         let onOpen = onOpen
         let parent = view.window?.parent
         closePalette()
         parent?.makeKeyAndOrderFront(nil)
         DispatchQueue.main.async { onOpen?(url, target) }
-        return true
     }
 
-    /// While a new query is pending, displayed rows cannot open stale results.
+    /// A mouse activation targets the displayed file, even while a newer query
+    /// is pending. Capture its URL before closing cancels the pending ranking.
     @objc private func rowDoubleClicked() {
-        openSelectedRow(target: .currentTab)
+        let row = tableView.clickedRow
+        guard results.indices.contains(row),
+              let url = snapshot?.url(at: results[row]) else { return }
+        openFile(at: url, target: .currentTab)
     }
 
     @objc private func openFolderTapped() {
@@ -501,7 +509,8 @@ extension FileSearchPanelController: NSTextFieldDelegate {
         if hasSearchQuery {
             // Keep the published rows and their matching emphasis visible
             // until the new query finishes. apply replaces them together;
-            // resultsAreCurrent prevents activating the previous query.
+            // Keyboard activation waits for the current query; double-clicks
+            // open the file explicitly targeted in the displayed results.
             scheduleRefresh()
         } else {
             rankedQuery = nil
