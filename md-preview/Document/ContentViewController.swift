@@ -75,7 +75,7 @@ final class ContentViewController: NSViewController {
     var localMarkdownLinkActivated: ((URL) -> Void)?
     /// Fires once after a pending source scroll anchor (prepared via
     /// `prepareToRestoreSourceScrollAnchor`) has been applied to a fresh
-    /// render. The edit-mode overlay uses it to hold its cross-fade until
+    /// render. The edit-mode overlay uses it to hold its visibility swap until
     /// the preview underneath is positioned.
     var pendingAnchorRestored: (() -> Void)?
 
@@ -374,14 +374,14 @@ final class ContentViewController: NSViewController {
             let target = max((sourceTop - anchor.topGap) * self.webView.pageZoom, 0)
             // A mode switch is a position hand-off, not a navigation: land
             // instantly. An animated scroll here reads as jitter when the
-            // editor overlay fades away.
+            // editor overlay is hidden.
             self.webView.scrollDocument(to: target, topMargin: 0, duration: 0)
             completion?()
         }
     }
 
     /// Applies the scroll anchor captured from the editor once the fresh
-    /// article is in place, then reports it so the editor overlay can fade.
+    /// article is in place, then reports it so the views can swap visibility.
     private func applyPendingScrollAnchorIfNeeded() {
         guard shouldApplyPendingAnchorOnHeight,
               let anchor = pendingPreviewScrollAnchor else { return }
@@ -444,7 +444,7 @@ final class ContentViewController: NSViewController {
     weak var findOverlay: NSView?
 
     /// The formatting controls. The preview is hidden while editing; legacy
-    /// rows still affect page padding during the exit crossfade, while the
+    /// rows still affect page padding during the exit hand-off, while the
     /// macOS 26 floating controls intentionally do not.
     weak var formattingBar: NSView?
 

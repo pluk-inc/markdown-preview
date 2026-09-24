@@ -77,11 +77,11 @@ extension DocumentWindowController {
             // well raced the anchor hand-off and re-laid the preview out
             // twice, which showed as jitter during the mode switch. The
             // formatting accessory likewise stays mounted until the overlay
-            // has faded — removing it earlier reflows the content area in
-            // the middle of the crossfade.
+            // is hidden — removing it earlier reflows the content area in
+            // the middle of the visibility swap.
             self.exitEditMode(rerender: true,
                               preserveUnsavedChanges: true,
-                              hidesAccessoryAfterFade: true) {}
+                              hidesAccessoryAfterSwap: true) {}
         }
     }
 
@@ -431,7 +431,7 @@ extension DocumentWindowController {
 
     private func exitEditMode(rerender: Bool,
                               preserveUnsavedChanges: Bool = false,
-                              hidesAccessoryAfterFade: Bool = false,
+                              hidesAccessoryAfterSwap: Bool = false,
                               completion: @escaping () -> Void) {
         guard let split = mainSplit else {
             completion()
@@ -443,7 +443,7 @@ extension DocumentWindowController {
         split.editorViewController?.pasteImageRequested = nil
         split.editorViewController?.imageClicked = nil
         documentWindow.makeFirstResponder(nil)
-        let overlayHidden: (() -> Void)? = hidesAccessoryAfterFade
+        let overlayHidden: (() -> Void)? = hidesAccessoryAfterSwap
             ? { [weak self] in self?.dismissEditChrome() }
             : nil
         split.exitEditMode(waitForPreviewRender: rerender,

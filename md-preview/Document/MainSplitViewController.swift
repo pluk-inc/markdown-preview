@@ -383,6 +383,7 @@ final class MainSplitViewController: NSSplitViewController {
         // Ensure preview is visible during the prepare phase — a rapid mode
         // toggle could leave it hidden from a previous edit session.
         contentViewController?.view.isHidden = false
+        editorVC.view.alphaValue = 0
         editorVC.view.isHidden = false
         editorVC.editorDidBecomeReady = { [weak self, weak editorVC] in
             guard let self, let editorVC, self.isEditorPreparing else { return }
@@ -522,33 +523,24 @@ final class MainSplitViewController: NSSplitViewController {
                                      sourceAnchor: pendingSourceScrollAnchor) { [weak self, weak editorVC] in
             DispatchQueue.main.async {
                 guard let self, let editorVC, self.isEditorPreparing else { return }
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 0.10
-                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                    editorVC.view.animator().alphaValue = 1
-                } completionHandler: { [weak self, weak editorVC] in
-                    Task { @MainActor [weak self, weak editorVC] in
-                        guard let self, let editorVC, self.isEditorPreparing else { return }
-                        self.isEditorPreparing = false
-                        self.isEditorVisible = true
-                        // Hide the preview WebView so it no longer contributes to
-                        // titlebar material sampling. The editor overlay is now
-                        // fully opaque and covering it.
-                        self.contentViewController?.view.isHidden = true
-                        self.refreshFindAfterModeChange()
-                        if self.shouldAutofocusEditor {
-                            self.shouldAutofocusEditor = false
-                            editorVC.focusEditor()
-                        }
-                    }
+                // Original uses transparent WebViews. Crossfading would draw
+                // both text layers together, even with the editor at alpha 1.
+                // Swap in one main-thread turn after scroll restoration.
+                self.contentViewController?.view.isHidden = true
+                editorVC.view.alphaValue = 1
+                self.isEditorPreparing = false
+                self.isEditorVisible = true
+                self.refreshFindAfterModeChange()
+                if self.shouldAutofocusEditor {
+                    self.shouldAutofocusEditor = false
+                    editorVC.focusEditor()
                 }
             }
         }
     }
 
-    /// `overlayHidden` fires once the editor overlay has fully faded out and
-    /// been hidden — the moment chrome tied to editing (the formatting
-    /// accessory) can be dismissed without reflowing the crossfade.
+    /// `overlayHidden` fires after the visibility swap, so editing chrome can
+    /// be dismissed without reflowing the outgoing editor.
     func exitEditMode(waitForPreviewRender: Bool,
                       overlayHidden: (@MainActor () -> Void)? = nil,
                       completion: @escaping () -> Void) {
@@ -572,45 +564,38 @@ final class MainSplitViewController: NSSplitViewController {
             self.isEditorVisible = false
             self.shouldAutofocusEditor = false
 
-            let fadeOutEditor = { [weak self, weak editorVC] in
+            var didRevealPreview = false
+            let revealPreview = { [weak self, weak editorVC] in
                 guard let self, let editorVC,
                       !self.isEditorPreparing, !self.isEditorVisible,
-                      editorVC.view.alphaValue > 0 else { return }
+                      !didRevealPreview else { return }
+                didRevealPreview = true
                 self.contentViewController?.pendingAnchorRestored = nil
-                // Reveal the preview before fading out the editor so the preview
-                // is ready beneath it during the crossfade.
+                // Hide the transparent editor before exposing the reader.
+                // Also finish correctly when exiting during preparation,
+                // while the editor still has alpha zero.
+                editorVC.view.isHidden = true
+                editorVC.view.alphaValue = 0
                 self.contentViewController?.view.isHidden = false
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 0.10
-                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                    editorVC.view.animator().alphaValue = 0
-                } completionHandler: { [weak self, weak editorVC] in
-                    Task { @MainActor [weak self, weak editorVC] in
-                        guard let self, let editorVC,
-                              !self.isEditorPreparing, !self.isEditorVisible else { return }
-                        editorVC.view.isHidden = true
-                        self.refreshFindAfterModeChange()
-                        overlayHidden?()
-                    }
-                }
+                self.refreshFindAfterModeChange()
+                overlayHidden?()
             }
 
             if waitForPreviewRender, anchor != nil {
-                // Keep the editor overlay covering the preview until the
-                // fresh render has restored the source anchor beneath it —
-                // fading immediately exposed the old article re-rendering
+                // Keep the preview hidden until the fresh render has restored
+                // the source anchor — swapping immediately exposed re-rendering
                 // and scrolling into place, which read as jitter. A deadline
                 // caps the hold in case the render outruns it.
                 self.contentViewController?.prepareToRestoreSourceScrollAnchor(anchor)
-                self.contentViewController?.pendingAnchorRestored = fadeOutEditor
+                self.contentViewController?.pendingAnchorRestored = revealPreview
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    fadeOutEditor()
+                    revealPreview()
                 }
             } else {
                 if let anchor {
                     self.contentViewController?.restoreSourceScrollAnchor(anchor)
                 }
-                fadeOutEditor()
+                revealPreview()
             }
             completion()
         }
