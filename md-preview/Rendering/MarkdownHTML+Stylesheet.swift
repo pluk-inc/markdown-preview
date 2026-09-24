@@ -30,28 +30,14 @@ nonisolated extension MarkdownHTML {
         --tertiary: -apple-system-tertiary-label;
         --quote-border: -apple-system-quaternary-label;
         --grid: -apple-system-separator;
-        --accent: -apple-system-control-accent;
+        --accent: var(--link);
         --link: rgb(0, 104, 218);
         --aside-bg: #f5f5f7;
         --aside-border: #696969;
         --code-bg: #f9f9f9;
         --code-border: #f0f0f0;
-        /* Code highlighting palette; the class mapping lives in
-           MarkdownHTML+Highlight.swift and the editor mirrors these values. */
-        --hl-plain: var(--text);
-        --hl-keyword: #9b2393;
-        --hl-string: #c41a16;
-        --hl-comment: #5d6c79;
-        --hl-doc-keyword: #4a5560;
-        --hl-number: #1c00cf;
-        --hl-type: #3900a0;
-        --hl-builtin: #6c36a9;
-        --hl-declaration: #0b4f79;
-        --hl-function: #0f68a0;
-        --hl-variable: #326d74;
-        --hl-preprocessor: #643820;
-        --hl-attribute: #815f03;
-        --hl-url: #0e0eff;
+        /* Shared with the editor; class mappings live in MarkdownHTML+Highlight.swift. */
+        \(lightCodePaletteCSS)
         --mdp-list-indent: 2.1em;
         --mdp-list-gap: 0.75em;
     }
@@ -65,19 +51,7 @@ nonisolated extension MarkdownHTML {
         --aside-border: #9a9a9e;
         --code-bg: #262626;
         --code-border: #323232;
-        --hl-keyword: #fc5fa3;
-        --hl-string: #fc6a5d;
-        --hl-comment: #6c7986;
-        --hl-doc-keyword: #92a1b1;
-        --hl-number: #d0bf69;
-        --hl-type: #d0a8ff;
-        --hl-builtin: #a167e6;
-        --hl-declaration: #5dd8ff;
-        --hl-function: #41a1c0;
-        --hl-variable: #67b7a4;
-        --hl-preprocessor: #fd8f3f;
-        --hl-attribute: #bf8555;
-        --hl-url: #5482ff;
+        \(darkCodePaletteCSS)
     }
     :root[data-mdp-color-scheme],
     :root[data-mdp-color-scheme] body {
@@ -90,19 +64,7 @@ nonisolated extension MarkdownHTML {
             --aside-border: #9a9a9e;
             --code-bg: #262626;
             --code-border: #323232;
-            --hl-keyword: #fc5fa3;
-            --hl-string: #fc6a5d;
-            --hl-comment: #6c7986;
-            --hl-doc-keyword: #92a1b1;
-            --hl-number: #d0bf69;
-            --hl-type: #d0a8ff;
-            --hl-builtin: #a167e6;
-            --hl-declaration: #5dd8ff;
-            --hl-function: #41a1c0;
-            --hl-variable: #67b7a4;
-            --hl-preprocessor: #fd8f3f;
-            --hl-attribute: #bf8555;
-            --hl-url: #5482ff;
+            \(darkCodePaletteCSS)
         }
     }
 
@@ -161,9 +123,9 @@ nonisolated extension MarkdownHTML {
     /* Hide inner scrollers' bars (tables, math) but never match the root:
        any custom ::-webkit-scrollbar style on <html>/<body> — including a
        later "restore" override — swaps the page's native macOS overlay
-       scrollbar for WebKit's legacy one. Zero specificity (:where) keeps
-       the pre::-webkit-scrollbar rules below winning for code blocks. */
-    :where(:not(html):not(body))::-webkit-scrollbar {
+       scrollbar for WebKit's legacy one. Exclude code blocks as well so
+       horizontal overflow retains its native scrollbar. */
+    :where(:not(html):not(body):not(pre))::-webkit-scrollbar {
         display: none;
         width: 0;
         height: 0;
@@ -177,7 +139,7 @@ nonisolated extension MarkdownHTML {
         word-spacing: var(--mdp-word-spacing, normal);
         color: var(--text);
         background: transparent;
-        padding: \(pagePaddingTop)px var(--mdp-page-padding, \(pagePaddingHorizontal)px) \(pagePaddingBottom)px;
+        padding: calc((\(pagePaddingTop)px + var(--mdp-page-top-clearance, 0px)) / var(--mdp-chrome-zoom, 1)) var(--mdp-page-padding, \(pagePaddingHorizontal)px) \(pagePaddingBottom)px;
         -webkit-font-smoothing: antialiased;
     }
     /* Reader spacing tweaks stop at code — whitespace fidelity wins. */
@@ -423,26 +385,16 @@ nonisolated extension MarkdownHTML {
         overflow-x: auto;
         line-height: 1.3;
     }
-    pre::-webkit-scrollbar {
+    pre[data-code-language]::before {
+        content: attr(data-code-language);
         display: block;
-        height: 10px;
-        width: 0;
-    }
-    pre::-webkit-scrollbar-track {
-        background: transparent;
-    }
-    pre::-webkit-scrollbar-thumb {
-        background-color: color-mix(in srgb, var(--text) 22%, transparent);
-        border-radius: 10px;
-        border: 3px solid transparent;
-        background-clip: padding-box;
-    }
-    pre:hover::-webkit-scrollbar-thumb {
-        background-color: color-mix(in srgb, var(--text) 38%, transparent);
-    }
-    pre::-webkit-scrollbar-thumb:hover,
-    pre::-webkit-scrollbar-thumb:active {
-        background-color: color-mix(in srgb, var(--text) 55%, transparent);
+        position: sticky;
+        left: 0;
+        height: 20px;
+        color: var(--secondary);
+        font: 11px/14px -apple-system, BlinkMacSystemFont, sans-serif;
+        user-select: none;
+        -webkit-user-select: none;
     }
     pre code {
         /* highlight.js adds display:block with the .hljs class after its
@@ -458,52 +410,35 @@ nonisolated extension MarkdownHTML {
     .md-code-wrap {
         position: relative;
         margin: \(paragraphSpacing)px 0 0;
+        background: var(--code-bg);
+        border: 0.5px solid var(--code-border);
+        border-radius: 16px;
+        overflow: hidden;
     }
-    .md-code-wrap > pre { margin: 0; }
-    .md-code-copy {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        appearance: none;
-        min-width: 56px;
-        height: 24px;
-        padding: 0 10px;
-        border: none;
-        border-radius: 8px;
-        color: var(--secondary);
-        background: color-mix(in srgb, var(--text) 10%, var(--code-bg));
-        font: 500 11px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-        cursor: pointer;
-        opacity: 0;
-        transition: opacity 120ms ease,
-                    color 120ms ease,
-                    background-color 120ms ease,
-                    transform 120ms ease;
+    .md-code-wrap > pre { margin: 0; border: 0; border-radius: 0; padding-top: 8px; }
+    .md-code-wrap > pre::before { display: none; }
+    .md-code-wrap.is-wrapped > pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .md-code-header {
+        box-sizing: content-box;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        height: 28px;
+        padding: 8px 10px 0 16px;
         user-select: none;
         -webkit-user-select: none;
-        z-index: 2;
+        cursor: default;
     }
-    .md-code-wrap:hover .md-code-copy,
-    .md-code-wrap:focus-within .md-code-copy,
-    .md-code-copy.is-copied {
-        opacity: 1;
+    .md-code-language { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+        color: var(--secondary); font: 11px/14px -apple-system, BlinkMacSystemFont, sans-serif; }
+    .md-code-action {
+        display: inline-flex; align-items: center; justify-content: center;
+        flex: none; width: 28px; height: 28px; padding: 0;
+        appearance: none; border: 0; border-radius: 50%;
+        color: var(--secondary); background: transparent; cursor: pointer;
     }
-    .md-code-copy:hover {
-        color: var(--text);
-        background: color-mix(in srgb, var(--text) 16%, var(--code-bg));
-    }
-    .md-code-copy:active {
-        background: color-mix(in srgb, var(--text) 22%, var(--code-bg));
-        transform: scale(0.97);
-    }
-    .md-code-copy:focus-visible {
-        outline: none;
-        box-shadow: 0 0 0 3px color-mix(in srgb, AccentColor 60%, transparent);
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .md-code-copy { transition: none; }
-        .md-code-copy:active { transform: none; }
-    }
+    .md-code-action:hover { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
+    .md-code-action:focus-visible { outline: 2px solid AccentColor; outline-offset: 1px; }
     .mermaid-figure {
         position: relative;
         margin: \(largeBlockSpacing)px auto 0;
@@ -717,7 +652,7 @@ nonisolated extension MarkdownHTML {
         padding-inline-start: var(--mdp-list-indent);
         padding-inline-end: 0;
     }
-    ol > li::marker { color: var(--accent); font-variant-numeric: tabular-nums; }
+    ol > li::marker { color: var(--link); font-variant-numeric: tabular-nums; }
     /* No text marker: it would paint as a selected box beside every item.
        The gutter comes from the list padding, a 0.4em circle is painted in
        its place, and copying a list yields its Markdown source, bullets
@@ -732,7 +667,7 @@ nonisolated extension MarkdownHTML {
         top: calc(0.5lh - 0.2em);
         width: 0;
         height: 0;
-        border: 0.2em solid var(--accent);
+        border: 0.2em solid var(--link);
         border-radius: 50%;
     }
     li { margin-top: \(listItemSpacing)px; }
@@ -942,7 +877,7 @@ nonisolated extension MarkdownHTML {
         }
 
         /* Interaction affordances are screen-only. */
-        .md-code-copy,
+        .md-code-action,
         .md-search-burst,
         .mermaid-hud { display: none !important; }
         mark.md-search-highlight,

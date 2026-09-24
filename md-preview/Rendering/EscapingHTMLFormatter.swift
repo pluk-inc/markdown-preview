@@ -1274,7 +1274,15 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
             // nothing left for the deferred pass, so it never loads it.
             languageAttr += " data-hljs-done=\"1\""
         }
-        result += "<pre\(sourceLineAttribute(codeBlock))><code\(languageAttr)>\(body)</code></pre>\n"
+        let label = info.language.isEmpty ? (detectedLanguage ?? "code") : info.language
+        let opening = codeBlock.range.map { range -> String in
+            guard parsedSourceLines.indices.contains(range.lowerBound.line - 1) else { return "" }
+            return String(decoding: parsedSourceLines[range.lowerBound.line - 1].utf8.dropFirst(range.lowerBound.column - 1), as: UTF8.self)
+        } ?? ""
+        let isFenced = opening.hasPrefix("```") || opening.hasPrefix("~~~")
+        let labelAttribute = isFenced && language != "mermaid"
+            ? " data-code-language=\"\(escapeAttribute(label))\"" : ""
+        result += "<pre\(sourceLineAttribute(codeBlock))\(labelAttribute)><code\(languageAttr)>\(body)</code></pre>\n"
     }
 
     mutating func visitHeading(_ heading: Heading) {

@@ -106,8 +106,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         CrashReporter.start()
-        let appearanceMode = AppearanceMode.migrateLegacyValue()
+        let storedAppearance = AppearanceMode.migrateLegacyValue()
+        ThemePreset.migrateLegacyValues()
+        let appearanceMode = ThemePreset.applied().requiredAppearance ?? storedAppearance
+        if appearanceMode != storedAppearance { AppearanceMode.current = appearanceMode }
         applyAppearanceMode(appearanceMode, reloadPreviews: false)
+        // Capture launch settings before another instance can change them while
+        // we're inactive, even if this user never opens the Settings window.
+        SettingsModel.shared.refreshFromExternalSources()
         installAppearanceMenuItems()
         installContentWidthMenuItems()
         installSidebarViewMenuItems()
@@ -129,6 +135,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidBecomeActive(_ notification: Notification) {
         UsageAnalyticsReporter.recordAppBecameActive()
+        guard hasFinishedLaunching else { return }
+        let model = SettingsModel.shared
+        let changed = model.appliedPreset != ThemePreset.applied()
+            || model.appearance != AppearanceMode.current
+            || model.themeColors != ThemeColorsSetting.current
+            || model.documentFont != DocumentFontSetting.current
+            || model.readerLayout != ReaderLayoutSetting.current
+        guard changed else { return }
+        model.refreshFromExternalSources()
+        // Repaint only when another instance changed the shared reading look.
+        applyAppearanceMode(ThemePreset.applied().requiredAppearance ?? AppearanceMode.current,
+                            reloadPreviews: true)
     }
 
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
@@ -311,9 +329,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Applies an appearance chosen in Settings, keeping the View menu's check
     /// marks and every open preview in step.
     func applyAppearanceSetting(_ mode: AppearanceMode) {
-        guard mode != AppearanceMode.current else { return }
-        AppearanceMode.current = mode
-        applyAppearanceMode(mode, reloadPreviews: true)
+        let resolved = ThemePreset.applied().requiredAppearance ?? mode
+        AppearanceMode.current = resolved
+        applyAppearanceMode(resolved, reloadPreviews: true)
     }
 
     func applyContentWidthSetting(_ setting: ContentWidthSetting) {
@@ -443,6 +461,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func selectAppearanceMode(_ sender: NSMenuItem) {
+        guard ThemePreset.applied().requiredAppearance == nil else { return }
         guard let rawValue = sender.representedObject as? String,
               let mode = AppearanceMode(rawValue: rawValue),
               mode != AppearanceMode.current else { return }
@@ -475,8 +494,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
              #selector(performFindPanelAction(_:)),
              #selector(performTextFinderAction(_:)):
             return activeDocumentWindowController != nil
-        case #selector(selectAppearanceMode(_:)),
-             #selector(selectContentWidthSetting(_:)):
+        case #selector(selectAppearanceMode(_:)):
+            return ThemePreset.applied().requiredAppearance == nil
+        case #selector(selectContentWidthSetting(_:)):
             return true
         case #selector(toggleEditModeFromMenu(_:)):
             return activeDocumentWindowController?.canToggleEditMode ?? false

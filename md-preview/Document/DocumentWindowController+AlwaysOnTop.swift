@@ -51,7 +51,7 @@ extension DocumentWindowController {
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if menuItem.action == #selector(saveDocument(_:)) {
-            return isEditing
+            return isEditing || hasPendingEditorChanges
         }
         if menuItem.action == #selector(searchForDocument(_:)) {
             // Greyed out rather than opening a palette with nothing to search.

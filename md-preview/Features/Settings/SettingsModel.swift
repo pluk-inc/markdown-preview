@@ -7,8 +7,8 @@
 //
 //  State goes through `SettingsModel` rather than `@AppStorage` because these
 //  preferences aren't plain defaults: appearance lives in the app group shared
-//  with the Quick Look extension, appearance and content width clear their key
-//  at the default value, crash reporting starts and stops the Sentry SDK, and
+//  with the Quick Look extension, fixed themes lock their appearance, content
+//  width clears its default key, crash reporting starts and stops the Sentry SDK, and
 //  anonymous usage analytics has its own capture lifecycle. Routing through
 //  the existing types keeps one source of truth.
 //
@@ -28,6 +28,10 @@ final class SettingsModel {
             guard !isRestoringExternalValues, appearance != oldValue else { return }
             appDelegate?.applyAppearanceSetting(appearance)
         }
+    }
+
+    var isAppearanceLocked: Bool {
+        appliedPreset.requiredAppearance != nil
     }
 
     var documentFont: DocumentFontSetting {
@@ -128,60 +132,43 @@ final class SettingsModel {
         themeColors = colors
     }
 
-    /// Original restores the default colors by clearing theme overrides.
+    /// Explicit reset, unlike selecting Original, discards its saved colors.
     func resetThemeColors() {
         applyPreset(.defaultPreset)
+        applyReadingLook(themeColors: ThemePreset.defaultPreset.setting,
+                         documentFont: ThemePreset.defaultPreset.font,
+                         readerLayout: ReaderLayoutSetting(), appearance: .automatic)
     }
 
     /// The theme the reader last applied from a gallery. Remembered so Reset
     /// puts *that* theme back — hand-edited colors, a swapped face or moved
     /// sliders undo to the theme they were built on, rather than dropping the
     /// reader onto the default one.
-    private static let appliedPresetKey = "MarkdownPreview.theme.appliedPreset"
-
-    var appliedPreset: ThemePreset {
-        if let name = UserDefaults.standard.string(forKey: Self.appliedPresetKey),
-           let stored = ThemePreset.builtIn.first(where: { $0.name == name }) {
-            return stored
-        }
-        // No name recorded — the reader upgraded from a build that never
-        // wrote one. Fall back to whichever preset their stored colors
-        // match, so Reset returns them to the theme they are actually
-        // reading in rather than to the default one.
-        return selectedPreset ?? .defaultPreset
-    }
+    private(set) var appliedPreset = ThemePreset.applied()
 
     /// Applies a whole reading look at once — what the Customize Theme sheet
     /// hands over when the reader saves. Coalesced, so the open documents
     /// update once rather than once per dimension.
     func applyReadingLook(themeColors newColors: ThemeColorsSetting,
                           documentFont newFont: DocumentFontSetting,
-                          readerLayout newLayout: ReaderLayoutSetting) {
+                          readerLayout newLayout: ReaderLayoutSetting,
+                          appearance newAppearance: AppearanceMode? = nil) {
         let apply = {
             self.themeColors = newColors
             self.documentFont = newFont
             self.readerLayout = newLayout
+            if let newAppearance { self.appearance = newAppearance }
         }
         guard let appDelegate else { return apply() }
         appDelegate.withCoalescedPreviewReloads(apply)
     }
 
-    /// The preset the stored colors correspond to. Colors that were never
-    /// customized count as the default preset — the app treats "no
-    /// overrides" as the default theme, so preset galleries always mark an
-    /// active card. Hand-edited colors that match no preset return nil
-    /// ("Custom colors").
+    /// Customizing a theme retains its identity, even if its colors match another.
     var selectedPreset: ThemePreset? {
-        if let match = ThemePreset.builtIn.first(where: { themeColors == $0.setting }) {
-            return match
-        }
-        return themeColors.isCustomized ? nil : .defaultPreset
+        appliedPreset
     }
 
-    /// Applies a preset: replaces color overrides for both schemes
-    /// (clearing them for Original) and switches to the preset's flavor so
-    /// the native chrome matches. A `.system` preset keeps the Automatic
-    /// appearance instead — its palettes carry both schemes.
+    /// Saves the outgoing look and restores the selected theme's own settings.
     func applyPreset(_ preset: ThemePreset) {
         guard let appDelegate else { return applyPresetValues(preset) }
         // One re-render for the whole look rather than one per dimension.
@@ -189,18 +176,19 @@ final class SettingsModel {
     }
 
     private func applyPresetValues(_ preset: ThemePreset) {
-        UserDefaults.standard.set(preset.name, forKey: Self.appliedPresetKey)
-        themeColors = preset.setting
-        switch preset.flavor {
-        case .light: appearance = .light
-        case .dark: appearance = .dark
-        case .system: appearance = .automatic
-        }
-        // A preset is a whole reading look, so it carries the face and the
-        // body weight with it. The spacing sliders are the reader's own and
-        // survive a preset change.
-        documentFont = preset.font
-        readerLayout.boldText = preset.boldText
+        // Another app sharing the suite may have changed the active look
+        // since this model was last refreshed. Save under its current owner.
+        ThemePreset.applied().save(.init(colors: ThemeColorsSetting.current,
+                                        font: DocumentFontSetting.current,
+                                        layout: ReaderLayoutSetting.current,
+                                        appearance: AppearanceMode.current))
+        let look = preset.restoredLook()
+        preset.recordApplied()
+        appliedPreset = preset
+        themeColors = look.colors
+        appearance = look.appearance
+        documentFont = look.font
+        readerLayout = look.layout
     }
 
     var checksForUpdatesAutomatically: Bool {
@@ -304,6 +292,7 @@ final class SettingsModel {
         isRestoringExternalValues = true
         defer { isRestoringExternalValues = false }
 
+        appliedPreset = ThemePreset.applied()
         appearance = AppearanceMode.current
         contentWidth = ContentWidthSetting.current
         autoSaveIntervalMinutes = AutoSaveSetting.currentMinutes

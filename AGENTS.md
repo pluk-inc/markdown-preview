@@ -84,6 +84,12 @@ grep -rn "<the behaviour you changed>" README.md samples/ tests/fixtures/ docs/
 
 ## Releasing
 
+Every release PR must have the `release` GitHub label. Apply it when creating
+the PR (`gh pr create --label release`), or add it to an existing release PR
+with `gh pr edit <PR> --add-label release`. If the label does not exist in the
+repository, create it first. Verify the label is present before handing off
+the release PR.
+
 See the `release-process` skill for branch/PR naming, exactly what `scripts/release.sh` and `scripts/rollback-release.sh` do, and the Amore config already wired for this project.
 
 ## Release references

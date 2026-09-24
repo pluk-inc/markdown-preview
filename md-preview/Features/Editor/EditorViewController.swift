@@ -17,6 +17,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
 
     /// Fired on every document change — the host debounces for autosave.
     var contentDidChange: (() -> Void)?
+    var formattingDidChange: ((Int, Set<String>) -> Void)?
     /// Fired after CodeMirror has constructed and painted its initial document.
     /// The split view uses this to avoid replacing the preview with a blank WKWebView.
     var editorDidBecomeReady: (() -> Void)?
@@ -44,10 +45,30 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         config.userContentController.add(bridge, name: EditorBridge.name)
         let webView = EditorWKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
-        webView.underPageBackgroundColor = .windowBackgroundColor
+        webView.setValue(false, forKey: "drawsBackground")
+        webView.underPageBackgroundColor = .clear
         bridge.owner = self
         self.webView = webView
-        view = webView
+        if #available(macOS 26.0, *) {
+            view = webView
+        } else {
+            // The preview's white backing disappears when edit mode hides it.
+            // Give the transparent editor its own document background.
+            let background = LegacyEditorBackgroundView()
+            webView.translatesAutoresizingMaskIntoConstraints = false
+            background.addSubview(webView)
+            NSLayoutConstraint.activate([
+                webView.leadingAnchor.constraint(equalTo: background.leadingAnchor),
+                webView.trailingAnchor.constraint(equalTo: background.trailingAnchor),
+                webView.topAnchor.constraint(equalTo: background.topAnchor),
+                webView.bottomAnchor.constraint(equalTo: background.bottomAnchor),
+            ])
+            view = background
+        }
+        webView.appearanceDidChange = { [weak self] in
+            self?.updateUnderPageBackgroundColor()
+        }
+        updateUnderPageBackgroundColor()
     }
 
     func load(markdown: String, assetBaseURL: URL? = nil) {
@@ -89,6 +110,12 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     /// the 900px column and the body gutters track the preview exactly.
     func applyPageZoom(_ zoom: CGFloat) {
         webView.pageZoom = zoom
+        updateChromeZoom()
+    }
+
+    private func updateChromeZoom() {
+        guard #available(macOS 26.0, *) else { return }
+        webView.evaluateJavaScript("document.documentElement.style.setProperty('--mdp-chrome-zoom', '\(max(webView.pageZoom, 0.001))')", completionHandler: nil)
     }
 
     /// Rewrites the theme override `<style>` so a color edited in Settings
@@ -105,17 +132,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
 
     override func viewDidLayout() {
         super.viewDidLayout()
-        // The under-page color is resolved statically; re-resolve on the
-        // first pass and whenever the effective appearance flips.
-        let appearanceName = view.effectiveAppearance.name
-        if appearanceName != lastUnderPageAppearance {
-            lastUnderPageAppearance = appearanceName
-            updateUnderPageBackgroundColor()
-        }
         updateObscuredContentInsets()
     }
-
-    private var lastUnderPageAppearance: NSAppearance.Name?
 
     override func viewDidAppear() {
         super.viewDidAppear()
@@ -166,8 +184,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         }
     }
 
-    /// The whole obscured strip — titlebar, toolbar, tab bar, visible
-    /// bottom accessories, and the formatting bar overlay.
+    /// The whole obscured strip — titlebar, toolbar, tab bar, and visible
+    /// bottom accessories. Floating formatting controls are excluded: their
+    /// clearance is page padding, not an obscured strip or scrollbar inset.
     /// contentLayoutRect already excludes the titlebar chrome, so the gap
     /// alone is that chrome's height; adding accessory heights on top
     /// double-counted them and left a blank band below the formatting bar.
@@ -185,7 +204,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             // See ContentViewController.fullChromeTopInset: the safe area
             // lags accessory changes by a layout pass, so measure the bars.
             gap += MainSplitViewController.nativeAccessoryHeight(findOverlay, in: window)
-            gap += MainSplitViewController.nativeAccessoryHeight(formattingBar, in: window)
+            if !MainSplitViewController.usesFloatingFormattingBar {
+                gap += MainSplitViewController.nativeAccessoryHeight(formattingBar, in: window)
+            }
             return max(0, gap)
         }
         for accessory in window.titlebarAccessoryViewControllers
@@ -203,7 +224,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         // (MainSplitViewController.formattingBarTabBarOverlap), so that
         // amount comes back off once.
         var overlays: CGFloat = 0
-        if let bar = formattingBar, bar.window === window, !bar.isHidden {
+        if !MainSplitViewController.usesFloatingFormattingBar,
+           let bar = formattingBar, bar.window === window, !bar.isHidden {
             overlays += bar.fittingSize.height
         }
         if let find = findOverlay, find.window === window, !find.isHidden {
@@ -229,20 +251,21 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     }
 
     /// See ContentViewController.updateUnderPageBackgroundColor — set on
-    /// theme changes only, never per layout pass.
+    /// theme and appearance changes only, never per layout pass.
     private func updateUnderPageBackgroundColor() {
+        if #unavailable(macOS 26.0) {
+            view.needsDisplay = true
+        }
         guard #available(macOS 26.0, *) else { return }
-        // Resolved statically: WebKit serializes this color to the web
-        // process, and a dynamic provider resolved there loses the theme
-        // values — the toolbar strip then falls back to the stock editor
-        // dark. applyThemeColors and appearance changes re-run this.
+        // WebKit snapshots the color in the setter. These explicit palette
+        // and fallback colors must be reassigned when the appearance changes.
         let isDark = view.effectiveAppearance
             .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         let scheme: ThemeColorScheme = isDark ? .dark : .light
         let colors = ThemeColorsSetting.current
         webView.underPageBackgroundColor = colors.color(.editorBackground, scheme)
             ?? colors.color(.windowBackground, scheme)
-            ?? ThemeColorsSetting.defaultColor(.editorBackground, scheme)
+            ?? .clear
     }
 
     /// Current buffer contents, or nil if the editor isn't ready.
@@ -314,6 +337,54 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         webView.evaluateJavaScript("window.__mdEditor && window.__mdEditor.exec(\(name))") { _, _ in }
     }
 
+    func fetchHeadingLevel(_ completion: @escaping (Int) -> Void) {
+        webView.evaluateJavaScript("window.__mdEditor && window.__mdEditor.getHeadingLevel()") { result, _ in
+            completion(result as? Int ?? 0)
+        }
+    }
+
+    func fetchListStyle(_ completion: @escaping (String) -> Void) {
+        webView.evaluateJavaScript("window.__mdEditor && window.__mdEditor.getListStyle()") { result, _ in
+            completion(result as? String ?? "none")
+        }
+    }
+
+    func fetchBlockStyle(_ completion: @escaping (String) -> Void) {
+        webView.evaluateJavaScript("window.__mdEditor && window.__mdEditor.getBlockStyle()") { result, _ in
+            completion(result as? String ?? "none")
+        }
+    }
+
+    func setBlockStyle(_ style: String, language: String) {
+        webView.evaluateJavaScript("window.__mdEditor && window.__mdEditor.setBlockStyle(\(EditorHTML.jsStringLiteral(style)), \(EditorHTML.jsStringLiteral(language)))") { _, _ in }
+    }
+
+    func setListStyle(_ style: String) {
+        webView.evaluateJavaScript("window.__mdEditor && window.__mdEditor.setListStyle(\(EditorHTML.jsStringLiteral(style)))") { _, _ in }
+    }
+
+    struct LinkSelection {
+        let text: String
+        let from: Int
+        let to: Int
+    }
+
+    func fetchLinkSelection(_ completion: @escaping (LinkSelection?) -> Void) {
+        webView.evaluateJavaScript("window.__mdEditor && window.__mdEditor.getLinkSelection(true)") { result, _ in
+            guard let value = result as? [String: Any], let text = value["text"] as? String,
+                  let from = value["from"] as? Int, let to = value["to"] as? Int else {
+                completion(nil)
+                return
+            }
+            completion(LinkSelection(text: text, from: from, to: to))
+        }
+    }
+
+    func insertLink(text: String, url: String, from: Int, to: Int) {
+        let script = "window.__mdEditor && window.__mdEditor.insertLinkFromPopover(\(EditorHTML.jsStringLiteral(text)), \(EditorHTML.jsStringLiteral(url)), \(from), \(to))"
+        webView.evaluateJavaScript(script) { _, _ in }
+    }
+
     func insertMarkdown(_ markdown: String,
                         from: Int,
                         to: Int,
@@ -345,6 +416,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                 contentDidChange?()
             case "ready":
                 hasLoadedEditorPage = true
+                updateChromeZoom()
                 // Fresh page — the bar padding lives in the DOM and must be
                 // re-applied even when the tracked value hasn't changed,
                 // and WebKit re-derives the under-page color from the new
@@ -365,6 +437,15 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         guard let payload = message as? [String: Any],
               let kind = payload["kind"] as? String else { return }
         switch kind {
+        case "copyCode":
+            guard let text = payload["value"] as? String else { return }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+        case "formattingState":
+            guard let heading = payload["heading"] as? Int,
+                  (0...6).contains(heading),
+                  let commands = payload["commands"] as? [String] else { return }
+            formattingDidChange?(heading, Set(commands))
         case "findResult":
             guard let index = payload["index"] as? Int,
                   let total = payload["total"] as? Int else { return }
@@ -440,7 +521,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         func pageBackground(_ scheme: ThemeColorScheme) -> String {
             let hex = colors.hexValue(.editorBackground, scheme)
                 ?? colors.hexValue(.windowBackground, scheme)
-            return MarkdownHTML.ThemeOverrides.sanitizedHexColor(hex) ?? "Canvas"
+            return MarkdownHTML.ThemeOverrides.sanitizedHexColor(hex) ?? "transparent"
         }
         let lightPageBackground = pageBackground(.light)
         let darkPageBackground = pageBackground(.dark)
@@ -478,7 +559,38 @@ private final class EditorBridge: NSObject, WKScriptMessageHandler {
     }
 }
 
+private final class LegacyEditorBackgroundView: NSView {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        wantsLayer = true
+    }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let scheme: ThemeColorScheme = isDark ? .dark : .light
+        let colors = ThemeColorsSetting.current
+        let background = colors.color(.editorBackground, scheme)
+            ?? colors.color(.windowBackground, scheme)
+            ?? (isDark ? nil : NSColor.white)
+        layer?.backgroundColor = background?.cgColor
+    }
+}
+
 private final class EditorWKWebView: WKWebView {
+    var appearanceDidChange: (() -> Void)?
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        appearanceDidChange?()
+    }
+
     // Left clicks in the transparent titlebar strip stay native (window
     // drag) instead of being consumed by WebKit — see ChromeStripClickThrough.
     override func hitTest(_ point: NSPoint) -> NSView? {

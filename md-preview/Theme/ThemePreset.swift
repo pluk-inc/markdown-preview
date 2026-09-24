@@ -2,17 +2,18 @@
 //  ThemePreset.swift
 //  md-preview
 //
-//  Named built-in theme presets. Original restores the app's default colors;
-//  other presets write a fixed palette into ThemeColorsSetting slots.
-//  Applying a preset also switches the app's appearance to the preset's
+//  Named built-in theme presets. Each theme remembers its customized look.
+//  First selection uses the built-in defaults; Reset restores those defaults.
+//  Applying a fixed preset also locks the app's appearance to the preset's
 //  flavor so the native chrome (sidebar,
-//  toolbar) matches. A `.system` preset keeps the Automatic appearance and
+//  toolbar) matches. Original remembers its adjustable appearance and
 //  carries a separate dark palette, so both schemes stay readable while
 //  the app keeps tracking the system look. The accent color maps to the
 //  link slot — syntax highlighting keeps its own colors.
 //
 
 import Foundation
+import Darwin
 
 nonisolated struct ThemePreset: Identifiable, Equatable, Sendable {
 
@@ -87,6 +88,104 @@ nonisolated struct ThemePreset: Identifiable, Equatable, Sendable {
 
     var id: String { name }
 
+    /// Fixed palettes must keep matching native chrome. Original follows the
+    /// user's appearance choice. Editing colors never changes theme identity.
+    var requiredAppearance: AppearanceMode? {
+        switch flavor {
+        case .light: .light
+        case .dark: .dark
+        case .system: nil
+        }
+    }
+
+    static let appliedPresetKey = "MarkdownPreview.theme.appliedPreset"
+
+    // Identity and saved looks must have the same owner as the active colors,
+    // font, layout, and appearance, including across release/debug builds.
+    static var defaults: UserDefaults { AppearanceMode.sharedDefaults() ?? .standard }
+
+    static var migrationLockURL: URL? {
+        let manager = FileManager.default
+        if let group = Bundle.main.object(forInfoDictionaryKey: AppearanceMode.appGroupInfoKey) as? String,
+           !group.isEmpty {
+            // Never fall back to a process-local lock when preferences are shared.
+            return manager.containerURL(forSecurityApplicationGroupIdentifier: group)?
+                .appendingPathComponent("theme-migration.lock")
+        }
+        return manager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Markdown Preview/theme-migration.lock")
+    }
+
+    static func migrateLegacyValues(from legacy: UserDefaults = .standard,
+                                    to shared: UserDefaults = defaults,
+                                    lockURL: URL? = migrationLockURL) {
+        // Release and debug can launch together. An actor only protects one
+        // process, so serialize the read/merge/write in the shared container.
+        // Failure leaves legacy data intact for a subsequent launch to retry.
+        guard let lockURL else { return }
+        do {
+            try FileManager.default.createDirectory(at: lockURL.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+        } catch { return }
+        let descriptor = open(lockURL.path, O_CREAT | O_RDWR | O_CLOEXEC, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else { return }
+        defer { close(descriptor) }
+        while flock(descriptor, LOCK_EX) != 0 {
+            if errno != EINTR { return }
+        }
+        defer { flock(descriptor, LOCK_UN) }
+        // Refresh after acquiring the lock, and publish before releasing it.
+        shared.synchronize()
+        defer { shared.synchronize() }
+
+        // Each missing look migrates independently of the selected identity.
+        for preset in builtIn where shared.data(forKey: preset.savedLookKey) == nil {
+            if let data = legacy.data(forKey: preset.savedLookKey) {
+                shared.set(data, forKey: preset.savedLookKey)
+            }
+        }
+        if shared.string(forKey: appliedPresetKey) == nil,
+           let legacyID = legacy.string(forKey: appliedPresetKey),
+           builtIn.contains(where: { $0.id == legacyID }) {
+            shared.set(legacyID, forKey: appliedPresetKey)
+        }
+    }
+
+    func recordApplied(in defaults: UserDefaults = Self.defaults) {
+        defaults.set(id, forKey: Self.appliedPresetKey)
+    }
+
+    /// Identity is explicit: custom colors never select a preset by coincidence.
+    /// Older installs with no gallery selection belong to Original.
+    static func applied(in defaults: UserDefaults = Self.defaults) -> ThemePreset {
+        builtIn.first { $0.id == defaults.string(forKey: appliedPresetKey) } ?? defaultPreset
+    }
+
+    struct SavedLook: Codable, Equatable {
+        var colors: ThemeColorsSetting
+        var font: DocumentFontSetting
+        var layout: ReaderLayoutSetting
+        var appearance: AppearanceMode
+    }
+
+    private var savedLookKey: String { "MarkdownPreview.theme.savedLook.v1.\(id)" }
+
+    func save(_ look: SavedLook, in defaults: UserDefaults = Self.defaults) {
+        guard let data = try? JSONEncoder().encode(look) else { return }
+        defaults.set(data, forKey: savedLookKey)
+    }
+
+    func restoredLook(in defaults: UserDefaults = Self.defaults) -> SavedLook {
+        if let data = defaults.data(forKey: savedLookKey),
+           var look = try? JSONDecoder().decode(SavedLook.self, from: data) {
+            look.appearance = requiredAppearance ?? look.appearance
+            return look
+        }
+        return SavedLook(colors: setting, font: font,
+                         layout: ReaderLayoutSetting(boldText: boldText),
+                         appearance: requiredAppearance ?? .automatic)
+    }
+
     /// The default theme: Reset Colors returns to it, and it leads the
     /// gallery.
     static var defaultPreset: ThemePreset { builtIn[0] }
@@ -108,7 +207,7 @@ nonisolated struct ThemePreset: Identifiable, Equatable, Sendable {
         ThemePreset(name: "Original", flavor: .system,
                     palette: Palette(pageBackground: "#FFFFFF", codeBackground: "#F5F5F7",
                                      text: "#1D1D1F", accent: "#0066CC"),
-                    darkPalette: Palette(pageBackground: "#1E1E1E", codeBackground: "#2A2828",
+                    darkPalette: Palette(pageBackground: "#1C1C1C", codeBackground: "#2A2828",
                                          text: "#F5F5F7", accent: "#2997FF"),
                     usesDefaultColors: true),
         // Apple Books "Quiet": soft dark gray with bright ink — sampled from

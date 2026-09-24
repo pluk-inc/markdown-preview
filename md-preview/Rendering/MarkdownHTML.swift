@@ -177,6 +177,14 @@ nonisolated enum MarkdownHTML {
     static let bodyFontSize: CGFloat = 14
     static let bodyLineHeight: CGFloat = 1.5
     static let pagePaddingTop: CGFloat = 32
+    /// App-only breathing room for floating controls, shared by read/edit
+    /// pages. It scrolls with the document, leaving the scroll track full-height.
+    static var appPageTopClearance: CGFloat {
+        // 8pt above the 28pt pills, then 2pt before the document. The
+        // normal page padding already supplies part of that total.
+        if #available(macOS 26.0, *) { return 8 + 28 + 2 - pagePaddingTop }
+        return 0
+    }
     static let pagePaddingHorizontal: CGFloat = 40
     static let pagePaddingBottom: CGFloat = 48
     static let sourceLineHeight = bodyFontSize * bodyLineHeight
@@ -283,6 +291,7 @@ nonisolated enum MarkdownHTML {
                        documentFont: DocumentFontSetting = .current,
                        readerLayout: ReaderLayoutSetting = .current,
                        warmup: Bool = false,
+                       pageTopClearance: CGFloat = 0,
                        highlightsCode: Bool = true) -> RenderedHTML {
         let frontmatter = MarkdownFrontmatter.split(markdown)
         let body = frontmatter.body
@@ -332,8 +341,9 @@ nonisolated enum MarkdownHTML {
         let containsCode = detectHighlightableCode(in: bodyHTML)
         let scrollOverride = allowsScroll ? """
         <style>
-        html { overflow: auto !important; }
+        html { overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior-x: none; }
         body { overflow: visible !important; }
+        article.markdown-body { overflow-x: auto; overscroll-behavior-x: contain; overflow-wrap: anywhere; }
         </style>
         """ : ""
         let contentWidthOverride: String
@@ -447,6 +457,7 @@ nonisolated enum MarkdownHTML {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         \(baseTag)
         <style>\(stylesheet)</style>
+        <style>:root { --mdp-page-top-clearance: \(pageTopClearance)px; }</style>
         \(themeStyleBlock)
         \(scrollOverride)
         \(contentWidthOverride)

@@ -323,6 +323,9 @@ final class MainSplitViewController: NSSplitViewController {
     private var cachedEditorViewController: EditorViewController?
     private var isEditorPreparing = false
     private var isEditorVisible = false
+    private var isEditorExiting = false
+    private var pendingExitCompletions: [() -> Void] = []
+    private var editModeGeneration = UUID()
     private var pendingSourceScrollAnchor: SourceScrollAnchor?
     private var isSourceScrollAnchorResolved = false
     private var isEditorDOMReady = false
@@ -330,7 +333,7 @@ final class MainSplitViewController: NSSplitViewController {
     private var shouldAutofocusEditor = false
 
     var isEditingDocument: Bool {
-        isEditorPreparing || isEditorVisible
+        isEditorPreparing || isEditorVisible || isEditorExiting
     }
 
     var editorViewController: EditorViewController? {
@@ -341,6 +344,8 @@ final class MainSplitViewController: NSSplitViewController {
     func enterEditMode(markdown: String,
                        assetBaseURL: URL? = nil,
                        autofocus: Bool = false) -> EditorViewController {
+        // Do not invalidate an exit that still owes its caller a completion.
+        if isEditorExiting, let editor = cachedEditorViewController { return editor }
         if let editor = editorViewController {
             editor.load(markdown: markdown, assetBaseURL: assetBaseURL)
             if autofocus {
@@ -369,23 +374,26 @@ final class MainSplitViewController: NSSplitViewController {
         let previewZoom = contentViewController?.pageZoom ?? 1
         let previewScrollProgress = contentViewController?.scrollProgress ?? 0
 
+        let generation = UUID()
+        editModeGeneration = generation
         isEditorPreparing = true
         pendingSourceScrollAnchor = nil
         isSourceScrollAnchorResolved = false
         isEditorDOMReady = false
         pendingPreviewScrollProgress = previewScrollProgress
         shouldAutofocusEditor = autofocus
-        // A rapid re-entry can interrupt a previous exit whose anchor
-        // restore is still pending; drop that machinery so it can't fire
-        // into the new editing session.
+        // A completed exit may still have a fallback deadline scheduled.
+        // Clear its restoration machinery before the next editing session.
         contentViewController?.prepareToRestoreSourceScrollAnchor(nil)
         contentViewController?.pendingAnchorRestored = nil
         // Ensure preview is visible during the prepare phase — a rapid mode
         // toggle could leave it hidden from a previous edit session.
         contentViewController?.view.isHidden = false
+        editorVC.view.alphaValue = 0
         editorVC.view.isHidden = false
         editorVC.editorDidBecomeReady = { [weak self, weak editorVC] in
-            guard let self, let editorVC, self.isEditorPreparing else { return }
+            guard let self, let editorVC, self.editModeGeneration == generation,
+                  self.isEditorPreparing else { return }
             editorVC.editorDidBecomeReady = nil
             self.isEditorDOMReady = true
             self.revealEditorIfPrepared(editorVC)
@@ -393,13 +401,15 @@ final class MainSplitViewController: NSSplitViewController {
         editorVC.applyPageZoom(previewZoom)
         editorVC.load(markdown: markdown, assetBaseURL: assetBaseURL)
         contentViewController?.sourceScrollAnchor { [weak self, weak editorVC] anchor in
-            guard let self, let editorVC, self.isEditorPreparing else { return }
+            guard let self, let editorVC, self.editModeGeneration == generation,
+                  self.isEditorPreparing else { return }
             self.pendingSourceScrollAnchor = anchor
             self.isSourceScrollAnchorResolved = true
             self.revealEditorIfPrepared(editorVC)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self, weak editorVC] in
-            guard let self, let editorVC, self.isEditorPreparing,
+            guard let self, let editorVC, self.editModeGeneration == generation,
+                  self.isEditorPreparing,
                   !self.isSourceScrollAnchorResolved else { return }
             self.isSourceScrollAnchorResolved = true
             self.revealEditorIfPrepared(editorVC)
@@ -412,7 +422,12 @@ final class MainSplitViewController: NSSplitViewController {
     /// not a titlebar accessory (the native tab bar always renders below
     /// accessories, and would jump on every edit-mode toggle).
     func installFormattingBar(_ bar: NSView) {
-        if Self.usesNativeChromeAccessories {
+        if Self.usesFloatingFormattingBar {
+            if Self.usesNativeChromeAccessories {
+                layeredContentViewController?.nativeFindOverlay = findOverlayView
+            }
+            layeredContentViewController?.installFormattingBar(bar)
+        } else if Self.usesNativeChromeAccessories {
             formattingAccessory = installNativeChromeAccessory(bar)
         } else {
             layeredContentViewController?.installFormattingBar(bar)
@@ -427,7 +442,9 @@ final class MainSplitViewController: NSSplitViewController {
     }
 
     func removeFormattingBar() {
-        if #available(macOS 26.1, *), Self.usesNativeChromeAccessories,
+        if Self.usesFloatingFormattingBar {
+            layeredContentViewController?.removeFormattingBar()
+        } else if #available(macOS 26.1, *), Self.usesNativeChromeAccessories,
            let item = splitViewItems.dropFirst().first,
            let index = item.topAlignedAccessoryViewControllers.firstIndex(where: { $0 === formattingAccessory }) {
             item.removeTopAlignedAccessoryViewController(at: index)
@@ -446,14 +463,19 @@ final class MainSplitViewController: NSSplitViewController {
     private var formattingAccessory: NSViewController?
     private var findAccessory: NSViewController?
 
+    static var usesFloatingFormattingBar: Bool {
+        if #available(macOS 26.0, *) { return true }
+        return false
+    }
+
     static var usesNativeChromeAccessories: Bool {
         if #available(macOS 27.0, *) { return false }
         if #available(macOS 26.1, *) { return true }
         return false
     }
 
-    /// Height a native chrome accessory (find bar, formatting bar) adds to
-    /// the obscured strip above the page, or 0 when it is absent or hidden.
+    /// Height a visible chrome row (native find accessory or floating
+    /// formatting overlay) adds above the page, or 0 when absent or hidden.
     /// fittingSize rather than the frame: the frame is unresolved between
     /// install and the next layout pass, exactly when callers ask.
     static func nativeAccessoryHeight(_ bar: NSView?, in window: NSWindow) -> CGFloat {
@@ -483,6 +505,9 @@ final class MainSplitViewController: NSSplitViewController {
             layeredContentViewController?.installFindOverlay(bar)
         }
         findOverlayView = bar
+        if Self.usesNativeChromeAccessories {
+            layeredContentViewController?.nativeFindOverlay = bar
+        }
         cachedEditorViewController?.findOverlay = bar
         contentViewController?.findOverlay = bar
     }
@@ -500,55 +525,67 @@ final class MainSplitViewController: NSSplitViewController {
 
     private func revealEditorIfPrepared(_ editorVC: EditorViewController) {
         guard isEditorPreparing, isEditorDOMReady, isSourceScrollAnchorResolved else { return }
+        let generation = editModeGeneration
         // CodeMirror and the preview source lookup complete independently.
         // Apply the exact line only after both are ready, then reveal after a
         // display cycle so no empty editor frame is exposed.
         editorVC.applyScrollProgress(pendingPreviewScrollProgress,
                                      sourceAnchor: pendingSourceScrollAnchor) { [weak self, weak editorVC] in
             DispatchQueue.main.async {
-                guard let self, let editorVC, self.isEditorPreparing else { return }
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 0.10
-                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                    editorVC.view.animator().alphaValue = 1
-                } completionHandler: { [weak self, weak editorVC] in
-                    Task { @MainActor [weak self, weak editorVC] in
-                        guard let self, let editorVC, self.isEditorPreparing else { return }
-                        self.isEditorPreparing = false
-                        self.isEditorVisible = true
-                        // Hide the preview WebView so it no longer contributes to
-                        // titlebar material sampling. The editor overlay is now
-                        // fully opaque and covering it.
-                        self.contentViewController?.view.isHidden = true
-                        self.refreshFindAfterModeChange()
-                        if self.shouldAutofocusEditor {
-                            self.shouldAutofocusEditor = false
-                            editorVC.focusEditor()
-                        }
-                    }
+                guard let self, let editorVC, self.editModeGeneration == generation,
+                      self.isEditorPreparing else { return }
+                // Original uses transparent WebViews. Crossfading would draw
+                // both text layers together, even with the editor at alpha 1.
+                // Swap in one main-thread turn after scroll restoration.
+                self.contentViewController?.view.isHidden = true
+                editorVC.view.alphaValue = 1
+                self.isEditorPreparing = false
+                self.isEditorVisible = true
+                self.refreshFindAfterModeChange()
+                if self.shouldAutofocusEditor {
+                    self.shouldAutofocusEditor = false
+                    editorVC.focusEditor()
                 }
             }
         }
     }
 
-    /// `overlayHidden` fires once the editor overlay has fully faded out and
-    /// been hidden — the moment chrome tied to editing (the formatting
-    /// accessory) can be dismissed without reflowing the crossfade.
+    /// `overlayHidden` fires after the visibility swap, so editing chrome can
+    /// be dismissed without reflowing the outgoing editor. Completion also waits
+    /// for that swap; callers may navigate or enter another editing session.
     func exitEditMode(waitForPreviewRender: Bool,
+                      renderPreview: (() -> Void)? = nil,
                       overlayHidden: (@MainActor () -> Void)? = nil,
                       completion: @escaping () -> Void) {
+        if isEditorExiting {
+            pendingExitCompletions.append {
+                renderPreview?()
+                overlayHidden?()
+                completion()
+            }
+            return
+        }
         guard let editorVC = cachedEditorViewController,
               isEditorPreparing || isEditorVisible else {
+            renderPreview?()
             overlayHidden?()
             completion()
             return
         }
+        // Cancel pending entry work before asking WebKit for the exit anchor.
+        // That asynchronous request must not leave the reveal path enabled.
+        let generation = UUID()
+        editModeGeneration = generation
+        isEditorExiting = true
+        isEditorPreparing = false
+        editorVC.editorDidBecomeReady = nil
         editorVC.fetchScrollAnchor { [weak self, weak editorVC] anchor in
             guard let self, let editorVC else {
                 overlayHidden?()
                 completion()
                 return
             }
+            guard self.editModeGeneration == generation else { return }
             editorVC.editorDidBecomeReady = nil
             self.pendingSourceScrollAnchor = nil
             self.isSourceScrollAnchorResolved = false
@@ -557,47 +594,48 @@ final class MainSplitViewController: NSSplitViewController {
             self.isEditorVisible = false
             self.shouldAutofocusEditor = false
 
-            let fadeOutEditor = { [weak self, weak editorVC] in
+            var didRevealPreview = false
+            let revealPreview = { [weak self, weak editorVC] in
                 guard let self, let editorVC,
+                      self.editModeGeneration == generation,
                       !self.isEditorPreparing, !self.isEditorVisible,
-                      editorVC.view.alphaValue > 0 else { return }
+                      !didRevealPreview else { return }
+                didRevealPreview = true
+                self.isEditorExiting = false
+                let pendingCompletions = self.pendingExitCompletions
+                self.pendingExitCompletions.removeAll()
                 self.contentViewController?.pendingAnchorRestored = nil
-                // Reveal the preview before fading out the editor so the preview
-                // is ready beneath it during the crossfade.
+                // Hide the transparent editor before exposing the reader.
+                // Also finish correctly when exiting during preparation,
+                // while the editor still has alpha zero.
+                editorVC.view.isHidden = true
+                editorVC.view.alphaValue = 0
                 self.contentViewController?.view.isHidden = false
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 0.10
-                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                    editorVC.view.animator().alphaValue = 0
-                } completionHandler: { [weak self, weak editorVC] in
-                    Task { @MainActor [weak self, weak editorVC] in
-                        guard let self, let editorVC,
-                              !self.isEditorPreparing, !self.isEditorVisible else { return }
-                        editorVC.view.isHidden = true
-                        self.refreshFindAfterModeChange()
-                        overlayHidden?()
-                    }
-                }
+                self.refreshFindAfterModeChange()
+                overlayHidden?()
+                completion()
+                pendingCompletions.forEach { $0() }
             }
 
             if waitForPreviewRender, anchor != nil {
-                // Keep the editor overlay covering the preview until the
-                // fresh render has restored the source anchor beneath it —
-                // fading immediately exposed the old article re-rendering
+                // Keep the preview hidden until the fresh render has restored
+                // the source anchor — swapping immediately exposed re-rendering
                 // and scrolling into place, which read as jitter. A deadline
                 // caps the hold in case the render outruns it.
                 self.contentViewController?.prepareToRestoreSourceScrollAnchor(anchor)
-                self.contentViewController?.pendingAnchorRestored = fadeOutEditor
+                self.contentViewController?.pendingAnchorRestored = revealPreview
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    fadeOutEditor()
+                    revealPreview()
                 }
+                renderPreview?()
             } else {
-                if let anchor {
-                    self.contentViewController?.restoreSourceScrollAnchor(anchor)
+                renderPreview?()
+                if let anchor, let preview = self.contentViewController {
+                    preview.restoreSourceScrollAnchor(anchor, completion: revealPreview)
+                } else {
+                    revealPreview()
                 }
-                fadeOutEditor()
             }
-            completion()
         }
     }
 
@@ -682,6 +720,7 @@ private final class LayeredContentViewController: NSViewController {
     private var legacyEditorTopConstraint: NSLayoutConstraint?
     private weak var formattingBar: NSView?
     private weak var findOverlay: NSView?
+    weak var nativeFindOverlay: NSView?
     private var formattingBarTopConstraint: NSLayoutConstraint?
     private var findOverlayTopConstraint: NSLayoutConstraint?
     private var chromeObservation: NSKeyValueObservation?
@@ -760,6 +799,9 @@ private final class LayeredContentViewController: NSViewController {
             top.constant = overlap
         }
         var editTop = overlap
+        if let find = nativeFindOverlay, !find.isHidden {
+            editTop += find.fittingSize.height
+        }
         if let find = findOverlay, find.superview === view, !find.isHidden {
             editTop += find.fittingSize.height
         }

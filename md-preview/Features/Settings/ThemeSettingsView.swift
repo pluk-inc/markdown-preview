@@ -37,6 +37,7 @@ struct ThemeSettingsView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .disabled(model.isAppearanceLocked)
                             .accessibilityLabel(mode.settingsTitle)
                             .accessibilityAddTraits(
                                 model.appearance == mode ? [.isSelected] : []
@@ -46,7 +47,9 @@ struct ThemeSettingsView: View {
                 }
                 .padding(.vertical, 4)
             } footer: {
-                Text(L("Appearance also applies to Quick Look previews."))
+                Text(model.isAppearanceLocked
+                    ? L("This theme uses a fixed appearance. Choose Original to change it.")
+                    : L("Appearance also applies to Quick Look previews."))
             }
 
             Section {
@@ -58,7 +61,7 @@ struct ThemeSettingsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(String(format: L("Current theme: %@"),
                                 selected.map { L($0.name) } ?? L("Custom colors")))
-                    Text(L("A theme fills every color, picks a reading face, and switches the app to its light or dark look."))
+                    Text(L("Each theme remembers its colors, font and layout. Original also remembers your appearance choice. Reset restores the selected theme’s defaults."))
                 }
             }
 

@@ -20,6 +20,9 @@ jobs:
           MDP_LAYOUT_ARTIFACTS: ${{ runner.temp }}/md-preview-layout-failures
         run: swift test --package-path tests/swift-tests
 
+      - name: Test editor transition callback ordering
+        run: python3 tests/test-mode-transitions.py
+
       - name: Upload WebKit layout diagnostics
         if: failure()
         uses: actions/upload-artifact@v7

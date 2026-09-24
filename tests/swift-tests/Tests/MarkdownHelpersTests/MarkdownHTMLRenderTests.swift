@@ -158,7 +158,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         // ::-webkit-scrollbar style on the root replaces the native macOS
         // overlay scrollbar with WebKit's legacy one.
         XCTAssertFalse(rendered.html.contains("\n    ::-webkit-scrollbar {"))
-        XCTAssertTrue(rendered.html.contains(":where(:not(html):not(body))::-webkit-scrollbar"))
+        XCTAssertTrue(rendered.html.contains(":where(:not(html):not(body):not(pre))::-webkit-scrollbar"))
         let styleBlocks = rendered.html
             .components(separatedBy: "<style>")
             .dropFirst()
@@ -420,8 +420,13 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(stylesheet.contains("::selection"))
         XCTAssertFalse(stylesheet.contains("::-webkit-selection"))
         XCTAssertFalse(stylesheet.contains("::-moz-selection"))
-        XCTAssertEqual(nonSelectableRules.count, 1)
-        XCTAssertTrue(nonSelectableRules[0].contains(".md-code-copy"))
+        // Code UI is not document text. The generated language label and
+        // card header may opt out, but the Markdown content must not.
+        let allowedSelectors = ["pre[data-code-language]::before", ".md-code-header"]
+        XCTAssertEqual(nonSelectableRules.count, allowedSelectors.count)
+        for selector in allowedSelectors {
+            XCTAssertTrue(nonSelectableRules.contains { $0.contains(selector) }, selector)
+        }
     }
 
     @MainActor
@@ -681,7 +686,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
 
         XCTAssertTrue(rendered.html.contains("li:first-child { margin-top: 0; }"))
         XCTAssertTrue(rendered.html.contains("ul { list-style: none; }"))
-        XCTAssertTrue(rendered.html.contains(".md-code-wrap > pre { margin: 0; }"))
+        XCTAssertTrue(rendered.html.contains(".md-code-wrap > pre { margin: 0;"))
         XCTAssertTrue(rendered.html.contains(".md-code-wrap {"))
         XCTAssertTrue(rendered.html.contains("margin: \(MarkdownHTML.paragraphSpacing)px 0 0;"))
     }

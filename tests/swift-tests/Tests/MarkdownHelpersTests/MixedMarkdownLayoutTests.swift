@@ -169,7 +169,7 @@ extension EditorPreviewLayoutTests {
             After code blocks.
             """, texts: ["Before code blocks.", "let exampleValue", "print", "Between code blocks.",
                            "unlabelledExample", "secondExampleLine", "indentedExample", "anotherIndentedLine", "After code blocks."],
-                           readSelectors: ["pre": 3], editorSelectors: [".cm-md-code-language": 2]))
+                           readSelectors: ["pre": 3], editorSelectors: [".cm-md-code-language": 3]))
     }
 
     func testTableColumnsAndWrappedCells() async throws {

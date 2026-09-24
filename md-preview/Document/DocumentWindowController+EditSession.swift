@@ -32,6 +32,9 @@ extension DocumentWindowController {
             self?.stopAutoSaveTimer()
             self?.startAutoSaveTimerIfNeeded()
         }
+        editor.formattingDidChange = { [weak self] heading, commands in
+            self?.updateFormattingSelection(heading: heading, commands: commands)
+        }
         editor.pasteImageRequested = { [weak self] from, to in
             self?.pasteImage(at: from, replacing: to)
         }
@@ -74,11 +77,11 @@ extension DocumentWindowController {
             // well raced the anchor hand-off and re-laid the preview out
             // twice, which showed as jitter during the mode switch. The
             // formatting accessory likewise stays mounted until the overlay
-            // has faded — removing it earlier reflows the content area in
-            // the middle of the crossfade.
+            // is hidden — removing it earlier reflows the content area in
+            // the middle of the visibility swap.
             self.exitEditMode(rerender: true,
                               preserveUnsavedChanges: true,
-                              hidesAccessoryAfterFade: true) {}
+                              hidesAccessoryAfterSwap: true) {}
         }
     }
 
@@ -428,22 +431,27 @@ extension DocumentWindowController {
 
     private func exitEditMode(rerender: Bool,
                               preserveUnsavedChanges: Bool = false,
-                              hidesAccessoryAfterFade: Bool = false,
+                              hidesAccessoryAfterSwap: Bool = false,
                               completion: @escaping () -> Void) {
         guard let split = mainSplit else {
             completion()
             return
         }
         split.editorViewController?.contentDidChange = nil
+        split.editorViewController?.formattingDidChange = nil
         split.editorViewController?.cancelRequested = nil
         split.editorViewController?.pasteImageRequested = nil
         split.editorViewController?.imageClicked = nil
         documentWindow.makeFirstResponder(nil)
-        let overlayHidden: (() -> Void)? = hidesAccessoryAfterFade
-            ? { [weak self] in self?.dismissEditChrome() }
-            : nil
+        let overlayHidden: @MainActor () -> Void = { [weak self] in
+            if hidesAccessoryAfterSwap { self?.dismissEditChrome() }
+            else { self?.updateEditToolbarItem() }
+        }
         split.exitEditMode(waitForPreviewRender: rerender,
-                           overlayHidden: overlayHidden) { [weak self] in
+                           renderPreview: { [weak self] in
+            guard rerender, let self, let markdown = self.currentMarkdown else { return }
+            self.renderCurrentDocument(text: markdown, fileURL: self.currentFileURL)
+        }, overlayHidden: overlayHidden) { [weak self] in
             guard let self else {
                 completion()
                 return
@@ -453,9 +461,6 @@ extension DocumentWindowController {
             }
             if self.editBar == nil {
                 self.updateEditToolbarItem()
-            }
-            if rerender, let markdown = self.currentMarkdown {
-                self.renderCurrentDocument(text: markdown, fileURL: self.currentFileURL)
             }
             completion()
         }

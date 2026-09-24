@@ -12,12 +12,12 @@
 
 import AppKit
 
-nonisolated enum ThemeColorScheme: String, CaseIterable, Sendable {
+nonisolated enum ThemeColorScheme: String, CaseIterable, Codable, Sendable {
     case light
     case dark
 }
 
-nonisolated enum ThemeColorSlot: String, CaseIterable, Sendable {
+nonisolated enum ThemeColorSlot: String, CaseIterable, Codable, Sendable {
     /// The whole document window: the native window background, the surface
     /// behind the rendered page, and the gutters beside the centered column.
     case windowBackground
@@ -35,7 +35,7 @@ nonisolated enum ThemeColorSlot: String, CaseIterable, Sendable {
     case linkColor
 }
 
-nonisolated struct ThemeColorsSetting: Equatable, Sendable {
+nonisolated struct ThemeColorsSetting: Equatable, Codable, Sendable {
 
     /// "#RRGGBB" per scheme and slot. A missing entry means the default.
     private var values: [ThemeColorScheme: [ThemeColorSlot: String]] = [:]
@@ -150,12 +150,12 @@ nonisolated struct ThemeColorsSetting: Equatable, Sendable {
             // DocumentBackgroundView paints the light page white.
             return .white
         case (.windowBackground, .dark):
-            return resolvedWindowBackground(dark: true)
+            return NSColor(srgbRed: 28 / 255, green: 28 / 255, blue: 28 / 255, alpha: 1)
         case (.editorBackground, .light):
-            // The editor page background is CSS `Canvas`.
+            // The transparent editor uses the document's default background.
             return .white
         case (.editorBackground, .dark):
-            return NSColor(srgbRed: 30 / 255, green: 30 / 255, blue: 30 / 255, alpha: 1)
+            return defaultColor(.windowBackground, .dark)
         case (.codeBlockBackground, .light):
             // --code-bg in MarkdownHTML.stylesheet: #f5f5f7 / #2A2828.
             return NSColor(srgbRed: 245 / 255, green: 245 / 255, blue: 247 / 255, alpha: 1)
@@ -172,16 +172,6 @@ nonisolated struct ThemeColorsSetting: Equatable, Sendable {
         case (.linkColor, .dark):
             return NSColor(srgbRed: 41 / 255, green: 151 / 255, blue: 255 / 255, alpha: 1)
         }
-    }
-
-    private static func resolvedWindowBackground(dark: Bool) -> NSColor {
-        var resolved = NSColor.windowBackgroundColor
-        let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-        appearance?.performAsCurrentDrawingAppearance {
-            resolved = NSColor(cgColor: NSColor.windowBackgroundColor.cgColor)
-                ?? NSColor.windowBackgroundColor
-        }
-        return resolved
     }
 
     // MARK: - Rendered-surface overrides
@@ -229,12 +219,12 @@ nonisolated struct ThemeColorsSetting: Equatable, Sendable {
             }
             // The editor follows the window color unless it has its own
             // override — one picked color themes both modes. Always emitted
-            // (Canvas when unthemed): the page template bakes the value
+            // (transparent when unthemed): the page template bakes the value
             // present at load time into its base stylesheet, and a reset
             // must override that baked value on the live page too.
             let page = sanitizedHex(.editorBackground, scheme)
                 ?? sanitizedHex(.windowBackground, scheme)
-                ?? "Canvas"
+                ?? "transparent"
             lines.append("html, body { background: \(page); }")
             return lines.joined(separator: "\n")
         }

@@ -111,6 +111,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     var copyFeedbackWork: DispatchWorkItem?
     /// The Themes & Settings popover while it is on screen.
     var themesPopover: NSPopover?
+    var formattingPopover: NSPopover?
     /// Armed only while the themes popover is open.
     let themesPopoverEscapeMonitor = EscapeKeyMonitor()
     weak var searchField: NSSearchField?
@@ -123,7 +124,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// titlebar accessory — so showing it never pushes the tab bar down.
     /// Mounted once at setup and toggled via isHidden.
     weak var findBarOverlay: NSView?
-    weak var findBarHairline: NSView?
     var searchMode: SearchMode = .contains
     var pendingFindWork: DispatchWorkItem?
     static let findDebounceDelay: TimeInterval = 0.10
@@ -224,6 +224,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         documentWindow.toolbar = toolbar
         documentWindow.toolbarStyle = .automatic
         replaceZoomToolbarItemIfNeeded(in: toolbar)
+        migrateLegacySidebarToolbarIfNeeded(in: toolbar)
 
         installFindBar()
         applyWindowBackgroundTheme()
@@ -250,7 +251,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             return ThemeColorsSetting.current.color(
                 .windowBackground, isDark ? .dark : .light
-            ) ?? .windowBackgroundColor
+            ) ?? (isDark ? ThemeColorsSetting.defaultColor(.windowBackground, .dark) : .windowBackgroundColor)
         }
         // Preserve native titlebar backing so WebKit can supply the scroll
         // edge on macOS 26+. Earlier systems also use native window chrome.
@@ -575,10 +576,35 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// shows the plain arrow.
     ///
     /// Sequoia rows use the native titlebar material with unthemed controls.
-    /// Newer systems provide their backdrop through native chrome.
+    /// On macOS 26+, a formatting container can instead remain transparent
+    /// around its native Liquid Glass groups.
     final class EditAccessoryContainerView: NSView {
+        private let usesFloatingGlass: Bool
+        weak var cursorContentView: NSView?
+
+        private var cursorRegion: NSRect {
+            guard usesFloatingGlass else { return bounds }
+            guard let cursorContentView else { return .zero }
+            return convert(cursorContentView.bounds, from: cursorContentView).intersection(bounds)
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            let hit = super.hitTest(point)
+            guard usesFloatingGlass, let superview else { return hit }
+            return cursorRegion.contains(convert(point, from: superview)) ? hit : nil
+        }
         private var fullscreenBackdrop: NSVisualEffectView?
         private var fullscreenThemeFill: NSView?
+
+        convenience init(floatingGlass: Bool = false) {
+            self.init(frame: .zero, floatingGlass: floatingGlass)
+        }
+
+        private init(frame frameRect: NSRect, floatingGlass: Bool) {
+            usesFloatingGlass = floatingGlass
+            super.init(frame: frameRect)
+            installLegacyBackdropIfNeeded()
+        }
 
         /// Full screen on macOS 26 and later draws the toolbar on an opaque
         /// native strip instead of frosting the page, so the rows below it
@@ -586,6 +612,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         /// custom background, retain the native titlebar material.
         func updateFullscreenBackground() {
             guard #available(macOS 26.0, *) else { return }
+            guard !usesFloatingGlass else { return }
             if window?.styleMask.contains(.fullScreen) == true {
                 let scheme: ThemeColorScheme = effectiveAppearance
                     .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .dark : .light
@@ -625,8 +652,19 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
 
         override init(frame frameRect: NSRect) {
+            usesFloatingGlass = false
             super.init(frame: frameRect)
-            if #unavailable(macOS 26.0) {
+            installLegacyBackdropIfNeeded()
+        }
+
+        required init?(coder: NSCoder) {
+            usesFloatingGlass = false
+            super.init(coder: coder)
+            installLegacyBackdropIfNeeded()
+        }
+
+        private func installLegacyBackdropIfNeeded() {
+            if #unavailable(macOS 26.0), fullscreenBackdrop == nil {
                 let backdrop = NSVisualEffectView(frame: bounds)
                 backdrop.material = .titlebar
                 backdrop.blendingMode = .withinWindow
@@ -636,12 +674,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             }
         }
 
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
-
         override func resetCursorRects() {
-            addCursorRect(bounds, cursor: .arrow)
+            super.resetCursorRects()
+            // Only the controls and their inter-group gaps own the cursor.
+            // The remaining transparent row belongs to the document.
+            addCursorRect(cursorRegion, cursor: .arrow)
         }
 
         // First install: the cursor rect is computed while the accessory
@@ -659,7 +696,19 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
 
         override func cursorUpdate(with event: NSEvent) {
-            NSCursor.arrow.set()
+            if cursorRegion.contains(convert(event.locationInWindow, from: nil)) {
+                NSCursor.arrow.set()
+            }
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            super.mouseEntered(with: event)
+            cursorUpdate(with: event)
+        }
+
+        override func mouseMoved(with event: NSEvent) {
+            super.mouseMoved(with: event)
+            cursorUpdate(with: event)
         }
 
         override func updateTrackingAreas() {
@@ -668,8 +717,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 removeTrackingArea(area)
             }
             addTrackingArea(NSTrackingArea(
-                rect: bounds,
-                options: [.cursorUpdate, .activeInKeyWindow, .inVisibleRect],
+                rect: cursorRegion,
+                options: [.cursorUpdate, .mouseEnteredAndExited, .mouseMoved,
+                          .activeInKeyWindow, .enabledDuringMouseDrag],
                 owner: self
             ))
         }
