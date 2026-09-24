@@ -352,63 +352,34 @@ nonisolated enum EditorHTML {
             border-top: 1px solid var(--grid);
             vertical-align: top;
         }
+        #editor .cm-md-code-card {
+            position: relative;
+            container-type: inline-size;
+            display: grid;
+            grid-template-columns: max-content;
+            overflow-x: auto;
+            overscroll-behavior-x: none;
+            scrollbar-width: thin;
+            border: 0.5px solid var(--code-border);
+            border-radius: 16px;
+            background: var(--code-bg);
+        }
         #editor .cm-md-codeblock {
             font-family: ui-monospace, "SF Mono", Menlo, monospace;
             font-size: 1em;
             line-height: 1.3;
             position: relative;
-            /* Use real borders so WebKit snaps the same 0.5px width as the
-               read-mode card on both Retina and standard-density displays. */
             padding: 0;
-            border-inline: 0.5px solid transparent;
-            overflow-x: auto;
-            overflow-y: hidden;
-            overscroll-behavior-x: none;
-            scrollbar-width: none;
+            white-space: pre;
+            min-width: 100cqw;
         }
-        #editor .cm-content.cm-lineWrapping > .cm-md-codeblock { white-space: pre; }
         #editor .cm-md-code-scroll-text {
             display: inline-block;
-            min-width: var(--code-scroll-width, 0px);
-            /* Keep padding on the scrolling text so it cannot displace the
-               sticky header at either end of the scroll range. */
             padding-inline: 16px;
         }
-        #editor .cm-md-codeblock-last { scrollbar-width: thin; }
-        /* The code card is painted on a z:-2 pseudo instead of the line
-           itself, so it matches the preview's opaque --code-bg and never
-           covers the native selection or the caret. */
-        #editor .cm-md-codeblock::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            z-index: -2;
-            background: var(--code-bg);
-            /* Keep the card edges at the scrollport, not the end of the code. */
-            transform: translateX(var(--code-scroll-offset, 0px));
-        }
-        #editor .cm-content > .cm-line.cm-md-codeblock-first {
-            padding-top: 16px;
-            border-top: 0.5px solid transparent;
-            position: relative;
-        }
-        #editor .cm-md-codeblock-first::before {
-            border-radius: 16px 16px 0 0;
-        }
-        #editor .cm-md-codeblock-last {
-            padding-bottom: 16px;
-            border-bottom: 0.5px solid transparent;
-        }
-        #editor .cm-md-codeblock-last::before {
-            border-radius: 0 0 16px 16px;
-        }
-        /* A single content line owns both ends of the card. */
-        #editor .cm-md-codeblock-first.cm-md-codeblock-last::before {
-            border-radius: 16px;
-        }
-        /* Reserve a header row so the language never competes with code,
-           including wrapped lines and blocks at the start of a document. */
-        #editor .cm-content > .cm-line.cm-md-codeblock-first:has(.cm-md-code-language) {
+        #editor .cm-md-codeblock-first { padding-top: 16px; }
+        #editor .cm-md-codeblock-last { padding-bottom: 16px; }
+        #editor .cm-md-codeblock-first:has(.cm-md-code-language) {
             padding-top: calc(16px + \(codeLanguageHeaderHeight)px);
         }
         #editor .cm-md-code-fence-source-hidden {
@@ -424,7 +395,7 @@ nonisolated enum EditorHTML {
             margin-inline: 9px 10px;
             margin-top: calc(-8px - \(codeLanguageHeaderHeight)px);
             margin-bottom: 8px;
-            width: calc(100% - 19px);
+            width: calc(100cqw - 19px);
             height: 28px;
             display: flex;
             align-items: center;
@@ -458,10 +429,10 @@ nonisolated enum EditorHTML {
         }
         #editor .cm-md-code-action:hover { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
         #editor .cm-md-code-action:focus-visible { outline: 2px solid AccentColor; outline-offset: 1px; }
-        #editor .cm-content.cm-lineWrapping > .cm-md-code-wrapped { white-space: pre-wrap; overflow-wrap: anywhere; padding-inline: 16px; }
-        #editor .cm-md-code-wrapped .cm-md-code-scroll-text { display: inline; min-width: 0; padding-inline: 0; }
-        #editor .cm-md-code-wrapped .cm-md-code-language { position: relative; inset-inline-start: auto; margin-inline: -7px; width: calc(100% + 14px); }
-        #editor .cm-md-code-wrapped::before { transform: none; }
+        #editor .cm-md-code-card-wrapped { grid-template-columns: minmax(0, 1fr); }
+        #editor .cm-md-code-wrapped { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; padding-inline: 16px; }
+        #editor .cm-md-code-wrapped .cm-md-code-scroll-text { display: inline; padding-inline: 0; }
+        #editor .cm-md-code-wrapped .cm-md-code-language { position: relative; inset-inline-start: auto; margin-inline: -7px; }
         #editor .cm-md-code-language-input::placeholder {
             color: var(--secondary);
             opacity: 0.8;

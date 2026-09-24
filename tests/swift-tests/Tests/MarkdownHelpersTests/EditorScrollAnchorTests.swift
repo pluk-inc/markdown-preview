@@ -120,7 +120,7 @@ final class EditorScrollAnchorTests: XCTestCase {
                     window.__layoutTestFrame(); await new Promise(r => setTimeout(r, 15));
                 }};
                 const toggle = () => document.querySelector(isEditor ? '.cm-md-code-toggle-wrap' : '.md-code-toggle-wrap');
-                const line = () => document.querySelector(isEditor ? '[data-code-scroll-group]' : '.md-code-wrap pre');
+                const line = () => document.querySelector(isEditor ? '.cm-md-code-card' : '.md-code-wrap pre');
                 const copy = () => document.querySelector(isEditor ? '.cm-md-code-copy' : '.md-code-copy');
                 // Measure text layout independently of the native scrollport.
                 // WebKit can add/remove scrollbar space during wrap changes.
@@ -182,23 +182,22 @@ final class EditorScrollAnchorTests: XCTestCase {
                 const settle = async () => { for (let i = 0; i < 8; i++) {
                     window.__layoutTestFrame(); await new Promise(r => setTimeout(r, 15));
                 }};
-                const lines = () => [...document.querySelectorAll('[data-code-scroll-group]')];
+                const card = () => document.querySelector('.cm-md-code-card');
+                const origin = card().getBoundingClientRect().left;
                 const measurements = [];
                 const measure = () => {
-                    for (const line of lines()) {
-                        const card = getComputedStyle(line, '::before');
-                        const translation = card.transform === 'none' ? 0 : new DOMMatrix(card.transform).m41;
-                        measurements.push({
-                            widthError: Math.abs(parseFloat(card.width) - line.clientWidth),
-                            offsetError: Math.abs(translation - line.scrollLeft),
-                            rounded: (!line.classList.contains('cm-md-codeblock-first') || parseFloat(card.borderTopRightRadius) > 0)
-                                && (!line.classList.contains('cm-md-codeblock-last') || parseFloat(card.borderBottomRightRadius) > 0)
-                        });
-                    }
+                    const bounds = card().getBoundingClientRect();
+                    const style = getComputedStyle(card());
+                    measurements.push({
+                        widthError: Math.abs(bounds.width - document.querySelector('.cm-content').clientWidth),
+                        offsetError: Math.abs(bounds.left - origin),
+                        rounded: parseFloat(style.borderTopRightRadius) > 0
+                            && parseFloat(style.borderBottomRightRadius) > 0
+                    });
                 };
-                const overflow = lines()[0].scrollWidth - lines()[0].clientWidth;
+                const overflow = card().scrollWidth - card().clientWidth;
                 for (const offset of [0, 120, overflow]) {
-                    lines()[0].scrollLeft = offset;
+                    card().scrollLeft = offset;
                     await settle();
                     measure();
                 }
@@ -231,7 +230,7 @@ final class EditorScrollAnchorTests: XCTestCase {
             _ = try await editor.layout(texts: [], imageCount: 0)
             let result = try await editor.webView.evaluateJavaScript("""
                 (() => {
-                    const line = document.querySelector('[data-code-scroll-group]');
+                    const line = document.querySelector('.cm-md-code-card');
                     const button = line.querySelector('.cm-md-code-copy');
                     const x = button.getBoundingClientRect().x;
                     const scrollers = [document.scrollingElement, document.querySelector('.cm-scroller')];
@@ -421,8 +420,11 @@ final class EditorScrollAnchorTests: XCTestCase {
             const text = first.querySelector('.cm-md-code-scroll-text');
             const height = text.getBoundingClientRect().height;
             const lineHeight = parseFloat(getComputedStyle(first).lineHeight);
-            first.scrollLeft = 120;
-            first.dispatchEvent(new Event('scroll'));
+            const card = first.closest('.cm-md-code-card');
+            const initialX = lines.map(line => line.getBoundingClientRect().left);
+            const overflow = card.scrollWidth - card.clientWidth;
+            card.scrollLeft = 120;
+            const deltas = lines.map((line, index) => initialX[index] - line.getBoundingClientRect().left);
             const originalSource = window.__mdEditor.getMarkdown();
             // Editing before the block changes its group key. Editing inside
             // it must also preserve the shared horizontal position.
@@ -432,19 +434,19 @@ final class EditorScrollAnchorTests: XCTestCase {
             window.__mdEditor.insertTextAt('x', inside, inside);
             for (let i = 0; i < 12; i++) { window.__layoutTestFrame(); await Promise.resolve(); }
             const updated = [...document.querySelectorAll('[data-code-scroll-group]')];
-            return { count: lines.length, overflow: first.scrollWidth - first.clientWidth,
-                height, lineHeight, firstOffset: first.scrollLeft, lastOffset: last.scrollLeft,
-                updatedOffsets: updated.map(line => line.scrollLeft),
+            return { count: lines.length, overflow,
+                height, lineHeight, deltas, singleScrollport: lines.every(line => line.scrollLeft === 0),
+                updatedOffset: document.querySelector('.cm-md-code-card').scrollLeft,
                 source: originalSource };
             """, arguments: [:], in: nil, contentWorld: .page)
         let values = try XCTUnwrap(result as? [String: Any])
         XCTAssertEqual(values["count"] as? Int, 2)
         XCTAssertGreaterThan(try XCTUnwrap(values["overflow"] as? Double), 120)
         XCTAssertEqual(try XCTUnwrap(values["height"] as? Double), try XCTUnwrap(values["lineHeight"] as? Double), accuracy: 1)
-        XCTAssertEqual(try XCTUnwrap(values["firstOffset"] as? Double), 120, accuracy: 1)
-        XCTAssertEqual(try XCTUnwrap(values["lastOffset"] as? Double), 120, accuracy: 1)
+        XCTAssertEqual(values["singleScrollport"] as? Bool, true)
+        XCTAssertEqual(try XCTUnwrap(values["updatedOffset"] as? Double), 120, accuracy: 1)
         XCTAssertEqual(values["source"] as? String, markdown)
-        for offset in try XCTUnwrap(values["updatedOffsets"] as? [Double]) {
+        for offset in try XCTUnwrap(values["deltas"] as? [Double]) {
             XCTAssertEqual(offset, 120, accuracy: 1)
         }
     }

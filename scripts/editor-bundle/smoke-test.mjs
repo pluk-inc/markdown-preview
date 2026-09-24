@@ -606,6 +606,26 @@ check("inactive indented code hides source indentation",
     && indentedCodeLines.at(-1)?.textContent === "</script>")
 indentedCodeEditor.destroy()
 
+const nativeCodeHost = document.createElement('div')
+document.body.appendChild(nativeCodeHost)
+const nativeCodeSource = 'Before\n\n```text\nfirst\nsecond\n```\n\nBetween\n\n```\nthird\n```\n\nAfter'
+const nativeCodeEditor = dom.window.MDEditor.create(nativeCodeHost, nativeCodeSource, {})
+const nativeCards = [...nativeCodeHost.querySelectorAll('.cm-md-code-card')]
+check('each editable code block has one native scroll wrapper',
+  nativeCards.length === 2 && nativeCards[0].querySelectorAll('.cm-md-codeblock').length === 2)
+check('native code wrappers exclude surrounding paragraphs and separators',
+  nativeCards.every(card => !/Before|Between|After/.test(card.textContent)
+    && card.querySelector('.cm-md-block-separator') == null))
+nativeCodeEditor.select(nativeCodeSource.indexOf('second') + 3)
+nativeCodeEditor.insert('X')
+check('editing inside a native code wrapper preserves source positions',
+  nativeCodeEditor.getMarkdown() === nativeCodeSource.replace('second', 'secXond'))
+nativeCodeHost.querySelector('.cm-content').dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+  key: 'z', code: 'KeyZ', ctrlKey: true, bubbles: true, cancelable: true,
+}))
+check('native code wrapper editing supports undo', nativeCodeEditor.getMarkdown() === nativeCodeSource)
+nativeCodeEditor.destroy()
+
 const listLikeCodeHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(listLikeCodeHost)
 const listLikeCodeEditor = dom.window.MDEditor.create(
@@ -763,6 +783,8 @@ check("typing an opening fence inserts its own closing fence",
 const emptyCodeLine = autoFenceHost.querySelector(".cm-md-codeblock-first")
 check("auto-closed empty code line keeps its caret buffer after the language widget",
   emptyCodeLine?.querySelector(".cm-md-code-language + .cm-widgetBuffer") != null)
+check('empty code block keeps its editable line in a native scroll wrapper',
+  emptyCodeLine?.closest('.cm-md-code-card') != null)
 autoFenceEditor.insert("body")
 check("auto-closed fence leaves the cursor in its content",
   autoFenceEditor.getMarkdown() === "intro\n```\nbody\n```")
