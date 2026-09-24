@@ -17,17 +17,21 @@ nonisolated enum FileSearchMatcher {
         let fileName: String
         /// Path relative to the project root, no leading slash.
         let relativePath: String
+        fileprivate let name: PreparedText
+        fileprivate let path: PreparedText
 
         init(fileName: String, relativePath: String) {
             self.fileName = fileName
             self.relativePath = relativePath
+            self.name = PreparedText(fileName)
+            self.path = fileName == relativePath ? name : PreparedText(relativePath)
         }
 
         /// Derives the file name from the path, which is all the callers that
         /// enumerate a directory tree actually have.
         init(relativePath: String) {
-            self.relativePath = relativePath
-            self.fileName = relativePath.split(separator: "/").last.map(String.init) ?? relativePath
+            self.init(fileName: relativePath.split(separator: "/").last.map(String.init) ?? relativePath,
+                      relativePath: relativePath)
         }
     }
 
@@ -104,8 +108,8 @@ nonisolated enum FileSearchMatcher {
             if index % cancellationCheckInterval == 0 {
                 try Task.checkCancellation()
             }
-            guard let match = match(query: prepared, against: candidates[index]) else { continue }
-            scored.append((index, match.score))
+            guard let score = score(query: prepared, against: candidates[index]) else { continue }
+            scored.append((index, score))
         }
         try Task.checkCancellation()
 
@@ -129,6 +133,7 @@ nonisolated enum FileSearchMatcher {
         /// file names contain them.
         let text: String
         let folded: [Character]
+        let ascii: [UInt8]?
         /// A `/` means the reader is narrowing by directory, which only the
         /// relative path can satisfy.
         let matchesRelativePath: Bool
@@ -137,6 +142,10 @@ nonisolated enum FileSearchMatcher {
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
             self.text = trimmed
             self.folded = trimmed.map(FileSearchMatcher.folded)
+            let ascii = folded.compactMap(\.asciiValue)
+            // Character.asciiValue reports LF for CRLF, but matching treats
+            // those as distinct graphemes, so CRLF must stay on the Unicode path.
+            self.ascii = ascii.count == folded.count && !trimmed.utf8.contains(13) ? ascii : nil
             self.matchesRelativePath = trimmed.contains("/")
         }
 
@@ -147,17 +156,69 @@ nonisolated enum FileSearchMatcher {
         guard !query.isBlank else { return Match(score: 0) }
 
         if query.matchesRelativePath {
-            guard let alignment = align(query: query.folded, to: candidate.relativePath) else {
+            guard let alignment = align(query: query, to: candidate.path) else {
                 return nil
             }
             return Match(score: alignment.score, pathRanges: alignment.ranges)
         }
 
-        guard let alignment = align(query: query.folded, to: candidate.fileName) else {
+        guard let alignment = align(query: query, to: candidate.name) else {
             return nil
         }
-        return Match(score: alignment.score + nameTierBonus(query: query, fileName: candidate.fileName),
+        return Match(score: alignment.score + nameTierBonus(query: query, name: candidate.name),
                      nameRanges: alignment.ranges)
+    }
+
+    /// Ranking needs only scores. Highlight backtracking is reserved for the
+    /// visible rows that call `match`, not every matching file in the index.
+    static func score(query: PreparedQuery, against candidate: Candidate) -> Int? {
+        guard !query.isBlank else { return 0 }
+        let text = query.matchesRelativePath ? candidate.path : candidate.name
+        guard let alignment = align(query: query, to: text, includeRanges: false) else { return nil }
+        return alignment.score + (query.matchesRelativePath ? 0 : nameTierBonus(query: query, name: candidate.name))
+    }
+
+    /// Immutable work shared by queries for the lifetime of the index snapshot.
+    /// Character folding preserves the existing Unicode and highlight semantics.
+    fileprivate struct PreparedText: Equatable, Sendable {
+        enum Storage: Equatable, Sendable {
+            case ascii([UInt8])
+            case unicode(String)
+        }
+
+        let storage: Storage
+        let boundaryBonuses: [UInt8]
+
+        let count: Int
+
+        init(_ text: String) {
+            let bytes = Array(text.utf8)
+            // CRLF is one Swift Character despite containing two ASCII bytes.
+            if bytes.allSatisfy({ $0 < 128 }), !bytes.contains(13) {
+                // Most project paths are ASCII. One byte per character avoids
+                // retaining a 16-byte Character for every byte in those paths.
+                count = bytes.count
+                storage = .ascii(bytes.map { (65...90).contains($0) ? $0 + 32 : $0 })
+                boundaryBonuses = bytes.indices.map { index in
+                    guard index > 0 else { return UInt8(bonusBoundary) }
+                    let previous = bytes[index - 1]
+                    if [45, 95, 46, 32, 47].contains(previous) { return UInt8(bonusBoundary) }
+                    let current = bytes[index]
+                    if (97...122).contains(previous), (65...90).contains(current) { return UInt8(bonusCamel) }
+                    if (48...57).contains(previous), (65...90).contains(current) || (97...122).contains(current) {
+                        return UInt8(bonusCamel)
+                    }
+                    return 0
+                }
+            } else {
+                // Retaining Character arrays for every Unicode path is costly.
+                // Keep the original string and prepare only the queried field,
+                // avoiding extra cold-open latency and index memory for these files.
+                count = text.count
+                storage = .unicode(text)
+                boundaryBonuses = []
+            }
+        }
     }
 
     // MARK: - Tiers
@@ -165,11 +226,16 @@ nonisolated enum FileSearchMatcher {
     /// Whole-name outcomes are put in tiers of their own rather than being
     /// folded into the per-character score, so an exact hit can never lose to
     /// a long scattered one.
-    private static func nameTierBonus(query: PreparedQuery, fileName: String) -> Int {
-        let folded = fileName.map(folded)
-        if folded == query.folded { return scoreExactName }
-        if folded.count > query.folded.count, Array(folded.prefix(query.folded.count)) == query.folded {
-            return scorePrefixName
+    private static func nameTierBonus(query: PreparedQuery, name: PreparedText) -> Int {
+        switch name.storage {
+        case .ascii(let text):
+            guard let query = query.ascii else { return 0 }
+            if text == query { return scoreExactName }
+            if text.starts(with: query) { return scorePrefixName }
+        case .unicode(let text):
+            let folded = text.map(FileSearchMatcher.folded)
+            if folded == query.folded { return scoreExactName }
+            if folded.starts(with: query.folded) { return scorePrefixName }
         }
         return 0
     }
@@ -185,19 +251,45 @@ nonisolated enum FileSearchMatcher {
     /// programming rather than a greedy left-to-right walk: greedy takes the
     /// first letter that fits and so misses the word-boundary hit a little
     /// further along, which is usually the one the reader meant.
-    private static func align(query: [Character], to text: String) -> Alignment? {
+    private static func align(query: PreparedQuery, to text: PreparedText,
+                              includeRanges: Bool = true) -> Alignment? {
+        switch text.storage {
+        case .ascii(let characters):
+            guard let query = query.ascii else { return nil }
+            return align(query: query, text: characters, includeRanges: includeRanges) {
+                Int(text.boundaryBonuses[$0])
+            }
+        case .unicode(let string):
+            guard query.folded.count <= text.count else { return nil }
+            // Reject without allocating arrays, as in the original Unicode path.
+            var next = 0
+            for character in string {
+                if next == query.folded.count { break }
+                if FileSearchMatcher.folded(character) == query.folded[next] { next += 1 }
+            }
+            guard next == query.folded.count else { return nil }
+            let characters = Array(string)
+            return align(query: query.folded, text: characters.map(FileSearchMatcher.folded),
+                         includeRanges: includeRanges) { boundaryBonus(characters, at: $0) }
+        }
+    }
+
+    private static func align<Element: Equatable>(query: [Element], text: [Element],
+                                                  includeRanges: Bool,
+                                                  boundaryAt: (Int) -> Int) -> Alignment? {
         // Cheap reject first. Most of a project never matches, and this keeps
         // the allocation below off the hot path.
-        guard isSubsequence(query, of: text) else { return nil }
-
-        let characters = Array(text)
-        let foldedText = characters.map(folded)
         let rows = query.count
-        let columns = characters.count
+        let columns = text.count
+        guard rows <= columns, isSubsequence(query, of: text) else { return nil }
+        let foldedText = text
         guard rows > 0, columns > 0 else { return nil }
 
-        var scores = [Int](repeating: unreachable, count: rows * columns)
-        var parents = [Int](repeating: -1, count: rows * columns)
+        // Only the previous row is needed to score the next. Parent links are
+        // allocated only when a visible result needs its highlight ranges.
+        var previous = [Int](repeating: unreachable, count: columns)
+        var current = previous
+        var parents = includeRanges ? [Int](repeating: -1, count: rows * columns) : []
 
         for row in 0..<rows {
             // Best cell on the previous row at least two columns back, which
@@ -207,22 +299,22 @@ nonisolated enum FileSearchMatcher {
 
             for column in 0..<columns {
                 if row > 0, column >= 2 {
-                    let candidateScore = scores[(row - 1) * columns + (column - 2)]
+                    let candidateScore = previous[column - 2]
                     if candidateScore > gapBest {
                         gapBest = candidateScore
                         gapBestColumn = column - 2
                     }
                 }
 
+                current[column] = unreachable
                 guard foldedText[column] == query[row] else { continue }
 
-                let cell = row * columns + column
-                let bonus = scoreMatch + boundaryBonus(characters, at: column)
+                let bonus = scoreMatch + boundaryAt(column)
 
                 if row == 0 {
                     // Nudge earlier starts ahead of later ones, gently enough
                     // that it only settles otherwise-equal alignments.
-                    scores[cell] = bonus - min(column, leadingPenaltyLimit) * penaltyLeading
+                    current[column] = bonus - min(column, leadingPenaltyLimit) * penaltyLeading
                     continue
                 }
 
@@ -230,7 +322,7 @@ nonisolated enum FileSearchMatcher {
                 var bestParent = -1
 
                 if column >= 1 {
-                    let contiguous = scores[(row - 1) * columns + (column - 1)]
+                    let contiguous = previous[column - 1]
                     if contiguous != unreachable {
                         best = contiguous + bonusContiguous
                         bestParent = column - 1
@@ -242,20 +334,21 @@ nonisolated enum FileSearchMatcher {
                 }
 
                 guard bestParent >= 0 else { continue }
-                scores[cell] = best + bonus
-                parents[cell] = bestParent
+                current[column] = best + bonus
+                if includeRanges { parents[row * columns + column] = bestParent }
             }
+            swap(&previous, &current)
         }
 
-        let lastRow = (rows - 1) * columns
         var bestColumn = -1
         var bestScore = unreachable
-        for column in 0..<columns where scores[lastRow + column] > bestScore {
-            bestScore = scores[lastRow + column]
+        for column in 0..<columns where previous[column] > bestScore {
+            bestScore = previous[column]
             bestColumn = column
         }
         guard bestColumn >= 0, bestScore != unreachable else { return nil }
 
+        guard includeRanges else { return Alignment(score: bestScore, ranges: []) }
         var positions = [Int](repeating: 0, count: rows)
         var column = bestColumn
         for row in stride(from: rows - 1, through: 0, by: -1) {
@@ -280,11 +373,11 @@ nonisolated enum FileSearchMatcher {
         return ranges
     }
 
-    private static func isSubsequence(_ query: [Character], of text: String) -> Bool {
+    private static func isSubsequence<Element: Equatable>(_ query: [Element], of text: [Element]) -> Bool {
         var next = query.startIndex
         for character in text {
             guard next < query.endIndex else { return true }
-            if folded(character) == query[next] { next += 1 }
+            if character == query[next] { next += 1 }
         }
         return next == query.endIndex
     }
@@ -316,8 +409,8 @@ nonisolated enum FileSearchMatcher {
     /// navigator sorts its rows with, so results never depend on the order the
     /// file system happened to enumerate.
     private static func isOrderedBefore(_ lhs: Candidate, _ rhs: Candidate) -> Bool {
-        let lhsLength = lhs.relativePath.count
-        let rhsLength = rhs.relativePath.count
+        let lhsLength = lhs.path.count
+        let rhsLength = rhs.path.count
         if lhsLength != rhsLength { return lhsLength < rhsLength }
         switch lhs.relativePath.localizedStandardCompare(rhs.relativePath) {
         case .orderedAscending: return true
