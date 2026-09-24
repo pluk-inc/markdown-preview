@@ -51,6 +51,12 @@ private final class FileNode {
 
 final class ProjectNavigatorView: NSView {
 
+    private static let folderIconColor = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? .systemBlue
+            : .secondaryLabelColor
+    }
+
     var onSelectFile: ((URL) -> Void)?
 
     private let scrollView = NSScrollView()
@@ -462,7 +468,7 @@ extension ProjectNavigatorView: NSOutlineViewDelegate {
         if node.isDirectory {
             cell.imageView?.image = NSImage(systemSymbolName: "folder.fill",
                                            accessibilityDescription: "Folder")
-            cell.imageView?.contentTintColor = .secondaryLabelColor
+            cell.imageView?.contentTintColor = Self.folderIconColor
         } else {
             let icon = NSWorkspace.shared.icon(forFile: node.url.path)
             icon.size = NSSize(width: 16, height: 16)
