@@ -13,6 +13,7 @@
 //
 
 import Foundation
+import Darwin
 
 nonisolated struct ThemePreset: Identifiable, Equatable, Sendable {
 
@@ -103,17 +104,51 @@ nonisolated struct ThemePreset: Identifiable, Equatable, Sendable {
     // font, layout, and appearance, including across release/debug builds.
     static var defaults: UserDefaults { AppearanceMode.sharedDefaults() ?? .standard }
 
+    static var migrationLockURL: URL? {
+        let manager = FileManager.default
+        if let group = Bundle.main.object(forInfoDictionaryKey: AppearanceMode.appGroupInfoKey) as? String,
+           !group.isEmpty {
+            // Never fall back to a process-local lock when preferences are shared.
+            return manager.containerURL(forSecurityApplicationGroupIdentifier: group)?
+                .appendingPathComponent("theme-migration.lock")
+        }
+        return manager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Markdown Preview/theme-migration.lock")
+    }
+
     static func migrateLegacyValues(from legacy: UserDefaults = .standard,
-                                    to shared: UserDefaults = defaults) {
-        // Once a shared identity exists it is authoritative. A second app's
-        // stale local identity must never replace it or its saved looks.
-        guard shared.string(forKey: appliedPresetKey) == nil else { return }
+                                    to shared: UserDefaults = defaults,
+                                    lockURL: URL? = migrationLockURL) {
+        // Release and debug can launch together. An actor only protects one
+        // process, so serialize the read/merge/write in the shared container.
+        // Failure leaves legacy data intact for a subsequent launch to retry.
+        guard let lockURL else { return }
+        do {
+            try FileManager.default.createDirectory(at: lockURL.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+        } catch { return }
+        let descriptor = open(lockURL.path, O_CREAT | O_RDWR | O_CLOEXEC, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else { return }
+        defer { close(descriptor) }
+        while flock(descriptor, LOCK_EX) != 0 {
+            if errno != EINTR { return }
+        }
+        defer { flock(descriptor, LOCK_UN) }
+        // Refresh after acquiring the lock, and publish before releasing it.
+        shared.synchronize()
+        defer { shared.synchronize() }
+
+        // Each missing look migrates independently of the selected identity.
         for preset in builtIn where shared.data(forKey: preset.savedLookKey) == nil {
             if let data = legacy.data(forKey: preset.savedLookKey) {
                 shared.set(data, forKey: preset.savedLookKey)
             }
         }
-        shared.set(applied(in: legacy).id, forKey: appliedPresetKey)
+        if shared.string(forKey: appliedPresetKey) == nil,
+           let legacyID = legacy.string(forKey: appliedPresetKey),
+           builtIn.contains(where: { $0.id == legacyID }) {
+            shared.set(legacyID, forKey: appliedPresetKey)
+        }
     }
 
     func recordApplied(in defaults: UserDefaults = Self.defaults) {

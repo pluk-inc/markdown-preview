@@ -111,6 +111,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let appearanceMode = ThemePreset.applied().requiredAppearance ?? storedAppearance
         if appearanceMode != storedAppearance { AppearanceMode.current = appearanceMode }
         applyAppearanceMode(appearanceMode, reloadPreviews: false)
+        // Capture launch settings before another instance can change them while
+        // we're inactive, even if this user never opens the Settings window.
+        SettingsModel.shared.refreshFromExternalSources()
         installAppearanceMenuItems()
         installContentWidthMenuItems()
         installSidebarViewMenuItems()
