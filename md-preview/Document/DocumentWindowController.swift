@@ -15,6 +15,8 @@ import UniformTypeIdentifiers
 // is never called: no menu item ever gets its state, and the failure is silent.
 final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate, NSSharingServicePickerToolbarItemDelegate, NSSearchFieldDelegate, NSMenuDelegate, NSMenuItemValidation, NSToolbarItemValidation, NSPopoverDelegate {
 
+    var fileSearchPalette: FileSearchPanelController?
+
     enum NavigationIntent {
         case normal
         case back

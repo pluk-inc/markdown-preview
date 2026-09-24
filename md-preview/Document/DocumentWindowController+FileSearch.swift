@@ -18,13 +18,16 @@ extension DocumentWindowController {
 
     @objc func searchForDocument(_ sender: Any?) {
         guard let split = documentWindow.contentViewController as? MainSplitViewController else { return }
-        // A sheet cannot go up over another sheet; if one is already showing,
-        // the palette would simply never appear.
+        // Keep modal document operations in control of keyboard focus.
         guard documentWindow.attachedSheet == nil else {
             NSSound.beep()
             return
         }
 
+        if let existing = fileSearchPalette {
+            existing.view.window?.makeKeyAndOrderFront(nil)
+            return
+        }
         let palette = FileSearchPanelController(projectRoot: split.projectRootURL)
         palette.onOpen = { [weak self] url, target in
             self?.openSearchResult(url, in: target)
@@ -32,7 +35,9 @@ extension DocumentWindowController {
         palette.onRequestOpenFolder = { [weak self] in
             self?.openDocument(nil)
         }
-        split.presentAsSheet(palette)
+        palette.onDismiss = { [weak self] in self?.fileSearchPalette = nil }
+        fileSearchPalette = palette
+        palette.present(relativeTo: documentWindow)
     }
 
     /// Offered in Customize Toolbar but deliberately absent from the default

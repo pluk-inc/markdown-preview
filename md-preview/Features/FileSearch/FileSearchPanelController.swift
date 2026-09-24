@@ -3,9 +3,8 @@
 //  md-preview
 //
 //  The Search for Document palette: type part of a file name, pick a result,
-//  open it. Presented as a sheet rather than a floating panel because each
-//  document window has its own project root, so one app-wide palette would be
-//  wrong.
+//  open it. Each document presents its own floating panel so the results
+//  remain scoped to that document’s project root.
 //
 
 import Cocoa
@@ -19,22 +18,48 @@ final class FileSearchPanelController: NSViewController {
         case newWindow
     }
 
-    /// Called with the chosen file once the sheet has gone. The controller
+    /// Called with the chosen file once the panel has gone. The controller
     /// dismisses itself first — see `activateSelection`.
     var onOpen: ((URL, OpenTarget) -> Void)?
     /// Called when the reader asks for a folder from the empty state.
     var onRequestOpenFolder: (() -> Void)?
+
+    var onDismiss: (() -> Void)?
+    private var presentation: FileSearchPanelPresentation?
+
+    func present(relativeTo parent: NSWindow) {
+        let presentation = FileSearchPanelPresentation()
+        self.presentation = presentation
+        presentation.present(self, relativeTo: parent)
+    }
+
+    fileprivate func closePalette() {
+        guard let presentation else { return }
+        self.presentation = nil
+        debounce?.cancel()
+        debounce = nil
+        rankTask?.cancel()
+        rankTask = nil
+        pendingActivation = nil
+        presentation.close()
+        onDismiss?()
+    }
 
     private let projectRoot: URL?
     private let index: ProjectFileIndex
 
     private let queryField = PlainQueryField()
     private let fieldSeparator = HairlineSeparator()
+    private let resultsContainer = NSView()
+    private var resultsHeightConstraint: NSLayoutConstraint?
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
     private let statusLabel = NSTextField(labelWithString: "")
-    private let hintLabel = NSTextField(labelWithString: "")
     private let openFolderButton = NSButton()
+
+    private var hasSearchQuery: Bool {
+        !queryField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     private var snapshot: ProjectFileIndex.Snapshot?
     /// Indices into `snapshot.candidates`, best first.
@@ -64,10 +89,44 @@ final class FileSearchPanelController: NSViewController {
 
     override func loadView() {
         // Sized by frame rather than by self-constraints: AppKit owns a view
-        // controller's root view frame, and a sheet takes its size from it.
-        let container = KeyEquivalentView(frame: NSRect(x: 0, y: 0, width: 560, height: 420))
-        container.onKey = { [weak self] event in self?.handleNavigationKey(event) ?? false }
-        view = container
+        // controller's root view frame, and the panel takes its size from it.
+        let root = KeyEquivalentView(frame: NSRect(x: 0, y: 0, width: 480,
+                                                   height: projectRoot == nil ? 160 : 52))
+        // Clip the backing surface as well as the glass so no rectangular
+        // backdrop is visible outside the rounded panel corners.
+        root.wantsLayer = true
+        root.layer?.backgroundColor = NSColor.clear.cgColor
+        root.layer?.cornerRadius = 20
+        root.layer?.masksToBounds = true
+        root.onKey = { [weak self] event in self?.handleNavigationKey(event) ?? false }
+        let container = DraggablePaletteContent(frame: root.bounds)
+        container.autoresizingMask = [.width, .height]
+        if #available(macOS 26.0, *) {
+            let glass = NSGlassEffectView(frame: root.bounds)
+            glass.autoresizingMask = [.width, .height]
+            glass.style = .regular
+            glass.cornerRadius = 20
+            glass.contentView = container
+            root.addSubview(glass)
+        } else {
+            let effect = NSVisualEffectView(frame: root.bounds)
+            effect.autoresizingMask = [.width, .height]
+            effect.material = .popover
+            effect.blendingMode = .behindWindow
+            effect.state = .active
+            effect.wantsLayer = true
+            effect.layer?.cornerRadius = 20
+            effect.layer?.masksToBounds = true
+            effect.addSubview(container)
+            root.addSubview(effect)
+        }
+        view = root
+
+        let searchIcon = NSImageView()
+        searchIcon.translatesAutoresizingMaskIntoConstraints = false
+        searchIcon.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)
+        searchIcon.symbolConfiguration = .init(pointSize: 19, weight: .regular)
+        searchIcon.contentTintColor = .secondaryLabelColor
 
         // A large, unbezelled field with a hairline under it, the way Xcode's
         // Open Quickly presents it: in a palette the field is the whole point,
@@ -76,15 +135,16 @@ final class FileSearchPanelController: NSViewController {
         queryField.placeholderString = NSLocalizedString("Search files by name",
                                                          comment: "Search for Document field placeholder")
         queryField.delegate = self
-        queryField.font = .systemFont(ofSize: 19)
+        queryField.font = .systemFont(ofSize: 20)
         queryField.isBordered = false
         queryField.drawsBackground = false
         queryField.lineBreakMode = .byTruncatingTail
 
         fieldSeparator.translatesAutoresizingMaskIntoConstraints = false
 
+        tableView.backgroundColor = .clear
         tableView.headerView = nil
-        tableView.style = .inset
+        tableView.style = .fullWidth
         tableView.rowHeight = 40
         tableView.allowsMultipleSelection = false
         tableView.allowsEmptySelection = false
@@ -112,13 +172,6 @@ final class FileSearchPanelController: NSViewController {
         statusLabel.alignment = .center
         statusLabel.isHidden = true
 
-        hintLabel.translatesAutoresizingMaskIntoConstraints = false
-        hintLabel.font = .preferredFont(forTextStyle: .caption1)
-        hintLabel.textColor = .tertiaryLabelColor
-        // A keyboard-only affordance nobody mentions is undiscoverable.
-        hintLabel.stringValue = NSLocalizedString("↑↓ browse · ↩ open · ⌘↩ new tab · ⌥↩ new window",
-                                                  comment: "Search for Document keyboard hint")
-
         openFolderButton.translatesAutoresizingMaskIntoConstraints = false
         openFolderButton.bezelStyle = .rounded
         openFolderButton.title = NSLocalizedString("Open Folder…", comment: "Search for Document empty state button")
@@ -126,24 +179,41 @@ final class FileSearchPanelController: NSViewController {
         openFolderButton.action = #selector(openFolderTapped)
         openFolderButton.isHidden = true
 
-        for subview in [queryField, fieldSeparator, scrollView, statusLabel, hintLabel, openFolderButton] {
+        resultsContainer.translatesAutoresizingMaskIntoConstraints = false
+        resultsContainer.isHidden = projectRoot != nil
+        fieldSeparator.isHidden = projectRoot != nil
+        for subview in [searchIcon, queryField, fieldSeparator, resultsContainer] {
             container.addSubview(subview)
         }
+        for subview in [scrollView, statusLabel, openFolderButton] {
+            resultsContainer.addSubview(subview)
+        }
 
+        let resultsHeight = resultsContainer.heightAnchor.constraint(equalToConstant: 108)
+        resultsHeightConstraint = resultsHeight
         NSLayoutConstraint.activate([
-            queryField.topAnchor.constraint(equalTo: container.topAnchor, constant: 18),
-            queryField.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 18),
+            resultsHeight,
+            queryField.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
+            searchIcon.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            searchIcon.centerYAnchor.constraint(equalTo: queryField.centerYAnchor),
+            searchIcon.widthAnchor.constraint(equalToConstant: 22),
+            searchIcon.heightAnchor.constraint(equalToConstant: 22),
+            queryField.leadingAnchor.constraint(equalTo: searchIcon.trailingAnchor, constant: 10),
             queryField.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -18),
 
-            fieldSeparator.topAnchor.constraint(equalTo: queryField.bottomAnchor, constant: 14),
-            fieldSeparator.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            fieldSeparator.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            fieldSeparator.topAnchor.constraint(equalTo: container.topAnchor, constant: 51),
+            fieldSeparator.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            fieldSeparator.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
             fieldSeparator.heightAnchor.constraint(equalToConstant: 1),
 
-            scrollView.topAnchor.constraint(equalTo: fieldSeparator.bottomAnchor, constant: 4),
-            scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
-            scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
-            scrollView.bottomAnchor.constraint(equalTo: hintLabel.topAnchor, constant: -8),
+            resultsContainer.topAnchor.constraint(equalTo: fieldSeparator.bottomAnchor),
+            resultsContainer.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            resultsContainer.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+
+            scrollView.topAnchor.constraint(equalTo: resultsContainer.topAnchor, constant: 4),
+            scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: resultsContainer.bottomAnchor, constant: -8),
 
             statusLabel.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
             statusLabel.centerYAnchor.constraint(equalTo: scrollView.centerYAnchor),
@@ -151,17 +221,15 @@ final class FileSearchPanelController: NSViewController {
             statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -24),
 
             openFolderButton.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 12),
-            openFolderButton.centerXAnchor.constraint(equalTo: statusLabel.centerXAnchor),
-
-            hintLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            hintLabel.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -16),
-            hintLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12)
+            openFolderButton.centerXAnchor.constraint(equalTo: statusLabel.centerXAnchor)
         ])
     }
 
     override func viewDidAppear() {
         super.viewDidAppear()
+        (view.window as? FileSearchPanel)?.queryField = queryField
         view.window?.makeFirstResponder(queryField)
+        updatePanelSize()
         loadIndex()
     }
 
@@ -174,6 +242,32 @@ final class FileSearchPanelController: NSViewController {
         pendingActivation = nil
     }
 
+    /// Keep the empty query as a single search bar, expanding downwards once
+    /// there is something to find. The field stays in the same screen position.
+    private func updatePanelSize() {
+        let expanded = projectRoot == nil || (hasSearchQuery && rankedQuery == queryField.stringValue)
+        resultsContainer.isHidden = !expanded
+        fieldSeparator.isHidden = !expanded
+        guard let panel = view.window else { return }
+        let rowHeight = tableView.rowHeight + tableView.intercellSpacing.height
+        let resultsHeight = results.isEmpty ? 108 : CGFloat(min(results.count, 6)) * rowHeight + 12
+        resultsHeightConstraint?.constant = resultsHeight
+        let height: CGFloat = 52 + (expanded ? resultsHeight : 0)
+        var frame = panel.frame
+        frame.origin.y += frame.height - height
+        frame.size.height = height
+        if let screen = panel.screen {
+            frame.origin.y = max(frame.origin.y, screen.visibleFrame.minY + 16)
+        }
+        guard frame != panel.frame else { return }
+        let animate = panel.isVisible && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let searchPanel = panel as? FileSearchPanel
+        searchPanel?.isResizingForResults = true
+        defer { searchPanel?.isResizingForResults = false }
+        panel.setFrame(frame, display: true, animate: animate)
+        panel.invalidateShadow()
+    }
+
     // MARK: - Index
 
     private func loadIndex() {
@@ -183,7 +277,7 @@ final class FileSearchPanelController: NSViewController {
         }
         Task { [weak self, index] in
             let snapshot = await index.snapshot(for: projectRoot)
-            guard let self else { return }
+            guard let self, self.presentation != nil else { return }
             self.snapshot = snapshot
             self.refreshResults()
         }
@@ -215,7 +309,7 @@ final class FileSearchPanelController: NSViewController {
     private func refreshResults() {
         debounce?.cancel()
         debounce = nil
-        guard let snapshot else { return }
+        guard hasSearchQuery, let snapshot else { return }
         let query = queryField.stringValue
         let candidates = snapshot.candidates
         rankTask?.cancel()
@@ -235,16 +329,18 @@ final class FileSearchPanelController: NSViewController {
     private func apply(_ ranked: [Int], for query: String) {
         // Superseded while the pass was finishing: the field has moved on and
         // a newer ranking is already on its way.
-        guard query == queryField.stringValue else { return }
+        guard presentation != nil, hasSearchQuery, query == queryField.stringValue else { return }
         results = ranked
         rankedQuery = query
         rankTask = nil
         tableView.reloadData()
+        scrollView.isHidden = results.isEmpty
         if !results.isEmpty {
             tableView.selectRowIndexes([0], byExtendingSelection: false)
             tableView.scrollRowToVisible(0)
         }
         updateStatus()
+        updatePanelSize()
         if let target = pendingActivation {
             pendingActivation = nil
             activateSelection(target: target)
@@ -280,7 +376,7 @@ final class FileSearchPanelController: NSViewController {
     // MARK: - Selection
 
     /// How far a page key moves. Read from the table rather than assumed, so
-    /// it stays right when the sheet is resized or the row height changes.
+    /// it stays right when the panel is resized or the row height changes.
     private var visibleRowCount: Int {
         max(1, tableView.rows(in: tableView.visibleRect).length - 1)
     }
@@ -311,7 +407,7 @@ final class FileSearchPanelController: NSViewController {
         case Key.end: selectRow(results.count - 1)
         case Key.pageUp: moveSelection(by: -visibleRowCount)
         case Key.pageDown: moveSelection(by: visibleRowCount)
-        case Key.escape: dismiss(self)
+        case Key.escape: closePalette()
         case Key.return, Key.keypadEnter:
             if modifiers.contains(.command) { return activateSelection(target: .newTab) }
             if modifiers.contains(.option) { return activateSelection(target: .newWindow) }
@@ -353,6 +449,7 @@ final class FileSearchPanelController: NSViewController {
     /// result instead. Returns true whenever the key is consumed.
     @discardableResult
     private func activateSelection(target: OpenTarget) -> Bool {
+        guard hasSearchQuery else { return true }
         guard resultsAreCurrent else {
             // Before the index has loaded there is nothing to rank yet;
             // `loadIndex` ranks once it arrives and honours this then.
@@ -365,28 +462,27 @@ final class FileSearchPanelController: NSViewController {
         return openSelectedRow(target: target)
     }
 
-    /// Dismisses *before* handing the URL back. `present(url:)` can raise a
-    /// Save/Don't Save sheet, and AppKit will not stack a second sheet on a
-    /// window that already has one — opening from edit mode is a silent no-op
-    /// if the palette is still up.
+    /// Dismisses before handing the URL back so a Save/Don't Save sheet can
+    /// receive focus if the current document has unsaved edits.
     @discardableResult
     private func openSelectedRow(target: OpenTarget) -> Bool {
-        guard let url = selectedURL else { return false }
+        guard resultsAreCurrent, let url = selectedURL else { return false }
         let onOpen = onOpen
-        dismiss(self)
+        let parent = view.window?.parent
+        closePalette()
+        parent?.makeKeyAndOrderFront(nil)
         DispatchQueue.main.async { onOpen?(url, target) }
         return true
     }
 
-    /// A double-click names a row the reader can see, so it opens that row
-    /// even if a newer ranking is on its way.
+    /// While a new query is pending, displayed rows cannot open stale results.
     @objc private func rowDoubleClicked() {
         openSelectedRow(target: .currentTab)
     }
 
     @objc private func openFolderTapped() {
         let onRequestOpenFolder = onRequestOpenFolder
-        dismiss(self)
+        closePalette()
         DispatchQueue.main.async { onRequestOpenFolder?() }
     }
 }
@@ -398,7 +494,23 @@ extension FileSearchPanelController: NSTextFieldDelegate {
     func controlTextDidChange(_ obj: Notification) {
         // A Return waiting on the old text must not fire on the new one.
         pendingActivation = nil
-        scheduleRefresh()
+        debounce?.cancel()
+        debounce = nil
+        rankTask?.cancel()
+        rankTask = nil
+        if hasSearchQuery {
+            // Keep the published rows and their matching emphasis visible
+            // until the new query finishes. apply replaces them together;
+            // resultsAreCurrent prevents activating the previous query.
+            scheduleRefresh()
+        } else {
+            rankedQuery = nil
+            results = []
+            tableView.reloadData()
+            scrollView.isHidden = true
+            statusLabel.isHidden = true
+            updatePanelSize()
+        }
     }
 
     func control(_ control: NSControl,
@@ -438,7 +550,7 @@ extension FileSearchPanelController: NSTextFieldDelegate {
         case #selector(NSResponder.cancelOperation(_:)):
             // The field would otherwise just clear itself, which is not what
             // Escape means when a palette is up.
-            dismiss(self)
+            closePalette()
             return true
         default:
             return false
@@ -467,6 +579,7 @@ extension FileSearchPanelController: NSTableViewDataSource, NSTableViewDelegate 
         let match = FileSearchMatcher.match(query: rankedQuery ?? "", against: candidate)
         cell.configure(fileName: candidate.fileName,
                        relativePath: candidate.relativePath,
+                       projectRoot: projectRoot,
                        nameRanges: match?.nameRanges ?? [],
                        pathRanges: match?.pathRanges ?? [],
                        icon: snapshot.url(at: results[row]).map {
@@ -487,6 +600,13 @@ extension FileSearchPanelController: NSTableViewDataSource, NSTableViewDelegate 
 /// normally renders its selection in a muted grey. The arrow keys were moving
 /// the selection all along; it just did not look like anything was happening.
 private final class EmphasizedRowView: NSTableRowView {
+    override func drawSelection(in dirtyRect: NSRect) {
+        guard selectionHighlightStyle != .none else { return }
+        NSColor.selectedContentBackgroundColor.setFill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 1),
+                     xRadius: 13, yRadius: 13).fill()
+    }
+
     override var isEmphasized: Bool {
         get { true }
         set { }
@@ -517,7 +637,7 @@ private final class FileSearchRowView: NSTableCellView {
         textField = name
 
         NSLayoutConstraint.activate([
-            icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
+            icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 18),
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
             icon.widthAnchor.constraint(equalToConstant: 22),
             icon.heightAnchor.constraint(equalToConstant: 22),
@@ -538,6 +658,7 @@ private final class FileSearchRowView: NSTableCellView {
 
     func configure(fileName: String,
                    relativePath: String,
+                   projectRoot: URL?,
                    nameRanges: [Range<Int>],
                    pathRanges: [Range<Int>],
                    icon iconImage: NSImage?) {
@@ -553,11 +674,26 @@ private final class FileSearchRowView: NSTableCellView {
         let subtitle = pathRanges.isEmpty
             ? (relativePath as NSString).deletingLastPathComponent
             : relativePath
-        path.attributedStringValue = Self.emphasising(pathRanges.isEmpty ? [] : pathRanges,
-                                                      in: subtitle,
-                                                      base: Self.pathFont,
-                                                      emphasis: Self.pathMatchFont,
-                                                      color: .secondaryLabelColor)
+        let breadcrumb = NSMutableAttributedString(attributedString: Self.emphasising(
+            pathRanges, in: subtitle, base: Self.pathFont,
+            emphasis: Self.pathMatchFont, color: .secondaryLabelColor
+        ))
+        // Replace separators after applying match ranges, preserving Unicode
+        // offsets and emphasis while making the hierarchy easier to scan.
+        for index in subtitle.indices.reversed() where subtitle[index] == "/" {
+            let range = NSRange(index..<subtitle.index(after: index), in: subtitle)
+            breadcrumb.replaceCharacters(in: range, with: " › ")
+        }
+        if let projectRoot {
+            let prefix = projectRoot.lastPathComponent + (subtitle.isEmpty ? "" : " › ")
+            breadcrumb.insert(NSAttributedString(string: prefix, attributes: [
+                .font: Self.pathFont, .foregroundColor: NSColor.secondaryLabelColor
+            ]), at: 0)
+            path.toolTip = projectRoot.appendingPathComponent(relativePath).path
+        } else {
+            path.toolTip = relativePath
+        }
+        path.attributedStringValue = breadcrumb
 
         iconImage?.size = NSSize(width: 22, height: 22)
         icon.image = iconImage
@@ -593,7 +729,7 @@ private final class FileSearchRowView: NSTableCellView {
 /// carries a separate `focusRingType` of its own. Both are cleared here, and
 /// `drawFocusRingMask()` is overridden as well so nothing can put it back.
 ///
-/// The palette is a sheet whose field is focused the moment it opens and never
+/// The palette is a panel whose field is focused the moment it opens and never
 /// gives focus up, so a ring saying "this is focused" tells the reader nothing
 /// and just boxes in the one element that should read as plain text.
 private final class PlainQueryField: NSTextField {
@@ -645,10 +781,137 @@ private final class PlainQueryField: NSTextField {
 /// rely on the field being mid-edit for the rest.
 private final class KeyEquivalentView: NSView {
 
+    override var mouseDownCanMoveWindow: Bool { true }
+
     var onKey: ((NSEvent) -> Bool)?
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if onKey?(event) == true { return true }
         return super.performKeyEquivalent(with: event)
     }
+}
+
+
+/// Owns the floating window independently of NSViewController presentation.
+/// Every close clears the document's palette reference before another search.
+@MainActor
+private final class FileSearchPanelPresentation: NSObject, NSWindowDelegate {
+    private var panel: FileSearchPanel?
+    private weak var presentedController: FileSearchPanelController?
+    private var parentCloseObserver: NSObjectProtocol?
+
+    func present(_ viewController: FileSearchPanelController, relativeTo parent: NSWindow) {
+        let content = viewController.view
+        let panel = FileSearchPanel(contentRect: content.bounds,
+                                    styleMask: [.borderless],
+                                    backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false
+        panel.isMovableByWindowBackground = true
+        panel.isFloatingPanel = true
+        panel.level = .floating
+        panel.collectionBehavior = [.fullScreenAuxiliary]
+        panel.hidesOnDeactivate = true
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.contentViewController = viewController
+        panel.delegate = self
+        self.panel = panel
+        presentedController = viewController
+
+        let savedPosition = UserDefaults.standard.array(forKey: Self.positionKey) as? [Double]
+        let savedTopLeft: NSPoint? = savedPosition.flatMap { values in
+            guard values.count == 2, values.allSatisfy({ $0.isFinite }) else { return nil }
+            return NSPoint(x: values[0], y: values[1])
+        }
+        let screen = savedTopLeft.flatMap { point in
+            NSScreen.screens.first { $0.frame.contains(point) }
+        } ?? parent.screen
+        let screenFrame = screen?.visibleFrame ?? parent.frame
+        let width = min(content.frame.width, screenFrame.width - 32)
+        let height = min(content.frame.height, screenFrame.height - 32)
+        let desiredX = savedTopLeft?.x ?? (parent.frame.midX - width / 2)
+        // Start about a quarter of the way down the document window.
+        let desiredTop = savedTopLeft?.y ?? (parent.frame.maxY - parent.frame.height * 0.26)
+        let x = min(max(desiredX, screenFrame.minX + 16), screenFrame.maxX - width - 16)
+        let y = min(max(desiredTop - height, screenFrame.minY + 16), screenFrame.maxY - height - 16)
+        panel.setFrame(NSRect(x: x, y: y, width: width, height: height), display: false)
+        parent.addChildWindow(panel, ordered: .above)
+        parentCloseObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: parent, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.presentedController?.closePalette() }
+        }
+        panel.makeKeyAndOrderFront(nil)
+    }
+
+    func close() {
+        if let parentCloseObserver {
+            NotificationCenter.default.removeObserver(parentCloseObserver)
+        }
+        parentCloseObserver = nil
+        presentedController = nil
+        panel?.delegate = nil
+        if let panel {
+            let parent = panel.parent
+            let restoreFocus = panel.isKeyWindow || NSApp.keyWindow == nil
+            parent?.removeChildWindow(panel)
+            panel.orderOut(nil)
+            panel.contentViewController = nil
+            panel.close()
+            // Return keyboard focus to the document for its menu shortcuts.
+            if restoreFocus { parent?.makeKeyAndOrderFront(nil) }
+        }
+        panel = nil
+    }
+
+    private static let positionKey = "FileSearchPanel.topLeft"
+
+    func windowDidMove(_ notification: Notification) {
+        guard let panel, panel.isVisible, !panel.isResizingForResults,
+              NSEvent.pressedMouseButtons & 1 != 0 else { return }
+        // Store the search bar's top edge, independent of the result height.
+        UserDefaults.standard.set([panel.frame.minX, panel.frame.maxY], forKey: Self.positionKey)
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        presentedController?.closePalette()
+    }
+}
+
+private final class FileSearchPanel: NSPanel {
+    weak var queryField: NSTextField?
+    var isResizingForResults = false
+
+    // The shared field editor fills the search field, including its empty
+    // trailing space. Intercept that space before it consumes the mouse event.
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown, event.clickCount == 1,
+           !event.modifierFlags.contains(.shift),
+           let field = queryField,
+           field.bounds.contains(field.convert(event.locationInWindow, from: nil)),
+           let editor = field.currentEditor() as? NSTextView,
+           let layout = editor.layoutManager, let container = editor.textContainer {
+            layout.ensureLayout(for: container)
+            let point = editor.convert(event.locationInWindow, from: nil)
+            let textEnd = editor.textContainerOrigin.x + layout.usedRect(for: container).maxX
+            if field.stringValue.isEmpty || point.x > textEnd + 6 {
+                editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
+                performDrag(with: event)
+                return
+            }
+        }
+        super.sendEvent(event)
+    }
+
+    override func animationResizeTime(_ newFrame: NSRect) -> TimeInterval { 0.16 }
+
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+}
+
+/// Unoccupied space in the palette moves its window; text and result controls
+/// retain their own mouse handling.
+private final class DraggablePaletteContent: NSView {
+    override var mouseDownCanMoveWindow: Bool { true }
 }
