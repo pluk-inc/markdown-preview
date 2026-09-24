@@ -125,9 +125,14 @@ final class EditorScrollAnchorTests: XCTestCase {
                 // Measure text layout independently of the native scrollport.
                 // WebKit can add/remove scrollbar space during wrap changes.
                 const contentHeight = () => {
-                    const range = document.createRange();
-                    range.selectNodeContents(isEditor ? line() : line().querySelector('code'));
-                    return range.getBoundingClientRect().height;
+                    const texts = isEditor ? [...line().querySelectorAll('.cm-md-code-scroll-text')]
+                        : [line().querySelector('code')];
+                    const bounds = texts.map(text => {
+                        const range = document.createRange();
+                        range.selectNodeContents(text);
+                        return range.getBoundingClientRect();
+                    });
+                    return Math.max(...bounds.map(rect => rect.bottom)) - Math.min(...bounds.map(rect => rect.top));
                 };
                 const before = isEditor ? window.__mdEditor.getMarkdown() : line().textContent;
                 let copied = null;
@@ -230,6 +235,10 @@ final class EditorScrollAnchorTests: XCTestCase {
             _ = try await editor.layout(texts: [], imageCount: 0)
             let result = try await editor.webView.evaluateJavaScript("""
                 (() => {
+                    // Exercise space-consuming scrollbars as on the macOS 15 CI runner.
+                    const style = document.createElement('style');
+                    style.textContent = '.cm-md-code-card::-webkit-scrollbar { width: 15px; height: 15px; }';
+                    document.head.appendChild(style);
                     const line = document.querySelector('.cm-md-code-card');
                     const button = line.querySelector('.cm-md-code-copy');
                     const x = button.getBoundingClientRect().x;
@@ -250,6 +259,89 @@ final class EditorScrollAnchorTests: XCTestCase {
             for key in ["pinned", "pageFixed"] {
                 XCTAssertEqual(values[key] as? Bool, true, "Page scrolling: \(pageScrolling); \(values)")
             }
+        }
+    }
+
+    func testEmptyCodeLinesKeepCaretAndHeaderInsets() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        for body in ["", "first\n\nlast"] {
+            let markdown = "```text\n" + body + "\n```"
+            let position = body.isEmpty ? 8 : 14
+            let editor = WebViewLayoutHarness(html: EditorHTML.render(
+                markdown: markdown, editorJavaScript: script), width: 500, isEditor: true, height: 400)
+            defer { editor.close() }
+            _ = try await editor.layout(texts: [], imageCount: 0)
+            let result = try await editor.webView.callAsyncJavaScript("""
+                window.__mdEditor.select(position);
+                window.__mdEditor.focus();
+                for (let i = 0; i < 12; i++) { window.__layoutTestFrame(); await Promise.resolve(); }
+                const card = document.querySelector('.cm-md-code-card');
+                const blank = [...card.querySelectorAll('.cm-md-codeblock')]
+                    .find(line => !line.querySelector('.cm-md-code-scroll-text'));
+                const bounds = card.getBoundingClientRect();
+                const border = parseFloat(getComputedStyle(card).borderLeftWidth);
+                const range = document.createRange();
+                range.selectNode(blank.querySelector('br'));
+                const inset = range.getBoundingClientRect().left - bounds.left - border;
+                const headerX = card.querySelector('.cm-md-code-language').getBoundingClientRect().left;
+                window.__mdEditor.insertTextAt('x', position, position);
+                for (let i = 0; i < 12; i++) { window.__layoutTestFrame(); await Promise.resolve(); }
+                const text = [...card.querySelectorAll('.cm-md-code-scroll-text')].find(node => node.textContent === 'x');
+                const typed = document.createRange();
+                typed.selectNodeContents(text);
+                return { inset, typedInset: typed.getBoundingClientRect().left - bounds.left - border,
+                    headerShift: card.querySelector('.cm-md-code-language').getBoundingClientRect().left - headerX,
+                    overflow: card.scrollWidth - card.clientWidth };
+                """, arguments: ["position": position], in: nil, contentWorld: .page)
+            let values = try XCTUnwrap(result as? [String: Double])
+            XCTAssertEqual(try XCTUnwrap(values["inset"]), 16, accuracy: 1, "\(values)")
+            XCTAssertEqual(try XCTUnwrap(values["typedInset"]), 16, accuracy: 1, "\(values)")
+            XCTAssertEqual(try XCTUnwrap(values["headerShift"]), 0, accuracy: 1, "\(values)")
+            XCTAssertLessThanOrEqual(try XCTUnwrap(values["overflow"]), 1, "\(values)")
+        }
+    }
+
+    func testReaderWideHTMLRemainsReachableAndLongTextWraps() async throws {
+        let longText = String(repeating: "longword", count: 120)
+        let html = MarkdownHTML.render(markdown: longText + "\n\n<video width=\"1200\" controls></video>",
+                                       allowsScroll: true).html
+        let reader = WebViewLayoutHarness(html: html, width: 500, isEditor: false, height: 400)
+        defer { reader.close() }
+        _ = try await reader.layout(texts: [], imageCount: 0)
+        let result = try await reader.webView.evaluateJavaScript("""
+            (() => {
+                const article = document.querySelector('article.markdown-body');
+                const text = document.createRange();
+                text.selectNodeContents(article.querySelector('p'));
+                const wrapped = [...text.getClientRects()].every(rect => rect.width <= article.clientWidth + 1);
+                article.scrollLeft = article.scrollWidth;
+                const video = article.querySelector('video').getBoundingClientRect();
+                return { wrapped, reachable: article.scrollLeft > 0 && video.right <= article.getBoundingClientRect().right + 1,
+                    pageLocked: getComputedStyle(document.scrollingElement).overflowX === 'hidden' };
+            })()
+            """)
+        let values = try XCTUnwrap(result as? [String: Bool])
+        for key in ["wrapped", "reachable", "pageLocked"] { XCTAssertEqual(values[key], true, "\(values)") }
+    }
+
+    func testLongEditorParagraphRemainsWithinPage() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        for pageScrolling in [false, true] {
+            let editor = WebViewLayoutHarness(html: EditorHTML.render(
+                markdown: String(repeating: "longword", count: 120), editorJavaScript: script,
+                configuration: .init(usesPageScrolling: pageScrolling)), width: 500, isEditor: true, height: 400)
+            defer { editor.close() }
+            _ = try await editor.layout(texts: [], imageCount: 0)
+            let result = try await editor.webView.evaluateJavaScript("""
+                (() => {
+                    const line = document.querySelector('.cm-line');
+                    const text = document.createRange();
+                    text.selectNodeContents(line);
+                    return [...text.getClientRects()].every(rect => rect.width <= line.clientWidth + 1)
+                        && document.scrollingElement.scrollWidth <= window.innerWidth + 1;
+                })()
+                """)
+            XCTAssertEqual(result as? Bool, true, "Page scrolling: \(pageScrolling)")
         }
     }
 

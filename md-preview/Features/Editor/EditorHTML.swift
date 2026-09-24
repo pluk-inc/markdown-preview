@@ -360,7 +360,12 @@ nonisolated enum EditorHTML {
             container-type: inline-size;
             display: grid;
             grid-template-columns: max-content;
+            /* Classic horizontal scrollbars must not stretch the code rows
+               or introduce a second scrollbar that shifts the sticky header. */
+            grid-auto-rows: max-content;
+            align-content: start;
             overflow-x: auto;
+            overflow-y: hidden;
             border: 0.5px solid var(--code-border);
             border-radius: 16px;
             background: var(--code-bg);
@@ -377,6 +382,13 @@ nonisolated enum EditorHTML {
         #editor .cm-md-code-scroll-text {
             display: inline-block;
             padding-inline: 16px;
+        }
+        #editor .cm-md-codeblock:not(.cm-md-code-wrapped):not(:has(.cm-md-code-scroll-text)) {
+            box-sizing: border-box;
+            padding-inline-start: 16px;
+        }
+        #editor .cm-md-codeblock:not(.cm-md-code-wrapped):not(:has(.cm-md-code-scroll-text)) .cm-md-code-language {
+            margin-inline-start: -7px;
         }
         #editor .cm-md-codeblock-first { padding-top: 16px; }
         #editor .cm-md-codeblock-last { padding-bottom: 16px; }
