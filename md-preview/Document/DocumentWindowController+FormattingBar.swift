@@ -596,7 +596,7 @@ extension DocumentWindowController {
         formatMarkdown("h\(sender.tag)")
     }
 
-    /// File > Save (⌘S) while editing: write without leaving edit mode.
+    /// File > Save (⌘S): save pending edits in either mode without switching modes.
     /// Intercepts the responder chain ahead of MarkdownDocument, whose
     /// NSDocument save machinery stays disabled.
     @IBAction func saveDocument(_ sender: Any?) {
