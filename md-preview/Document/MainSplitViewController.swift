@@ -323,6 +323,7 @@ final class MainSplitViewController: NSSplitViewController {
     private var cachedEditorViewController: EditorViewController?
     private var isEditorPreparing = false
     private var isEditorVisible = false
+    private var editModeGeneration = UUID()
     private var pendingSourceScrollAnchor: SourceScrollAnchor?
     private var isSourceScrollAnchorResolved = false
     private var isEditorDOMReady = false
@@ -369,6 +370,8 @@ final class MainSplitViewController: NSSplitViewController {
         let previewZoom = contentViewController?.pageZoom ?? 1
         let previewScrollProgress = contentViewController?.scrollProgress ?? 0
 
+        let generation = UUID()
+        editModeGeneration = generation
         isEditorPreparing = true
         pendingSourceScrollAnchor = nil
         isSourceScrollAnchorResolved = false
@@ -386,7 +389,8 @@ final class MainSplitViewController: NSSplitViewController {
         editorVC.view.alphaValue = 0
         editorVC.view.isHidden = false
         editorVC.editorDidBecomeReady = { [weak self, weak editorVC] in
-            guard let self, let editorVC, self.isEditorPreparing else { return }
+            guard let self, let editorVC, self.editModeGeneration == generation,
+                  self.isEditorPreparing else { return }
             editorVC.editorDidBecomeReady = nil
             self.isEditorDOMReady = true
             self.revealEditorIfPrepared(editorVC)
@@ -394,13 +398,15 @@ final class MainSplitViewController: NSSplitViewController {
         editorVC.applyPageZoom(previewZoom)
         editorVC.load(markdown: markdown, assetBaseURL: assetBaseURL)
         contentViewController?.sourceScrollAnchor { [weak self, weak editorVC] anchor in
-            guard let self, let editorVC, self.isEditorPreparing else { return }
+            guard let self, let editorVC, self.editModeGeneration == generation,
+                  self.isEditorPreparing else { return }
             self.pendingSourceScrollAnchor = anchor
             self.isSourceScrollAnchorResolved = true
             self.revealEditorIfPrepared(editorVC)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self, weak editorVC] in
-            guard let self, let editorVC, self.isEditorPreparing,
+            guard let self, let editorVC, self.editModeGeneration == generation,
+                  self.isEditorPreparing,
                   !self.isSourceScrollAnchorResolved else { return }
             self.isSourceScrollAnchorResolved = true
             self.revealEditorIfPrepared(editorVC)
@@ -516,13 +522,15 @@ final class MainSplitViewController: NSSplitViewController {
 
     private func revealEditorIfPrepared(_ editorVC: EditorViewController) {
         guard isEditorPreparing, isEditorDOMReady, isSourceScrollAnchorResolved else { return }
+        let generation = editModeGeneration
         // CodeMirror and the preview source lookup complete independently.
         // Apply the exact line only after both are ready, then reveal after a
         // display cycle so no empty editor frame is exposed.
         editorVC.applyScrollProgress(pendingPreviewScrollProgress,
                                      sourceAnchor: pendingSourceScrollAnchor) { [weak self, weak editorVC] in
             DispatchQueue.main.async {
-                guard let self, let editorVC, self.isEditorPreparing else { return }
+                guard let self, let editorVC, self.editModeGeneration == generation,
+                      self.isEditorPreparing else { return }
                 // Original uses transparent WebViews. Crossfading would draw
                 // both text layers together, even with the editor at alpha 1.
                 // Swap in one main-thread turn after scroll restoration.
@@ -550,12 +558,19 @@ final class MainSplitViewController: NSSplitViewController {
             completion()
             return
         }
+        // Cancel pending entry work before asking WebKit for the exit anchor.
+        // That asynchronous request must not leave the reveal path enabled.
+        let generation = UUID()
+        editModeGeneration = generation
+        isEditorPreparing = false
+        editorVC.editorDidBecomeReady = nil
         editorVC.fetchScrollAnchor { [weak self, weak editorVC] anchor in
             guard let self, let editorVC else {
                 overlayHidden?()
                 completion()
                 return
             }
+            guard self.editModeGeneration == generation else { return }
             editorVC.editorDidBecomeReady = nil
             self.pendingSourceScrollAnchor = nil
             self.isSourceScrollAnchorResolved = false
@@ -567,6 +582,7 @@ final class MainSplitViewController: NSSplitViewController {
             var didRevealPreview = false
             let revealPreview = { [weak self, weak editorVC] in
                 guard let self, let editorVC,
+                      self.editModeGeneration == generation,
                       !self.isEditorPreparing, !self.isEditorVisible,
                       !didRevealPreview else { return }
                 didRevealPreview = true
@@ -592,10 +608,11 @@ final class MainSplitViewController: NSSplitViewController {
                     revealPreview()
                 }
             } else {
-                if let anchor {
-                    self.contentViewController?.restoreSourceScrollAnchor(anchor)
+                if let anchor, let preview = self.contentViewController {
+                    preview.restoreSourceScrollAnchor(anchor, completion: revealPreview)
+                } else {
+                    revealPreview()
                 }
-                revealPreview()
             }
             completion()
         }
