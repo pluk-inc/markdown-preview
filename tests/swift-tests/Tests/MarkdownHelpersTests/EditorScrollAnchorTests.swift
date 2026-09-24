@@ -243,15 +243,37 @@ final class EditorScrollAnchorTests: XCTestCase {
                         pinned &&= Math.abs(button.getBoundingClientRect().x - x) < 1;
                     }
                     return { pinned, positions, pageFixed: scrollers.every(s => s.scrollWidth <= s.clientWidth + 1 && s.scrollLeft === 0),
-                        scrollers: scrollers.map(s => [s.scrollWidth, s.clientWidth, s.scrollLeft]),
-                        contained: getComputedStyle(line).overscrollBehaviorX === 'none' };
+                        scrollers: scrollers.map(s => [s.scrollWidth, s.clientWidth, s.scrollLeft]) };
                 })()
                 """)
             let values = try XCTUnwrap(result as? [String: Any])
-            for key in ["pinned", "pageFixed", "contained"] {
+            for key in ["pinned", "pageFixed"] {
                 XCTAssertEqual(values[key] as? Bool, true, "Page scrolling: \(pageScrolling); \(values)")
             }
         }
+    }
+
+    func testCodeScrollPolicyMatchesReadMode() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let markdown = "```text\n" + String(repeating: "long code ", count: 100) + "\n```"
+        var policies: [[String: String]] = []
+        for isEditor in [false, true] {
+            let html = isEditor
+                ? EditorHTML.render(markdown: markdown, editorJavaScript: script)
+                : MarkdownHTML.render(markdown: markdown, allowsScroll: true).html
+            let harness = WebViewLayoutHarness(html: html, width: 500, isEditor: isEditor, height: 400)
+            defer { harness.close() }
+            _ = try await harness.layout(texts: [], imageCount: 0)
+            let result = try await harness.webView.evaluateJavaScript("""
+                (() => {
+                    const style = getComputedStyle(document.querySelector('\(isEditor ? ".cm-md-code-card" : ".md-code-wrap pre")'));
+                    return Object.fromEntries(['overflowX', 'overscrollBehaviorX', 'scrollbarWidth', 'scrollBehavior']
+                        .map(property => [property, style[property]]));
+                })()
+                """)
+            policies.append(try XCTUnwrap(result as? [String: String]))
+        }
+        XCTAssertEqual(policies[0], policies[1])
     }
 
     func testEditorSyntaxColorsMatchPreviewTokenClassesInBothPalettes() async throws {

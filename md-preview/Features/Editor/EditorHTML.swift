@@ -361,8 +361,6 @@ nonisolated enum EditorHTML {
             display: grid;
             grid-template-columns: max-content;
             overflow-x: auto;
-            overscroll-behavior-x: none;
-            scrollbar-width: thin;
             border: 0.5px solid var(--code-border);
             border-radius: 16px;
             background: var(--code-bg);
