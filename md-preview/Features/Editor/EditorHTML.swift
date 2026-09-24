@@ -305,7 +305,7 @@ nonisolated enum EditorHTML {
             transform: translateY(-50%);
             width: 0;
             height: 0;
-            border: 0.2em solid var(--accent);
+            border: 0.2em solid var(--link);
             border-radius: 50%;
         }
         /* Keep the active raw "- " marker in the same hanging box as the
@@ -333,7 +333,7 @@ nonisolated enum EditorHTML {
             box-sizing: border-box;
             font-variant-numeric: tabular-nums;
         }
-        .cm-md-ordered { color: var(--accent); }
+        .cm-md-ordered { color: var(--link); }
         .cm-md-ordered-source { color: var(--secondary); }
         /* Continuation lines of an item keep the depth padding but no hanging
            indent, so they align with the item text like the preview. */

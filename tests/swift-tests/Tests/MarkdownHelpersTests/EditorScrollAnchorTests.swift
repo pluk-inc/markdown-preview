@@ -4,6 +4,41 @@ import XCTest
 
 @MainActor
 final class EditorScrollAnchorTests: XCTestCase {
+    func testListMarkersFollowThemeAccentInReaderAndEditor() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let source = "Introduction\n\n- Bullet\n\n1. Number\n\n[Link](https://example.com)"
+        for isEditor in [false, true] {
+            for dark in [false, true] {
+                let html = isEditor
+                    ? EditorHTML.render(markdown: source, editorJavaScript: script)
+                    : MarkdownHTML.render(markdown: source, allowsScroll: true).html
+                let harness = WebViewLayoutHarness(html: html, width: 650, isEditor: isEditor, height: 500)
+                defer { harness.close() }
+                harness.webView.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+                _ = try await harness.layout(texts: [], imageCount: 0)
+                // Exercise live changes and returning to Original, not only initial rendering.
+                for name in ["Paper", "Graphite", "Original"] {
+                    let preset = try XCTUnwrap(ThemePreset.builtIn.first { $0.name == name })
+                    let css = isEditor ? preset.setting.editorOverrideCSS
+                        : (preset.setting.markdownThemeOverrides?.css ?? "")
+                    let matches = try await harness.webView.callAsyncJavaScript("""
+                        document.getElementById(styleID).textContent = css;
+                        const link = document.querySelector(isEditor ? '.cm-md-link' : 'a');
+                        const bullet = document.querySelector(isEditor ? '.cm-md-bullet' : 'ul > li');
+                        const number = document.querySelector(isEditor ? '.cm-md-ordered' : 'ol > li');
+                        if (!link || !bullet || !number) return false;
+                        const accent = getComputedStyle(link).color;
+                        return getComputedStyle(bullet, isEditor ? '::after' : '::before').borderTopColor === accent
+                            && getComputedStyle(number, isEditor ? null : '::marker').color === accent;
+                        """, arguments: ["styleID": MarkdownHTML.themeStyleElementID,
+                                           "css": css, "isEditor": isEditor],
+                        in: nil, contentWorld: .page) as? Bool
+                    XCTAssertEqual(matches, true, "\(name), dark=\(dark), editor=\(isEditor)")
+                }
+            }
+        }
+    }
+
     func testCodeCardCopyRespectsParsedIndentation() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         for (source, expected) in [("  ```\n  x\n  ```", "x"),

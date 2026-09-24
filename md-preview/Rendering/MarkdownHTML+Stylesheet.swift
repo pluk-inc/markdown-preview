@@ -652,7 +652,7 @@ nonisolated extension MarkdownHTML {
         padding-inline-start: var(--mdp-list-indent);
         padding-inline-end: 0;
     }
-    ol > li::marker { color: var(--accent); font-variant-numeric: tabular-nums; }
+    ol > li::marker { color: var(--link); font-variant-numeric: tabular-nums; }
     /* No text marker: it would paint as a selected box beside every item.
        The gutter comes from the list padding, a 0.4em circle is painted in
        its place, and copying a list yields its Markdown source, bullets
@@ -667,7 +667,7 @@ nonisolated extension MarkdownHTML {
         top: calc(0.5lh - 0.2em);
         width: 0;
         height: 0;
-        border: 0.2em solid var(--accent);
+        border: 0.2em solid var(--link);
         border-radius: 50%;
     }
     li { margin-top: \(listItemSpacing)px; }
