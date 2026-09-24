@@ -27,6 +27,7 @@ extension NSToolbarItem.Identifier {
     static let zoom = NSToolbarItem.Identifier("Zoom")
     static let themesAndSettings = NSToolbarItem.Identifier("ThemesAndSettings")
     static let editDocument = NSToolbarItem.Identifier("EditDocument")
+    static let saveDocument = NSToolbarItem.Identifier("SaveDocument")
     static let navigation = NSToolbarItem.Identifier("Navigation")
     static let alwaysOnTop = NSToolbarItem.Identifier("AlwaysOnTop")
 }
@@ -99,6 +100,7 @@ extension DocumentWindowController {
             .space,
             .openActions,
             .openWith,
+            .saveDocument,
             .editDocument,
             .inspector,
             .share,
@@ -131,6 +133,7 @@ extension DocumentWindowController {
             guard hasLLMTargetsAvailable else { return nil }
             return makeOpenInLLMItem()
         case .editDocument: return makeEditItem(willBeInsertedIntoToolbar: flag)
+        case .saveDocument: return makeSaveItem(willBeInsertedIntoToolbar: flag)
         case .inspector: return makeInspectorItem(willBeInsertedIntoToolbar: flag)
         case .alwaysOnTop: return makeAlwaysOnTopItem(willBeInsertedIntoToolbar: flag)
         case .share: return makeShareItem()
@@ -275,6 +278,47 @@ extension DocumentWindowController {
         item.toolTip = NSLocalizedString("Share document", comment: "Share toolbar item tooltip")
         item.delegate = self
         return item
+    }
+
+    /// Not in the default toolbar -- it is offered in Customize Toolbar for
+    /// people who want it. Enabled only while there is something to save, so
+    /// once added it doubles as the unsaved-changes indicator. It saves
+    /// through saveDocument(_:), the same path as ⌘S, including after edit
+    /// mode has been left with the changes kept.
+    ///
+    /// Icon-only like the other toolbar items; the label still appears in the
+    /// customization palette and in the toolbar's Icon and Text mode.
+    private func makeSaveItem(willBeInsertedIntoToolbar: Bool) -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: .saveDocument)
+        let save = NSLocalizedString("Save", comment: "Save toolbar item label")
+        item.label = save
+        item.paletteLabel = save
+        item.image = NSImage(systemSymbolName: "square.and.arrow.down",
+                             accessibilityDescription: save)
+        item.isBordered = true
+        item.target = self
+        item.action = #selector(saveDocument(_:))
+        // State comes from updateSaveToolbarItem(), not from validation.
+        item.autovalidates = false
+        if willBeInsertedIntoToolbar {
+            saveItem = item
+        }
+        applySaveToolbarState(to: item)
+        return item
+    }
+
+    func updateSaveToolbarItem() {
+        guard let saveItem else { return }
+        applySaveToolbarState(to: saveItem)
+    }
+
+    private func applySaveToolbarState(to item: NSToolbarItem) {
+        let enabled = EditExitPolicy.isSaveCommandEnabled(hasUnsavedChanges: hasUnsavedEditorChanges)
+        let tip = enabled
+            ? NSLocalizedString("Save changes", comment: "Save toolbar item tooltip")
+            : NSLocalizedString("No unsaved changes", comment: "Save toolbar item tooltip when disabled")
+        item.isEnabled = enabled
+        item.toolTip = tip
     }
 
     private func makePrintItem() -> NSToolbarItem {

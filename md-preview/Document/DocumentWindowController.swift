@@ -67,6 +67,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     weak var inspectorButton: NSButton?
     weak var alwaysOnTopButton: NSButton?
     weak var editButton: NSButton?
+    weak var saveItem: NSToolbarItem?
     var editorChangeRevision = 0
     /// In-memory source shown by preview before the user saves it.
     var editorDraftMarkdown: String?
@@ -75,6 +76,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     var isEditorCommitInFlight = false
     var pendingEditorCommitRequested = false
     var pendingCommitShouldExit = false
+    /// The next commit writes through a save panel -- Save As… -- even when
+    /// the document already has a file.
+    var pendingCommitSavesAs = false
     var pendingCommitCompletions: [(Bool) -> Void] = []
     /// When sidebar navigation starts from edit mode, the newly loaded file
     /// should return to edit mode instead of dropping the user into preview.
@@ -97,6 +101,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 stopAutoSaveTimer()
             }
             updateWindowSubtitle()
+            updateSaveToolbarItem()
         }
     }
     /// The formatting bar shown while editing. Not a titlebar accessory:

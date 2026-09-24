@@ -51,7 +51,14 @@ extension DocumentWindowController {
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if menuItem.action == #selector(saveDocument(_:)) {
-            return isEditing || hasPendingEditorChanges
+            return EditExitPolicy.isSaveCommandEnabled(hasUnsavedChanges: hasUnsavedEditorChanges)
+        }
+        if menuItem.action == #selector(saveDocumentAs(_:)) {
+            return EditExitPolicy.isSaveAsCommandEnabled(hasDocument: canToggleEditMode)
+        }
+        if menuItem.action == #selector(revertDocumentToSaved(_:)) {
+            return EditExitPolicy.isRevertCommandEnabled(hasUnsavedChanges: hasUnsavedEditorChanges,
+                                                         hasFile: currentFileURL != nil)
         }
         if menuItem.action == #selector(searchForDocument(_:)) {
             // Greyed out rather than opening a palette with nothing to search.

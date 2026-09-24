@@ -80,7 +80,7 @@ extension DocumentWindowController {
 
     func toggleEditMode() {
         if isEditing {
-            previewPendingEdits()
+            requestExitEditMode()
         } else {
             // Enter without placing a caret or selecting the toolbar search
             // field. Clicking the document will focus the editor explicitly.
