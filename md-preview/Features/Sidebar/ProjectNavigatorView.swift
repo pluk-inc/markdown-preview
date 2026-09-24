@@ -459,9 +459,16 @@ extension ProjectNavigatorView: NSOutlineViewDelegate {
         }
 
         cell.textField?.stringValue = node.displayName
-        let icon = NSWorkspace.shared.icon(forFile: node.url.path)
-        icon.size = NSSize(width: 16, height: 16)
-        cell.imageView?.image = icon
+        if node.isDirectory {
+            cell.imageView?.image = NSImage(systemSymbolName: "folder.fill",
+                                           accessibilityDescription: "Folder")
+            cell.imageView?.contentTintColor = .secondaryLabelColor
+        } else {
+            let icon = NSWorkspace.shared.icon(forFile: node.url.path)
+            icon.size = NSSize(width: 16, height: 16)
+            cell.imageView?.image = icon
+            cell.imageView?.contentTintColor = nil
+        }
         let row = outlineView.row(forItem: node)
         cell.textField?.textColor = row >= 0 && row == outlineView.selectedRow
             ? (themeAccent ?? .controlAccentColor)
