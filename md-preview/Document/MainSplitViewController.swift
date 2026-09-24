@@ -551,12 +551,15 @@ final class MainSplitViewController: NSSplitViewController {
     }
 
     /// `overlayHidden` fires after the visibility swap, so editing chrome can
-    /// be dismissed without reflowing the outgoing editor.
+    /// be dismissed without reflowing the outgoing editor. Completion also waits
+    /// for that swap; callers may navigate or enter another editing session.
     func exitEditMode(waitForPreviewRender: Bool,
+                      renderPreview: (() -> Void)? = nil,
                       overlayHidden: (@MainActor () -> Void)? = nil,
                       completion: @escaping () -> Void) {
         if isEditorExiting {
             pendingExitCompletions.append {
+                renderPreview?()
                 overlayHidden?()
                 completion()
             }
@@ -564,6 +567,7 @@ final class MainSplitViewController: NSSplitViewController {
         }
         guard let editorVC = cachedEditorViewController,
               isEditorPreparing || isEditorVisible else {
+            renderPreview?()
             overlayHidden?()
             completion()
             return
@@ -609,7 +613,7 @@ final class MainSplitViewController: NSSplitViewController {
                 self.contentViewController?.view.isHidden = false
                 self.refreshFindAfterModeChange()
                 overlayHidden?()
-                if !waitForPreviewRender { completion() }
+                completion()
                 pendingCompletions.forEach { $0() }
             }
 
@@ -623,16 +627,15 @@ final class MainSplitViewController: NSSplitViewController {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                     revealPreview()
                 }
+                renderPreview?()
             } else {
+                renderPreview?()
                 if let anchor, let preview = self.contentViewController {
                     preview.restoreSourceScrollAnchor(anchor, completion: revealPreview)
                 } else {
                     revealPreview()
                 }
             }
-            // Rendering is started by this callback. No-render exits instead
-            // complete from revealPreview, after the asynchronous restoration.
-            if waitForPreviewRender { completion() }
         }
     }
 

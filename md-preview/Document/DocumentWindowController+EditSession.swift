@@ -448,7 +448,10 @@ extension DocumentWindowController {
             else { self?.updateEditToolbarItem() }
         }
         split.exitEditMode(waitForPreviewRender: rerender,
-                           overlayHidden: overlayHidden) { [weak self] in
+                           renderPreview: { [weak self] in
+            guard rerender, let self, let markdown = self.currentMarkdown else { return }
+            self.renderCurrentDocument(text: markdown, fileURL: self.currentFileURL)
+        }, overlayHidden: overlayHidden) { [weak self] in
             guard let self else {
                 completion()
                 return
@@ -458,9 +461,6 @@ extension DocumentWindowController {
             }
             if self.editBar == nil {
                 self.updateEditToolbarItem()
-            }
-            if rerender, let markdown = self.currentMarkdown {
-                self.renderCurrentDocument(text: markdown, fileURL: self.currentFileURL)
             }
             completion()
         }

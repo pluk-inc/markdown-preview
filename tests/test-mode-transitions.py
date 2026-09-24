@@ -109,13 +109,26 @@ swift += '''
     b.isEditorVisible = true
     b.contentViewController!.view.isHidden = true
     var renderStarts = 0
-    b.exitEditMode(waitForPreviewRender: true, completion: { renderStarts += 1 })
+    var navigationStarts = 0
+    b.exitEditMode(waitForPreviewRender: true,
+                   renderPreview: { renderStarts += 1 },
+                   completion: {
+        precondition(!b.isEditingDocument, "Navigation must wait until editing has ended")
+        navigationStarts += 1
+        _ = b.enterEditMode(markdown: "next file")
+    })
     b.cachedEditorViewController!.anchorCallback?(SourceScrollAnchor())
     precondition(renderStarts == 1, "Render-wait exit must start rendering before reveal")
+    precondition(navigationStarts == 0, "Navigation began while the outgoing editor was exiting")
     precondition(b.contentViewController!.view.isHidden, "Render-wait exit revealed too early")
     let oldDeadline = DispatchQueue.main.deadlines.last!
     b.contentViewController!.pendingAnchorRestored?()
+    precondition(navigationStarts == 1, "Navigation did not complete after the swap")
+    precondition(b.isEditorPreparing, "Next file could not enter edit mode")
+    oldDeadline()
+    precondition(navigationStarts == 1, "Fallback repeated navigation")
     // A new entry completes before a second anchored exit begins.
+    b.isEditorPreparing = false
     b.isEditorVisible = true
     b.contentViewController!.view.isHidden = true
     b.contentViewController!.pendingAnchorRestored = nil
@@ -148,7 +161,26 @@ swift += '''
     d.exitEditMode(waitForPreviewRender: false, completion: { immediate += 1 })
     d.cachedEditorViewController!.anchorCallback?(nil)
     precondition(immediate == 1 && !d.isEditingDocument, "No-anchor exit must settle immediately")
-    print("PASS: preparation cancellation, stale deadline rejection, and restoration ordering")
+    let e = Controller()
+    e.isEditorVisible = true
+    var events: [String] = []
+    e.exitEditMode(waitForPreviewRender: true,
+                   renderPreview: { events.append("render") },
+                   completion: { events.append("complete") })
+    e.cachedEditorViewController!.anchorCallback?(nil)
+    precondition(events == ["render", "complete"], "Unanchored render must precede navigation")
+
+    let f = Controller()
+    f.isEditorVisible = true
+    var fallbackCompletions = 0
+    f.exitEditMode(waitForPreviewRender: true, completion: { fallbackCompletions += 1 })
+    f.cachedEditorViewController!.anchorCallback?(SourceScrollAnchor())
+    let fallback = DispatchQueue.main.deadlines.last!
+    fallback()
+    fallback()
+    precondition(fallbackCompletions == 1 && !f.isEditingDocument,
+                 "Missing render callback must still finish navigation exactly once")
+    print("PASS: preparation cancellation, stale deadline rejection, restoration ordering, and file navigation")
 }
 await probe()
 '''

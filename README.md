@@ -67,7 +67,7 @@ Or grab the latest signed and notarized DMG from the [Releases](https://github.c
 - **Mermaid diagrams** — fenced `mermaid` code blocks render as diagrams in both the app and Quick Look previews, using a bundled renderer so previews work offline without a CDN request.
 - **Math equations** — LaTeX inline (`$x_1 + x_2$`), display (`$$\int_0^1 x^2\,dx$$`), and fenced `math` blocks render with a bundled KaTeX. Selecting a rendered formula and copying yields the original LaTeX source (via the official `copy-tex` extension).
 - **Document outline** — sidebar TOC that mirrors your headings; click to jump.
-- **File navigator** — browse Markdown files in the sidebar. Click a folder's name, icon, or empty row space to expand or collapse it, or use its disclosure triangle. Click a file to open its preview.
+- **File navigator** — browse Markdown files in the sidebar. Click a folder's name, icon, or empty row space to expand or collapse it, or use its disclosure triangle. Click a file to open it in the current reading or editing mode.
 - **Inspector panel** — toggleable side panel with file metadata.
 - **In-document search** — toolbar search field plus standard <kbd>⌘F</kbd> / <kbd>⌘G</kbd> / <kbd>⌘⇧G</kbd> for next/previous match.
 - **Open With** — switch to your real editor (VS Code, Cursor, Zed, Sublime, BBEdit, Nova, CotEditor, TextMate, MacVim, Xcode, TextEdit) without leaving the preview. The list filters to apps that actually declare an editor role for Markdown, and remembers your pick.
