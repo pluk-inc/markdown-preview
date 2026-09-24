@@ -121,9 +121,6 @@ extension DocumentWindowController {
 
         mainSplit?.installFormattingBar(container)
         editBar = container
-        if #available(macOS 27.0, *) {
-            findBarHairline?.isHidden = false
-        }
     }
 
     /// Xcode's Markdown canvas uses compact, independently shaped glass
@@ -157,6 +154,11 @@ extension DocumentWindowController {
                         action: Selector,
                         width: CGFloat) -> NSButton {
             let button = NSButton(title: title ?? "", target: self, action: action)
+            if #available(macOS 27.0, *), title != nil {
+                button.cell = CenteredFormattingButtonCell(textCell: title ?? "")
+                button.target = self
+                button.action = action
+            }
             let primaryImage = symbol.flatMap {
                 NSImage(systemSymbolName: $0, accessibilityDescription: tip)?
                     .withSymbolConfiguration(symbolConfig)
@@ -236,16 +238,19 @@ extension DocumentWindowController {
         let container = EditAccessoryContainerView(floatingGlass: true)
         container.addSubview(groups)
         container.cursorContentView = groups
-        // Separate the header from the editing surface without putting a
-        // background strip behind the floating glass controls.
-        let headerSeparator = NSBox()
-        headerSeparator.boxType = .separator
-        headerSeparator.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(headerSeparator)
+        // macOS 27 supplies the native header edge; only macOS 26 needs this.
+        if #unavailable(macOS 27.0) {
+            let headerSeparator = NSBox()
+            headerSeparator.boxType = .separator
+            headerSeparator.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(headerSeparator)
+            NSLayoutConstraint.activate([
+                headerSeparator.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                headerSeparator.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                headerSeparator.topAnchor.constraint(equalTo: container.topAnchor),
+            ])
+        }
         NSLayoutConstraint.activate([
-            headerSeparator.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            headerSeparator.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            headerSeparator.topAnchor.constraint(equalTo: container.topAnchor),
             // Float at the editor's trailing edge, independent of the page's
             // text gutter or centered reading column.
             groups.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: 12),
@@ -256,9 +261,6 @@ extension DocumentWindowController {
 
         mainSplit?.installFormattingBar(container)
         editBar = container
-        if #available(macOS 27.0, *) {
-            findBarHairline?.isHidden = false
-        }
     }
 
     @available(macOS 26.0, *)
@@ -346,9 +348,6 @@ extension DocumentWindowController {
         guard editBar != nil else { return }
         mainSplit?.removeFormattingBar()
         editBar = nil
-        if #available(macOS 27.0, *) {
-            findBarHairline?.isHidden = true
-        }
     }
 
     /// Leaves edit-mode chrome as one operation: drops the formatting bar
@@ -525,9 +524,15 @@ extension DocumentWindowController {
         button.title = level == 0
             ? NSLocalizedString("Body", comment: "Formatting toolbar body style")
             : String(format: NSLocalizedString("Heading %d", comment: "Formatting toolbar heading"), level)
+        let padding: CGFloat
+        if #available(macOS 27.0, *) {
+            padding = 16
+        } else {
+            padding = 12
+        }
         button.constraints.first {
             $0.firstAttribute == .width && $0.secondItem == nil
-        }?.constant = max(70, ceil(button.intrinsicContentSize.width) + 12)
+        }?.constant = max(70, ceil(button.intrinsicContentSize.width) + padding)
     }
 
     @objc private func showMoreFormattingMenu(_ sender: NSButton) {
@@ -876,6 +881,29 @@ private struct HeadingFormatPopover: View {
         }
         .padding(8)
         .frame(width: 200)
+    }
+}
+
+/// Center the label and chevron as one face, independently of AppKit's
+/// borderless trailing-image baseline. The entire capsule remains clickable.
+@available(macOS 27.0, *)
+private final class CenteredFormattingButtonCell: NSButtonCell {
+    override func drawInterior(withFrame cellFrame: NSRect, in controlView: NSView) {
+        let label = NSAttributedString(string: title, attributes: [
+            .font: font ?? NSFont.systemFont(ofSize: 13, weight: .medium),
+            .foregroundColor: isEnabled ? NSColor.textColor : NSColor.disabledControlTextColor,
+        ])
+        let labelSize = label.size()
+        let imageSize = image?.size ?? .zero
+        let gap: CGFloat = 5
+        let contentWidth = labelSize.width + gap + imageSize.width
+        let leadingX = cellFrame.midX - contentWidth / 2
+        label.draw(at: NSPoint(x: leadingX, y: cellFrame.midY - labelSize.height / 2))
+        image?.draw(in: NSRect(x: leadingX + labelSize.width + gap,
+                              y: cellFrame.midY - imageSize.height / 2,
+                              width: imageSize.width, height: imageSize.height),
+                    from: .zero, operation: .sourceOver,
+                    fraction: isEnabled ? 1 : 0.5, respectFlipped: true, hints: nil)
     }
 }
 
