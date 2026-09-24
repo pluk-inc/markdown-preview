@@ -167,6 +167,58 @@ final class EditorScrollAnchorTests: XCTestCase {
         }
     }
 
+    func testCodeCardBackgroundStaysInsideScrollport() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        for multiline in [false, true] {
+            let code = String(repeating: "long code text ", count: 30)
+                + (multiline ? "\nshort last line" : "")
+            let editor = WebViewLayoutHarness(html: EditorHTML.render(
+                markdown: "```text\n" + code + "\n```", editorJavaScript: script),
+                width: 500, isEditor: true, height: 600)
+            defer { editor.close() }
+            _ = try await editor.layout(texts: [], imageCount: 0)
+            let result = try await editor.webView.callAsyncJavaScript("""
+                const settle = async () => { for (let i = 0; i < 8; i++) {
+                    window.__layoutTestFrame(); await new Promise(r => setTimeout(r, 15));
+                }};
+                const lines = () => [...document.querySelectorAll('[data-code-scroll-group]')];
+                const measurements = [];
+                const measure = () => {
+                    for (const line of lines()) {
+                        const card = getComputedStyle(line, '::before');
+                        const translation = card.transform === 'none' ? 0 : new DOMMatrix(card.transform).m41;
+                        measurements.push({
+                            widthError: Math.abs(parseFloat(card.width) - line.clientWidth),
+                            offsetError: Math.abs(translation - line.scrollLeft),
+                            rounded: (!line.classList.contains('cm-md-codeblock-first') || parseFloat(card.borderTopRightRadius) > 0)
+                                && (!line.classList.contains('cm-md-codeblock-last') || parseFloat(card.borderBottomRightRadius) > 0)
+                        });
+                    }
+                };
+                const overflow = lines()[0].scrollWidth - lines()[0].clientWidth;
+                for (const offset of [0, 120, overflow]) {
+                    lines()[0].scrollLeft = offset;
+                    await settle();
+                    measure();
+                }
+                document.querySelector('.cm-md-code-toggle-wrap').click();
+                await settle();
+                measure();
+                document.querySelector('.cm-md-code-toggle-wrap').click();
+                await settle();
+                measure();
+                return { overflow, measurements };
+                """, arguments: [:], in: nil, contentWorld: .page)
+            let values = try XCTUnwrap(result as? [String: Any])
+            XCTAssertGreaterThan(try XCTUnwrap(values["overflow"] as? Double), 120)
+            for measurement in try XCTUnwrap(values["measurements"] as? [[String: Any]]) {
+                XCTAssertLessThanOrEqual(try XCTUnwrap(measurement["widthError"] as? Double), 1)
+                XCTAssertLessThanOrEqual(try XCTUnwrap(measurement["offsetError"] as? Double), 1)
+                XCTAssertEqual(measurement["rounded"] as? Bool, true)
+            }
+        }
+    }
+
     func testEditorSyntaxColorsMatchPreviewTokenClassesInBothPalettes() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let editor = WebViewLayoutHarness(

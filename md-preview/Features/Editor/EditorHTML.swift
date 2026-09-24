@@ -380,7 +380,8 @@ nonisolated enum EditorHTML {
             inset: 0;
             z-index: -2;
             background: var(--code-bg);
-            min-width: calc(var(--code-scroll-width, 0px) + 32px);
+            /* Keep the card edges at the scrollport, not the end of the code. */
+            transform: translateX(var(--code-scroll-offset, 0px));
         }
         #editor .cm-content > .cm-line.cm-md-codeblock-first {
             padding-top: 16px;
@@ -454,7 +455,7 @@ nonisolated enum EditorHTML {
         #editor .cm-md-code-action:focus-visible { outline: 2px solid AccentColor; outline-offset: 1px; }
         #editor .cm-content.cm-lineWrapping > .cm-md-code-wrapped { white-space: pre-wrap; overflow-wrap: anywhere; }
         #editor .cm-md-code-wrapped .cm-md-code-scroll-text { display: inline; min-width: 0; }
-        #editor .cm-md-code-wrapped::before { min-width: 0; }
+        #editor .cm-md-code-wrapped::before { transform: none; }
         #editor .cm-md-code-wrapped .cm-md-code-language { transform: none; }
         #editor .cm-md-code-language-input::placeholder {
             color: var(--secondary);
