@@ -33,12 +33,20 @@ struct Deadline { static func now() -> Self { Self() }; static func +(lhs: Self,
         func asyncAfter(deadline: Deadline, execute: @escaping () -> Void) { deadlines.append(execute) }
     }
 }
-@MainActor final class View { var alphaValue: Double = 1; var isHidden = false }
+@MainActor final class View {
+    var alphaValue: Double = 1; var isHidden = false
+    var translatesAutoresizingMaskIntoConstraints = true
+}
+@MainActor final class Host { func installEditorOverlay(_ editor: EditorViewController) {} }
 @MainActor final class EditorViewController {
     let view = View()
     var editorDidBecomeReady: (() -> Void)?
     var anchorCallback: ((SourceScrollAnchor?) -> Void)?
     var scrollCallback: (() -> Void)?
+    var findOverlay: View?
+    func loadViewIfNeeded() {}
+    func load(markdown: String, assetBaseURL: URL?) {}
+    func applyPageZoom(_ zoom: Double) {}
     func fetchScrollAnchor(_ body: @escaping (SourceScrollAnchor?) -> Void) { anchorCallback = body }
     func applyScrollProgress(_ p: Double, sourceAnchor: SourceScrollAnchor?, completion: @escaping () -> Void) { scrollCallback = completion }
     func focusEditor() {}
@@ -47,6 +55,9 @@ struct Deadline { static func now() -> Self { Self() }; static func +(lhs: Self,
     let view = View()
     var pendingAnchorRestored: (() -> Void)?
     var restoreCompletion: (() -> Void)?
+    var pageZoom: Double = 1
+    var scrollProgress: Double = 0
+    func sourceScrollAnchor(_ completion: (SourceScrollAnchor?) -> Void) { completion(nil) }
     func prepareToRestoreSourceScrollAnchor(_ anchor: SourceScrollAnchor?) {}
     func restoreSourceScrollAnchor(_ anchor: SourceScrollAnchor, completion: (() -> Void)? = nil) { restoreCompletion = completion }
 }
@@ -55,6 +66,11 @@ struct Deadline { static func now() -> Self { Self() }; static func +(lhs: Self,
     var contentViewController: Preview? = Preview()
     var isEditorPreparing = false
     var isEditorVisible = false
+    var isEditorExiting = false
+    var pendingExitCompletions: [() -> Void] = []
+    var layeredContentViewController: Host? = Host()
+    var findOverlayView: View?
+    var editorViewController: EditorViewController? { isEditingDocument ? cachedEditorViewController : nil }
     var editModeGeneration = UUID()
     var pendingSourceScrollAnchor: SourceScrollAnchor?
     var isSourceScrollAnchorResolved = true
@@ -63,26 +79,45 @@ struct Deadline { static func now() -> Self { Self() }; static func +(lhs: Self,
     var shouldAutofocusEditor = false
     func refreshFindAfterModeChange() {}
 '''
-swift += method('private func revealEditorIfPrepared') + '\n' + method('func exitEditMode') + '\n}\n'
+swift += '\n'.join(method(name) for name in [
+    'var isEditingDocument:', 'func enterEditMode',
+    'private func revealEditorIfPrepared', 'func exitEditMode'
+]) + '\n}\n'
 swift += '''
 @MainActor func probe() {
     let a = Controller()
     a.isEditorPreparing = true
     a.cachedEditorViewController!.view.alphaValue = 0
-    a.exitEditMode(waitForPreviewRender: true, completion: {})
     a.revealEditorIfPrepared(a.cachedEditorViewController!)
-    a.cachedEditorViewController!.scrollCallback?()
+    let queuedEntry = a.cachedEditorViewController!.scrollCallback!
+    var exitCount = 0
+    a.exitEditMode(waitForPreviewRender: false, completion: { exitCount += 1 })
+    queuedEntry()
     DispatchQueue.main.pending.forEach { $0() }
     precondition(!a.isEditorVisible, "Exit during preparation must cancel reveal")
+    let exitGeneration = a.editModeGeneration
+    _ = a.enterEditMode(markdown: "new entry")
+    precondition(a.editModeGeneration == exitGeneration, "Entry invalidated a pending exit")
+    precondition(a.isEditingDocument, "Pending exit lost its editing state")
+    a.cachedEditorViewController!.anchorCallback?(SourceScrollAnchor())
+    precondition(exitCount == 0, "Exit completed before restoration")
+    a.contentViewController!.restoreCompletion?()
+    precondition(exitCount == 1, "Exit completion was lost")
+    precondition(!a.isEditingDocument, "Completed exit still reports editing")
 
     let b = Controller()
     b.isEditorVisible = true
     b.contentViewController!.view.isHidden = true
-    b.exitEditMode(waitForPreviewRender: true, completion: {})
+    var renderStarts = 0
+    b.exitEditMode(waitForPreviewRender: true, completion: { renderStarts += 1 })
     b.cachedEditorViewController!.anchorCallback?(SourceScrollAnchor())
+    precondition(renderStarts == 1, "Render-wait exit must start rendering before reveal")
+    precondition(b.contentViewController!.view.isHidden, "Render-wait exit revealed too early")
     let oldDeadline = DispatchQueue.main.deadlines.last!
+    b.contentViewController!.pendingAnchorRestored?()
     // A new entry completes before a second anchored exit begins.
     b.isEditorVisible = true
+    b.contentViewController!.view.isHidden = true
     b.contentViewController!.pendingAnchorRestored = nil
     b.exitEditMode(waitForPreviewRender: true, completion: {})
     b.cachedEditorViewController!.anchorCallback?(SourceScrollAnchor())
@@ -95,12 +130,24 @@ swift += '''
     let c = Controller()
     c.isEditorVisible = true
     c.contentViewController!.view.isHidden = true
-    c.exitEditMode(waitForPreviewRender: false, completion: {})
+    var completed = 0
+    c.exitEditMode(waitForPreviewRender: false, completion: { completed += 1 })
+    var duplicateCompleted = 0
+    c.exitEditMode(waitForPreviewRender: false, completion: { duplicateCompleted += 1 })
     c.cachedEditorViewController!.anchorCallback?(SourceScrollAnchor())
     precondition(c.contentViewController!.view.isHidden, "Preview revealed before restoration")
+    precondition(completed == 0 && duplicateCompleted == 0, "No-render exit completed too early")
     c.contentViewController!.restoreCompletion?()
     precondition(!c.contentViewController!.view.isHidden, "Completed restoration must reveal preview")
     precondition(c.cachedEditorViewController!.view.isHidden, "Completed exit must hide editor")
+    c.contentViewController!.restoreCompletion?()
+    precondition(completed == 1 && duplicateCompleted == 1, "Exit callbacks must settle exactly once")
+    let d = Controller()
+    d.isEditorVisible = true
+    var immediate = 0
+    d.exitEditMode(waitForPreviewRender: false, completion: { immediate += 1 })
+    d.cachedEditorViewController!.anchorCallback?(nil)
+    precondition(immediate == 1 && !d.isEditingDocument, "No-anchor exit must settle immediately")
     print("PASS: preparation cancellation, stale deadline rejection, and restoration ordering")
 }
 await probe()

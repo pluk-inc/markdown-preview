@@ -443,9 +443,10 @@ extension DocumentWindowController {
         split.editorViewController?.pasteImageRequested = nil
         split.editorViewController?.imageClicked = nil
         documentWindow.makeFirstResponder(nil)
-        let overlayHidden: (() -> Void)? = hidesAccessoryAfterSwap
-            ? { [weak self] in self?.dismissEditChrome() }
-            : nil
+        let overlayHidden: @MainActor () -> Void = { [weak self] in
+            if hidesAccessoryAfterSwap { self?.dismissEditChrome() }
+            else { self?.updateEditToolbarItem() }
+        }
         split.exitEditMode(waitForPreviewRender: rerender,
                            overlayHidden: overlayHidden) { [weak self] in
             guard let self else {

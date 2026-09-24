@@ -323,6 +323,8 @@ final class MainSplitViewController: NSSplitViewController {
     private var cachedEditorViewController: EditorViewController?
     private var isEditorPreparing = false
     private var isEditorVisible = false
+    private var isEditorExiting = false
+    private var pendingExitCompletions: [() -> Void] = []
     private var editModeGeneration = UUID()
     private var pendingSourceScrollAnchor: SourceScrollAnchor?
     private var isSourceScrollAnchorResolved = false
@@ -331,7 +333,7 @@ final class MainSplitViewController: NSSplitViewController {
     private var shouldAutofocusEditor = false
 
     var isEditingDocument: Bool {
-        isEditorPreparing || isEditorVisible
+        isEditorPreparing || isEditorVisible || isEditorExiting
     }
 
     var editorViewController: EditorViewController? {
@@ -342,6 +344,8 @@ final class MainSplitViewController: NSSplitViewController {
     func enterEditMode(markdown: String,
                        assetBaseURL: URL? = nil,
                        autofocus: Bool = false) -> EditorViewController {
+        // Do not invalidate an exit that still owes its caller a completion.
+        if isEditorExiting, let editor = cachedEditorViewController { return editor }
         if let editor = editorViewController {
             editor.load(markdown: markdown, assetBaseURL: assetBaseURL)
             if autofocus {
@@ -378,9 +382,8 @@ final class MainSplitViewController: NSSplitViewController {
         isEditorDOMReady = false
         pendingPreviewScrollProgress = previewScrollProgress
         shouldAutofocusEditor = autofocus
-        // A rapid re-entry can interrupt a previous exit whose anchor
-        // restore is still pending; drop that machinery so it can't fire
-        // into the new editing session.
+        // A completed exit may still have a fallback deadline scheduled.
+        // Clear its restoration machinery before the next editing session.
         contentViewController?.prepareToRestoreSourceScrollAnchor(nil)
         contentViewController?.pendingAnchorRestored = nil
         // Ensure preview is visible during the prepare phase — a rapid mode
@@ -552,6 +555,13 @@ final class MainSplitViewController: NSSplitViewController {
     func exitEditMode(waitForPreviewRender: Bool,
                       overlayHidden: (@MainActor () -> Void)? = nil,
                       completion: @escaping () -> Void) {
+        if isEditorExiting {
+            pendingExitCompletions.append {
+                overlayHidden?()
+                completion()
+            }
+            return
+        }
         guard let editorVC = cachedEditorViewController,
               isEditorPreparing || isEditorVisible else {
             overlayHidden?()
@@ -562,6 +572,7 @@ final class MainSplitViewController: NSSplitViewController {
         // That asynchronous request must not leave the reveal path enabled.
         let generation = UUID()
         editModeGeneration = generation
+        isEditorExiting = true
         isEditorPreparing = false
         editorVC.editorDidBecomeReady = nil
         editorVC.fetchScrollAnchor { [weak self, weak editorVC] anchor in
@@ -586,6 +597,9 @@ final class MainSplitViewController: NSSplitViewController {
                       !self.isEditorPreparing, !self.isEditorVisible,
                       !didRevealPreview else { return }
                 didRevealPreview = true
+                self.isEditorExiting = false
+                let pendingCompletions = self.pendingExitCompletions
+                self.pendingExitCompletions.removeAll()
                 self.contentViewController?.pendingAnchorRestored = nil
                 // Hide the transparent editor before exposing the reader.
                 // Also finish correctly when exiting during preparation,
@@ -595,6 +609,8 @@ final class MainSplitViewController: NSSplitViewController {
                 self.contentViewController?.view.isHidden = false
                 self.refreshFindAfterModeChange()
                 overlayHidden?()
+                if !waitForPreviewRender { completion() }
+                pendingCompletions.forEach { $0() }
             }
 
             if waitForPreviewRender, anchor != nil {
@@ -614,7 +630,9 @@ final class MainSplitViewController: NSSplitViewController {
                     revealPreview()
                 }
             }
-            completion()
+            // Rendering is started by this callback. No-render exits instead
+            // complete from revealPreview, after the asynchronous restoration.
+            if waitForPreviewRender { completion() }
         }
     }
 
