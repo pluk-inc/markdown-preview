@@ -30,7 +30,7 @@ nonisolated extension MarkdownHTML {
         --tertiary: -apple-system-tertiary-label;
         --quote-border: -apple-system-quaternary-label;
         --grid: -apple-system-separator;
-        --accent: -apple-system-control-accent;
+        --accent: var(--link);
         --link: rgb(0, 104, 218);
         --aside-bg: #f5f5f7;
         --aside-border: #696969;

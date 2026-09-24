@@ -41,7 +41,7 @@ nonisolated enum EditorHTML {
             --secondary: -apple-system-secondary-label;
             --quote-border: -apple-system-quaternary-label;
             --grid: -apple-system-separator;
-            --accent: -apple-system-control-accent;
+            --accent: var(--link);
             --link: rgb(0, 104, 218);
             --code-bg: #f9f9f9;
             --code-border: #f0f0f0;
@@ -559,7 +559,6 @@ nonisolated enum EditorHTML {
         }
         .cm-md-table-grid th {
             font-weight: 600;
-            background: color-mix(in srgb, Canvas 94%, var(--grid));
         }
         .cm-md-table-cell {
             min-height: calc(\(MarkdownHTML.bodyFontSize)px * \(MarkdownHTML.bodyLineHeight));

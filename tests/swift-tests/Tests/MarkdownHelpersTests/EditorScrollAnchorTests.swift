@@ -4,7 +4,7 @@ import XCTest
 
 @MainActor
 final class EditorScrollAnchorTests: XCTestCase {
-    func testListMarkersFollowThemeAccentInReaderAndEditor() async throws {
+    func testDocumentControlsFollowThemeAccentInReaderAndEditor() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let source = "Introduction\n\n- Bullet\n\n1. Number\n\n[Link](https://example.com)"
         for isEditor in [false, true] {
@@ -28,12 +28,63 @@ final class EditorScrollAnchorTests: XCTestCase {
                         const number = document.querySelector(isEditor ? '.cm-md-ordered' : 'ol > li');
                         if (!link || !bullet || !number) return false;
                         const accent = getComputedStyle(link).color;
-                        return getComputedStyle(bullet, isEditor ? '::after' : '::before').borderTopColor === accent
+                        const listsMatch = getComputedStyle(bullet, isEditor ? '::after' : '::before').borderTopColor === accent
                             && getComputedStyle(number, isEditor ? null : '::marker').color === accent;
+                        const table = document.createElement('table');
+                        table.className = isEditor ? 'cm-md-table-grid' : 'md-table-editor';
+                        const header = document.createElement('th');
+                        header.textContent = 'Header';
+                        table.createTHead().insertRow().append(header);
+                        const td = table.insertRow().insertCell();
+                        const cell = isEditor ? td.appendChild(document.createElement('div')) : td;
+                        cell.className = isEditor ? 'cm-md-table-cell' : 'is-editing';
+                        cell.contentEditable = 'true';
+                        document.body.append(table);
+                        const headerClear = getComputedStyle(header).backgroundColor === 'rgba(0, 0, 0, 0)';
+                        // This harness has no key window, so WebKit does not apply :focus.
+                        // Evaluate the actual production focus declaration through a test class.
+                        const focusStyle = document.createElement('style');
+                        if (isEditor) {
+                            const rule = [...document.styleSheets].flatMap(sheet => [...sheet.cssRules])
+                                .find(rule => rule.selectorText === '.cm-md-table-cell:focus');
+                            if (!rule) return 'missing focus rule';
+                            focusStyle.textContent = '.theme-focus-probe {' + rule.style.cssText + '}';
+                            document.head.append(focusStyle);
+                            cell.classList.add('theme-focus-probe');
+                        }
+                        const expected = document.createElement('span');
+                        expected.style.background = 'color-mix(in srgb, var(--link) 8%, transparent)';
+                        document.body.append(expected);
+                        const focusMatches = getComputedStyle(cell).outlineColor === accent
+                            && getComputedStyle(cell).backgroundColor === getComputedStyle(expected).backgroundColor;
+                        focusStyle.remove();
+                        cell.classList.remove('theme-focus-probe');
+                        cell.classList.remove('is-editing');
+                        cell.classList.add('is-table-part-selected', 'is-table-selection-top',
+                            'is-table-selection-right', 'is-table-selection-bottom', 'is-table-selection-left');
+                        expected.style.background = 'color-mix(in srgb, var(--link) 14%, Canvas)';
+                        expected.style.boxShadow = [
+                            'inset 0 1px', 'inset -1px 0', 'inset 0 -1px', 'inset 1px 0'
+                        ].map(edge => edge + ' color-mix(in srgb, var(--link) 52%, transparent)').join(',');
+                        const selectionMatches = getComputedStyle(cell).backgroundColor === getComputedStyle(expected).backgroundColor
+                            && getComputedStyle(cell).boxShadow === getComputedStyle(expected).boxShadow;
+                        let checkboxMatches = true;
+                        if (!isEditor) {
+                            const checkbox = document.createElement('input');
+                            checkbox.type = 'checkbox'; checkbox.checked = true;
+                            checkbox.className = 'task-list-item-checkbox';
+                            document.body.append(checkbox);
+                            checkboxMatches = getComputedStyle(checkbox).backgroundColor === accent
+                                && getComputedStyle(checkbox).borderTopColor === accent;
+                            checkbox.remove();
+                        }
+                        const details = JSON.stringify({listsMatch, focusMatches, selectionMatches, checkboxMatches, headerClear});
+                        table.remove(); expected.remove();
+                        return listsMatch && focusMatches && selectionMatches && checkboxMatches && headerClear ? 'pass' : details;
                         """, arguments: ["styleID": MarkdownHTML.themeStyleElementID,
                                            "css": css, "isEditor": isEditor],
-                        in: nil, contentWorld: .page) as? Bool
-                    XCTAssertEqual(matches, true, "\(name), dark=\(dark), editor=\(isEditor)")
+                        in: nil, contentWorld: .page) as? String
+                    XCTAssertEqual(matches, "pass", "\(name), dark=\(dark), editor=\(isEditor)")
                 }
             }
         }
