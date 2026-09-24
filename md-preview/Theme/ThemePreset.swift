@@ -99,9 +99,30 @@ nonisolated struct ThemePreset: Identifiable, Equatable, Sendable {
 
     static let appliedPresetKey = "MarkdownPreview.theme.appliedPreset"
 
+    // Identity and saved looks must have the same owner as the active colors,
+    // font, layout, and appearance, including across release/debug builds.
+    static var defaults: UserDefaults { AppearanceMode.sharedDefaults() ?? .standard }
+
+    static func migrateLegacyValues(from legacy: UserDefaults = .standard,
+                                    to shared: UserDefaults = defaults) {
+        // Once a shared identity exists it is authoritative. A second app's
+        // stale local identity must never replace it or its saved looks.
+        guard shared.string(forKey: appliedPresetKey) == nil else { return }
+        for preset in builtIn where shared.data(forKey: preset.savedLookKey) == nil {
+            if let data = legacy.data(forKey: preset.savedLookKey) {
+                shared.set(data, forKey: preset.savedLookKey)
+            }
+        }
+        shared.set(applied(in: legacy).id, forKey: appliedPresetKey)
+    }
+
+    func recordApplied(in defaults: UserDefaults = Self.defaults) {
+        defaults.set(id, forKey: Self.appliedPresetKey)
+    }
+
     /// Identity is explicit: custom colors never select a preset by coincidence.
     /// Older installs with no gallery selection belong to Original.
-    static func applied(in defaults: UserDefaults = .standard) -> ThemePreset {
+    static func applied(in defaults: UserDefaults = Self.defaults) -> ThemePreset {
         builtIn.first { $0.id == defaults.string(forKey: appliedPresetKey) } ?? defaultPreset
     }
 
@@ -114,12 +135,12 @@ nonisolated struct ThemePreset: Identifiable, Equatable, Sendable {
 
     private var savedLookKey: String { "MarkdownPreview.theme.savedLook.v1.\(id)" }
 
-    func save(_ look: SavedLook, in defaults: UserDefaults = .standard) {
+    func save(_ look: SavedLook, in defaults: UserDefaults = Self.defaults) {
         guard let data = try? JSONEncoder().encode(look) else { return }
         defaults.set(data, forKey: savedLookKey)
     }
 
-    func restoredLook(in defaults: UserDefaults = .standard) -> SavedLook {
+    func restoredLook(in defaults: UserDefaults = Self.defaults) -> SavedLook {
         if let data = defaults.data(forKey: savedLookKey),
            var look = try? JSONDecoder().decode(SavedLook.self, from: data) {
             look.appearance = requiredAppearance ?? look.appearance

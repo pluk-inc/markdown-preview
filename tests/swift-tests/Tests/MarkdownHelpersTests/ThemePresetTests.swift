@@ -3,6 +3,36 @@ import XCTest
 @testable import MarkdownHelpers
 
 final class ThemePresetTests: XCTestCase {
+    func testSharedThemeIdentityAndSavedLooksWinOverAnotherAppsLegacyValues() throws {
+        let names = (0..<3).map { _ in "doc.md-preview.tests.\(UUID().uuidString)" }
+        let stores = try names.map { try XCTUnwrap(UserDefaults(suiteName: $0)) }
+        defer { for (name, store) in zip(names, stores) { store.removePersistentDomain(forName: name) } }
+        let (firstApp, secondApp, shared) = (stores[0], stores[1], stores[2])
+        let original = ThemePreset.defaultPreset
+        let graphite = try XCTUnwrap(ThemePreset.builtIn.first { $0.name == "Graphite" })
+        original.recordApplied(in: firstApp)
+        var originalLook = original.restoredLook(in: firstApp)
+        originalLook.appearance = .light
+        original.save(originalLook, in: firstApp)
+        ThemePreset.migrateLegacyValues(from: firstApp, to: shared)
+        XCTAssertEqual(original.restoredLook(in: shared), originalLook)
+
+        graphite.recordApplied(in: shared)
+        ThemeColorsSetting.write(graphite.setting, to: shared)
+        original.recordApplied(in: secondApp)
+        original.save(original.restoredLook(in: secondApp), in: secondApp)
+        ThemePreset.migrateLegacyValues(from: secondApp, to: shared)
+        XCTAssertEqual(ThemePreset.applied(in: shared), graphite)
+        XCTAssertEqual(ThemeColorsSetting.read(from: shared), graphite.setting)
+        XCTAssertEqual(original.restoredLook(in: shared), originalLook)
+
+        original.recordApplied(in: shared)
+        ThemeColorsSetting.write(original.restoredLook(in: shared).colors, to: shared)
+        let reopened = try XCTUnwrap(UserDefaults(suiteName: names[2]))
+        XCTAssertEqual(ThemePreset.applied(in: reopened), original)
+        XCTAssertFalse(ThemeColorsSetting.read(from: reopened).isCustomized)
+    }
+
     func testOriginalDarkBackgroundMatchesRequestedRGB() {
         XCTAssertEqual(ThemeColorsSetting.hexString(from: ThemeColorsSetting.defaultColor(.windowBackground, .dark)), "#1C1C1C")
         XCTAssertEqual(ThemeColorsSetting.hexString(from: ThemeColorsSetting.defaultColor(.editorBackground, .dark)), "#1C1C1C")

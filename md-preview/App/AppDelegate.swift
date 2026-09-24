@@ -107,6 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         CrashReporter.start()
         let storedAppearance = AppearanceMode.migrateLegacyValue()
+        ThemePreset.migrateLegacyValues()
         let appearanceMode = ThemePreset.applied().requiredAppearance ?? storedAppearance
         if appearanceMode != storedAppearance { AppearanceMode.current = appearanceMode }
         applyAppearanceMode(appearanceMode, reloadPreviews: false)
@@ -130,6 +131,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidBecomeActive(_ notification: Notification) {
         UsageAnalyticsReporter.recordAppBecameActive()
+        guard hasFinishedLaunching else { return }
+        let model = SettingsModel.shared
+        let changed = model.appliedPreset != ThemePreset.applied()
+            || model.appearance != AppearanceMode.current
+            || model.themeColors != ThemeColorsSetting.current
+            || model.documentFont != DocumentFontSetting.current
+            || model.readerLayout != ReaderLayoutSetting.current
+        guard changed else { return }
+        model.refreshFromExternalSources()
+        // Repaint only when another instance changed the shared reading look.
+        applyAppearanceMode(ThemePreset.applied().requiredAppearance ?? AppearanceMode.current,
+                            reloadPreviews: true)
     }
 
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
