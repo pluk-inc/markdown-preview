@@ -176,10 +176,14 @@ final class SettingsModel {
     }
 
     private func applyPresetValues(_ preset: ThemePreset) {
-        appliedPreset.save(.init(colors: themeColors, font: documentFont,
-                                 layout: readerLayout, appearance: AppearanceMode.current))
+        // Another app sharing the suite may have changed the active look
+        // since this model was last refreshed. Save under its current owner.
+        ThemePreset.applied().save(.init(colors: ThemeColorsSetting.current,
+                                        font: DocumentFontSetting.current,
+                                        layout: ReaderLayoutSetting.current,
+                                        appearance: AppearanceMode.current))
         let look = preset.restoredLook()
-        UserDefaults.standard.set(preset.id, forKey: ThemePreset.appliedPresetKey)
+        preset.recordApplied()
         appliedPreset = preset
         themeColors = look.colors
         appearance = look.appearance
