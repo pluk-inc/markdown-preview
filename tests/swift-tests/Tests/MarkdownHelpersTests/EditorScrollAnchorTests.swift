@@ -122,6 +122,13 @@ final class EditorScrollAnchorTests: XCTestCase {
                 const toggle = () => document.querySelector(isEditor ? '.cm-md-code-toggle-wrap' : '.md-code-toggle-wrap');
                 const line = () => document.querySelector(isEditor ? '[data-code-scroll-group]' : '.md-code-wrap pre');
                 const copy = () => document.querySelector(isEditor ? '.cm-md-code-copy' : '.md-code-copy');
+                // Measure text layout independently of the native scrollport.
+                // WebKit can add/remove scrollbar space during wrap changes.
+                const contentHeight = () => {
+                    const range = document.createRange();
+                    range.selectNodeContents(isEditor ? line() : line().querySelector('code'));
+                    return range.getBoundingClientRect().height;
+                };
                 const before = isEditor ? window.__mdEditor.getMarkdown() : line().textContent;
                 let copied = null;
                 Object.defineProperty(navigator, 'clipboard', { configurable: true,
@@ -133,9 +140,7 @@ final class EditorScrollAnchorTests: XCTestCase {
                 copy().click();
                 await settle();
                 const exactCopy = copied !== null && copied.replace(/\\n$/, '') === code;
-                // Compare the content box: legacy/overlay scrollbar visibility
-                // can change the border-box height after horizontal scrolling.
-                const height = line().clientHeight;
+                const height = contentHeight();
                 const buttonX = copy().getBoundingClientRect().x;
                 line().scrollLeft = 80;
                 await settle();
@@ -143,18 +148,22 @@ final class EditorScrollAnchorTests: XCTestCase {
                 toggle().click();
                 await settle();
                 const wrapped = toggle().getAttribute('aria-pressed') === 'true'
-                    && line().getBoundingClientRect().height > height + 20
+                    && contentHeight() > height + 20
                     && line().scrollWidth <= line().clientWidth + 1;
                 toggle().click();
                 await settle();
                 return { pinned, wrapped, exactCopy,
-                    restored: Math.abs(line().clientHeight - height) < 1,
+                    restored: Math.abs(contentHeight() - height) < 1,
+                    heights: { before: height, after: contentHeight(), scrollport: line().clientHeight },
                     unchanged: before === (isEditor ? window.__mdEditor.getMarkdown() : line().textContent),
                     iconOnly: copy().textContent === '' && !!copy().querySelector('svg'),
                     unwrapped: toggle().getAttribute('aria-pressed') === 'false' };
                 """, arguments: ["isEditor": isEditor, "code": code], in: nil, contentWorld: .page)
-            let values = try XCTUnwrap(result as? [String: Bool])
-            for (name, passed) in values { XCTAssertTrue(passed, "\(isEditor ? "Editor" : "Reader"): \(name)") }
+            let values = try XCTUnwrap(result as? [String: Any])
+            for name in ["pinned", "wrapped", "exactCopy", "restored", "unchanged", "iconOnly", "unwrapped"] {
+                XCTAssertEqual(values[name] as? Bool, true,
+                               "\(isEditor ? "Editor" : "Reader"): \(name); \(values)")
+            }
         }
     }
 

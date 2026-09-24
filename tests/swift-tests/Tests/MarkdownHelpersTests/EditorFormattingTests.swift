@@ -202,10 +202,18 @@ final class EditorFormattingTests: XCTestCase {
             let editor = WebViewLayoutHarness(
                 html: EditorHTML.render(markdown: source, editorJavaScript: script),
                 width: 360, isEditor: true, height: 400)
-            _ = try await editor.layout(texts: [], imageCount: 0)
+            defer { editor.close() }
+            _ = try await editor.layout(texts: [], imageCount: 0,
+                                        selectors: [".cm-md-heading-prefix": 1])
             let result = try await editor.webView.callAsyncJavaScript("""
                 const settle = async () => {
-                    for (let i = 0; i < 12; i++) { window.__layoutTestFrame(); await Promise.resolve(); }
+                    // Let CodeMirror's queued tasks run as well as its frame
+                    // callbacks; microtasks alone can starve decoration work.
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                    for (let i = 0; i < 12; i++) {
+                        window.__layoutTestFrame();
+                        await Promise.resolve();
+                    }
                 };
                 const rects = () => {
                     const line = document.querySelector('.cm-md-heading-prefix').closest('.cm-line');
@@ -246,7 +254,6 @@ final class EditorFormattingTests: XCTestCase {
             XCTAssertEqual(after[0][0] - before[0][0], prefixWidth, accuracy: 1,
                            "Heading level \(level) should reveal its markers inline")
             XCTAssertEqual(values["hidden"] as? Bool, false)
-            editor.close()
         }
     }
 
