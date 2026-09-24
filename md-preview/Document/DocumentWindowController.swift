@@ -113,10 +113,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// Armed only while the themes popover is open.
     let themesPopoverEscapeMonitor = EscapeKeyMonitor()
     weak var searchField: NSSearchField?
-    /// The Table of Contents / Project Navigator picker in the toolbar.
-    weak var sidebarModeItem: NSToolbarItemGroup?
-    /// Timestamp of the last click handled by the sidebar mode picker.
-    var sidebarToolbarHandledEventTimestamp: TimeInterval?
     var findBar: FindBar?
     /// Container for the find bar. A content overlay like editBar — not a
     /// titlebar accessory — so showing it never pushes the tab bar down.

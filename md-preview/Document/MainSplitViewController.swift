@@ -234,11 +234,9 @@ final class MainSplitViewController: NSSplitViewController {
 
     /// Target of the system `.toggleSidebar` toolbar item. The themed layout
     /// uses a plain split view item, which the stock implementation ignores,
-    /// so both layouts go through the app's own toggle and the toolbar's
-    /// pane picker is kept in step.
+    /// so both layouts go through the app's own toggle.
     override func toggleSidebar(_ sender: Any?) {
         toggleSidebar()
-        (view.window?.windowController as? DocumentWindowController)?.syncSidebarToolbarState()
     }
 
     @discardableResult

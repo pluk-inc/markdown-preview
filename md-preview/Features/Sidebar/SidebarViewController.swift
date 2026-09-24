@@ -19,6 +19,7 @@ final class SidebarViewController: NSViewController {
     private var contentContainer: NSView!
     private var scrollView: NSScrollView!
     private var outlineView: NSOutlineView!
+    private var modePicker: NSSegmentedControl!
     private var projectNavigator: ProjectNavigatorView!
     private var roots: [TOCNode] = []
     private var titleItem: TitleItem?
@@ -38,6 +39,37 @@ final class SidebarViewController: NSViewController {
 
     override func loadView() {
         let container = NSView()
+        let outlineLabel = NSLocalizedString("Table of Contents", comment: "Sidebar mode segment label")
+        let navigatorLabel = NSLocalizedString("Project Navigator", comment: "Sidebar mode segment label")
+
+        let outlineImage = NSImage(
+            systemSymbolName: "list.bullet.indent",
+            accessibilityDescription: outlineLabel
+        ) ?? NSImage()
+
+        let navigatorImage = NSImage(
+            systemSymbolName: "folder",
+            accessibilityDescription: navigatorLabel
+        ) ?? NSImage()
+
+        modePicker = NSSegmentedControl(
+            images: [outlineImage, navigatorImage],
+            trackingMode: .selectOne,
+            target: self,
+            action: #selector(modePickerChanged(_:))
+        )
+
+        if #available(macOS 27.0, *) {
+            modePicker.role = .tabs
+        }
+
+        modePicker.segmentStyle = .automatic
+        modePicker.segmentDistribution = .fillEqually
+        modePicker.controlSize = .large
+        modePicker.setToolTip(outlineLabel, forSegment: 0)
+        modePicker.setToolTip(navigatorLabel, forSegment: 1)
+        modePicker.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(modePicker)
 
         contentContainer = NSView()
         contentContainer.translatesAutoresizingMaskIntoConstraints = false
@@ -82,7 +114,10 @@ final class SidebarViewController: NSViewController {
         contentContainer.addSubview(projectNavigator)
 
         NSLayoutConstraint.activate([
-            contentContainer.topAnchor.constraint(equalTo: container.topAnchor),
+            modePicker.topAnchor.constraint(equalTo: container.safeAreaLayoutGuide.topAnchor),
+            modePicker.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
+            modePicker.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
+            contentContainer.topAnchor.constraint(equalTo: modePicker.bottomAnchor),
             contentContainer.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             contentContainer.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             contentContainer.bottomAnchor.constraint(equalTo: container.bottomAnchor),
@@ -92,7 +127,7 @@ final class SidebarViewController: NSViewController {
             scrollView.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor),
 
-            projectNavigator.topAnchor.constraint(equalTo: contentContainer.topAnchor),
+            projectNavigator.topAnchor.constraint(equalTo: contentContainer.topAnchor, constant: 6),
             projectNavigator.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
             projectNavigator.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
             projectNavigator.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor)
@@ -115,6 +150,11 @@ final class SidebarViewController: NSViewController {
         onModeChanged?(newMode)
     }
 
+    @objc private func modePickerChanged(_ sender: NSSegmentedControl) {
+        guard let mode = Mode(rawValue: sender.selectedSegment) else { return }
+        setMode(mode)
+    }
+
     private func refreshNavigatorIfNeeded() {
         if pendingFolderURL != loadedFolderURL {
             loadedFolderURL = pendingFolderURL
@@ -124,6 +164,8 @@ final class SidebarViewController: NSViewController {
     }
 
     private func applyMode() {
+        modePicker.selectedSegment = currentMode.rawValue
+
         switch currentMode {
         case .outline:
             scrollView.isHidden = false

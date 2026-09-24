@@ -18,7 +18,6 @@ extension NSToolbarItem.Identifier {
     /// The sidebar show/hide toggle. The raw value predates the mode picker
     /// and is kept so saved toolbar layouts still resolve.
     static let sidebarMenu = NSToolbarItem.Identifier("SidebarMenu")
-    static let sidebarMode = NSToolbarItem.Identifier("SidebarMode")
     static let printDocument = NSToolbarItem.Identifier("PrintDocument")
     static let exportDocument = NSToolbarItem.Identifier("ExportDocument")
     static let exportPDF = NSToolbarItem.Identifier("ExportPDF")
@@ -52,9 +51,9 @@ extension DocumentWindowController {
         // chain.
         let leading: [NSToolbarItem.Identifier]
         if #available(macOS 26.0, *) {
-            leading = [.sidebarMode, .flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator]
+            leading = [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator]
         } else {
-            leading = [.toggleSidebar, .sidebarMode]
+            leading = [.toggleSidebar]
         }
         let identifiers: [NSToolbarItem.Identifier] = leading + [
             .navigation,
@@ -78,7 +77,6 @@ extension DocumentWindowController {
         var identifiers: [NSToolbarItem.Identifier] = [
             .toggleSidebar,
             .sidebarMenu,
-            .sidebarMode,
             .sidebarTrackingSeparator,
             .navigation,
             .flexibleSpace,
@@ -108,7 +106,6 @@ extension DocumentWindowController {
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         switch itemIdentifier {
         case .sidebarMenu: return makeSidebarToggleItem()
-        case .sidebarMode: return makeSidebarModeItem(willBeInsertedIntoToolbar: flag)
         case .navigation: return makeNavigationItem(willBeInsertedIntoToolbar: flag)
         case .openActions: return makeOpenActionsItem()
         case .openWith: return makeOpenWithItem()
