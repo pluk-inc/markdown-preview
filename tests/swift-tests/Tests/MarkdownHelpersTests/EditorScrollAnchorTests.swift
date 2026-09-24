@@ -143,6 +143,7 @@ final class EditorScrollAnchorTests: XCTestCase {
                 const height = contentHeight();
                 const buttonX = copy().getBoundingClientRect().x;
                 line().scrollLeft = 80;
+                const pinnedImmediately = Math.abs(copy().getBoundingClientRect().x - buttonX) < 1;
                 await settle();
                 const pinned = Math.abs(copy().getBoundingClientRect().x - buttonX) < 1;
                 toggle().click();
@@ -152,7 +153,7 @@ final class EditorScrollAnchorTests: XCTestCase {
                     && line().scrollWidth <= line().clientWidth + 1;
                 toggle().click();
                 await settle();
-                return { pinned, wrapped, exactCopy,
+                return { pinned, pinnedImmediately, wrapped, exactCopy,
                     restored: Math.abs(contentHeight() - height) < 1,
                     heights: { before: height, after: contentHeight(), scrollport: line().clientHeight },
                     unchanged: before === (isEditor ? window.__mdEditor.getMarkdown() : line().textContent),
@@ -160,7 +161,7 @@ final class EditorScrollAnchorTests: XCTestCase {
                     unwrapped: toggle().getAttribute('aria-pressed') === 'false' };
                 """, arguments: ["isEditor": isEditor, "code": code], in: nil, contentWorld: .page)
             let values = try XCTUnwrap(result as? [String: Any])
-            for name in ["pinned", "wrapped", "exactCopy", "restored", "unchanged", "iconOnly", "unwrapped"] {
+            for name in ["pinned", "pinnedImmediately", "wrapped", "exactCopy", "restored", "unchanged", "iconOnly", "unwrapped"] {
                 XCTAssertEqual(values[name] as? Bool, true,
                                "\(isEditor ? "Editor" : "Reader"): \(name); \(values)")
             }
@@ -215,6 +216,41 @@ final class EditorScrollAnchorTests: XCTestCase {
                 XCTAssertLessThanOrEqual(try XCTUnwrap(measurement["widthError"] as? Double), 1)
                 XCTAssertLessThanOrEqual(try XCTUnwrap(measurement["offsetError"] as? Double), 1)
                 XCTAssertEqual(measurement["rounded"] as? Bool, true)
+            }
+        }
+    }
+
+    func testCodeCardScrollingKeepsControlsAndPageFixed() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        for pageScrolling in [false, true] {
+            let editor = WebViewLayoutHarness(html: EditorHTML.render(
+                markdown: "```text\n" + String(repeating: "long code ", count: 100) + "\n```",
+                editorJavaScript: script, configuration: .init(usesPageScrolling: pageScrolling)),
+                width: 500, isEditor: true, height: 400)
+            defer { editor.close() }
+            _ = try await editor.layout(texts: [], imageCount: 0)
+            let result = try await editor.webView.evaluateJavaScript("""
+                (() => {
+                    const line = document.querySelector('[data-code-scroll-group]');
+                    const button = line.querySelector('.cm-md-code-copy');
+                    const x = button.getBoundingClientRect().x;
+                    const scrollers = [document.scrollingElement, document.querySelector('.cm-scroller')];
+                    const max = line.scrollWidth - line.clientWidth;
+                    let pinned = max > 120;
+                    const positions = [];
+                    for (const offset of [1, 8, 120, max, 0]) {
+                        line.scrollLeft = offset;
+                        positions.push({offset, x: button.getBoundingClientRect().x, expected: x});
+                        pinned &&= Math.abs(button.getBoundingClientRect().x - x) < 1;
+                    }
+                    return { pinned, positions, pageFixed: scrollers.every(s => s.scrollWidth <= s.clientWidth + 1 && s.scrollLeft === 0),
+                        scrollers: scrollers.map(s => [s.scrollWidth, s.clientWidth, s.scrollLeft]),
+                        contained: getComputedStyle(line).overscrollBehaviorX === 'none' };
+                })()
+                """)
+            let values = try XCTUnwrap(result as? [String: Any])
+            for key in ["pinned", "pageFixed", "contained"] {
+                XCTAssertEqual(values[key] as? Bool, true, "Page scrolling: \(pageScrolling); \(values)")
             }
         }
     }

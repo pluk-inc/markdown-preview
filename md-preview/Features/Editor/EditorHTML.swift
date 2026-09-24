@@ -359,16 +359,20 @@ nonisolated enum EditorHTML {
             position: relative;
             /* Use real borders so WebKit snaps the same 0.5px width as the
                read-mode card on both Retina and standard-density displays. */
-            padding: 0 16px;
+            padding: 0;
             border-inline: 0.5px solid transparent;
             overflow-x: auto;
             overflow-y: hidden;
+            overscroll-behavior-x: none;
             scrollbar-width: none;
         }
         #editor .cm-content.cm-lineWrapping > .cm-md-codeblock { white-space: pre; }
         #editor .cm-md-code-scroll-text {
             display: inline-block;
             min-width: var(--code-scroll-width, 0px);
+            /* Keep padding on the scrolling text so it cannot displace the
+               sticky header at either end of the scroll range. */
+            padding-inline: 16px;
         }
         #editor .cm-md-codeblock-last { scrollbar-width: thin; }
         /* The code card is painted on a z:-2 pseudo instead of the line
@@ -411,19 +415,20 @@ nonisolated enum EditorHTML {
             visibility: hidden;
         }
         #editor .cm-md-code-language {
-            position: absolute;
+            /* Native sticky positioning keeps controls fixed during async
+               scrolling, before JavaScript receives the scroll event. */
+            position: sticky;
             /* Text starts at the same 16px inset as the read-only label:
                subtract the input's padding and 1px border. */
             inset-inline-start: 9px;
-            max-width: calc(100% - 21px);
-            top: 8px;
+            margin-inline: 9px 10px;
+            margin-top: calc(-8px - \(codeLanguageHeaderHeight)px);
+            margin-bottom: 8px;
             width: calc(100% - 19px);
-            max-width: none;
             height: 28px;
             display: flex;
             align-items: center;
             gap: 4px;
-            transform: translateX(var(--code-scroll-offset, 0px));
             cursor: default;
             z-index: 1;
             line-height: 1;
@@ -453,10 +458,10 @@ nonisolated enum EditorHTML {
         }
         #editor .cm-md-code-action:hover { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
         #editor .cm-md-code-action:focus-visible { outline: 2px solid AccentColor; outline-offset: 1px; }
-        #editor .cm-content.cm-lineWrapping > .cm-md-code-wrapped { white-space: pre-wrap; overflow-wrap: anywhere; }
-        #editor .cm-md-code-wrapped .cm-md-code-scroll-text { display: inline; min-width: 0; }
+        #editor .cm-content.cm-lineWrapping > .cm-md-code-wrapped { white-space: pre-wrap; overflow-wrap: anywhere; padding-inline: 16px; }
+        #editor .cm-md-code-wrapped .cm-md-code-scroll-text { display: inline; min-width: 0; padding-inline: 0; }
+        #editor .cm-md-code-wrapped .cm-md-code-language { position: relative; inset-inline-start: auto; margin-inline: -7px; width: calc(100% + 14px); }
         #editor .cm-md-code-wrapped::before { transform: none; }
-        #editor .cm-md-code-wrapped .cm-md-code-language { transform: none; }
         #editor .cm-md-code-language-input::placeholder {
             color: var(--secondary);
             opacity: 0.8;
