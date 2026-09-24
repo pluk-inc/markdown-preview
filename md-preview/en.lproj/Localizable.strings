@@ -299,3 +299,47 @@
 "Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out.";
 "Open documents in tabs" = "Open documents in tabs";
 "A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window.";
+
+/* Appearance and navigation settings */
+"A theme fills every color, picks a reading face, and switches the app to its light or dark look." = "A theme fills every color, picks a reading face, and switches the app to its light or dark look.";
+"Accessibility & Layout Options" = "Accessibility & Layout Options";
+"Appearance: %@" = "Appearance: %@";
+"Athelas" = "Athelas";
+"Avenir Next" = "Avenir Next";
+"Bold Text" = "Bold Text";
+"Character Spacing" = "Character Spacing";
+"Charter" = "Charter";
+"Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window." = "Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window.";
+"Customize" = "Customize";
+"Customize Theme" = "Customize Theme";
+"Customize…" = "Customize…";
+"Fonts, spacing and colors" = "Fonts, spacing and colors";
+"Georgia" = "Georgia";
+"GitHub Project" = "GitHub Project";
+"Highlight outline section under the pointer" = "Highlight outline section under the pointer";
+"Iowan" = "Iowan";
+"Line Spacing" = "Line Spacing";
+"Margins" = "Margins";
+"New York" = "New York";
+"Open Markdown links in new windows" = "Open Markdown links in new windows";
+"Original" = "Original";
+"Palatino" = "Palatino";
+"Reset Theme" = "Reset Theme";
+"SF Rounded" = "SF Rounded";
+"Seravek" = "Seravek";
+"Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings." = "Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings.";
+"Text size, appearance, and themes" = "Text size, appearance, and themes";
+"The same panel the toolbar's Themes & Settings button opens, with a Reset for the whole look." = "The same panel the toolbar's Themes & Settings button opens, with a Reset for the whole look.";
+"Themes" = "Themes";
+"Themes & Settings" = "Themes & Settings";
+"Times New Roman" = "Times New Roman";
+"Word Spacing" = "Word Spacing";
+
+/* Theme names */
+"Quiet" = "Quiet";
+"Paper" = "Paper";
+"Calm" = "Calm";
+"Focus" = "Focus";
+"Graphite" = "Graphite";
+"Dusk" = "Dusk";
+"Midnight" = "Midnight";
