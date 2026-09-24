@@ -16,7 +16,7 @@ import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-mar
 import { yamlFrontmatter } from "@codemirror/lang-yaml"
 import {
   syntaxTree, syntaxTreeAvailable, ensureSyntaxTree, syntaxHighlighting, HighlightStyle,
-  indentUnit, LanguageDescription, LanguageSupport, StreamLanguage,
+  indentUnit, languageDataProp, LanguageDescription, LanguageSupport, StreamLanguage,
 } from "@codemirror/language"
 import { highlightTree, tags as t } from "@lezer/highlight"
 import { javascript } from "@codemirror/lang-javascript"
@@ -2718,7 +2718,12 @@ window.MDEditor = {
           anchoredPointerSelection,
           mermaidPreviews,
           tableEditors,
-          syntaxHighlighting(codeHighlight),
+          // Markdown punctuation also carries processingInstruction tags.
+          // Keep code colors inside embedded languages, not Markdown markers.
+          syntaxHighlighting({
+            style: codeHighlight.style,
+            scope: (type) => type.prop(languageDataProp) !== markdownLanguage.data,
+          }),
           Prec.lowest(livePreview),
           alignInactiveHeadings,
           autoCloseFence,

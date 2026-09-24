@@ -405,6 +405,32 @@ final class EditorScrollAnchorTests: XCTestCase {
         }
     }
 
+    func testMarkdownMarkersDoNotUseCodePaletteInOriginalDarkAppearance() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let editor = WebViewLayoutHarness(
+            html: EditorHTML.render(markdown: "## [Unreleased]\n\n[Real link](https://example.com)\n\n```c\n#include <stdio.h>\n```",
+                                    editorJavaScript: script),
+            width: 900, isEditor: true, height: 600)
+        defer { editor.close() }
+        editor.webView.appearance = NSAppearance(named: .darkAqua)
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        let result = try await editor.webView.callAsyncJavaScript("""
+            const heading = [...document.querySelectorAll('.cm-line')]
+                .find(node => node.textContent.includes('[Unreleased]'));
+            const link = document.querySelector('.cm-md-link');
+            const metadata = [...document.querySelectorAll('.hl-meta')];
+            return {
+                markdownClean: !heading?.querySelector('.hl-meta') && !!heading,
+                linkBlue: !!link && getComputedStyle(link).color === 'rgb(65, 156, 255)',
+                codeOrange: metadata.some(node => node.textContent.includes('#include')
+                    && getComputedStyle(node).color === 'rgb(253, 143, 63)')
+            };
+            """, arguments: [:], in: nil, contentWorld: .page) as? [String: Bool]
+        XCTAssertEqual(result?["markdownClean"], true)
+        XCTAssertEqual(result?["linkBlue"], true)
+        XCTAssertEqual(result?["codeOrange"], true)
+    }
+
     func testLanguageInputTextUsesPreviewHeaderInsets() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let editor = WebViewLayoutHarness(

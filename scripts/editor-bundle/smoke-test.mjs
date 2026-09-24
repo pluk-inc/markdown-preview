@@ -661,6 +661,30 @@ check("Setext source line uses collapsed overlay styling",
   && setextHost.querySelector(".cm-md-setext-source")?.textContent === "=====")
 setextEditor.destroy()
 
+const markerHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(markerHost)
+const markerSource = "## [Unreleased]\n\n- **Bold** and *italic*\n\n[Real link](https://example.com)"
+const markerEditor = dom.window.MDEditor.create(markerHost, markerSource, {})
+for (const position of [0, markerSource.indexOf("Bold"), markerSource.indexOf("Real link")]) {
+  markerEditor.select(position)
+  check(`Markdown markers do not inherit code metadata colors at ${position}`,
+    markerHost.querySelector(".hl-meta") == null)
+}
+check("actual Markdown links retain link styling", markerHost.querySelector(".cm-md-link") != null)
+check("marker styling preserves Markdown source", markerEditor.getMarkdown() === markerSource)
+markerEditor.destroy()
+
+const preprocessorHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(preprocessorHost)
+const preprocessorSource = "```c\n#include <stdio.h>\nint answer = 42;\n```"
+const preprocessorEditor = dom.window.MDEditor.create(preprocessorHost, preprocessorSource, {})
+for (const position of [0, preprocessorSource.indexOf("include")]) {
+  preprocessorEditor.select(position)
+  check(`code preprocessors keep metadata highlighting at ${position}`,
+    preprocessorHost.querySelector(".hl-meta")?.textContent.includes("#include"))
+}
+preprocessorEditor.destroy()
+
 const leadingCodeHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(leadingCodeHost)
 const leadingCodeEditor = dom.window.MDEditor.create(
