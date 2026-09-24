@@ -451,6 +451,45 @@ final class EditorScrollAnchorTests: XCTestCase {
         }
     }
 
+    func testMainPageOnlyScrollsVerticallyWhileCodeAndTablesScrollHorizontally() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let columns = Array(repeating: "LongColumnName", count: 12).joined(separator: " | ")
+        let divider = Array(repeating: "---", count: 12).joined(separator: " | ")
+        let markdown = "```text\n" + String(repeating: "long code ", count: 100)
+            + "\n```\n\n| " + columns + " |\n| " + divider + " |\n| " + columns + " |\n\n"
+            + String(repeating: "Paragraph.\n\n", count: 80)
+        for mode in ["reader", "editor-page", "editor-internal"] {
+            let isEditor = mode != "reader"
+            let pageScrolling = mode != "editor-internal"
+            let html = isEditor
+                ? EditorHTML.render(markdown: markdown, editorJavaScript: script,
+                                    configuration: .init(usesPageScrolling: pageScrolling))
+                : MarkdownHTML.render(markdown: markdown, allowsScroll: true).html
+            let harness = WebViewLayoutHarness(html: html, width: 500, isEditor: isEditor, height: 400)
+            defer { harness.close() }
+            _ = try await harness.layout(texts: [], imageCount: 0)
+            let result = try await harness.webView.evaluateJavaScript("""
+                (() => {
+                    const page = \(pageScrolling ? "document.scrollingElement" : "document.querySelector('.cm-scroller')");
+                    const style = getComputedStyle(page);
+                    const nested = [...document.querySelectorAll('\(isEditor ? ".cm-md-code-card, .cm-md-table-scroll" : ".md-code-wrap pre, table")')];
+                    const innerScrolling = nested.length === 2 && nested.every(element => {
+                        element.scrollLeft = 80;
+                        return element.scrollLeft > 0;
+                    });
+                    page.scrollTop = 100;
+                    return { locked: style.overflowX === 'hidden' && style.overscrollBehaviorX === 'none',
+                        vertical: page.scrollTop > 0, innerScrolling, pageLeft: page.scrollLeft };
+                })()
+                """)
+            let values = try XCTUnwrap(result as? [String: Any])
+            for key in ["locked", "vertical", "innerScrolling"] {
+                XCTAssertEqual(values[key] as? Bool, true, "\(mode): \(values)")
+            }
+            XCTAssertEqual(values["pageLeft"] as? Double, 0, "\(mode): \(values)")
+        }
+    }
+
     func testSmallScrollPreservesPagePaddingInBothScrollModes() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         for pageScrolling in [false, true] {

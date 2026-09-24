@@ -61,6 +61,7 @@ nonisolated enum EditorHTML {
             padding: 0;
             height: 100%;
             overflow: hidden;
+            overscroll-behavior-x: none;
             background: \(lightPageBackground);
         }
         @media (prefers-color-scheme: dark) {
@@ -83,7 +84,9 @@ nonisolated enum EditorHTML {
            this block — and it sets .cm-scroller to monospace. Win on
            specificity (#editor), not on order. */
         #editor .cm-scroller {
-            overflow: auto;
+            overflow-x: hidden;
+            overflow-y: auto;
+            overscroll-behavior-x: none;
             /* Keep page gutters outside the editable content column. */
             padding-inline: \(MarkdownHTML.pagePaddingHorizontal)px;
             /* Document clearance is outside contenteditable and scrolls
@@ -598,6 +601,10 @@ nonisolated enum EditorHTML {
         html[data-page-scrolling="true"] body {
             height: auto;
             overflow: visible;
+        }
+        html[data-page-scrolling="true"] {
+            overflow-x: hidden;
+            overflow-y: auto;
         }
         html[data-page-scrolling="true"] #editor,
         html[data-page-scrolling="true"] .cm-editor { height: auto; }

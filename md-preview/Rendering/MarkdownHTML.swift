@@ -341,7 +341,7 @@ nonisolated enum MarkdownHTML {
         let containsCode = detectHighlightableCode(in: bodyHTML)
         let scrollOverride = allowsScroll ? """
         <style>
-        html { overflow: auto !important; }
+        html { overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior-x: none; }
         body { overflow: visible !important; }
         </style>
         """ : ""
