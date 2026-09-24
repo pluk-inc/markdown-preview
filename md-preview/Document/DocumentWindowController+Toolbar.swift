@@ -44,18 +44,15 @@ extension DocumentWindowController {
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         // Inside the sidebar's titlebar area: the pane picker at the leading
         // edge, the show/hide toggle at the trailing edge next to the
-        // separator. Pre-26 there is no sidebar-tracking region, so the two
-        // sit together at the leading edge instead.
+        // separator. The tracking separator is available on every supported
+        // macOS version and keeps these controls above the sidebar.
         // The toggle is the system item: AppKit lays it out correctly when
         // the sidebar section collapses, and it reaches
         // MainSplitViewController.toggleSidebar(_:) through the responder
         // chain.
-        let leading: [NSToolbarItem.Identifier]
-        if #available(macOS 26.0, *) {
-            leading = [.sidebarMode, .flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator]
-        } else {
-            leading = [.toggleSidebar, .sidebarMode]
-        }
+        let leading: [NSToolbarItem.Identifier] = [
+            .sidebarMode, .flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator
+        ]
         let identifiers: [NSToolbarItem.Identifier] = leading + [
             .navigation,
             .flexibleSpace,
@@ -72,6 +69,22 @@ extension DocumentWindowController {
             return identifiers.filter { $0 != .space }
         }
         return identifiers
+    }
+
+    /// Repair the old pre-26 default without resetting customized toolbars.
+    func migrateLegacySidebarToolbarIfNeeded(in toolbar: NSToolbar) {
+        guard #unavailable(macOS 26.0) else { return }
+        let identifiers = toolbar.items.map(\.itemIdentifier)
+        guard !identifiers.contains(.sidebarTrackingSeparator),
+              Array(identifiers.prefix(2)) == [.toggleSidebar, .sidebarMode] else { return }
+        toolbar.removeItem(at: 1)
+        toolbar.removeItem(at: 0)
+        let leading: [NSToolbarItem.Identifier] = [
+            .sidebarMode, .flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator
+        ]
+        for (index, identifier) in leading.enumerated() {
+            toolbar.insertItem(withItemIdentifier: identifier, at: index)
+        }
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {

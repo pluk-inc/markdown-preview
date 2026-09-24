@@ -49,7 +49,22 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         webView.underPageBackgroundColor = .clear
         bridge.owner = self
         self.webView = webView
-        view = webView
+        if #available(macOS 26.0, *) {
+            view = webView
+        } else {
+            // The preview's white backing disappears when edit mode hides it.
+            // Give the transparent editor its own document background.
+            let background = LegacyEditorBackgroundView()
+            webView.translatesAutoresizingMaskIntoConstraints = false
+            background.addSubview(webView)
+            NSLayoutConstraint.activate([
+                webView.leadingAnchor.constraint(equalTo: background.leadingAnchor),
+                webView.trailingAnchor.constraint(equalTo: background.trailingAnchor),
+                webView.topAnchor.constraint(equalTo: background.topAnchor),
+                webView.bottomAnchor.constraint(equalTo: background.bottomAnchor),
+            ])
+            view = background
+        }
         webView.appearanceDidChange = { [weak self] in
             self?.updateUnderPageBackgroundColor()
         }
@@ -238,6 +253,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     /// See ContentViewController.updateUnderPageBackgroundColor — set on
     /// theme and appearance changes only, never per layout pass.
     private func updateUnderPageBackgroundColor() {
+        if #unavailable(macOS 26.0) {
+            view.needsDisplay = true
+        }
         guard #available(macOS 26.0, *) else { return }
         // WebKit snapshots the color in the setter. These explicit palette
         // and fallback colors must be reassigned when the appearance changes.
@@ -538,6 +556,30 @@ private final class EditorBridge: NSObject, WKScriptMessageHandler {
                                didReceive message: WKScriptMessage) {
         guard message.name == EditorBridge.name else { return }
         owner?.handle(message: message.body)
+    }
+}
+
+private final class LegacyEditorBackgroundView: NSView {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        wantsLayer = true
+    }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let scheme: ThemeColorScheme = isDark ? .dark : .light
+        let colors = ThemeColorsSetting.current
+        let background = colors.color(.editorBackground, scheme)
+            ?? colors.color(.windowBackground, scheme)
+            ?? (isDark ? nil : NSColor.white)
+        layer?.backgroundColor = background?.cgColor
     }
 }
 
