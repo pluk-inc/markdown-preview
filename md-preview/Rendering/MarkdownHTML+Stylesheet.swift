@@ -24,7 +24,8 @@ nonisolated extension MarkdownHTML {
         /* Semantic system colors. WebKit resolves them for the element's own
            color scheme, so the forced-scheme attribute and the media query
            below both get the right appearance without a second palette, and
-           the page follows the system accent and increased-contrast settings. */
+           labels and separators follow increased-contrast settings.
+           Accent colors follow the theme's link color. */
         --text: -apple-system-label;
         --secondary: -apple-system-secondary-label;
         --tertiary: -apple-system-tertiary-label;

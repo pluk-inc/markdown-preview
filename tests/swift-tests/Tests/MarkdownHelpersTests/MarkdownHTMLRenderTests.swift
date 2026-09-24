@@ -488,7 +488,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(css.contains("--text: -apple-system-label;"))
         XCTAssertTrue(css.contains("--secondary: -apple-system-secondary-label;"))
         XCTAssertTrue(css.contains("--grid: -apple-system-separator;"))
-        XCTAssertTrue(css.contains("--accent: -apple-system-control-accent;"))
+        XCTAssertTrue(css.contains("--accent: var(--link);"))
         XCTAssertTrue(css.contains("h1 { font-size: 2em; }"))
         XCTAssertTrue(css.contains("h6 { font-size: 0.846em; }"))
         // The highlighting palette is declared once and consumed by class rules.
