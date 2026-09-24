@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [0.0.61] – 2026-09-24
+
+This release adds floating formatting controls and code-block actions, improves reading and editing consistency, and fixes theme, saving, and toolbar behavior across macOS versions.
+
+### Added
+
+- **Floating formatting controls on macOS 26 and later.** Compact Liquid Glass groups provide heading, link, list, styling, and searchable code-language popovers ([#424](https://github.com/pluk-inc/markdown-preview/pull/424)).
+- **Code blocks gain copy and wrap controls.** Rounded code cards show the language alongside controls that stay visible while scrolling, in both read and edit modes ([#425](https://github.com/pluk-inc/markdown-preview/pull/425), [#431](https://github.com/pluk-inc/markdown-preview/pull/431)).
+
+### Changed
+
+- **Themes remember their own appearance and reading settings.** Fixed-color themes keep their intended light or dark appearance, while Original retains its Automatic, Light, or Dark choice. Switching themes restores saved colors, font, and layout ([#420](https://github.com/pluk-inc/markdown-preview/pull/420), [#421](https://github.com/pluk-inc/markdown-preview/pull/421)).
+- **More consistent reading and editing.** Scroll positions, top spacing, syntax colors, inline-code wrapping, and table cells align more closely between modes. Editor code blocks scroll as a single region with fixed controls and rounded corners ([#423](https://github.com/pluk-inc/markdown-preview/pull/423), [#431](https://github.com/pluk-inc/markdown-preview/pull/431)).
+
+### Fixed
+
+- **Text selection stays stable when Markdown syntax appears.** Clicking and dragging in the editor no longer shifts the selection as formatting markers are revealed ([#422](https://github.com/pluk-inc/markdown-preview/pull/422)).
+- **Switching modes no longer overlaps reader and editor text.** Switching files in the sidebar also preserves the current reading or editing mode with the correct formatting toolbar ([#432](https://github.com/pluk-inc/markdown-preview/pull/432), [#434](https://github.com/pluk-inc/markdown-preview/pull/434)).
+- **Save works after returning to read mode.** File > Save and ⌘S remain available when unsaved editor changes are pending ([#436](https://github.com/pluk-inc/markdown-preview/pull/436)).
+- **Markdown markers and lists use the correct colors.** Brackets and formatting markers no longer inherit embedded-code syntax colors, and list bullets and numbers follow the selected theme accent ([#435](https://github.com/pluk-inc/markdown-preview/pull/435)).
+- **Sidebar controls and editor backgrounds are corrected on macOS 15.** Sidebar buttons stay above the sidebar, and entering edit mode in light appearance retains a white document background ([#438](https://github.com/pluk-inc/markdown-preview/pull/438)).
+- **Formatting controls align correctly on macOS 27.** The text-style arrow is centered with its label, and duplicate header dividers are removed ([#437](https://github.com/pluk-inc/markdown-preview/pull/437)).
+
 ## [0.0.60] – 2026-09-22
 
 This release fixes keyboard focus when entering edit mode and keeps toolbar and tab colors in sync with automatic appearance changes.
