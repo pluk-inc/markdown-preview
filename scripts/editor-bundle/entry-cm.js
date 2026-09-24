@@ -5,7 +5,7 @@
 // themselves unless the cursor is inside the construct.
 
 import {
-  EditorView, keymap, ViewPlugin, Decoration, WidgetType, dropCursor,
+  EditorView, keymap, ViewPlugin, Decoration, BlockWrapper, WidgetType, dropCursor,
 } from "@codemirror/view"
 import { Annotation, EditorState, EditorSelection, MapMode, Prec, StateEffect, StateField, Transaction } from "@codemirror/state"
 import {
@@ -1161,78 +1161,26 @@ const codeLineFirst = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-
 const codeLineLast = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-last" })
 const codeScrollText = Decoration.mark({ class: "cm-md-code-scroll-text" })
 
-// Keep CodeMirror's editable lines (and source selection) intact, while each
-// code card shares one horizontal offset and one scrollbar on its last line.
-const codeBlockScrolling = ViewPlugin.fromClass(class {
-  constructor(view) {
-    this.view = view
-    this.offsets = new Map()
-    this.onScroll = (event) => {
-      const line = event.target
-      if (!(line instanceof HTMLElement) || !line.dataset.codeScrollGroup) return
-      const group = line.dataset.codeScrollGroup
-      const offset = line.scrollLeft
-      if (this.offsets.get(group) === offset) return
-      this.offsets.set(group, offset)
-      for (const other of view.contentDOM.querySelectorAll('[data-code-scroll-group]')) {
-        if (other.dataset.codeScrollGroup === group) {
-          other.scrollLeft = offset
-          other.style.setProperty('--code-scroll-offset', `${offset}px`)
-        }
-      }
-    }
-    view.contentDOM.addEventListener('scroll', this.onScroll, true)
-    this.measure()
+// One native scrollport per code block keeps momentum, text, and selection
+// together without mirroring horizontal offsets between editable lines.
+function codeBlockWrappers(decorations, state) {
+  const groups = new Map()
+  for (let cursor = decorations.iter(); cursor.value; cursor.next()) {
+    const attrs = cursor.value.spec.attributes
+    const group = attrs?.['data-code-scroll-group']
+    if (group == null) continue
+    const line = state.doc.lineAt(cursor.from)
+    const end = Math.min(state.doc.length, Math.max(line.to, line.from + 1))
+    const existing = groups.get(group)
+    if (existing) existing.to = end
+    else groups.set(group, { from: cursor.from, to: end,
+      wrapped: attrs.class === 'cm-md-code-wrapped' })
   }
-  update(update) {
-    if (update.docChanged || update.viewportChanged || update.geometryChanged
-        || update.startState.field(wrappedCodeBlocks) !== update.state.field(wrappedCodeBlocks)) this.measure()
-  }
-  measure() {
-    this.view.requestMeasure({
-      key: this,
-      read: (view) => {
-        const groups = new Map()
-        for (const line of view.contentDOM.querySelectorAll('[data-code-scroll-group]')) {
-          if (line.classList.contains('cm-md-code-wrapped')) continue
-          const key = line.dataset.codeScrollGroup
-          if (!groups.has(key)) groups.set(key, { lines: [], width: 0, offset: 0 })
-          const group = groups.get(key)
-          group.offset = Math.max(group.offset, line.scrollLeft)
-          let left = Infinity, right = -Infinity
-          for (const text of line.querySelectorAll('.cm-md-code-scroll-text')) {
-            const range = document.createRange()
-            range.selectNodeContents(text)
-            const bounds = range.getBoundingClientRect()
-            left = Math.min(left, bounds.left)
-            right = Math.max(right, bounds.right)
-          }
-          const width = Number.isFinite(left) ? right - left : 0
-          group.lines.push({ line, width })
-          group.width = Math.max(group.width, width)
-        }
-        return groups
-      },
-      write: (groups) => {
-        this.offsets.clear()
-        for (const [key, group] of groups) {
-          const width = `${Math.ceil(group.width)}px`
-          for (const { line } of group.lines) {
-            if (line.style.getPropertyValue('--code-scroll-width') !== width) {
-              line.style.setProperty('--code-scroll-width', width)
-            }
-            line.scrollLeft = group.offset
-            line.style.setProperty('--code-scroll-offset', `${line.scrollLeft}px`)
-          }
-          this.offsets.set(key, group.offset)
-        }
-      },
-    })
-  }
-  destroy() {
-    this.view.contentDOM.removeEventListener('scroll', this.onScroll, true)
-  }
-})
+  return BlockWrapper.set([...groups.values()].map(({ from, to, wrapped }) =>
+    BlockWrapper.create({ tagName: 'div', attributes: {
+      class: `cm-md-code-card${wrapped ? ' cm-md-code-card-wrapped' : ''}`,
+    } }).range(from, to)), true)
+}
 const tableLine = Decoration.line({ class: "cm-md-table" })
 // Preview gives every list item after the first a 0.4em margin-top (and a
 // nested list the same via li > ul). Mirror it on the item's first line.
@@ -2231,6 +2179,7 @@ const livePreview = ViewPlugin.fromClass(class {
   constructor(view) {
     this.detectedCodeCache = new Map()
     this.decorations = buildDecorations(view, this.detectedCodeCache)
+    this.codeWrappers = codeBlockWrappers(this.decorations, view.state)
   }
   update(update) {
     if (update.docChanged) this.detectedCodeCache.clear()
@@ -2242,9 +2191,13 @@ const livePreview = ViewPlugin.fromClass(class {
         || syntaxTree(update.startState) !== syntaxTree(update.state)
         || update.startState.field(documentFind) !== update.state.field(documentFind)) {
       this.decorations = buildDecorations(update.view, this.detectedCodeCache)
+      this.codeWrappers = codeBlockWrappers(this.decorations, update.state)
     }
   }
-}, { decorations: (v) => v.decorations })
+}, {
+  decorations: (v) => v.decorations,
+  provide: plugin => EditorView.blockWrappers.of(view => view.plugin(plugin)?.codeWrappers ?? BlockWrapper.set([])),
+})
 
 // Align inactive headings with the document column. Active headings show
 // their source prefix inline, with pointer selection anchored in source space.
@@ -2767,7 +2720,6 @@ window.MDEditor = {
           tableEditors,
           syntaxHighlighting(codeHighlight),
           Prec.lowest(livePreview),
-          codeBlockScrolling,
           alignInactiveHeadings,
           autoCloseFence,
           closeBrackets(),
