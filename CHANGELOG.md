@@ -1,10 +1,27 @@
 # Changelog
 
-## [Unreleased]
+## [0.0.62] – 2026-09-25
+
+This release adds project document search, makes navigation controls more compact, and fixes read-mode scrolling and Mermaid block-diagram arrows.
 
 ### Added
 
 - **Search for Document finds a file by part of its name.** <kbd>⇧⌘O</kbd> opens a search palette over the current project: type any part of a file name and the list narrows to the closest matches, ranked so whole-word and start-of-name hits come first, with the matched letters shown in bold. <kbd>↑</kbd> and <kbd>↓</kbd> move through the results without leaving the field. <kbd>↩</kbd> opens the result in the current tab, <kbd>⌘↩</kbd> in a new tab, and <kbd>⌥↩</kbd> in a new window. A toolbar button is available from *View → Customize Toolbar…* for anyone who would rather not use the shortcut ([#408](https://github.com/pluk-inc/markdown-preview/pull/408)).
+
+### Changed
+
+- **Back and Forward controls use a compact native appearance.** Navigation arrows take up less toolbar space while retaining their tooltips and independent enabled states ([#418](https://github.com/pluk-inc/markdown-preview/pull/418)).
+
+### Fixed
+
+- **Read mode reliably responds to scroll gestures.** Documents no longer intermittently swallow scrolling, including after switching from edit mode, while wide content and nested code blocks and tables remain horizontally scrollable ([#442](https://github.com/pluk-inc/markdown-preview/pull/442)).
+- **Mermaid block diagrams retain dotted lines and arrowheads.** The updated Mermaid 11.15.0 renderer fixes dotted connections in the app and Quick Look ([#441](https://github.com/pluk-inc/markdown-preview/pull/441)).
+
+### Contributors
+
+- [@toluwajosh](https://github.com/toluwajosh) — added project document search ([#408](https://github.com/pluk-inc/markdown-preview/pull/408)).
+- [@manemajef](https://github.com/manemajef) — improved Back and Forward toolbar appearance ([#418](https://github.com/pluk-inc/markdown-preview/pull/418)).
+- [@alchezar](https://github.com/alchezar) — reported dotted-arrow rendering in Mermaid block diagrams ([#427](https://github.com/pluk-inc/markdown-preview/issues/427)).
 
 ## [0.0.61] – 2026-09-24
 
