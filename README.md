@@ -11,6 +11,12 @@
 <p align="center"><img alt="Platform" src="https://img.shields.io/badge/platform-macOS%2015%2B-blue" />&nbsp;<img alt="Swift" src="https://img.shields.io/badge/swift-6.0-orange" />&nbsp;<img alt="License" src="https://img.shields.io/badge/license-MIT-green" />&nbsp;<img alt="Latest release" src="https://img.shields.io/github/v/release/pluk-inc/markdown-preview" />&nbsp;<img alt="Homebrew cask" src="https://img.shields.io/homebrew/cask/v/markdown-preview" /></p>
 
 <p align="center">
+  <a href="https://discord.com/invite/NUtNMK7re2">
+    <img src="https://img.shields.io/badge/Join%20our%20Discord-5865F2?logo=discord&amp;logoColor=white" alt="Join our Discord community" />
+  </a>
+</p>
+
+<p align="center">
   <a href="https://buymeacoffee.com/pluk">
     <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" height="42" alt="Buy Me a Coffee" />
   </a>
