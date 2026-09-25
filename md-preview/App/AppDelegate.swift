@@ -350,6 +350,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         reloadDocumentPreviewsForSettingChange()
     }
 
+    /// Re-render open documents with a fresh extension snapshot. Quick Look
+    /// reads same app-group value when it creates its next preview.
+    func applyRenderExtensionPreferences(_ enabledIDs: Set<String>) {
+        let current = RenderExtensionPreferences.currentConfiguration.enabledIDs
+        guard enabledIDs != current else { return }
+        RenderExtensionPreferences.store(
+            enabledIDs: enabledIDs,
+            in: RenderExtensionPreferences.sharedDefaults()
+        )
+        reloadDocumentPreviewsForSettingChange()
+    }
+
     /// Applies reading layout chosen in Customize Theme (bold text and the
     /// spacing sliders). The values are CSS custom properties, so open pages
     /// are restyled in place rather than re-rendered — cheap enough to run on

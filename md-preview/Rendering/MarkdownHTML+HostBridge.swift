@@ -906,10 +906,10 @@ nonisolated extension MarkdownHTML {
             return DOMPurify.sanitize(html, SANITIZE_CONFIG);
         }
 
-        // Incremental-update entry point. Each renderer (KaTeX/Mermaid)
-        // registers an idempotent reapplier that re-processes the current
-        // article. Same-flag re-renders skip the WKWebView reload entirely.
+        // Incremental-update entry point. Renderers register independently;
+        // the core owns ordering, DOM-diff preservation, and theme delivery.
         const reappliers = [];
+        const renderers = new Map();
         window.MdPreview = window.MdPreview || {};
         window.MdPreview.performTableContextAction = (token, operation) => {
             if (!pendingTableContextAction || pendingTableContextAction.token !== token) return false;
@@ -922,6 +922,8 @@ nonisolated extension MarkdownHTML {
             }
             return true;
         };
+        // Legacy one-function renderers remain supported while bundled
+        // extensions move to registerRenderer().
         window.MdPreview.registerReapplier = (fn) => {
             if (typeof fn === 'function') reappliers.push(fn);
         };
@@ -942,7 +944,21 @@ nonisolated extension MarkdownHTML {
             { cls: 'md-code-wrap',   kind: 'code', inner: 'pre > code', done: 'hljsDone', attrInner: 'pre' },
             { cls: 'math',           kind: 'math', inner: null,         done: 'mathDone', attrInner: null  }
         ];
-        const EXPENSIVE_SELECTOR = EXPENSIVE_BLOCKS.map((b) => '.' + b.cls).join(', ');
+        window.MdPreview.registerRenderer = (renderer) => {
+            if (!renderer || !renderer.id || renderers.has(renderer.id)) return;
+            renderers.set(renderer.id, renderer);
+        };
+        window.MdPreview.renderAll = (root = document) => {
+            for (const fn of reappliers) {
+                try { fn(root); } catch (e) { /* one bad apple shouldn't block others */ }
+            }
+            for (const renderer of renderers.values()) {
+                try { renderer.render?.(root); } catch (e) { /* one bad apple shouldn't block others */ }
+            }
+        };
+        function expensiveSelector() {
+            return EXPENSIVE_BLOCKS.map((b) => '.' + b.cls).join(', ');
+        }
         function expensiveKindOf(el) {
             if (!el.classList) return null;
             return EXPENSIVE_BLOCKS.find((b) => el.classList.contains(b.cls)) || null;
@@ -958,7 +974,9 @@ nonisolated extension MarkdownHTML {
         // both strings, so identical source yields identical keys.
         function keyExpensiveBlocks(root) {
             const counts = new Map();
-            root.querySelectorAll(EXPENSIVE_SELECTOR).forEach((el) => {
+            const selector = expensiveSelector();
+            if (!selector) return;
+            root.querySelectorAll(selector).forEach((el) => {
                 const info = expensiveKindOf(el);
                 const srcNode = expensiveSrcNode(el, info);
                 if (!srcNode) return;
@@ -1054,6 +1072,13 @@ nonisolated extension MarkdownHTML {
             const article = document.querySelector('.markdown-body');
             if (!article) return;
             const tStart = perfNow();
+            // Renderers get a last look at the live tree before it's morphed
+            // or replaced, so state they stashed on now-vanishing nodes (e.g.
+            // collapsed-heading flags) can be restored once the incoming
+            // content is in place and renderAll() runs setup again.
+            for (const renderer of renderers.values()) {
+                try { renderer.beforeUpdate?.(article); } catch (e) { /* one bad apple shouldn't block others */ }
+            }
             finishTableCellEdit(false);
             clearTablePartSelection();
             // DOM-diff fast path: morph the live article toward the incoming
@@ -1104,9 +1129,7 @@ nonisolated extension MarkdownHTML {
                     enableTableEditing();
                 }
                 enableTaskCheckboxes();
-                for (const fn of reappliers) {
-                    try { fn(); } catch (e) { /* one bad apple shouldn't block others */ }
-                }
+                window.MdPreview.renderAll(article);
             }
             perfLog('MdPreview.update' + (morphed ? ' (morphdom)' : ''), '(+' + (perfNow() - tStart).toFixed(1) + 'ms)');
             pushHeight();

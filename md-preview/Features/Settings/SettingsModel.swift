@@ -124,9 +124,9 @@ final class SettingsModel {
         }
     }
 
-    func setThemeColor(_ color: NSColor,
-                       slot: ThemeColorSlot,
-                       scheme: ThemeColorScheme) {
+    var enabledRenderExtensionIDs: Set<String>
+
+    func setThemeColor(_ color: NSColor, slot: ThemeColorSlot, scheme: ThemeColorScheme) {
         var colors = themeColors
         colors.setColor(color, slot, scheme)
         themeColors = colors
@@ -193,8 +193,7 @@ final class SettingsModel {
 
     var checksForUpdatesAutomatically: Bool {
         didSet {
-            guard !isRestoringExternalValues,
-                  checksForUpdatesAutomatically != oldValue else { return }
+            guard !isRestoringExternalValues, checksForUpdatesAutomatically != oldValue else { return }
             updater?.automaticallyChecksForUpdates = checksForUpdatesAutomatically
         }
     }
@@ -248,6 +247,7 @@ final class SettingsModel {
         opensMarkdownLinksInNewWindows = UserDefaults.standard.bool(forKey: "MarkdownPreview.opensMarkdownLinksInNewWindows")
         sendsCrashReports = CrashReporter.isEnabled
         themeColors = ThemeColorsSetting.current
+        enabledRenderExtensionIDs = RenderExtensionPreferences.currentConfiguration.enabledIDs
         sharesAnonymousUsageAnalytics = UsageAnalyticsReporter.isEnabled
         checksForUpdatesAutomatically = updater?.automaticallyChecksForUpdates ?? true
         downloadsUpdatesAutomatically = updater?.automaticallyDownloadsUpdates ?? false
@@ -304,6 +304,7 @@ final class SettingsModel {
         opensMarkdownLinksInNewWindows = UserDefaults.standard.bool(forKey: "MarkdownPreview.opensMarkdownLinksInNewWindows")
         sendsCrashReports = CrashReporter.isEnabled
         themeColors = ThemeColorsSetting.current
+        enabledRenderExtensionIDs = RenderExtensionPreferences.currentConfiguration.enabledIDs
         sharesAnonymousUsageAnalytics = UsageAnalyticsReporter.isEnabled
         if let updater { refreshUpdateSettings(from: updater) }
     }

@@ -120,6 +120,57 @@ final class MdPreviewUpdateTests: XCTestCase {
         XCTAssertFalse(state.detailsOpen, json)
     }
 
+    /// The incoming HTML for an update never carries the collapse toggle
+    /// button or `data-mdp-collapsed` (client JS adds those), so morphing or
+    /// swapping the article would otherwise silently re-expand every
+    /// heading. The collapsible-headings extension's `beforeUpdate` hook
+    /// must snapshot collapsed state off the live tree and `setup()` must
+    /// restore it, rather than defaulting every re-processed heading to
+    /// expanded.
+    @MainActor
+    func testMorphdomUpdatePreservesCollapsedHeadingState() async throws {
+        let webView = try await loadHarness(
+            articleAttributes: "",
+            extraHeadScripts: MarkdownHTML.collapsibleHeadersScript
+        )
+
+        func articleHTML(paragraph: String) -> String {
+            MarkdownHTML.render(
+                markdown: "# Heading\n\n\(paragraph)",
+                vendorLoading: .lazy
+            ).articleHTML
+        }
+        let docV1 = MarkdownHTML.javaScriptStringLiteral(articleHTML(paragraph: "First draft."))
+        let docV2 = MarkdownHTML.javaScriptStringLiteral(articleHTML(paragraph: "Edited draft."))
+
+        _ = try await webView.evaluateJavaScript("window.MdPreview.update(\(docV1)); true")
+        _ = try await webView.evaluateJavaScript("""
+            document.querySelector('h1').querySelector('.mdp-collapse-toggle').click(); true
+            """)
+        let collapsedBeforeUpdate = try await webView.evaluateJavaScript(
+            "document.querySelector('p').classList.contains('mdp-collapsed-section')"
+        ) as? Bool
+        XCTAssertEqual(collapsedBeforeUpdate, true)
+
+        _ = try await webView.evaluateJavaScript("window.MdPreview.update(\(docV2)); true")
+
+        let result = try await webView.evaluateJavaScript("""
+            (() => {
+                const heading = document.querySelector('h1');
+                return {
+                    paragraphText: document.querySelector('p').textContent,
+                    stillCollapsed: document.querySelector('p').classList.contains('mdp-collapsed-section'),
+                    ariaExpanded: heading.querySelector('.mdp-collapse-toggle').getAttribute('aria-expanded'),
+                    toggleCount: heading.querySelectorAll('.mdp-collapse-toggle').length
+                };
+            })()
+            """) as? [String: Any]
+        XCTAssertEqual(result?["paragraphText"] as? String, "Edited draft.")
+        XCTAssertEqual(result?["stillCollapsed"] as? Bool, true)
+        XCTAssertEqual(result?["ariaExpanded"] as? String, "false")
+        XCTAssertEqual(result?["toggleCount"] as? Int, 1)
+    }
+
     @MainActor
     func testWarmupArticleTakesInnerHTMLReplaceBeforeMorphing() async throws {
         let webView = try await loadHarness(
@@ -382,7 +433,8 @@ final class MdPreviewUpdateTests: XCTestCase {
     @MainActor
     private func loadHarness(
         articleAttributes: String,
-        stubsWebKitMessageHandler: Bool = false
+        stubsWebKitMessageHandler: Bool = false,
+        extraHeadScripts: String = ""
     ) async throws -> WKWebView {
         let purifyJS = try TestVendor.script("md-preview/Vendor/DOMPurify/purify.min.js")
         let morphdomJS = try TestVendor.script("md-preview/Vendor/Morphdom/morphdom.min.js")
@@ -400,19 +452,23 @@ final class MdPreviewUpdateTests: XCTestCase {
         let fakeRenderers = """
         <script>
         (() => {
-            function renderFake() {
+            function renderMath() {
                 document.querySelectorAll('.math:not([data-math-done="1"])').forEach((el) => {
                     el.__mdSrc = el.textContent;
                     el.dataset.mathDone = '1';
                     el.__renderCount = (el.__renderCount || 0) + 1;
                     el.innerHTML = '<span class="fake-katex">rendered-math</span>';
                 });
+            }
+            function renderMermaid() {
                 document.querySelectorAll('.mermaid-figure .mermaid:not([data-mm-done="1"])').forEach((el) => {
                     el.__mdSrc = el.textContent;
                     el.dataset.mmDone = '1';
                     el.__renderCount = (el.__renderCount || 0) + 1;
                     el.innerHTML = '<svg class="fake-mermaid"></svg>';
                 });
+            }
+            function renderCode() {
                 document.querySelectorAll('pre code[class*="language-"]:not([data-hljs-done="1"])').forEach((el) => {
                     el.__mdSrc = el.textContent;
                     el.dataset.hljsDone = '1';
@@ -420,7 +476,18 @@ final class MdPreviewUpdateTests: XCTestCase {
                     el.innerHTML = '<span class="fake-hljs">highlighted</span>';
                 });
             }
-            window.MdPreview.registerReapplier(renderFake);
+            window.MdPreview.registerRenderer({
+                id: 'fake-math', render: renderMath,
+                expensiveBlock: { cls: 'math', kind: 'math', inner: null, done: 'mathDone', attrInner: null }
+            });
+            window.MdPreview.registerRenderer({
+                id: 'fake-mermaid', render: renderMermaid,
+                expensiveBlock: { cls: 'mermaid-figure', kind: 'mm', inner: '.mermaid', done: 'mmDone', attrInner: null }
+            });
+            window.MdPreview.registerRenderer({
+                id: 'fake-code', render: renderCode,
+                expensiveBlock: { cls: 'md-code-wrap', kind: 'code', inner: 'pre > code', done: 'hljsDone', attrInner: 'pre' }
+            });
         })();
         </script>
         """
@@ -433,6 +500,7 @@ final class MdPreviewUpdateTests: XCTestCase {
         \(webKitMessageHandlerStub)
         \(MarkdownHTML.hostBridgeScript)
         \(fakeRenderers)
+        \(extraHeadScripts)
         </head><body>
         <article class="markdown-body"\(articleAttributes)></article>
         </body></html>

@@ -637,8 +637,8 @@ nonisolated extension MarkdownHTML {
         flex: 0 0 auto;
         fill: currentColor;
     }
-    .markdown-alert-note { border-left-color: #0969da; }
-    .markdown-alert-note .markdown-alert-title { color: #0969da; }
+    .markdown-alert-note { border-left-color: var(--link); }
+    .markdown-alert-note .markdown-alert-title { color: var(--link); }
     .markdown-alert-tip { border-left-color: #1a7f37; }
     .markdown-alert-tip .markdown-alert-title { color: #1a7f37; }
     .markdown-alert-important { border-left-color: #8250df; }

@@ -329,12 +329,14 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let markdown = Self.warmupMarkdown
         let contentWidth = ContentWidthSetting.current.renderWidth
         let themeOverrides = Self.currentThemeOverrides()
+        let renderExtensionConfiguration = RenderExtensionPreferences.currentConfiguration
         Task { @concurrent [weak self] in
             let rendered = Self.timedRender(label: "warmup",
                                             markdown: markdown,
                                             assetBaseHref: baseHref,
                                             contentWidth: contentWidth,
                                             themeOverrides: themeOverrides,
+                                            renderExtensionConfiguration: renderExtensionConfiguration,
                                             warmup: true)
             await self?.applyWarmup(rendered)
         }
@@ -391,12 +393,14 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let generation = renderGeneration
         let contentWidth = ContentWidthSetting.current.renderWidth
         let themeOverrides = Self.currentThemeOverrides()
+        let renderExtensionConfiguration = RenderExtensionPreferences.currentConfiguration
         Task { @concurrent [weak self] in
             let rendered = Self.timedRender(label: "display",
                                             markdown: markdown,
                                             assetBaseHref: baseHref,
                                             contentWidth: contentWidth,
-                                            themeOverrides: themeOverrides)
+                                            themeOverrides: themeOverrides,
+                                            renderExtensionConfiguration: renderExtensionConfiguration)
             #if DEBUG
             let renderFinishedAt = DispatchTime.now().uptimeNanoseconds
             await self?.applyDisplayDebug(
@@ -418,6 +422,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                                 assetBaseHref: String,
                                                 contentWidth: MarkdownHTML.ContentWidth,
                                                 themeOverrides: MarkdownHTML.ThemeOverrides? = nil,
+                                                renderExtensionConfiguration: MarkdownHTML.RenderExtensionConfiguration,
                                                 warmup: Bool = false) -> MarkdownHTML.RenderedHTML {
         let t0 = DispatchTime.now()
         let rendered = MarkdownHTML.render(markdown: markdown,
@@ -427,7 +432,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                            contentWidth: contentWidth,
                                            themeOverrides: themeOverrides,
                                            warmup: warmup,
-                                           pageTopClearance: MarkdownHTML.appPageTopClearance)
+                                           pageTopClearance: MarkdownHTML.appPageTopClearance,
+                                           renderExtensionConfiguration: renderExtensionConfiguration)
         let elapsedMs = Int(
             (Double(DispatchTime.now().uptimeNanoseconds - t0.uptimeNanoseconds)
              / 1_000_000).rounded()

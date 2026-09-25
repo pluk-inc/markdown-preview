@@ -16,6 +16,7 @@ import SwiftUI
 enum SettingsPane: String, CaseIterable, Identifiable {
     case general = "General"
     case theme = "Appearance"
+    case renderExtensions = "Extensions"
     case privacy = "Privacy"
     case about = "About"
 
@@ -26,11 +27,12 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     /// Development-time exports of the icons rendered by each registered
     /// System Settings extension. They are bundled so the sandboxed app never
     /// needs to call private IconServices at runtime. Panes without an export
-    /// (Theme) draw an equivalent tile in SwiftUI instead.
+    /// draw an equivalent tile in SwiftUI instead.
     var iconAssetName: String? {
         switch self {
         case .general: "SettingsGeneral"
         case .theme: nil
+        case .renderExtensions: nil
         case .privacy: "SettingsPrivacy"
         case .about: "SettingsAbout"
         }
@@ -51,8 +53,10 @@ struct SettingsPaneIcon: View {
                     .resizable()
                     .interpolation(.high)
                     .frame(width: 24, height: 24)
+            } else if pane == .theme {
+                appearanceTile
             } else {
-                generatedTile
+                extensionTile
                     .frame(width: 24, height: 24)
             }
         }
@@ -61,7 +65,7 @@ struct SettingsPaneIcon: View {
 
     /// System Settings-style tile matching the real Appearance pane icon:
     /// a black rounded rect with the half-filled circle glyph.
-    private var generatedTile: some View {
+    private var appearanceTile: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 4.4, style: .continuous)
                 .fill(LinearGradient(
@@ -376,6 +380,7 @@ struct SettingsDetailView: View {
         switch viewModel.selectedPane {
         case .general: GeneralSettingsView()
         case .theme: ThemeSettingsView()
+        case .renderExtensions: RenderExtensionsSettingsView()
         case .privacy: PrivacySettingsView()
         case .about: AboutSettingsView()
         }

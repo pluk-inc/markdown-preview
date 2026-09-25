@@ -123,6 +123,8 @@ Version.xcconfig    Marketing & build version (single source of truth)
 appcast.xml         Sparkle update feed
 ```
 
+[Render extension guide](docs/render-extensions.md) — compiled-in Markdown transforms, active-only assets, and extension authoring.
+
 ## Releasing
 
 Releases are driven by [Amore](http://amore.computer/) — it handles building, code signing, notarization, DMG creation, S3 upload, and Sparkle appcast publishing in one shot.

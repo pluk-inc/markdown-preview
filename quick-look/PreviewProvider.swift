@@ -44,7 +44,8 @@ class PreviewProvider: QLPreviewProvider, QLPreviewingController {
         let renderedHTML = MarkdownHTML.makeHTML(
             from: text,
             allowsScroll: true,
-            colorScheme: colorScheme
+            colorScheme: colorScheme,
+            renderExtensionConfiguration: RenderExtensionPreferences.currentConfiguration
         )
         let baseDirectory = request.fileURL.deletingLastPathComponent()
         let rewrite = InlineLocalAssets.rewriteRelativeImages(

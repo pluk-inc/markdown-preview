@@ -96,6 +96,7 @@
 				Helpers/ChromeStripClickThrough.swift,
 				Rendering/CodeFenceInfo.swift,
 				Rendering/CodeHighlighter.swift,
+
 				Rendering/DocumentFontSetting.swift,
 				Rendering/EscapingHTMLFormatter.swift,
 				Rendering/MarkdownAssetResolution.swift,
@@ -106,13 +107,17 @@
 				"Rendering/MarkdownHTML+Highlight.swift",
 				"Rendering/MarkdownHTML+HostBridge.swift",
 				"Rendering/MarkdownHTML+KaTeX.swift",
+				"Rendering/MarkdownHTML+ColorfulHeaders.swift",
+				"Rendering/MarkdownHTML+CollapsibleHeaders.swift",
 				"Rendering/MarkdownHTML+Math.swift",
 				"Rendering/MarkdownHTML+Mermaid.swift",
+				Rendering/MarkdownRenderExtension.swift,
 				"Rendering/MarkdownHTML+RTL.swift",
 				"Rendering/MarkdownHTML+Stylesheet.swift",
 				"Rendering/MarkdownHTML+Utils.swift",
 				Rendering/MarkdownWebView.swift,
 				Rendering/QuickLookAppearance.swift,
+
 				Rendering/ReaderLayoutSetting.swift,
 				Rendering/URLSchemeTaskCallbackGate.swift,
 			);

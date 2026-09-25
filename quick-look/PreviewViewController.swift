@@ -619,7 +619,8 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
         let renderedHTML = addingCopyButtonClearance(to: MarkdownHTML.makeHTML(
             from: text,
             allowsScroll: true,
-            colorScheme: colorScheme
+            colorScheme: colorScheme,
+            renderExtensionConfiguration: RenderExtensionPreferences.currentConfiguration
         ))
         let baseDirectory = url.deletingLastPathComponent()
         let rewrite = InlineLocalAssets.rewriteRelativeImages(
