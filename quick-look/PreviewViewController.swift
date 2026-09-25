@@ -625,7 +625,7 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
         let rewrite = InlineLocalAssets.rewriteRelativeImages(
             html: renderedHTML,
             baseDirectory: baseDirectory,
-            reader: { try Data(contentsOf: $0) }
+            reader: { try InlineLocalAssets.safeReadContainedFile(at: $0, containedIn: baseDirectory) }
         )
 
         loadViewIfNeeded()

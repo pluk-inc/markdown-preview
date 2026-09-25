@@ -289,4 +289,111 @@ final class InlineLocalAssetsTests: XCTestCase {
         XCTAssertTrue(html.contains("<p>cid:md-asset-0</p>"))
         XCTAssertTrue(html.contains("data:image/png;base64,\(red.base64EncodedString())"))
     }
+
+    /// Real filesystem: a relative `src` that reaches outside the document
+    /// folder through a symlink must not be inlined. Containment compared
+    /// paths textually before, which this defeats — and an archive containing
+    /// a symlink is enough to arrange it.
+    func testSymlinkEscapingTheBaseDirectoryIsNotInlined() throws {
+        let temporary = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("ql-symlink-\(UUID().uuidString)", isDirectory: true)
+        let folder = temporary.appendingPathComponent("notes", isDirectory: true)
+        let outside = temporary.appendingPathComponent("outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporary) }
+
+        try red.write(to: outside.appendingPathComponent("secret.png"))
+        try FileManager.default.createSymbolicLink(
+            at: folder.appendingPathComponent("escape"),
+            withDestinationURL: outside
+        )
+
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: #"<img src="escape/secret.png">"#,
+            baseDirectory: folder,
+            reader: { try Data(contentsOf: $0) }
+        )
+
+        XCTAssertTrue(result.attachments.isEmpty, "a symlinked-out file was inlined")
+        XCTAssertTrue(result.html.contains(#"src="escape/secret.png""#),
+                      "the src should be left untouched, not rewritten to a cid:")
+    }
+
+    // MARK: - safeReadContainedFile
+
+    /// What production passes as `rewriteRelativeImages`'s `reader`. Opens,
+    /// validates, and reads in one step so nothing between a containment
+    /// check and a later reopen can matter — see its doc comment.
+    func testSafeReadContainedFileReadsAFileInsideTheBoundary() throws {
+        let temporary = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("ql-saferead-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporary) }
+
+        let file = temporary.appendingPathComponent("pic.png")
+        try red.write(to: file)
+
+        let data = try InlineLocalAssets.safeReadContainedFile(at: file, containedIn: temporary)
+        XCTAssertEqual(data, red)
+    }
+
+    /// Same scenario as `testSymlinkEscapingTheBaseDirectoryIsNotInlined`,
+    /// against `safeReadContainedFile` directly: the containment check here
+    /// runs on what `open` actually resolved to (via `fcntl(F_GETPATH)`),
+    /// not on a separately re-resolved path string, so this proves the fix
+    /// checks the real, opened object rather than reintroducing the gap
+    /// `rewriteRelativeImages`'s own pre-check already covers.
+    func testSafeReadContainedFileRejectsASymlinkEscapingTheBoundary() throws {
+        let temporary = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("ql-saferead-symlink-\(UUID().uuidString)", isDirectory: true)
+        let folder = temporary.appendingPathComponent("notes", isDirectory: true)
+        let outside = temporary.appendingPathComponent("outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporary) }
+
+        let secret = outside.appendingPathComponent("secret.png")
+        try red.write(to: secret)
+        let escape = folder.appendingPathComponent("escape.png")
+        try FileManager.default.createSymbolicLink(at: escape, withDestinationURL: secret)
+
+        XCTAssertThrowsError(
+            try InlineLocalAssets.safeReadContainedFile(at: escape, containedIn: folder)
+        ) { error in
+            XCTAssertEqual(error as? InlineLocalAssets.ContainmentError, .outsideBoundary)
+        }
+    }
+
+    func testSafeReadContainedFileRejectsADirectory() throws {
+        let temporary = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("ql-saferead-dir-\(UUID().uuidString)", isDirectory: true)
+        let subdirectory = temporary.appendingPathComponent("subdir", isDirectory: true)
+        try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporary) }
+
+        XCTAssertThrowsError(
+            try InlineLocalAssets.safeReadContainedFile(at: subdirectory, containedIn: temporary)
+        ) { error in
+            XCTAssertEqual(error as? InlineLocalAssets.ContainmentError, .notAFile)
+        }
+    }
+
+    /// The volume root already ends in the path separator; appending
+    /// another for the containment prefix would reject every descendant.
+    func testSafeReadContainedFileTreatsTheVolumeRootAsContainingItsDescendants() throws {
+        let temporary = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("ql-saferead-root-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporary) }
+
+        let file = temporary.appendingPathComponent("pic.png")
+        try red.write(to: file)
+
+        let data = try InlineLocalAssets.safeReadContainedFile(
+            at: file,
+            containedIn: URL(fileURLWithPath: "/", isDirectory: true)
+        )
+        XCTAssertEqual(data, red)
+    }
 }

@@ -45,7 +45,7 @@ struct Deadline { static func now() -> Self { Self() }; static func +(lhs: Self,
     var scrollCallback: (() -> Void)?
     var findOverlay: View?
     func loadViewIfNeeded() {}
-    func load(markdown: String, assetBaseURL: URL?) {}
+    func load(markdown: String, assetBaseURL: URL?, containmentRoot: URL?) {}
     func applyPageZoom(_ zoom: Double) {}
     func fetchScrollAnchor(_ body: @escaping (SourceScrollAnchor?) -> Void) { anchorCallback = body }
     func applyScrollProgress(_ p: Double, sourceAnchor: SourceScrollAnchor?, completion: @escaping () -> Void) { scrollCallback = completion }

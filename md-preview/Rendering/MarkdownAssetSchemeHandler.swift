@@ -17,7 +17,7 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
 
     nonisolated static let scheme = MarkdownAssetResolution.scheme
     /// URL path prefix reserved for app-bundled vendor scripts (lazy-loaded).
-    nonisolated static let vendorPathPrefix = "/__vendor/"
+    nonisolated static let vendorPathPrefix = MarkdownAssetResolution.vendorPathPrefix
 
     /// Builds an `md-asset:///__vendor/<filename>` URL string for use in
     /// `<script src=…>` tags emitted by the lazy renderer wirings.
@@ -36,15 +36,27 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
     private let lock = NSLock()
     private let tasks = TaskRegistry()
     private var _baseURL: URL?
+    private var _containmentRoot: URL?
 
     func setBaseURL(_ url: URL?) {
         lock.lock(); defer { lock.unlock() }
         _baseURL = url
     }
 
-    private func currentBaseURL() -> URL? {
+    /// The folder assets may be served from, when it is wider than the
+    /// document's own folder — a folder the reader opened. Setting it to
+    /// `nil` leaves the base URL as the boundary, which is what an
+    /// individually opened file and Quick Look get.
+    func setContainmentRoot(_ url: URL?) {
         lock.lock(); defer { lock.unlock() }
-        return _baseURL
+        _containmentRoot = url
+    }
+
+    /// The folder a request must resolve inside. Falls back to the base URL,
+    /// so a caller that says nothing about a boundary gets the narrowest one.
+    private func currentBoundary() -> URL? {
+        lock.lock(); defer { lock.unlock() }
+        return _containmentRoot ?? _baseURL
     }
 
     /// Resolves a `/__vendor/<file>` URL to a file inside the app bundle's
@@ -82,7 +94,7 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
 
     func webView(_ webView: WKWebView, start urlSchemeTask: any WKURLSchemeTask) {
         let request = urlSchemeTask.request
-        let base = currentBaseURL()
+        let boundary = currentBoundary()
         let wrapper = TaskWrapper(task: urlSchemeTask)
         let taskRegistry = tasks
         taskRegistry.insert(wrapper)
@@ -104,16 +116,31 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
 
             // User files are only served while a document with a real file
             // location is loaded — the base is nil for unsaved documents
-            // and the warmup page.
-            guard base != nil,
-                  let resolved = MarkdownAssetResolution.fileURL(for: requestURL) else {
+            // and the warmup page — and only from inside that document's
+            // folder. Document content chooses this path, so an unbounded
+            // resolve here is an arbitrary local file read.
+            //
+            // Opens and reads the file as one operation — see
+            // `readContainedFile`'s doc comment — rather than resolving a
+            // path here and handing it to `serve(file:)` below, which would
+            // check one filesystem object and read a second one reopened
+            // from the same path string moments later.
+            guard let boundary,
+                  let (data, resolved) = MarkdownAssetResolution.readContainedFile(
+                      for: requestURL,
+                      containedIn: boundary
+                  ) else {
                 wrapper.fail(with: URLError(.badURL))
                 return
             }
-            Self.serve(file: resolved, requestURL: requestURL, task: wrapper, cacheable: false)
+            Self.respond(data: data, resolved: resolved, requestURL: requestURL, task: wrapper)
         }
     }
 
+    /// Vendor bundles only — trusted, app-bundle-local files with no
+    /// containment concern, so reading the path directly (with a byte
+    /// cache on top) is fine. User files go through `readContainedFile`
+    /// and `respond(data:resolved:...)` instead; see the call site.
     private nonisolated static func serve(file resolved: URL,
                                           requestURL: URL,
                                           task: TaskWrapper,
@@ -131,16 +158,34 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
             }
             data = read
         }
+        respond(data: data, resolved: resolved, requestURL: requestURL, task: task, cacheable: cacheable)
+    }
+
+    private nonisolated static func respond(data: Data,
+                                            resolved: URL,
+                                            requestURL: URL,
+                                            task: TaskWrapper,
+                                            cacheable: Bool = false) {
         let mime = mimeType(for: resolved)
+        var headerFields = [
+            "Content-Type": mime,
+            "Content-Length": String(data.count),
+            "Access-Control-Allow-Origin": "*"
+        ]
+        if !cacheable {
+            // A user file must not linger in WebKit's memory cache. The folder
+            // a document may read from can narrow while the window stays open
+            // — leaving an opened project, say — and a cached response would
+            // go on showing a file the new boundary forbids, without this
+            // handler being asked again. Vendor bundles are immutable and
+            // stay cacheable.
+            headerFields["Cache-Control"] = "no-store"
+        }
         let response = HTTPURLResponse(
             url: requestURL,
             statusCode: 200,
             httpVersion: "HTTP/1.1",
-            headerFields: [
-                "Content-Type": mime,
-                "Content-Length": String(data.count),
-                "Access-Control-Allow-Origin": "*"
-            ]
+            headerFields: headerFields
         ) ?? URLResponse(url: requestURL,
                          mimeType: mime,
                          expectedContentLength: data.count,

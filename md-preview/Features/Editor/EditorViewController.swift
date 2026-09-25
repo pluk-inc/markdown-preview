@@ -37,6 +37,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     private var hasLoadedEditorPage = false
     private var pageSupportsMermaid = false
     private var currentAssetBaseURL: URL?
+    /// Wider than the document's folder only when the reader opened a folder
+    /// containing it — see `MarkdownAccessPolicy`.
+    private var currentContainmentRoot: URL?
     private var findCompletion: ((FindResult) -> Void)?
 
     override func loadView() {
@@ -71,10 +74,36 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         updateUnderPageBackgroundColor()
     }
 
-    func load(markdown: String, assetBaseURL: URL? = nil) {
+    /// Applies a changed containment boundary to the document already open in
+    /// the editor, without touching its content — cursor, selection, scroll
+    /// position, and undo history all survive. For when the boundary itself
+    /// moved (the reader opened a different folder, or the open document was
+    /// renamed or moved to a different folder) but the document's content on
+    /// screen didn't change; `load(markdown:assetBaseURL:containmentRoot:)`
+    /// is for the document itself changing.
+    ///
+    /// Also refreshes the live page's `<base>` href, not just the Swift-side
+    /// and scheme-handler boundaries — `<base>` is what the browser resolves
+    /// a relative `src="../foo.png"` against, so leaving it stale would keep
+    /// resolving (or failing to resolve) assets against the folder the
+    /// document just left.
+    func updateContainmentRoot(_ containmentRoot: URL?, assetBaseURL: URL?) {
+        currentContainmentRoot = containmentRoot?.standardizedFileURL
+        currentAssetBaseURL = assetBaseURL?.standardizedFileURL
+        assetScheme.setContainmentRoot(currentContainmentRoot)
+        assetScheme.setBaseURL(currentAssetBaseURL)
+        let baseHref = currentAssetBaseURL.map(MarkdownAssetResolution.baseHref(forFolder:)) ?? ""
+        webView.evaluateJavaScript(
+            "window.__mdSetBaseHref && window.__mdSetBaseHref(\(EditorHTML.jsStringLiteral(baseHref)))"
+        )
+    }
+
+    func load(markdown: String, assetBaseURL: URL? = nil, containmentRoot: URL? = nil) {
         hasChanges = false
         currentAssetBaseURL = assetBaseURL?.standardizedFileURL
+        currentContainmentRoot = containmentRoot?.standardizedFileURL
         assetScheme.setBaseURL(currentAssetBaseURL)
+        assetScheme.setContainmentRoot(currentContainmentRoot)
         let needsMermaid = Self.containsMermaidFence(in: markdown)
         if hasLoadedEditorPage, pageSupportsMermaid || !needsMermaid {
             let baseHref = currentAssetBaseURL.map(MarkdownAssetResolution.baseHref(forFolder:)) ?? ""
@@ -457,7 +486,11 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         case "imageClick":
             guard let source = payload["src"] as? String,
                   let url = URL(string: source),
-                  let fileURL = MarkdownAssetResolution.fileURL(for: url) else { return }
+                  let boundary = currentContainmentRoot ?? currentAssetBaseURL,
+                  let fileURL = MarkdownAssetResolution.fileURL(
+                      for: url,
+                      containedIn: boundary
+                  ) else { return }
             imageClicked?(fileURL)
         case "tableContextMenu":
             presentTableContextMenu(payload)

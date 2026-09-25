@@ -54,6 +54,19 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     var currentFileURL: URL?
+    /// A folder the reader opened in this window, which bounds documents
+    /// inside it. Set only by `openFolder(_:)` — rendering a document must
+    /// never move it — and dropped when a document outside it is loaded, at
+    /// the same moment the file navigator re-roots. See `MarkdownAccessPolicy`.
+    var openedFolderRoot: URL?
+    /// The folder the open document may read from: the folder opened in this
+    /// window when the document sits inside it, otherwise its own folder.
+    var currentContainmentRoot: URL? {
+        MarkdownAccessPolicy.containmentRoot(
+            documentFolder: currentFileURL?.deletingLastPathComponent(),
+            openedFolder: openedFolderRoot
+        )
+    }
     var currentMarkdown: String?
     var backHistory: [HistoryEntry] = []
     var forwardHistory: [HistoryEntry] = []
@@ -199,6 +212,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             self?.present(url: url)
         }
         split.onOpenMarkdownLink = { [weak self] url in
+            // `present(url:)` opens a directory as this window's folder root,
+            // which widens what a document may read. A link comes from
+            // document content, so it never gets to do that — only an
+            // explicit Open Folder does.
+            guard !url.isExistingDirectory else { return }
             if SettingsModel.shared.opensMarkdownLinksInNewWindows {
                 self?.openInNewWindow(url)
             } else {
@@ -526,10 +544,23 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// The currently-open file moved (Finder rename, editor save-as, etc).
     /// Update the open URL and propagate it to the title, recent docs,
     /// Open With list, sidebar selection, and inspector — without
-    /// re-rendering the WebView, since the markdown content didn't change.
+    /// re-rendering the WebView's *content*, since the markdown didn't
+    /// change. The boundary around that content can still have changed
+    /// (the move can cross in or out of the opened folder), so
+    /// `openedFolderRoot` is reconsidered the same way a fresh load
+    /// reconsiders it, and `rerenderForBoundaryChange()` pushes whatever
+    /// that resolves to into the live webview or editor — without
+    /// discarding scroll position or edit state, unless the boundary
+    /// itself actually changed. Skipping this left the previous boundary
+    /// in effect after a move: still permissive if the document moved out
+    /// of the opened folder, or too narrow if it moved in.
     func handleRename(to newURL: URL) {
         guard currentFileURL != nil else { return }
         currentFileURL = newURL
+        openedFolderRoot = MarkdownAccessPolicy.openedFolder(
+            openedFolderRoot,
+            afterLoading: newURL.deletingLastPathComponent()
+        )
         markdownDocument?.replaceFileURL(newURL)
         documentWindow.title = newURL.lastPathComponent
         updateWindowSubtitle()
@@ -540,6 +571,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if let markdown = currentMarkdown {
             (documentWindow.contentViewController as? MainSplitViewController)?
                 .openFileURLDidChange(newURL, markdown: markdown)
+            rerenderForBoundaryChange()
         } else {
             loadFile(at: newURL, silentOnFailure: true)
         }

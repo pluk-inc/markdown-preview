@@ -208,6 +208,9 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     var scrollDidChange: (() -> Void)?
     private let assetScheme = MarkdownAssetScheme()
     private var currentAssetBase: URL?
+    /// Wider than the document's folder only when the reader opened a folder
+    /// containing it — see `MarkdownAccessPolicy`.
+    private var currentContainmentRoot: URL?
     private let messageBridge = HostBridge()
 
     private struct RendererFingerprint: Equatable {
@@ -381,11 +384,25 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             ?? MarkdownAssetResolution.rootBaseHref
     }
 
-    func display(markdown: String, assetBaseURL: URL? = nil) {
+    /// `containmentRoot` bounds asset loads and link targets. Left `nil` — as
+    /// Quick Look and the warmup page leave it — the document's own folder
+    /// bounds them, which is the narrowest answer.
+    func display(markdown: String, assetBaseURL: URL? = nil, containmentRoot: URL? = nil) {
         currentMarkdown = markdown
         isPointerOverMermaidFigure = false
+        // A different boundary changes which assets resolve, and the fast path
+        // below swaps the article body while keeping DOM nodes — an <img> that
+        // failed under the old boundary is never requested again. Opening a
+        // project folder would then leave its own images broken until the
+        // reader switched documents. Reload fully, as a settings change does.
+        if containmentRoot != currentContainmentRoot {
+            loadedFingerprint = nil
+            isPageReady = false
+        }
         assetScheme.setBaseURL(assetBaseURL)
+        assetScheme.setContainmentRoot(containmentRoot)
         currentAssetBase = assetBaseURL
+        currentContainmentRoot = containmentRoot
         let baseHref = currentBaseHref
         renderGeneration &+= 1
         let generation = renderGeneration
@@ -511,7 +528,11 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
 
     func reloadPreview() {
         guard let currentMarkdown else { return }
-        display(markdown: currentMarkdown, assetBaseURL: currentAssetBase)
+        // Carry the boundary through: dropping it here would narrow an open
+        // project back to the document's own folder on the next reload.
+        display(markdown: currentMarkdown,
+                assetBaseURL: currentAssetBase,
+                containmentRoot: currentContainmentRoot)
     }
 
     /// Full reload (no fast-path) so render-time settings — appearance,
@@ -1519,33 +1540,37 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         decisionHandler(.allow)
     }
 
+    /// A clicked link is not an asset load: the reader asked for it, so it is
+    /// not bounded by `MarkdownAccessPolicy` the way automatic loads are. If
+    /// it opens another Markdown document, that document gets its own
+    /// boundary applied fresh, for its own assets — see
+    /// `DocumentWindowController`.
     private func activateLink(_ url: URL) {
-            if let fragment = sameDocumentFragmentID(from: url) {
-                fragmentLinkActivated?(fragment)
-            } else if url.scheme == MarkdownAssetScheme.scheme,
-               currentAssetBase != nil,
-               // `/__vendor/` is a reserved namespace served from the app
-               // bundle by the scheme handler — never a filesystem path, so
-               // clicks on authored vendor links stay inert.
-               !url.path.hasPrefix(MarkdownAssetScheme.vendorPathPrefix),
-               let resolved = MarkdownAssetResolution.fileURL(for: url) {
-                if Self.isMarkdownDocument(resolved) {
-                    // fileURL(for:) works on the path alone and drops `#section`.
-                    localMarkdownLinkActivated?(Self.reattachingFragment(of: url, to: resolved))
-                } else {
-                    NSWorkspace.shared.open(resolved)
-                }
-            } else if url.scheme != MarkdownAssetScheme.scheme {
-                NSWorkspace.shared.open(url)
+        if let fragment = sameDocumentFragmentID(from: url) {
+            fragmentLinkActivated?(fragment)
+        } else if url.scheme == MarkdownAssetScheme.scheme,
+           currentAssetBase != nil,
+           // `/__vendor/` is a reserved namespace served from the app bundle
+           // by the scheme handler — never a filesystem path, so clicks on
+           // authored vendor links stay inert.
+           !url.path.hasPrefix(MarkdownAssetScheme.vendorPathPrefix),
+           let resolved = MarkdownAssetResolution.candidateFileURL(for: url) {
+            if Self.isMarkdownDocumentFile(resolved) {
+                // The resolver works on the path alone and drops `#section`.
+                localMarkdownLinkActivated?(Self.reattachingFragment(of: url, to: resolved))
+            } else {
+                NSWorkspace.shared.open(resolved)
             }
+        } else if url.scheme != MarkdownAssetScheme.scheme {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     private func showLinkContextMenu(_ source: URL) {
         let target: URL
         if source.scheme == MarkdownAssetScheme.scheme {
-            guard currentAssetBase != nil,
-                  !source.path.hasPrefix(MarkdownAssetScheme.vendorPathPrefix),
-                  let file = MarkdownAssetResolution.fileURL(for: source) else { return }
+            guard !source.path.hasPrefix(MarkdownAssetScheme.vendorPathPrefix),
+                  let file = MarkdownAssetResolution.candidateFileURL(for: source) else { return }
             target = Self.reattachingFragment(of: source, to: file)
         } else {
             guard ["https", "http", "mailto", "file"].contains(source.scheme?.lowercased() ?? "") else { return }
@@ -1590,6 +1615,27 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
 
     private static func isMarkdownDocument(_ url: URL) -> Bool {
         ["md", "markdown", "mdown", "mkdn", "mkd", "mdx"].contains(url.pathExtension.lowercased())
+    }
+
+    /// Something the system would run or install rather than open: an app or
+    /// other bundle, a Unix executable, an installer package, a disk image.
+    /// For these "open" means execute, and a Markdown file has no reason to
+    /// start one — so they are shown in Finder instead, even inside the
+    /// boundary, where an ordinary document would simply open.
+    /// A Markdown *file*, not merely something named like one.
+    ///
+    /// The extension test above is satisfied by a **directory** called
+    /// `notes.md`. `onOpenMarkdownLink` already refuses to open a directory as
+    /// this window's folder root, but that guard runs after this decision has
+    /// already sent the click here as "open in viewer" — so the same case is
+    /// caught here too, closer to where the click is resolved. A path that
+    /// does not exist stays eligible: following it fails the way a missing
+    /// file always has.
+    private static func isMarkdownDocumentFile(_ url: URL) -> Bool {
+        guard isMarkdownDocument(url) else { return false }
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+        return !(exists && isDirectory.boolValue)
     }
 
     private static func reattachingFragment(of source: URL, to target: URL) -> URL {
