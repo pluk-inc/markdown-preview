@@ -705,11 +705,14 @@ final class EditorScrollAnchorTests: XCTestCase {
                     });
                     page.scrollTop = 100;
                     return { locked: style.overflowX === 'hidden' && style.overscrollBehaviorX === 'none',
-                        vertical: page.scrollTop > 0, innerScrolling, pageLeft: page.scrollLeft };
+                        vertical: page.scrollTop > 0, innerScrolling, pageLeft: page.scrollLeft,
+                        // A direct scrollTop assignment still passes when the article steals wheel
+                        // gestures through a 1px vertical overflow. Check its user-scroll axis too.
+                        verticalGesturesReachPage: \(isEditor ? "true" : "getComputedStyle(document.querySelector('article.markdown-body')).overflowY === 'hidden'") };
                 })()
                 """)
             let values = try XCTUnwrap(result as? [String: Any])
-            for key in ["locked", "vertical", "innerScrolling"] {
+            for key in ["locked", "vertical", "innerScrolling", "verticalGesturesReachPage"] {
                 XCTAssertEqual(values[key] as? Bool, true, "\(mode): \(values)")
             }
             XCTAssertEqual(values["pageLeft"] as? Double, 0, "\(mode): \(values)")
