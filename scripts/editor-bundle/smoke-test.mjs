@@ -426,6 +426,16 @@ dom.window.document.body.appendChild(headingHost)
 const headingEditor = dom.window.MDEditor.create(headingHost, "### Stable heading", {})
 check("unfocused leading heading source stays hidden",
   headingHost.querySelector(".cm-md-heading-source-hidden")?.textContent === "### ")
+headingEditor.focus()
+headingEditor.select(4, 10)
+check("ordinary heading range selection keeps source hidden",
+  headingHost.querySelector(".cm-md-heading-source-hidden")?.textContent === "### ")
+const headingContent = headingHost.querySelector(".cm-content")
+headingContent.dispatchEvent(new dom.window.CompositionEvent("compositionstart", { bubbles: true }))
+headingEditor.select(4, 9)
+check("IME composition range reveals heading source",
+  headingHost.querySelector(".cm-md-heading-source-hidden") == null)
+headingContent.dispatchEvent(new dom.window.CompositionEvent("compositionend", { bubbles: true }))
 headingEditor.exec("h0")
 check("Normal Text removes the heading marker",
   headingEditor.getMarkdown() === "Stable heading")
