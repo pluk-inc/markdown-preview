@@ -26,7 +26,6 @@ class PreviewProvider: QLPreviewProvider, QLPreviewingController {
             "[mdp-perf-ql] provide start \(request.fileURL.lastPathComponent, privacy: .public)"
         )
         #endif
-        let text = try String(contentsOf: request.fileURL, encoding: .utf8)
         let appearanceMode = AppearanceMode.current
         let colorScheme: MarkdownHTML.ColorScheme
         switch appearanceMode {
@@ -41,6 +40,32 @@ class PreviewProvider: QLPreviewProvider, QLPreviewingController {
         case .dark:
             colorScheme = .dark
         }
+        let text: String
+        do {
+            text = try String(contentsOf: request.fileURL, encoding: .utf8)
+        } catch {
+            // A rendered page with the concrete reason beats a thrown error,
+            // which the host shows as an empty preview.
+            let errorHTML = MarkdownHTML.makeHTML(
+                from: QuickLookErrorPage.makeMarkdown(
+                    for: error,
+                    fileURL: request.fileURL
+                ),
+                allowsScroll: true,
+                colorScheme: colorScheme
+            )
+            return QLPreviewReply(
+                dataOfContentType: .html,
+                contentSize: CGSize(
+                    width: MarkdownHTML.preferredPageWidth,
+                    height: MarkdownHTML.preferredPageWidth
+                )
+            ) { replyToUpdate in
+                replyToUpdate.stringEncoding = .utf8
+                return Data(errorHTML.utf8)
+            }
+        }
+
         let renderedHTML = MarkdownHTML.makeHTML(
             from: text,
             allowsScroll: true,

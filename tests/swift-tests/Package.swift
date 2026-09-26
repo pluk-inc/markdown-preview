@@ -22,7 +22,7 @@ let package = Package(
         .target(name: "QuickLookHelpers"),
         .testTarget(
             name: "QuickLookHelperTests",
-            dependencies: ["QuickLookHelpers"]
+            dependencies: ["QuickLookHelpers", "MarkdownHelpers"]
         ),
         .target(
             name: "MarkdownHelpers",
