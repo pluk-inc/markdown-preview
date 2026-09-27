@@ -291,6 +291,7 @@ nonisolated enum MarkdownHTML {
                        documentFont: DocumentFontSetting = .current,
                        readerLayout: ReaderLayoutSetting = .current,
                        warmup: Bool = false,
+                       preloadsMathAndCode: Bool = false,
                        pageTopClearance: CGFloat = 0,
                        highlightsCode: Bool = true) -> RenderedHTML {
         let frontmatter = MarkdownFrontmatter.split(markdown)
@@ -336,9 +337,12 @@ nonisolated enum MarkdownHTML {
             frontmatterHTML = ""
         }
         let bodyHTML = frontmatterHTML + renderedBodyHTML
-        let containsMath = mathResult.containsMath || footnoteDefinitions.containsMath
+        // A preloading page carries the math and code renderers before it
+        // has content, so later documents that need them can reuse it.
+        let containsMath = preloadsMathAndCode
+            || mathResult.containsMath || footnoteDefinitions.containsMath
         let containsMermaid = mermaidResult.containsMermaid || footnoteDefinitions.containsMermaid
-        let containsCode = detectHighlightableCode(in: bodyHTML)
+        let containsCode = preloadsMathAndCode || detectHighlightableCode(in: bodyHTML)
         let scrollOverride = allowsScroll ? """
         <style>
         html { overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior-x: none; }

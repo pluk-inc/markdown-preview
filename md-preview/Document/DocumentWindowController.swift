@@ -6,6 +6,7 @@
 //
 
 import Cocoa
+import os
 import UniformTypeIdentifiers
 
 
@@ -337,6 +338,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         stopAutoSaveTimer()
         autoSaveFeedbackResetWork?.cancel()
         autoSaveFeedbackResetWork = nil
+        // The closing window is still visible here; check after it is gone.
+        DispatchQueue.main.async {
+            SpareReaderPool.shared.releaseSpareIfNoDocumentsShown()
+        }
     }
 
     func windowWillEnterFullScreen(_ notification: Notification) {
@@ -372,6 +377,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         updateWindowSubtitle()
         attachToExistingTabGroupIfNeeded()
         documentWindow.makeKeyAndOrderFront(nil)
+        #if DEBUG
+        Logger.perf.debug(
+            "[mdp-perf-open] window-shown t=\(DispatchTime.now().uptimeNanoseconds, privacy: .public)"
+        )
+        #endif
         // Tab placement is settled once the window is shown; a window opened
         // via "Open in New Window" goes back to normal tabbing afterwards
         // (it can host or join tabs on explicit request, but plain opens no

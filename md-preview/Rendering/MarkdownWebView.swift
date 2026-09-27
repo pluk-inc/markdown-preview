@@ -245,7 +245,20 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     private weak var webScrollView: NSScrollView?
     nonisolated(unsafe) private var scrollBoundsObserver: NSObjectProtocol?
 
-    override init(frame frameRect: NSRect) {
+    /// A spare's empty page also loads the math and code renderers, so it
+    /// can take most documents without a full page load.
+    private let isSpare: Bool
+
+    convenience init(spare: Bool) {
+        self.init(frame: .zero, spare: spare)
+    }
+
+    override convenience init(frame frameRect: NSRect) {
+        self.init(frame: frameRect, spare: false)
+    }
+
+    private init(frame frameRect: NSRect, spare: Bool) {
+        isSpare = spare
         let config = WKWebViewConfiguration()
         config.setURLSchemeHandler(assetScheme, forURLScheme: MarkdownAssetScheme.scheme)
         config.userContentController.addUserScript(Self.disableContextMenuScript)
@@ -329,13 +342,15 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let markdown = Self.warmupMarkdown
         let contentWidth = ContentWidthSetting.current.renderWidth
         let themeOverrides = Self.currentThemeOverrides()
+        let preloadsMathAndCode = isSpare
         Task { @concurrent [weak self] in
             let rendered = Self.timedRender(label: "warmup",
                                             markdown: markdown,
                                             assetBaseHref: baseHref,
                                             contentWidth: contentWidth,
                                             themeOverrides: themeOverrides,
-                                            warmup: true)
+                                            warmup: true,
+                                            preloadsMathAndCode: preloadsMathAndCode)
             await self?.applyWarmup(rendered)
         }
     }
@@ -355,6 +370,15 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    /// True once the empty launch page has loaded and no document has been
+    /// shown yet, so a new window can adopt this reader as is.
+    var isReadyAsSpare: Bool {
+        renderGeneration == 0 && isPageReady && superview == nil
+    }
+
+    /// True once any `display()` has been requested.
+    var hasRequestedDocument: Bool { renderGeneration > 0 }
 
     override func layout() {
         super.layout()
@@ -418,7 +442,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                                 assetBaseHref: String,
                                                 contentWidth: MarkdownHTML.ContentWidth,
                                                 themeOverrides: MarkdownHTML.ThemeOverrides? = nil,
-                                                warmup: Bool = false) -> MarkdownHTML.RenderedHTML {
+                                                warmup: Bool = false,
+                                                preloadsMathAndCode: Bool = false) -> MarkdownHTML.RenderedHTML {
         let t0 = DispatchTime.now()
         let rendered = MarkdownHTML.render(markdown: markdown,
                                            allowsScroll: true,
@@ -427,6 +452,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                            contentWidth: contentWidth,
                                            themeOverrides: themeOverrides,
                                            warmup: warmup,
+                                           preloadsMathAndCode: preloadsMathAndCode,
                                            pageTopClearance: MarkdownHTML.appPageTopClearance)
         let elapsedMs = Int(
             (Double(DispatchTime.now().uptimeNanoseconds - t0.uptimeNanoseconds)
@@ -519,9 +545,15 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     /// unconditional so a warmup-only page rendered under the old settings
     /// can't be fast-pathed into later.
     func reloadPreviewForSettingChange() {
+        discardLoadedPage()
+        reloadPreview()
+    }
+
+    /// Makes the next `display()` load a full page instead of updating the
+    /// loaded one.
+    func discardLoadedPage() {
         loadedFingerprint = nil
         isPageReady = false
-        reloadPreview()
     }
 
     /// User theme colors read at render time. The Quick Look extension
@@ -1598,6 +1630,12 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         else { return target }
         components.fragment = fragment
         return components.url ?? target
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        // The page is gone, so the next display() must load it again rather
+        // than call into it.
+        discardLoadedPage()
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

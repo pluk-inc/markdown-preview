@@ -4,6 +4,7 @@
 //
 
 import Cocoa
+import os
 import WebKit
 
 /// Where the preview should land after the next document render — a link
@@ -84,7 +85,7 @@ final class ContentViewController: NSViewController {
         container.translatesAutoresizingMaskIntoConstraints = false
         view = container
 
-        webView = MarkdownWebView()
+        webView = SpareReaderPool.shared.takeReader()
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.heightDidChange = { [weak self] _ in
             guard let self else { return }
@@ -102,6 +103,9 @@ final class ContentViewController: NSViewController {
             // fires heightDidChange, so this is the reliable signal.
             self?.applyPendingScrollAnchorIfNeeded()
             self?.updatePointerTracking()
+            guard let self, self.webView.hasRequestedDocument else { return }
+            self.handleFirstDocumentPaint()
+            SpareReaderPool.shared.documentDidPaint()
         }
         NotificationCenter.default.addObserver(self, selector: #selector(updatePointerTracking),
                                                name: UserDefaults.didChangeNotification, object: nil)
@@ -391,6 +395,25 @@ final class ContentViewController: NSViewController {
             guard let self else { return }
             self.pendingAnchorRestored?()
             self.pendingAnchorRestored = nil
+        }
+    }
+
+    private var didHandleFirstDocumentPaint = false
+
+    /// Two animation frames after the first document reached the DOM, its
+    /// frame is on screen.
+    private func handleFirstDocumentPaint() {
+        guard !didHandleFirstDocumentPaint else { return }
+        didHandleFirstDocumentPaint = true
+        webView.webView.callAsyncJavaScript(
+            "await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));",
+            arguments: [:], in: nil, in: .page
+        ) { _ in
+            #if DEBUG
+            Logger.perf.debug(
+                "[mdp-perf-open] painted t=\(DispatchTime.now().uptimeNanoseconds, privacy: .public) wall=\(Date().timeIntervalSince1970, privacy: .public)"
+            )
+            #endif
         }
     }
 
