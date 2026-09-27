@@ -86,6 +86,10 @@ final class MainSplitViewController: NSSplitViewController {
         }
     }
 
+    func showSnapshot(_ prefetch: DocumentSnapshotCache.Prefetch) {
+        contentViewController?.showSnapshot(prefetch)
+    }
+
     func display(markdown: String, fileName: String, url: URL?, assetBaseURL: URL?) {
         contentViewController?.display(
             markdown: markdown,

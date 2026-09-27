@@ -364,6 +364,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         isEditing ? nil : tableUndoManager
     }
 
+    /// A saved image of the document, decoding while the window is built.
+    var pendingSnapshot: DocumentSnapshotCache.Prefetch?
+
     func display(markdown: String, fileURL: URL?) {
         tableUndoManager.removeAllActions()
         currentFileURL = fileURL
@@ -376,6 +379,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             ?? NSLocalizedString("Untitled", comment: "Window title when no document is open")
         updateWindowSubtitle()
         attachToExistingTabGroupIfNeeded()
+        if let pendingSnapshot {
+            self.pendingSnapshot = nil
+            (documentWindow.contentViewController as? MainSplitViewController)?
+                .showSnapshot(pendingSnapshot)
+        }
         documentWindow.makeKeyAndOrderFront(nil)
         #if DEBUG
         Logger.perf.debug(

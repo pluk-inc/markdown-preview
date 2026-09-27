@@ -38,7 +38,12 @@ final class MarkdownDocument: NSDocument {
     }
 
     override func makeWindowControllers() {
+        // Start decoding the saved image before the window is built.
+        let snapshot = folderURL == nil
+            ? DocumentSnapshotCache.shared.prefetch(fileURL: fileURL, markdown: markdown)
+            : nil
         let controller = DocumentWindowController()
+        controller.pendingSnapshot = snapshot
         addWindowController(controller)
         if let folderURL {
             controller.display(markdown: "", fileURL: nil)

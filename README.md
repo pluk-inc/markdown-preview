@@ -86,6 +86,7 @@ Or grab the latest signed and notarized DMG from the [Releases](https://github.c
 - **Command line tools** — install `mdp`, `md-preview`, and `markdown-preview` from the app menu, then open files or folders from any shell with commands like `mdp README.md` or `mdp .`.
 - **URL scheme** — open a file or folder from a browser link or another app with `md-preview://file/<absolute path>` (e.g. `md-preview://file/Users/me/project/README.md`), the same shape as `cursor://file/…`. Percent-encode special characters in the path (a space becomes `%20`).
 - **Default handler** — offers to register itself as the default `.md` opener on first launch.
+- **Fast opening** — a document you open again shows its first screen at once from a saved image while the page loads; the app keeps the images for the 40 most recent documents in its own cache, and they never leave your Mac. While a document window is open, the next document reuses a web view prepared in the background; closing the last window frees it.
 
 ## Supported file types
 

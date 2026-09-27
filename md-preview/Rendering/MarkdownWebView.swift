@@ -393,6 +393,10 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     /// True once any `display()` has been requested.
     var hasRequestedDocument: Bool { renderGeneration > 0 }
 
+    /// True when the last displayed document needs math, Mermaid or script
+    /// highlighting, which change the page after its first paint.
+    private(set) var lastDisplayNeedsLateRenderers = true
+
     override func layout() {
         super.layout()
         configureWebKitScrollView()
@@ -503,6 +507,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             mermaid: rendered.containsMermaid,
             code: rendered.containsCode
         )
+        lastDisplayNeedsLateRenderers = fingerprint.math || fingerprint.mermaid || fingerprint.code
 
         // Fast path: the loaded page already has every renderer the new doc
         // needs — swap the article body via JS instead of reloading the

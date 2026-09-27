@@ -218,6 +218,9 @@ final class ContentViewController: NSViewController {
         sourceURL: URL?,
         assetBaseURL: URL? = nil
     ) {
+        if !webView.hasRequestedDocument, let sourceURL {
+            snapshotSource = (sourceURL, DocumentSnapshotCache.hash(markdown))
+        }
         exportSource = ExportSource(
             markdown: markdown,
             sourceURL: sourceURL,
@@ -399,21 +402,88 @@ final class ContentViewController: NSViewController {
     }
 
     private var didHandleFirstDocumentPaint = false
+    private var snapshotOverlay: DocumentSnapshotOverlayView?
+    private var snapshotWebViewFrame: NSRect?
+    /// The file and content hash of the first document, for its snapshot.
+    private var snapshotSource: (url: URL, contentHash: String)?
+    private var shownSnapshotMetadata: DocumentSnapshotCache.Metadata?
+
+    /// Covers the reader with the saved image of this document, if it
+    /// matches what the page will look like. Call before the window shows.
+    func showSnapshot(_ prefetch: DocumentSnapshotCache.Prefetch) {
+        guard snapshotOverlay == nil,
+              let expected = snapshotMetadata(contentHash: prefetch.contentHash),
+              let image = DocumentSnapshotCache.shared.image(for: prefetch, expected: expected),
+              let container = webView.superview else { return }
+        var frame = webView.frame
+        let inset = CGFloat(expected.topInset)
+        frame.size.height -= inset
+        if container.isFlipped { frame.origin.y += inset }
+        let overlay = DocumentSnapshotOverlayView(image: image, frame: frame,
+                                                  scale: view.window?.backingScaleFactor ?? 2)
+        container.addSubview(overlay, positioned: .above, relativeTo: webView)
+        snapshotOverlay = overlay
+        snapshotWebViewFrame = webView.frame
+        shownSnapshotMetadata = expected
+    }
+
+    private func removeSnapshotOverlay() {
+        snapshotOverlay?.removeFromSuperview()
+        snapshotOverlay = nil
+    }
+
+    /// The inset the page will use, even before the window has applied it.
+    private var snapshotTopInset: CGFloat {
+        if #available(macOS 26.0, *) {
+            return fullChromeTopInset
+        }
+        return 0
+    }
+
+    private func snapshotMetadata(contentHash: String) -> DocumentSnapshotCache.Metadata? {
+        let size = webView.bounds.size
+        guard size.width > 0, size.height > 0,
+              let scale = view.window?.backingScaleFactor else { return nil }
+        let isDark = view.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        return DocumentSnapshotCache.Metadata(
+            contentHash: contentHash,
+            pixelWidth: Int((size.width * scale).rounded()),
+            pixelHeight: Int((size.height * scale).rounded()),
+            isDark: isDark,
+            settings: ReaderRenderSettings.current.fingerprint,
+            zoom: Double(webView.pageZoom),
+            topInset: Double(snapshotTopInset)
+        )
+    }
 
     /// Two animation frames after the first document reached the DOM, its
-    /// frame is on screen.
+    /// frame is on screen: the snapshot can go, and a new one can be saved.
     private func handleFirstDocumentPaint() {
         guard !didHandleFirstDocumentPaint else { return }
         didHandleFirstDocumentPaint = true
         webView.webView.callAsyncJavaScript(
             "await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));",
             arguments: [:], in: nil, in: .page
-        ) { _ in
+        ) { [weak self] _ in
             #if DEBUG
             Logger.perf.debug(
-                "[mdp-perf-open] painted t=\(DispatchTime.now().uptimeNanoseconds, privacy: .public) wall=\(Date().timeIntervalSince1970, privacy: .public)"
+                "[mdp-perf-open] painted t=\(DispatchTime.now().uptimeNanoseconds, privacy: .public) wall=\(Date().timeIntervalSince1970, privacy: .public) snapshot=\(self?.snapshotOverlay != nil, privacy: .public)"
             )
             #endif
+            self?.removeSnapshotOverlay()
+            self?.saveSnapshotIfNeeded()
+        }
+    }
+
+    private func saveSnapshotIfNeeded() {
+        guard let source = snapshotSource,
+              !webView.lastDisplayNeedsLateRenderers,
+              currentScrollPosition == 0,
+              let metadata = snapshotMetadata(contentHash: source.contentHash),
+              metadata != shownSnapshotMetadata else { return }
+        webView.webView.takeSnapshot(with: nil) { image, _ in
+            guard let cgImage = image?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+            DocumentSnapshotCache.shared.store(cgImage, fileURL: source.url, metadata: metadata)
         }
     }
 
@@ -439,6 +509,9 @@ final class ContentViewController: NSViewController {
 
     override func viewDidLayout() {
         super.viewDidLayout()
+        if snapshotOverlay != nil, webView.frame != snapshotWebViewFrame {
+            removeSnapshotOverlay()
+        }
         updateObscuredContentInsets()
     }
 
