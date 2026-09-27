@@ -263,6 +263,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         config.setURLSchemeHandler(assetScheme, forURLScheme: MarkdownAssetScheme.scheme)
         config.userContentController.addUserScript(Self.disableContextMenuScript)
         config.userContentController.add(messageBridge, name: HostBridge.name)
+        Self.disableUserInstalledFonts(in: config.preferences)
         webView = PreviewWKWebView(frame: .zero, configuration: config)
         super.init(frame: frameRect)
 
@@ -370,6 +371,18 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    /// Reader fonts are all system fonts, and DOMPurify strips page styles,
+    /// so pages never need user-installed fonts. Turning them off stops WebKit
+    /// registering those fonts with the font service during start-up, which
+    /// blocks the main thread (about 30 ms of cold launch).
+    private static func disableUserInstalledFonts(in preferences: WKPreferences) {
+        let selector = NSSelectorFromString("_setShouldAllowUserInstalledFonts:")
+        guard preferences.responds(to: selector) else { return }
+        typealias Setter = @convention(c) (AnyObject, Selector, Bool) -> Void
+        let setter = unsafeBitCast(preferences.method(for: selector), to: Setter.self)
+        setter(preferences, selector, false)
+    }
 
     /// True once the empty launch page has loaded and no document has been
     /// shown yet, so a new window can adopt this reader as is.
