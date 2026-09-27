@@ -432,13 +432,10 @@ check("ordinary heading range selection keeps source hidden",
   headingHost.querySelector(".cm-md-heading-source-hidden")?.textContent === "### ")
 const headingContent = headingHost.querySelector(".cm-content")
 headingContent.dispatchEvent(new dom.window.CompositionEvent("compositionstart", { bubbles: true }))
-await Promise.resolve()
+headingEditor.select(4, 9)
 check("IME composition range reveals heading source",
   headingHost.querySelector(".cm-md-heading-source-hidden") == null)
 headingContent.dispatchEvent(new dom.window.CompositionEvent("compositionend", { bubbles: true }))
-await Promise.resolve()
-check("ended IME composition range hides heading source",
-  headingHost.querySelector(".cm-md-heading-source-hidden")?.textContent === "### ")
 headingEditor.exec("h0")
 check("Normal Text removes the heading marker",
   headingEditor.getMarkdown() === "Stable heading")

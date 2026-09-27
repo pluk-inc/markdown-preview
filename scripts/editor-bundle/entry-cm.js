@@ -2181,19 +2181,15 @@ function formattingState(state) {
 
 const livePreview = ViewPlugin.fromClass(class {
   constructor(view) {
-    this.compositionStarted = view.compositionStarted
     this.detectedCodeCache = new Map()
     this.decorations = buildDecorations(view, this.detectedCodeCache)
     this.codeWrappers = codeBlockWrappers(this.decorations, view.state)
   }
   update(update) {
     if (update.docChanged) this.detectedCodeCache.clear()
-    const compositionChanged = this.compositionStarted !== update.view.compositionStarted
-    this.compositionStarted = update.view.compositionStarted
     // Background parsing can finish without a document, selection, or viewport
     // change. Refresh widgets then too, or images can stay as source until input.
     if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged
-        || compositionChanged
         || update.startState.field(pointerPreview) !== update.state.field(pointerPreview)
         || update.startState.field(wrappedCodeBlocks) !== update.state.field(wrappedCodeBlocks)
         || syntaxTree(update.startState) !== syntaxTree(update.state)
@@ -2203,10 +2199,6 @@ const livePreview = ViewPlugin.fromClass(class {
     }
   }
 }, {
-  eventObservers: {
-    compositionstart(_event, view) { Promise.resolve().then(() => view.dispatch({})) },
-    compositionend(_event, view) { Promise.resolve().then(() => view.dispatch({})) },
-  },
   decorations: (v) => v.decorations,
   provide: plugin => EditorView.blockWrappers.of(view => view.plugin(plugin)?.codeWrappers ?? BlockWrapper.set([])),
 })
