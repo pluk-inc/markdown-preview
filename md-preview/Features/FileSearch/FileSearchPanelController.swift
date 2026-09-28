@@ -193,7 +193,9 @@ final class FileSearchPanelController: NSViewController {
         resultsHeightConstraint = resultsHeight
         NSLayoutConstraint.activate([
             resultsHeight,
-            queryField.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
+            // Center the field in the 52-point search row, including when
+            // results expand the panel below it.
+            queryField.centerYAnchor.constraint(equalTo: container.topAnchor, constant: 26),
             searchIcon.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
             searchIcon.centerYAnchor.constraint(equalTo: queryField.centerYAnchor),
             searchIcon.widthAnchor.constraint(equalToConstant: 22),
