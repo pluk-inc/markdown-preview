@@ -189,6 +189,49 @@ final class EditorFormattingTests: XCTestCase {
         }
     }
 
+    func testNewTaskAfterDoubleEnterKeepsBlankLineAndCaretPosition() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: "- [ ] First", editorJavaScript: script),
+                                          width: 650, isEditor: true, height: 500)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        let result = try await editor.webView.callAsyncJavaScript("""
+            const api = window.__mdEditor;
+            document.hasFocus = () => true;
+            const settle = async () => {
+                for (let i = 0; i < 12; i++) { window.__layoutTestFrame(); await Promise.resolve(); }
+            };
+            api.select(api.getMarkdown().length); api.focus();
+            const enter = async () => {
+                document.querySelector('.cm-content').dispatchEvent(new KeyboardEvent('keydown',
+                    {key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true}));
+                await settle();
+            };
+            await enter(); await enter();
+            const lastLineTop = () => [...document.querySelectorAll('.cm-line')].at(-1).getBoundingClientRect().top;
+            const before = lastLineTop();
+            const positions = [];
+            for (const character of '- [ ] Second') {
+                const range = api.getLinkSelection();
+                api.insertTextAt(character, range.from, range.to);
+                await settle();
+                positions.push(lastLineTop());
+            }
+            const lines = [...document.querySelectorAll('.cm-line')];
+            return {before, positions, source: api.getMarkdown(),
+                blankHeight: lines[1].getBoundingClientRect().height,
+                caret: api.getLinkSelection().from};
+            """, arguments: [:], in: nil, contentWorld: .page) as? [String: Any]
+        let before = try XCTUnwrap(result?["before"] as? Double)
+        for top in try XCTUnwrap(result?["positions"] as? [Double]) {
+            XCTAssertGreaterThanOrEqual(top, before - 0.5, "Starting a new task must not collapse the separator above it")
+        }
+        XCTAssertGreaterThan(try XCTUnwrap(result?["blankHeight"] as? Double), 0)
+        let source = "- [ ] First\n\n- [ ] Second"
+        XCTAssertEqual(result?["source"] as? String, source)
+        XCTAssertEqual(result?["caret"] as? Int, source.utf16.count)
+    }
+
     func testTypedTaskCheckboxContinuesAndExitsOnEmptyItem() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: "", editorJavaScript: script),

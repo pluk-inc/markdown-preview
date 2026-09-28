@@ -2167,14 +2167,13 @@ function buildDecorations(view, detectedCodeCache) {
           // list starts at its first item, so "first" is a position check.
           const isFirstItem = node.from === listStack[listStack.length - 1]
           const isNested = listStack.length > 1
-          if (!isFirstItem) {
-            let number = state.doc.lineAt(node.from).number - 1
-            while (number > 0 && state.doc.line(number).text.trim() === "") {
-              lineOnce(state.doc.line(number).from, blockSeparatorLine(0))
-              number--
-            }
-          }
-          if (!isFirstItem || isNested) lineOnce(node.from, listItemGapLine)
+          // Authored blank lines must keep their editing height. Markdown
+          // can parse a new marker after a blank as another item in the same
+          // list; collapsing that separator pulls the caret upward mid-typing.
+          const itemLine = state.doc.lineAt(node.from)
+          const hasBlankBefore = itemLine.number > 1
+            && state.doc.line(itemLine.number - 1).text.trim() === ""
+          if ((!isFirstItem || isNested) && !hasBlankBefore) lineOnce(node.from, listItemGapLine)
           eachLine(node.from, node.to, listItemLine)
           lineOnce(node.from, listDepthLine(listStack.length))
           listDepthPositions.add(state.doc.lineAt(node.from).from)
