@@ -35,12 +35,6 @@ struct WhatsNewFeature: Identifiable {
             ))
         }
         features.append(WhatsNewFeature(
-            id: "faster-opening",
-            symbol: "hare",
-            title: L("Faster document opening"),
-            detail: L("Improved rendering shows documents sooner, and files you reopen appear right away.")
-        ))
-        features.append(WhatsNewFeature(
             id: "code-block-controls",
             symbol: "curlybraces.square",
             title: L("Redesigned code blocks"),
@@ -193,27 +187,36 @@ enum WhatsNewWindow {
         hadUsedAppBeforeLaunch = priorUseKeys.contains { UserDefaults.standard.bool(forKey: $0) }
     }
 
-    /// Called each time a document window shows content. The first window
-    /// still on screen, without a sheet, once the delay passes decides for
-    /// the launch; until one does, later windows try again. Only a reader
+    /// Called each time a document window shows content. Only a reader
     /// updating from a build older than `WhatsNewPolicy.featuresBuild` sees
-    /// the window.
+    /// the window, once, over a document window that is on screen without a
+    /// sheet when the delay passes.
     static func presentIfNeeded(over documentWindow: NSWindow) {
         guard !didHandleAutomaticPresentation, !isAutomaticPresentationScheduled else { return }
-        isAutomaticPresentationScheduled = true
+        scheduleAutomaticPresentation(preferring: documentWindow)
+    }
 
+    private static func scheduleAutomaticPresentation(preferring documentWindow: NSWindow?) {
+        isAutomaticPresentationScheduled = true
         DispatchQueue.main.asyncAfter(deadline: .now() + automaticPresentationDelay) { [weak documentWindow] in
             isAutomaticPresentationScheduled = false
-            // A sheet (a save panel, an alert) means the reader is busy, and
-            // a closed window falls back to the frontmost document window.
-            let target = [documentWindow, NSApp.mainWindow].compactMap { $0 }.first {
-                $0.isVisible && $0.attachedSheet == nil
-                    && $0.windowController is DocumentWindowController
+            // The window that asked comes first, then the front document
+            // window, then any other; one with a sheet (a save panel, an
+            // alert) is busy.
+            let documentWindows = ([documentWindow, NSApp.mainWindow] + NSApp.orderedWindows)
+                .compactMap { $0 }
+                .filter { $0.isVisible && $0.windowController is DocumentWindowController }
+            guard let target = documentWindows.first(where: { $0.attachedSheet == nil }) else {
+                // Every document window is busy: look again once the reader
+                // may be done. With none left, the next one to open asks.
+                if !documentWindows.isEmpty {
+                    scheduleAutomaticPresentation(preferring: documentWindows.first)
+                }
+                return
             }
-            guard let target else { return }
 
             // Claimed only now that the window can show, so a reader whose
-            // document closed during the delay is asked again next time.
+            // documents closed during the delay is asked again next time.
             didHandleAutomaticPresentation = true
             let thisBuild = (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String)
                 .flatMap(Int.init) ?? 0

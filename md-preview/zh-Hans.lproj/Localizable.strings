@@ -322,5 +322,3 @@
 "On macOS 26 and later, the formatting bar uses Liquid Glass, with headings, links, lists, and styles in compact groups." = "在 macOS 26 及更高版本上，格式栏采用 Liquid Glass 设计，标题、链接、列表和样式分组排列，更加紧凑。";
 "Redesigned code blocks" = "全新设计的代码块";
 "Wrap long lines with one click. Code blocks now use rounded cards that show their language." = "一键为长代码行换行。代码块现采用圆角卡片设计，并显示其语言。";
-"Faster document opening" = "更快地打开文稿";
-"Improved rendering shows documents sooner, and files you reopen appear right away." = "改进的渲染方式让文稿更快显示，重新打开的文件也会立即出现。";
