@@ -71,6 +71,7 @@ final class ContentViewController: NSViewController {
     private static let stickyReleaseFraction: CGFloat = 1.0 / 3.0
 
     var activeHeadingDidChange: ((Int?) -> Void)?
+    var zoomDidChange: ((CGFloat) -> Void)?
     var taskCheckboxToggled: ((Int, Bool) -> Void)?
     var tableEditRequested: ((MarkdownTableEditRequest) -> Void)?
     var localMarkdownLinkActivated: ((URL) -> Void)?
@@ -131,6 +132,7 @@ final class ContentViewController: NSViewController {
         webView.zoomDidChange = { [weak self] zoom in
             self?.webViewCenteredLeadingConstraint?.constant =
                 -MarkdownHTML.preferredPageWidth * zoom / 2
+            self?.zoomDidChange?(zoom)
         }
         webView.scrollDidChange = { [weak self] in
             self?.evaluateActiveHeading()

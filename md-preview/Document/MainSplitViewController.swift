@@ -72,6 +72,9 @@ final class MainSplitViewController: NSSplitViewController {
         }
 
         // Wired after addSplitViewItem so the accessors are non-nil.
+        contentViewController?.zoomDidChange = { [weak self] zoom in
+            self?.cachedEditorViewController?.applyPageZoom(zoom)
+        }
         contentViewController?.activeHeadingDidChange = { [weak self] headingID in
             self?.sidebarViewController?.setActiveHeading(headingID)
         }
