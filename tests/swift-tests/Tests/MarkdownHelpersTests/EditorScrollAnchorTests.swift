@@ -4,6 +4,43 @@ import XCTest
 
 @MainActor
 final class EditorScrollAnchorTests: XCTestCase {
+    func testTaskCheckboxGeometryMatchesReadMode() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let source = "Outside the task list\n\n- [x] Independent task\n- [ ] Testing"
+        var measurements: [[Double]] = []
+        for isEditor in [false, true] {
+            let html = isEditor ? EditorHTML.render(markdown: source, editorJavaScript: script)
+                : MarkdownHTML.render(markdown: source, allowsScroll: true).html
+            let harness = WebViewLayoutHarness(html: html, width: 650, isEditor: isEditor, height: 400)
+            defer { harness.close() }
+            _ = try await harness.layout(texts: [], imageCount: 0)
+            let result = try await harness.webView.callAsyncJavaScript("""
+                const rect = label => {
+                    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                    while (walker.nextNode()) {
+                        const offset = walker.currentNode.textContent.indexOf(label);
+                        if (offset < 0 || walker.currentNode.parentElement.closest('script, style')) continue;
+                        const range = document.createRange();
+                        range.setStart(walker.currentNode, offset); range.setEnd(walker.currentNode, offset + 1);
+                        return {bounds: range.getBoundingClientRect(), element: walker.currentNode.parentElement};
+                    }
+                    throw new Error('Missing label');
+                };
+                const origin = rect('Outside the task list').bounds.left;
+                return ['Independent task', 'Testing'].flatMap(label => {
+                    const text = rect(label);
+                    const line = text.element.closest(isEditor ? '.cm-line' : 'li');
+                    const box = line.querySelector('input[type=checkbox]').getBoundingClientRect();
+                    return [text.bounds.left - box.right, box.left - origin, text.bounds.left - origin, box.width];
+                });
+                """, arguments: ["isEditor": isEditor], in: nil, contentWorld: .page)
+            measurements.append(try XCTUnwrap(result as? [Double]))
+        }
+        for index in measurements[0].indices {
+            XCTAssertEqual(measurements[0][index], measurements[1][index], accuracy: 1, "Geometry component \(index)")
+        }
+    }
+
     func testDocumentControlsFollowThemeAccentInReaderAndEditor() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let source = "Introduction\n\n- Bullet\n\n1. Number\n\n[Link](https://example.com)"

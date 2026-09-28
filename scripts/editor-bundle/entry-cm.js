@@ -1226,7 +1226,7 @@ class TaskCheckboxWidget extends WidgetType {
         insert: checkbox.checked ? 'x' : ' ' }, userEvent: 'input' })
       view.focus()
     })
-    wrapper.append(checkbox)
+    wrapper.append(checkbox, document.createTextNode(" "))
     return wrapper
   }
   ignoreEvent() { return true }
@@ -1375,6 +1375,7 @@ const quoteLine = (depth, starts, ends, gap) => {
 // hanging indent, and the source indentation is hidden like a nested
 // marker's.
 const listContinuationLine = Decoration.line({ class: "cm-md-list-continuation" })
+const taskLine = Decoration.line({ class: "cm-md-task-line" })
 const completedTaskLine = Decoration.line({ class: "cm-md-task-completed" })
 const codeLine = Decoration.line({ class: "cm-md-codeblock" })
 const codeLineFirst = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-first" })
@@ -1796,6 +1797,7 @@ function buildDecorations(view, detectedCodeCache) {
       && /^\s*\[[ xX]\](\s|$)/.test(line.text.slice(markerTo - line.from))
     if (isTask) {
       const task = line.text.slice(markerTo - line.from).match(/^[ \t]*\[([ xX])\][ \t]?/)
+      lineOnce(line.from, taskLine)
       if (task[1] !== ' ') lineOnce(line.from, completedTaskLine)
       const bracket = markerTo + task[0].indexOf('[')
       ranges.push(Decoration.replace({ widget: new TaskCheckboxWidget(bracket + 1, task[1] !== ' ') })
@@ -2216,6 +2218,7 @@ function buildDecorations(view, detectedCodeCache) {
           const line = state.doc.lineAt(node.from)
           const isTask = /^\s*\[[ xX]\](\s|$)/.test(line.text.slice(node.to - line.from))
           if (isTask && /^[-+*]$/.test(mark)) {
+            lineOnce(line.from, taskLine)
             const task = line.text.slice(node.to - line.from).match(/^[ \t]*\[([ xX])\][ \t]?/)
             const bracket = node.to + task[0].indexOf('[')
             ranges.push(Decoration.replace({ widget: new TaskCheckboxWidget(bracket + 1, task[1] !== ' ') })

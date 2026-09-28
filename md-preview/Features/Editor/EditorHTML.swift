@@ -287,13 +287,11 @@ nonisolated enum EditorHTML {
             color: var(--secondary);
             text-decoration: line-through;
         }
+        #editor .cm-md-task-line {
+            text-indent: 0 !important;
+        }
         .cm-md-task-marker {
-            display: inline-block;
-            width: 2.1em;
-            text-indent: 0;
-            text-align: end;
-            padding-inline-end: 0.3em;
-            box-sizing: border-box;
+            display: inline;
         }
         .cm-md-task-marker input {
             appearance: none;
@@ -302,6 +300,8 @@ nonisolated enum EditorHTML {
             width: 0.9em;
             height: 0.9em;
             margin: 0;
+            margin-inline-start: calc(-0.9em - 0.75em);
+            margin-inline-end: 0.75em;
             vertical-align: calc(0.5cap - 0.45em);
             border: 1.5px solid var(--grid);
             border-radius: 25%;
