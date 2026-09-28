@@ -640,7 +640,11 @@ private final class FileSearchRowView: NSTableCellView {
         path.translatesAutoresizingMaskIntoConstraints = false
 
         name.lineBreakMode = .byTruncatingTail
-        path.lineBreakMode = .byTruncatingHead
+        path.lineBreakMode = .byTruncatingMiddle
+        name.maximumNumberOfLines = 1
+        path.maximumNumberOfLines = 1
+        name.cell?.usesSingleLineMode = true
+        path.cell?.usesSingleLineMode = true
 
         addSubview(icon)
         addSubview(name)
@@ -677,7 +681,8 @@ private final class FileSearchRowView: NSTableCellView {
                                                       in: fileName,
                                                       base: Self.nameFont,
                                                       emphasis: Self.nameMatchFont,
-                                                      color: .labelColor)
+                                                      color: .labelColor,
+                                                      paragraphStyle: Self.nameParagraphStyle)
 
         // A slash in the query matches the path, so show the whole path for
         // the emphasis to sit on. Otherwise the name above already is the last
@@ -687,7 +692,8 @@ private final class FileSearchRowView: NSTableCellView {
             : relativePath
         let breadcrumb = NSMutableAttributedString(attributedString: Self.emphasising(
             pathRanges, in: subtitle, base: Self.pathFont,
-            emphasis: Self.pathMatchFont, color: .secondaryLabelColor
+            emphasis: Self.pathMatchFont, color: .secondaryLabelColor,
+            paragraphStyle: Self.pathParagraphStyle
         ))
         // Replace separators after applying match ranges, preserving Unicode
         // offsets and emphasis while making the hierarchy easier to scan.
@@ -698,7 +704,8 @@ private final class FileSearchRowView: NSTableCellView {
         if let projectRoot {
             let prefix = projectRoot.lastPathComponent + (subtitle.isEmpty ? "" : " › ")
             breadcrumb.insert(NSAttributedString(string: prefix, attributes: [
-                .font: Self.pathFont, .foregroundColor: NSColor.secondaryLabelColor
+                .font: Self.pathFont, .foregroundColor: NSColor.secondaryLabelColor,
+                .paragraphStyle: Self.pathParagraphStyle
             ]), at: 0)
             path.toolTip = projectRoot.appendingPathComponent(relativePath).path
         } else {
@@ -716,10 +723,11 @@ private final class FileSearchRowView: NSTableCellView {
                                     in string: String,
                                     base: NSFont,
                                     emphasis: NSFont,
-                                    color: NSColor) -> NSAttributedString {
+                                    color: NSColor,
+                                    paragraphStyle: NSParagraphStyle) -> NSAttributedString {
         let attributed = NSMutableAttributedString(
             string: string,
-            attributes: [.font: base, .foregroundColor: color]
+            attributes: [.font: base, .foregroundColor: color, .paragraphStyle: paragraphStyle]
         )
         for range in FileSearchMatcher.nsRanges(ranges, in: string) {
             attributed.addAttribute(.font, value: emphasis, range: range)
@@ -731,6 +739,20 @@ private final class FileSearchRowView: NSTableCellView {
     private static let nameMatchFont = NSFont.systemFont(ofSize: 13, weight: .bold)
     private static let pathFont = NSFont.systemFont(ofSize: 11)
     private static let pathMatchFont = NSFont.systemFont(ofSize: 11, weight: .bold)
+
+    // Attributed strings need their own line-break policy; the field's setting
+    // alone does not prevent the default paragraph style from wrapping.
+    private static let nameParagraphStyle: NSParagraphStyle = {
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byTruncatingTail
+        return style.copy() as! NSParagraphStyle
+    }()
+
+    private static let pathParagraphStyle: NSParagraphStyle = {
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byTruncatingMiddle
+        return style.copy() as! NSParagraphStyle
+    }()
 }
 
 /// A text field that never draws a focus ring.
