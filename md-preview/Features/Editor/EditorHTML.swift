@@ -292,7 +292,7 @@ nonisolated enum EditorHTML {
             width: 2.1em;
             text-indent: 0;
             text-align: end;
-            padding-inline-end: 0.6em;
+            padding-inline-end: 0.3em;
             box-sizing: border-box;
         }
         .cm-md-task-marker input {
