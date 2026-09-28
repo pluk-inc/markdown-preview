@@ -491,7 +491,10 @@ final class ContentViewController: NSViewController {
               let metadata = snapshotMetadata(contentHash: source.contentHash),
               metadata != shownSnapshotMetadata else { return }
         webView.webView.takeSnapshot(with: nil) { [weak self] image, _ in
+            // The capture is asynchronous: drop it if the document, size,
+            // appearance or settings changed before WebKit took the image.
             guard let self, self.isShowingSnapshotSource(source),
+                  self.snapshotMetadata(contentHash: source.contentHash) == metadata,
                   let cgImage = image?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
             DocumentSnapshotCache.shared.store(cgImage, fileURL: source.url, metadata: metadata)
         }
