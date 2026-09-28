@@ -4,6 +4,73 @@ import XCTest
 
 @MainActor
 final class EditorFormattingTests: XCTestCase {
+    func testFormattingMissingTableCellsDoesNotTargetBodySelection() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        for command in ["bold", "keyboard", "link"] {
+            let source = "Before\n\n| First | Second |\n| --- | --- |\n| One |"
+            let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: source, editorJavaScript: script),
+                                              width: 650, isEditor: true, height: 400)
+            defer { editor.close() }
+            _ = try await editor.layout(texts: [], imageCount: 0)
+            let result = try await editor.webView.callAsyncJavaScript("""
+                const api = window.__mdEditor;
+                api.select(0, 6);
+                const selector = '[data-table-row="1"][data-table-column="1"]';
+                const cell = document.querySelector(selector);
+                cell.focus();
+                cell.replaceChildren(document.createTextNode(''));
+                window.getSelection().setBaseAndExtent(cell.firstChild, 0, cell.firstChild, 0);
+                if (command === 'keyboard') {
+                    cell.dispatchEvent(new KeyboardEvent('keydown', {key: 'b', metaKey: true,
+                        bubbles: true, cancelable: true}));
+                } else if (command === 'link') {
+                    const selected = api.getLinkSelection();
+                    api.insertLinkFromPopover('Link', 'https://example.com', selected.from, selected.to);
+                } else {
+                    cell.blur();
+                    api.exec(command);
+                }
+                return {source: api.getMarkdown(), value: document.querySelector(selector).textContent};
+                """, arguments: ["command": command], in: nil, contentWorld: .page) as? [String: Any]
+            XCTAssertTrue((result?["source"] as? String)?.hasPrefix("Before\n\n") == true, command)
+            XCTAssertEqual(result?["value"] as? String,
+                           command == "link" ? "[Link](https://example.com)" : "****", command)
+        }
+    }
+
+    func testTableFormattingRejectsTargetAfterDocumentReplacement() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let source = "Before\n\n| Name |\n| --- |\n| Ada |"
+        let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: source, editorJavaScript: script),
+                                          width: 650, isEditor: true, height: 400)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        let result = try await editor.webView.evaluateJavaScript("""
+            (() => {
+                const api = window.__mdEditor;
+                api.select(0, 6);
+                const cell = document.querySelector('[data-table-row="1"]');
+                cell.focus();
+                window.getSelection().setBaseAndExtent(cell.firstChild, 0, cell.firstChild, 3);
+                const oldLink = api.getLinkSelection();
+                const replacement = 'Updated before\\n\\n| Name |\\n| --- |\\n| Grace |';
+                api.replaceMarkdown(replacement);
+                api.exec('bold');
+                const rejectedBold = api.getMarkdown() === replacement;
+                const rejectedLink = api.insertLinkFromPopover('Ada', 'https://example.com', oldLink.from, oldLink.to) === false;
+                const selected = api.getLinkSelection();
+                const untouched = api.getMarkdown() === replacement;
+                api.select(0, 7);
+                api.exec('italic');
+                const resumed = api.getMarkdown().startsWith('*Updated* before');
+                return {rejectedBold, rejectedLink, invalidSelection: selected === null, untouched, resumed};
+            })()
+            """) as? [String: Any]
+        for key in ["rejectedBold", "rejectedLink", "invalidSelection", "untouched", "resumed"] {
+            XCTAssertEqual(result?[key] as? Bool, true, key)
+        }
+    }
+
     func testTableClickAnchorsBeforeRevealingSyntax() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         for cell in ["**target words**", "*target words*", "~~target words~~",

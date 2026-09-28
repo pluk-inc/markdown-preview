@@ -260,6 +260,21 @@ final class MdPreviewUpdateTests: XCTestCase {
     @MainActor
     func testReaderTablesAndTasksStayReadOnlyAcrossUpdates() async throws {
         let webView = try await loadHarness(articleAttributes: "", stubsWebKitMessageHandler: true)
+        let pasteboard = NSPasteboard.general
+        let savedItems = (pasteboard.pasteboardItems ?? []).map { item in
+            let copy = NSPasteboardItem()
+            for type in item.types {
+                if let data = item.data(forType: type) { copy.setData(data, forType: type) }
+            }
+            return copy
+        }
+        var copiedChangeCount: Int?
+        defer {
+            if pasteboard.changeCount == copiedChangeCount {
+                pasteboard.clearContents()
+                pasteboard.writeObjects(savedItems)
+            }
+        }
         let article = MarkdownHTML.render(markdown: """
             | Name | Value |
             | --- | --- |
@@ -301,12 +316,6 @@ final class MdPreviewUpdateTests: XCTestCase {
                 selection.removeAllRanges();
                 selection.addRange(range);
                 const selectedText = selection.toString();
-                const copied = {};
-                const copy = new Event('copy', { bubbles: true, cancelable: true });
-                Object.defineProperty(copy, 'clipboardData', {
-                    value: { setData(type, value) { copied[type] = value; } }
-                });
-                cell.dispatchEvent(copy);
                 return JSON.stringify({
                     unchanged: table.outerHTML === before,
                     stableHeight: table.getBoundingClientRect().height === height,
@@ -317,7 +326,6 @@ final class MdPreviewUpdateTests: XCTestCase {
                     contextPrevented: context.defaultPrevented,
                     pastePrevented: paste.defaultPrevented,
                     selectedText,
-                    copiedText: copied['text/plain'] || selectedText,
                     link: table.querySelector('a').getAttribute('href'),
                     mutations: window.__hostMessages.filter(message =>
                         ['tableEdit', 'tableContextMenu', 'taskCheckbox'].includes(message.kind)).length
@@ -335,7 +343,16 @@ final class MdPreviewUpdateTests: XCTestCase {
             XCTAssertEqual(state["editorCount"] as? Int, 0, json)
             XCTAssertEqual(state["mutations"] as? Int, 0, json)
             XCTAssertEqual(state["selectedText"] as? String, "Ada", json)
-            XCTAssertEqual(state["copiedText"] as? String, "Ada", json)
+            pasteboard.clearContents()
+            copiedChangeCount = pasteboard.changeCount
+            XCTAssertTrue(webView.responds(to: NSSelectorFromString("copy:")))
+            webView.perform(NSSelectorFromString("copy:"), with: nil)
+            for _ in 0..<100 {
+                if pasteboard.changeCount != copiedChangeCount { break }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            copiedChangeCount = pasteboard.changeCount
+            XCTAssertEqual(pasteboard.string(forType: .string), "Ada", "\(path): native clipboard")
             XCTAssertEqual(state["link"] as? String, "https://example.com", json)
         }
     }
