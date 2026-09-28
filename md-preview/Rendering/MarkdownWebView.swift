@@ -398,6 +398,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     /// images load later and can change without the Markdown changing.
     private(set) var lastDisplayMayChangeAfterFirstPaint = true
     private var lastContentProcessReload: Date?
+    private var pendingContentProcessReload: DispatchWorkItem?
 
     override func layout() {
         super.layout()
@@ -425,6 +426,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     }
 
     func display(markdown: String, assetBaseURL: URL? = nil) {
+        pendingContentProcessReload?.cancel()
+        pendingContentProcessReload = nil
         currentMarkdown = markdown
         isPointerOverMermaidFigure = false
         assetScheme.setBaseURL(assetBaseURL)
@@ -510,7 +513,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             code: rendered.containsCode
         )
         lastDisplayMayChangeAfterFirstPaint = fingerprint.math || fingerprint.mermaid || fingerprint.code
-            || rendered.articleHTML.contains("<img")
+            || rendered.articleHTML.range(of: "<img", options: .caseInsensitive) != nil
 
         // Fast path: the loaded page already has every renderer the new doc
         // needs — swap the article body via JS instead of reloading the
@@ -1656,12 +1659,26 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         // The page is gone, so the next display() must load it again rather
         // than call into it. Load it now so the preview is not left blank,
-        // but not again within a few seconds, in case the document itself
-        // makes the process stop.
+        // but at most once every few seconds, in case the document itself
+        // makes the process stop; a stop inside that window reloads when it
+        // ends. A new display() cancels the pending reload.
         discardLoadedPage()
-        if let last = lastContentProcessReload, Date().timeIntervalSince(last) < 5 { return }
-        lastContentProcessReload = Date()
-        reloadPreview()
+        let interval: TimeInterval = 5
+        let wait = lastContentProcessReload.map { interval - Date().timeIntervalSince($0) } ?? 0
+        guard wait > 0 else {
+            lastContentProcessReload = Date()
+            reloadPreview()
+            return
+        }
+        guard pendingContentProcessReload == nil else { return }
+        let reload = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            pendingContentProcessReload = nil
+            lastContentProcessReload = Date()
+            reloadPreview()
+        }
+        pendingContentProcessReload = reload
+        DispatchQueue.main.asyncAfter(deadline: .now() + wait, execute: reload)
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

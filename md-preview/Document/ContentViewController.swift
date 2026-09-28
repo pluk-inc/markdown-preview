@@ -475,14 +475,24 @@ final class ContentViewController: NSViewController {
         }
     }
 
+    /// True while the displayed document is still the one `snapshotSource`
+    /// describes. A later display can replace it before its first paint.
+    private func isShowingSnapshotSource(_ source: (url: URL, contentHash: String)) -> Bool {
+        guard let shown = exportSource else { return false }
+        return shown.sourceURL == source.url
+            && DocumentSnapshotCache.hash(shown.markdown) == source.contentHash
+    }
+
     private func saveSnapshotIfNeeded() {
         guard let source = snapshotSource,
+              isShowingSnapshotSource(source),
               !webView.lastDisplayMayChangeAfterFirstPaint,
               currentScrollPosition == 0,
               let metadata = snapshotMetadata(contentHash: source.contentHash),
               metadata != shownSnapshotMetadata else { return }
-        webView.webView.takeSnapshot(with: nil) { image, _ in
-            guard let cgImage = image?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+        webView.webView.takeSnapshot(with: nil) { [weak self] image, _ in
+            guard let self, self.isShowingSnapshotSource(source),
+                  let cgImage = image?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
             DocumentSnapshotCache.shared.store(cgImage, fileURL: source.url, metadata: metadata)
         }
     }
