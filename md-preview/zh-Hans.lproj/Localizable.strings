@@ -310,3 +310,17 @@
 "↑↓ browse · ↩ open · ⌘↩ new tab · ⌥↩ new window" = "↑↓ 浏览 · ↩ 打开 · ⌘↩ 新标签页 · ⌥↩ 新窗口";
 "Search for Document" = "搜索文稿";
 "Search for a file by name" = "按名称搜索文件";
+
+/* What's New */
+"What’s New in Markdown Preview" = "Markdown Preview 的新功能";
+"What’s New in Markdown Preview %@" = "Markdown Preview %@ 的新功能";
+"Release Notes" = "发布说明";
+"Continue" = "继续";
+"Find any document fast" = "快速查找任意文稿";
+"Press ⇧⌘O and type part of a file name to open it from the current project." = "按下 ⇧⌘O 并输入文件名的一部分，即可打开当前项目中的文件。";
+"Redesigned formatting bar" = "全新设计的格式栏";
+"On macOS 26 and later, the formatting bar uses Liquid Glass, with headings, links, lists, and styles in compact groups." = "在 macOS 26 及更高版本上，格式栏采用 Liquid Glass 设计，标题、链接、列表和样式分组排列，更加紧凑。";
+"Redesigned code blocks" = "全新设计的代码块";
+"Wrap long lines with one click. Code blocks now use rounded cards that show their language." = "一键为长代码行换行。代码块现采用圆角卡片设计，并显示其语言。";
+"Faster document opening" = "更快地打开文稿";
+"Improved rendering shows documents sooner, and files you reopen appear right away." = "改进的渲染方式让文稿更快显示，重新打开的文件也会立即出现。";

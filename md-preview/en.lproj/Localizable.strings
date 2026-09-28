@@ -310,3 +310,17 @@
 "↑↓ browse · ↩ open · ⌘↩ new tab · ⌥↩ new window" = "↑↓ browse · ↩ open · ⌘↩ new tab · ⌥↩ new window";
 "Search for Document" = "Search for Document";
 "Search for a file by name" = "Search for a file by name";
+
+/* What's New */
+"What’s New in Markdown Preview" = "What’s New in Markdown Preview";
+"What’s New in Markdown Preview %@" = "What’s New in Markdown Preview %@";
+"Release Notes" = "Release Notes";
+"Continue" = "Continue";
+"Find any document fast" = "Find any document fast";
+"Press ⇧⌘O and type part of a file name to open it from the current project." = "Press ⇧⌘O and type part of a file name to open it from the current project.";
+"Redesigned formatting bar" = "Redesigned formatting bar";
+"On macOS 26 and later, the formatting bar uses Liquid Glass, with headings, links, lists, and styles in compact groups." = "On macOS 26 and later, the formatting bar uses Liquid Glass, with headings, links, lists, and styles in compact groups.";
+"Redesigned code blocks" = "Redesigned code blocks";
+"Wrap long lines with one click. Code blocks now use rounded cards that show their language." = "Wrap long lines with one click. Code blocks now use rounded cards that show their language.";
+"Faster document opening" = "Faster document opening";
+"Improved rendering shows documents sooner, and files you reopen appear right away." = "Improved rendering shows documents sooner, and files you reopen appear right away.";

@@ -400,6 +400,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         refreshOpenInLLMItem()
         refreshOpenActionsItem()
         updateEditToolbarItem()
+        // Folder and untitled windows count too. Runs before the
+        // default-handler offer, whose key is the sign that this install has
+        // opened a file before.
+        WhatsNewWindow.presentIfNeeded(
+            over: documentWindow,
+            hasUsedAppBefore: UserDefaults.standard.bool(forKey: Self.didOfferDefaultHandlerKey)
+        )
         if let fileURL {
             NSDocumentController.shared.noteNewRecentDocumentURL(fileURL)
             renderCurrentDocument(text: markdown, fileURL: fileURL)

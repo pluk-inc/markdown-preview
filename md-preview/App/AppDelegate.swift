@@ -126,6 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         installSettingsMenuItem()
         NSApp.windowsMenu?.delegate = self
         installAppMenuItems()
+        installWhatsNewMenuItem()
         installViewMenuItemIcons()
         hasFinishedLaunching = true
         if !didReceiveOpenURLsDuringLaunch {
@@ -492,7 +493,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
              #selector(selectOutlineMode(_:)),
              #selector(selectFilesMode(_:)),
              #selector(performFindPanelAction(_:)),
-             #selector(performTextFinderAction(_:)):
+             #selector(performTextFinderAction(_:)),
+             #selector(showWhatsNew(_:)):
             return activeDocumentWindowController != nil
         case #selector(selectAppearanceMode(_:)):
             return ThemePreset.applied().requiredAppearance == nil
@@ -1112,6 +1114,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                  keyEquivalent: "")
         cliItem.target = self
         appMenu.insertItem(cliItem, at: appMenu.index(of: updatesItem) + 1)
+    }
+
+    private func installWhatsNewMenuItem() {
+        guard let helpMenu = NSApp.helpMenu,
+              helpMenu.items.first(where: { $0.action == #selector(showWhatsNew(_:)) }) == nil
+        else { return }
+
+        let item = NSMenuItem(title: L("What’s New in Markdown Preview"),
+                              action: #selector(showWhatsNew(_:)),
+                              keyEquivalent: "")
+        item.target = self
+        helpMenu.addItem(item)
+    }
+
+    @objc private func showWhatsNew(_ sender: Any?) {
+        guard let window = activeDocumentWindowController?.window else { return }
+        WhatsNewWindow.present(over: window)
     }
 
     private func installSidebarViewMenuItems() {
