@@ -1227,6 +1227,7 @@ class TaskCheckboxWidget extends WidgetType {
   toDOM(view) {
     const wrapper = document.createElement('span')
     wrapper.className = 'cm-md-task-marker'
+    wrapper.dataset.sourceFrom = String(this.from)
     const checkbox = document.createElement('input')
     checkbox.type = 'checkbox'
     checkbox.checked = this.checked
@@ -1236,12 +1237,21 @@ class TaskCheckboxWidget extends WidgetType {
       event.stopPropagation()
     })
     checkbox.addEventListener('change', () => {
+      const keyboardFocused = document.activeElement === checkbox
       view.dispatch({ changes: { from: this.from, to: this.from + 1,
         insert: checkbox.checked ? 'x' : ' ' }, userEvent: 'input' })
-      view.focus()
+      if (!keyboardFocused) view.focus()
     })
     wrapper.append(checkbox, document.createTextNode(" "))
     return wrapper
+  }
+  updateDOM(wrapper) {
+    // Reuse the focused input when toggling; replacing it also loses Tab order.
+    if (Number(wrapper.dataset.sourceFrom) !== this.from) return false
+    const checkbox = wrapper.querySelector('input')
+    checkbox.checked = this.checked
+    checkbox.setAttribute('aria-label', this.checked ? 'Mark task incomplete' : 'Mark task complete')
+    return true
   }
   ignoreEvent() { return true }
 }
@@ -2198,8 +2208,16 @@ function buildDecorations(view, detectedCodeCache) {
             && state.doc.line(itemLine.number - 1).text.trim() === ""
           if ((!isFirstItem || isNested) && !hasBlankBefore) lineOnce(node.from, listItemGapLine)
           eachLine(node.from, node.to, listItemLine)
-          if (/^[-+*][ \t]+\[[xX]\](?:[ \t]|$)/.test(state.doc.sliceString(node.from, itemLine.to))) {
-            eachLine(node.from, node.to, completedTaskLine)
+          if (/^[ \t]*[-+*][ \t]+\[[xX]\](?:[ \t]|$)/.test(state.doc.sliceString(node.from, itemLine.to))) {
+            // Nested lists own their completion state. Keep the parent's
+            // continuation paragraphs styled, including those after a sublist.
+            let from = node.from
+            for (let child = node.node.firstChild; child; child = child.nextSibling) {
+              if (child.name !== "BulletList" && child.name !== "OrderedList") continue
+              eachLine(from, state.doc.lineAt(child.from).from - 1, completedTaskLine)
+              from = state.doc.lineAt(child.to).to + 1
+            }
+            eachLine(from, node.to, completedTaskLine)
           }
           lineOnce(node.from, listDepthLine(listStack.length))
           listDepthPositions.add(state.doc.lineAt(node.from).from)

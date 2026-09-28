@@ -299,6 +299,53 @@ final class EditorFormattingTests: XCTestCase {
         XCTAssertEqual(result?["caret"] as? Int, source.utf16.count)
     }
 
+    func testCheckboxTogglePreservesKeyboardFocus() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: "- [ ] First\n- [ ] Second", editorJavaScript: script),
+                                          width: 650, isEditor: true, height: 400)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        let result = try await editor.webView.evaluateJavaScript("""
+            (() => {
+                const checkbox = document.querySelector('.cm-md-task-marker input');
+                checkbox.focus(); checkbox.click();
+                const retained = document.activeElement === checkbox && checkbox.isConnected;
+                const label = checkbox.getAttribute('aria-label');
+                checkbox.click();
+                return {retained, label, unchecked: !checkbox.checked,
+                        retainedAgain: document.activeElement === checkbox && checkbox.isConnected,
+                        source: window.__mdEditor.getMarkdown()};
+            })()
+            """) as? [String: Any]
+        for key in ["retained", "retainedAgain", "unchecked"] {
+            XCTAssertEqual(result?[key] as? Bool, true, key)
+        }
+        XCTAssertEqual(result?["label"] as? String, "Mark task incomplete")
+        XCTAssertEqual(result?["source"] as? String, "- [ ] First\n- [ ] Second")
+    }
+
+    func testCompletedParentDoesNotStrikeNestedUncheckedItems() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let source = "- [x] Parent\n  continuation\n    - [ ] Child\n      child continuation\n    - [x] Done child\n        - [ ] Grandchild\n\n  Parent after children\n- [ ] Sibling"
+        let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: source, editorJavaScript: script),
+                                          width: 650, isEditor: true, height: 600)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        let result = try await editor.webView.evaluateJavaScript("""
+            (() => {
+                const lines = [...document.querySelectorAll('.cm-line')];
+                return Object.fromEntries(lines.filter(line => line.textContent.trim()).map(line =>
+                    [line.textContent.trim(), getComputedStyle(line).textDecorationLine.includes('line-through')]));
+            })()
+            """) as? [String: Bool]
+        for label in ["Parent", "continuation", "Done child", "Parent after children"] {
+            XCTAssertEqual(result?[label], true, label)
+        }
+        for label in ["Child", "child continuation", "Grandchild", "Sibling"] {
+            XCTAssertEqual(result?[label], false, label)
+        }
+    }
+
     func testCompletedTaskStyleTracksCheckboxToggles() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let source = "- [x] Done **bold**\n  continuation\n- [ ] Pending"
