@@ -256,6 +256,32 @@ final class EditorFormattingTests: XCTestCase {
         }
     }
 
+    func testTaskSeparatorStaysStableOnContinuationLines() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let source = "- [ ] First\n\n- [ ] Second\n  continuation\n\n  Later paragraph"
+        let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: source, editorJavaScript: script),
+                                          width: 650, isEditor: true, height: 500)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        let result = try await editor.webView.callAsyncJavaScript("""
+            document.hasFocus = () => true;
+            const api = window.__mdEditor;
+            const positions = [];
+            api.focus();
+            for (const text of ['Second', 'continuation', 'Later paragraph', 'Second']) {
+                api.select(api.getMarkdown().indexOf(text)); api.focus();
+                for (let i = 0; i < 12; i++) { window.__layoutTestFrame(); await Promise.resolve(); }
+                const line = [...document.querySelectorAll('.cm-line')].find(line => line.textContent.includes('Second'));
+                positions.push(line.getBoundingClientRect().top);
+            }
+            return {positions, source: api.getMarkdown()};
+            """, arguments: [:], in: nil, contentWorld: .page) as? [String: Any]
+        let positions = try XCTUnwrap(result?["positions"] as? [Double])
+        XCTAssertEqual(positions.count, 4)
+        for position in positions { XCTAssertEqual(position, positions[0], accuracy: 0.5) }
+        XCTAssertEqual(result?["source"] as? String, source)
+    }
+
     func testNewTaskAfterDoubleEnterKeepsBlankLineAndCaretPosition() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: "- [ ] First", editorJavaScript: script),

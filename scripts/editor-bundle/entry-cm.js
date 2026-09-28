@@ -2200,11 +2200,11 @@ function buildDecorations(view, detectedCodeCache) {
           // list starts at its first item, so "first" is a position check.
           const isFirstItem = node.from === listStack[listStack.length - 1]
           const isNested = listStack.length > 1
-          // Keep the separator while authoring a new item so typing its
-          // marker cannot pull the caret upward. Inactive loose lists use
+          // Keep the separator while editing any line of an item so moving
+          // to a continuation cannot pull the caret upward. Inactive loose lists use
           // the same compact item spacing as Read Mode.
           const itemLine = state.doc.lineAt(node.from)
-          const preserveBlankBefore = touchesLineOf(node.from) && itemLine.number > 1
+          const preserveBlankBefore = touches(itemLine.from, node.to) && itemLine.number > 1
             && state.doc.line(itemLine.number - 1).text.trim() === ""
           if (!isFirstItem && !preserveBlankBefore) {
             let number = itemLine.number - 1
