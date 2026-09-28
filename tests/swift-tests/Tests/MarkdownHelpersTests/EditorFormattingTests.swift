@@ -189,6 +189,109 @@ final class EditorFormattingTests: XCTestCase {
         }
     }
 
+    func testTypedTaskCheckboxContinuesAndExitsOnEmptyItem() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: "", editorJavaScript: script),
+                                          width: 650, isEditor: true, height: 400)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        let result = try await editor.webView.callAsyncJavaScript("""
+            try {
+            document.hasFocus = () => true;
+            const api = window.__mdEditor;
+            const settle = async () => {
+                for (let i = 0; i < 12; i++) { window.__layoutTestFrame(); await Promise.resolve(); }
+            };
+            const type = async text => {
+                for (const char of text) {
+                    const selection = api.getLinkSelection();
+                    api.insertTextAt(char, selection.from, selection.to);
+                    await settle();
+                }
+            };
+            const enter = async () => {
+                document.querySelector('.cm-content').dispatchEvent(new KeyboardEvent('keydown',
+                    {key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true}));
+                await settle();
+            };
+            await type('- [ ] First');
+            const rendered = document.querySelectorAll('.cm-md-task-marker input').length;
+            document.querySelector('.cm-md-task-marker input').click();
+            await settle();
+            const toggled = api.getMarkdown();
+            api.select(toggled.length); api.focus();
+            await enter();
+            const continued = api.getMarkdown();
+            const emptyRendered = document.querySelectorAll('.cm-md-task-marker input').length;
+            await enter();
+            const exited = api.getMarkdown();
+            await type('Outside');
+            await enter(); await enter();
+            await type('- [ ] Second');
+            const final = api.getMarkdown();
+            const boxes = [...document.querySelectorAll('.cm-md-task-marker input')];
+            boxes.at(-1)?.click(); await settle();
+            return {rendered, toggled, continued, emptyRendered, exited, final,
+                    checkedSecond: api.getMarkdown(), count: boxes.length};
+            } catch (error) { return {error: String(error), stack: error.stack}; }
+            """, arguments: [:], in: nil, contentWorld: .page) as? [String: Any]
+        XCTAssertNil(result?["error"], String(describing: result))
+        XCTAssertEqual(result?["rendered"] as? Int, 1)
+        XCTAssertEqual(result?["toggled"] as? String, "- [x] First")
+        XCTAssertEqual(result?["continued"] as? String, "- [x] First\n- [ ] ")
+        XCTAssertEqual(result?["emptyRendered"] as? Int, 2)
+        XCTAssertEqual(result?["exited"] as? String, "- [x] First\n\n")
+        XCTAssertEqual(result?["final"] as? String, "- [x] First\n\nOutside\n\n- [ ] Second")
+        XCTAssertEqual(result?["checkedSecond"] as? String, "- [x] First\n\nOutside\n\n- [x] Second")
+        XCTAssertEqual(result?["count"] as? Int, 2)
+    }
+
+    func testTaskEnterPreservesMarkersAndMarkdownContext() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let examples = [
+            ("+ [X] One", "+ [X] One\n+ [ ] ", "+ [X] One\n\n"),
+            ("* [ ] One", "* [ ] One\n* [ ] ", "* [ ] One\n\n"),
+            ("- [ ] One\n- [ ] Two", "- [ ] One\n- [ ] Two\n- [ ] ", "- [ ] One\n- [ ] Two\n\n"),
+            ("> - [ ] One", "> - [ ] One\n> - [ ] ", "> - [ ] One\n> "),
+            ("- [ ] Parent\n    - [x] Child", "- [ ] Parent\n    - [x] Child\n    - [ ] ",
+             "- [ ] Parent\n    - [x] Child\n- [ ] ")
+        ]
+        for (source, continued, exited) in examples {
+            let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: source, editorJavaScript: script),
+                                              width: 650, isEditor: true, height: 400)
+            defer { editor.close() }
+            _ = try await editor.layout(texts: [], imageCount: 0)
+            let result = try await editor.webView.evaluateJavaScript("""
+                (() => {
+                    const api = window.__mdEditor;
+                    api.select(api.getMarkdown().length); api.focus();
+                    const enter = () => document.querySelector('.cm-content').dispatchEvent(new KeyboardEvent('keydown',
+                        {key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true}));
+                    enter(); const continued = api.getMarkdown();
+                    enter(); return {continued, exited: api.getMarkdown()};
+                })()
+                """) as? [String: Any]
+            XCTAssertEqual(result?["continued"] as? String, continued, source)
+            XCTAssertEqual(result?["exited"] as? String, exited, source)
+        }
+        let source = "```markdown\n- [ ] Literal"
+        let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: source, editorJavaScript: script),
+                                          width: 650, isEditor: true, height: 400)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        let literal = try await editor.webView.evaluateJavaScript("""
+            (() => {
+                const api = window.__mdEditor;
+                api.select(api.getMarkdown().length); api.focus();
+                document.querySelector('.cm-content').dispatchEvent(new KeyboardEvent('keydown',
+                    {key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true}));
+                return {source: api.getMarkdown(), boxes: document.querySelectorAll('.cm-md-task-marker input').length};
+            })()
+            """) as? [String: Any]
+        XCTAssertEqual(literal?["source"] as? String, source + "\n")
+        XCTAssertEqual(literal?["boxes"] as? Int, 0)
+    }
+
     func testLinkPopoverRejectsPartialOverlapAtEitherSelectionEdge() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let source = "Before [hello](https://example.com) after"

@@ -283,6 +283,41 @@ nonisolated enum EditorHTML {
             padding-inline-start: 2.1em;
             text-indent: -2.1em;
         }
+        .cm-md-task-marker {
+            display: inline-block;
+            width: 2.1em;
+            text-indent: 0;
+            text-align: end;
+            padding-inline-end: 0.6em;
+            box-sizing: border-box;
+        }
+        .cm-md-task-marker input {
+            appearance: none;
+            -webkit-appearance: none;
+            font: inherit;
+            width: 0.9em;
+            height: 0.9em;
+            margin: 0;
+            vertical-align: calc(0.5cap - 0.45em);
+            border: 1.5px solid var(--grid);
+            border-radius: 25%;
+            background: transparent;
+            position: relative;
+            cursor: pointer;
+        }
+        .cm-md-task-marker input:checked {
+            border-color: var(--accent);
+            background: var(--accent);
+        }
+        .cm-md-task-marker input:checked::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4.4 8.4 L7 11 L11.6 5.4" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: 100% 100%;
+        }
         .cm-md-bullet {
             display: inline-block;
             width: 2.1em;
