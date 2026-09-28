@@ -347,8 +347,9 @@ final class MdPreviewUpdateTests: XCTestCase {
             copiedChangeCount = pasteboard.changeCount
             XCTAssertTrue(webView.responds(to: NSSelectorFromString("copy:")))
             webView.perform(NSSelectorFromString("copy:"), with: nil)
+            // WebKit can change pasteboard ownership before its text arrives.
             for _ in 0..<100 {
-                if pasteboard.changeCount != copiedChangeCount { break }
+                if pasteboard.string(forType: .string) != nil { break }
                 try await Task.sleep(for: .milliseconds(10))
             }
             copiedChangeCount = pasteboard.changeCount
