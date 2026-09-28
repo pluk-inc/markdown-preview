@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.0.63] – 2026-09-28
+
+This release opens documents faster, adds task checkboxes in Edit Mode and optional paragraph wrapping, and improves editing and navigation.
+
+### Added
+
+- **Task checkboxes work in Edit Mode.** Task markers become clickable checkboxes while typing, with muted strikethrough for completed tasks. Enter continues with an unchecked task; Enter on an empty task exits the list and preserves the blank separator ([#457](https://github.com/pluk-inc/markdown-preview/pull/457)).
+- **Choose how source line breaks appear in reading previews.** Enable *Settings → General → Reading → Strict line breaks* to flow ordinary source newlines into paragraphs in the app and Quick Look. The option defaults off; explicit hard breaks, paragraph boundaries, and code blocks keep their meaning ([#459](https://github.com/pluk-inc/markdown-preview/pull/459)).
+- **A What's New window introduces features after an update.** Reopen it from *Help → What's New in Markdown Preview* to revisit the highlights and release notes ([#453](https://github.com/pluk-inc/markdown-preview/pull/453)).
+
+### Changed
+
+- **Documents open faster.** Later document windows reuse a prepared reader, startup avoids unnecessary font loading, and eligible reopened documents show a saved preview while their content loads ([#450](https://github.com/pluk-inc/markdown-preview/pull/450)).
+- **Read Mode keeps tables and task checkboxes read-only.** Switch to Edit Mode to change them. Table cells in Edit Mode show inline formatting until focused, with improved text selection and formatting controls ([#456](https://github.com/pluk-inc/markdown-preview/pull/456)).
+
+### Fixed
+
+- **CJK input keeps heading markers stable.** Markdown heading syntax no longer flickers during input-method composition, including Japanese live conversion ([#444](https://github.com/pluk-inc/markdown-preview/pull/444)).
+- **Text size changes apply immediately in Edit Mode.** Toolbar controls, keyboard shortcuts, reset, and Settings update the editor without reopening it ([#454](https://github.com/pluk-inc/markdown-preview/pull/454)).
+- **Navigation arrows stay visible and document search aligns correctly.** Back and Forward no longer collapse into a dropdown when toolbar space is constrained, and the search field stays vertically centered ([#452](https://github.com/pluk-inc/markdown-preview/pull/452)).
+- **Long search-result paths fit on one line.** Paths truncate in the middle instead of wrapping and clipping; full paths remain available in tooltips ([#455](https://github.com/pluk-inc/markdown-preview/pull/455)).
+
+### Contributors
+
+- [@kota113](https://github.com/kota113) — fixed heading-marker flicker during CJK input ([#444](https://github.com/pluk-inc/markdown-preview/pull/444)).
+- [@Azhrei](https://github.com/Azhrei) — reported source line-break behavior ([#446](https://github.com/pluk-inc/markdown-preview/issues/446)).
+- [@cybito](https://github.com/cybito) — reported unintended table editing in Read Mode ([#451](https://github.com/pluk-inc/markdown-preview/issues/451)).
+- [@pankajpopli](https://github.com/pankajpopli) — reported text-size controls not updating Edit Mode ([#448](https://github.com/pluk-inc/markdown-preview/issues/448)).
+
 ## [0.0.62] – 2026-09-25
 
 This release adds project document search, makes navigation controls more compact, and fixes read-mode scrolling and Mermaid block-diagram arrows.
