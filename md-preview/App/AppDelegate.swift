@@ -147,6 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             || model.themeColors != ThemeColorsSetting.current
             || model.documentFont != DocumentFontSetting.current
             || model.readerLayout != ReaderLayoutSetting.current
+            || model.strictLineBreaks != StrictLineBreaksSetting.current
         guard changed else { return }
         model.refreshFromExternalSources()
         // Repaint only when another instance changed the shared reading look.
@@ -337,6 +338,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let resolved = ThemePreset.applied().requiredAppearance ?? mode
         AppearanceMode.current = resolved
         applyAppearanceMode(resolved, reloadPreviews: true)
+    }
+
+    func applyStrictLineBreaksSetting(_ enabled: Bool) {
+        guard enabled != StrictLineBreaksSetting.current else { return }
+        StrictLineBreaksSetting.current = enabled
+        reloadDocumentPreviewsForSettingChange()
     }
 
     func applyContentWidthSetting(_ setting: ContentWidthSetting) {

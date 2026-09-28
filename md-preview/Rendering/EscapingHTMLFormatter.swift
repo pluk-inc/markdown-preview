@@ -1008,11 +1008,15 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         let taskChecked: Bool?
     }
 
+    private let strictLineBreaks: Bool
+
     init(options: HTMLFormatterOptions = [],
          sourceLineOffset: Int = 0,
          sourceMarkdown: String = "",
          parsedMarkdown: String = "",
-         highlightsCode: Bool = true) {
+         highlightsCode: Bool = true,
+         strictLineBreaks: Bool = false) {
+        self.strictLineBreaks = strictLineBreaks
         self.options = options
         self.sourceLineOffset = sourceLineOffset
         self.highlightsCode = highlightsCode
@@ -1026,7 +1030,8 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
                        options: HTMLFormatterOptions = [],
                        sourceLineOffset: Int = 0,
                        sourceMarkdown: String? = nil,
-                       highlightsCode: Bool = true) -> String {
+                       highlightsCode: Bool = true,
+                       strictLineBreaks: Bool = false) -> String {
         let preparedMarkdown = MarkdownHighlightSource.preparing(markdown)
         let document = Document(parsing: preparedMarkdown)
         var walker = EscapingHTMLFormatter(
@@ -1034,7 +1039,8 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
             sourceLineOffset: sourceLineOffset,
             sourceMarkdown: sourceMarkdown ?? markdown,
             parsedMarkdown: preparedMarkdown,
-            highlightsCode: highlightsCode
+            highlightsCode: highlightsCode,
+            strictLineBreaks: strictLineBreaks
         )
         walker.visit(document)
         return walker.result
@@ -1391,7 +1397,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
                 sourceListLineOpen = true
                 sourceListIndentWrappers = line.extraDepth
             } else {
-                result += "<br />\n"
+                visit(child)
             }
         }
         if sourceListLineOpen {
@@ -1630,9 +1636,8 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     }
 
     mutating func visitSoftBreak(_ softBreak: SoftBreak) {
-        // Hard-break behavior: a single newline in the source is a real
-        // line break, not a CommonMark soft-wrap space.
-        result += "<br />\n"
+        // Strict mode leaves a soft wrap for HTML to collapse into whitespace.
+        result += strictLineBreaks ? "\n" : "<br />\n"
     }
 
     mutating func visitLink(_ link: Link) {

@@ -271,14 +271,16 @@ nonisolated enum MarkdownHTML {
                          vendorLoading: VendorLoading = .inline,
                          colorScheme: ColorScheme? = nil,
                          documentFont: DocumentFontSetting = .current,
-                         readerLayout: ReaderLayoutSetting = .current) -> String {
+                         readerLayout: ReaderLayoutSetting = .current,
+                         strictLineBreaks: Bool = StrictLineBreaksSetting.current) -> String {
         render(markdown: markdown,
                allowsScroll: allowsScroll,
                assetBaseHref: assetBaseHref,
                vendorLoading: vendorLoading,
                colorScheme: colorScheme,
                documentFont: documentFont,
-               readerLayout: readerLayout).html
+               readerLayout: readerLayout,
+               strictLineBreaks: strictLineBreaks).html
     }
 
     static func render(markdown: String,
@@ -290,6 +292,7 @@ nonisolated enum MarkdownHTML {
                        themeOverrides: ThemeOverrides? = nil,
                        documentFont: DocumentFontSetting = .current,
                        readerLayout: ReaderLayoutSetting = .current,
+                       strictLineBreaks: Bool = StrictLineBreaksSetting.current,
                        warmup: Bool = false,
                        preloadsMathAndCode: Bool = false,
                        pageTopClearance: CGFloat = 0,
@@ -309,14 +312,16 @@ nonisolated enum MarkdownHTML {
             math.processedMarkdown,
             sourceLineOffset: sourceLineOffset,
             sourceMarkdown: body,
-            highlightsCode: highlightsCode
+            highlightsCode: highlightsCode,
+            strictLineBreaks: strictLineBreaks
         )
         let mermaidResult = renderMermaidBlocks(in: formatted)
         let mathResult = renderMathBlocks(in: mermaidResult.html, with: math)
         let footnoteReferenceHTML = renderFootnoteReferences(in: mathResult.html, with: footnotes)
         let footnoteDefinitions = renderFootnoteDefinitions(
             footnotes,
-            sourceLineOffset: sourceLineOffset
+            sourceLineOffset: sourceLineOffset,
+            strictLineBreaks: strictLineBreaks
         )
         let headingsHTML = injectHeadingIDs(in: footnoteReferenceHTML + footnoteDefinitions.html)
         // Direction inference scans every rendered block. Most documents

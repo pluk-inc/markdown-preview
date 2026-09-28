@@ -21,6 +21,12 @@ struct GeneralSettingsView: View {
                     Text(L("Size of rendered Markdown in document windows."))
                 }
 
+                Toggle(isOn: $model.strictLineBreaks) {
+                    Text(L("Strict line breaks"))
+                    Text(L("Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews."))
+                }
+                .accessibilityLabel(L("Strict line breaks"))
+
                 Toggle(L("Highlight outline section under the pointer"), isOn: $outlineFollowsPointer)
 
                 Picker(L("Content width"), selection: $model.contentWidth) {
