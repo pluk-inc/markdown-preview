@@ -2200,13 +2200,20 @@ function buildDecorations(view, detectedCodeCache) {
           // list starts at its first item, so "first" is a position check.
           const isFirstItem = node.from === listStack[listStack.length - 1]
           const isNested = listStack.length > 1
-          // Authored blank lines must keep their editing height. Markdown
-          // can parse a new marker after a blank as another item in the same
-          // list; collapsing that separator pulls the caret upward mid-typing.
+          // Keep the separator while authoring a new item so typing its
+          // marker cannot pull the caret upward. Inactive loose lists use
+          // the same compact item spacing as Read Mode.
           const itemLine = state.doc.lineAt(node.from)
-          const hasBlankBefore = itemLine.number > 1
+          const preserveBlankBefore = touchesLineOf(node.from) && itemLine.number > 1
             && state.doc.line(itemLine.number - 1).text.trim() === ""
-          if ((!isFirstItem || isNested) && !hasBlankBefore) lineOnce(node.from, listItemGapLine)
+          if (!isFirstItem && !preserveBlankBefore) {
+            let number = itemLine.number - 1
+            while (number > 0 && state.doc.line(number).text.trim() === "") {
+              lineOnce(state.doc.line(number).from, blockSeparatorLine(0))
+              number--
+            }
+          }
+          if ((!isFirstItem || isNested) && !preserveBlankBefore) lineOnce(node.from, listItemGapLine)
           eachLine(node.from, node.to, listItemLine)
           if (/^[ \t]*[-+*][ \t]+\[[xX]\](?:[ \t]|$)/.test(state.doc.sliceString(node.from, itemLine.to))) {
             // Nested lists own their completion state. Keep the parent's
