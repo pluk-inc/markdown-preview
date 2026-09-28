@@ -72,8 +72,6 @@ final class ContentViewController: NSViewController {
 
     var activeHeadingDidChange: ((Int?) -> Void)?
     var zoomDidChange: ((CGFloat) -> Void)?
-    var taskCheckboxToggled: ((Int, Bool) -> Void)?
-    var tableEditRequested: ((MarkdownTableEditRequest) -> Void)?
     var localMarkdownLinkActivated: ((URL) -> Void)?
     /// Fires once after a pending source scroll anchor (prepared via
     /// `prepareToRestoreSourceScrollAnchor`) has been applied to a fresh
@@ -122,12 +120,6 @@ final class ContentViewController: NSViewController {
         }
         webView.localMarkdownLinkActivated = { [weak self] url in
             self?.localMarkdownLinkActivated?(url)
-        }
-        webView.taskCheckboxToggled = { [weak self] line, checked in
-            self?.taskCheckboxToggled?(line, checked)
-        }
-        webView.tableEditRequested = { [weak self] request in
-            self?.tableEditRequested?(request)
         }
         webView.zoomDidChange = { [weak self] zoom in
             self?.webViewCenteredLeadingConstraint?.constant =

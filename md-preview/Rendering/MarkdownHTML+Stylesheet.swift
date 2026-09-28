@@ -733,63 +733,6 @@ nonisolated extension MarkdownHTML {
     :is(th, td)[align="right"] { text-align: right; }
     :is(th, td)[align="left"] { text-align: left; }
 
-    .md-table-editor {
-        position: relative;
-        display: inline-block;
-        width: fit-content;
-        margin: \(largeBlockSpacing)px 0 0;
-        max-width: 100%;
-        overflow: visible;
-    }
-    .md-table-scroll {
-        width: fit-content;
-        max-width: 100%;
-        overflow-x: auto;
-    }
-    .md-table-scroll > table { margin-top: 0; }
-    .md-table-editor:focus { outline: none; }
-    .md-table-editor th,
-    .md-table-editor td { cursor: text; }
-    .md-table-editor th[data-placeholder]:empty::before {
-        content: attr(data-placeholder);
-        color: var(--secondary);
-        font-weight: 400;
-        opacity: 0.72;
-        pointer-events: none;
-    }
-    .md-table-editor th.is-editing,
-    .md-table-editor td.is-editing {
-        outline: 2px solid var(--accent);
-        outline-offset: -2px;
-        background: color-mix(in srgb, var(--accent) 8%, transparent);
-        white-space: pre-wrap;
-    }
-    .md-table-editor .is-table-part-selected {
-        --table-selection-top-edge: 0 0 transparent;
-        --table-selection-right-edge: 0 0 transparent;
-        --table-selection-bottom-edge: 0 0 transparent;
-        --table-selection-left-edge: 0 0 transparent;
-        background: color-mix(in srgb, var(--accent) 14%, Canvas);
-        box-shadow:
-            var(--table-selection-top-edge),
-            var(--table-selection-right-edge),
-            var(--table-selection-bottom-edge),
-            var(--table-selection-left-edge);
-    }
-    .md-table-editor .is-table-selection-top {
-        --table-selection-top-edge: inset 0 1px color-mix(in srgb, var(--accent) 52%, transparent);
-    }
-    .md-table-editor .is-table-selection-right {
-        --table-selection-right-edge: inset -1px 0 color-mix(in srgb, var(--accent) 52%, transparent);
-    }
-    .md-table-editor .is-table-selection-bottom {
-        --table-selection-bottom-edge: inset 0 -1px color-mix(in srgb, var(--accent) 52%, transparent);
-    }
-    .md-table-editor .is-table-selection-left {
-        --table-selection-left-edge: inset 1px 0 color-mix(in srgb, var(--accent) 52%, transparent);
-    }
-    .md-table-editor.is-saving { opacity: 0.72; }
-
     hr {
         border: 0;
         height: 1px;
@@ -911,7 +854,6 @@ nonisolated extension MarkdownHTML {
         /* Inner scrollers can't scroll on paper — let them wrap instead of
            clipping their overflow. */
         :root:not(.\(previewPrintClass)) .md-code-wrap,
-        :root:not(.\(previewPrintClass)) .md-table-scroll,
         :root:not(.\(previewPrintClass)) table,
         :root:not(.\(previewPrintClass)) pre {
             overflow: visible !important;

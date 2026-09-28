@@ -4,6 +4,191 @@ import XCTest
 
 @MainActor
 final class EditorFormattingTests: XCTestCase {
+    func testTableClickAnchorsBeforeRevealingSyntax() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        for cell in ["**target words**", "*target words*", "~~target words~~",
+                     "`target words`", "`` target words ``", "==target words==",
+                     "[target words](https://example.com)", "**before *target words***"] {
+            for drag in [false, true] {
+                let source = "| Name |\n| --- |\n| \(cell) |"
+                let editor = WebViewLayoutHarness(
+                    html: EditorHTML.render(markdown: source, editorJavaScript: script),
+                    width: 500, isEditor: true, height: 400)
+                defer { editor.close() }
+                _ = try await editor.layout(texts: [], imageCount: 0)
+                let result = try await editor.webView.callAsyncJavaScript("""
+                    const cell = document.querySelector('[data-table-row="1"][data-table-column="0"]');
+                    const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+                    while (walker.nextNode()) {
+                        if (walker.currentNode.textContent.includes('target')) break;
+                    }
+                    const node = walker.currentNode;
+                    const start = node.textContent.indexOf('target') + 2;
+                    const range = document.createRange();
+                    range.setStart(node, start); range.setEnd(node, start + 1);
+                    const rect = range.getBoundingClientRect();
+                    const x = rect.x + rect.width * 0.25, y = rect.y + rect.height / 2;
+                    const hit = document.caretRangeFromPoint(x, y);
+                    const expected = sourceCell.indexOf('target') + hit.startOffset - node.textContent.indexOf('target');
+                    const mouse = (type, target, dx = 0) => target.dispatchEvent(new MouseEvent(type,
+                        {bubbles: true, cancelable: true, button: 0, buttons: type === 'mouseup' ? 0 : 1,
+                         detail: 1, clientX: x + dx, clientY: y, view: window}));
+                    mouse('mousedown', document.elementFromPoint(x, y));
+                    const selection = window.getSelection();
+                    const anchor = selection.anchorOffset;
+                    mouse('mousemove', document, drag ? 65 : 0.1);
+                    mouse('mouseup', document, drag ? 65 : 0.1);
+                    return {expected, anchor, finalAnchor: selection.anchorOffset,
+                        collapsed: selection.isCollapsed, text: cell.textContent,
+                        source: window.__mdEditor.getMarkdown()};
+                    """, arguments: ["sourceCell": cell, "drag": drag], in: nil, contentWorld: .page)
+                let values = try XCTUnwrap(result as? [String: Any])
+                XCTAssertEqual(values["anchor"] as? Int, values["expected"] as? Int, cell)
+                XCTAssertEqual(values["finalAnchor"] as? Int, values["expected"] as? Int, cell)
+                XCTAssertEqual(values["collapsed"] as? Bool, !drag, cell)
+                XCTAssertEqual(values["text"] as? String, cell)
+                XCTAssertEqual(values["source"] as? String, source)
+            }
+        }
+    }
+
+    func testTablePointerSelectionKeepsNativeTextRangeAndFormattingTarget() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let editor = WebViewLayoutHarness(
+            html: EditorHTML.render(markdown: "Before\n\n| Name | Status |\n| --- | --- |\n| Ada Lovelace | Ready |", editorJavaScript: script),
+            width: 650, isEditor: true, height: 400)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        let result = try await editor.webView.evaluateJavaScript("""
+            (() => {
+                const cell = document.querySelector('[data-table-row="1"][data-table-column="0"]');
+                const down = new MouseEvent('mousedown', { button: 0, buttons: 1, bubbles: true, cancelable: true });
+                cell.dispatchEvent(down);
+                const sourceFocused = document.activeElement === cell && !down.defaultPrevented;
+                // Model WebKit's native drag selection between down and up.
+                // The table handlers must not collapse or prevent this range.
+                window.getSelection().setBaseAndExtent(cell.firstChild, 0, cell.firstChild, 3);
+                const up = new MouseEvent('mouseup', { button: 0, bubbles: true, cancelable: true });
+                cell.dispatchEvent(up);
+                const click = new MouseEvent('click', { button: 0, bubbles: true, cancelable: true });
+                cell.dispatchEvent(click);
+                const retained = window.getSelection().toString() === 'Ada'
+                    && !up.defaultPrevented && !click.defaultPrevented;
+                const doubleDown = new MouseEvent('mousedown', { button: 0, detail: 2, bubbles: true, cancelable: true });
+                cell.dispatchEvent(doubleDown);
+                const doubleAllowed = !doubleDown.defaultPrevented;
+                cell.dispatchEvent(new MouseEvent('mouseup', { button: 0, bubbles: true }));
+                window.__mdEditor.exec('bold');
+                return sourceFocused && retained && doubleAllowed
+                    && window.__mdEditor.getMarkdown().includes('**Ada** Lovelace')
+                    && window.__mdEditor.getMarkdown().startsWith('Before\\n\\n');
+            })()
+            """)
+        XCTAssertEqual(result as? Bool, true)
+    }
+
+    func testFormattingToolbarTargetsTableCellSelectionAfterBlur() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        for (command, marker) in [("bold", "**"), ("italic", "*"), ("strikethrough", "~~"), ("highlight", "=="), ("code", "`")] {
+            let markdown = "Unrelated paragraph\n\n| Name | Status |\n| --- | --- |\n| Ada Lovelace | Ready |\n\nAfter table"
+            let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: markdown, editorJavaScript: script),
+                                              width: 650, isEditor: true, height: 400)
+            defer { editor.close() }
+            _ = try await editor.layout(texts: [], imageCount: 0)
+            let result = try await editor.webView.callAsyncJavaScript("""
+                const api = window.__mdEditor;
+                const cell = document.querySelector('[data-table-row="1"][data-table-column="0"]');
+                cell.focus();
+                window.getSelection().setBaseAndExtent(cell.firstChild, 0, cell.firstChild, 3);
+                document.dispatchEvent(new Event('selectionchange'));
+                // Native toolbar focus must not redirect the action to the paragraph.
+                cell.blur();
+                api.exec(command);
+                let current = document.querySelector('[data-table-row="1"][data-table-column="0"]');
+                const applied = current.textContent === marker + 'Ada' + marker + ' Lovelace'
+                    && document.activeElement === current && window.getSelection().toString() === 'Ada';
+                api.exec(command);
+                current = document.querySelector('[data-table-row="1"][data-table-column="0"]');
+                const toggledOff = current.textContent === 'Ada Lovelace';
+                const beforeBlock = api.getMarkdown();
+                api.exec('h2');
+                api.setListStyle('bullet');
+                return applied && toggledOff && api.getMarkdown() === beforeBlock
+                    && api.getMarkdown().startsWith('Unrelated paragraph\\n\\n')
+                    && api.getMarkdown().endsWith('\\n\\nAfter table')
+                    && document.querySelector('[data-table-row="1"][data-table-column="1"]').textContent === 'Ready';
+                """, arguments: ["command": command, "marker": marker], in: nil, contentWorld: .page)
+            XCTAssertEqual(result as? Bool, true, command)
+        }
+    }
+
+    func testTableLinkPopoverAndKeyboardFormattingPreservePendingTyping() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let markdown = "Before\n\n| Name |\n| --- |\n| Ada |"
+        let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: markdown, editorJavaScript: script),
+                                          width: 650, isEditor: true, height: 400)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        let result = try await editor.webView.evaluateJavaScript("""
+            (() => {
+                const api = window.__mdEditor;
+                let cell = document.querySelector('[data-table-row="1"]');
+                cell.focus();
+                cell.textContent = 'New Ada';
+                window.getSelection().setBaseAndExtent(cell.firstChild, 4, cell.firstChild, 7);
+                const selected = api.getLinkSelection(true);
+                const correctLabel = selected.text === 'Ada';
+                const linked = api.insertLinkFromPopover(selected.text, 'https://example.com', selected.from, selected.to);
+                cell = document.querySelector('[data-table-row="1"]');
+                const linkSource = cell.textContent === 'New [Ada](https://example.com)';
+                window.getSelection().setBaseAndExtent(cell.firstChild, 0, cell.firstChild, 3);
+                cell.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', metaKey: true, bubbles: true, cancelable: true }));
+                cell = document.querySelector('[data-table-row="1"]');
+                const keyboard = cell.textContent === '**New** [Ada](https://example.com)';
+                cell.blur();
+                return correctLabel && linked && linkSource && keyboard
+                    && api.getMarkdown().startsWith('Before\\n\\n')
+                    && api.getMarkdown().includes('**New** [Ada](https://example.com)');
+            })()
+            """)
+        XCTAssertEqual(result as? Bool, true)
+    }
+
+    func testTableFormattingMapsPendingPipesWhitespaceUnicodeAndEmptyCells() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        for (text, start, end, expected) in [
+            ("left | Ada", 7, 10, "left \\| **Ada**"),
+            ("  Ada  ", 2, 5, "**Ada**"),
+            ("🙂 Ada", 3, 6, "🙂 **Ada**"),
+            ("", 0, 0, "****")
+        ] {
+            let editor = WebViewLayoutHarness(
+                html: EditorHTML.render(markdown: "Before\n\n| First | Second |\n| --- | --- |\n| Same | Same |\n| Same |  |", editorJavaScript: script),
+                width: 650, isEditor: true, height: 400)
+            defer { editor.close() }
+            _ = try await editor.layout(texts: [], imageCount: 0)
+            let result = try await editor.webView.callAsyncJavaScript("""
+                const api = window.__mdEditor;
+                const selector = '[data-table-row="2"][data-table-column="1"]';
+                const cell = document.querySelector(selector);
+                cell.focus();
+                cell.replaceChildren(document.createTextNode(text));
+                window.getSelection().setBaseAndExtent(cell.firstChild, start, cell.firstChild, end);
+                api.exec('bold');
+                const value = document.querySelector(selector).textContent;
+                const neighbor = document.querySelector('[data-table-row="2"][data-table-column="0"]').textContent;
+                api.select(0, 6);
+                api.exec('italic');
+                return JSON.stringify({ value, neighbor, outside: api.getMarkdown().startsWith('*Before*\\n\\n') });
+                """, arguments: ["text": text, "start": start, "end": end], in: nil, contentWorld: .page)
+            let json = try XCTUnwrap(result as? String)
+            let values = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+            XCTAssertEqual(values["value"] as? String, expected, json)
+            XCTAssertEqual(values["neighbor"] as? String, "Same", json)
+            XCTAssertEqual(values["outside"] as? Bool, true, json)
+        }
+    }
+
     func testLinkPopoverRejectsPartialOverlapAtEitherSelectionEdge() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let source = "Before [hello](https://example.com) after"

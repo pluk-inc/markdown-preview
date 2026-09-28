@@ -128,8 +128,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     var searchMode: SearchMode = .contains
     var pendingFindWork: DispatchWorkItem?
     static let findDebounceDelay: TimeInterval = 0.10
-    let tableUndoManager = UndoManager()
-    var isTableUndoSaveInFlight = false
 
     var documentWindow: NSWindow {
         guard let window else {
@@ -205,12 +203,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             } else {
                 self?.present(url: url)
             }
-        }
-        split.onToggleTaskCheckbox = { [weak self] line, checked in
-            self?.toggleTaskCheckbox(onLine: line, checked: checked)
-        }
-        split.onEditTable = { [weak self] request in
-            self?.applyTableEdit(request)
         }
         documentWindow.contentViewController = split
         documentWindow.setContentSize(NSSize(width: 1100, height: 720))
@@ -360,15 +352,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         applyWindowBackgroundTheme()
     }
 
-    func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
-        isEditing ? nil : tableUndoManager
-    }
-
     /// A saved image of the document, decoding while the window is built.
     var pendingSnapshot: DocumentSnapshotCache.Prefetch?
 
     func display(markdown: String, fileURL: URL?) {
-        tableUndoManager.removeAllActions()
         currentFileURL = fileURL
         currentMarkdown = markdown
         resetAutoSaveFeedback()
@@ -444,7 +431,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             return
         }
         let restoredScrollPosition = commitNavigation(to: url, intent: intent)
-        tableUndoManager.removeAllActions()
 
         // Switching to a different file blanks the preview so the previous
         // doc doesn't linger on screen during sheet dismissal + load.

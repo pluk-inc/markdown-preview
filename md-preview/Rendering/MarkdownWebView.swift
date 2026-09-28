@@ -136,12 +136,6 @@ struct SourceScrollAnchor {
     }
 }
 
-struct MarkdownTableEditRequest {
-    let startLine: Int
-    let endLine: Int
-    let edits: [MarkdownTableEdit]
-}
-
 /// User-selectable article layout, persisted across launches. Quick Look
 /// always renders the centered column; this setting only drives the app.
 /// Lives here (not AppDelegate.swift) because this file is compiled into
@@ -203,8 +197,6 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     var fragmentLinkActivated: ((String) -> Void)?
     var pointerDocumentYDidChange: ((CGFloat) -> Void)?
     var localMarkdownLinkActivated: ((URL) -> Void)?
-    var taskCheckboxToggled: ((Int, Bool) -> Void)?
-    var tableEditRequested: ((MarkdownTableEditRequest) -> Void)?
     var scrollDidChange: (() -> Void)?
     private let assetScheme = MarkdownAssetScheme()
     private var currentAssetBase: URL?
@@ -656,54 +648,6 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.setString(text, forType: .string)
-        case "taskCheckbox":
-            guard let line = dict["line"] as? NSNumber,
-                  let checked = dict["checked"] as? NSNumber else { return }
-            taskCheckboxToggled?(line.intValue, checked.boolValue)
-        case "tableContextMenu":
-            presentTableContextMenu(dict)
-        case "tableEdit":
-            guard let operation = dict["operation"] as? String,
-                  let start = dict["start"] as? NSNumber,
-                  let end = dict["end"] as? NSNumber,
-                  let row = dict["row"] as? NSNumber,
-                  let column = dict["column"] as? NSNumber else { return }
-            let edit: MarkdownTableEdit
-            switch operation {
-            case "setCell":
-                guard let value = dict["value"] as? String else { return }
-                edit = .setCell(row: row.intValue, column: column.intValue, markdown: value)
-            case "insertRowBefore":
-                edit = .insertRowBefore(row.intValue)
-            case "insertRowAfter", "insertRow":
-                edit = .insertRowAfter(row.intValue)
-            case "deleteRow":
-                edit = .deleteRow(row.intValue)
-            case "insertColumnBefore":
-                edit = .insertColumnBefore(column.intValue)
-            case "insertColumnAfter", "insertColumn":
-                edit = .insertColumnAfter(column.intValue)
-            case "deleteColumn":
-                edit = .deleteColumn(column.intValue)
-            default:
-                return
-            }
-            var edits: [MarkdownTableEdit] = []
-            if operation != "setCell", let pendingValue = dict["pendingValue"] as? String {
-                let pendingRow = (dict["pendingRow"] as? NSNumber)?.intValue ?? row.intValue
-                let pendingColumn = (dict["pendingColumn"] as? NSNumber)?.intValue ?? column.intValue
-                edits.append(.setCell(
-                    row: pendingRow,
-                    column: pendingColumn,
-                    markdown: pendingValue
-                ))
-            }
-            edits.append(edit)
-            tableEditRequested?(MarkdownTableEditRequest(
-                startLine: start.intValue,
-                endLine: end.intValue,
-                edits: edits
-            ))
         case "scroll":
             guard let value = dict["value"] as? String else { return }
             switch value {
@@ -720,26 +664,6 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             }
         default:
             break
-        }
-    }
-
-    private func presentTableContextMenu(_ payload: [String: Any]) {
-        guard let token = payload["token"] as? String else { return }
-        let context = TableContextMenuPresenter.Context(
-            canInsertRowAbove: (payload["canInsertRowAbove"] as? NSNumber)?.boolValue ?? false,
-            canDuplicateRow: (payload["canDuplicateRow"] as? NSNumber)?.boolValue ?? false,
-            canDeleteRow: (payload["canDeleteRow"] as? NSNumber)?.boolValue ?? false,
-            canDeleteColumn: (payload["canDeleteColumn"] as? NSNumber)?.boolValue ?? false,
-            showsDuplicateRow: (payload["showsDuplicateRow"] as? NSNumber)?.boolValue ?? false
-        )
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            let presenter = TableContextMenuPresenter(context: context) { [weak self] operation in
-                guard let self else { return }
-                let script = "window.MdPreview && window.MdPreview.performTableContextAction(\(self.javaScriptStringLiteral(token)), \(self.javaScriptStringLiteral(operation)))"
-                self.webView.evaluateJavaScript(script) { _, _ in }
-            }
-            presenter.present(in: self.webView)
         }
     }
 

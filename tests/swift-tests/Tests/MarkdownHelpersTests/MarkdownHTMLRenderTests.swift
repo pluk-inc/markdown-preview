@@ -39,7 +39,6 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(rendered.articleHTML.contains("<img src=\"notes-pictures/1.png\""))
         XCTAssertTrue(rendered.html.contains("<base href=\"md-asset:///Users/me/notes/\">"))
         XCTAssertFalse(rendered.html.contains("kind: 'imageClick'"))
-        XCTAssertTrue(rendered.html.contains("a, button, input, img"))
     }
 
     func testYamlFrontmatterRendersAsTableBeforeDocumentBody() {
@@ -2380,17 +2379,9 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(rendered.articleHTML.contains(
             "<td data-table-row=\"1\" data-table-column=\"1\" data-table-markdown=\"10\" align=\"right\">10</td>"
         ), rendered.articleHTML)
-        XCTAssertTrue(rendered.html.contains("function enableTableEditing(root = document)"))
-        XCTAssertFalse(rendered.html.contains("md-table-edge-action"))
-        XCTAssertTrue(rendered.html.contains("kind: 'tableContextMenu'"))
-        XCTAssertTrue(rendered.html.contains("cell.dataset.placeholder = placeholder"))
-        XCTAssertTrue(rendered.html.contains("function selectTablePart(cell, operation)"))
-        XCTAssertTrue(rendered.html.contains("event.key === 'Backspace' || event.key === 'Delete'"))
-        XCTAssertTrue(rendered.html.contains("selectTableRange(tableCellDrag.cell, cell)"))
-        XCTAssertTrue(rendered.html.contains("window.getSelection()?.removeAllRanges()"))
-        XCTAssertTrue(rendered.html.contains(".md-table-editor .is-table-selection-left"))
-        XCTAssertTrue(rendered.html.contains("cell.hasAttribute('data-table-markdown')"))
-        XCTAssertTrue(rendered.html.contains("cell.dataset.tableOriginal = cell.dataset.tableMarkdown || ''"))
+        XCTAssertFalse(rendered.html.contains("kind: 'tableEdit'"))
+        XCTAssertFalse(rendered.html.contains("kind: 'tableContextMenu'"))
+        XCTAssertFalse(rendered.html.contains("kind: 'taskCheckbox'"))
     }
 
     func testRenderedTableCellsRetainOriginalMarkdownForSourceAwareEditing() throws {
