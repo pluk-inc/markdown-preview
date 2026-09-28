@@ -1507,11 +1507,15 @@ function buildDecorations(view, detectedCodeCache) {
   // CodeMirror always owns a selection at offset zero, even before the user
   // clicks the editor. Only reveal source syntax when the editor truly has
   // keyboard focus; otherwise the first block looks spuriously active.
-  // A range selection is an operation on rendered content, not a request to
-  // reveal every Markdown marker it spans. Only a caret activates source
-  // syntax; this keeps Cmd-A and long drag selections in live-preview form.
+  // Keep source syntax visible for an insertion caret and while an IME
+  // composition owns a non-empty selection. Ordinary range selections stay
+  // in live-preview form, so Cmd-A and drag selections do not reveal every
+  // Markdown marker they span.
+  const sourceCaret = focused && (sel.empty || view.compositionStarted)
+    ? sel.head
+    : null
   const touches = (from, to) => currentFindTouches(state, from, to)
-    || (focused && sel.empty && sel.head >= from && sel.head <= to)
+    || (sourceCaret != null && sourceCaret >= from && sourceCaret <= to)
   const touchesLineOf = (pos) => {
     const line = state.doc.lineAt(pos)
     return touches(line.from, line.to)
