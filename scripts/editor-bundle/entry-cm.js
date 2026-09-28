@@ -663,10 +663,12 @@ function renderTableCell(element, source) {
 // A table cell owns a native DOM selection, separate from CodeMirror's.
 // Remember it when the native formatting toolbar or link popover takes focus.
 const tableFormattingTargets = new WeakMap()
+const tableCellCommit = Annotation.define()
 const tableFormattingCallbacks = new WeakMap()
 const tableInlineCommands = new Set(['bold', 'italic', 'strikethrough', 'highlight', 'code', 'link'])
 
 function tableCellSourceRange(view, target) {
+  if (target.invalid || target.tableFrom < 0 || target.tableFrom >= view.state.doc.length) return null
   const first = view.state.doc.lineAt(target.tableFrom)
   const lineNumber = first.number + (target.row === 0 ? 0 : target.row + 1)
   if (lineNumber > view.state.doc.lines) return null
@@ -678,7 +680,7 @@ function tableCellSourceRange(view, target) {
 
 function captureTableSelection(view) {
   const target = tableFormattingTargets.get(view)
-  if (!target || target.element.dataset.tableEditing !== 'true') return
+  if (!target || target.invalid || target.element.dataset.tableEditing !== 'true') return
   const selection = window.getSelection()
   if (!selection?.anchorNode || !selection.focusNode
       || !target.element.contains(selection.anchorNode) || !target.element.contains(selection.focusNode)) return
@@ -705,7 +707,7 @@ function captureTableSelection(view) {
 
 function prepareTableFormatting(view) {
   const target = tableFormattingTargets.get(view)
-  if (!target) return null
+  if (!target || target.invalid) return null
   captureTableSelection(view)
   // Blur commits any pending typing through the table's existing save path.
   if (target.element.dataset.tableEditing === 'true') target.element.blur()
@@ -744,6 +746,15 @@ const tableFormattingSelection = ViewPlugin.fromClass(class {
     }
     document.addEventListener('selectionchange', this.capture)
     view.dom.addEventListener('mousedown', this.clear, true)
+  }
+  update(update) {
+    const target = tableFormattingTargets.get(this.view)
+    if (target && update.docChanged
+        && update.transactions.some(transaction => transaction.docChanged && !transaction.annotation(tableCellCommit))) {
+      // Keep a blocked target until the user explicitly selects a live cell or
+      // body position, rather than formatting CodeMirror's previous selection.
+      tableFormattingTargets.set(this.view, { ...target, invalid: true })
+    }
   }
   destroy() {
     document.removeEventListener('selectionchange', this.capture)
@@ -795,7 +806,7 @@ class TableEditorWidget extends WidgetType {
       }))
     }
 
-    const applyModel = (focusTarget = null) => {
+    const applyModel = (focusTarget = null, commitsCell = false) => {
       const source = serializeTable(model)
       if (source === this.source) {
         if (focusTarget) {
@@ -808,6 +819,7 @@ class TableEditorWidget extends WidgetType {
       active = null
       view.dispatch({
         changes: { from: this.from, to: this.from + this.source.length, insert: source },
+        annotations: commitsCell ? tableCellCommit.of(true) : [],
         userEvent: "input",
       })
       if (focusTarget) focusCellAfterUpdate(focusTarget.row, focusTarget.column)
@@ -972,16 +984,18 @@ class TableEditorWidget extends WidgetType {
           if (!active || active.element !== editor) return
           const value = editor.innerText || ""
           const changed = value !== model.rows[row][column]
+            || !tableCellSourceRange(view, { tableFrom: this.from, row, column })
           model.rows[row][column] = value
           active = null
           delete editor.dataset.tableEditing
           renderTableCell(editor, model.rows[row][column])
-          if (changed) applyModel()
+          if (changed) applyModel(null, true)
         })
         editor.addEventListener("keydown", (event) => {
           if ((event.metaKey || event.ctrlKey) && ['b', 'i'].includes(event.key.toLowerCase())) {
             event.preventDefault()
             const target = prepareTableFormatting(view)
+            if (!target) return
             toggleInlineMark(event.key.toLowerCase() === 'b' ? '**' : '*')(view)
             if (target) restoreTableFormatting(view, target)
             return
@@ -3024,7 +3038,9 @@ window.MDEditor = {
       },
       setListStyle: style => !tableFormattingTargets.has(view) && applyListStyle(view, style),
       getLinkSelection: (expandLink = false) => {
-        prepareTableFormatting(view)
+        if (tableFormattingTargets.has(view) && !prepareTableFormatting(view)) {
+          return null
+        }
         const { from, to } = view.state.selection.main
         const link = enclosingNode(view.state, from, ['Link'])
         if (expandLink && link && to <= link.to) {
@@ -3046,6 +3062,10 @@ window.MDEditor = {
         const target = destination.replace(/[\s<>\\()]/g, character =>
           /[()]/.test(character) ? '%' + character.charCodeAt(0).toString(16).toUpperCase() : encodeURIComponent(character))
         const tableTarget = tableFormattingTargets.get(view)
+        if (tableTarget) {
+          const range = tableCellSourceRange(view, tableTarget)
+          if (!range || from < range.from || to > range.to) return false
+        }
         const linkMarkdown = `[${label}](${target})`
         const insert = tableTarget ? escapedTableCell(linkMarkdown) : linkMarkdown
         view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length }, userEvent: 'input' })
