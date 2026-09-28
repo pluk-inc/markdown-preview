@@ -166,6 +166,8 @@ extension DocumentWindowController {
         item.label = NSLocalizedString("Navigation", comment: "Navigation toolbar item label")
         item.paletteLabel = NSLocalizedString("Back and Forward", comment: "Navigation toolbar palette label")
         item.isNavigational = true
+        // Keep both arrows visible when the toolbar runs out of room.
+        item.controlRepresentation = .expanded
         item.autovalidates = false
         item.subitems.first?.toolTip = back
         item.subitems.last?.toolTip = forward
