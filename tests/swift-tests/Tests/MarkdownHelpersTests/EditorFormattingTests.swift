@@ -232,6 +232,32 @@ final class EditorFormattingTests: XCTestCase {
         XCTAssertEqual(result?["caret"] as? Int, source.utf16.count)
     }
 
+    func testCompletedTaskStyleTracksCheckboxToggles() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let source = "- [x] Done **bold**\n  continuation\n- [ ] Pending"
+        let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: source, editorJavaScript: script),
+                                          width: 650, isEditor: true, height: 400)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        let result = try await editor.webView.evaluateJavaScript("""
+            (() => {
+                const lines = () => [...document.querySelectorAll('.cm-line')];
+                const struck = line => getComputedStyle(line).textDecorationLine.includes('line-through');
+                const initial = struck(lines()[0]) && struck(lines()[1]) && !struck(lines()[2]);
+                const muted = getComputedStyle(lines()[0]).color !== getComputedStyle(lines()[2]).color;
+                document.querySelector('.cm-md-task-marker input').click();
+                const cleared = !struck(lines()[0]) && !struck(lines()[1]);
+                document.querySelector('.cm-md-task-marker input').click();
+                return {initial, muted, cleared, restored: struck(lines()[0]),
+                        source: window.__mdEditor.getMarkdown()};
+            })()
+            """) as? [String: Any]
+        for key in ["initial", "muted", "cleared", "restored"] {
+            XCTAssertEqual(result?[key] as? Bool, true, key)
+        }
+        XCTAssertEqual(result?["source"] as? String, source)
+    }
+
     func testTypedTaskCheckboxContinuesAndExitsOnEmptyItem() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: "", editorJavaScript: script),

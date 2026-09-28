@@ -283,6 +283,10 @@ nonisolated enum EditorHTML {
             padding-inline-start: 2.1em;
             text-indent: -2.1em;
         }
+        .cm-md-task-completed {
+            color: var(--secondary);
+            text-decoration: line-through;
+        }
         .cm-md-task-marker {
             display: inline-block;
             width: 2.1em;

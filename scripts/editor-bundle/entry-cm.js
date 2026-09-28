@@ -1375,6 +1375,7 @@ const quoteLine = (depth, starts, ends, gap) => {
 // hanging indent, and the source indentation is hidden like a nested
 // marker's.
 const listContinuationLine = Decoration.line({ class: "cm-md-list-continuation" })
+const completedTaskLine = Decoration.line({ class: "cm-md-task-completed" })
 const codeLine = Decoration.line({ class: "cm-md-codeblock" })
 const codeLineFirst = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-first" })
 const codeLineLast = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-last" })
@@ -1795,6 +1796,7 @@ function buildDecorations(view, detectedCodeCache) {
       && /^\s*\[[ xX]\](\s|$)/.test(line.text.slice(markerTo - line.from))
     if (isTask) {
       const task = line.text.slice(markerTo - line.from).match(/^[ \t]*\[([ xX])\][ \t]?/)
+      if (task[1] !== ' ') lineOnce(line.from, completedTaskLine)
       const bracket = markerTo + task[0].indexOf('[')
       ranges.push(Decoration.replace({ widget: new TaskCheckboxWidget(bracket + 1, task[1] !== ' ') })
         .range(markerFrom, markerTo + task[0].length))
@@ -2175,6 +2177,9 @@ function buildDecorations(view, detectedCodeCache) {
             && state.doc.line(itemLine.number - 1).text.trim() === ""
           if ((!isFirstItem || isNested) && !hasBlankBefore) lineOnce(node.from, listItemGapLine)
           eachLine(node.from, node.to, listItemLine)
+          if (/^[-+*][ \t]+\[[xX]\](?:[ \t]|$)/.test(state.doc.sliceString(node.from, itemLine.to))) {
+            eachLine(node.from, node.to, completedTaskLine)
+          }
           lineOnce(node.from, listDepthLine(listStack.length))
           listDepthPositions.add(state.doc.lineAt(node.from).from)
           // Continuation lines of this item (not nested markers, not blank)
