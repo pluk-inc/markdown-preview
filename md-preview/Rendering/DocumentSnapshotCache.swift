@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 /// that image when the same file opens again, until WebKit paints the page.
 /// Only documents whose first paint is also their final look are saved:
 /// math, Mermaid and script-highlighted code change after the first paint,
+/// and images can load late or change on disk without the Markdown changing,
 /// so an image of them would not match the page it covers.
 @MainActor
 final class DocumentSnapshotCache {
@@ -19,6 +20,8 @@ final class DocumentSnapshotCache {
     private static let decodeWait: DispatchTimeInterval = .milliseconds(30)
     /// Saved images show document content, so keep only recent ones.
     private nonisolated static let maximumSnapshots = 40
+    /// One writer at a time, so pruning and replacing never interleave.
+    private nonisolated static let writeQueue = DispatchQueue(label: "doc.md-preview.snapshots", qos: .utility)
 
     /// Everything the saved image depends on.
     nonisolated struct Metadata: Codable, Equatable, Sendable {
@@ -53,13 +56,17 @@ final class DocumentSnapshotCache {
     func prefetch(fileURL: URL?, markdown: String) -> Prefetch? {
         guard isEnabled, let fileURL else { return nil }
         let prefetch = Prefetch(contentHash: Self.hash(markdown))
-        let files = Self.files(for: fileURL)
+        let file = Self.file(for: fileURL)
         DispatchQueue.global(qos: .userInteractive).async {
             defer { prefetch.done.signal() }
-            guard let json = try? Data(contentsOf: files.metadata),
+            // The metadata travels inside the PNG, so an image is never read
+            // with another version's metadata.
+            guard let source = CGImageSourceCreateWithURL(file as CFURL, nil),
+                  let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+                  let png = properties[kCGImagePropertyPNGDictionary] as? [CFString: Any],
+                  let json = (png[kCGImagePropertyPNGDescription] as? String)?.data(using: .utf8),
                   let metadata = try? JSONDecoder().decode(Metadata.self, from: json),
                   metadata.contentHash == prefetch.contentHash,
-                  let source = CGImageSourceCreateWithURL(files.image as CFURL, nil),
                   let image = CGImageSourceCreateImageAtIndex(source, 0, [
                       kCGImageSourceShouldCacheImmediately: true,
                   ] as CFDictionary) else { return }
@@ -82,18 +89,27 @@ final class DocumentSnapshotCache {
         guard isEnabled,
               image.width == metadata.pixelWidth,
               image.height == metadata.pixelHeight else { return }
-        let files = Self.files(for: fileURL)
-        DispatchQueue.global(qos: .utility).async {
+        let file = Self.file(for: fileURL)
+        Self.writeQueue.async {
             guard let json = try? JSONEncoder().encode(metadata) else { return }
-            try? FileManager.default.createDirectory(at: files.image.deletingLastPathComponent(),
-                                                     withIntermediateDirectories: true)
+            let folder = file.deletingLastPathComponent()
+            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            // Write beside the target, then rename over it, so a reader sees
+            // either the old file or the new one, never a partial write.
+            let temporary = folder.appendingPathComponent(".\(UUID().uuidString).png")
             guard let destination = CGImageDestinationCreateWithURL(
-                files.image as CFURL, UTType.png.identifier as CFString, 1, nil
+                temporary as CFURL, UTType.png.identifier as CFString, 1, nil
             ) else { return }
-            CGImageDestinationAddImage(destination, image, nil)
-            guard CGImageDestinationFinalize(destination) else { return }
-            try? json.write(to: files.metadata, options: .atomic)
-            Self.removeOldSnapshots(in: files.image.deletingLastPathComponent())
+            let properties = [kCGImagePropertyPNGDictionary: [
+                kCGImagePropertyPNGDescription: String(decoding: json, as: UTF8.self),
+            ]] as CFDictionary
+            CGImageDestinationAddImage(destination, image, properties)
+            guard CGImageDestinationFinalize(destination),
+                  rename(temporary.path, file.path) == 0 else {
+                try? FileManager.default.removeItem(at: temporary)
+                return
+            }
+            Self.removeOldSnapshots(in: folder)
         }
     }
 
@@ -101,7 +117,8 @@ final class DocumentSnapshotCache {
         let manager = FileManager.default
         guard let images = try? manager.contentsOfDirectory(
             at: folder, includingPropertiesForKeys: [.contentModificationDateKey]
-        ).filter({ $0.pathExtension == "png" }), images.count > maximumSnapshots else { return }
+        ).filter({ $0.pathExtension == "png" && !$0.lastPathComponent.hasPrefix(".") }),
+              images.count > maximumSnapshots else { return }
         let oldestFirst = images.sorted {
             let a = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
             let b = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
@@ -109,7 +126,6 @@ final class DocumentSnapshotCache {
         }
         for image in oldestFirst.prefix(images.count - maximumSnapshots) {
             try? manager.removeItem(at: image)
-            try? manager.removeItem(at: image.deletingPathExtension().appendingPathExtension("json"))
         }
     }
 
@@ -118,12 +134,11 @@ final class DocumentSnapshotCache {
     }
 
     /// One image per file path; a new version of the file replaces it.
-    private nonisolated static func files(for fileURL: URL) -> (image: URL, metadata: URL) {
+    private nonisolated static func file(for fileURL: URL) -> URL {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         let name = hash(fileURL.standardizedFileURL.path)
-        let folder = caches.appendingPathComponent("DocumentSnapshots", isDirectory: true)
-        return (folder.appendingPathComponent("\(name).png"),
-                folder.appendingPathComponent("\(name).json"))
+        return caches.appendingPathComponent("DocumentSnapshots", isDirectory: true)
+            .appendingPathComponent("\(name).png")
     }
 }
 

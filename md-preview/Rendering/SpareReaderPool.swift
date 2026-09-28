@@ -5,7 +5,6 @@ import os
 /// second and later document windows skip WKWebView creation and the
 /// WebContent process launch. The first document of a cold launch never
 /// waits for a spare: the pool only fills after a real document has painted,
-/// or after a launch that opened no document (the Open panel shows then),
 /// because preparing a reader during launch competes with that document.
 @MainActor
 final class SpareReaderPool {
@@ -43,14 +42,9 @@ final class SpareReaderPool {
         return spare
     }
 
-    /// Call once a document's content is on screen.
+    /// Call once a document's content is on screen. Prepares a spare after a
+    /// short idle delay, if there is none yet.
     func documentDidPaint() {
-        prepareSpare()
-    }
-
-    /// Prepares a spare after a short idle delay, if there is none yet. The
-    /// app delegate also calls this after a launch that opened no document.
-    func prepareSpare() {
         guard isEnabled, spare == nil, !replenishScheduled else { return }
         replenishScheduled = true
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.replenishDelay) { [weak self] in
@@ -71,12 +65,8 @@ final class SpareReaderPool {
         spareSettings = nil
     }
 
-    /// A document window, or the Open panel that leads to one, is on screen.
     private static var appIsShowingDocuments: Bool {
-        NSApp.windows.contains { window in
-            window.isVisible
-                && (window.windowController is DocumentWindowController || window is NSOpenPanel)
-        }
+        NSApp.windows.contains { $0.isVisible && $0.windowController is DocumentWindowController }
     }
 
     private func logTake(_ kind: String) {

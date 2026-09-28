@@ -477,7 +477,7 @@ final class ContentViewController: NSViewController {
 
     private func saveSnapshotIfNeeded() {
         guard let source = snapshotSource,
-              !webView.lastDisplayNeedsLateRenderers,
+              !webView.lastDisplayMayChangeAfterFirstPaint,
               currentScrollPosition == 0,
               let metadata = snapshotMetadata(contentHash: source.contentHash),
               metadata != shownSnapshotMetadata else { return }

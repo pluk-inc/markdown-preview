@@ -130,7 +130,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hasFinishedLaunching = true
         if !didReceiveOpenURLsDuringLaunch {
             scheduleDocumentPrompt(requiresNoDocuments: true)
-            SpareReaderPool.shared.prepareSpare()
         }
     }
 

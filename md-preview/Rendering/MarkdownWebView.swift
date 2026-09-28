@@ -393,9 +393,11 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     /// True once any `display()` has been requested.
     var hasRequestedDocument: Bool { renderGeneration > 0 }
 
-    /// True when the last displayed document needs math, Mermaid or script
-    /// highlighting, which change the page after its first paint.
-    private(set) var lastDisplayNeedsLateRenderers = true
+    /// True when the last displayed document can look different after its
+    /// first paint: math, Mermaid and script highlighting render later, and
+    /// images load later and can change without the Markdown changing.
+    private(set) var lastDisplayMayChangeAfterFirstPaint = true
+    private var lastContentProcessReload: Date?
 
     override func layout() {
         super.layout()
@@ -507,7 +509,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             mermaid: rendered.containsMermaid,
             code: rendered.containsCode
         )
-        lastDisplayNeedsLateRenderers = fingerprint.math || fingerprint.mermaid || fingerprint.code
+        lastDisplayMayChangeAfterFirstPaint = fingerprint.math || fingerprint.mermaid || fingerprint.code
+            || rendered.articleHTML.contains("<img")
 
         // Fast path: the loaded page already has every renderer the new doc
         // needs — swap the article body via JS instead of reloading the
@@ -1652,8 +1655,13 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         // The page is gone, so the next display() must load it again rather
-        // than call into it.
+        // than call into it. Load it now so the preview is not left blank,
+        // but not again within a few seconds, in case the document itself
+        // makes the process stop.
         discardLoadedPage()
+        if let last = lastContentProcessReload, Date().timeIntervalSince(last) < 5 { return }
+        lastContentProcessReload = Date()
+        reloadPreview()
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
