@@ -173,35 +173,60 @@ enum WhatsNewWindow {
     /// Waits for the document to settle before covering it, so the window
     /// never competes with the first paint of a launch.
     private static let automaticPresentationDelay: TimeInterval = 0.8
-    private static var didClaimAutomaticPresentation = false
+    private static var hadUsedAppBeforeLaunch = false
+    private static var isAutomaticPresentationScheduled = false
+    private static var didHandleAutomaticPresentation = false
     private static var window: NSPanel?
+    private static var closeObserver: NSObjectProtocol?
 
-    /// Called each time a document window shows a file. At most one window
-    /// per launch asks, and only a reader updating from a build older than
-    /// `WhatsNewPolicy.featuresBuild` sees it. Call before anything marks
-    /// the install as used.
-    static func presentIfNeeded(over documentWindow: NSWindow, hasUsedAppBefore: Bool) {
-        guard !didClaimAutomaticPresentation else { return }
-        didClaimAutomaticPresentation = true
-        let thisBuild = (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String)
-            .flatMap(Int.init) ?? 0
-        guard WhatsNewPolicy.claimPresentation(thisBuild: thisBuild,
-                                               hasUsedAppBefore: hasUsedAppBefore) else { return }
+    /// Keys every earlier release wrote once a reader used the app: the
+    /// sidebar seed runs for the first window of any kind (file, folder or
+    /// untitled), the default-handler offer for the first file.
+    private static let priorUseKeys = [
+        MainSplitViewController.didSeedKey,
+        DocumentWindowController.didOfferDefaultHandlerKey,
+    ]
+
+    /// Call from `applicationWillFinishLaunching(_:)`, before any window —
+    /// restored ones included — can write the prior-use keys for this launch.
+    static func noteLaunch() {
+        hadUsedAppBeforeLaunch = priorUseKeys.contains { UserDefaults.standard.bool(forKey: $0) }
+    }
+
+    /// Called each time a document window shows content. The first window
+    /// still on screen, without a sheet, once the delay passes decides for
+    /// the launch; until one does, later windows try again. Only a reader
+    /// updating from a build older than `WhatsNewPolicy.featuresBuild` sees
+    /// the window.
+    static func presentIfNeeded(over documentWindow: NSWindow) {
+        guard !didHandleAutomaticPresentation, !isAutomaticPresentationScheduled else { return }
+        isAutomaticPresentationScheduled = true
 
         DispatchQueue.main.asyncAfter(deadline: .now() + automaticPresentationDelay) { [weak documentWindow] in
+            isAutomaticPresentationScheduled = false
             // A sheet (a save panel, an alert) means the reader is busy, and
             // a closed window falls back to the frontmost document window.
             let target = [documentWindow, NSApp.mainWindow].compactMap { $0 }.first {
                 $0.isVisible && $0.attachedSheet == nil
                     && $0.windowController is DocumentWindowController
             }
-            if let target { present(over: target) }
+            guard let target else { return }
+
+            // Claimed only now that the window can show, so a reader whose
+            // document closed during the delay is asked again next time.
+            didHandleAutomaticPresentation = true
+            let thisBuild = (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String)
+                .flatMap(Int.init) ?? 0
+            guard WhatsNewPolicy.claimPresentation(thisBuild: thisBuild,
+                                                   hasUsedAppBefore: hadUsedAppBeforeLaunch)
+            else { return }
+            present(over: target)
         }
     }
 
-    /// Shows the window centred over `documentWindow`, or brings the open
-    /// one to the front.
-    static func present(over documentWindow: NSWindow) {
+    /// Shows the window centred over `documentWindow`, or over the screen
+    /// when there is none, or brings the open one to the front.
+    static func present(over documentWindow: NSWindow?) {
         if let window {
             window.makeKeyAndOrderFront(nil)
             return
@@ -234,14 +259,27 @@ enum WhatsNewWindow {
         window.isReleasedWhenClosed = false
         window.setContentSize(hosting.view.intrinsicContentSize)
 
-        let frame = window.frame
-        let parent = documentWindow.frame
-        window.setFrameOrigin(NSPoint(x: parent.midX - frame.width / 2,
-                                      y: parent.midY - frame.height / 2))
-        NotificationCenter.default.addObserver(
+        if let documentWindow {
+            // Never below the document: an Always on Top window floats.
+            if documentWindow.level.rawValue > window.level.rawValue {
+                window.level = documentWindow.level
+            }
+            let frame = window.frame
+            let parent = documentWindow.frame
+            window.setFrameOrigin(NSPoint(x: parent.midX - frame.width / 2,
+                                          y: parent.midY - frame.height / 2))
+        } else {
+            window.center()
+        }
+
+        closeObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: window, queue: .main
         ) { _ in
-            MainActor.assumeIsolated { Self.window = nil }
+            MainActor.assumeIsolated {
+                if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
+                closeObserver = nil
+                Self.window = nil
+            }
         }
         Self.window = window
         window.makeKeyAndOrderFront(nil)

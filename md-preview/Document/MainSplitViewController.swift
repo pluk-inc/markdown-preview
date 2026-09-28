@@ -7,7 +7,8 @@ import Cocoa
 
 final class MainSplitViewController: NSSplitViewController {
 
-    private static let didSeedKey = "MainSplitView.didSeedInitialState"
+    /// Also read by `WhatsNewWindow` as a sign of earlier use.
+    static let didSeedKey = "MainSplitView.didSeedInitialState"
     /// Keeps the pane picker and sidebar toggle visible beside the window controls.
     private static let minimumSidebarWidth: CGFloat = 230
 

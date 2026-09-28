@@ -49,7 +49,7 @@ Updated readers see a What's New window once, over their first document window a
 2. Replace the entries in `WhatsNewFeature.current` with the confirmed features.
 3. Add every new title and description to both `md-preview/en.lproj/Localizable.strings` and `md-preview/zh-Hans.lproj/Localizable.strings` under `/* What's New */`, and remove strings that no entry uses any more (keep keys other UI still uses, such as "Search for Document"). Run `plutil -lint` on both files.
 4. Build the app and run `swift test --package-path tests/swift-tests --filter WhatsNewPolicyTests`.
-5. Check the window in the Debug build: run `defaults delete doc.md-preview.dev MarkdownPreview.whatsNewLastBuild`, launch the built app with a document, and confirm the window lists the confirmed features. Before the release is published, the Release Notes link returns 404; that is expected.
+5. Check the window in the Debug build as an updating reader: run `defaults delete doc.md-preview.dev MarkdownPreview.whatsNewLastBuild` and `defaults write doc.md-preview.dev MainSplitView.didSeedInitialState -bool true` (a fresh Debug profile otherwise counts as a new install, which never sees the window), launch the built app with a document, and confirm the window lists the confirmed features. Before the release is published, the Release Notes link returns 404; that is expected.
 
 ### How `scripts/release.sh` actually works
 Read this before running it — the script ships the update, it doesn't just prepare a PR.

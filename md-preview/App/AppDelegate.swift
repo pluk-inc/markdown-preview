@@ -104,6 +104,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var pendingTerminationSaveCount = 0
     private var terminationSaveFailed = false
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        WhatsNewWindow.noteLaunch()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         CrashReporter.start()
         let storedAppearance = AppearanceMode.migrateLegacyValue()
@@ -493,8 +497,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
              #selector(selectOutlineMode(_:)),
              #selector(selectFilesMode(_:)),
              #selector(performFindPanelAction(_:)),
-             #selector(performTextFinderAction(_:)),
-             #selector(showWhatsNew(_:)):
+             #selector(performTextFinderAction(_:)):
             return activeDocumentWindowController != nil
         case #selector(selectAppearanceMode(_:)):
             return ThemePreset.applied().requiredAppearance == nil
@@ -1129,8 +1132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func showWhatsNew(_ sender: Any?) {
-        guard let window = activeDocumentWindowController?.window else { return }
-        WhatsNewWindow.present(over: window)
+        WhatsNewWindow.present(over: activeDocumentWindowController?.window)
     }
 
     private func installSidebarViewMenuItems() {
