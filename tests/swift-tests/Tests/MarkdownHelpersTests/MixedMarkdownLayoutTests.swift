@@ -39,7 +39,8 @@ extension EditorPreviewLayoutTests {
             "Deep bullet", "Nested ordered item", "Nested quotation.", "greeting", "Left cell", "Center cell",
             "After first mixed image.", "After diagram.", "هذه فقرة عربية لاختبار اتجاه النص والمحاذاة.",
             "After extra blank lines.", "Final mixed paragraph.", "After equations.", "After alerts.",
-            "After reference image.", "After raw HTML.", "Final extended paragraph."
+            "After reference image.", "After raw HTML.", "Final extended paragraph.",
+            "Unchecked task", "Completed task"
         ], imageCount: 4, editorImageCount: 2,
            readSelectors: ["h1": 3, "h2": 4, "h3": 1, "h4": 1, "h5": 1, "h6": 1,
                            "table": 3, "input[type=checkbox]": 2, "input[type=checkbox]:checked": 1,
@@ -80,7 +81,7 @@ extension EditorPreviewLayoutTests {
             "Extended mixed document", "bold introduction", "After equations.", "Note body with", "Tip body.",
             "Important body.", "Warning body.", "Caution body.", "After alerts.", "After reference image.",
             "After raw HTML.", "Formatting", "Example", "Inline table styles", "Escaped pipe", "finalValue",
-            "Final extended paragraph."
+            "Final extended paragraph.", "Unchecked task", "Completed task"
         ], imageCount: 2, editorImageCount: 0,
            readSelectors: [".katex": 3, ".math-error": 0, ".markdown-alert": 5, ".footnotes": 1,
                            "details summary": 1, "p[align=center] img": 1, "table": 2, "input[type=checkbox]": 2],
