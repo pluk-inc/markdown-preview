@@ -322,3 +322,7 @@
 "On macOS 26 and later, the formatting bar uses Liquid Glass, with headings, links, lists, and styles in compact groups." = "在 macOS 26 及更高版本上，格式栏采用 Liquid Glass 设计，标题、链接、列表和样式分组排列，更加紧凑。";
 "Redesigned code blocks" = "全新设计的代码块";
 "Wrap long lines with one click. Code blocks now use rounded cards that show their language." = "一键为长代码行换行。代码块现采用圆角卡片设计，并显示其语言。";
+
+/* Reading preferences */
+"Strict line breaks" = "严格换行";
+"Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "将普通源文本行合并为连续段落。关闭此选项可保留每个换行。适用于阅读视图和快速查看预览。";

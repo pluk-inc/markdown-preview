@@ -322,3 +322,7 @@
 "On macOS 26 and later, the formatting bar uses Liquid Glass, with headings, links, lists, and styles in compact groups." = "On macOS 26 and later, the formatting bar uses Liquid Glass, with headings, links, lists, and styles in compact groups.";
 "Redesigned code blocks" = "Redesigned code blocks";
 "Wrap long lines with one click. Code blocks now use rounded cards that show their language." = "Wrap long lines with one click. Code blocks now use rounded cards that show their language.";
+
+/* Reading preferences */
+"Strict line breaks" = "Strict line breaks";
+"Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews.";

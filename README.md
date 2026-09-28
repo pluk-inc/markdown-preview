@@ -68,6 +68,8 @@ Or grab the latest signed and notarized DMG from the [Releases](https://github.c
 
 ## Features
 
+Single source newlines remain visible by default. Enable **Settings → General → Reading → Strict line breaks** to let ordinary source lines flow into paragraphs in reading view and Quick Look. Two trailing spaces or a backslash still create an explicit line break; blank lines still separate paragraphs. Reopen an existing Quick Look preview after changing this setting.
+
 - **Native rendering** — `WKWebView` pipeline backed by [swift-markdown](https://github.com/swiftlang/swift-markdown), with heading anchors and link handling. Bare `http://` and `https://` URLs are clickable in the app and Quick Look previews.
 - **Edit Mode** — edit Markdown in place with a formatting toolbar for headings, emphasis, lists, quotes, code, and links. Toggle it from the toolbar or with <kbd>⌘E</kbd>, then save with <kbd>⌘S</kbd>.
 - **Mermaid diagrams** — fenced `mermaid` code blocks render as diagrams in both the app and Quick Look previews, using a bundled renderer so previews work offline without a CDN request.
