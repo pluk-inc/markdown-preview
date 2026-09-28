@@ -1220,7 +1220,7 @@ const tableEditors = StateField.define({
   provide: (field) => EditorView.decorations.from(field),
 })
 
-// Task markers stay rendered while typing, including a newly created empty item.
+// Completed task markers stay rendered while typing the label, including an empty item.
 class TaskCheckboxWidget extends WidgetType {
   constructor(from, checked) { super(); this.from = from; this.checked = checked }
   eq(other) { return this.from === other.from && this.checked === other.checked }
@@ -1757,6 +1757,10 @@ function buildDecorations(view, detectedCodeCache) {
   }
   const isActiveFence = (node) => currentFindTouches(state, node.from, node.to)
     || (activeFence != null && node.from <= activeFence.from && node.to >= activeFence.to)
+  // Auto-closing brackets can form a valid task before the user types `]`.
+  // Keep its source editable until the caret has left the brackets.
+  const editingTaskMarker = (bracket) => sourceCaret != null
+    && sourceCaret > bracket && sourceCaret < bracket + 3
   const decoratedLines = new Set()
   const listDepthPositions = new Set()
   const lineOnce = (pos, deco) => {
@@ -1811,9 +1815,10 @@ function buildDecorations(view, detectedCodeCache) {
       && /^\s*\[[ xX]\](\s|$)/.test(line.text.slice(markerTo - line.from))
     if (isTask) {
       const task = line.text.slice(markerTo - line.from).match(/^[ \t]*\[([ xX])\][ \t]?/)
+      const bracket = markerTo + task[0].indexOf('[')
+      if (editingTaskMarker(bracket)) return
       lineOnce(line.from, taskLine)
       if (task[1] !== ' ') lineOnce(line.from, completedTaskLine)
-      const bracket = markerTo + task[0].indexOf('[')
       ranges.push(Decoration.replace({ widget: new TaskCheckboxWidget(bracket + 1, task[1] !== ' ') })
         .range(markerFrom, markerTo + task[0].length))
     } else if (/^[-+*]$/.test(marker)) {
@@ -2232,9 +2237,10 @@ function buildDecorations(view, detectedCodeCache) {
           const line = state.doc.lineAt(node.from)
           const isTask = /^\s*\[[ xX]\](\s|$)/.test(line.text.slice(node.to - line.from))
           if (isTask && /^[-+*]$/.test(mark)) {
-            lineOnce(line.from, taskLine)
             const task = line.text.slice(node.to - line.from).match(/^[ \t]*\[([ xX])\][ \t]?/)
             const bracket = node.to + task[0].indexOf('[')
+            if (editingTaskMarker(bracket)) return
+            lineOnce(line.from, taskLine)
             ranges.push(Decoration.replace({ widget: new TaskCheckboxWidget(bracket + 1, task[1] !== ' ') })
               .range(node.from, node.to + task[0].length))
           } else if ((mark === "-" || mark === "*" || mark === "+") && !isTask) {

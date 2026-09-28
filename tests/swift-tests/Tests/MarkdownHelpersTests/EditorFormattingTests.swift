@@ -325,6 +325,47 @@ final class EditorFormattingTests: XCTestCase {
         XCTAssertEqual(result?["source"] as? String, source)
     }
 
+    func testFreshTaskTypingWaitsForCaretToLeaveAutoClosedBracket() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let html = EditorHTML.render(markdown: "", editorJavaScript: script)
+            .replacingOccurrences(of: "editor = window.MDEditor.create(",
+                                  with: "editor = window.__typingEditor = window.MDEditor.create(")
+        let editor = WebViewLayoutHarness(html: html, width: 650, isEditor: true, height: 400)
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0)
+        let result = try await editor.webView.callAsyncJavaScript("""
+            document.hasFocus = () => true;
+            const api = window.__typingEditor;
+            api.focus();
+            const settle = async () => {
+                for (let i = 0; i < 12; i++) { window.__layoutTestFrame(); await Promise.resolve(); }
+            };
+            const results = [];
+            for (const marker of ['- [ ]', '- [x]', '- [X]', '- [ x ]']) {
+                api.replaceMarkdown(''); api.select(0); api.focus();
+                let premature = false;
+                for (const char of marker) {
+                    api.insert(char); await settle();
+                    const caret = api.getLinkSelection().from;
+                    const closing = api.getMarkdown().indexOf(']');
+                    if (caret <= closing && document.querySelector('.cm-md-task-marker')) premature = true;
+                }
+                const boxes = document.querySelectorAll('.cm-md-task-marker input').length;
+                for (const char of ' New task') { api.insert(char); await settle(); }
+                results.push({marker, premature, boxes, source: api.getMarkdown(), caret: api.getLinkSelection().from});
+            }
+            return results;
+            """, arguments: [:], in: nil, contentWorld: .page) as? [[String: Any]]
+        XCTAssertEqual(result?.count, 4)
+        for item in result ?? [] {
+            let marker = try XCTUnwrap(item["marker"] as? String)
+            XCTAssertEqual(item["premature"] as? Bool, false, marker)
+            XCTAssertEqual(item["boxes"] as? Int, marker == "- [ x ]" ? 0 : 1, marker)
+            XCTAssertEqual(item["source"] as? String, marker + " New task", marker)
+            XCTAssertEqual(item["caret"] as? Int, (marker + " New task").utf16.count, marker)
+        }
+    }
+
     func testTypedTaskCheckboxContinuesAndExitsOnEmptyItem() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: "", editorJavaScript: script),
