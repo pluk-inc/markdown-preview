@@ -21,6 +21,28 @@ final class FileSearchPanelPlacementTests: XCTestCase {
         XCTAssertTrue(screen.insetBy(dx: 16, dy: 16).contains(frame))
     }
 
+    func testSavedDragIsClampedWhenMovingToSmallerDisplay() {
+        let largeScreen = CGRect(x: 0, y: 0, width: 2560, height: 1440)
+        let savedOffset: [Double] = [1700, 1000]
+        let original = FileSearchPanelPlacement.frame(
+            contentSize: CGSize(width: 480, height: 400),
+            parentFrame: largeScreen, visibleFrame: largeScreen, savedOffset: savedOffset
+        )
+        // This drag fits on the original display without clamping.
+        XCTAssertEqual(original, CGRect(x: 1700, y: 40, width: 480, height: 400))
+
+        let smallerScreen = CGRect(x: 2560, y: 0, width: 1280, height: 720)
+        let restored = FileSearchPanelPlacement.frame(
+            contentSize: original.size,
+            parentFrame: CGRect(x: 2660, y: 20, width: 1000, height: 680),
+            visibleFrame: smallerScreen, savedOffset: savedOffset
+        )
+        XCTAssertTrue(smallerScreen.insetBy(dx: 16, dy: 16).contains(restored))
+        XCTAssertEqual(restored.maxX, smallerScreen.maxX - 16)
+        XCTAssertEqual(restored.minY, smallerScreen.minY + 16)
+        XCTAssertEqual(restored.size, original.size)
+    }
+
     func testInvalidOffsetsUseDefaultPlacement() {
         let parent = CGRect(x: 100, y: 100, width: 1000, height: 800)
         func frame(_ offset: [Double]?) -> CGRect {
