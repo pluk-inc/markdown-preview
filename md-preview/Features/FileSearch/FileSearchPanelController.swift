@@ -852,23 +852,14 @@ private final class FileSearchPanelPresentation: NSObject, NSWindowDelegate {
         self.panel = panel
         presentedController = viewController
 
-        let savedPosition = UserDefaults.standard.array(forKey: Self.positionKey) as? [Double]
-        let savedTopLeft: NSPoint? = savedPosition.flatMap { values in
-            guard values.count == 2, values.allSatisfy({ $0.isFinite }) else { return nil }
-            return NSPoint(x: values[0], y: values[1])
-        }
-        let screen = savedTopLeft.flatMap { point in
-            NSScreen.screens.first { $0.frame.contains(point) }
-        } ?? parent.screen
-        let screenFrame = screen?.visibleFrame ?? parent.frame
-        let width = min(content.frame.width, screenFrame.width - 32)
-        let height = min(content.frame.height, screenFrame.height - 32)
-        let desiredX = savedTopLeft?.x ?? (parent.frame.midX - width / 2)
-        // Start about a quarter of the way down the document window.
-        let desiredTop = savedTopLeft?.y ?? (parent.frame.maxY - parent.frame.height * 0.26)
-        let x = min(max(desiredX, screenFrame.minX + 16), screenFrame.maxX - width - 16)
-        let y = min(max(desiredTop - height, screenFrame.minY + 16), screenFrame.maxY - height - 16)
-        panel.setFrame(NSRect(x: x, y: y, width: width, height: height), display: false)
+        let savedOffset = UserDefaults.standard.array(forKey: Self.positionKey) as? [Double]
+        let frame = FileSearchPanelPlacement.frame(
+            contentSize: content.frame.size,
+            parentFrame: parent.frame,
+            visibleFrame: parent.screen?.visibleFrame ?? parent.frame,
+            savedOffset: savedOffset
+        )
+        panel.setFrame(frame, display: false)
         parent.addChildWindow(panel, ordered: .above)
         parentCloseObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: parent, queue: .main
@@ -898,13 +889,17 @@ private final class FileSearchPanelPresentation: NSObject, NSWindowDelegate {
         panel = nil
     }
 
-    private static let positionKey = "FileSearchPanel.topLeft"
+    private static let positionKey = "FileSearchPanel.parentOffset"
 
     func windowDidMove(_ notification: Notification) {
-        guard let panel, panel.isVisible, !panel.isResizingForResults,
+        guard let panel, let parent = panel.parent, panel.isVisible, !panel.isResizingForResults,
               NSEvent.pressedMouseButtons & 1 != 0 else { return }
-        // Store the search bar's top edge, independent of the result height.
-        UserDefaults.standard.set([panel.frame.minX, panel.frame.maxY], forKey: Self.positionKey)
+        // Keep the search bar relative to its document, independent of result
+        // height and the display on which the document is opened next.
+        UserDefaults.standard.set(
+            [panel.frame.minX - parent.frame.minX, parent.frame.maxY - panel.frame.maxY],
+            forKey: Self.positionKey
+        )
     }
 
     func windowDidResignKey(_ notification: Notification) {
