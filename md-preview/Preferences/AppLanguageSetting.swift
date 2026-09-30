@@ -7,6 +7,7 @@ enum AppLanguageSetting {
     static let systemDefault = ""
     static let defaultsKey = "AppleLanguages"
 
+    /// Lists bundled translations, excluding the Base interface resources.
     static func availableLanguages(in bundle: Bundle = .main) -> [String] {
         bundle.localizations.filter { $0 != "Base" }.sorted()
     }
@@ -16,6 +17,7 @@ enum AppLanguageSetting {
         Locale(identifier: language).localizedString(forIdentifier: language) ?? language
     }
 
+    /// Resolves an app-specific override to a bundled language, or System Default.
     static func selection(defaults: UserDefaults = .standard,
                           domain: String? = Bundle.main.bundleIdentifier,
                           languages: [String] = availableLanguages()) -> String {
@@ -27,6 +29,7 @@ enum AppLanguageSetting {
         return Bundle.preferredLocalizations(from: languages, forPreferences: preferred).first ?? systemDefault
     }
 
+    /// Persists the next-launch language, removing the override for System Default.
     static func save(_ language: String, defaults: UserDefaults = .standard) {
         if language == systemDefault {
             defaults.removeObject(forKey: defaultsKey)
