@@ -82,7 +82,7 @@ nonisolated enum FileSearchMatcher {
     /// Indices into `candidates`, best first. Non-matches are dropped.
     ///
     /// A blank query matches everything for callers that need an unfiltered
-    /// ordering. The palette skips ranking until a nonblank query is entered.
+    /// ordering. The palette preserves recent-file order for a blank query.
     static func rank(query: String, candidates: [Candidate]) -> [Int] {
         // Outside a cancelled task the cancellable variant never throws.
         (try? rankCancellably(query: query, candidates: candidates)) ?? []

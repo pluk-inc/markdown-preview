@@ -54,8 +54,7 @@ extension DocumentWindowController {
             return isEditing || hasPendingEditorChanges
         }
         if menuItem.action == #selector(searchForDocument(_:)) {
-            // Greyed out rather than opening a palette with nothing to search.
-            return projectRootURL != nil
+            return true
         }
         if menuItem.action == #selector(toggleAlwaysOnTop(_:)) {
             menuItem.state = isAlwaysOnTop ? .on : .off
