@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.0.64] – 2026-09-30
+
+This release adds recent files to document search, restores task checkbox toggles in Read Mode, and reduces idle memory usage.
+
+### Added
+
+- **Reopen recent documents from Search for Document.** Press ⇧⌘O to see up to 10 recently opened files, even without a document or project open. Typing shows matching recents above project results without duplicates; history persists across launches and follows *File → Open Recent → Clear Menu* ([#469](https://github.com/pluk-inc/markdown-preview/pull/469)).
+
+### Changed
+
+- **Lower idle memory usage.** The app no longer keeps a spare reader ready in the background. Later documents create their reader when opened, trading the previous reuse speedup for lower memory use; saved previews for eligible reopened documents remain available ([#471](https://github.com/pluk-inc/markdown-preview/pull/471)).
+- **Tighter task checkbox spacing.** Checkboxes sit closer to their text in both Read and Edit modes ([#470](https://github.com/pluk-inc/markdown-preview/pull/470)).
+
+### Fixed
+
+- **Task checkboxes work again in Read Mode.** Clicking a checkbox saves its change directly to the file, with conflict handling for edits made elsewhere. Tables and Quick Look previews remain read-only ([#470](https://github.com/pluk-inc/markdown-preview/pull/470)).
+- **Document search stays on the correct display.** The search palette remembers its position relative to the document window and stays within that window's current screen when moving between displays ([#463](https://github.com/pluk-inc/markdown-preview/pull/463)).
+
+### Contributors
+
+- [@gglanzani](https://github.com/gglanzani) — requested easier access to recently opened files ([#428](https://github.com/pluk-inc/markdown-preview/issues/428)).
+- [@lelanddutcher](https://github.com/lelanddutcher) — reported the Read Mode task checkbox regression ([#461](https://github.com/pluk-inc/markdown-preview/issues/461)).
+
 ## [0.0.63] – 2026-09-28
 
 This release opens documents faster, adds task checkboxes in Edit Mode and optional paragraph wrapping, and improves editing and navigation.
