@@ -59,13 +59,10 @@ extension DocumentWindowController {
         return item
     }
 
-    /// Without this the button would stay enabled with no project mounted,
-    /// while the menu item greyed out — the default validation only checks
-    /// that something in the responder chain answers the selector, and this
-    /// one always does.
+    /// Recent files are available even without a mounted project.
     func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
         guard item.action == #selector(searchForDocument(_:)) else { return true }
-        return projectRootURL != nil
+        return true
     }
 
     func openSearchResult(_ url: URL, in target: FileSearchPanelController.OpenTarget) {
