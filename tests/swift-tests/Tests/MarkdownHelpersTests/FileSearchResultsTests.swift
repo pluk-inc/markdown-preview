@@ -30,4 +30,20 @@ final class FileSearchResultsTests: XCTestCase {
         XCTAssertEqual(try FileSearchResults.rows(query: "", recentURLs: [], snapshot: nil), [])
         XCTAssertEqual(try FileSearchResults.rows(query: "missing", recentURLs: [recent], snapshot: nil), [])
     }
+    func testSymlinkHistoryAndProjectMatchAppearOnlyOnce() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("guide.md")
+        let alias = directory.appendingPathComponent("guide-link.md")
+        try "# Guide".write(to: file, atomically: true, encoding: .utf8)
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: file)
+        let snapshot = ProjectFileIndex.Snapshot(root: directory, candidates: [
+            .init(relativePath: "guide.md")
+        ], isTruncated: false)
+        let rows = try FileSearchResults.rows(query: "guide", recentURLs: [alias, file], snapshot: snapshot)
+        XCTAssertEqual(rows.compactMap { $0.entry?.url }, [alias])
+        XCTAssertFalse(rows.contains(.filesHeading))
+    }
+
 }

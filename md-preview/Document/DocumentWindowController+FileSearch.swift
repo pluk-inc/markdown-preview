@@ -66,15 +66,35 @@ extension DocumentWindowController {
     }
 
     func openSearchResult(_ url: URL, in target: FileSearchPanelController.OpenTarget) {
+        let requestID = UUID()
+        searchOpenRequestID = requestID
         switch target {
         case .currentTab:
-            // Returns early by design when the file is already showing, which
-            // is the right nothing-to-do.
-            present(url: url)
+            guard currentFileURL?.standardizedFileURL != url.standardizedFileURL else { return }
+            let originalURL = currentFileURL
+            // Read once before changing document state. Passing that content
+            // through navigation also avoids a second read failing after commit.
+            Task { @concurrent [weak self] in
+                let result = Result { try String(contentsOf: url, encoding: .utf8) }
+                await self?.finishSearchOpen(result, url: url, originalURL: originalURL, requestID: requestID)
+            }
         case .newTab:
             openInNewTab(url)
         case .newWindow:
             openInNewWindow(url)
         }
     }
+    private func finishSearchOpen(_ result: Result<String, Error>, url: URL,
+                                  originalURL: URL?, requestID: UUID) {
+        guard searchOpenRequestID == requestID, currentFileURL == originalURL,
+              documentWindow.isVisible, documentWindow.attachedSheet == nil else { return }
+        searchOpenRequestID = nil
+        switch result {
+        case .success(let markdown):
+            present(url: url, intent: .normal, loadedMarkdown: markdown)
+        case .failure(let error):
+            NSAlert(error: error).beginSheetModal(for: documentWindow)
+        }
+    }
+
 }

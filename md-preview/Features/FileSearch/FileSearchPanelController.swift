@@ -79,6 +79,19 @@ final class FileSearchPanelController: NSViewController {
         self.projectRoot = projectRoot
         self.index = index
         super.init(nibName: nil, bundle: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(recentDocumentsDidClear),
+                                               name: MarkdownDocumentController.recentDocumentsDidClear,
+                                               object: nil)
+    }
+
+    @objc private func recentDocumentsDidClear() {
+        recentURLs = []
+        pendingActivation = nil
+        guard presentation != nil, isViewLoaded else { return }
+        // Remove cleared history immediately, including during a pending rank.
+        results = []
+        tableView.reloadData()
+        refreshResults()
     }
 
     required init?(coder: NSCoder) {

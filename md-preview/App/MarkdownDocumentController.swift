@@ -7,6 +7,13 @@ import Cocoa
 import UniformTypeIdentifiers
 
 final class MarkdownDocumentController: NSDocumentController {
+    static let recentDocumentsDidClear = Notification.Name("MarkdownDocumentController.recentDocumentsDidClear")
+
+    override func clearRecentDocuments(_ sender: Any?) {
+        super.clearRecentDocuments(sender)
+        NotificationCenter.default.post(name: Self.recentDocumentsDidClear, object: self)
+    }
+
     private static let markdownFileExtensions = ["md", "markdown", "mdown", "mdx", "txt"]
 
     override func beginOpenPanel(
