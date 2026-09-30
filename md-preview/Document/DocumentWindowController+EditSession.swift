@@ -524,6 +524,40 @@ extension DocumentWindowController {
         }
     }
 
+    func toggleTaskCheckbox(onLine sourceLine: Int, checked: Bool) {
+        guard UserDefaults.standard.bool(forKey: "MarkdownPreview.allowCheckingOffTasks"),
+              !isEditing,
+              let baseline = currentMarkdown,
+              let updated = TaskCheckboxSource.settingChecked(
+                checked, onLine: sourceLine, in: baseline
+              ),
+              updated != baseline else {
+            rerenderCurrentPreview()
+            return
+        }
+
+        let diskState = diskFileState(for: currentFileURL, expectedMarkdown: baseline)
+        saveEditedMarkdown(updated, diskState: diskState) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .saved:
+                self.currentMarkdown = updated
+                if let url = self.currentFileURL {
+                    self.markdownDocument?.replaceContents(markdown: updated, fileURL: url)
+                    self.renderCurrentDocument(text: updated, fileURL: url)
+                }
+            case let .reloaded(externalMarkdown):
+                self.currentMarkdown = externalMarkdown
+                if let url = self.currentFileURL {
+                    self.markdownDocument?.replaceContents(markdown: externalMarkdown, fileURL: url)
+                    self.renderCurrentDocument(text: externalMarkdown, fileURL: url)
+                }
+            case .cancelled:
+                self.rerenderCurrentPreview()
+            }
+        }
+    }
+
     func rerenderCurrentPreview() {
         guard let url = currentFileURL, let markdown = currentMarkdown else { return }
         renderCurrentDocument(text: markdown, fileURL: url)

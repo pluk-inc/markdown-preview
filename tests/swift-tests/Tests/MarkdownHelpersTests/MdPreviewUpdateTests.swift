@@ -358,6 +358,54 @@ final class MdPreviewUpdateTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testReaderTaskCheckboxOptInAcrossUpdates() async throws {
+        for hasBridge in [false, true] {
+            let webView = try await loadHarness(articleAttributes: "", stubsWebKitMessageHandler: hasBridge)
+            let article = MarkdownHTML.javaScriptStringLiteral(MarkdownHTML.render(
+                markdown: "# Tasks\n\n- [ ] Pending\n- [x] Done\n\n| A | B |\n| --- | --- |\n| C | D |",
+                vendorLoading: .lazy
+            ).articleHTML)
+            _ = try await webView.evaluateJavaScript("MdPreview.setTaskCheckboxesEnabled(true); true")
+            for path in ["initial", "morph", "fallback"] {
+                if path == "fallback" {
+                    _ = try await webView.evaluateJavaScript("window.morphdom = undefined; true")
+                }
+                _ = try await webView.evaluateJavaScript("MdPreview.update(\(article)); true")
+                let state = try await webView.evaluateJavaScript("""
+                (() => {
+                    window.__hostMessages = [];
+                    const boxes = [...document.querySelectorAll('.task-list-item-checkbox')];
+                    boxes.forEach(box => box.click());
+                    const messages = window.__hostMessages.filter(m => m.kind === 'taskCheckbox');
+                    return {
+                        disabled: boxes.every(box => box.disabled),
+                        checked: boxes.map(box => box.checked),
+                        lines: messages.map(m => m.line),
+                        values: messages.map(m => m.checked),
+                        editableTables: document.querySelectorAll('table [contenteditable="true"], .md-table-editor').length
+                    };
+                })()
+                """) as! [String: Any]
+                XCTAssertEqual(state["disabled"] as? Bool, !hasBridge, path)
+                XCTAssertEqual(state["checked"] as? [Bool], hasBridge ? [true, false] : [false, true], path)
+                XCTAssertEqual(state["lines"] as? [Int], hasBridge ? [3, 4] : [], path)
+                XCTAssertEqual(state["values"] as? [Bool], hasBridge ? [true, false] : [], path)
+                XCTAssertEqual(state["editableTables"] as? Int, 0, path)
+            }
+            let disabled = try await webView.evaluateJavaScript("""
+            (() => {
+                MdPreview.setTaskCheckboxesEnabled(false);
+                window.__hostMessages = [];
+                const boxes = [...document.querySelectorAll('.task-list-item-checkbox')];
+                boxes.forEach(box => box.click());
+                return boxes.every(box => box.disabled) && window.__hostMessages.length === 0;
+            })()
+            """) as? Bool
+            XCTAssertEqual(disabled, true)
+        }
+    }
+
     /// Builds the harness page — bundled DOMPurify + morphdom, the shipped
     /// host bridge, and fake renderers that mimic the real markers: stash
     /// `__mdSrc`, set the done flag, replace the children with a sentinel,

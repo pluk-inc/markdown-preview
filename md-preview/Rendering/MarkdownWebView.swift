@@ -193,6 +193,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     /// finishes. Unlike heightDidChange, this also fires when the new
     /// document happens to lay out at the same height as the old one.
     var contentDidReplace: (() -> Void)?
+    var taskCheckboxToggled: ((Int, Bool) -> Void)?
     var zoomDidChange: ((CGFloat) -> Void)?
     var fragmentLinkActivated: ((String) -> Void)?
     var pointerDocumentYDidChange: ((CGFloat) -> Void)?
@@ -610,10 +611,19 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     }
     #endif
 
+    func setTaskCheckboxesEnabled(_ enabled: Bool) {
+        webView.evaluateJavaScript("window.MdPreview?.setTaskCheckboxesEnabled(\(enabled));", completionHandler: nil)
+    }
+
     fileprivate func didReceiveHostMessage(_ body: Any) {
         guard let dict = body as? [String: Any],
               let kind = dict["kind"] as? String else { return }
         switch kind {
+        case "taskCheckbox":
+            guard UserDefaults.standard.bool(forKey: "MarkdownPreview.allowCheckingOffTasks"),
+                  let line = dict["line"] as? Int, line > 0,
+                  let checked = dict["checked"] as? Bool else { return }
+            taskCheckboxToggled?(line, checked)
         case "height":
             guard let value = dict["value"] as? NSNumber else { return }
             let raw = ceil(CGFloat(truncating: value))

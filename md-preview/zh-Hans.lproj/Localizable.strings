@@ -326,3 +326,7 @@
 /* Reading preferences */
 "Strict line breaks" = "严格换行";
 "Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "将普通源文本行合并为连续段落。关闭此选项可保留每个换行。适用于阅读视图和快速查看预览。";
+
+"Allow checking off tasks" = "允许勾选任务";
+
+"Click task checkboxes in Read Mode to save changes directly to the file. Quick Look remains read-only." = "在阅读模式中点击任务复选框，将更改直接保存到文件。快速查看仍为只读。";

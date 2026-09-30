@@ -102,12 +102,19 @@ final class ContentViewController: NSViewController {
             // fires heightDidChange, so this is the reliable signal.
             self?.applyPendingScrollAnchorIfNeeded()
             self?.updatePointerTracking()
+            self?.updateTaskCheckboxSetting()
             guard let self, self.webView.hasRequestedDocument else { return }
             self.handleFirstDocumentPaint()
             SpareReaderPool.shared.documentDidPaint()
         }
         NotificationCenter.default.addObserver(self, selector: #selector(updatePointerTracking),
                                                name: UserDefaults.didChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(updateTaskCheckboxSetting),
+                                               name: UserDefaults.didChangeNotification, object: nil)
+        webView.taskCheckboxToggled = { [weak self] line, checked in
+            (self?.view.window?.windowController as? DocumentWindowController)?
+                .toggleTaskCheckbox(onLine: line, checked: checked)
+        }
         webView.fragmentLinkActivated = { [weak self] fragment in
             self?.scrollToElement(id: fragment)
         }
@@ -246,6 +253,12 @@ final class ContentViewController: NSViewController {
             markdown: source.markdown,
             sourceURL: sourceURL,
             assetBaseURL: sourceURL.deletingLastPathComponent()
+        )
+    }
+
+    @objc private func updateTaskCheckboxSetting() {
+        webView.setTaskCheckboxesEnabled(
+            UserDefaults.standard.bool(forKey: "MarkdownPreview.allowCheckingOffTasks")
         )
     }
 
