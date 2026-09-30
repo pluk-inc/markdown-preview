@@ -84,7 +84,7 @@ final class ContentViewController: NSViewController {
         container.translatesAutoresizingMaskIntoConstraints = false
         view = container
 
-        webView = SpareReaderPool.shared.takeReader()
+        webView = MarkdownWebView()
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.heightDidChange = { [weak self] _ in
             guard let self else { return }
@@ -104,7 +104,6 @@ final class ContentViewController: NSViewController {
             self?.updatePointerTracking()
             guard let self, self.webView.hasRequestedDocument else { return }
             self.handleFirstDocumentPaint()
-            SpareReaderPool.shared.documentDidPaint()
         }
         NotificationCenter.default.addObserver(self, selector: #selector(updatePointerTracking),
                                                name: UserDefaults.didChangeNotification, object: nil)

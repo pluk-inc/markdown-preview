@@ -237,20 +237,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     private weak var webScrollView: NSScrollView?
     nonisolated(unsafe) private var scrollBoundsObserver: NSObjectProtocol?
 
-    /// A spare's empty page also loads the math and code renderers, so it
-    /// can take most documents without a full page load.
-    private let isSpare: Bool
-
-    convenience init(spare: Bool) {
-        self.init(frame: .zero, spare: spare)
-    }
-
-    override convenience init(frame frameRect: NSRect) {
-        self.init(frame: frameRect, spare: false)
-    }
-
-    private init(frame frameRect: NSRect, spare: Bool) {
-        isSpare = spare
+    override init(frame frameRect: NSRect) {
         let config = WKWebViewConfiguration()
         config.setURLSchemeHandler(assetScheme, forURLScheme: MarkdownAssetScheme.scheme)
         config.userContentController.addUserScript(Self.disableContextMenuScript)
@@ -335,15 +322,13 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let markdown = Self.warmupMarkdown
         let contentWidth = ContentWidthSetting.current.renderWidth
         let themeOverrides = Self.currentThemeOverrides()
-        let preloadsMathAndCode = isSpare
         Task { @concurrent [weak self] in
             let rendered = Self.timedRender(label: "warmup",
                                             markdown: markdown,
                                             assetBaseHref: baseHref,
                                             contentWidth: contentWidth,
                                             themeOverrides: themeOverrides,
-                                            warmup: true,
-                                            preloadsMathAndCode: preloadsMathAndCode)
+                                            warmup: true)
             await self?.applyWarmup(rendered)
         }
     }
@@ -374,12 +359,6 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         typealias Setter = @convention(c) (AnyObject, Selector, Bool) -> Void
         let setter = unsafeBitCast(preferences.method(for: selector), to: Setter.self)
         setter(preferences, selector, false)
-    }
-
-    /// True once the empty launch page has loaded and no document has been
-    /// shown yet, so a new window can adopt this reader as is.
-    var isReadyAsSpare: Bool {
-        renderGeneration == 0 && isPageReady && superview == nil
     }
 
     /// True once any `display()` has been requested.
@@ -456,8 +435,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                                 assetBaseHref: String,
                                                 contentWidth: MarkdownHTML.ContentWidth,
                                                 themeOverrides: MarkdownHTML.ThemeOverrides? = nil,
-                                                warmup: Bool = false,
-                                                preloadsMathAndCode: Bool = false) -> MarkdownHTML.RenderedHTML {
+                                                warmup: Bool = false) -> MarkdownHTML.RenderedHTML {
         let t0 = DispatchTime.now()
         let rendered = MarkdownHTML.render(markdown: markdown,
                                            allowsScroll: true,
@@ -466,7 +444,6 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                            contentWidth: contentWidth,
                                            themeOverrides: themeOverrides,
                                            warmup: warmup,
-                                           preloadsMathAndCode: preloadsMathAndCode,
                                            pageTopClearance: MarkdownHTML.appPageTopClearance)
         let elapsedMs = Int(
             (Double(DispatchTime.now().uptimeNanoseconds - t0.uptimeNanoseconds)

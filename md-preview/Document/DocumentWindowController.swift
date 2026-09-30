@@ -330,10 +330,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         stopAutoSaveTimer()
         autoSaveFeedbackResetWork?.cancel()
         autoSaveFeedbackResetWork = nil
-        // The closing window is still visible here; check after it is gone.
-        DispatchQueue.main.async {
-            SpareReaderPool.shared.releaseSpareIfNoDocumentsShown()
-        }
     }
 
     func windowWillEnterFullScreen(_ notification: Notification) {
