@@ -539,25 +539,20 @@ nonisolated extension MarkdownHTML {
         window.MdPreview.registerReapplier = (fn) => {
             if (typeof fn === 'function') reappliers.push(fn);
         };
-        let taskCheckboxesEnabled = false;
-        function applyTaskCheckboxSetting() {
+        function enableTaskCheckboxes() {
             document.querySelectorAll('.task-list-item-checkbox').forEach(box => {
-                box.disabled = !hasHostBridge || !taskCheckboxesEnabled;
+                box.disabled = !hasHostBridge;
             });
         }
-        window.MdPreview.setTaskCheckboxesEnabled = enabled => {
-            taskCheckboxesEnabled = enabled === true;
-            applyTaskCheckboxSetting();
-        };
         document.addEventListener('change', event => {
             const box = event.target;
-            if (!hasHostBridge || !taskCheckboxesEnabled ||
+            if (!hasHostBridge ||
                 !box.matches('.task-list-item-checkbox')) return;
             const line = Number(box.closest('[data-source-line]')?.dataset.sourceLine);
             if (!Number.isInteger(line) || line < 1) return;
             post({ kind: 'taskCheckbox', line, checked: box.checked });
         });
-        reappliers.push(applyTaskCheckboxSetting);
+        reappliers.push(enableTaskCheckboxes);
         function mdHash(s) {
             let h = 5381;
             for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;

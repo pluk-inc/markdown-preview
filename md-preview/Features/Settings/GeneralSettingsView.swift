@@ -9,7 +9,6 @@ import SwiftUI
 
 struct GeneralSettingsView: View {
     @AppStorage("MarkdownPreview.outlineFollowsPointer") private var outlineFollowsPointer = false
-    @AppStorage("MarkdownPreview.allowCheckingOffTasks") private var allowCheckingOffTasks = false
     @Bindable private var model = SettingsModel.shared
 
     var body: some View {
@@ -27,12 +26,6 @@ struct GeneralSettingsView: View {
                     Text(L("Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews."))
                 }
                 .accessibilityLabel(L("Strict line breaks"))
-
-                Toggle(isOn: $allowCheckingOffTasks) {
-                    Text(L("Allow checking off tasks"))
-                    Text(L("Click task checkboxes in Read Mode to save changes directly to the file. Quick Look remains read-only."))
-                }
-                .accessibilityLabel(L("Allow checking off tasks"))
 
                 Toggle(L("Highlight outline section under the pointer"), isOn: $outlineFollowsPointer)
 

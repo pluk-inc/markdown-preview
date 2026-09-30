@@ -611,17 +611,12 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     }
     #endif
 
-    func setTaskCheckboxesEnabled(_ enabled: Bool) {
-        webView.evaluateJavaScript("window.MdPreview?.setTaskCheckboxesEnabled(\(enabled));", completionHandler: nil)
-    }
-
     fileprivate func didReceiveHostMessage(_ body: Any) {
         guard let dict = body as? [String: Any],
               let kind = dict["kind"] as? String else { return }
         switch kind {
         case "taskCheckbox":
-            guard UserDefaults.standard.bool(forKey: "MarkdownPreview.allowCheckingOffTasks"),
-                  let line = dict["line"] as? Int, line > 0,
+            guard let line = dict["line"] as? Int, line > 0,
                   let checked = dict["checked"] as? Bool else { return }
             taskCheckboxToggled?(line, checked)
         case "height":

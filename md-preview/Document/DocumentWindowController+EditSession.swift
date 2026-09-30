@@ -525,8 +525,7 @@ extension DocumentWindowController {
     }
 
     func toggleTaskCheckbox(onLine sourceLine: Int, checked: Bool) {
-        guard UserDefaults.standard.bool(forKey: "MarkdownPreview.allowCheckingOffTasks"),
-              !isEditing,
+        guard !isEditing,
               let baseline = currentMarkdown,
               let updated = TaskCheckboxSource.settingChecked(
                 checked, onLine: sourceLine, in: baseline
