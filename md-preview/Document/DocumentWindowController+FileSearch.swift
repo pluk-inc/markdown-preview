@@ -68,12 +68,12 @@ extension DocumentWindowController {
     func openSearchResult(_ url: URL, in target: FileSearchPanelController.OpenTarget) {
         switch target {
         case .currentTab:
-            let requestID = UUID()
-            searchOpenRequestID = requestID
             // An alias of the edited document is still the current file.
-            // Return before reading disk or ending the edit session.
+            // Leave any pending open alone when this selection is a no-op.
             guard currentFileURL.map(FileSearchResults.resolvedIdentity)
                 != FileSearchResults.resolvedIdentity(url) else { return }
+            let requestID = UUID()
+            searchOpenRequestID = requestID
             let preserveEditMode = isEditing || pendingEditModeURL != nil
             if isEditing || hasPendingEditorChanges {
                 requestEndEditing(keepAccessoryMounted: true) { [weak self] success in
