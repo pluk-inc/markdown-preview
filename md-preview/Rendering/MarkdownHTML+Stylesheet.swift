@@ -690,8 +690,8 @@ nonisolated extension MarkdownHTML {
         width: 0.9em;
         height: 0.9em;
         margin: 0;
-        margin-inline-start: calc(-0.9em - var(--mdp-list-gap));
-        margin-inline-end: var(--mdp-list-gap);
+        margin-inline-start: calc(-0.9em - 0.25em);
+        margin-inline-end: 0.25em;
         vertical-align: calc(0.5cap - 0.45em);
         border: 1.5px solid var(--grid);
         border-radius: 25%;

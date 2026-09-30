@@ -80,6 +80,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// When sidebar navigation starts from edit mode, the newly loaded file
     /// should return to edit mode instead of dropping the user into preview.
     var pendingEditModeURL: URL?
+    var searchOpenRequestID: UUID?
     var autoSaveTimer: Timer?
     var autoSaveTimerID: UUID?
     var isPerformingAutomaticSave = false
@@ -323,6 +324,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     func windowWillClose(_ notification: Notification) {
+        searchOpenRequestID = nil
         fullscreenToolbarTheme.restore()
         fileWatcher?.cancel()
         fileWatcher = nil
@@ -402,6 +404,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     func present(url: URL, intent: NavigationIntent) {
+        searchOpenRequestID = nil
         let fragment = url.fragment?.removingPercentEncoding
         let url = Self.fileURLWithoutFragment(url)
         let preserveEditMode = isEditing || pendingEditModeURL != nil
@@ -417,7 +420,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     func present(url: URL, preservingEditMode: Bool,
-                         intent: NavigationIntent, fragment: String?) {
+                         intent: NavigationIntent, fragment: String?, loadedMarkdown: String? = nil) {
         if url.isExistingDirectory {
             pendingEditModeURL = nil
             openFolder(url)
@@ -461,7 +464,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         } else {
             split?.prepareToScrollAfterNavigation(to: nil)
         }
-        loadFile(at: url)
+        if let loadedMarkdown {
+            applyLoadedMarkdown(loadedMarkdown, fileURL: url)
+        } else {
+            loadFile(at: url)
+        }
         startWatching(url)
         offerToBecomeDefaultHandlerIfNeeded()
     }

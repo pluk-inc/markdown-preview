@@ -108,6 +108,10 @@ final class ContentViewController: NSViewController {
         }
         NotificationCenter.default.addObserver(self, selector: #selector(updatePointerTracking),
                                                name: UserDefaults.didChangeNotification, object: nil)
+        webView.taskCheckboxToggled = { [weak self] line, checked in
+            (self?.view.window?.windowController as? DocumentWindowController)?
+                .toggleTaskCheckbox(onLine: line, checked: checked)
+        }
         webView.fragmentLinkActivated = { [weak self] fragment in
             self?.scrollToElement(id: fragment)
         }

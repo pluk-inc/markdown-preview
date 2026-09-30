@@ -258,7 +258,7 @@ final class MdPreviewUpdateTests: XCTestCase {
     }
 
     @MainActor
-    func testReaderTablesAndTasksStayReadOnlyAcrossUpdates() async throws {
+    func testReaderTablesStayReadOnlyAcrossUpdates() async throws {
         let webView = try await loadHarness(articleAttributes: "", stubsWebKitMessageHandler: true)
         let pasteboard = NSPasteboard.general
         let savedItems = (pasteboard.pasteboardItems ?? []).map { item in
@@ -304,12 +304,6 @@ final class MdPreviewUpdateTests: XCTestCase {
                 cell.dispatchEvent(context);
                 const paste = new Event('paste', { bubbles: true, cancelable: true });
                 cell.dispatchEvent(paste);
-                const checkboxes = [...document.querySelectorAll('.task-list-item-checkbox')];
-                const checked = checkboxes.map(box => box.checked);
-                checkboxes.forEach(box => {
-                    box.click();
-                    box.dispatchEvent(new Event('change', { bubbles: true }));
-                });
                 const range = document.createRange();
                 range.selectNodeContents(cell);
                 const selection = window.getSelection();
@@ -321,8 +315,6 @@ final class MdPreviewUpdateTests: XCTestCase {
                     stableHeight: table.getBoundingClientRect().height === height,
                     editable: !!document.querySelector('[contenteditable="plaintext-only"], [contenteditable="true"]'),
                     editorCount: document.querySelectorAll('.md-table-editor').length,
-                    disabled: checkboxes.length === 2 && checkboxes.every(box => box.disabled),
-                    checkedUnchanged: checkboxes.every((box, i) => box.checked === checked[i]),
                     contextPrevented: context.defaultPrevented,
                     pastePrevented: paste.defaultPrevented,
                     selectedText,
@@ -334,7 +326,7 @@ final class MdPreviewUpdateTests: XCTestCase {
             """)
             let json = try XCTUnwrap(result as? String)
             let state = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
-            for key in ["unchanged", "stableHeight", "disabled", "checkedUnchanged"] {
+            for key in ["unchanged", "stableHeight"] {
                 XCTAssertEqual(state[key] as? Bool, true, "\(path): \(key): \(json)")
             }
             for key in ["editable", "contextPrevented", "pastePrevented"] {
@@ -355,6 +347,43 @@ final class MdPreviewUpdateTests: XCTestCase {
             copiedChangeCount = pasteboard.changeCount
             XCTAssertEqual(pasteboard.string(forType: .string), "Ada", "\(path): native clipboard")
             XCTAssertEqual(state["link"] as? String, "https://example.com", json)
+        }
+    }
+
+    @MainActor
+    func testReaderTaskCheckboxesRequireHostAcrossUpdates() async throws {
+        for hasBridge in [false, true] {
+            let webView = try await loadHarness(articleAttributes: "", stubsWebKitMessageHandler: hasBridge)
+            let article = MarkdownHTML.javaScriptStringLiteral(MarkdownHTML.render(
+                markdown: "# Tasks\n\n- [ ] Pending\n- [x] Done\n\n| A | B |\n| --- | --- |\n| C | D |",
+                vendorLoading: .lazy
+            ).articleHTML)
+            for path in ["initial", "morph", "fallback"] {
+                if path == "fallback" {
+                    _ = try await webView.evaluateJavaScript("window.morphdom = undefined; true")
+                }
+                _ = try await webView.evaluateJavaScript("MdPreview.update(\(article)); true")
+                let state = try await webView.evaluateJavaScript("""
+                (() => {
+                    window.__hostMessages = [];
+                    const boxes = [...document.querySelectorAll('.task-list-item-checkbox')];
+                    boxes.forEach(box => box.click());
+                    const messages = window.__hostMessages.filter(m => m.kind === 'taskCheckbox');
+                    return {
+                        disabled: boxes.every(box => box.disabled),
+                        checked: boxes.map(box => box.checked),
+                        lines: messages.map(m => m.line),
+                        values: messages.map(m => m.checked),
+                        editableTables: document.querySelectorAll('table [contenteditable="true"], .md-table-editor').length
+                    };
+                })()
+                """) as! [String: Any]
+                XCTAssertEqual(state["disabled"] as? Bool, !hasBridge, path)
+                XCTAssertEqual(state["checked"] as? [Bool], hasBridge ? [true, false] : [false, true], path)
+                XCTAssertEqual(state["lines"] as? [Int], hasBridge ? [3, 4] : [], path)
+                XCTAssertEqual(state["values"] as? [Bool], hasBridge ? [true, false] : [], path)
+                XCTAssertEqual(state["editableTables"] as? Int, 0, path)
+            }
         }
     }
 

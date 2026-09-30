@@ -444,6 +444,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSDocumentController.shared.openDocument(sender)
     }
 
+    private var recentFilesPalette: FileSearchPanelController?
+
+    @objc func searchForDocument(_ sender: Any?) {
+        if let controller = activeDocumentWindowController {
+            controller.searchForDocument(sender)
+            return
+        }
+        if let palette = recentFilesPalette {
+            palette.view.window?.makeKeyAndOrderFront(nil)
+            return
+        }
+        let palette = FileSearchPanelController(projectRoot: nil)
+        palette.onOpen = { url, _ in
+            NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, error in
+                if let error { NSApp.presentError(error) }
+            }
+        }
+        palette.onRequestOpenFolder = { NSDocumentController.shared.openDocument(nil) }
+        palette.onDismiss = { [weak self] in self?.recentFilesPalette = nil }
+        recentFilesPalette = palette
+        palette.present(relativeTo: NSApp.mainWindow)
+    }
+
     @IBAction func performFindPanelAction(_ sender: Any?) {
         activeDocumentWindowController?.handleFindAction(sender)
     }

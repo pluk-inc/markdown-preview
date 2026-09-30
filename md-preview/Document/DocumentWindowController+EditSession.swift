@@ -524,6 +524,44 @@ extension DocumentWindowController {
         }
     }
 
+    func toggleTaskCheckbox(onLine sourceLine: Int, checked: Bool) {
+        guard !isEditing,
+              let baseline = currentMarkdown,
+              let updated = TaskCheckboxSource.settingChecked(
+                checked, onLine: sourceLine, in: baseline
+              ),
+              updated != baseline else {
+            rerenderCurrentPreview()
+            return
+        }
+
+        let diskState = diskFileState(for: currentFileURL, expectedMarkdown: baseline)
+        saveEditedMarkdown(updated, diskState: diskState) { [weak self] result in
+            guard let self else { return }
+            let markdown: String
+            switch result {
+            case .saved:
+                markdown = updated
+            case let .reloaded(externalMarkdown):
+                markdown = externalMarkdown
+            case .cancelled:
+                self.rerenderCurrentPreview()
+                return
+            }
+            // Read Mode can be previewing an unsaved editor draft. A saved or
+            // reloaded result replaces that session, including its disk baseline.
+            self.editorDraftMarkdown = nil
+            self.editorBaselineMarkdown = nil
+            self.editorChangeRevision = 0
+            self.hasUnsavedEditorChanges = false
+            self.currentMarkdown = markdown
+            if let url = self.currentFileURL {
+                self.markdownDocument?.replaceContents(markdown: markdown, fileURL: url)
+                self.renderCurrentDocument(text: markdown, fileURL: url)
+            }
+        }
+    }
+
     func rerenderCurrentPreview() {
         guard let url = currentFileURL, let markdown = currentMarkdown else { return }
         renderCurrentDocument(text: markdown, fileURL: url)
@@ -552,7 +590,8 @@ extension DocumentWindowController {
         alert.addButton(withTitle: NSLocalizedString("Reload from Disk", comment: "Conflict alert button"))
         alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Alert button"))
         alert.beginSheetModal(for: documentWindow) { [weak self] response in
-            guard let self else {
+            guard let self,
+                  self.currentFileURL?.standardizedFileURL == fileURL.standardizedFileURL else {
                 completion(.cancelled)
                 return
             }
@@ -597,7 +636,8 @@ extension DocumentWindowController {
         alert.addButton(withTitle: overwriteTitle)
         alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Alert button"))
         alert.beginSheetModal(for: documentWindow) { [weak self] response in
-            guard let self, response == .alertFirstButtonReturn else {
+            guard let self, response == .alertFirstButtonReturn,
+                  self.currentFileURL?.standardizedFileURL == fileURL.standardizedFileURL else {
                 completion(.cancelled)
                 return
             }
@@ -610,6 +650,12 @@ extension DocumentWindowController {
         to url: URL,
         completion: @escaping (EditedMarkdownSaveResult) -> Void
     ) {
+        // Conflict and permission sheets can outlive a rename or navigation.
+        // Never recreate the old path or apply its result to another document.
+        guard currentFileURL?.standardizedFileURL == url.standardizedFileURL else {
+            completion(.cancelled)
+            return
+        }
         if write(text, to: url) {
             completion(.saved)
             return
@@ -630,7 +676,8 @@ extension DocumentWindowController {
             comment: "Save panel permission message"
         )
         panel.beginSheetModal(for: documentWindow) { [weak self] response in
-            guard let self, response == .OK, let chosen = panel.url else {
+            guard let self, response == .OK, let chosen = panel.url,
+                  self.currentFileURL?.standardizedFileURL == url.standardizedFileURL else {
                 completion(.cancelled)
                 return
             }
