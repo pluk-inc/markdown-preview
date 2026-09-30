@@ -585,7 +585,8 @@ extension DocumentWindowController {
         alert.addButton(withTitle: NSLocalizedString("Reload from Disk", comment: "Conflict alert button"))
         alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Alert button"))
         alert.beginSheetModal(for: documentWindow) { [weak self] response in
-            guard let self else {
+            guard let self,
+                  self.currentFileURL?.standardizedFileURL == fileURL.standardizedFileURL else {
                 completion(.cancelled)
                 return
             }
@@ -630,7 +631,8 @@ extension DocumentWindowController {
         alert.addButton(withTitle: overwriteTitle)
         alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Alert button"))
         alert.beginSheetModal(for: documentWindow) { [weak self] response in
-            guard let self, response == .alertFirstButtonReturn else {
+            guard let self, response == .alertFirstButtonReturn,
+                  self.currentFileURL?.standardizedFileURL == fileURL.standardizedFileURL else {
                 completion(.cancelled)
                 return
             }
@@ -643,6 +645,12 @@ extension DocumentWindowController {
         to url: URL,
         completion: @escaping (EditedMarkdownSaveResult) -> Void
     ) {
+        // Conflict and permission sheets can outlive a rename or navigation.
+        // Never recreate the old path or apply its result to another document.
+        guard currentFileURL?.standardizedFileURL == url.standardizedFileURL else {
+            completion(.cancelled)
+            return
+        }
         if write(text, to: url) {
             completion(.saved)
             return
@@ -663,7 +671,8 @@ extension DocumentWindowController {
             comment: "Save panel permission message"
         )
         panel.beginSheetModal(for: documentWindow) { [weak self] response in
-            guard let self, response == .OK, let chosen = panel.url else {
+            guard let self, response == .OK, let chosen = panel.url,
+                  self.currentFileURL?.standardizedFileURL == url.standardizedFileURL else {
                 completion(.cancelled)
                 return
             }
