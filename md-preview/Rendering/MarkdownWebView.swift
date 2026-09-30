@@ -718,15 +718,14 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
 
     // Discrete zoom stops, mirroring Safari's ⌘+/⌘− cadence. Not private:
     // the toolbar popover draws one dot per stop to show where the current
-    // text size sits on the scale.
-    static let zoomSteps: [CGFloat] = [
-        0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0
-    ]
+    // text size sits on the scale. Owned by `ZoomSteps` so Settings, shortcuts,
+    // pinch and the toolbar share a single source of truth.
+    static var zoomSteps: [CGFloat] { ZoomSteps.values }
 
     /// Which stop `zoom` sits at, for the popover's scale. Values between
     /// stops (a trackpad pinch can leave one) round to the nearest.
     static func zoomStepIndex(for zoom: CGFloat) -> Int {
-        zoomSteps.indices.min { abs(zoomSteps[$0] - zoom) < abs(zoomSteps[$1] - zoom) } ?? 0
+        ZoomSteps.index(for: zoom)
     }
 
     var pageZoom: CGFloat { webView.pageZoom }
@@ -764,24 +763,37 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         accumulatedMagnification = 0
         didMagnifyDuringCurrentGesture = false
         if shouldPersistZoom {
-            persistPageZoom(webView.pageZoom)
+            // Settle on the nearest stop so the document, the stored value and
+            // the Settings stepper all agree on one size.
+            let snappedZoom = Self.zoomSteps[Self.zoomStepIndex(for: webView.pageZoom)]
+            // Persist the snapped stop even if setPageZoom skips the live update
+            // due to the 0.001 tolerance check.
+            persistPageZoom(snappedZoom)
+            setPageZoom(snappedZoom)
         }
     }
 
+    /// Seeds the web view with the stored zoom on first load.
+    /// Snaps the stored value to the nearest configured stop.
     func enablePersistentZoom(defaultsKey: String) {
         zoomDefaultsKey = defaultsKey
         guard let stored = UserDefaults.standard.object(forKey: defaultsKey) as? NSNumber else { return }
-        setPageZoom(CGFloat(truncating: stored), persist: false, notifyHeight: false)
+        let rawZoom = CGFloat(truncating: stored)
+        let snappedZoom = Self.zoomSteps[Self.zoomStepIndex(for: rawZoom)]
+        setPageZoom(snappedZoom, persist: false, notifyHeight: false)
     }
 
     /// Re-reads the stored zoom after Settings changes it. Unlike
     /// `enablePersistentZoom` this applies the absent-key case too, so picking
     /// the default size — which clears the key — still resets an already-zoomed
     /// window instead of leaving it where it was.
+    /// Snaps the stored value to the nearest configured stop.
     func applyPersistedZoom() {
         guard let zoomDefaultsKey else { return }
         let stored = UserDefaults.standard.object(forKey: zoomDefaultsKey) as? NSNumber
-        setPageZoom(stored.map { CGFloat(truncating: $0) } ?? 1.0, persist: false)
+        let rawZoom = stored.map { CGFloat(truncating: $0) } ?? 1.0
+        let snappedZoom = Self.zoomSteps[Self.zoomStepIndex(for: rawZoom)]
+        setPageZoom(snappedZoom, persist: false)
     }
 
     private func nextZoomStep(from current: CGFloat, increasing: Bool) -> CGFloat {
@@ -816,15 +828,19 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
 
     private func clampedZoom(_ value: CGFloat) -> CGFloat {
         guard value.isFinite else { return 1.0 }
-        return max(Self.zoomSteps.first!, min(Self.zoomSteps.last!, value))
+        let steps = ZoomSteps.values
+        return max(steps.first!, min(steps.last!, value))
     }
 
+    /// Persists the current zoom to UserDefaults, snapping to the nearest
+    /// configured stop so restored zoom always matches a valid step.
     private func persistPageZoom(_ value: CGFloat) {
         guard let zoomDefaultsKey else { return }
-        if abs(value - 1.0) <= 0.001 {
+        let persistedValue = Self.zoomSteps[Self.zoomStepIndex(for: value)]
+        if abs(persistedValue - 1.0) <= 0.001 {
             UserDefaults.standard.removeObject(forKey: zoomDefaultsKey)
         } else {
-            UserDefaults.standard.set(Double(value), forKey: zoomDefaultsKey)
+            UserDefaults.standard.set(Double(persistedValue), forKey: zoomDefaultsKey)
         }
     }
 

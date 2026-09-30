@@ -75,11 +75,9 @@ final class SettingsModel {
         }
     }
 
-    /// Optional because ⌘+ / ⌘− can leave the stored zoom between the named
-    /// stops; the picker then shows nothing selected rather than lying.
-    var textSize: TextSizeSetting? {
+    var textSize: TextSizeSetting {
         didSet {
-            guard !isRestoringExternalValues, textSize != oldValue, let textSize else { return }
+            guard !isRestoringExternalValues, textSize != oldValue else { return }
             appDelegate?.applyTextSizeSetting(textSize)
         }
     }

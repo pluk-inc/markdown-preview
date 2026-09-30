@@ -9,6 +9,11 @@
 "Appearance also applies to Quick Look previews." = "外观设置也会应用于“快速查看”预览。";
 "Layout" = "布局";
 "Text size" = "文本大小";
+"Current text size: %@" = "当前文本大小：%@";
+"Decrease text size" = "减小文本大小";
+"Steps to the next smaller preset size" = "调整到下一个较小的预设大小";
+"Increase text size" = "增大文本大小";
+"Steps to the next larger preset size" = "调整到下一个较大的预设大小";
 "Size of rendered Markdown in document windows." = "文稿窗口中渲染的 Markdown 大小。";
 "Small" = "小";
 "Medium" = "中";

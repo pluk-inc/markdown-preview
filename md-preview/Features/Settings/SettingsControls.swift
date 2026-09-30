@@ -1,43 +1,51 @@
 //
-//  SettingsControls.swift
-//  md-preview
-//
+ //  SettingsControls.swift
+ //  md-preview
+ //
 
 import SwiftUI
 
 // MARK: - Text size
 
-/// Three "Aa" samples drawn at the sizes they select.
-///
-/// Hand-built rather than a segmented `Picker` for two reasons: the segmented
-/// style renders every item in the control's own font, which flattens the size
-/// ramp that makes this control readable at a glance, and its optional-tag
-/// matching selects the wrong segment. Nothing is highlighted when the stored
-/// zoom sits between the stops.
-struct TextSizePicker: View {
-    @Binding var selection: TextSizeSetting?
+/// Stepper-based text size control with +/- buttons and current size display.
+/// Steps through the same discrete zoom stops used by ⌘+/⌘−, pinch, and the toolbar.
+struct TextSizeStepper: View {
+    @Binding var selection: TextSizeSetting
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(TextSizeSetting.allCases, id: \.self) { size in
-                Button {
-                    selection = size
-                } label: {
-                    Text(verbatim: "Aa")
-                        .font(.system(size: size.sampleFontSize))
-                        .frame(width: 36, height: 28)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(selection == size
-                                      ? Color.primary.opacity(0.1)
-                                      : Color.clear)
-                        )
-                        .contentShape(Rectangle())
+        HStack(spacing: 8) {
+            Button {
+                if selection.canStepDown {
+                    selection = selection.steppedDown()
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(size.title)
-                .accessibilityAddTraits(selection == size ? [.isSelected] : [])
+            } label: {
+                Image(systemName: "minus")
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 28, height: 28)
             }
+            .buttonStyle(.bordered)
+            .disabled(!selection.canStepDown)
+            .accessibilityLabel(L("Decrease text size"))
+            .accessibilityHint(L("Steps to the next smaller preset size"))
+
+            Text(selection.displayString)
+                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .frame(minWidth: 56)
+                .accessibilityLabel(String.localizedStringWithFormat(L("Current text size: %@"), selection.displayString))
+
+            Button {
+                if selection.canStepUp {
+                    selection = selection.steppedUp()
+                }
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.bordered)
+            .disabled(!selection.canStepUp)
+            .accessibilityLabel(L("Increase text size"))
+            .accessibilityHint(L("Steps to the next larger preset size"))
         }
     }
 }
@@ -121,7 +129,7 @@ struct AppearanceOptionView: View {
                     ForEach(0..<3, id: \.self) { _ in
                         RoundedRectangle(cornerRadius: 1)
                             .fill(textColor.opacity(0.6))
-                            .frame(height: 2)
+                        .frame(height: 2)
                     }
                     Spacer()
                 }

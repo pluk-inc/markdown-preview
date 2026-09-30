@@ -119,7 +119,7 @@ struct ThemesPopoverView: View {
     /// showing, so revealing them never moves anything.
     private var zoomScale: some View {
         HStack(spacing: 5) {
-            ForEach(MarkdownWebView.zoomSteps.indices, id: \.self) { index in
+            ForEach(ZoomSteps.values.indices, id: \.self) { index in
                 Circle()
                     .fill(index <= zoomStep
                           ? Color.primary.opacity(0.75)
@@ -139,7 +139,7 @@ struct ThemesPopoverView: View {
     /// countdown that hides it.
     private func changeTextSize(_ action: () -> Void) {
         action()
-        zoomStep = MarkdownWebView.zoomStepIndex(for: currentZoom())
+        zoomStep = ZoomSteps.index(for: currentZoom())
         showsScale = true
         hideScaleTask?.cancel()
         hideScaleTask = Task {

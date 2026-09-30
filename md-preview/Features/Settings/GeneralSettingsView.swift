@@ -15,7 +15,7 @@ struct GeneralSettingsView: View {
         Form {
             Section {
                 LabeledContent {
-                    TextSizePicker(selection: $model.textSize)
+                    TextSizeStepper(selection: $model.textSize)
                 } label: {
                     Text(L("Text size"))
                     Text(L("Size of rendered Markdown in document windows."))
