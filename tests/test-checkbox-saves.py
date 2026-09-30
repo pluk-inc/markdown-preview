@@ -51,12 +51,49 @@ final class NSSavePanel {
 }
 final class Document {
     var contents = ""
-    func replaceContents(markdown: String, fileURL: URL) { contents = markdown }
+    func replaceContents(markdown: String, fileURL: URL? = nil) { contents = markdown }
+}
+enum NSSound { static func beep() {} }
+final class Editor {
+    var markdown = ""
+    var cancelRequested: (() -> Void)?
+    var contentDidChange: (() -> Void)?
+    var formattingDidChange: ((Int, [String]) -> Void)?
+    var pasteImageRequested: ((Int, Int) -> Void)?
+    var imageClicked: ((URL) -> Void)?
+    func fetchMarkdown(_ completion: (String?) -> Void) { completion(markdown) }
+}
+final class Split {
+    var isEditingDocument = false
+    var editorViewController: Editor? = Editor()
+    func enterEditMode(markdown: String, assetBaseURL: URL?, autofocus: Bool) -> Editor {
+        isEditingDocument = true
+        editorViewController!.markdown = markdown
+        return editorViewController!
+    }
 }
 final class Controller {
     enum DiskFileState { case unchanged, modified(String), missing, unreadable }
     enum EditedMarkdownSaveResult { case saved, reloaded(String), cancelled }
-    var isEditing = false
+    var mainSplit: Split? = Split()
+    var isEditing: Bool { mainSplit?.isEditingDocument == true }
+    var editorDraftMarkdown: String?
+    var editorBaselineMarkdown: String?
+    var editorChangeRevision = 0
+    var hasUnsavedEditorChanges = false
+    func stopAutoSaveTimer() {}
+    func startAutoSaveTimerIfNeeded() {}
+    func updateFormattingSelection(heading: Int, commands: [String]) {}
+    func pasteImage(at: Int, replacing: Int) {}
+    func renameImage(at: URL) {}
+    func showEditAccessory() {}
+    func updateEditToolbarItem() {}
+    func exitEditMode(rerender: Bool, preserveUnsavedChanges: Bool,
+                      hidesAccessoryAfterSwap: Bool, completion: () -> Void) {
+        mainSplit?.isEditingDocument = false
+        if rerender { rerenderCurrentPreview() }
+        completion()
+    }
     var isPerformingAutomaticSave = false
     var currentMarkdown: String?
     var currentFileURL: URL?
@@ -66,7 +103,7 @@ final class Controller {
     func renderCurrentDocument(text: String, fileURL: URL) { rendered = text }
     func handleRename(to url: URL) { currentFileURL = url }
 '''
-for name in ['diskFileState', 'saveEditedMarkdown', 'toggleTaskCheckbox', 'rerenderCurrentPreview',
+for name in ['enterEditMode', 'previewPendingEdits', 'diskFileState', 'saveEditedMarkdown', 'toggleTaskCheckbox', 'rerenderCurrentPreview',
              'presentExternalEditConflict', 'presentUnavailableFileConflict',
              'persistEditedMarkdown', 'write']:
     signature = ('private ' if name in ['presentExternalEditConflict', 'presentUnavailableFileConflict',
@@ -114,6 +151,31 @@ for choice in [Response.alertFirstButtonReturn, .alertSecondButtonReturn, .cance
     precondition(tryDisk(c) == expectedDisk)
     precondition(c.currentMarkdown == expectedPreview && c.rendered == expectedPreview)
 }
+// Exercise actual enter/preview methods, retaining an unsaved draft in Read Mode.
+for choice in [Response.alertFirstButtonReturn, .alertSecondButtonReturn, .cancel] {
+    let c = try fixture("draft-\(choice)")
+    c.enterEditMode()
+    let draft = original + "\nUnsaved paragraph\n"
+    c.mainSplit!.editorViewController!.markdown = draft
+    c.mainSplit!.editorViewController!.contentDidChange?()
+    c.previewPendingEdits()
+    precondition(c.editorDraftMarkdown == draft && c.hasUnsavedEditorChanges)
+    c.toggleTaskCheckbox(onLine: 3, checked: true)
+    respond(choice)
+    let expected = choice == .alertFirstButtonReturn
+        ? checked + "\nUnsaved paragraph\n" : choice == .cancel ? draft : original
+    let expectedDisk = choice == .alertFirstButtonReturn ? expected : original
+    precondition(tryDisk(c) == expectedDisk)
+    precondition(c.hasUnsavedEditorChanges == (choice == .cancel))
+    if choice != .cancel {
+        precondition(c.editorDraftMarkdown == nil && c.editorBaselineMarkdown == nil)
+        precondition(c.editorChangeRevision == 0)
+    }
+    c.enterEditMode()
+    precondition(c.mainSplit!.editorViewController!.markdown == expected,
+                 "Reentering Edit Mode must not resurrect the rejected draft")
+    precondition(c.editorBaselineMarkdown == expectedDisk)
+}
 // A rename while either conflict choice waits must neither recreate the old
 // file nor show an unsaved checkbox value under the renamed document.
 for choice in [Response.alertFirstButtonReturn, .alertSecondButtonReturn] {
@@ -155,7 +217,7 @@ permission.currentMarkdown = original
 NSSavePanel.respond!(.OK)
 precondition(!FileManager.default.fileExists(atPath: chosen.path))
 precondition(tryDisk(other) == original)
-print("PASS: checkbox disk writes, all conflict choices, rename during conflict, missing-file navigation, permission-panel navigation")
+print("PASS: checkbox disk writes, draft preview and editor reentry for all conflict choices, rename during conflict, missing-file navigation, permission-panel navigation")
 '''
 with tempfile.TemporaryDirectory(prefix='checkbox-save-tests-') as directory:
     path = Path(directory) / 'probe.swift'

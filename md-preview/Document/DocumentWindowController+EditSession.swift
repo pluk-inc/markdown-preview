@@ -538,21 +538,26 @@ extension DocumentWindowController {
         let diskState = diskFileState(for: currentFileURL, expectedMarkdown: baseline)
         saveEditedMarkdown(updated, diskState: diskState) { [weak self] result in
             guard let self else { return }
+            let markdown: String
             switch result {
             case .saved:
-                self.currentMarkdown = updated
-                if let url = self.currentFileURL {
-                    self.markdownDocument?.replaceContents(markdown: updated, fileURL: url)
-                    self.renderCurrentDocument(text: updated, fileURL: url)
-                }
+                markdown = updated
             case let .reloaded(externalMarkdown):
-                self.currentMarkdown = externalMarkdown
-                if let url = self.currentFileURL {
-                    self.markdownDocument?.replaceContents(markdown: externalMarkdown, fileURL: url)
-                    self.renderCurrentDocument(text: externalMarkdown, fileURL: url)
-                }
+                markdown = externalMarkdown
             case .cancelled:
                 self.rerenderCurrentPreview()
+                return
+            }
+            // Read Mode can be previewing an unsaved editor draft. A saved or
+            // reloaded result replaces that session, including its disk baseline.
+            self.editorDraftMarkdown = nil
+            self.editorBaselineMarkdown = nil
+            self.editorChangeRevision = 0
+            self.hasUnsavedEditorChanges = false
+            self.currentMarkdown = markdown
+            if let url = self.currentFileURL {
+                self.markdownDocument?.replaceContents(markdown: markdown, fileURL: url)
+                self.renderCurrentDocument(text: markdown, fileURL: url)
             }
         }
     }
