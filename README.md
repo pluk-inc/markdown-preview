@@ -68,6 +68,8 @@ Or grab the latest signed and notarized DMG from the [Releases](https://github.c
 
 ## Features
 
+**App language:** Choose **Settings → General → Language** to use a bundled translation independently of your system language. Quit and reopen the app to apply the choice to settings, menus, and document controls. **System Default** removes the app override and follows macOS again. This preference persists across launches and affects only the app; Quick Look previews continue to use their system-selected language. Available languages are discovered from the app’s bundled translations.
+
 Single source newlines remain visible by default. Enable **Settings → General → Reading → Strict line breaks** to let ordinary source lines flow into paragraphs in reading view and Quick Look. Two trailing spaces or a backslash still create an explicit line break; blank lines still separate paragraphs. Reopen an existing Quick Look preview after changing this setting.
 
 - **Native rendering** — `WKWebView` pipeline backed by [swift-markdown](https://github.com/swiftlang/swift-markdown), with heading anchors and link handling. Bare `http://` and `https://` URLs are clickable in the app and Quick Look previews.
