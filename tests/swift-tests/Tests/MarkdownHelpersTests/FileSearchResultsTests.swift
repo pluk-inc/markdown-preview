@@ -42,8 +42,40 @@ final class FileSearchResultsTests: XCTestCase {
             .init(relativePath: "guide.md")
         ], isTruncated: false)
         let rows = try FileSearchResults.rows(query: "guide", recentURLs: [alias, file], snapshot: snapshot)
-        XCTAssertEqual(rows.compactMap { $0.entry?.url }, [alias])
+        XCTAssertEqual(rows.compactMap { $0.entry?.url }, [file])
         XCTAssertFalse(rows.contains(.filesHeading))
+    }
+
+    func testDifferentAliasNameDoesNotHideMatchingRecentTarget() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("guide.md")
+        let alias = directory.appendingPathComponent("shortcut.md")
+        try "# Guide".write(to: file, atomically: true, encoding: .utf8)
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: file)
+
+        let matching = try FileSearchResults.rows(query: "guide.md", recentURLs: [alias, file], snapshot: nil)
+        XCTAssertEqual(matching.compactMap { $0.entry?.url }, [file])
+        let aliasMatch = try FileSearchResults.rows(query: "shortcut", recentURLs: [alias, file], snapshot: nil)
+        XCTAssertEqual(aliasMatch.compactMap { $0.entry?.url }, [alias])
+        let blank = try FileSearchResults.rows(query: "", recentURLs: [alias, file], snapshot: nil)
+        XCTAssertEqual(blank.compactMap { $0.entry?.url }, [alias])
+    }
+
+    func testCurrentFileIdentityMatchesAnAliasBeforeReloading() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("edited.md")
+        let alias = directory.appendingPathComponent("shortcut.md")
+        try "Old disk content".write(to: file, atomically: true, encoding: .utf8)
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: file)
+        // The selection guard must recognize this identity without loading old
+        // disk content or asking the editor to commit its newer in-memory text.
+        XCTAssertEqual(FileSearchResults.resolvedIdentity(file), FileSearchResults.resolvedIdentity(alias))
+        XCTAssertNotEqual(FileSearchResults.resolvedIdentity(file),
+                          FileSearchResults.resolvedIdentity(directory.appendingPathComponent("other.md")))
     }
 
 }

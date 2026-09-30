@@ -403,7 +403,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         present(url: url, intent: .normal)
     }
 
-    func present(url: URL, intent: NavigationIntent, loadedMarkdown: String? = nil) {
+    func present(url: URL, intent: NavigationIntent) {
         searchOpenRequestID = nil
         let fragment = url.fragment?.removingPercentEncoding
         let url = Self.fileURLWithoutFragment(url)
@@ -412,11 +412,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             requestEndEditing(keepAccessoryMounted: true) { [weak self] success in
                 guard success else { return }
                 self?.present(url: url, preservingEditMode: preserveEditMode,
-                              intent: intent, fragment: fragment, loadedMarkdown: loadedMarkdown)
+                              intent: intent, fragment: fragment)
             }
             return
         }
-        present(url: url, preservingEditMode: preserveEditMode, intent: intent, fragment: fragment, loadedMarkdown: loadedMarkdown)
+        present(url: url, preservingEditMode: preserveEditMode, intent: intent, fragment: fragment)
     }
 
     func present(url: URL, preservingEditMode: Bool,

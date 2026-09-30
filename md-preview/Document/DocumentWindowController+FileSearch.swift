@@ -66,17 +66,22 @@ extension DocumentWindowController {
     }
 
     func openSearchResult(_ url: URL, in target: FileSearchPanelController.OpenTarget) {
-        let requestID = UUID()
-        searchOpenRequestID = requestID
         switch target {
         case .currentTab:
-            guard currentFileURL?.standardizedFileURL != url.standardizedFileURL else { return }
-            let originalURL = currentFileURL
-            // Read once before changing document state. Passing that content
-            // through navigation also avoids a second read failing after commit.
-            Task { @concurrent [weak self] in
-                let result = Result { try String(contentsOf: url, encoding: .utf8) }
-                await self?.finishSearchOpen(result, url: url, originalURL: originalURL, requestID: requestID)
+            let requestID = UUID()
+            searchOpenRequestID = requestID
+            // An alias of the edited document is still the current file.
+            // Return before reading disk or ending the edit session.
+            guard currentFileURL.map(FileSearchResults.resolvedIdentity)
+                != FileSearchResults.resolvedIdentity(url) else { return }
+            let preserveEditMode = isEditing || pendingEditModeURL != nil
+            if isEditing || hasPendingEditorChanges {
+                requestEndEditing(keepAccessoryMounted: true) { [weak self] success in
+                    guard let self, success, self.searchOpenRequestID == requestID else { return }
+                    self.readSearchResult(url, requestID: requestID, preserveEditMode: preserveEditMode)
+                }
+            } else {
+                readSearchResult(url, requestID: requestID, preserveEditMode: preserveEditMode)
             }
         case .newTab:
             openInNewTab(url)
@@ -84,17 +89,38 @@ extension DocumentWindowController {
             openInNewWindow(url)
         }
     }
-    private func finishSearchOpen(_ result: Result<String, Error>, url: URL,
-                                  originalURL: URL?, requestID: UUID) {
-        guard searchOpenRequestID == requestID, currentFileURL == originalURL,
-              documentWindow.isVisible, documentWindow.attachedSheet == nil else { return }
-        searchOpenRequestID = nil
-        switch result {
-        case .success(let markdown):
-            present(url: url, intent: .normal, loadedMarkdown: markdown)
-        case .failure(let error):
-            NSAlert(error: error).beginSheetModal(for: documentWindow)
+
+    private func readSearchResult(_ url: URL, requestID: UUID, preserveEditMode: Bool) {
+        let originalURL = currentFileURL
+        // Read after the save decision, but before replacing the current tab.
+        // Navigation uses this content directly, with no second fallible read.
+        Task { @concurrent [weak self] in
+            let result = Result { try String(contentsOf: url, encoding: .utf8) }
+            await self?.finishSearchOpen(result, url: url, originalURL: originalURL,
+                                        requestID: requestID, preserveEditMode: preserveEditMode)
         }
     }
 
+    private func finishSearchOpen(_ result: Result<String, Error>, url: URL,
+                                  originalURL: URL?, requestID: UUID, preserveEditMode: Bool) {
+        // windowWillClose invalidates the request. A background tab may be
+        // hidden after opening another tab, but its pending read is still valid.
+        guard searchOpenRequestID == requestID, currentFileURL == originalURL,
+              documentWindow.attachedSheet == nil else { return }
+        // Editing may have resumed during a slow read. Resolve it and read
+        // again afterward rather than applying content from before that decision.
+        if isEditing || hasPendingEditorChanges {
+            openSearchResult(url, in: .currentTab)
+            return
+        }
+        searchOpenRequestID = nil
+        switch result {
+        case .success(let markdown):
+            present(url: url, preservingEditMode: preserveEditMode,
+                    intent: .normal, fragment: nil, loadedMarkdown: markdown)
+        case .failure(let error):
+            if preserveEditMode { enterEditMode() }
+            NSAlert(error: error).beginSheetModal(for: documentWindow)
+        }
+    }
 }
