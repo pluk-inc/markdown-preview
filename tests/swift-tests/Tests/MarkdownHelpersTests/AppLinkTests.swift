@@ -69,7 +69,7 @@ final class AppLinkTests: XCTestCase {
         let suite = "AppLinkTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        for scheme in ["claude", "codex", "cursor", "vscode", "obsidian", "x-devonthink-item", "md-preview", "OBSIDIAN", "new-app+v2"] {
+        for scheme in ["claude", "codex", "cursor", "vscode", "obsidian", "x-devonthink-item", "OBSIDIAN", "new-app+v2"] {
             let url = try XCTUnwrap(URL(string: "\(scheme)://test"))
             XCTAssertEqual(ExternalLinkPolicy.decision(for: url, defaults: defaults), .confirm)
         }
@@ -80,7 +80,7 @@ final class AppLinkTests: XCTestCase {
         XCTAssertEqual(ExternalLinkPolicy.decision(for: URL(string: "different://test")!, defaults: defaults), .confirm)
         ExternalLinkPolicy.reset(defaults: defaults)
         XCTAssertEqual(ExternalLinkPolicy.decision(for: approved, defaults: defaults), .confirm)
-        for value in ["https://example.com", "http://example.com", "mailto:test@example.com"] {
+        for value in ["https://example.com", "http://example.com", "mailto:test@example.com", "md-preview://file/tmp/test.md", "MD-PREVIEW://file/tmp/test.md"] {
             XCTAssertEqual(ExternalLinkPolicy.decision(for: URL(string: value)!, defaults: defaults), .open)
         }
         // Persisted values can never override the unsafe-scheme boundary.
