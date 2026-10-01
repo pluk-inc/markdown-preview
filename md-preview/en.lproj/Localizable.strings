@@ -348,3 +348,11 @@
 "Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings." = "Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings.";
 "Themes" = "Themes";
 "This theme uses a fixed appearance. Choose Original to change it." = "This theme uses a fixed appearance. Choose Original to change it.";
+
+/* Reading text alignment */
+"Text alignment" = "Text alignment";
+"Left" = "Left";
+"Center" = "Center";
+"Right" = "Right";
+"Justified" = "Justified";
+"Alignment applies to prose in reading view and Quick Look. Automatic follows the document. Code, tables and explicit HTML alignment are preserved." = "Alignment applies to prose in reading view and Quick Look. Automatic follows the document. Code, tables and explicit HTML alignment are preserved.";

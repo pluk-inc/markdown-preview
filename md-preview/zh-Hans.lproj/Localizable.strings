@@ -348,3 +348,11 @@
 "Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings." = "文本大小也适用于快速查看预览。使用 ⌘+ 和 ⌘− 缩放文稿窗口也会更改文本大小。字体和阅读布局可在“外观”设置中调整。";
 "Themes" = "主题";
 "This theme uses a fixed appearance. Choose Original to change it." = "此主题使用固定外观。选择“Original”主题即可更改外观。";
+
+/* Reading text alignment */
+"Text alignment" = "文本对齐";
+"Left" = "左对齐";
+"Center" = "居中";
+"Right" = "右对齐";
+"Justified" = "两端对齐";
+"Alignment applies to prose in reading view and Quick Look. Automatic follows the document. Code, tables and explicit HTML alignment are preserved." = "对齐方式适用于阅读视图和快速查看中的正文。“自动”遵循文稿的对齐方式。代码、表格和 HTML 中明确指定的对齐方式保持不变。";

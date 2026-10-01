@@ -48,6 +48,13 @@ final class SettingsModel {
         }
     }
 
+    var textAlignment: TextAlignmentSetting {
+        didSet {
+            guard !isRestoringExternalValues, textAlignment != oldValue else { return }
+            appDelegate?.applyTextAlignmentSetting(textAlignment)
+        }
+    }
+
     var strictLineBreaks: Bool {
         didSet {
             guard !isRestoringExternalValues, strictLineBreaks != oldValue else { return }
@@ -258,6 +265,7 @@ final class SettingsModel {
         textSize = TextSizeSetting.current
         documentFont = DocumentFontSetting.current
         readerLayout = ReaderLayoutSetting.current
+        textAlignment = TextAlignmentSetting.current
         strictLineBreaks = StrictLineBreaksSetting.current
         isAlwaysOnTop = AlwaysOnTopPolicy.isEnabled
         opensDocumentsInTabs = TabOpeningPolicy.isEnabled
@@ -316,6 +324,7 @@ final class SettingsModel {
         textSize = TextSizeSetting.current
         documentFont = DocumentFontSetting.current
         readerLayout = ReaderLayoutSetting.current
+        textAlignment = TextAlignmentSetting.current
         strictLineBreaks = StrictLineBreaksSetting.current
         isAlwaysOnTop = AlwaysOnTopPolicy.isEnabled
         opensDocumentsInTabs = TabOpeningPolicy.isEnabled

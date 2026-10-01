@@ -22,10 +22,17 @@ struct ReadingSettingsView: View {
                         Text(setting.title).tag(setting)
                     }
                 }
+
+                Picker(L("Text alignment"), selection: $model.textAlignment) {
+                    ForEach(TextAlignmentSetting.allCases, id: \.self) { setting in
+                        Text(setting.title).tag(setting)
+                    }
+                }
             } header: {
                 Text(L("Text & layout"))
             } footer: {
                 Text(L("Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings."))
+                Text(L("Alignment applies to prose in reading view and Quick Look. Automatic follows the document. Code, tables and explicit HTML alignment are preserved."))
             }
 
             Section {
