@@ -42,14 +42,14 @@ nonisolated enum TextAlignmentSetting: String, CaseIterable {
         return """
         <style>
         article.markdown-body :is(p, li, dt, dd, h1, h2, h3, h4, h5, h6):not(
-            [align], [align] *, [style*="text-align" i], [style*="text-align" i] *,
+            center *, [align], [align] *, [style*="text-align" i], [style*="text-align" i] *,
             table *, pre *, .mermaid *, .katex *
         ) {
             text-align: \(alignment);
             text-align-last: auto;
         }
         /* A fenced block nested inside an aligned list must not inherit it. */
-        article.markdown-body :is(pre, .md-code-wrap):not([align], [align] *, [style*="text-align" i], [style*="text-align" i] *) {
+        article.markdown-body :is(pre, .md-code-wrap):not(center *, [align], [align] *, [style*="text-align" i], [style*="text-align" i] *) {
             text-align: start;
             text-align-last: auto;
         }

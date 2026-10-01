@@ -27,6 +27,8 @@ func greet() {
 
 <p align="center">This HTML paragraph stays centered.</p>
 
+<center><p>This legacy HTML paragraph also stays centered.</p></center>
+
 <div align="right"><p>This HTML paragraph stays right-aligned.</p></div>
 
 ## Source line breaks

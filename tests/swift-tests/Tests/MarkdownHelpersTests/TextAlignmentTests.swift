@@ -59,6 +59,8 @@ final class TextAlignmentTests: XCTestCase {
 
         <div align="right"><p id="authored-attribute">Authored right alignment</p></div>
 
+        <center><p id="authored-center">Legacy centered paragraph</p></center>
+
         <p align="center" id="authored-style">Authored centered alignment</p>
         """
         for setting in TextAlignmentSetting.allCases {
@@ -84,6 +86,7 @@ final class TextAlignmentTests: XCTestCase {
                             code: [...document.querySelectorAll('pre')].map(e => getComputedStyle(e).textAlign),
                             codeLabels: [...document.querySelectorAll('.md-code-language')].map(e => getComputedStyle(e).textAlign),
                             attribute: style('#authored-attribute').textAlign,
+                            legacyCenter: style('#authored-center').textAlign,
                             inlineStyle: style('#authored-style').textAlign
                         };
                     })()
@@ -105,6 +108,7 @@ final class TextAlignmentTests: XCTestCase {
                 XCTAssertEqual(labels.count, 2)
                 XCTAssertTrue(labels.allSatisfy { ["start", "left"].contains($0) })
                 XCTAssertTrue(["right", "-webkit-right"].contains(result["attribute"] as? String ?? ""))
+                XCTAssertTrue(["center", "-webkit-center"].contains(result["legacyCenter"] as? String ?? ""))
                 XCTAssertTrue(["center", "-webkit-center"].contains(result["inlineStyle"] as? String ?? ""))
                 web.stopLoading()
             }
