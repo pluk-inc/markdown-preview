@@ -10,16 +10,6 @@ import Foundation
 // `nonisolated` matters: the targets default to MainActor isolation, and
 // rendering runs off the main actor.
 nonisolated extension MarkdownHTML {
-    /// Explicitly supported app destinations. Shared by the sanitizer and native
-    /// link handlers; do not allow arbitrary protocols on embedded resources.
-    static let appLinkSchemes = [
-        "claude", "codex", "cursor", "vscode", "obsidian", "x-devonthink-item", "md-preview"
-    ]
-
-    static func isAppLink(_ url: URL) -> Bool {
-        appLinkSchemes.contains(url.scheme?.lowercased() ?? "")
-    }
-
     // Debug-only perf instrumentation. Routes labelled timings through the
     // host bridge so `[mdp-perf +Xms]` entries land in Xcode's console while
     // diagnosing load-phase regressions. Compiled out of release builds —
@@ -520,14 +510,16 @@ nonisolated extension MarkdownHTML {
         // ALLOWED_URI_REGEXP extends DOMPurify's default safe-URL list with
         // `md-asset:` so markdown image references that resolve to the
         // document's base directory (![alt](relative/path.png)) keep working.
-        // Preserve supported app destinations only on HTML anchors. Keeping the
+        // Preserve external destinations only on HTML anchors. Keeping the
         // normal URI policy keeps app schemes out of src, SVG href, etc.
         if (typeof DOMPurify !== 'undefined' && DOMPurify.addHook) {
-            const appLinkScheme = /^(?:\(appLinkSchemes.joined(separator: "|"))):/i;
+            const blockedLinkScheme = /^(?:\(ExternalLinkPolicy.blockedSchemes.joined(separator: "|"))):/i;
+            const externalLinkScheme = /^[a-z][a-z0-9+.-]*:/i;
             DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
                 if (node.namespaceURI === 'http://www.w3.org/1999/xhtml'
                     && node.nodeName === 'A' && data.attrName === 'href'
-                    && appLinkScheme.test(data.attrValue)) {
+                    && externalLinkScheme.test(data.attrValue)
+                    && !blockedLinkScheme.test(data.attrValue)) {
                     data.forceKeepAttr = true;
                 }
             });

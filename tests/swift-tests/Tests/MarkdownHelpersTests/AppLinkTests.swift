@@ -10,7 +10,7 @@ final class AppLinkTests: XCTestCase {
             "cursor://file/tmp/example.md", "vscode://file/tmp/example.md",
             "obsidian://open?vault=notes", "x-devonthink-item://test",
             "md-preview://file/tmp/example.md", "OBSIDIAN://open?vault=notes",
-            "https://example.com", "mailto:test@example.com"
+            "https://example.com", "mailto:test@example.com", "new-app+v2://test"
         ]
         let markdown = destinations.enumerated().map { "[link\($0)](\($1))" }.joined(separator: "\n\n")
         for mode: MarkdownHTML.VendorLoading in [.lazy, .inline] {
@@ -34,7 +34,9 @@ final class AppLinkTests: XCTestCase {
         <a href="jav&#x09;ascript:alert(1)">obfuscated</a>
         <a href="data:text/html,test">data</a>
         <a href="vbscript:msgbox(1)">vbscript</a>
-        <a href="unknown-app://test">unknown</a>
+        <a href="blob:https://example.com/test">blob</a>
+        <a href="filesystem:https://example.com/test">filesystem</a>
+        <a href="about:blank">about</a>
         <a href="file:///tmp/test.md">file</a>
         <img src="obsidian://open?vault=notes">
         <svg><a href="obsidian://open?vault=notes"><text>svg</text></a></svg>
@@ -63,13 +65,32 @@ final class AppLinkTests: XCTestCase {
         }
     }
 
-    func testNativeAppLinkPolicy() throws {
-        for scheme in ["claude", "codex", "cursor", "vscode", "obsidian", "x-devonthink-item", "md-preview", "OBSIDIAN"] {
-            XCTAssertTrue(MarkdownHTML.isAppLink(try XCTUnwrap(URL(string: "\(scheme)://test"))))
+    func testNativePolicyAndPersistedApprovals() throws {
+        let suite = "AppLinkTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        for scheme in ["claude", "codex", "cursor", "vscode", "obsidian", "x-devonthink-item", "md-preview", "OBSIDIAN", "new-app+v2"] {
+            let url = try XCTUnwrap(URL(string: "\(scheme)://test"))
+            XCTAssertEqual(ExternalLinkPolicy.decision(for: url, defaults: defaults), .confirm)
         }
-        for value in ["javascript:alert(1)", "data:text/html,test", "file:///tmp/test", "unknown://test", "https://example.com"] {
-            XCTAssertFalse(MarkdownHTML.isAppLink(try XCTUnwrap(URL(string: value))))
+        let approved = try XCTUnwrap(URL(string: "CUSTOM://first"))
+        ExternalLinkPolicy.remember(approved, defaults: defaults)
+        let reopenedDefaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        XCTAssertEqual(ExternalLinkPolicy.decision(for: URL(string: "custom://another")!, defaults: reopenedDefaults), .open)
+        XCTAssertEqual(ExternalLinkPolicy.decision(for: URL(string: "different://test")!, defaults: defaults), .confirm)
+        ExternalLinkPolicy.reset(defaults: defaults)
+        XCTAssertEqual(ExternalLinkPolicy.decision(for: approved, defaults: defaults), .confirm)
+        for value in ["https://example.com", "http://example.com", "mailto:test@example.com"] {
+            XCTAssertEqual(ExternalLinkPolicy.decision(for: URL(string: value)!, defaults: defaults), .open)
         }
+        // Persisted values can never override the unsafe-scheme boundary.
+        defaults.set(ExternalLinkPolicy.blockedSchemes, forKey: ExternalLinkPolicy.defaultsKey)
+        for scheme in ExternalLinkPolicy.blockedSchemes {
+            let url = try XCTUnwrap(URL(string: "\(scheme):test"))
+            XCTAssertEqual(ExternalLinkPolicy.decision(for: url, defaults: defaults), .blocked)
+        }
+        XCTAssertEqual(ExternalLinkPolicy.decision(for: URL(string: "relative.md")!, defaults: nil), .blocked)
+        XCTAssertEqual(ExternalLinkPolicy.decision(for: approved, defaults: nil), .confirm)
     }
 
     @MainActor

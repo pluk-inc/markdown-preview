@@ -684,10 +684,7 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
             return
         }
 
-        if let scheme = url.scheme?.lowercased(),
-           (["http", "https", "mailto"].contains(scheme) || MarkdownHTML.isAppLink(url)) {
-            NSWorkspace.shared.open(url)
-        }
         decisionHandler(.cancel)
+        ExternalLinkOpener.open(url, window: webView.window)
     }
 }

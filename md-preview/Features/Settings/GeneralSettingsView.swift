@@ -100,6 +100,16 @@ struct GeneralSettingsView: View {
             }
 
             Section {
+                Button(L("Reset App Link Approvals")) {
+                    ExternalLinkPolicy.reset(defaults: AppearanceMode.sharedDefaults())
+                }
+            } header: {
+                Text(L("App links"))
+            } footer: {
+                Text(L("Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look."))
+            }
+
+            Section {
                 LabeledContent(L("Command line tools")) {
                     Button(L("Install…")) {
                         appDelegate?.installCommandLineToolsFromSettings()
