@@ -84,13 +84,31 @@ final class AppLinkTests: XCTestCase {
             XCTAssertEqual(ExternalLinkPolicy.decision(for: URL(string: value)!, defaults: defaults), .open)
         }
         // Persisted values can never override the unsafe-scheme boundary.
-        defaults.set(ExternalLinkPolicy.blockedSchemes, forKey: ExternalLinkPolicy.defaultsKey)
+        for scheme in ExternalLinkPolicy.blockedSchemes {
+            defaults.set(true, forKey: ExternalLinkPolicy.approvalKey(for: scheme, defaults: defaults))
+        }
         for scheme in ExternalLinkPolicy.blockedSchemes {
             let url = try XCTUnwrap(URL(string: "\(scheme):test"))
             XCTAssertEqual(ExternalLinkPolicy.decision(for: url, defaults: defaults), .blocked)
         }
         XCTAssertEqual(ExternalLinkPolicy.decision(for: URL(string: "relative.md")!, defaults: nil), .blocked)
         XCTAssertEqual(ExternalLinkPolicy.decision(for: approved, defaults: nil), .confirm)
+    }
+
+    func testResetIgnoresAnApprovalWriteThatStartedBeforeReset() throws {
+        let suite = "AppLinkRaceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let old = URL(string: "old-app://test")!
+        ExternalLinkPolicy.remember(old, defaults: defaults)
+        let pendingKey = ExternalLinkPolicy.approvalKey(for: "pending-app", defaults: defaults)
+        ExternalLinkPolicy.reset(defaults: defaults)
+        defaults.set(true, forKey: pendingKey) // delayed extension write
+        XCTAssertEqual(ExternalLinkPolicy.decision(for: old, defaults: defaults), .confirm)
+        XCTAssertEqual(ExternalLinkPolicy.decision(for: URL(string: "pending-app://test")!, defaults: defaults), .confirm)
+        let fresh = URL(string: "fresh-app://test")!
+        ExternalLinkPolicy.remember(fresh, defaults: defaults)
+        XCTAssertEqual(ExternalLinkPolicy.decision(for: fresh, defaults: defaults), .open)
     }
 
     @MainActor

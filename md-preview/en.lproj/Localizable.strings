@@ -326,3 +326,14 @@
 /* Reading preferences */
 "Strict line breaks" = "Strict line breaks";
 "Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews.";
+
+/* App link approvals */
+"Reset App Link Approvals" = "Reset App Link Approvals";
+"App links" = "App links";
+"Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look." = "Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look.";
+"No application can open this link" = "No application can open this link";
+"OK" = "OK";
+"Allow this document to open “%@”?" = "Allow this document to open “%@”?";
+"Allow" = "Allow";
+"Always Allow" = "Always Allow";
+"Allow all %@: links in documents and Quick Look." = "Allow all %@: links in documents and Quick Look.";

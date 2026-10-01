@@ -4,6 +4,7 @@ import AppKit
 nonisolated enum ExternalLinkPolicy {
     static let blockedSchemes = ["javascript", "vbscript", "data", "file", "about", "blob", "filesystem", "md-asset"]
     static let defaultsKey = "MarkdownPreview.approvedLinkSchemes"
+    static let generationKey = defaultsKey + ".generation"
 
     enum Decision: Equatable { case blocked, open, confirm }
 
@@ -15,7 +16,7 @@ nonisolated enum ExternalLinkPolicy {
     static func decision(for url: URL, defaults: UserDefaults?) -> Decision {
         guard isExternal(url), let scheme = url.scheme?.lowercased() else { return .blocked }
         if ["http", "https", "mailto", "md-preview"].contains(scheme)
-            || (defaults?.stringArray(forKey: defaultsKey) ?? []).contains(scheme) {
+            || (defaults?.bool(forKey: approvalKey(for: scheme, defaults: defaults)) ?? false) {
             return .open
         }
         return .confirm
@@ -23,13 +24,18 @@ nonisolated enum ExternalLinkPolicy {
 
     static func remember(_ url: URL, defaults: UserDefaults?) {
         guard isExternal(url), let scheme = url.scheme?.lowercased() else { return }
-        var schemes = defaults?.stringArray(forKey: defaultsKey) ?? []
-        if !schemes.contains(scheme) { schemes.append(scheme) }
-        defaults?.set(schemes, forKey: defaultsKey)
+        defaults?.set(true, forKey: approvalKey(for: scheme, defaults: defaults))
+    }
+
+    /// Separate keys avoid read-modify-write races between the app and Quick Look.
+    /// Reset rotates the namespace: a writer holding an old key cannot restore it.
+    static func approvalKey(for scheme: String, defaults: UserDefaults?) -> String {
+        let generation = defaults?.string(forKey: generationKey) ?? "initial"
+        return defaultsKey + "." + generation + "." + scheme.lowercased()
     }
 
     static func reset(defaults: UserDefaults?) {
-        defaults?.removeObject(forKey: defaultsKey)
+        defaults?.set(UUID().uuidString, forKey: generationKey)
     }
 }
 

@@ -424,6 +424,9 @@ private final class QuickLookWebView: WKWebView {
 }
 
 final class PreviewViewController: NSViewController, QLPreviewingController, WKNavigationDelegate {
+    /// Injectable dispatch keeps navigation tests from launching external apps.
+    var openExternalLink: @MainActor (URL, NSWindow?) -> Void = ExternalLinkOpener.open
+
     private static let copyFeedbackDuration: TimeInterval = 1.0
     private static let floatingButtonMinimumWidth: CGFloat = 70
     private static let floatingButtonHeight: CGFloat = 26
@@ -685,6 +688,6 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
         }
 
         decisionHandler(.cancel)
-        ExternalLinkOpener.open(url, window: webView.window)
+        openExternalLink(url, webView.window)
     }
 }

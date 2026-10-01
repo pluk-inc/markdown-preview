@@ -326,3 +326,14 @@
 /* Reading preferences */
 "Strict line breaks" = "严格换行";
 "Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "将普通源文本行合并为连续段落。关闭此选项可保留每个换行。适用于阅读视图和快速查看预览。";
+
+/* App link approvals */
+"Reset App Link Approvals" = "重置应用链接授权";
+"App links" = "应用链接";
+"Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look." = "打开自定义应用链接前重新询问。授权按 URL 协议保存，并与快速查看共享。";
+"No application can open this link" = "没有可打开此链接的应用";
+"OK" = "好";
+"Allow this document to open “%@”?" = "允许此文稿打开“%@”吗？";
+"Allow" = "允许";
+"Always Allow" = "始终允许";
+"Allow all %@: links in documents and Quick Look." = "允许文稿和快速查看中的所有 %@: 链接。";
