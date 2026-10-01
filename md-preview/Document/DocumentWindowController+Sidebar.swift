@@ -141,11 +141,16 @@ extension DocumentWindowController {
     /// AppKit can retain a hidden group's width ahead of the document title.
     func syncSidebarToolbarState() {
         guard let toolbar = documentWindow.toolbar else { return }
+        guard !sidebarToolbarSyncInProgress else { return }
+        sidebarToolbarSyncInProgress = true
         let collapsed = !currentSidebarMenuState().sidebarVisible
         // A transient collapse must not replace the user's saved layout.
         let autosaves = toolbar.autosavesConfiguration
         toolbar.autosavesConfiguration = false
-        defer { toolbar.autosavesConfiguration = autosaves }
+        defer {
+            toolbar.autosavesConfiguration = autosaves
+            sidebarToolbarSyncInProgress = false
+        }
 
         if collapsed {
             if let index = toolbar.items.firstIndex(where: { $0.itemIdentifier == .sidebarMode }) {

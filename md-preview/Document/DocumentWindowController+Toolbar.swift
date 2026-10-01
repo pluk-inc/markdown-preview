@@ -115,12 +115,49 @@ extension DocumentWindowController {
         if hasLLMTargetsAvailable {
             identifiers.insertAfterOpenActions(.openInLLM)
         }
-        // Sidebar-only controls are unavailable in the palette while their
-        // pane is collapsed, matching the controls currently in the toolbar.
-        if !sidebarMenuState.sidebarVisible {
-            identifiers.removeAll { $0 == .sidebarMode }
-        }
         return identifiers
+    }
+
+    /// Restore shared preferences into this window's independent toolbar.
+    /// Keep a complete item order alongside AppKit's opaque configuration.
+    func restoreAndObserveToolbarItemOrder(_ toolbar: NSToolbar) {
+        let key = "MainToolbar.expandedItemIdentifiers"
+        if let saved = UserDefaults.standard.stringArray(forKey: key) {
+            toolbar.itemIdentifiers = saved.map { NSToolbarItem.Identifier($0) }
+        }
+        toolbarItemOrderPersistenceReady = true
+        toolbarPreferenceObservations = [
+            toolbar.observe(\.displayMode) { [weak self] _, _ in
+                DispatchQueue.main.async { self?.persistCustomizedToolbarItemOrder() }
+            },
+            toolbar.observe(\.isVisible) { [weak self] _, _ in
+                DispatchQueue.main.async { self?.persistCustomizedToolbarItemOrder() }
+            }
+        ]
+    }
+
+    func toolbarWillAddItem(_ notification: Notification) {
+        persistCustomizedToolbarItemOrder()
+    }
+
+    func toolbarDidRemoveItem(_ notification: Notification) {
+        persistCustomizedToolbarItemOrder()
+    }
+
+    private func persistCustomizedToolbarItemOrder() {
+        guard toolbarItemOrderPersistenceReady, !sidebarToolbarSyncInProgress else { return }
+        // willAdd is delivered before insertion. Save after AppKit finishes
+        // the operation, including reorder and default-set replacement.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let toolbar = self.documentWindow.toolbar else { return }
+            let complete = SidebarToolbarItemOrder.complete(
+                toolbar.items.map { $0.itemIdentifier.rawValue },
+                removedPlacement: self.collapsedSidebarModePlacement
+            )
+            UserDefaults.standard.set(complete, forKey: "MainToolbar.expandedItemIdentifiers")
+            UserDefaults.standard.set(toolbar.configuration, forKey: "MainToolbar.configuration")
+            self.syncSidebarToolbarState()
+        }
     }
 
     func toolbar(_ toolbar: NSToolbar,
