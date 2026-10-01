@@ -156,14 +156,17 @@ extension DocumentWindowController {
             if let index = toolbar.items.firstIndex(where: { $0.itemIdentifier == .sidebarMode }) {
                 let hasSpacer = toolbar.items.indices.contains(index + 1)
                     && toolbar.items[index + 1].itemIdentifier == .flexibleSpace
-                collapsedSidebarModePlacement = (index, hasSpacer)
+                collapsedSidebarModePlacement = .init(
+                    index: index, hasSpacer: hasSpacer,
+                    identifiers: toolbar.items.map { $0.itemIdentifier.rawValue }
+                )
                 if hasSpacer { toolbar.removeItem(at: index + 1) }
                 toolbar.removeItem(at: index)
             }
         } else if let placement = collapsedSidebarModePlacement {
             collapsedSidebarModePlacement = nil
             if !toolbar.items.contains(where: { $0.itemIdentifier == .sidebarMode }) {
-                let index = min(placement.index, toolbar.items.count)
+                let index = placement.insertionIndex(in: toolbar.items.map { $0.itemIdentifier.rawValue })
                 toolbar.insertItem(withItemIdentifier: .sidebarMode, at: index)
                 if placement.hasSpacer {
                     toolbar.insertItem(withItemIdentifier: .flexibleSpace, at: index + 1)

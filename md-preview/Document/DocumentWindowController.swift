@@ -120,7 +120,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// The Table of Contents / Project Navigator picker in the toolbar.
     var sidebarModeItem: NSToolbarItemGroup?
     /// The original position and spacer while sidebar-only items are removed.
-    var collapsedSidebarModePlacement: (index: Int, hasSpacer: Bool)?
+    var collapsedSidebarModePlacement: SidebarToolbarItemOrder.Placement?
     var sidebarToolbarSyncInProgress = false
     var toolbarItemOrderPersistenceReady = false
     var toolbarPreferenceObservations: [NSKeyValueObservation] = []
@@ -228,9 +228,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             toolbar.setConfiguration(saved)
         }
         documentWindow.toolbarStyle = .automatic
+        restoreToolbarItemOrder(toolbar)
         replaceZoomToolbarItemIfNeeded(in: toolbar)
         migrateLegacySidebarToolbarIfNeeded(in: toolbar)
-        restoreAndObserveToolbarItemOrder(toolbar)
+        observeAndPersistToolbarPreferences(toolbar)
 
         installFindBar()
         applyWindowBackgroundTheme()
