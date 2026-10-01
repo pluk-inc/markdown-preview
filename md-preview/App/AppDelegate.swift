@@ -147,6 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             || model.themeColors != ThemeColorsSetting.current
             || model.documentFont != DocumentFontSetting.current
             || model.readerLayout != ReaderLayoutSetting.current
+            || model.textAlignment != TextAlignmentSetting.current
             || model.strictLineBreaks != StrictLineBreaksSetting.current
         let languageChanged = model.appLanguage != AppLanguageSetting.selection()
         guard changed || languageChanged else { return }
@@ -341,6 +342,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let resolved = ThemePreset.applied().requiredAppearance ?? mode
         AppearanceMode.current = resolved
         applyAppearanceMode(resolved, reloadPreviews: true)
+    }
+
+    func applyTextAlignmentSetting(_ setting: TextAlignmentSetting) {
+        guard setting != TextAlignmentSetting.current else { return }
+        TextAlignmentSetting.current = setting
+        reloadDocumentPreviewsForSettingChange()
     }
 
     func applyStrictLineBreaksSetting(_ enabled: Bool) {

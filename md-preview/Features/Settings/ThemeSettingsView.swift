@@ -72,7 +72,7 @@ struct ThemeSettingsView: View {
                     }
                 }
             } footer: {
-                Text(L("The same panel the toolbar's Themes & Settings button opens, with a Reset for the whole look."))
+                Text(L("Customize the selected theme’s font, spacing and colors. Reset restores that theme’s defaults; global Reading preferences stay unchanged."))
             }
         }
         .formStyle(.grouped)
