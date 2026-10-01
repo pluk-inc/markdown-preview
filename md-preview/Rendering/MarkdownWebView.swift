@@ -1510,7 +1510,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                   let file = MarkdownAssetResolution.fileURL(for: source) else { return }
             target = Self.reattachingFragment(of: source, to: file)
         } else {
-            guard ["https", "http", "mailto", "file"].contains(source.scheme?.lowercased() ?? "") else { return }
+            guard ["https", "http", "mailto", "file"].contains(source.scheme?.lowercased() ?? "")
+                || MarkdownHTML.isAppLink(source) else { return }
             target = source
         }
         let menu = NSMenu()
