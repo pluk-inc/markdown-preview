@@ -15,6 +15,7 @@ import SwiftUI
 
 enum SettingsPane: String, CaseIterable, Identifiable {
     case general = "General"
+    case reading = "Reading"
     case theme = "Appearance"
     case privacy = "Privacy"
     case about = "About"
@@ -26,11 +27,11 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     /// Development-time exports of the icons rendered by each registered
     /// System Settings extension. They are bundled so the sandboxed app never
     /// needs to call private IconServices at runtime. Panes without an export
-    /// (Theme) draw an equivalent tile in SwiftUI instead.
+    /// (Reading and Appearance) draw an equivalent tile in SwiftUI instead.
     var iconAssetName: String? {
         switch self {
         case .general: "SettingsGeneral"
-        case .theme: nil
+        case .reading, .theme: nil
         case .privacy: "SettingsPrivacy"
         case .about: "SettingsAbout"
         }
@@ -59,22 +60,21 @@ struct SettingsPaneIcon: View {
         .frame(width: 20, height: 20)
     }
 
-    /// System Settings-style tile matching the real Appearance pane icon:
-    /// a black rounded rect with the half-filled circle glyph.
+    /// Match the sidebar tile geometry for panes without bundled icons.
     private var generatedTile: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 4.4, style: .continuous)
                 .fill(LinearGradient(
                     colors: [
-                        Color(red: 0.25, green: 0.25, blue: 0.27),
-                        Color(red: 0.05, green: 0.05, blue: 0.06)
+                        pane == .reading ? Color(red: 0.2, green: 0.55, blue: 0.95) : Color(red: 0.25, green: 0.25, blue: 0.27),
+                        pane == .reading ? Color(red: 0.05, green: 0.3, blue: 0.75) : Color(red: 0.05, green: 0.05, blue: 0.06)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 ))
                 .frame(width: 20, height: 20)
                 .shadow(color: .black.opacity(0.22), radius: 0.6, y: 0.6)
-            Image(systemName: "circle.lefthalf.filled")
+            Image(systemName: pane == .reading ? "book.closed.fill" : "circle.lefthalf.filled")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.white)
         }
@@ -375,6 +375,7 @@ struct SettingsDetailView: View {
     var body: some View {
         switch viewModel.selectedPane {
         case .general: GeneralSettingsView()
+        case .reading: ReadingSettingsView()
         case .theme: ThemeSettingsView()
         case .privacy: PrivacySettingsView()
         case .about: AboutSettingsView()

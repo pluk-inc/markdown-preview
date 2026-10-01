@@ -292,7 +292,7 @@
 "Serif" = "衬线";
 "Rounded" = "圆体";
 "Monospace" = "等宽";
-"The font also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes the text size." = "字体设置也会应用于“快速查看”预览。使用 ⌘+ 和 ⌘− 缩放文稿窗口会改变文字大小。";
+"The font also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes the text size." = "字体设置也会应用于“快速查看”预览。使用 ⌘+ 和 ⌘− 缩放文稿窗口会改变文本大小。";
 
 /* Settings — Windows */
 "Windows" = "窗口";
@@ -331,3 +331,20 @@
 "Language" = "语言";
 "System Default" = "跟随系统";
 "Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews." = "退出并重新打开 Markdown Preview 以应用语言更改。此设置仅影响应用，不影响快速查看预览。";
+
+/* Settings organization */
+"Saving" = "保存";
+"External apps & tools" = "外部 App 与工具";
+"Text & layout" = "文本与布局";
+"Markdown" = "Markdown";
+"Outline" = "大纲";
+"Customize the selected theme’s font, spacing and colors. Reset restores that theme’s defaults; global Reading preferences stay unchanged." = "自定所选主题的字体、间距和颜色。重置会恢复该主题的默认设置，不会更改全局阅读偏好设置。";
+"Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window." = "点按指向其他 Markdown 文件的链接时，在新窗口中打开。关闭此选项则在当前窗口中打开。";
+"Customize…" = "自定…";
+"Each theme remembers its colors, font and layout. Original also remembers your appearance choice. Reset restores the selected theme’s defaults." = "每个主题都会保留各自的颜色、字体和布局设置。“Original”主题还会保留您的外观选择。重置会恢复所选主题的默认设置。";
+"Fonts, spacing and colors" = "字体、间距和颜色";
+"Highlight outline section under the pointer" = "高亮显示指针下的大纲章节";
+"Open Markdown links in new windows" = "在新窗口中打开 Markdown 链接";
+"Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings." = "文本大小也适用于快速查看预览。使用 ⌘+ 和 ⌘− 缩放文稿窗口也会更改文本大小。字体和阅读布局可在“外观”设置中调整。";
+"Themes" = "主题";
+"This theme uses a fixed appearance. Choose Original to change it." = "此主题使用固定外观。选择“Original”主题即可更改外观。";

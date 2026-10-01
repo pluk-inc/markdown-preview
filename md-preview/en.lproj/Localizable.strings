@@ -331,3 +331,20 @@
 "Language" = "Language";
 "System Default" = "System Default";
 "Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews." = "Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews.";
+
+/* Settings organization */
+"Saving" = "Saving";
+"External apps & tools" = "External apps & tools";
+"Text & layout" = "Text & layout";
+"Markdown" = "Markdown";
+"Outline" = "Outline";
+"Customize the selected theme’s font, spacing and colors. Reset restores that theme’s defaults; global Reading preferences stay unchanged." = "Customize the selected theme’s font, spacing and colors. Reset restores that theme’s defaults; global Reading preferences stay unchanged.";
+"Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window." = "Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window.";
+"Customize…" = "Customize…";
+"Each theme remembers its colors, font and layout. Original also remembers your appearance choice. Reset restores the selected theme’s defaults." = "Each theme remembers its colors, font and layout. Original also remembers your appearance choice. Reset restores the selected theme’s defaults.";
+"Fonts, spacing and colors" = "Fonts, spacing and colors";
+"Highlight outline section under the pointer" = "Highlight outline section under the pointer";
+"Open Markdown links in new windows" = "Open Markdown links in new windows";
+"Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings." = "Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings.";
+"Themes" = "Themes";
+"This theme uses a fixed appearance. Choose Original to change it." = "This theme uses a fixed appearance. Choose Original to change it.";

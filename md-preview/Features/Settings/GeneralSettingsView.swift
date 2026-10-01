@@ -8,7 +8,6 @@ import SwiftUI
 // MARK: - General
 
 struct GeneralSettingsView: View {
-    @AppStorage("MarkdownPreview.outlineFollowsPointer") private var outlineFollowsPointer = false
     @Bindable private var model = SettingsModel.shared
 
     var body: some View {
@@ -24,33 +23,6 @@ struct GeneralSettingsView: View {
                 Text(L("Language"))
             } footer: {
                 Text(L("Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews."))
-            }
-
-            Section {
-                LabeledContent {
-                    TextSizePicker(selection: $model.textSize)
-                } label: {
-                    Text(L("Text size"))
-                    Text(L("Size of rendered Markdown in document windows."))
-                }
-
-                Toggle(isOn: $model.strictLineBreaks) {
-                    Text(L("Strict line breaks"))
-                    Text(L("Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews."))
-                }
-                .accessibilityLabel(L("Strict line breaks"))
-
-                Toggle(L("Highlight outline section under the pointer"), isOn: $outlineFollowsPointer)
-
-                Picker(L("Content width"), selection: $model.contentWidth) {
-                    ForEach(ContentWidthSetting.allCases, id: \.self) { setting in
-                        Text(setting.title).tag(setting)
-                    }
-                }
-            } header: {
-                Text(L("Reading"))
-            } footer: {
-                Text(L("Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings."))
             }
 
             Section {
@@ -90,7 +62,7 @@ struct GeneralSettingsView: View {
                     Text(L("Save edited documents periodically."))
                 }
             } header: {
-                Text(L("Editing"))
+                Text(L("Saving"))
             } footer: {
                 Text(L("Automatic saving runs while a document has unsaved edits."))
             }
@@ -106,19 +78,16 @@ struct GeneralSettingsView: View {
                         editorItems
                     }
                 }
-            } header: {
-                Text(L("Hand-off"))
-            } footer: {
-                Text(L("The app the Open button in the document toolbar uses first. Its menu still offers every other installed app."))
-            }
 
-            Section {
                 LabeledContent(L("Command line tools")) {
                     Button(L("Install…")) {
                         appDelegate?.installCommandLineToolsFromSettings()
                     }
                 }
+            } header: {
+                Text(L("External apps & tools"))
             } footer: {
+                Text(L("The app the Open button in the document toolbar uses first. Its menu still offers every other installed app."))
                 Text(L("Adds mdp, md-preview, and markdown-preview to your PATH. Run it again after updating the app to refresh the commands."))
             }
         }
