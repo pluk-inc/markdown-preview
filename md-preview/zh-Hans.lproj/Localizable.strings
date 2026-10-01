@@ -337,3 +337,8 @@
 "Allow" = "允许";
 "Always Allow" = "始终允许";
 "Allow all %@: links in documents and Quick Look." = "允许文稿和快速查看中的所有 %@: 链接。";
+
+/* App language */
+"Language" = "语言";
+"System Default" = "跟随系统";
+"Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews." = "退出并重新打开 Markdown Preview 以应用语言更改。此设置仅影响应用，不影响快速查看预览。";

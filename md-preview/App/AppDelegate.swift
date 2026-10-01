@@ -148,8 +148,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             || model.documentFont != DocumentFontSetting.current
             || model.readerLayout != ReaderLayoutSetting.current
             || model.strictLineBreaks != StrictLineBreaksSetting.current
-        guard changed else { return }
+        let languageChanged = model.appLanguage != AppLanguageSetting.selection()
+        guard changed || languageChanged else { return }
         model.refreshFromExternalSources()
+        // Language changes take effect on relaunch; only refresh their picker now.
+        guard changed else { return }
         // Repaint only when another instance changed the shared reading look.
         applyAppearanceMode(ThemePreset.applied().requiredAppearance ?? AppearanceMode.current,
                             reloadPreviews: true)

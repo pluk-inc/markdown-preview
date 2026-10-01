@@ -337,3 +337,8 @@
 "Allow" = "Allow";
 "Always Allow" = "Always Allow";
 "Allow all %@: links in documents and Quick Look." = "Allow all %@: links in documents and Quick Look.";
+
+/* App language */
+"Language" = "Language";
+"System Default" = "System Default";
+"Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews." = "Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews.";

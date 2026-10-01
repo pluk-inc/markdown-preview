@@ -14,6 +14,19 @@ struct GeneralSettingsView: View {
     var body: some View {
         Form {
             Section {
+                Picker(L("Language"), selection: $model.appLanguage) {
+                    Text(L("System Default")).tag(AppLanguageSetting.systemDefault)
+                    ForEach(AppLanguageSetting.availableLanguages(), id: \.self) { language in
+                        Text(verbatim: AppLanguageSetting.displayName(for: language)).tag(language)
+                    }
+                }
+            } header: {
+                Text(L("Language"))
+            } footer: {
+                Text(L("Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews."))
+            }
+
+            Section {
                 LabeledContent {
                     TextSizePicker(selection: $model.textSize)
                 } label: {

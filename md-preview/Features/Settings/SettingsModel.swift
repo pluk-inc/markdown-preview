@@ -23,6 +23,13 @@ import SwiftUI
 final class SettingsModel {
     static let shared = SettingsModel()
 
+    var appLanguage: String {
+        didSet {
+            guard !isRestoringExternalValues, appLanguage != oldValue else { return }
+            AppLanguageSetting.save(appLanguage)
+        }
+    }
+
     var appearance: AppearanceMode {
         didSet {
             guard !isRestoringExternalValues, appearance != oldValue else { return }
@@ -244,6 +251,7 @@ final class SettingsModel {
 
     private init() {
         let updater = (NSApp.delegate as? AppDelegate)?.updaterController.updater
+        appLanguage = AppLanguageSetting.selection()
         appearance = AppearanceMode.current
         contentWidth = ContentWidthSetting.current
         autoSaveIntervalMinutes = AutoSaveSetting.currentMinutes
@@ -301,6 +309,7 @@ final class SettingsModel {
         defer { isRestoringExternalValues = false }
 
         appliedPreset = ThemePreset.applied()
+        appLanguage = AppLanguageSetting.selection()
         appearance = AppearanceMode.current
         contentWidth = ContentWidthSetting.current
         autoSaveIntervalMinutes = AutoSaveSetting.currentMinutes
