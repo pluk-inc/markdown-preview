@@ -83,6 +83,7 @@ Single source newlines remain visible by default. Enable **Settings → Reading 
 - **Mermaid diagrams** — fenced `mermaid` code blocks render as diagrams in both the app and Quick Look previews, using a bundled renderer so previews work offline without a CDN request.
 - **Math equations** — LaTeX inline (`$x_1 + x_2$`), display (`$$\int_0^1 x^2\,dx$$`), and fenced `math` blocks render with a bundled KaTeX. Selecting a rendered formula and copying yields the original LaTeX source (via the official `copy-tex` extension).
 - **Document outline** — sidebar TOC that mirrors your headings; click to jump.
+- **Collapsible sidebar** — the outline and file picker hides when the sidebar collapses; the sidebar toggle stays available to reopen it.
 - **File navigator** — browse Markdown files in the sidebar. Click a folder's name, icon, or empty row space to expand or collapse it, or use its disclosure triangle. Click a file to open it in the current reading or editing mode.
 - **Inspector panel** — toggleable side panel with file metadata.
 - **In-document search** — toolbar search field plus standard <kbd>⌘F</kbd> / <kbd>⌘G</kbd> / <kbd>⌘⇧G</kbd> for next/previous match.

@@ -115,6 +115,11 @@ extension DocumentWindowController {
         if hasLLMTargetsAvailable {
             identifiers.insertAfterOpenActions(.openInLLM)
         }
+        // Sidebar-only controls are unavailable in the palette while their
+        // pane is collapsed, matching the controls currently in the toolbar.
+        if !sidebarMenuState.sidebarVisible {
+            identifiers.removeAll { $0 == .sidebarMode }
+        }
         return identifiers
     }
 
