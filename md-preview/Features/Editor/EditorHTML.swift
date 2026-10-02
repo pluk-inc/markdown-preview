@@ -604,7 +604,8 @@ nonisolated enum EditorHTML {
             padding: 8px 12px;
             outline: none;
             white-space: pre-wrap;
-            overflow-wrap: anywhere;
+            overflow-wrap: normal;
+            word-break: normal;
             cursor: text;
         }
         .cm-md-table-grid th .cm-md-table-cell[data-placeholder]:empty::before {

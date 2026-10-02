@@ -773,8 +773,8 @@ nonisolated extension MarkdownHTML {
        WebKit lays print out at a viewport of the printable width in CSS px
        (96px per inch), and 1 CSS px maps to exactly 0.75pt on paper. Sizing
        the body in `pt` here therefore lands at that literal point size, with
-       no scaling factor to compensate for. `md-print-size` (injected by the
-       app at print time) overrides the default below.
+       no scaling factor to compensate for. The app applies the selected
+       point size to a temporary copy before printing.
 
        The on-screen palette is dark-mode aware; paper is not, so regular
        printing restores the light values unconditionally. PDF export adds
@@ -803,7 +803,7 @@ nonisolated extension MarkdownHTML {
             background: #fff;
         }
         @page {
-            margin: \(printPageMarginTop) \(printPageMarginSide) \(printPageMarginBottom);
+            margin: \(printPageMarginTopPoints)pt \(printPageMarginSidePoints)pt \(printPageMarginBottomPoints)pt;
         }
         body {
             -webkit-print-color-adjust: exact;
@@ -813,8 +813,7 @@ nonisolated extension MarkdownHTML {
             font-size: \(defaultPrintPointSize)pt;
             padding: 0;
         }
-        /* NSPrintInfo owns the page margins, and the print viewport is
-           narrower than the on-screen measure, so the column just fills it. */
+        /* The article fills the area inside the CSS page margins. */
         :root:not(.\(previewPrintClass)) article.markdown-body {
             max-width: none;
             margin: 0;

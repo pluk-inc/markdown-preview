@@ -490,6 +490,12 @@ nonisolated extension MarkdownHTML {
         })()
     """
 
+    static var paperMermaidScript: String {
+        let vendor = bundledVendorResource("mermaid.min", ext: "js", subdir: "Vendor/Mermaid") ?? ""
+        return vendor + "\n" + mermaidInitWiring
+            + ";\nvoid 0;"
+    }
+
     static func mermaidScript(mode: VendorLoading) -> VendorEmission {
         guard bundledVendorURL("mermaid.min", ext: "js", subdir: "Vendor/Mermaid") != nil else {
             return VendorEmission(head: mermaidFallbackScript)

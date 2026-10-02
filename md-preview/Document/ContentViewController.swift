@@ -315,8 +315,8 @@ final class ContentViewController: NSViewController {
     }
 
     func printDocument() {
-        guard let window = view.window, hasExportableDocument else { return }
-        webView.printDocument(from: window)
+        guard let window = view.window, let source = exportSource else { return }
+        webView.printDocument(assetBaseURL: source.assetBaseURL, from: window)
     }
 
     var hasExportableDocument: Bool {

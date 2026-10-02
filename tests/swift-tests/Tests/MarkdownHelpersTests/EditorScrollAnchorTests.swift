@@ -464,6 +464,25 @@ final class EditorScrollAnchorTests: XCTestCase {
         }
     }
 
+    func testTableColumnsKeepWordsWhole() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let prose = Array(repeating: "ordinary words of prose", count: 20).joined(separator: " ")
+        let markdown = "Before the table.\n\n| Measure | Meaning |\n| --- | --- |\n| Static | \(prose) |"
+        for isEditor in [false, true] {
+            let html = isEditor
+                ? EditorHTML.render(markdown: markdown, editorJavaScript: script)
+                : MarkdownHTML.render(markdown: markdown, allowsScroll: true).html
+            let harness = WebViewLayoutHarness(html: html, width: 500, isEditor: isEditor, height: 400)
+            defer { harness.close() }
+            let layout = try await harness.layout(texts: ["Measure", "Static", prose], imageCount: 0,
+                                                  selectors: [isEditor ? ".cm-md-table-grid" : "table": 1])
+            let lines = layout.elements.map(\.lines.count)
+            let mode = isEditor ? "editor" : "reader"
+            XCTAssertEqual(Array(lines.prefix(2)), [1, 1], "\(mode): \(lines)")
+            XCTAssertGreaterThan(lines[2], 1, "\(mode): \(lines)")
+        }
+    }
+
     func testCodeScrollPolicyMatchesReadMode() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let markdown = "```text\n" + String(repeating: "long code ", count: 100) + "\n```"
