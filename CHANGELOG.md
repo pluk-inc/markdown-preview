@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.0.65] – 2026-10-06
+
+This release makes tables easier to read and export, adds fullscreen table previews, and gives you more control over reading preferences, app language, and app links.
+
+### Added
+
+- **Expand tables fullscreen.** Use Expand Table in Read or Edit Mode to open a read-only snapshot; press Escape to return to your document ([#476](https://github.com/pluk-inc/markdown-preview/pull/476)).
+- **Choose text alignment.** Settings → Reading offers Automatic, Left, Center, Right, and Justified prose alignment, shared with Quick Look. Changes update open reading views while preserving code, table, and explicit HTML alignment ([#480](https://github.com/pluk-inc/markdown-preview/pull/480)).
+- **Choose the app language.** Settings → General → Language lets you select English, Simplified Chinese, or System Default. Quit and reopen the app to apply the choice; Quick Look keeps its system-selected language ([#472](https://github.com/pluk-inc/markdown-preview/pull/472)).
+- **Open custom app links.** Read Mode and Quick Look support links to other apps with a native confirmation dialog. Always Allow remembers approval for that URL scheme; reset saved approvals in Settings → General → App links ([#478](https://github.com/pluk-inc/markdown-preview/pull/478)).
+
+### Changed
+
+- **Reading preferences have their own settings pane.** Find text size, content width, alignment, line breaks, and outline highlighting under Reading; General groups app behavior and external tools, while Appearance holds theme customization ([#479](https://github.com/pluk-inc/markdown-preview/pull/479)).
+- **Tables fit PDF, PNG, and paper output.** Wide tables wrap or scale to fit while surrounding text retains its size. The print dialog offers 50–200% scale and font-size controls; dense tables may use smaller text ([#476](https://github.com/pluk-inc/markdown-preview/pull/476)).
+
+### Fixed
+
+- **Table columns stay readable.** Ordinary words and inline code keep their natural widths in Read and Edit modes instead of stacking one character per line; wide tables scroll horizontally ([#476](https://github.com/pluk-inc/markdown-preview/pull/476)).
+- **Collapsing the sidebar reclaims toolbar space.** The outline/folder picker and its spacing disappear while collapsed, then return in their saved position. Toolbar customization persists across windows and relaunches ([#482](https://github.com/pluk-inc/markdown-preview/pull/482)).
+
+### Contributors
+
+- [@hammamiomar](https://github.com/hammamiomar) — contributed the table readability improvements ([#476](https://github.com/pluk-inc/markdown-preview/pull/476)).
+- [@AntonNikishin](https://github.com/AntonNikishin) — requested horizontal scrolling and fullscreen tables ([#475](https://github.com/pluk-inc/markdown-preview/issues/475)).
+- [@eugens-github](https://github.com/eugens-github) — reported large-table rendering issues ([#485](https://github.com/pluk-inc/markdown-preview/issues/485)).
+- [@pankajpopli](https://github.com/pankajpopli) — requested text alignment options ([#449](https://github.com/pluk-inc/markdown-preview/issues/449)).
+- [@kota113](https://github.com/kota113) — requested an in-app language selector ([#445](https://github.com/pluk-inc/markdown-preview/issues/445#issuecomment-5910773467)).
+- [@beforeold](https://github.com/beforeold) — reported custom app links not opening ([#381](https://github.com/pluk-inc/markdown-preview/issues/381)).
+
 ## [0.0.64] – 2026-09-30
 
 This release adds recent files to document search, restores task checkbox toggles in Read Mode, and reduces idle memory usage.
