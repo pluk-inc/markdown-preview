@@ -1,12 +1,12 @@
 /* App menu */
-"Install CLI..." = "コマンドラインツールをインストール…";
+"Install CLI..." = "CLIをインストール…";
 "Settings…" = "設定…";
 
 /* Settings */
 "General" = "一般";
 "Privacy" = "プライバシー";
-"About" = "情報";
-"Appearance also applies to Quick Look previews." = "外観は Quick Look プレビューにも適用されます。";
+"About" = "アプリについて";
+"Appearance also applies to Quick Look previews." = "外観は Quick Look のプレビューにも適用されます。";
 "Layout" = "レイアウト";
 "Text size" = "テキストサイズ";
 "Size of rendered Markdown in document windows." = "書類ウインドウに表示される Markdown のサイズです。";
@@ -14,7 +14,7 @@
 "Medium" = "中";
 "Large" = "大";
 "Content width" = "コンテンツ幅";
-"Zooming a document window with ⌘+ and ⌘− changes this same size." = "⌘+ や ⌘- で書類ウインドウを拡大/縮小しても、このサイズが変更されます。";
+"Zooming a document window with ⌘+ and ⌘− changes this same size." = "⌘+ や ⌘- で書類ウインドウを拡大/縮小しても、この値が変更されます。";
 "Editing" = "編集";
 "Automatic saving" = "自動保存";
 "Save edited documents periodically." = "編集中の書類を定期的に保存します。";
@@ -25,10 +25,10 @@
 "Hand-off" = "外部アプリで開く";
 "Open documents in" = "書類を開くアプリ";
 "AI apps" = "AI アプリ";
-"The app the Open button in the document toolbar uses first. Its menu still offers every other installed app." = "書類ツールバーの「開く」ボタンで優先的に使用されるアプリです。メニューからはインストールされている他のすべてのアプリも選択できます。";
+"The app the Open button in the document toolbar uses first. Its menu still offers every other installed app." = "ツールバーの「開く」ボタンで優先的に使用されるアプリです。メニューからはインストールされている他のアプリも選択できます。";
 "Command line tools" = "コマンドラインツール";
 "Install…" = "インストール…";
-"Adds mdp, md-preview, and markdown-preview to your PATH. Run it again after updating the app to refresh the commands." = "mdp、md-preview、markdown-preview を PATH に追加します。アプリをアップデートした後に再実行するとコマンドが更新されます。";
+"Adds mdp, md-preview, and markdown-preview to your PATH. Run it again after updating the app to refresh the commands." = "mdp, md-preview, markdown-preview を PATH に追加します。アプリをアップデートした後に再実行するとコマンドが更新されます。";
 "Markdown Preview" = "Markdown Preview";
 "Version %@ (%@)" = "バージョン %@ (%@)";
 "Check for Updates" = "アップデートを確認";
@@ -44,8 +44,8 @@
 "Text" = "テキスト";
 "Link" = "リンク";
 "Presets" = "プリセット";
-"Colors apply to the current appearance. Choose the Automatic appearance to set Light and Dark separately." = "カラーは現在の外観に適用されます。ライトとダークを個別に設定するには「自動」外観を選択してください。";
-"A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards." = "プリセットを適用するとすべてのカラーが設定され、ライトまたはダークの外観に切り替わります。その後、下部で個別のカラーを調整できます。";
+"Colors apply to the current appearance. Choose the Automatic appearance to set Light and Dark separately." = "カラーは現在の外観に適用されます。ライトとダークを個別に設定するには「自動」を選択してください。";
+"A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards." = "プリセットを使うと、すべての色とテーマ（ライト/ダーク）が一括で切り替わります。その後、下部で個別のカラーを調整できます。";
 "Red Graphite" = "レッドグラファイト";
 "Dark Graphite" = "ダークグラファイト";
 "Normal" = "標準";
@@ -53,15 +53,15 @@
 "Solarized Light" = "Solarized Light";
 "Solarized Dark" = "Solarized Dark";
 "Dracula" = "Dracula";
-"Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "カラーはライト外観とダーク外観で個別に設定されます。デフォルトのカラーを選択すると上書きが解除されます。";
+"Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "カラーは外観（ライト/ダーク）で個別に設定されます。デフォルトのカラーを選択すると上書きが解除されます。";
 "Custom colors" = "カスタムカラー";
 "Reset Colors" = "カラーをリセット";
 "Restores the default Normal theme." = "デフォルトの「標準」テーマに戻します。";
 "Current theme: %@" = "現在のテーマ: %@";
 "Send anonymous crash reports" = "匿名のクラッシュレポートを送信";
-"Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "クラッシュレポートには、スタックトレースやOSおよびアプリのバージョンなどの診断情報が含まれます。技術的なファイルパスが含まれる場合がありますが、Markdown Preview が意図的に書類の内容や個人情報を添付することはありません。";
-"Share anonymous usage analytics" = "匿名の使用状況分析を共有";
-"When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS major version, processor architecture, and locale country or region. This is used only to count daily and monthly active installations and understand basic platform compatibility. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers." = "有効にすると、Markdown Preview はアプリがアクティブになったときに、ランダムなインストール識別子に関連付けられたイベントを1日に最大1回送信します。また、アプリのバージョン、macOS のメジャーバージョン、プロセッサアーキテクチャ、ロケールの国または地域も送信されます。これは、日次および月次のアクティブインストール数を集計し、基本的なプラットフォームの互換性を把握するためにのみ使用されます。書類の内容、ファイル名やパス、操作内容、表示画面、詳細な位置情報、個人情報、広告識別子が送信されることはありません。";
+"Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "クラッシュレポートには、スタックトレース、OSおよびアプリのバージョンなどの診断情報が含まれます。技術的なファイルのパスが含まれる場合がありますが、Markdown Preview が意図的に書類の内容や個人情報を送信することはありません。";
+"Share anonymous usage analytics" = "匿名で使用状況の統計を共有";
+"When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS major version, processor architecture, and locale country or region. This is used only to count daily and monthly active installations and understand basic platform compatibility. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers." = "有効にすると、Markdown Preview はアプリが起動中、ランダムな識別子（インストール時に作成）に関連付けられたイベントを1日に最大1回送信します。また、アプリのバージョン、macOS のメジャーバージョン、プロセッサアーキテクチャ、ロケールの国または地域も送信されます。これは、日次および月次のアクティブインストール数を集計し、プラットフォームとの基本的な互換性を把握するためにのみ使用されます。書類の内容、ファイル名やパス、操作内容、表示画面、詳細な位置情報、個人情報、広告識別子が送信されることはありません。";
 
 /* View menu */
 "Appearance" = "外観";
@@ -210,8 +210,8 @@
 "Don’t Save" = "保存しない";
 "The file was removed while it was open." = "ファイルは開いている間に削除されました。";
 "Recreate File" = "ファイルを再作成";
-"The file could not be read to verify that it is unchanged." = "ファイルが変更されていないことを確認するために読み取ることができませんでした。";
-"Save Anyway" = "それでも保存";
+"The file could not be read to verify that it is unchanged." = "ファイルが読み取りできなかったため、内容が変更されていないことを確認できません。";
+"Save Anyway" = "このまま保存";
 "This document changed on disk" = "この書類はディスク上で変更されました";
 "Another app changed %@. Cancel keeps your changes unsaved. Choose which version to keep." = "別のアプリが %@ を変更しました。「キャンセル」を選択すると未保存の変更が保持されます。保持するバージョンを選択してください。";
 "Keep My Changes" = "自分の変更を保持";
@@ -280,8 +280,8 @@
 "“%@” is not a link Markdown Preview understands. Use md-preview://file/ followed by the absolute path of the file, for example md-preview://file/Users/me/notes/README.md." = "「%@」は Markdown Preview が認識できるリンクではありません。md-preview://file/ に続けてファイルの絶対パスを指定してください（例: md-preview://file/Users/me/notes/README.md）。";
 
 /* CLI installer errors */
-"Terminal automation failed: %@" = "ターミナルの自動化に失敗しました: %@";
-"Terminal automation failed." = "ターミナルの自動化に失敗しました。";
+"Terminal automation failed: %@" = "ターミナルの自動操作に失敗しました: %@";
+"Terminal automation failed." = "ターミナルの自動操作に失敗しました。";
 "Failed to write CLI installer script: %@" = "CLI インストールスクリプトの書き込みに失敗しました: %@";
 "The bundled Markdown Preview CLI could not be found." = "バンドルされた Markdown Preview CLI が見つかりませんでした。";
 
@@ -289,7 +289,7 @@
 "Reading" = "閲覧";
 "Font" = "フォント";
 "System" = "システム";
-"Serif" = "明朝";
+"Serif" = "明朝（セリフ）";
 "Rounded" = "丸ゴシック";
 "Monospace" = "等幅";
 "The font also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes the text size." = "フォントは Quick Look プレビューにも適用されます。⌘+ や ⌘- で書類ウインドウを拡大/縮小すると、テキストサイズが変更されます。";
@@ -318,10 +318,10 @@
 "Continue" = "続ける";
 "Find any document fast" = "あらゆる書類をすばやく検索";
 "Press ⇧⌘O and type part of a file name to open it from the current project." = "⇧⌘O を押してファイル名の一部を入力すると、現在のプロジェクトからファイルを開くことができます。";
-"Redesigned formatting bar" = "刷新されたフォーマットバー";
+"Redesigned formatting bar" = "新デザインのフォーマットバー";
 "On macOS 26 and later, the formatting bar uses Liquid Glass, with headings, links, lists, and styles in compact groups." = "macOS 26 以降では、フォーマットバーに Liquid Glass が採用され、見出し、リンク、リスト、スタイルがコンパクトにグループ化されています。";
-"Redesigned code blocks" = "刷新されたコードブロック";
-"Wrap long lines with one click. Code blocks now use rounded cards that show their language." = "クリック1つで長い行を折り返せます。コードブロックが言語を表示する角丸カードになりました。";
+"Redesigned code blocks" = "新デザインのコードブロック";
+"Wrap long lines with one click. Code blocks now use rounded cards that show their language." = "クリック1つで長い行を折り返せます。コードブロックが言語表示付きの角丸カードになりました。";
 
 /* Reading preferences */
 "Strict line breaks" = "厳格な改行";
