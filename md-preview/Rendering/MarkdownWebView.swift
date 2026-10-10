@@ -199,6 +199,9 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     var pointerDocumentYDidChange: ((CGFloat) -> Void)?
     var localMarkdownLinkActivated: ((URL) -> Void)?
     var scrollDidChange: (() -> Void)?
+    /// WebKit adds its own chrome, such as the toolbar scroll pocket, as
+    /// direct subviews of the web view.
+    var webViewDidAddSubview: (() -> Void)?
     private let assetScheme = MarkdownAssetScheme()
     private var currentAssetBase: URL?
     private let messageBridge = HostBridge()
@@ -244,8 +247,12 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         config.userContentController.addUserScript(Self.disableContextMenuScript)
         config.userContentController.add(messageBridge, name: HostBridge.name)
         Self.disableUserInstalledFonts(in: config.preferences)
-        webView = PreviewWKWebView(frame: .zero, configuration: config)
+        let previewWebView = PreviewWKWebView(frame: .zero, configuration: config)
+        webView = previewWebView
         super.init(frame: frameRect)
+        previewWebView.didAddSubviewHandler = { [weak self] in
+            self?.webViewDidAddSubview?()
+        }
 
         messageBridge.owner = self
         webView.setValue(false, forKey: "drawsBackground")
@@ -1646,6 +1653,13 @@ private extension NSView {
 }
 
 private final class PreviewWKWebView: WKWebView {
+    var didAddSubviewHandler: (() -> Void)?
+
+    override func didAddSubview(_ subview: NSView) {
+        super.didAddSubview(subview)
+        didAddSubviewHandler?()
+    }
+
     // Left clicks in the transparent titlebar strip stay native (window
     // drag) instead of being consumed by WebKit — see ChromeStripClickThrough.
     override func hitTest(_ point: NSPoint) -> NSView? {
