@@ -1,0 +1,378 @@
+/* App menu */
+"Install CLI..." = "CLI をインストール…";
+"Settings…" = "設定…";
+
+/* Settings */
+"General" = "一般";
+"Privacy" = "プライバシー";
+"About" = "アプリについて";
+"Appearance also applies to Quick Look previews." = "外観は Quick Look プレビューにも適用されます。";
+"Layout" = "レイアウト";
+"Text size" = "テキストサイズ";
+"Size of rendered Markdown in document windows." = "書類ウインドウに表示される Markdown のサイズです。";
+"Small" = "小";
+"Medium" = "中";
+"Large" = "大";
+"Content width" = "コンテンツ幅";
+"Zooming a document window with ⌘+ and ⌘− changes this same size." = "⌘+ や ⌘− で書類ウインドウを拡大／縮小しても、この値が変更されます。";
+"Editing" = "編集";
+"Automatic saving" = "自動保存";
+"Save edited documents periodically." = "編集中の書類を定期的に保存します。";
+"Automatic saving runs while a document has unsaved edits." = "自動保存は、書類に未保存の変更があるときに行われます。";
+"30 seconds" = "30秒";
+"1 minute" = "1分";
+"%d minutes" = "%d分";
+"Hand-off" = "外部アプリで開く";
+"Open documents in" = "書類を開くアプリ";
+"AI apps" = "AI アプリ";
+"The app the Open button in the document toolbar uses first. Its menu still offers every other installed app." = "ツールバーの「開く」ボタンで優先的に使用されるアプリです。メニューからはインストールされている他のアプリも選択できます。";
+"Command line tools" = "コマンドラインツール";
+"Install…" = "インストール…";
+"Adds mdp, md-preview, and markdown-preview to your PATH. Run it again after updating the app to refresh the commands." = "mdp, md-preview, markdown-preview を PATH に追加します。アプリをアップデートした後に再実行するとコマンドが更新されます。";
+"Markdown Preview" = "Markdown Preview";
+"Version %@ (%@)" = "バージョン %@ (%@)";
+"Check for Updates" = "アップデートを確認";
+"Automatically check for updates" = "アップデートを自動的に確認";
+"Automatically download updates" = "アップデートを自動的にダウンロード";
+"Last checked" = "前回の確認";
+"Never" = "なし";
+"Downloaded updates install the next time you quit Markdown Preview." = "ダウンロードされたアップデートは、次回 Markdown Preview を終了したときにインストールされます。";
+"Colors" = "色の設定";
+"Window background" = "ウインドウの背景";
+"Editor background" = "エディタの背景";
+"Code block background" = "コードブロックの背景";
+"Text" = "テキスト";
+"Link" = "リンク";
+"Presets" = "プリセット";
+"Colors apply to the current appearance. Choose the Automatic appearance to set Light and Dark separately." = "色の設定は現在の外観に適用されます。ライトとダークを個別に設定するには「自動」を選択してください。";
+"A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards." = "プリセットを使うと、すべての色と外観（ライト/ダーク）が一括で切り替わります。その後、下部で個別の色を調整できます。";
+"Red Graphite" = "レッドグラファイト";
+"Dark Graphite" = "ダークグラファイト";
+"Normal" = "標準";
+"Charcoal" = "チャコール";
+"Solarized Light" = "Solarized Light";
+"Solarized Dark" = "Solarized Dark";
+"Dracula" = "Dracula";
+"Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "色は外観（ライト/ダーク）ごとに設定されます。デフォルトの色を選択すると上書きが解除されます。";
+"Custom colors" = "カスタムカラー";
+"Reset Colors" = "色をリセット";
+"Restores the default Normal theme." = "デフォルトの「標準」テーマに戻します。";
+"Current theme: %@" = "現在のテーマ: %@";
+"Send anonymous crash reports" = "匿名のクラッシュレポートを送信";
+"Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "クラッシュレポートには、スタックトレース、OSおよびアプリのバージョンなどの診断情報が含まれます。技術的なファイルのパスが含まれる場合がありますが、Markdown Preview が意図的に書類の内容や個人情報を送信することはありません。";
+"Share anonymous usage analytics" = "匿名で使用状況の統計を共有";
+"When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS major version, processor architecture, and locale country or region. This is used only to count daily and monthly active installations and understand basic platform compatibility. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers." = "有効にすると、Markdown Preview はアプリが起動中、ランダムな識別子（インストール時に作成）に関連付けられたイベントを1日に最大1回送信します。また、アプリのバージョン、macOS のメジャーバージョン、プロセッサアーキテクチャ、ロケールの国または地域も送信されます。これは、日次および月次のアクティブインストール数を集計し、プラットフォームとの基本的な互換性を把握するためにのみ使用されます。書類の内容、ファイル名やパス、操作内容、表示画面、詳細な位置情報、個人情報、広告識別子が送信されることはありません。";
+
+/* View menu */
+"Appearance" = "外観";
+"Automatic" = "自動";
+"Light" = "ライト";
+"Dark" = "ダーク";
+"Content Width" = "コンテンツ幅";
+"Normal" = "標準";
+"Full Width" = "フル幅";
+"Toggle Sidebar" = "サイドバーを切り替え";
+"Hide Sidebar" = "サイドバーを非表示";
+"Table of Contents" = "目次";
+"Project Navigator" = "プロジェクトナビゲータ";
+"Toggle Edit Mode" = "編集モードを切り替え";
+
+/* File menu */
+"New Tab" = "新規タブ";
+"Choose a name and location for the new Markdown file." = "新しい Markdown ファイルの名前と場所を選択してください。";
+
+/* Print panel */
+"Font Size:" = "フォントサイズ:";
+"Font Size" = "フォントサイズ";
+"%d pt" = "%d pt";
+"pt" = "pt";
+
+/* Export panel */
+"Export" = "書き出し";
+"Format:" = "フォーマット:";
+"PDF Document" = "PDF 書類";
+"HTML Document" = "HTML 書類";
+"The document could not be prepared for export." = "書類の書き出し準備ができませんでした。";
+"The selected paper has no printable area." = "選択した用紙にはプリント可能な領域がありません。";
+
+/* Go menu */
+"Go" = "移動";
+"Up" = "上へ";
+"Down" = "下へ";
+"Page Up" = "ページアップ";
+"Page Down" = "ページダウン";
+"Previous Item" = "前の項目";
+"Next Item" = "次の項目";
+"Top of Document" = "書類の先頭";
+"Bottom of Document" = "書類の末尾";
+
+/* Format menu */
+"Format" = "フォーマット";
+"Body" = "本文";
+"Heading 1" = "見出し 1";
+"Heading 2" = "見出し 2";
+"Heading 3" = "見出し 3";
+"Bold" = "ボールド";
+"Italic" = "イタリック";
+"Strikethrough" = "取り消し線";
+"Inline Code" = "インラインコード";
+"Link" = "リンク";
+"Bulleted List" = "箇条書きリスト";
+"Numbered List" = "番号付きリスト";
+"Checklist" = "チェックリスト";
+"Block Quote" = "引用";
+
+/* Open panel */
+"Choose a Markdown file or folder" = "Markdown ファイルまたはフォルダを選択";
+
+/* Search toolbar */
+"Search" = "検索";
+"Search in Document" = "書類内を検索";
+
+/* Main toolbar */
+"Navigation" = "ナビゲーション";
+"Back and Forward" = "戻る/進む";
+"Back" = "戻る";
+"Forward" = "進む";
+"Sidebar" = "サイドバー";
+"Sidebar options" = "サイドバーのオプション";
+"Inspector" = "インスペクタ";
+"Get Info" = "情報を見る";
+"Always on Top" = "常に最前面に表示";
+"Keep Markdown Preview windows in front of other apps" = "Markdown Preview のウインドウを常に他のアプリの手前に表示します";
+"Show the inspector" = "インスペクタを表示";
+"Share" = "共有";
+"Share document" = "書類を共有";
+"Print" = "プリント";
+"Print document" = "書類をプリント";
+"Copy" = "コピー";
+"Copy Markdown source to clipboard" = "Markdown ソースをクリップボードにコピー";
+"Copied" = "コピーしました";
+"Edit" = "編集";
+"Edit document" = "書類を編集";
+"Stop editing and return to preview" = "編集を終了してプレビューに戻る";
+"Open" = "開く";
+"Open document in another app" = "書類を別のアプリで開く";
+"Open in %@" = "%@ で開く";
+"Open in LLM" = "LLM で開く";
+"Open document in an LLM app" = "書類を LLM アプリで開く";
+"Zoom" = "拡大/縮小";
+"Zoom Out" = "縮小";
+"Zoom In" = "拡大";
+"Open With" = "このアプリケーションで開く";
+"Open in another editor" = "別のエディタで開く";
+
+/* Formatting toolbar */
+"Task List" = "タスクリスト";
+"Normal Text" = "標準テキスト";
+"Heading %d" = "見出し %d";
+
+/* Find bar */
+"Match:" = "一致条件:";
+"Contains" = "次を含む";
+"Begins With" = "次で始まる";
+"Done" = "完了";
+"Not found" = "見つかりません";
+"%d of %d" = "%1$d / %2$d";
+"Previous match" = "前の一致項目";
+"Next match" = "次の一致項目";
+
+/* Open With context menu */
+"Open with External Editor" = "外部エディタで開く";
+"Open As" = "このアプリケーションで開く";
+"No editors available" = "利用可能なエディタがありません";
+
+/* Inspector */
+"Inspector tab" = "インスペクタタブ";
+"Document" = "書類";
+"Properties" = "プロパティ";
+"File Name" = "ファイル名";
+"Full Path" = "フルパス";
+"Document Type" = "書類の種類";
+"Markdown Document" = "Markdown 書類";
+"File Size" = "ファイルサイズ";
+"Words" = "単語数";
+"Characters" = "文字数";
+"Lines" = "行数";
+"Headings" = "見出し";
+"Links" = "リンク";
+"Images" = "画像";
+"Modified" = "変更日";
+"No frontmatter" = "Frontmatter なし";
+"Untitled" = "名称未設定";
+
+/* Document state and save dialogs */
+"Edited" = "編集済み";
+"Auto-save failed" = "自動保存に失敗しました";
+"Do you want to save your changes?" = "変更内容を保存しますか？";
+"this document" = "この書類";
+"Your changes to %@ will be lost if you don’t save them." = "保存しないと、%@ への変更内容は失われます。";
+"Save" = "保存";
+"Cancel" = "キャンセル";
+"Don’t Save" = "保存しない";
+"The file was removed while it was open." = "ファイルは開いている間に削除されました。";
+"Recreate File" = "ファイルを再作成";
+"The file could not be read to verify that it is unchanged." = "ファイルを読み取れなかったため、内容が変更されていないことを確認できません。";
+"Save Anyway" = "このまま保存";
+"This document changed on disk" = "この書類はディスク上で変更されました";
+"Another app changed %@. Cancel keeps your changes unsaved. Choose which version to keep." = "別のアプリが %@ を変更しました。「キャンセル」を選択すると未保存の変更が保持されます。保持するバージョンを選択してください。";
+"Keep My Changes" = "自分の変更を保持";
+"Reload from Disk" = "ディスクから再読み込み";
+"Unable to verify the document on disk" = "ディスク上の書類を確認できません";
+"%@ Cancel keeps your changes unsaved." = "%@「キャンセル」を選択すると未保存の変更が保持されます。";
+"Markdown Preview needs your permission to save this file." = "このファイルを保存するには、Markdown Preview にアクセス権を付与する必要があります。";
+"The clipboard does not contain an image." = "クリップボードに画像がありません。";
+"The pasted image could not be placed next to the Markdown file." = "貼り付けた画像を Markdown ファイルと同じ場所に保存できませんでした。";
+"Choose the folder containing this Markdown file to save the pasted image." = "貼り付けた画像を保存するために、この Markdown ファイルが含まれるフォルダを選択してください。";
+"Choose the folder containing this Markdown file." = "この Markdown ファイルが含まれるフォルダを選択してください。";
+"Rename Image" = "画像の名前を変更";
+"Choose a new name for this image." = "この画像の新しい名前を入力してください。";
+"Rename" = "名前を変更";
+
+/* Open menus */
+"No document open" = "開いている書類がありません";
+"No apps available" = "利用可能なアプリがありません";
+"Editors" = "エディタ";
+"AI Apps" = "AI アプリ";
+"No LLM apps available" = "利用可能な LLM アプリがありません";
+"Open in LLM…" = "LLM で開く…";
+"Open with…" = "このアプリケーションで開く…";
+
+/* Project navigator context menu */
+"Show in Finder" = "Finder で表示";
+"Open in New Tab" = "新規タブで開く";
+"Open in New Window" = "新規ウインドウで開く";
+"Copy Path" = "パスをコピー";
+
+/* Table editing */
+"Table" = "表";
+"Row" = "行";
+"Column" = "列";
+"Select Row" = "行を選択";
+"Add Row Above" = "上に行を追加";
+"Add Row Below" = "下に行を追加";
+"Duplicate Row" = "行を複製";
+"Delete Row" = "行を削除";
+"Select Column" = "列を選択";
+"Add Column Left" = "左に列を追加";
+"Add Column Right" = "右に列を追加";
+"Delete Column" = "列を削除";
+"Edit Table Cell" = "表のセルを編集";
+"Add Row" = "行を追加";
+"Add Column" = "列を追加";
+"Edit Table" = "表を編集";
+
+/* Rendered preview controls */
+"Heading" = "見出し";
+"Copy code" = "コードをコピー";
+"Code copied" = "コードをコピーしました";
+"Mermaid diagram" = "Mermaid ダイアグラム";
+"%@ — Mermaid diagram" = "%@ — Mermaid ダイアグラム";
+"Reset zoom" = "拡大/縮小をリセット";
+"Fill width" = "幅に合わせる";
+"Fit diagram" = "ダイアグラム全体を表示";
+"Open in Window" = "ウインドウで開く";
+"Mermaid renderer is unavailable.\n\n" = "Mermaid レンダラーを利用できません。\n\n";
+"Footnote %d" = "脚注 %d";
+"Back to reference %d" = "参照元 %d に戻る";
+"KaTeX renderer is unavailable.\n\n" = "KaTeX レンダラーを利用できません。\n\n";
+
+/* URL scheme errors */
+"Cannot open link" = "リンクを開けません";
+"“%@” is not a link Markdown Preview understands. Use md-preview://file/ followed by the absolute path of the file, for example md-preview://file/Users/me/notes/README.md." = "「%@」は Markdown Preview が認識できるリンクではありません。md-preview://file/ に続けてファイルの絶対パスを指定してください（例: md-preview://file/Users/me/notes/README.md）。";
+
+/* CLI installer errors */
+"Terminal automation failed: %@" = "ターミナルの自動操作に失敗しました: %@";
+"Terminal automation failed." = "ターミナルの自動操作に失敗しました。";
+"Failed to write CLI installer script: %@" = "CLI インストールスクリプトの書き込みに失敗しました: %@";
+"The bundled Markdown Preview CLI could not be found." = "バンドルされた Markdown Preview CLI が見つかりませんでした。";
+
+/* Settings — Reading */
+"Reading" = "書類の表示";
+"Font" = "フォント";
+"System" = "システム";
+"Serif" = "明朝（セリフ）";
+"Rounded" = "丸ゴシック";
+"Monospace" = "等幅";
+"The font also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes the text size." = "フォントは Quick Look プレビューにも適用されます。⌘+ や ⌘− で書類ウインドウを拡大／縮小すると、テキストサイズが変更されます。";
+
+/* Settings — Windows */
+"Windows" = "ウインドウ";
+"Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "今後開くウインドウを含め、すべての Markdown Preview ウインドウを他のアプリの手前に表示し続けます。フルスクリーンのウインドウは、フルスクリーンを解除するまで対象外となります。";
+"Open documents in tabs" = "書類をタブで開く";
+"A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "Finder から開かれた書類を、新しいウインドウで表示する代わりに、最前面のウインドウの新規タブとして開きます（「新規ウインドウで開く」設定は引き続き有効です）。";
+
+/* Search for Document */
+"Search for Document…" = "書類を検索…";
+"Search files by name" = "ファイル名で検索";
+"No matching files" = "一致するファイルがありません";
+"Open a folder to search its files" = "ファイルを検索するにはフォルダを開いてください";
+"Open Folder…" = "フォルダを開く…";
+"Showing the first %d files in this project" = "このプロジェクトの最初の %d 件のファイルを表示中";
+"↑↓ browse · ↩ open · ⌘↩ new tab · ⌥↩ new window" = "↑↓ 選択 · ↩ 開く · ⌘↩ 新規タブ · ⌥↩ 新規ウインドウ";
+"Search for Document" = "書類を検索";
+"Search for a file by name" = "ファイル名で書類を検索";
+
+/* What's New */
+"What’s New in Markdown Preview" = "Markdown Preview の新機能";
+"What’s New in Markdown Preview %@" = "Markdown Preview %@ の新機能";
+"Release Notes" = "リリースノート";
+"Continue" = "続ける";
+"Find any document fast" = "あらゆる書類をすばやく検索";
+"Press ⇧⌘O and type part of a file name to open it from the current project." = "⇧⌘O を押してファイル名の一部を入力すると、現在のプロジェクトからファイルを開くことができます。";
+"Redesigned formatting bar" = "フォーマットバーのデザインを刷新";
+"On macOS 26 and later, the formatting bar uses Liquid Glass, with headings, links, lists, and styles in compact groups." = "macOS 26 以降では、フォーマットバーに Liquid Glass が採用され、見出し、リンク、リスト、スタイルがコンパクトにグループ化されています。";
+"Redesigned code blocks" = "コードブロックのデザインを刷新";
+"Wrap long lines with one click. Code blocks now use rounded cards that show their language." = "クリック1つで長い行を折り返せます。コードブロックが言語表示付きの角丸カードになりました。";
+
+/* Reading preferences */
+"Strict line breaks" = "厳密な改行";
+"Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "ソースコード中のMarkdown書式に沿わない改行を無視し、連続した段落として扱います。オフにすると、通常の改行も改行として扱います。アプリと Quick Look プレビュー双方に適用されます。";
+
+/* App link approvals */
+"Reset App Link Approvals" = "リンクの許可をリセット";
+"App links" = "外部アプリへのリンク";
+"Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look." = "リンクから外部アプリを開く前に、確認ダイアログが表示されます。許可は URL スキームごとに保存され、Quick Look でも適用されます。";
+"No application can open this link" = "このリンクを開けるアプリがありません";
+"OK" = "OK";
+"Allow this document to open “%@”?" = "この書類が「%@」を開くことを許可しますか？";
+"Allow" = "許可";
+"Always Allow" = "常に許可";
+"Allow all %@: links in documents and Quick Look." = "書類と Quick Look 内のすべての %@: リンクを常に許可します。";
+
+/* App language */
+"Language" = "言語";
+"System Default" = "システムのデフォルト";
+"Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews." = "言語の変更を適用するには、Markdown Preview を終了して再度開いてください。この設定はアプリにのみ適用され、Quick Look プレビューには適用されません。";
+
+/* Settings organization */
+"Saving" = "保存";
+"External apps & tools" = "外部アプリとツール";
+"Text & layout" = "テキストとレイアウト";
+"Markdown" = "Markdown";
+"Outline" = "見出し";
+"Customize the selected theme’s font, spacing and colors. Reset restores that theme’s defaults; global Reading preferences stay unchanged." = "選択したテーマのフォント、間隔と余白、色をカスタマイズします。リセットすると選択中テーマの初期設定に戻りますが、「書類の表示」設定は変更されません。";
+"Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window." = "他の Markdown ファイルへのリンクをクリックすると、新規ウインドウで開きます。オフにすると、現在のウインドウで開きます。";
+"Customize…" = "カスタマイズ…";
+"Each theme remembers its colors, font and layout. Original also remembers your appearance choice. Reset restores the selected theme’s defaults." = "色、フォント、レイアウトはテーマごとに保存されます。「Original」では外観（ライト/ダーク）の選択も保存されます。リセットすると、選択中テーマのデフォルト設定に戻ります。";
+"Fonts, spacing and colors" = "フォント、間隔と余白、色";
+"Highlight outline section under the pointer" = "ポインタの下にある見出しセクションを強調表示";
+"Open Markdown links in new windows" = "Markdown へのリンクを新規ウインドウで開く";
+"Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings." = "テキストサイズは Quick Look プレビューにも適用され、⌘+ や ⌘− で書類を拡大／縮小しても変更されます。フォントと閲覧時のレイアウトは「外観」で設定できます。";
+"Themes" = "テーマ";
+"This theme uses a fixed appearance. Choose Original to change it." = "このテーマの外観は変更できません。外観を変更するには「Original」を選択してください。";
+
+/* Reading text alignment */
+"Text alignment" = "テキストの配置";
+"Left" = "左揃え";
+"Center" = "中央揃え";
+"Right" = "右揃え";
+"Justified" = "両端揃え";
+"Alignment applies to prose in reading view and Quick Look. Automatic follows the document. Code, tables and explicit HTML alignment are preserved." = "テキストの配置はアプリと Quick Look の双方に適用されます。「自動」では書類の設定に従います。コード、表、HTML で明示的に指定された配置は維持されます。";
+
+/* Paper print scale, applied before pagination. */
+"Scale:" = "拡大／縮小:";
+"Scale" = "拡大／縮小";
+
+/* Table fullscreen control. */
+"Expand Table" = "表を拡大";
