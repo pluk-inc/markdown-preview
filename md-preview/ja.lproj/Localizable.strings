@@ -53,7 +53,7 @@
 "Solarized Light" = "Solarized Light";
 "Solarized Dark" = "Solarized Dark";
 "Dracula" = "Dracula";
-"Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "色は外観（ライト/ダーク）ごとに個別に設定されます。デフォルトの色を選択すると上書きが解除されます。";
+"Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "色は外観（ライト/ダーク）ごとに設定されます。デフォルトの色を選択すると上書きが解除されます。";
 "Custom colors" = "カスタムカラー";
 "Reset Colors" = "色をリセット";
 "Restores the default Normal theme." = "デフォルトの「標準」テーマに戻します。";
@@ -288,7 +288,7 @@
 "The bundled Markdown Preview CLI could not be found." = "バンドルされた Markdown Preview CLI が見つかりませんでした。";
 
 /* Settings — Reading */
-"Reading" = "閲覧";
+"Reading" = "書類の表示";
 "Font" = "フォント";
 "System" = "システム";
 "Serif" = "明朝（セリフ）";
@@ -300,7 +300,7 @@
 "Windows" = "ウインドウ";
 "Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "今後開くウインドウを含め、すべての Markdown Preview ウインドウを他のアプリの手前に表示し続けます。フルスクリーンのウインドウは、フルスクリーンを解除するまで対象外となります。";
 "Open documents in tabs" = "書類をタブで開く";
-"A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "Finder から開かれた書類を、新しいウインドウで表示する代わりに、最前面のウインドウの新規タブとして開きます（「新規ウインドウで開く」は引き続き新しいウインドウを開きます）。";
+"A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "Finder から開かれた書類を、新しいウインドウで表示する代わりに、最前面のウインドウの新規タブとして開きます（「新規ウインドウで開く」設定は引き続き有効です）。";
 
 /* Search for Document */
 "Search for Document…" = "書類を検索…";
@@ -327,12 +327,12 @@
 
 /* Reading preferences */
 "Strict line breaks" = "厳密な改行";
-"Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "ソースコード中の通常の改行を結合し、連続した段落にします。オフにすると、Markdown書式に沿わない改行も改行として扱います。アプリと Quick Look プレビュー双方に適用されます。";
+"Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "ソースコード中のMarkdown書式に沿わない改行を無視し、連続した段落として扱います。オフにすると、通常の改行も改行として扱います。アプリと Quick Look プレビュー双方に適用されます。";
 
 /* App link approvals */
 "Reset App Link Approvals" = "リンクの許可をリセット";
-"App links" = "他のアプリへのリンク";
-"Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look." = "リンクから外部アプリを開く前に、再度確認ダイアログを表示します。許可は URL スキームごとに保存され、Quick Look と共有されます。";
+"App links" = "外部アプリへのリンク";
+"Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look." = "リンクから外部アプリを開く前に、確認ダイアログが表示されます。許可は URL スキームごとに保存され、Quick Look でも適用されます。";
 "No application can open this link" = "このリンクを開けるアプリがありません";
 "OK" = "OK";
 "Allow this document to open “%@”?" = "この書類が「%@」を開くことを許可しますか？";
@@ -351,7 +351,7 @@
 "Text & layout" = "テキストとレイアウト";
 "Markdown" = "Markdown";
 "Outline" = "見出し";
-"Customize the selected theme’s font, spacing and colors. Reset restores that theme’s defaults; global Reading preferences stay unchanged." = "選択したテーマのフォント、間隔と余白、色をカスタマイズします。リセットすると選択中テーマの初期設定に戻りますが、「閲覧」設定は変更されません。";
+"Customize the selected theme’s font, spacing and colors. Reset restores that theme’s defaults; global Reading preferences stay unchanged." = "選択したテーマのフォント、間隔と余白、色をカスタマイズします。リセットすると選択中テーマの初期設定に戻りますが、「書類の表示」設定は変更されません。";
 "Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window." = "他の Markdown ファイルへのリンクをクリックすると、新規ウインドウで開きます。オフにすると、現在のウインドウで開きます。";
 "Customize…" = "カスタマイズ…";
 "Each theme remembers its colors, font and layout. Original also remembers your appearance choice. Reset restores the selected theme’s defaults." = "色、フォント、レイアウトはテーマごとに保存されます。「Original」では外観（ライト/ダーク）の選択も保存されます。リセットすると、選択中テーマのデフォルト設定に戻ります。";
@@ -368,7 +368,7 @@
 "Center" = "中央揃え";
 "Right" = "右揃え";
 "Justified" = "両端揃え";
-"Alignment applies to prose in reading view and Quick Look. Automatic follows the document. Code, tables and explicit HTML alignment are preserved." = "テキストの配置は閲覧表示と Quick Look の本文に適用されます。「自動」では書類の設定に従います。コード、表、HTML で明示的に指定された配置は維持されます。";
+"Alignment applies to prose in reading view and Quick Look. Automatic follows the document. Code, tables and explicit HTML alignment are preserved." = "テキストの配置はアプリと Quick Look の双方に適用されます。「自動」では書類の設定に従います。コード、表、HTML で明示的に指定された配置は維持されます。";
 
 /* Paper print scale, applied before pagination. */
 "Scale:" = "拡大／縮小:";
