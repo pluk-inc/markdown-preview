@@ -1,12 +1,12 @@
 /* App menu */
-"Install CLI..." = "CLIをインストール…";
+"Install CLI..." = "CLI をインストール…";
 "Settings…" = "設定…";
 
 /* Settings */
 "General" = "一般";
 "Privacy" = "プライバシー";
 "About" = "アプリについて";
-"Appearance also applies to Quick Look previews." = "外観は Quick Look のプレビューにも適用されます。";
+"Appearance also applies to Quick Look previews." = "外観は Quick Look プレビューにも適用されます。";
 "Layout" = "レイアウト";
 "Text size" = "テキストサイズ";
 "Size of rendered Markdown in document windows." = "書類ウインドウに表示される Markdown のサイズです。";
@@ -14,7 +14,7 @@
 "Medium" = "中";
 "Large" = "大";
 "Content width" = "コンテンツ幅";
-"Zooming a document window with ⌘+ and ⌘− changes this same size." = "⌘+ や ⌘- で書類ウインドウを拡大/縮小しても、この値が変更されます。";
+"Zooming a document window with ⌘+ and ⌘− changes this same size." = "⌘+ や ⌘− で書類ウインドウを拡大／縮小しても、この値が変更されます。";
 "Editing" = "編集";
 "Automatic saving" = "自動保存";
 "Save edited documents periodically." = "編集中の書類を定期的に保存します。";
@@ -38,14 +38,14 @@
 "Never" = "なし";
 "Downloaded updates install the next time you quit Markdown Preview." = "ダウンロードされたアップデートは、次回 Markdown Preview を終了したときにインストールされます。";
 "Colors" = "色の設定";
-"Window background" = "ウインドウの背景色";
-"Editor background" = "エディタの背景色";
+"Window background" = "ウインドウの背景";
+"Editor background" = "エディタの背景";
 "Code block background" = "コードブロックの背景";
-"Text" = "テキスト色";
-"Link" = "リンクの色";
+"Text" = "テキスト";
+"Link" = "リンク";
 "Presets" = "プリセット";
 "Colors apply to the current appearance. Choose the Automatic appearance to set Light and Dark separately." = "色の設定は現在の外観に適用されます。ライトとダークを個別に設定するには「自動」を選択してください。";
-"A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards." = "プリセットを使うと、すべての色とテーマ（ライト/ダーク）が一括で切り替わります。その後、下部で個別のカラーを調整できます。";
+"A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards." = "プリセットを使うと、すべての色と外観（ライト/ダーク）が一括で切り替わります。その後、下部で個別の色を調整できます。";
 "Red Graphite" = "レッドグラファイト";
 "Dark Graphite" = "ダークグラファイト";
 "Normal" = "標準";
@@ -55,7 +55,7 @@
 "Dracula" = "Dracula";
 "Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "色は外観（ライト/ダーク）ごとに個別に設定されます。デフォルトの色を選択すると上書きが解除されます。";
 "Custom colors" = "カスタムカラー";
-"Reset Colors" = "カラーをリセット";
+"Reset Colors" = "色をリセット";
 "Restores the default Normal theme." = "デフォルトの「標準」テーマに戻します。";
 "Current theme: %@" = "現在のテーマ: %@";
 "Send anonymous crash reports" = "匿名のクラッシュレポートを送信";
@@ -92,6 +92,8 @@
 "Format:" = "フォーマット:";
 "PDF Document" = "PDF 書類";
 "HTML Document" = "HTML 書類";
+"The document could not be prepared for export." = "書類の書き出し準備ができませんでした。";
+"The selected paper has no printable area." = "選択した用紙にはプリント可能な領域がありません。";
 
 /* Go menu */
 "Go" = "移動";
@@ -210,7 +212,7 @@
 "Don’t Save" = "保存しない";
 "The file was removed while it was open." = "ファイルは開いている間に削除されました。";
 "Recreate File" = "ファイルを再作成";
-"The file could not be read to verify that it is unchanged." = "ファイルが読み取りできなかったため、内容が変更されていないことを確認できません。";
+"The file could not be read to verify that it is unchanged." = "ファイルを読み取れなかったため、内容が変更されていないことを確認できません。";
 "Save Anyway" = "このまま保存";
 "This document changed on disk" = "この書類はディスク上で変更されました";
 "Another app changed %@. Cancel keeps your changes unsaved. Choose which version to keep." = "別のアプリが %@ を変更しました。「キャンセル」を選択すると未保存の変更が保持されます。保持するバージョンを選択してください。";
@@ -292,11 +294,11 @@
 "Serif" = "明朝（セリフ）";
 "Rounded" = "丸ゴシック";
 "Monospace" = "等幅";
-"The font also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes the text size." = "フォントは Quick Look プレビューにも適用されます。⌘+ や ⌘- で書類ウインドウを拡大/縮小すると、テキストサイズが変更されます。";
+"The font also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes the text size." = "フォントは Quick Look プレビューにも適用されます。⌘+ や ⌘− で書類ウインドウを拡大／縮小すると、テキストサイズが変更されます。";
 
 /* Settings — Windows */
 "Windows" = "ウインドウ";
-"Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "今後開くウインドウを含め、すべての Markdown Preview ウインドウを他のアプリの前面に表示し続けます。フルスクリーンのウインドウは、フルスクリーンを解除するまで維持されます。";
+"Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "今後開くウインドウを含め、すべての Markdown Preview ウインドウを他のアプリの手前に表示し続けます。フルスクリーンのウインドウは、フルスクリーンを解除するまで対象外となります。";
 "Open documents in tabs" = "書類をタブで開く";
 "A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "Finder から開かれた書類を、新しいウインドウで表示する代わりに、最前面のウインドウの新規タブとして開きます（「新規ウインドウで開く」は引き続き新しいウインドウを開きます）。";
 
@@ -309,7 +311,7 @@
 "Showing the first %d files in this project" = "このプロジェクトの最初の %d 件のファイルを表示中";
 "↑↓ browse · ↩ open · ⌘↩ new tab · ⌥↩ new window" = "↑↓ 選択 · ↩ 開く · ⌘↩ 新規タブ · ⌥↩ 新規ウインドウ";
 "Search for Document" = "書類を検索";
-"Search for a file by name" = "ファイル名でファイルを検索";
+"Search for a file by name" = "ファイル名で書類を検索";
 
 /* What's New */
 "What’s New in Markdown Preview" = "Markdown Preview の新機能";
@@ -326,3 +328,51 @@
 /* Reading preferences */
 "Strict line breaks" = "厳密な改行";
 "Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "ソースコード中の通常の改行を結合し、連続した段落にします。オフにすると、Markdown書式に沿わない改行も改行として扱います。アプリと Quick Look プレビュー双方に適用されます。";
+
+/* App link approvals */
+"Reset App Link Approvals" = "リンクの許可をリセット";
+"App links" = "他のアプリへのリンク";
+"Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look." = "リンクから外部アプリを開く前に、再度確認ダイアログを表示します。許可は URL スキームごとに保存され、Quick Look と共有されます。";
+"No application can open this link" = "このリンクを開けるアプリがありません";
+"OK" = "OK";
+"Allow this document to open “%@”?" = "この書類が「%@」を開くことを許可しますか？";
+"Allow" = "許可";
+"Always Allow" = "常に許可";
+"Allow all %@: links in documents and Quick Look." = "書類と Quick Look 内のすべての %@: リンクを常に許可します。";
+
+/* App language */
+"Language" = "言語";
+"System Default" = "システムのデフォルト";
+"Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews." = "言語の変更を適用するには、Markdown Preview を終了して再度開いてください。この設定はアプリにのみ適用され、Quick Look プレビューには適用されません。";
+
+/* Settings organization */
+"Saving" = "保存";
+"External apps & tools" = "外部アプリとツール";
+"Text & layout" = "テキストとレイアウト";
+"Markdown" = "Markdown";
+"Outline" = "見出し";
+"Customize the selected theme’s font, spacing and colors. Reset restores that theme’s defaults; global Reading preferences stay unchanged." = "選択したテーマのフォント、間隔と余白、色をカスタマイズします。リセットすると選択中テーマの初期設定に戻りますが、「閲覧」設定は変更されません。";
+"Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window." = "他の Markdown ファイルへのリンクをクリックすると、新規ウインドウで開きます。オフにすると、現在のウインドウで開きます。";
+"Customize…" = "カスタマイズ…";
+"Each theme remembers its colors, font and layout. Original also remembers your appearance choice. Reset restores the selected theme’s defaults." = "色、フォント、レイアウトはテーマごとに保存されます。「Original」では外観（ライト/ダーク）の選択も保存されます。リセットすると、選択中テーマのデフォルト設定に戻ります。";
+"Fonts, spacing and colors" = "フォント、間隔と余白、色";
+"Highlight outline section under the pointer" = "ポインタの下にある見出しセクションを強調表示";
+"Open Markdown links in new windows" = "Markdown へのリンクを新規ウインドウで開く";
+"Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings." = "テキストサイズは Quick Look プレビューにも適用され、⌘+ や ⌘− で書類を拡大／縮小しても変更されます。フォントと閲覧時のレイアウトは「外観」で設定できます。";
+"Themes" = "テーマ";
+"This theme uses a fixed appearance. Choose Original to change it." = "このテーマの外観は変更できません。外観を変更するには「Original」を選択してください。";
+
+/* Reading text alignment */
+"Text alignment" = "テキストの配置";
+"Left" = "左揃え";
+"Center" = "中央揃え";
+"Right" = "右揃え";
+"Justified" = "両端揃え";
+"Alignment applies to prose in reading view and Quick Look. Automatic follows the document. Code, tables and explicit HTML alignment are preserved." = "テキストの配置は閲覧表示と Quick Look の本文に適用されます。「自動」では書類の設定に従います。コード、表、HTML で明示的に指定された配置は維持されます。";
+
+/* Paper print scale, applied before pagination. */
+"Scale:" = "拡大／縮小:";
+"Scale" = "拡大／縮小";
+
+/* Table fullscreen control. */
+"Expand Table" = "表を拡大";
