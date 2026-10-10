@@ -23,6 +23,9 @@ jobs:
       - name: Test editor transition callback ordering
         run: python3 tests/test-mode-transitions.py
 
+      - name: Test checkbox saves and conflict responses
+        run: python3 tests/test-checkbox-saves.py
+
       - name: Upload WebKit layout diagnostics
         if: failure()
         uses: actions/upload-artifact@v7

@@ -193,13 +193,17 @@ nonisolated enum MarkdownHTML {
     /// print pipeline paginates the same read-only page shown on screen.
     static let previewPrintClass = "md-preview-print-fidelity"
 
-    /// The only export-specific print adjustments are mechanical: move the
-    /// read-only page padding into a real page margin so every PDF page gets
-    /// the same gutters, retain the same content measure, and paint the
-    /// otherwise-transparent WebKit page with the active Canvas color. The
-    /// print operation then fits that complete column to the selected paper
-    /// instead of reflowing it at the narrower print viewport.
+    /// PDF export keeps the preview's column width and colors, with margins
+    /// on every page. Oversized tables are fitted before printing.
     static let previewPrintOverrideCSS = """
+    html.\(previewPrintClass) body {
+        box-sizing: border-box;
+        width: \(contentColumnWidth)px;
+        padding: 0;
+    }
+    html.\(previewPrintClass) article.markdown-body {
+        display: block;
+    }
     @media print {
         @page {
             margin: \(Int(pagePaddingTop))px \(Int(pagePaddingHorizontal))px \(Int(pagePaddingBottom))px;
@@ -207,11 +211,6 @@ nonisolated enum MarkdownHTML {
         html.\(previewPrintClass),
         html.\(previewPrintClass) body {
             background: Canvas;
-        }
-        html.\(previewPrintClass) body {
-            box-sizing: border-box;
-            width: \(contentColumnWidth)px;
-            padding: 0;
         }
         /* The figure clips an absolutely-positioned stage, so a page break
            through it discards everything past the break. */
@@ -223,7 +222,7 @@ nonisolated enum MarkdownHTML {
 
     /// Body size, in points, used by the print stylesheet when the app hasn't
     /// injected an explicit choice. CSS `pt` reaches paper 1:1, so this is the
-    /// literal printed size. The on-screen 14px body would print at 10.5pt,
+    /// literal printed size at 100% scale. The on-screen 14px body would print at 10.5pt,
     /// small for paper, so the print default stays at 12pt.
     static let defaultPrintPointSize = 12
 
@@ -232,9 +231,9 @@ nonisolated enum MarkdownHTML {
     /// deliberately smaller than the sides: the first line of every page adds
     /// roughly 20pt of its own leading above the glyphs, so equal margins make
     /// the top read as a much deeper gap than the sides.
-    static let printPageMarginTop = "0.5in"
-    static let printPageMarginSide = "0.75in"
-    static let printPageMarginBottom = "0.6in"
+    static let printPageMarginTopPoints: CGFloat = 36
+    static let printPageMarginSidePoints: CGFloat = 54
+    static let printPageMarginBottomPoints: CGFloat = 43.2
 
     // Block margin-top tokens. The editor bundle receives these through
     // MDEditor.create's `spacing` option so both surfaces space blocks
@@ -272,7 +271,8 @@ nonisolated enum MarkdownHTML {
                          colorScheme: ColorScheme? = nil,
                          documentFont: DocumentFontSetting = .current,
                          readerLayout: ReaderLayoutSetting = .current,
-                         strictLineBreaks: Bool = StrictLineBreaksSetting.current) -> String {
+                         strictLineBreaks: Bool = StrictLineBreaksSetting.current,
+                         textAlignment: TextAlignmentSetting = .current) -> String {
         render(markdown: markdown,
                allowsScroll: allowsScroll,
                assetBaseHref: assetBaseHref,
@@ -280,7 +280,8 @@ nonisolated enum MarkdownHTML {
                colorScheme: colorScheme,
                documentFont: documentFont,
                readerLayout: readerLayout,
-               strictLineBreaks: strictLineBreaks).html
+               strictLineBreaks: strictLineBreaks,
+               textAlignment: textAlignment).html
     }
 
     static func render(markdown: String,
@@ -293,8 +294,8 @@ nonisolated enum MarkdownHTML {
                        documentFont: DocumentFontSetting = .current,
                        readerLayout: ReaderLayoutSetting = .current,
                        strictLineBreaks: Bool = StrictLineBreaksSetting.current,
+                       textAlignment: TextAlignmentSetting = .current,
                        warmup: Bool = false,
-                       preloadsMathAndCode: Bool = false,
                        pageTopClearance: CGFloat = 0,
                        highlightsCode: Bool = true) -> RenderedHTML {
         let frontmatter = MarkdownFrontmatter.split(markdown)
@@ -342,12 +343,9 @@ nonisolated enum MarkdownHTML {
             frontmatterHTML = ""
         }
         let bodyHTML = frontmatterHTML + renderedBodyHTML
-        // A preloading page carries the math and code renderers before it
-        // has content, so later documents that need them can reuse it.
-        let containsMath = preloadsMathAndCode
-            || mathResult.containsMath || footnoteDefinitions.containsMath
+        let containsMath = mathResult.containsMath || footnoteDefinitions.containsMath
         let containsMermaid = mermaidResult.containsMermaid || footnoteDefinitions.containsMermaid
-        let containsCode = preloadsMathAndCode || detectHighlightableCode(in: bodyHTML)
+        let containsCode = detectHighlightableCode(in: bodyHTML)
         let scrollOverride = allowsScroll ? """
         <style>
         html { overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior-x: none; }
@@ -355,6 +353,7 @@ nonisolated enum MarkdownHTML {
         /* Keep vertical gestures on the page: overflow-x:auto otherwise makes
            overflow-y:auto, and even 1px of article overflow can swallow a wheel gesture. */
         article.markdown-body { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; overflow-wrap: anywhere; }
+        article.markdown-body table { overflow-wrap: normal; }
         </style>
         """ : ""
         let contentWidthOverride: String
@@ -474,6 +473,7 @@ nonisolated enum MarkdownHTML {
         \(contentWidthOverride)
         \(documentFontOverride)
         \(readerLayoutBlock)
+        \(textAlignment.styleBlock)
         \(sanitizerBlock)
         \(morphBlock)
         \(hostBridgeScript)

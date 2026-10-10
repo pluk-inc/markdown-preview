@@ -4,7 +4,7 @@
 //
 //  The Search for Document palette: type part of a file name, pick a result,
 //  open it. Each document presents its own floating panel so the results
-//  remain scoped to that document’s project root.
+//  combine app-wide recents with files from that document’s project root.
 //
 
 import Cocoa
@@ -27,7 +27,7 @@ final class FileSearchPanelController: NSViewController {
     var onDismiss: (() -> Void)?
     private var presentation: FileSearchPanelPresentation?
 
-    func present(relativeTo parent: NSWindow) {
+    func present(relativeTo parent: NSWindow?) {
         let presentation = FileSearchPanelPresentation()
         self.presentation = presentation
         presentation.present(self, relativeTo: parent)
@@ -62,8 +62,8 @@ final class FileSearchPanelController: NSViewController {
     }
 
     private var snapshot: ProjectFileIndex.Snapshot?
-    /// Indices into `snapshot.candidates`, best first.
-    private var results: [Int] = []
+    private var recentURLs: [URL] = []
+    private var results: [FileSearchResults.Row] = []
     /// The field text `results` were ranked for. Nil until the first ranking
     /// lands. When it differs from the field, what is on screen belongs to
     /// an earlier query.
@@ -79,6 +79,19 @@ final class FileSearchPanelController: NSViewController {
         self.projectRoot = projectRoot
         self.index = index
         super.init(nibName: nil, bundle: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(recentDocumentsDidClear),
+                                               name: MarkdownDocumentController.recentDocumentsDidClear,
+                                               object: nil)
+    }
+
+    @objc private func recentDocumentsDidClear() {
+        recentURLs = []
+        pendingActivation = nil
+        guard presentation != nil, isViewLoaded else { return }
+        // Remove cleared history immediately, including during a pending rank.
+        results = []
+        tableView.reloadData()
+        refreshResults()
     }
 
     required init?(coder: NSCoder) {
@@ -231,7 +244,11 @@ final class FileSearchPanelController: NSViewController {
         super.viewDidAppear()
         (view.window as? FileSearchPanel)?.queryField = queryField
         view.window?.makeFirstResponder(queryField)
-        updatePanelSize()
+        recentURLs = NSDocumentController.shared.recentDocumentURLs.filter {
+            $0.isFileURL && (ProjectFileIndex.markdownExtensions.contains($0.pathExtension.lowercased())
+                            || $0.pathExtension.lowercased() == "txt")
+        }
+        refreshResults()
         loadIndex()
     }
 
@@ -244,17 +261,16 @@ final class FileSearchPanelController: NSViewController {
         pendingActivation = nil
     }
 
-    /// Keep the empty query as a single search bar, expanding downwards once
-    /// there is something to find. The field stays in the same screen position.
+    /// Keep the field in the same screen position when results change.
     private func updatePanelSize() {
-        let expanded = projectRoot == nil || (hasSearchQuery && rankedQuery == queryField.stringValue)
-        resultsContainer.isHidden = !expanded
-        fieldSeparator.isHidden = !expanded
+        resultsContainer.isHidden = false
+        fieldSeparator.isHidden = false
         guard let panel = view.window else { return }
-        let rowHeight = tableView.rowHeight + tableView.intercellSpacing.height
-        let resultsHeight = results.isEmpty ? 108 : CGFloat(min(results.count, 6)) * rowHeight + 12
+        let resultsHeight: CGFloat = results.isEmpty ? 108 : results.prefix(8).reduce(12) {
+            $0 + ($1.entry == nil ? 24 : 40) + tableView.intercellSpacing.height
+        }
         resultsHeightConstraint?.constant = resultsHeight
-        let height: CGFloat = 52 + (expanded ? resultsHeight : 0)
+        let height: CGFloat = 52 + resultsHeight
         var frame = panel.frame
         frame.origin.y += frame.height - height
         frame.size.height = height
@@ -273,25 +289,13 @@ final class FileSearchPanelController: NSViewController {
     // MARK: - Index
 
     private func loadIndex() {
-        guard let projectRoot else {
-            showEmptyState()
-            return
-        }
+        guard let projectRoot else { return }
         Task { [weak self, index] in
             let snapshot = await index.snapshot(for: projectRoot)
             guard let self, self.presentation != nil else { return }
             self.snapshot = snapshot
             self.refreshResults()
         }
-    }
-
-    private func showEmptyState() {
-        results = []
-        tableView.reloadData()
-        statusLabel.stringValue = NSLocalizedString("Open a folder to search its files",
-                                                    comment: "Search for Document empty state")
-        statusLabel.isHidden = false
-        openFolderButton.isHidden = false
     }
 
     /// Re-ranks on a short delay. The constant is the toolbar find field's, so
@@ -311,12 +315,16 @@ final class FileSearchPanelController: NSViewController {
     private func refreshResults() {
         debounce?.cancel()
         debounce = nil
-        guard hasSearchQuery, let snapshot else { return }
         let query = queryField.stringValue
-        let candidates = snapshot.candidates
+        let snapshot = snapshot
+        let recentURLs = recentURLs
         rankTask?.cancel()
+        if !hasSearchQuery {
+            apply((try? FileSearchResults.rows(query: query, recentURLs: recentURLs, snapshot: nil)) ?? [], for: query)
+            return
+        }
         rankTask = Task { [weak self] in
-            guard let ranked = try? await Self.rank(query: query, candidates: candidates),
+            guard let ranked = try? await Self.rank(query: query, recentURLs: recentURLs, snapshot: snapshot),
                   let self, !Task.isCancelled else { return }
             self.apply(ranked, for: query)
         }
@@ -324,26 +332,25 @@ final class FileSearchPanelController: NSViewController {
 
     @concurrent
     private nonisolated static func rank(query: String,
-                                         candidates: [FileSearchMatcher.Candidate]) async throws -> [Int] {
-        try FileSearchMatcher.rankCancellably(query: query, candidates: candidates)
+                                         recentURLs: [URL], snapshot: ProjectFileIndex.Snapshot?) async throws -> [FileSearchResults.Row] {
+        try FileSearchResults.rows(query: query, recentURLs: recentURLs, snapshot: snapshot)
     }
 
-    private func apply(_ ranked: [Int], for query: String) {
+    private func apply(_ ranked: [FileSearchResults.Row], for query: String) {
         // Superseded while the pass was finishing: the field has moved on and
         // a newer ranking is already on its way.
-        guard presentation != nil, hasSearchQuery, query == queryField.stringValue else { return }
+        guard presentation != nil, query == queryField.stringValue else { return }
         results = ranked
         rankedQuery = query
         rankTask = nil
         tableView.reloadData()
         scrollView.isHidden = results.isEmpty
         if !results.isEmpty {
-            tableView.selectRowIndexes([0], byExtendingSelection: false)
-            tableView.scrollRowToVisible(0)
+            selectRow(results.firstIndex { $0.entry != nil } ?? 0)
         }
         updateStatus()
         updatePanelSize()
-        if let target = pendingActivation {
+        if let target = pendingActivation, resultsAreCurrent {
             pendingActivation = nil
             activateSelection(target: target)
         }
@@ -353,17 +360,20 @@ final class FileSearchPanelController: NSViewController {
     /// field, with nothing newer scheduled or in flight.
     private var resultsAreCurrent: Bool {
         rankedQuery == queryField.stringValue && debounce == nil && rankTask == nil
+            && !(hasSearchQuery && results.isEmpty && projectRoot != nil && snapshot == nil)
     }
 
     private func updateStatus() {
         openFolderButton.isHidden = true
         if results.isEmpty {
-            statusLabel.stringValue = NSLocalizedString("No matching files",
-                                                        comment: "Search for Document no results")
+            statusLabel.stringValue = hasSearchQuery
+                ? NSLocalizedString("No matching files", comment: "Search for Document no results")
+                : NSLocalizedString("No recent files", comment: "Search for Document empty history")
+            openFolderButton.isHidden = projectRoot != nil
             statusLabel.isHidden = false
             return
         }
-        if snapshot?.isTruncated == true {
+        if hasSearchQuery && snapshot?.isTruncated == true {
             statusLabel.stringValue = String(
                 format: NSLocalizedString("Showing the first %d files in this project",
                                           comment: "Search for Document truncated index"),
@@ -385,9 +395,14 @@ final class FileSearchPanelController: NSViewController {
 
     private func selectRow(_ row: Int) {
         guard !results.isEmpty else { return }
-        let clamped = min(max(row, 0), results.count - 1)
-        tableView.selectRowIndexes([clamped], byExtendingSelection: false)
-        tableView.scrollRowToVisible(clamped)
+        let firstFile = results.firstIndex { $0.entry != nil } ?? 0
+        let clamped = min(max(row, firstFile), results.count - 1)
+        let direction = clamped < tableView.selectedRow ? -1 : 1
+        var target = clamped
+        while results.indices.contains(target), results[target].entry == nil { target += direction }
+        guard results.indices.contains(target) else { return }
+        tableView.selectRowIndexes([target], byExtendingSelection: false)
+        tableView.scrollRowToVisible(target)
     }
 
     /// Drives the list from the raw key event.
@@ -434,14 +449,13 @@ final class FileSearchPanelController: NSViewController {
     private func moveSelection(by offset: Int) {
         guard !results.isEmpty else { return }
         let next = min(max(tableView.selectedRow + offset, 0), results.count - 1)
-        tableView.selectRowIndexes([next], byExtendingSelection: false)
-        tableView.scrollRowToVisible(next)
+        selectRow(next)
     }
 
     private var selectedURL: URL? {
         let row = tableView.selectedRow
         guard results.indices.contains(row) else { return nil }
-        return snapshot?.url(at: results[row])
+        return results[row].entry?.url
     }
 
     /// The keyboard path. Return is often pressed straight after the last
@@ -451,7 +465,6 @@ final class FileSearchPanelController: NSViewController {
     /// result instead. Returns true whenever the key is consumed.
     @discardableResult
     private func activateSelection(target: OpenTarget) -> Bool {
-        guard hasSearchQuery else { return true }
         guard resultsAreCurrent else {
             // Before the index has loaded there is nothing to rank yet;
             // `loadIndex` ranks once it arrives and honours this then.
@@ -486,7 +499,7 @@ final class FileSearchPanelController: NSViewController {
     @objc private func rowDoubleClicked() {
         let row = tableView.clickedRow
         guard results.indices.contains(row),
-              let url = snapshot?.url(at: results[row]) else { return }
+              let url = results[row].entry?.url else { return }
         openFile(at: url, target: .currentTab)
     }
 
@@ -515,12 +528,7 @@ extension FileSearchPanelController: NSTextFieldDelegate {
             // open the file explicitly targeted in the displayed results.
             scheduleRefresh()
         } else {
-            rankedQuery = nil
-            results = []
-            tableView.reloadData()
-            scrollView.isHidden = true
-            statusLabel.isHidden = true
-            updatePanelSize()
+            refreshResults()
         }
     }
 
@@ -539,7 +547,7 @@ extension FileSearchPanelController: NSTextFieldDelegate {
         // spellings are accepted so neither keyboard layout loses the key.
         case #selector(NSResponder.moveToBeginningOfDocument(_:)),
              #selector(NSResponder.scrollToBeginningOfDocument(_:)):
-            selectRow(0)
+            selectRow(results.firstIndex { $0.entry != nil } ?? 0)
             return true
         case #selector(NSResponder.moveToEndOfDocument(_:)),
              #selector(NSResponder.scrollToEndOfDocument(_:)):
@@ -578,8 +586,23 @@ extension FileSearchPanelController: NSTableViewDataSource, NSTableViewDelegate 
     func tableView(_ tableView: NSTableView,
                    viewFor tableColumn: NSTableColumn?,
                    row: Int) -> NSView? {
-        guard let snapshot, results.indices.contains(row) else { return nil }
-        let candidate = snapshot.candidates[results[row]]
+        guard results.indices.contains(row) else { return nil }
+        guard let entry = results[row].entry else {
+            let label = NSTextField(labelWithString: results[row] == .recentHeading
+                ? NSLocalizedString("Recent Files", comment: "Search history section")
+                : NSLocalizedString("File Results", comment: "Project search section"))
+            label.font = .systemFont(ofSize: 11, weight: .semibold)
+            label.textColor = .secondaryLabelColor
+            let container = NSView()
+            label.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(label)
+            NSLayoutConstraint.activate([
+                label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+                label.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+            ])
+            return container
+        }
+        let candidate = entry.candidate
 
         let identifier = NSUserInterfaceItemIdentifier("FileSearchRow")
         let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? FileSearchRowView
@@ -590,13 +613,19 @@ extension FileSearchPanelController: NSTableViewDataSource, NSTableViewDelegate 
         let match = FileSearchMatcher.match(query: rankedQuery ?? "", against: candidate)
         cell.configure(fileName: candidate.fileName,
                        relativePath: candidate.relativePath,
-                       projectRoot: projectRoot,
+                       projectRoot: entry.projectRoot,
                        nameRanges: match?.nameRanges ?? [],
                        pathRanges: match?.pathRanges ?? [],
-                       icon: snapshot.url(at: results[row]).map {
-                           NSWorkspace.shared.icon(forFile: $0.path)
-                       })
+                       icon: NSWorkspace.shared.icon(forFile: entry.url.path))
         return cell
+    }
+
+    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
+        results[row].entry != nil
+    }
+
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        results[row].entry == nil ? 24 : 40
     }
 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
@@ -699,7 +728,10 @@ private final class FileSearchRowView: NSTableCellView {
         // offsets and emphasis while making the hierarchy easier to scan.
         for index in subtitle.indices.reversed() where subtitle[index] == "/" {
             let range = NSRange(index..<subtitle.index(after: index), in: subtitle)
-            breadcrumb.replaceCharacters(in: range, with: " › ")
+            // Absolute recent-file paths have no named component before the
+            // first slash. Omit that separator, but keep "/" for root itself.
+            let replacement = index == subtitle.startIndex ? (subtitle == "/" ? "/" : "") : " › "
+            breadcrumb.replaceCharacters(in: range, with: replacement)
         }
         if let projectRoot {
             let prefix = projectRoot.lastPathComponent + (subtitle.isEmpty ? "" : " › ")
@@ -833,7 +865,7 @@ private final class FileSearchPanelPresentation: NSObject, NSWindowDelegate {
     private weak var presentedController: FileSearchPanelController?
     private var parentCloseObserver: NSObjectProtocol?
 
-    func present(_ viewController: FileSearchPanelController, relativeTo parent: NSWindow) {
+    func present(_ viewController: FileSearchPanelController, relativeTo parent: NSWindow?) {
         let content = viewController.view
         let panel = FileSearchPanel(contentRect: content.bounds,
                                     styleMask: [.borderless],
@@ -852,19 +884,23 @@ private final class FileSearchPanelPresentation: NSObject, NSWindowDelegate {
         self.panel = panel
         presentedController = viewController
 
-        let savedOffset = UserDefaults.standard.array(forKey: Self.positionKey) as? [Double]
+        let visibleFrame = parent?.screen?.visibleFrame ?? NSScreen.main?.visibleFrame
+            ?? NSRect(x: 0, y: 0, width: 800, height: 600)
+        let savedOffset = parent == nil ? nil : UserDefaults.standard.array(forKey: Self.positionKey) as? [Double]
         let frame = FileSearchPanelPlacement.frame(
             contentSize: content.frame.size,
-            parentFrame: parent.frame,
-            visibleFrame: parent.screen?.visibleFrame ?? parent.frame,
+            parentFrame: parent?.frame ?? visibleFrame,
+            visibleFrame: visibleFrame,
             savedOffset: savedOffset
         )
         panel.setFrame(frame, display: false)
-        parent.addChildWindow(panel, ordered: .above)
-        parentCloseObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification, object: parent, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.presentedController?.closePalette() }
+        parent?.addChildWindow(panel, ordered: .above)
+        if let parent {
+            parentCloseObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.willCloseNotification, object: parent, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.presentedController?.closePalette() }
+            }
         }
         panel.makeKeyAndOrderFront(nil)
     }

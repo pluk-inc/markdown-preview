@@ -2381,7 +2381,6 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         ), rendered.articleHTML)
         XCTAssertFalse(rendered.html.contains("kind: 'tableEdit'"))
         XCTAssertFalse(rendered.html.contains("kind: 'tableContextMenu'"))
-        XCTAssertFalse(rendered.html.contains("kind: 'taskCheckbox'"))
     }
 
     func testRenderedTableCellsRetainOriginalMarkdownForSourceAwareEditing() throws {

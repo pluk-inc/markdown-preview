@@ -4,6 +4,9 @@ import XCTest
 
 @MainActor
 final class EditorPreviewLayoutTests: XCTestCase {
+    private final class HostBridge: NSObject, WKScriptMessageHandler {
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {}
+    }
     struct Fixture {
         let name: String
         let markdown: String
@@ -170,9 +173,11 @@ final class EditorPreviewLayoutTests: XCTestCase {
                 mermaidJavaScript: mermaid,
                 configuration: .init(fullWidth: fullWidth, usesPageScrolling: pageScrolling)
             )
-            let reader = WebViewLayoutHarness(html: readerHTML, width: width, isEditor: false, zoom: zoom, height: fixture.height)
+            // Both app surfaces have native hosts, including their table controls.
+            let host = HostBridge()
+            let reader = WebViewLayoutHarness(html: readerHTML, width: width, isEditor: false, zoom: zoom, height: fixture.height, messageHandler: host)
             let editor = WebViewLayoutHarness(html: editorHTML, width: initial == nil ? width : 1100,
-                                              isEditor: true, zoom: zoom, height: fixture.height)
+                                              isEditor: true, zoom: zoom, height: fixture.height, messageHandler: host)
             defer { reader.close(); editor.close() }
             var readLayout: WebViewLayoutHarness.Layout?
             var editLayout: WebViewLayoutHarness.Layout?

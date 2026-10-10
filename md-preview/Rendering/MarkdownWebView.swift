@@ -193,6 +193,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     /// finishes. Unlike heightDidChange, this also fires when the new
     /// document happens to lay out at the same height as the old one.
     var contentDidReplace: (() -> Void)?
+    var taskCheckboxToggled: ((Int, Bool) -> Void)?
     var zoomDidChange: ((CGFloat) -> Void)?
     var fragmentLinkActivated: ((String) -> Void)?
     var pointerDocumentYDidChange: ((CGFloat) -> Void)?
@@ -237,20 +238,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     private weak var webScrollView: NSScrollView?
     nonisolated(unsafe) private var scrollBoundsObserver: NSObjectProtocol?
 
-    /// A spare's empty page also loads the math and code renderers, so it
-    /// can take most documents without a full page load.
-    private let isSpare: Bool
-
-    convenience init(spare: Bool) {
-        self.init(frame: .zero, spare: spare)
-    }
-
-    override convenience init(frame frameRect: NSRect) {
-        self.init(frame: frameRect, spare: false)
-    }
-
-    private init(frame frameRect: NSRect, spare: Bool) {
-        isSpare = spare
+    override init(frame frameRect: NSRect) {
         let config = WKWebViewConfiguration()
         config.setURLSchemeHandler(assetScheme, forURLScheme: MarkdownAssetScheme.scheme)
         config.userContentController.addUserScript(Self.disableContextMenuScript)
@@ -335,15 +323,13 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let markdown = Self.warmupMarkdown
         let contentWidth = ContentWidthSetting.current.renderWidth
         let themeOverrides = Self.currentThemeOverrides()
-        let preloadsMathAndCode = isSpare
         Task { @concurrent [weak self] in
             let rendered = Self.timedRender(label: "warmup",
                                             markdown: markdown,
                                             assetBaseHref: baseHref,
                                             contentWidth: contentWidth,
                                             themeOverrides: themeOverrides,
-                                            warmup: true,
-                                            preloadsMathAndCode: preloadsMathAndCode)
+                                            warmup: true)
             await self?.applyWarmup(rendered)
         }
     }
@@ -374,12 +360,6 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         typealias Setter = @convention(c) (AnyObject, Selector, Bool) -> Void
         let setter = unsafeBitCast(preferences.method(for: selector), to: Setter.self)
         setter(preferences, selector, false)
-    }
-
-    /// True once the empty launch page has loaded and no document has been
-    /// shown yet, so a new window can adopt this reader as is.
-    var isReadyAsSpare: Bool {
-        renderGeneration == 0 && isPageReady && superview == nil
     }
 
     /// True once any `display()` has been requested.
@@ -456,8 +436,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                                 assetBaseHref: String,
                                                 contentWidth: MarkdownHTML.ContentWidth,
                                                 themeOverrides: MarkdownHTML.ThemeOverrides? = nil,
-                                                warmup: Bool = false,
-                                                preloadsMathAndCode: Bool = false) -> MarkdownHTML.RenderedHTML {
+                                                warmup: Bool = false) -> MarkdownHTML.RenderedHTML {
         let t0 = DispatchTime.now()
         let rendered = MarkdownHTML.render(markdown: markdown,
                                            allowsScroll: true,
@@ -466,7 +445,6 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                            contentWidth: contentWidth,
                                            themeOverrides: themeOverrides,
                                            warmup: warmup,
-                                           preloadsMathAndCode: preloadsMathAndCode,
                                            pageTopClearance: MarkdownHTML.appPageTopClearance)
         let elapsedMs = Int(
             (Double(DispatchTime.now().uptimeNanoseconds - t0.uptimeNanoseconds)
@@ -614,6 +592,10 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         guard let dict = body as? [String: Any],
               let kind = dict["kind"] as? String else { return }
         switch kind {
+        case "taskCheckbox":
+            guard let line = dict["line"] as? Int, line > 0,
+                  let checked = dict["checked"] as? Bool else { return }
+            taskCheckboxToggled?(line, checked)
         case "height":
             guard let value = dict["value"] as? NSNumber else { return }
             let raw = ceil(CGFloat(truncating: value))
@@ -642,6 +624,10 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         #if !QUICK_LOOK_EXTENSION
         case "mermaidPopup":
             presentMermaidPopup(dict)
+        case "tablePopup":
+            guard let markdown = dict["markdown"] as? String else { return }
+            TablePreviewWindow.shared.present(markdown: markdown, title: dict["title"] as? String,
+                                              assetBaseURL: currentAssetBase, relativeTo: window)
         #endif
         case "copyCode":
             guard let text = dict["value"] as? String else { return }
@@ -1492,8 +1478,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                  decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
         if navigationAction.navigationType == .linkActivated, let url = navigationAction.request.url {
-            activateLink(url)
             decisionHandler(.cancel)
+            activateLink(url)
             return
         }
         decisionHandler(.allow)
@@ -1516,7 +1502,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                     NSWorkspace.shared.open(resolved)
                 }
             } else if url.scheme != MarkdownAssetScheme.scheme {
-                NSWorkspace.shared.open(url)
+                ExternalLinkOpener.open(url, window: window)
             }
     }
 
@@ -1528,7 +1514,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                   let file = MarkdownAssetResolution.fileURL(for: source) else { return }
             target = Self.reattachingFragment(of: source, to: file)
         } else {
-            guard ["https", "http", "mailto", "file"].contains(source.scheme?.lowercased() ?? "") else { return }
+            guard ["https", "http", "mailto", "file"].contains(source.scheme?.lowercased() ?? "")
+                || ExternalLinkPolicy.isExternal(source) else { return }
             target = source
         }
         let menu = NSMenu()

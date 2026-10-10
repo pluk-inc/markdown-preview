@@ -59,25 +59,68 @@ extension DocumentWindowController {
         return item
     }
 
-    /// Without this the button would stay enabled with no project mounted,
-    /// while the menu item greyed out — the default validation only checks
-    /// that something in the responder chain answers the selector, and this
-    /// one always does.
+    /// Recent files are available even without a mounted project.
     func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
         guard item.action == #selector(searchForDocument(_:)) else { return true }
-        return projectRootURL != nil
+        return true
     }
 
     func openSearchResult(_ url: URL, in target: FileSearchPanelController.OpenTarget) {
         switch target {
         case .currentTab:
-            // Returns early by design when the file is already showing, which
-            // is the right nothing-to-do.
-            present(url: url)
+            // An alias of the edited document is still the current file.
+            // Leave any pending open alone when this selection is a no-op.
+            guard currentFileURL.map(FileSearchResults.resolvedIdentity)
+                != FileSearchResults.resolvedIdentity(url) else { return }
+            let requestID = UUID()
+            searchOpenRequestID = requestID
+            let preserveEditMode = isEditing || pendingEditModeURL != nil
+            if isEditing || hasPendingEditorChanges {
+                requestEndEditing(keepAccessoryMounted: true) { [weak self] success in
+                    guard let self, success, self.searchOpenRequestID == requestID else { return }
+                    self.readSearchResult(url, requestID: requestID, preserveEditMode: preserveEditMode)
+                }
+            } else {
+                readSearchResult(url, requestID: requestID, preserveEditMode: preserveEditMode)
+            }
         case .newTab:
             openInNewTab(url)
         case .newWindow:
             openInNewWindow(url)
+        }
+    }
+
+    private func readSearchResult(_ url: URL, requestID: UUID, preserveEditMode: Bool) {
+        let originalURL = currentFileURL
+        // Read after the save decision, but before replacing the current tab.
+        // Navigation uses this content directly, with no second fallible read.
+        Task { @concurrent [weak self] in
+            let result = Result { try String(contentsOf: url, encoding: .utf8) }
+            await self?.finishSearchOpen(result, url: url, originalURL: originalURL,
+                                        requestID: requestID, preserveEditMode: preserveEditMode)
+        }
+    }
+
+    private func finishSearchOpen(_ result: Result<String, Error>, url: URL,
+                                  originalURL: URL?, requestID: UUID, preserveEditMode: Bool) {
+        // windowWillClose invalidates the request. A background tab may be
+        // hidden after opening another tab, but its pending read is still valid.
+        guard searchOpenRequestID == requestID, currentFileURL == originalURL,
+              documentWindow.attachedSheet == nil else { return }
+        // Editing may have resumed during a slow read. Resolve it and read
+        // again afterward rather than applying content from before that decision.
+        if isEditing || hasPendingEditorChanges {
+            openSearchResult(url, in: .currentTab)
+            return
+        }
+        searchOpenRequestID = nil
+        switch result {
+        case .success(let markdown):
+            present(url: url, preservingEditMode: preserveEditMode,
+                    intent: .normal, fragment: nil, loadedMarkdown: markdown)
+        case .failure(let error):
+            if preserveEditMode { enterEditMode() }
+            NSAlert(error: error).beginSheetModal(for: documentWindow)
         }
     }
 }

@@ -37,6 +37,7 @@ final class MainSplitViewController: NSSplitViewController {
 
     var onSelectFile: ((URL) -> Void)?
     var onOpenMarkdownLink: ((URL) -> Void)?
+    private var sidebarCollapseObservation: NSKeyValueObservation?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -64,6 +65,12 @@ final class MainSplitViewController: NSSplitViewController {
         addSplitViewItem(sidebar)
         addSplitViewItem(content)
         addSplitViewItem(inspector)
+
+        sidebarCollapseObservation = sidebar.observe(\.isCollapsed, options: [.new]) { [weak self] _, _ in
+            DispatchQueue.main.async { [weak self] in
+                (self?.view.window?.windowController as? DocumentWindowController)?.syncSidebarToolbarState()
+            }
+        }
 
         splitView.autosaveName = "MainSplitView"
         DispatchQueue.main.async { [weak self] in
@@ -661,6 +668,9 @@ final class MainSplitViewController: NSSplitViewController {
 
     override func viewDidAppear() {
         super.viewDidAppear()
+        defer {
+            (view.window?.windowController as? DocumentWindowController)?.syncSidebarToolbarState()
+        }
 
         let defaults = UserDefaults.standard
         guard !defaults.bool(forKey: Self.didSeedKey) else { return }

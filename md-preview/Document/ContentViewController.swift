@@ -84,7 +84,7 @@ final class ContentViewController: NSViewController {
         container.translatesAutoresizingMaskIntoConstraints = false
         view = container
 
-        webView = SpareReaderPool.shared.takeReader()
+        webView = MarkdownWebView()
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.heightDidChange = { [weak self] _ in
             guard let self else { return }
@@ -104,10 +104,13 @@ final class ContentViewController: NSViewController {
             self?.updatePointerTracking()
             guard let self, self.webView.hasRequestedDocument else { return }
             self.handleFirstDocumentPaint()
-            SpareReaderPool.shared.documentDidPaint()
         }
         NotificationCenter.default.addObserver(self, selector: #selector(updatePointerTracking),
                                                name: UserDefaults.didChangeNotification, object: nil)
+        webView.taskCheckboxToggled = { [weak self] line, checked in
+            (self?.view.window?.windowController as? DocumentWindowController)?
+                .toggleTaskCheckbox(onLine: line, checked: checked)
+        }
         webView.fragmentLinkActivated = { [weak self] fragment in
             self?.scrollToElement(id: fragment)
         }
@@ -312,8 +315,8 @@ final class ContentViewController: NSViewController {
     }
 
     func printDocument() {
-        guard let window = view.window, hasExportableDocument else { return }
-        webView.printDocument(from: window)
+        guard let window = view.window, let source = exportSource else { return }
+        webView.printDocument(assetBaseURL: source.assetBaseURL, from: window)
     }
 
     var hasExportableDocument: Bool {

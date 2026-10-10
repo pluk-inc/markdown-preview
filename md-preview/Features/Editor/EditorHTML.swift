@@ -300,8 +300,8 @@ nonisolated enum EditorHTML {
             width: 0.9em;
             height: 0.9em;
             margin: 0;
-            margin-inline-start: calc(-0.9em - 0.75em);
-            margin-inline-end: 0.75em;
+            margin-inline-start: calc(-0.9em - 0.25em);
+            margin-inline-end: 0.25em;
             vertical-align: calc(0.5cap - 0.45em);
             border: 1.5px solid var(--grid);
             border-radius: 25%;
@@ -559,6 +559,7 @@ nonisolated enum EditorHTML {
         .cm-md-mermaid-error {
             border: 1px solid color-mix(in srgb, #d1242f 45%, transparent);
         }
+        \(MarkdownHTML.tableControlsCSS)
         .cm-md-table {
             font-family: ui-monospace, "SF Mono", Menlo, monospace;
             font-size: 0.88em;
@@ -604,7 +605,8 @@ nonisolated enum EditorHTML {
             padding: 8px 12px;
             outline: none;
             white-space: pre-wrap;
-            overflow-wrap: anywhere;
+            overflow-wrap: normal;
+            word-break: normal;
             cursor: text;
         }
         .cm-md-table-grid th .cm-md-table-cell[data-placeholder]:empty::before {
@@ -671,6 +673,8 @@ nonisolated enum EditorHTML {
             const post = function (m) {
                 try { window.webkit.messageHandlers.\(configuration.bridgeName).postMessage(m); } catch (e) {}
             };
+            window.__mdTableExpandLabel = \(jsStringLiteral(NSLocalizedString("Expand Table", comment: "Open a table in full screen")));
+            window.__mdOpenTablePopup = function (markdown) { post({kind: "tablePopup", markdown}); };
             window.__mdRequestTableContextMenu = function (details) {
                 post(Object.assign({ kind: "tableContextMenu" }, details));
             };

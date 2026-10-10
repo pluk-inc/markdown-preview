@@ -9,7 +9,7 @@ import Cocoa
 
 extension DocumentWindowController {
     /// Table of Contents / Project Navigator as a tabbed picker: a click
-    /// shows that pane, opening the sidebar if it was hidden. Hiding is the
+    /// shows that pane. The picker hides with the sidebar. Hiding is the
     /// sidebar toggle's job, at the other end of the sidebar's titlebar area.
     ///
     /// Selection mode follows the sidebar. `.selectOne` draws the grey
@@ -22,6 +22,10 @@ extension DocumentWindowController {
     /// navigation group — the toolbar keeps window-drag regions only around
     /// items it draws itself.
     func makeSidebarModeItem(willBeInsertedIntoToolbar: Bool) -> NSToolbarItem {
+        if willBeInsertedIntoToolbar, let sidebarModeItem {
+            applySidebarModeSelection(to: sidebarModeItem)
+            return sidebarModeItem
+        }
         let outlineLabel = NSLocalizedString("Table of Contents", comment: "Sidebar mode toolbar segment label")
         let filesLabel = NSLocalizedString("Project Navigator", comment: "Sidebar mode toolbar segment label")
 
@@ -133,9 +137,42 @@ extension DocumentWindowController {
         return true
     }
 
-    /// Mirrors the split view into the mode picker: the visible pane is
-    /// selected, and nothing is selected while the sidebar is hidden.
+    /// Remove sidebar-only items from layout, rather than hiding their views:
+    /// AppKit can retain a hidden group's width ahead of the document title.
     func syncSidebarToolbarState() {
+        guard let toolbar = documentWindow.toolbar else { return }
+        guard !sidebarToolbarSyncInProgress else { return }
+        sidebarToolbarSyncInProgress = true
+        let collapsed = !currentSidebarMenuState().sidebarVisible
+        // A transient collapse must not replace the user's saved layout.
+        let autosaves = toolbar.autosavesConfiguration
+        toolbar.autosavesConfiguration = false
+        defer {
+            toolbar.autosavesConfiguration = autosaves
+            sidebarToolbarSyncInProgress = false
+        }
+
+        if collapsed {
+            if let index = toolbar.items.firstIndex(where: { $0.itemIdentifier == .sidebarMode }) {
+                let hasSpacer = toolbar.items.indices.contains(index + 1)
+                    && toolbar.items[index + 1].itemIdentifier == .flexibleSpace
+                collapsedSidebarModePlacement = .init(
+                    index: index, hasSpacer: hasSpacer,
+                    identifiers: toolbar.items.map { $0.itemIdentifier.rawValue }
+                )
+                if hasSpacer { toolbar.removeItem(at: index + 1) }
+                toolbar.removeItem(at: index)
+            }
+        } else if let placement = collapsedSidebarModePlacement {
+            collapsedSidebarModePlacement = nil
+            if !toolbar.items.contains(where: { $0.itemIdentifier == .sidebarMode }) {
+                let index = placement.insertionIndex(in: toolbar.items.map { $0.itemIdentifier.rawValue })
+                toolbar.insertItem(withItemIdentifier: .sidebarMode, at: index)
+                if placement.hasSpacer {
+                    toolbar.insertItem(withItemIdentifier: .flexibleSpace, at: index + 1)
+                }
+            }
+        }
         if let sidebarModeItem {
             applySidebarModeSelection(to: sidebarModeItem)
         }

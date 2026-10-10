@@ -94,10 +94,13 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Helpers/ChromeStripClickThrough.swift,
+				en.lproj/Localizable.strings,
+				"zh-Hans.lproj/Localizable.strings",
 				Rendering/CodeFenceInfo.swift,
 				Rendering/CodeHighlighter.swift,
 				Rendering/DocumentFontSetting.swift,
 				Rendering/EscapingHTMLFormatter.swift,
+				Rendering/ExternalLinkPolicy.swift,
 				Rendering/MarkdownAssetResolution.swift,
 				Rendering/MarkdownAssetSchemeHandler.swift,
 				Rendering/MarkdownFrontmatter.swift,
@@ -115,6 +118,7 @@
 				Rendering/QuickLookAppearance.swift,
 				Rendering/ReaderLayoutSetting.swift,
 				Rendering/StrictLineBreaksSetting.swift,
+				Rendering/TextAlignmentSetting.swift,
 				Rendering/URLSchemeTaskCallbackGate.swift,
 			);
 			target = 9A02092C2FA10D4C00092060 /* quick-look */;

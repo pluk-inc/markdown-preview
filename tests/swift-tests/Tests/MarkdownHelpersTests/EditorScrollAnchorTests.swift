@@ -464,6 +464,84 @@ final class EditorScrollAnchorTests: XCTestCase {
         }
     }
 
+    func testTableColumnsKeepWordsWhole() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let prose = Array(repeating: "ordinary words of prose", count: 20).joined(separator: " ")
+        let markdown = """
+        Before the table.
+
+        | Measure | Meaning |
+        | --- | --- |
+        | Static | \(prose) |
+
+        | ID | Candidate | Inspection and provisional placement |
+        | --- | --- | --- |
+        | TGW-F02 | `validation/tgw_solar_validation/hourly_ave_error/hourly_ave_error_2020.png` | visual; supplement |
+
+        | Date | Event | Source |
+        | --- | --- | --- |
+        | 9/3 10:50 | Some event description that is a bit long | x.com/theo/status/2095328650459840627 |
+
+        | ID | Module / Component | Type | Complexity | Functional Overview | Edge Cases |
+        | --- | --- | --- | --- | --- | --- |
+        | MOD-01 | `AuthenticationService` | Security / Core | High | \(prose) | Race conditions and token refresh |
+
+        """
+        for isEditor in [false, true] {
+            let html = isEditor
+                ? EditorHTML.render(markdown: markdown, editorJavaScript: script)
+                : MarkdownHTML.render(markdown: markdown, allowsScroll: true).html
+            let harness = WebViewLayoutHarness(html: html, width: 500, isEditor: isEditor, height: 400)
+            defer { harness.close() }
+            let layout = try await harness.layout(texts: ["Measure", "Static", prose, "Candidate", "Inspection", "Date", "Source", "AuthenticationService"], imageCount: 0,
+                                                  selectors: [isEditor ? ".cm-md-table-grid" : "table": 4])
+            let lines = layout.elements.map(\.lines.count)
+            let mode = isEditor ? "editor" : "reader"
+            XCTAssertEqual(Array(lines.prefix(2)), [1, 1], "\(mode): \(lines)")
+            XCTAssertGreaterThan(lines[2], 1, "\(mode): \(lines)")
+            XCTAssertEqual(Array(lines.suffix(5)), [1, 1, 1, 1, 1], "\(mode): \(lines)")
+        }
+    }
+
+    func testExpandTableCapturesReadOnlySnapshotWithoutChangingSource() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let markdown = "# Components\n\n| Module | Notes |\n| --- | --- |\n| `AuthenticationService` | **Important** |"
+        for isEditor in [false, true] {
+            let rendered = MarkdownHTML.render(markdown: markdown, allowsScroll: true)
+            let html = isEditor ? EditorHTML.render(markdown: markdown, editorJavaScript: script) : rendered.html
+            let messages = TablePopupMessageRecorder()
+            let harness = WebViewLayoutHarness(html: html, width: 500, isEditor: isEditor, height: 400, messageHandler: messages)
+            defer { harness.close() }
+            _ = try await harness.layout(texts: ["AuthenticationService"], imageCount: 0)
+            if !isEditor {
+                // The morph path must neither duplicate controls nor lose their actions.
+                _ = try await harness.webView.evaluateJavaScript(
+                    "window.MdPreview.update(" + EditorHTML.jsStringLiteral(rendered.articleHTML) + ");")
+            }
+            let result = try await harness.webView.evaluateJavaScript("""
+                (() => {
+                    const buttons = document.querySelectorAll('.md-table-expand');
+                    buttons[0].click();
+                    return {count: buttons.length,
+                        source: \(isEditor ? "window.__mdEditor.getMarkdown()" : "window.MdPreview.source")};
+                })()
+                """) as? [String: Any]
+            XCTAssertEqual(result?["count"] as? Int, 1)
+            XCTAssertEqual(result?["source"] as? String, markdown)
+            let deadline = Date().addingTimeInterval(2)
+            while messages.requests.isEmpty && Date() < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            let snapshot = try XCTUnwrap(messages.requests.first?["markdown"] as? String)
+            if isEditor {
+                XCTAssertEqual(snapshot, markdown.components(separatedBy: "\n").dropFirst(2).joined(separator: "\n"))
+            }
+            XCTAssertTrue(snapshot.contains("AuthenticationService"))
+            XCTAssertTrue(snapshot.contains("Important"))
+            XCTAssertFalse(snapshot.contains("md-table-actions"))
+        }
+    }
+
     func testCodeScrollPolicyMatchesReadMode() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let markdown = "```text\n" + String(repeating: "long code ", count: 100) + "\n```"
@@ -852,6 +930,16 @@ final class EditorScrollAnchorTests: XCTestCase {
             XCTAssertEqual(try XCTUnwrap(values["position"]), 1, accuracy: 0.01)
             XCTAssertEqual(try XCTUnwrap(values["gap"]), try XCTUnwrap(values["expectedGap"]), accuracy: 1)
             XCTAssertLessThanOrEqual(try XCTUnwrap(values["maximumDrift"]), 1)
+        }
+    }
+}
+
+@MainActor
+private final class TablePopupMessageRecorder: NSObject, WKScriptMessageHandler {
+    var requests: [[String: Any]] = []
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        if let body = message.body as? [String: Any], body["kind"] as? String == "tablePopup" {
+            requests.append(body)
         }
     }
 }

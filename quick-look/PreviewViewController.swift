@@ -424,6 +424,9 @@ private final class QuickLookWebView: WKWebView {
 }
 
 final class PreviewViewController: NSViewController, QLPreviewingController, WKNavigationDelegate {
+    /// Injectable dispatch keeps navigation tests from launching external apps.
+    var openExternalLink: @MainActor (URL, NSWindow?) -> Void = ExternalLinkOpener.open
+
     private static let copyFeedbackDuration: TimeInterval = 1.0
     private static let floatingButtonMinimumWidth: CGFloat = 70
     private static let floatingButtonHeight: CGFloat = 26
@@ -499,13 +502,16 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
         button.showsBorderOnlyWhileMouseInside = false
         button.setContentHuggingPriority(.required, for: .horizontal)
         button.setContentCompressionResistancePriority(.required, for: .horizontal)
+        button.bezelStyle = .accessoryBarAction
+        // Xcode 16 CI compiles this controller through the test and benchmark
+        // targets. Runtime availability alone cannot hide newer SDK symbols.
+        #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             button.bezelStyle = .glass
             button.borderShape = .capsule
             button.tintProminence = .none
-        } else {
-            button.bezelStyle = .accessoryBarAction
         }
+        #endif
         button.isEnabled = false
         let copyMarkdownHelp = NSLocalizedString(
             "Copy Markdown source to clipboard",
@@ -684,10 +690,7 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
             return
         }
 
-        if let scheme = url.scheme?.lowercased(),
-           ["http", "https", "mailto"].contains(scheme) {
-            NSWorkspace.shared.open(url)
-        }
         decisionHandler(.cancel)
+        openExternalLink(url, webView.window)
     }
 }

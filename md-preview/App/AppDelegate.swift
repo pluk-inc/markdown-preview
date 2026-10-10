@@ -147,9 +147,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             || model.themeColors != ThemeColorsSetting.current
             || model.documentFont != DocumentFontSetting.current
             || model.readerLayout != ReaderLayoutSetting.current
+            || model.textAlignment != TextAlignmentSetting.current
             || model.strictLineBreaks != StrictLineBreaksSetting.current
-        guard changed else { return }
+        let languageChanged = model.appLanguage != AppLanguageSetting.selection()
+        guard changed || languageChanged else { return }
         model.refreshFromExternalSources()
+        // Language changes take effect on relaunch; only refresh their picker now.
+        guard changed else { return }
         // Repaint only when another instance changed the shared reading look.
         applyAppearanceMode(ThemePreset.applied().requiredAppearance ?? AppearanceMode.current,
                             reloadPreviews: true)
@@ -340,6 +344,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         applyAppearanceMode(resolved, reloadPreviews: true)
     }
 
+    func applyTextAlignmentSetting(_ setting: TextAlignmentSetting) {
+        guard setting != TextAlignmentSetting.current else { return }
+        TextAlignmentSetting.current = setting
+        reloadDocumentPreviewsForSettingChange()
+    }
+
     func applyStrictLineBreaksSetting(_ enabled: Bool) {
         guard enabled != StrictLineBreaksSetting.current else { return }
         StrictLineBreaksSetting.current = enabled
@@ -442,6 +452,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @IBAction func openDocument(_ sender: Any?) {
         NSDocumentController.shared.openDocument(sender)
+    }
+
+    private var recentFilesPalette: FileSearchPanelController?
+
+    @objc func searchForDocument(_ sender: Any?) {
+        if let controller = activeDocumentWindowController {
+            controller.searchForDocument(sender)
+            return
+        }
+        if let palette = recentFilesPalette {
+            palette.view.window?.makeKeyAndOrderFront(nil)
+            return
+        }
+        let palette = FileSearchPanelController(projectRoot: nil)
+        palette.onOpen = { url, _ in
+            NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, error in
+                if let error { NSApp.presentError(error) }
+            }
+        }
+        palette.onRequestOpenFolder = { NSDocumentController.shared.openDocument(nil) }
+        palette.onDismiss = { [weak self] in self?.recentFilesPalette = nil }
+        recentFilesPalette = palette
+        palette.present(relativeTo: NSApp.mainWindow)
     }
 
     @IBAction func performFindPanelAction(_ sender: Any?) {

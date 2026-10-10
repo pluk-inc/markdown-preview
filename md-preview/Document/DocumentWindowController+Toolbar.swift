@@ -118,6 +118,69 @@ extension DocumentWindowController {
         return identifiers
     }
 
+    /// Restore shared preferences into this window's independent toolbar.
+    /// Keep a complete item order alongside AppKit's opaque configuration.
+    func restoreToolbarItemOrder(_ toolbar: NSToolbar) {
+        let key = "MainToolbar.expandedItemIdentifiers"
+        if let saved = UserDefaults.standard.stringArray(forKey: key) {
+            toolbar.itemIdentifiers = saved.map { NSToolbarItem.Identifier($0) }
+        }
+    }
+
+    /// Save migrations immediately, before another window can restore them.
+    func observeAndPersistToolbarPreferences(_ toolbar: NSToolbar) {
+        toolbarItemOrderPersistenceReady = true
+        saveToolbarItemOrder(toolbar)
+        saveToolbarDisplayPreferences(toolbar)
+        toolbarPreferenceObservations = [
+            toolbar.observe(\.displayMode) { [weak self] _, _ in
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, let toolbar = self.documentWindow.toolbar else { return }
+                    self.saveToolbarDisplayPreferences(toolbar)
+                }
+            },
+            toolbar.observe(\.isVisible) { [weak self] _, _ in
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, let toolbar = self.documentWindow.toolbar else { return }
+                    self.saveToolbarDisplayPreferences(toolbar)
+                }
+            }
+        ]
+    }
+
+    func toolbarWillAddItem(_ notification: Notification) {
+        persistCustomizedToolbarItemOrder()
+    }
+
+    func toolbarDidRemoveItem(_ notification: Notification) {
+        persistCustomizedToolbarItemOrder()
+    }
+
+    private func persistCustomizedToolbarItemOrder() {
+        guard toolbarItemOrderPersistenceReady, !sidebarToolbarSyncInProgress else { return }
+        // willAdd is delivered before insertion. Save after AppKit finishes
+        // the operation, including reorder and default-set replacement.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let toolbar = self.documentWindow.toolbar else { return }
+            self.saveToolbarItemOrder(toolbar)
+            self.syncSidebarToolbarState()
+        }
+    }
+
+    private func saveToolbarItemOrder(_ toolbar: NSToolbar) {
+        let complete = SidebarToolbarItemOrder.complete(
+            toolbar.items.map { $0.itemIdentifier.rawValue },
+            removedPlacement: collapsedSidebarModePlacement
+        )
+        UserDefaults.standard.set(complete, forKey: "MainToolbar.expandedItemIdentifiers")
+    }
+
+    /// The canonical item order is saved only on item edits or initialization.
+    /// Display changes in another window must not overwrite that shared order.
+    private func saveToolbarDisplayPreferences(_ toolbar: NSToolbar) {
+        UserDefaults.standard.set(toolbar.configuration, forKey: "MainToolbar.configuration")
+    }
+
     func toolbar(_ toolbar: NSToolbar,
                  itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {

@@ -92,6 +92,8 @@
 "Format:" = "Format:";
 "PDF Document" = "PDF Document";
 "HTML Document" = "HTML Document";
+"The document could not be prepared for export." = "The document could not be prepared for export.";
+"The selected paper has no printable area." = "The selected paper has no printable area.";
 
 /* Go menu */
 "Go" = "Go";
@@ -326,3 +328,51 @@
 /* Reading preferences */
 "Strict line breaks" = "Strict line breaks";
 "Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews.";
+
+/* App link approvals */
+"Reset App Link Approvals" = "Reset App Link Approvals";
+"App links" = "App links";
+"Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look." = "Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look.";
+"No application can open this link" = "No application can open this link";
+"OK" = "OK";
+"Allow this document to open “%@”?" = "Allow this document to open “%@”?";
+"Allow" = "Allow";
+"Always Allow" = "Always Allow";
+"Allow all %@: links in documents and Quick Look." = "Allow all %@: links in documents and Quick Look.";
+
+/* App language */
+"Language" = "Language";
+"System Default" = "System Default";
+"Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews." = "Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews.";
+
+/* Settings organization */
+"Saving" = "Saving";
+"External apps & tools" = "External apps & tools";
+"Text & layout" = "Text & layout";
+"Markdown" = "Markdown";
+"Outline" = "Outline";
+"Customize the selected theme’s font, spacing and colors. Reset restores that theme’s defaults; global Reading preferences stay unchanged." = "Customize the selected theme’s font, spacing and colors. Reset restores that theme’s defaults; global Reading preferences stay unchanged.";
+"Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window." = "Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window.";
+"Customize…" = "Customize…";
+"Each theme remembers its colors, font and layout. Original also remembers your appearance choice. Reset restores the selected theme’s defaults." = "Each theme remembers its colors, font and layout. Original also remembers your appearance choice. Reset restores the selected theme’s defaults.";
+"Fonts, spacing and colors" = "Fonts, spacing and colors";
+"Highlight outline section under the pointer" = "Highlight outline section under the pointer";
+"Open Markdown links in new windows" = "Open Markdown links in new windows";
+"Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings." = "Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings.";
+"Themes" = "Themes";
+"This theme uses a fixed appearance. Choose Original to change it." = "This theme uses a fixed appearance. Choose Original to change it.";
+
+/* Reading text alignment */
+"Text alignment" = "Text alignment";
+"Left" = "Left";
+"Center" = "Center";
+"Right" = "Right";
+"Justified" = "Justified";
+"Alignment applies to prose in reading view and Quick Look. Automatic follows the document. Code, tables and explicit HTML alignment are preserved." = "Alignment applies to prose in reading view and Quick Look. Automatic follows the document. Code, tables and explicit HTML alignment are preserved.";
+
+/* Paper print scale, applied before pagination. */
+"Scale:" = "Scale:";
+"Scale" = "Scale";
+
+/* Table fullscreen control. */
+"Expand Table" = "Expand Table";

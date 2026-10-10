@@ -7,13 +7,8 @@
 //
 
 import Cocoa
-import PDFKit
-import os
 import UniformTypeIdentifiers
 import WebKit
-
-private let printSizeStyleElementID = "md-print-size"
-private let previewPrintStyleElementID = "md-preview-print-style"
 
 private enum DocumentExportFormat: String, CaseIterable {
     case pdf
@@ -64,8 +59,7 @@ private struct FileExportSource {
     let markdown: String
     let sourceURL: URL?
     let assetBaseURL: URL?
-    /// Supplied by `MarkdownWebView`, which owns the live page PNG is captured
-    /// from. Reports `nil` on success.
+    /// Reports nil after the image has been saved.
     let writePNG: (URL, @escaping (Error?) -> Void) -> Void
 
     func writeHTML(to url: URL) throws {
@@ -170,49 +164,46 @@ private enum PrintSizeOptions {
     }
 }
 
-/// `Font Size: … [ 12 pt ] ⇅` — an editable field paired with a stepper, the
-/// same pairing the print panel's own Copies field uses.
-private final class PrintSizeRowView: NSView {
-    /// Called with the committed, clamped size. Persistence already happened.
+/// Editable numeric print setting, paired with a stepper.
+private final class PrintNumberRowView: NSView {
+    /// Called with the committed, clamped value.
     var onChange: ((Int) -> Void)?
 
-    private var pointSize: Int
+    private var value: Int
+    private let range: ClosedRange<Int>
     private let sizeField = NSTextField()
     private let stepper = NSStepper()
 
-    init(width: CGFloat) {
-        pointSize = PrintSizeOptions.pointSize
+    init(width: CGFloat, label: String, value: Int, range: ClosedRange<Int>, suffix: String) {
+        self.value = value
+        self.range = range
         super.init(frame: NSRect(x: 0, y: 0,
                                  width: width, height: AccessoryRowMetrics.height))
         autoresizingMask = [.width]
 
-        let caption = NSTextField(labelWithString: NSLocalizedString(
-            "Font Size:", comment: "Print font size field label"))
+        let caption = NSTextField(labelWithString: label)
 
         let formatter = NumberFormatter()
         formatter.numberStyle = .none
         formatter.allowsFloats = false
-        let pointUnit = NSLocalizedString(
-            "pt", comment: "Abbreviation for typographic points")
-        formatter.positiveSuffix = " \(pointUnit)"
-        // Keep direct numeric entry convenient: both `13` and `13 pt` commit
-        // to the same value, while the resting presentation always shows `pt`.
+        formatter.positiveSuffix = suffix
+        // Accept direct numeric entry as well as the displayed unit.
         formatter.isLenient = true
 
         sizeField.formatter = formatter
         sizeField.alignment = .right
-        sizeField.integerValue = pointSize
+        sizeField.integerValue = value
         sizeField.target = self
         sizeField.action = #selector(sizeFieldChanged(_:))
         // Commit on Return *and* on focus loss, so a typed value isn't lost by
         // clicking straight into the surrounding panel's controls.
         sizeField.cell?.sendsActionOnEndEditing = true
 
-        stepper.minValue = Double(PrintSizeOptions.minimumPointSize)
-        stepper.maxValue = Double(PrintSizeOptions.maximumPointSize)
+        stepper.minValue = Double(range.lowerBound)
+        stepper.maxValue = Double(range.upperBound)
         stepper.increment = 1
         stepper.valueWraps = false
-        stepper.integerValue = pointSize
+        stepper.integerValue = value
         stepper.target = self
         stepper.action = #selector(stepperChanged(_:))
 
@@ -254,36 +245,101 @@ private final class PrintSizeRowView: NSView {
     }
 
     private func commit(_ requested: Int) {
-        let size = PrintSizeOptions.clamped(requested)
+        let size = min(max(requested, range.lowerBound), range.upperBound)
         // Echo the clamp back so the field never shows an out-of-range value,
         // and keep the two controls in step.
         sizeField.integerValue = size
         stepper.integerValue = size
-        guard size != pointSize else { return }
-        pointSize = size
-        PrintSizeOptions.pointSize = size
+        guard size != value else { return }
+        value = size
         onChange?(size)
+    }
+
+    func setValue(_ requested: Int) {
+        value = min(max(requested, range.lowerBound), range.upperBound)
+        sizeField.integerValue = value
+        stepper.integerValue = value
     }
 }
 
 /// Adds a "Markdown Preview" pane to the system print panel holding the font
-/// size control, so the panel's own page thumbnails act as the preview.
+/// size and scale controls, so the panel's own page thumbnails act as the preview.
 private final class PrintSizeAccessoryController: NSViewController, NSPrintPanelAccessorizing {
-    /// Applies a size to the document, calling back once the page has actually
-    /// taken the change.
-    var applySize: ((Int, @escaping () -> Void) -> Void)?
+    var preparePaper: ((NSPrintInfo, Int) async throws -> Void)?
+    var presentError: ((Error) -> Void)?
     var exportFormatDidChange: ((DocumentExportFormat) -> Void)?
 
-    /// AppKit repaginates the preview when this changes. It is bumped *after*
-    /// the stylesheet injection completes rather than when the field changes,
-    /// so the repagination never races ahead of the CSS it is meant to show.
+    /// Refresh the native preview after the new layout is ready.
     @objc private dynamic var previewRevision = 0
 
     private var pointSize = PrintSizeOptions.pointSize
+    private var scalePercent: Int
+    private var scaleRow: PrintNumberRowView?
     private var exportFormat: DocumentExportFormat?
     private let showsPrintSize: Bool
+    private var printInfoObservers: [NSKeyValueObservation] = []
 
-    init(exportFormat: DocumentExportFormat? = nil) {
+    override var representedObject: Any? {
+        didSet {
+            guard (oldValue as? NSPrintInfo) !== (representedObject as? NSPrintInfo) else { return }
+            printInfoObservers = []
+            guard showsPrintSize, let info = representedObject as? NSPrintInfo else { return }
+            printInfoObservers = [
+                info.observe(\.paperSize, options: [.old, .new]) { [weak self] _, change in
+                    guard change.oldValue != change.newValue else { return }
+                    Task { @MainActor in self?.refreshPreview() }
+                },
+                info.observe(\.orientation, options: [.old, .new]) { [weak self] _, change in
+                    guard change.oldValue != change.newValue else { return }
+                    Task { @MainActor in self?.refreshPreview() }
+                },
+                // Presets can restore the hidden native scale setting.
+                info.observe(\.scalingFactor, options: [.old, .new]) { [weak self] _, change in
+                    guard change.newValue != 1 else { return }
+                    Task { @MainActor in self?.refreshPreview() }
+                },
+            ]
+            refreshPreview()
+        }
+    }
+
+    func prepareForPrinting(using info: NSPrintInfo) async throws {
+        adoptPresetScale(using: info)
+        let layoutInfo = info.copy() as? NSPrintInfo ?? NSPrintInfo()
+        layoutInfo.scalingFactor = CGFloat(scalePercent) / 100
+        try await preparePaper?(layoutInfo, pointSize)
+    }
+
+    private func adoptPresetScale(using info: NSPrintInfo) {
+        // Adopt a printer preset's scale before clearing the native setting so
+        // WebKit applies it once, during layout rather than pagination.
+        if info.scalingFactor != 1 {
+            let factor = info.scalingFactor
+            willChangeValue(forKey: "localizedSummaryItems")
+            scalePercent = factor.isFinite && factor > 0
+                ? Int(min(max(factor * 100, 50), 200).rounded()) : 100
+            scaleRow?.setValue(scalePercent)
+            didChangeValue(forKey: "localizedSummaryItems")
+            info.scalingFactor = 1
+        }
+    }
+
+    private func refreshPreview() {
+        guard let info = representedObject as? NSPrintInfo else { return }
+        Task {
+            do {
+                try await prepareForPrinting(using: info)
+                previewRevision += 1
+            } catch is CancellationError {
+            } catch {
+                presentError?(error)
+            }
+        }
+    }
+
+    init(exportFormat: DocumentExportFormat? = nil, paperScale: CGFloat = 1) {
+        scalePercent = paperScale.isFinite && paperScale > 0
+            ? Int(min(max(paperScale * 100, 50), 200).rounded()) : 100
         self.exportFormat = exportFormat
         showsPrintSize = exportFormat == nil
         super.init(nibName: nil, bundle: nil)
@@ -296,17 +352,31 @@ private final class PrintSizeAccessoryController: NSViewController, NSPrintPanel
     override func loadView() {
         var rows: [NSView] = []
         if showsPrintSize {
-            let sizeRow = PrintSizeRowView(width: 620)
+            let sizeRow = PrintNumberRowView(
+                width: 620, label: NSLocalizedString("Font Size:", comment: "Print font size field label"),
+                value: pointSize, range: PrintSizeOptions.minimumPointSize...PrintSizeOptions.maximumPointSize,
+                suffix: " " + NSLocalizedString("pt", comment: "Abbreviation for typographic points"))
             sizeRow.onChange = { [weak self] size in
                 guard let self else { return }
                 self.willChangeValue(forKey: "localizedSummaryItems")
                 self.pointSize = size
+                PrintSizeOptions.pointSize = size
                 self.didChangeValue(forKey: "localizedSummaryItems")
-                self.applySize?(size) { [weak self] in
-                    self?.previewRevision += 1
-                }
+                self.refreshPreview()
             }
             rows.append(sizeRow)
+            let scaleRow = PrintNumberRowView(
+                width: 620, label: NSLocalizedString("Scale:", comment: "Print scale field label"),
+                value: scalePercent, range: 50...200, suffix: "%")
+            self.scaleRow = scaleRow
+            scaleRow.onChange = { [weak self] percent in
+                guard let self else { return }
+                self.willChangeValue(forKey: "localizedSummaryItems")
+                self.scalePercent = percent
+                self.didChangeValue(forKey: "localizedSummaryItems")
+                self.refreshPreview()
+            }
+            rows.append(scaleRow)
         }
 
         if let exportFormat {
@@ -361,6 +431,10 @@ private final class PrintSizeAccessoryController: NSViewController, NSPrintPanel
                     "Font Size", comment: "Print panel summary item name"),
                 .itemDescription: PrintSizeOptions.localizedLabel(for: pointSize),
             ])
+            items.append([
+                .itemName: NSLocalizedString("Scale", comment: "Print panel scale summary"),
+                .itemDescription: "\(scalePercent)%",
+            ])
         }
         if let exportFormat {
             items.insert([
@@ -374,6 +448,33 @@ private final class PrintSizeAccessoryController: NSViewController, NSPrintPanel
 
     func keyPathsForValuesAffectingPreview() -> Set<String> {
         ["previewRevision"]
+    }
+}
+
+/// Waits for the final paper settings before AppKit starts the print job.
+private final class PaperPrintPanel: NSPrintPanel {
+    var prepare: ((NSPrintInfo) async throws -> Void)?
+
+    override func beginSheet(
+        using printInfo: NSPrintInfo,
+        on parentWindow: NSWindow,
+        completionHandler handler: ((NSPrintPanel.Result) -> Void)? = nil
+    ) {
+        super.beginSheet(using: printInfo, on: parentWindow) { result in
+            guard result == .printed else {
+                handler?(result)
+                return
+            }
+            Task {
+                do {
+                    try await self.prepare?(printInfo)
+                    handler?(.printed)
+                } catch {
+                    parentWindow.presentError(error)
+                    handler?(.cancelled)
+                }
+            }
+        }
     }
 }
 
@@ -397,7 +498,7 @@ private final class ExportPrintPanel: NSPrintPanel {
     private weak var printSheetWindow: NSWindow?
     private weak var printSheetController: NSWindowController?
     private var isObservingPrintSheet = false
-    private var isShowingFileSavePanel = false
+    private var isSavingFile = false
     private var didRemoveTopPocket = false
 
     /// `initialFormat` lets Export as PDF… open on PDF while still offering the
@@ -460,7 +561,7 @@ private final class ExportPrintPanel: NSPrintPanel {
         parentWindow = nil
         printSheetWindow = nil
         printSheetController = nil
-        isShowingFileSavePanel = false
+        isSavingFile = false
         didRemoveTopPocket = false
         isObservingPrintSheet = false
     }
@@ -535,10 +636,13 @@ private final class ExportPrintPanel: NSPrintPanel {
     }
 
     private func configureSaveButton(on controller: NSWindowController) {
-        guard !isShowingFileSavePanel else { return }
         guard let saveButton = privateObject(
             named: "printButton", on: controller) as? NSButton
         else { return }
+        guard !isSavingFile else {
+            saveButton.isEnabled = false
+            return
+        }
 
         saveButton.title = NSLocalizedString(
             "Save", comment: "Export button title")
@@ -569,13 +673,16 @@ private final class ExportPrintPanel: NSPrintPanel {
 
     @objc private func saveExportedFile(_ sender: Any?) {
         let format = selectedFormat
-        guard !isShowingFileSavePanel,
+        guard !isSavingFile,
               !format.usesPrintPipeline,
               let fileExportSource,
               let printSheetWindow
         else { return }
 
-        isShowingFileSavePanel = true
+        isSavingFile = true
+        if let printSheetController {
+            configureSaveButton(on: printSheetController)
+        }
         let panel = NSSavePanel()
         panel.title = NSLocalizedString(
             "Export", comment: "Export panel title")
@@ -601,11 +708,11 @@ private final class ExportPrintPanel: NSPrintPanel {
 
         panel.beginSheetModal(for: printSheetWindow) { [weak self] response in
             guard let self else { return }
-            self.isShowingFileSavePanel = false
             // NSSavePanel may invoke its completion while it is still ordered
             // onscreen. Detach it before restoring or ending the outer sheet.
             panel.orderOut(nil)
             guard response == .OK, let url = panel.url else {
+                self.isSavingFile = false
                 if let printSheetController = self.printSheetController {
                     self.configureSaveButton(on: printSheetController)
                 }
@@ -616,23 +723,32 @@ private final class ExportPrintPanel: NSPrintPanel {
             case .html:
                 do {
                     try fileExportSource.writeHTML(to: url)
+                    self.completeFileExport(error: nil)
                 } catch {
-                    NSAlert(error: error).beginSheetModal(for: printSheetWindow)
-                    return
+                    self.completeFileExport(error: error)
                 }
-                self.dismissAfterFileExport()
             case .png:
                 fileExportSource.writePNG(url) { [weak self] error in
-                    if let error {
-                        NSAlert(error: error).beginSheetModal(for: printSheetWindow)
-                        return
-                    }
-                    self?.dismissAfterFileExport()
+                    self?.completeFileExport(error: error)
                 }
             case .pdf:
                 break
             }
         }
+    }
+
+    private func completeFileExport(error: Error?) {
+        guard let printSheetWindow else { return }
+        guard let error else {
+            dismissAfterFileExport()
+            return
+        }
+        isSavingFile = false
+        if let printSheetController {
+            configureSaveButton(on: printSheetController)
+        }
+        guard !(error is CancellationError) else { return }
+        NSAlert(error: error).beginSheetModal(for: printSheetWindow)
     }
 
     /// These formats bypass NSPrintOperation. End the outer panel as cancelled
@@ -752,209 +868,30 @@ extension MarkdownWebView {
     /// `NSPrintOperation.run()` must never be used with a WKWebView: WebKit
     /// computes pagination asynchronously, so the synchronous path never learns
     /// the page count and can emit pages without bound. Only `runModal` is safe.
-    private func makePrintOperation(jobTitle: String) -> NSPrintOperation {
-        let printInfo = NSPrintInfo.shared.copy() as? NSPrintInfo ?? NSPrintInfo()
+    private func makePrintOperation(for webView: WKWebView, from window: NSWindow,
+                                    printInfo: NSPrintInfo = NSPrintInfo.shared) -> NSPrintOperation {
+        let printInfo = printInfo.copy() as? NSPrintInfo ?? NSPrintInfo()
         printInfo.horizontalPagination = .fit
         printInfo.verticalPagination = .automatic
         printInfo.isHorizontallyCentered = true
         printInfo.isVerticallyCentered = false
 
         let operation = webView.printOperation(with: printInfo)
-        operation.jobTitle = jobTitle
+        // The save panel appends the file extension to this title.
+        operation.jobTitle = (window.title as NSString).deletingPathExtension
         // WKWebView's print view needs an explicit frame, otherwise AppKit
         // asserts when the operation tries to lay out at zero size.
         operation.view?.frame = webView.bounds
-        return operation
-    }
-
-    private func configuredPrintOperation(
-        from window: NSWindow,
-        panel: ExportPrintPanel? = nil
-    ) -> NSPrintOperation {
-        // The PDF save panel seeds its filename from the job title, so a window
-        // titled "notes.md" would otherwise produce "notes.md.pdf".
-        let operation = makePrintOperation(
-            jobTitle: (window.title as NSString).deletingPathExtension)
-        if let panel {
-            operation.printPanel = panel
-        }
-
-        let accessory = PrintSizeAccessoryController(
-            exportFormat: panel?.formatForAccessory)
-        accessory.applySize = { [weak self] size, done in
-            self?.applyPrintPointSize(size, completion: done)
-        }
-        accessory.exportFormatDidChange = { [weak panel] format in
-            panel?.selectExportFormat(format)
-        }
-        operation.printPanel.addAccessoryController(accessory)
         operation.printPanel.options.insert(.showsPreview)
         return operation
     }
 
-    /// Mermaid theme for paper printing. Diagrams bake their colors into the
-    /// SVG at render time, so the forced-light print stylesheet needs figures
-    /// re-rendered with mermaid's light theme.
-    private static let paperPrintMermaidTheme = "default"
-
-    private func runPrintOperation(
-        _ operation: NSPrintOperation,
-        from window: NSWindow,
-        matchesPreview: Bool = false
-    ) {
-        // Export keeps the live read-only stylesheet intact. Regular Print
-        // retains its paper-oriented size and pagination controls, forces the
-        // light palette, and restores the on-screen theme when the panel ends.
-        if matchesPreview {
-            renderAllMermaidDiagrams {
-                self.applyPreviewPrintMode {
-                    operation.runModal(
-                        for: window,
-                        delegate: nil,
-                        didRun: nil,
-                        contextInfo: nil
-                    )
-                }
-            }
-        } else {
-            renderAllMermaidDiagrams(forcedTheme: Self.paperPrintMermaidTheme) {
-                self.applyPaperPrintMode {
-                    self.applyPrintPointSize(PrintSizeOptions.pointSize) {
-                        operation.runModal(
-                            for: window,
-                            delegate: self,
-                            didRun: #selector(Self.paperPrintOperationDidRun(_:success:contextInfo:)),
-                            contextInfo: nil
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    @objc private func paperPrintOperationDidRun(
-        _ operation: NSPrintOperation,
-        success: Bool,
-        contextInfo: UnsafeMutableRawPointer?
-    ) {
-        renderAllMermaidDiagrams {}
-    }
-
-    /// Mermaid renders lazily as figures scroll into view, but pagination
-    /// captures the whole document at once — a diagram that never got near
-    /// the viewport would print as its raw source text. `forcedTheme` pins the
-    /// mermaid theme (re-rendering mismatched figures); calling again without
-    /// one restores the on-screen theme.
-    private func renderAllMermaidDiagrams(
-        forcedTheme: String? = nil,
-        completion: @escaping () -> Void
-    ) {
-        let themeArgument = forcedTheme.map { "'\($0)'" } ?? ""
-        let script = """
-        if (window.MdPreview && typeof window.MdPreview.mermaidRenderAll === 'function') {
-            await window.MdPreview.mermaidRenderAll(\(themeArgument));
-        }
-        """
-        webView.callAsyncJavaScript(script, in: nil, in: .page) { result in
-            if case .failure(let error) = result {
-                Logger.perf.debug(
-                    "mermaid print pre-render failed: \(error.localizedDescription, privacy: .public)"
-                )
-            }
-            completion()
-        }
-    }
-
-    /// Marks the live page so its paper-only CSS does not replace the
-    /// read-only typography, width, spacing, wrapping, or active palette.
-    /// WebKit still paginates it, but the pixels sent into that pagination are
-    /// the same ones the preview renderer owns.
-    private func applyPreviewPrintMode(completion: (() -> Void)? = nil) {
-        let script = """
-        (() => {
-            document.documentElement.classList.add(
-                '\(MarkdownHTML.previewPrintClass)'
-            );
-            document.getElementById('\(printSizeStyleElementID)')?.remove();
-            let style = document.getElementById('\(previewPrintStyleElementID)');
-            if (!style) {
-                style = document.createElement('style');
-                style.id = '\(previewPrintStyleElementID)';
-                document.head.appendChild(style);
-            }
-            style.textContent = \(Self.javaScriptStringLiteral(
-                MarkdownHTML.previewPrintOverrideCSS
-            ));
-            return true;
-        })()
-        """
-        evaluatePrintSetupScript(script, label: "preview print mode", completion: completion)
-    }
-
-    private func applyPaperPrintMode(completion: (() -> Void)? = nil) {
-        let script = """
-        (() => {
-            document.documentElement.classList.remove(
-                '\(MarkdownHTML.previewPrintClass)'
-            );
-            document.getElementById('\(previewPrintStyleElementID)')?.remove();
-            return true;
-        })()
-        """
-        evaluatePrintSetupScript(script, label: "paper print mode", completion: completion)
-    }
-
-    private func evaluatePrintSetupScript(
-        _ script: String,
-        label: String,
-        completion: (() -> Void)?
-    ) {
-        webView.evaluateJavaScript(script) { _, error in
-            if let error {
-                Logger.perf.debug(
-                    "\(label, privacy: .public) setup failed: \(error.localizedDescription, privacy: .public)"
-                )
-            }
-            completion?()
-        }
-    }
-
-    private nonisolated static func javaScriptStringLiteral(_ value: String) -> String {
-        let data = try? JSONSerialization.data(withJSONObject: [value])
-        let array = data.flatMap { String(data: $0, encoding: .utf8) } ?? "[\"\"]"
-        return String(array.dropFirst().dropLast())
-    }
-
-    /// Sets the printed body size by injecting a print-only rule into the
-    /// already-rendered page. Updating one stable element keeps repeated
-    /// changes idempotent and leaves the on-screen document untouched.
-    private func applyPrintPointSize(
-        _ requestedPoints: Int,
-        completion: (() -> Void)? = nil
-    ) {
-        let points = PrintSizeOptions.clamped(requestedPoints)
-        let script = """
-        (() => {
-            const id = '\(printSizeStyleElementID)';
-            let style = document.getElementById(id);
-            if (!style) {
-                style = document.createElement('style');
-                style.id = id;
-                document.head.appendChild(style);
-            }
-            style.textContent =
-                '@media print { body { font-size: \(points)pt !important; } }';
-            return true;
-        })()
-        """
-        webView.evaluateJavaScript(script) { _, error in
-            if let error {
-                Logger.perf.debug(
-                    "print size injection failed: \(error.localizedDescription, privacy: .public)"
-                )
-            }
-            completion?()
-        }
+    private func captureExportSession(assetBaseURL: URL?) async throws -> DocumentExportSession {
+        let configuration = WKWebViewConfiguration()
+        let assets = MarkdownAssetScheme()
+        assets.setBaseURL(assetBaseURL)
+        configuration.setURLSchemeHandler(assets, forURLScheme: MarkdownAssetScheme.scheme)
+        return try await DocumentExportSession.capture(from: webView, configuration: configuration)
     }
 
     /// File ▸ Export… — the same native preview used by PDF export, with a
@@ -998,118 +935,78 @@ extension MarkdownWebView {
         initialFormat: DocumentExportFormat?,
         from window: NSWindow
     ) {
-        let source = FileExportSource(
-            markdown: markdown,
-            sourceURL: sourceURL,
-            assetBaseURL: assetBaseURL,
-            writePNG: { [weak self] url, completion in
-                self?.writePNG(to: url, completion: completion)
-            }
-        )
-        let panel = ExportPrintPanel(
-            fileExportSource: source,
-            initialFormat: initialFormat
-        )
-        let operation = configuredPrintOperation(from: window, panel: panel)
-        prepareForPanelDrivenExport(operation)
-        runPrintOperation(operation, from: window, matchesPreview: true)
-    }
-
-    /// Rasterises the document to a single tall PNG. `createPDF` captures the
-    /// whole scrollable page as one unpaginated sheet, so no page breaks cut
-    /// through the content, and it renders screen media — the image keeps the
-    /// on-screen palette rather than the print stylesheet's forced light one.
-    private func writePNG(to url: URL, completion: @escaping (Error?) -> Void) {
-        webView.createPDF(configuration: WKPDFConfiguration()) { result in
-            switch result {
-            case .failure(let error):
-                completion(error)
-            case .success(let data):
-                do {
-                    try Self.writePNG(fromPDF: data, to: url)
-                    completion(nil)
-                } catch {
-                    completion(error)
+        Task {
+            var session: DocumentExportSession?
+            do {
+                let export = try await captureExportSession(assetBaseURL: assetBaseURL)
+                session = export
+                let exportView = try await export.webView(for: .pdf)
+                let source = FileExportSource(
+                    markdown: markdown,
+                    sourceURL: sourceURL,
+                    assetBaseURL: assetBaseURL,
+                    writePNG: { url, completion in
+                        Task {
+                            do {
+                                try await export.writePNG(to: url)
+                                completion(nil)
+                            } catch {
+                                completion(error)
+                            }
+                        }
+                    }
+                )
+                let panel = ExportPrintPanel(fileExportSource: source, initialFormat: initialFormat)
+                let operation = makePrintOperation(for: exportView, from: window)
+                let accessory = PrintSizeAccessoryController(exportFormat: panel.formatForAccessory)
+                accessory.exportFormatDidChange = { [weak panel] format in
+                    panel?.selectExportFormat(format)
                 }
+                panel.addAccessoryController(accessory)
+                panel.options.insert(.showsPreview)
+                operation.printPanel = panel
+                prepareForPanelDrivenExport(operation)
+                _ = await export.runPrintOperation(operation, from: window)
+            } catch {
+                session?.close()
+                window.presentError(error)
             }
         }
-    }
-
-    private static func writePNG(fromPDF data: Data, to url: URL) throws {
-        guard let document = PDFDocument(data: data), document.pageCount > 0 else {
-            throw exportError("The document could not be rendered as an image.")
-        }
-
-        // 2x so the result stays sharp on Retina displays and when zoomed.
-        let scale: CGFloat = 2
-        let pages = (0..<document.pageCount).compactMap { document.page(at: $0) }
-        let bounds = pages.map { $0.bounds(for: .mediaBox) }
-        let width = bounds.map(\.width).max() ?? 0
-        let height = bounds.map(\.height).reduce(0, +)
-        guard width > 0, height > 0 else {
-            throw exportError("The document could not be rendered as an image.")
-        }
-
-        let pixelWidth = Int((width * scale).rounded())
-        let pixelHeight = Int((height * scale).rounded())
-        guard let rep = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: pixelWidth,
-            pixelsHigh: pixelHeight,
-            bitsPerSample: 8,
-            samplesPerPixel: 4,
-            hasAlpha: true,
-            isPlanar: false,
-            colorSpaceName: .deviceRGB,
-            bytesPerRow: 0,
-            bitsPerPixel: 0
-        ) else {
-            throw exportError("The image could not be allocated.")
-        }
-        rep.size = NSSize(width: width, height: height)
-
-        NSGraphicsContext.saveGraphicsState()
-        defer { NSGraphicsContext.restoreGraphicsState() }
-        guard let context = NSGraphicsContext(bitmapImageRep: rep) else {
-            throw exportError("The image could not be allocated.")
-        }
-        NSGraphicsContext.current = context
-        let cgContext = context.cgContext
-        cgContext.scaleBy(x: scale, y: scale)
-        NSColor.white.setFill()
-        NSRect(x: 0, y: 0, width: width, height: height).fill()
-
-        // PDF origin is bottom-left, so stack downward from the top edge.
-        var offsetY = height
-        for (page, pageBounds) in zip(pages, bounds) {
-            offsetY -= pageBounds.height
-            cgContext.saveGState()
-            cgContext.translateBy(x: 0, y: offsetY)
-            page.draw(with: .mediaBox, to: cgContext)
-            cgContext.restoreGState()
-        }
-
-        guard let png = rep.representation(using: .png, properties: [:]) else {
-            throw exportError("The image could not be encoded.")
-        }
-        try png.write(to: url)
-    }
-
-    private static func exportError(_ message: String) -> NSError {
-        NSError(
-            domain: "doc.md-preview.export",
-            code: 1,
-            userInfo: [NSLocalizedDescriptionKey: NSLocalizedString(
-                message, comment: "PNG export failure")]
-        )
     }
 
     /// File ▸ Print… — the system print panel, with the font size in a
     /// "Markdown Preview" accessory pane so the panel's own live page
     /// thumbnails preview the choice.
-    func printDocument(from window: NSWindow) {
-        let operation = configuredPrintOperation(from: window)
-        runPrintOperation(operation, from: window)
+    func printDocument(assetBaseURL: URL?, from window: NSWindow) {
+        Task {
+            var session: DocumentExportSession?
+            do {
+                let export = try await captureExportSession(assetBaseURL: assetBaseURL)
+                session = export
+                let info = NSPrintInfo.shared.copy() as? NSPrintInfo ?? NSPrintInfo()
+                info.scalingFactor = 1
+                let paperView = try await export.preparePaper(using: info, pointSize: PrintSizeOptions.pointSize)
+                let operation = makePrintOperation(for: paperView, from: window,
+                                                   printInfo: DocumentExportSession.printInfoForPreparedPaper(info))
+                let accessory = PrintSizeAccessoryController(paperScale: info.scalingFactor)
+                accessory.preparePaper = { [weak operation] info, size in
+                    let view = try await export.preparePaper(using: info, pointSize: size)
+                    operation?.view?.frame = view.bounds
+                }
+                accessory.presentError = { window.presentError($0) }
+                let panel = PaperPrintPanel()
+                // Scale is applied before WebKit paginates, via our accessory.
+                panel.options.remove(.showsScaling)
+                panel.prepare = { try await accessory.prepareForPrinting(using: $0) }
+                panel.addAccessoryController(accessory)
+                panel.options.insert(.showsPreview)
+                operation.printPanel = panel
+                _ = await export.runPrintOperation(operation, from: window)
+            } catch {
+                session?.close()
+                window.presentError(error)
+            }
+        }
     }
 
     private func prepareForPanelDrivenExport(_ operation: NSPrintOperation) {
