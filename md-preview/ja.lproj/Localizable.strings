@@ -18,7 +18,7 @@
 "Editing" = "編集";
 "Automatic saving" = "自動保存";
 "Save edited documents periodically." = "編集中の書類を定期的に保存します。";
-"Automatic saving runs while a document has unsaved edits." = "自動保存は、書類に未保存の変更があるときに実行されます。";
+"Automatic saving runs while a document has unsaved edits." = "自動保存は、書類に未保存の変更があるときに行われます。";
 "30 seconds" = "30秒";
 "1 minute" = "1分";
 "%d minutes" = "%d分";
@@ -37,14 +37,14 @@
 "Last checked" = "前回の確認";
 "Never" = "なし";
 "Downloaded updates install the next time you quit Markdown Preview." = "ダウンロードされたアップデートは、次回 Markdown Preview を終了したときにインストールされます。";
-"Colors" = "カラー";
-"Window background" = "ウインドウの背景";
-"Editor background" = "エディタの背景";
+"Colors" = "色の設定";
+"Window background" = "ウインドウの背景色";
+"Editor background" = "エディタの背景色";
 "Code block background" = "コードブロックの背景";
-"Text" = "テキスト";
-"Link" = "リンク";
+"Text" = "テキスト色";
+"Link" = "リンクの色";
 "Presets" = "プリセット";
-"Colors apply to the current appearance. Choose the Automatic appearance to set Light and Dark separately." = "カラーは現在の外観に適用されます。ライトとダークを個別に設定するには「自動」を選択してください。";
+"Colors apply to the current appearance. Choose the Automatic appearance to set Light and Dark separately." = "色の設定は現在の外観に適用されます。ライトとダークを個別に設定するには「自動」を選択してください。";
 "A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards." = "プリセットを使うと、すべての色とテーマ（ライト/ダーク）が一括で切り替わります。その後、下部で個別のカラーを調整できます。";
 "Red Graphite" = "レッドグラファイト";
 "Dark Graphite" = "ダークグラファイト";
@@ -53,7 +53,7 @@
 "Solarized Light" = "Solarized Light";
 "Solarized Dark" = "Solarized Dark";
 "Dracula" = "Dracula";
-"Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "カラーは外観（ライト/ダーク）で個別に設定されます。デフォルトのカラーを選択すると上書きが解除されます。";
+"Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "色は外観（ライト/ダーク）ごとに個別に設定されます。デフォルトの色を選択すると上書きが解除されます。";
 "Custom colors" = "カスタムカラー";
 "Reset Colors" = "カラーをリセット";
 "Restores the default Normal theme." = "デフォルトの「標準」テーマに戻します。";
@@ -298,7 +298,7 @@
 "Windows" = "ウインドウ";
 "Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "今後開くウインドウを含め、すべての Markdown Preview ウインドウを他のアプリの前面に表示し続けます。フルスクリーンのウインドウは、フルスクリーンを解除するまで維持されます。";
 "Open documents in tabs" = "書類をタブで開く";
-"A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "Finder から開いたファイルは、個別のウインドウではなく最前面のウインドウにタブとして追加されます（「新規ウインドウで開く」は引き続き新しいウインドウを開きます）。";
+"A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "Finder から開かれた書類を、新しいウインドウで表示する代わりに、最前面のウインドウの新規タブとして開きます（「新規ウインドウで開く」は引き続き新しいウインドウを開きます）。";
 
 /* Search for Document */
 "Search for Document…" = "書類を検索…";
@@ -318,11 +318,11 @@
 "Continue" = "続ける";
 "Find any document fast" = "あらゆる書類をすばやく検索";
 "Press ⇧⌘O and type part of a file name to open it from the current project." = "⇧⌘O を押してファイル名の一部を入力すると、現在のプロジェクトからファイルを開くことができます。";
-"Redesigned formatting bar" = "新デザインのフォーマットバー";
+"Redesigned formatting bar" = "フォーマットバーのデザインを刷新";
 "On macOS 26 and later, the formatting bar uses Liquid Glass, with headings, links, lists, and styles in compact groups." = "macOS 26 以降では、フォーマットバーに Liquid Glass が採用され、見出し、リンク、リスト、スタイルがコンパクトにグループ化されています。";
-"Redesigned code blocks" = "新デザインのコードブロック";
+"Redesigned code blocks" = "コードブロックのデザインを刷新";
 "Wrap long lines with one click. Code blocks now use rounded cards that show their language." = "クリック1つで長い行を折り返せます。コードブロックが言語表示付きの角丸カードになりました。";
 
 /* Reading preferences */
-"Strict line breaks" = "厳格な改行";
-"Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "通常のソースコードの改行を結合して連続した段落にします。オフにするとすべての改行が保持されます。閲覧ビューと Quick Look プレビューに適用されます。";
+"Strict line breaks" = "厳密な改行";
+"Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "ソースコード中の通常の改行を結合し、連続した段落にします。オフにすると、Markdown書式に沿わない改行も改行として扱います。アプリと Quick Look プレビュー双方に適用されます。";
