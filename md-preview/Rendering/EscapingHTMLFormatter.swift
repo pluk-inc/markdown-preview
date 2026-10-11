@@ -1606,6 +1606,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         if let source = image.source, !source.isEmpty {
             result += " src=\"\(escapeAttribute(source))\""
         }
+        result += " alt=\"\(escapeAttribute(image.plainText))\""
         if let title = image.title, !title.isEmpty {
             result += " title=\"\(escapeAttribute(title))\""
         }

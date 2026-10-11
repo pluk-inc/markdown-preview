@@ -19,6 +19,7 @@
 "Automatic saving" = "自動保存";
 "Save edited documents periodically." = "編集中の書類を定期的に保存します。";
 "Automatic saving runs while a document has unsaved edits." = "自動保存は、書類に未保存の変更があるときに行われます。";
+"Instant" = "即時";
 "30 seconds" = "30秒";
 "1 minute" = "1分";
 "%d minutes" = "%d分";
