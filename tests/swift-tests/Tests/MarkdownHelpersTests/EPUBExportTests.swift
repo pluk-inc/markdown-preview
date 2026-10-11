@@ -10,6 +10,10 @@ final class EPUBExportTests: XCTestCase {
     }
 
     private let png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+    private var jpeg: String {
+        let pixels = NSBitmapImageRep(data: Data(base64Encoded: png)!)!
+        return pixels.representation(using: .jpeg, properties: [:])!.base64EncodedString()
+    }
     private let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"160\" height=\"50\"><rect width=\"160\" height=\"50\" fill=\"royalblue\"/></svg>"
 
     private var book: String {
@@ -72,8 +76,8 @@ final class EPUBExportTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: contents.deletingLastPathComponent()) }
 
         XCTAssertEqual(try TestArchive.files(in: contents), [
-            "META-INF/container.xml", "OEBPS/content.opf", "OEBPS/images/diagram-1.png",
-            "OEBPS/images/image-1.svg", "OEBPS/images/image-2.png", "OEBPS/nav.xhtml",
+            "META-INF/container.xml", "OEBPS/content.opf", "OEBPS/images/image-1.png",
+            "OEBPS/images/image-2.png", "OEBPS/images/image-3.png", "OEBPS/nav.xhtml",
             "OEBPS/section-001.xhtml", "OEBPS/section-002.xhtml", "OEBPS/section-003.xhtml",
             "OEBPS/section-004.xhtml", "OEBPS/style.css", "mimetype",
         ])
@@ -113,13 +117,17 @@ final class EPUBExportTests: XCTestCase {
         XCTAssertTrue(sections[3].contains(#"<a href="section-001.xhtml#md-heading-0">top</a>"#))
         XCTAssertTrue(sections[3].contains("<a>dead end</a>"))
 
-        // Images travel inside the book; one that cannot be read leaves its description.
-        XCTAssertTrue(sections[0].contains(#"<img src="images/image-1.svg" alt="Vector""#))
+        // Pictures are stored as the preview drew them, at twice the size
+        // shown; an image the preview could not load leaves its description.
+        XCTAssertTrue(sections[0].contains(#"<img src="images/image-1.png" alt="Vector" width="160""#))
         XCTAssertTrue(sections[0].contains(#"<img src="images/image-2.png" alt="Pixel""#))
         XCTAssertTrue(sections[0].contains("Missing"))
         XCTAssertFalse(sections[0].contains("md-asset"))
-        XCTAssertEqual(try Data(contentsOf: folder.appendingPathComponent("images/image-2.png")),
-                       Data(base64Encoded: png))
+        let vector = try XCTUnwrap(NSBitmapImageRep(data: Data(contentsOf: folder.appendingPathComponent("images/image-1.png"))))
+        XCTAssertEqual([vector.pixelsWide, vector.pixelsHigh], [320, 100])
+        let blue = try XCTUnwrap(vector.colorAt(x: 160, y: 50)?.usingColorSpace(.deviceRGB))
+        XCTAssertGreaterThan(blue.blueComponent, 0.7)
+        XCTAssertLessThan(blue.redComponent, 0.45)
 
         XCTAssertTrue(sections[1].contains("\u{2610} "))
         XCTAssertTrue(sections[1].contains("\u{2611} "))
@@ -130,9 +138,9 @@ final class EPUBExportTests: XCTestCase {
         // The diagram becomes a picture drawn for a light page, shown at the
         // size Mermaid laid it out and stored at twice that.
         let width = try XCTUnwrap(sections[2].firstMatch(
-            of: /<img src="images\/diagram-1\.png" alt="Mermaid diagram" width="(\d+)"/)?.1).flatMap { Int($0) }
+            of: /<img src="images\/image-3\.png" alt="Mermaid diagram" width="(\d+)"/)?.1).flatMap { Int($0) }
         XCTAssertFalse(sections[2].contains("<svg"))
-        let diagram = try XCTUnwrap(NSBitmapImageRep(data: Data(contentsOf: folder.appendingPathComponent("images/diagram-1.png"))))
+        let diagram = try XCTUnwrap(NSBitmapImageRep(data: Data(contentsOf: folder.appendingPathComponent("images/image-3.png"))))
         let displayWidth = try XCTUnwrap(width)
         XCTAssertTrue((200...330).contains(displayWidth), "\(displayWidth)")
         XCTAssertEqual(Double(diagram.pixelsWide), Double(displayWidth * 2), accuracy: 3)
@@ -171,6 +179,14 @@ final class EPUBExportTests: XCTestCase {
 
         Body with a control\u{C}character and <span xlink:title="stray prefix">raw HTML</span>.
 
+        ![Photo](data:image/jpeg;base64,\(jpeg))
+
+        <img src="data:image/png;base64,\(png)" width="0" height="0" alt="Unseen">
+
+        <svg width="40" height="20" aria-label="Badge"><image href="https://example.com/beacon.png" width="40" height="20"/><rect width="40" height="20" fill="royalblue"/></svg>
+
+        <table background="https://example.com/beacon.png"><tr><td>Cell</td></tr></table>
+
         | A | B | C | D | E | F |
         | --- | --- | --- | --- | --- | --- |
         | 1 | 2 | 3 | 4 | 5 | 6 |
@@ -181,7 +197,7 @@ final class EPUBExportTests: XCTestCase {
         """
         let harness = makeHarness(markdown: markdown)
         defer { harness.close() }
-        _ = try await harness.layout(texts: ["Opening words."], imageCount: 0)
+        _ = try await harness.layout(texts: ["Opening words."], imageCount: 2)
         let contents = try await export(from: harness, markdown: markdown, name: "single")
         defer { try? FileManager.default.removeItem(at: contents.deletingLastPathComponent()) }
 
@@ -190,8 +206,20 @@ final class EPUBExportTests: XCTestCase {
         XCTAssertNoThrow(try XMLDocument(contentsOf: folder.appendingPathComponent("section-001.xhtml")))
         // Only tables with many columns are set in smaller type to fit a page.
         let section = try String(contentsOf: folder.appendingPathComponent("section-001.xhtml"), encoding: .utf8)
-        XCTAssertEqual(section.components(separatedBy: "<table").count - 1, 2)
+        XCTAssertEqual(section.components(separatedBy: "<table").count - 1, 3)
         XCTAssertEqual(section.components(separatedBy: #"<table class="md-many-columns">"#).count - 1, 1)
+
+        // A book made from someone else's document carries only what the
+        // preview showed, and never reaches for the network when opened.
+        let files = try TestArchive.files(in: contents).filter { $0.contains("/images/") }
+        XCTAssertEqual(files, ["OEBPS/images/image-1.jpg", "OEBPS/images/image-2.png"])
+        XCTAssertEqual(try Data(contentsOf: folder.appendingPathComponent("images/image-1.jpg")).prefix(3),
+                       Data([0xFF, 0xD8, 0xFF]))
+        XCTAssertTrue(section.contains(#"<img src="images/image-1.jpg" alt="Photo""#))
+        XCTAssertTrue(section.contains(#"<img src="images/image-2.png" alt="Badge" width="40""#))
+        for absent in ["Unseen", "<svg", "<image", "example.com", "background=", "xlink"] {
+            XCTAssertFalse(section.contains(absent), absent)
+        }
         let package = try XMLDocument(contentsOf: folder.appendingPathComponent("content.opf"))
         XCTAssertEqual(try package.nodes(forXPath: "//*[local-name()='title']").first?.stringValue, "Only heading")
         XCTAssertEqual(try package.nodes(forXPath: "//*[local-name()='language']").first?.stringValue, "en")
@@ -229,32 +257,6 @@ final class EPUBExportTests: XCTestCase {
             Ceci est un document entièrement rédigé en français, avec assez de mots pour le reconnaître.
             """)
         XCTAssertEqual(detected, .init(title: nil, authors: [], language: "fr"))
-    }
-
-    func testImagesLoadFromDocumentFilesAndUnsupportedFormatsBecomePNG() async throws {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("mdp-epub-images-" + UUID().uuidString, isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let pixel = try XCTUnwrap(Data(base64Encoded: png))
-        let tiff = try XCTUnwrap(NSBitmapImageRep(data: pixel)?.representation(using: .tiff, properties: [:]))
-        try pixel.write(to: directory.appendingPathComponent("pixel.png"))
-        try tiff.write(to: directory.appendingPathComponent("scan image.tiff"))
-        try Data("not an image".utf8).write(to: directory.appendingPathComponent("notes.png"))
-
-        let base = MarkdownAssetResolution.baseHref(forFolder: directory)
-        let sources = ["pixel.png", "scan%20image.tiff", "notes.png", "absent.png"].map { base + $0 }
-        let images = await EPUBExport.loadImages(sources + ["ftp://example.com/a.png"])
-
-        XCTAssertEqual(images[sources[0]]?.data, pixel)
-        XCTAssertEqual(images[sources[0]]?.mediaType, "image/png")
-        XCTAssertEqual(images[sources[1]]?.mediaType, "image/png")
-        XCTAssertEqual(images[sources[1]]?.data.prefix(4), pixel.prefix(4))
-        XCTAssertEqual(images.count, 2)
-        XCTAssertEqual(EPUBExport.image(from: Data(svg.utf8))?.fileExtension, "svg")
-        XCTAssertEqual(EPUBExport.image(from: Data([0xFF, 0xD8, 0xFF, 0xE0]))?.mediaType, "image/jpeg")
-        // An error page with an inline icon is not an SVG image.
-        XCTAssertNil(EPUBExport.image(from: Data("<!DOCTYPE html><html><body>\(svg)</body></html>".utf8)))
     }
 
     private func makeHarness(markdown: String) -> WebViewLayoutHarness {

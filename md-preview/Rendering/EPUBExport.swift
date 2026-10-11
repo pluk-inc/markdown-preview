@@ -7,7 +7,6 @@
 //  so they are free to rewrite it.
 //
 
-import AppKit
 import Foundation
 import NaturalLanguage
 
@@ -59,125 +58,74 @@ nonisolated enum EPUBExport {
         return Locale.current.language.languageCode?.identifier ?? "en"
     }
 
-    // MARK: - Images
-
-    struct Image: Sendable {
-        var data: Data
-        var mediaType: String
-        var fileExtension: String
-    }
-
-    /// Loads the images the page shows, keyed by the URL the page used.
-    /// Images that cannot be read are left out; the page falls back to their
-    /// alternative text.
-    @concurrent
-    static func loadImages(_ sources: [String]) async -> [String: Image] {
-        // A stalled or endless download must not hold the export open.
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 20
-        configuration.timeoutIntervalForResource = 60
-        let session = URLSession(configuration: configuration)
-        defer { session.finishTasksAndInvalidate() }
-        return await withTaskGroup(of: (String, Image?).self) { group in
-            for source in Set(sources) {
-                group.addTask { (source, await loadImage(source, using: session)) }
-            }
-            var images: [String: Image] = [:]
-            for await (source, image) in group {
-                images[source] = image
-            }
-            return images
-        }
-    }
-
-    private static func loadImage(_ source: String, using session: URLSession) async -> Image? {
-        guard let url = URL(string: source) else { return nil }
-        let data: Data?
-        switch url.scheme?.lowercased() {
-        case MarkdownAssetResolution.scheme:
-            data = MarkdownAssetResolution.fileURL(for: url).flatMap { try? Data(contentsOf: $0) }
-        case "http", "https", "data":
-            // A book cannot refer to the network, so remote images are embedded.
-            if let (body, response) = try? await session.data(from: url),
-               (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true {
-                data = body
-            } else {
-                data = nil
-            }
-        default:
-            data = nil
-        }
-        return data.flatMap(image(from:))
-    }
-
-    /// Passes through the formats every reader accepts and re-encodes the
-    /// rest (WebP, HEIC, TIFF, …) as PNG.
-    static func image(from data: Data) -> Image? {
-        if data.starts(with: [0x89, 0x50, 0x4E, 0x47]) {
-            return Image(data: data, mediaType: "image/png", fileExtension: "png")
-        }
-        if data.starts(with: [0xFF, 0xD8, 0xFF]) {
-            return Image(data: data, mediaType: "image/jpeg", fileExtension: "jpg")
-        }
-        if data.starts(with: Data("GIF8".utf8)) {
-            return Image(data: data, mediaType: "image/gif", fileExtension: "gif")
-        }
-        // A web page served in place of a missing image can contain an inline
-        // `<svg>` too; that is not a picture.
-        let start = String(decoding: data.prefix(2048), as: UTF8.self).lowercased()
-        if start.contains("<svg"), !start.contains("<html"), !start.contains("<!doctype html") {
-            return Image(data: data, mediaType: "image/svg+xml", fileExtension: "svg")
-        }
-        guard let png = NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:]) else {
-            return nil
-        }
-        return Image(data: png, mediaType: "image/png", fileExtension: "png")
-    }
-
     // MARK: - Page scripts
 
-    /// Lists what has to be gathered before the page is converted: where each
-    /// rendered diagram is drawn on the page, and the URL of every image the
-    /// page managed to load. An image the preview could not show (missing, or
-    /// refused by the asset handler) is never read for the book either.
+    /// Marks every picture the book will carry and reports where the page
+    /// draws it: Mermaid diagrams, inline SVG and images.
+    ///
+    /// Pictures are captured from this page, never re-read from their source.
+    /// The book then holds what the preview showed, at the size it showed it,
+    /// and nothing else: no bytes fetched a second time, no file the preview
+    /// did not display, and no SVG markup a reading app would have to trust.
     static let inventoryScript = #"""
     const article = document.querySelector('article.markdown-body');
     if (!article) return null;
-    // Diagrams are captured as pictures; give them the white page a reader
-    // shows them on, whatever the preview's theme.
+    // A reader shows pictures on its own light page, whatever the preview's theme.
     document.documentElement.setAttribute('data-mdp-color-scheme', 'light');
     const style = document.createElement('style');
     style.textContent = 'html, body, .mermaid-figure, .mermaid-stage, .mermaid { background: #fff !important; }';
     document.head.append(style);
-    article.querySelectorAll('.mermaid-hud').forEach(node => node.remove());
+    // Preview controls would end up in the pictures, and a closed disclosure
+    // hides what the book shows open.
+    article.querySelectorAll('.mermaid-hud, .markdown-alert-icon, .md-code-header, .md-table-actions, button')
+        .forEach(node => node.remove());
+    article.querySelectorAll('details').forEach(details => { details.open = true; });
     scrollTo(0, 0);
-    const diagrams = Array.from(article.querySelectorAll('.mermaid-figure'), figure => {
-        const svg = figure.querySelector('.mermaid svg');
-        const box = svg && svg.getBoundingClientRect();
-        if (!box || !(box.width > 0 && box.height > 0)) return null;
-        // The preview fits each drawing inside a wider element. Report the
-        // drawing itself, and the size Mermaid laid it out at: its text is
-        // body-sized there, which is how large a reader should show it.
-        const view = svg.viewBox && svg.viewBox.baseVal;
-        const natural = view && view.width > 0 && view.height > 0 ? view : box;
-        const fit = Math.min(box.width / natural.width, box.height / natural.height);
-        const width = natural.width * fit;
-        const height = natural.height * fit;
-        return {
-            x: box.left + (box.width - width) / 2, y: box.top + (box.height - height) / 2,
-            width, height, naturalWidth: natural.width
-        };
-    });
-    const loaded = await Promise.all(Array.from(article.querySelectorAll('img'), image =>
-        image.decode().then(() => image.currentSrc || image.src, () => '')));
-    return { diagrams, images: Array.from(new Set(loaded.filter(Boolean))) };
+
+    const pictures = [];
+    const add = (element, box, displayWidth, jpeg) => {
+        element.setAttribute('data-epub-picture', String(pictures.length));
+        pictures.push({ x: box.x, y: box.y, width: box.width, height: box.height, displayWidth, jpeg });
+    };
+    const drawn = box => box.width > 0 && box.height > 0;
+    for (const element of article.querySelectorAll('.mermaid-figure, svg, img')) {
+        if (element.localName === 'img') {
+            // Only an image the preview loaded, and only if it is on the page.
+            if (!(await element.decode().then(() => true, () => false))) continue;
+            const box = element.getBoundingClientRect();
+            if (!drawn(box)) { element.remove(); continue; }
+            const source = element.currentSrc || element.src;
+            add(element, box, box.width, /^data:image\/jpe?g|\.jpe?g($|[?#])/i.test(source));
+        } else if (element.localName === 'svg') {
+            // Inline SVG typed into the document; a diagram's own is handled below.
+            if (element.closest('.mermaid-figure') || element.parentElement.closest('svg')) continue;
+            const box = element.getBoundingClientRect();
+            if (drawn(box)) add(element, box, box.width, false);
+        } else {
+            const svg = element.querySelector('.mermaid svg');
+            const box = svg && svg.getBoundingClientRect();
+            if (!box || !drawn(box)) continue;
+            // The preview fits each drawing inside a wider element. Report the
+            // drawing itself, and the size Mermaid laid it out at: its text is
+            // body-sized there, which is how large a reader should show it.
+            const view = svg.viewBox && svg.viewBox.baseVal;
+            const natural = view && view.width > 0 && view.height > 0 ? view : box;
+            const fit = Math.min(box.width / natural.width, box.height / natural.height);
+            const width = natural.width * fit;
+            const height = natural.height * fit;
+            add(element, {
+                x: box.left + (box.width - width) / 2, y: box.top + (box.height - height) / 2, width, height
+            }, natural.width, false);
+        }
+    }
+    return { pictures };
     """#
 
     /// Rewrites the article into reader-friendly markup and returns it as
     /// well-formed XHTML sections plus the table of contents.
     ///
-    /// `images` maps the inventory's image URLs to file paths inside the book;
-    /// `diagrams` holds `{ path, width }` (or null) per diagram, in page order.
+    /// `pictures` holds `{ path, width }` for each picture the inventory
+    /// marked, in the same order, or null where the capture failed.
     static let conversionScript = #"""
     const article = document.querySelector('article.markdown-body');
     if (!article) return null;
@@ -204,27 +152,24 @@ nonisolated enum EPUBExport {
         if (!slugs.has(slug)) slugs.set(slug, heading);
     }
 
-    all('img').forEach(image => {
-        const file = images[image.currentSrc || image.src];
-        if (file) {
-            image.setAttribute('src', file);
-            image.removeAttribute('srcset');
-        } else {
-            image.replaceWith(image.getAttribute('alt') || '');
-        }
-    });
-    // Mermaid's SVG leans on features e-readers lack; use the captured picture.
-    all('.mermaid-figure').forEach((figure, index) => {
-        const file = diagrams[index];
-        if (!file) return;
-        const image = document.createElement('img');
+    // An image the preview could not load leaves its description.
+    all('img:not([data-epub-picture])').forEach(image => image.replaceWith(image.getAttribute('alt') || ''));
+    all('[data-epub-picture]').forEach(element => {
+        const file = pictures[Number(element.getAttribute('data-epub-picture'))];
+        const description = element.getAttribute(element.localName === 'img' ? 'alt' : 'aria-label') || '';
+        if (!file) return element.replaceWith(description);
+        const image = element.localName === 'img' ? element : document.createElement('img');
         image.setAttribute('src', file.path);
-        image.setAttribute('alt', figure.getAttribute('aria-label') || '');
+        image.setAttribute('alt', description);
+        // The file is stored larger than it is shown, to stay sharp.
         image.setAttribute('width', String(Math.round(file.width)));
-        const replacement = document.createElement('figure');
-        replacement.className = 'mermaid-figure';
-        replacement.append(image);
-        figure.replaceWith(replacement);
+        image.removeAttribute('height');
+        if (element.localName === 'svg') return element.replaceWith(image);
+        if (element === image) return;
+        const figure = document.createElement('figure');
+        figure.className = 'mermaid-figure';
+        figure.append(image);
+        element.replaceWith(figure);
     });
     // KaTeX renders each formula twice. Keep the MathML, which readers lay out
     // themselves, and drop the HTML that needs KaTeX's stylesheet and fonts.
@@ -241,13 +186,14 @@ nonisolated enum EPUBExport {
     all('mark.md-search-highlight, mark.md-search-highlight-current')
         .forEach(mark => mark.replaceWith(...mark.childNodes));
     // Preview controls, spacing helpers, and anything a book cannot carry.
-    all(`script, style, link, template, button, iframe, object, embed, video, audio, canvas,
-         source, select, textarea, .md-source-blank-line, .md-code-header, .md-code-action,
-         .md-table-actions, .md-search-burst, .mermaid-hud, .markdown-alert-icon`)
+    // Every picture is a captured image by now, so any SVG left was not drawn.
+    all(`script, style, link, template, button, iframe, object, embed, video, audio, canvas, svg,
+         source, map, area, select, textarea, .md-source-blank-line, .md-code-header,
+         .md-code-action, .md-table-actions, .md-search-burst, .mermaid-hud, .markdown-alert-icon`)
         .forEach(node => node.remove());
     // Form controls are dropped by some readers; a glyph always shows.
     all('input').forEach(input => {
-        if (input.type === 'checkbox') input.replaceWith(input.checked ? '☑' : '☐');
+        if (input.type === 'checkbox') input.replaceWith(input.checked ? '\u2611' : '\u2610');
         else input.remove();
     });
     all('details').forEach(details => details.setAttribute('open', ''));
@@ -256,11 +202,17 @@ nonisolated enum EPUBExport {
         if (columns >= 6) table.classList.add('md-many-columns');
     });
     all('*').forEach(element => {
+        const tag = element.localName;
         for (const attribute of Array.from(element.attributes)) {
             const name = attribute.name;
+            // A book must not reach for the network when it is opened: only
+            // links, and the pictures stored in it, may point anywhere.
+            const reference = ['background', 'poster', 'srcset', 'sizes', 'ping', 'usemap'].includes(name)
+                || (name === 'href' && tag !== 'a') || (name === 'src' && tag !== 'img')
+                || attribute.namespaceURI === 'http://www.w3.org/1999/xlink';
             // A prefixed name typed into raw HTML (`xlink:href` on a link) has
             // no namespace, and would make the section unreadable as XML.
-            if (name.startsWith('data-') || name === 'tabindex' || name === 'loading'
+            if (reference || name.startsWith('data-') || name === 'tabindex' || name === 'loading'
                 || name === 'contenteditable' || (attribute.namespaceURI === null && name.includes(':'))) {
                 element.removeAttributeNode(attribute);
             }
@@ -268,7 +220,7 @@ nonisolated enum EPUBExport {
         // `align` is not valid in a book's XHTML.
         const align = element.getAttribute('align');
         if (align === null) return;
-        if (element.localName !== 'img' && element.style) element.style.textAlign = align;
+        if (tag !== 'img' && element.style) element.style.textAlign = align;
         element.removeAttribute('align');
     });
 
@@ -330,7 +282,7 @@ nonisolated enum EPUBExport {
 
     const serializer = new XMLSerializer();
     // Characters XML 1.0 cannot contain, even escaped.
-    const invalid = /[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g;
+    const invalid = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g;
     const sections = groups.map((group, index) => {
         const heading = group.find(node => level(node));
         const holder = document.createElement('article');
@@ -340,8 +292,7 @@ nonisolated enum EPUBExport {
             file: files[index],
             title: heading ? clean(heading.textContent) : '',
             xhtml: serializer.serializeToString(holder).replace(invalid, ''),
-            math: holder.querySelector('math') !== null,
-            svg: holder.querySelector('svg') !== null
+            math: holder.querySelector('math') !== null
         };
     });
     return { sections, navigation, title };

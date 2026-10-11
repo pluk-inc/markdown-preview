@@ -16,7 +16,6 @@ nonisolated struct EPUBPackage: Sendable {
         var title: String
         var xhtml: String
         var containsMath = false
-        var containsSVG = false
     }
 
     /// A table-of-contents entry. `href` is relative to the content folder.
@@ -26,7 +25,7 @@ nonisolated struct EPUBPackage: Sendable {
         var href: String
     }
 
-    /// An image stored next to the sections; `path` is relative to them.
+    /// A picture stored next to the sections; `path` is relative to them.
     struct Resource: Sendable {
         var path: String
         var mediaType: String
@@ -67,9 +66,8 @@ nonisolated struct EPUBPackage: Sendable {
             try archive.add(document, at: "\(folder)/\(section.fileName)")
         }
         for resource in resources {
-            // Raster formats are already compressed.
-            try archive.add(resource.data, at: "\(folder)/\(resource.path)",
-                            compression: resource.mediaType == "image/svg+xml" ? .deflated : .stored)
+            // PNG and JPEG are already compressed.
+            try archive.add(resource.data, at: "\(folder)/\(resource.path)", compression: .stored)
         }
         return try archive.finish()
     }
@@ -91,10 +89,8 @@ nonisolated struct EPUBPackage: Sendable {
         formatter.formatOptions = [.withInternetDateTime]
         let creators = authors.map { "<dc:creator>\(Self.escape($0))</dc:creator>\n" }.joined()
         let sectionItems = sections.enumerated().map { index, section in
-            // Readers reject a document that uses these without declaring them.
-            let properties = [section.containsMath ? "mathml" : nil, section.containsSVG ? "svg" : nil]
-                .compactMap(\.self).joined(separator: " ")
-            let attribute = properties.isEmpty ? "" : " properties=\"\(properties)\""
+            // Readers reject a document that uses MathML without declaring it.
+            let attribute = section.containsMath ? " properties=\"mathml\"" : ""
             return """
             <item id="section-\(index + 1)" href="\(Self.escape(section.fileName))" \
             media-type="application/xhtml+xml"\(attribute)/>

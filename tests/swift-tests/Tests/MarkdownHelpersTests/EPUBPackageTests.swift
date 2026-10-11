@@ -87,7 +87,7 @@ final class EPUBPackageTests: XCTestCase {
         XCTAssertEqual(try values("//*[local-name()='itemref']/@idref"), ["section-1", "section-2"])
         XCTAssertEqual(try values("//*[local-name()='item'][@properties='nav']/@href"), ["nav.xhtml"])
         XCTAssertEqual(try values("//*[local-name()='item'][@id='section-1']/@properties"), [])
-        XCTAssertEqual(try values("//*[local-name()='item'][@id='section-2']/@properties"), ["mathml svg"])
+        XCTAssertEqual(try values("//*[local-name()='item'][@id='section-2']/@properties"), ["mathml"])
         XCTAssertEqual(try values("//*[local-name()='item'][@media-type='image/png']/@href"), ["images/picture.png"])
         // Every spine entry and manifest href names a real file.
         let identifiers = Set(try values("//*[local-name()='item']/@id"))
@@ -197,7 +197,7 @@ final class EPUBPackageTests: XCTestCase {
                       xhtml: "<article xmlns=\"http://www.w3.org/1999/xhtml\"><h1 id=\"a\">Start</h1></article>"),
                 .init(fileName: "section-002.xhtml", title: "",
                       xhtml: "<article xmlns=\"http://www.w3.org/1999/xhtml\"><p>More</p></article>",
-                      containsMath: true, containsSVG: true),
+                      containsMath: true),
             ],
             headings: [.init(level: 1, title: "Start", href: "section-001.xhtml#a")],
             resources: [.init(path: "images/picture.png", mediaType: "image/png", data: Data([0x89, 0x50, 0x4E, 0x47]))]

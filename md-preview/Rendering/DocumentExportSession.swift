@@ -229,47 +229,42 @@ final class DocumentExportSession {
             EPUBExport.inventoryScript, in: nil, contentWorld: .page) as? [String: Any]
         else { throw Self.exportError("The document could not be prepared for export.") }
 
+        // Every picture is captured from the page as the preview drew it.
         var resources: [EPUBPackage.Resource] = []
-        var diagrams: [Any] = []
-        for (index, box) in (inventory["diagrams"] as? [Any] ?? []).enumerated() {
-            guard let box = box as? [String: Double],
-                  let x = box["x"], let y = box["y"], let width = box["width"], let height = box["height"],
-                  let naturalWidth = box["naturalWidth"]
+        var pictures: [Any] = []
+        for box in inventory["pictures"] as? [[String: Any]] ?? [] {
+            guard !isClosed else { throw CancellationError() }
+            guard let x = box["x"] as? Double, let y = box["y"] as? Double,
+                  let width = box["width"] as? Double, let height = box["height"] as? Double,
+                  let displayWidth = box["displayWidth"] as? Double
             else {
-                diagrams.append(NSNull())
+                pictures.append(NSNull())
                 continue
             }
             let capture = WKPDFConfiguration()
             capture.rect = CGRect(x: x, y: y, width: width, height: height)
-            // The capture is vector, so the picture can be sharp at the size a
-            // reader shows it whatever size the preview drew it at.
-            let scale = min(2 * naturalWidth / width, 4096 / max(width, height))
-            // One diagram that cannot be captured stays as the page has it;
-            // it is no reason to lose the book.
+            // Twice the size a reader shows it, short of an unreasonable bitmap.
+            let scale = min(2 * displayWidth / width, 8192 / max(width, height))
+            // Photographs stay JPEG; as PNG they would be many times larger.
+            let isPhoto = box["jpeg"] as? Bool ?? false
+            // One picture that cannot be captured leaves its description; it
+            // is no reason to lose the book.
             guard let pdf = try? await view.pdf(configuration: capture),
-                  let png = try? Self.pngData(fromPDF: pdf, scale: scale)
+                  let png = try? Self.pngData(fromPDF: pdf, scale: scale),
+                  let data = isPhoto
+                    ? NSBitmapImageRep(data: png)?.representation(using: .jpeg, properties: [.compressionFactor: 0.85])
+                    : png
             else {
-                diagrams.append(NSNull())
+                pictures.append(NSNull())
                 continue
             }
-            let path = "images/diagram-\(resources.count + 1).png"
-            resources.append(.init(path: path, mediaType: "image/png", data: png))
-            diagrams.append(["path": path, "width": naturalWidth])
+            let path = "images/image-\(resources.count + 1).\(isPhoto ? "jpg" : "png")"
+            resources.append(.init(path: path, mediaType: isPhoto ? "image/jpeg" : "image/png", data: data))
+            pictures.append(["path": path, "width": displayWidth])
         }
-
-        let sources = inventory["images"] as? [String] ?? []
-        let loaded = await EPUBExport.loadImages(sources)
-        var images: [String: String] = [:]
-        for source in sources {
-            guard let image = loaded[source] else { continue }
-            let path = "images/image-\(images.count + 1).\(image.fileExtension)"
-            resources.append(.init(path: path, mediaType: image.mediaType, data: image.data))
-            images[source] = path
-        }
-        guard !isClosed else { throw CancellationError() }
 
         guard let converted = try await view.callAsyncJavaScript(
-            EPUBExport.conversionScript, arguments: ["images": images, "diagrams": diagrams],
+            EPUBExport.conversionScript, arguments: ["pictures": pictures],
             in: nil, contentWorld: .page) as? [String: Any],
               let convertedSections = converted["sections"] as? [[String: Any]]
         else { throw Self.exportError("The document could not be prepared for export.") }
@@ -278,8 +273,7 @@ final class DocumentExportSession {
                 return nil
             }
             return .init(fileName: file, title: section["title"] as? String ?? "", xhtml: xhtml,
-                         containsMath: section["math"] as? Bool ?? false,
-                         containsSVG: section["svg"] as? Bool ?? false)
+                         containsMath: section["math"] as? Bool ?? false)
         }
         let headings = (converted["navigation"] as? [[String: Any]] ?? []).compactMap { entry -> EPUBPackage.Heading? in
             guard let level = entry["level"] as? Int, let title = entry["title"] as? String,
