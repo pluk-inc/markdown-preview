@@ -55,9 +55,9 @@ enum InlineLocalAssets {
                 replacement = "\(prefix)cid:\(existingCID)\(suffix)"
             } else if let resolved = resolveRelative(src: src, baseDirectory: baseDirectory),
                       let data = try? reader(resolved),
-                      isDescendantOrSame(resolved, of: base) || isImageData(data, url: resolved),
                       data.count <= perImageByteCap,
-                      cumulativeBytes + data.count <= cumulativeByteCap {
+                      cumulativeBytes + data.count <= cumulativeByteCap,
+                      isDescendantOrSame(resolved, of: base) || isImageData(data, url: resolved) {
                 let cid = "md-asset-\(attachments.count)"
                 attachments[cid] = Attachment(
                     data: data,
