@@ -93,6 +93,7 @@
 "Format:" = "Format:";
 "PDF Document" = "PDF Document";
 "HTML Document" = "HTML Document";
+"EPUB Book" = "EPUB Book";
 "The document could not be prepared for export." = "The document could not be prepared for export.";
 "The selected paper has no printable area." = "The selected paper has no printable area.";
 

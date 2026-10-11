@@ -4,7 +4,7 @@ import WebKit
 
 @MainActor
 final class DocumentExportSession {
-    enum Format { case pdf, png, paper }
+    enum Format { case pdf, png, paper, epub }
 
     private struct PaperLayout: Equatable {
         let width: CGFloat
@@ -137,7 +137,9 @@ final class DocumentExportSession {
             ? previewSize
             : NSSize(width: MarkdownHTML.preferredPageWidth, height: previewSize.height)
         let page = ExportPage(size: size, configuration: configuration)
-        page.webView.appearance = format == .paper ? NSAppearance(named: .aqua) : appearance
+        // Paper and reading apps supply their own light page.
+        let leavesPreview = format == .paper || format == .epub
+        page.webView.appearance = leavesPreview ? NSAppearance(named: .aqua) : appearance
         page.webView.pageZoom = format == .png ? previewZoom : 1
         page.webView.mediaType = format == .paper ? "print" : nil
         pages[format] = page
@@ -153,10 +155,10 @@ final class DocumentExportSession {
                 images.forEach(image => { image.loading = 'eager'; });
                 await Promise.allSettled(images.map(image => image.decode()));
                 await document.fonts.ready;
-                """, arguments: ["matchesPreview": format != .paper,
+                """, arguments: ["matchesPreview": !leavesPreview,
                                  "printClass": MarkdownHTML.previewPrintClass, "css": css],
                 in: nil, contentWorld: .page)
-            if format == .paper {
+            if leavesPreview {
                 if !mermaidSources.isEmpty {
                     _ = try await page.webView.evaluateJavaScript(MarkdownHTML.paperMermaidScript)
                     _ = try await page.webView.callAsyncJavaScript("""
@@ -214,6 +216,87 @@ final class DocumentExportSession {
         let data = try await preparation.value
         guard !isClosed else { throw CancellationError() }
         try data.write(to: url)
+    }
+
+    /// Writes a reflowable EPUB of the rendered article. `markdown` supplies
+    /// the frontmatter that names the book; `fallbackTitle` names it otherwise.
+    func writeEPUB(to url: URL, markdown: String, fallbackTitle: String) async throws {
+        guard !isClosed else { throw CancellationError() }
+        // The conversion rewrites its page, so each save starts from a fresh one.
+        defer { pages.removeValue(forKey: .epub)?.close() }
+        let view = try await webView(for: .epub)
+        guard let inventory = try await view.callAsyncJavaScript(
+            EPUBExport.inventoryScript, in: nil, contentWorld: .page) as? [String: Any]
+        else { throw Self.exportError("The document could not be prepared for export.") }
+
+        var resources: [EPUBPackage.Resource] = []
+        var diagrams: [Any] = []
+        for (index, box) in (inventory["diagrams"] as? [Any] ?? []).enumerated() {
+            guard let box = box as? [String: Double],
+                  let x = box["x"], let y = box["y"], let width = box["width"], let height = box["height"],
+                  let naturalWidth = box["naturalWidth"]
+            else {
+                diagrams.append(NSNull())
+                continue
+            }
+            let capture = WKPDFConfiguration()
+            capture.rect = CGRect(x: x, y: y, width: width, height: height)
+            // The capture is vector, so the picture can be sharp at the size a
+            // reader shows it whatever size the preview drew it at.
+            let scale = min(2 * naturalWidth / width, 4096 / max(width, height))
+            // One diagram that cannot be captured stays as the page has it;
+            // it is no reason to lose the book.
+            guard let pdf = try? await view.pdf(configuration: capture),
+                  let png = try? Self.pngData(fromPDF: pdf, scale: scale)
+            else {
+                diagrams.append(NSNull())
+                continue
+            }
+            let path = "images/diagram-\(resources.count + 1).png"
+            resources.append(.init(path: path, mediaType: "image/png", data: png))
+            diagrams.append(["path": path, "width": naturalWidth])
+        }
+
+        let sources = inventory["images"] as? [String] ?? []
+        let loaded = await EPUBExport.loadImages(sources)
+        var images: [String: String] = [:]
+        for source in sources {
+            guard let image = loaded[source] else { continue }
+            let path = "images/image-\(images.count + 1).\(image.fileExtension)"
+            resources.append(.init(path: path, mediaType: image.mediaType, data: image.data))
+            images[source] = path
+        }
+        guard !isClosed else { throw CancellationError() }
+
+        guard let converted = try await view.callAsyncJavaScript(
+            EPUBExport.conversionScript, arguments: ["images": images, "diagrams": diagrams],
+            in: nil, contentWorld: .page) as? [String: Any],
+              let convertedSections = converted["sections"] as? [[String: Any]]
+        else { throw Self.exportError("The document could not be prepared for export.") }
+        let sections = convertedSections.compactMap { section -> EPUBPackage.Section? in
+            guard let file = section["file"] as? String, let xhtml = section["xhtml"] as? String else {
+                return nil
+            }
+            return .init(fileName: file, title: section["title"] as? String ?? "", xhtml: xhtml,
+                         containsMath: section["math"] as? Bool ?? false,
+                         containsSVG: section["svg"] as? Bool ?? false)
+        }
+        let headings = (converted["navigation"] as? [[String: Any]] ?? []).compactMap { entry -> EPUBPackage.Heading? in
+            guard let level = entry["level"] as? Int, let title = entry["title"] as? String,
+                  let href = entry["href"] as? String else { return nil }
+            return .init(level: level, title: title, href: href)
+        }
+        let metadata = EPUBExport.metadata(from: markdown)
+        let headingTitle = converted["title"] as? String ?? ""
+        let package = EPUBPackage(
+            title: metadata.title ?? (headingTitle.isEmpty ? fallbackTitle : headingTitle),
+            authors: metadata.authors, language: metadata.language,
+            sections: sections, headings: headings, resources: resources)
+        guard !sections.isEmpty,
+              let data = try? await Task(operation: { @concurrent in try package.archiveData() }).value
+        else { throw Self.exportError("The document could not be prepared for export.") }
+        guard !isClosed else { throw CancellationError() }
+        try data.write(to: url, options: .atomic)
     }
 
     func close() {
@@ -306,13 +389,12 @@ private final class ExportPrintCompletion: NSObject {
 }
 
 extension DocumentExportSession {
-    private static func pngData(fromPDF data: Data) throws -> Data {
+    private static func pngData(fromPDF data: Data, scale: CGFloat = 2) throws -> Data {
         guard let document = PDFDocument(data: data), document.pageCount > 0 else {
             throw exportError("The document could not be rendered as an image.")
         }
 
-        // 2x so the result stays sharp on Retina displays and when zoomed.
-        let scale: CGFloat = 2
+        // 2x by default so the result stays sharp on Retina displays and when zoomed.
         let pages = (0..<document.pageCount).compactMap { document.page(at: $0) }
         let bounds = pages.map { $0.bounds(for: .mediaBox) }
         let width = bounds.map(\.width).max() ?? 0

@@ -93,6 +93,7 @@
 "Format:" = "フォーマット:";
 "PDF Document" = "PDF 書類";
 "HTML Document" = "HTML 書類";
+"EPUB Book" = "EPUB ブック";
 "The document could not be prepared for export." = "書類の書き出し準備ができませんでした。";
 "The selected paper has no printable area." = "選択した用紙にはプリント可能な領域がありません。";
 
