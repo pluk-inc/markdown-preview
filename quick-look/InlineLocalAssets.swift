@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import UniformTypeIdentifiers
 
 enum InlineLocalAssets {
@@ -31,6 +32,7 @@ enum InlineLocalAssets {
             return Result(html: html, attachments: [:])
         }
 
+        let base = baseDirectory.standardizedFileURL
         var attachments: [String: Attachment] = [:]
         var srcToCID: [String: String] = [:]
         var cumulativeBytes = 0
@@ -53,6 +55,7 @@ enum InlineLocalAssets {
                 replacement = "\(prefix)cid:\(existingCID)\(suffix)"
             } else if let resolved = resolveRelative(src: src, baseDirectory: baseDirectory),
                       let data = try? reader(resolved),
+                      isDescendantOrSame(resolved, of: base) || isImageData(data, url: resolved),
                       data.count <= perImageByteCap,
                       cumulativeBytes + data.count <= cumulativeByteCap {
                 let cid = "md-asset-\(attachments.count)"
@@ -150,6 +153,18 @@ enum InlineLocalAssets {
 
     private static func isImageFile(_ url: URL) -> Bool {
         UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) ?? false
+    }
+
+    /// The name check alone trusts the filename: `x.png` can be a symlink to,
+    /// or a rename of, any readable file. Outside the document folder the
+    /// bytes must decode as an image too.
+    private static func isImageData(_ data: Data, url: URL) -> Bool {
+        if UTType(filenameExtension: url.pathExtension)?.conforms(to: .svg) == true {
+            let head = String(decoding: data.prefix(1024), as: UTF8.self)
+            return head.range(of: "<svg", options: .caseInsensitive) != nil
+        }
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return false }
+        return CGImageSourceGetType(source) != nil && CGImageSourceGetCount(source) > 0
     }
 
     private static func hasURLScheme(_ value: String) -> Bool {

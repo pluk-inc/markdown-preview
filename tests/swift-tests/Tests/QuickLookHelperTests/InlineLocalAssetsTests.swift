@@ -14,6 +14,10 @@ final class InlineLocalAssetsTests: XCTestCase {
 
     private let red = Data([0xDE, 0xAD, 0xBE, 0xEF])
     private let blue = Data([0xCA, 0xFE, 0xBA, 0xBE])
+    // A real 1×1 PNG: files outside the document folder must decode as images.
+    private let png = Data(base64Encoded:
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
+    private let svg = Data(#"<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"/>"#.utf8)
 
     // MARK: - Rewriting
 
@@ -121,11 +125,11 @@ final class InlineLocalAssetsTests: XCTestCase {
             html: html,
             baseDirectory: URL(fileURLWithPath: "/tmp/qltest-fixture/report/", isDirectory: true),
             reader: reader([
-                "/tmp/qltest-fixture/assets/2026/07/monthly.jpg": red,
-                "/tmp/device evidence/x.png": blue,
+                "/tmp/qltest-fixture/assets/2026/07/monthly.jpg": png,
+                "/tmp/device evidence/x.png": png,
             ])
         )
-        XCTAssertEqual(Set(result.attachments.values.map(\.data)), [red, blue])
+        XCTAssertEqual(result.attachments.count, 2)
         XCTAssertFalse(result.html.contains("../"))
     }
 
@@ -134,10 +138,35 @@ final class InlineLocalAssetsTests: XCTestCase {
         let result = InlineLocalAssets.rewriteRelativeImages(
             html: html,
             baseDirectory: baseDir,
-            reader: reader(["/Users/k/Screenshots/shot one.png": red])
+            reader: reader(["/Users/k/Screenshots/shot one.png": png])
         )
-        XCTAssertEqual(result.attachments.values.first?.data, red)
+        XCTAssertEqual(result.attachments.values.first?.data, png)
         XCTAssertTrue(result.html.contains("src=\"cid:"))
+    }
+
+    func testOutsideSVGWithSVGContentBecomesCID() {
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: #"<img src="../diagram.svg">"#,
+            baseDirectory: baseDir,
+            reader: reader(["/tmp/diagram.svg": svg])
+        )
+        XCTAssertEqual(result.attachments.values.first?.data, svg)
+    }
+
+    func testOutsideImageNameWithNonImageBytesIsLeftAlone() {
+        // e.g. `../x.png` is a symlink to a text file, or a renamed one.
+        let html = #"<img src="../x.png"><img src="/Users/k/notes.jpg"><img src="../fake.svg">"#
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: html,
+            baseDirectory: baseDir,
+            reader: reader([
+                "/tmp/x.png": Data("secret token".utf8),
+                "/Users/k/notes.jpg": red,
+                "/tmp/fake.svg": Data("not a drawing".utf8),
+            ])
+        )
+        XCTAssertEqual(result.html, html)
+        XCTAssertTrue(result.attachments.isEmpty)
     }
 
     func testParentDirectoryNonImageIsLeftAlone() {
