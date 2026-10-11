@@ -444,8 +444,17 @@ final class MarkdownHTMLPDFExportTests: XCTestCase {
             info.orientation = orientation
             info.scalingFactor = scale
             let view = try await session.preparePaper(using: info, pointSize: pointSize)
-            let headerEdge = try await view.evaluateJavaScript(
-                "document.querySelector('th').getBoundingClientRect().right") as? Double
+            // macOS 15 WebKit leaves the body's CSS zoom out of client rects;
+            // newer WebKit includes it. Measure the zoomed edge on both.
+            let headerEdge = try await view.evaluateJavaScript("""
+                (() => {
+                    const th = document.querySelector('th');
+                    const rect = th.getBoundingClientRect();
+                    const zoom = parseFloat(document.body.style.zoom) || 1;
+                    const zoomed = Math.abs(rect.width - th.offsetWidth * zoom) < Math.abs(rect.width - th.offsetWidth);
+                    return zoomed ? rect.right : rect.right * zoom;
+                })()
+                """) as? Double
             let headerRight = try XCTUnwrap(headerEdge)
             let outputInfo = DocumentExportSession.printInfoForPreparedPaper(info)
             XCTAssertEqual(info.scalingFactor, scale)
