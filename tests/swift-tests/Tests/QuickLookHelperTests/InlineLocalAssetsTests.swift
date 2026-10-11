@@ -153,6 +153,27 @@ final class InlineLocalAssetsTests: XCTestCase {
         XCTAssertEqual(result.attachments.values.first?.data, svg)
     }
 
+    func testOutsideSVGAfterLongCommentBecomesCID() {
+        let comment = "<!-- " + String(repeating: "x", count: 2048) + " -->"
+        let data = Data((#"<?xml version="1.0"?>"# + comment + #"<svg xmlns="http://www.w3.org/2000/svg"/>"#).utf8)
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: #"<img src="../diagram.svg">"#,
+            baseDirectory: baseDir,
+            reader: reader(["/tmp/diagram.svg": data])
+        )
+        XCTAssertEqual(result.attachments.values.first?.data, data)
+    }
+
+    func testOutsideSVGNameWithSVGOnlyInCommentIsLeftAlone() {
+        let html = #"<img src="../notes.svg">"#
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: html,
+            baseDirectory: baseDir,
+            reader: reader(["/tmp/notes.svg": Data("<!-- <svg> --><notes>secret</notes>".utf8)])
+        )
+        XCTAssertEqual(result.html, html)
+    }
+
     func testOutsideImageNameWithNonImageBytesIsLeftAlone() {
         // e.g. `../x.png` is a symlink to a text file, or a renamed one.
         let html = #"<img src="../x.png"><img src="/Users/k/notes.jpg"><img src="../fake.svg">"#

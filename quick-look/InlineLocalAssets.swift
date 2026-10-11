@@ -160,8 +160,7 @@ enum InlineLocalAssets {
     /// bytes must decode as an image too.
     private static func isImageData(_ data: Data, url: URL) -> Bool {
         if UTType(filenameExtension: url.pathExtension)?.conforms(to: .svg) == true {
-            let head = String(decoding: data.prefix(1024), as: UTF8.self)
-            return head.range(of: "<svg", options: .caseInsensitive) != nil
+            return SVGRootCheck.hasSVGRoot(data)
         }
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return false }
         return CGImageSourceGetType(source) != nil && CGImageSourceGetCount(source) > 0
@@ -183,5 +182,28 @@ enum InlineLocalAssets {
         let candidatePath = candidate.standardizedFileURL.path
         let basePath = baseDirectory.standardizedFileURL.path
         return candidatePath == basePath || candidatePath.hasPrefix(basePath + "/")
+    }
+}
+
+/// Parses only up to the first element: an SVG file must have `<svg>` as its
+/// root, wherever it sits after the prolog and comments.
+private final class SVGRootCheck: NSObject, XMLParserDelegate {
+    private var rootName: String?
+
+    static func hasSVGRoot(_ data: Data) -> Bool {
+        let check = SVGRootCheck()
+        let parser = XMLParser(data: data)
+        parser.shouldResolveExternalEntities = false
+        parser.delegate = check
+        parser.parse()
+        guard let name = check.rootName else { return false }
+        return name == "svg" || name.hasSuffix(":svg")
+    }
+
+    func parser(_ parser: XMLParser, didStartElement elementName: String,
+                namespaceURI: String?, qualifiedName: String?,
+                attributes: [String: String] = [:]) {
+        rootName = elementName
+        parser.abortParsing()
     }
 }
