@@ -70,4 +70,19 @@ final class ExternalOpenSchemeTests: XCTestCase {
         XCTAssertNil(ExternalOpenScheme.resolvedURL(opening: URL(string: "md-preview://file/")!))
         XCTAssertNil(ExternalOpenScheme.resolvedURL(opening: URL(string: "md-preview://")!))
     }
+
+    // MARK: - Fragment
+
+    func testFragmentIsReturnedDecoded() {
+        XCTAssertEqual(ExternalOpenScheme.fragment(opening: URL(string: "md-preview://file/Users/me/a.md#install-steps")!),
+                       "install-steps")
+        XCTAssertEqual(ExternalOpenScheme.fragment(opening: URL(string: "MD-PREVIEW://file/Users/me/a.md#caf%C3%A9")!),
+                       "café")
+    }
+
+    func testNoFragmentForOtherSchemesOrEmptyFragment() {
+        XCTAssertNil(ExternalOpenScheme.fragment(opening: URL(string: "md-preview://file/Users/me/a.md")!))
+        XCTAssertNil(ExternalOpenScheme.fragment(opening: URL(string: "md-preview://file/Users/me/a.md#")!))
+        XCTAssertNil(ExternalOpenScheme.fragment(opening: URL(string: "file:///Users/me/a.md#x")!))
+    }
 }

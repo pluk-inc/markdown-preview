@@ -21,6 +21,12 @@ nonisolated enum MarkdownAssetResolution {
 
     static let scheme = "md-asset"
 
+    /// A link to one of these opens as a document in the app, from Read
+    /// Mode and from Quick Look; other local files open in their own app.
+    static func isMarkdownDocument(_ url: URL) -> Bool {
+        ["md", "markdown", "mdown", "mkdn", "mkd", "mdx"].contains(url.pathExtension.lowercased())
+    }
+
     /// Base href used when the document has no file location (unsaved
     /// documents, the vendor warmup page): relative references cannot
     /// resolve to files, while vendor scripts — absolute

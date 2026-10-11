@@ -629,7 +629,7 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
         ))
         let baseDirectory = url.deletingLastPathComponent()
         let rewrite = InlineLocalAssets.rewriteRelativeImages(
-            html: renderedHTML,
+            html: LocalLinks.rewrite(html: renderedHTML, baseDirectory: baseDirectory),
             baseDirectory: baseDirectory,
             reader: { try Data(contentsOf: $0) }
         )

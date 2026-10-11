@@ -32,16 +32,20 @@ extension DocumentWindowController {
         }
     }
 
+    /// Scrolls a document that was just opened to `#fragment`.
+    static func scrollToAnchorWhenReady(_ fragment: String?, in document: NSDocument?) {
+        guard let fragment,
+              let controller = document?.windowControllers.first as? DocumentWindowController
+        else { return }
+        controller.mainSplit?.scrollToAnchorWhenReady(fragment)
+    }
+
     private func openDocumentWindow(for fileURL: URL, completion: (() -> Void)? = nil) {
         let fragment = fileURL.fragment?.removingPercentEncoding
         NSDocumentController.shared.openDocument(withContentsOf: Self.fileURLWithoutFragment(fileURL),
                                                  display: true) { [weak self] document, _, error in
             completion?()
-            if let fragment,
-               let controller = document?.windowControllers.first as? DocumentWindowController,
-               let split = controller.documentWindow.contentViewController as? MainSplitViewController {
-                split.scrollToAnchorWhenReady(fragment)
-            }
+            Self.scrollToAnchorWhenReady(fragment, in: document)
             guard let self, let error else { return }
             NSAlert(error: error).beginSheetModal(for: self.documentWindow)
         }

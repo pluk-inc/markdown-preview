@@ -194,6 +194,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 continue
             }
 
+            let fragment = ExternalOpenScheme.fragment(opening: incoming)
             pendingOpenURLCount += 1
             NSDocumentController.shared.openDocument(withContentsOf: url,
                                                      display: true) { [weak self] document, _, error in
@@ -202,6 +203,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 guard let self else { return }
                 self.showWindowIfNeeded(for: document)
+                DocumentWindowController.scrollToAnchorWhenReady(fragment, in: document)
                 self.pendingOpenURLCount -= 1
                 if error != nil {
                     self.scheduleDocumentPromptIfIdle()

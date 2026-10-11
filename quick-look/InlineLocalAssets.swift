@@ -135,12 +135,7 @@ enum InlineLocalAssets {
     /// paths resolve (#488). Files outside the document folder must have an
     /// image type, so a previewed file can't pull arbitrary files into the page.
     private static func resolveRelative(src attribute: String, baseDirectory: URL) -> URL? {
-        // The renderer escapes `&` in attributes (`a&b.png` → `a&amp;b.png`).
-        // WebKit would read the unescaped value, so resolve that one.
-        let src = decodingCharacterReferences(attribute)
-        guard !src.isEmpty else { return nil }
-        if src.hasPrefix("#") || src.hasPrefix("//") { return nil }
-        if hasURLScheme(src) { return nil }
+        guard let src = localReference(attribute) else { return nil }
         let isAbsolute = src.hasPrefix("/")
 
         // CommonMark renderers percent-encode spaces in image targets;
@@ -156,6 +151,18 @@ enum InlineLocalAssets {
         let candidate = URL(fileURLWithPath: decoded, relativeTo: base).standardizedFileURL
         guard isDescendantOrSame(candidate, of: base) || isImageFile(candidate) else { return nil }
         return candidate
+    }
+
+    /// The value of a `src` or `href` attribute when it names a local path,
+    /// or nil for URLs with a scheme, `#fragment` refs, protocol-relative
+    /// `//host` refs, and empty values. The renderer escapes `&` in
+    /// attributes (`a&b.png` → `a&amp;b.png`); WebKit reads the unescaped
+    /// value, so this returns that one.
+    static func localReference(_ attribute: String) -> String? {
+        let value = decodingCharacterReferences(attribute)
+        guard !value.isEmpty, !value.hasPrefix("#"), !value.hasPrefix("//"),
+              !hasURLScheme(value) else { return nil }
+        return value
     }
 
     /// Decodes the character references an attribute value can carry:
