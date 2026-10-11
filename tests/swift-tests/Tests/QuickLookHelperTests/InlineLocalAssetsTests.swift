@@ -14,6 +14,10 @@ final class InlineLocalAssetsTests: XCTestCase {
 
     private let red = Data([0xDE, 0xAD, 0xBE, 0xEF])
     private let blue = Data([0xCA, 0xFE, 0xBA, 0xBE])
+    // A real 1×1 PNG: files outside the document folder must decode as images.
+    private let png = Data(base64Encoded:
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
+    private let svg = Data(#"<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"/>"#.utf8)
 
     // MARK: - Rewriting
 
@@ -94,7 +98,7 @@ final class InlineLocalAssetsTests: XCTestCase {
         XCTAssertEqual(result.html, html)
     }
 
-    func testHostAbsolutePathUntouched() {
+    func testAbsoluteNonImagePathUntouched() {
         let html = #"<img src="/etc/passwd">"#
         let result = InlineLocalAssets.rewriteRelativeImages(
             html: html,
@@ -104,12 +108,94 @@ final class InlineLocalAssetsTests: XCTestCase {
         XCTAssertEqual(result.html, html)
     }
 
-    func testParentDirectoryTraversalIsLeftAlone() {
-        let html = #"<img src="../secret.png">"#
+    func testProtocolRelativeSrcLeftAlone() {
+        let html = #"<img src="//example.com/a.png">"#
         let result = InlineLocalAssets.rewriteRelativeImages(
             html: html,
             baseDirectory: baseDir,
-            reader: { _ in XCTFail("reader must not be called for parent traversal"); return Data() }
+            reader: { _ in XCTFail("reader must not be called for //host refs"); return Data() }
+        )
+        XCTAssertEqual(result.html, html)
+    }
+
+    // #488: the app resolves these, so Quick Look must too.
+    func testParentDirectoryImagesBecomeCIDs() {
+        let html = #"<img src="../assets/2026/07/monthly.jpg"><img src="../../device%20evidence/x.png">"#
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: html,
+            baseDirectory: URL(fileURLWithPath: "/tmp/qltest-fixture/report/", isDirectory: true),
+            reader: reader([
+                "/tmp/qltest-fixture/assets/2026/07/monthly.jpg": png,
+                "/tmp/device evidence/x.png": png,
+            ])
+        )
+        XCTAssertEqual(result.attachments.count, 2)
+        XCTAssertFalse(result.html.contains("../"))
+    }
+
+    func testAbsoluteImagePathBecomesCID() {
+        let html = #"<img src="/Users/k/Screenshots/shot%20one.png">"#
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: html,
+            baseDirectory: baseDir,
+            reader: reader(["/Users/k/Screenshots/shot one.png": png])
+        )
+        XCTAssertEqual(result.attachments.values.first?.data, png)
+        XCTAssertTrue(result.html.contains("src=\"cid:"))
+    }
+
+    func testOutsideSVGWithSVGContentBecomesCID() {
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: #"<img src="../diagram.svg">"#,
+            baseDirectory: baseDir,
+            reader: reader(["/tmp/diagram.svg": svg])
+        )
+        XCTAssertEqual(result.attachments.values.first?.data, svg)
+    }
+
+    func testOutsideSVGAfterLongCommentBecomesCID() {
+        let comment = "<!-- " + String(repeating: "x", count: 2048) + " -->"
+        let data = Data((#"<?xml version="1.0"?>"# + comment + #"<svg xmlns="http://www.w3.org/2000/svg"/>"#).utf8)
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: #"<img src="../diagram.svg">"#,
+            baseDirectory: baseDir,
+            reader: reader(["/tmp/diagram.svg": data])
+        )
+        XCTAssertEqual(result.attachments.values.first?.data, data)
+    }
+
+    func testOutsideSVGNameWithSVGOnlyInCommentIsLeftAlone() {
+        let html = #"<img src="../notes.svg">"#
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: html,
+            baseDirectory: baseDir,
+            reader: reader(["/tmp/notes.svg": Data("<!-- <svg> --><notes>secret</notes>".utf8)])
+        )
+        XCTAssertEqual(result.html, html)
+    }
+
+    func testOutsideImageNameWithNonImageBytesIsLeftAlone() {
+        // e.g. `../x.png` is a symlink to a text file, or a renamed one.
+        let html = #"<img src="../x.png"><img src="/Users/k/notes.jpg"><img src="../fake.svg">"#
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: html,
+            baseDirectory: baseDir,
+            reader: reader([
+                "/tmp/x.png": Data("secret token".utf8),
+                "/Users/k/notes.jpg": red,
+                "/tmp/fake.svg": Data("not a drawing".utf8),
+            ])
+        )
+        XCTAssertEqual(result.html, html)
+        XCTAssertTrue(result.attachments.isEmpty)
+    }
+
+    func testParentDirectoryNonImageIsLeftAlone() {
+        let html = #"<img src="../secret.txt"><img src="../../.ssh/id_ed25519">"#
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: html,
+            baseDirectory: baseDir,
+            reader: { _ in XCTFail("reader must not be called for non-images outside the folder"); return Data() }
         )
         XCTAssertEqual(result.html, html)
         XCTAssertTrue(result.attachments.isEmpty)

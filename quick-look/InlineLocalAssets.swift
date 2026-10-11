@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import UniformTypeIdentifiers
 
 enum InlineLocalAssets {
@@ -31,6 +32,7 @@ enum InlineLocalAssets {
             return Result(html: html, attachments: [:])
         }
 
+        let base = baseDirectory.standardizedFileURL
         var attachments: [String: Attachment] = [:]
         var srcToCID: [String: String] = [:]
         var cumulativeBytes = 0
@@ -54,7 +56,8 @@ enum InlineLocalAssets {
             } else if let resolved = resolveRelative(src: src, baseDirectory: baseDirectory),
                       let data = try? reader(resolved),
                       data.count <= perImageByteCap,
-                      cumulativeBytes + data.count <= cumulativeByteCap {
+                      cumulativeBytes + data.count <= cumulativeByteCap,
+                      isDescendantOrSame(resolved, of: base) || isImageData(data, url: resolved) {
                 let cid = "md-asset-\(attachments.count)"
                 attachments[cid] = Attachment(
                     data: data,
@@ -121,24 +124,46 @@ enum InlineLocalAssets {
         )
     }()
 
-    /// Returns nil for srcs that should not be rewritten (absolute URLs,
-    /// fragment refs, host-absolute paths, empty values).
+    /// Returns nil for srcs that should not be rewritten (URLs with a
+    /// scheme, fragment refs, protocol-relative `//host` refs, empty values).
+    ///
+    /// Like the app's `md-asset` scheme, `../` paths and absolute filesystem
+    /// paths resolve (#488). Files outside the document folder must have an
+    /// image type, so a previewed file can't pull arbitrary files into the page.
     private static func resolveRelative(src: String, baseDirectory: URL) -> URL? {
         guard !src.isEmpty else { return nil }
-        if src.hasPrefix("#") || src.hasPrefix("/") { return nil }
+        if src.hasPrefix("#") || src.hasPrefix("//") { return nil }
         if hasURLScheme(src) { return nil }
+        let isAbsolute = src.hasPrefix("/")
 
         // CommonMark renderers percent-encode spaces in image targets;
         // FileManager wants real paths.
         let decoded = src.removingPercentEncoding ?? src
         guard !decoded.isEmpty else { return nil }
-        if decoded.hasPrefix("#") || decoded.hasPrefix("/") { return nil }
+        if decoded.hasPrefix("#") || decoded.hasPrefix("//") { return nil }
+        // Decoding must not turn a relative src into an absolute one.
+        if decoded.hasPrefix("/") != isAbsolute { return nil }
         if hasURLScheme(decoded) { return nil }
 
         let base = baseDirectory.standardizedFileURL
         let candidate = URL(fileURLWithPath: decoded, relativeTo: base).standardizedFileURL
-        guard isDescendantOrSame(candidate, of: base) else { return nil }
+        guard isDescendantOrSame(candidate, of: base) || isImageFile(candidate) else { return nil }
         return candidate
+    }
+
+    private static func isImageFile(_ url: URL) -> Bool {
+        UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) ?? false
+    }
+
+    /// The name check alone trusts the filename: `x.png` can be a symlink to,
+    /// or a rename of, any readable file. Outside the document folder the
+    /// bytes must decode as an image too.
+    private static func isImageData(_ data: Data, url: URL) -> Bool {
+        if UTType(filenameExtension: url.pathExtension)?.conforms(to: .svg) == true {
+            return SVGRootCheck.hasSVGRoot(data)
+        }
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return false }
+        return CGImageSourceGetType(source) != nil && CGImageSourceGetCount(source) > 0
     }
 
     private static func hasURLScheme(_ value: String) -> Bool {
@@ -157,5 +182,28 @@ enum InlineLocalAssets {
         let candidatePath = candidate.standardizedFileURL.path
         let basePath = baseDirectory.standardizedFileURL.path
         return candidatePath == basePath || candidatePath.hasPrefix(basePath + "/")
+    }
+}
+
+/// Parses only up to the first element: an SVG file must have `<svg>` as its
+/// root, wherever it sits after the prolog and comments.
+private final class SVGRootCheck: NSObject, XMLParserDelegate {
+    private var rootName: String?
+
+    static func hasSVGRoot(_ data: Data) -> Bool {
+        let check = SVGRootCheck()
+        let parser = XMLParser(data: data)
+        parser.shouldResolveExternalEntities = false
+        parser.delegate = check
+        parser.parse()
+        guard let name = check.rootName else { return false }
+        return name == "svg" || name.hasSuffix(":svg")
+    }
+
+    func parser(_ parser: XMLParser, didStartElement elementName: String,
+                namespaceURI: String?, qualifiedName: String?,
+                attributes: [String: String] = [:]) {
+        rootName = elementName
+        parser.abortParsing()
     }
 }

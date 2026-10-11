@@ -22,7 +22,10 @@ final class EscapingHTMLFormatterTests: XCTestCase {
 
     func testImageAltTextIsPreservedAndEscaped() {
         let html = EscapingHTMLFormatter.format(#"![A "chart" & total](chart.png)"#)
-        XCTAssertTrue(html.contains(#"alt="A &quot;chart&quot; &amp; total""#), html)
+        // Smart punctuation curls the quotes in alt text, as in the visible prose.
+        XCTAssertTrue(html.contains(#"alt="A “chart” &amp; total""#), html)
+        let quoted = EscapingHTMLFormatter.format(#"![Say "hi"](a.png)"#)
+        XCTAssertFalse(quoted.contains(#"alt="Say "hi"""#), quoted)
 
         let emptyAlt = EscapingHTMLFormatter.format("![](decorative.png)")
         XCTAssertTrue(emptyAlt.contains(#"alt="""#), emptyAlt)
