@@ -20,6 +20,14 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         XCTAssertFalse(html.contains("<a "), html)
     }
 
+    func testImageAltTextIsPreservedAndEscaped() {
+        let html = EscapingHTMLFormatter.format(#"![A "chart" & total](chart.png)"#)
+        XCTAssertTrue(html.contains(#"alt="A &quot;chart&quot; &amp; total""#), html)
+
+        let emptyAlt = EscapingHTMLFormatter.format("![](decorative.png)")
+        XCTAssertTrue(emptyAlt.contains(#"alt="""#), emptyAlt)
+    }
+
     func testBareURLsInIssue390ListBecomeLinks() {
         let html = EscapingHTMLFormatter.format("* https://apple.com/\n* https://github.com/")
         XCTAssertTrue(html.contains(#"<a href="https://apple.com/">https://apple.com/</a>"#), html)
