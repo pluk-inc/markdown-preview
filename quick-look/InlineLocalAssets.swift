@@ -47,8 +47,8 @@ enum InlineLocalAssets {
             ))
 
             let prefix = nsHtml.substring(with: match.range(at: 1))
-            let src = nsHtml.substring(with: match.range(at: 2))
-            let suffix = nsHtml.substring(with: match.range(at: 3))
+            let src = nsHtml.substring(with: match.range(at: 3))
+            let suffix = nsHtml.substring(with: match.range(at: 4))
 
             let replacement: String
             if let existingCID = srcToCID[src] {
@@ -96,11 +96,11 @@ enum InlineLocalAssets {
                 length: match.range.location - cursor
             ))
 
-            let src = nsHtml.substring(with: match.range(at: 2))
+            let src = nsHtml.substring(with: match.range(at: 3))
             let contentID = src.hasPrefix("cid:") ? String(src.dropFirst(4)) : ""
             if let attachment = result.attachments[contentID] {
                 let prefix = nsHtml.substring(with: match.range(at: 1))
-                let suffix = nsHtml.substring(with: match.range(at: 3))
+                let suffix = nsHtml.substring(with: match.range(at: 4))
                 let mimeType = UTType(filenameExtension: attachment.pathExtension)?.preferredMIMEType
                     ?? "application/octet-stream"
                 let dataURL = "data:\(mimeType);base64,\(attachment.data.base64EncodedString())"
@@ -115,11 +115,15 @@ enum InlineLocalAssets {
         return output
     }
 
-    // Matches the double-quoted image tags emitted by MarkdownHTML's renderer.
+    // Matches the double-quoted image tags emitted by MarkdownHTML's renderer
+    // and the single-quoted ones authors write in raw HTML. Other attributes'
+    // quoted values are skipped whole, so `src` text inside them never
+    // matches, and the whitespace before `src` skips `data-src`. Group 2 is
+    // the quote, group 3 the value, group 4 the closing quote.
     private static let imgSrcRegex: NSRegularExpression = {
         // swiftlint:disable:next force_try
         try! NSRegularExpression(
-            pattern: #"(<img\b[^>]*?\bsrc=")([^"]*)(")"#,
+            pattern: #"(<img\b(?:[^>"']|"[^"]*"|'[^']*')*?\ssrc\s*=\s*(["']))([\s\S]*?)(\2)"#,
             options: [.caseInsensitive]
         )
     }()
@@ -130,7 +134,10 @@ enum InlineLocalAssets {
     /// Like the app's `md-asset` scheme, `../` paths and absolute filesystem
     /// paths resolve (#488). Files outside the document folder must have an
     /// image type, so a previewed file can't pull arbitrary files into the page.
-    private static func resolveRelative(src: String, baseDirectory: URL) -> URL? {
+    private static func resolveRelative(src attribute: String, baseDirectory: URL) -> URL? {
+        // The renderer escapes `&` in attributes (`a&b.png` → `a&amp;b.png`).
+        // WebKit would read the unescaped value, so resolve that one.
+        let src = decodingCharacterReferences(attribute)
         guard !src.isEmpty else { return nil }
         if src.hasPrefix("#") || src.hasPrefix("//") { return nil }
         if hasURLScheme(src) { return nil }
@@ -150,6 +157,58 @@ enum InlineLocalAssets {
         guard isDescendantOrSame(candidate, of: base) || isImageFile(candidate) else { return nil }
         return candidate
     }
+
+    /// Decodes the character references an attribute value can carry:
+    /// the XML named ones (case-sensitive, as in HTML) and decimal or hex
+    /// numeric ones. Anything else, such as a bare `&` in raw HTML, stays
+    /// as written.
+    private static func decodingCharacterReferences(_ value: String) -> String {
+        guard value.contains("&") else { return value }
+        let nsValue = value as NSString
+        var output = ""
+        var cursor = 0
+        for match in characterReferenceRegex.matches(
+            in: value,
+            range: NSRange(location: 0, length: nsValue.length)
+        ) {
+            let body = nsValue.substring(with: match.range(at: 1))
+            let decoded: String?
+            switch body {
+            case "amp", "AMP": decoded = "&"
+            case "lt", "LT": decoded = "<"
+            case "gt", "GT": decoded = ">"
+            case "quot", "QUOT": decoded = "\""
+            case "apos": decoded = "'"
+            case _ where body.hasPrefix("#"):
+                let isHex = body.hasPrefix("#x") || body.hasPrefix("#X")
+                let digits = body.dropFirst(isHex ? 2 : 1)
+                decoded = UInt32(digits, radix: isHex ? 16 : 10).map(htmlNumericCharacter) ?? "\u{FFFD}"
+            default: decoded = nil
+            }
+            guard let decoded else { continue }
+            output += nsValue.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
+            output += decoded
+            cursor = match.range.location + match.range.length
+        }
+        output += nsValue.substring(from: cursor)
+        return output
+    }
+
+    /// HTML reads 0x80–0x9F as Windows-1252 (`&#x80;` is `€`), and NUL,
+    /// surrogates, and values past U+10FFFF as U+FFFD.
+    private static func htmlNumericCharacter(_ value: UInt32) -> String {
+        if (0x80...0x9F).contains(value),
+           let character = String(bytes: [UInt8(value)], encoding: .windowsCP1252) {
+            return character
+        }
+        guard value != 0, let scalar = Unicode.Scalar(value) else { return "\u{FFFD}" }
+        return String(Character(scalar))
+    }
+
+    private static let characterReferenceRegex: NSRegularExpression = {
+        // swiftlint:disable:next force_try
+        try! NSRegularExpression(pattern: #"&([a-zA-Z]+|#[0-9]+|#[xX][0-9a-fA-F]+);"#)
+    }()
 
     private static func isImageFile(_ url: URL) -> Bool {
         UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) ?? false

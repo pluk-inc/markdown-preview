@@ -446,11 +446,12 @@ nonisolated enum MarkdownHTML {
             with: "<\\/template",
             options: [.caseInsensitive]
         )
-        // The Markdown source rides along for copy-as-source. `</` is escaped
-        // inside the string literal so a fence containing `</script>` cannot
-        // end the element.
+        // The Markdown source rides along for copy-as-source. Every `<` is
+        // escaped inside the string literal, so a fence containing
+        // `</script>` cannot end the element, and Quick Look's HTML rewrites
+        // cannot mistake raw `<img>` or `<a>` in the source for page markup.
         let sourceBlock = warmup ? "" : """
-        <script>window.MdPreview = window.MdPreview || {}; window.MdPreview.source = \(javaScriptStringLiteral(markdown).replacingOccurrences(of: "</", with: "<\\/"));</script>
+        <script>window.MdPreview = window.MdPreview || {}; window.MdPreview.source = \(javaScriptStringLiteral(markdown).replacingOccurrences(of: "<", with: "\\u003C"));</script>
         """
         let colorSchemeAttribute = colorScheme.map {
             " data-mdp-color-scheme=\"\($0.rawValue)\""
