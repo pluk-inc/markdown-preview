@@ -94,7 +94,7 @@ final class InlineLocalAssetsTests: XCTestCase {
         XCTAssertEqual(result.html, html)
     }
 
-    func testHostAbsolutePathUntouched() {
+    func testAbsoluteNonImagePathUntouched() {
         let html = #"<img src="/etc/passwd">"#
         let result = InlineLocalAssets.rewriteRelativeImages(
             html: html,
@@ -104,12 +104,48 @@ final class InlineLocalAssetsTests: XCTestCase {
         XCTAssertEqual(result.html, html)
     }
 
-    func testParentDirectoryTraversalIsLeftAlone() {
-        let html = #"<img src="../secret.png">"#
+    func testProtocolRelativeSrcLeftAlone() {
+        let html = #"<img src="//example.com/a.png">"#
         let result = InlineLocalAssets.rewriteRelativeImages(
             html: html,
             baseDirectory: baseDir,
-            reader: { _ in XCTFail("reader must not be called for parent traversal"); return Data() }
+            reader: { _ in XCTFail("reader must not be called for //host refs"); return Data() }
+        )
+        XCTAssertEqual(result.html, html)
+    }
+
+    // #488: the app resolves these, so Quick Look must too.
+    func testParentDirectoryImagesBecomeCIDs() {
+        let html = #"<img src="../assets/2026/07/monthly.jpg"><img src="../../device%20evidence/x.png">"#
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: html,
+            baseDirectory: URL(fileURLWithPath: "/tmp/qltest-fixture/report/", isDirectory: true),
+            reader: reader([
+                "/tmp/qltest-fixture/assets/2026/07/monthly.jpg": red,
+                "/tmp/device evidence/x.png": blue,
+            ])
+        )
+        XCTAssertEqual(Set(result.attachments.values.map(\.data)), [red, blue])
+        XCTAssertFalse(result.html.contains("../"))
+    }
+
+    func testAbsoluteImagePathBecomesCID() {
+        let html = #"<img src="/Users/k/Screenshots/shot%20one.png">"#
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: html,
+            baseDirectory: baseDir,
+            reader: reader(["/Users/k/Screenshots/shot one.png": red])
+        )
+        XCTAssertEqual(result.attachments.values.first?.data, red)
+        XCTAssertTrue(result.html.contains("src=\"cid:"))
+    }
+
+    func testParentDirectoryNonImageIsLeftAlone() {
+        let html = #"<img src="../secret.txt"><img src="../../.ssh/id_ed25519">"#
+        let result = InlineLocalAssets.rewriteRelativeImages(
+            html: html,
+            baseDirectory: baseDir,
+            reader: { _ in XCTFail("reader must not be called for non-images outside the folder"); return Data() }
         )
         XCTAssertEqual(result.html, html)
         XCTAssertTrue(result.attachments.isEmpty)

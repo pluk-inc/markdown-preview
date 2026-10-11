@@ -121,24 +121,35 @@ enum InlineLocalAssets {
         )
     }()
 
-    /// Returns nil for srcs that should not be rewritten (absolute URLs,
-    /// fragment refs, host-absolute paths, empty values).
+    /// Returns nil for srcs that should not be rewritten (URLs with a
+    /// scheme, fragment refs, protocol-relative `//host` refs, empty values).
+    ///
+    /// Like the app's `md-asset` scheme, `../` paths and absolute filesystem
+    /// paths resolve (#488). Files outside the document folder must have an
+    /// image type, so a previewed file can't pull arbitrary files into the page.
     private static func resolveRelative(src: String, baseDirectory: URL) -> URL? {
         guard !src.isEmpty else { return nil }
-        if src.hasPrefix("#") || src.hasPrefix("/") { return nil }
+        if src.hasPrefix("#") || src.hasPrefix("//") { return nil }
         if hasURLScheme(src) { return nil }
+        let isAbsolute = src.hasPrefix("/")
 
         // CommonMark renderers percent-encode spaces in image targets;
         // FileManager wants real paths.
         let decoded = src.removingPercentEncoding ?? src
         guard !decoded.isEmpty else { return nil }
-        if decoded.hasPrefix("#") || decoded.hasPrefix("/") { return nil }
+        if decoded.hasPrefix("#") || decoded.hasPrefix("//") { return nil }
+        // Decoding must not turn a relative src into an absolute one.
+        if decoded.hasPrefix("/") != isAbsolute { return nil }
         if hasURLScheme(decoded) { return nil }
 
         let base = baseDirectory.standardizedFileURL
         let candidate = URL(fileURLWithPath: decoded, relativeTo: base).standardizedFileURL
-        guard isDescendantOrSame(candidate, of: base) else { return nil }
+        guard isDescendantOrSame(candidate, of: base) || isImageFile(candidate) else { return nil }
         return candidate
+    }
+
+    private static func isImageFile(_ url: URL) -> Bool {
+        UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) ?? false
     }
 
     private static func hasURLScheme(_ value: String) -> Bool {
