@@ -337,7 +337,6 @@ extension DocumentExportSession {
         ) else {
             throw exportError("The image could not be allocated.")
         }
-        rep.size = NSSize(width: width, height: height)
 
         NSGraphicsContext.saveGraphicsState()
         defer { NSGraphicsContext.restoreGraphicsState() }
@@ -360,6 +359,10 @@ extension DocumentExportSession {
             cgContext.restoreGState()
         }
 
+        // Set the point size only after drawing: a bitmap context scales by
+        // the rep's pixels-per-point, which would apply `scale` a second time
+        // and leave just an enlarged corner of the document in the image.
+        rep.size = NSSize(width: width, height: height)
         guard let png = rep.representation(using: .png, properties: [:]) else {
             throw exportError("The image could not be encoded.")
         }

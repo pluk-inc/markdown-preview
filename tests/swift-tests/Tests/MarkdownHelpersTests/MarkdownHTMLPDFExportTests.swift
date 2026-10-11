@@ -384,6 +384,20 @@ final class MarkdownHTMLPDFExportTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: imageURL) }
         try await session.writePNG(to: imageURL)
         try saveArtifact(Data(contentsOf: imageURL), name: "rendered-media.png")
+        // The picture is the whole document at 2x, not an enlarged corner of
+        // it: the blue image sits where the preview draws it.
+        let imageCenter = try await harness.webView.evaluateJavaScript("""
+            (() => {
+                const box = document.querySelector('article img').getBoundingClientRect();
+                return [box.left + box.width / 2 + scrollX, box.top + box.height / 2 + scrollY];
+            })()
+            """) as? [Double]
+        let center = try XCTUnwrap(imageCenter)
+        let picture = try XCTUnwrap(NSBitmapImageRep(data: Data(contentsOf: imageURL)))
+        let sample = try XCTUnwrap(
+            picture.colorAt(x: Int(center[0] * 2), y: Int(center[1] * 2))?.usingColorSpace(.deviceRGB))
+        XCTAssertGreaterThan(sample.blueComponent, 0.7)
+        XCTAssertLessThan(sample.redComponent, 0.45)
         let view = try await session.webView(for: .pdf)
         let pdf = try await printPDF(view, session: session, name: "rendered-media")
         assertWholeWords(["Rendered", "Start", "Finish", "Category", "Static"], in: pdf)
