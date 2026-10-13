@@ -18,29 +18,44 @@ struct WhatsNewFeature: Identifiable {
     /// The features of `WhatsNewPolicy.featuresVersion`. Features
     /// the running system cannot show are left out rather than announced.
     static var current: [WhatsNewFeature] {
-        var features = [
+        [
             WhatsNewFeature(
-                id: "search-for-document",
-                symbol: "doc.text.magnifyingglass",
-                title: L("Find any document fast"),
-                detail: L("Press ⇧⌘O and type part of a file name to open it from the current project.")
+                id: "japanese-translation",
+                symbol: "character.bubble",
+                title: L("Now in Japanese"),
+                detail: L("Choose Japanese in Settings → General → Language, or let it follow your system language.")
+            ),
+            WhatsNewFeature(
+                id: "expand-tables",
+                symbol: "arrow.up.left.and.arrow.down.right",
+                title: L("Expand tables fullscreen"),
+                detail: L("Choose Expand Table to see a wide table fullscreen. Press Escape to go back.")
+            ),
+            WhatsNewFeature(
+                id: "recent-documents",
+                symbol: "clock",
+                title: L("Reopen recent documents"),
+                detail: L("Press ⇧⌘O to see your 10 most recent files, even with no document open.")
+            ),
+            WhatsNewFeature(
+                id: "instant-auto-save",
+                symbol: "clock.arrow.circlepath",
+                title: L("Instant auto save"),
+                detail: L("Choose Instant in Settings → General to save two seconds after you stop typing.")
+            ),
+            WhatsNewFeature(
+                id: "text-alignment",
+                symbol: "text.alignleft",
+                title: L("Choose text alignment"),
+                detail: L("Set left, center, right, or justified text in Settings → Reading. Quick Look uses it too.")
+            ),
+            WhatsNewFeature(
+                id: "quick-look-images",
+                symbol: "photo.on.rectangle",
+                title: L("More images in Quick Look"),
+                detail: L("Quick Look shows images from parent folders and follows links to headings.")
             ),
         ]
-        if #available(macOS 26.0, *) {
-            features.append(WhatsNewFeature(
-                id: "floating-formatting-controls",
-                symbol: "textformat",
-                title: L("Redesigned formatting bar"),
-                detail: L("On macOS 26 and later, the formatting bar uses Liquid Glass, with headings, links, lists, and styles in compact groups.")
-            ))
-        }
-        features.append(WhatsNewFeature(
-            id: "code-block-controls",
-            symbol: "curlybraces.square",
-            title: L("Redesigned code blocks"),
-            detail: L("Wrap long lines with one click. Code blocks now use rounded cards that show their language.")
-        ))
-        return features
     }
 }
 

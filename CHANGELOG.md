@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.0.66] – 2026-10-13
+
+This release adds a Japanese translation and an Instant auto save interval, lets New Tab start a new document, and makes Quick Look load more images and follow heading links.
+
+### Added
+
+- **Japanese translation.** Menus, settings, dialogs, and toolbars are available in Japanese. Choose it in Settings → General → Language, or let it follow your system language ([#474](https://github.com/pluk-inc/markdown-preview/pull/474), [#500](https://github.com/pluk-inc/markdown-preview/pull/500)).
+- **Instant auto save.** Settings → General → Automatic saving offers an Instant interval that saves two seconds after you stop typing ([#496](https://github.com/pluk-inc/markdown-preview/pull/496)).
+- **Start a new document from New Tab.** The file picker that File → New Tab (⌘T) opens now has a New Document button, like the picker at launch and in File → Open. The new document, file, or folder opens as a tab of the front window ([#502](https://github.com/pluk-inc/markdown-preview/pull/502)).
+
+### Fixed
+
+- **Quick Look loads images outside the document's folder.** Images referenced with `../` paths or absolute paths now appear in Quick Look as they do in the app. Files outside the document's folder load only when they are real images ([#501](https://github.com/pluk-inc/markdown-preview/pull/501)).
+- **Quick Look loads more image references.** Images whose file names contain `&`, and raw HTML images with single-quoted `src`, now appear in Quick Look ([#503](https://github.com/pluk-inc/markdown-preview/pull/503)).
+- **Heading links scroll in Quick Look.** Links such as `[Jump to the end](#bottom-of-this-document)` now scroll to the matching heading instead of doing nothing ([#504](https://github.com/pluk-inc/markdown-preview/pull/504)).
+- **PNG export shows the whole document.** *File → Export… → PNG Image* no longer saves an enlarged corner of the document ([#510](https://github.com/pluk-inc/markdown-preview/pull/510)).
+- **Images keep their alt text.** Rendered images include the Markdown description as `alt` text, so VoiceOver can read it and broken images show it ([#497](https://github.com/pluk-inc/markdown-preview/pull/497)).
+- **No seam in the toolbar background.** In Normal content width on a wide window, the toolbar background is now one continuous material instead of two backgrounds that meet behind the document title ([#495](https://github.com/pluk-inc/markdown-preview/pull/495)).
+
+### Contributors
+
+- [@kota113](https://github.com/kota113) — contributed the Japanese translation and Instant auto save ([#474](https://github.com/pluk-inc/markdown-preview/pull/474), [#496](https://github.com/pluk-inc/markdown-preview/pull/496), [#500](https://github.com/pluk-inc/markdown-preview/pull/500)), and requested New Document in New Tab ([#499](https://github.com/pluk-inc/markdown-preview/issues/499)).
+- [@individuate](https://github.com/individuate) — fixed PNG export ([#510](https://github.com/pluk-inc/markdown-preview/pull/510)).
+- [@sean0407](https://github.com/sean0407) — preserved image alt text ([#497](https://github.com/pluk-inc/markdown-preview/pull/497)).
+- [@OpenSource03](https://github.com/OpenSource03) — fixed the toolbar background seam ([#495](https://github.com/pluk-inc/markdown-preview/pull/495)).
+- [@vizmoe](https://github.com/vizmoe) — reported missing parent-folder images in Quick Look ([#488](https://github.com/pluk-inc/markdown-preview/issues/488)).
+- [@ftc2](https://github.com/ftc2) — reported Quick Look link and image gaps ([#492](https://github.com/pluk-inc/markdown-preview/issues/492)).
+
 ## [0.0.65] – 2026-10-06
 
 This release makes tables easier to read and export, adds fullscreen table previews, and gives you more control over reading preferences, app language, and app links.

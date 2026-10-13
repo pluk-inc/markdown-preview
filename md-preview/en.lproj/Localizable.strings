@@ -319,12 +319,18 @@
 "What’s New in Markdown Preview %@" = "What’s New in Markdown Preview %@";
 "Release Notes" = "Release Notes";
 "Continue" = "Continue";
-"Find any document fast" = "Find any document fast";
-"Press ⇧⌘O and type part of a file name to open it from the current project." = "Press ⇧⌘O and type part of a file name to open it from the current project.";
-"Redesigned formatting bar" = "Redesigned formatting bar";
-"On macOS 26 and later, the formatting bar uses Liquid Glass, with headings, links, lists, and styles in compact groups." = "On macOS 26 and later, the formatting bar uses Liquid Glass, with headings, links, lists, and styles in compact groups.";
-"Redesigned code blocks" = "Redesigned code blocks";
-"Wrap long lines with one click. Code blocks now use rounded cards that show their language." = "Wrap long lines with one click. Code blocks now use rounded cards that show their language.";
+"Now in Japanese" = "Now in Japanese";
+"Choose Japanese in Settings → General → Language, or let it follow your system language." = "Choose Japanese in Settings → General → Language, or let it follow your system language.";
+"Instant auto save" = "Instant auto save";
+"Choose Instant in Settings → General to save two seconds after you stop typing." = "Choose Instant in Settings → General to save two seconds after you stop typing.";
+"Expand tables fullscreen" = "Expand tables fullscreen";
+"Choose Expand Table to see a wide table fullscreen. Press Escape to go back." = "Choose Expand Table to see a wide table fullscreen. Press Escape to go back.";
+"Reopen recent documents" = "Reopen recent documents";
+"Press ⇧⌘O to see your 10 most recent files, even with no document open." = "Press ⇧⌘O to see your 10 most recent files, even with no document open.";
+"Choose text alignment" = "Choose text alignment";
+"Set left, center, right, or justified text in Settings → Reading. Quick Look uses it too." = "Set left, center, right, or justified text in Settings → Reading. Quick Look uses it too.";
+"More images in Quick Look" = "More images in Quick Look";
+"Quick Look shows images from parent folders and follows links to headings." = "Quick Look shows images from parent folders and follows links to headings.";
 
 /* Reading preferences */
 "Strict line breaks" = "Strict line breaks";
