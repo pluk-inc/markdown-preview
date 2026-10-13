@@ -178,6 +178,9 @@ final class EPUBPackageTests: XCTestCase {
         for physical in ["padding-left", "border-left", "margin-right", "text-align: left"] {
             XCTAssertFalse(css.contains(physical), physical)
         }
+        // Readers that left-align paragraphs themselves still set
+        // right-to-left blocks from the right.
+        XCTAssertTrue(css.contains(#"[dir="rtl"] { text-align: right; }"#))
     }
 
     func testContentDocumentIsWellFormedAndEscapesTheTitle() throws {

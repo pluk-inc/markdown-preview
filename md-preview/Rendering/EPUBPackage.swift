@@ -253,6 +253,9 @@ nonisolated struct EPUBPackage: Sendable {
     .md-source-list-indent-step { display: block; padding-inline-start: 1.6em; }
     .md-source-list-line { display: block; }
     .md-inline-tab { white-space: pre; }
+    /* Readers left-align paragraphs with a rule of their own, so a
+       right-to-left block asks for the right edge, as in the preview. */
+    [dir="rtl"] { text-align: right; }
     /* Logical sides, so right-to-left blocks indent from their own start. */
     blockquote {
         margin: 1em 0;

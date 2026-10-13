@@ -179,6 +179,8 @@ final class EPUBExportTests: XCTestCase {
 
         Body with a control\u{C}character and <span xlink:title="stray prefix">raw HTML</span>.
 
+        שלום עולם, a right-to-left paragraph.
+
         ![Photo](data:image/jpeg;base64,\(jpeg))
 
         <img src="data:image/png;base64,\(png)" width="0" height="0" alt="Unseen">
@@ -208,6 +210,8 @@ final class EPUBExportTests: XCTestCase {
         let section = try String(contentsOf: folder.appendingPathComponent("section-001.xhtml"), encoding: .utf8)
         XCTAssertEqual(section.components(separatedBy: "<table").count - 1, 3)
         XCTAssertEqual(section.components(separatedBy: #"<table class="md-many-columns">"#).count - 1, 1)
+        // Text direction travels with the block it was inferred for.
+        XCTAssertTrue(section.contains(#"<p dir="rtl">שלום עולם"#))
 
         // A book made from someone else's document carries only what the
         // preview showed, and never reaches for the network when opened.
