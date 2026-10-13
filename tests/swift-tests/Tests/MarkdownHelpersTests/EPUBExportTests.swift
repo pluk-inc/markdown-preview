@@ -243,6 +243,65 @@ final class EPUBExportTests: XCTestCase {
         XCTAssertTrue(navigation.contains(#"<a href="section-001.xhtml">File name</a>"#))
     }
 
+    func testLinksResolveAsInThePreview() async throws {
+        let markdown = """
+        # Guide
+
+        [third](#setup-1-1), [second](#setup-1), [start](#), [up](#top), [nowhere](#missing)
+
+        ## Setup
+
+        ## Setup
+
+        ## Setup-1
+        """
+        let harness = makeHarness(markdown: markdown)
+        defer { harness.close() }
+        _ = try await harness.layout(texts: ["Guide"], imageCount: 0)
+        let contents = try await export(from: harness, markdown: markdown, name: "links")
+        defer { try? FileManager.default.removeItem(at: contents.deletingLastPathComponent()) }
+
+        let section = try String(contentsOf: contents.appendingPathComponent("OEBPS/section-001.xhtml"), encoding: .utf8)
+        // Repeated headings take GitHub's suffixes: `Setup`, `Setup` and
+        // `Setup-1` are `setup`, `setup-1` and `setup-1-1`.
+        XCTAssertTrue(section.contains(#"<a href="section-003.xhtml#md-heading-2">second</a>"#), section)
+        XCTAssertTrue(section.contains(#"<a href="section-004.xhtml#md-heading-3">third</a>"#), section)
+        XCTAssertTrue(section.contains(#"<a href="section-001.xhtml">start</a>"#), section)
+        XCTAssertTrue(section.contains(#"<a href="section-001.xhtml">up</a>"#), section)
+        XCTAssertTrue(section.contains("<a>nowhere</a>"), section)
+    }
+
+    func testPicturesBesideTheDocumentAreEmbedded() async throws {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mdp epub " + UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder.appendingPathComponent("pictures"),
+                                                withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try Data(svg.utf8).write(to: folder.appendingPathComponent("pictures/local.svg"))
+
+        // The page finds the file as it does in the app: relative to a base
+        // that names the document's folder, through the `md-asset` scheme.
+        let markdown = "Words.\n\n![Local](pictures/local.svg)\n"
+        let files = LocalFiles()
+        let harness = makeHarness(markdown: markdown, folder: folder, assetHandler: files)
+        defer { harness.close() }
+        _ = try await harness.layout(texts: ["Words."], imageCount: 1)
+        let configuration = WKWebViewConfiguration()
+        configuration.setURLSchemeHandler(files, forURLScheme: MarkdownAssetResolution.scheme)
+        let contents = try await export(from: harness, markdown: markdown, name: "local", configuration: configuration)
+        defer { try? FileManager.default.removeItem(at: contents.deletingLastPathComponent()) }
+
+        let book = contents.appendingPathComponent("OEBPS")
+        let section = try String(contentsOf: book.appendingPathComponent("section-001.xhtml"), encoding: .utf8)
+        XCTAssertTrue(section.contains(#"<img src="images/image-1.png" alt="Local" width="160""#), section)
+        XCTAssertFalse(section.contains("md-asset"))
+        let picture = try XCTUnwrap(NSBitmapImageRep(data: Data(contentsOf: book.appendingPathComponent("images/image-1.png"))))
+        XCTAssertEqual([picture.pixelsWide, picture.pixelsHigh], [320, 100])
+        let blue = try XCTUnwrap(picture.colorAt(x: 160, y: 50)?.usingColorSpace(.deviceRGB))
+        XCTAssertGreaterThan(blue.blueComponent, 0.7)
+        XCTAssertLessThan(blue.redComponent, 0.45)
+    }
+
     func testMetadataComesFromFrontmatterThenTheText() {
         let declared = EPUBExport.metadata(from: """
             ---
@@ -261,14 +320,30 @@ final class EPUBExportTests: XCTestCase {
             Ceci est un document entièrement rédigé en français, avec assez de mots pour le reconnaître.
             """)
         XCTAssertEqual(detected, .init(title: nil, authors: [], language: "fr"))
+
+        func language(declared: String) -> String {
+            EPUBExport.metadata(from: "---\nlang: \(declared)\n---\nCeci est un document entièrement rédigé en français.").language
+        }
+        // A locale identifier is read as the tag it stands for.
+        XCTAssertEqual(language(declared: "en_GB"), "en-GB")
+        for tag in ["zh-Hans-CN", "de-CH-1901", "de-DE-u-co-phonebk", "en-x-a"] {
+            XCTAssertEqual(language(declared: tag), tag)
+        }
+        // A lone letter with nothing after it is not a tag.
+        for malformed in ["en-x", "en-a", "en-GB-u"] {
+            XCTAssertEqual(language(declared: malformed), "fr", malformed)
+        }
     }
 
-    private func makeHarness(markdown: String) -> WebViewLayoutHarness {
+    private func makeHarness(markdown: String, folder: URL? = nil,
+                             assetHandler: WKURLSchemeHandler? = nil) -> WebViewLayoutHarness {
         _ = NSApplication.shared
         // A dark preview: the book must not inherit its page or diagram colours.
-        let html = MarkdownHTML.render(markdown: markdown, allowsScroll: true, vendorLoading: .inline,
-                                       colorScheme: .dark).html
-        return WebViewLayoutHarness(html: appLikeMermaidStart(html), width: 900, isEditor: false, height: 600)
+        let html = MarkdownHTML.render(markdown: markdown, allowsScroll: true,
+                                       assetBaseHref: folder.map(MarkdownAssetResolution.baseHref(forFolder:)),
+                                       vendorLoading: .inline, colorScheme: .dark).html
+        return WebViewLayoutHarness(html: appLikeMermaidStart(html), width: 900, isEditor: false, height: 600,
+                                    schemeHandlers: assetHandler.map { [MarkdownAssetResolution.scheme: $0] } ?? [:])
     }
 
     /// The app loads Mermaid after the page's load event, so Mermaid's own
@@ -281,8 +356,9 @@ final class EPUBExportTests: XCTestCase {
             in: end, with: "<script>window.mermaid && (mermaid.startOnLoad = false);</script></body>")
     }
 
-    private func export(from harness: WebViewLayoutHarness, markdown: String, name: String) async throws -> URL {
-        let session = try await DocumentExportSession.capture(from: harness.webView)
+    private func export(from harness: WebViewLayoutHarness, markdown: String, name: String,
+                        configuration: WKWebViewConfiguration = WKWebViewConfiguration()) async throws -> URL {
+        let session = try await DocumentExportSession.capture(from: harness.webView, configuration: configuration)
         defer { session.close() }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".epub")
         defer { try? FileManager.default.removeItem(at: url) }
@@ -295,4 +371,23 @@ final class EPUBExportTests: XCTestCase {
         }
         return try TestArchive.extract(data)
     }
+}
+
+/// Stands in for the app's `md-asset` handler, which is not part of this
+/// test target: serves the file a request's path names.
+private final class LocalFiles: NSObject, WKURLSchemeHandler {
+    func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
+        guard let url = urlSchemeTask.request.url,
+              let file = MarkdownAssetResolution.fileURL(for: url),
+              let data = try? Data(contentsOf: file) else {
+            return urlSchemeTask.didFailWithError(URLError(.fileDoesNotExist))
+        }
+        let type = file.pathExtension == "svg" ? "image/svg+xml" : "application/octet-stream"
+        urlSchemeTask.didReceive(URLResponse(url: url, mimeType: type, expectedContentLength: data.count,
+                                             textEncodingName: nil))
+        urlSchemeTask.didReceive(data)
+        urlSchemeTask.didFinish()
+    }
+
+    func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
 }

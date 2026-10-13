@@ -46,8 +46,12 @@ nonisolated enum EPUBExport {
     }
 
     private static func language(declared: String?, text: String) -> String {
-        let tag = #"^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$"#
-        if let declared, declared.range(of: tag, options: .regularExpression) != nil {
+        // A language, then subtags of two letters or more. A single letter
+        // opens an extension, or `x` private use, and needs a subtag after it.
+        let tag = #"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*(-[A-WY-Za-wy-z0-9](-[A-Za-z0-9]{2,8})+)*(-[Xx](-[A-Za-z0-9]{1,8})+)?$"#
+        // Locale identifiers such as `en_GB` are a common way to write a tag.
+        if let declared = declared?.replacingOccurrences(of: "_", with: "-"),
+           declared.range(of: tag, options: .regularExpression) != nil {
             return declared
         }
         // A sample is enough, and keeps long documents quick.
@@ -132,8 +136,8 @@ nonisolated enum EPUBExport {
     const all = selector => Array.from(article.querySelectorAll(selector));
     const clean = text => (text || '').replace(/\s+/g, ' ').trim();
 
-    // In-document links resolve as the preview does (MarkdownWebView's
-    // elementOffset): literal ids first, then GitHub-style heading slugs.
+    // In-document links resolve as the preview does (MarkdownHTML's
+    // fragmentTargetScript): literal ids first, then GitHub-style heading slugs.
     // Slugs are taken now, from the text the preview shows, before the
     // rewriting below changes what a heading contains.
     const headings = all('h1, h2, h3, h4, h5, h6');
@@ -145,11 +149,15 @@ nonisolated enum EPUBExport {
     const slugs = new Map();
     const seen = new Map();
     for (const heading of headings) {
-        let slug = slugify(heading.textContent || '');
-        const count = seen.get(slug) || 0;
-        seen.set(slug, count + 1);
-        if (count > 0) slug = slug + '-' + count;
-        if (!slugs.has(slug)) slugs.set(slug, heading);
+        const base = slugify(heading.textContent || '');
+        let slug = base;
+        if (seen.has(slug)) {
+            let count = seen.get(base);
+            do { count += 1; slug = base + '-' + count; } while (seen.has(slug));
+            seen.set(base, count);
+        }
+        seen.set(slug, 0);
+        slugs.set(slug, heading);
     }
 
     // An image the preview could not load leaves its description.
@@ -262,8 +270,13 @@ nonisolated enum EPUBExport {
     all('a[href]').forEach(link => {
         const href = link.getAttribute('href');
         if (href.startsWith('#')) {
-            const target = href.length > 1 ? destination(href.slice(1)) : null;
-            if (!target) return link.removeAttribute('href');
+            const target = destination(href.slice(1));
+            if (!target) {
+                // As in the preview, `#` and `#top` lead to the start.
+                if (/^#(top)?$/i.test(href)) link.setAttribute('href', files[0]);
+                else link.removeAttribute('href');
+                return;
+            }
             const file = sectionOf(link) === sectionOf(target) ? '' : files[sectionOf(target)];
             link.setAttribute('href', file + '#' + encodeURIComponent(target.id));
         } else if (!/^(https?:|mailto:|tel:)/i.test(href)) {
