@@ -19,7 +19,8 @@ nonisolated extension MarkdownHTML {
     static let stylesheet = baseStylesheet + "\n" + highlightThemeCSS + "\n" + tableControlsCSS
 
     static let tableControlsCSS = """
-    .md-table-wrap { position: relative; margin-top: \(largeBlockSpacing)px; padding-top: 28px; }
+    /* Shrink to the table so the Expand button sits at the table's edge, not the column's. */
+    .md-table-wrap { position: relative; margin-top: \(largeBlockSpacing)px; padding-top: 28px; width: fit-content; max-width: 100%; }
     .md-table-wrap > table { margin-top: 0; }
     .md-table-actions { display: flex; justify-content: flex-end; height: 28px; }
     .md-table-wrap > .md-table-actions { position: absolute; top: 0; inset-inline-end: 0; }
@@ -30,7 +31,7 @@ nonisolated extension MarkdownHTML {
     }
     .md-table-expand:hover { background: var(--code-bg); color: var(--text); }
     .md-table-expand:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-    th code, td code, .cm-md-table-cell .cm-md-inline-code { overflow-wrap: inherit; word-break: normal; }
+    th code, td code, .cm-md-table-cell .cm-md-inline-code { overflow-wrap: inherit; word-break: inherit; }
     html.\(previewPrintClass) .md-table-actions { display: none; }
     html.\(previewPrintClass) .md-table-wrap { padding-top: 0; }
     @media print {
@@ -749,6 +750,12 @@ nonisolated extension MarkdownHTML {
         text-align: start;
         vertical-align: top;
     }
+    /* Chinese and Japanese have no spaces, so a cell's min-content width is
+       otherwise one character and short labels wrap two or three characters
+       per line. keep-all keeps CJK runs whole; the renderer adds <wbr> after
+       CJK punctuation in Markdown cells so long text still wraps by phrase.
+       Latin text is unaffected. Raw HTML tables keep the default. */
+    :is(th, td)[data-table-row] { word-break: keep-all; }
     th { font-weight: 600; }
     :is(th, td)[align="center"] { text-align: center; }
     :is(th, td)[align="right"] { text-align: right; }

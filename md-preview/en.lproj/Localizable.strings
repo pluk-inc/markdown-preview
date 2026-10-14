@@ -323,8 +323,8 @@
 "Choose Japanese in Settings → General → Language, or let it follow your system language." = "Choose Japanese in Settings → General → Language, or let it follow your system language.";
 "Instant auto save" = "Instant auto save";
 "Choose Instant in Settings → General to save two seconds after you stop typing." = "Choose Instant in Settings → General to save two seconds after you stop typing.";
-"Expand tables fullscreen" = "Expand tables fullscreen";
-"Choose Expand Table to see a wide table fullscreen. Press Escape to go back." = "Choose Expand Table to see a wide table fullscreen. Press Escape to go back.";
+"Expand tables in a window" = "Expand tables in a window";
+"Choose Expand Table to open a wide table in its own window. Press Escape to go back." = "Choose Expand Table to open a wide table in its own window. Press Escape to go back.";
 "Reopen recent documents" = "Reopen recent documents";
 "Press ⇧⌘O to see your 10 most recent files, even with no document open." = "Press ⇧⌘O to see your 10 most recent files, even with no document open.";
 "Choose text alignment" = "Choose text alignment";

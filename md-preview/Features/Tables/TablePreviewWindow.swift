@@ -3,11 +3,14 @@ import WebKit
 
 /// A read-only snapshot of one table, using the regular sanitized renderer and
 /// link/asset policies. The source document and its editing state stay intact.
+/// It opens as an ordinary window: the reader decides whether to make it
+/// fullscreen, minimize it, or resize it, and Escape closes it.
 @MainActor
 final class TablePreviewWindow: NSObject, NSWindowDelegate {
     static let shared = TablePreviewWindow()
     private var tableWindow: NSWindow?
     private var preview: MarkdownWebView?
+    private var escapeMonitor: Any?
 
     func present(markdown: String, title: String?, assetBaseURL: URL?, relativeTo parent: NSWindow?) {
         guard !markdown.isEmpty else { return }
@@ -24,6 +27,7 @@ final class TablePreviewWindow: NSObject, NSWindowDelegate {
                               backing: .buffered, defer: false)
             window.isReleasedWhenClosed = false
             window.collectionBehavior = [.fullScreenPrimary]
+            window.setFrameAutosaveName("TablePreviewWindow")
             window.delegate = self
             preview = MarkdownWebView(frame: .zero)
             // Fill the table window independently of the document's reading
@@ -46,20 +50,28 @@ final class TablePreviewWindow: NSObject, NSWindowDelegate {
             ?? NSLocalizedString("Table", comment: "Expanded table window title")
         preview.contentDidReplace = { [weak window, weak preview] in
             preview?.contentDidReplace = nil
-            guard let window else { return }
-            window.makeKeyAndOrderFront(nil)
-            if !window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
+            window?.makeKeyAndOrderFront(nil)
         }
         preview.display(markdown: markdown, assetBaseURL: assetBaseURL)
+        // The web view consumes key events, so Escape is caught before it.
+        if escapeMonitor == nil {
+            escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let self, let tableWindow, event.window === tableWindow,
+                      event.keyCode == 53, event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty
+                else { return event }
+                tableWindow.close()
+                return nil
+            }
+        }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate()
     }
 
-    func windowDidExitFullScreen(_ notification: Notification) {
-        tableWindow?.close()
-    }
-
     func windowWillClose(_ notification: Notification) {
+        if let escapeMonitor {
+            NSEvent.removeMonitor(escapeMonitor)
+            self.escapeMonitor = nil
+        }
         preview?.contentDidReplace = nil
         preview?.clearContent()
         preview = nil

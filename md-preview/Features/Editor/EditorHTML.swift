@@ -606,9 +606,13 @@ nonisolated enum EditorHTML {
             outline: none;
             white-space: pre-wrap;
             overflow-wrap: normal;
-            word-break: normal;
+            /* Keep short CJK labels whole, like the reader. The rendered cell
+               carries <wbr> after CJK punctuation; the Markdown source shown
+               while editing does not, so it wraps normally. */
+            word-break: keep-all;
             cursor: text;
         }
+        .cm-md-table-cell[data-table-editing] { word-break: normal; }
         .cm-md-table-grid th .cm-md-table-cell[data-placeholder]:empty::before {
             content: attr(data-placeholder);
             color: var(--secondary);

@@ -323,8 +323,8 @@
 "Choose Japanese in Settings → General → Language, or let it follow your system language." = "در تنظیمات ← عمومی ← زبان، ژاپنی را انتخاب کنید، یا بگذارید از زبان سیستم پیروی کند.";
 "Instant auto save" = "ذخیرهٔ خودکار فوری";
 "Choose Instant in Settings → General to save two seconds after you stop typing." = "در تنظیمات ← عمومی، گزینهٔ «فوری» را انتخاب کنید تا دو ثانیه پس از توقف تایپ ذخیره شود.";
-"Expand tables fullscreen" = "گسترش جدول‌ها به تمام‌صفحه";
-"Choose Expand Table to see a wide table fullscreen. Press Escape to go back." = "برای مشاهدهٔ یک جدول عریض به‌صورت تمام‌صفحه، «گسترش جدول» را انتخاب کنید. برای بازگشت، کلید Escape را فشار دهید.";
+"Expand tables in a window" = "گسترش جدول‌ها در پنجرهٔ جداگانه";
+"Choose Expand Table to open a wide table in its own window. Press Escape to go back." = "برای مشاهدهٔ یک جدول عریض در پنجرهٔ جداگانه، «گسترش جدول» را انتخاب کنید. برای بازگشت، کلید Escape را فشار دهید.";
 "Reopen recent documents" = "باز کردن مجدد اسناد اخیر";
 "Press ⇧⌘O to see your 10 most recent files, even with no document open." = "برای مشاهدهٔ ۱۰ فایل اخیر خود کلیدهای ⇧⌘O را فشار دهید، حتی اگر هیچ سندی باز نباشد.";
 "Choose text alignment" = "انتخاب چینش متن";

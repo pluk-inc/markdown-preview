@@ -604,6 +604,26 @@ let pendingTableContextAction = null
 // Markdown. Build DOM nodes so authored HTML stays text and links stay editable.
 const tableInlineParser = markdownLanguage.parser.configure(obsidianHighlight)
 const tableRenderedTextOffsets = new WeakMap()
+// Rendered cells use word-break: keep-all so short CJK labels stay whole.
+// WebKit's keep-all also refuses to break after 、，。, so split the text at
+// CJK punctuation and put a <wbr> between the phrases, like the reader does.
+const cjkOpening = /[（［｛〈《「『【〔〖〘〚]/u
+const cjkClosing = /[、。，．：；！？）］｝〉》」』】〕〗〙〛｡､]/u
+function cjkPhraseBreaks(text) {
+  const breaks = []
+  if (!/[\u3000-\uffff]/u.test(text)) return breaks
+  const characters = Array.from(text)
+  let offset = 0
+  for (let index = 1; index < characters.length; index++) {
+    offset += characters[index - 1].length
+    const previous = characters[index - 1]
+    const current = characters[index]
+    if (/\s/u.test(previous) || /\s/u.test(current)) continue
+    if ((cjkClosing.test(previous) && !cjkClosing.test(current))
+        || (cjkOpening.test(current) && !cjkOpening.test(previous))) breaks.push(offset)
+  }
+  return breaks
+}
 
 function renderTableCell(element, source) {
   const classes = {
@@ -612,11 +632,20 @@ function renderTableCell(element, source) {
     Strikethrough: 'cm-md-strikethrough',
     Highlight: 'cm-md-highlight',
   }
-  const appendText = (parent, text, from) => {
+  const appendRun = (parent, text, from) => {
     if (!text) return
     const node = document.createTextNode(text)
     tableRenderedTextOffsets.set(node, from)
     parent.append(node)
+  }
+  const appendText = (parent, text, from) => {
+    let start = 0
+    for (const offset of cjkPhraseBreaks(text)) {
+      appendRun(parent, text.slice(start, offset), from + start)
+      parent.append(document.createElement('wbr'))
+      start = offset
+    }
+    appendRun(parent, text.slice(start), from + start)
   }
   const appendRange = (parent, node, from, to) => {
     let offset = from
@@ -635,7 +664,7 @@ function renderTableCell(element, source) {
       let text = source.slice(node.firstChild.to, node.lastChild.from).replace(/\n/g, ' ')
       const padded = text.startsWith(' ') && text.endsWith(' ') && /[^ ]/.test(text)
       if (padded) text = text.slice(1, -1)
-      appendText(code, text, node.firstChild.to + (padded ? 1 : 0))
+      appendRun(code, text, node.firstChild.to + (padded ? 1 : 0))
       parent.append(code)
     } else if (classes[node.name]) {
       const span = document.createElement('span')
@@ -1070,7 +1099,7 @@ class TableEditorWidget extends WidgetType {
       let sourceAnchor = null
       if (cell.dataset.tableEditing !== 'true' && event.detail === 1
           && !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey
-          && cell.textContent !== model.rows[row][column]) {
+          && (cell.textContent !== model.rows[row][column] || cell.childElementCount)) {
         const hit = document.caretRangeFromPoint?.(event.clientX, event.clientY)
         const from = hit && tableRenderedTextOffsets.get(hit.startContainer)
         if (from != null && cell.contains(hit.startContainer)) {

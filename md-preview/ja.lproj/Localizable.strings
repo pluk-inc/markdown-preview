@@ -323,8 +323,8 @@
 "Choose Japanese in Settings → General → Language, or let it follow your system language." = "「設定」→「一般」→「言語」で日本語を選択するか、システムの言語に合わせることができます。";
 "Instant auto save" = "即時自動保存";
 "Choose Instant in Settings → General to save two seconds after you stop typing." = "「設定」→「一般」で「即時」を選択すると、入力を止めてから2秒後に保存されます。";
-"Expand tables fullscreen" = "表をフルスクリーンで表示";
-"Choose Expand Table to see a wide table fullscreen. Press Escape to go back." = "「表を拡大」を選択すると、幅の広い表をフルスクリーンで表示できます。Esc キーで戻ります。";
+"Expand tables in a window" = "表を別ウインドウで表示";
+"Choose Expand Table to open a wide table in its own window. Press Escape to go back." = "「表を拡大」を選択すると、幅の広い表を別ウインドウで表示できます。Esc キーで戻ります。";
 "Reopen recent documents" = "最近の書類を再び開く";
 "Press ⇧⌘O to see your 10 most recent files, even with no document open." = "⇧⌘O を押すと、書類を開いていなくても最近開いた 10 個のファイルが表示されます。";
 "Choose text alignment" = "テキストの配置を選択";

@@ -993,6 +993,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     private var markdownLinkDepth = 0
     private var rawHTMLLinkExclusions: [String] = []
     private var inTableHead = false
+    private var tableCellDepth = 0
     private var tableColumnAlignments: [Table.ColumnAlignment?]?
     private var tableSourceRows: [[String]]?
     private var currentTableColumn = 0
@@ -1579,7 +1580,9 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         }
 
         result += ">"
+        tableCellDepth += 1
         descendInto(tableCell)
+        tableCellDepth -= 1
         result += "</\(element)>\n"
     }
 
@@ -1654,15 +1657,15 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     }
 
     mutating func visitText(_ text: Text) {
+        let html: String
         if let prefix = sourceListPrefixToStrip,
            text.string.hasPrefix(prefix) {
-            result += renderText(
-                String(text.string.dropFirst(prefix.count))
-            )
+            html = renderText(String(text.string.dropFirst(prefix.count)))
             sourceListPrefixToStrip = nil
         } else {
-            result += renderText(text.string)
+            html = renderText(text.string)
         }
+        result += tableCellDepth > 0 ? insertingCJKPhraseBreaks(html) : html
     }
 
     /// ASCII-only candidate check: no Foundation bridging, Unicode case folding,
@@ -1744,6 +1747,56 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         descendInto(attributes)
         result += "</span>"
     }
+}
+
+/// Table cells use `word-break: keep-all` so short Chinese and Japanese
+/// labels stay on one line. WebKit's keep-all then treats a whole CJK
+/// sentence as one word: unlike Chromium it does not break after 、，。 either.
+/// A `<wbr>` after closing punctuation and before opening brackets gives the
+/// phrase-by-phrase wrapping readers expect. The input is escaped HTML; text
+/// inside tags (URLs in `href`, highlight marks) is left alone, and `<wbr>`
+/// adds no characters to copied text.
+private nonisolated func insertingCJKPhraseBreaks(_ html: String) -> String {
+    guard html.unicodeScalars.contains(where: { $0.value >= 0x3000 }) else { return html }
+    func isOpening(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar {
+        case "\u{FF08}", "\u{FF3B}", "\u{FF5B}", "\u{3008}", "\u{300A}", "\u{300C}", "\u{300E}",
+             "\u{3010}", "\u{3014}", "\u{3016}", "\u{3018}", "\u{301A}":
+            return true
+        default:
+            return false
+        }
+    }
+    func isClosing(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar {
+        case "\u{3001}", "\u{3002}", "\u{FF0C}", "\u{FF0E}", "\u{FF1A}", "\u{FF1B}", "\u{FF01}", "\u{FF1F}",
+             "\u{FF09}", "\u{FF3D}", "\u{FF5D}", "\u{3009}", "\u{300B}", "\u{300D}", "\u{300F}", "\u{3011}",
+             "\u{3015}", "\u{3017}", "\u{3019}", "\u{301B}", "\u{FF61}", "\u{FF64}":
+            return true
+        default:
+            return false
+        }
+    }
+    var result = ""
+    result.reserveCapacity(html.utf8.count + 64)
+    var insideTag = false
+    var previous: Unicode.Scalar?
+    for scalar in html.unicodeScalars {
+        if insideTag {
+            if scalar == ">" { insideTag = false }
+        } else if scalar == "<" {
+            insideTag = true
+            previous = nil
+        } else {
+            if let previous, !previous.properties.isWhitespace, !scalar.properties.isWhitespace,
+               (isClosing(previous) && !isClosing(scalar)) || (isOpening(scalar) && !isOpening(previous)) {
+                result += "<wbr>"
+            }
+            previous = scalar
+        }
+        result.unicodeScalars.append(scalar)
+    }
+    return result
 }
 
 private nonisolated func escapeTextWithHighlights(_ string: String) -> String {

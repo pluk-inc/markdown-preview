@@ -9,6 +9,7 @@ final class MarkdownHTMLPDFExportTests: XCTestCase {
     private let longValue = String(repeating: "WideValue", count: 28) + "ValueEnd"
     private let longHeader = String(repeating: "WideHeader", count: 24) + "HeaderEnd"
     private let prose = Array(repeating: "ordinary words of prose", count: 20).joined(separator: " ")
+    private let cjkProse = "同一条视频内（不管多长）人、物、画风不漂，站位合理不乱跑，被挡住再出现还是原样。"
 
     private var tables: String {
         """
@@ -28,6 +29,10 @@ final class MarkdownHTMLPDFExportTests: XCTestCase {
         | --- | --- |
         | Ordinary | \(String(repeating: prose + " ", count: 6)) |
 
+        | 二级维度 | 一句话看什么 |
+        | --- | --- |
+        | 首尾帧与关键帧精度 | \(String(repeating: cjkProse, count: 6)) |
+
         <table><tr><th colspan="2">\(longHeader)</th></tr>
         <tr><td rowspan="2">Grouped</td><td>\(prose)</td></tr>
         <tr><td><a href="https://example.com"><em>\(longValue.prefix(120))</em>\(longValue.dropFirst(120))</a></td></tr></table>
@@ -40,6 +45,9 @@ final class MarkdownHTMLPDFExportTests: XCTestCase {
                 let harness = makeHarness(markdown: tables, width: width, margins: margins)
                 defer { harness.close() }
                 let labels = ["Measure", "Static", "Category", "Stable", "Mixed", "Ordinary", "Grouped"]
+                // The PDF text layer maps some CJK characters to radical code points
+                // (二 → ⼆), so CJK text is checked in the export views, not in the PDF.
+                let cjkCells = ["二级维度", "首尾帧与关键帧精度", cjkProse]
                 let before = try await harness.layout(texts: labels, imageCount: 0)
                 let source = try await documentState(harness.webView)
                 // Legacy scrollbars occupy part of the view width.
@@ -51,6 +59,8 @@ final class MarkdownHTMLPDFExportTests: XCTestCase {
                 let session = try await DocumentExportSession.capture(from: harness.webView)
                 defer { session.close() }
                 let imageView = try await session.webView(for: .png)
+                let imageLines = try await cellLineCounts(of: cjkCells, in: imageView)
+                XCTAssertEqual(imageLines.map { min($0, 2) }, [1, 1, 2], "\(name): \(imageLines)")
                 let imagePDFData = try await imageView.pdf(configuration: WKPDFConfiguration())
                 let imagePDF = try XCTUnwrap(PDFDocument(data: imagePDFData))
                 XCTAssertEqual(imagePDF.page(at: 0)?.bounds(for: .mediaBox).width, expectedWidth)
@@ -67,6 +77,8 @@ final class MarkdownHTMLPDFExportTests: XCTestCase {
                 try saveArtifact(imageData, name: "\(name).png")
 
                 let pdfView = try await session.webView(for: .pdf)
+                let pdfLines = try await cellLineCounts(of: cjkCells, in: pdfView)
+                XCTAssertEqual(pdfLines.map { min($0, 2) }, [1, 1, 2], "\(name): \(pdfLines)")
                 let pdf = try await printPDF(pdfView, session: session, name: name)
                 XCTAssertTrue(session.isClosed)
                 assertCompleteText([longHeader, longValue, prose], in: pdf)
@@ -711,6 +723,21 @@ final class MarkdownHTMLPDFExportTests: XCTestCase {
             XCTAssertTrue(text.contains(value.filter { !$0.isWhitespace }),
                           "PDF lost text: \(value)", file: file, line: line)
         }
+    }
+
+    /// Distinct line tops of the first table cell containing each text.
+    private func cellLineCounts(of texts: [String], in webView: WKWebView) async throws -> [Int] {
+        let result = try await webView.callAsyncJavaScript("""
+            return texts.map(text => {
+                const cell = [...document.querySelectorAll('th, td')].find(cell => cell.textContent.includes(text));
+                if (!cell) return 0;
+                const range = document.createRange();
+                range.selectNodeContents(cell);
+                const tops = new Set([...range.getClientRects()].filter(rect => rect.width > 0).map(rect => Math.round(rect.top)));
+                return tops.size;
+            });
+            """, arguments: ["texts": texts], in: nil, contentWorld: .page)
+        return try XCTUnwrap(result as? [Int])
     }
 
     private func assertWholeWords(_ words: [String], in pdf: PDFDocument,

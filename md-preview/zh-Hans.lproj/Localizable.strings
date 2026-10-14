@@ -323,8 +323,8 @@
 "Choose Japanese in Settings → General → Language, or let it follow your system language." = "在“设置”→“通用”→“语言”中选择日语，或跟随系统语言。";
 "Instant auto save" = "即时自动保存";
 "Choose Instant in Settings → General to save two seconds after you stop typing." = "在“设置”→“通用”中选择“立即”，停止输入两秒后即自动保存。";
-"Expand tables fullscreen" = "全屏展开表格";
-"Choose Expand Table to see a wide table fullscreen. Press Escape to go back." = "选择“展开表格”即可全屏查看宽表格。按 Esc 键返回。";
+"Expand tables in a window" = "在窗口中展开表格";
+"Choose Expand Table to open a wide table in its own window. Press Escape to go back." = "选择“展开表格”即可在独立窗口中查看宽表格。按 Esc 键返回。";
 "Reopen recent documents" = "重新打开最近的文稿";
 "Press ⇧⌘O to see your 10 most recent files, even with no document open." = "按下 ⇧⌘O 即可查看最近打开的 10 个文件，即使没有打开任何文稿。";
 "Choose text alignment" = "选择文本对齐方式";
