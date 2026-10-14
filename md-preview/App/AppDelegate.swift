@@ -191,9 +191,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // changed the shared look since the first window rendered, that
             // window still shows the old look, so repaint it here — the
             // activation check that normally does this would see no change.
+            // Compared after the refresh: a change before it is caught here,
+            // a change after it by the next activation.
+            SettingsModel.shared.refreshFromExternalSources()
             let lookChanged = launchLook.map { $0 != SharedLook.current() } ?? false
             launchLook = nil
-            SettingsModel.shared.refreshFromExternalSources()
             if lookChanged {
                 applyAppearanceMode(ThemePreset.applied().requiredAppearance ?? AppearanceMode.current,
                                     reloadPreviews: true)
