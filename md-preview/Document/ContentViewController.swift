@@ -97,12 +97,12 @@ final class ContentViewController: NSViewController {
             }
         }
         webView.contentDidReplace = { [weak self] in
-            LaunchSignposts.event("domReady")
             // The fresh article is in the DOM; a same-height render never
             // fires heightDidChange, so this is the reliable signal.
             self?.applyPendingScrollAnchorIfNeeded()
             self?.updatePointerTracking()
             guard let self, self.webView.hasRequestedDocument else { return }
+            LaunchSignposts.event("domReady")
             self.handleFirstDocumentPaint()
         }
         NotificationCenter.default.addObserver(self, selector: #selector(updatePointerTracking),
