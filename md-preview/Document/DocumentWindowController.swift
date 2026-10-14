@@ -451,8 +451,40 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // longer recapture it).
         documentWindow.tabbingMode = .automatic
         NSApp.activate()
+        if fileURL != nil {
+            LaunchSignposts.interval("pumpWebKit") { pumpRunLoopForWebKitStartup() }
+        }
         DispatchQueue.main.async { [weak self] in
             self?.finishFirstShow(fileURL: fileURL)
+        }
+    }
+
+    private static var didPumpForFirstWindow = false
+
+    /// Runs the main run loop in place until the first page has painted or
+    /// 450 ms have passed. Deliberate, and a hack.
+    ///
+    /// The document's HTML went to WebKit before the toolbar was built, and
+    /// WebKit's helper processes are up ~55 ms later. But every step after
+    /// that — their ready messages, the RunningBoard assertions WebKit takes
+    /// for each of them, the navigation policy round trip — is delivered to
+    /// the main run loop, and the launch turn that created this window
+    /// still has 150–250 ms to go (the document controller's completion,
+    /// applicationDidFinishLaunching, the rest of AppKit's launch sequence).
+    /// Running the loop here lets WebKit use that time instead of waiting
+    /// for it. The frame is already committed, so nothing visible waits;
+    /// input is not read because AppKit pulls events itself, outside the
+    /// run loop sources. Only the first window of a launch does this.
+    private func pumpRunLoopForWebKitStartup() {
+        guard !Self.didPumpForFirstWindow else { return }
+        Self.didPumpForFirstWindow = true
+        guard let split = documentWindow.contentViewController as? MainSplitViewController else { return }
+        let deadline = CFAbsoluteTimeGetCurrent() + 0.45
+        while !split.hasPaintedFirstDocument {
+            let remaining = deadline - CFAbsoluteTimeGetCurrent()
+            guard remaining > 0 else { break }
+            let result = CFRunLoopRunInMode(.defaultMode, min(0.05, remaining), true)
+            if result == .stopped || result == .finished { break }
         }
     }
 

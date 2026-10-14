@@ -89,6 +89,10 @@ final class MainSplitViewController: NSSplitViewController {
         }
     }
 
+    var hasPaintedFirstDocument: Bool {
+        contentViewController?.hasPaintedFirstDocument ?? true
+    }
+
     func showSnapshot(_ prefetch: DocumentSnapshotCache.Prefetch) {
         contentViewController?.showSnapshot(prefetch)
     }

@@ -226,6 +226,11 @@ final class ContentViewController: NSViewController {
         scheduleHeadingOffsetsRefresh()
     }
 
+    /// True once the first document's frame has been presented (two
+    /// animation frames after it reached the DOM). The launch pump in
+    /// DocumentWindowController stops on it.
+    private(set) var hasPaintedFirstDocument = false
+
     func clearContent() {
         exportSource = nil
         resetScrollspy()
@@ -457,6 +462,7 @@ final class ContentViewController: NSViewController {
             )
             #endif
             LaunchSignposts.event("webPaint")
+            self?.hasPaintedFirstDocument = true
             self?.removeSnapshotOverlay()
             self?.saveSnapshotIfNeeded()
         }
