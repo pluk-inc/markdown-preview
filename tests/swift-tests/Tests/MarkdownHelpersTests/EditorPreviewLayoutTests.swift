@@ -130,6 +130,31 @@ final class EditorPreviewLayoutTests: XCTestCase {
                            "Second ordered item", "Quoted paragraph.", "Closing paragraph."]))
     }
 
+    /// A list past 99 items widens its gutter by one digit (#522); both
+    /// surfaces must agree on the new text column, the wrapped continuation
+    /// lines, and the nested lists' indentation.
+    func testLongOrderedListMarkerGutter() async throws {
+        var lines = ["Before the list."]
+        for index in 1...98 { lines.append("\(index). Entry number \(index)") }
+        lines.append("99. Ninety-ninth entry wraps onto a second line because this sentence is deliberately long enough to need it at every width.")
+        lines.append("100. Hundredth entry")
+        // "100. " is five columns wide, so nested content needs five spaces.
+        lines.append("     - Bullet under the hundredth")
+        lines.append("     1. First nested")
+        lines.append("     2. Second nested")
+        lines.append("101. Final entry")
+        // A paragraph separates the second list; otherwise "998." would
+        // continue the first one and be numbered 102 by the preview.
+        lines += ["", "Between the lists.", "", "998. Nine hundred", "999. Nine hundred and one",
+                  "1000. One thousand", "", "After the list."]
+        try await check(Fixture(name: "long-ordered-list", markdown: lines.joined(separator: "\n"),
+                                texts: ["Before the list.", "Entry number 1", "Entry number 98", "Ninety-ninth entry",
+                                        "deliberately long enough", "Hundredth entry", "Bullet under the hundredth",
+                                        "First nested", "Second nested", "Final entry", "Between the lists.",
+                                        "Nine hundred and one", "One thousand", "After the list."],
+                                height: 3600))
+    }
+
     func testQuoteAtDocumentStart() async throws {
         try await check(Fixture(name: "leading-quote", markdown: "> Opening quotation.\n> Continuing the same paragraph.\n\nAfter quotation.",
                                texts: ["Opening quotation.", "Continuing the same paragraph.", "After quotation."]))
