@@ -10,7 +10,7 @@
 import Foundation
 import os
 
-enum LaunchSignposts {
+nonisolated enum LaunchSignposts {
     static let signposter = OSSignposter(subsystem: "doc.md-preview.launch", category: "launch")
 
     @discardableResult
