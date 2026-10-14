@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>1UK-8n-QPP.title</key>
+	<string>سفارشی‌سازی نوار ابزار…</string>
+	<key>1Xt-HY-uBw.title</key>
+	<string>Markdown Preview</string>
+	<key>1b7-l0-nxx.title</key>
+	<string>یافتن</string>
+	<key>2oI-Rn-ZJC.title</key>
+	<string>تبدیل‌ها</string>
+	<key>3IN-sU-3Bg.title</key>
+	<string>املا</string>
+	<key>3rS-ZA-NoH.title</key>
+	<string>گفتار</string>
+	<key>4EN-yA-p0u.title</key>
+	<string>یافتن</string>
+	<key>4J7-dP-txa.title</key>
+	<string>ورود به حالت تمام‌صفحه</string>
+	<key>4sb-4s-VLi.title</key>
+	<string>خروج از Markdown Preview</string>
+	<key>5QF-Oa-p0T.title</key>
+	<string>ویرایش</string>
+	<key>5kV-Vb-QxS.title</key>
+	<string>دربارهٔ Markdown Preview</string>
+	<key>6dh-zS-Vam.title</key>
+	<string>ازنو</string>
+	<key>78Y-hA-62v.title</key>
+	<string>تصحیح خودکار املا</string>
+	<key>9ic-FL-obx.title</key>
+	<string>جایگزینی‌ها</string>
+	<key>9yt-4B-nSM.title</key>
+	<string>کپی/چسباندن هوشمند</string>
+	<key>AYu-sK-qS6.title</key>
+	<string>منوی اصلی</string>
+	<key>Bw7-FT-i3A.title</key>
+	<string>ذخیره با نام…</string>
+	<key>DVo-aG-piG.title</key>
+	<string>بستن</string>
+	<key>Dv1-io-Yv7.title</key>
+	<string>املا و دستور زبان</string>
+	<key>Ex0-fm-F00.title</key>
+	<string>خروجی گرفتن…</string>
+	<key>Ex1-pd-F01.title</key>
+	<string>خروجی گرفتن به‌صورت PDF…</string>
+	<key>F2S-fz-NVQ.title</key>
+	<string>راهنما</string>
+	<key>FKE-Sm-Kum.title</key>
+	<string>راهنمای Markdown Preview</string>
+	<key>FeM-D8-WVr.title</key>
+	<string>جایگزینی‌ها</string>
+	<key>H8h-7b-M4v.title</key>
+	<string>نمایش</string>
+	<key>HFQ-gK-NFA.title</key>
+	<string>جایگزینی متن</string>
+	<key>HFo-cy-zxI.title</key>
+	<string>نمایش املا و دستور زبان</string>
+	<key>HyV-fh-RgO.title</key>
+	<string>نمایش</string>
+	<key>IAo-SY-fd9.title</key>
+	<string>باز کردن…</string>
+	<key>KaW-ft-85H.title</key>
+	<string>بازگشت به نسخهٔ ذخیره‌شده</string>
+	<key>Kd2-mp-pUS.title</key>
+	<string>نمایش همه</string>
+	<key>LE2-aR-0XJ.title</key>
+	<string>آوردن همه به جلو</string>
+	<key>NMo-om-nkz.title</key>
+	<string>سرویس‌ها</string>
+	<key>OY7-WF-poV.title</key>
+	<string>کوچک کردن</string>
+	<key>Olw-nP-bQN.title</key>
+	<string>پنهان کردن Markdown Preview</string>
+	<key>OwM-mh-QMV.title</key>
+	<string>یافتن قبلی</string>
+	<key>Oyz-dy-DGm.title</key>
+	<string>توقف گفتار</string>
+	<key>R4o-n2-Eq4.title</key>
+	<string>بزرگ‌نمایی</string>
+	<key>Ruw-6m-B2m.title</key>
+	<string>انتخاب همه</string>
+	<key>S0p-oC-mLd.title</key>
+	<string>پرش به بخش انتخاب‌شده</string>
+	<key>Td7-aD-5lo.title</key>
+	<string>پنجره</string>
+	<key>UEZ-Bs-lqG.title</key>
+	<string>بزرگ کردن حروف اول کلمات</string>
+	<key>Vdr-fp-XzO.title</key>
+	<string>پنهان کردن بقیه</string>
+	<key>W48-6f-4Dl.title</key>
+	<string>ویرایش</string>
+	<key>Was-JA-tGl.title</key>
+	<string>جدید</string>
+	<key>WeT-3V-zwk.title</key>
+	<string>چسباندن و هماهنگ کردن سبک</string>
+	<key>Xz5-n4-O0W.title</key>
+	<string>یافتن…</string>
+	<key>YEy-JH-Tfz.title</key>
+	<string>یافتن و جایگزینی…</string>
+	<key>Ynk-f8-cLZ.title</key>
+	<string>شروع گفتار</string>
+	<key>aTl-1u-JFS.title</key>
+	<string>چاپ…</string>
+	<key>aUF-d1-5bR.title</key>
+	<string>پنجره</string>
+	<key>bib-Uj-vzu.title</key>
+	<string>پرونده</string>
+	<key>buJ-ug-pKt.title</key>
+	<string>استفاده از بخش انتخاب‌شده برای یافتن</string>
+	<key>c8a-y6-VQd.title</key>
+	<string>تبدیل‌ها</string>
+	<key>cwL-P1-jid.title</key>
+	<string>پیوندهای هوشمند</string>
+	<key>d9M-CD-aMd.title</key>
+	<string>کوچک کردن حروف</string>
+	<key>dMs-cI-mzQ.title</key>
+	<string>پرونده</string>
+	<key>dRJ-4n-Yzg.title</key>
+	<string>واگرد</string>
+	<key>gVA-U4-sdL.title</key>
+	<string>چسباندن</string>
+	<key>hQb-2v-fYv.title</key>
+	<string>نقل‌قول‌های هوشمند</string>
+	<key>hz2-CU-CR7.title</key>
+	<string>بررسی سند در همین لحظه</string>
+	<key>hz9-B4-Xy5.title</key>
+	<string>سرویس‌ها</string>
+	<key>kIP-vf-haE.title</key>
+	<string>نمایش نوار کناری</string>
+	<key>mK6-2p-4JG.title</key>
+	<string>بررسی دستور زبان همراه با املا</string>
+	<key>mdp-aot-itm.title</key>
+	<string>همیشه در بالا</string>
+	<key>mdp-zi-itm.title</key>
+	<string>بزرگ‌نمایی</string>
+	<key>mdp-zo-itm.title</key>
+	<string>کوچک‌نمایی</string>
+	<key>mdp-zr-itm.title</key>
+	<string>اندازهٔ واقعی</string>
+	<key>oas-Oc-fiZ.title</key>
+	<string>باز کردن موارد اخیر</string>
+	<key>pa3-QI-u2k.title</key>
+	<string>حذف</string>
+	<key>pxx-59-PXV.title</key>
+	<string>ذخیره…</string>
+	<key>q09-fT-Sye.title</key>
+	<string>یافتن بعدی</string>
+	<key>rbD-Rh-wIN.title</key>
+	<string>بررسی املا هنگام تایپ</string>
+	<key>rgM-f4-ycn.title</key>
+	<string>خط‌تیره‌های هوشمند</string>
+	<key>snW-S8-Cw5.title</key>
+	<string>نمایش نوار ابزار</string>
+	<key>spk-cu-itm.title</key>
+	<string>بررسی به‌روزرسانی‌ها…</string>
+	<key>tRr-pd-1PS.title</key>
+	<string>تشخیص‌دهنده‌های داده</string>
+	<key>tXI-mr-wws.title</key>
+	<string>باز کردن موارد اخیر</string>
+	<key>uQy-DD-JDr.title</key>
+	<string>Markdown Preview</string>
+	<key>uRl-iY-unG.title</key>
+	<string>برش</string>
+	<key>vNY-rz-j42.title</key>
+	<string>پاک کردن منو</string>
+	<key>vmV-6d-7jI.title</key>
+	<string>بزرگ کردن حروف</string>
+	<key>wpr-3q-Mcd.title</key>
+	<string>راهنما</string>
+	<key>x3v-GG-iWU.title</key>
+	<string>کپی</string>
+	<key>xrE-MZ-jX0.title</key>
+	<string>گفتار</string>
+	<key>z6F-FW-3nz.title</key>
+	<string>نمایش جایگزینی‌ها</string>
+</dict>
+</plist>

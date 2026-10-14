@@ -1,0 +1,385 @@
+/* App menu */
+"Install CLI..." = "نصب CLI...";
+"Settings…" = "تنظیمات…";
+
+/* Settings */
+"General" = "عمومی";
+"Privacy" = "حریم خصوصی";
+"About" = "درباره";
+"Appearance also applies to Quick Look previews." = "ظاهر بر پیش‌نمایش‌های Quick Look نیز اعمال می‌شود.";
+"Layout" = "طرح‌بندی";
+"Text size" = "اندازهٔ متن";
+"Size of rendered Markdown in document windows." = "اندازهٔ Markdown نمایش‌داده‌شده در پنجره‌های سند.";
+"Small" = "کوچک";
+"Medium" = "متوسط";
+"Large" = "بزرگ";
+"Content width" = "عرض محتوا";
+"Zooming a document window with ⌘+ and ⌘− changes this same size." = "بزرگ‌نمایی پنجرهٔ سند با ⌘+ و ⌘− همین اندازه را تغییر می‌دهد.";
+"Editing" = "ویرایش";
+"Automatic saving" = "ذخیرهٔ خودکار";
+"Save edited documents periodically." = "ذخیرهٔ دوره‌ای اسناد ویرایش‌شده.";
+"Automatic saving runs while a document has unsaved edits." = "ذخیرهٔ خودکار زمانی اجرا می‌شود که سند ویرایش‌های ذخیره‌نشده داشته باشد.";
+"Instant" = "فوری";
+"30 seconds" = "۳۰ ثانیه";
+"1 minute" = "۱ دقیقه";
+"%d minutes" = "%d دقیقه";
+"Hand-off" = "انتقال";
+"Open documents in" = "باز کردن اسناد در";
+"AI apps" = "برنامه‌های هوش مصنوعی";
+"The app the Open button in the document toolbar uses first. Its menu still offers every other installed app." = "برنامه‌ای که دکمهٔ «باز کردن» در نوار ابزار سند ابتدا استفاده می‌کند. منوی آن همچنان همهٔ برنامه‌های نصب‌شدهٔ دیگر را ارائه می‌دهد.";
+"Command line tools" = "ابزارهای خط فرمان";
+"Install…" = "نصب…";
+"Adds mdp, md-preview, and markdown-preview to your PATH. Run it again after updating the app to refresh the commands." = "‏mdp،‏ md-preview و markdown-preview را به PATH شما اضافه می‌کند. پس از به‌روزرسانی برنامه، آن را دوباره اجرا کنید تا دستورها تازه‌سازی شوند.";
+"Markdown Preview" = "Markdown Preview";
+"Version %@ (%@)" = "نسخهٔ %@ (%@)";
+"Check for Updates" = "بررسی به‌روزرسانی‌ها";
+"Automatically check for updates" = "بررسی خودکار به‌روزرسانی‌ها";
+"Automatically download updates" = "دانلود خودکار به‌روزرسانی‌ها";
+"Last checked" = "آخرین بررسی";
+"Never" = "هرگز";
+"Downloaded updates install the next time you quit Markdown Preview." = "به‌روزرسانی‌های دانلودشده دفعهٔ بعدی که از Markdown Preview خارج می‌شوید نصب می‌شوند.";
+"Colors" = "رنگ‌ها";
+"Window background" = "پس‌زمینهٔ پنجره";
+"Editor background" = "پس‌زمینهٔ ویرایشگر";
+"Code block background" = "پس‌زمینهٔ بلوک کد";
+"Text" = "متن";
+"Link" = "پیوند";
+"Presets" = "پیش‌تنظیم‌ها";
+"Colors apply to the current appearance. Choose the Automatic appearance to set Light and Dark separately." = "رنگ‌ها بر ظاهر فعلی اعمال می‌شوند. برای تنظیم جداگانهٔ روشن و تاریک، ظاهر خودکار را انتخاب کنید.";
+"A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards." = "یک پیش‌تنظیم همهٔ رنگ‌ها را پر می‌کند و برنامه را به حالت روشن یا تاریک می‌برد. سپس می‌توانید رنگ‌های جداگانه را در پایین تنظیم کنید.";
+"Red Graphite" = "گرافیت قرمز";
+"Dark Graphite" = "گرافیت تیره";
+"Normal" = "عادی";
+"Charcoal" = "زغالی";
+"Solarized Light" = "Solarized Light";
+"Solarized Dark" = "Solarized Dark";
+"Dracula" = "Dracula";
+"Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "هر رنگ مقدار جداگانه‌ای برای ظاهر روشن و تاریک دارد. انتخاب رنگ پیش‌فرض، مقدار جایگزین را حذف می‌کند.";
+"Custom colors" = "رنگ‌های سفارشی";
+"Reset Colors" = "بازنشانی رنگ‌ها";
+"Restores the default Normal theme." = "پوستهٔ عادی پیش‌فرض را بازیابی می‌کند.";
+"Current theme: %@" = "پوستهٔ فعلی: %@";
+"Send anonymous crash reports" = "ارسال گزارش‌های ناشناس خرابی";
+"Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "گزارش‌های خرابی شامل جزئیات تشخیصی مانند رد پشته و نسخه‌های سیستم‌عامل و برنامه هستند. آن‌ها ممکن است شامل مسیرهای فنی فایل باشند؛ Markdown Preview عمداً محتوای سند یا اطلاعات شخصی را پیوست نمی‌کند.";
+"Share anonymous usage analytics" = "اشتراک‌گذاری آمار ناشناس استفاده";
+"When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS major version, processor architecture, and locale country or region. This is used only to count daily and monthly active installations and understand basic platform compatibility. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers." = "در صورت فعال بودن، Markdown Preview هنگام فعال شدن برنامه حداکثر یک رویداد در روز ارسال می‌کند که به یک شناسهٔ نصب تصادفی مرتبط است. همچنین نسخهٔ برنامه، نسخهٔ اصلی macOS، معماری پردازنده و کشور یا منطقهٔ محلی را ارسال می‌کند. این اطلاعات فقط برای شمارش نصب‌های فعال روزانه و ماهانه و درک سازگاری اولیه با پلتفرم استفاده می‌شود. این ویژگی محتوای سند، نام‌ها یا مسیرهای فایل، اقدامات، صفحه‌ها، موقعیت مکانی دقیق، اطلاعات شخصی یا شناسه‌های تبلیغاتی را ارسال نمی‌کند.";
+
+/* View menu */
+"Appearance" = "ظاهر";
+"Automatic" = "خودکار";
+"Light" = "روشن";
+"Dark" = "تاریک";
+"Content Width" = "عرض محتوا";
+"Normal" = "عادی";
+"Full Width" = "عرض کامل";
+"Toggle Sidebar" = "تغییر وضعیت نوار کناری";
+"Hide Sidebar" = "مخفی کردن نوار کناری";
+"Table of Contents" = "فهرست مطالب";
+"Project Navigator" = "پیمایشگر پروژه";
+"Toggle Edit Mode" = "تغییر وضعیت حالت ویرایش";
+
+/* File menu */
+"New Tab" = "زبانهٔ جدید";
+"Choose a name and location for the new Markdown file." = "نام و مکانی را برای فایل Markdown جدید انتخاب کنید.";
+
+/* Print panel */
+"Font Size:" = "اندازهٔ قلم:";
+"Font Size" = "اندازهٔ قلم";
+"%d pt" = "%d pt";
+"pt" = "pt";
+
+/* Export panel */
+"Export" = "خروجی گرفتن";
+"Format:" = "قالب:";
+"PDF Document" = "سند PDF";
+"HTML Document" = "سند HTML";
+"The document could not be prepared for export." = "آماده‌سازی سند برای خروجی گرفتن امکان‌پذیر نبود.";
+"The selected paper has no printable area." = "کاغذ انتخاب‌شده ناحیهٔ قابل چاپی ندارد.";
+
+/* Go menu */
+"Go" = "برو";
+"Up" = "بالا";
+"Down" = "پایین";
+"Page Up" = "صفحه به بالا";
+"Page Down" = "صفحه به پایین";
+"Previous Item" = "مورد قبلی";
+"Next Item" = "مورد بعدی";
+"Top of Document" = "ابتدای سند";
+"Bottom of Document" = "انتهای سند";
+
+/* Format menu */
+"Format" = "قالب‌بندی";
+"Body" = "بدنه";
+"Heading 1" = "سرتیتر ۱";
+"Heading 2" = "سرتیتر ۲";
+"Heading 3" = "سرتیتر ۳";
+"Bold" = "ضخیم";
+"Italic" = "مورب";
+"Strikethrough" = "خط‌خورده";
+"Inline Code" = "کد درون‌خطی";
+"Link" = "پیوند";
+"Bulleted List" = "فهرست نشانه‌دار";
+"Numbered List" = "فهرست شماره‌دار";
+"Checklist" = "چک‌لیست";
+"Block Quote" = "بلوک نقل‌قول";
+
+/* Open panel */
+"Choose a Markdown file or folder" = "یک فایل یا پوشهٔ Markdown را انتخاب کنید";
+
+/* Search toolbar */
+"Search" = "جستجو";
+"Search in Document" = "جستجو در سند";
+
+/* Main toolbar */
+"Navigation" = "ناوبری";
+"Back and Forward" = "عقب و جلو";
+"Back" = "بازگشت";
+"Forward" = "جلو";
+"Sidebar" = "نوار کناری";
+"Sidebar options" = "گزینه‌های نوار کناری";
+"Inspector" = "بازرس";
+"Get Info" = "دریافت اطلاعات";
+"Always on Top" = "همیشه در بالا";
+"Keep Markdown Preview windows in front of other apps" = "نگه‌داشتن پنجره‌های Markdown Preview در جلوی سایر برنامه‌ها";
+"Show the inspector" = "نمایش بازرس";
+"Share" = "اشتراک‌گذاری";
+"Share document" = "اشتراک‌گذاری سند";
+"Print" = "چاپ";
+"Print document" = "چاپ سند";
+"Copy" = "کپی";
+"Copy Markdown source to clipboard" = "کپی منبع Markdown در کلیپ‌بورد";
+"Copied" = "کپی شد";
+"Edit" = "ویرایش";
+"Edit document" = "ویرایش سند";
+"Stop editing and return to preview" = "توقف ویرایش و بازگشت به پیش‌نمایش";
+"Open" = "باز کردن";
+"Open document in another app" = "باز کردن سند در برنامه‌ای دیگر";
+"Open in %@" = "باز کردن در %@";
+"Open in LLM" = "باز کردن در LLM";
+"Open document in an LLM app" = "باز کردن سند در یک برنامهٔ LLM";
+"Zoom" = "بزرگ‌نمایی";
+"Zoom Out" = "کوچک‌نمایی";
+"Zoom In" = "بزرگ‌نمایی";
+"Open With" = "باز کردن با";
+"Open in another editor" = "باز کردن در ویرایشگری دیگر";
+
+/* Formatting toolbar */
+"Task List" = "فهرست وظایف";
+"Normal Text" = "متن عادی";
+"Heading %d" = "سرتیتر %d";
+
+/* Find bar */
+"Match:" = "تطابق:";
+"Contains" = "شامل";
+"Begins With" = "شروع با";
+"Done" = "انجام شد";
+"Not found" = "یافت نشد";
+"%d of %d" = "%d از %d";
+"Previous match" = "تطابق قبلی";
+"Next match" = "تطابق بعدی";
+
+/* Open With context menu */
+"Open with External Editor" = "باز کردن با ویرایشگر خارجی";
+"Open As" = "باز کردن به‌صورت";
+"No editors available" = "هیچ ویرایشگری در دسترس نیست";
+
+/* Inspector */
+"Inspector tab" = "زبانهٔ بازرس";
+"Document" = "سند";
+"Properties" = "مشخصات";
+"File Name" = "نام فایل";
+"Full Path" = "مسیر کامل";
+"Document Type" = "نوع سند";
+"Markdown Document" = "سند Markdown";
+"File Size" = "اندازهٔ فایل";
+"Words" = "کلمات";
+"Characters" = "نویسه‌ها";
+"Lines" = "سطرها";
+"Headings" = "سرتیترها";
+"Links" = "پیوندها";
+"Images" = "تصاویر";
+"Modified" = "تغییریافته";
+"No frontmatter" = "بدون frontmatter";
+"Untitled" = "بدون عنوان";
+
+/* Document state and save dialogs */
+"Edited" = "ویرایش‌شده";
+"Auto-save failed" = "ذخیرهٔ خودکار ناموفق بود";
+"Do you want to save your changes?" = "آیا می‌خواهید تغییرات خود را ذخیره کنید؟";
+"this document" = "این سند";
+"Your changes to %@ will be lost if you don’t save them." = "اگر تغییرات خود در %@ را ذخیره نکنید، از دست خواهند رفت.";
+"Save" = "ذخیره";
+"Cancel" = "لغو";
+"Don’t Save" = "ذخیره نشود";
+"The file was removed while it was open." = "فایل در حالی که باز بود حذف شد.";
+"Recreate File" = "ایجاد دوبارهٔ فایل";
+"The file could not be read to verify that it is unchanged." = "خواندن فایل برای تأیید بدون تغییر بودن آن امکان‌پذیر نبود.";
+"Save Anyway" = "در هر صورت ذخیره شود";
+"This document changed on disk" = "این سند روی دیسک تغییر کرده است";
+"Another app changed %@. Cancel keeps your changes unsaved. Choose which version to keep." = "برنامهٔ دیگری %@ را تغییر داده است. «لغو» تغییرات شما را ذخیره‌نشده نگه می‌دارد. انتخاب کنید کدام نسخه حفظ شود.";
+"Keep My Changes" = "حفظ تغییرات من";
+"Reload from Disk" = "بارگذاری مجدد از دیسک";
+"Unable to verify the document on disk" = "امکان تأیید سند روی دیسک وجود ندارد";
+"%@ Cancel keeps your changes unsaved." = "%@ «لغو» تغییرات شما را ذخیره‌نشده نگه می‌دارد.";
+"Markdown Preview needs your permission to save this file." = "‏Markdown Preview برای ذخیرهٔ این فایل به مجوز شما نیاز دارد.";
+"The clipboard does not contain an image." = "کلیپ‌بورد حاوی هیچ تصویری نیست.";
+"The pasted image could not be placed next to the Markdown file." = "قرار دادن تصویر جای‌گذاری‌شده در کنار فایل Markdown امکان‌پذیر نبود.";
+"Choose the folder containing this Markdown file to save the pasted image." = "برای ذخیرهٔ تصویر جای‌گذاری‌شده، پوشهٔ حاوی این فایل Markdown را انتخاب کنید.";
+"Choose the folder containing this Markdown file." = "پوشهٔ حاوی این فایل Markdown را انتخاب کنید.";
+"Rename Image" = "تغییر نام تصویر";
+"Choose a new name for this image." = "نام جدیدی برای این تصویر انتخاب کنید.";
+"Rename" = "تغییر نام";
+
+/* Open menus */
+"No document open" = "هیچ سندی باز نیست";
+"No apps available" = "هیچ برنامه‌ای در دسترس نیست";
+"Editors" = "ویرایشگرها";
+"AI Apps" = "برنامه‌های هوش مصنوعی";
+"No LLM apps available" = "هیچ برنامهٔ LLM در دسترس نیست";
+"Open in LLM…" = "باز کردن در LLM…";
+"Open with…" = "باز کردن با…";
+
+/* Project navigator context menu */
+"Show in Finder" = "نمایش در Finder";
+"Open in New Tab" = "باز کردن در برگهٔ جدید";
+"Open in New Window" = "باز کردن در پنجرهٔ جدید";
+"Copy Path" = "کپی مسیر";
+
+/* Table editing */
+"Table" = "جدول";
+"Row" = "سطر";
+"Column" = "ستون";
+"Select Row" = "انتخاب سطر";
+"Add Row Above" = "افزودن سطر در بالا";
+"Add Row Below" = "افزودن سطر در پایین";
+"Duplicate Row" = "تکثیر سطر";
+"Delete Row" = "حذف سطر";
+"Select Column" = "انتخاب ستون";
+"Add Column Left" = "افزودن ستون در چپ";
+"Add Column Right" = "افزودن ستون در راست";
+"Delete Column" = "حذف ستون";
+"Edit Table Cell" = "ویرایش خانهٔ جدول";
+"Add Row" = "افزودن سطر";
+"Add Column" = "افزودن ستون";
+"Edit Table" = "ویرایش جدول";
+
+/* Rendered preview controls */
+"Heading" = "سرتیتر";
+"Copy code" = "کپی کد";
+"Code copied" = "کد کپی شد";
+"Mermaid diagram" = "نمودار Mermaid";
+"%@ — Mermaid diagram" = "%@ — نمودار Mermaid";
+"Reset zoom" = "بازنشانی بزرگ‌نمایی";
+"Fill width" = "پر کردن عرض";
+"Fit diagram" = "برازش نمودار";
+"Open in Window" = "باز کردن در پنجره";
+"Mermaid renderer is unavailable.\n\n" = "رندرکنندهٔ Mermaid در دسترس نیست.\n\n";
+"Footnote %d" = "پاورقی %d";
+"Back to reference %d" = "بازگشت به ارجاع %d";
+"KaTeX renderer is unavailable.\n\n" = "رندرکنندهٔ KaTeX در دسترس نیست.\n\n";
+
+/* URL scheme errors */
+"Cannot open link" = "پیوند باز نمی‌شود";
+"“%@” is not a link Markdown Preview understands. Use md-preview://file/ followed by the absolute path of the file, for example md-preview://file/Users/me/notes/README.md." = "\U2068«%@»\U2069 پیوندی نیست که Markdown Preview تشخیص دهد. از \U2068md-preview://file/\U2069 و به دنبال آن مسیر مطلق فایل استفاده کنید، برای مثال \U2068md-preview://file/Users/me/notes/README.md\U2069.";
+
+/* CLI installer errors */
+"Terminal automation failed: %@" = "خودکارسازی Terminal ناموفق بود: %@";
+"Terminal automation failed." = "خودکارسازی Terminal ناموفق بود.";
+"Failed to write CLI installer script: %@" = "نوشتن اسکریپت نصب‌کنندهٔ CLI ناموفق بود: %@";
+"The bundled Markdown Preview CLI could not be found." = "ابزار CLI همراه Markdown Preview پیدا نشد.";
+
+/* Settings — Reading */
+"Reading" = "خواندن";
+"Font" = "قلم";
+"System" = "سیستم";
+"Serif" = "سریف";
+"Rounded" = "گرد";
+"Monospace" = "تک‌فاصله";
+"The font also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes the text size." = "این قلم برای پیش‌نمایش‌های Quick Look نیز اعمال می‌شود. بزرگ‌نمایی پنجرهٔ سند با ⌘+ و ⌘− اندازهٔ متن را تغییر می‌دهد.";
+
+/* Settings — Windows */
+"Windows" = "پنجره‌ها";
+"Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "همهٔ پنجره‌های Markdown Preview را جلوتر از سایر برنامه‌ها نگه می‌دارد، از جمله پنجره‌هایی که بعداً باز می‌کنید. پنجره در حالت تمام‌صفحه به همان شکل باقی می‌ماند تا زمانی که از آن خارج شود.";
+"Open documents in tabs" = "باز کردن اسناد در برگه‌ها";
+"A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "فایلی که از Finder باز می‌شود، به‌جای باز شدن در پنجره‌ای جداگانه، به‌عنوان یک برگه به پنجرهٔ جلویی می‌پیوندد — «باز کردن در پنجرهٔ جدید» همچنان یک پنجره باز می‌کند.";
+
+/* Search for Document */
+"Search for Document…" = "جستجوی سند…";
+"Search files by name" = "جستجوی فایل‌ها بر اساس نام";
+"No matching files" = "هیچ فایل منطبقی پیدا نشد";
+"Open a folder to search its files" = "برای جستجوی فایل‌ها، یک پوشه را باز کنید";
+"Open Folder…" = "باز کردن پوشه…";
+"Showing the first %d files in this project" = "نمایش %d فایل نخست در این پروژه";
+"↑↓ browse · ↩ open · ⌘↩ new tab · ⌥↩ new window" = "↑↓ مرور · ↩ باز کردن · ⌘↩ برگهٔ جدید · ⌥↩ پنجرهٔ جدید";
+"Search for Document" = "جستجوی سند";
+"Search for a file by name" = "جستجوی فایل بر اساس نام";
+
+/* What's New */
+"What’s New in Markdown Preview" = "ویژگی‌های جدید Markdown Preview";
+"What’s New in Markdown Preview %@" = "ویژگی‌های جدید Markdown Preview %@";
+"Release Notes" = "یادداشت‌های انتشار";
+"Continue" = "ادامه";
+"Now in Japanese" = "اکنون به زبان ژاپنی";
+"Choose Japanese in Settings → General → Language, or let it follow your system language." = "در تنظیمات ← عمومی ← زبان، ژاپنی را انتخاب کنید، یا بگذارید از زبان سیستم پیروی کند.";
+"Instant auto save" = "ذخیرهٔ خودکار فوری";
+"Choose Instant in Settings → General to save two seconds after you stop typing." = "در تنظیمات ← عمومی، گزینهٔ «فوری» را انتخاب کنید تا دو ثانیه پس از توقف تایپ ذخیره شود.";
+"Expand tables fullscreen" = "گسترش جدول‌ها به تمام‌صفحه";
+"Choose Expand Table to see a wide table fullscreen. Press Escape to go back." = "برای مشاهدهٔ یک جدول عریض به‌صورت تمام‌صفحه، «گسترش جدول» را انتخاب کنید. برای بازگشت، کلید Escape را فشار دهید.";
+"Reopen recent documents" = "باز کردن مجدد اسناد اخیر";
+"Press ⇧⌘O to see your 10 most recent files, even with no document open." = "برای مشاهدهٔ ۱۰ فایل اخیر خود کلیدهای ⇧⌘O را فشار دهید، حتی اگر هیچ سندی باز نباشد.";
+"Choose text alignment" = "انتخاب چینش متن";
+"Set left, center, right, or justified text in Settings → Reading. Quick Look uses it too." = "در تنظیمات ← خواندن، متن را چپ‌چین، وسط‌چین، راست‌چین یا هم‌تراز کنید. Quick Look نیز از آن استفاده می‌کند.";
+"More images in Quick Look" = "تصاویر بیشتر در Quick Look";
+"Quick Look shows images from parent folders and follows links to headings." = "تصاویر پوشه‌های والد را Quick Look نشان می‌دهد و پیوندهای مربوط به سرتیترها را دنبال می‌کند.";
+
+/* Reading preferences */
+"Strict line breaks" = "شکست دقیق خطوط";
+"Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "خطوط عادی مبدأ را به پاراگراف‌های پیوسته تبدیل می‌کند. این گزینه را خاموش کنید تا تمام شکست‌های خط حفظ شوند. برای نمای خواندن و پیش‌نمایش‌های Quick Look اعمال می‌شود.";
+
+/* App link approvals */
+"Reset App Link Approvals" = "بازنشانی مجوزهای پیوند برنامه";
+"App links" = "پیوندهای برنامه";
+"Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look." = "پیش از باز کردن پیوندهای سفارشی برنامه دوباره سؤال شود. مجوزها برای هر URL scheme ذخیره می‌شوند و با Quick Look به اشتراک گذاشته می‌شوند.";
+"No application can open this link" = "هیچ برنامه‌ای نمی‌تواند این پیوند را باز کند";
+"OK" = "تأیید";
+"Allow this document to open “%@”?" = "به این سند اجازه داده شود \U2068«%@»\U2069 را باز کند؟";
+"Allow" = "اجازه دادن";
+"Always Allow" = "همیشه اجازه داده شود";
+"Allow all %@: links in documents and Quick Look." = "اجازه دادن به همهٔ پیوندهای \U2068%@:\U2069 در اسناد و Quick Look.";
+
+/* App language */
+"Language" = "زبان";
+"System Default" = "پیش‌فرض سیستم";
+"Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews." = "برای اعمال تغییرات زبان، از Markdown Preview خارج شده و آن را دوباره باز کنید. این تنظیم فقط بر برنامه تأثیر می‌گذارد، نه پیش‌نمایش‌های Quick Look.";
+
+/* Settings organization */
+"Saving" = "ذخیره‌سازی";
+"External apps & tools" = "برنامه‌ها و ابزارهای خارجی";
+"Text & layout" = "متن و چیدمان";
+"Markdown" = "Markdown";
+"Outline" = "طرح کلی";
+"Customize the selected theme’s font, spacing and colors. Reset restores that theme’s defaults; global Reading preferences stay unchanged." = "قلم، فاصله‌گذاری و رنگ‌های پوستهٔ انتخاب‌شده را سفارشی‌سازی کنید. گزینهٔ «Reset Theme» پیش‌فرض‌های آن پوسته را بازمی‌گرداند؛ ترجیحات کلی «خواندن» بدون تغییر باقی می‌مانند.";
+"Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window." = "کلیک روی پیوند به یک فایل Markdown دیگر، آن را در پنجره‌ای جداگانه باز می‌کند. این گزینه را خاموش کنید تا در پنجرهٔ فعلی باز شود.";
+"Customize…" = "سفارشی‌سازی…";
+"Each theme remembers its colors, font and layout. Original also remembers your appearance choice. Reset restores the selected theme’s defaults." = "هر پوسته رنگ‌ها، قلم و چیدمان خود را به خاطر می‌سپارد. پوستهٔ Original همچنین انتخاب ظاهر شما را به یاد می‌سپارد. گزینهٔ «Reset Theme» پیش‌فرض‌های پوستهٔ انتخاب‌شده را بازمی‌گرداند.";
+"Fonts, spacing and colors" = "قلم‌ها، فاصله‌گذاری و رنگ‌ها";
+"Highlight outline section under the pointer" = "برجسته‌سازی بخش طرح کلی در زیر نشانگر";
+"Open Markdown links in new windows" = "باز کردن پیوندهای Markdown در پنجره‌های جدید";
+"Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings." = "اندازهٔ متن برای پیش‌نمایش‌های Quick Look نیز اعمال می‌شود. بزرگ‌نمایی پنجرهٔ سند با ⌘+ و ⌘− نیز آن را تغییر می‌دهد. قلم‌ها و چیدمان خواندن در تنظیمات «ظاهر» قرار دارند.";
+"Themes" = "پوسته‌ها";
+"This theme uses a fixed appearance. Choose Original to change it." = "این پوسته از یک ظاهر ثابت استفاده می‌کند. برای تغییر آن، Original را انتخاب کنید.";
+
+/* Reading text alignment */
+"Text alignment" = "چینش متن";
+"Left" = "چپ";
+"Center" = "وسط";
+"Right" = "راست";
+"Justified" = "هم‌تراز";
+"Alignment applies to prose in reading view and Quick Look. Automatic follows the document. Code, tables and explicit HTML alignment are preserved." = "چینش برای متن‌های نثر در نمای خواندن و Quick Look اعمال می‌شود. گزینهٔ «خودکار» از سند پیروی می‌کند. چینش کد، جدول‌ها و تگ‌های صریح HTML حفظ می‌شود.";
+
+/* Paper print scale, applied before pagination. */
+"Scale:" = "مقیاس:";
+"Scale" = "مقیاس";
+
+/* Table fullscreen control. */
+"Expand Table" = "گسترش جدول";
