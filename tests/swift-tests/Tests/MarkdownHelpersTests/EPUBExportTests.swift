@@ -41,7 +41,7 @@ final class EPUBExportTests: XCTestCase {
         let message = "Hello"
         ```
 
-        Inline math $E = mc^2$ here.
+        Inline math $E = mc^2$ here, with spacing $a \\, b$ and $a \\! b$.
 
         ## Diagram
 
@@ -65,7 +65,7 @@ final class EPUBExportTests: XCTestCase {
     func testBookSplitsSectionsAndCarriesRenderedContent() async throws {
         let harness = makeHarness(markdown: book)
         defer { harness.close() }
-        _ = try await harness.layout(texts: [], imageCount: 2, selectors: [".katex": 1])
+        _ = try await harness.layout(texts: [], imageCount: 2, selectors: [".katex": 3])
         // An image the preview could not load either (the harness waits on real ones).
         _ = try await harness.webView.evaluateJavaScript("""
             document.querySelector('article p').insertAdjacentHTML('beforeend',
@@ -134,6 +134,15 @@ final class EPUBExportTests: XCTestCase {
         XCTAssertTrue(sections[1].contains(#"<span class="hljs-keyword">let</span>"#))
         XCTAssertTrue(sections[1].contains(#"<math xmlns="http://www.w3.org/1998/Math/MathML">"#))
         XCTAssertFalse(sections[1].contains("annotation"))
+        // MathML holds text only in token elements; KaTeX's loose spacing
+        // characters are kept in <mtext>.
+        XCTAssertTrue(sections[1].contains("<mi>a</mi><mtext>\u{2009}</mtext><mi>b</mi>"))
+        let loose = try XMLDocument(xmlString: sections[1]).nodes(forXPath: """
+            //*[local-name()='math']/descendant-or-self::*
+               [not(local-name()='mi' or local-name()='mn' or local-name()='mo'
+                    or local-name()='ms' or local-name()='mtext')]/text()
+            """)
+        XCTAssertEqual(loose.count, 0)
 
         // The diagram becomes a picture drawn for a light page, shown at the
         // size Mermaid laid it out and stored at twice that.

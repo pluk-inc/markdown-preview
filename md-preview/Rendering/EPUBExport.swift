@@ -185,6 +185,19 @@ nonisolated enum EPUBExport {
         const math = katex.querySelector('.katex-mathml > math');
         if (!math) return;
         math.querySelectorAll('annotation').forEach(node => node.remove());
+        // KaTeX writes spacing commands such as `\,` as bare characters, but
+        // MathML holds text only in token elements. Each becomes an <mtext>,
+        // which keeps the space and stands in the formula as one element.
+        const loose = [];
+        const walker = document.createTreeWalker(math, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            if (!/^(mi|mn|mo|ms|mtext)$/.test(node.parentNode.localName)) loose.push(node);
+        }
+        loose.forEach(node => {
+            const text = document.createElementNS(math.namespaceURI, 'mtext');
+            node.replaceWith(text);
+            text.append(node);
+        });
         (katex.closest('.katex-display') || katex).replaceWith(math);
     });
     all('.md-code-wrap').forEach(wrap => {
