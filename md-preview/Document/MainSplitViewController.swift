@@ -93,11 +93,13 @@ final class MainSplitViewController: NSSplitViewController {
         contentViewController?.showSnapshot(prefetch)
     }
 
-    func display(markdown: String, fileName: String, url: URL?, assetBaseURL: URL?) {
+    func display(markdown: String, fileName: String, url: URL?, assetBaseURL: URL?,
+                 renderImmediately: Bool = false) {
         contentViewController?.display(
             markdown: markdown,
             sourceURL: url,
-            assetBaseURL: assetBaseURL
+            assetBaseURL: assetBaseURL,
+            renderImmediately: renderImmediately
         )
         sidebarViewController?.display(markdown: markdown, fileName: fileName, fileURL: url)
         inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))

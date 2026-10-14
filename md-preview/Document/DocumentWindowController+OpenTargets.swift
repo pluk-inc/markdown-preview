@@ -8,6 +8,29 @@
 import Cocoa
 
 extension DocumentWindowController {
+    // MARK: - Deferred toolbar menus
+
+    /// A menu whose items are built when it is about to open. The Open
+    /// items' menus carry an icon per installed app, which AppKit loads
+    /// from disk; none of that is visible until the menu drops down.
+    func deferredMenu(replacing previous: NSMenu?, _ build: @escaping () -> NSMenu) -> NSMenu {
+        if let previous {
+            deferredToolbarMenuBuilders[ObjectIdentifier(previous)] = nil
+        }
+        let menu = NSMenu()
+        menu.delegate = self
+        deferredToolbarMenuBuilders[ObjectIdentifier(menu)] = build
+        return menu
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard let build = deferredToolbarMenuBuilders[ObjectIdentifier(menu)] else { return }
+        let built = build()
+        let items = built.items
+        built.removeAllItems()
+        menu.items = items
+    }
+
     // MARK: - Open
 
     /// Re-resolves the default hand-off app after Settings changes it.
@@ -49,9 +72,11 @@ extension DocumentWindowController {
             "Open document in another app",
             comment: "Open toolbar item tooltip"
         )
-        openActionsItem?.menu = buildOpenActionsMenu(editorCandidates: editors,
-                                                     llmCandidates: llmApps,
-                                                     defaultAction: defaultAction)
+        openActionsItem?.menu = deferredMenu(replacing: openActionsItem?.menu) { [weak self] in
+            self?.buildOpenActionsMenu(editorCandidates: editors,
+                                       llmCandidates: llmApps,
+                                       defaultAction: defaultAction) ?? NSMenu()
+        }
     }
 
     private func openActionsTitle(for selection: OpenActionSelection?) -> String? {
@@ -226,8 +251,10 @@ extension DocumentWindowController {
             "Open document in an LLM app",
             comment: "Open in LLM toolbar item tooltip"
         )
-        openInLLMItem?.menu = buildOpenInLLMMenu(candidates: candidates,
-                                                 defaultTarget: resolvedDefault)
+        openInLLMItem?.menu = deferredMenu(replacing: openInLLMItem?.menu) { [weak self] in
+            self?.buildOpenInLLMMenu(candidates: candidates,
+                                     defaultTarget: resolvedDefault) ?? NSMenu()
+        }
     }
 
     private func removeOpenInLLMToolbarItem() {
@@ -498,8 +525,10 @@ extension DocumentWindowController {
             "Open in another editor",
             comment: "Open With toolbar item tooltip"
         )
-        openWithItem?.menu = buildOpenWithMenu(candidates: candidates,
-                                               defaultEditor: resolvedDefault)
+        openWithItem?.menu = deferredMenu(replacing: openWithItem?.menu) { [weak self] in
+            self?.buildOpenWithMenu(candidates: candidates,
+                                    defaultEditor: resolvedDefault) ?? NSMenu()
+        }
     }
 
     func openWithImage(for url: URL?) -> NSImage {

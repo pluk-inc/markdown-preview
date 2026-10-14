@@ -404,7 +404,13 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             ?? MarkdownAssetResolution.rootBaseHref
     }
 
-    func display(markdown: String, assetBaseURL: URL? = nil) {
+    /// Documents up to this size are rendered on the calling thread when
+    /// `renderImmediately` is set: a few milliseconds of cmark, in exchange
+    /// for WebKit starting its process and page load before the window is
+    /// built rather than after the launch turn.
+    private static let immediateRenderByteLimit = 256 * 1024
+
+    func display(markdown: String, assetBaseURL: URL? = nil, renderImmediately: Bool = false) {
         pendingContentProcessReload?.cancel()
         pendingContentProcessReload = nil
         currentMarkdown = markdown
@@ -416,6 +422,15 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let generation = renderGeneration
         let contentWidth = ContentWidthSetting.current.renderWidth
         let themeOverrides = Self.currentThemeOverrides()
+        if renderImmediately, markdown.utf8.count <= Self.immediateRenderByteLimit {
+            let rendered = Self.timedRender(label: "display",
+                                            markdown: markdown,
+                                            assetBaseHref: baseHref,
+                                            contentWidth: contentWidth,
+                                            themeOverrides: themeOverrides)
+            applyDisplay(rendered, generation: generation)
+            return
+        }
         Task { @concurrent [weak self] in
             let rendered = Self.timedRender(label: "display",
                                             markdown: markdown,
@@ -531,6 +546,9 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         )
         #else
         webView.loadHTMLString(rendered.html, baseURL: nil)
+        #endif
+        #if !QUICK_LOOK_EXTENSION
+        LaunchSignposts.event("loadHTMLString")
         #endif
         loadedFingerprint = fingerprint
         isPageReady = false

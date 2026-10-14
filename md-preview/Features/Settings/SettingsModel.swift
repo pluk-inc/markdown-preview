@@ -256,6 +256,10 @@ final class SettingsModel {
 
     private var updater: SPUUpdater? { appDelegate?.updaterController.updater }
 
+    /// True once `shared` exists. Launch code consults it so a comparison
+    /// against the model never forces its creation.
+    nonisolated(unsafe) private(set) static var hasLoadedShared = false
+
     private init() {
         let updater = (NSApp.delegate as? AppDelegate)?.updaterController.updater
         appLanguage = AppLanguageSetting.selection()
@@ -277,7 +281,10 @@ final class SettingsModel {
         downloadsUpdatesAutomatically = updater?.automaticallyDownloadsUpdates ?? false
         lastUpdateCheckDate = updater?.lastUpdateCheckDate
         openTargetID = ""
-        reloadOpenTargets()
+        Self.hasLoadedShared = true
+        // The picker's app list is loaded when General Settings appears
+        // (and by showSettingsWindow); discovering every editor and reading
+        // its Info.plist here would put ~70 ms on the launch path.
 
         if let updater {
             // Changing automatic checks can make Sparkle recalculate whether

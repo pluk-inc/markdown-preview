@@ -75,6 +75,7 @@ extension DocumentWindowController {
             setFindBarVisible(false)
             return
         }
+        installFindBar()
         findBar?.update(matchCount: result.total, currentIndex: result.index)
         setFindBarVisible(true)
     }
@@ -91,7 +92,10 @@ extension DocumentWindowController {
     /// accessory find bar sat above the tabs and shoved them down on every
     /// appearance. The overlay never reflows the layout — see
     /// DocumentWindowController.editBar.
+    /// Built on the first search, not at window setup: the bar is hidden
+    /// until then and cost ~20 ms on the launch path.
     func installFindBar() {
+        guard findBar == nil else { return }
         let bar = FindBar(
             frame: NSRect(x: 0, y: 0, width: 600, height: FindBar.preferredHeight)
         )

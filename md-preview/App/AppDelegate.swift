@@ -76,11 +76,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @IBOutlet private weak var checkForUpdatesMenuItem: NSMenuItem?
 
+    /// Started from `startDeferredLaunchServices()`, after the first
+    /// document window is on screen, so Sparkle's XPC setup never shares
+    /// the launch turn with the first frame.
     let updaterController = SPUStandardUpdaterController(
-        startingUpdater: true,
+        startingUpdater: false,
         updaterDelegate: nil,
         userDriverDelegate: nil
     )
+    private var didStartDeferredLaunchServices = false
 
     private var settingsWindowController: SettingsWindowController?
     /// Non-zero while `withCoalescedPreviewReloads` is holding reloads back.
@@ -105,19 +109,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var terminationSaveFailed = false
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        LaunchSignposts.event("willFinishLaunching")
         WhatsNewWindow.noteLaunch()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        CrashReporter.start()
+        let signpost = LaunchSignposts.begin("didFinishLaunching")
+        defer { LaunchSignposts.end(signpost) }
         let storedAppearance = AppearanceMode.migrateLegacyValue()
         ThemePreset.migrateLegacyValues()
         let appearanceMode = ThemePreset.applied().requiredAppearance ?? storedAppearance
         if appearanceMode != storedAppearance { AppearanceMode.current = appearanceMode }
         applyAppearanceMode(appearanceMode, reloadPreviews: false)
-        // Capture launch settings before another instance can change them while
-        // we're inactive, even if this user never opens the Settings window.
-        SettingsModel.shared.refreshFromExternalSources()
         installAppearanceMenuItems()
         installContentWidthMenuItems()
         installSidebarViewMenuItems()
@@ -136,11 +139,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if !didReceiveOpenURLsDuringLaunch {
             scheduleDocumentPrompt(requiresNoDocuments: true)
         }
+        // Nothing below is visible in the first frame. A document opened
+        // from Finder arrives before this callback, so by now its window is
+        // ordered front; give the first frame and WebKit's first paint the
+        // main thread before starting the updater and the crash reporter.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) { [weak self] in
+            self?.startDeferredLaunchServices()
+        }
+    }
+
+    /// Sparkle and Sentry both do XPC and file work at start; neither is
+    /// needed for the first frame. Idempotent, so an early caller (Check for
+    /// Updates…) can run it ahead of the launch timer.
+    func startDeferredLaunchServices() {
+        guard !didStartDeferredLaunchServices else { return }
+        didStartDeferredLaunchServices = true
+        LaunchSignposts.interval("deferredServices") {
+            updaterController.startUpdater()
+            CrashReporter.start()
+            // Capture launch settings before another instance can change
+            // them while we're inactive, even if this user never opens the
+            // Settings window. Creating the model reads every setting and
+            // registers Sparkle observers, so it waits with the rest.
+            SettingsModel.shared.refreshFromExternalSources()
+        }
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
-        UsageAnalyticsReporter.recordAppBecameActive()
-        guard hasFinishedLaunching else { return }
+        // The daily ping builds a request and touches defaults; it has no
+        // place in the launch turn.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            UsageAnalyticsReporter.recordAppBecameActive()
+        }
+        // Until the deferred services created the model, no other instance
+        // can have changed a setting behind this one's back.
+        guard hasFinishedLaunching, SettingsModel.hasLoadedShared else { return }
         let model = SettingsModel.shared
         let changed = model.appliedPreset != ThemePreset.applied()
             || model.appearance != AppearanceMode.current
@@ -291,6 +324,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @IBAction func checkForUpdates(_ sender: Any?) {
+        startDeferredLaunchServices()
         updaterController.updater.checkForUpdates()
     }
 
@@ -320,6 +354,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func showSettingsWindow(_ sender: Any?) {
+        // Settings reads and writes the updater; make sure it is running.
+        startDeferredLaunchServices()
         SettingsModel.shared.refreshFromExternalSources()
         SettingsModel.shared.reloadOpenTargets()
         let controller = settingsWindowController ?? SettingsWindowController()
@@ -329,6 +365,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Opens Settings directly on a pane.
     func showSettingsWindow(pane: SettingsPane) {
+        startDeferredLaunchServices()
         SettingsModel.shared.refreshFromExternalSources()
         SettingsModel.shared.reloadOpenTargets()
         let controller = settingsWindowController ?? SettingsWindowController()

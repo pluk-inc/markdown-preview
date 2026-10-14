@@ -97,6 +97,7 @@ final class ContentViewController: NSViewController {
             }
         }
         webView.contentDidReplace = { [weak self] in
+            LaunchSignposts.event("domReady")
             // The fresh article is in the DOM; a same-height render never
             // fires heightDidChange, so this is the reliable signal.
             self?.applyPendingScrollAnchorIfNeeded()
@@ -199,7 +200,8 @@ final class ContentViewController: NSViewController {
     func display(
         markdown: String,
         sourceURL: URL?,
-        assetBaseURL: URL? = nil
+        assetBaseURL: URL? = nil,
+        renderImmediately: Bool = false
     ) {
         if !webView.hasRequestedDocument, let sourceURL {
             snapshotSource = (sourceURL, DocumentSnapshotCache.hash(markdown))
@@ -219,7 +221,8 @@ final class ContentViewController: NSViewController {
             scheduleNavigationTargetAttempt()
         }
         resetScrollspy()
-        webView.display(markdown: markdown, assetBaseURL: assetBaseURL)
+        webView.display(markdown: markdown, assetBaseURL: assetBaseURL,
+                        renderImmediately: renderImmediately)
         scheduleHeadingOffsetsRefresh()
     }
 
@@ -453,6 +456,7 @@ final class ContentViewController: NSViewController {
                 "[mdp-perf-open] painted t=\(DispatchTime.now().uptimeNanoseconds, privacy: .public) wall=\(Date().timeIntervalSince1970, privacy: .public) snapshot=\(self?.snapshotOverlay != nil, privacy: .public)"
             )
             #endif
+            LaunchSignposts.event("webPaint")
             self?.removeSnapshotOverlay()
             self?.saveSnapshotIfNeeded()
         }
