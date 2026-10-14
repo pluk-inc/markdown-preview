@@ -451,7 +451,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // longer recapture it).
         documentWindow.tabbingMode = .automatic
         NSApp.activate()
-        if fileURL != nil {
+        if let fileURL {
+            // Before the pump: a save that lands while the first window
+            // waits for WebKit must still reach the preview, and the watcher
+            // only reports changes made after it starts.
+            startWatching(fileURL)
             LaunchSignposts.interval("pumpWebKit") { pumpRunLoopForWebKitStartup() }
         }
         DispatchQueue.main.async { [weak self] in
@@ -498,7 +502,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             WhatsNewWindow.presentIfNeeded(over: documentWindow)
             if let fileURL {
                 NSDocumentController.shared.noteNewRecentDocumentURL(fileURL)
-                startWatching(fileURL)
                 offerToBecomeDefaultHandlerIfNeeded()
             }
         }
