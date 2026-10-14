@@ -99,7 +99,7 @@ struct GeneralSettingsView: View {
             } header: {
                 Text(L("App links"))
             } footer: {
-                Text(L("Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look."))
+                Text(L("Ask again before opening custom app links. Approvals are saved per URL scheme."))
             }
         }
         .formStyle(.grouped)

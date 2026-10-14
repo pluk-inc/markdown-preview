@@ -23,6 +23,8 @@ final class MarkdownDocumentController: NSDocumentController {
     /// runs because its New Document button opens the untitled document
     /// while the panel is still up — the panel then returns as cancelled.
     private var pendingPanelTabOpen = false
+    private let previewHandoffDeadline = Date().addingTimeInterval(5)
+    private var handoffQueries: [UUID: (observer: NSObjectProtocol, completion: (URL?) -> Void)] = [:]
 
     /// File ▸ New Tab. Runs the same panel as File ▸ Open — including the
     /// system's New Document button, which only the document controller's
@@ -71,11 +73,73 @@ final class MarkdownDocumentController: NSDocumentController {
             return
         }
 
+        if Date() < previewHandoffDeadline, url.isFileURL,
+           MarkdownAssetResolution.isMarkdownDocument(url),
+           let appID = Bundle.main.bundleIdentifier {
+            (NSApp.delegate as? AppDelegate)?.beginQuickLookHandoff()
+            queryQuickLook(source: url, appID: appID) { [weak self] target in
+                guard let self else { return }
+                var documentURL = url
+                var fragment: String?
+                if let target {
+                    if target.scheme?.lowercased() == ExternalOpenScheme.scheme {
+                        documentURL = ExternalOpenScheme.resolvedURL(opening: target) ?? url
+                        fragment = ExternalOpenScheme.fragment(opening: target)
+                    } else {
+                        ExternalLinkOpener.open(target, window: nil)
+                    }
+                }
+                self.openDocumentNormally(withContentsOf: documentURL, display: displayDocument) { document, wasOpen, error in
+                    DocumentWindowController.scrollToAnchorWhenReady(fragment, in: document)
+                    completionHandler(document, wasOpen, error)
+                }
+            }
+            return
+        }
+
+        openDocumentNormally(withContentsOf: url, display: displayDocument, completionHandler: completionHandler)
+    }
+
+    private func openDocumentNormally(
+        withContentsOf url: URL,
+        display: Bool,
+        completionHandler: @escaping (NSDocument?, Bool, Error?) -> Void
+    ) {
         super.openDocument(
             withContentsOf: url,
-            display: displayDocument,
+            display: display,
             completionHandler: completionHandler
         )
+    }
+
+    /// Finder's host opens the previewed file. During startup ask the live
+    /// extension before making a document window. Query each source independently
+    /// so restoring another document cannot steal the clicked link. After the
+    /// startup window, opens are immediate; unanswered queries cost at most 0.3s.
+    private func queryQuickLook(source: URL, appID: String, completion: @escaping (URL?) -> Void) {
+        let query = QuickLookLinkHandoff.Query(id: UUID(), source: source)
+        let observer = DistributedNotificationCenter.default().addObserver(
+            forName: QuickLookLinkHandoff.notification("reply", appID: appID),
+            object: nil, queue: .main
+        ) { [weak self] note in
+            guard let reply = QuickLookLinkHandoff.decode(QuickLookLinkHandoff.Reply.self, object: note.object),
+                  reply.id == query.id, QuickLookLinkHandoff.isSupported(reply.target) else { return }
+            MainActor.assumeIsolated { self?.completeQuickLookQuery(query.id, target: reply.target) }
+        }
+        handoffQueries[query.id] = (observer, completion)
+        DistributedNotificationCenter.default().postNotificationName(
+            QuickLookLinkHandoff.notification("query", appID: appID),
+            object: QuickLookLinkHandoff.encode(query), userInfo: nil, deliverImmediately: true
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.completeQuickLookQuery(query.id, target: nil)
+        }
+    }
+
+    private func completeQuickLookQuery(_ id: UUID, target: URL?) {
+        guard let query = handoffQueries.removeValue(forKey: id) else { return }
+        DistributedNotificationCenter.default().removeObserver(query.observer)
+        query.completion(target)
     }
 
     override func openUntitledDocumentAndDisplay(_ displayDocument: Bool) throws -> NSDocument {

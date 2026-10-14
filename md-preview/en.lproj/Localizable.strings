@@ -339,13 +339,13 @@
 /* App link approvals */
 "Reset App Link Approvals" = "Reset App Link Approvals";
 "App links" = "App links";
-"Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look." = "Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look.";
+"Ask again before opening custom app links. Approvals are saved per URL scheme." = "Ask again before opening custom app links. Approvals are saved per URL scheme.";
 "No application can open this link" = "No application can open this link";
 "OK" = "OK";
 "Allow this document to open “%@”?" = "Allow this document to open “%@”?";
 "Allow" = "Allow";
 "Always Allow" = "Always Allow";
-"Allow all %@: links in documents and Quick Look." = "Allow all %@: links in documents and Quick Look.";
+"Allow all %@: links in documents." = "Allow all %@: links in documents.";
 
 /* App language */
 "Language" = "Language";

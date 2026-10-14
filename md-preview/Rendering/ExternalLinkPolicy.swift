@@ -65,7 +65,7 @@ enum ExternalLinkOpener {
         alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "External link"))
         alert.addButton(withTitle: NSLocalizedString("Allow", comment: "External link"))
         let alwaysAllow = alert.addButton(withTitle: NSLocalizedString("Always Allow", comment: "External link"))
-        alwaysAllow.toolTip = String(format: NSLocalizedString("Allow all %@: links in documents and Quick Look.", comment: "External link"), url.scheme!.lowercased())
+        alwaysAllow.toolTip = String(format: NSLocalizedString("Allow all %@: links in documents.", comment: "External link"), url.scheme!.lowercased())
         alert.buttons[0].keyEquivalent = "\r"
         alert.buttons[1].keyEquivalent = ""
         let finish: (NSApplication.ModalResponse) -> Void = { response in

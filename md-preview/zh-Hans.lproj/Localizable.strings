@@ -339,13 +339,13 @@
 /* App link approvals */
 "Reset App Link Approvals" = "重置应用链接授权";
 "App links" = "应用链接";
-"Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look." = "打开自定义应用链接前重新询问。授权按 URL 协议保存，并与快速查看共享。";
+"Ask again before opening custom app links. Approvals are saved per URL scheme." = "打开自定义应用链接前重新询问。授权按 URL 协议保存。";
 "No application can open this link" = "没有可打开此链接的应用";
 "OK" = "好";
 "Allow this document to open “%@”?" = "允许此文稿打开“%@”吗？";
 "Allow" = "允许";
 "Always Allow" = "始终允许";
-"Allow all %@: links in documents and Quick Look." = "允许文稿和快速查看中的所有 %@: 链接。";
+"Allow all %@: links in documents." = "允许文稿中的所有 %@: 链接。";
 
 /* App language */
 "Language" = "语言";

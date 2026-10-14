@@ -1484,7 +1484,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                // clicks on authored vendor links stay inert.
                !url.path.hasPrefix(MarkdownAssetScheme.vendorPathPrefix),
                let resolved = MarkdownAssetResolution.fileURL(for: url) {
-                if Self.isMarkdownDocument(resolved) {
+                if MarkdownAssetResolution.isMarkdownDocument(resolved) {
                     // fileURL(for:) works on the path alone and drops `#section`.
                     localMarkdownLinkActivated?(Self.reattachingFragment(of: url, to: resolved))
                 } else {
@@ -1517,7 +1517,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         }
         add("Open Link", #selector(openContextLink(_:)), url: source)
         #if !QUICK_LOOK_EXTENSION
-        if target.isFileURL && Self.isMarkdownDocument(target) && sameDocumentFragmentID(from: source) == nil {
+        if target.isFileURL && MarkdownAssetResolution.isMarkdownDocument(target) && sameDocumentFragmentID(from: source) == nil {
             add("Open Link in New Window", #selector(openContextLinkInNewWindow(_:)), url: target)
         }
         #endif
@@ -1542,10 +1542,6 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         guard let url = sender.representedObject as? URL else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(url.absoluteString, forType: .string)
-    }
-
-    private static func isMarkdownDocument(_ url: URL) -> Bool {
-        ["md", "markdown", "mdown", "mkdn", "mkd", "mdx"].contains(url.pathExtension.lowercased())
     }
 
     private static func reattachingFragment(of source: URL, to target: URL) -> URL {

@@ -106,6 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         WhatsNewWindow.noteLaunch()
+        observeQuickLookLinks()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -176,6 +177,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return true
     }
 
+    /// Quick Look hands Markdown links to the running app; see
+    /// `ExternalOpenScheme.quickLookOpenNotification(appBundleIdentifier:)`.
+    private func observeQuickLookLinks() {
+        guard let appID = Bundle.main.bundleIdentifier else { return }
+        DistributedNotificationCenter.default().addObserver(
+            forName: ExternalOpenScheme.quickLookOpenNotification(appBundleIdentifier: appID),
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            // Any process can post this, so accept only what a Quick Look
+            // link produces: a web link, or an md-preview:// link to a
+            // Markdown file.
+            guard let string = note.object as? String,
+                  let url = URL(string: string),
+                  ExternalOpenScheme.isQuickLookHandOff(url)
+            else { return }
+            MainActor.assumeIsolated {
+                guard url.scheme?.caseInsensitiveCompare(ExternalOpenScheme.scheme) == .orderedSame else {
+                    ExternalLinkOpener.open(url, window: nil)
+                    return
+                }
+                guard let file = ExternalOpenScheme.resolvedURL(opening: url),
+                      MarkdownAssetResolution.isMarkdownDocument(file)
+                else { return }
+                NSApp.activate()
+                self?.application(NSApp, open: [url])
+            }
+        }
+    }
+
+    /// Finder opens through NSDocumentController, before the app has finished
+    /// launching. Keep the startup picker out of the brief preview-link query.
+    func beginQuickLookHandoff() {
+        didReceiveOpenURLsDuringLaunch = true
+        cancelScheduledDocumentPrompt()
+    }
+
     func application(_ application: NSApplication, open urls: [URL]) {
         if !hasFinishedLaunching {
             didReceiveOpenURLsDuringLaunch = true
@@ -194,6 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 continue
             }
 
+            let fragment = ExternalOpenScheme.fragment(opening: incoming)
             pendingOpenURLCount += 1
             NSDocumentController.shared.openDocument(withContentsOf: url,
                                                      display: true) { [weak self] document, _, error in
@@ -202,6 +241,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 guard let self else { return }
                 self.showWindowIfNeeded(for: document)
+                DocumentWindowController.scrollToAnchorWhenReady(fragment, in: document)
                 self.pendingOpenURLCount -= 1
                 if error != nil {
                     self.scheduleDocumentPromptIfIdle()

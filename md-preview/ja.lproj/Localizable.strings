@@ -339,13 +339,13 @@
 /* App link approvals */
 "Reset App Link Approvals" = "リンクの許可をリセット";
 "App links" = "外部アプリへのリンク";
-"Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look." = "リンクから外部アプリを開く前に、確認ダイアログが表示されます。許可は URL スキームごとに保存され、Quick Look でも適用されます。";
+"Ask again before opening custom app links. Approvals are saved per URL scheme." = "リンクから外部アプリを開く前に、確認ダイアログが表示されます。許可は URL スキームごとに保存されます。";
 "No application can open this link" = "このリンクを開けるアプリがありません";
 "OK" = "OK";
 "Allow this document to open “%@”?" = "この書類が「%@」を開くことを許可しますか？";
 "Allow" = "許可";
 "Always Allow" = "常に許可";
-"Allow all %@: links in documents and Quick Look." = "書類と Quick Look 内のすべての %@: リンクを常に許可します。";
+"Allow all %@: links in documents." = "書類内のすべての %@: リンクを常に許可します。";
 
 /* App language */
 "Language" = "言語";
