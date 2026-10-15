@@ -56,8 +56,10 @@ final class TablePreviewWindow: NSObject, NSWindowDelegate {
         // The web view consumes key events, so Escape is caught before it.
         if escapeMonitor == nil {
             escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                // Caps Lock is a lock state, not a modifier the reader holds.
+                let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock)
                 guard let self, let tableWindow, event.window === tableWindow,
-                      event.keyCode == 53, event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty
+                      event.keyCode == 53, modifiers.isEmpty
                 else { return event }
                 tableWindow.close()
                 return nil

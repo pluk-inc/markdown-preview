@@ -29,6 +29,13 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         }
     }
 
+    func testTableCellsBreakCJKPhrasesAcrossInlineFormatting() {
+        let html = MarkdownHTML.render(markdown: "| A |\n| --- |\n| 第一句，**第二句**（第三句）`代码` |\n", vendorLoading: .lazy).html
+        XCTAssertTrue(html.contains("第一句，<strong><wbr>第二句</strong><wbr>（第三句）<code>代码</code>"), html)
+        // Paragraph text keeps its original markup.
+        XCTAssertTrue(MarkdownHTML.render(markdown: "第一句，**第二句**", vendorLoading: .lazy).html.contains("第一句，<strong>第二句</strong>"))
+    }
+
     func testLocalMarkdownImagesRemainReadOnlyInPreview() {
         let rendered = MarkdownHTML.render(
             markdown: "![1](notes-pictures/1.png)",

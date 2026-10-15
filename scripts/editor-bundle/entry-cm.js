@@ -607,20 +607,22 @@ const tableRenderedTextOffsets = new WeakMap()
 // Rendered cells use word-break: keep-all so short CJK labels stay whole.
 // WebKit's keep-all also refuses to break after 、，。, so split the text at
 // CJK punctuation and put a <wbr> between the phrases, like the reader does.
+// `previous` is the last character of the preceding run, so a phrase that
+// ends at a formatting boundary (中文，**后续**) still gets its break.
 const cjkOpening = /[（［｛〈《「『【〔〖〘〚]/u
 const cjkClosing = /[、。，．：；！？）］｝〉》」』】〕〗〙〛｡､]/u
-function cjkPhraseBreaks(text) {
+function cjkPhraseBreaks(text, previous) {
   const breaks = []
-  if (!/[\u3000-\uffff]/u.test(text)) return breaks
+  if (!/[\u3000-\uffff]/u.test(text) && !(previous && cjkClosing.test(previous))) return breaks
   const characters = Array.from(text)
   let offset = 0
-  for (let index = 1; index < characters.length; index++) {
-    offset += characters[index - 1].length
-    const previous = characters[index - 1]
+  for (let index = 0; index < characters.length; index++) {
+    if (index > 0) offset += characters[index - 1].length
+    const before = index > 0 ? characters[index - 1] : previous
     const current = characters[index]
-    if (/\s/u.test(previous) || /\s/u.test(current)) continue
-    if ((cjkClosing.test(previous) && !cjkClosing.test(current))
-        || (cjkOpening.test(current) && !cjkOpening.test(previous))) breaks.push(offset)
+    if (!before || /\s/u.test(before) || /\s/u.test(current)) continue
+    if ((cjkClosing.test(before) && !cjkClosing.test(current))
+        || (cjkOpening.test(current) && !cjkOpening.test(before))) breaks.push(offset)
   }
   return breaks
 }
@@ -638,14 +640,17 @@ function renderTableCell(element, source) {
     tableRenderedTextOffsets.set(node, from)
     parent.append(node)
   }
+  let previous = null
   const appendText = (parent, text, from) => {
+    if (!text) return
     let start = 0
-    for (const offset of cjkPhraseBreaks(text)) {
+    for (const offset of cjkPhraseBreaks(text, previous)) {
       appendRun(parent, text.slice(start, offset), from + start)
       parent.append(document.createElement('wbr'))
       start = offset
     }
     appendRun(parent, text.slice(start), from + start)
+    previous = Array.from(text).at(-1)
   }
   const appendRange = (parent, node, from, to) => {
     let offset = from
@@ -666,6 +671,7 @@ function renderTableCell(element, source) {
       if (padded) text = text.slice(1, -1)
       appendRun(code, text, node.firstChild.to + (padded ? 1 : 0))
       parent.append(code)
+      previous = null
     } else if (classes[node.name]) {
       const span = document.createElement('span')
       span.className = classes[node.name]

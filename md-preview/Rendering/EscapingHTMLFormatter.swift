@@ -994,6 +994,9 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     private var rawHTMLLinkExclusions: [String] = []
     private var inTableHead = false
     private var tableCellDepth = 0
+    /// Last visible character of the current cell, carried across inline
+    /// elements so a phrase ending at a formatting boundary still breaks.
+    private var tableCellPreviousScalar: Unicode.Scalar?
     private var tableColumnAlignments: [Table.ColumnAlignment?]?
     private var tableSourceRows: [[String]]?
     private var currentTableColumn = 0
@@ -1581,6 +1584,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
 
         result += ">"
         tableCellDepth += 1
+        tableCellPreviousScalar = nil
         descendInto(tableCell)
         tableCellDepth -= 1
         result += "</\(element)>\n"
@@ -1589,6 +1593,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     // MARK: Inline elements
 
     mutating func visitInlineCode(_ inlineCode: InlineCode) {
+        tableCellPreviousScalar = nil
         result += "<code>\(escapeText(inlineCode.code))</code>"
     }
 
@@ -1605,6 +1610,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     }
 
     mutating func visitImage(_ image: Image) {
+        tableCellPreviousScalar = nil
         result += "<img"
         if let source = image.source, !source.isEmpty {
             result += " src=\"\(escapeAttribute(source))\""
@@ -1665,7 +1671,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         } else {
             html = renderText(text.string)
         }
-        result += tableCellDepth > 0 ? insertingCJKPhraseBreaks(html) : html
+        result += tableCellDepth > 0 ? insertingCJKPhraseBreaks(html, after: &tableCellPreviousScalar) : html
     }
 
     /// ASCII-only candidate check: no Foundation bridging, Unicode case folding,
@@ -1755,9 +1761,9 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
 /// A `<wbr>` after closing punctuation and before opening brackets gives the
 /// phrase-by-phrase wrapping readers expect. The input is escaped HTML; text
 /// inside tags (URLs in `href`, highlight marks) is left alone, and `<wbr>`
-/// adds no characters to copied text.
-private nonisolated func insertingCJKPhraseBreaks(_ html: String) -> String {
-    guard html.unicodeScalars.contains(where: { $0.value >= 0x3000 }) else { return html }
+/// adds no characters to copied text. `previous` is the last visible
+/// character before this text, so `中文，**后续**` breaks after the comma.
+private nonisolated func insertingCJKPhraseBreaks(_ html: String, after previous: inout Unicode.Scalar?) -> String {
     func isOpening(_ scalar: Unicode.Scalar) -> Bool {
         switch scalar {
         case "\u{FF08}", "\u{FF3B}", "\u{FF5B}", "\u{3008}", "\u{300A}", "\u{300C}", "\u{300E}",
@@ -1780,16 +1786,14 @@ private nonisolated func insertingCJKPhraseBreaks(_ html: String) -> String {
     var result = ""
     result.reserveCapacity(html.utf8.count + 64)
     var insideTag = false
-    var previous: Unicode.Scalar?
     for scalar in html.unicodeScalars {
         if insideTag {
             if scalar == ">" { insideTag = false }
         } else if scalar == "<" {
             insideTag = true
-            previous = nil
         } else {
-            if let previous, !previous.properties.isWhitespace, !scalar.properties.isWhitespace,
-               (isClosing(previous) && !isClosing(scalar)) || (isOpening(scalar) && !isOpening(previous)) {
+            if let last = previous, !last.properties.isWhitespace, !scalar.properties.isWhitespace,
+               (isClosing(last) && !isClosing(scalar)) || (isOpening(scalar) && !isOpening(last)) {
                 result += "<wbr>"
             }
             previous = scalar

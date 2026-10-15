@@ -469,6 +469,8 @@ final class EditorScrollAnchorTests: XCTestCase {
         let prose = Array(repeating: "ordinary words of prose", count: 20).joined(separator: " ")
         // Chinese has no spaces: without keep-all a short label wraps two or three characters per line.
         let cjkProse = "同一条视频内（不管多长）人、物、画风不漂，站位合理不乱跑，被挡住再出现还是原样"
+        // Its only break opportunity sits at the formatting boundary after the comma.
+        let formattedProse = "第一句话很长很长很长很长很长，第二句话也很长很长很长很长"
         let markdown = """
         Before the table.
 
@@ -492,6 +494,7 @@ final class EditorScrollAnchorTests: XCTestCase {
         | --- | --- | --- | --- | --- | --- |
         | 三、一致性 | 10 | 视频内一致 | 核心 | \(cjkProse) | 不仅是 10 秒内，同一视频内都需要保持一致，站位不能乱跑 |
         | 五、长镜头与一镜到底 | 20 | 首尾帧与关键帧精度 | 扩展 | 按分镜精确落到指定的首尾画面，中间是真实运动而不是变形过渡 |  |
+        | 六、格式 | 30 | 加粗短语 | 核心 | 第一句话很长很长很长很长很长，**第二句话也很长很长很长很长** |  |
 
         """
         for isEditor in [false, true] {
@@ -502,7 +505,7 @@ final class EditorScrollAnchorTests: XCTestCase {
             let harness = WebViewLayoutHarness(html: html, width: 500, isEditor: isEditor)
             defer { harness.close() }
             let layout = try await harness.layout(texts: ["Measure", "Static", prose, "Candidate", "Inspection", "Date", "Source", "AuthenticationService",
-                                                          "二级维度", "视频内一致", "首尾帧与关键帧精度", cjkProse], imageCount: 0,
+                                                          "二级维度", "视频内一致", "首尾帧与关键帧精度", cjkProse, formattedProse], imageCount: 0,
                                                   selectors: [isEditor ? ".cm-md-table-grid" : "table": 5])
             let lines = layout.elements.map(\.lines.count)
             let mode = isEditor ? "editor" : "reader"
@@ -511,6 +514,7 @@ final class EditorScrollAnchorTests: XCTestCase {
             XCTAssertEqual(Array(lines[3..<8]), [1, 1, 1, 1, 1], "\(mode): \(lines)")
             XCTAssertEqual(Array(lines[8..<11]), [1, 1, 1], "\(mode): \(lines)")
             XCTAssertGreaterThan(lines[11], 1, "\(mode): \(lines)")
+            XCTAssertGreaterThan(lines[12], 1, "\(mode): \(lines)")
         }
     }
 
