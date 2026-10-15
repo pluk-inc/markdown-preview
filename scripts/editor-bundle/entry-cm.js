@@ -168,12 +168,17 @@ const obsidianHighlight = {
 // ---------------------------------------------------------------------------
 
 class TextWidget extends WidgetType {
-  constructor(text, className) { super(); this.text = text; this.className = className }
-  eq(other) { return other.text === this.text && other.className === this.className }
+  constructor(text, className, style = "") {
+    super(); this.text = text; this.className = className; this.style = style
+  }
+  eq(other) {
+    return other.text === this.text && other.className === this.className && other.style === this.style
+  }
   toDOM() {
     const span = document.createElement("span")
     span.textContent = this.text
     span.className = this.className
+    if (this.style) span.style.cssText = this.style
     return span
   }
   ignoreEvent() { return false }
@@ -1346,16 +1351,68 @@ const activeBulletDeco = Decoration.mark({ class: "cm-md-bullet-source" })
 // Ordered markers sit in the same hanging box as bullets, right-aligned and
 // in the accent color, so item text lines up across list kinds like the
 // preview's ::marker. The active marker stays editable source in that box.
+// A marker of three or more digits needs a wider hanging box, or "100." wraps
+// inside it (#522). The box grows by 1ch per digit past the second, like the
+// preview's `ol[data-mdp-digits]` gutter, and the whole list shares the box
+// width of its widest marker so item text stays in one column.
+const MARKER_BOX_EM = 2.1
+const markerBoxStyle = (extraDigits) =>
+  extraDigits > 0 ? `width:calc(${MARKER_BOX_EM}em + ${extraDigits}ch);` : ""
 const orderedDecoCache = new Map()
-const orderedDeco = (mark) => {
-  let deco = orderedDecoCache.get(mark)
+const orderedDeco = (mark, extraDigits) => {
+  const key = `${extraDigits}|${mark}`
+  let deco = orderedDecoCache.get(key)
   if (!deco) {
-    deco = Decoration.replace({ widget: new TextWidget(mark, "cm-md-ordered") })
-    orderedDecoCache.set(mark, deco)
+    deco = Decoration.replace({
+      widget: new TextWidget(mark, "cm-md-ordered", markerBoxStyle(extraDigits)),
+    })
+    orderedDecoCache.set(key, deco)
   }
   return deco
 }
-const activeOrderedDeco = Decoration.mark({ class: "cm-md-ordered-source" })
+const activeOrderedDecoCache = new Map()
+const activeOrderedDeco = (extraDigits) => {
+  let deco = activeOrderedDecoCache.get(extraDigits)
+  if (!deco) {
+    const style = markerBoxStyle(extraDigits)
+    deco = Decoration.mark(style
+      ? { class: "cm-md-ordered-source", attributes: { style } }
+      : { class: "cm-md-ordered-source" })
+    activeOrderedDecoCache.set(extraDigits, deco)
+  }
+  return deco
+}
+// Mirrors EscapingHTMLFormatter.maximumMarkerDigits: the preview stylesheet
+// has one gutter rule per digit count up to this cap.
+const MAX_MARKER_DIGITS = 9
+// Digits past the second in the widest marker of an ordered list. The editor
+// shows source markers as written, so it measures those rather than the
+// numbers the preview would count to; for a list numbered in sequence both
+// agree. Decorations rebuild on every caret move and scroll, so the answer
+// is remembered per list for the current syntax tree; the tree object only
+// changes when the document does.
+let orderedDigitsTree = null
+const orderedDigitsCache = new Map()
+const orderedListExtraDigits = (listNode, tree) => {
+  if (tree !== orderedDigitsTree) {
+    orderedDigitsTree = tree
+    orderedDigitsCache.clear()
+  }
+  const key = `${listNode.from}:${listNode.to}`
+  const cached = orderedDigitsCache.get(key)
+  if (cached !== undefined) return cached
+  let widest = 0
+  for (let item = listNode.firstChild; item; item = item.nextSibling) {
+    if (item.name !== "ListItem") continue
+    const mark = item.firstChild
+    if (!mark || mark.name !== "ListMark") continue
+    // The mark includes its "." or ")" delimiter.
+    widest = Math.max(widest, mark.to - mark.from - 1)
+  }
+  const extraDigits = Math.max(0, Math.min(widest, MAX_MARKER_DIGITS) - 2)
+  orderedDigitsCache.set(key, extraDigits)
+  return extraDigits
+}
 const hrDeco = Decoration.replace({ widget: new RuleWidget() })
 const ruleLine = Decoration.line({ class: "cm-md-rule-line" })
 const markdownListMarker = /^([ \t]*)([-+*]|\d+[.)])([ \t]+|$)/
@@ -1490,17 +1547,30 @@ const listItemGapLine = Decoration.line({ class: "cm-md-list-item-gap" })
 // Mirrors the preview's list geometry: ul/ol start padding with the marker
 // hanging inside it, so item text and wrapped lines align like rendered <li>s.
 const listItemLine = Decoration.line({ class: "cm-md-list-item" })
+// `extraDigits` holds, per enclosing list from the outermost in, the digits
+// past the second of its widest marker (see orderedListExtraDigits). Every
+// such digit widens that level's step by 1ch, and the innermost level's step
+// is the hanging box of this line's marker.
 const listDepthLineCache = new Map()
-const listDepthLine = (depth) => {
-  let deco = listDepthLineCache.get(depth)
+const listDepthLine = (depth, extraDigits = []) => {
+  const extraTotal = extraDigits.reduce((sum, extra) => sum + extra, 0)
+  const extraHanging = extraDigits[extraDigits.length - 1] ?? 0
+  const key = `${depth}:${extraTotal}:${extraHanging}`
+  let deco = listDepthLineCache.get(key)
   if (!deco) {
+    const padding = extraTotal > 0
+      ? `calc(${depth * MARKER_BOX_EM}em + ${extraTotal}ch)`
+      : `${depth * MARKER_BOX_EM}em`
+    const indent = extraHanging > 0
+      ? `calc(-${MARKER_BOX_EM}em - ${extraHanging}ch)`
+      : `-${MARKER_BOX_EM}em`
     deco = Decoration.line({
       class: `cm-md-list-depth-${depth}`,
       attributes: {
-        style: `padding-inline-start:${depth * 2.1}em;text-indent:-2.1em;`,
+        style: `padding-inline-start:${padding};text-indent:${indent};`,
       },
     })
-    listDepthLineCache.set(depth, deco)
+    listDepthLineCache.set(key, deco)
   }
   return deco
 }
@@ -1966,12 +2036,16 @@ function buildDecorations(view, detectedCodeCache) {
   // materializing a SyntaxNode per visited node.
   let depth = 0
   const listStack = []
+  // Parallel to listStack: digits past the second in each list's widest
+  // ordered marker (0 for bullet lists), see listDepthLine.
+  const listExtraDigits = []
   const quoteStack = []
   const quoteLines = new Map()
 
+  const tree = syntaxTree(state)
   for (const { from, to } of view.visibleRanges) {
     let contentDocumentDepth = null
-    syntaxTree(state).iterate({
+    tree.iterate({
       from, to,
       enter: (node) => {
         depth++
@@ -2248,6 +2322,7 @@ function buildDecorations(view, detectedCodeCache) {
         // --- Lists --------------------------------------------------------
         if (name === "BulletList" || name === "OrderedList") {
           listStack.push(node.from)
+          listExtraDigits.push(name === "OrderedList" ? orderedListExtraDigits(node.node, tree) : 0)
           return
         }
         if (name === "ListItem") {
@@ -2283,7 +2358,7 @@ function buildDecorations(view, detectedCodeCache) {
             }
             eachLine(from, node.to, completedTaskLine)
           }
-          lineOnce(node.from, listDepthLine(listStack.length))
+          lineOnce(node.from, listDepthLine(listStack.length, listExtraDigits))
           listDepthPositions.add(state.doc.lineAt(node.from).from)
           // Continuation lines of this item (not nested markers, not blank)
           // sit at the item's text column with their indentation hidden.
@@ -2295,7 +2370,7 @@ function buildDecorations(view, detectedCodeCache) {
               const text = line.text
               if (text.length > 0 && !markdownListMarker.test(text)) {
                 lineOnce(line.from, listContinuationLine)
-                lineOnce(line.from, listDepthLine(listStack.length))
+                lineOnce(line.from, listDepthLine(listStack.length, listExtraDigits))
                 const lead = text.match(/^[ \t]+/)
                 if (lead) ranges.push(hide.range(line.from, line.from + lead[0].length))
               }
@@ -2338,11 +2413,12 @@ function buildDecorations(view, detectedCodeCache) {
             }
           } else if (/^\d+[.)]$/.test(mark) && !isTask) {
             const after = state.doc.sliceString(node.to, node.to + 1)
+            const extraDigits = listExtraDigits[listExtraDigits.length - 1] ?? 0
             if (touchesLineOf(node.from)) {
-              ranges.push(activeOrderedDeco.range(node.from, node.to))
+              ranges.push(activeOrderedDeco(extraDigits).range(node.from, node.to))
               if (after === " ") ranges.push(hide.range(node.to, node.to + 1))
             } else {
-              ranges.push(orderedDeco(mark).range(node.from, node.to + (after === " " ? 1 : 0)))
+              ranges.push(orderedDeco(mark, extraDigits).range(node.from, node.to + (after === " " ? 1 : 0)))
             }
           }
           return
@@ -2467,7 +2543,10 @@ function buildDecorations(view, detectedCodeCache) {
       leave: (node) => {
         depth--
         const name = node.name
-        if (name === "BulletList" || name === "OrderedList") listStack.pop()
+        if (name === "BulletList" || name === "OrderedList") {
+          listStack.pop()
+          listExtraDigits.pop()
+        }
         if (name === "Blockquote") quoteStack.pop()
       },
     })

@@ -14,6 +14,7 @@ private enum DocumentExportFormat: String, CaseIterable {
     case pdf
     case html
     case png
+    case epub
 
     private static let defaultsKey = "DocumentExportFormat"
 
@@ -38,6 +39,9 @@ private enum DocumentExportFormat: String, CaseIterable {
         case .png:
             return NSLocalizedString(
                 "PNG Image", comment: "Export format name")
+        case .epub:
+            return NSLocalizedString(
+                "EPUB Book", comment: "Export format name")
         }
     }
 
@@ -46,6 +50,7 @@ private enum DocumentExportFormat: String, CaseIterable {
         case .pdf: return .pdf
         case .html: return .html
         case .png: return .png
+        case .epub: return .epub
         }
     }
 
@@ -61,6 +66,8 @@ private struct FileExportSource {
     let assetBaseURL: URL?
     /// Reports nil after the image has been saved.
     let writePNG: (URL, @escaping (Error?) -> Void) -> Void
+    /// Reports nil after the book has been saved.
+    let writeEPUB: (URL, @escaping (Error?) -> Void) -> Void
 
     func writeHTML(to url: URL) throws {
         let html = MarkdownHTML.makeHTML(
@@ -731,6 +738,10 @@ private final class ExportPrintPanel: NSPrintPanel {
                 fileExportSource.writePNG(url) { [weak self] error in
                     self?.completeFileExport(error: error)
                 }
+            case .epub:
+                fileExportSource.writeEPUB(url) { [weak self] error in
+                    self?.completeFileExport(error: error)
+                }
             case .pdf:
                 break
             }
@@ -949,6 +960,21 @@ extension MarkdownWebView {
                         Task {
                             do {
                                 try await export.writePNG(to: url)
+                                completion(nil)
+                            } catch {
+                                completion(error)
+                            }
+                        }
+                    },
+                    writeEPUB: { url, completion in
+                        Task {
+                            do {
+                                // Only a file name has an extension to drop.
+                                let name = sourceURL?.deletingPathExtension().lastPathComponent ?? window.title
+                                try await export.writeEPUB(
+                                    to: url, markdown: markdown,
+                                    fallbackTitle: name.isEmpty ? NSLocalizedString(
+                                        "Untitled", comment: "Window title when no document is open") : name)
                                 completion(nil)
                             } catch {
                                 completion(error)

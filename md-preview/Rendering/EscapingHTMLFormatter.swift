@@ -1332,12 +1332,26 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         } else {
             start = ""
         }
-        result += "<ol\(start)\(sourceLineAttribute(orderedList))>\n"
+        result += "<ol\(start)\(Self.markerDigitsAttribute(for: orderedList))\(sourceLineAttribute(orderedList))>\n"
         listDepth += 1
         descendInto(orderedList)
         listDepth -= 1
         result += "</ol>\n"
     }
+
+    /// The stylesheet widens a list's marker gutter by one digit for every
+    /// digit past the second, so "100." stays on one line beside its item
+    /// (#522). Lists that stay below 100 keep the default gutter and carry no
+    /// attribute. The editor mirrors the same rule from the source markers.
+    static func markerDigitsAttribute(for orderedList: OrderedList) -> String {
+        let lastNumber = Int(orderedList.startIndex) + max(orderedList.childCount, 1) - 1
+        let digits = min(String(lastNumber).count, maximumMarkerDigits)
+        return digits > 2 ? " data-mdp-digits=\"\(digits)\"" : ""
+    }
+
+    /// Upper bound of `data-mdp-digits`; the stylesheet has one rule per value.
+    /// Mirrored by `MAX_MARKER_DIGITS` in `scripts/editor-bundle/entry-cm.js`.
+    static let maximumMarkerDigits = 9
 
     mutating func visitUnorderedList(_ unorderedList: UnorderedList) {
         result += "<ul\(sourceLineAttribute(unorderedList))>\n"

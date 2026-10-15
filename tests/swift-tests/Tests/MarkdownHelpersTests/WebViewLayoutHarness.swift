@@ -33,7 +33,8 @@ final class WebViewLayoutHarness {
     private let isEditor: Bool
 
     init(html: String, width: CGFloat, isEditor: Bool, zoom: CGFloat = 1, height: CGFloat = 1800,
-         messageHandler: WKScriptMessageHandler? = nil) {
+         messageHandler: WKScriptMessageHandler? = nil,
+         schemeHandlers: [String: WKURLSchemeHandler] = [:]) {
         self.html = html
         self.isEditor = isEditor
         let configuration = WKWebViewConfiguration()
@@ -41,6 +42,9 @@ final class WebViewLayoutHarness {
         if let messageHandler {
             configuration.userContentController.add(messageHandler, name: "mdPreviewHost")
             configuration.userContentController.add(messageHandler, name: "mdEditorHost")
+        }
+        for (scheme, handler) in schemeHandlers {
+            configuration.setURLSchemeHandler(handler, forURLScheme: scheme)
         }
         configuration.preferences.inactiveSchedulingPolicy = .none
         // A command-line test has no visible window. WebKit pauses native

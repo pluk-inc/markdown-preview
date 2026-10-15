@@ -24,5 +24,12 @@ Each marker should be round, vertically centered, and visibly separated from the
 1. Ordered markers remain right-aligned.
 2. Ordered list text keeps the same visual gap.
 
+A list that passes 99 widens its gutter by one digit, so three-digit markers stay on one line and every item's text starts in the same column:
+
+98. Ninety-eight
+99. Ninety-nine
+100. One hundred
+101. One hundred and one
+
 - [ ] An unchecked task keeps its checkbox gap.
 - [x] A checked task keeps its checkbox gap.

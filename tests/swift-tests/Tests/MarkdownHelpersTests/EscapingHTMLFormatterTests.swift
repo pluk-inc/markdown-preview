@@ -11,6 +11,21 @@ final class EscapingHTMLFormatterTests: XCTestCase {
     }
 
 
+    func testOrderedListsCarryTheirMarkerDigitCountFromThreeDigitsOn() {
+        func list(_ count: Int, start: Int = 1, indent: String = "") -> String {
+            (0..<count).map { "\(indent)\(start + $0). Item" }.joined(separator: "\n")
+        }
+        XCTAssertFalse(EscapingHTMLFormatter.format(list(99)).contains("data-mdp-digits"))
+        XCTAssertTrue(EscapingHTMLFormatter.format(list(100)).contains("<ol data-mdp-digits=\"3\""))
+        XCTAssertTrue(EscapingHTMLFormatter.format(list(4, start: 998)).contains("<ol start=\"998\" data-mdp-digits=\"4\""))
+        XCTAssertFalse(EscapingHTMLFormatter.format(list(1, start: 99)).contains("data-mdp-digits"))
+        // Each list measures its own markers: a short list nested in a long one
+        // keeps the default gutter, and bullets never carry the attribute.
+        let nested = EscapingHTMLFormatter.format("1. Parent\n" + list(100, indent: "   ") + "\n2. Next\n   - Bullet\n   - Bullet")
+        XCTAssertEqual(nested.components(separatedBy: "data-mdp-digits").count - 1, 1, nested)
+        XCTAssertTrue(nested.contains("<ol data-mdp-digits=\"3\""), nested)
+    }
+
     func testBareURLFastPathHandlesUppercaseAndDecodedEntities() {
         for markdown in ["HTTPS://example.com/", "h&#116;tp://example.com/", #"http\://example.com/"#] {
             let html = EscapingHTMLFormatter.format(markdown)
