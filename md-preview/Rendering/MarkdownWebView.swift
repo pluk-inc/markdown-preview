@@ -378,7 +378,14 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     /// WebKit "experimental features", reached through private selectors, so
     /// every call is guarded and `MarkdownPreview.gpuProcessRendering YES`
     /// restores the default.
+    ///
+    /// macOS 27's WebKit no longer paints a page whose DOM rendering is kept
+    /// out of the GPU process: the reading view stayed blank while the
+    /// editor, which does not set these flags, rendered (#529). The flags are
+    /// still accepted there, so the opt-out is skipped by OS version rather
+    /// than by their presence.
     private static func keepDOMRenderingInWebContentProcess(in preferences: WKPreferences) {
+        if #available(macOS 27, *) { return }
         guard !UserDefaults.standard.bool(forKey: "MarkdownPreview.gpuProcessRendering") else { return }
         typealias Setter = @convention(c) (AnyObject, Selector, Bool, AnyObject) -> Void
         let groups: [(list: String, setter: String, keys: Set<String>)] = [
