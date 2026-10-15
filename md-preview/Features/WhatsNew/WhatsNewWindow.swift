@@ -34,7 +34,7 @@ struct WhatsNewFeature: Identifiable {
             WhatsNewFeature(
                 id: "faster-first-window",
                 symbol: "bolt",
-                title: L("Faster first window"),
+                title: L("Documents open faster"),
                 detail: L("Your document opens up to 2× faster, before anything else loads.")
             ),
             WhatsNewFeature(

@@ -324,7 +324,7 @@
 "Turn long documents into a book for Apple Books or your e-reader, with a table of contents and resizable text." = "長い書類を Apple Books や電子書籍リーダー向けの本に。目次付きで、文字サイズも変更できます。";
 "Now in Japanese and Persian" = "日本語とペルシア語に対応";
 "Markdown Preview speaks two more languages, with every menu, setting, and dialog translated." = "Markdown Preview が 2 つの言語に新たに対応。メニュー、設定、ダイアログをすべて翻訳しました。";
-"Faster first window" = "最初のウインドウがより速く";
+"Documents open faster" = "書類がより速く開く";
 "Your document opens up to 2× faster, before anything else loads." = "書類が最大 2 倍速く開き、ほかの処理より先に表示されます。";
 "Instant auto save" = "即時自動保存";
 "Choose Instant in Settings → General to save two seconds after you stop typing." = "「設定」→「一般」で「即時」を選択すると、入力を止めてから2秒後に保存されます。";
