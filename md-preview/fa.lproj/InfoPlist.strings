@@ -1,0 +1,2 @@
+/* Document type name for .txt files (CFBundleTypeName in Info.plist). */
+"Plain Text Document" = "سند متن ساده";
