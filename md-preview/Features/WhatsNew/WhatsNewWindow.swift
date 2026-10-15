@@ -41,7 +41,7 @@ struct WhatsNewFeature: Identifiable {
                 id: "expand-tables",
                 symbol: "arrow.up.left.and.arrow.down.right",
                 title: L("Expand tables in a window"),
-                detail: L("Choose Expand Table to open a wide table in its own window. Press Escape to go back.")
+                detail: L("Choose Expand Table to open a wide table in its own window.")
             ),
             WhatsNewFeature(
                 id: "instant-auto-save",

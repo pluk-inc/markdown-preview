@@ -329,7 +329,7 @@
 "Instant auto save" = "即时自动保存";
 "Choose Instant in Settings → General to save two seconds after you stop typing." = "在“设置”→“通用”中选择“立即”，停止输入两秒后即自动保存。";
 "Expand tables in a window" = "在窗口中展开表格";
-"Choose Expand Table to open a wide table in its own window. Press Escape to go back." = "选择“展开表格”即可在独立窗口中查看宽表格。按 Esc 键返回。";
+"Choose Expand Table to open a wide table in its own window." = "选择“展开表格”即可在独立窗口中查看宽表格。";
 
 /* Reading preferences */
 "Strict line breaks" = "严格换行";

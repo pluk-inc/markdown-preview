@@ -329,7 +329,7 @@
 "Instant auto save" = "Instant auto save";
 "Choose Instant in Settings → General to save two seconds after you stop typing." = "Choose Instant in Settings → General to save two seconds after you stop typing.";
 "Expand tables in a window" = "Expand tables in a window";
-"Choose Expand Table to open a wide table in its own window. Press Escape to go back." = "Choose Expand Table to open a wide table in its own window. Press Escape to go back.";
+"Choose Expand Table to open a wide table in its own window." = "Choose Expand Table to open a wide table in its own window.";
 
 /* Reading preferences */
 "Strict line breaks" = "Strict line breaks";

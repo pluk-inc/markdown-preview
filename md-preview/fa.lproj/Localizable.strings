@@ -328,7 +328,7 @@
 "Instant auto save" = "ذخیرهٔ خودکار فوری";
 "Choose Instant in Settings → General to save two seconds after you stop typing." = "در تنظیمات ← عمومی، گزینهٔ «فوری» را انتخاب کنید تا دو ثانیه پس از توقف تایپ ذخیره شود.";
 "Expand tables in a window" = "گسترش جدول‌ها در پنجرهٔ جداگانه";
-"Choose Expand Table to open a wide table in its own window. Press Escape to go back." = "برای مشاهدهٔ یک جدول عریض در پنجرهٔ جداگانه، «گسترش جدول» را انتخاب کنید. برای بازگشت، کلید Escape را فشار دهید.";
+"Choose Expand Table to open a wide table in its own window." = "برای مشاهدهٔ یک جدول عریض در پنجرهٔ جداگانه، «گسترش جدول» را انتخاب کنید.";
 
 /* Reading preferences */
 "Strict line breaks" = "شکست دقیق خطوط";

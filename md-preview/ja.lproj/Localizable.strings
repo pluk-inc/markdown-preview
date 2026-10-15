@@ -329,7 +329,7 @@
 "Instant auto save" = "即時自動保存";
 "Choose Instant in Settings → General to save two seconds after you stop typing." = "「設定」→「一般」で「即時」を選択すると、入力を止めてから2秒後に保存されます。";
 "Expand tables in a window" = "表を別ウインドウで表示";
-"Choose Expand Table to open a wide table in its own window. Press Escape to go back." = "「表を拡大」を選択すると、幅の広い表を別ウインドウで表示できます。Esc キーで戻ります。";
+"Choose Expand Table to open a wide table in its own window." = "「表を拡大」を選択すると、幅の広い表を別ウインドウで表示できます。";
 
 /* Reading preferences */
 "Strict line breaks" = "厳密な改行";
