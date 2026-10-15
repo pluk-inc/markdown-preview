@@ -325,7 +325,7 @@
 "Now in Japanese and Persian" = "现已支持日语和波斯语";
 "Markdown Preview speaks two more languages, with every menu, setting, and dialog translated." = "Markdown Preview 新增两种语言，每个菜单、设置和对话框都已翻译。";
 "Faster first window" = "首个窗口打开更快";
-"Your document opens up to 1.4× faster, before anything else loads." = "文稿打开速度最高提升至 1.4 倍，先于其他内容加载。";
+"Your document opens up to 2× faster, before anything else loads." = "文稿打开速度最高提升至 2 倍，先于其他内容加载。";
 "Instant auto save" = "即时自动保存";
 "Choose Instant in Settings → General to save two seconds after you stop typing." = "在“设置”→“通用”中选择“立即”，停止输入两秒后即自动保存。";
 "Expand tables in a window" = "在窗口中展开表格";
