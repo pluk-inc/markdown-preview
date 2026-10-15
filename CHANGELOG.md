@@ -1,17 +1,28 @@
 # Changelog
 
-## [0.0.66] – 2026-10-13
+## [0.0.67] – 2026-10-15
 
-This release adds a Japanese translation and an Instant auto save interval, lets New Tab start a new document, and makes Quick Look load more images and follow heading links.
+This release adds EPUB export, Japanese and Persian translations, and an Instant auto save interval. It opens the first document window sooner, lets New Tab start a new document, keeps the inspector up to date while you type, and makes Quick Look load more images and follow heading links.
 
 ### Added
 
+- **EPUB export.** *File → Export…* offers **EPUB Book** for reading long documents in Apple Books or on an e-reader, where the reader sets the text size. The book is split into sections at its headings with a table of contents; images, Mermaid diagrams, and math are embedded, and `title`, `author`, and `lang` frontmatter name the book ([#517](https://github.com/pluk-inc/markdown-preview/pull/517)).
 - **Japanese translation.** Menus, settings, dialogs, and toolbars are available in Japanese. Choose it in Settings → General → Language, or let it follow your system language ([#474](https://github.com/pluk-inc/markdown-preview/pull/474), [#500](https://github.com/pluk-inc/markdown-preview/pull/500)).
+- **Persian translation.** Menus, settings, dialogs, and toolbars are available in Persian. Choose it in Settings → General → Language, or let it follow your system language ([#516](https://github.com/pluk-inc/markdown-preview/pull/516)).
+- **Restart after changing the language.** Changing Settings → General → Language now offers **Restart Now** or **Later**, so the new language applies without quitting by hand. Unsaved edits prompt as usual, and open documents come back after the restart ([#530](https://github.com/pluk-inc/markdown-preview/pull/530)).
 - **Instant auto save.** Settings → General → Automatic saving offers an Instant interval that saves two seconds after you stop typing ([#496](https://github.com/pluk-inc/markdown-preview/pull/496)).
 - **Start a new document from New Tab.** The file picker that File → New Tab (⌘T) opens now has a New Document button, like the picker at launch and in File → Open. The new document, file, or folder opens as a tab of the front window ([#502](https://github.com/pluk-inc/markdown-preview/pull/502)).
 
+### Changed
+
+- **The first document window opens sooner.** At launch, the window's first frame is committed before the rest of the launch work runs, and updates, crash reporting, and settings load after it. Document text also appears sooner on macOS 26 and earlier ([#520](https://github.com/pluk-inc/markdown-preview/pull/520), [#531](https://github.com/pluk-inc/markdown-preview/pull/531), [#533](https://github.com/pluk-inc/markdown-preview/pull/533)).
+- **Expand Table opens a normal window.** The table window no longer forces fullscreen. Resize it, minimize it, or make it fullscreen; its size is remembered, and Escape closes it ([#524](https://github.com/pluk-inc/markdown-preview/pull/524)).
+
 ### Fixed
 
+- **Chinese and Japanese table labels stay whole.** Short labels in Markdown table cells no longer wrap one or two characters per line beside a long column, and long cells wrap at punctuation. Applies to Read Mode, Edit Mode, Quick Look, and exports ([#524](https://github.com/pluk-inc/markdown-preview/pull/524)).
+- **The inspector updates while you edit.** Words, Characters, and Sections refresh as you type in Edit Mode, and clicking a section jumps to it in the editor ([#521](https://github.com/pluk-inc/markdown-preview/pull/521)).
+- **Ordered lists past 99 keep their markers on one line.** The list gutter widens by one digit for each extra digit in Read Mode and Edit Mode, so `100.` no longer wraps ([#523](https://github.com/pluk-inc/markdown-preview/pull/523)).
 - **Quick Look loads images outside the document's folder.** Images referenced with `../` paths or absolute paths now appear in Quick Look as they do in the app. Files outside the document's folder load only when they are real images ([#501](https://github.com/pluk-inc/markdown-preview/pull/501)).
 - **Quick Look loads more image references.** Images whose file names contain `&`, and raw HTML images with single-quoted `src`, now appear in Quick Look ([#503](https://github.com/pluk-inc/markdown-preview/pull/503)).
 - **Heading links scroll in Quick Look.** Links such as `[Jump to the end](#bottom-of-this-document)` now scroll to the matching heading instead of doing nothing ([#504](https://github.com/pluk-inc/markdown-preview/pull/504)).
@@ -21,10 +32,13 @@ This release adds a Japanese translation and an Instant auto save interval, lets
 
 ### Contributors
 
-- [@kota113](https://github.com/kota113) — contributed the Japanese translation and Instant auto save ([#474](https://github.com/pluk-inc/markdown-preview/pull/474), [#496](https://github.com/pluk-inc/markdown-preview/pull/496), [#500](https://github.com/pluk-inc/markdown-preview/pull/500)), and requested New Document in New Tab ([#499](https://github.com/pluk-inc/markdown-preview/issues/499)).
-- [@individuate](https://github.com/individuate) — fixed PNG export ([#510](https://github.com/pluk-inc/markdown-preview/pull/510)).
+- [@individuate](https://github.com/individuate) — added EPUB export ([#517](https://github.com/pluk-inc/markdown-preview/pull/517), requested in [#509](https://github.com/pluk-inc/markdown-preview/issues/509)) and fixed PNG export ([#510](https://github.com/pluk-inc/markdown-preview/pull/510)).
+- [@kota113](https://github.com/kota113) — contributed the Japanese translation and Instant auto save ([#474](https://github.com/pluk-inc/markdown-preview/pull/474), [#496](https://github.com/pluk-inc/markdown-preview/pull/496), [#500](https://github.com/pluk-inc/markdown-preview/pull/500)), made the inspector update while editing ([#521](https://github.com/pluk-inc/markdown-preview/pull/521), [#513](https://github.com/pluk-inc/markdown-preview/issues/513)), requested New Document in New Tab ([#499](https://github.com/pluk-inc/markdown-preview/issues/499)), and reported the blank reading view on macOS 27 before release ([#529](https://github.com/pluk-inc/markdown-preview/issues/529)).
+- [@aliafshany](https://github.com/aliafshany) — contributed the Persian translation ([#516](https://github.com/pluk-inc/markdown-preview/pull/516)).
 - [@sean0407](https://github.com/sean0407) — preserved image alt text ([#497](https://github.com/pluk-inc/markdown-preview/pull/497)).
 - [@OpenSource03](https://github.com/OpenSource03) — fixed the toolbar background seam ([#495](https://github.com/pluk-inc/markdown-preview/pull/495)).
+- [@SebDominguez](https://github.com/SebDominguez) — reported ordered-list markers wrapping past 99 ([#522](https://github.com/pluk-inc/markdown-preview/issues/522)).
+- [@huangzhongzhong](https://github.com/huangzhongzhong) — reported Chinese table labels wrapping per character ([#490](https://github.com/pluk-inc/markdown-preview/issues/490)).
 - [@vizmoe](https://github.com/vizmoe) — reported missing parent-folder images in Quick Look ([#488](https://github.com/pluk-inc/markdown-preview/issues/488)).
 - [@ftc2](https://github.com/ftc2) — reported Quick Look link and image gaps ([#492](https://github.com/pluk-inc/markdown-preview/issues/492)).
 

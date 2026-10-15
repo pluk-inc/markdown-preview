@@ -20,10 +20,22 @@ struct WhatsNewFeature: Identifiable {
     static var current: [WhatsNewFeature] {
         [
             WhatsNewFeature(
-                id: "japanese-translation",
+                id: "epub-export",
+                symbol: "book.closed",
+                title: L("Export as EPUB"),
+                detail: L("Choose EPUB Book in File → Export… to read long documents in Apple Books or on an e-reader.")
+            ),
+            WhatsNewFeature(
+                id: "japanese-persian-translations",
                 symbol: "character.bubble",
-                title: L("Now in Japanese"),
-                detail: L("Choose Japanese in Settings → General → Language, or let it follow your system language.")
+                title: L("Now in Japanese and Persian"),
+                detail: L("Choose a language in Settings → General → Language. The app offers to restart right away.")
+            ),
+            WhatsNewFeature(
+                id: "faster-first-window",
+                symbol: "bolt",
+                title: L("Faster first window"),
+                detail: L("The first document window appears sooner after you open a file.")
             ),
             WhatsNewFeature(
                 id: "expand-tables",
@@ -32,28 +44,10 @@ struct WhatsNewFeature: Identifiable {
                 detail: L("Choose Expand Table to open a wide table in its own window. Press Escape to go back.")
             ),
             WhatsNewFeature(
-                id: "recent-documents",
-                symbol: "clock",
-                title: L("Reopen recent documents"),
-                detail: L("Press ⇧⌘O to see your 10 most recent files, even with no document open.")
-            ),
-            WhatsNewFeature(
                 id: "instant-auto-save",
                 symbol: "clock.arrow.circlepath",
                 title: L("Instant auto save"),
                 detail: L("Choose Instant in Settings → General to save two seconds after you stop typing.")
-            ),
-            WhatsNewFeature(
-                id: "text-alignment",
-                symbol: "text.alignleft",
-                title: L("Choose text alignment"),
-                detail: L("Set left, center, right, or justified text in Settings → Reading. Quick Look uses it too.")
-            ),
-            WhatsNewFeature(
-                id: "quick-look-images",
-                symbol: "photo.on.rectangle",
-                title: L("More images in Quick Look"),
-                detail: L("Quick Look shows images from parent folders and follows links to headings.")
             ),
         ]
     }

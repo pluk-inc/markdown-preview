@@ -320,18 +320,16 @@
 "What’s New in Markdown Preview %@" = "What’s New in Markdown Preview %@";
 "Release Notes" = "Release Notes";
 "Continue" = "Continue";
-"Now in Japanese" = "Now in Japanese";
-"Choose Japanese in Settings → General → Language, or let it follow your system language." = "Choose Japanese in Settings → General → Language, or let it follow your system language.";
+"Export as EPUB" = "Export as EPUB";
+"Choose EPUB Book in File → Export… to read long documents in Apple Books or on an e-reader." = "Choose EPUB Book in File → Export… to read long documents in Apple Books or on an e-reader.";
+"Now in Japanese and Persian" = "Now in Japanese and Persian";
+"Choose a language in Settings → General → Language. The app offers to restart right away." = "Choose a language in Settings → General → Language. The app offers to restart right away.";
+"Faster first window" = "Faster first window";
+"The first document window appears sooner after you open a file." = "The first document window appears sooner after you open a file.";
 "Instant auto save" = "Instant auto save";
 "Choose Instant in Settings → General to save two seconds after you stop typing." = "Choose Instant in Settings → General to save two seconds after you stop typing.";
 "Expand tables in a window" = "Expand tables in a window";
 "Choose Expand Table to open a wide table in its own window. Press Escape to go back." = "Choose Expand Table to open a wide table in its own window. Press Escape to go back.";
-"Reopen recent documents" = "Reopen recent documents";
-"Press ⇧⌘O to see your 10 most recent files, even with no document open." = "Press ⇧⌘O to see your 10 most recent files, even with no document open.";
-"Choose text alignment" = "Choose text alignment";
-"Set left, center, right, or justified text in Settings → Reading. Quick Look uses it too." = "Set left, center, right, or justified text in Settings → Reading. Quick Look uses it too.";
-"More images in Quick Look" = "More images in Quick Look";
-"Quick Look shows images from parent folders and follows links to headings." = "Quick Look shows images from parent folders and follows links to headings.";
 
 /* Reading preferences */
 "Strict line breaks" = "Strict line breaks";

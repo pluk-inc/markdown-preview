@@ -319,18 +319,16 @@
 "What’s New in Markdown Preview %@" = "ویژگی‌های جدید Markdown Preview %@";
 "Release Notes" = "یادداشت‌های انتشار";
 "Continue" = "ادامه";
-"Now in Japanese" = "اکنون به زبان ژاپنی";
-"Choose Japanese in Settings → General → Language, or let it follow your system language." = "در تنظیمات ← عمومی ← زبان، ژاپنی را انتخاب کنید، یا بگذارید از زبان سیستم پیروی کند.";
+"Export as EPUB" = "خروجی EPUB";
+"Choose EPUB Book in File → Export… to read long documents in Apple Books or on an e-reader." = "در فایل ← خروجی گرفتن…، گزینهٔ «EPUB Book» را انتخاب کنید تا اسناد طولانی را در Apple Books یا کتاب‌خوان الکترونیکی بخوانید.";
+"Now in Japanese and Persian" = "اکنون به زبان ژاپنی و فارسی";
+"Choose a language in Settings → General → Language. The app offers to restart right away." = "در تنظیمات ← عمومی ← زبان، یک زبان انتخاب کنید. برنامه پیشنهاد می‌کند بلافاصله دوباره راه‌اندازی شود.";
+"Faster first window" = "پنجرهٔ اول سریع‌تر";
+"The first document window appears sooner after you open a file." = "پس از باز کردن یک فایل، پنجرهٔ اول سند زودتر نمایش داده می‌شود.";
 "Instant auto save" = "ذخیرهٔ خودکار فوری";
 "Choose Instant in Settings → General to save two seconds after you stop typing." = "در تنظیمات ← عمومی، گزینهٔ «فوری» را انتخاب کنید تا دو ثانیه پس از توقف تایپ ذخیره شود.";
 "Expand tables in a window" = "گسترش جدول‌ها در پنجرهٔ جداگانه";
 "Choose Expand Table to open a wide table in its own window. Press Escape to go back." = "برای مشاهدهٔ یک جدول عریض در پنجرهٔ جداگانه، «گسترش جدول» را انتخاب کنید. برای بازگشت، کلید Escape را فشار دهید.";
-"Reopen recent documents" = "باز کردن مجدد اسناد اخیر";
-"Press ⇧⌘O to see your 10 most recent files, even with no document open." = "برای مشاهدهٔ ۱۰ فایل اخیر خود کلیدهای ⇧⌘O را فشار دهید، حتی اگر هیچ سندی باز نباشد.";
-"Choose text alignment" = "انتخاب چینش متن";
-"Set left, center, right, or justified text in Settings → Reading. Quick Look uses it too." = "در تنظیمات ← خواندن، متن را چپ‌چین، وسط‌چین، راست‌چین یا هم‌تراز کنید. Quick Look نیز از آن استفاده می‌کند.";
-"More images in Quick Look" = "تصاویر بیشتر در Quick Look";
-"Quick Look shows images from parent folders and follows links to headings." = "تصاویر پوشه‌های والد را Quick Look نشان می‌دهد و پیوندهای مربوط به سرتیترها را دنبال می‌کند.";
 
 /* Reading preferences */
 "Strict line breaks" = "شکست دقیق خطوط";

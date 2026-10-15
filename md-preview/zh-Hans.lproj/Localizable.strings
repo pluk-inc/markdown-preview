@@ -320,18 +320,16 @@
 "What’s New in Markdown Preview %@" = "Markdown Preview %@ 的新功能";
 "Release Notes" = "发布说明";
 "Continue" = "继续";
-"Now in Japanese" = "现已支持日语";
-"Choose Japanese in Settings → General → Language, or let it follow your system language." = "在“设置”→“通用”→“语言”中选择日语，或跟随系统语言。";
+"Export as EPUB" = "导出为 EPUB";
+"Choose EPUB Book in File → Export… to read long documents in Apple Books or on an e-reader." = "在“文件”→“导出…”中选择“EPUB 图书”，即可在 Apple Books 或电子阅读器上阅读长文稿。";
+"Now in Japanese and Persian" = "现已支持日语和波斯语";
+"Choose a language in Settings → General → Language. The app offers to restart right away." = "在“设置”→“通用”→“语言”中选择语言。App 会提示立即重新启动。";
+"Faster first window" = "首个窗口打开更快";
+"The first document window appears sooner after you open a file." = "打开文件后，首个文稿窗口会更快显示。";
 "Instant auto save" = "即时自动保存";
 "Choose Instant in Settings → General to save two seconds after you stop typing." = "在“设置”→“通用”中选择“立即”，停止输入两秒后即自动保存。";
 "Expand tables in a window" = "在窗口中展开表格";
 "Choose Expand Table to open a wide table in its own window. Press Escape to go back." = "选择“展开表格”即可在独立窗口中查看宽表格。按 Esc 键返回。";
-"Reopen recent documents" = "重新打开最近的文稿";
-"Press ⇧⌘O to see your 10 most recent files, even with no document open." = "按下 ⇧⌘O 即可查看最近打开的 10 个文件，即使没有打开任何文稿。";
-"Choose text alignment" = "选择文本对齐方式";
-"Set left, center, right, or justified text in Settings → Reading. Quick Look uses it too." = "在“设置”→“阅读”中设置左对齐、居中、右对齐或两端对齐。快速查看也会使用此设置。";
-"More images in Quick Look" = "快速查看显示更多图片";
-"Quick Look shows images from parent folders and follows links to headings." = "快速查看现可显示上级文件夹中的图片，并可跳转到标题链接。";
 
 /* Reading preferences */
 "Strict line breaks" = "严格换行";

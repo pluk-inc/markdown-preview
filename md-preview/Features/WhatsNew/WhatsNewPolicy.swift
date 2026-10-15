@@ -14,8 +14,8 @@ import Foundation
 
 enum WhatsNewPolicy {
     /// The release that introduced `WhatsNewFeature.current`.
-    static let featuresVersion = "0.0.66"
-    static let featuresBuild = 70
+    static let featuresVersion = "0.0.67"
+    static let featuresBuild = 71
 
     static let lastBuildKey = "MarkdownPreview.whatsNewLastBuild"
 
