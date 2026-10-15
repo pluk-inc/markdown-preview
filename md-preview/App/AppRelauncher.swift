@@ -59,7 +59,7 @@ final class AppRelauncher {
         let helper = Process()
         helper.executableURL = URL(fileURLWithPath: "/bin/sh")
         helper.arguments = ["-c", "cat >/dev/null; exec /usr/bin/open -a \"$@\"", "relaunch",
-                            Bundle.main.bundlePath] + Self.documentPathsToReopen()
+                            Bundle.main.bundlePath] + Self.documentsToReopen()
         helper.standardInput = pipe
         helper.standardOutput = FileHandle.nullDevice
         helper.standardError = FileHandle.nullDevice
@@ -78,12 +78,28 @@ final class AppRelauncher {
     private var relaunchHelper: Process?
     private var relaunchPipe: Pipe?
 
-    /// The files to hand the new instance. With "Close windows when quitting
-    /// an app" turned off, macOS restores every window itself and handing it
-    /// the files too would open each document twice.
-    private static func documentPathsToReopen() -> [String] {
+    /// The documents to hand the new instance, as `open` arguments. With
+    /// "Close windows when quitting an app" turned off, macOS restores every
+    /// window itself and handing them over too would open each one twice.
+    ///
+    /// Files go as paths, which Launch Services opens with the sandbox
+    /// access this instance has. A folder-only window has no file URL; its
+    /// folder is the one the sidebar mounted, and it goes as an
+    /// `md-preview://file/` link because `open` run from inside the sandbox
+    /// rejects a directory path and then launches nothing at all.
+    private static func documentsToReopen() -> [String] {
         let restoresWindowsAfterQuit = UserDefaults.standard.bool(forKey: "NSQuitAlwaysKeepsWindows")
         guard !restoresWindowsAfterQuit else { return [] }
-        return NSDocumentController.shared.documents.compactMap(\.fileURL?.path)
+        return NSDocumentController.shared.documents.compactMap { document in
+            if let fileURL = document.fileURL { return fileURL.path }
+            guard let folderURL = document.windowControllers.lazy
+                .compactMap({ ($0 as? DocumentWindowController)?.projectRootURL })
+                .first else { return nil }
+            var link = URLComponents()
+            link.scheme = ExternalOpenScheme.scheme
+            link.host = "file"
+            link.path = folderURL.path
+            return link.string
+        }
     }
 }
