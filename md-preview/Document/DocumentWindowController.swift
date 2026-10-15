@@ -487,9 +487,20 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// for it. The frame is already committed, so nothing visible waits;
     /// input is not read because AppKit pulls events itself, outside the
     /// run loop sources. Only the first window of a launch does this.
+    ///
+    /// Only while the launch turn is still running, though. A window AppKit
+    /// restores is created after `applicationDidFinishLaunching`, while
+    /// restoration still holds every window off screen: WebKit cannot paint
+    /// an invisible page, so the wait ran to its 450 ms deadline on the main
+    /// thread and pushed the restored windows out by that much (about
+    /// 1.25 s to the first window instead of 0.9 s, measured on macOS 27).
     private func pumpRunLoopForWebKitStartup() {
-        guard !Self.didPumpForFirstWindow else { return }
+        // Checked first, so a window created after launch never claims the
+        // one-time pump from one the launch itself is about to open.
+        guard (NSApp.delegate as? AppDelegate)?.hasFinishedLaunching == false,
+              !Self.didPumpForFirstWindow else { return }
         Self.didPumpForFirstWindow = true
+        guard (NSApp.delegate as? AppDelegate)?.hasFinishedLaunching == false else { return }
         guard let split = documentWindow.contentViewController as? MainSplitViewController else { return }
         let deadline = CFAbsoluteTimeGetCurrent() + 0.45
         while !split.hasPaintedFirstDocument {
