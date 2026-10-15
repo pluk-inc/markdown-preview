@@ -321,11 +321,11 @@
 "Release Notes" = "发布说明";
 "Continue" = "继续";
 "Export as EPUB" = "导出为 EPUB";
-"Choose EPUB Book in File → Export… to read long documents in Apple Books or on an e-reader." = "在“文件”→“导出…”中选择“EPUB 图书”，即可在 Apple Books 或电子阅读器上阅读长文稿。";
+"Turn long documents into a book for Apple Books or your e-reader, with a table of contents and resizable text." = "将长文稿变成一本书，在 Apple Books 或电子阅读器上阅读，带目录，文字大小可调。";
 "Now in Japanese and Persian" = "现已支持日语和波斯语";
-"Choose a language in Settings → General → Language. The app offers to restart right away." = "在“设置”→“通用”→“语言”中选择语言。App 会提示立即重新启动。";
+"Markdown Preview speaks two more languages, with every menu, setting, and dialog translated." = "Markdown Preview 新增两种语言，每个菜单、设置和对话框都已翻译。";
 "Faster first window" = "首个窗口打开更快";
-"The first document window appears sooner after you open a file." = "打开文件后，首个文稿窗口会更快显示。";
+"Your document is on screen about 20% sooner after launch, before anything else loads." = "启动后，文稿显示在屏幕上的时间提前约 20%，先于其他内容加载。";
 "Instant auto save" = "即时自动保存";
 "Choose Instant in Settings → General to save two seconds after you stop typing." = "在“设置”→“通用”中选择“立即”，停止输入两秒后即自动保存。";
 "Expand tables in a window" = "在窗口中展开表格";

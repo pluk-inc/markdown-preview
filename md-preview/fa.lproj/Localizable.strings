@@ -320,11 +320,11 @@
 "Release Notes" = "یادداشت‌های انتشار";
 "Continue" = "ادامه";
 "Export as EPUB" = "خروجی EPUB";
-"Choose EPUB Book in File → Export… to read long documents in Apple Books or on an e-reader." = "در فایل ← خروجی گرفتن…، گزینهٔ «EPUB Book» را انتخاب کنید تا اسناد طولانی را در Apple Books یا کتاب‌خوان الکترونیکی بخوانید.";
+"Turn long documents into a book for Apple Books or your e-reader, with a table of contents and resizable text." = "اسناد طولانی را به کتابی برای Apple Books یا کتاب‌خوان الکترونیکی تبدیل کنید، با فهرست مطالب و اندازهٔ متن قابل تغییر.";
 "Now in Japanese and Persian" = "اکنون به زبان ژاپنی و فارسی";
-"Choose a language in Settings → General → Language. The app offers to restart right away." = "در تنظیمات ← عمومی ← زبان، یک زبان انتخاب کنید. برنامه پیشنهاد می‌کند بلافاصله دوباره راه‌اندازی شود.";
+"Markdown Preview speaks two more languages, with every menu, setting, and dialog translated." = "Markdown Preview به دو زبان دیگر صحبت می‌کند، با ترجمهٔ همهٔ منوها، تنظیمات و پنجره‌های گفتگو.";
 "Faster first window" = "پنجرهٔ اول سریع‌تر";
-"The first document window appears sooner after you open a file." = "پس از باز کردن یک فایل، پنجرهٔ اول سند زودتر نمایش داده می‌شود.";
+"Your document is on screen about 20% sooner after launch, before anything else loads." = "سند شما حدود ۲۰٪ زودتر پس از راه‌اندازی روی صفحه ظاهر می‌شود، پیش از بارگذاری هر چیز دیگر.";
 "Instant auto save" = "ذخیرهٔ خودکار فوری";
 "Choose Instant in Settings → General to save two seconds after you stop typing." = "در تنظیمات ← عمومی، گزینهٔ «فوری» را انتخاب کنید تا دو ثانیه پس از توقف تایپ ذخیره شود.";
 "Expand tables in a window" = "گسترش جدول‌ها در پنجرهٔ جداگانه";
