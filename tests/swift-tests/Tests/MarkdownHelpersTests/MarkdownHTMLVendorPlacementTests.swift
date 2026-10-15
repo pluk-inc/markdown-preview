@@ -86,6 +86,28 @@ final class MarkdownHTMLVendorPlacementTests: XCTestCase {
         XCTAssertEqual(metrics.opacity, "0", "warmup keepHidden must survive the early populate")
     }
 
+    @MainActor
+    func testLazyPreviewRendersEditorMathSample() async throws {
+        let source = try String(contentsOf: TestVendor.repositoryRoot
+            .appendingPathComponent("samples/editor-math.md"), encoding: .utf8)
+        let rendered = MarkdownHTML.render(markdown: source, vendorLoading: .lazy)
+        let preview = WebViewLayoutHarness(html: rendered.html, width: 900, isEditor: false,
+            schemeHandlers: ["md-asset": EditorMathAssets()])
+        defer { preview.close() }
+        _ = try await preview.layout(texts: ["Math in edit mode", "Inline", "Display"], imageCount: 0,
+            selectors: [".math-display .katex": 4])
+        let visible = try await preview.webView.evaluateJavaScript("""
+            (() => {
+                const article = document.querySelector('.markdown-body');
+                const style = getComputedStyle(article);
+                return article.textContent.includes('Math in edit mode')
+                    && style.opacity !== '0' && style.display !== 'none'
+                    && style.visibility !== 'hidden' && article.getBoundingClientRect().height > 0;
+            })()
+            """)
+        XCTAssertEqual(visible as? Bool, true)
+    }
+
     private struct PopulateMetrics: Decodable {
         let templateGone: Bool
         let articleChildren: Int

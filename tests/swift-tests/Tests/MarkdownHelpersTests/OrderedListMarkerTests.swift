@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 import WebKit
 @testable import MarkdownHelpers
@@ -77,8 +78,17 @@ final class OrderedListMarkerTests: XCTestCase {
         let host = HostBridge()
         // Tall enough that CodeMirror materializes every line.
         let harness = WebViewLayoutHarness(html: html, width: 700, isEditor: true, height: 6500, messageHandler: host)
-        defer { harness.close() }
-        _ = try await harness.layout(texts: ["Item 100", "Short 99", "Big c"], imageCount: 0)
+        // A window gives WebKit a native focus host for the editable-marker checks.
+        let window = NSWindow(contentRect: harness.webView.frame, styleMask: .borderless,
+                              backing: .buffered, defer: false)
+        window.contentView = harness.webView
+        defer {
+            harness.close()
+            window.contentView = nil
+        }
+        // Parsing and text geometry can settle before live-preview decorations.
+        _ = try await harness.layout(texts: ["Item 100", "Short 99", "Big c"], imageCount: 0,
+                                     selectors: [".cm-md-ordered": 223])
         let result = try await harness.webView.evaluateJavaScript("""
             (() => {
                 const markers = [...document.querySelectorAll('.cm-md-ordered')];

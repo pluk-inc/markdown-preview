@@ -58,11 +58,11 @@ exactly its declared **20 CSS pixels per header** when comparing downstream Y
 positions; they never subtract a measured discrepancy or relax other geometry.
 
 **Three cases (12 runs)** also include features that intentionally remain source
-in the editor: metadata, tasks, math, alerts, reference syntax, footnotes, HTML,
+in the editor: metadata, tasks, alerts, reference syntax, footnotes, HTML,
 and formatting inside table cells. They assert actual reader feature counts,
 visible editor source, unchanged Markdown, column alignment, and local alignment
 and wrapping of shared text around those features. They do **not** claim equal
-block heights for a rendered equation versus its editable source. Editor-only source cues (such as Setext underline markers) are not a claim of
+block heights for features whose editor representation remains source. Editor-only source cues (such as Setext underline markers) are not a claim of
 pixel-identical screenshots. Every fixture also verifies that rendering preserves
 the exact original Markdown.
 

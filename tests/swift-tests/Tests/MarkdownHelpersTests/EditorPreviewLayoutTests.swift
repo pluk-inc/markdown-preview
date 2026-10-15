@@ -34,6 +34,122 @@ final class EditorPreviewLayoutTests: XCTestCase {
         return "data:image/svg+xml;base64,\(Data(svg.utf8).base64EncodedString())"
     }
 
+    func testMathRendersWithSharedKaTeX() async throws {
+        let source = "Inline $x_1 + x_2$.\n\n$$\nE = mc^2\n$$\n\n```math\nx^2\n```"
+        let html = EditorHTML.render(markdown: source,
+            editorJavaScript: try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js"))
+        let editor = WebViewLayoutHarness(html: html, width: 900, isEditor: true,
+            schemeHandlers: ["md-asset": EditorMathAssets()])
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0,
+            selectors: [".katex": 3, ".katex-display": 2, ".katex-error": 0])
+        let saved = try await editor.webView.evaluateJavaScript("window.__mdEditor.getMarkdown()")
+        XCTAssertEqual(saved as? String, source)
+    }
+
+    func testKeyboardEntryRevealsFencedMathSource() async throws {
+        let source = "Before\n\n```math\nx^2\n```\n\nAfter"
+        let html = EditorHTML.render(markdown: source,
+            editorJavaScript: try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js"))
+        let editor = WebViewLayoutHarness(html: html, width: 900, isEditor: true,
+            schemeHandlers: ["md-asset": EditorMathAssets()])
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0, selectors: [".katex": 1])
+        let result = try await editor.webView.callAsyncJavaScript("""
+            window.__mdEditor.focus();
+            window.__mdEditor.select(7);
+            for (let i = 0; i < 2; i++) {
+                document.querySelector('.cm-content').dispatchEvent(new KeyboardEvent('keydown', {
+                    key: 'ArrowRight', code: 'ArrowRight', bubbles: true, cancelable: true
+                }));
+                window.__layoutTestFrame();
+            }
+            return {
+                rendered: !!document.querySelector('.math-display'),
+                sourceVisible: document.querySelector('.cm-content').textContent.includes('x^2'),
+                markdown: window.__mdEditor.getMarkdown()
+            };
+            """, arguments: [:], in: nil, contentWorld: .page)
+        let values = try XCTUnwrap(result as? [String: Any])
+        XCTAssertEqual(values["rendered"] as? Bool, false)
+        XCTAssertEqual(values["sourceVisible"] as? Bool, true)
+        XCTAssertEqual(values["markdown"] as? String, source)
+    }
+
+    func testQuotedMathDoesNotAddEmptyDelimiterLines() async throws {
+        for source in [">$$\n>equation\n>$$", "> $$\n> x^2\n> $$"] {
+            let html = EditorHTML.render(markdown: source,
+                editorJavaScript: try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js"))
+            let editor = WebViewLayoutHarness(html: html, width: 900, isEditor: true,
+                schemeHandlers: ["md-asset": EditorMathAssets()])
+            defer { editor.close() }
+            _ = try await editor.layout(texts: [], imageCount: 0, selectors: [".katex": 1])
+            let extraHeight = try await editor.webView.evaluateJavaScript("""
+                (() => {
+                    const math = document.querySelector('.math-display');
+                    const line = math.closest('.cm-line');
+                    const style = getComputedStyle(line);
+                    return line.getBoundingClientRect().height - math.getBoundingClientRect().height
+                        - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+                })()
+                """)
+            XCTAssertEqual(try XCTUnwrap(extraHeight as? Double), 0, accuracy: 1, source)
+            let saved = try await editor.webView.evaluateJavaScript("window.__mdEditor.getMarkdown()")
+            XCTAssertEqual(saved as? String, source)
+        }
+    }
+
+    func testDisplayMathSpacingMatchesPreview() async throws {
+        for (name, formula) in [
+            ("single-line", "$$ x^2 $$"),
+            ("multiline", "$$\nx^2\n$$"),
+            ("fenced", "```math\nx^2\n```"),
+        ] {
+            try await check(Fixture(name: "math-spacing-\(name)",
+                markdown: "Before equation.\n\n\(formula)\n\nAfter equation.",
+                texts: ["Before equation.", "After equation."],
+                readSelectors: [".katex": 1], editorSelectors: [".katex": 1]))
+        }
+    }
+
+    func testArrowUpEntersPreviousMathAtItsClosingDelimiter() async throws {
+        let source = "$$\na\n$$\n\n$$\nb"
+        let html = EditorHTML.render(markdown: source,
+            editorJavaScript: try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js"))
+        let editor = WebViewLayoutHarness(html: html, width: 900, isEditor: true,
+            schemeHandlers: ["md-asset": EditorMathAssets()])
+        defer { editor.close() }
+        _ = try await editor.layout(texts: [], imageCount: 0, selectors: [".katex": 1])
+        let result = try await editor.webView.callAsyncJavaScript("""
+            const settle = async () => {
+                for (let i = 0; i < 3; i++) {
+                    window.__layoutTestFrame();
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+            };
+            window.__mdEditor.focus();
+            window.__mdEditor.select(source.length);
+            await settle();
+            const lines = [];
+            for (let i = 0; i < 3; i++) {
+                document.querySelector('.cm-content').dispatchEvent(new KeyboardEvent('keydown', {
+                    key: 'ArrowUp', code: 'ArrowUp', bubbles: true, cancelable: true
+                }));
+                await settle();
+                const selection = window.getSelection();
+                lines.push(window.__mdEditor.getLinkSelection(false).from);
+            }
+            window.__mdEditor.exec('bold');
+            return { markdown: window.__mdEditor.getMarkdown(), lines };
+            """, arguments: ["source": source], in: nil, contentWorld: .page)
+        let values = try XCTUnwrap(result as? [String: Any])
+        let markdown = try XCTUnwrap(values["markdown"] as? String)
+        let inserted = try XCTUnwrap(markdown.range(of: "****"))
+        let offset = markdown.distance(from: markdown.startIndex, to: inserted.lowerBound)
+        XCTAssertEqual(values["lines"] as? [Int], [10, 8, 7])
+        XCTAssertTrue((5...7).contains(offset), "Caret landed at \(offset), lines: \(values["lines"] ?? "missing")")
+    }
+
     func testParagraphAndHeadingAlignment() async throws {
         try await check(Fixture(name: "paragraphs-headings", markdown: """
             # First heading
@@ -202,7 +318,8 @@ final class EditorPreviewLayoutTests: XCTestCase {
             let host = HostBridge()
             let reader = WebViewLayoutHarness(html: readerHTML, width: width, isEditor: false, zoom: zoom, height: fixture.height, messageHandler: host)
             let editor = WebViewLayoutHarness(html: editorHTML, width: initial == nil ? width : 1100,
-                                              isEditor: true, zoom: zoom, height: fixture.height, messageHandler: host)
+                                              isEditor: true, zoom: zoom, height: fixture.height, messageHandler: host,
+                                              schemeHandlers: ["md-asset": EditorMathAssets()])
             defer { reader.close(); editor.close() }
             var readLayout: WebViewLayoutHarness.Layout?
             var editLayout: WebViewLayoutHarness.Layout?

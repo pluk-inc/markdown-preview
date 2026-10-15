@@ -10,6 +10,33 @@ import Foundation
 // `nonisolated` matters: the targets default to MainActor isolation, and
 // rendering runs off the main actor.
 nonisolated extension MarkdownHTML {
+    static let mathStylesheet = """
+    .math-display {
+        margin: 1.2em 0 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+    .math-display .katex-display {
+        margin: 0;
+    }
+    .math-error {
+        color: #b00020;
+        background: var(--code-bg);
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-family: \(codeFontFamily);
+        font-size: 0.88em;
+        white-space: pre-wrap;
+    }
+    :root[data-mdp-color-scheme="dark"] .math-error {
+        color: #ff6e6e;
+    }
+    @media (prefers-color-scheme: dark) {
+        :root:not([data-mdp-color-scheme="light"]) .math-error { color: #ff6e6e; }
+    }
+    .katex { direction: ltr !important; unicode-bidi: isolate; }
+    """
+
     // Shared document typography, spacing, and controls. Logical positioning
     // keeps lists, quotations, and table alignment consistent in both directions.
     /// The shared document stylesheet plus the code highlighting class rules.
@@ -597,30 +624,7 @@ nonisolated extension MarkdownHTML {
         font-family: \(codeFontFamily);
         font-size: 0.88em;
     }
-    .math-display {
-        margin: 1.2em 0 0;
-        overflow-x: auto;
-        overflow-y: hidden;
-    }
-    .math-display .katex-display {
-        margin: 0;
-    }
-    .math-error {
-        color: #b00020;
-        background: var(--code-bg);
-        padding: 4px 8px;
-        border-radius: 6px;
-        font-family: \(codeFontFamily);
-        font-size: 0.88em;
-        white-space: pre-wrap;
-    }
-    :root[data-mdp-color-scheme="dark"] .math-error {
-        color: #ff6e6e;
-    }
-    @media (prefers-color-scheme: dark) {
-        :root:not([data-mdp-color-scheme="light"]) .math-error { color: #ff6e6e; }
-    }
-    .katex { direction: ltr !important; unicode-bidi: isolate; }
+    \(mathStylesheet)
 
     blockquote {
         position: relative;

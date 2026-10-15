@@ -1222,4 +1222,120 @@ check("search reveals and highlights Mermaid source", blockFindHost.querySelecto
 check("searching rendered blocks preserves source", blockFindEditor.getMarkdown() === blockFindSource)
 blockFindEditor.destroy()
 
+
+// Exercise the shipped KaTeX and the same rendering function used in both modes.
+const { createRequire } = await import("node:module")
+const require = createRequire(import.meta.url)
+globalThis.katex = require("../../md-preview/Vendor/KaTeX/katex.min.js")
+const mathSwift = readFileSync(new URL("../../md-preview/Rendering/MarkdownHTML+KaTeX.swift", import.meta.url), "utf8")
+const renderFunction = mathSwift.match(/static let mathElementRenderer = """([\s\S]*?)"""/)[1]
+dom.window.__mdRenderMathElement = new Function(`${renderFunction}; return renderMathElement`)()
+let mathLoads = 0
+dom.window.__mdLoadMath = () => { mathLoads++; return Promise.resolve() }
+const mathHost = document.createElement("div")
+document.body.append(mathHost)
+const mathSource = "Intro\n\nInline $x_1 + \\frac{1}{2}$ and $y^2$.\n\n$$ \\sum_{i=1}^n i $$\n\n$$\n\\begin{aligned}\nx &= 1 \\\\\n\ny &= 2\n\\end{aligned}\n$$\n\nEnd"
+const mathEditor = dom.window.MDEditor.create(mathHost, mathSource, {})
+await new Promise(resolve => setTimeout(resolve, 30))
+check("inline and multiline dollar math render with bundled KaTeX", mathHost.querySelectorAll('.katex').length === 4)
+check("display math uses KaTeX display mode", mathHost.querySelectorAll('.katex-display').length === 2)
+check("math rendering preserves exact Markdown", mathEditor.getMarkdown() === mathSource)
+const unchangedMath = mathHost.querySelector('.math')
+const loadCount = mathLoads
+mathEditor.select(mathSource.length)
+mathEditor.insertTextAt('!', mathSource.length, mathSource.length)
+await new Promise(resolve => setTimeout(resolve, 10))
+check("unrelated typing retains math DOM without typesetting again", mathHost.querySelector('.math') === unchangedMath && mathLoads === loadCount)
+mathEditor.focus()
+mathEditor.select(mathSource.indexOf('frac') + 2)
+check("entering a formula reveals editable TeX", mathHost.querySelectorAll('.math').length === 3 && mathHost.textContent.includes('frac'))
+check("active TeX is syntax highlighted", !!mathHost.querySelector('.hl-keyword, .hl-string, .hl-type, .hl-number'))
+mathEditor.select(mathEditor.getMarkdown().length)
+await new Promise(resolve => setTimeout(resolve, 10))
+check("leaving a formula restores its preview", mathHost.querySelectorAll('.katex').length === 4)
+mathEditor.find('frac')
+check("find reveals math source", mathHost.textContent.includes('frac') && !!mathHost.querySelector('.cm-find-current'))
+mathEditor.destroy()
+
+for (const [label, source, count] of [
+  ['adjacent inline formulas', '$x$$y$', 2],
+  ['unclosed double delimiter', '$$x$', 0],
+  ['currency', 'Pay $5 and $10', 0],
+  ['escaped dollar', String.raw`\$x$`, 0],
+  ['inline code', '`$x$` and ``$$x$$``', 0],
+  ['fenced code', '```text\n$x$\n$$y$$\n```', 0],
+  ['unclosed inline', 'Before $x_1 and after', 0],
+  ['unclosed display', '$$\nx_1\n\nFollowing text', 0],
+  ['empty delimiters', '$$$$', 0],
+  ['invalid TeX', String.raw`$\notARealCommand{x}$`, 1],
+  ['fenced math', '```math\nx^2\n```', 1],
+  ['quoted display math', '> $$\n> x^2\n> $$', 1],
+  ['unclosed fenced math', '```math\nx^2', 0],
+  ['table math', '| Formula |\n| --- |\n| $x^2$ |', 1],
+]) {
+  const host = document.createElement('div')
+  document.body.append(host)
+  const instance = dom.window.MDEditor.create(host, source, {})
+  await new Promise(resolve => setTimeout(resolve, 10))
+  check(`math edge case: ${label}`, host.querySelectorAll('.katex, .katex-error').length === count
+    && instance.getMarkdown() === source)
+  instance.destroy()
+  host.remove()
+}
+
+const firstMathHost = document.createElement('div')
+document.body.append(firstMathHost)
+const firstMath = window.MDEditor.create(firstMathHost, '$x^2$ after', {})
+await new Promise(resolve => setTimeout(resolve, 10))
+firstMathHost.querySelector('.math').dispatchEvent(new dom.window.MouseEvent('mousedown', {
+  bubbles: true, cancelable: true,
+}))
+await new Promise(resolve => setTimeout(resolve, 20))
+check('clicking a formula at document start reveals source safely', !firstMathHost.querySelector('.math')
+  && firstMath.getMarkdown() === '$x^2$ after')
+firstMath.destroy()
+firstMathHost.remove()
+
+const typedMathHost = document.createElement('div')
+document.body.append(typedMathHost)
+const typedMath = window.MDEditor.create(typedMathHost, 'Intro\n\n', {})
+const noMathLoads = mathLoads
+check('plain editor does not load KaTeX', !typedMathHost.querySelector('.math') && mathLoads === noMathLoads)
+typedMath.insertTextAt('$$\nx^2\n$$\n\nEnd', 7, 7)
+await new Promise(resolve => setTimeout(resolve, 10))
+check('typing the first formula activates math without reload', typedMathHost.querySelectorAll('.katex').length === 1)
+typedMath.focus()
+await new Promise(resolve => setTimeout(resolve, 550))
+typedMath.insertTextAt('', 14, 16)
+check('deleting closing delimiters restores visible source', !typedMathHost.querySelector('.math')
+  && typedMathHost.textContent.includes('End') && typedMath.getMarkdown().includes('x^2'))
+typedMathHost.querySelector('.cm-content').dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+  key: 'z', code: 'KeyZ', ctrlKey: true, bubbles: true, cancelable: true,
+}))
+typedMath.select(typedMath.getMarkdown().length)
+await new Promise(resolve => setTimeout(resolve, 10))
+check('undo restores the formula preview', typedMathHost.querySelectorAll('.katex').length === 1)
+typedMath.destroy()
+typedMathHost.remove()
+
+
+// Exercise the production loader without requiring a network or duplicating it.
+const editorSwift = readFileSync(new URL('../../md-preview/Features/Editor/EditorHTML.swift', import.meta.url), 'utf8')
+const mathLoader = editorSwift.match(/window.__mdLoadMath = function \(\) \{[\s\S]*?\n        \};/)[0]
+dom.window.eval(mathLoader
+  .replace(/css.href = .*?;/, "css.href = 'math-test.css';")
+  .replace(/script.src = .*?;/, "script.src = 'math-test.js';"))
+const failedLoad = window.__mdLoadMath()
+const caughtFailure = failedLoad.catch(error => error)
+const loadError = new dom.window.Event('error')
+document.querySelector('link[href="math-test.css"]').dispatchEvent(loadError)
+check('math loader propagates asset failures', await caughtFailure === loadError)
+check('math loader removes failed asset elements', !document.querySelector('[href="math-test.css"], [src="math-test.js"]'))
+const retryLoad = window.__mdLoadMath()
+check('math loader retries after failure', retryLoad !== failedLoad)
+document.querySelector('link[href="math-test.css"]').dispatchEvent(new dom.window.Event('load'))
+document.querySelector('script[src="math-test.js"]').dispatchEvent(new dom.window.Event('load'))
+await retryLoad
+check('math loader caches successful loads', window.__mdLoadMath() === retryLoad)
+
 process.exit(failures ? 1 : 0)

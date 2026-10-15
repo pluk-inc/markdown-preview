@@ -78,6 +78,16 @@ nonisolated enum EditorHTML {
             height: 100%;
             box-sizing: border-box;
         }
+        \(MarkdownHTML.mathStylesheet)
+        /* Source separator lines own block spacing in CodeMirror. */
+        #editor .math-display { margin-top: 0; }
+        /* Nested math shares a CodeMirror line with the hidden quote/list
+           prefix. A block-level div would add empty line boxes around it. */
+        #editor .cm-line .math-display {
+            display: inline-block;
+            width: 100%;
+            vertical-align: top;
+        }
         .cm-editor { height: 100%; outline: none; }
         .cm-editor.cm-focused { outline: none; }
         /* CodeMirror injects its base theme into <head> at runtime — after
@@ -673,6 +683,37 @@ nonisolated enum EditorHTML {
         }
         </script>
         """ : "")
+        <script>
+        \(MarkdownHTML.mathElementRenderer)
+        window.__mdRenderMathElement = renderMathElement;
+        // Loaded once, on the first rendered formula, including newly typed math.
+        window.__mdLoadMath = function () {
+            if (!window.__mdMathLoading) {
+                const css = document.createElement('link');
+                css.rel = 'stylesheet';
+                css.href = '\(MarkdownAssetScheme.vendorURL("katex.min.css"))';
+                const styleReady = new Promise((resolve, reject) => {
+                    css.onload = resolve;
+                    css.onerror = reject;
+                });
+                document.head.appendChild(css);
+                const script = document.createElement('script');
+                script.src = '\(MarkdownAssetScheme.vendorURL("katex.min.js"))';
+                const scriptReady = new Promise((resolve, reject) => {
+                    script.onload = resolve;
+                    script.onerror = reject;
+                });
+                document.head.appendChild(script);
+                window.__mdMathLoading = Promise.all([styleReady, scriptReady]).catch((error) => {
+                    css.remove();
+                    script.remove();
+                    window.__mdMathLoading = null;
+                    throw error;
+                });
+            }
+            return window.__mdMathLoading;
+        };
+        </script>
         <script>\(editorJavaScript)</script>
         <script>
         (function () {
@@ -723,6 +764,7 @@ nonisolated enum EditorHTML {
                             line: \(MarkdownHTML.sourceLineHeight),
                             blankGap: \(MarkdownHTML.blankLineGap),
                             paragraph: \(MarkdownHTML.paragraphSpacing),
+                            math: \(MarkdownHTML.bodyFontSize * 1.2),
                             quote: \(MarkdownHTML.quoteSpacing),
                             alert: \(MarkdownHTML.largeBlockSpacing),
                             table: \(MarkdownHTML.largeBlockSpacing),

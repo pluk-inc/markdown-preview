@@ -26,10 +26,29 @@ nonisolated extension MarkdownHTML {
     </script>
     """
 
+    /// Shared by reading mode and the editor, including error handling.
+    static let mathElementRenderer = """
+    function renderMathElement(el, tex, display) {
+        try {
+            katex.render(tex, el, {
+                displayMode: display,
+                throwOnError: false,
+                output: 'htmlAndMathml'
+            });
+            el.dataset.mathDone = '1';
+        } catch (err) {
+            el.classList.add('math-error');
+            el.textContent = String((err && err.message) || err);
+            el.dataset.mathDone = '1';
+        }
+    }
+    """
+
     /// JS body of `function renderMath()`. Shared between inline and lazy
     /// modes — only the surrounding wiring (immediate run vs. deferred-on-load)
     /// differs.
     private static let katexRenderMathBody = """
+    \(mathElementRenderer)
     function renderMath() {
         document.querySelectorAll('.math').forEach((el) => {
             if (el.dataset.mathDone === '1') return;
@@ -38,18 +57,7 @@ nonisolated extension MarkdownHTML {
             // Pre-render source, stashed so MdPreview.update can pair
             // unchanged math with its finished output during DOM diffs.
             el.__mdSrc = tex;
-            try {
-                katex.render(tex, el, {
-                    displayMode: display,
-                    throwOnError: false,
-                    output: 'htmlAndMathml'
-                });
-                el.dataset.mathDone = '1';
-            } catch (err) {
-                el.classList.add('math-error');
-                el.textContent = String((err && err.message) || err);
-                el.dataset.mathDone = '1';
-            }
+            renderMathElement(el, tex, display);
         });
         window.dispatchEvent(new Event('md-preview-math-rendered'));
     }
