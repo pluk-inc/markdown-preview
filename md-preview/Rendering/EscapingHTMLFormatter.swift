@@ -1346,6 +1346,7 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     }
 
     /// Upper bound of `data-mdp-digits`; the stylesheet has one rule per value.
+    /// Mirrored by `MAX_MARKER_DIGITS` in `scripts/editor-bundle/entry-cm.js`.
     static let maximumMarkerDigits = 9
 
     mutating func visitUnorderedList(_ unorderedList: UnorderedList) {

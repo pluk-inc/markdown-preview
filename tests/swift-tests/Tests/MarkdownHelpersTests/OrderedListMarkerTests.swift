@@ -124,5 +124,41 @@ final class OrderedListMarkerTests: XCTestCase {
         // Item text starts at the same column for every item of a list.
         XCTAssertEqual(try XCTUnwrap(try marker("item99")["textX"] as? Double),
                        try XCTUnwrap(try marker("item100")["textX"] as? Double), accuracy: 0.5)
+
+        // The caret's own marker stays editable source in the same box: same
+        // width, one line, and the item text does not shift on activation.
+        let active = try await harness.webView.callAsyncJavaScript("""
+            const markdown = window.__mdEditor.getMarkdown();
+            const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+            // A command-line test has no key window, so the document never reports focus.
+            document.hasFocus = () => true;
+            const measure = async (needle) => {
+                window.__mdEditor.select(markdown.indexOf(needle) + needle.length);
+                // Source markers are revealed only while the editor has focus.
+                window.__mdEditor.focus();
+                for (let frame = 0; frame < 12; frame++) { window.__layoutTestFrame(); await delay(20); }
+                const mark = needle.split(' ')[0];
+                const source = [...document.querySelectorAll('.cm-md-ordered-source')].find(el => el.textContent === mark);
+                if (!source) throw new Error('No editable marker for ' + needle);
+                const rect = source.getBoundingClientRect();
+                const line = source.closest('.cm-line');
+                return { width: rect.width, height: rect.height,
+                         lineHeight: parseFloat(getComputedStyle(line).lineHeight), textX: rect.right };
+            };
+            return { active100: await measure('100. Item 100'), active1000: await measure('1000. Big c') };
+            """, arguments: [:], in: nil, contentWorld: .page) as? [String: Any]
+        func activeMarker(_ key: String) throws -> [String: Any] { try XCTUnwrap(try XCTUnwrap(active)[key] as? [String: Any]) }
+        let active100 = try activeMarker("active100")
+        XCTAssertEqual(try XCTUnwrap(active100["width"] as? Double), 2.1 * em + ch, accuracy: 0.5)
+        XCTAssertEqual(try XCTUnwrap(active100["height"] as? Double), try XCTUnwrap(active100["lineHeight"] as? Double),
+                       accuracy: 0.5, "editable 100. wrapped onto a second line")
+        XCTAssertEqual(try XCTUnwrap(active100["textX"] as? Double),
+                       try XCTUnwrap(try marker("item100")["textX"] as? Double), accuracy: 0.5, "item text shifted on activation")
+        let active1000 = try activeMarker("active1000")
+        XCTAssertEqual(try XCTUnwrap(active1000["width"] as? Double), 2.1 * em + 2 * ch, accuracy: 0.5)
+        XCTAssertEqual(try XCTUnwrap(active1000["height"] as? Double), try XCTUnwrap(active1000["lineHeight"] as? Double),
+                       accuracy: 0.5, "editable 1000. wrapped onto a second line")
+        XCTAssertEqual(try XCTUnwrap(active1000["textX"] as? Double),
+                       try XCTUnwrap(try marker("big1000")["textX"] as? Double), accuracy: 0.5, "item text shifted on activation")
     }
 }

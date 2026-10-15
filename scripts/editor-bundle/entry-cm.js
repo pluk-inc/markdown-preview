@@ -1347,11 +1347,25 @@ const activeOrderedDeco = (extraDigits) => {
   }
   return deco
 }
+// Mirrors EscapingHTMLFormatter.maximumMarkerDigits: the preview stylesheet
+// has one gutter rule per digit count up to this cap.
+const MAX_MARKER_DIGITS = 9
 // Digits past the second in the widest marker of an ordered list. The editor
 // shows source markers as written, so it measures those rather than the
 // numbers the preview would count to; for a list numbered in sequence both
-// agree.
-const orderedListExtraDigits = (listNode) => {
+// agree. Decorations rebuild on every caret move and scroll, so the answer
+// is remembered per list for the current syntax tree; the tree object only
+// changes when the document does.
+let orderedDigitsTree = null
+const orderedDigitsCache = new Map()
+const orderedListExtraDigits = (listNode, tree) => {
+  if (tree !== orderedDigitsTree) {
+    orderedDigitsTree = tree
+    orderedDigitsCache.clear()
+  }
+  const key = `${listNode.from}:${listNode.to}`
+  const cached = orderedDigitsCache.get(key)
+  if (cached !== undefined) return cached
   let widest = 0
   for (let item = listNode.firstChild; item; item = item.nextSibling) {
     if (item.name !== "ListItem") continue
@@ -1360,7 +1374,9 @@ const orderedListExtraDigits = (listNode) => {
     // The mark includes its "." or ")" delimiter.
     widest = Math.max(widest, mark.to - mark.from - 1)
   }
-  return Math.max(0, Math.min(widest, 9) - 2)
+  const extraDigits = Math.max(0, Math.min(widest, MAX_MARKER_DIGITS) - 2)
+  orderedDigitsCache.set(key, extraDigits)
+  return extraDigits
 }
 const hrDeco = Decoration.replace({ widget: new RuleWidget() })
 const ruleLine = Decoration.line({ class: "cm-md-rule-line" })
@@ -1991,9 +2007,10 @@ function buildDecorations(view, detectedCodeCache) {
   const quoteStack = []
   const quoteLines = new Map()
 
+  const tree = syntaxTree(state)
   for (const { from, to } of view.visibleRanges) {
     let contentDocumentDepth = null
-    syntaxTree(state).iterate({
+    tree.iterate({
       from, to,
       enter: (node) => {
         depth++
@@ -2270,7 +2287,7 @@ function buildDecorations(view, detectedCodeCache) {
         // --- Lists --------------------------------------------------------
         if (name === "BulletList" || name === "OrderedList") {
           listStack.push(node.from)
-          listExtraDigits.push(name === "OrderedList" ? orderedListExtraDigits(node.node) : 0)
+          listExtraDigits.push(name === "OrderedList" ? orderedListExtraDigits(node.node, tree) : 0)
           return
         }
         if (name === "ListItem") {
