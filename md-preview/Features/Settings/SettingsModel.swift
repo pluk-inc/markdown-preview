@@ -27,8 +27,18 @@ final class SettingsModel {
         didSet {
             guard !isRestoringExternalValues, appLanguage != oldValue else { return }
             AppLanguageSetting.save(appLanguage)
+            // Saved either way; the restart offer is only for a selection that
+            // loads a different language than this process is showing.
+            guard AppLanguageSetting.relaunchChangesLanguage(selection: appLanguage,
+                                                             loadedLanguage: loadedLanguage) else { return }
+            appDelegate?.offerRelaunchForLanguageChange()
         }
     }
+
+    /// The language this process launched in. The picker compares against
+    /// it, not the saved selection: choosing Later keeps the saved value
+    /// ahead of the running UI until the next launch.
+    private let loadedLanguage = AppLanguageSetting.loadedLanguage()
 
     var appearance: AppearanceMode {
         didSet {

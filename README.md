@@ -68,7 +68,7 @@ Or grab the latest signed and notarized DMG from the [Releases](https://github.c
 
 ## Features
 
-**App language:** Choose **Settings → General → Language** to use a bundled translation independently of your system language. Quit and reopen the app to apply the choice to settings, menus, and document controls. **System Default** removes the app override and follows macOS again. This preference persists across launches and affects only the app; Quick Look previews continue to use their system-selected language. Available languages are discovered from the app’s bundled translations.
+**App language:** Choose **Settings → General → Language** to use a bundled translation independently of your system language. The app offers to restart right away so the choice applies to settings, menus, and document controls; choose **Later** to keep working, and it applies the next time you open the app. **System Default** removes the app override and follows macOS again. This preference persists across launches and affects only the app; Quick Look previews continue to use their system-selected language. Available languages are discovered from the app’s bundled translations.
 
 Settings groups window behavior, saving, and external tools under **General**. **Reading** contains text size, content width, text alignment, Markdown line breaks, and outline highlighting. **Appearance** contains themes and their font, spacing, and color customization; resetting a theme leaves global Reading preferences unchanged.
 

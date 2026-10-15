@@ -37,4 +37,39 @@ enum AppLanguageSetting {
             defaults.set([language], forKey: defaultsKey)
         }
     }
+
+    /// The bundled language this process loaded its resources in. CFBundle
+    /// fixes the main bundle's language list at launch, so this stays the same
+    /// however the saved selection changes afterwards.
+    static func loadedLanguage(in bundle: Bundle = .main) -> String {
+        bundle.preferredLocalizations.first ?? systemDefault
+    }
+
+    /// The user's system-wide language list, read from the global domain so
+    /// an app override never shadows it.
+    static func systemLanguagePreferences(defaults: UserDefaults = .standard) -> [String] {
+        defaults.persistentDomain(forName: UserDefaults.globalDomain)?[defaultsKey] as? [String] ?? []
+    }
+
+    /// The bundled language a selection loads on the next launch: the override
+    /// itself, or the best match for the system's list when there is none.
+    static func resolvedLanguage(for selection: String,
+                                 languages: [String] = availableLanguages(),
+                                 systemPreferences: [String] = systemLanguagePreferences()) -> String {
+        guard selection == systemDefault else { return selection }
+        return Bundle.preferredLocalizations(from: languages, forPreferences: systemPreferences).first
+            ?? languages.first
+            ?? systemDefault
+    }
+
+    /// True when only a relaunch can show the selection: it loads a language
+    /// other than the one this process is showing. Re-selecting the loaded
+    /// language, or a System Default that resolves to it, changes nothing.
+    static func relaunchChangesLanguage(selection: String,
+                                        loadedLanguage: String,
+                                        languages: [String] = availableLanguages(),
+                                        systemPreferences: [String] = systemLanguagePreferences()) -> Bool {
+        resolvedLanguage(for: selection, languages: languages, systemPreferences: systemPreferences)
+            != loadedLanguage
+    }
 }

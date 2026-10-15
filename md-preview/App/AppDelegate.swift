@@ -132,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var isTerminationSaveInProgress = false
     private var pendingTerminationSaveCount = 0
     private var terminationSaveFailed = false
+    private let relauncher = AppRelauncher()
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         LaunchSignposts.event("willFinishLaunching")
@@ -223,7 +224,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let languageChanged = model.appLanguage != AppLanguageSetting.selection()
         guard changed || languageChanged else { return }
         model.refreshFromExternalSources()
-        // Language changes take effect on relaunch; only refresh their picker now.
+        // A language another instance saved applies on relaunch; only refresh
+        // the picker. The restart offer belongs to the instance that changed it.
         guard changed else { return }
         // Repaint only when another instance changed the shared reading look.
         applyAppearanceMode(ThemePreset.applied().requiredAppearance ?? AppearanceMode.current,
@@ -327,6 +329,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        relauncher.terminationIsStarting()
         if isTerminationSaveInProgress {
             return .terminateLater
         }
@@ -355,6 +358,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         return .terminateLater
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        relauncher.launchNewInstanceIfRequested()
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
@@ -409,6 +416,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let controller = settingsWindowController ?? SettingsWindowController()
         settingsWindowController = controller
         controller.show(pane: pane)
+    }
+
+    /// Offers to restart now, so a new language shows up right away rather
+    /// than on the next manual launch. Deferred a turn: a modal opened inside
+    /// a SwiftUI binding setter would re-enter the view update that set it.
+    func offerRelaunchForLanguageChange() {
+        DispatchQueue.main.async { [weak self] in
+            self?.presentLanguageRelaunchAlert()
+        }
+    }
+
+    /// Shown in the language the process loaded, since the new one is not
+    /// loaded yet. Later keeps the saved choice for the next manual launch,
+    /// which the picker's footer still describes.
+    private func presentLanguageRelaunchAlert() {
+        let alert = NSAlert()
+        alert.messageText = L("Restart Markdown Preview to change the language?")
+        alert.informativeText = L("The new language applies to menus, settings, and document controls after the app restarts. Quick Look previews keep their system language.")
+        alert.addButton(withTitle: L("Restart Now"))
+        alert.addButton(withTitle: L("Later"))
+
+        let respond: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+            guard response == .alertFirstButtonReturn else { return }
+            self?.relauncher.relaunch()
+        }
+        if let window = settingsWindowController?.window, window.isVisible {
+            alert.beginSheetModal(for: window, completionHandler: respond)
+        } else {
+            respond(alert.runModal())
+        }
     }
 
     /// Applies an appearance chosen in Settings, keeping the View menu's check

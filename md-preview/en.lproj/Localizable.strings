@@ -352,6 +352,10 @@
 "Language" = "Language";
 "System Default" = "System Default";
 "Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews." = "Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews.";
+"Restart Markdown Preview to change the language?" = "Restart Markdown Preview to change the language?";
+"The new language applies to menus, settings, and document controls after the app restarts. Quick Look previews keep their system language." = "The new language applies to menus, settings, and document controls after the app restarts. Quick Look previews keep their system language.";
+"Restart Now" = "Restart Now";
+"Later" = "Later";
 
 /* Settings organization */
 "Saving" = "Saving";
