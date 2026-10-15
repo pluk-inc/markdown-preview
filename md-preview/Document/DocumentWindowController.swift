@@ -495,7 +495,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// thread and pushed the restored windows out by that much (about
     /// 1.25 s to the first window instead of 0.9 s, measured on macOS 27).
     private func pumpRunLoopForWebKitStartup() {
-        guard !Self.didPumpForFirstWindow else { return }
+        // Checked first, so a window created after launch never claims the
+        // one-time pump from one the launch itself is about to open.
+        guard (NSApp.delegate as? AppDelegate)?.hasFinishedLaunching == false,
+              !Self.didPumpForFirstWindow else { return }
         Self.didPumpForFirstWindow = true
         guard (NSApp.delegate as? AppDelegate)?.hasFinishedLaunching == false else { return }
         guard let split = documentWindow.contentViewController as? MainSplitViewController else { return }
