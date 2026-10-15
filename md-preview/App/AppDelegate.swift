@@ -127,7 +127,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var isDocumentPromptScheduled = false
     private var documentPromptScheduleGeneration = 0
     private var didReceiveOpenURLsDuringLaunch = false
-    private var hasFinishedLaunching = false
+    /// True once `applicationDidFinishLaunching` has run. Window code reads
+    /// it to tell a document opened by the launch itself from one created
+    /// afterwards, such as a window AppKit restores.
+    private(set) var hasFinishedLaunching = false
     private var pendingOpenURLCount = 0
     private var isTerminationSaveInProgress = false
     private var pendingTerminationSaveCount = 0
