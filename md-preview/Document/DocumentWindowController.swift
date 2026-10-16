@@ -25,7 +25,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     enum DiskFileState {
-        case unchanged
+        case unchanged(String)
         case modified(String)
         case missing
         case unreadable

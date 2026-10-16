@@ -387,6 +387,20 @@
 /* Table fullscreen control. */
 "Expand Table" = "展开表格";
 
+/* Save conflict comparison */
+"Previous Change" = "上一处改动";
+"Next Change" = "下一处改动";
+"The comparison could not be displayed. Cancel to return to your unsaved draft." = "无法显示差异。请取消以返回未保存的草稿。";
+
+/* Save conflict comparison controls */
+"Show Whole File" = "显示完整文件";
+"On Disk" = "磁盘版本";
+"Your Draft" = "您的草稿";
+"$ unchanged lines" = "$ 行未变化内容";
+"None" = "无";
+"Line endings differ. On disk: %1$@; draft: %2$@." = "换行符不同。磁盘版本：%1$@；草稿：%2$@。";
+"This document changed on disk again" = "磁盘上的文稿再次被更改";
+
 /* Additional settings, navigation, formatting, and export strings. */
 "GitHub Project" = "GitHub 项目";
 "Bold Text" = "粗体文本";
@@ -414,7 +428,6 @@
 "Text Style" = "文本样式";
 "Lists" = "列表";
 "More Formatting" = "更多格式";
-"None" = "无";
 "PNG Image" = "PNG 图像";
 "Wrap code" = "代码换行";
 "Unwrap code" = "取消代码换行";

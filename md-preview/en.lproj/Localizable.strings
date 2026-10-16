@@ -387,6 +387,20 @@
 /* Table fullscreen control. */
 "Expand Table" = "Expand Table";
 
+/* Save conflict comparison */
+"Previous Change" = "Previous Change";
+"Next Change" = "Next Change";
+"The comparison could not be displayed. Cancel to return to your unsaved draft." = "The comparison could not be displayed. Cancel to return to your unsaved draft.";
+
+/* Save conflict comparison controls */
+"Show Whole File" = "Show Whole File";
+"On Disk" = "On Disk";
+"Your Draft" = "Your Draft";
+"$ unchanged lines" = "$ unchanged lines";
+"None" = "None";
+"Line endings differ. On disk: %1$@; draft: %2$@." = "Line endings differ. On disk: %1$@; draft: %2$@.";
+"This document changed on disk again" = "This document changed on disk again";
+
 /* Additional settings, navigation, formatting, and export strings. */
 "GitHub Project" = "GitHub Project";
 "Bold Text" = "Bold Text";
@@ -414,7 +428,6 @@
 "Text Style" = "Text Style";
 "Lists" = "Lists";
 "More Formatting" = "More Formatting";
-"None" = "None";
 "PNG Image" = "PNG Image";
 "Wrap code" = "Wrap code";
 "Unwrap code" = "Unwrap code";

@@ -16,3 +16,12 @@ const result = await build({
 // and is byte-for-byte reproducible through `npm run build`.
 const output = result.outputFiles[0].text.replace(/[ \t]+$/gm, "")
 await writeFile(outputURL, output)
+
+// Keep the conflict viewer out of the normal editor's startup path.
+await build({
+  entryPoints: [fileURLToPath(new URL("conflict-diff.js", import.meta.url))],
+  outfile: fileURLToPath(new URL("../../md-preview/Vendor/CodeMirror/mdconflict.min.js", import.meta.url)),
+  bundle: true,
+  minify: true,
+  format: "iife",
+})

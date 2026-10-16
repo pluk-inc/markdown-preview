@@ -562,7 +562,7 @@ extension DocumentWindowController {
         guard let url, let expectedMarkdown else { return .unreadable }
         do {
             let diskMarkdown = try String(contentsOf: url, encoding: .utf8)
-            return diskMarkdown == expectedMarkdown ? .unchanged : .modified(diskMarkdown)
+            return diskMarkdown == expectedMarkdown ? .unchanged(diskMarkdown) : .modified(diskMarkdown)
         } catch {
             return FileManager.default.fileExists(atPath: url.path) ? .unreadable : .missing
         }
@@ -582,8 +582,8 @@ extension DocumentWindowController {
             }
         }
         switch diskState {
-        case .unchanged:
-            persistEditedMarkdown(text, to: url, completion: completion)
+        case let .unchanged(snapshot):
+            persistEditedMarkdown(text, to: url, expectedMarkdown: snapshot, completion: completion)
         case let .modified(externalMarkdown):
             presentExternalEditConflict(localMarkdown: text,
                                         externalMarkdown: externalMarkdown,
@@ -663,42 +663,51 @@ extension DocumentWindowController {
         localMarkdown: String,
         externalMarkdown: String,
         fileURL: URL,
+        changedAgain: Bool = false,
         completion: @escaping (EditedMarkdownSaveResult) -> Void
     ) {
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = NSLocalizedString(
-            "This document changed on disk",
-            comment: "External edit conflict alert title"
-        )
-        alert.informativeText = String(
-            format: NSLocalizedString(
-                "Another app changed %@. Cancel keeps your changes unsaved. Choose which version to keep.",
-                comment: "External edit conflict alert message"
-            ),
-            fileURL.lastPathComponent
-        )
-        alert.addButton(withTitle: NSLocalizedString("Keep My Changes", comment: "Conflict alert button"))
-        alert.addButton(withTitle: NSLocalizedString("Reload from Disk", comment: "Conflict alert button"))
-        alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Alert button"))
+        guard localMarkdown != externalMarkdown else {
+            completion(.saved)
+            return
+        }
+        let alert = SaveConflictSheet.make(localMarkdown: localMarkdown,
+                                           externalMarkdown: externalMarkdown,
+                                           fileName: fileURL.lastPathComponent,
+                                           changedAgain: changedAgain)
         alert.beginSheetModal(for: documentWindow) { [weak self] response in
             guard let self,
                   self.currentFileURL?.standardizedFileURL == fileURL.standardizedFileURL else {
                 completion(.cancelled)
                 return
             }
+            guard response == .alertFirstButtonReturn || response == .alertSecondButtonReturn else {
+                completion(.cancelled)
+                return
+            }
+            // A decision applies only to the version the user compared. An
+            // agent may have written again while the sheet was open.
+            let latestMarkdown: String
+            do {
+                latestMarkdown = try String(contentsOf: fileURL, encoding: .utf8)
+            } catch {
+                completion(.cancelled)
+                self.presentError(error)
+                return
+            }
+            guard latestMarkdown == externalMarkdown else {
+                self.presentExternalEditConflict(localMarkdown: localMarkdown,
+                                                 externalMarkdown: latestMarkdown,
+                                                 fileURL: fileURL,
+                                                 changedAgain: true,
+                                                 completion: completion)
+                return
+            }
             switch response {
             case .alertFirstButtonReturn:
-                self.persistEditedMarkdown(localMarkdown, to: fileURL, completion: completion)
+                self.persistEditedMarkdown(localMarkdown, to: fileURL,
+                                           expectedMarkdown: externalMarkdown, completion: completion)
             case .alertSecondButtonReturn:
-                // The sheet may remain open while another editor writes
-                // again. Reload the latest bytes instead of the snapshot
-                // captured when the conflict was first detected.
-                if let latestMarkdown = try? String(contentsOf: fileURL, encoding: .utf8) {
-                    completion(.reloaded(latestMarkdown))
-                } else {
-                    completion(.reloaded(externalMarkdown))
-                }
+                completion(.reloaded(latestMarkdown))
             default:
                 completion(.cancelled)
             }
@@ -740,6 +749,7 @@ extension DocumentWindowController {
     private func persistEditedMarkdown(
         _ text: String,
         to url: URL,
+        expectedMarkdown: String? = nil,
         completion: @escaping (EditedMarkdownSaveResult) -> Void
     ) {
         // Conflict and permission sheets can outlive a rename or navigation.
@@ -747,6 +757,13 @@ extension DocumentWindowController {
         guard currentFileURL?.standardizedFileURL == url.standardizedFileURL else {
             completion(.cancelled)
             return
+        }
+        if let expectedMarkdown {
+            let state = diskFileState(for: url, expectedMarkdown: expectedMarkdown)
+            guard case .unchanged = state else {
+                saveEditedMarkdown(text, diskState: state, completion: completion)
+                return
+            }
         }
         if write(text, to: url) {
             completion(.saved)
@@ -772,6 +789,13 @@ extension DocumentWindowController {
                   self.currentFileURL?.standardizedFileURL == url.standardizedFileURL else {
                 completion(.cancelled)
                 return
+            }
+            if chosen.standardizedFileURL == url.standardizedFileURL, let expectedMarkdown {
+                let state = self.diskFileState(for: url, expectedMarkdown: expectedMarkdown)
+                guard case .unchanged = state else {
+                    self.saveEditedMarkdown(text, diskState: state, completion: completion)
+                    return
+                }
             }
             let ok = self.write(text, to: chosen)
             if ok, chosen.standardizedFileURL != url.standardizedFileURL {

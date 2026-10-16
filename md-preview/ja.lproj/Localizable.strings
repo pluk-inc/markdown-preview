@@ -387,6 +387,18 @@
 /* Table fullscreen control. */
 "Expand Table" = "表を拡大";
 
+/* Save conflict comparison controls */
+"Show Whole File" = "ファイル全体を表示";
+"On Disk" = "ディスク上";
+"Your Draft" = "自分の下書き";
+"Previous Change" = "前の変更";
+"Next Change" = "次の変更";
+"$ unchanged lines" = "$ 行の変更なし";
+"None" = "なし";
+"Line endings differ. On disk: %1$@; draft: %2$@." = "改行コードが異なります。ディスク上：%1$@、下書き：%2$@。";
+"This document changed on disk again" = "この書類はディスク上で再び変更されました";
+"The comparison could not be displayed. Cancel to return to your unsaved draft." = "比較を表示できませんでした。キャンセルすると未保存の下書きに戻ります。";
+
 /* Additional settings, navigation, formatting, and export strings. */
 "GitHub Project" = "GitHub プロジェクト";
 "Bold Text" = "太字";
@@ -414,7 +426,6 @@
 "Text Style" = "テキストスタイル";
 "Lists" = "リスト";
 "More Formatting" = "その他の書式";
-"None" = "なし";
 "PNG Image" = "PNG 画像";
 "Wrap code" = "コードを折り返す";
 "Unwrap code" = "コードの折り返しを解除";

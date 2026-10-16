@@ -1,7 +1,7 @@
 {
   "name": "md-preview-editor-bundle",
   "private": true,
-  "description": "Builds md-preview/Vendor/CodeMirror/mdedit.min.js — the CodeMirror 6 live-preview markdown editor used by edit mode. Run `npm ci && npm run build` after changing entry-cm.js or bumping deps.",
+  "description": "Builds the CodeMirror editor and the separately loaded save-conflict viewer in md-preview/Vendor/CodeMirror. Run `npm ci && npm run build` after changing either entry point or dependencies.",
   "scripts": {
     "build": "node build.mjs"
   },
@@ -17,6 +17,7 @@
     "@codemirror/lang-yaml": "^6",
     "@codemirror/language": "^6",
     "@codemirror/legacy-modes": "^6",
+    "@codemirror/merge": "^6.12.2",
     "@codemirror/state": "^6",
     "@codemirror/view": "^6",
     "@lezer/highlight": "^1",
