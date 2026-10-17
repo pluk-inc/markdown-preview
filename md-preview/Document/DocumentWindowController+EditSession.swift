@@ -16,6 +16,8 @@ extension DocumentWindowController {
             return
         }
 
+        split.updateInspectorSelection(nil)
+
         // Edit the complete source. Frontmatter is stripped only by the
         // read-only renderer; the editor must expose and preserve it.
         let editor = split.enterEditMode(
@@ -40,8 +42,9 @@ extension DocumentWindowController {
             self.startAutoSaveTimerIfNeeded()
             self.scheduleInspectorRefresh(from: editor)
         }
-        editor.formattingDidChange = { [weak self] heading, commands in
+        editor.formattingDidChange = { [weak self] heading, commands, selection in
             self?.updateFormattingSelection(heading: heading, commands: commands)
+            self?.mainSplit?.updateInspectorSelection(selection)
         }
         editor.pasteImageRequested = { [weak self] from, to in
             self?.pasteImage(at: from, replacing: to)
@@ -527,6 +530,7 @@ extension DocumentWindowController {
             completion()
             return
         }
+        split.updateInspectorSelection(nil)
         split.editorViewController?.contentDidChange = nil
         split.editorViewController?.formattingDidChange = nil
         split.editorViewController?.cancelRequested = nil

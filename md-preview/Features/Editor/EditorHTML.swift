@@ -709,7 +709,8 @@ nonisolated enum EditorHTML {
                         onDirty: function () { post("dirty"); },
                         onCopyCode: function (text) { post({ kind: "copyCode", value: text }); },
                         onFormattingChange: function (state) {
-                            post({ kind: "formattingState", heading: state.heading, commands: state.commands });
+                            post({ kind: "formattingState", heading: state.heading, commands: state.commands,
+                                   selectedText: state.selectedText });
                         },
                         onSearchChange: function (result) {
                             post({ kind: "findResult", index: result.index, total: result.total });

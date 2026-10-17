@@ -107,6 +107,10 @@ final class MainSplitViewController: NSSplitViewController {
         contentViewController?.activeHeadingDidChange = { [weak self] headingID in
             self?.sidebarViewController?.setActiveHeading(headingID)
         }
+        contentViewController?.selectedTextDidChange = { [weak self] text in
+            guard let self, !self.isEditingDocument else { return }
+            self.updateInspectorSelection(text)
+        }
         contentViewController?.localMarkdownLinkActivated = { [weak self] url in
             self?.onOpenMarkdownLink?(url)
         }
@@ -129,9 +133,15 @@ final class MainSplitViewController: NSSplitViewController {
             renderImmediately: renderImmediately
         )
         sidebarViewController?.display(markdown: markdown, fileName: fileName, fileURL: url)
+        inspectorViewController?.setSelectedText(nil)
         inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))
     }
 
+    /// Update selected-range statistics without refreshing the preview or TOC.
+    func updateInspectorSelection(_ text: String?) {
+        inspectorViewController?.setSelectedText(text)
+    }
+  
     /// Apply already-computed live results; AppKit and SwiftUI remain on main.
     func applyLiveSidebarUpdates(outline: [TOCItem]?, metadata: DocumentMetadata?, fileURL: URL?) {
         if let outline, isSidebarVisible && sidebarMode == .outline {
@@ -167,6 +177,7 @@ final class MainSplitViewController: NSSplitViewController {
     }
 
     func clearContent() {
+        inspectorViewController?.setSelectedText(nil)
         contentViewController?.clearContent()
     }
 

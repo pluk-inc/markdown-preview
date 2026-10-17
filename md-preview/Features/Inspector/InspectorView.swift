@@ -54,6 +54,7 @@ extension DocumentMetadata {
 
 struct InspectorView: View {
     let metadata: DocumentMetadata
+    let showsSelectionCounts: Bool
     @State private var tab: Tab = .document
     @State private var pathExpanded = false
 
@@ -160,18 +161,21 @@ struct InspectorView: View {
             }
 
             Section {
-                LabeledContent(
-                    NSLocalizedString("Words", comment: "Inspector field label"),
-                    value: metadata.wordCount.formatted()
-                )
-                LabeledContent(
-                    NSLocalizedString("Characters", comment: "Inspector field label"),
-                    value: metadata.characterCount.formatted()
-                )
-                LabeledContent(
-                    NSLocalizedString("Lines", comment: "Inspector field label"),
-                    value: metadata.lineCount.formatted()
-                )
+                LabeledContent {
+                    Text(metadata.wordCount.formatted())
+                } label: {
+                    countLabel("Words")
+                }
+                LabeledContent {
+                    Text(metadata.characterCount.formatted())
+                } label: {
+                    countLabel("Characters")
+                }
+                LabeledContent {
+                    Text(metadata.lineCount.formatted())
+                } label: {
+                    countLabel("Lines")
+                }
             }
 
             Section {
@@ -198,6 +202,33 @@ struct InspectorView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    @ViewBuilder
+    private func countLabel(_ key: String) -> some View {
+        let title = NSLocalizedString(key, comment: "Inspector field label")
+        if showsSelectionCounts {
+            let suffix = "- " + NSLocalizedString("Selected", comment: "Inspector selected-range count label")
+
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(title)
+                        .fixedSize(horizontal: true, vertical: false)
+                    Text(suffix)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title)
+                    Text(suffix)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+            }
+        } else {
+            Text(title)
+        }
     }
 
     private func pathText(for url: URL) -> Text {

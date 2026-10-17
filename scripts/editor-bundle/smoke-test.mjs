@@ -1049,6 +1049,29 @@ check("Backspace removes the selected row",
   obsidianTableEditor.getMarkdown().split("\n").length === 2)
 obsidianTableEditor.destroy()
 
+const countTableHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(countTableHost)
+const reportedSelections = []
+const countTableEditor = dom.window.MDEditor.create(
+  countTableHost,
+  "| Name | Status |\n| --- | --- |\n| Ada | Active |",
+  { onFormattingChange: (state) => reportedSelections.push(state.selectedText) },
+)
+const countCell = countTableHost.querySelector('[data-table-row="1"][data-table-column="0"]')
+// jsdom has no innerText and does not focus the editable cell, so stand in
+// for both: the cell holds plain text, and the focus listener marks it active.
+if (countCell) Object.defineProperty(countCell, "innerText", { get() { return this.textContent } })
+countCell?.dispatchEvent(new dom.window.FocusEvent("focus"))
+dom.window.getSelection()?.setBaseAndExtent(countCell.firstChild, 0, countCell.firstChild, 3)
+dom.window.document.dispatchEvent(new dom.window.Event("selectionchange"))
+check("a table cell selection reports its text for Inspector counts",
+  reportedSelections.at(-1) === "Ada")
+countCell?.dispatchEvent(new dom.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }))
+countTableEditor.performTableContextAction(nativeTableContextRequest?.token, "selectRow")
+check("Select Row clears the previous cell selection counts",
+  reportedSelections.at(-1) === null)
+countTableEditor.destroy()
+
 const dragTableHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(dragTableHost)
 const dragTableEditor = dom.window.MDEditor.create(
