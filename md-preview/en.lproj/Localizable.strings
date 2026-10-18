@@ -329,16 +329,10 @@
 "What’s New in Markdown Preview %@" = "What’s New in Markdown Preview %@";
 "Release Notes" = "Release Notes";
 "Continue" = "Continue";
-"Export as EPUB" = "Export as EPUB";
-"Turn long documents into a book for Apple Books or your e-reader, with a table of contents and resizable text." = "Turn long documents into a book for Apple Books or your e-reader, with a table of contents and resizable text.";
-"Now in Japanese and Persian" = "Now in Japanese and Persian";
-"Markdown Preview speaks two more languages, with every menu, setting, and dialog translated." = "Markdown Preview speaks two more languages, with every menu, setting, and dialog translated.";
-"Documents open faster" = "Documents open faster";
-"Your document opens up to 2× faster, before anything else loads." = "Your document opens up to 2× faster, before anything else loads.";
-"Instant auto save" = "Instant auto save";
-"Choose Instant in Settings → General to save two seconds after you stop typing." = "Choose Instant in Settings → General to save two seconds after you stop typing.";
-"Expand tables in a window" = "Expand tables in a window";
-"Choose Expand Table to open a wide table in its own window." = "Choose Expand Table to open a wide table in its own window.";
+"Faster Mermaid diagrams" = "Faster Mermaid diagrams";
+"Diagrams draw faster and take their colors from your theme." = "Diagrams draw faster and take their colors from your theme.";
+"Counts for selected text" = "Counts for selected text";
+"Select text, and the inspector shows its words, characters, and lines." = "Select text, and the inspector shows its words, characters, and lines.";
 
 /* Reading preferences */
 "Strict line breaks" = "Strict line breaks";

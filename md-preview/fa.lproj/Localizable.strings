@@ -328,16 +328,10 @@
 "What’s New in Markdown Preview %@" = "ویژگی‌های جدید Markdown Preview %@";
 "Release Notes" = "یادداشت‌های انتشار";
 "Continue" = "ادامه";
-"Export as EPUB" = "خروجی EPUB";
-"Turn long documents into a book for Apple Books or your e-reader, with a table of contents and resizable text." = "اسناد طولانی را به کتابی برای Apple Books یا کتاب‌خوان الکترونیکی تبدیل کنید، با فهرست مطالب و اندازهٔ متن قابل تغییر.";
-"Now in Japanese and Persian" = "اکنون به زبان ژاپنی و فارسی";
-"Markdown Preview speaks two more languages, with every menu, setting, and dialog translated." = "Markdown Preview به دو زبان دیگر صحبت می‌کند، با ترجمهٔ همهٔ منوها، تنظیمات و پنجره‌های گفتگو.";
-"Documents open faster" = "اسناد سریع‌تر باز می‌شوند";
-"Your document opens up to 2× faster, before anything else loads." = "سند شما تا ۲ برابر سریع‌تر باز می‌شود، پیش از بارگذاری هر چیز دیگر.";
-"Instant auto save" = "ذخیرهٔ خودکار فوری";
-"Choose Instant in Settings → General to save two seconds after you stop typing." = "در تنظیمات ← عمومی، گزینهٔ «فوری» را انتخاب کنید تا دو ثانیه پس از توقف تایپ ذخیره شود.";
-"Expand tables in a window" = "گسترش جدول‌ها در پنجرهٔ جداگانه";
-"Choose Expand Table to open a wide table in its own window." = "برای مشاهدهٔ یک جدول عریض در پنجرهٔ جداگانه، «گسترش جدول» را انتخاب کنید.";
+"Faster Mermaid diagrams" = "نمودارهای Mermaid سریع‌تر";
+"Diagrams draw faster and take their colors from your theme." = "نمودارها سریع‌تر رسم می‌شوند و رنگ‌های پوستهٔ شما را می‌گیرند.";
+"Counts for selected text" = "شمارش متن انتخاب‌شده";
+"Select text, and the inspector shows its words, characters, and lines." = "متنی را انتخاب کنید تا بازرس تعداد واژه‌ها، نویسه‌ها و خط‌های آن را نشان دهد.";
 
 /* Reading preferences */
 "Strict line breaks" = "شکست دقیق خطوط";

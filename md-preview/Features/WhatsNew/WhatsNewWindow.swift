@@ -20,34 +20,16 @@ struct WhatsNewFeature: Identifiable {
     static var current: [WhatsNewFeature] {
         [
             WhatsNewFeature(
-                id: "epub-export",
-                symbol: "book.closed",
-                title: L("Export as EPUB"),
-                detail: L("Turn long documents into a book for Apple Books or your e-reader, with a table of contents and resizable text.")
+                id: "faster-mermaid-diagrams",
+                symbol: "chart.xyaxis.line",
+                title: L("Faster Mermaid diagrams"),
+                detail: L("Diagrams draw faster and take their colors from your theme.")
             ),
             WhatsNewFeature(
-                id: "japanese-persian-translations",
-                symbol: "character.bubble",
-                title: L("Now in Japanese and Persian"),
-                detail: L("Markdown Preview speaks two more languages, with every menu, setting, and dialog translated.")
-            ),
-            WhatsNewFeature(
-                id: "faster-first-window",
-                symbol: "bolt",
-                title: L("Documents open faster"),
-                detail: L("Your document opens up to 2× faster, before anything else loads.")
-            ),
-            WhatsNewFeature(
-                id: "expand-tables",
-                symbol: "arrow.up.left.and.arrow.down.right",
-                title: L("Expand tables in a window"),
-                detail: L("Choose Expand Table to open a wide table in its own window.")
-            ),
-            WhatsNewFeature(
-                id: "instant-auto-save",
-                symbol: "clock.arrow.circlepath",
-                title: L("Instant auto save"),
-                detail: L("Choose Instant in Settings → General to save two seconds after you stop typing.")
+                id: "selection-counts",
+                symbol: "text.word.spacing",
+                title: L("Counts for selected text"),
+                detail: L("Select text, and the inspector shows its words, characters, and lines.")
             ),
         ]
     }

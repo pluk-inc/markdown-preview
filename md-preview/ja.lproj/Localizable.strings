@@ -329,16 +329,10 @@
 "What’s New in Markdown Preview %@" = "Markdown Preview %@ の新機能";
 "Release Notes" = "リリースノート";
 "Continue" = "続ける";
-"Export as EPUB" = "EPUB として書き出し";
-"Turn long documents into a book for Apple Books or your e-reader, with a table of contents and resizable text." = "長い書類を Apple Books や電子書籍リーダー向けの本に。目次付きで、文字サイズも変更できます。";
-"Now in Japanese and Persian" = "日本語とペルシア語に対応";
-"Markdown Preview speaks two more languages, with every menu, setting, and dialog translated." = "Markdown Preview が 2 つの言語に新たに対応。メニュー、設定、ダイアログをすべて翻訳しました。";
-"Documents open faster" = "書類がより速く開く";
-"Your document opens up to 2× faster, before anything else loads." = "書類が最大 2 倍速く開き、ほかの処理より先に表示されます。";
-"Instant auto save" = "即時自動保存";
-"Choose Instant in Settings → General to save two seconds after you stop typing." = "「設定」→「一般」で「即時」を選択すると、入力を止めてから2秒後に保存されます。";
-"Expand tables in a window" = "表を別ウインドウで表示";
-"Choose Expand Table to open a wide table in its own window." = "「表を拡大」を選択すると、幅の広い表を別ウインドウで表示できます。";
+"Faster Mermaid diagrams" = "より速い Mermaid 図";
+"Diagrams draw faster and take their colors from your theme." = "図の描画がより速くなり、テーマの色で表示されます。";
+"Counts for selected text" = "選択したテキストのカウント";
+"Select text, and the inspector shows its words, characters, and lines." = "テキストを選択すると、インスペクタにその単語数、文字数、行数が表示されます。";
 
 /* Reading preferences */
 "Strict line breaks" = "厳密な改行";

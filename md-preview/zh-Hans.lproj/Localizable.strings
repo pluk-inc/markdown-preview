@@ -329,16 +329,10 @@
 "What’s New in Markdown Preview %@" = "Markdown Preview %@ 的新功能";
 "Release Notes" = "发布说明";
 "Continue" = "继续";
-"Export as EPUB" = "导出为 EPUB";
-"Turn long documents into a book for Apple Books or your e-reader, with a table of contents and resizable text." = "将长文稿变成一本书，在 Apple Books 或电子阅读器上阅读，带目录，文字大小可调。";
-"Now in Japanese and Persian" = "现已支持日语和波斯语";
-"Markdown Preview speaks two more languages, with every menu, setting, and dialog translated." = "Markdown Preview 新增两种语言，每个菜单、设置和对话框都已翻译。";
-"Documents open faster" = "文稿打开更快";
-"Your document opens up to 2× faster, before anything else loads." = "文稿打开速度最高提升至 2 倍，先于其他内容加载。";
-"Instant auto save" = "即时自动保存";
-"Choose Instant in Settings → General to save two seconds after you stop typing." = "在“设置”→“通用”中选择“立即”，停止输入两秒后即自动保存。";
-"Expand tables in a window" = "在窗口中展开表格";
-"Choose Expand Table to open a wide table in its own window." = "选择“展开表格”即可在独立窗口中查看宽表格。";
+"Faster Mermaid diagrams" = "更快的 Mermaid 图表";
+"Diagrams draw faster and take their colors from your theme." = "图表绘制更快，并采用当前主题的颜色。";
+"Counts for selected text" = "所选文本的统计";
+"Select text, and the inspector shows its words, characters, and lines." = "选择文本后，检查器会显示其字数、字符数和行数。";
 
 /* Reading preferences */
 "Strict line breaks" = "严格换行";

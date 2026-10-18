@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.0.68] – 2026-10-18
+
+This release draws Mermaid diagrams with a faster renderer that follows your theme, shows counts for selected text in the inspector, and translates more of the interface.
+
+### Added
+
+- **Counts for selected text.** Select text in Read Mode or Edit Mode, and the inspector shows the selection's words, characters, and lines, labeled as selected. With nothing selected, it shows the whole document's counts ([#534](https://github.com/pluk-inc/markdown-preview/pull/534)).
+
+### Changed
+
+- **Faster Mermaid diagrams that follow your theme.** `mermaid` code blocks are now drawn by [Pele](https://pele.run), which draws diagrams about 40% faster and makes the app about 5 MB smaller. Diagrams take their colors from the current theme, span the column like code blocks, and accept frontmatter blocks. Layout and spacing differ from before, and a diagram that cannot be drawn shows the error with its line and column. Applies to Read Mode, Edit Mode, Quick Look, and exports ([#539](https://github.com/pluk-inc/markdown-preview/pull/539)).
+- **More of the interface is translated.** Settings, navigation, recent files, search results, formatting and link actions, export messages, and theme and font names now have Japanese, Persian, and Simplified Chinese translations ([#532](https://github.com/pluk-inc/markdown-preview/pull/532)).
+
+### Fixed
+
+- **Diagram editing in Edit Mode.** Select All no longer closes an open diagram's source, clicking a diagram puts the caret at the end of its source instead of inside the opening fence, and an empty diagram block opens a source line with one click ([#539](https://github.com/pluk-inc/markdown-preview/pull/539)).
+
+### Contributors
+
+- [@kota113](https://github.com/kota113) — added counts for selected text ([#534](https://github.com/pluk-inc/markdown-preview/pull/534), requested in [#525](https://github.com/pluk-inc/markdown-preview/issues/525)) and the missing translations ([#532](https://github.com/pluk-inc/markdown-preview/pull/532)).
+- [@nexmoe](https://github.com/nexmoe) — suggested rendering Mermaid diagrams with Pele ([#537](https://github.com/pluk-inc/markdown-preview/issues/537)).
+
 ## [0.0.67] – 2026-10-15
 
 This release adds EPUB export, Japanese and Persian translations, and an Instant auto save interval. It opens the first document window sooner, lets New Tab start a new document, keeps the inspector up to date while you type, and makes Quick Look load more images and follow heading links.
