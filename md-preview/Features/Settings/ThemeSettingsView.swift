@@ -60,7 +60,7 @@ struct ThemeSettingsView: View {
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(String(format: L("Current theme: %@"),
-                                selected.map { L($0.name) } ?? L("Custom colors")))
+                                selected.map { L("theme_\($0.name)", default: $0.name) } ?? L("Custom colors")))
                     Text(L("Each theme remembers its colors, font and layout. Original also remembers your appearance choice. Reset restores the selected theme’s defaults."))
                 }
             }

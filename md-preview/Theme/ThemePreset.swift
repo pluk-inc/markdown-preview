@@ -38,7 +38,7 @@ nonisolated struct ThemePreset: Identifiable, Equatable, Sendable {
         case system
     }
 
-    /// Display name; also the localization key.
+    /// Display name; localization key is "theme_\(name)".
     let name: String
     let flavor: Flavor
     /// The reading face the preset applies. A preset is a whole reading

@@ -1,0 +1,8 @@
+# CodeRabbit configuration. Settings here override the web settings page.
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+reviews:
+  tools:
+    # Start the review when the PR opens or changes, instead of waiting for
+    # GitHub Checks (CI) to finish first.
+    github-checks:
+      enabled: false

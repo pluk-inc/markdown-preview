@@ -7,8 +7,12 @@
 
 import AppKit
 
-func L(_ key: String) -> String {
-    NSLocalizedString(key, comment: "")
+func L(_ key: String, default value: String? = nil) -> String {
+    let localized = NSLocalizedString(key, comment: "")
+    if let value, localized == key {
+        return value
+    }
+    return localized
 }
 
 var appDelegate: AppDelegate? {

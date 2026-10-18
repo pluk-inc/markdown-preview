@@ -32,7 +32,7 @@ struct ThemePresetCard: View {
                     .font(preset.font.font(size: 24))
                     .fontWeight(preset.boldText ? .heavy : .semibold)
                     .foregroundStyle(text)
-                Text(L(preset.name))
+                Text(L("theme_\(preset.name)", default: preset.name))
                     .font(.system(size: 11))
                     .foregroundStyle(text.opacity(0.8))
                     .lineLimit(1)
@@ -52,7 +52,7 @@ struct ThemePresetCard: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text(L(preset.name)))
+        .accessibilityLabel(Text(L("theme_\(preset.name)", default: preset.name)))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
