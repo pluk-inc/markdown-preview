@@ -139,6 +139,175 @@ nonisolated extension MarkdownHTML {
 
         window.MdPreviewHost = { pushHeight, measureHeight };
 
+        // Controls injected into the article. Copying and Inspector counts
+        // both leave them out.
+        const MD_CHROME_SELECTOR = '.md-code-header, .md-table-actions, .mermaid-hud';
+        // Rendered but not document text: diagram zoom controls and KaTeX's
+        // visually hidden MathML twin. Inspector counts only.
+        const MD_UNCOUNTED_SELECTOR = MD_CHROME_SELECTOR + ', .mermaid-hud, .katex-mathml';
+
+        // Text of `range` as the preview shows it. Walks the live article
+        // rather than a detached clone so computed styles decide block
+        // breaks, whitespace collapsing, and visibility (closed <details>,
+        // display:none) the way the page renders them.
+        function renderedTextOfRange(range, root) {
+            const styles = new Map();
+            function styleOf(element) {
+                let style = styles.get(element);
+                if (!style) {
+                    style = getComputedStyle(element);
+                    styles.set(element, style);
+                }
+                return style;
+            }
+            function whiteSpaceMode(element) {
+                const style = styleOf(element);
+                const collapse = style.whiteSpaceCollapse;
+                if (collapse) {
+                    if (collapse === 'preserve-breaks') return 'preserve-breaks';
+                    return collapse === 'collapse' ? 'collapse' : 'preserve';
+                }
+                const ws = style.whiteSpace;
+                if (ws === 'pre-line') return 'preserve-breaks';
+                return /^(?:pre|pre-wrap|break-spaces)$/.test(ws) ? 'preserve' : 'collapse';
+            }
+            function isBlock(display) {
+                return !/^(?:inline|contents|table-cell|ruby)/.test(display);
+            }
+
+            // Separators wait until the next visible text, so leading and
+            // trailing breaks never reach the result. Line breaks win over
+            // cell tabs, which win over collapsed spaces.
+            let text = '';
+            let breaks = 0;
+            let cell = false;
+            let space = false;
+            function emit(value) {
+                if (text) {
+                    if (breaks) {
+                        const trailing = /\\n*$/.exec(text)[0].length;
+                        text += '\\n'.repeat(Math.max(0, breaks - trailing));
+                    } else if (cell) {
+                        text += '\\t';
+                    } else if (space && !text.endsWith('\\n') && !value.startsWith('\\n')) {
+                        text += ' ';
+                    }
+                }
+                breaks = 0;
+                cell = false;
+                space = false;
+                text += value;
+            }
+            // Whether the character at `index` takes up space on screen.
+            function rendersCharacter(node, index) {
+                const probe = document.createRange();
+                probe.setStart(node, index);
+                probe.setEnd(node, index + 1);
+                return probe.getBoundingClientRect().width > 0;
+            }
+            function addText(node) {
+                const from = node === range.startContainer ? range.startOffset : 0;
+                const to = node === range.endContainer ? range.endOffset : node.nodeValue.length;
+                const selected = node.nodeValue.slice(from, to);
+                const parent = node.parentElement;
+                if (!selected || !parent || styleOf(parent).visibility !== 'visible') return;
+                const mode = whiteSpaceMode(parent);
+                if (mode === 'preserve') {
+                    emit(selected);
+                    return;
+                }
+                let value = mode === 'preserve-breaks'
+                    ? selected.replace(/[ \\t]*\\n[ \\t]*/g, '\\n').replace(/[ \\t]+/g, ' ')
+                    : selected.replace(/[ \\t\\n\\r\\f]+/g, ' ');
+                // Spaces between text nodes wait for the next visible text so
+                // source formatting drops out. A space at a selection edge has
+                // no such neighbor in the selection, so ask layout instead.
+                if (value.startsWith(' ')) {
+                    value = value.slice(1);
+                    if (node === range.startContainer && rendersCharacter(node, from)) emit(' ');
+                    else space = true;
+                }
+                const trailingSpace = value.endsWith(' ');
+                if (trailingSpace) value = value.slice(0, -1);
+                if (value) emit(value);
+                if (trailingSpace) {
+                    const run = /[ \\t\\n\\r\\f]+$/.exec(selected);
+                    if (node === range.endContainer && rendersCharacter(node, from + run.index)) emit(' ');
+                    else space = true;
+                }
+            }
+
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+                acceptNode(node) {
+                    if (!range.intersectsNode(node)) return NodeFilter.FILTER_REJECT;
+                    if (node.nodeType !== Node.ELEMENT_NODE) return NodeFilter.FILTER_ACCEPT;
+                    if (node.matches(MD_UNCOUNTED_SELECTOR)) return NodeFilter.FILTER_REJECT;
+                    // display:contents has no box of its own, so checkVisibility
+                    // reports false even though its children render.
+                    if (styleOf(node).display === 'contents') return NodeFilter.FILTER_ACCEPT;
+                    if (typeof node.checkVisibility === 'function' && !node.checkVisibility())
+                        return NodeFilter.FILTER_REJECT;
+                    return NodeFilter.FILTER_ACCEPT;
+                }
+            });
+            function walkChildren(node) {
+                if (!walker.firstChild()) return;
+                // A closed <details> renders only its summary.
+                const closedDetails = node.nodeName === 'DETAILS' && !node.open;
+                do {
+                    const child = walker.currentNode;
+                    if (closedDetails && child.nodeName !== 'SUMMARY') continue;
+                    walk(child);
+                } while (walker.nextSibling());
+                walker.parentNode();
+            }
+            function walk(node) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    addText(node);
+                    return;
+                }
+                if (node.nodeName === 'BR') {
+                    emit('\\n');
+                    return;
+                }
+                const display = styleOf(node).display;
+                const blockBreaks = !isBlock(display) ? 0 : node.nodeName === 'P' ? 2 : 1;
+                breaks = Math.max(breaks, blockBreaks);
+                walkChildren(node);
+                breaks = Math.max(breaks, blockBreaks);
+                if (display === 'table-cell') cell = true;
+            }
+            walkChildren(root);
+            return text;
+        }
+
+        // Mirror read-only text selections to the native Inspector. Only the
+        // rendered article counts, even when Select All includes page chrome.
+        let lastSelectedText = null;
+        function pushSelectedText() {
+            if (!hasHostBridge) return;
+            const article = document.querySelector('article.markdown-body');
+            const selection = window.getSelection();
+            let text = null;
+            if (article && selection && !selection.isCollapsed && selection.rangeCount) {
+                const range = selection.getRangeAt(0);
+                if (range.intersectsNode(article)) {
+                    const clipped = range.cloneRange();
+                    const bounds = document.createRange();
+                    bounds.selectNodeContents(article);
+                    if (clipped.compareBoundaryPoints(Range.START_TO_START, bounds) < 0)
+                        clipped.setStart(bounds.startContainer, bounds.startOffset);
+                    if (clipped.compareBoundaryPoints(Range.END_TO_END, bounds) > 0)
+                        clipped.setEnd(bounds.endContainer, bounds.endOffset);
+                    text = renderedTextOfRange(clipped, article) || null;
+                }
+            }
+            if (text === lastSelectedText) return;
+            lastSelectedText = text;
+            post({ kind: 'selectedText', value: text });
+        }
+        document.addEventListener('selectionchange', pushSelectedText);
+
         function elementForEventTarget(target) {
             if (target instanceof Element) return target;
             if (target && target.parentElement instanceof Element) return target.parentElement;
@@ -279,7 +448,7 @@ nonisolated extension MarkdownHTML {
             for (let i = 0; i < selection.rangeCount; i += 1) {
                 fragment.appendChild(selection.getRangeAt(i).cloneContents());
             }
-            const buttons = fragment.querySelectorAll('.md-code-header, .md-table-actions');
+            const buttons = fragment.querySelectorAll(MD_CHROME_SELECTOR);
             buttons.forEach((button) => button.remove());
             return { fragment, removedButtons: buttons.length > 0 };
         }
@@ -740,6 +909,11 @@ nonisolated extension MarkdownHTML {
             }
             const article = document.querySelector('.markdown-body');
             if (!article) return;
+            // A document swap invalidates any selection from the old article.
+            if (lastSelectedText !== null) {
+                lastSelectedText = null;
+                post({ kind: 'selectedText', value: null });
+            }
             const tStart = perfNow();
             // DOM-diff fast path: morph the live article toward the incoming
             // HTML so finished Mermaid SVGs, KaTeX output, and highlighted
@@ -792,6 +966,9 @@ nonisolated extension MarkdownHTML {
                     try { fn(); } catch (e) { /* one bad apple shouldn't block others */ }
                 }
             }
+            // Morphing can preserve a native selection without a selectionchange event.
+            // Re-report it after the DOM update if it still intersects the article.
+            pushSelectedText();
             perfLog('MdPreview.update' + (morphed ? ' (morphdom)' : ''), '(+' + (perfNow() - tStart).toFixed(1) + 'ms)');
             pushHeight();
         };

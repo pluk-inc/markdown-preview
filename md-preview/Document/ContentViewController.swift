@@ -70,6 +70,7 @@ final class ContentViewController: NSViewController {
     private static let stickyReleaseFraction: CGFloat = 1.0 / 3.0
 
     var activeHeadingDidChange: ((Int?) -> Void)?
+    var selectedTextDidChange: ((String?) -> Void)?
     var zoomDidChange: ((CGFloat) -> Void)?
     var localMarkdownLinkActivated: ((URL) -> Void)?
     /// Fires once after a pending source scroll anchor (prepared via
@@ -113,6 +114,9 @@ final class ContentViewController: NSViewController {
         }
         webView.fragmentLinkActivated = { [weak self] fragment in
             self?.scrollToElement(id: fragment)
+        }
+        webView.selectedTextDidChange = { [weak self] text in
+            self?.selectedTextDidChange?(text)
         }
         webView.pointerDocumentYDidChange = { [weak self] y in
             guard let self,

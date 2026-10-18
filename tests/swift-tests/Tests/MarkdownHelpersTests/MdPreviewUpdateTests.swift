@@ -393,6 +393,258 @@ final class MdPreviewUpdateTests: XCTestCase {
     /// and count runs so a destructive re-render (fresh node, count reset)
     /// is detectable.
     @MainActor
+    func testReaderSelectionReportsOnlyArticleTextAndClearsWhenDeselected() async throws {
+        let webView = try await loadHarness(articleAttributes: "", stubsWebKitMessageHandler: true)
+        let article = MarkdownHTML.render(
+            markdown: "First 😀 paragraph.\n\nSecond paragraph.",
+            vendorLoading: .lazy
+        ).articleHTML
+        _ = try await webView.evaluateJavaScript(
+            "window.MdPreview.update(\(MarkdownHTML.javaScriptStringLiteral(article))); true"
+        )
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const article = document.querySelector('article.markdown-body');
+            const outside = document.createElement('div');
+            outside.textContent = 'Not part of the article';
+            document.body.appendChild(outside);
+            window.__hostMessages = [];
+            const selection = window.getSelection();
+            function selectContents(node) {
+                const range = document.createRange();
+                range.selectNodeContents(node);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                document.dispatchEvent(new Event('selectionchange'));
+            }
+            function reported() {
+                return window.__hostMessages.filter(m => m.kind === 'selectedText').map(m => m.value);
+            }
+            selectContents(article.querySelector('p'));
+            const first = reported();
+            document.dispatchEvent(new Event('selectionchange'));
+            const repeated = reported();
+            selectContents(outside);
+            const outsideResult = reported();
+            selectContents(document.body);
+            const wholeBody = reported();
+            selection.removeAllRanges();
+            document.dispatchEvent(new Event('selectionchange'));
+            const cleared = reported();
+            selectContents(article.querySelector('p'));
+            // A full replacement discards the old DOM selection.
+            window.morphdom = undefined;
+            window.MdPreview.update('<p>Replacement document</p>');
+            const replaced = reported();
+            return JSON.stringify({ first, repeated, outsideResult, wholeBody, cleared, replaced });
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let state = try JSONDecoder().decode(ReaderSelectionMessages.self, from: Data(json.utf8))
+        XCTAssertEqual(state.first, ["First 😀 paragraph."])
+        XCTAssertEqual(state.repeated.count, state.first.count,
+                       "Duplicate selection events should be ignored")
+        XCTAssertEqual(state.outsideResult.count, state.first.count + 1)
+        XCTAssertNil(state.outsideResult.last ?? nil)
+        XCTAssertEqual(state.wholeBody.count, state.outsideResult.count + 1)
+        let articleText = try XCTUnwrap(state.wholeBody.last ?? nil)
+        XCTAssertTrue(articleText.contains("First 😀 paragraph."))
+        XCTAssertTrue(articleText.contains("Second paragraph."))
+        XCTAssertFalse(articleText.contains("Not part of the article"))
+        XCTAssertEqual(state.cleared.count, state.wholeBody.count + 1)
+        XCTAssertNil(state.cleared.last ?? nil)
+        XCTAssertEqual(state.replaced.count, state.cleared.count + 2)
+        XCTAssertNil(state.replaced.last ?? nil)
+    }
+
+    @MainActor
+    func testReaderSelectionSurvivesUnrelatedArticleMorph() async throws {
+        let webView = try await loadHarness(articleAttributes: "", stubsWebKitMessageHandler: true)
+        let initialHTML = MarkdownHTML.javaScriptStringLiteral(
+            "<p id='kept'>Selected paragraph.</p><p>Before update.</p>"
+        )
+        let updatedHTML = MarkdownHTML.javaScriptStringLiteral(
+            "<p id='kept'>Selected paragraph.</p><p>After update.</p>"
+        )
+        _ = try await webView.evaluateJavaScript("MdPreview.update(\(initialHTML)); true")
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const selectedNode = document.getElementById('kept').firstChild;
+            const selection = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(selectedNode);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            window.__hostMessages = [];
+            document.dispatchEvent(new Event('selectionchange'));
+
+            // Change unrelated text without modifying the selected paragraph.
+            MdPreview.update(\(updatedHTML));
+
+            return JSON.stringify({
+                selectionIntact: selection.rangeCount > 0
+                    && selection.getRangeAt(0).startContainer === selectedNode
+                    && selection.toString() === 'Selected paragraph.',
+                newParagraph: document.querySelectorAll('p')[1].textContent,
+                reports: window.__hostMessages
+                    .filter(message => message.kind === 'selectedText')
+                    .map(message => message.value)
+            });
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let state = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any]
+        )
+        XCTAssertEqual(state["selectionIntact"] as? Bool, true, json)
+        XCTAssertEqual(state["newParagraph"] as? String, "After update.", json)
+        let reports = try XCTUnwrap(state["reports"] as? [Any])
+        XCTAssertEqual(reports.count, 3, json)
+        XCTAssertEqual(reports[0] as? String, "Selected paragraph.")
+        XCTAssertTrue(reports[1] is NSNull, json)
+        XCTAssertEqual(reports[2] as? String, "Selected paragraph.")
+    }
+
+    @MainActor
+    func testReaderSelectionCountsLineBreaksAndSkipsCodeChrome() async throws {
+        let webView = try await loadHarness(articleAttributes: "", stubsWebKitMessageHandler: true)
+        let html = """
+        <p>one<br>two</p>
+        <pre data-code-language="swift"><code>let answer = 42</code></pre>
+        """
+        _ = try await webView.evaluateJavaScript(
+            "window.MdPreview.update(\(MarkdownHTML.javaScriptStringLiteral(html))); true"
+        )
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const article = document.querySelector('article.markdown-body');
+            const paragraph = article.querySelector('p');
+            const code = article.querySelector('pre');
+            const selection = window.getSelection();
+            window.__hostMessages = [];
+            function select(range) {
+                selection.removeAllRanges();
+                selection.addRange(range);
+                document.dispatchEvent(new Event('selectionchange'));
+                return window.__hostMessages.filter(m => m.kind === 'selectedText').at(-1)?.value;
+            }
+            const single = document.createRange();
+            single.selectNodeContents(paragraph);
+            const lineBreaks = select(single);
+            const spanning = document.createRange();
+            spanning.setStartBefore(paragraph);
+            spanning.setEndAfter(code);
+            const withCode = select(spanning);
+            return JSON.stringify({ lineBreaks, withCode });
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let state = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: String])
+        XCTAssertEqual(state["lineBreaks"], "one\ntwo")
+        XCTAssertEqual(state["withCode"], "one\ntwo\n\nlet answer = 42")
+        XCTAssertFalse(state["withCode"]?.contains("swift") ?? true, json)
+    }
+
+    @MainActor
+    func testReaderSelectionCountsOnlyRenderedText() async throws {
+        let webView = try await loadHarness(articleAttributes: "", stubsWebKitMessageHandler: true)
+        let html = """
+        <ul>
+          <li>alpha   beta</li>
+          <li>gamma</li>
+        </ul>
+        <table><thead><tr><th>Name</th><th>Role</th></tr></thead>
+        <tbody><tr><td>Ada Lovelace</td><td>math</td></tr></tbody></table>
+        <details><summary>More</summary><p>hidden body</p>bare hidden</details>
+        <p>x <span class="katex"><span class="katex-mathml">MATHML</span><span class="katex-html">E</span></span> y</p>
+        """
+        _ = try await webView.evaluateJavaScript(
+            "window.MdPreview.update(\(MarkdownHTML.javaScriptStringLiteral(html))); true"
+        )
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const article = document.querySelector('article.markdown-body');
+            const selection = window.getSelection();
+            window.__hostMessages = [];
+            function select(node) {
+                const range = document.createRange();
+                range.selectNodeContents(node);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                document.dispatchEvent(new Event('selectionchange'));
+                return window.__hostMessages.filter(m => m.kind === 'selectedText').at(-1)?.value;
+            }
+            const list = select(article.querySelector('ul'));
+            const table = select(article.querySelector('table'));
+            const details = select(article.querySelector('details'));
+            const math = select(article.querySelector('.katex').parentElement);
+            return JSON.stringify({ list, table, details, math });
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let state = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: String])
+        // Source indentation and repeated spaces collapse as the preview renders them.
+        XCTAssertEqual(state["list"], "alpha beta\ngamma")
+        // Cells stay separate words; rows stay separate lines.
+        XCTAssertEqual(state["table"], "Name\tRole\nAda Lovelace\tmath")
+        // A closed <details> shows only its summary.
+        XCTAssertEqual(state["details"], "More")
+        // KaTeX's hidden MathML twin is not counted twice.
+        XCTAssertEqual(state["math"], "x E y")
+    }
+
+    @MainActor
+    func testReaderSelectionKeepsSelectedEdgeSpaces() async throws {
+        let webView = try await loadHarness(articleAttributes: "", stubsWebKitMessageHandler: true)
+        _ = try await webView.evaluateJavaScript(
+            "window.MdPreview.update('<p>fish and chips</p>\\n<p>\\n  indented\\n</p>\\n<p>fish   and</p>\\n<p>fish <em>and</em></p>\\n<p><em>fish</em> <strong>and</strong></p>'); true"
+        )
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const [first, second, third, beforeInline, betweenInline] =
+                document.querySelectorAll('article.markdown-body p');
+            const text = first.firstChild;
+            const selection = window.getSelection();
+            window.__hostMessages = [];
+            function select(node, start, end) {
+                const range = document.createRange();
+                range.setStart(node, start);
+                range.setEnd(node, end);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                document.dispatchEvent(new Event('selectionchange'));
+                return window.__hostMessages.filter(m => m.kind === 'selectedText').at(-1)?.value;
+            }
+            return JSON.stringify({
+                trailing: select(text, 0, 5),
+                leading: select(text, 4, 8),
+                spaceOnly: select(text, 4, 5),
+                formatting: select(second.firstChild, 0, second.firstChild.length),
+                spaceRun: select(third.firstChild, 0, 7),
+                runTail: select(third.firstChild, 5, 10),
+                beforeInline: select(beforeInline.firstChild, 0, 5),
+                betweenInline: select(betweenInline.childNodes[1], 0, 1),
+            });
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let state = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: String])
+        XCTAssertEqual(state["trailing"], "fish ")
+        XCTAssertEqual(state["leading"], " and")
+        // A selected space alone still counts as a selection, not the whole document.
+        XCTAssertEqual(state["spaceOnly"], " ")
+        // Source whitespace around a paragraph's text is still not counted.
+        XCTAssertEqual(state["formatting"], "indented")
+        // A run of spaces renders, and counts, as one space.
+        XCTAssertEqual(state["spaceRun"], "fish ")
+        // Spaces after the run's first one are not rendered.
+        XCTAssertEqual(state["runTail"], "and")
+        // An edge space renders even when the next word is in another element.
+        XCTAssertEqual(state["beforeInline"], "fish ")
+        XCTAssertEqual(state["betweenInline"], " ")
+    }
+
+    @MainActor
     private func loadHarness(
         articleAttributes: String,
         stubsWebKitMessageHandler: Bool = false
@@ -519,4 +771,13 @@ private struct WarmupArticleState: Decodable {
     private enum CodingKeys: String, CodingKey {
         case warmup, opacity, keyedBlocks, paragraphText
     }
+}
+
+private struct ReaderSelectionMessages: Decodable {
+    let first: [String?]
+    let repeated: [String?]
+    let outsideResult: [String?]
+    let wholeBody: [String?]
+    let cleared: [String?]
+    let replaced: [String?]
 }
