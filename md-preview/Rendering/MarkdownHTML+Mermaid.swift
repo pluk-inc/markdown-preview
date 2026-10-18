@@ -85,6 +85,37 @@ nonisolated extension MarkdownHTML {
         return MermaidRenderResult(html: rendered, containsMermaid: true)
     }
 
+    /// Localized diagram messages, shared by the preview wiring and the editor
+    /// widget so both modes say the same thing. Errors come from PeleError's
+    /// code and position, since Pele's own message is English only.
+    static let diagramMessagesJS = """
+    {
+        errors: {
+            'unsupported-diagram': \(javaScriptStringLiteral(NSLocalizedString("This diagram type is not supported.", comment: "Mermaid diagram error"))),
+            syntax: \(javaScriptStringLiteral(NSLocalizedString("The diagram has a syntax error.", comment: "Mermaid diagram error"))),
+            semantic: \(javaScriptStringLiteral(NSLocalizedString("The diagram is not valid.", comment: "Mermaid diagram error"))),
+            limit: \(javaScriptStringLiteral(NSLocalizedString("The diagram is too large to draw.", comment: "Mermaid diagram error")))
+        },
+        generic: \(javaScriptStringLiteral(NSLocalizedString("The diagram could not be drawn.", comment: "Mermaid diagram error"))),
+        position: \(javaScriptStringLiteral(NSLocalizedString("Line %d, column %d", comment: "Position of a Mermaid diagram error: line, then column"))),
+        empty: \(javaScriptStringLiteral(NSLocalizedString("This diagram is empty.", comment: "Shown for a Mermaid code block with no source"))),
+        emptyHint: \(javaScriptStringLiteral(NSLocalizedString("Empty diagram. Click to add Mermaid source.", comment: "Edit-mode placeholder for a Mermaid code block with no source"))),
+        unavailable: \(javaScriptStringLiteral(NSLocalizedString("Mermaid renderer is unavailable.\n\n", comment: "Mermaid rendering error"))).trim()
+    }
+    """
+
+    /// `(err) => message` for a PeleError, reading `messages` (diagramMessagesJS)
+    /// from the enclosing scope. Translations order the numbers positionally.
+    static let diagramErrorMessageJS = """
+    (err) => {
+        const summary = (err && messages.errors[err.code]) || messages.generic;
+        if (!(err && err.line > 0)) return summary;
+        return summary + ' ' + messages.position
+            .replace(/%(1\\$)?d/, String(err.line))
+            .replace(/%(2\\$)?d/, String(err.column));
+    }
+    """
+
     /// Marks every figure that is not drawn yet with the localized
     /// "renderer unavailable" message above its source. Used when the bundle
     /// is missing, and when a lazy bundle never arrives before an export.
@@ -97,12 +128,13 @@ nonisolated extension MarkdownHTML {
         figure.classList.add('mermaid-error');
         node.__mdSrc = node.textContent;
         node.dataset.mmUnavailable = '1';
+        // Same layout as showError: no trailing line break under the source.
         node.textContent = \(javaScriptStringLiteral(
             NSLocalizedString(
                 "Mermaid renderer is unavailable.\n\n",
                 comment: "Mermaid rendering error"
             )
-        )) + node.__mdSrc;
+        )) + node.__mdSrc.replace(/\\s+$/, '');
     });
     """
 
@@ -130,26 +162,10 @@ nonisolated extension MarkdownHTML {
             ));
             const states = new WeakMap();
             const renderOptions = \(diagramRenderOptionsJS);
-            // Localized from PeleError's code and position; Pele's own
-            // message is English only.
-            const errorMessages = {
-                'unsupported-diagram': \(javaScriptStringLiteral(NSLocalizedString("This diagram type is not supported.", comment: "Mermaid diagram error"))),
-                syntax: \(javaScriptStringLiteral(NSLocalizedString("The diagram has a syntax error.", comment: "Mermaid diagram error"))),
-                semantic: \(javaScriptStringLiteral(NSLocalizedString("The diagram is not valid.", comment: "Mermaid diagram error"))),
-                limit: \(javaScriptStringLiteral(NSLocalizedString("The diagram is too large to draw.", comment: "Mermaid diagram error")))
-            };
-            const genericError = \(javaScriptStringLiteral(NSLocalizedString("The diagram could not be drawn.", comment: "Mermaid diagram error")));
-            const emptyDiagram = \(javaScriptStringLiteral(NSLocalizedString("This diagram is empty.", comment: "Shown for a Mermaid code block with no source")));
-            const errorPosition = \(javaScriptStringLiteral(NSLocalizedString("Line %d, column %d", comment: "Position of a Mermaid diagram error: line, then column")));
-            function errorMessage(err) {
-                const summary = (err && errorMessages[err.code]) || genericError;
-                if (!(err && err.line > 0)) return summary;
-                // Translations order the numbers positionally (%1$d, %2$d).
-                const position = errorPosition
-                    .replace(/%(1\\$)?d/, String(err.line))
-                    .replace(/%(2\\$)?d/, String(err.column));
-                return summary + ' ' + position;
-            }
+            const messages = \(diagramMessagesJS);
+            const errorMessage = \(diagramErrorMessageJS);
+            const genericError = messages.generic;
+            const emptyDiagram = messages.empty;
             let renderCount = 0;
             const peleColorVariables = \(diagramColorVariableNamesJS);
             const peleStyleVariables = \(diagramStyleVariablesJS);
@@ -492,7 +508,7 @@ nonisolated extension MarkdownHTML {
             window.MdPreview = window.MdPreview || {};
             window.MdPreview.mermaidRenderAll = renderAll;
 
-            return { bootstrap };
+            return { bootstrap, renderAll };
         })()
     """
 
@@ -534,10 +550,12 @@ nonisolated extension MarkdownHTML {
                 // never arrives, the figures say so, as with a missing
                 // bundle, instead of exporting bare source as if it were
                 // drawn; the rest of the document still exports.
+                let waitLimit = null;
                 window.MdPreview = window.MdPreview || {};
                 window.MdPreview.mermaidRenderAll = async () => {
-                    await Promise.race([loaded, new Promise((resolve) => setTimeout(resolve, 5000))]);
-                    if (mm) return window.MdPreview.mermaidRenderAll();
+                    waitLimit = waitLimit || new Promise((resolve) => setTimeout(resolve, 5000));
+                    await Promise.race([loaded, waitLimit]);
+                    if (mm) return mm.renderAll();
                     \(markUndrawnFiguresJS)
                 };
                 window.MdPreviewLazy.lazyRenderer({

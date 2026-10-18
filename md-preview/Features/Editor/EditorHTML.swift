@@ -567,22 +567,14 @@ nonisolated enum EditorHTML {
             aspect-ratio: auto;
             max-height: none;
         }
-        /* Quote bars for a diagram nested in a quote; the bundle sets the
-           padding and one bar position per level. */
-        .cm-md-mermaid-nest {
-            /* Quote lines keep 1em clear at the end, like the preview's quote,
-               and the quote's closing padding sits under its last block; the
-               bar stops above it, as on a quote line. */
-            padding-inline-end: var(--cm-md-nest-end, 0);
-            padding-bottom: var(--cm-md-nest-bottom, 0);
-            background-repeat: no-repeat;
-            background-size: 4px calc(100% - var(--cm-md-nest-bottom, 0px));
-        }
         .cm-md-mermaid-message .cm-md-mermaid-stage {
             position: static;
             display: block;
             \(MarkdownHTML.diagramMessageCSS)
         }
+        /* A diagram nested in a quote or list: the bundle sets the indent,
+           padding and one quote bar per level, as on quote and list lines. */
+        .cm-md-mermaid-nest { background-repeat: no-repeat; }
         \(MarkdownHTML.tableControlsCSS)
         .cm-md-table {
             font-family: ui-monospace, "SF Mono", Menlo, monospace;
@@ -691,7 +683,11 @@ nonisolated enum EditorHTML {
                 try { window.webkit.messageHandlers.\(configuration.bridgeName).postMessage(m); } catch (e) {}
             };
             window.__mdDiagramRenderOptions = \(MarkdownHTML.diagramRenderOptionsJS);
-            window.__mdEmptyDiagramLabel = \(jsStringLiteral(NSLocalizedString("Empty diagram. Click to add Mermaid source.", comment: "Edit-mode placeholder for a Mermaid code block with no source")));
+            window.__mdDiagramMessages = (() => {
+                const messages = \(MarkdownHTML.diagramMessagesJS);
+                messages.forError = \(MarkdownHTML.diagramErrorMessageJS);
+                return messages;
+            })();
             window.__mdTableExpandLabel = \(jsStringLiteral(NSLocalizedString("Expand Table", comment: "Open a table in full screen")));
             window.__mdOpenTablePopup = function (markdown) { post({kind: "tablePopup", markdown}); };
             window.__mdRequestTableContextMenu = function (details) {

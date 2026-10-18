@@ -954,6 +954,17 @@ check("an empty diagram in a quote gets a quoted source line",
     host.querySelector(".cm-md-code-card .cm-md-mermaid-preview") == null)
   editor.destroy()
 }
+{
+  // A diagram under item "100." takes the list's extra digit width, like the
+  // item's own continuation lines.
+  const host = dom.window.document.createElement("div")
+  dom.window.document.body.appendChild(host)
+  const editor = dom.window.MDEditor.create(host, "100. item\n\n     ```mermaid\n     ```\n", {})
+  const nest = host.querySelector(".cm-md-mermaid-nest")
+  check("a diagram in a wide ordered list keeps the extra digit indent",
+    nest != null && /1ch/.test(nest.style.paddingInlineStart))
+  editor.destroy()
+}
 const clickedListed = await clickFirstDiagramAndType("intro\n\n- item\n\n  ```mermaid\n  ```\n\nafter", "g")
 check("an empty diagram in a list keeps the list indent",
   clickedListed.markdown === "intro\n\n- item\n\n  ```mermaid\n  g\n  ```\n\nafter")
