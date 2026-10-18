@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>1UK-8n-QPP.title</key>
+	<string>Dostosuj pasek narzędzi…</string>
+	<key>1Xt-HY-uBw.title</key>
+	<string>Markdown Preview</string>
+	<key>1b7-l0-nxx.title</key>
+	<string>Znajdź</string>
+	<key>2oI-Rn-ZJC.title</key>
+	<string>Przekształcenia</string>
+	<key>3IN-sU-3Bg.title</key>
+	<string>Pisownia</string>
+	<key>3rS-ZA-NoH.title</key>
+	<string>Mowa</string>
+	<key>4EN-yA-p0u.title</key>
+	<string>Znajdź</string>
+	<key>4J7-dP-txa.title</key>
+	<string>Włącz tryb pełnoekranowy</string>
+	<key>4sb-4s-VLi.title</key>
+	<string>Zakończ Markdown Preview</string>
+	<key>5QF-Oa-p0T.title</key>
+	<string>Edycja</string>
+	<key>5kV-Vb-QxS.title</key>
+	<string>Markdown Preview — informacje</string>
+	<key>6dh-zS-Vam.title</key>
+	<string>Przywróć</string>
+	<key>78Y-hA-62v.title</key>
+	<string>Poprawiaj pisownię automatycznie</string>
+	<key>9ic-FL-obx.title</key>
+	<string>Zastąpienia</string>
+	<key>9yt-4B-nSM.title</key>
+	<string>Inteligentne kopiowanie/wklejanie</string>
+	<key>AYu-sK-qS6.title</key>
+	<string>Menu główne</string>
+	<key>Bw7-FT-i3A.title</key>
+	<string>Zachowaj jako…</string>
+	<key>DVo-aG-piG.title</key>
+	<string>Zamknij</string>
+	<key>Dv1-io-Yv7.title</key>
+	<string>Pisownia i gramatyka</string>
+	<key>Ex0-fm-F00.title</key>
+	<string>Eksportuj…</string>
+	<key>Ex1-pd-F01.title</key>
+	<string>Eksportuj jako PDF…</string>
+	<key>F2S-fz-NVQ.title</key>
+	<string>Pomoc</string>
+	<key>FKE-Sm-Kum.title</key>
+	<string>Pomoc Markdown Preview</string>
+	<key>FeM-D8-WVr.title</key>
+	<string>Zastąpienia</string>
+	<key>H8h-7b-M4v.title</key>
+	<string>Widok</string>
+	<key>HFQ-gK-NFA.title</key>
+	<string>Zastępowanie tekstu</string>
+	<key>HFo-cy-zxI.title</key>
+	<string>Pokaż pisownię i gramatykę</string>
+	<key>HyV-fh-RgO.title</key>
+	<string>Widok</string>
+	<key>IAo-SY-fd9.title</key>
+	<string>Otwórz…</string>
+	<key>KaW-ft-85H.title</key>
+	<string>Przywróć zachowane</string>
+	<key>Kd2-mp-pUS.title</key>
+	<string>Pokaż wszystkie</string>
+	<key>LE2-aR-0XJ.title</key>
+	<string>Wszystkie na wierzch</string>
+	<key>NMo-om-nkz.title</key>
+	<string>Usługi</string>
+	<key>OY7-WF-poV.title</key>
+	<string>Minimalizuj</string>
+	<key>Olw-nP-bQN.title</key>
+	<string>Ukryj Markdown Preview</string>
+	<key>OwM-mh-QMV.title</key>
+	<string>Znajdź poprzednie</string>
+	<key>Oyz-dy-DGm.title</key>
+	<string>Przestań mówić</string>
+	<key>R4o-n2-Eq4.title</key>
+	<string>Zoom</string>
+	<key>Ruw-6m-B2m.title</key>
+	<string>Zaznacz wszystko</string>
+	<key>S0p-oC-mLd.title</key>
+	<string>Przejdź do zaznaczenia</string>
+	<key>Td7-aD-5lo.title</key>
+	<string>Okno</string>
+	<key>UEZ-Bs-lqG.title</key>
+	<string>Wielkie litery na początku słów</string>
+	<key>Vdr-fp-XzO.title</key>
+	<string>Ukryj pozostałe</string>
+	<key>W48-6f-4Dl.title</key>
+	<string>Edycja</string>
+	<key>Was-JA-tGl.title</key>
+	<string>Nowy</string>
+	<key>WeT-3V-zwk.title</key>
+	<string>Wklej i dostosuj styl</string>
+	<key>Xz5-n4-O0W.title</key>
+	<string>Znajdź…</string>
+	<key>YEy-JH-Tfz.title</key>
+	<string>Znajdź i zastąp…</string>
+	<key>Ynk-f8-cLZ.title</key>
+	<string>Zacznij mówić</string>
+	<key>aTl-1u-JFS.title</key>
+	<string>Drukuj…</string>
+	<key>aUF-d1-5bR.title</key>
+	<string>Okno</string>
+	<key>bib-Uj-vzu.title</key>
+	<string>Plik</string>
+	<key>buJ-ug-pKt.title</key>
+	<string>Szukaj zaznaczonego tekstu</string>
+	<key>c8a-y6-VQd.title</key>
+	<string>Przekształcenia</string>
+	<key>cwL-P1-jid.title</key>
+	<string>Łącza inteligentne</string>
+	<key>d9M-CD-aMd.title</key>
+	<string>Małe litery</string>
+	<key>dMs-cI-mzQ.title</key>
+	<string>Plik</string>
+	<key>dRJ-4n-Yzg.title</key>
+	<string>Cofnij</string>
+	<key>gVA-U4-sdL.title</key>
+	<string>Wklej</string>
+	<key>hQb-2v-fYv.title</key>
+	<string>Cudzysłowy inteligentne</string>
+	<key>hz2-CU-CR7.title</key>
+	<string>Sprawdź dokument teraz</string>
+	<key>hz9-B4-Xy5.title</key>
+	<string>Usługi</string>
+	<key>kIP-vf-haE.title</key>
+	<string>Pokaż pasek boczny</string>
+	<key>mK6-2p-4JG.title</key>
+	<string>Sprawdzaj gramatykę i pisownię</string>
+	<key>mdp-aot-itm.title</key>
+	<string>Zawsze na wierzchu</string>
+	<key>mdp-zi-itm.title</key>
+	<string>Przybliż</string>
+	<key>mdp-zo-itm.title</key>
+	<string>Oddal</string>
+	<key>mdp-zr-itm.title</key>
+	<string>Wielkość rzeczywista</string>
+	<key>oas-Oc-fiZ.title</key>
+	<string>Otwórz ostatnie</string>
+	<key>pa3-QI-u2k.title</key>
+	<string>Usuń</string>
+	<key>pxx-59-PXV.title</key>
+	<string>Zachowaj…</string>
+	<key>q09-fT-Sye.title</key>
+	<string>Znajdź następne</string>
+	<key>rbD-Rh-wIN.title</key>
+	<string>Sprawdzaj pisownię podczas pisania</string>
+	<key>rgM-f4-ycn.title</key>
+	<string>Myślniki inteligentne</string>
+	<key>snW-S8-Cw5.title</key>
+	<string>Pokaż pasek narzędzi</string>
+	<key>spk-cu-itm.title</key>
+	<string>Sprawdź uaktualnienia…</string>
+	<key>tRr-pd-1PS.title</key>
+	<string>Wykrywacze danych</string>
+	<key>tXI-mr-wws.title</key>
+	<string>Otwórz ostatnie</string>
+	<key>uQy-DD-JDr.title</key>
+	<string>Markdown Preview</string>
+	<key>uRl-iY-unG.title</key>
+	<string>Wytnij</string>
+	<key>vNY-rz-j42.title</key>
+	<string>Wymaż menu</string>
+	<key>vmV-6d-7jI.title</key>
+	<string>Wielkie litery</string>
+	<key>wpr-3q-Mcd.title</key>
+	<string>Pomoc</string>
+	<key>x3v-GG-iWU.title</key>
+	<string>Kopiuj</string>
+	<key>xrE-MZ-jX0.title</key>
+	<string>Mowa</string>
+	<key>z6F-FW-3nz.title</key>
+	<string>Pokaż zastąpienia</string>
+</dict>
+</plist>
