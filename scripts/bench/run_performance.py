@@ -111,12 +111,15 @@ def prepare(label: str, commit: str, out: Path) -> tuple[Path, Path]:
         f'.package(url: {json.dumps(pin["location"])}, revision: {json.dumps(pin["state"]["revision"])})'
         for pin in parser_pins.values()
     )
+    # Copy whichever renderers the revision vendors (Mermaid before the
+    # switch to Pele), so both sides of a comparison build.
+    vendors = sorted(path.name for path in (snapshot / "md-preview/Vendor").iterdir() if path.is_dir())
     (package / "Package.swift").write_text('''// swift-tools-version:6.0
 import PackageDescription
 let package = Package(name: "PerformanceProbe", platforms: [.macOS(.v15)], dependencies: [
 ''' + dependencies + '''], targets: [
 .executableTarget(name: "PerformanceProbe", dependencies: [.product(name: "Markdown", package: "swift-markdown")],
-                  path: "Sources", resources: ["CodeMirror", "DOMPurify", "Highlight", "KaTeX", "Mermaid", "Morphdom"].map { .copy("Vendor/\\($0)") })
+                  path: "Sources", resources: ''' + json.dumps(vendors) + '''.map { .copy("Vendor/\\($0)") })
 ])
 ''')
     run(["swift", "build", "-c", "release", "--package-path", str(package), "--product", "PerformanceProbe"],

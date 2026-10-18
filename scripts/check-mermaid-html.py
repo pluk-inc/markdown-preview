@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
-"""Static smoke checks for Mermaid support in MarkdownHTML.swift."""
+"""Static smoke checks for Mermaid diagram support in the MarkdownHTML renderer."""
 from pathlib import Path
 import sys
 
-source = Path("md-preview/MarkdownHTML.swift").read_text()
+source = "\n".join(
+    Path(path).read_text()
+    for path in (
+        "md-preview/Rendering/MarkdownHTML+Mermaid.swift",
+        "md-preview/Rendering/MarkdownHTML+Stylesheet.swift",
+    )
+)
 checks = {
     "detects mermaid code fences": "language-mermaid" in source and "mermaidRegex" in source,
-    "loads bundled Mermaid renderer": "Vendor/Mermaid" in source and "mermaid.min" in source,
-    "does not load Mermaid from a CDN": "cdn.jsdelivr.net/npm/mermaid" not in source,
-    "initializes Mermaid after page load": "mermaid.initialize" in source and "mermaid.run" in source,
+    "loads bundled Pele renderer": "Vendor/Pele" in source and "pele.global" in source,
+    "does not load a renderer from a CDN": "cdn.jsdelivr.net" not in source,
+    "renders diagrams with Pele after page load": "pele.render" in source and "bootstrap" in source,
+    "maps diagram colours to the theme": "--pele-fg: var(--text)" in source,
     "styles Mermaid containers": ".mermaid" in source,
     "centers rendered diagrams": (
         "justify-content: center" in source
@@ -23,7 +30,6 @@ checks = {
     "opens diagram popup with measured size": (
         'data-mm-act="popup"' in source
         and "kind: 'mermaidPopup'" in source
-        and "naturalWidth" in source
         and "openPopup" in source
     ),
 }

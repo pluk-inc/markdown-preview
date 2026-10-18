@@ -77,7 +77,9 @@ nonisolated enum EPUBExport {
     // A reader shows pictures on its own light page, whatever the preview's theme.
     document.documentElement.setAttribute('data-mdp-color-scheme', 'light');
     const style = document.createElement('style');
-    style.textContent = 'html, body, .mermaid-figure, .mermaid-stage, .mermaid { background: #fff !important; }';
+    // Diagram colours derive from --code-bg, so it turns white with the page.
+    style.textContent = 'html, body, .mermaid-figure, .mermaid-stage, .mermaid { background: #fff !important; }'
+        + ' .mermaid-figure { --code-bg: #fff !important; }';
     document.head.append(style);
     // Preview controls would end up in the pictures, and a closed disclosure
     // hides what the book shows open.
@@ -110,7 +112,7 @@ nonisolated enum EPUBExport {
             const box = svg && svg.getBoundingClientRect();
             if (!box || !drawn(box)) continue;
             // The preview fits each drawing inside a wider element. Report the
-            // drawing itself, and the size Mermaid laid it out at: its text is
+            // drawing itself, and the size Pele laid it out at: its text is
             // body-sized there, which is how large a reader should show it.
             const view = svg.viewBox && svg.viewBox.baseVal;
             const natural = view && view.width > 0 && view.height > 0 ? view : box;

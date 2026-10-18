@@ -62,7 +62,7 @@ def main() -> int:
     (DEST / "copy-tex.min.js").write_bytes(copy_tex)
     (DEST / "katex.min.css").write_text(inlined, encoding="utf-8")
     # File name is intentionally distinct so it does not collide with
-    # md-preview/Vendor/Mermaid/LICENSE in the bundle output directory.
+    # the other vendor license files in the bundle output directory.
     (DEST / "KaTeX-LICENSE.txt").write_bytes(license_text)
     (DEST / "VERSION").write_text(VERSION + "\n", encoding="utf-8")
 

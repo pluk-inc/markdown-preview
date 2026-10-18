@@ -3,7 +3,7 @@ import Foundation
 
 /// Access to production assets and fixtures in the repository checkout.
 /// MarkdownHelpers also bundles Vendor resources so renderer bootstrap paths
-/// (including KaTeX and Mermaid) are the same in tests and the app.
+/// (including KaTeX and Pele) are the same in tests and the app.
 enum TestVendor {
     /// Repository root, derived from this file's location at
     /// `tests/swift-tests/Tests/MarkdownHelpersTests/` (five levels deep).

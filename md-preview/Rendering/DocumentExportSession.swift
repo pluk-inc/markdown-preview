@@ -20,7 +20,6 @@ final class DocumentExportSession {
     }
 
     private let html: String
-    private let mermaidSources: [String]
     private let baseURL: URL?
     private let previewSize: NSSize
     private let previewZoom: CGFloat
@@ -33,10 +32,8 @@ final class DocumentExportSession {
     private var printCompletion: ExportPrintCompletion?
     private(set) var isClosed = false
 
-    private init(html: String, mermaidSources: [String], source: WKWebView,
-                 configuration: WKWebViewConfiguration) {
+    private init(html: String, source: WKWebView, configuration: WKWebViewConfiguration) {
         self.html = html
-        self.mermaidSources = mermaidSources
         baseURL = source.url
         previewSize = source.bounds.size
         previewZoom = source.pageZoom
@@ -58,21 +55,15 @@ final class DocumentExportSession {
             copy.querySelectorAll('input[type="checkbox"]').forEach((box, index) => {
                 box.toggleAttribute('checked', checkboxes[index].checked);
             });
-            return {
-                html: '<!DOCTYPE html>' + copy.outerHTML,
-                mermaidSources: Array.from(document.querySelectorAll('.mermaid'),
-                    node => node.__mdSrc || node.textContent)
-            };
+            return { html: '<!DOCTYPE html>' + copy.outerHTML };
             """, in: nil, contentWorld: .page)
         guard let snapshot = result as? [String: Any],
-              let html = snapshot["html"] as? String,
-              let sources = snapshot["mermaidSources"] as? [String] else {
+              let html = snapshot["html"] as? String else {
             throw exportError("The document could not be prepared for export.")
         }
         configuration.preferences = source.configuration.preferences
         configuration.websiteDataStore = source.configuration.websiteDataStore
-        return DocumentExportSession(html: html, mermaidSources: sources,
-                                     source: source, configuration: configuration)
+        return DocumentExportSession(html: html, source: source, configuration: configuration)
     }
 
     func webView(for format: Format) async throws -> WKWebView {
@@ -159,16 +150,10 @@ final class DocumentExportSession {
                                  "printClass": MarkdownHTML.previewPrintClass, "css": css],
                 in: nil, contentWorld: .page)
             if leavesPreview {
-                if !mermaidSources.isEmpty {
-                    _ = try await page.webView.evaluateJavaScript(MarkdownHTML.paperMermaidScript)
-                    _ = try await page.webView.callAsyncJavaScript("""
-                        document.querySelectorAll('.mermaid').forEach((node, index) => {
-                            node.__mdSrc = sources[index];
-                            node.style.transform = '';
-                        });
-                        await window.MdPreview.mermaidRenderAll('default');
-                        """, arguments: ["sources": mermaidSources], in: nil, contentWorld: .page)
-                }
+                // Diagram colours follow the print palette through CSS
+                // variables, so paper only drops the on-screen pan/zoom.
+                _ = try await page.webView.evaluateJavaScript(
+                    "document.querySelectorAll('.mermaid').forEach(node => { node.style.transform = ''; }); void 0;")
             } else {
                 _ = try await page.webView.callAsyncJavaScript(
                     ExportTableLayout.prepareScript, in: nil, contentWorld: .page)

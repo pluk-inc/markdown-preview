@@ -419,8 +419,10 @@ final class MarkdownHTMLPDFExportTests: XCTestCase {
         let paperSession = try await DocumentExportSession.capture(from: harness.webView)
         let info = printInfo()
         let paperView = try await paperSession.preparePaper(using: info, pointSize: 12)
-        let theme = try await paperView.evaluateJavaScript("document.querySelector('.mermaid').dataset.mmTheme") as? String
-        XCTAssertEqual(theme, "default")
+        // Diagram colours reach the paper palette through CSS variables; the
+        // copy keeps the preview's SVG and only drops its pan/zoom.
+        let transform = try await paperView.evaluateJavaScript("document.querySelector('.mermaid').style.transform") as? String
+        XCTAssertEqual(transform, "")
         let diagramCount = try await paperView.evaluateJavaScript("document.querySelectorAll('.mermaid svg').length") as? Int
         XCTAssertEqual(diagramCount, 1)
         let paper = try await printPDF(paperView, session: paperSession, info: info, name: "paper-rendered-media")

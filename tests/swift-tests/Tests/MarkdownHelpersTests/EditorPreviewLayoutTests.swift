@@ -179,7 +179,7 @@ final class EditorPreviewLayoutTests: XCTestCase {
         let editorScript = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         TestVendor.installHighlighterGrammar()
         let mermaid = fixture.markdown.contains("```mermaid")
-            ? try TestVendor.script("md-preview/Vendor/Mermaid/mermaid.min.js") : nil
+            ? try TestVendor.script("md-preview/Vendor/Pele/pele.global.js") : nil
         let zoom = try XCTUnwrap(Double(ProcessInfo.processInfo.environment["MDP_LAYOUT_ZOOM"] ?? "1"))
         guard zoom > 0 else { throw WebViewLayoutHarness.Failure("Page zoom must be positive") }
         for (width, fullWidth, pageScrolling) in [

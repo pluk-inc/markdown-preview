@@ -103,12 +103,12 @@ nonisolated extension MarkdownHTML {
     </script>
     """
 
-    /// Mermaid wiring IIFE. Assumes the `mermaid` global has been (or will
-    /// be) defined by the time DOMContentLoaded fires — true for both inline
+    /// Mermaid wiring IIFE. Assumes the `pele` global has been (or will be)
+    /// defined by the time DOMContentLoaded fires — true for both inline
     /// vendor `<script>` and `<script defer src=...>` delivery, since `defer`
     /// scripts run before DOMContentLoaded.
     /// Mermaid pan/zoom/HUD/popup wiring. Internal so SPM helper tests can
-    /// drive the real bootstrap path (with a stub `mermaid` + message host).
+    /// drive the real bootstrap path (with a stub `pele` + message host).
     static let mermaidInitWiring = """
     (() => {
             const fillWidthLabel = \(javaScriptStringLiteral(
@@ -120,34 +120,22 @@ nonisolated extension MarkdownHTML {
             const states = new WeakMap();
             const queue = [];
             let drainPromise = null;
-            let initializedTheme = null;
-            let themeOverride = null;
 
-            function selectedTheme() {
-                const nativeScheme = document.documentElement.dataset.mdpColorScheme;
-                if (nativeScheme) return nativeScheme === 'dark' ? 'dark' : 'default';
-                const dark = window.matchMedia
-                    && window.matchMedia('(prefers-color-scheme: dark)').matches;
-                return dark ? 'dark' : 'default';
-            }
-
-            // Paper printing forces the light palette while mermaid bakes its
-            // theme into the SVG, so the host can pin a theme for the length
-            // of a print operation.
-            function activeTheme() {
-                return themeOverride || selectedTheme();
-            }
-
-            function ensureInit(theme) {
-                if (initializedTheme === theme) return;
-                initializedTheme = theme;
-                mermaid.initialize({
-                    startOnLoad: false,
-                    theme,
-                    securityLevel: 'strict',
-                    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif'
-                });
-            }
+            // Pele measures labels with a canvas in this font, and its SVG
+            // draws them in the same one. Colours are not options: the SVG
+            // reads them from --pele-* variables, which the stylesheet maps
+            // to the theme, so appearance changes and paper printing need no
+            // re-render.
+            const renderOptions = {
+                fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
+                // Keep the author's flowchart direction; the figure scales
+                // and zooms instead of re-laying out for narrow windows.
+                autoDirection: false
+            };
+            const peleColorVariables = [
+                '--pele-bg', '--pele-fg', '--pele-muted', '--pele-line',
+                '--pele-surface', '--pele-surface-alt', '--pele-border', '--pele-accent'
+            ];
 
             function drain() {
                 if (drainPromise) return drainPromise;
@@ -170,18 +158,12 @@ nonisolated extension MarkdownHTML {
 
             // Rendering is viewport-driven, so pagination (print/export) must
             // force every remaining figure through the queue and wait for the
-            // drain to settle before the page is captured. Passing a theme
-            // pins it (and re-renders mismatched figures) until the next call
-            // without one restores the on-screen theme.
-            async function renderAll(theme) {
-                themeOverride = theme || null;
-                const want = activeTheme();
+            // drain to settle before the page is captured.
+            async function renderAll() {
                 document.querySelectorAll('.mermaid-figure').forEach((figure) => {
                     const node = figure.querySelector('.mermaid');
                     if (!node || queue.includes(figure)) return;
-                    if (node.dataset.mmDone !== '1' || node.dataset.mmTheme !== want) {
-                        queue.push(figure);
-                    }
+                    if (node.dataset.mmDone !== '1') queue.push(figure);
                 });
                 while (queue.length || drainPromise) {
                     await drain();
@@ -189,39 +171,29 @@ nonisolated extension MarkdownHTML {
             }
 
             async function renderOne(figure) {
-                const theme = activeTheme();
-                ensureInit(theme);
                 const node = figure.querySelector('.mermaid');
-                if (!node) return;
-                if (node.dataset.mmDone === '1') {
-                    if (node.dataset.mmTheme === theme) return;
-                    if (typeof node.__mdSrc !== 'string') return;
-                    // Theme change: put the stashed source back and clear any
-                    // pan/zoom transform now, so a pagination that starts
-                    // before the next frame never captures a stale state.
-                    const prior = states.get(figure);
-                    if (prior && prior.surface) prior.surface.style.transform = '';
-                    node.textContent = node.__mdSrc;
-                    node.removeAttribute('data-processed');
-                    delete node.dataset.mmDone;
-                } else {
-                    // Pre-render source, stashed so MdPreview.update can pair
-                    // unchanged diagrams with their SVGs during DOM diffs.
-                    node.__mdSrc = node.textContent;
-                }
+                if (!node || node.dataset.mmDone === '1') return;
+                // Pre-render source, stashed so MdPreview.update can pair
+                // unchanged diagrams with their SVGs during DOM diffs.
+                if (typeof node.__mdSrc !== 'string') node.__mdSrc = node.textContent;
+                let result;
                 try {
-                    await mermaid.run({ nodes: [node], suppressErrors: true });
+                    result = pele.render(node.__mdSrc, renderOptions);
                 } catch (err) {
+                    // PeleError messages are plain text with the line and
+                    // column; show them above the source, never as HTML.
+                    node.textContent = String((err && err.message) || err) + '\\n\\n' + node.__mdSrc;
+                    node.classList.add('mermaid-error');
                     figure.classList.add('mermaid-error');
                     return;
                 }
+                node.innerHTML = result.svg;
                 const svg = node.querySelector('svg');
                 if (!svg) {
                     figure.classList.add('mermaid-error');
                     return;
                 }
                 node.dataset.mmDone = '1';
-                node.dataset.mmTheme = theme;
                 attachZoom(figure, svg);
             }
 
@@ -313,7 +285,17 @@ nonisolated extension MarkdownHTML {
                 if (!s || !s.svg) return;
                 const svg = s.svg;
                 const clone = svg.cloneNode(true);
-                clone.removeAttribute('style');
+                // Keep the style attribute: it wires Pele's --pele-* inputs
+                // into the drawing. The popup has none of this page's CSS,
+                // so carry the theme colours along, resolved to plain values
+                // (the tokens are system colours and color-mix() here).
+                const probe = document.createElement('span');
+                figure.appendChild(probe);
+                for (const name of peleColorVariables) {
+                    probe.style.color = 'var(' + name + ')';
+                    clone.style.setProperty(name, getComputedStyle(probe).color);
+                }
+                probe.remove();
                 clone.setAttribute('preserveAspectRatio', 'xMidYMid meet');
                 clone.removeAttribute('width');
                 clone.removeAttribute('height');
@@ -490,19 +472,13 @@ nonisolated extension MarkdownHTML {
         })()
     """
 
-    static var paperMermaidScript: String {
-        let vendor = bundledVendorResource("mermaid.min", ext: "js", subdir: "Vendor/Mermaid") ?? ""
-        return vendor + "\n" + mermaidInitWiring
-            + ";\nvoid 0;"
-    }
-
     static func mermaidScript(mode: VendorLoading) -> VendorEmission {
-        guard bundledVendorURL("mermaid.min", ext: "js", subdir: "Vendor/Mermaid") != nil else {
+        guard bundledVendorURL("pele.global", ext: "js", subdir: "Vendor/Pele") != nil else {
             return VendorEmission(head: mermaidFallbackScript)
         }
         switch mode {
         case .inline:
-            let vendorJS = bundledVendorResource("mermaid.min", ext: "js", subdir: "Vendor/Mermaid") ?? ""
+            let vendorJS = bundledVendorResource("pele.global", ext: "js", subdir: "Vendor/Pele") ?? ""
             let safeVendor = vendorJS.replacingOccurrences(of: "</script", with: "<\\/script")
             return VendorEmission(
                 body: """
@@ -527,7 +503,7 @@ nonisolated extension MarkdownHTML {
             (() => {
                 let mm = null;
                 window.MdPreviewLazy.lazyRenderer({
-                    src: '\(MarkdownAssetScheme.vendorURL("mermaid.min.js"))',
+                    src: '\(MarkdownAssetScheme.vendorURL("pele.global.js"))',
                     run: () => {
                         mm = mm || \(mermaidInitWiring);
                         mm.bootstrap();

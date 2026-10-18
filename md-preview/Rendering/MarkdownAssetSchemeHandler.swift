@@ -59,7 +59,7 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
         let mapping: [String: (name: String, ext: String, subdir: String)] = [
             "katex.min.js":     ("katex.min",     "js",  "Vendor/KaTeX"),
             "copy-tex.min.js":  ("copy-tex.min",  "js",  "Vendor/KaTeX"),
-            "mermaid.min.js":   ("mermaid.min",   "js",  "Vendor/Mermaid"),
+            "pele.global.js":   ("pele.global",   "js",  "Vendor/Pele"),
             "highlight.min.js": ("highlight.min", "js",  "Vendor/Highlight"),
             "purify.min.js":    ("purify.min",    "js",  "Vendor/DOMPurify"),
         ]

@@ -15,8 +15,8 @@
 		9A33940C2FA5AF500015D9A4 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 9A33940B2FA5AF500015D9A4 /* Markdown */; };
 		9A7B10012FB0000100010001 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 9A7B10032FB0000100010001 /* Sentry */; };
 		9AC100010000000000000001 /* bin/markdown-preview in Copy CLI Tool */ = {isa = PBXBuildFile; fileRef = 9AC100010000000000000002 /* bin/markdown-preview */; };
-		9AF000000000000000000003 /* mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000101 /* mermaid.min.js */; };
-		9AF000000000000000000004 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000102 /* LICENSE */; };
+		9AF000000000000000000003 /* pele.global.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000101 /* pele.global.js */; };
+		9AF000000000000000000004 /* Pele-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000102 /* Pele-LICENSE.txt */; };
 		9AF000000000000000000005 /* katex.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000103 /* katex.min.js */; };
 		9AF000000000000000000006 /* katex.min.css in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000104 /* katex.min.css */; };
 		9AF000000000000000000007 /* copy-tex.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000105 /* copy-tex.min.js */; };
@@ -70,8 +70,8 @@
 		9A2040010000000000000002 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = "md-preview/en.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		9A2040010000000000000003 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "md-preview/zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		9AC100010000000000000002 /* bin/markdown-preview */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "bin/markdown-preview"; sourceTree = "<group>"; };
-		9AF000000000000000000101 /* mermaid.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = mermaid.min.js; path = "md-preview/Vendor/Mermaid/mermaid.min.js"; sourceTree = "<group>"; };
-		9AF000000000000000000102 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE; path = "md-preview/Vendor/Mermaid/LICENSE"; sourceTree = "<group>"; };
+		9AF000000000000000000101 /* pele.global.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = pele.global.js; path = "md-preview/Vendor/Pele/pele.global.js"; sourceTree = "<group>"; };
+		9AF000000000000000000102 /* Pele-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "Pele-LICENSE.txt"; path = "md-preview/Vendor/Pele/Pele-LICENSE.txt"; sourceTree = "<group>"; };
 		9AF000000000000000000103 /* katex.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = katex.min.js; path = "md-preview/Vendor/KaTeX/katex.min.js"; sourceTree = "<group>"; };
 		9AF000000000000000000104 /* katex.min.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; name = katex.min.css; path = "md-preview/Vendor/KaTeX/katex.min.css"; sourceTree = "<group>"; };
 		9AF000000000000000000105 /* copy-tex.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "copy-tex.min.js"; path = "md-preview/Vendor/KaTeX/copy-tex.min.js"; sourceTree = "<group>"; };
@@ -173,8 +173,8 @@
 				9A0209A02FA1100100092060 /* Version.xcconfig */,
 				9A2040010000000000000004 /* Localizable.strings */,
 				9AC100010000000000000004 /* Resources */,
-				9AF000000000000000000101 /* mermaid.min.js */,
-				9AF000000000000000000102 /* LICENSE */,
+				9AF000000000000000000101 /* pele.global.js */,
+				9AF000000000000000000102 /* Pele-LICENSE.txt */,
 				9AF000000000000000000103 /* katex.min.js */,
 				9AF000000000000000000104 /* katex.min.css */,
 				9AF000000000000000000105 /* copy-tex.min.js */,
@@ -327,8 +327,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				9A2040010000000000000001 /* Localizable.strings in Resources */,
-				9AF000000000000000000003 /* mermaid.min.js in Resources */,
-				9AF000000000000000000004 /* LICENSE in Resources */,
+				9AF000000000000000000003 /* pele.global.js in Resources */,
+				9AF000000000000000000004 /* Pele-LICENSE.txt in Resources */,
 				9AF000000000000000000005 /* katex.min.js in Resources */,
 				9AF000000000000000000006 /* katex.min.css in Resources */,
 				9AF000000000000000000007 /* copy-tex.min.js in Resources */,

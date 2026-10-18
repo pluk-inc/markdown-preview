@@ -31,7 +31,7 @@ let package = Package(
             ],
             // Copy real child directories; copying the Vendor symlink itself
             // leaves a dangling relative link with SwiftPM's native build system.
-            resources: ["CodeMirror", "DOMPurify", "Highlight", "KaTeX", "Mermaid", "Morphdom"]
+            resources: ["CodeMirror", "DOMPurify", "Highlight", "KaTeX", "Morphdom", "Pele"]
                 .map { .copy("Vendor/\($0)") }
         ),
         .testTarget(

@@ -512,7 +512,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     private static let editorJavaScript =
         vendorResource("mdedit.min", ext: "js", subdir: "Vendor/CodeMirror") ?? ""
     private static let mermaidJavaScript =
-        vendorResource("mermaid.min", ext: "js", subdir: "Vendor/Mermaid") ?? ""
+        vendorResource("pele.global", ext: "js", subdir: "Vendor/Pele") ?? ""
 
     private static func containsMermaidFence(in markdown: String) -> Bool {
         markdown.range(

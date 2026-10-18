@@ -1139,13 +1139,13 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                 }
             }
         };
-        window.mermaid = {
-            initialize() {},
-            async run({ nodes }) {
-                for (const node of nodes) {
-                    node.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200">'
-                        + '<rect width="400" height="200" fill="#4a90d9"/></svg>';
-                }
+        window.pele = {
+            render() {
+                return {
+                    svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200"'
+                        + ' style="--_fg:var(--pele-fg,#1f1f1f)">'
+                        + '<rect width="400" height="200" fill="var(--_fg)"/></svg>'
+                };
             }
         };
         </script>
@@ -1163,7 +1163,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(10))
         }
 
-        // Wait for IntersectionObserver → mock mermaid.run → attachZoom.
+        // Wait for IntersectionObserver → stub pele.render → attachZoom.
         var renderedReady = false
         for _ in 0..<100 {
             let done = try await webView.evaluateJavaScript(
@@ -1191,6 +1191,11 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(hudPayload.sectionTitle, "1. System overview")
         // Clone should not carry pan/zoom transform styles from the surface.
         XCTAssertFalse(hudPayload.svg.contains("transform:"), hudPayload.svg)
+        // The popup has no page stylesheet: Pele's variable wiring stays and
+        // the theme colours travel with the SVG as resolved values.
+        XCTAssertTrue(hudPayload.svg.contains("--_fg: var(--pele-fg"), hudPayload.svg)
+        XCTAssertTrue(hudPayload.svg.contains("--pele-fg: rgb"), hudPayload.svg)
+        XCTAssertFalse(hudPayload.svg.contains("color-mix"), hudPayload.svg)
 
         // Double-click still zooms (the HUD ⛶ button is the only popup trigger).
         _ = try await webView.evaluateJavaScript("window.__posted = []; true")
@@ -1227,47 +1232,44 @@ final class MarkdownHTMLRenderTests: XCTestCase {
     }
 
     @MainActor
-    func testMermaidNativeColorSchemeOverridesMatchMedia() async throws {
+    func testMermaidColorsFollowTheThemeWithoutRerendering() async throws {
         let rendered = MarkdownHTML.render(
             markdown: """
             ```mermaid
-            journey
-                title My working day
-                section Go to work
-                  Make tea: 5: Me
+            flowchart LR
+                A --> B
             ```
             """,
             vendorLoading: .lazy,
             colorScheme: .dark
         )
+        let stylesheet = try XCTUnwrap(
+            rendered.html
+                .components(separatedBy: "<style>")
+                .dropFirst()
+                .first?
+                .components(separatedBy: "</style>")
+                .first
+        )
 
         let html = """
         <!DOCTYPE html>
         <html data-mdp-color-scheme="dark"><head>
+        <style>\(stylesheet)</style>
         <script>
-        window.__themes = [];
         window.__runs = 0;
-        Object.defineProperty(window, 'matchMedia', {
-            value: () => ({ matches: false }),
-            configurable: true
-        });
         window.IntersectionObserver = class {
             constructor(callback) { this.callback = callback; }
             observe(target) { this.callback([{ target, isIntersecting: true }]); }
             unobserve() {}
         };
         window.ResizeObserver = class {
-            constructor() {}
             observe() {}
         };
-        window.mermaid = {
-            initialize(options) { window.__themes.push(options.theme); },
-            async run({ nodes }) {
+        window.pele = {
+            render() {
                 window.__runs += 1;
-                const theme = window.__themes[window.__themes.length - 1];
-                for (const node of nodes) {
-                    node.innerHTML = '<svg viewBox="0 0 400 200" data-theme="' + theme + '"></svg>';
-                }
+                return { svg: '<svg viewBox="0 0 400 200"><rect width="400" height="200" fill="var(--pele-surface)"/></svg>' };
             }
         };
         </script></head><body>
@@ -1284,22 +1286,98 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(10))
         }
 
-        var darkRenderReady = false
-        for _ in 0..<100 {
-            let state = try await webView.evaluateJavaScript("""
-            JSON.stringify({
-                themes: window.__themes,
-                runs: window.__runs,
-                renderedTheme: document.querySelector('.mermaid svg')?.dataset.theme || ''
-            })
+        func surface() async throws -> String? {
+            try await webView.evaluateJavaScript("""
+            (() => {
+                const rect = document.querySelector('.mermaid svg rect');
+                return rect ? getComputedStyle(rect).fill + '|' + window.__runs : null;
+            })()
             """) as? String
-            if state == #"{"themes":["dark"],"runs":1,"renderedTheme":"dark"}"# {
-                darkRenderReady = true
-                break
-            }
+        }
+        var dark: String?
+        for _ in 0..<100 {
+            dark = try await surface()
+            if dark != nil { break }
             try await Task.sleep(for: .milliseconds(20))
         }
-        XCTAssertTrue(darkRenderReady, "native dark appearance must win when matchMedia reports light")
+        let darkSurface = try XCTUnwrap(dark, "figure should finish its stub render")
+        XCTAssertTrue(darkSurface.hasSuffix("|1"), darkSurface)
+
+        _ = try await webView.evaluateJavaScript(
+            "document.documentElement.dataset.mdpColorScheme = 'light'; true"
+        )
+        let afterChange = try await surface()
+        let lightSurface = try XCTUnwrap(afterChange)
+        XCTAssertTrue(lightSurface.hasSuffix("|1"), "a theme change must not re-render: \(lightSurface)")
+        XCTAssertNotEqual(darkSurface, lightSurface, "diagram colours must follow the page theme")
+    }
+
+    @MainActor
+    func testMermaidShowsPeleErrorAboveTheSource() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ```mermaid
+            flowchart LR
+                A -->
+            ```
+            """,
+            vendorLoading: .lazy
+        )
+        let html = """
+        <!DOCTYPE html>
+        <html><head>
+        <script>
+        window.IntersectionObserver = class {
+            constructor(callback) { this.callback = callback; }
+            observe(target) { this.callback([{ target, isIntersecting: true }]); }
+            unobserve() {}
+        };
+        window.ResizeObserver = class {
+            observe() {}
+        };
+        window.pele = {
+            render() { throw new Error('Expected a node at line 2, column 10 <b>'); }
+        };
+        </script></head><body>
+        <article class="markdown-body">\(rendered.articleHTML)</article>
+        <script>
+        const __mdpMermaid = \(MarkdownHTML.mermaidInitWiring);
+        __mdpMermaid.bootstrap();
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        var state: String?
+        for _ in 0..<100 {
+            state = try await webView.evaluateJavaScript("""
+            (() => {
+                const figure = document.querySelector('.mermaid-figure.mermaid-error');
+                if (!figure) return null;
+                const node = figure.querySelector('.mermaid');
+                return JSON.stringify({
+                    nodeError: node.classList.contains('mermaid-error'),
+                    tags: node.children.length,
+                    text: node.textContent.trim()
+                });
+            })()
+            """) as? String
+            if state != nil { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let json = try XCTUnwrap(state, "a failed render must mark the figure")
+        let decoded = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any]
+        )
+        XCTAssertEqual(decoded["nodeError"] as? Bool, true)
+        XCTAssertEqual(decoded["tags"] as? Int, 0, "the message must be text, never HTML")
+        let text = try XCTUnwrap(decoded["text"] as? String)
+        XCTAssertTrue(text.hasPrefix("Expected a node at line 2, column 10 <b>"), text)
+        XCTAssertTrue(text.contains("flowchart LR"), text)
     }
 
     @MainActor
@@ -1333,13 +1411,10 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         window.ResizeObserver = class {
             observe() {}
         };
-        window.mermaid = {
-            initialize() {},
-            async run({ nodes }) {
+        window.pele = {
+            render() {
                 window.__runs += 1;
-                for (const node of nodes) {
-                    node.innerHTML = '<svg viewBox="0 0 400 200"></svg>';
-                }
+                return { svg: '<svg viewBox="0 0 400 200"></svg>' };
             }
         };
         </script></head><body>
@@ -1380,101 +1455,6 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             allRendered,
             "renderAll must render every unobserved figure and settle afterwards"
         )
-    }
-
-    @MainActor
-    func testMermaidRenderAllRethemesForPaperPrintAndRestores() async throws {
-        let rendered = MarkdownHTML.render(
-            markdown: """
-            ```mermaid
-            flowchart LR
-                A --> B
-            ```
-            """,
-            vendorLoading: .lazy,
-            colorScheme: .dark
-        )
-
-        let html = """
-        <!DOCTYPE html>
-        <html data-mdp-color-scheme="dark"><head>
-        <script>
-        window.__themes = [];
-        window.IntersectionObserver = class {
-            constructor(callback) { this.callback = callback; }
-            observe(target) { this.callback([{ target, isIntersecting: true }]); }
-            unobserve() {}
-        };
-        window.ResizeObserver = class {
-            observe() {}
-        };
-        window.mermaid = {
-            initialize(options) { window.__themes.push(options.theme); },
-            async run({ nodes }) {
-                const theme = window.__themes[window.__themes.length - 1];
-                for (const node of nodes) {
-                    node.innerHTML = '<svg viewBox="0 0 400 200" data-theme="' + theme + '"></svg>';
-                }
-            }
-        };
-        </script></head><body>
-        <article class="markdown-body">\(rendered.articleHTML)</article>
-        <script>
-        const __mdpMermaid = \(MarkdownHTML.mermaidInitWiring);
-        __mdpMermaid.bootstrap();
-        </script>
-        </body></html>
-        """
-        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
-        webView.loadHTMLString(html, baseURL: nil)
-        while webView.isLoading {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-
-        func diagramState() async throws -> String? {
-            try await webView.evaluateJavaScript("""
-            JSON.stringify({
-                themes: window.__themes,
-                mmTheme: document.querySelector('.mermaid')?.dataset.mmTheme || '',
-                svgTheme: document.querySelector('.mermaid svg')?.dataset.theme || ''
-            })
-            """) as? String
-        }
-
-        func waitFor(_ expected: String) async throws -> Bool {
-            for _ in 0..<100 {
-                if try await diagramState() == expected { return true }
-                try await Task.sleep(for: .milliseconds(20))
-            }
-            return false
-        }
-
-        let renderedDark = try await waitFor(
-            #"{"themes":["dark"],"mmTheme":"dark","svgTheme":"dark"}"#
-        )
-        XCTAssertTrue(renderedDark, "initial render must use the native dark theme")
-
-        // Paper print: pin the light theme and re-render the finished figure.
-        _ = try await webView.evaluateJavaScript("""
-        window.__paperDone = false;
-        window.MdPreview.mermaidRenderAll('default').then(() => {
-            window.__paperDone = true;
-        });
-        true
-        """)
-        let rethemed = try await waitFor(
-            #"{"themes":["dark","default"],"mmTheme":"default","svgTheme":"default"}"#
-        )
-        XCTAssertTrue(rethemed, "a pinned theme must re-render already-finished figures")
-
-        // Panel dismissed: restore the on-screen theme.
-        _ = try await webView.evaluateJavaScript(
-            "window.MdPreview.mermaidRenderAll(); true"
-        )
-        let restored = try await waitFor(
-            #"{"themes":["dark","default","dark"],"mmTheme":"dark","svgTheme":"dark"}"#
-        )
-        XCTAssertTrue(restored, "a bare renderAll must restore the on-screen theme")
     }
 
     @MainActor

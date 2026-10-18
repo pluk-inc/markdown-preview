@@ -541,6 +541,7 @@ nonisolated enum EditorHTML {
             background: var(--code-bg);
             cursor: text;
             box-sizing: border-box;
+            \(MarkdownHTML.diagramColorVariablesCSS)
         }
         .cm-md-mermaid-stage {
             position: absolute;
@@ -662,17 +663,6 @@ nonisolated enum EditorHTML {
         <body>
         <div id="editor"></div>
         \(includesMermaid ? "<script>\(mermaidJavaScript)</script>" : "")
-        \(includesMermaid ? """
-        <script>
-        if (window.mermaid) {
-            window.mermaid.initialize({
-                startOnLoad: false,
-                securityLevel: "strict",
-                theme: window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default"
-            });
-        }
-        </script>
-        """ : "")
         <script>\(editorJavaScript)</script>
         <script>
         (function () {

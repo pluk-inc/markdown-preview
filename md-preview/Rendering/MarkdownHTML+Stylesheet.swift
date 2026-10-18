@@ -18,6 +18,21 @@ nonisolated extension MarkdownHTML {
     /// runtime, yet its spans still need their colors.
     static let stylesheet = baseStylesheet + "\n" + highlightThemeCSS + "\n" + tableControlsCSS
 
+    /// Pele's SVG reads its colours from these, so diagrams follow the theme,
+    /// appearance changes and the paper palette without a re-render. Shared by
+    /// the preview's figure and the editor's widget; the mixes match Pele's
+    /// own light defaults.
+    static let diagramColorVariablesCSS = """
+    --pele-bg: var(--code-bg);
+    --pele-fg: var(--text);
+    --pele-muted: var(--secondary);
+    --pele-line: color-mix(in srgb, var(--text) 85%, var(--code-bg));
+    --pele-surface: color-mix(in srgb, var(--text) 6%, var(--code-bg));
+    --pele-surface-alt: color-mix(in srgb, var(--text) 11%, var(--code-bg));
+    --pele-border: color-mix(in srgb, var(--text) 45%, var(--code-bg));
+    --pele-accent: var(--accent);
+    """
+
     static let tableControlsCSS = """
     /* Shrink to the table so the Expand button sits at the table's edge, not the column's. */
     .md-table-wrap { position: relative; margin-top: \(largeBlockSpacing)px; padding-top: 28px; width: fit-content; max-width: 100%; }
@@ -486,6 +501,7 @@ nonisolated extension MarkdownHTML {
         aspect-ratio: var(--mm-aspect, 4 / 3);
         max-height: var(--mm-max-height);
         contain: layout paint;
+        \(diagramColorVariablesCSS)
     }
     .mermaid-figure.mermaid-width-expanded {
         width: 100%;
@@ -588,6 +604,18 @@ nonisolated extension MarkdownHTML {
     @media (prefers-reduced-motion: reduce) {
         .mermaid-hud { transition: none; }
     }
+    /* A diagram that cannot be drawn shows the message and its source in
+       flow, so the figure sizes to the text instead of the aspect ratio. */
+    .mermaid-figure.mermaid-error {
+        aspect-ratio: auto;
+        max-width: none;
+        max-height: none;
+    }
+    .mermaid-figure.mermaid-error .mermaid-stage {
+        position: static;
+        contain: none;
+    }
+    .mermaid-figure.mermaid-error .mermaid-hud { display: none; }
     .mermaid-error {
         position: static;
         aspect-ratio: auto;

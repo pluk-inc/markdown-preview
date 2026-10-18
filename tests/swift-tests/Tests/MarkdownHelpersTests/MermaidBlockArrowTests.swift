@@ -18,9 +18,9 @@ final class MermaidBlockArrowTests: XCTestCase {
         while Date() < deadline {
             if !webView.isLoading {
                 edges = (try await webView.evaluateJavaScript("""
-                Array.from(document.querySelectorAll('.mermaid svg path.flowchart-link')).map(path => ({
-                    dash: getComputedStyle(path).strokeDasharray,
-                    marker: path.getAttribute('marker-end') || ''
+                Array.from(document.querySelectorAll('.mermaid svg .pele-edge')).map(edge => ({
+                    dash: getComputedStyle(edge.querySelector('path:not(.pele-marker)')).strokeDasharray,
+                    marker: edge.querySelector('path.pele-marker') ? 'arrowhead' : ''
                 }))
                 """)) as? [[String: String]] ?? []
                 if edges.count == 3 { break }
@@ -35,7 +35,7 @@ final class MermaidBlockArrowTests: XCTestCase {
             XCTAssertFalse(try XCTUnwrap(edge["dash"]).isEmpty)
         }
         for edge in edges {
-            XCTAssertTrue(try XCTUnwrap(edge["marker"]).contains("url("), "Every link must retain its arrowhead")
+            XCTAssertEqual(edge["marker"], "arrowhead", "Every link must retain its arrowhead")
         }
     }
 }

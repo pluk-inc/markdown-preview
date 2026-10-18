@@ -145,7 +145,7 @@ final class EPUBExportTests: XCTestCase {
         XCTAssertEqual(loose.count, 0)
 
         // The diagram becomes a picture drawn for a light page, shown at the
-        // size Mermaid laid it out and stored at twice that.
+        // size Pele laid it out and stored at twice that.
         let width = try XCTUnwrap(sections[2].firstMatch(
             of: /<img src="images\/image-3\.png" alt="Mermaid diagram" width="(\d+)"/)?.1).flatMap { Int($0) }
         XCTAssertFalse(sections[2].contains("<svg"))
@@ -153,7 +153,7 @@ final class EPUBExportTests: XCTestCase {
         let displayWidth = try XCTUnwrap(width)
         XCTAssertTrue((200...330).contains(displayWidth), "\(displayWidth)")
         XCTAssertEqual(Double(diagram.pixelsWide), Double(displayWidth * 2), accuracy: 3)
-        XCTAssertEqual(Double(diagram.pixelsWide) / Double(diagram.pixelsHigh), 263.0 / 70, accuracy: 0.3)
+        XCTAssertEqual(Double(diagram.pixelsWide) / Double(diagram.pixelsHigh), 213.0 / 64, accuracy: 0.3)
         // Whole and uncropped: a light margin all round, with ink inside it.
         var darkest: CGFloat = 1
         for x in stride(from: 0, to: diagram.pixelsWide, by: 3) {
@@ -351,18 +351,8 @@ final class EPUBExportTests: XCTestCase {
         let html = MarkdownHTML.render(markdown: markdown, allowsScroll: true,
                                        assetBaseHref: folder.map(MarkdownAssetResolution.baseHref(forFolder:)),
                                        vendorLoading: .inline, colorScheme: .dark).html
-        return WebViewLayoutHarness(html: appLikeMermaidStart(html), width: 900, isEditor: false, height: 600,
+        return WebViewLayoutHarness(html: html, width: 900, isEditor: false, height: 600,
                                     schemeHandlers: assetHandler.map { [MarkdownAssetResolution.scheme: $0] } ?? [:])
-    }
-
-    /// The app loads Mermaid after the page's load event, so Mermaid's own
-    /// start-on-load pass never runs there and every diagram goes through the
-    /// preview's renderer. This inline test page loads it earlier; switch that
-    /// pass off so diagrams take the same path as in the app.
-    private func appLikeMermaidStart(_ html: String) -> String {
-        guard let end = html.range(of: "</body>", options: .backwards) else { return html }
-        return html.replacingCharacters(
-            in: end, with: "<script>window.mermaid && (mermaid.startOnLoad = false);</script></body>")
     }
 
     private func export(from harness: WebViewLayoutHarness, markdown: String, name: String,

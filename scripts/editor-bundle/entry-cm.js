@@ -288,33 +288,36 @@ class MermaidWidget extends WidgetType {
       })
     })
 
-    const mermaid = window.mermaid
-    if (!mermaid || typeof mermaid.render !== "function") {
+    const pele = window.pele
+    if (!pele || typeof pele.render !== "function") {
       stage.textContent = "Mermaid preview unavailable. Click to edit source."
       return figure
     }
 
-    const id = `md-editor-mermaid-${++mermaidWidgetID}`
-    Promise.resolve(mermaid.render(id, this.source))
-      .then(({ svg }) => {
-        stage.innerHTML = svg
-        const diagram = stage.querySelector("svg")
-        const box = diagram?.viewBox?.baseVal
-        if (diagram && box?.width > 0 && box?.height > 0) {
-          figure.style.setProperty("--mm-aspect", `${box.width} / ${box.height}`)
-          diagram.removeAttribute("width")
-          diagram.removeAttribute("height")
-          diagram.setAttribute("preserveAspectRatio", "xMidYMid meet")
-          diagram.style.width = "100%"
-          diagram.style.height = "100%"
-        }
-        view.requestMeasure()
+    // Pele renders synchronously, so the widget is complete when CodeMirror
+    // first measures it. Its SVG takes colours from the --pele-* variables
+    // on the figure; the font matches the preview's.
+    try {
+      const { svg } = pele.render(this.source, {
+        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
+        autoDirection: false,
+        idPrefix: `md-editor-mermaid-${++mermaidWidgetID}-`,
       })
-      .catch(() => {
-        stage.textContent = "Unable to render Mermaid diagram. Click to edit source."
-        figure.classList.add("cm-md-mermaid-error")
-        view.requestMeasure()
-      })
+      stage.innerHTML = svg
+      const diagram = stage.querySelector("svg")
+      const box = diagram?.viewBox?.baseVal
+      if (diagram && box?.width > 0 && box?.height > 0) {
+        figure.style.setProperty("--mm-aspect", `${box.width} / ${box.height}`)
+        diagram.removeAttribute("width")
+        diagram.removeAttribute("height")
+        diagram.setAttribute("preserveAspectRatio", "xMidYMid meet")
+        diagram.style.width = "100%"
+        diagram.style.height = "100%"
+      }
+    } catch {
+      stage.textContent = "Unable to render Mermaid diagram. Click to edit source."
+      figure.classList.add("cm-md-mermaid-error")
+    }
     return figure
   }
 

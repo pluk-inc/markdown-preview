@@ -132,7 +132,9 @@ private struct PerformanceProbe {
                source: documents.map(\.1).joined(), unit: "MiB")
 
         let editorScript = try script("CodeMirror/mdedit.min.js")
-        let mermaidScript = try script("Mermaid/mermaid.min.js")
+        // Each revision is measured with its own diagram renderer: Pele, or
+        // Mermaid before the switch.
+        let mermaidScript = try (try? script("Pele/pele.global.js")) ?? script("Mermaid/mermaid.min.js")
         let large = documents[4].1
         let media = """
         # Rendered media
