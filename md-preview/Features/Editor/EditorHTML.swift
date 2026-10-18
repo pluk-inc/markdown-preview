@@ -377,9 +377,12 @@ nonisolated enum EditorHTML {
             font-variant-numeric: tabular-nums;
         }
         /* The preview's ::marker ends "1." one marker space before the text;
-           0.25em puts the rendered number on the same pixels. The editable
-           source keeps 0.5em, since its own trailing space adds the rest. */
-        .cm-md-ordered { color: var(--link); padding-inline-end: 0.25em; }
+           0.25em puts the number on the same pixels. The active source hides
+           its trailing space, so it takes the same padding and the number
+           does not move when the caret enters or leaves the line. */
+        .cm-md-ordered,
+        .cm-md-ordered-source { padding-inline-end: 0.25em; }
+        .cm-md-ordered { color: var(--link); }
         .cm-md-ordered-source { color: var(--secondary); }
         /* Continuation lines of an item keep the depth padding but no hanging
            indent, so they align with the item text like the preview. */
