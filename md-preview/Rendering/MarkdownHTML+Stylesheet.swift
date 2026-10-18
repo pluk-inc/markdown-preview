@@ -633,6 +633,15 @@ nonisolated extension MarkdownHTML {
     .mermaid-hud-btn:active {
         background: color-mix(in srgb, var(--text) 18%, transparent);
     }
+    /* −, + and ⛶ draw about 1px below the middle of the text box (− and +
+       sit on the font's maths axis); shift them up inside the same button
+       box, measured centred to a quarter point. */
+    .mermaid-hud-btn[data-mm-act="out"],
+    .mermaid-hud-btn[data-mm-act="in"],
+    .mermaid-hud-btn[data-mm-act="popup"] {
+        padding-top: 4px;
+        padding-bottom: 6px;
+    }
     .mermaid-hud-level {
         min-width: 46px;
         font-variant-numeric: tabular-nums;
