@@ -337,11 +337,13 @@ nonisolated enum EditorHTML {
         .cm-md-bullet::after {
             content: "";
             position: absolute;
-            /* Match the preview's 0.75em gap between the circle and the
-               item text. */
-            inset-inline-end: 0.75em;
-            top: 50%;
-            transform: translateY(-50%);
+            /* Place the 0.4em circle the way the preview does: from its start
+               edge, 0.75em before the item text, and centred by layout, not a
+               transform. Both edges and a transform reach the same spot but
+               round to different device pixels, so the dot seemed to shift
+               when switching modes. */
+            inset-inline-start: calc(100% - 1.15em);
+            top: calc(50% - 0.2em);
             width: 0;
             height: 0;
             border: 0.2em solid var(--link);
