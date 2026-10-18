@@ -2,7 +2,7 @@
 
 ## [0.0.68] – 2026-10-18
 
-This release draws Mermaid diagrams with a faster renderer that follows your theme, shows counts for selected text in the inspector, and translates more of the interface.
+This release draws Mermaid diagrams with a faster renderer that follows your theme, shows counts for selected text in the inspector, and translates more of the interface. New Tab no longer offers New Document.
 
 ### Added
 
@@ -12,6 +12,10 @@ This release draws Mermaid diagrams with a faster renderer that follows your the
 
 - **Faster Mermaid diagrams that follow your theme.** `mermaid` code blocks are now drawn by [Pele](https://pele.run), which draws diagrams about 40% faster and makes the app about 5 MB smaller. Diagrams take their colors from the current theme, span the column like code blocks, and accept frontmatter blocks. Layout and spacing differ from before, and a diagram that cannot be drawn shows the error with its line and column. Applies to Read Mode, Edit Mode, Quick Look, and exports ([#539](https://github.com/pluk-inc/markdown-preview/pull/539)).
 - **More of the interface is translated.** Settings, navigation, recent files, search results, formatting and link actions, export messages, and theme and font names now have Japanese, Persian, and Simplified Chinese translations ([#532](https://github.com/pluk-inc/markdown-preview/pull/532)).
+
+### Removed
+
+- **New Document in the New Tab panel.** The file picker that File → New Tab (⌘T) opens no longer has a New Document button, as before 0.0.67. To start a new document, use File → New (⌘N) ([#542](https://github.com/pluk-inc/markdown-preview/pull/542), reverts [#502](https://github.com/pluk-inc/markdown-preview/pull/502)).
 
 ### Fixed
 
