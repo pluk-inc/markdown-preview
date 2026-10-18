@@ -533,7 +533,6 @@ nonisolated enum EditorHTML {
             margin: 0 auto;
             width: 100%;
             --mm-max-height: min(70vh, 720px);
-            max-width: calc(var(--mm-max-height) * (var(--mm-aspect, 4 / 3)));
             aspect-ratio: var(--mm-aspect, 4 / 3);
             max-height: var(--mm-max-height);
             overflow: hidden;

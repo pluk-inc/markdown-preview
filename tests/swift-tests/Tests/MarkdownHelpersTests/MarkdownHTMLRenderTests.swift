@@ -1615,17 +1615,12 @@ final class MarkdownHTMLRenderTests: XCTestCase {
 
         XCTAssertFalse(initial.expanded)
         XCTAssertEqual(initial.buttonPressed, "false")
-        // Pin the size, not just "narrower and centred": a figure collapsed to
-        // 0 x 0 satisfies both of those. The height cap is 70vh of the 600pt
-        // view, and the 1:4 aspect ratio carries it through to the width.
+        // Pin the size: a figure collapsed to 0 x 0 would pass looser checks.
+        // The tray spans the column like a code block at the height cap (70vh
+        // of the 600pt view); the 1:4 drawing is centred inside it.
         XCTAssertEqual(initial.figureHeight, 420, accuracy: 1)
-        XCTAssertEqual(initial.figureWidth, 105, accuracy: 1)
-        XCTAssertLessThan(initial.figureWidth, initial.articleWidth)
-        XCTAssertEqual(
-            initial.figureLeft - initial.articleLeft,
-            (initial.articleWidth - initial.figureWidth) / 2,
-            accuracy: 1
-        )
+        XCTAssertEqual(initial.figureWidth, initial.articleWidth, accuracy: 1)
+        XCTAssertEqual(initial.figureLeft, initial.articleLeft, accuracy: 1)
 
         try await webView.evaluateJavaScript(
             "document.querySelector('[data-mm-act=\"width\"]').click()"
@@ -1638,6 +1633,8 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(expanded.buttonPressed, "true")
         XCTAssertEqual(expanded.figureWidth, expanded.articleWidth, accuracy: 1)
         XCTAssertEqual(expanded.svgWidth, expanded.availableWidth, accuracy: 1)
+        // Fill width lifts the height cap, so the drawing itself spans the column.
+        XCTAssertGreaterThan(expanded.figureHeight, initial.figureHeight + 1)
 
         try await webView.evaluateJavaScript(
             "document.querySelector('[data-mm-act=\"width\"]').click()"
@@ -1649,6 +1646,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(restored.expanded)
         XCTAssertEqual(restored.buttonPressed, "false")
         XCTAssertEqual(restored.figureWidth, initial.figureWidth, accuracy: 1)
+        XCTAssertEqual(restored.figureHeight, initial.figureHeight, accuracy: 1)
     }
 
     /// The article is a flex column on screen, which stretches its children.

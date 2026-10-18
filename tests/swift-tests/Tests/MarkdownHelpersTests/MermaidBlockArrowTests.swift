@@ -38,4 +38,40 @@ final class MermaidBlockArrowTests: XCTestCase {
             XCTAssertEqual(edge["marker"], "arrowhead", "Every link must retain its arrowhead")
         }
     }
+
+    /// Pele reads frontmatter only from the first line, so the figure must
+    /// hold the fence's text exactly, with no line break added before it.
+    @MainActor
+    func testFrontmatterDiagramRenders() async throws {
+        let markdown = """
+        ```mermaid
+        ---
+        title: Reef animals
+        ---
+        classDiagram
+            Animal <|-- Turtle
+            Animal : +int age
+        ```
+        """
+        let rendered = MarkdownHTML.render(markdown: markdown, vendorLoading: .inline)
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 700))
+        webView.loadHTMLString(rendered.html, baseURL: nil)
+        let deadline = Date().addingTimeInterval(20)
+        var state = ""
+        while Date() < deadline {
+            if !webView.isLoading {
+                state = (try await webView.evaluateJavaScript("""
+                (() => {
+                    const figure = document.querySelector('.mermaid-figure');
+                    if (!figure) return '';
+                    if (figure.classList.contains('mermaid-error')) return 'error';
+                    return figure.querySelector('.mermaid svg.pele-class') ? 'class' : '';
+                })()
+                """)) as? String ?? ""
+                if !state.isEmpty { break }
+            }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(state, "class", "A frontmatter diagram must render as its type, not as an error")
+    }
 }

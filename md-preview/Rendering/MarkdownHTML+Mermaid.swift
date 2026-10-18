@@ -65,9 +65,7 @@ nonisolated extension MarkdownHTML {
             let diagram = nsHTML.substring(with: match.range(at: 2))
             rendered += """
             <figure\(sourceAttributes) class="mermaid-figure" tabindex="0" role="img" aria-label="\(diagramLabel)">
-            <div class="mermaid-stage"><div class="mermaid">
-            \(diagram)
-            </div></div>
+            <div class="mermaid-stage"><div class="mermaid">\(diagram)</div></div>
             <div class="mermaid-hud" aria-hidden="true">
             <div class="mermaid-hud-group mermaid-hud-zoom">
             <button type="button" class="mermaid-hud-btn" data-mm-act="out" tabindex="-1" aria-label="\(zoomOut)">−</button>
@@ -122,6 +120,7 @@ nonisolated extension MarkdownHTML {
             const states = new WeakMap();
             const renderOptions = \(diagramRenderOptionsJS);
             const peleColorVariables = \(diagramColorVariableNamesJS);
+            const peleStyleVariables = \(diagramStyleVariableNamesJS);
 
             // pele.render is synchronous, so a batch draws in one pass and
             // announces itself once for the host's height and scroll sync.
@@ -270,6 +269,11 @@ nonisolated extension MarkdownHTML {
                     clone.style.setProperty(name, getComputedStyle(probe).color);
                 }
                 probe.remove();
+                const computed = getComputedStyle(svg);
+                for (const name of peleStyleVariables) {
+                    const value = computed.getPropertyValue(name).trim();
+                    if (value) clone.style.setProperty(name, value);
+                }
                 clone.setAttribute('preserveAspectRatio', 'xMidYMid meet');
                 clone.removeAttribute('width');
                 clone.removeAttribute('height');

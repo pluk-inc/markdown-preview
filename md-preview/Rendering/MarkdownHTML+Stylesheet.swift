@@ -21,22 +21,52 @@ nonisolated extension MarkdownHTML {
     /// Pele's SVG reads its colours from these, so diagrams follow the theme,
     /// appearance changes and the paper palette without a re-render. Shared by
     /// the preview's figure and the editor's widget, and resolved into the
-    /// popup's copy; the mixes match Pele's own light defaults.
+    /// popup's copy.
+    ///
+    /// Tones follow Craft's Beautiful Mermaid recipe: every role is the text
+    /// colour mixed into the background at a fixed weight (secondary text
+    /// 60%, lines 50%, borders 20%, group tint 5%, node tint 3%), so each
+    /// theme preset gets a coherent mono hierarchy in its own colours. The
+    /// background is the code-block tray (`--code-bg`), the link colour stays
+    /// the one accent, and chart series reuse the code highlighting palette,
+    /// which already has light and dark values.
     static let diagramColorVariables: [(name: String, value: String)] = [
         ("--pele-bg", "var(--code-bg)"),
         ("--pele-fg", "var(--text)"),
-        ("--pele-muted", "var(--secondary)"),
-        ("--pele-line", "color-mix(in srgb, var(--text) 85%, var(--code-bg))"),
-        ("--pele-surface", "color-mix(in srgb, var(--text) 6%, var(--code-bg))"),
-        ("--pele-surface-alt", "color-mix(in srgb, var(--text) 11%, var(--code-bg))"),
-        ("--pele-border", "color-mix(in srgb, var(--text) 45%, var(--code-bg))"),
-        ("--pele-accent", "var(--accent)"),
+        ("--pele-muted", "color-mix(in srgb, var(--text) 60%, var(--code-bg))"),
+        ("--pele-line", "color-mix(in srgb, var(--text) 50%, var(--code-bg))"),
+        ("--pele-surface", "color-mix(in srgb, var(--text) 3%, var(--code-bg))"),
+        ("--pele-surface-alt", "color-mix(in srgb, var(--text) 5%, var(--code-bg))"),
+        ("--pele-border", "color-mix(in srgb, var(--text) 20%, var(--code-bg))"),
+        ("--pele-accent", "var(--link)"),
+        ("--pele-critical", "var(--hl-string)"),
+        // Series 2 is magenta so the first two slices stay apart whatever
+        // hue the theme's accent has (Calm's is amber, like --hl-attribute).
+        ("--pele-series-1", "var(--link)"),
+        ("--pele-series-2", "var(--hl-keyword)"),
+        ("--pele-series-3", "var(--hl-variable)"),
+        ("--pele-series-4", "var(--hl-attribute)"),
+        ("--pele-series-5", "var(--hl-string)"),
+        ("--pele-series-6", "var(--hl-type)"),
+        ("--pele-series-7", "var(--hl-preprocessor)"),
+        ("--pele-series-8", "var(--hl-comment)"),
     ]
-    static let diagramColorVariablesCSS = diagramColorVariables
+    /// Non-colour inputs, copied into the popup as they are: weights match
+    /// table headers and alert titles, and the radius sits between inline
+    /// code (5px) and code blocks (8px).
+    static let diagramStyleVariables: [(name: String, value: String)] = [
+        ("--pele-radius", "6px"),
+        ("--pele-title-weight", "600"),
+        ("--pele-heading-weight", "600"),
+        ("--pele-font-mono", codeFontFamily),
+    ]
+    static let diagramColorVariablesCSS = (diagramColorVariables + diagramStyleVariables)
         .map { "\($0.name): \($0.value);" }
         .joined(separator: "\n")
     static let diagramColorVariableNamesJS = "["
         + diagramColorVariables.map { javaScriptStringLiteral($0.name) }.joined(separator: ", ") + "]"
+    static let diagramStyleVariableNamesJS = "["
+        + diagramStyleVariables.map { javaScriptStringLiteral($0.name) }.joined(separator: ", ") + "]"
 
     /// Options every `pele.render` call shares, in the preview and the editor.
     /// Pele measures labels in the body font and keeps the author's flowchart
@@ -504,12 +534,10 @@ nonisolated extension MarkdownHTML {
         /* The stage is absolutely positioned, so the figure has no width of
            its own. Left to its auto margins inside the article's flex column
            it shrinks to 0 wide, and the aspect ratio then makes it 0 tall.
-           The max-width is the height cap carried through the aspect ratio,
-           which block layout derived by itself: a tall diagram narrows and
-           stays centred rather than filling the column with empty sides. */
+           The tray always spans the column like a code block; a tall diagram
+           hits the height cap and stays centred inside it. */
         --mm-max-height: min(70vh, 720px);
         width: 100%;
-        max-width: calc(var(--mm-max-height) * (var(--mm-aspect, 4 / 3)));
         aspect-ratio: var(--mm-aspect, 4 / 3);
         max-height: var(--mm-max-height);
         contain: layout paint;
