@@ -570,10 +570,13 @@ nonisolated enum EditorHTML {
         /* Quote bars for a diagram nested in a quote; the bundle sets the
            padding and one bar position per level. */
         .cm-md-mermaid-nest {
-            /* Quote lines keep 1em clear at the end, like the preview's quote. */
+            /* Quote lines keep 1em clear at the end, like the preview's quote,
+               and the quote's closing padding sits under its last block; the
+               bar stops above it, as on a quote line. */
             padding-inline-end: var(--cm-md-nest-end, 0);
+            padding-bottom: var(--cm-md-nest-bottom, 0);
             background-repeat: no-repeat;
-            background-size: 4px 100%;
+            background-size: 4px calc(100% - var(--cm-md-nest-bottom, 0px));
         }
         .cm-md-mermaid-message .cm-md-mermaid-stage {
             position: static;

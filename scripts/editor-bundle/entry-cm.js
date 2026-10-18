@@ -267,15 +267,18 @@ class MermaidWidget extends WidgetType {
   // `quoteDepth` and `listDepth` count the containers around the fence. The
   // widget replaces whole lines, so their line styles (quote bars, list
   // indent) no longer reach it; it draws the same ones itself.
-  constructor(source, quoteDepth = 0, listDepth = 0) {
+  // `quoteEnds` counts the quotes that end with the fence: their closing
+  // padding belongs to their last line, which is this widget.
+  constructor(source, quoteDepth = 0, listDepth = 0, quoteEnds = 0) {
     super()
     this.source = source
     this.quoteDepth = quoteDepth
     this.listDepth = listDepth
+    this.quoteEnds = quoteEnds
   }
   eq(other) {
-    return other.source === this.source
-      && other.quoteDepth === this.quoteDepth && other.listDepth === this.listDepth
+    return other.source === this.source && other.quoteDepth === this.quoteDepth
+      && other.listDepth === this.listDepth && other.quoteEnds === this.quoteEnds
   }
 
   toDOM(view) {
@@ -289,6 +292,7 @@ class MermaidWidget extends WidgetType {
     nest.style.paddingInlineStart = `calc(${this.quoteDepth * 1.5}em + ${this.listDepth * MARKER_BOX_EM}em)`
     if (bars.length) {
       nest.style.setProperty("--cm-md-nest-end", "1em")
+      nest.style.setProperty("--cm-md-nest-bottom", `${this.quoteEnds * 0.4}em`)
       nest.style.backgroundImage = bars.map(() => "linear-gradient(var(--quote-border), var(--quote-border))").join(",")
       nest.style.backgroundPosition = bars.join(",")
     }
@@ -1887,13 +1891,18 @@ function buildMermaidPreviews(state) {
         // still draw as an empty code card above the diagram.
         let quoteDepth = 0
         let listDepth = 0
+        let quoteEnds = 0
+        const lastLine = state.doc.lineAt(node.to).number
         for (let parent = node.node.parent; parent; parent = parent.parent) {
-          if (parent.name === "Blockquote") quoteDepth++
+          if (parent.name === "Blockquote") {
+            quoteDepth++
+            if (state.doc.lineAt(parent.to).number === lastLine) quoteEnds++
+          }
           if (parent.name === "ListItem") listDepth++
         }
         ranges.push(Decoration.replace({
           block: true,
-          widget: new MermaidWidget(details.source, quoteDepth, listDepth),
+          widget: new MermaidWidget(details.source, quoteDepth, listDepth, quoteEnds),
         }).range(state.doc.lineAt(node.from).from, node.to))
         return false
       }
@@ -2251,14 +2260,17 @@ function buildDecorations(view, detectedCodeCache) {
           return
         }
 
-        // Container paragraphs use their own semantic margin. Their blank
-        // source lines are not top-level authored spacers in the preview.
-        if (name === "Paragraph" && /^(Blockquote|ListItem)$/.test(node.node.parent?.name || "")) {
+        // Container paragraphs and diagrams use their own semantic margin.
+        // Their blank source lines are not top-level authored spacers in the
+        // preview, where a diagram keeps its larger figure margin.
+        const containerBlock = name === "Paragraph"
+          || (name === "FencedCode" && fencedCodeDetails(state, node).language === "mermaid")
+        if (containerBlock && /^(Blockquote|ListItem)$/.test(node.node.parent?.name || "")) {
           const first = state.doc.lineAt(node.from)
           if (first.number > state.doc.lineAt(node.node.parent.from).number) {
             const previous = state.doc.line(first.number - 1)
             if (/^(?:[ >]*)$/.test(previous.text)) {
-              lineOnce(previous.from, blockSeparatorLine(METRICS.paragraph))
+              lineOnce(previous.from, blockSeparatorLine(blockMarginTop(node)))
             }
           }
         }
