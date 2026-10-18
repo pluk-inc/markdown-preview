@@ -1609,6 +1609,66 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(state, #"{"level":"51%","centredX":true,"centredY":true}"#)
     }
 
+    /// A zoomed-out drawing stays centred when its box changes size, and a
+    /// pan the reader made is kept.
+    @MainActor
+    func testZoomedOutDiagramStaysCentredWhenItsBoxResizes() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: "```mermaid\nflowchart LR\n    A --> B\n```\n",
+            vendorLoading: .lazy
+        )
+        let html = """
+        <!DOCTYPE html>
+        <html><head>
+        <style>\(MarkdownHTML.stylesheet)</style>
+        <script>
+        window.requestAnimationFrame = (callback) => callback();
+        window.IntersectionObserver = class {
+            constructor(callback) { this.callback = callback; }
+            observe(target) { this.callback([{ target, isIntersecting: true }]); }
+            unobserve() {}
+        };
+        window.pele = { render() { return { svg: '<svg viewBox="0 0 400 200"></svg>' }; } };
+        </script></head><body>
+        <article class="markdown-body">\(rendered.articleHTML)</article>
+        <script>
+        const __mdpMermaid = \(MarkdownHTML.mermaidInitWiring);
+        __mdpMermaid.bootstrap();
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let state = try await webView.callAsyncJavaScript("""
+            const settle = () => new Promise((resolve) => setTimeout(resolve, 150));
+            const figure = document.querySelector('.mermaid-figure');
+            const surface = figure.querySelector('.mermaid');
+            await settle();
+            const out = figure.querySelector('[data-mm-act="out"]');
+            out.click(); out.click();
+            const offset = () => {
+                const m = /translate\\(([-\\d.]+)px, *([-\\d.]+)px\\) scale\\(([\\d.]+)\\)/.exec(surface.style.transform);
+                const box = figure.getBoundingClientRect(), k = Number(m[3]);
+                return [Number(m[1]) - box.width * (1 - k) / 2, Number(m[2]) - box.height * (1 - k) / 2];
+            };
+            figure.style.width = '420px';
+            await settle();
+            const centred = offset().every((v) => Math.abs(v) < 0.5);
+            // Pan by 30px, then resize again: the pan must survive.
+            figure.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: 100, clientY: 100, pointerId: 1, bubbles: true }));
+            figure.dispatchEvent(new PointerEvent('pointermove', { clientX: 130, clientY: 100, pointerId: 1, bubbles: true }));
+            figure.dispatchEvent(new PointerEvent('pointerup', { clientX: 130, clientY: 100, pointerId: 1, bubbles: true }));
+            figure.style.width = '600px';
+            await settle();
+            const [panX, panY] = offset();
+            return JSON.stringify({ centred, panKept: Math.abs(panX - 30) < 0.5 && Math.abs(panY) < 0.5 });
+            """, contentWorld: .page) as? String
+        XCTAssertEqual(state, #"{"centred":true,"panKept":true}"#)
+    }
+
     @MainActor
     func testMermaidRenderAllRendersFiguresTheObserverNeverReached() async throws {
         let rendered = MarkdownHTML.render(

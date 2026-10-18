@@ -288,7 +288,21 @@ nonisolated extension MarkdownHTML {
 
             function cacheRect(figure) {
                 const s = states.get(figure);
-                if (s) s.rect = figure.getBoundingClientRect();
+                if (!s) return;
+                const previous = s.rect;
+                s.rect = figure.getBoundingClientRect();
+                // Zoomed out, the offsets hold the centring for the old box
+                // size: move them by the change of that centre, so a centred
+                // drawing stays centred and a deliberate pan is kept.
+                if (previous && s.scale < 1) {
+                    const dx = (s.rect.width - previous.width) * (1 - s.scale) / 2;
+                    const dy = (s.rect.height - previous.height) * (1 - s.scale) / 2;
+                    if (dx || dy) {
+                        s.tx += dx;
+                        s.ty += dy;
+                        apply(figure, s);
+                    }
+                }
             }
 
             function postMermaidHover(value) {
