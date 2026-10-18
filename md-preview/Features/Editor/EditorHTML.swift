@@ -483,12 +483,7 @@ nonisolated enum EditorHTML {
         }
         #editor .cm-md-code-action:hover { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
         #editor .cm-md-code-action:focus-visible { outline: 2px solid AccentColor; outline-offset: 1px; }
-        /* A diagram widget is not code: around an empty fence the card wraps
-           the widget itself, and a max-content column would size it to its
-           (absent) content. The card's line decorations stay, because they
-           carry the spacing that matches the preview. */
-        #editor .cm-md-code-card-wrapped,
-        #editor .cm-md-code-card:has(> .cm-md-mermaid-preview) { grid-template-columns: minmax(0, 1fr); }
+        #editor .cm-md-code-card-wrapped { grid-template-columns: minmax(0, 1fr); }
         #editor .cm-md-code-wrapped { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; padding-inline: 16px; }
         #editor .cm-md-code-wrapped .cm-md-code-scroll-text { display: inline; padding-inline: 0; }
         #editor .cm-md-code-wrapped .cm-md-code-language { position: relative; inset-inline-start: auto; margin-inline: -7px; }
@@ -572,9 +567,18 @@ nonisolated enum EditorHTML {
             aspect-ratio: auto;
             max-height: none;
         }
+        /* Quote bars for a diagram nested in a quote; the bundle sets the
+           padding and one bar position per level. */
+        .cm-md-mermaid-nest {
+            /* Quote lines keep 1em clear at the end, like the preview's quote. */
+            padding-inline-end: var(--cm-md-nest-end, 0);
+            background-repeat: no-repeat;
+            background-size: 4px 100%;
+        }
         .cm-md-mermaid-message .cm-md-mermaid-stage {
             position: static;
-            justify-content: flex-start;
+            display: block;
+            \(MarkdownHTML.diagramMessageCSS)
         }
         \(MarkdownHTML.tableControlsCSS)
         .cm-md-table {

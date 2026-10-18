@@ -279,6 +279,7 @@
 "The diagram is not valid." = "نمودار معتبر نیست.";
 "The diagram is too large to draw." = "نمودار برای رسم بیش از حد بزرگ است.";
 "The diagram could not be drawn." = "رسم نمودار ممکن نشد.";
+"This diagram is empty." = "این نمودار خالی است.";
 "Line %d, column %d" = "خط %1$d، ستون %2$d";
 "Empty diagram. Click to add Mermaid source." = "نمودار خالی است. برای افزودن کد Mermaid کلیک کنید.";
 "Footnote %d" = "پاورقی %d";

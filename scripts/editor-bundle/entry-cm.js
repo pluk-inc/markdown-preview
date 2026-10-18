@@ -264,10 +264,39 @@ class RuleWidget extends WidgetType {
 let mermaidWidgetID = 0
 
 class MermaidWidget extends WidgetType {
-  constructor(source) { super(); this.source = source }
-  eq(other) { return other.source === this.source }
+  // `quoteDepth` and `listDepth` count the containers around the fence. The
+  // widget replaces whole lines, so their line styles (quote bars, list
+  // indent) no longer reach it; it draws the same ones itself.
+  constructor(source, quoteDepth = 0, listDepth = 0) {
+    super()
+    this.source = source
+    this.quoteDepth = quoteDepth
+    this.listDepth = listDepth
+  }
+  eq(other) {
+    return other.source === this.source
+      && other.quoteDepth === this.quoteDepth && other.listDepth === this.listDepth
+  }
 
   toDOM(view) {
+    const figure = this.figure(view)
+    if (!this.quoteDepth && !this.listDepth) return figure
+    // Same geometry as quoteLine and listDepthLine, so the diagram lines up
+    // with the text around it, as in the preview.
+    const nest = document.createElement("div")
+    nest.className = "cm-md-mermaid-nest"
+    const bars = Array.from({ length: this.quoteDepth }, (_, level) => `calc(0.3em + ${level * 1.5}em) 0`)
+    nest.style.paddingInlineStart = `calc(${this.quoteDepth * 1.5}em + ${this.listDepth * MARKER_BOX_EM}em)`
+    if (bars.length) {
+      nest.style.setProperty("--cm-md-nest-end", "1em")
+      nest.style.backgroundImage = bars.map(() => "linear-gradient(var(--quote-border), var(--quote-border))").join(",")
+      nest.style.backgroundPosition = bars.join(",")
+    }
+    nest.appendChild(figure)
+    return nest
+  }
+
+  figure(view) {
     const figure = document.createElement("figure")
     figure.className = "cm-md-mermaid-preview"
     figure.setAttribute("role", "img")
@@ -287,9 +316,11 @@ class MermaidWidget extends WidgetType {
       // An empty block gets one source line, so the first click is enough.
       const { state } = view
       const position = view.posAtDOM(figure)
-      let from = null
-      state.field(mermaidPreviews).between(position, position, (start) => { from = start; return false })
-      const node = from == null ? null : fencedCodeNode(state, from, 1)
+      // The range starts at the line start, which a quote or list marker
+      // owns, so find the fence from the range's end.
+      let to = null
+      state.field(mermaidPreviews).between(position, position, (_start, end) => { to = end; return false })
+      const node = to == null ? null : fencedCodeNode(state, to, -1)
       if (!node) return
       const { sourceFrom, sourceTo, closed } = fencedCodeDetails(state, node)
       const empty = sourceTo <= sourceFrom
@@ -1694,6 +1725,19 @@ function fencedCodeNode(state, pos, side) {
   return null
 }
 
+// True when a diagram widget replaces the fence on this line. Such a fence
+// keeps its code-line decorations (they carry the spacing that matches the
+// preview) but gets no code card or language label: the card would wrap the
+// widget and draw a second box around it.
+function replacedByDiagram(state, lineFrom) {
+  let replaced = false
+  state.field(mermaidPreviews, false)?.between(lineFrom, lineFrom, (start) => {
+    replaced = start === lineFrom
+    return false
+  })
+  return replaced
+}
+
 function fencedCodeAt(state, pos) {
   const node = fencedCodeNode(state, pos, -1)
   return node && {
@@ -1838,10 +1882,19 @@ function buildMermaidPreviews(state) {
       const isActive = activeFence != null
         && node.from <= activeFence.from && node.to >= activeFence.to
       if (details.language === "mermaid" && !isActive && !currentFindTouches(state, node.from, node.to)) {
+        // Replace whole lines: inside a quote or list the fence starts after
+        // the marker or indent, and what the replace left of that line would
+        // still draw as an empty code card above the diagram.
+        let quoteDepth = 0
+        let listDepth = 0
+        for (let parent = node.node.parent; parent; parent = parent.parent) {
+          if (parent.name === "Blockquote") quoteDepth++
+          if (parent.name === "ListItem") listDepth++
+        }
         ranges.push(Decoration.replace({
           block: true,
-          widget: new MermaidWidget(details.source),
-        }).range(node.from, node.to))
+          widget: new MermaidWidget(details.source, quoteDepth, listDepth),
+        }).range(state.doc.lineAt(node.from).from, node.to))
         return false
       }
     },
@@ -2486,7 +2539,10 @@ function buildDecorations(view, detectedCodeCache) {
             : hidesClosingFence
               ? state.doc.line(last.number - 1)
               : last
-          if (name === "FencedCode") {
+          const diagram = name === "FencedCode" && replacedByDiagram(state, first.from)
+          if (diagram) {
+            // No language label or highlighting under a diagram widget.
+          } else if (name === "FencedCode") {
             const details = fencedCodeDetails(state, node)
             if (details.detectedLanguage) {
               for (const token of detectedCodeHighlights(details, detectedCodeCache)) {
@@ -2543,10 +2599,12 @@ function buildDecorations(view, detectedCodeCache) {
               if (isFirst) lineOnce(line.from, codeLineFirst)
               if (isLast) lineOnce(line.from, codeLineLast)
               if (!isFirst && !isLast) lineOnce(line.from, codeLine)
-              ranges.push(Decoration.line({ attributes: {
-                'data-code-scroll-group': String(first.from),
-                class: state.field(wrappedCodeBlocks).has(first.from) ? 'cm-md-code-wrapped' : '',
-              } }).range(line.from))
+              if (!diagram) {
+                ranges.push(Decoration.line({ attributes: {
+                  'data-code-scroll-group': String(first.from),
+                  class: state.field(wrappedCodeBlocks).has(first.from) ? 'cm-md-code-wrapped' : '',
+                } }).range(line.from))
+              }
               if (line.length) ranges.push(codeScrollText.range(line.from, line.to))
             }
             if (name === "CodeBlock" && !touchesLineOf(line.from)) {

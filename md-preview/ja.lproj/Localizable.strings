@@ -280,6 +280,7 @@
 "The diagram is not valid." = "ダイアグラムが正しくありません。";
 "The diagram is too large to draw." = "ダイアグラムが大きすぎるため描画できません。";
 "The diagram could not be drawn." = "ダイアグラムを描画できませんでした。";
+"This diagram is empty." = "このダイアグラムは空です。";
 "Line %d, column %d" = "%1$d 行目、%2$d 列目";
 "Empty diagram. Click to add Mermaid source." = "空のダイアグラムです。クリックして Mermaid のソースを追加します。";
 "Footnote %d" = "脚注 %d";

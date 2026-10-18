@@ -139,6 +139,7 @@ nonisolated extension MarkdownHTML {
                 limit: \(javaScriptStringLiteral(NSLocalizedString("The diagram is too large to draw.", comment: "Mermaid diagram error")))
             };
             const genericError = \(javaScriptStringLiteral(NSLocalizedString("The diagram could not be drawn.", comment: "Mermaid diagram error")));
+            const emptyDiagram = \(javaScriptStringLiteral(NSLocalizedString("This diagram is empty.", comment: "Shown for a Mermaid code block with no source")));
             const errorPosition = \(javaScriptStringLiteral(NSLocalizedString("Line %d, column %d", comment: "Position of a Mermaid diagram error: line, then column")));
             function errorMessage(err) {
                 const summary = (err && errorMessages[err.code]) || genericError;
@@ -168,9 +169,12 @@ nonisolated extension MarkdownHTML {
 
             // A failed figure counts as done, so MdPreview.update keeps it
             // while its source is unchanged and the message is never parsed
-            // as a diagram. The message goes above the source as text.
+            // as a diagram. The message goes above the source as text; the
+            // figure keeps line breaks, so a trailing one would show as a
+            // blank line, and an empty block shows the message alone.
             function showError(figure, node, message) {
-                node.textContent = message + '\\n\\n' + node.__mdSrc;
+                const source = node.__mdSrc.replace(/\\s+$/, '');
+                node.textContent = source ? message + '\\n\\n' + source : message;
                 node.dataset.mmDone = '1';
                 figure.classList.add('mermaid-error');
             }
@@ -189,6 +193,11 @@ nonisolated extension MarkdownHTML {
                 // unchanged diagrams with their SVGs during DOM diffs. A
                 // morph with new source clears the done flag and lands here.
                 node.__mdSrc = node.textContent;
+                if (!node.__mdSrc.trim()) {
+                    showError(figure, node, emptyDiagram);
+                    figure.classList.add('mermaid-empty');
+                    return;
+                }
                 let svg;
                 try {
                     // A unique prefix keeps each diagram's accessible title and

@@ -77,6 +77,16 @@ nonisolated extension MarkdownHTML {
     static let diagramRenderOptionsJS =
         "{ fontFamily: \(javaScriptStringLiteral(bodyFontFamily)), autoDirection: false }"
 
+    /// Text shown in a diagram's place (an error, or an empty block), shared
+    /// by the preview and the editor widget so both modes match.
+    static let diagramMessageCSS = """
+    padding: 12px 16px;
+    text-align: start;
+    white-space: pre-wrap;
+    font-family: \(codeFontFamily);
+    font-size: 0.88em;
+    """
+
     static let tableControlsCSS = """
     /* Shrink to the table so the Expand button sits at the table's edge, not the column's. */
     .md-table-wrap { position: relative; margin-top: \(largeBlockSpacing)px; padding-top: 28px; width: fit-content; max-width: 100%; }
@@ -657,12 +667,10 @@ nonisolated extension MarkdownHTML {
     .mermaid-figure.mermaid-error .mermaid {
         position: static;
         display: block;
-        padding: 12px 16px;
-        text-align: left;
-        white-space: pre-wrap;
-        font-family: \(codeFontFamily);
-        font-size: 0.88em;
+        \(diagramMessageCSS)
     }
+    /* An empty block is a placeholder, not content. */
+    .mermaid-figure.mermaid-empty .mermaid { color: var(--secondary); }
     .math-display {
         margin: 1.2em 0 0;
         overflow-x: auto;

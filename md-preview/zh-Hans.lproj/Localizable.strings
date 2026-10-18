@@ -280,6 +280,7 @@
 "The diagram is not valid." = "图表无效。";
 "The diagram is too large to draw." = "图表过大，无法绘制。";
 "The diagram could not be drawn." = "无法绘制图表。";
+"This diagram is empty." = "此图表为空。";
 "Line %d, column %d" = "第 %1$d 行，第 %2$d 列";
 "Empty diagram. Click to add Mermaid source." = "空图表。点按以添加 Mermaid 源代码。";
 "Footnote %d" = "脚注 %d";

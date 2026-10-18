@@ -280,6 +280,7 @@
 "The diagram is not valid." = "The diagram is not valid.";
 "The diagram is too large to draw." = "The diagram is too large to draw.";
 "The diagram could not be drawn." = "The diagram could not be drawn.";
+"This diagram is empty." = "This diagram is empty.";
 "Line %d, column %d" = "Line %d, column %d";
 "Empty diagram. Click to add Mermaid source." = "Empty diagram. Click to add Mermaid source.";
 "Footnote %d" = "Footnote %d";

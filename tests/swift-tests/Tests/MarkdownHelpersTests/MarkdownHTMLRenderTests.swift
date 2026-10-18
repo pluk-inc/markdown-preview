@@ -1520,6 +1520,44 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(state, #"{"marked":true,"error":false,"drawn":true,"sources":["flowchart LR\n    A --> B"]}"#)
     }
 
+    /// An empty block is not a renderer error: it says so, with no blank
+    /// lines under the message, and never reaches the renderer.
+    @MainActor
+    func testEmptyMermaidBlockShowsOnlyTheEmptyMessage() async throws {
+        let rendered = MarkdownHTML.render(markdown: "```mermaid\n```\n", vendorLoading: .lazy)
+        let html = """
+        <!DOCTYPE html>
+        <html><head><script>
+        window.IntersectionObserver = class { observe() {} unobserve() {} };
+        window.ResizeObserver = class { observe() {} };
+        window.__calls = 0;
+        window.pele = { render() { window.__calls += 1; return { svg: '<svg></svg>' }; } };
+        </script></head><body>
+        <article class="markdown-body">\(rendered.articleHTML)</article>
+        <script>
+        const __mdpMermaid = \(MarkdownHTML.mermaidInitWiring);
+        __mdpMermaid.bootstrap();
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let state = try await webView.callAsyncJavaScript("""
+            await window.MdPreview.mermaidRenderAll();
+            const figure = document.querySelector('.mermaid-figure');
+            return JSON.stringify({
+                error: figure.classList.contains('mermaid-error'),
+                empty: figure.classList.contains('mermaid-empty'),
+                text: figure.querySelector('.mermaid').textContent,
+                calls: window.__calls
+            });
+            """, contentWorld: .page) as? String
+        XCTAssertEqual(state, #"{"error":true,"empty":true,"text":"This diagram is empty.","calls":0}"#)
+    }
+
     @MainActor
     func testMermaidRenderAllRendersFiguresTheObserverNeverReached() async throws {
         let rendered = MarkdownHTML.render(
