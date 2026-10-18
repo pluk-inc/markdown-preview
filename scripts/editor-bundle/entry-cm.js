@@ -1771,7 +1771,13 @@ const activeCodeBlock = StateField.define({
     }
 
     const selection = tr.state.selection.main
-    if (!selection.empty) return null
+    // A range selection is an operation on rendered content, so it never
+    // opens a block. One that still covers the open block (select all, or a
+    // drag inside its source) keeps that block open instead of closing it
+    // under the user.
+    if (!selection.empty) {
+      return value && selection.from <= value.to && selection.to >= value.from ? value : null
+    }
 
     const head = selection.head
     if (tr.isUserEvent("select.pointer")) return fencedCodeAt(tr.state, head)

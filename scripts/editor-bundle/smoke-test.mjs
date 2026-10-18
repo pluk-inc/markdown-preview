@@ -900,6 +900,12 @@ check("active Mermaid block reveals editable source",
   mermaidHost.querySelector(".cm-md-mermaid-preview") == null)
 check("active Mermaid block preserves source",
   mermaidEditor.getMarkdown().includes("flowchart LR\n  A --> B"))
+mermaidEditor.select(0, mermaidEditor.getMarkdown().length)
+check("select all keeps the open Mermaid source open",
+  mermaidHost.querySelector(".cm-md-mermaid-preview") == null)
+mermaidEditor.select(0, 3)
+check("a range selection outside the open block closes it",
+  mermaidHost.querySelector(".cm-md-mermaid-preview") != null)
 mermaidEditor.destroy()
 
 const authoredMermaidHost = dom.window.document.createElement("div")
