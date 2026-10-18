@@ -965,6 +965,19 @@ check("an empty diagram in a quote gets a quoted source line",
     nest != null && /1ch/.test(nest.style.paddingInlineStart))
   editor.destroy()
 }
+for (const [markdown, marker] of [
+  ["- ```mermaid\n  flowchart LR\n    A --> B\n  ```\n\nafter", ".cm-md-bullet"],
+  ["1. ```mermaid\n   flowchart LR\n     A --> B\n   ```\n\nafter", ".cm-md-ordered"],
+]) {
+  // A fence that starts on the list marker's line keeps the marker drawn.
+  const host = dom.window.document.createElement("div")
+  dom.window.document.body.appendChild(host)
+  const editor = dom.window.MDEditor.create(host, markdown, {})
+  check(`a diagram on a list marker's line keeps the marker (${marker})`,
+    host.querySelector(marker) != null && host.querySelector(".cm-md-mermaid-preview") != null
+    && host.querySelector(".cm-md-code-card .cm-md-mermaid-preview") == null)
+  editor.destroy()
+}
 const clickedListed = await clickFirstDiagramAndType("intro\n\n- item\n\n  ```mermaid\n  ```\n\nafter", "g")
 check("an empty diagram in a list keeps the list indent",
   clickedListed.markdown === "intro\n\n- item\n\n  ```mermaid\n  g\n  ```\n\nafter")

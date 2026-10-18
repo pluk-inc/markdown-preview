@@ -1752,17 +1752,18 @@ function fencedCodeNode(state, pos, side) {
   return null
 }
 
-// True when a diagram widget replaces the fence on this line. Such a fence
-// keeps its code-line decorations (they carry the spacing that matches the
-// preview) but gets no code card or language label: the card would wrap the
-// widget and draw a second box around it.
-function replacedByDiagram(state, lineFrom) {
-  let replaced = false
-  state.field(mermaidPreviews, false)?.between(lineFrom, lineFrom, (start) => {
-    replaced = start === lineFrom
-    return false
+// Where the diagram widget replacing the fence at `fenceFrom` starts (the
+// line start, or the fence after a list marker), or -1. Such a fence keeps
+// its code-line decorations (they carry the spacing that matches the preview)
+// but gets no code card or language label: the card would wrap the widget
+// and draw a second box around it.
+function diagramWidgetStart(state, lineFrom, fenceFrom) {
+  let found = -1
+  state.field(mermaidPreviews, false)?.between(lineFrom, fenceFrom, (start) => {
+    if (start >= lineFrom && start <= fenceFrom) found = start
+    return found < 0
   })
-  return replaced
+  return found
 }
 
 function fencedCodeAt(state, pos) {
@@ -1911,7 +1912,10 @@ function buildMermaidPreviews(state) {
       if (details.language === "mermaid" && !isActive && !currentFindTouches(state, node.from, node.to)) {
         // Replace whole lines: inside a quote or list the fence starts after
         // the marker or indent, and what the replace left of that line would
-        // still draw as an empty code card above the diagram.
+        // still draw as an empty code card above the diagram. A list marker on
+        // the fence's line stays, so its bullet or number is still drawn.
+        const opening = state.doc.lineAt(node.from)
+        const keepsMarker = listPrefix(state.sliceDoc(opening.from, node.from)).style !== "none"
         const nest = { quoteDepth: 0, quoteEnds: 0, listDepth: 0, listExtra: 0 }
         const lastLine = state.doc.lineAt(node.to).number
         for (let parent = node.node.parent; parent; parent = parent.parent) {
@@ -1927,7 +1931,7 @@ function buildMermaidPreviews(state) {
         ranges.push(Decoration.replace({
           block: true,
           widget: new MermaidWidget(details.source, nest.quoteDepth || nest.listDepth ? nest : null),
-        }).range(state.doc.lineAt(node.from).from, node.to))
+        }).range(keepsMarker ? node.from : opening.from, node.to))
         return false
       }
     },
@@ -2574,7 +2578,11 @@ function buildDecorations(view, detectedCodeCache) {
               ? state.doc.line(last.number - 1)
               : last
           // No language label or highlighting under a diagram widget.
-          const diagram = name === "FencedCode" && replacedByDiagram(state, first.from)
+          const diagramFrom = name === "FencedCode" ? diagramWidgetStart(state, first.from, node.from) : -1
+          const diagram = diagramFrom >= 0
+          // A diagram that keeps a list marker on its first line leaves that
+          // line to the list, so the marker is not collapsed with the fence.
+          const markerLine = diagram && diagramFrom > first.from
           if (name === "FencedCode" && !diagram) {
             const details = fencedCodeDetails(state, node)
             if (details.detectedLanguage) {
@@ -2607,6 +2615,11 @@ function buildDecorations(view, detectedCodeCache) {
           let pos = node.from
           while (pos <= node.to) {
             const line = state.doc.lineAt(pos)
+            if (markerLine && line.from === first.from) {
+              if (line.to >= node.to) break
+              pos = line.to + 1
+              continue
+            }
             const rawIndentedList = name === "CodeBlock"
               && decoratedLines.has(`${listItemLine.spec.class}@${line.from}`)
               ? line.text.match(markdownListMarker)
