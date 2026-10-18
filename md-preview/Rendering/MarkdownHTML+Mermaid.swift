@@ -85,20 +85,27 @@ nonisolated extension MarkdownHTML {
         return MermaidRenderResult(html: rendered, containsMermaid: true)
     }
 
+    /// Marks every figure that is not drawn yet with the localized
+    /// "renderer unavailable" message above its source. Used when the bundle
+    /// is missing, and when a lazy bundle never arrives before an export.
+    private static let markUndrawnFiguresJS = """
+    document.querySelectorAll('.mermaid-figure').forEach((figure) => {
+        const node = figure.querySelector('.mermaid');
+        if (!node || node.dataset.mmDone === '1' || figure.classList.contains('mermaid-error')) return;
+        figure.classList.add('mermaid-error');
+        node.textContent = \(javaScriptStringLiteral(
+            NSLocalizedString(
+                "Mermaid renderer is unavailable.\n\n",
+                comment: "Mermaid rendering error"
+            )
+        )) + node.textContent;
+    });
+    """
+
     private static let mermaidFallbackScript = """
     <script>
     window.addEventListener('load', () => {
-        document.querySelectorAll('.mermaid-figure').forEach((figure) => {
-            const node = figure.querySelector('.mermaid');
-            if (!node) return;
-            figure.classList.add('mermaid-error');
-            node.textContent = \(javaScriptStringLiteral(
-                NSLocalizedString(
-                    "Mermaid renderer is unavailable.\n\n",
-                    comment: "Mermaid rendering error"
-                )
-            )) + node.textContent;
-        });
+        \(markUndrawnFiguresJS)
     });
     </script>
     """
@@ -503,12 +510,15 @@ nonisolated extension MarkdownHTML {
                 const loaded = new Promise((resolve) => { markLoaded = resolve; });
                 // Print or export can start before the bundle arrives. Until
                 // the wiring replaces it, this waits for the bundle (a few
-                // seconds at most, in case it never loads) so the capture
-                // holds drawn diagrams, not their source.
+                // seconds at most) so the capture holds drawn diagrams. If it
+                // never arrives, the figures say so, as with a missing
+                // bundle, instead of exporting bare source as if it were
+                // drawn; the rest of the document still exports.
                 window.MdPreview = window.MdPreview || {};
                 window.MdPreview.mermaidRenderAll = async () => {
                     await Promise.race([loaded, new Promise((resolve) => setTimeout(resolve, 5000))]);
-                    if (mm) await window.MdPreview.mermaidRenderAll();
+                    if (mm) return window.MdPreview.mermaidRenderAll();
+                    \(markUndrawnFiguresJS)
                 };
                 window.MdPreviewLazy.lazyRenderer({
                     src: '\(MarkdownAssetScheme.vendorURL("pele.global.js"))',

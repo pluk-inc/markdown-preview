@@ -1432,6 +1432,43 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(sources, #"["flowchart LR\n    A --> B","flowchart LR\n    C --> D"]"#)
     }
 
+    /// An export can start before a lazy page has its bundle. If the bundle
+    /// never arrives, renderAll must still settle, and the figure must say the
+    /// renderer is unavailable rather than pass its bare source off as drawn.
+    @MainActor
+    func testLazyRenderAllMarksFiguresWhenTheBundleNeverLoads() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ```mermaid
+            flowchart LR
+                A --> B
+            ```
+            """,
+            vendorLoading: .lazy
+        )
+        // No md-asset scheme handler here, so the lazy bundle request fails.
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(rendered.html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let state = try await webView.callAsyncJavaScript("""
+            await window.MdPreview.mermaidRenderAll();
+            const figure = document.querySelector('.mermaid-figure');
+            return JSON.stringify({
+                error: figure.classList.contains('mermaid-error'),
+                text: figure.querySelector('.mermaid').textContent.trim()
+            });
+            """, contentWorld: .page) as? String
+        let decoded = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(try XCTUnwrap(state).utf8)) as? [String: Any]
+        )
+        XCTAssertEqual(decoded["error"] as? Bool, true)
+        let text = try XCTUnwrap(decoded["text"] as? String)
+        XCTAssertTrue(text.hasPrefix("Mermaid renderer is unavailable."), text)
+        XCTAssertTrue(text.contains("A --> B"), text)
+    }
+
     @MainActor
     func testMermaidRenderAllRendersFiguresTheObserverNeverReached() async throws {
         let rendered = MarkdownHTML.render(
