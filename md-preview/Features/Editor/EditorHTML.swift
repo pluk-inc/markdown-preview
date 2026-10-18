@@ -376,7 +376,10 @@ nonisolated enum EditorHTML {
             box-sizing: border-box;
             font-variant-numeric: tabular-nums;
         }
-        .cm-md-ordered { color: var(--link); }
+        /* The preview's ::marker ends "1." one marker space before the text;
+           0.25em puts the rendered number on the same pixels. The editable
+           source keeps 0.5em, since its own trailing space adds the rest. */
+        .cm-md-ordered { color: var(--link); padding-inline-end: 0.25em; }
         .cm-md-ordered-source { color: var(--secondary); }
         /* Continuation lines of an item keep the depth padding but no hanging
            indent, so they align with the item text like the preview. */
