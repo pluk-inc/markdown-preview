@@ -1469,6 +1469,57 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertTrue(text.contains("A --> B"), text)
     }
 
+    /// A bundle that arrives after the export fallback marked a figure must
+    /// still draw the original source, not the "unavailable" message.
+    @MainActor
+    func testLateBundleDrawsTheSourceAfterTheUnavailableFallback() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ```mermaid
+            flowchart LR
+                A --> B
+            ```
+            """,
+            vendorLoading: .lazy
+        )
+        let html = """
+        <!DOCTYPE html>
+        <html><head><script>
+        window.IntersectionObserver = class { observe() {} unobserve() {} };
+        window.ResizeObserver = class { observe() {} };
+        </script></head><body>
+        <article class="markdown-body">\(rendered.articleHTML)</article>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let state = try await webView.callAsyncJavaScript("""
+            \(MarkdownHTML.markUndrawnFiguresJS)
+            const marked = document.querySelector('.mermaid-figure').classList.contains('mermaid-error');
+            window.__sources = [];
+            window.pele = {
+                render(source) {
+                    window.__sources.push(source.trim());
+                    return { svg: '<svg viewBox="0 0 400 200"></svg>' };
+                }
+            };
+            const wiring = \(MarkdownHTML.mermaidInitWiring);
+            wiring.bootstrap();
+            await window.MdPreview.mermaidRenderAll();
+            const figure = document.querySelector('.mermaid-figure');
+            return JSON.stringify({
+                marked,
+                error: figure.classList.contains('mermaid-error'),
+                drawn: !!figure.querySelector('.mermaid svg'),
+                sources: window.__sources
+            });
+            """, contentWorld: .page) as? String
+        XCTAssertEqual(state, #"{"marked":true,"error":false,"drawn":true,"sources":["flowchart LR\n    A --> B"]}"#)
+    }
+
     @MainActor
     func testMermaidRenderAllRendersFiguresTheObserverNeverReached() async throws {
         let rendered = MarkdownHTML.render(

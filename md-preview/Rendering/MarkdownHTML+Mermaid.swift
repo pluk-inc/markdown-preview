@@ -88,17 +88,21 @@ nonisolated extension MarkdownHTML {
     /// Marks every figure that is not drawn yet with the localized
     /// "renderer unavailable" message above its source. Used when the bundle
     /// is missing, and when a lazy bundle never arrives before an export.
-    private static let markUndrawnFiguresJS = """
+    /// The source is kept, so a bundle that arrives later still draws it.
+    /// Internal so SPM helper tests can drive a late load.
+    static let markUndrawnFiguresJS = """
     document.querySelectorAll('.mermaid-figure').forEach((figure) => {
         const node = figure.querySelector('.mermaid');
         if (!node || node.dataset.mmDone === '1' || figure.classList.contains('mermaid-error')) return;
         figure.classList.add('mermaid-error');
+        node.__mdSrc = node.textContent;
+        node.dataset.mmUnavailable = '1';
         node.textContent = \(javaScriptStringLiteral(
             NSLocalizedString(
                 "Mermaid renderer is unavailable.\n\n",
                 comment: "Mermaid rendering error"
             )
-        )) + node.textContent;
+        )) + node.__mdSrc;
     });
     """
 
@@ -174,6 +178,13 @@ nonisolated extension MarkdownHTML {
             function renderOne(figure) {
                 const node = figure.querySelector('.mermaid');
                 if (!node || node.dataset.mmDone === '1') return;
+                if (node.dataset.mmUnavailable === '1') {
+                    // The bundle arrived after an export gave up on it: put
+                    // the source back before drawing it.
+                    delete node.dataset.mmUnavailable;
+                    node.textContent = node.__mdSrc;
+                    figure.classList.remove('mermaid-error');
+                }
                 // Pre-render source, stashed so MdPreview.update can pair
                 // unchanged diagrams with their SVGs during DOM diffs. A
                 // morph with new source clears the done flag and lands here.
