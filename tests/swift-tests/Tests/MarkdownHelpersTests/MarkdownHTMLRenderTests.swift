@@ -1243,19 +1243,11 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             vendorLoading: .lazy,
             colorScheme: .dark
         )
-        let stylesheet = try XCTUnwrap(
-            rendered.html
-                .components(separatedBy: "<style>")
-                .dropFirst()
-                .first?
-                .components(separatedBy: "</style>")
-                .first
-        )
 
         let html = """
         <!DOCTYPE html>
         <html data-mdp-color-scheme="dark"><head>
-        <style>\(stylesheet)</style>
+        <style>\(MarkdownHTML.stylesheet)</style>
         <script>
         window.__runs = 0;
         window.IntersectionObserver = class {
@@ -1360,7 +1352,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                 if (!figure) return null;
                 const node = figure.querySelector('.mermaid');
                 return JSON.stringify({
-                    nodeError: node.classList.contains('mermaid-error'),
+                    done: node.dataset.mmDone || '',
                     tags: node.children.length,
                     text: node.textContent.trim()
                 });
@@ -1373,11 +1365,67 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         let decoded = try XCTUnwrap(
             JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any]
         )
-        XCTAssertEqual(decoded["nodeError"] as? Bool, true)
+        XCTAssertEqual(decoded["done"] as? String, "1", "a failed figure must not be parsed again")
         XCTAssertEqual(decoded["tags"] as? Int, 0, "the message must be text, never HTML")
         let text = try XCTUnwrap(decoded["text"] as? String)
         XCTAssertTrue(text.hasPrefix("Expected a node at line 2, column 10 <b>"), text)
         XCTAssertTrue(text.contains("flowchart LR"), text)
+    }
+
+    @MainActor
+    func testMermaidRendersNewSourceAfterAnUpdateMorphsTheFigure() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ```mermaid
+            flowchart LR
+                A --> B
+            ```
+            """,
+            vendorLoading: .lazy
+        )
+        let html = """
+        <!DOCTYPE html>
+        <html><head>
+        <script>
+        window.__sources = [];
+        window.IntersectionObserver = class {
+            observe() {}
+            unobserve() {}
+        };
+        window.ResizeObserver = class {
+            observe() {}
+        };
+        window.pele = {
+            render(source) {
+                window.__sources.push(source.trim());
+                return { svg: '<svg viewBox="0 0 400 200"></svg>' };
+            }
+        };
+        </script></head><body>
+        <article class="markdown-body">\(rendered.articleHTML)</article>
+        <script>
+        const __mdpMermaid = \(MarkdownHTML.mermaidInitWiring);
+        __mdpMermaid.bootstrap();
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        // What morphdom does to a drawn figure whose source changed: the
+        // node is reused, its text replaced and its done flag dropped.
+        let sources = try await webView.callAsyncJavaScript("""
+            await window.MdPreview.mermaidRenderAll();
+            const node = document.querySelector('.mermaid');
+            node.textContent = 'flowchart LR\\n    C --> D';
+            delete node.dataset.mmDone;
+            await window.MdPreview.mermaidRenderAll();
+            return JSON.stringify(window.__sources);
+            """, contentWorld: .page) as? String
+        XCTAssertEqual(sources, #"["flowchart LR\n    A --> B","flowchart LR\n    C --> D"]"#)
     }
 
     @MainActor

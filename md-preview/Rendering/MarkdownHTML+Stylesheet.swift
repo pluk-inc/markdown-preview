@@ -20,18 +20,30 @@ nonisolated extension MarkdownHTML {
 
     /// Pele's SVG reads its colours from these, so diagrams follow the theme,
     /// appearance changes and the paper palette without a re-render. Shared by
-    /// the preview's figure and the editor's widget; the mixes match Pele's
-    /// own light defaults.
-    static let diagramColorVariablesCSS = """
-    --pele-bg: var(--code-bg);
-    --pele-fg: var(--text);
-    --pele-muted: var(--secondary);
-    --pele-line: color-mix(in srgb, var(--text) 85%, var(--code-bg));
-    --pele-surface: color-mix(in srgb, var(--text) 6%, var(--code-bg));
-    --pele-surface-alt: color-mix(in srgb, var(--text) 11%, var(--code-bg));
-    --pele-border: color-mix(in srgb, var(--text) 45%, var(--code-bg));
-    --pele-accent: var(--accent);
-    """
+    /// the preview's figure and the editor's widget, and resolved into the
+    /// popup's copy; the mixes match Pele's own light defaults.
+    static let diagramColorVariables: [(name: String, value: String)] = [
+        ("--pele-bg", "var(--code-bg)"),
+        ("--pele-fg", "var(--text)"),
+        ("--pele-muted", "var(--secondary)"),
+        ("--pele-line", "color-mix(in srgb, var(--text) 85%, var(--code-bg))"),
+        ("--pele-surface", "color-mix(in srgb, var(--text) 6%, var(--code-bg))"),
+        ("--pele-surface-alt", "color-mix(in srgb, var(--text) 11%, var(--code-bg))"),
+        ("--pele-border", "color-mix(in srgb, var(--text) 45%, var(--code-bg))"),
+        ("--pele-accent", "var(--accent)"),
+    ]
+    static let diagramColorVariablesCSS = diagramColorVariables
+        .map { "\($0.name): \($0.value);" }
+        .joined(separator: "\n")
+    static let diagramColorVariableNamesJS = "["
+        + diagramColorVariables.map { javaScriptStringLiteral($0.name) }.joined(separator: ", ") + "]"
+
+    /// Options every `pele.render` call shares, in the preview and the editor.
+    /// Pele measures labels in the body font and keeps the author's flowchart
+    /// direction: the figure scales and zooms instead of re-laying out for a
+    /// narrow window.
+    static let diagramRenderOptionsJS =
+        "{ fontFamily: \(javaScriptStringLiteral(bodyFontFamily)), autoDirection: false }"
 
     static let tableControlsCSS = """
     /* Shrink to the table so the Expand button sits at the table's edge, not the column's. */
@@ -616,9 +628,9 @@ nonisolated extension MarkdownHTML {
         contain: none;
     }
     .mermaid-figure.mermaid-error .mermaid-hud { display: none; }
-    .mermaid-error {
+    .mermaid-figure.mermaid-error .mermaid {
         position: static;
-        aspect-ratio: auto;
+        display: block;
         padding: 12px 16px;
         text-align: left;
         white-space: pre-wrap;

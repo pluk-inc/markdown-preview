@@ -296,11 +296,10 @@ class MermaidWidget extends WidgetType {
 
     // Pele renders synchronously, so the widget is complete when CodeMirror
     // first measures it. Its SVG takes colours from the --pele-* variables
-    // on the figure; the font matches the preview's.
+    // on the figure; the host passes the preview's render options.
     try {
       const { svg } = pele.render(this.source, {
-        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
-        autoDirection: false,
+        ...window.__mdDiagramRenderOptions,
         idPrefix: `md-editor-mermaid-${++mermaidWidgetID}-`,
       })
       stage.innerHTML = svg

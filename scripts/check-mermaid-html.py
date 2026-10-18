@@ -15,7 +15,7 @@ checks = {
     "loads bundled Pele renderer": "Vendor/Pele" in source and "pele.global" in source,
     "does not load a renderer from a CDN": "cdn.jsdelivr.net" not in source,
     "renders diagrams with Pele after page load": "pele.render" in source and "bootstrap" in source,
-    "maps diagram colours to the theme": "--pele-fg: var(--text)" in source,
+    "maps diagram colours to the theme": '("--pele-fg", "var(--text)")' in source,
     "styles Mermaid containers": ".mermaid" in source,
     "centers rendered diagrams": (
         "justify-content: center" in source

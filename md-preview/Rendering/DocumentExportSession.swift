@@ -139,6 +139,9 @@ final class DocumentExportSession {
             let css = format == .pdf ? MarkdownHTML.previewPrintOverrideCSS : ""
             _ = try await page.webView.callAsyncJavaScript("""
                 if (matchesPreview) document.documentElement.classList.add(printClass);
+                // Diagram colours follow the print palette through CSS
+                // variables, so paper only drops the on-screen pan/zoom.
+                else document.querySelectorAll('.mermaid').forEach(node => { node.style.transform = ''; });
                 const style = document.createElement('style');
                 style.textContent = css;
                 document.head.append(style);
@@ -149,12 +152,7 @@ final class DocumentExportSession {
                 """, arguments: ["matchesPreview": !leavesPreview,
                                  "printClass": MarkdownHTML.previewPrintClass, "css": css],
                 in: nil, contentWorld: .page)
-            if leavesPreview {
-                // Diagram colours follow the print palette through CSS
-                // variables, so paper only drops the on-screen pan/zoom.
-                _ = try await page.webView.evaluateJavaScript(
-                    "document.querySelectorAll('.mermaid').forEach(node => { node.style.transform = ''; }); void 0;")
-            } else {
+            if !leavesPreview {
                 _ = try await page.webView.callAsyncJavaScript(
                     ExportTableLayout.prepareScript, in: nil, contentWorld: .page)
             }

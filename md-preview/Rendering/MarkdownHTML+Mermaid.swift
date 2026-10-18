@@ -90,8 +90,10 @@ nonisolated extension MarkdownHTML {
     private static let mermaidFallbackScript = """
     <script>
     window.addEventListener('load', () => {
-        document.querySelectorAll('.mermaid').forEach((node) => {
-            node.classList.add('mermaid-error');
+        document.querySelectorAll('.mermaid-figure').forEach((figure) => {
+            const node = figure.querySelector('.mermaid');
+            if (!node) return;
+            figure.classList.add('mermaid-error');
             node.textContent = \(javaScriptStringLiteral(
                 NSLocalizedString(
                     "Mermaid renderer is unavailable.\n\n",
@@ -103,12 +105,12 @@ nonisolated extension MarkdownHTML {
     </script>
     """
 
-    /// Mermaid wiring IIFE. Assumes the `pele` global has been (or will be)
-    /// defined by the time DOMContentLoaded fires — true for both inline
-    /// vendor `<script>` and `<script defer src=...>` delivery, since `defer`
-    /// scripts run before DOMContentLoaded.
-    /// Mermaid pan/zoom/HUD/popup wiring. Internal so SPM helper tests can
-    /// drive the real bootstrap path (with a stub `pele` + message host).
+    /// Mermaid render, pan/zoom, HUD and popup wiring. Assumes the `pele`
+    /// global has been (or will be) defined by the time DOMContentLoaded
+    /// fires — true for both inline vendor `<script>` and `<script defer
+    /// src=...>` delivery, since `defer` scripts run before DOMContentLoaded.
+    /// Internal so SPM helper tests can drive the real bootstrap path (with a
+    /// stub `pele` + message host).
     static let mermaidInitWiring = """
     (() => {
             const fillWidthLabel = \(javaScriptStringLiteral(
@@ -118,79 +120,49 @@ nonisolated extension MarkdownHTML {
                 NSLocalizedString("Fit diagram", comment: "Mermaid diagram control")
             ));
             const states = new WeakMap();
-            const queue = [];
-            let drainPromise = null;
+            const renderOptions = \(diagramRenderOptionsJS);
+            const peleColorVariables = \(diagramColorVariableNamesJS);
 
-            // Pele measures labels with a canvas in this font, and its SVG
-            // draws them in the same one. Colours are not options: the SVG
-            // reads them from --pele-* variables, which the stylesheet maps
-            // to the theme, so appearance changes and paper printing need no
-            // re-render.
-            const renderOptions = {
-                fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
-                // Keep the author's flowchart direction; the figure scales
-                // and zooms instead of re-laying out for narrow windows.
-                autoDirection: false
-            };
-            const peleColorVariables = [
-                '--pele-bg', '--pele-fg', '--pele-muted', '--pele-line',
-                '--pele-surface', '--pele-surface-alt', '--pele-border', '--pele-accent'
-            ];
-
-            function drain() {
-                if (drainPromise) return drainPromise;
-                drainPromise = (async () => {
-                    while (queue.length) {
-                        const figure = queue.shift();
-                        try {
-                            await renderOne(figure);
-                        } catch (err) {
-                            figure.classList.add('mermaid-error');
-                        }
-                    }
-                })().then(() => {
-                    drainPromise = null;
-                    if (queue.length) return drain();
-                    window.dispatchEvent(new Event('md-preview-mermaid-rendered'));
-                });
-                return drainPromise;
+            // pele.render is synchronous, so a batch draws in one pass and
+            // announces itself once for the host's height and scroll sync.
+            function renderFigures(figures) {
+                for (const figure of figures) renderOne(figure);
+                window.dispatchEvent(new Event('md-preview-mermaid-rendered'));
             }
 
             // Rendering is viewport-driven, so pagination (print/export) must
-            // force every remaining figure through the queue and wait for the
-            // drain to settle before the page is captured.
+            // draw every remaining figure before the page is captured.
             async function renderAll() {
-                document.querySelectorAll('.mermaid-figure').forEach((figure) => {
-                    const node = figure.querySelector('.mermaid');
-                    if (!node || queue.includes(figure)) return;
-                    if (node.dataset.mmDone !== '1') queue.push(figure);
-                });
-                while (queue.length || drainPromise) {
-                    await drain();
-                }
+                renderFigures(document.querySelectorAll('.mermaid-figure'));
             }
 
-            async function renderOne(figure) {
+            // A failed figure counts as done, so MdPreview.update keeps it
+            // while its source is unchanged and the message is never parsed
+            // as a diagram. PeleError messages are plain text with the line
+            // and column; they go above the source, never in as HTML.
+            function showError(figure, node, message) {
+                node.textContent = (message ? message + '\\n\\n' : '') + node.__mdSrc;
+                node.dataset.mmDone = '1';
+                figure.classList.add('mermaid-error');
+            }
+
+            function renderOne(figure) {
                 const node = figure.querySelector('.mermaid');
                 if (!node || node.dataset.mmDone === '1') return;
                 // Pre-render source, stashed so MdPreview.update can pair
-                // unchanged diagrams with their SVGs during DOM diffs.
-                if (typeof node.__mdSrc !== 'string') node.__mdSrc = node.textContent;
-                let result;
+                // unchanged diagrams with their SVGs during DOM diffs. A
+                // morph with new source clears the done flag and lands here.
+                node.__mdSrc = node.textContent;
+                let svg;
                 try {
-                    result = pele.render(node.__mdSrc, renderOptions);
+                    node.innerHTML = pele.render(node.__mdSrc, renderOptions).svg;
+                    svg = node.querySelector('svg');
                 } catch (err) {
-                    // PeleError messages are plain text with the line and
-                    // column; show them above the source, never as HTML.
-                    node.textContent = String((err && err.message) || err) + '\\n\\n' + node.__mdSrc;
-                    node.classList.add('mermaid-error');
-                    figure.classList.add('mermaid-error');
+                    showError(figure, node, String((err && err.message) || err));
                     return;
                 }
-                node.innerHTML = result.svg;
-                const svg = node.querySelector('svg');
                 if (!svg) {
-                    figure.classList.add('mermaid-error');
+                    showError(figure, node, '');
                     return;
                 }
                 node.dataset.mmDone = '1';
@@ -230,10 +202,12 @@ nonisolated extension MarkdownHTML {
                     vbW, vbH, svg
                 };
                 states.set(figure, state);
-                cacheRect(figure);
 
-                // A theme re-render reuses the figure and its listeners; only
-                // the state and HUD need resetting for the fresh SVG.
+                // A figure redrawn after MdPreview.update morphed in new
+                // source keeps its listeners; only the state and HUD need
+                // resetting for the fresh SVG. Its rect is measured on first
+                // use (or by the ResizeObserver), not here, so a batch of
+                // figures does not force a layout per diagram.
                 if (alreadyWired) {
                     apply(figure, state);
                     return;
@@ -453,14 +427,13 @@ nonisolated extension MarkdownHTML {
                 const figures = document.querySelectorAll('.mermaid-figure');
                 if (!figures.length) return;
                 const io = new IntersectionObserver((entries) => {
-                    for (const entry of entries) {
-                        if (entry.isIntersecting) {
-                            io.unobserve(entry.target);
-                            queue.push(entry.target);
-                            ro.observe(entry.target);
-                            drain();
-                        }
+                    const visible = entries.filter((entry) => entry.isIntersecting).map((entry) => entry.target);
+                    if (!visible.length) return;
+                    for (const figure of visible) {
+                        io.unobserve(figure);
+                        ro.observe(figure);
                     }
+                    renderFigures(visible);
                 }, { rootMargin: '300px 0px' });
                 figures.forEach((f) => io.observe(f));
             }

@@ -77,8 +77,9 @@ nonisolated enum EPUBExport {
     // A reader shows pictures on its own light page, whatever the preview's theme.
     document.documentElement.setAttribute('data-mdp-color-scheme', 'light');
     const style = document.createElement('style');
-    // Diagram colours derive from --code-bg, so it turns white with the page.
-    style.textContent = 'html, body, .mermaid-figure, .mermaid-stage, .mermaid { background: #fff !important; }'
+    // A diagram's background and colours derive from --code-bg, so it turns
+    // white with the page.
+    style.textContent = 'html, body { background: #fff !important; }'
         + ' .mermaid-figure { --code-bg: #fff !important; }';
     document.head.append(style);
     // Preview controls would end up in the pictures, and a closed disclosure

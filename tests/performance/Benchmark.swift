@@ -134,7 +134,7 @@ private struct PerformanceProbe {
         let editorScript = try script("CodeMirror/mdedit.min.js")
         // Each revision is measured with its own diagram renderer: Pele, or
         // Mermaid before the switch.
-        let mermaidScript = try (try? script("Pele/pele.global.js")) ?? script("Mermaid/mermaid.min.js")
+        let diagramScript = try (try? script("Pele/pele.global.js")) ?? script("Mermaid/mermaid.min.js")
         let large = documents[4].1
         let media = """
         # Rendered media
@@ -159,7 +159,7 @@ private struct PerformanceProbe {
                 let surface = isEditor ? "editor" : "read"
                 let html = isEditor
                     ? EditorHTML.render(markdown: markdown, editorJavaScript: editorScript,
-                                        mermaidJavaScript: mediaCase ? mermaidScript : nil)
+                                        mermaidJavaScript: mediaCase ? diagramScript : nil)
                     : MarkdownHTML.render(markdown: markdown, vendorLoading: .inline,
                                           documentFont: .system, readerLayout: ReaderLayoutSetting()).html
                 var opens: [Double] = []

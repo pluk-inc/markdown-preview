@@ -232,7 +232,12 @@ final class MermaidDiagramPopup: NSObject, WKNavigationDelegate {
           const naturalHeight = vb.height || parseFloat(svg.getAttribute('height')) || 1;
           svg.setAttribute('width', naturalWidth + 'px');
           svg.setAttribute('height', naturalHeight + 'px');
-          svg.removeAttribute('style');
+          // Keep the style attribute: it carries Pele's colour wiring and the
+          // theme colours the preview resolved. Only the preview's sizing goes.
+          svg.style.removeProperty('width');
+          svg.style.removeProperty('height');
+          const background = getComputedStyle(svg).getPropertyValue('--pele-bg').trim();
+          if (background) document.body.style.background = background;
           let scale = 1;
           let minimumScale = 0.1;
           let tx = 0;
