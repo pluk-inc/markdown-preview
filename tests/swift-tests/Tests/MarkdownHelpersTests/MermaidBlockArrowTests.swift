@@ -18,9 +18,12 @@ final class MermaidBlockArrowTests: XCTestCase {
         while Date() < deadline {
             if !webView.isLoading {
                 edges = (try await webView.evaluateJavaScript("""
-                Array.from(document.querySelectorAll('.mermaid svg path.flowchart-link')).map(path => ({
+                Array.from(document.querySelectorAll(
+                    '.mermaid svg path.flowchart-link, .mermaid svg .pele-edge > path:first-child'
+                )).map(path => ({
                     dash: getComputedStyle(path).strokeDasharray,
-                    marker: path.getAttribute('marker-end') || ''
+                    marker: path.getAttribute('marker-end')
+                        || (path.parentElement.querySelector('.pele-marker') ? 'url(pele-marker)' : '')
                 }))
                 """)) as? [[String: String]] ?? []
                 if edges.count == 3 { break }

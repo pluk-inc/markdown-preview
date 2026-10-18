@@ -71,6 +71,12 @@ final class EPUBExportTests: XCTestCase {
             document.querySelector('article p').insertAdjacentHTML('beforeend',
                 '<img alt="Missing" src="md-asset:///nowhere/missing.png">'); 0
             """)
+        let diagramBounds = try await harness.webView.callAsyncJavaScript("""
+            await window.MdPreview.mermaidRenderAll();
+            const box = document.querySelector('.mermaid svg').viewBox.baseVal;
+            return [box.width, box.height];
+            """, in: nil, contentWorld: .page)
+        let diagramSize = try XCTUnwrap(diagramBounds as? [Double])
         let before = try await harness.webView.evaluateJavaScript("document.querySelector('article').outerHTML") as? String
         let contents = try await export(from: harness, markdown: book, name: "field-guide")
         defer { try? FileManager.default.removeItem(at: contents.deletingLastPathComponent()) }
@@ -145,7 +151,7 @@ final class EPUBExportTests: XCTestCase {
         XCTAssertEqual(loose.count, 0)
 
         // The diagram becomes a picture drawn for a light page, shown at the
-        // size Mermaid laid it out and stored at twice that.
+        // size the renderer laid it out and stored at twice that.
         let width = try XCTUnwrap(sections[2].firstMatch(
             of: /<img src="images\/image-3\.png" alt="Mermaid diagram" width="(\d+)"/)?.1).flatMap { Int($0) }
         XCTAssertFalse(sections[2].contains("<svg"))
@@ -153,7 +159,8 @@ final class EPUBExportTests: XCTestCase {
         let displayWidth = try XCTUnwrap(width)
         XCTAssertTrue((200...330).contains(displayWidth), "\(displayWidth)")
         XCTAssertEqual(Double(diagram.pixelsWide), Double(displayWidth * 2), accuracy: 3)
-        XCTAssertEqual(Double(diagram.pixelsWide) / Double(diagram.pixelsHigh), 263.0 / 70, accuracy: 0.3)
+        XCTAssertEqual(Double(diagram.pixelsWide) / Double(diagram.pixelsHigh),
+                       diagramSize[0] / diagramSize[1], accuracy: 0.02)
         // Whole and uncropped: a light margin all round, with ink inside it.
         var darkest: CGFloat = 1
         for x in stride(from: 0, to: diagram.pixelsWide, by: 3) {

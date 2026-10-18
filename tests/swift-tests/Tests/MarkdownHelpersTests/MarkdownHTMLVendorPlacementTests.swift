@@ -13,6 +13,7 @@ import XCTest
 final class MarkdownHTMLVendorPlacementTests: XCTestCase {
     func testProductionVendorResourcesResolve() throws {
         for (name, directory) in [("purify.min", "DOMPurify"), ("mermaid.min", "Mermaid"),
+                                  ("pele.global", "Pele"),
                                   ("katex.min", "KaTeX"), ("highlight.min", "Highlight"),
                                   ("morphdom.min", "Morphdom"), ("mdedit.min", "CodeMirror")] {
             let source = try XCTUnwrap(MarkdownHTML.bundledVendorResource(name, ext: "js", subdir: "Vendor/\(directory)"),

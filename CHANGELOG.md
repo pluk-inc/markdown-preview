@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **Mermaid previews use Pele with a compatibility fallback.** The app, editor, and Quick Look use bundled Pele for compatible diagrams and load the existing offline Mermaid.js renderer for authored Mermaid configuration, HTML labels, styling, custom icons, or rendering failures. Pele has its own layout; diagram positions and connecting lines can change ([#537](https://github.com/pluk-inc/markdown-preview/issues/537)).
+
 ## [0.0.67] – 2026-10-15
 
 This release adds EPUB export, Japanese and Persian translations, and an Instant auto save interval. It opens the first document window sooner, lets New Tab start a new document, keeps the inspector up to date while you type, and makes Quick Look load more images and follow heading links.

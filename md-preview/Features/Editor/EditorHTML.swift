@@ -661,18 +661,7 @@ nonisolated enum EditorHTML {
         </head>
         <body>
         <div id="editor"></div>
-        \(includesMermaid ? "<script>\(mermaidJavaScript)</script>" : "")
-        \(includesMermaid ? """
-        <script>
-        if (window.mermaid) {
-            window.mermaid.initialize({
-                startOnLoad: false,
-                securityLevel: "strict",
-                theme: window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default"
-            });
-        }
-        </script>
-        """ : "")
+        \(includesMermaid ? MarkdownHTML.inlineDiagramScripts(mermaidJavaScript: mermaidJavaScript) : "")
         <script>\(editorJavaScript)</script>
         <script>
         (function () {

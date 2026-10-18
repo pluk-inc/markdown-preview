@@ -19,8 +19,8 @@ swift test --package-path tests/swift-tests --filter EditorPreviewLayoutTests
 ```
 
 These tests load the production `MarkdownHTML` and `EditorHTML` pages into two
-real `WKWebView` instances. The editor, DOMPurify, syntax highlighting, Mermaid,
-and KaTeX use the actual vendored resources. Images use local data URLs. There
+real `WKWebView` instances. The editor, DOMPurify, syntax highlighting, Pele,
+the Mermaid compatibility fallback, and KaTeX use the actual vendored resources. Images use local data URLs. There
 is no network dependency, renderer stub, or duplicate test stylesheet.
 
 **21 test cases run in four configurations: 84 paired WebKit runs.** The matrix

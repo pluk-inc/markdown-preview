@@ -103,10 +103,122 @@ nonisolated extension MarkdownHTML {
     </script>
     """
 
-    /// Mermaid wiring IIFE. Assumes the `mermaid` global has been (or will
-    /// be) defined by the time DOMContentLoaded fires — true for both inline
-    /// vendor `<script>` and `<script defer src=...>` delivery, since `defer`
-    /// scripts run before DOMContentLoaded.
+    /// Shared by the reader and editor. Mermaid's larger bundle is evaluated
+    /// only for explicit Mermaid features or when Pele cannot render a diagram.
+    /// Inline pages keep the fallback inert so Quick Look stays entirely offline.
+    static let diagramRendererWiring = """
+    (() => {
+        if (window.MdPreviewDiagrams) return;
+        let fallbackPromise = null;
+        let initializedTheme = null;
+        let nextID = 0;
+        const fontFamily = '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif';
+
+        async function loadMermaid() {
+            if (window.mermaid) return window.mermaid;
+            if (!fallbackPromise) {
+                fallbackPromise = (async () => {
+                    const source = document.getElementById('md-mermaid-fallback-source');
+                    if (source) {
+                        const script = document.createElement('script');
+                        script.textContent = source.textContent;
+                        document.head.appendChild(script);
+                        script.remove();
+                    } else {
+                        await window.MdPreviewLazy.loadScript('\(MarkdownAssetScheme.vendorURL("mermaid.min.js"))');
+                    }
+                    if (!window.mermaid) throw new Error('Mermaid renderer is unavailable');
+                    // The host owns rendering, including offscreen export. Do
+                    // not let Mermaid's window-load handler process nodes again.
+                    window.mermaid.startOnLoad = false;
+                    return window.mermaid;
+                })().catch(error => {
+                    fallbackPromise = null;
+                    throw error;
+                });
+            }
+            return fallbackPromise;
+        }
+
+        function needsMermaid(source) {
+            // Preserve authored configuration, HTML labels, styling and icons
+            // rather than silently accepting a different interpretation.
+            return /^\\s*---(?:\\r?\\n|$)/.test(source)
+                || /%%\\s*\\{/.test(source)
+                || /<\\/?[a-z][^>]*>/i.test(source)
+                || /(?:^|[\\r\\n;])\\s*(?:classDef|style|linkStyle|click)\\s/.test(source)
+                || /@\\s*\\{[^}]*\\b(?:icon|img)\\s*:|::icon\\(/.test(source)
+                || /\\b(?:fa|fab|far|fas|fal|fad):[\\w-]+/.test(source);
+        }
+
+        function colorize(svg, theme) {
+            // Keep colors and Pele's internal CSS aliases on the SVG itself.
+            // Popups, PDF snapshots and EPUB rasterization leave the document
+            // stylesheet behind and must not depend on inherited variables.
+            const colors = theme === 'dark'
+                ? ['#1e1e1e', '#f5f5f7', '#aeaeb2', '#d1d1d6', '#2c2c2e', '#3a3a3c', '#8e8e93', '#65a9ff']
+                : ['#ffffff', '#1d1d1f', '#6e6e73', '#5b5b60', '#f5f5f7', '#e5e5ea', '#8e8e93', '#0066cc'];
+            ['bg', 'fg', 'muted', 'line', 'surface', 'surface-alt', 'border', 'accent'].forEach((key, index) => {
+                svg.style.setProperty('--pele-' + key, colors[index]);
+            });
+        }
+
+        async function render(source, { id, theme } = {}) {
+            id = id || 'md-preview-diagram-' + (++nextID);
+            theme = theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default');
+            if (window.pele && !needsMermaid(source)) {
+                try {
+                    if (!window.pele.supports(source)) throw new Error('Unsupported Pele diagram');
+                    const result = window.pele.render(source, {
+                        idPrefix: id, fontFamily, responsive: false,
+                        autoDirection: false, links: false
+                    });
+                    const holder = document.createElement('div');
+                    holder.innerHTML = result.svg;
+                    const svg = holder.querySelector('svg');
+                    if (!svg) throw new Error('Pele returned no SVG');
+                    colorize(svg, theme);
+                    return { svg: svg.outerHTML, renderer: 'pele' };
+                } catch (_) {
+                    // A recognized diagram type can still contain syntax Pele
+                    // does not accept. Retry the original source with Mermaid.
+                }
+            }
+            const mermaid = await loadMermaid();
+            if (initializedTheme !== theme) {
+                mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme, fontFamily });
+                initializedTheme = theme;
+            }
+            try {
+                // Match mermaid.run's trimming: the reader's HTML wrapper
+                // adds a newline before YAML frontmatter, which Mermaid's
+                // direct render API otherwise treats as diagram syntax.
+                const result = await mermaid.render(id, source.trim());
+                return { svg: result.svg, renderer: 'mermaid' };
+            } finally {
+                // Mermaid can leave a temporary error SVG behind when parse
+                // fails. The host displays the original source in its figure.
+                document.getElementById('d' + id)?.remove();
+            }
+        }
+
+        window.MdPreviewDiagrams = { render };
+    })();
+    """
+
+    /// Both bundles are local. The fallback script is text until the adapter
+    /// needs it; unlike wrapping it in a function, this avoids parsing it early.
+    static func inlineDiagramScripts(mermaidJavaScript: String) -> String {
+        let pele = bundledVendorResource("pele.global", ext: "js", subdir: "Vendor/Pele") ?? ""
+        return """
+        <script type="application/octet-stream" id="md-mermaid-fallback-source">\(mermaidJavaScript.replacingOccurrences(of: "</script", with: "<\\/script"))</script>
+        <script>
+        \(pele.replacingOccurrences(of: "</script", with: "<\\/script"))
+        \(diagramRendererWiring)
+        </script>
+        """
+    }
+
     /// Mermaid pan/zoom/HUD/popup wiring. Internal so SPM helper tests can
     /// drive the real bootstrap path (with a stub `mermaid` + message host).
     static let mermaidInitWiring = """
@@ -190,7 +302,6 @@ nonisolated extension MarkdownHTML {
 
             async function renderOne(figure) {
                 const theme = activeTheme();
-                ensureInit(theme);
                 const node = figure.querySelector('.mermaid');
                 if (!node) return;
                 if (node.dataset.mmDone === '1') {
@@ -210,8 +321,16 @@ nonisolated extension MarkdownHTML {
                     node.__mdSrc = node.textContent;
                 }
                 try {
-                    await mermaid.run({ nodes: [node], suppressErrors: true });
+                    if (window.MdPreviewDiagrams) {
+                        const result = await window.MdPreviewDiagrams.render(node.__mdSrc, { theme });
+                        node.innerHTML = result.svg;
+                        node.dataset.mmRenderer = result.renderer;
+                    } else {
+                        ensureInit(theme);
+                        await mermaid.run({ nodes: [node], suppressErrors: true });
+                    }
                 } catch (err) {
+                    node.textContent = node.__mdSrc;
                     figure.classList.add('mermaid-error');
                     return;
                 }
@@ -222,6 +341,7 @@ nonisolated extension MarkdownHTML {
                 }
                 node.dataset.mmDone = '1';
                 node.dataset.mmTheme = theme;
+                figure.classList.remove('mermaid-error');
                 attachZoom(figure, svg);
             }
 
@@ -313,7 +433,9 @@ nonisolated extension MarkdownHTML {
                 if (!s || !s.svg) return;
                 const svg = s.svg;
                 const clone = svg.cloneNode(true);
-                clone.removeAttribute('style');
+                // Pele stores its palette, CSS aliases and font on the SVG.
+                // Clear preview geometry without discarding those styles.
+                ['width', 'height', 'transform'].forEach(key => clone.style.removeProperty(key));
                 clone.setAttribute('preserveAspectRatio', 'xMidYMid meet');
                 clone.removeAttribute('width');
                 clone.removeAttribute('height');
@@ -492,7 +614,8 @@ nonisolated extension MarkdownHTML {
 
     static var paperMermaidScript: String {
         let vendor = bundledVendorResource("mermaid.min", ext: "js", subdir: "Vendor/Mermaid") ?? ""
-        return vendor + "\n" + mermaidInitWiring
+        let pele = bundledVendorResource("pele.global", ext: "js", subdir: "Vendor/Pele") ?? ""
+        return pele + "\n" + vendor + "\nmermaid.startOnLoad = false;\n" + diagramRendererWiring + "\n" + mermaidInitWiring
             + ";\nvoid 0;"
     }
 
@@ -503,12 +626,10 @@ nonisolated extension MarkdownHTML {
         switch mode {
         case .inline:
             let vendorJS = bundledVendorResource("mermaid.min", ext: "js", subdir: "Vendor/Mermaid") ?? ""
-            let safeVendor = vendorJS.replacingOccurrences(of: "</script", with: "<\\/script")
             return VendorEmission(
                 body: """
+                \(inlineDiagramScripts(mermaidJavaScript: vendorJS))
                 <script>
-                \(safeVendor)
-
                 const __mdpMermaid = \(mermaidInitWiring);
                 if (window.MdPreview && window.MdPreview.registerReapplier) {
                     window.MdPreview.registerReapplier(__mdpMermaid.bootstrap);
@@ -524,14 +645,25 @@ nonisolated extension MarkdownHTML {
         case .lazy:
             return VendorEmission(head: """
             <script>
+            \(diagramRendererWiring)
             (() => {
                 let mm = null;
-                window.MdPreviewLazy.lazyRenderer({
-                    src: '\(MarkdownAssetScheme.vendorURL("mermaid.min.js"))',
-                    run: () => {
-                        mm = mm || \(mermaidInitWiring);
-                        mm.bootstrap();
-                    },
+                let ready = false;
+                function run() {
+                    if (!ready) return;
+                    mm = mm || \(mermaidInitWiring);
+                    mm.bootstrap();
+                }
+                window.MdPreview.registerReapplier(run);
+                window.MdPreviewLazy.afterPaint(async () => {
+                    try {
+                        await window.MdPreviewLazy.loadScript('\(MarkdownAssetScheme.vendorURL("pele.global.js"))');
+                    } catch (_) {
+                        // The compatibility renderer also covers a missing or
+                        // unloadable Pele asset, not just rejected diagrams.
+                    }
+                    ready = true;
+                    run();
                 });
             })();
             </script>

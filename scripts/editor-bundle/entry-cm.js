@@ -288,16 +288,18 @@ class MermaidWidget extends WidgetType {
       })
     })
 
+    const diagrams = window.MdPreviewDiagrams
     const mermaid = window.mermaid
-    if (!mermaid || typeof mermaid.render !== "function") {
+    if (!diagrams && (!mermaid || typeof mermaid.render !== "function")) {
       stage.textContent = "Mermaid preview unavailable. Click to edit source."
       return figure
     }
 
     const id = `md-editor-mermaid-${++mermaidWidgetID}`
-    Promise.resolve(mermaid.render(id, this.source))
-      .then(({ svg }) => {
+    Promise.resolve(diagrams ? diagrams.render(this.source, { id }) : mermaid.render(id, this.source))
+      .then(({ svg, renderer }) => {
         stage.innerHTML = svg
+        if (renderer) figure.dataset.mmRenderer = renderer
         const diagram = stage.querySelector("svg")
         const box = diagram?.viewBox?.baseVal
         if (diagram && box?.width > 0 && box?.height > 0) {

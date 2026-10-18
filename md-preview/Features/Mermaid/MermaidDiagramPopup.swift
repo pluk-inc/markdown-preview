@@ -232,7 +232,7 @@ final class MermaidDiagramPopup: NSObject, WKNavigationDelegate {
           const naturalHeight = vb.height || parseFloat(svg.getAttribute('height')) || 1;
           svg.setAttribute('width', naturalWidth + 'px');
           svg.setAttribute('height', naturalHeight + 'px');
-          svg.removeAttribute('style');
+          ['width', 'height', 'transform'].forEach(key => svg.style.removeProperty(key));
           let scale = 1;
           let minimumScale = 0.1;
           let tx = 0;

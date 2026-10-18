@@ -25,6 +25,8 @@
 		9AF00000000000000000000B /* Highlight-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000109 /* Highlight-LICENSE.txt */; };
 		9AF00000000000000000000C /* purify.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF00000000000000000010A /* purify.min.js */; };
 		9AF00000000000000000000D /* DOMPurify-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF00000000000000000010B /* DOMPurify-LICENSE.txt */; };
+		9AF00000000000000000000E /* pele.global.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF00000000000000000010C /* pele.global.js */; };
+		9AF00000000000000000000F /* Pele-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF00000000000000000010D /* Pele-LICENSE.txt */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -80,6 +82,8 @@
 		9AF000000000000000000109 /* Highlight-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "Highlight-LICENSE.txt"; path = "md-preview/Vendor/Highlight/Highlight-LICENSE.txt"; sourceTree = "<group>"; };
 		9AF00000000000000000010A /* purify.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = purify.min.js; path = "md-preview/Vendor/DOMPurify/purify.min.js"; sourceTree = "<group>"; };
 		9AF00000000000000000010B /* DOMPurify-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "DOMPurify-LICENSE.txt"; path = "md-preview/Vendor/DOMPurify/DOMPurify-LICENSE.txt"; sourceTree = "<group>"; };
+		9AF00000000000000000010C /* pele.global.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = pele.global.js; path = "md-preview/Vendor/Pele/pele.global.js"; sourceTree = "<group>"; };
+		9AF00000000000000000010D /* Pele-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "Pele-LICENSE.txt"; path = "md-preview/Vendor/Pele/Pele-LICENSE.txt"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -183,6 +187,8 @@
 				9AF000000000000000000109 /* Highlight-LICENSE.txt */,
 				9AF00000000000000000010A /* purify.min.js */,
 				9AF00000000000000000010B /* DOMPurify-LICENSE.txt */,
+				9AF00000000000000000010C /* pele.global.js */,
+				9AF00000000000000000010D /* Pele-LICENSE.txt */,
 				9A0207C32FA0ED7C00092060 /* md-preview */,
 				9A0209312FA10D4C00092060 /* quick-look */,
 				9A02092E2FA10D4C00092060 /* Frameworks */,
@@ -337,6 +343,8 @@
 				9AF00000000000000000000B /* Highlight-LICENSE.txt in Resources */,
 				9AF00000000000000000000C /* purify.min.js in Resources */,
 				9AF00000000000000000000D /* DOMPurify-LICENSE.txt in Resources */,
+				9AF00000000000000000000E /* pele.global.js in Resources */,
+				9AF00000000000000000000F /* Pele-LICENSE.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

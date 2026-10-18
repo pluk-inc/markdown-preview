@@ -39,7 +39,7 @@ There are **18 metrics**:
 | A 100 KB mixed file | Editor insert/delete cycle, editor document replacement, and read-mode DOM update (3 metrics) |
 
 The probe uses actual production Swift sources and vendored CodeMirror,
-DOMPurify, Highlight, KaTeX, Mermaid, and Morphdom from each revision. It checks
+DOMPurify, Highlight, KaTeX, Mermaid, Morphdom, and Pele (where present) from each revision. It checks
 that edits/updates apply and preserves the original source after each edit cycle.
 It runs in **Release** with two warmups and seven measured samples per timing metric.
 
