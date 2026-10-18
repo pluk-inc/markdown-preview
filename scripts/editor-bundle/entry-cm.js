@@ -293,10 +293,16 @@ class MermaidWidget extends WidgetType {
       if (!node) return
       const { sourceFrom, sourceTo, closed } = fencedCodeDetails(state, node)
       const empty = sourceTo <= sourceFrom
-      const openingEnd = state.doc.lineAt(node.from).to
+      const openingLine = state.doc.lineAt(node.from)
+      // Inside a quote or list the new line needs the container's prefix,
+      // or the typed text falls outside the fence: copy it from the closing
+      // marker's line, or from the opening line with list markers blanked.
+      const prefix = !empty ? ""
+        : closed ? state.sliceDoc(state.doc.lineAt(sourceTo).from, node.lastChild.from)
+        : state.sliceDoc(openingLine.from, node.from).replace(/[-*+]|\d+[.)]/g, (marker) => " ".repeat(marker.length))
       view.dispatch({
-        changes: empty ? { from: openingEnd, insert: "\n" } : undefined,
-        selection: { anchor: empty ? openingEnd + 1 : closed ? sourceTo - 1 : sourceTo },
+        changes: empty ? { from: openingLine.to, insert: "\n" + prefix } : undefined,
+        selection: { anchor: empty ? openingLine.to + 1 + prefix.length : closed ? sourceTo - 1 : sourceTo },
         userEvent: "select.pointer",
       })
     })

@@ -937,6 +937,12 @@ const clickedEmpty = await clickFirstDiagramAndType(
 check("one click on an empty diagram block leaves the caret inside it",
   clickedEmpty.markdown === "intro\n\n```mermaid\ng\n```\n\nafter\n\n```mermaid\nflowchart LR\n  A --> B\n```")
 check("typing into an empty diagram block keeps the next diagram drawn", clickedEmpty.previews === 1)
+const clickedQuoted = await clickFirstDiagramAndType("intro\n\n> ```mermaid\n> ```\n\nafter", "g")
+check("an empty diagram in a quote gets a quoted source line",
+  clickedQuoted.markdown === "intro\n\n> ```mermaid\n> g\n> ```\n\nafter")
+const clickedListed = await clickFirstDiagramAndType("intro\n\n- item\n\n  ```mermaid\n  ```\n\nafter", "g")
+check("an empty diagram in a list keeps the list indent",
+  clickedListed.markdown === "intro\n\n- item\n\n  ```mermaid\n  g\n  ```\n\nafter")
 
 const authoredMermaidHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(authoredMermaidHost)
