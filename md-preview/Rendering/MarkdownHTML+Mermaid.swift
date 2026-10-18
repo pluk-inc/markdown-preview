@@ -260,7 +260,7 @@ nonisolated extension MarkdownHTML {
 
                 const alreadyWired = states.has(figure);
                 const state = {
-                    tx: 0, ty: 0, scale: 1, min: 1, max: 8,
+                    tx: 0, ty: 0, scale: 1, min: 0.25, max: 8,
                     rect: null, raf: 0, dragging: false,
                     lastX: 0, lastY: 0, surface,
                     vbW, vbH, svg
@@ -370,7 +370,13 @@ nonisolated extension MarkdownHTML {
                 s.tx = x - (x - s.tx) * ratio;
                 s.ty = y - (y - s.ty) * ratio;
                 s.scale = next;
-                if (s.scale <= 1.001) { s.tx = 0; s.ty = 0; }
+                if (s.scale <= 1.001) {
+                    // At or below 100% the whole drawing fits: keep it centred
+                    // in its box (the transform origin is the top-left corner).
+                    if (!s.rect) cacheRect(figure);
+                    s.tx = s.rect.width * (1 - s.scale) / 2;
+                    s.ty = s.rect.height * (1 - s.scale) / 2;
+                }
                 apply(figure, s);
             }
 
@@ -461,7 +467,7 @@ nonisolated extension MarkdownHTML {
                 if (e.target.closest('.mermaid-hud')) return;
                 const s = states.get(figure);
                 if (!s) return;
-                if (s.scale > 1.001) {
+                if (Math.abs(s.scale - 1) > 0.001) {
                     reset(figure);
                 } else {
                     if (!s.rect) cacheRect(figure);

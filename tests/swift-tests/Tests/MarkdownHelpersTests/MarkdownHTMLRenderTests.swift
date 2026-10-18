@@ -1558,6 +1558,57 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(state, #"{"error":true,"empty":true,"text":"This diagram is empty.","calls":0}"#)
     }
 
+    /// The zoom-out button goes below 100%, and the smaller drawing stays
+    /// centred in its box instead of shrinking into the top-left corner.
+    @MainActor
+    func testMermaidZoomsOutBelowFullSizeAndStaysCentred() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: "```mermaid\nflowchart LR\n    A --> B\n```\n",
+            vendorLoading: .lazy
+        )
+        let html = """
+        <!DOCTYPE html>
+        <html><head>
+        <style>\(MarkdownHTML.stylesheet)</style>
+        <script>
+        window.requestAnimationFrame = (callback) => callback();
+        window.IntersectionObserver = class {
+            constructor(callback) { this.callback = callback; }
+            observe(target) { this.callback([{ target, isIntersecting: true }]); }
+            unobserve() {}
+        };
+        window.ResizeObserver = class { observe() {} };
+        window.pele = { render() { return { svg: '<svg viewBox="0 0 400 200"></svg>' }; } };
+        </script></head><body>
+        <article class="markdown-body">\(rendered.articleHTML)</article>
+        <script>
+        const __mdpMermaid = \(MarkdownHTML.mermaidInitWiring);
+        __mdpMermaid.bootstrap();
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let state = try await webView.callAsyncJavaScript("""
+            const figure = document.querySelector('.mermaid-figure');
+            const out = figure.querySelector('[data-mm-act="out"]');
+            for (let i = 0; i < 3; i++) out.click();
+            const box = figure.getBoundingClientRect();
+            const match = /translate\\(([-\\d.]+)px, *([-\\d.]+)px\\) scale\\(([\\d.]+)\\)/
+                .exec(figure.querySelector('.mermaid').style.transform);
+            const scale = Number(match[3]);
+            return JSON.stringify({
+                level: figure.querySelector('.mermaid-hud-level').textContent,
+                centredX: Math.abs(Number(match[1]) - box.width * (1 - scale) / 2) < 0.5,
+                centredY: Math.abs(Number(match[2]) - box.height * (1 - scale) / 2) < 0.5
+            });
+            """, contentWorld: .page) as? String
+        XCTAssertEqual(state, #"{"level":"51%","centredX":true,"centredY":true}"#)
+    }
+
     @MainActor
     func testMermaidRenderAllRendersFiguresTheObserverNeverReached() async throws {
         let rendered = MarkdownHTML.render(
