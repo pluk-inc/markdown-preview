@@ -9,24 +9,12 @@ final class MermaidBlockArrowTests: XCTestCase {
             contentsOf: TestVendor.repositoryRoot.appendingPathComponent("samples/mermaid-block-arrows.md"),
             encoding: .utf8
         )
-        // Exercise the production HTML and offline bundle used by Quick Look.
-        let rendered = MarkdownHTML.render(markdown: markdown, vendorLoading: .inline)
-        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 700))
-        webView.loadHTMLString(rendered.html, baseURL: nil)
-        let deadline = Date().addingTimeInterval(20)
-        var edges: [[String: String]] = []
-        while Date() < deadline {
-            if !webView.isLoading {
-                edges = (try await webView.evaluateJavaScript("""
-                Array.from(document.querySelectorAll('.mermaid svg .pele-edge')).map(edge => ({
-                    dash: getComputedStyle(edge.querySelector('path:not(.pele-marker)')).strokeDasharray,
-                    marker: edge.querySelector('path.pele-marker') ? 'arrowhead' : ''
-                }))
-                """)) as? [[String: String]] ?? []
-                if edges.count == 3 { break }
-            }
-            try await Task.sleep(for: .milliseconds(50))
-        }
+        let edges: [[String: String]] = try await poll(markdown, script: """
+            Array.from(document.querySelectorAll('.mermaid svg .pele-edge')).map(edge => ({
+                dash: getComputedStyle(edge.querySelector('path:not(.pele-marker)')).strokeDasharray,
+                marker: edge.querySelector('path.pele-marker') ? 'arrowhead' : ''
+            }))
+            """, until: { $0.count == 3 }) ?? []
         XCTAssertEqual(edges.count, 3, "All block links must render")
         guard edges.count == 3 else { return }
         XCTAssertTrue(["none", "0px"].contains(try XCTUnwrap(edges[0]["dash"])), "The solid link must remain solid")
@@ -53,25 +41,33 @@ final class MermaidBlockArrowTests: XCTestCase {
             Animal : +int age
         ```
         """
+        let state: String = try await poll(markdown, script: """
+            (() => {
+                const figure = document.querySelector('.mermaid-figure');
+                if (!figure) return '';
+                if (figure.classList.contains('mermaid-error')) return 'error';
+                return figure.querySelector('.mermaid svg.pele-class') ? 'class' : '';
+            })()
+            """, until: { !$0.isEmpty }) ?? ""
+        XCTAssertEqual(state, "class", "A frontmatter diagram must render as its type, not as an error")
+    }
+
+    /// Loads the production HTML with the offline bundle Quick Look uses, then
+    /// evaluates `script` until `done` accepts its result or 20 s pass.
+    @MainActor
+    private func poll<T>(_ markdown: String, script: String, until done: (T) -> Bool) async throws -> T? {
         let rendered = MarkdownHTML.render(markdown: markdown, vendorLoading: .inline)
         let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 700))
         webView.loadHTMLString(rendered.html, baseURL: nil)
         let deadline = Date().addingTimeInterval(20)
-        var state = ""
+        var last: T?
         while Date() < deadline {
             if !webView.isLoading {
-                state = (try await webView.evaluateJavaScript("""
-                (() => {
-                    const figure = document.querySelector('.mermaid-figure');
-                    if (!figure) return '';
-                    if (figure.classList.contains('mermaid-error')) return 'error';
-                    return figure.querySelector('.mermaid svg.pele-class') ? 'class' : '';
-                })()
-                """)) as? String ?? ""
-                if !state.isEmpty { break }
+                last = try await webView.evaluateJavaScript(script) as? T
+                if let last, done(last) { break }
             }
             try await Task.sleep(for: .milliseconds(50))
         }
-        XCTAssertEqual(state, "class", "A frontmatter diagram must render as its type, not as an error")
+        return last
     }
 }

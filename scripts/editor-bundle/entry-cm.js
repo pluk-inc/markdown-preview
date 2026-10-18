@@ -281,44 +281,39 @@ class MermaidWidget extends WidgetType {
     figure.addEventListener("mousedown", (event) => {
       event.preventDefault()
       view.focus()
-      // Land at the end of the last source line, ready to continue the
-      // diagram — never inside a ``` marker, where a typed character would
-      // break the fence and drop the diagram.
-      // The widget's DOM position can land on any of its lines (an empty
-      // block reports the closing marker), so take the block's bounds from
-      // the syntax tree instead.
-      const doc = view.state.doc
+      // Take the block from the widget's own range (its DOM position can be
+      // any of its lines) and land at the end of the last source line, never
+      // inside a ``` marker, where a typed character would break the fence.
+      // An empty block gets one source line, so the first click is enough.
+      const { state } = view
       const position = view.posAtDOM(figure)
-      const fence = fencedCodeAt(view.state, position) || fencedCodeAt(view.state, position + 1)
-      if (!fence) return
-      const opening = doc.lineAt(fence.from)
-      const lastNumber = fence.closed ? doc.lineAt(fence.to).number - 1 : doc.lineAt(fence.to).number
-      // An empty block has no source line yet. Open one, so the first click
-      // leaves the caret where typing goes instead of before the closing ```.
-      if (lastNumber <= opening.number) {
-        view.dispatch({
-          changes: { from: opening.to, insert: "\n" },
-          selection: { anchor: opening.to + 1 },
-          userEvent: "select.pointer",
-        })
-        return
-      }
+      let from = null
+      state.field(mermaidPreviews).between(position, position, (start) => { from = start; return false })
+      const node = from == null ? null : fencedCodeNode(state, from, 1)
+      if (!node) return
+      const { sourceFrom, sourceTo, closed } = fencedCodeDetails(state, node)
+      const empty = sourceTo <= sourceFrom
+      const openingEnd = state.doc.lineAt(node.from).to
       view.dispatch({
-        selection: { anchor: doc.line(lastNumber).to },
+        changes: empty ? { from: openingEnd, insert: "\n" } : undefined,
+        selection: { anchor: empty ? openingEnd + 1 : closed ? sourceTo - 1 : sourceTo },
         userEvent: "select.pointer",
       })
     })
 
-    if (!this.source.trim()) {
-      stage.textContent = "Empty diagram. Click to add Mermaid source."
-      figure.classList.add("cm-md-mermaid-empty")
+    // A widget that shows text instead of a drawing has no size of its own;
+    // the message class lays the text out in flow.
+    const showMessage = (text, isError) => {
+      stage.textContent = text
+      figure.classList.add("cm-md-mermaid-message")
+      if (isError) figure.classList.add("cm-md-mermaid-error")
       return figure
     }
+    if (!this.source.trim()) return showMessage("Empty diagram. Click to add Mermaid source.", false)
 
     const pele = window.pele
     if (!pele || typeof pele.render !== "function") {
-      stage.textContent = "Mermaid preview unavailable. Click to edit source."
-      return figure
+      return showMessage("Mermaid preview unavailable. Click to edit source.", false)
     }
 
     // Pele renders synchronously, so the widget is complete when CodeMirror
@@ -341,8 +336,7 @@ class MermaidWidget extends WidgetType {
         diagram.style.height = "100%"
       }
     } catch {
-      stage.textContent = "Unable to render Mermaid diagram. Click to edit source."
-      figure.classList.add("cm-md-mermaid-error")
+      return showMessage("Unable to render Mermaid diagram. Click to edit source.", true)
     }
     return figure
   }
@@ -1677,25 +1671,28 @@ function fencedCodeDetails(state, node) {
     infoFrom,
     infoTo,
     sourceFrom,
+    sourceTo,
+    closed: codeMarks.length > 1,
     source,
   }
 }
 
-function fencedCodeAt(state, pos) {
+function fencedCodeNode(state, pos, side) {
   // Stay in the outer Markdown tree—the innermost mounted language tree does
   // not retain FencedCode as one of its parents.
-  let node = syntaxTree(state).resolve(pos, -1)
-  while (node) {
-    if (node.name === "FencedCode") {
-      return {
-        from: node.from,
-        to: node.to,
-        closed: node.node.lastChild?.name === "CodeMark",
-      }
-    }
-    node = node.parent
+  for (let node = syntaxTree(state).resolve(pos, side); node; node = node.parent) {
+    if (node.name === "FencedCode") return node
   }
   return null
+}
+
+function fencedCodeAt(state, pos) {
+  const node = fencedCodeNode(state, pos, -1)
+  return node && {
+    from: node.from,
+    to: node.to,
+    closed: node.node.lastChild?.name === "CodeMark",
+  }
 }
 
 // Snapshot only the state that controls source visibility during a gesture.
@@ -1799,8 +1796,8 @@ const activeCodeBlock = StateField.define({
 
     const selection = tr.state.selection.main
     // A range selection is an operation on rendered content, so it never
-    // opens a block. One that still covers the open block (select all, or a
-    // drag inside its source) keeps that block open instead of closing it
+    // opens a block. One that still overlaps the open block (select all, or
+    // a drag through its source) keeps that block open instead of closing it
     // under the user.
     if (!selection.empty) {
       return value && selection.from <= value.to && selection.to >= value.from ? value : null

@@ -51,22 +51,24 @@ nonisolated extension MarkdownHTML {
         ("--pele-series-7", "var(--hl-preprocessor)"),
         ("--pele-series-8", "var(--hl-comment)"),
     ]
-    /// Non-colour inputs, copied into the popup as they are: weights match
-    /// table headers and alert titles, and the radius sits between inline
-    /// code (5px) and code blocks (8px).
+    /// Non-colour inputs, sent to the popup as these literal values: weights
+    /// match table headers and alert titles, and the radius sits between
+    /// inline code (5px) and code blocks (8px).
     static let diagramStyleVariables: [(name: String, value: String)] = [
         ("--pele-radius", "6px"),
         ("--pele-title-weight", "600"),
         ("--pele-heading-weight", "600"),
         ("--pele-font-mono", codeFontFamily),
     ]
-    static let diagramColorVariablesCSS = (diagramColorVariables + diagramStyleVariables)
+    static let diagramVariablesCSS = (diagramColorVariables + diagramStyleVariables)
         .map { "\($0.name): \($0.value);" }
         .joined(separator: "\n")
     static let diagramColorVariableNamesJS = "["
         + diagramColorVariables.map { javaScriptStringLiteral($0.name) }.joined(separator: ", ") + "]"
-    static let diagramStyleVariableNamesJS = "["
-        + diagramStyleVariables.map { javaScriptStringLiteral($0.name) }.joined(separator: ", ") + "]"
+    static let diagramStyleVariablesJS = "{"
+        + diagramStyleVariables
+            .map { "\(javaScriptStringLiteral($0.name)): \(javaScriptStringLiteral($0.value))" }
+            .joined(separator: ", ") + "}"
 
     /// Options every `pele.render` call shares, in the preview and the editor.
     /// Pele measures labels in the body font and keeps the author's flowchart
@@ -526,26 +528,22 @@ nonisolated extension MarkdownHTML {
     .md-code-action:focus-visible { outline: 2px solid AccentColor; outline-offset: 1px; }
     .mermaid-figure {
         position: relative;
-        margin: \(largeBlockSpacing)px auto 0;
+        margin: \(largeBlockSpacing)px 0 0;
         background: var(--code-bg);
         border-radius: 15px;
         overflow: hidden;
         outline: none;
-        /* The stage is absolutely positioned, so the figure has no width of
-           its own. Left to its auto margins inside the article's flex column
-           it shrinks to 0 wide, and the aspect ratio then makes it 0 tall.
-           The tray always spans the column like a code block; a tall diagram
-           hits the height cap and stays centred inside it. */
+        /* The stage is absolutely positioned, so the figure needs an explicit
+           width: the tray spans the column like a code block, and a tall
+           diagram hits the height cap and stays centred inside it. */
         --mm-max-height: min(70vh, 720px);
         width: 100%;
         aspect-ratio: var(--mm-aspect, 4 / 3);
         max-height: var(--mm-max-height);
         contain: layout paint;
-        \(diagramColorVariablesCSS)
+        \(diagramVariablesCSS)
     }
     .mermaid-figure.mermaid-width-expanded {
-        width: 100%;
-        max-width: none;
         max-height: none;
     }
     .mermaid-figure:focus-visible {

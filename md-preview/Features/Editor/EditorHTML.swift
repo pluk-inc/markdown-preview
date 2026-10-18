@@ -483,6 +483,10 @@ nonisolated enum EditorHTML {
         }
         #editor .cm-md-code-action:hover { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
         #editor .cm-md-code-action:focus-visible { outline: 2px solid AccentColor; outline-offset: 1px; }
+        /* A diagram widget is not code: around an empty fence the card wraps
+           the widget itself, and a max-content column would size it to its
+           (absent) content. The card's line decorations stay, because they
+           carry the spacing that matches the preview. */
         #editor .cm-md-code-card-wrapped,
         #editor .cm-md-code-card:has(> .cm-md-mermaid-preview) { grid-template-columns: minmax(0, 1fr); }
         #editor .cm-md-code-wrapped { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; padding-inline: 16px; }
@@ -531,7 +535,7 @@ nonisolated enum EditorHTML {
             /* Outer spacing comes from the block separator lines, matching
                the preview's .mermaid-figure margin. */
             position: relative;
-            margin: 0 auto;
+            margin: 0;
             width: 100%;
             --mm-max-height: min(70vh, 720px);
             aspect-ratio: var(--mm-aspect, 4 / 3);
@@ -541,7 +545,7 @@ nonisolated enum EditorHTML {
             background: var(--code-bg);
             cursor: text;
             box-sizing: border-box;
-            \(MarkdownHTML.diagramColorVariablesCSS)
+            \(MarkdownHTML.diagramVariablesCSS)
         }
         .cm-md-mermaid-stage {
             position: absolute;
@@ -564,13 +568,11 @@ nonisolated enum EditorHTML {
         }
         /* No drawing gives the box no size of its own: lay the message out in
            flow so the box spans the column and stays easy to click. */
-        .cm-md-mermaid-preview.cm-md-mermaid-error,
-        .cm-md-mermaid-preview.cm-md-mermaid-empty {
+        .cm-md-mermaid-preview.cm-md-mermaid-message {
             aspect-ratio: auto;
             max-height: none;
         }
-        .cm-md-mermaid-error .cm-md-mermaid-stage,
-        .cm-md-mermaid-empty .cm-md-mermaid-stage {
+        .cm-md-mermaid-message .cm-md-mermaid-stage {
             position: static;
             justify-content: flex-start;
         }

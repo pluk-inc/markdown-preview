@@ -909,36 +909,34 @@ check("a range selection outside the open block closes it",
 mermaidEditor.destroy()
 
 // Clicking a diagram opens its source with the caret at the end of its last
-// source line; typing must edit the diagram, not a ``` marker.
-const clickedMermaidHost = dom.window.document.createElement("div")
-dom.window.document.body.appendChild(clickedMermaidHost)
-const clickedMermaidEditor = dom.window.MDEditor.create(
-  clickedMermaidHost, "intro\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\nafter\n\n```mermaid\npie\n```", {})
-clickedMermaidHost.querySelector(".cm-md-mermaid-preview")
-  .dispatchEvent(new dom.window.MouseEvent("mousedown", { bubbles: true, button: 0, detail: 1 }))
-dom.window.document.dispatchEvent(new dom.window.MouseEvent("mouseup", { bubbles: true, button: 0 }))
-await new Promise((resolve) => setTimeout(resolve, 10))
-clickedMermaidEditor.insert("x")
+// source line (an empty block gets one); typing must edit the diagram, not a
+// ``` marker, and leave the other diagram drawn.
+async function clickFirstDiagramAndType(markdown, text) {
+  const host = dom.window.document.createElement("div")
+  dom.window.document.body.appendChild(host)
+  const editor = dom.window.MDEditor.create(host, markdown, {})
+  host.querySelector(".cm-md-mermaid-preview")
+    .dispatchEvent(new dom.window.MouseEvent("mousedown", { bubbles: true, button: 0, detail: 1 }))
+  dom.window.document.dispatchEvent(new dom.window.MouseEvent("mouseup", { bubbles: true, button: 0 }))
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  editor.insert(text)
+  const result = {
+    markdown: editor.getMarkdown(),
+    previews: host.querySelectorAll(".cm-md-mermaid-preview").length,
+  }
+  editor.destroy()
+  return result
+}
+const clickedDiagram = await clickFirstDiagramAndType(
+  "intro\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\nafter\n\n```mermaid\npie\n```", "x")
 check("typing after clicking a diagram keeps its fence intact",
-  clickedMermaidEditor.getMarkdown() === "intro\n\n```mermaid\nflowchart LR\n  A --> Bx\n```\n\nafter\n\n```mermaid\npie\n```")
-check("typing after clicking a diagram keeps the other diagram drawn",
-  clickedMermaidHost.querySelectorAll(".cm-md-mermaid-preview").length === 1)
-clickedMermaidEditor.destroy()
-
-const emptyMermaidHost = dom.window.document.createElement("div")
-dom.window.document.body.appendChild(emptyMermaidHost)
-const emptyMermaidEditor = dom.window.MDEditor.create(
-  emptyMermaidHost, "intro\n\n```mermaid\n```\n\nafter\n\n```mermaid\nflowchart LR\n  A --> B\n```", {})
-emptyMermaidHost.querySelector(".cm-md-mermaid-preview")
-  .dispatchEvent(new dom.window.MouseEvent("mousedown", { bubbles: true, button: 0, detail: 1 }))
-dom.window.document.dispatchEvent(new dom.window.MouseEvent("mouseup", { bubbles: true, button: 0 }))
-await new Promise((resolve) => setTimeout(resolve, 10))
-emptyMermaidEditor.insert("g")
+  clickedDiagram.markdown === "intro\n\n```mermaid\nflowchart LR\n  A --> Bx\n```\n\nafter\n\n```mermaid\npie\n```")
+check("typing after clicking a diagram keeps the other diagram drawn", clickedDiagram.previews === 1)
+const clickedEmpty = await clickFirstDiagramAndType(
+  "intro\n\n```mermaid\n```\n\nafter\n\n```mermaid\nflowchart LR\n  A --> B\n```", "g")
 check("one click on an empty diagram block leaves the caret inside it",
-  emptyMermaidEditor.getMarkdown() === "intro\n\n```mermaid\ng\n```\n\nafter\n\n```mermaid\nflowchart LR\n  A --> B\n```")
-check("typing into an empty diagram block keeps the next diagram drawn",
-  emptyMermaidHost.querySelectorAll(".cm-md-mermaid-preview").length === 1)
-emptyMermaidEditor.destroy()
+  clickedEmpty.markdown === "intro\n\n```mermaid\ng\n```\n\nafter\n\n```mermaid\nflowchart LR\n  A --> B\n```")
+check("typing into an empty diagram block keeps the next diagram drawn", clickedEmpty.previews === 1)
 
 const authoredMermaidHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(authoredMermaidHost)
