@@ -574,6 +574,11 @@ nonisolated enum EditorHTML {
             display: block;
             \(MarkdownHTML.diagramMessageCSS)
         }
+        /* The marker line of a list item that opens with a diagram stands in
+           for the preview's figure margin under the marker. */
+        #editor .cm-content > .cm-line.cm-md-diagram-marker-line {
+            height: \(MarkdownHTML.largeBlockSpacing)px;
+        }
         /* A diagram nested in a quote or list: the bundle sets the indent,
            padding and one quote bar per level, as on quote and list lines. */
         .cm-md-mermaid-nest { background-repeat: no-repeat; }

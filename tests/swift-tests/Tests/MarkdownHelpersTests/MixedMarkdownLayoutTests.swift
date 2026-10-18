@@ -243,6 +243,28 @@ extension EditorPreviewLayoutTests {
                                          "diagram-svg": ".cm-md-mermaid-stage svg"]))
     }
 
+    /// A list item that opens with a diagram keeps its bullet or number in
+    /// both modes, and the diagram sits where the preview puts it.
+    func testListItemsThatOpenWithADiagramMatchTheReader() async throws {
+        try await check(Fixture(name: "mermaid-list-items", markdown: """
+            Before the lists.
+
+            - ```mermaid
+              flowchart LR
+                A --> B
+              ```
+
+            1. ```mermaid
+               flowchart LR
+                 C --> D
+               ```
+
+            After the lists.
+            """, texts: ["Before the lists.", "After the lists."],
+                           readSelectors: [".mermaid svg": 2],
+                           editorSelectors: [".cm-md-mermaid-stage svg": 2, ".cm-md-bullet": 1, ".cm-md-ordered": 1]))
+    }
+
     func testUnicodeAndRightToLeftParagraphs() async throws {
         try await check(Fixture(name: "unicode-rtl", markdown: """
             Unicode café 日本語 🧪 é.

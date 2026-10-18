@@ -764,6 +764,15 @@ nonisolated extension MarkdownHTML {
        hangs past the page edge. The editor mirrors this in entry-cm.js. */
     \(markerGutterRules)
     ol > li::marker { color: var(--link); font-variant-numeric: tabular-nums; }
+    /* A numbered item that opens with a diagram has no text line for its
+       ::marker (the drawing is absolutely positioned), so the number never
+       painted. A zero-height first line gives it one without moving the
+       diagram; bulleted items paint their own dot in ::before. */
+    ol > li:has(> .mermaid-figure:first-child)::before {
+        content: "\u{200B}";
+        display: block;
+        height: 0;
+    }
     /* No text marker: it would paint as a selected box beside every item.
        The gutter comes from the list padding, a 0.4em circle is painted in
        its place, and copying a list yields its Markdown source, bullets

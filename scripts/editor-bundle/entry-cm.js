@@ -1598,6 +1598,10 @@ const codeLine = Decoration.line({ class: "cm-md-codeblock" })
 const codeLineFirst = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-first" })
 const codeLineLast = Decoration.line({ class: "cm-md-codeblock cm-md-codeblock-last" })
 const codeScrollText = Decoration.mark({ class: "cm-md-code-scroll-text" })
+// The list marker's line above a diagram that opens its item: as tall as the
+// preview's figure margin, which is what separates the marker from the
+// diagram there.
+const diagramMarkerLine = Decoration.line({ class: "cm-md-diagram-marker-line" })
 
 // One native scrollport per code block keeps momentum, text, and selection
 // together without mirroring horizontal offsets between editable lines.
@@ -2616,6 +2620,7 @@ function buildDecorations(view, detectedCodeCache) {
           while (pos <= node.to) {
             const line = state.doc.lineAt(pos)
             if (markerLine && line.from === first.from) {
+              lineOnce(line.from, diagramMarkerLine)
               if (line.to >= node.to) break
               pos = line.to + 1
               continue
