@@ -309,7 +309,9 @@ class MermaidWidget extends WidgetType {
       if (isError) figure.classList.add("cm-md-mermaid-error")
       return figure
     }
-    if (!this.source.trim()) return showMessage("Empty diagram. Click to add Mermaid source.", false)
+    if (!this.source.trim()) {
+      return showMessage(window.__mdEmptyDiagramLabel || "Empty diagram. Click to add Mermaid source.", false)
+    }
 
     const pele = window.pele
     if (!pele || typeof pele.render !== "function") {

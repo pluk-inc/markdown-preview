@@ -274,6 +274,13 @@
 "Fit diagram" = "برازش نمودار";
 "Open in Window" = "باز کردن در پنجره";
 "Mermaid renderer is unavailable.\n\n" = "رندرکنندهٔ Mermaid در دسترس نیست.\n\n";
+"This diagram type is not supported." = "این نوع نمودار پشتیبانی نمی‌شود.";
+"The diagram has a syntax error." = "نمودار خطای نحوی دارد.";
+"The diagram is not valid." = "نمودار معتبر نیست.";
+"The diagram is too large to draw." = "نمودار برای رسم بیش از حد بزرگ است.";
+"The diagram could not be drawn." = "رسم نمودار ممکن نشد.";
+"Line %d, column %d" = "خط %1$d، ستون %2$d";
+"Empty diagram. Click to add Mermaid source." = "نمودار خالی است. برای افزودن کد Mermaid کلیک کنید.";
 "Footnote %d" = "پاورقی %d";
 "Back to reference %d" = "بازگشت به ارجاع %d";
 "KaTeX renderer is unavailable.\n\n" = "رندرکنندهٔ KaTeX در دسترس نیست.\n\n";

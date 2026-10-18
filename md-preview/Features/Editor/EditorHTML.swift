@@ -684,6 +684,7 @@ nonisolated enum EditorHTML {
                 try { window.webkit.messageHandlers.\(configuration.bridgeName).postMessage(m); } catch (e) {}
             };
             window.__mdDiagramRenderOptions = \(MarkdownHTML.diagramRenderOptionsJS);
+            window.__mdEmptyDiagramLabel = \(jsStringLiteral(NSLocalizedString("Empty diagram. Click to add Mermaid source.", comment: "Edit-mode placeholder for a Mermaid code block with no source")));
             window.__mdTableExpandLabel = \(jsStringLiteral(NSLocalizedString("Expand Table", comment: "Open a table in full screen")));
             window.__mdOpenTablePopup = function (markdown) { post({kind: "tablePopup", markdown}); };
             window.__mdRequestTableContextMenu = function (details) {

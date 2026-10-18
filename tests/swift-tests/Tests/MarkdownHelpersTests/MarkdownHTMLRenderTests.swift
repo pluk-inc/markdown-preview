@@ -1328,7 +1328,9 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             observe() {}
         };
         window.pele = {
-            render() { throw new Error('Expected a node at line 2, column 10 <b>'); }
+            render() {
+                throw Object.assign(new Error('Expected a node <b>'), { code: 'syntax', line: 2, column: 10 });
+            }
         };
         </script></head><body>
         <article class="markdown-body">\(rendered.articleHTML)</article>
@@ -1368,7 +1370,9 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(decoded["done"] as? String, "1", "a failed figure must not be parsed again")
         XCTAssertEqual(decoded["tags"] as? Int, 0, "the message must be text, never HTML")
         let text = try XCTUnwrap(decoded["text"] as? String)
-        XCTAssertTrue(text.hasPrefix("Expected a node at line 2, column 10 <b>"), text)
+        // Localized from the error's code and position, not Pele's English text.
+        XCTAssertTrue(text.hasPrefix("The diagram has a syntax error. Line 2, column 10"), text)
+        XCTAssertFalse(text.contains("Expected a node"), text)
         XCTAssertTrue(text.contains("flowchart LR"), text)
     }
 

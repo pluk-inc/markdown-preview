@@ -275,6 +275,13 @@
 "Fit diagram" = "ダイアグラム全体を表示";
 "Open in Window" = "ウインドウで開く";
 "Mermaid renderer is unavailable.\n\n" = "Mermaid レンダラーを利用できません。\n\n";
+"This diagram type is not supported." = "この種類のダイアグラムには対応していません。";
+"The diagram has a syntax error." = "ダイアグラムに構文エラーがあります。";
+"The diagram is not valid." = "ダイアグラムが正しくありません。";
+"The diagram is too large to draw." = "ダイアグラムが大きすぎるため描画できません。";
+"The diagram could not be drawn." = "ダイアグラムを描画できませんでした。";
+"Line %d, column %d" = "%1$d 行目、%2$d 列目";
+"Empty diagram. Click to add Mermaid source." = "空のダイアグラムです。クリックして Mermaid のソースを追加します。";
 "Footnote %d" = "脚注 %d";
 "Back to reference %d" = "参照元 %d に戻る";
 "KaTeX renderer is unavailable.\n\n" = "KaTeX レンダラーを利用できません。\n\n";

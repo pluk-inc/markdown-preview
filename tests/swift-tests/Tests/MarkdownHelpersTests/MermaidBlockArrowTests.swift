@@ -52,6 +52,30 @@ final class MermaidBlockArrowTests: XCTestCase {
         XCTAssertEqual(state, "class", "A frontmatter diagram must render as its type, not as an error")
     }
 
+    /// Pele defaults every accessible title and description ID to one prefix,
+    /// so each figure must pass its own or assistive tech reads the wrong one.
+    @MainActor
+    func testEachDiagramGetsItsOwnAccessibleTitleID() async throws {
+        let markdown = """
+        ```mermaid
+        flowchart LR
+            accTitle: First
+            A --> B
+        ```
+
+        ```mermaid
+        flowchart LR
+            accTitle: Second
+            C --> D
+        ```
+        """
+        let ids: [String] = try await poll(markdown, script: """
+            Array.from(document.querySelectorAll('.mermaid svg title')).map((title) => title.id)
+            """, until: { $0.count == 2 }) ?? []
+        XCTAssertEqual(ids.count, 2, "Both diagrams must render their titles")
+        XCTAssertEqual(Set(ids).count, 2, "Title IDs must differ: \(ids)")
+    }
+
     /// Loads the production HTML with the offline bundle Quick Look uses, then
     /// evaluates `script` until `done` accepts its result or 20 s pass.
     @MainActor

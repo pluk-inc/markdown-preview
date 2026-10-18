@@ -119,6 +119,26 @@ nonisolated extension MarkdownHTML {
             ));
             const states = new WeakMap();
             const renderOptions = \(diagramRenderOptionsJS);
+            // Localized from PeleError's code and position; Pele's own
+            // message is English only.
+            const errorMessages = {
+                'unsupported-diagram': \(javaScriptStringLiteral(NSLocalizedString("This diagram type is not supported.", comment: "Mermaid diagram error"))),
+                syntax: \(javaScriptStringLiteral(NSLocalizedString("The diagram has a syntax error.", comment: "Mermaid diagram error"))),
+                semantic: \(javaScriptStringLiteral(NSLocalizedString("The diagram is not valid.", comment: "Mermaid diagram error"))),
+                limit: \(javaScriptStringLiteral(NSLocalizedString("The diagram is too large to draw.", comment: "Mermaid diagram error")))
+            };
+            const genericError = \(javaScriptStringLiteral(NSLocalizedString("The diagram could not be drawn.", comment: "Mermaid diagram error")));
+            const errorPosition = \(javaScriptStringLiteral(NSLocalizedString("Line %d, column %d", comment: "Position of a Mermaid diagram error: line, then column")));
+            function errorMessage(err) {
+                const summary = (err && errorMessages[err.code]) || genericError;
+                if (!(err && err.line > 0)) return summary;
+                // Translations order the numbers positionally (%1$d, %2$d).
+                const position = errorPosition
+                    .replace(/%(1\\$)?d/, String(err.line))
+                    .replace(/%(2\\$)?d/, String(err.column));
+                return summary + ' ' + position;
+            }
+            let renderCount = 0;
             const peleColorVariables = \(diagramColorVariableNamesJS);
             const peleStyleVariables = \(diagramStyleVariablesJS);
 
@@ -137,10 +157,9 @@ nonisolated extension MarkdownHTML {
 
             // A failed figure counts as done, so MdPreview.update keeps it
             // while its source is unchanged and the message is never parsed
-            // as a diagram. PeleError messages are plain text with the line
-            // and column; they go above the source, never in as HTML.
+            // as a diagram. The message goes above the source as text.
             function showError(figure, node, message) {
-                node.textContent = (message ? message + '\\n\\n' : '') + node.__mdSrc;
+                node.textContent = message + '\\n\\n' + node.__mdSrc;
                 node.dataset.mmDone = '1';
                 figure.classList.add('mermaid-error');
             }
@@ -154,14 +173,17 @@ nonisolated extension MarkdownHTML {
                 node.__mdSrc = node.textContent;
                 let svg;
                 try {
-                    node.innerHTML = pele.render(node.__mdSrc, renderOptions).svg;
+                    // A unique prefix keeps each diagram's accessible title and
+                    // description IDs apart.
+                    const options = Object.assign({ idPrefix: 'mdp-diagram-' + (++renderCount) + '-' }, renderOptions);
+                    node.innerHTML = pele.render(node.__mdSrc, options).svg;
                     svg = node.querySelector('svg');
                 } catch (err) {
-                    showError(figure, node, String((err && err.message) || err));
+                    showError(figure, node, errorMessage(err));
                     return;
                 }
                 if (!svg) {
-                    showError(figure, node, '');
+                    showError(figure, node, genericError);
                     return;
                 }
                 node.dataset.mmDone = '1';
@@ -477,11 +499,23 @@ nonisolated extension MarkdownHTML {
             <script>
             (() => {
                 let mm = null;
+                let markLoaded;
+                const loaded = new Promise((resolve) => { markLoaded = resolve; });
+                // Print or export can start before the bundle arrives. Until
+                // the wiring replaces it, this waits for the bundle (a few
+                // seconds at most, in case it never loads) so the capture
+                // holds drawn diagrams, not their source.
+                window.MdPreview = window.MdPreview || {};
+                window.MdPreview.mermaidRenderAll = async () => {
+                    await Promise.race([loaded, new Promise((resolve) => setTimeout(resolve, 5000))]);
+                    if (mm) await window.MdPreview.mermaidRenderAll();
+                };
                 window.MdPreviewLazy.lazyRenderer({
                     src: '\(MarkdownAssetScheme.vendorURL("pele.global.js"))',
                     run: () => {
                         mm = mm || \(mermaidInitWiring);
                         mm.bootstrap();
+                        markLoaded();
                     },
                 });
             })();

@@ -236,6 +236,7 @@ final class MermaidDiagramPopup: NSObject, WKNavigationDelegate {
           // theme colours the preview resolved. Only the preview's sizing goes.
           svg.style.removeProperty('width');
           svg.style.removeProperty('height');
+          svg.style.removeProperty('max-width');
           const background = getComputedStyle(svg).getPropertyValue('--pele-bg').trim();
           if (background) document.body.style.background = background;
           let scale = 1;

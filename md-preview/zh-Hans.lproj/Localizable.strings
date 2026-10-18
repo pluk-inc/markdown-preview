@@ -275,6 +275,13 @@
 "Fit diagram" = "适应图表";
 "Open in Window" = "在窗口中打开";
 "Mermaid renderer is unavailable.\n\n" = "Mermaid 渲染器不可用。\n\n";
+"This diagram type is not supported." = "不支持此图表类型。";
+"The diagram has a syntax error." = "图表存在语法错误。";
+"The diagram is not valid." = "图表无效。";
+"The diagram is too large to draw." = "图表过大，无法绘制。";
+"The diagram could not be drawn." = "无法绘制图表。";
+"Line %d, column %d" = "第 %1$d 行，第 %2$d 列";
+"Empty diagram. Click to add Mermaid source." = "空图表。点按以添加 Mermaid 源代码。";
 "Footnote %d" = "脚注 %d";
 "Back to reference %d" = "返回脚注引用 %d";
 "KaTeX renderer is unavailable.\n\n" = "KaTeX 渲染器不可用。\n\n";

@@ -275,6 +275,13 @@
 "Fit diagram" = "Fit diagram";
 "Open in Window" = "Open in Window";
 "Mermaid renderer is unavailable.\n\n" = "Mermaid renderer is unavailable.\n\n";
+"This diagram type is not supported." = "This diagram type is not supported.";
+"The diagram has a syntax error." = "The diagram has a syntax error.";
+"The diagram is not valid." = "The diagram is not valid.";
+"The diagram is too large to draw." = "The diagram is too large to draw.";
+"The diagram could not be drawn." = "The diagram could not be drawn.";
+"Line %d, column %d" = "Line %d, column %d";
+"Empty diagram. Click to add Mermaid source." = "Empty diagram. Click to add Mermaid source.";
 "Footnote %d" = "Footnote %d";
 "Back to reference %d" = "Back to reference %d";
 "KaTeX renderer is unavailable.\n\n" = "KaTeX renderer is unavailable.\n\n";
