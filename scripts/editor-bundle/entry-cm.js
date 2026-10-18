@@ -281,14 +281,21 @@ class MermaidWidget extends WidgetType {
     figure.addEventListener("mousedown", (event) => {
       event.preventDefault()
       view.focus()
-      // Land on the first source line, not inside the opening ``` marker:
-      // a character typed there would break the fence and drop the diagram.
+      // Land at the end of the last source line, ready to continue the
+      // diagram — never inside a ``` marker, where a typed character would
+      // break the fence and drop the diagram.
+      // The widget's DOM position can land on any of its lines (an empty
+      // block reports the closing marker), so take the block's bounds from
+      // the syntax tree instead.
       const doc = view.state.doc
-      const opening = doc.lineAt(view.posAtDOM(figure))
-      const next = opening.number < doc.lines ? doc.line(opening.number + 1) : null
+      const position = view.posAtDOM(figure)
+      const fence = fencedCodeAt(view.state, position) || fencedCodeAt(view.state, position + 1)
+      if (!fence) return
+      const opening = doc.lineAt(fence.from)
+      const lastNumber = fence.closed ? doc.lineAt(fence.to).number - 1 : doc.lineAt(fence.to).number
       // An empty block has no source line yet. Open one, so the first click
       // leaves the caret where typing goes instead of before the closing ```.
-      if (!next || /^\s*(`{3,}|~{3,})\s*$/.test(next.text)) {
+      if (lastNumber <= opening.number) {
         view.dispatch({
           changes: { from: opening.to, insert: "\n" },
           selection: { anchor: opening.to + 1 },
@@ -297,10 +304,16 @@ class MermaidWidget extends WidgetType {
         return
       }
       view.dispatch({
-        selection: { anchor: Math.min(opening.to + 1, view.state.doc.length) },
+        selection: { anchor: doc.line(lastNumber).to },
         userEvent: "select.pointer",
       })
     })
+
+    if (!this.source.trim()) {
+      stage.textContent = "Empty diagram. Click to add Mermaid source."
+      figure.classList.add("cm-md-mermaid-empty")
+      return figure
+    }
 
     const pele = window.pele
     if (!pele || typeof pele.render !== "function") {

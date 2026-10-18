@@ -483,7 +483,8 @@ nonisolated enum EditorHTML {
         }
         #editor .cm-md-code-action:hover { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
         #editor .cm-md-code-action:focus-visible { outline: 2px solid AccentColor; outline-offset: 1px; }
-        #editor .cm-md-code-card-wrapped { grid-template-columns: minmax(0, 1fr); }
+        #editor .cm-md-code-card-wrapped,
+        #editor .cm-md-code-card:has(> .cm-md-mermaid-preview) { grid-template-columns: minmax(0, 1fr); }
         #editor .cm-md-code-wrapped { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; padding-inline: 16px; }
         #editor .cm-md-code-wrapped .cm-md-code-scroll-text { display: inline; padding-inline: 0; }
         #editor .cm-md-code-wrapped .cm-md-code-language { position: relative; inset-inline-start: auto; margin-inline: -7px; }
@@ -560,6 +561,18 @@ nonisolated enum EditorHTML {
         }
         .cm-md-mermaid-error {
             border: 1px solid color-mix(in srgb, #d1242f 45%, transparent);
+        }
+        /* No drawing gives the box no size of its own: lay the message out in
+           flow so the box spans the column and stays easy to click. */
+        .cm-md-mermaid-preview.cm-md-mermaid-error,
+        .cm-md-mermaid-preview.cm-md-mermaid-empty {
+            aspect-ratio: auto;
+            max-height: none;
+        }
+        .cm-md-mermaid-error .cm-md-mermaid-stage,
+        .cm-md-mermaid-empty .cm-md-mermaid-stage {
+            position: static;
+            justify-content: flex-start;
         }
         \(MarkdownHTML.tableControlsCSS)
         .cm-md-table {
