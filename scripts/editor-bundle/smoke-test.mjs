@@ -925,6 +925,21 @@ check("typing after clicking a diagram keeps its source open",
   clickedMermaidHost.querySelector(".cm-md-mermaid-preview") == null)
 clickedMermaidEditor.destroy()
 
+const emptyMermaidHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(emptyMermaidHost)
+const emptyMermaidEditor = dom.window.MDEditor.create(
+  emptyMermaidHost, "intro\n\n```mermaid\n```\n\nafter", {})
+emptyMermaidHost.querySelector(".cm-md-mermaid-preview")
+  .dispatchEvent(new dom.window.MouseEvent("mousedown", { bubbles: true, button: 0, detail: 1 }))
+dom.window.document.dispatchEvent(new dom.window.MouseEvent("mouseup", { bubbles: true, button: 0 }))
+await new Promise((resolve) => setTimeout(resolve, 10))
+emptyMermaidEditor.insert("g")
+check("one click on an empty diagram block leaves the caret inside it",
+  emptyMermaidEditor.getMarkdown() === "intro\n\n```mermaid\ng\n```\n\nafter")
+check("typing into an empty diagram block keeps its source open",
+  emptyMermaidHost.querySelector(".cm-md-mermaid-preview") == null)
+emptyMermaidEditor.destroy()
+
 const authoredMermaidHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(authoredMermaidHost)
 const authoredMermaidEditor = dom.window.MDEditor.create(

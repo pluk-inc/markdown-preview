@@ -283,7 +283,19 @@ class MermaidWidget extends WidgetType {
       view.focus()
       // Land on the first source line, not inside the opening ``` marker:
       // a character typed there would break the fence and drop the diagram.
-      const opening = view.state.doc.lineAt(view.posAtDOM(figure))
+      const doc = view.state.doc
+      const opening = doc.lineAt(view.posAtDOM(figure))
+      const next = opening.number < doc.lines ? doc.line(opening.number + 1) : null
+      // An empty block has no source line yet. Open one, so the first click
+      // leaves the caret where typing goes instead of before the closing ```.
+      if (!next || /^\s*(`{3,}|~{3,})\s*$/.test(next.text)) {
+        view.dispatch({
+          changes: { from: opening.to, insert: "\n" },
+          selection: { anchor: opening.to + 1 },
+          userEvent: "select.pointer",
+        })
+        return
+      }
       view.dispatch({
         selection: { anchor: Math.min(opening.to + 1, view.state.doc.length) },
         userEvent: "select.pointer",
