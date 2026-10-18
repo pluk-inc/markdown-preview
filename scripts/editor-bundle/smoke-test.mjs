@@ -908,6 +908,23 @@ check("a range selection outside the open block closes it",
   mermaidHost.querySelector(".cm-md-mermaid-preview") != null)
 mermaidEditor.destroy()
 
+// Clicking a diagram opens its source with the caret on the first source
+// line; typing must edit the diagram, not the opening ``` marker.
+const clickedMermaidHost = dom.window.document.createElement("div")
+dom.window.document.body.appendChild(clickedMermaidHost)
+const clickedMermaidEditor = dom.window.MDEditor.create(
+  clickedMermaidHost, "intro\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\nafter", {})
+clickedMermaidHost.querySelector(".cm-md-mermaid-preview")
+  .dispatchEvent(new dom.window.MouseEvent("mousedown", { bubbles: true, button: 0, detail: 1 }))
+dom.window.document.dispatchEvent(new dom.window.MouseEvent("mouseup", { bubbles: true, button: 0 }))
+await new Promise((resolve) => setTimeout(resolve, 10))
+clickedMermaidEditor.insert("x")
+check("typing after clicking a diagram keeps its fence intact",
+  clickedMermaidEditor.getMarkdown() === "intro\n\n```mermaid\nxflowchart LR\n  A --> B\n```\n\nafter")
+check("typing after clicking a diagram keeps its source open",
+  clickedMermaidHost.querySelector(".cm-md-mermaid-preview") == null)
+clickedMermaidEditor.destroy()
+
 const authoredMermaidHost = dom.window.document.createElement("div")
 dom.window.document.body.appendChild(authoredMermaidHost)
 const authoredMermaidEditor = dom.window.MDEditor.create(

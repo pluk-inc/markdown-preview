@@ -281,9 +281,11 @@ class MermaidWidget extends WidgetType {
     figure.addEventListener("mousedown", (event) => {
       event.preventDefault()
       view.focus()
-      const widgetPosition = view.posAtDOM(figure)
+      // Land on the first source line, not inside the opening ``` marker:
+      // a character typed there would break the fence and drop the diagram.
+      const opening = view.state.doc.lineAt(view.posAtDOM(figure))
       view.dispatch({
-        selection: { anchor: widgetPosition + 1 },
+        selection: { anchor: Math.min(opening.to + 1, view.state.doc.length) },
         userEvent: "select.pointer",
       })
     })
