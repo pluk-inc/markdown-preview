@@ -5,8 +5,8 @@ import XCTest
 ///
 /// **What a failure here means:** the CSS is being inserted at the wrong
 /// place. The dangerous form is insertion *inside an inlined vendor script*,
-/// which corrupts that script's JavaScript. When it happened to Mermaid the
-/// whole bundle died with `SyntaxError: Unexpected EOF` and no diagram
+/// which corrupts that script's JavaScript. When it happened to the old
+/// Mermaid.js bundle the whole bundle died with `SyntaxError: Unexpected EOF` and no diagram
 /// rendered in Quick Look — with no visible console error, because the
 /// preview page's opaque origin mutes script errors to a bare
 /// "Script error.".
@@ -17,8 +17,9 @@ final class CopyButtonClearanceTests: XCTestCase {
 
     // A page shaped like the real Quick Look output: a vendor bundle inlined
     // in <head> carrying `</head>` as data (DOMPurify), and another inlined
-    // in <body> doing the same (Mermaid). Both are single-quoted JavaScript
-    // strings and must survive byte-for-byte.
+    // in <body> doing the same (the old Mermaid.js bundle did; any inlined
+    // renderer may). Both are single-quoted JavaScript strings and must
+    // survive byte-for-byte.
     private let purifyLiteral =
         #"Ie='<html xmlns="http://www.w3.org/1999/xhtml"><head></head><body>'+Ie+"</body></html>";"#
 

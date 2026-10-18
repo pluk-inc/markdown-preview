@@ -11,7 +11,7 @@ import Markdown
 // the main actor. This lets MarkdownWebView.display dispatch the render
 // to a concurrent task instead of stalling the main thread on large docs.
 nonisolated enum MarkdownHTML {
-    /// How the heavy KaTeX/Mermaid bundles are delivered.
+    /// How the KaTeX and Pele (diagram) bundles are delivered.
     /// - inline: bundles are embedded as `<script>…</script>` blocks in the
     ///   HTML. Self-contained, used by Quick Look (which delivers HTML as a
     ///   single QLPreviewReply payload). The heavy scripts sit at body-end
@@ -419,7 +419,7 @@ nonisolated enum MarkdownHTML {
         let bodyParts = [earlyPopulate, mathBlock.body, mermaidBlock.body, highlightBlock.body]
             .filter { !$0.isEmpty }
         let bodyScripts = bodyParts.isEmpty ? "" : "\n" + bodyParts.joined(separator: "\n")
-        // Warmup keeps the article in layout (so Mermaid's IntersectionObserver
+        // Warmup keeps the article in layout (so the diagram IntersectionObserver
         // still fires and the renderer actually executes) but invisible —
         // otherwise the synthetic diagram flashes on screen before the first
         // real document arrives. `MdPreview.update` clears the inline style.

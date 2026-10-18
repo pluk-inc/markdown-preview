@@ -39,7 +39,7 @@ enum MermaidPopupSizing {
     }
 
     /// Neutralize script tags in SVG markup before loading into the popup
-    /// web view. Mermaid SVGs are static; this is defense-in-depth only.
+    /// web view. Pele's SVGs are static; this is defense-in-depth only.
     static func sanitizedSVGHTML(_ svgHTML: String) -> String {
         svgHTML
             .replacingOccurrences(of: "<script", with: "&lt;script", options: .caseInsensitive)
