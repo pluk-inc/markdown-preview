@@ -129,8 +129,15 @@ final class ContentViewController: NSViewController {
             self?.localMarkdownLinkActivated?(url)
         }
         webView.zoomDidChange = { [weak self] zoom in
-            self?.webViewCenteredLeadingConstraint?.constant =
-                -MarkdownHTML.preferredPageWidth * zoom / 2
+            // The page relayouts for the new zoom asynchronously. Moving the
+            // column now shows the old layout at the new position for a
+            // frame before the new layout paints, so wait for that paint.
+            // Reads pageZoom then, so a burst of steps lands on the last.
+            self?.webView.afterNextPagePaint { [weak self] in
+                guard let self else { return }
+                webViewCenteredLeadingConstraint?.constant =
+                    -MarkdownHTML.preferredPageWidth * webView.pageZoom / 2
+            }
             self?.zoomDidChange?(zoom)
         }
         webView.scrollDidChange = { [weak self] in
