@@ -24,7 +24,81 @@ Version is managed centrally in `Version.xcconfig` (`MARKETING_VERSION`, `CURREN
 - The maintainer uses Nushell and has `gh` authentication available. Match shell syntax to the actual execution shell.
 - Complete work authorized by the user's request, making reasonable routine implementation choices. A request for a plan authorizes planning only.
 - Apply skills within their stated scope. If an instruction blocks authorized work, identify the exact file and instruction rather than inferring an extra approval requirement.
-- Keep verification proportional: config and documentation changes need validation and diff review; Swift changes need relevant tests and an app build; visible behavior changes need runtime verification.
+- Keep verification proportional: config and documentation changes need validation and diff review; Swift changes need an app build; visible behavior changes need runtime verification. Tests run once, before the PR (see below).
+
+## While iterating: build and run, no tests
+
+For a small fix, a UI tweak, or a design round, build the app and launch it to
+check the change on screen. Do not run the test suites at this stage — they are
+slow and the change will move again. Run them only when the user asks, or as
+part of creating a PR.
+
+## Creating a PR
+
+Do these without being asked, in order:
+
+1. Run `/simplify` on the diff. Fix what holds up; skip a finding only with a
+   reason you can state.
+2. Run the checks CI runs (`.github/workflows/swift-tests.yml`), plus an app build:
+   ```bash
+   swift test --package-path tests/swift-tests
+   python3 tests/test-mode-transitions.py
+   python3 tests/test-checkbox-saves.py
+   xcodebuild -project md-preview.xcodeproj -scheme md-preview -configuration Debug build
+   ```
+   Fix failures before opening the PR. Do not open a PR on red checks.
+3. Check `git diff` for a `DEVELOPMENT_TEAM` hunk in `project.pbxproj` and
+   revert it (see Signing below), and grep docs for claims the change made false.
+4. Open the PR ready for review (`gh pr create`), not as a draft. Say in the PR
+   description what you skipped from step 1, and why.
+5. Wait for the bot reviews and handle them (next section). The PR is not
+   handed off until both bots have reviewed the latest commit.
+
+## Bot reviews: CodeRabbit and Greptile
+
+Both bots (`coderabbitai[bot]`, `greptile-apps[bot]`) review every PR on their
+own, usually 3–5 minutes after it opens. Wait for them; don't hand off the PR
+or end the turn first. Poll in the background (a Monitor or a background shell),
+not with foreground sleeps:
+
+```bash
+pr=<N>; head=$(gh pr view $pr --json headRefOid -q .headRefOid)
+until [ "$(gh api repos/pluk-inc/markdown-preview/pulls/$pr/reviews \
+  -q "[.[] | select(.commit_id==\"$head\") | .user.login] | unique | length")" -ge 2 ]
+do sleep 60; done
+```
+
+They don't always re-review a later push. If one has not reviewed the latest
+commit 10 minutes after the push, ask for it in a PR comment:
+`@coderabbitai review` or `@greptileai review`. If it still doesn't come, tell
+the user which bot is missing rather than waiting on.
+
+A review on the head commit is not enough on its own: while CodeRabbit still
+works, its PR comment says "Come back again in a few minutes". Wait until that
+text is gone too.
+
+When the reviews are in, handle them with the `resolve` skill — it has the
+thread query and the rules for reading bot findings:
+
+- Verify each finding against the current code. Fix the valid ones with the
+  smallest change; skip the rest with a reason. Bots are often wrong about
+  WebKit, AppKit, and sandbox behavior — check before you change anything.
+- Run the step 2 checks, check `project.pbxproj` for a signing hunk, then commit
+  and push without asking.
+- Reply to **every** bot thread with what you did or why you skipped it, then
+  mark it resolved.
+- The push starts a new review round. Wait again and repeat until a round has
+  no new valid findings, then hand off with one line per finding: fixed or
+  skipped, and why.
+
+Branch prefixes: `feature/`, `fix/`, `refactor/`, `perf/`, `docs/`, then a
+lowercase kebab-case title. Never `codex/`.
+
+The PR title names the one main change and why it matters, not every change.
+The description is for what the diff can't show: why the bug happens, why this
+fix over the alternatives, what you tried that didn't work. Write short prose
+paragraphs, not a list of every change — the diff is already that list. A
+trivial change gets one line.
 
 ## Documentation that describes behaviour is part of the behaviour
 
