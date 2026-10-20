@@ -79,11 +79,17 @@ or end the turn first. Poll in the background (a Monitor or a background shell),
 not with foreground sleeps:
 
 ```bash
-pr=<N>; head=$(gh pr view $pr --json headRefOid -q .headRefOid)
+pr=<N>; repo=pluk-inc/markdown-preview
+head=$(gh pr view $pr --json headRefOid -q .headRefOid)
 for i in $(seq 1 10); do
-  bots=$(gh api --paginate repos/pluk-inc/markdown-preview/pulls/$pr/reviews \
-    -q ".[] | select(.commit_id==\"$head\") | .user.login
-         | select(. == \"coderabbitai[bot]\" or . == \"greptile-apps[bot]\")" | sort -u | wc -l | tr -d " ")
+  roots=$(gh api --paginate repos/$repo/pulls/$pr/comments \
+    -q '.[] | select(.in_reply_to_id == null) | .pull_request_review_id')
+  bots=$(gh api --paginate repos/$repo/pulls/$pr/reviews -q ".[] | select(.commit_id==\"$head\")
+      | select(.user.login == \"coderabbitai[bot]\" or .user.login == \"greptile-apps[bot]\")
+      | \"\\(.id) \\(.user.login) \\(.body | length)\"" |
+    while read id login len; do
+      { [ "$len" -gt 0 ] || grep -qx "$id" <<<"$roots"; } && echo $login
+    done | sort -u | wc -l | tr -d ' ')
   busy=$(gh pr view $pr --json comments -q '[.comments[] | select(.author.login=="coderabbitai")
          | select(.body | test("Come back again in a few minutes"))] | length')
   [ "$bots" -eq 2 ] && [ "$busy" -eq 0 ] && { echo reviewed; exit 0; }
@@ -91,7 +97,10 @@ for i in $(seq 1 10); do
 done; echo "timeout: $bots of 2 bots"
 ```
 
-The loop counts only the two bots, and waits while CodeRabbit's PR comment says
+The loop counts only the two bots. A bot's reply in a thread (for example
+CodeRabbit thanking you for a fix) also files a review on the head commit, but
+with an empty body and no new thread, so the loop doesn't count it as a
+review of the new code. It also waits while CodeRabbit's PR comment says
 "Come back again in a few minutes" (its review is still running). They don't
 always re-review a later push. On a timeout, ask for the missing review in a PR comment:
 `@coderabbitai review` or `@greptileai review`. Run the loop one more time; if it
