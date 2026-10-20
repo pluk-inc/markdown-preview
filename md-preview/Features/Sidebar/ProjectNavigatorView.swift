@@ -379,8 +379,9 @@ extension ProjectNavigatorView: NSMenuDelegate {
         outlineView.window?.windowController as? DocumentWindowController
     }
 
-    /// Theme accent for the selected file row — the link color, matching
-    /// the TOC outline's treatment. Nil without a link override.
+    /// Theme accent for the selected file row before macOS 27 — the link
+    /// color, matching the TOC outline's treatment. Nil without a link
+    /// override. macOS 27 keeps the plain label color.
     fileprivate var themeAccent: NSColor? {
         let isDark = effectiveAppearance
             .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua

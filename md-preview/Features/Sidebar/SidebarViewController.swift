@@ -278,18 +278,18 @@ final class SidebarViewController: NSViewController {
 
     private var lastRowColorAppearance: NSAppearance.Name?
 
-    /// Theme accent for the active TOC row — the link color, so the
-    /// sidebar's highlight matches the page's primary color. Nil without a
-    /// link override; the system accent then applies.
+    /// Theme accent for the active TOC row before macOS 27 — the link
+    /// color, so the sidebar's highlight matches the page's primary color.
+    /// Nil without a link override; the system accent then applies.
     private var themeAccent: NSColor? {
         let isDark = view.effectiveAppearance
             .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         return ThemeColorsSetting.current.color(.linkColor, isDark ? .dark : .light)
     }
 
-    /// Re-applies text colors to visible rows: the selected heading gets
-    /// the theme accent (or the system accent), everything else the plain
-    /// label colors.
+    /// Re-applies text colors to visible rows: before macOS 27 the
+    /// selected heading gets the theme accent (or the system accent); on
+    /// macOS 27, and for every other row, the plain label color.
     func refreshRowTextColors() {
         guard isViewLoaded else { return }
         view.needsDisplay = true
