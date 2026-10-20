@@ -1564,10 +1564,10 @@ const quoteLineCache = new Map()
 const quoteGeometry = (depth, top) => {
   const levels = Array.from({ length: depth }, (_, level) => level)
   return {
-    // Whole-pixel steps, as the preview's blockquote padding.
-    padding: `calc(${depth} * round(1.5em, 1px))`,
+    // The preview's blockquote indent, from the shared --mdp-quote-indent.
+    padding: `calc(${depth} * var(--mdp-quote-indent))`,
     images: levels.map(() => "linear-gradient(var(--quote-border), var(--quote-border))").join(","),
-    positions: levels.map((level) => `calc(0.3em + ${level} * round(1.5em, 1px)) ${top}`).join(","),
+    positions: levels.map((level) => `calc(0.3em + ${level} * var(--mdp-quote-indent)) ${top}`).join(","),
   }
 }
 const quoteLine = (depth, starts, ends, gap) => {

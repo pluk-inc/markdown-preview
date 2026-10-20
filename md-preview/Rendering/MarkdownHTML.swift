@@ -169,15 +169,27 @@ nonisolated enum MarkdownHTML {
     // must come from one source of truth.
     static let bodyFontFamily = "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", system-ui, sans-serif"
     static let codeFontFamily = "ui-monospace, \"SF Mono\", Menlo, monospace"
+    /// Body text: pure black on light, rather than the label's 85% ink; the
+    /// system label color on dark.
+    static let textColorCSS = "--text: light-dark(#000, -apple-system-label);"
+    /// One quote level's indent. Whole pixels: at 1x the editor snaps a
+    /// fractional indent to the pixel grid, so its lines would wrap wider.
+    static let quoteIndentCSS = "--mdp-quote-indent: round(1.5em, 1px);"
+    /// Full kerning, and no lone short word on a paragraph's last line. Both
+    /// modes share it so entering edit mode keeps every line break.
+    static let bodyTextRenderingCSS = "text-rendering: optimizeLegibility; text-wrap: pretty;"
+    /// Monospace reads larger than the body face at the same size, so block
+    /// code steps down to the inline code size, on whole-pixel lines for the
+    /// editor's 1x snapping. Wrapped code breaks greedily, not `pretty`.
+    static let codeBlockTypeCSS = "font-size: 0.9em; line-height: round(1.3em, 1px); text-wrap-style: auto;"
     /// Body text sits two points above the system Body text style (13pt on
     /// macOS) for comfortable reading; the heading scale in the stylesheet steps
     /// through the system title styles (Large Title 26, Title 1 22, Title 2
     /// 17, Title 3 15, Headline 13, Subheadline 11) as em ratios of the body
     /// size, so it scales with this value.
     static let bodyFontSize: CGFloat = 15
-    /// 24px lines at the 15px body. Keep the product a whole pixel: the
-    /// editor snaps each line box to the device pixel grid at 1x, so a
-    /// fractional line (22.5px at 1.5) drifts from the reader line by line.
+    /// Keep `sourceLineHeight` a whole pixel: at 1x the editor snaps each
+    /// line box to the pixel grid, so a fractional line drifts from the reader.
     static let bodyLineHeight: CGFloat = 1.6
     static let pagePaddingTop: CGFloat = 32
     /// App-only breathing room for floating controls, shared by read/edit

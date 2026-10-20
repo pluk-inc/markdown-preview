@@ -490,9 +490,11 @@ final class MarkdownHTMLRenderTests: XCTestCase {
 
     func testTypographyFollowsTheSystemTextStyles() {
         XCTAssertEqual(MarkdownHTML.bodyFontSize, 15)
+        // At 1x the editor snaps line boxes to whole pixels; a fractional
+        // body line would drift from the reader line by line.
+        XCTAssertEqual(MarkdownHTML.sourceLineHeight, MarkdownHTML.sourceLineHeight.rounded())
         let css = MarkdownHTML.stylesheet
-        XCTAssertTrue(css.contains("--text: #000;"))
-        XCTAssertTrue(css.contains("--text: -apple-system-label;"))
+        XCTAssertTrue(css.contains(MarkdownHTML.textColorCSS))
         XCTAssertTrue(css.contains("--secondary: -apple-system-secondary-label;"))
         XCTAssertTrue(css.contains("--grid: -apple-system-separator;"))
         XCTAssertTrue(css.contains("--accent: var(--link);"))

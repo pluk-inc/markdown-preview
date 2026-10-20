@@ -121,10 +121,9 @@ nonisolated extension MarkdownHTML {
            color scheme, so the forced-scheme attribute and the media query
            below both get the right appearance without a second palette, and
            labels and separators follow increased-contrast settings.
-           Accent colors follow the theme's link color. Light body text is
-           pure black rather than the label's 85% ink, for crisper reading;
-           the dark buckets below restore the label color. */
-        --text: #000;
+           Accent colors follow the theme's link color. */
+        \(textColorCSS)
+        \(quoteIndentCSS)
         --secondary: -apple-system-secondary-label;
         --tertiary: -apple-system-tertiary-label;
         --quote-border: -apple-system-quaternary-label;
@@ -145,7 +144,6 @@ nonisolated extension MarkdownHTML {
     }
     :root[data-mdp-color-scheme="dark"] {
         color-scheme: dark;
-        --text: -apple-system-label;
         --link: rgb(65, 156, 255);
         --aside-bg: #323232;
         --aside-border: #9a9a9e;
@@ -159,7 +157,6 @@ nonisolated extension MarkdownHTML {
     }
     @media (prefers-color-scheme: dark) {
         :root:not([data-mdp-color-scheme="light"]) {
-            --text: -apple-system-label;
             --link: rgb(65, 156, 255);
             --aside-bg: #323232;
             --aside-border: #9a9a9e;
@@ -242,9 +239,7 @@ nonisolated extension MarkdownHTML {
         background: transparent;
         padding: calc((\(pagePaddingTop)px + var(--mdp-page-top-clearance, 0px)) / var(--mdp-chrome-zoom, 1)) var(--mdp-page-padding, \(pagePaddingHorizontal)px) \(pagePaddingBottom)px;
         -webkit-font-smoothing: antialiased;
-        /* Full kerning, and no lone short word on a paragraph's last line. */
-        text-rendering: optimizeLegibility;
-        text-wrap: pretty;
+        \(bodyTextRenderingCSS)
     }
     /* Reader spacing tweaks stop at code — whitespace fidelity wins. */
     pre, code {
@@ -508,11 +503,7 @@ nonisolated extension MarkdownHTML {
         padding: 0;
         background: transparent;
         border: 0;
-        /* Monospace reads larger than the body face at the same size, so
-           block code steps down like most readers do. Whole-pixel lines keep
-           the editor, which snaps line boxes at 1x, in step. */
-        font-size: 0.9em;
-        line-height: round(1.3em, 1px);
+        \(codeBlockTypeCSS)
     }
     .md-code-wrap {
         position: relative;
@@ -719,9 +710,7 @@ nonisolated extension MarkdownHTML {
         position: relative;
         margin: \(quoteSpacing)px 0 0;
         padding: 0.4em 1em;
-        /* Whole pixels: the editor snaps a fractional indent (22.5px at a
-           15px body) to the pixel grid, so its lines would wrap wider. */
-        padding-inline-start: round(1.5em, 1px);
+        padding-inline-start: var(--mdp-quote-indent);
         color: var(--secondary);
     }
     blockquote::before {
