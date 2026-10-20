@@ -94,11 +94,47 @@ thread query and the rules for reading bot findings:
 Branch prefixes: `feature/`, `fix/`, `refactor/`, `perf/`, `docs/`, then a
 lowercase kebab-case title. Never `codex/`.
 
-The PR title names the one main change and why it matters, not every change.
-The description is for what the diff can't show: why the bug happens, why this
-fix over the alternatives, what you tried that didn't work. Write short prose
-paragraphs, not a list of every change — the diff is already that list. A
-trivial change gets one line.
+### PR title
+
+The title names the **one main change** and why it matters, in words a person
+reads at a glance. The rest goes in the description.
+
+BAD
+> fix (preview): set mermaid svg width to max-content
+
+GOOD
+> fix (preview): draw diagrams at their natural size instead of stretching them
+
+### PR description
+
+The diff already says what changed. The description is for what the diff can't
+show: why the bug happens, why this fix over the alternatives, what you tried
+that didn't work.
+
+- **Summarise, don't enumerate.** Don't account for every change, trace code
+  paths by function name, or list each case you checked — that inventory is the
+  diff. Give the one-level-up story: what was broken, what it does now, what to
+  watch out for. Two or three short paragraphs, about 150 words, even for a
+  large change. A dependency bump or a typo fix gets one line.
+- **Prose, not bullets.** Reasoning is causal, and bullets break it into
+  disconnected facts. Use a list only for genuinely parallel items. No section
+  headers on anything under a few paragraphs.
+- Name a symbol only when the reviewer needs it to find the change. Compress
+  the verification to a clause ("checked in the app and Quick Look").
+- Flag what the reviewer can't see in the diff: a behavior change, a trade-off
+  you took on purpose, a decision you want a second opinion on.
+- Agent-written descriptions run long and bury the point. Trim before opening.
+
+BAD
+> Changed `MarkdownHTML+Stylesheet.swift` to remove `width: 100%` from
+> `.mermaid svg` and added `max-width: 100%`. Updated `EditorHTML.swift` to
+> match. Verified with flowchart, sequence, gantt, pie, and class diagrams in
+> light and dark mode, in the app and Quick Look, at three window widths.
+
+GOOD
+> Small diagrams were stretched to fill the column, so a three-box flowchart
+> rendered with huge text. They now draw at their natural size and only shrink
+> when wider than the column. Checked in the app and Quick Look.
 
 ## Documentation that describes behaviour is part of the behaviour
 
