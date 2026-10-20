@@ -80,19 +80,22 @@ not with foreground sleeps:
 
 ```bash
 pr=<N>; head=$(gh pr view $pr --json headRefOid -q .headRefOid)
-until [ "$(gh api repos/pluk-inc/markdown-preview/pulls/$pr/reviews \
-  -q "[.[] | select(.commit_id==\"$head\") | .user.login] | unique | length")" -ge 2 ]
-do sleep 60; done
+for i in $(seq 1 10); do
+  bots=$(gh api --paginate repos/pluk-inc/markdown-preview/pulls/$pr/reviews \
+    -q ".[] | select(.commit_id==\"$head\") | .user.login
+         | select(. == \"coderabbitai[bot]\" or . == \"greptile-apps[bot]\")" | sort -u | wc -l | tr -d " ")
+  busy=$(gh pr view $pr --json comments -q '[.comments[] | select(.author.login=="coderabbitai")
+         | select(.body | test("Come back again in a few minutes"))] | length')
+  [ "$bots" -eq 2 ] && [ "$busy" -eq 0 ] && { echo reviewed; exit 0; }
+  sleep 60
+done; echo "timeout: $bots of 2 bots"
 ```
 
-They don't always re-review a later push. If one has not reviewed the latest
-commit 10 minutes after the push, ask for it in a PR comment:
-`@coderabbitai review` or `@greptileai review`. If it still doesn't come, tell
-the user which bot is missing rather than waiting on.
-
-A review on the head commit is not enough on its own: while CodeRabbit still
-works, its PR comment says "Come back again in a few minutes". Wait until that
-text is gone too.
+The loop counts only the two bots, and waits while CodeRabbit's PR comment says
+"Come back again in a few minutes" (its review is still running). They don't
+always re-review a later push. On a timeout, ask for the missing review in a PR comment:
+`@coderabbitai review` or `@greptileai review`. Run the loop one more time; if it
+times out again, tell the user which bot is missing rather than waiting on.
 
 When the reviews are in, handle them with the `resolve` skill — it has the
 thread query and the rules for reading bot findings:
@@ -100,10 +103,11 @@ thread query and the rules for reading bot findings:
 - Verify each finding against the current code. Fix the valid ones with the
   smallest change; skip the rest with a reason. Bots are often wrong about
   WebKit, AppKit, and sandbox behavior — check before you change anything.
-- Run the step 2 checks, check `project.pbxproj` for a signing hunk, then commit
-  and push without asking.
+- If you changed files, run the step 2 checks, check `project.pbxproj` for a
+  signing hunk, then commit and push without asking. No valid findings means
+  nothing to commit.
 - Reply to **every** bot thread with what you did or why you skipped it, then
   mark it resolved.
-- The push starts a new review round. Wait again and repeat until a round has
+- A push starts a new review round. Wait again and repeat until a round has
   no new valid findings, then hand off with one line per finding: fixed or
   skipped, and why.

@@ -12,7 +12,7 @@ minimal, and validate.
 
 1. **Collect** findings from the PR (`gh pr view <PR> --comments`,
    `gh api repos/{owner}/{repo}/pulls/<PR>/comments`), pasted text, or
-   `/code-review` output. Skip resolved or outdated threads.
+   `/code-review` output. Skip resolved threads.
 2. **Verify** each one by reading the code as it is now. Verdict: valid,
    already fixed, invalid, or out of scope.
 3. **Fix** valid ones with the smallest change. No refactors. Add a test when
@@ -46,9 +46,10 @@ gh api graphql -F pr=<N> -f query='query($pr:Int!) {
 }'
 ```
 
-Act on a thread only when `isResolved` and `isOutdated` are false and the root
-author is `coderabbitai` or `greptile-apps`. An outdated thread points at code
-that changed; check it still applies before you reply, then resolve it.
+Act on every thread where `isResolved` is false and the root author is
+`coderabbitai` or `greptile-apps`. An outdated thread (`isOutdated` true)
+points at code that changed since the review: check if the finding still
+applies, fix it if it does, then reply and resolve it like any other thread.
 
 Also read each bot's review body and summary comment. CodeRabbit puts
 "nitpick" and "outside diff range" findings there, not in threads; Greptile
