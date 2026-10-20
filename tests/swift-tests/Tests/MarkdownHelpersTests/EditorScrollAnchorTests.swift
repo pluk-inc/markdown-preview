@@ -101,19 +101,20 @@ final class EditorScrollAnchorTests: XCTestCase {
                         expected.style.background = 'color-mix(in srgb, var(--link) 16%, transparent)';
                         const selectionMatches = !isEditor || (getComputedStyle(cell).backgroundColor === getComputedStyle(expected).backgroundColor
                             && getComputedStyle(cell).boxShadow === 'none');
-                        let checkboxMatches = true;
+                        // Task checkboxes are drawn by the system, so they take the
+                        // macOS accent colour; no theme may replace that drawing.
+                        let checkboxNative = true;
                         if (!isEditor) {
                             const checkbox = document.createElement('input');
                             checkbox.type = 'checkbox'; checkbox.checked = true;
                             checkbox.className = 'task-list-item-checkbox';
                             document.body.append(checkbox);
-                            checkboxMatches = getComputedStyle(checkbox).backgroundColor === accent
-                                && getComputedStyle(checkbox).borderTopColor === accent;
+                            checkboxNative = getComputedStyle(checkbox).appearance !== 'none';
                             checkbox.remove();
                         }
-                        const details = JSON.stringify({listsMatch, focusMatches, selectionMatches, checkboxMatches, headerClear});
+                        const details = JSON.stringify({listsMatch, focusMatches, selectionMatches, checkboxNative, headerClear});
                         table.remove(); expected.remove();
-                        return listsMatch && focusMatches && selectionMatches && checkboxMatches && headerClear ? 'pass' : details;
+                        return listsMatch && focusMatches && selectionMatches && checkboxNative && headerClear ? 'pass' : details;
                         """, arguments: ["styleID": MarkdownHTML.themeStyleElementID,
                                            "css": css, "isEditor": isEditor],
                         in: nil, contentWorld: .page) as? String
