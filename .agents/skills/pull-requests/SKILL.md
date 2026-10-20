@@ -76,7 +76,8 @@ Do these without being asked, in order:
 Both bots (`coderabbitai[bot]`, `greptile-apps[bot]`) review every PR on their
 own, usually 3–5 minutes after it opens. Wait for them; don't hand off the PR
 or end the turn first. Poll in the background (a Monitor or a background shell),
-not with foreground sleeps:
+not with foreground sleeps. Start it only after `git push` returns —
+started alongside the push, it reads the old head commit and waits on that:
 
 ```bash
 pr=<N>; repo=pluk-inc/markdown-preview
