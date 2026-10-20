@@ -169,12 +169,12 @@ nonisolated enum MarkdownHTML {
     // must come from one source of truth.
     static let bodyFontFamily = "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", system-ui, sans-serif"
     static let codeFontFamily = "ui-monospace, \"SF Mono\", Menlo, monospace"
-    /// Body text sits just above the system Body text style (13pt on macOS)
-    /// for comfortable reading; the heading scale in the stylesheet steps
+    /// Body text sits two points above the system Body text style (13pt on
+    /// macOS) for comfortable reading; the heading scale in the stylesheet steps
     /// through the system title styles (Large Title 26, Title 1 22, Title 2
     /// 17, Title 3 15, Headline 13, Subheadline 11) as em ratios of the body
     /// size, so it scales with this value.
-    static let bodyFontSize: CGFloat = 14
+    static let bodyFontSize: CGFloat = 15
     static let bodyLineHeight: CGFloat = 1.5
     static let pagePaddingTop: CGFloat = 32
     /// App-only breathing room for floating controls, shared by read/edit

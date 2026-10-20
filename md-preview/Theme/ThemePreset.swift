@@ -206,7 +206,7 @@ nonisolated struct ThemePreset: Identifiable, Equatable, Sendable {
         // choosing it must leave the same native chrome as a fresh install.
         ThemePreset(name: "Original", flavor: .system,
                     palette: Palette(pageBackground: "#FFFFFF", codeBackground: "#F5F5F7",
-                                     text: "#1D1D1F", accent: "#0066CC"),
+                                     text: "#000000", accent: "#0066CC"),
                     darkPalette: Palette(pageBackground: "#1C1C1C", codeBackground: "#2A2828",
                                          text: "#F5F5F7", accent: "#2997FF"),
                     usesDefaultColors: true),

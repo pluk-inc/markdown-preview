@@ -36,8 +36,9 @@ nonisolated enum EditorHTML {
            edit mode doesn't visually change the document. */
         :root {
             color-scheme: light dark;
-            /* Semantic system colors resolve per appearance on their own. */
-            --text: -apple-system-label;
+            /* Semantic system colors resolve per appearance on their own.
+               Light text is pure black, as in the preview. */
+            --text: #000;
             --secondary: -apple-system-secondary-label;
             --quote-border: -apple-system-quaternary-label;
             --grid: -apple-system-separator;
@@ -50,6 +51,7 @@ nonisolated enum EditorHTML {
         }
         @media (prefers-color-scheme: dark) {
             :root {
+                --text: -apple-system-label;
                 --link: rgb(65, 156, 255);
                 --code-bg: #262626;
                 --code-border: #323232;
@@ -73,6 +75,10 @@ nonisolated enum EditorHTML {
             line-height: \(MarkdownHTML.bodyLineHeight);
             color: var(--text);
             -webkit-font-smoothing: antialiased;
+            /* Same kerning and last-line wrapping as the preview, so entering
+               edit mode keeps every line break. */
+            text-rendering: optimizeLegibility;
+            text-wrap: pretty;
         }
         #editor {
             height: 100%;

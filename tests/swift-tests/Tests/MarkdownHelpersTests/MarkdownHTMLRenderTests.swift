@@ -489,8 +489,9 @@ final class MarkdownHTMLRenderTests: XCTestCase {
     }
 
     func testTypographyFollowsTheSystemTextStyles() {
-        XCTAssertEqual(MarkdownHTML.bodyFontSize, 14)
+        XCTAssertEqual(MarkdownHTML.bodyFontSize, 15)
         let css = MarkdownHTML.stylesheet
+        XCTAssertTrue(css.contains("--text: #000;"))
         XCTAssertTrue(css.contains("--text: -apple-system-label;"))
         XCTAssertTrue(css.contains("--secondary: -apple-system-secondary-label;"))
         XCTAssertTrue(css.contains("--grid: -apple-system-separator;"))
@@ -537,8 +538,8 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         let metrics = try XCTUnwrap(result as? [String: Any])
         let light = try XCTUnwrap(metrics["light"] as? [String: String])
         let dark = try XCTUnwrap(metrics["dark"] as? [String: String])
-        // Label colors: 85% black on light, 85% white on dark.
-        XCTAssertTrue(light["text"]?.hasPrefix("rgba(0, 0, 0, 0.8") == true, light["text"] ?? "")
+        // Pure black on light; the label color (85% white) on dark.
+        XCTAssertEqual(light["text"], "rgb(0, 0, 0)")
         XCTAssertTrue(dark["text"]?.hasPrefix("rgba(255, 255, 255, 0.8") == true, dark["text"] ?? "")
         XCTAssertNotEqual(light["bullet"], light["text"], "bullets use the accent color")
         XCTAssertEqual(metrics["display"] as? String, "flex")

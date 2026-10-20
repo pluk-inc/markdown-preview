@@ -245,7 +245,9 @@ final class MarkdownHTMLPDFExportTests: XCTestCase {
         assertCompleteText([longHeader, longValue, prose], in: paper)
         assertWholeWords(["Measure", "Static", "Category", "Stable", "Mixed", "Ordinary", "Grouped"], in: paper)
         assertTextInsidePages(paper, paperMargins: true)
-        XCTAssertLessThanOrEqual(paper.pageCount, 4)
+        // A loose bound against tiled or blown-up pages. `text-wrap: pretty`
+        // may give a paragraph one more line, which here spills onto page 5.
+        XCTAssertLessThanOrEqual(paper.pageCount, 5)
         let after = try await documentState(harness.webView)
         XCTAssertEqual(after, before)
     }

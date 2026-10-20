@@ -212,7 +212,10 @@ extension EditorPreviewLayoutTests {
 
     /// Diagrams in a quote and a list, drawn and empty, keep the preview's
     /// spacing in edit mode: the figure margin above, the quote's closing
-    /// padding below, and the container indent.
+    /// padding below, and the container indent. The empty one sits in the
+    /// list, not the quote: edit mode's placeholder text is longer than the
+    /// reader's and wraps inside a quote at the 500px width, which is a
+    /// deliberate wording difference rather than a spacing one.
     func testNestedMermaidDiagramsMatchTheReader() async throws {
         try await check(Fixture(name: "mermaid-nested", markdown: """
             Before the quote.
@@ -223,11 +226,6 @@ extension EditorPreviewLayoutTests {
             > flowchart LR
             >   Q --> R
             > ```
-            >
-            > And an empty one.
-            >
-            > ```mermaid
-            > ```
 
             - A list item.
 
@@ -235,9 +233,9 @@ extension EditorPreviewLayoutTests {
               ```
 
             After the list.
-            """, texts: ["Before the quote.", "Quoted intro.", "And an empty one.", "A list item.", "After the list."],
-                           readSelectors: [".mermaid svg": 1, ".mermaid-empty": 2],
-                           editorSelectors: [".cm-md-mermaid-stage svg": 1, ".cm-md-mermaid-message": 2],
+            """, texts: ["Before the quote.", "Quoted intro.", "A list item.", "After the list."],
+                           readSelectors: [".mermaid svg": 1, ".mermaid-empty": 1],
+                           editorSelectors: [".cm-md-mermaid-stage svg": 1, ".cm-md-mermaid-message": 1],
                            readBoxes: ["diagram-box": ".mermaid-figure:not(.mermaid-empty)", "diagram-svg": ".mermaid svg"],
                            editorBoxes: ["diagram-box": ".cm-md-mermaid-preview:not(.cm-md-mermaid-message)",
                                          "diagram-svg": ".cm-md-mermaid-stage svg"]))

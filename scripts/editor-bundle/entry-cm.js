@@ -1564,9 +1564,10 @@ const quoteLineCache = new Map()
 const quoteGeometry = (depth, top) => {
   const levels = Array.from({ length: depth }, (_, level) => level)
   return {
-    padding: `${depth * 1.5}em`,
+    // Whole-pixel steps, as the preview's blockquote padding.
+    padding: `calc(${depth} * round(1.5em, 1px))`,
     images: levels.map(() => "linear-gradient(var(--quote-border), var(--quote-border))").join(","),
-    positions: levels.map((level) => `calc(0.3em + ${level * 1.5}em) ${top}`).join(","),
+    positions: levels.map((level) => `calc(0.3em + ${level} * round(1.5em, 1px)) ${top}`).join(","),
   }
 }
 const quoteLine = (depth, starts, ends, gap) => {
