@@ -508,8 +508,11 @@ nonisolated extension MarkdownHTML {
         padding: 0;
         background: transparent;
         border: 0;
-        /* Block code reads at the body size; only inline code steps down. */
-        font-size: 1em;
+        /* Monospace reads larger than the body face at the same size, so
+           block code steps down like most readers do. Whole-pixel lines keep
+           the editor, which snaps line boxes at 1x, in step. */
+        font-size: 0.9em;
+        line-height: round(1.3em, 1px);
     }
     .md-code-wrap {
         position: relative;

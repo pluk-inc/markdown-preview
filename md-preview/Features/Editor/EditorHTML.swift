@@ -409,8 +409,9 @@ nonisolated enum EditorHTML {
         }
         #editor .cm-md-codeblock {
             font-family: ui-monospace, "SF Mono", Menlo, monospace;
-            font-size: 1em;
-            line-height: 1.3;
+            /* Same size and whole-pixel lines as the preview's pre code. */
+            font-size: 0.9em;
+            line-height: round(1.3em, 1px);
             position: relative;
             padding: 0;
             white-space: pre;
