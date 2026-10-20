@@ -222,7 +222,7 @@ nonisolated enum MarkdownHTML {
 
     /// Body size, in points, used by the print stylesheet when the app hasn't
     /// injected an explicit choice. CSS `pt` reaches paper 1:1, so this is the
-    /// literal printed size at 100% scale. The on-screen 14px body would print at 10.5pt,
+    /// literal printed size at 100% scale. The on-screen 15px body would print at 11.25pt,
     /// small for paper, so the print default stays at 12pt.
     static let defaultPrintPointSize = 12
 
