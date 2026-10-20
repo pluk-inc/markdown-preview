@@ -60,9 +60,14 @@ nonisolated extension MarkdownHTML {
         ("--pele-heading-weight", "600"),
         ("--pele-font-mono", codeFontFamily),
     ]
+    /// Pele draws labels in `--pele-font`, falling back to generic sans-serif
+    /// (Helvetica in WebKit) while it measures them in `fontFamily` below.
+    /// Both follow the document font. Not a literal popup input: the popup
+    /// resolves it from the page, where the theme's font variable exists.
+    static let diagramFontVariableCSS = "--pele-font: var(--mdp-doc-font, \(bodyFontFamily));"
     static let diagramVariablesCSS = (diagramColorVariables + diagramStyleVariables)
         .map { "\($0.name): \($0.value);" }
-        .joined(separator: "\n")
+        .joined(separator: "\n") + "\n" + diagramFontVariableCSS
     static let diagramColorVariableNamesJS = "["
         + diagramColorVariables.map { javaScriptStringLiteral($0.name) }.joined(separator: ", ") + "]"
     static let diagramStyleVariablesJS = "{"
@@ -71,11 +76,17 @@ nonisolated extension MarkdownHTML {
             .joined(separator: ", ") + "}"
 
     /// Options every `pele.render` call shares, in the preview and the editor.
-    /// Pele measures labels in the body font and keeps the author's flowchart
-    /// direction: the figure scales and zooms instead of re-laying out for a
-    /// narrow window.
-    static let diagramRenderOptionsJS =
-        "{ fontFamily: \(javaScriptStringLiteral(bodyFontFamily)), autoDirection: false }"
+    /// Pele measures labels in the page's body font and size, read at each
+    /// render (both callers copy the object, which runs the getters) so a
+    /// theme font or the body size reaches the next diagram. Flowchart labels
+    /// draw at `fontSize`, class and sequence text at 0.875 of it. It keeps
+    /// the author's flowchart direction: the figure scales and zooms instead
+    /// of re-laying out for a narrow window.
+    static let diagramRenderOptionsJS = """
+    { autoDirection: false,
+      get fontFamily() { return getComputedStyle(document.body).fontFamily || \(javaScriptStringLiteral(bodyFontFamily)); },
+      get fontSize() { return parseFloat(getComputedStyle(document.body).fontSize) || \(Int(bodyFontSize)); } }
+    """
 
     /// Text shown in a diagram's place (an error, or an empty block), shared
     /// by the preview and the editor widget so both modes match.

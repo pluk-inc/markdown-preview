@@ -351,6 +351,8 @@ nonisolated extension MarkdownHTML {
                 for (const [name, value] of Object.entries(peleStyleVariables)) {
                     clone.style.setProperty(name, value);
                 }
+                clone.style.setProperty('--pele-font',
+                    getComputedStyle(figure).getPropertyValue('--pele-font').trim());
                 clone.setAttribute('preserveAspectRatio', 'xMidYMid meet');
                 clone.removeAttribute('width');
                 clone.removeAttribute('height');
