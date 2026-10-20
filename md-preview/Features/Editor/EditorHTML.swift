@@ -531,11 +531,7 @@ nonisolated enum EditorHTML {
                the preview's .mermaid-figure margin. */
             position: relative;
             margin: 0;
-            width: 100%;
-            --mm-max-height: min(70vh, 720px);
-            aspect-ratio: var(--mm-aspect, 4 / 3);
-            /* Natural-size cap, as in the preview's .mermaid-figure. */
-            max-height: min(var(--mm-max-height), calc(var(--mm-height, 100000px) + 32px));
+            \(MarkdownHTML.diagramFigureSizingCSS)
             overflow: hidden;
             border-radius: 15px;
             background: var(--code-bg);
@@ -546,7 +542,7 @@ nonisolated enum EditorHTML {
         .cm-md-mermaid-stage {
             position: absolute;
             inset: 0;
-            padding: 16px;
+            padding: \(MarkdownHTML.diagramStagePadding)px;
             box-sizing: border-box;
             display: flex;
             align-items: center;

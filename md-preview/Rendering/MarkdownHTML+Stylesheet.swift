@@ -88,6 +88,20 @@ nonisolated extension MarkdownHTML {
       get fontSize() { return parseFloat(getComputedStyle(document.body).fontSize); } }
     """
 
+    /// Inset between a diagram and its tray, in both modes.
+    static let diagramStagePadding = 16
+    /// Tray geometry shared by the preview figure and the editor widget. The
+    /// tray spans the column like a code block; its height follows the
+    /// diagram's aspect ratio, capped by the window and by the diagram's own
+    /// height plus the stage padding, so a diagram narrower than the column
+    /// draws at its natural size instead of scaling up to the width.
+    static let diagramFigureSizingCSS = """
+    --mm-max-height: min(70vh, 720px);
+    width: 100%;
+    aspect-ratio: var(--mm-aspect, 4 / 3);
+    max-height: min(var(--mm-max-height), calc(var(--mm-height, var(--mm-max-height)) + \(2 * diagramStagePadding)px));
+    """
+
     /// Text shown in a diagram's place (an error, or an empty block), shared
     /// by the preview and the editor widget so both modes match.
     static let diagramMessageCSS = """
@@ -556,15 +570,8 @@ nonisolated extension MarkdownHTML {
         overflow: hidden;
         outline: none;
         /* The stage is absolutely positioned, so the figure needs an explicit
-           width: the tray spans the column like a code block, and a tall
-           diagram hits the height cap and stays centred inside it. The
-           diagram's own height plus the stage padding caps it too, so a
-           diagram narrower than the column draws at its natural size, with
-           labels at the body size, instead of scaling up to the width. */
-        --mm-max-height: min(70vh, 720px);
-        width: 100%;
-        aspect-ratio: var(--mm-aspect, 4 / 3);
-        max-height: min(var(--mm-max-height), calc(var(--mm-height, 100000px) + 32px));
+           width; a tall diagram stays centred inside the height cap. */
+        \(diagramFigureSizingCSS)
         contain: layout paint;
         \(diagramVariablesCSS)
     }
@@ -588,7 +595,7 @@ nonisolated extension MarkdownHTML {
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 16px;
+        padding: \(diagramStagePadding)px;
         box-sizing: border-box;
     }
     .mermaid svg {
