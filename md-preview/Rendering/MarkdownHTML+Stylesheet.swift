@@ -557,11 +557,14 @@ nonisolated extension MarkdownHTML {
         outline: none;
         /* The stage is absolutely positioned, so the figure needs an explicit
            width: the tray spans the column like a code block, and a tall
-           diagram hits the height cap and stays centred inside it. */
+           diagram hits the height cap and stays centred inside it. The
+           diagram's own height plus the stage padding caps it too, so a
+           diagram narrower than the column draws at its natural size, with
+           labels at the body size, instead of scaling up to the width. */
         --mm-max-height: min(70vh, 720px);
         width: 100%;
         aspect-ratio: var(--mm-aspect, 4 / 3);
-        max-height: var(--mm-max-height);
+        max-height: min(var(--mm-max-height), calc(var(--mm-height, 100000px) + 32px));
         contain: layout paint;
         \(diagramVariablesCSS)
     }

@@ -534,7 +534,8 @@ nonisolated enum EditorHTML {
             width: 100%;
             --mm-max-height: min(70vh, 720px);
             aspect-ratio: var(--mm-aspect, 4 / 3);
-            max-height: var(--mm-max-height);
+            /* Natural-size cap, as in the preview's .mermaid-figure. */
+            max-height: min(var(--mm-max-height), calc(var(--mm-height, 100000px) + 32px));
             overflow: hidden;
             border-radius: 15px;
             background: var(--code-bg);

@@ -259,6 +259,7 @@ nonisolated extension MarkdownHTML {
                 // capped by max-height so massive diagrams don't push the page.
                 if (vbW > 0 && vbH > 0) {
                     figure.style.setProperty('--mm-aspect', vbW + ' / ' + vbH);
+                    figure.style.setProperty('--mm-height', vbH + 'px');
                 }
 
                 const alreadyWired = states.has(figure);
