@@ -150,6 +150,33 @@ extension EditorPreviewLayoutTests {
             """, texts: ["Before nested quotes.", "Outer quote.", "Second quote paragraph.", "Inner quote.", "After nested quotes."]))
     }
 
+    /// Block code is smaller than the body, but the container indent around
+    /// it is not: code in a list or quote keeps the reader's text column.
+    /// Only the horizontal column is compared; code in a list item already
+    /// sits about 10px lower in edit mode on main, a separate spacing issue.
+    func testCodeNestedInListsAndQuotesKeepsTheContainerIndent() async throws {
+        try await check(Fixture(name: "code-nested", markdown: """
+            Before nested code.
+
+            - A list item.
+
+              ```
+              listedCodeLine
+              ```
+
+            > A quote.
+            >
+            > ```
+            > quotedCodeLine
+            > ```
+
+            After nested code.
+            """, texts: ["Before nested code.", "A list item.", "listedCodeLine", "A quote.",
+                         "quotedCodeLine", "After nested code."],
+            sourceRepresentationReason: "Code in a list item has a known vertical offset in edit mode",
+            localParityTexts: ["listedCodeLine", "quotedCodeLine"]))
+    }
+
     func testFencedUnlabelledAndIndentedCode() async throws {
         try await check(Fixture(name: "code-blocks", markdown: """
             Before code blocks.

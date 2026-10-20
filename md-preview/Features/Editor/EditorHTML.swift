@@ -76,6 +76,14 @@ nonisolated enum EditorHTML {
             -webkit-font-smoothing: antialiased;
             \(MarkdownHTML.bodyTextRenderingCSS)
         }
+        /* The body em as a computed length: a line's own em shrinks on code
+           lines (0.9em), but a list indent on that line must keep the text
+           column, as the preview's list item does around its pre. */
+        @property --mdp-body-em {
+            syntax: "<length>";
+            inherits: true;
+            initial-value: \(MarkdownHTML.bodyFontSize)px;
+        }
         #editor {
             height: 100%;
             box-sizing: border-box;
@@ -101,6 +109,7 @@ nonisolated enum EditorHTML {
             line-height: \(MarkdownHTML.bodyLineHeight);
         }
         #editor .cm-content {
+            --mdp-body-em: 1em;
             width: 100%;
             max-width: \(columnMaxWidth);
             min-height: 100%;

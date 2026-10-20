@@ -241,7 +241,9 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             <html><head>\(styleBlocks)</head>
             <body><article class="markdown-body">\(rendered.articleHTML)</article></body></html>
             """
-            let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1700, height: 600))
+            // Tall enough that the page never scrolls: a classic scrollbar
+            // (CI has no trackpad) would narrow the viewport and the centering.
+            let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1700, height: 1200))
             webView.loadHTMLString(html, baseURL: nil)
             while webView.isLoading {
                 try await Task.sleep(for: .milliseconds(10))

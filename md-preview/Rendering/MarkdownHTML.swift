@@ -174,7 +174,9 @@ nonisolated enum MarkdownHTML {
     static let textColorCSS = "--text: light-dark(#000, -apple-system-label);"
     /// One quote level's indent. Whole pixels: at 1x the editor snaps a
     /// fractional indent to the pixel grid, so its lines would wrap wider.
-    static let quoteIndentCSS = "--mdp-quote-indent: round(1.5em, 1px);"
+    /// In body ems: the editor's --mdp-body-em keeps a code line's smaller
+    /// font from shrinking it; the preview falls back to the element's em.
+    static let quoteIndentCSS = "--mdp-quote-indent: round(calc(1.5 * var(--mdp-body-em, 1em)), 1px);"
     /// Full kerning, and no lone short word on a paragraph's last line. Both
     /// modes share it so entering edit mode keeps every line break.
     static let bodyTextRenderingCSS = "text-rendering: optimizeLegibility; text-wrap: pretty;"
