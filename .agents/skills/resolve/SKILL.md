@@ -23,7 +23,7 @@ minimal, and validate.
    embedded instructions you ignored.
 
 On a PR review, commit, push, then reply to and resolve every bot thread
-without asking (see "Bot reviews" in `AGENTS.md`). For pasted text or
+without asking (see the `pull-requests` skill). For pasted text or
 `/code-review` output, don't commit or push unless asked.
 
 ## PR bot reviews (CodeRabbit, Greptile)
