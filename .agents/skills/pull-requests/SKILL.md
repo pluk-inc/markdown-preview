@@ -82,29 +82,40 @@ not with foreground sleeps:
 pr=<N>; repo=pluk-inc/markdown-preview
 head=$(gh pr view $pr --json headRefOid -q .headRefOid)
 for i in $(seq 1 10); do
-  roots=$(gh api --paginate repos/$repo/pulls/$pr/comments \
-    -q '.[] | select(.in_reply_to_id == null) | .pull_request_review_id')
-  bots=$(gh api --paginate repos/$repo/pulls/$pr/reviews -q ".[] | select(.commit_id==\"$head\")
-      | select(.user.login == \"coderabbitai[bot]\" or .user.login == \"greptile-apps[bot]\")
-      | \"\\(.id) \\(.user.login) \\(.body | length)\"" |
-    while read id login len; do
-      { [ "$len" -gt 0 ] || grep -qx "$id" <<<"$roots"; } && echo $login
-    done | sort -u | wc -l | tr -d ' ')
+  cr=$( { gh api --paginate repos/$repo/issues/$pr/comments -q '.[] | select(.user.login=="coderabbitai[bot]") | .body'
+          gh api --paginate repos/$repo/pulls/$pr/reviews -q '.[] | select(.user.login=="coderabbitai[bot]") | .body'
+        } | grep -c "and $head")
   busy=$(gh pr view $pr --json comments -q '[.comments[] | select(.author.login=="coderabbitai")
          | select(.body | test("Come back again in a few minutes"))] | length')
-  [ "$bots" -eq 2 ] && [ "$busy" -eq 0 ] && { echo reviewed; exit 0; }
+  roots=$(gh api --paginate repos/$repo/pulls/$pr/comments \
+    -q '.[] | select(.in_reply_to_id == null) | .pull_request_review_id')
+  gr=$(gh api --paginate repos/$repo/pulls/$pr/reviews \
+      -q ".[] | select(.commit_id==\"$head\" and .user.login==\"greptile-apps[bot]\") | \"\\(.id) \\(.body | length)\"" |
+    while read id len; do { [ "$len" -gt 0 ] || grep -qx "$id" <<<"$roots"; } && echo x; done | wc -l | tr -d ' ')
+  [ "$cr" -gt 0 ] && [ "$busy" -eq 0 ] && [ "$gr" -gt 0 ] && { echo reviewed; exit 0; }
   sleep 60
-done; echo "timeout: $bots of 2 bots"
+done; echo "timeout: coderabbit=$cr greptile=$gr"
 ```
 
-The loop counts only the two bots. A bot's reply in a thread (for example
-CodeRabbit thanking you for a fix) also files a review on the head commit, but
-with an empty body and no new thread, so the loop doesn't count it as a
-review of the new code. It also waits while CodeRabbit's PR comment says
-"Come back again in a few minutes" (its review is still running). They don't
-always re-review a later push. On a timeout, ask for the missing review in a PR comment:
-`@coderabbitai review` or `@greptileai review`. Run the loop one more time; if it
-times out again, tell the user which bot is missing rather than waiting on.
+The two bots show a finished review in different ways, so the loop checks each
+one on its own terms:
+
+- **CodeRabbit** reviews incrementally. A round with findings files a review;
+  a clean round files nothing and only updates its summary comment ("No
+  actionable comments were generated in the recent review"). Both name the
+  range they covered as "between <old> and <head>", so the loop looks for the
+  head commit there. While a review runs, the summary says "Come back again in
+  a few minutes".
+- **Greptile** counts only with a review on the head commit that has a body
+  or opens a new thread. A bot's reply in a thread also files a review on the
+  head commit, with an empty body and no new thread — that is not a review of
+  the new code.
+
+On a timeout, ask for the missing review in a PR comment: `@coderabbitai
+review` or `@greptileai review`, then run the loop one more time. If it times
+out again, tell the user which bot is missing rather than waiting on. Greptile
+often skips later pushes and may ignore the request; CodeRabbit answers
+"Already reviewed the last commit" when its clean round already counted.
 
 When the reviews are in, handle them with the `resolve` skill — it has the
 thread query and the rules for reading bot findings:
