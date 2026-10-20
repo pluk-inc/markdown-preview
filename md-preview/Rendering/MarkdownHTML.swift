@@ -175,7 +175,10 @@ nonisolated enum MarkdownHTML {
     /// 17, Title 3 15, Headline 13, Subheadline 11) as em ratios of the body
     /// size, so it scales with this value.
     static let bodyFontSize: CGFloat = 15
-    static let bodyLineHeight: CGFloat = 1.5
+    /// 24px lines at the 15px body. Keep the product a whole pixel: the
+    /// editor snaps each line box to the device pixel grid at 1x, so a
+    /// fractional line (22.5px at 1.5) drifts from the reader line by line.
+    static let bodyLineHeight: CGFloat = 1.6
     static let pagePaddingTop: CGFloat = 32
     /// App-only breathing room for floating controls, shared by read/edit
     /// pages. It scrolls with the document, leaving the scroll track full-height.
