@@ -393,8 +393,9 @@ extension ProjectNavigatorView: NSMenuDelegate {
         for row in 0..<outlineView.numberOfRows {
             guard let cell = outlineView.view(
                 atColumn: 0, row: row, makeIfNecessary: false
-            ) as? NSTableCellView, let textField = cell.textField else { continue }
-            textField.textColor = row == selected ? accent : .labelColor
+            ) as? SidebarLabelCellView else { continue }
+            cell.label.textColor = SidebarLabelCellView.textColor(
+                selected: row == selected, accent: accent)
         }
     }
 }
@@ -424,12 +425,11 @@ extension ProjectNavigatorView: NSOutlineViewDelegate {
                      item: Any) -> NSView? {
         guard let node = item as? FileNode else { return nil }
         let identifier = NSUserInterfaceItemIdentifier("FileCell")
-        let cell: NSTableCellView
-        if let recycled = outlineView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView {
+        let cell: SidebarLabelCellView
+        if let recycled = outlineView.makeView(withIdentifier: identifier, owner: self) as? SidebarLabelCellView {
             cell = recycled
         } else {
-            cell = NSTableCellView()
-            cell.identifier = identifier
+            cell = SidebarLabelCellView(identifier: identifier)
 
             let imageView = NSImageView()
             imageView.translatesAutoresizingMaskIntoConstraints = false
@@ -437,13 +437,10 @@ extension ProjectNavigatorView: NSOutlineViewDelegate {
             cell.addSubview(imageView)
             cell.imageView = imageView
 
-            let textField = NSTextField(labelWithString: "")
-            textField.translatesAutoresizingMaskIntoConstraints = false
+            let textField = cell.label
             textField.lineBreakMode = .byTruncatingTail
             textField.cell?.usesSingleLineMode = true
             textField.maximumNumberOfLines = 1
-            cell.addSubview(textField)
-            cell.textField = textField
 
             NSLayoutConstraint.activate([
                 imageView.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
@@ -456,14 +453,14 @@ extension ProjectNavigatorView: NSOutlineViewDelegate {
             ])
         }
 
-        cell.textField?.stringValue = node.displayName
+        cell.label.stringValue = node.displayName
         let icon = NSWorkspace.shared.icon(forFile: node.url.path)
         icon.size = NSSize(width: 16, height: 16)
         cell.imageView?.image = icon
         let row = outlineView.row(forItem: node)
-        cell.textField?.textColor = row >= 0 && row == outlineView.selectedRow
-            ? (themeAccent ?? .controlAccentColor)
-            : .labelColor
+        cell.label.textColor = SidebarLabelCellView.textColor(
+            selected: row >= 0 && row == outlineView.selectedRow,
+            accent: themeAccent ?? .controlAccentColor)
         return cell
     }
 
