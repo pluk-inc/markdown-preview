@@ -432,7 +432,7 @@ final class EditorFormattingTests: XCTestCase {
         XCTAssertEqual(result?["source"] as? String, "- [ ] First\n- [ ] Second")
     }
 
-    func testCompletedParentDoesNotStrikeNestedUncheckedItems() async throws {
+    func testCompletedParentDoesNotMuteNestedUncheckedItems() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let source = "- [x] Parent\n  continuation\n    - [ ] Child\n      child continuation\n    - [x] Done child\n        - [ ] Grandchild\n\n  Parent after children\n- [ ] Sibling"
         let editor = WebViewLayoutHarness(html: EditorHTML.render(markdown: source, editorJavaScript: script),
@@ -441,9 +441,11 @@ final class EditorFormattingTests: XCTestCase {
         _ = try await editor.layout(texts: [], imageCount: 0)
         let result = try await editor.webView.evaluateJavaScript("""
             (() => {
-                const lines = [...document.querySelectorAll('.cm-line')];
-                return Object.fromEntries(lines.filter(line => line.textContent.trim()).map(line =>
-                    [line.textContent.trim(), getComputedStyle(line).textDecorationLine.includes('line-through')]));
+                const lines = [...document.querySelectorAll('.cm-line')].filter(line => line.textContent.trim());
+                const sibling = lines.find(line => line.textContent.trim() === 'Sibling');
+                const plain = getComputedStyle(sibling).color;
+                return Object.fromEntries(lines.map(line =>
+                    [line.textContent.trim(), getComputedStyle(line).color !== plain]));
             })()
             """) as? [String: Bool]
         for label in ["Parent", "continuation", "Done child", "Parent after children"] {
@@ -464,17 +466,19 @@ final class EditorFormattingTests: XCTestCase {
         let result = try await editor.webView.evaluateJavaScript("""
             (() => {
                 const lines = () => [...document.querySelectorAll('.cm-line')];
-                const struck = line => getComputedStyle(line).textDecorationLine.includes('line-through');
-                const initial = struck(lines()[0]) && struck(lines()[1]) && !struck(lines()[2]);
-                const muted = getComputedStyle(lines()[0]).color !== getComputedStyle(lines()[2]).color;
+                const plain = getComputedStyle(lines()[2]).color;
+                const muted = line => getComputedStyle(line).color !== plain;
+                const unstruck = lines().every(line =>
+                    !getComputedStyle(line).textDecorationLine.includes('line-through'));
+                const initial = muted(lines()[0]) && muted(lines()[1]) && !muted(lines()[2]);
                 document.querySelector('.cm-md-task-marker input').click();
-                const cleared = !struck(lines()[0]) && !struck(lines()[1]);
+                const cleared = !muted(lines()[0]) && !muted(lines()[1]);
                 document.querySelector('.cm-md-task-marker input').click();
-                return {initial, muted, cleared, restored: struck(lines()[0]),
+                return {initial, unstruck, cleared, restored: muted(lines()[0]),
                         source: window.__mdEditor.getMarkdown()};
             })()
             """) as? [String: Any]
-        for key in ["initial", "muted", "cleared", "restored"] {
+        for key in ["initial", "unstruck", "cleared", "restored"] {
             XCTAssertEqual(result?[key] as? Bool, true, key)
         }
         XCTAssertEqual(result?["source"] as? String, source)

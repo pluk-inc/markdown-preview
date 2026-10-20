@@ -284,8 +284,7 @@ nonisolated enum EditorHTML {
             text-indent: -2.1em;
         }
         .cm-md-task-completed {
-            color: var(--secondary);
-            text-decoration: line-through;
+            color: color-mix(in srgb, var(--secondary), var(--text) 30%);
         }
         #editor .cm-md-task-line {
             text-indent: 0 !important;
@@ -293,34 +292,17 @@ nonisolated enum EditorHTML {
         .cm-md-task-marker {
             display: inline;
         }
+        /* The system draws the box, as in the preview. */
         .cm-md-task-marker input {
-            appearance: none;
-            -webkit-appearance: none;
             font: inherit;
-            width: 0.9em;
-            height: 0.9em;
+            width: 1.1em;
+            height: 1.1em;
             margin: 0;
-            margin-inline-start: calc(-0.9em - 0.25em);
+            margin-inline-start: calc(-1.1em - 0.25em);
             margin-inline-end: 0.25em;
-            vertical-align: calc(0.5cap - 0.45em);
-            border: 1.5px solid var(--grid);
-            border-radius: 25%;
-            background: transparent;
+            vertical-align: middle;
             position: relative;
-            cursor: pointer;
-        }
-        .cm-md-task-marker input:checked {
-            border-color: var(--accent);
-            background: var(--accent);
-        }
-        .cm-md-task-marker input:checked::after {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4.4 8.4 L7 11 L11.6 5.4" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
-            background-repeat: no-repeat;
-            background-position: center;
-            background-size: 100% 100%;
+            top: calc(0.5ex - 0.5cap);
         }
         .cm-md-bullet {
             display: inline-block;

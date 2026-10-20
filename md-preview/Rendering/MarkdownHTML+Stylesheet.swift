@@ -805,41 +805,34 @@ nonisolated extension MarkdownHTML {
     li > p:first-child { margin-top: 0; }
 
     li.task-list-item { list-style: none; }
-    /* Completed tasks read as done — struck through and muted. */
-    li.task-list-item:has(input.task-list-item-checkbox:checked) {
-        color: var(--secondary);
-        text-decoration: line-through;
+    /* Completed tasks read as done by muting, without a strikethrough, so a
+       long checklist stays legible. The mute stops short of --secondary so
+       the text stays readable beside its checkbox. Only the item's own
+       checkbox counts, and nested lists keep their own state: a checked
+       sub-item must not mark its parent done, and a checked parent must not
+       mute unchecked sub-items. */
+    li.task-list-item:has(> input.task-list-item-checkbox:checked) > :not(ul, ol) {
+        color: color-mix(in srgb, var(--secondary), var(--text) 30%);
     }
     li.task-list-item > p:first-of-type { display: inline; margin-top: 0; }
+    /* The system draws the box, so it matches every other macOS checkbox:
+       accent colour, dark mode, and the grey tick of an inactive window.
+       Left to itself WebKit draws it 12px square at any font-size, which
+       reads tiny beside body text; an explicit size scales the system
+       drawing, so it is sized in em like the text. Its baseline does not
+       scale with the text, so it is centred with `middle` (half the
+       x-height) and moved up to half the cap height instead. */
     .task-list-item-checkbox {
-        -webkit-appearance: none;
-        appearance: none;
         font: inherit;
-        width: 0.9em;
-        height: 0.9em;
+        width: 1.1em;
+        height: 1.1em;
         margin: 0;
-        margin-inline-start: calc(-0.9em - 0.25em);
+        margin-inline-start: calc(-1.1em - 0.25em);
         margin-inline-end: 0.25em;
-        vertical-align: calc(0.5cap - 0.45em);
-        border: 1.5px solid var(--grid);
-        border-radius: 25%;
-        background: transparent;
+        vertical-align: middle;
         position: relative;
+        top: calc(0.5ex - 0.5cap);
         flex: 0 0 auto;
-    }
-    .task-list-item-checkbox:checked {
-        border-color: var(--accent);
-        background: var(--accent);
-    }
-    .task-list-item-checkbox:not(:disabled) { cursor: pointer; }
-    .task-list-item-checkbox:checked::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4.4 8.4 L7 11 L11.6 5.4" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
-        background-repeat: no-repeat;
-        background-position: center;
-        background-size: 100% 100%;
     }
 
     table {
