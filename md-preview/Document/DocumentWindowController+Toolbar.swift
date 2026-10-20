@@ -6,7 +6,6 @@
 //
 
 import Cocoa
-import LinkPresentation
 import SwiftUI
 
 extension NSToolbarItem.Identifier {
@@ -345,14 +344,12 @@ extension DocumentWindowController {
 
     private func makePrintItem() -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: .printDocument)
-        let print = NSLocalizedString("Print", comment: "Print toolbar item label")
-        item.label = print
-        item.paletteLabel = print
+        item.label = DocumentAction.print.title
+        item.paletteLabel = DocumentAction.print.title
         item.toolTip = NSLocalizedString("Print document", comment: "Print toolbar item tooltip")
-        item.image = NSImage(systemSymbolName: "printer",
-                             accessibilityDescription: print)
+        item.image = DocumentAction.print.image
         item.isBordered = true
-        item.action = #selector(MainSplitViewController.printMarkdown(_:))
+        item.action = DocumentAction.print.action
         return item
     }
 
@@ -373,16 +370,13 @@ extension DocumentWindowController {
 
     private func makeExportItem() -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: .exportDocument)
-        let label = NSLocalizedString(
-            "Export", comment: "Export toolbar item label")
-        item.label = label
-        item.paletteLabel = label
+        item.label = DocumentAction.export.title
+        item.paletteLabel = DocumentAction.export.title
         item.toolTip = NSLocalizedString(
             "Export document", comment: "Export toolbar item tooltip")
-        item.image = NSImage(systemSymbolName: "document.badge.arrow.up",
-                             accessibilityDescription: label)
+        item.image = DocumentAction.export.image
         item.isBordered = true
-        item.action = #selector(MainSplitViewController.exportMarkdownDocument(_:))
+        item.action = DocumentAction.export.action
         return item
     }
 
@@ -595,91 +589,52 @@ extension DocumentWindowController {
         inspectorButton?.state = isSelected ? .on : .off
     }
 
-    /// Wrapped in a preview item so the popover header shows the app icon,
-    /// the file name and a gray subtitle instead of the first lines of the raw
-    /// Markdown.
     func items(for pickerToolbarItem: NSSharingServicePickerToolbarItem) -> [Any] {
         guard let currentMarkdown else { return [] }
         let title = currentFileURL?.lastPathComponent ?? documentWindow.title
-        let preview = NSPreviewRepresentingActivityItem(
-            item: currentMarkdown,
-            title: title,
-            image: Self.shareHeaderIcon,
-            icon: nil
-        )
-        Self.attachSubtitle(shareSubtitle(for: currentMarkdown), title: title, to: preview)
-        return [preview]
+        return [SharePreviewItem.make(markdown: currentMarkdown, title: title)]
     }
-
-    private func shareSubtitle(for markdown: String) -> String {
-        let words = DocumentMetadata.make(url: currentFileURL, markdown: markdown).wordCount
-        return [
-            NSLocalizedString("Markdown Document", comment: "Inspector document type"),
-            String(format: NSLocalizedString("%@ words", comment: "Share popover word count"),
-                   words.formatted()),
-        ].joined(separator: " · ")
-    }
-
-    /// The public preview item has no subtitle. The picker draws one from the
-    /// private `LPLinkMetadata.summary` when the item carries link metadata
-    /// (the private `linkMetadata` the Tips app's share preview fills), so
-    /// this sets both. When either private piece is missing, the item keeps
-    /// its public title-only header.
-    private static func attachSubtitle(_ subtitle: String, title: String,
-                                       to preview: NSPreviewRepresentingActivityItem) {
-        let metadata = LPLinkMetadata()
-        guard metadata.responds(to: NSSelectorFromString("setSummary:")),
-              preview.responds(to: NSSelectorFromString("linkMetadata")),
-              class_getInstanceVariable(NSPreviewRepresentingActivityItem.self, "_linkMetadata") != nil
-        else { return }
-        metadata.title = title
-        metadata.setValue(subtitle, forKey: "summary")
-        metadata.imageProvider = NSItemProvider(object: shareHeaderIcon)
-        preview.setValue(metadata, forKey: "linkMetadata")
-    }
-
-    /// The app icon without the transparent margin of the macOS icon grid, so
-    /// it fills the header tile the way a site icon does in Safari.
-    private static let shareHeaderIcon: NSImage = {
-        let icon = NSApp.applicationIconImage ?? NSImage()
-        let side: CGFloat = 128
-        // The icon body covers 824 of the 1024-point canvas.
-        let scale: CGFloat = 1024 / 824
-        return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
-            let drawn = rect.insetBy(dx: -(side * scale - side) / 2,
-                                     dy: -(side * scale - side) / 2)
-            icon.draw(in: drawn)
-            return true
-        }
-    }()
 
     /// Export and Print sit in their own section above the system services,
-    /// the way Safari puts Open in Safari and Print above Copy.
+    /// the way Safari puts Open in Safari and Print above Copy. They send the
+    /// same actions as the toolbar buttons, down the same responder chain.
     func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker,
                               sharingServicesForItems items: [Any],
                               proposedSharingServices proposedServices: [NSSharingService]) -> [NSSharingService] {
-        let export = NSLocalizedString("Export", comment: "Export toolbar item label")
-        let exportService = NSSharingService(
-            title: export,
-            image: NSImage(systemSymbolName: "document.badge.arrow.up",
-                           accessibilityDescription: export) ?? NSImage(),
-            alternateImage: nil
-        ) { [weak self] in
-            self?.splitViewController?.exportMarkdownDocument(nil)
+        let services = [DocumentAction.export, .print].map { action in
+            NSSharingService(title: action.title, image: action.image ?? NSImage(),
+                             alternateImage: nil) { [weak self] in
+                NSApp.sendAction(action.action, to: nil, from: self)
+            }
         }
-        let print = NSLocalizedString("Print", comment: "Print toolbar item label")
-        let printService = NSSharingService(
-            title: print,
-            image: NSImage(systemSymbolName: "printer",
-                           accessibilityDescription: print) ?? NSImage(),
-            alternateImage: nil
-        ) { [weak self] in
-            self?.splitViewController?.printMarkdown(nil)
+        return services + proposedServices
+    }
+}
+
+/// The label, symbol and action shared by a toolbar button and its row in the
+/// share popover.
+private enum DocumentAction {
+    case export, print
+
+    var title: String {
+        switch self {
+        case .export: NSLocalizedString("Export", comment: "Export toolbar item label")
+        case .print: NSLocalizedString("Print", comment: "Print toolbar item label")
         }
-        return [exportService, printService] + proposedServices
     }
 
-    private var splitViewController: MainSplitViewController? {
-        documentWindow.contentViewController as? MainSplitViewController
+    var image: NSImage? {
+        let symbol = switch self {
+        case .export: "document.badge.arrow.up"
+        case .print: "printer"
+        }
+        return NSImage(systemSymbolName: symbol, accessibilityDescription: title)
+    }
+
+    var action: Selector {
+        switch self {
+        case .export: #selector(MainSplitViewController.exportMarkdownDocument(_:))
+        case .print: #selector(MainSplitViewController.printMarkdown(_:))
+        }
     }
 }

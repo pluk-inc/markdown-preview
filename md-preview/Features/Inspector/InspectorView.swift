@@ -35,7 +35,7 @@ extension DocumentMetadata {
         let bodyLines = body.components(separatedBy: .newlines)
 
         meta.characterCount = body.count
-        meta.wordCount = body.split { $0.isWhitespace }.count
+        meta.wordCount = wordCount(ofBody: body)
         meta.lineCount = body.isEmpty ? 0 : bodyLines.count
         meta.headingCount = bodyLines
             .filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("#") }.count
@@ -49,6 +49,16 @@ extension DocumentMetadata {
             meta.fileSize = (attrs[.size] as? NSNumber)?.int64Value
         }
         return meta
+    }
+
+    /// The inspector's word count without the rest of `make`, for callers that
+    /// need only this number.
+    nonisolated static func wordCount(of markdown: String) -> Int {
+        wordCount(ofBody: MarkdownFrontmatter.split(markdown).body)
+    }
+
+    private nonisolated static func wordCount(ofBody body: String) -> Int {
+        body.split { $0.isWhitespace }.count
     }
 }
 
