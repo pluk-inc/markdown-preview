@@ -341,9 +341,9 @@ final class SidebarViewController: NSViewController {
 /// Row view whose selection never draws emphasized. While the mouse is
 /// down, AppKit emphasizes the pressed row and fills the selection pill
 /// with the system accent color — which fights the theme. Suppressing the
-/// emphasized state keeps the quiet source-list fill in every state; the
-/// theme accent lives in the row's text color instead. Stateless, so it
-/// is created directly rather than recycled. Shared with ProjectNavigatorView.
+/// emphasized state keeps the quiet source-list fill in every state;
+/// before macOS 27 the theme accent lives in the row's text color
+/// instead. Stateless, so it is created directly rather than recycled. Shared with ProjectNavigatorView.
 final class QuietSelectionRowView: NSTableRowView {
     override var isEmphasized: Bool {
         get { false }
