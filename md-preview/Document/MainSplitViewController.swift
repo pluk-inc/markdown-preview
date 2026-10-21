@@ -30,6 +30,9 @@ final class MainSplitViewController: NSSplitViewController {
         // Sequoia's tabs end at the content layout guide without Tahoe's
         // extra margin. Tucking the rows upward clips the first row.
         guard #available(macOS 26.0, *) else { return 0 }
+        // macOS 27 closes the tab bar with a hard header edge instead of an
+        // empty margin, so tucking upward presses the rows against it.
+        if #available(macOS 27.0, *) { return 0 }
         guard let window, window.tabGroup?.isTabBarVisible == true else { return 0 }
         return window.styleMask.contains(.fullScreen)
             ? formattingBarTabBarOverlapFullScreen : formattingBarTabBarOverlap
