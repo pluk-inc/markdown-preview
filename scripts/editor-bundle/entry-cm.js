@@ -198,12 +198,34 @@ function renderMathWhenLoaded(element, tex, display, rendered) {
   }).catch(() => { /* Keep source visible if the bundled renderer is unavailable. */ })
 }
 
+// An empty fence has no source line to edit, and a caret on its closing
+// marker would break the fence. Open one source line and select it. Inside a
+// quote or list the new line needs the container's prefix, or the typed text
+// falls outside the fence: copy it from the closing marker's line, or from
+// the opening line with list markers blanked.
+function openEmptyFence(view, node) {
+  const { state } = view
+  const { sourceFrom, sourceTo, closed } = fencedCodeDetails(state, node)
+  if (sourceTo > sourceFrom) return false
+  const openingLine = state.doc.lineAt(node.from)
+  const blankedMarker = ({ prefix, indent }) => indent + " ".repeat(prefix.length - indent.length)
+  const prefix = closed ? state.sliceDoc(state.doc.lineAt(sourceTo).from, node.lastChild.from)
+    : blankedMarker(listPrefix(state.sliceDoc(openingLine.from, node.from)))
+  view.dispatch({
+    changes: { from: openingLine.to, insert: "\n" + prefix },
+    selection: { anchor: openingLine.to + 1 + prefix.length },
+    userEvent: "select.pointer",
+  })
+  return true
+}
+
 class MathWidget extends WidgetType {
-  constructor(source, display, sourceOffset) {
-    super(); this.source = source; this.display = display; this.sourceOffset = sourceOffset
+  constructor(source, display, sourceOffset, fenced = false) {
+    super(); this.source = source; this.display = display; this.sourceOffset = sourceOffset; this.fenced = fenced
   }
   eq(other) {
-    return this.source === other.source && this.display === other.display && this.sourceOffset === other.sourceOffset
+    return this.source === other.source && this.display === other.display
+      && this.sourceOffset === other.sourceOffset && this.fenced === other.fenced
   }
   toDOM(view) {
     const element = document.createElement(this.display ? "div" : "span")
@@ -213,9 +235,10 @@ class MathWidget extends WidgetType {
     element.addEventListener("mousedown", event => {
       event.preventDefault()
       const from = view.posAtDOM(element)
-      const anchor = from + this.sourceOffset
       view.focus()
-      view.dispatch({ selection: { anchor }, userEvent: "select.pointer" })
+      const fence = this.fenced && fencedCodeNode(view.state, from, 1)
+      if (fence && openEmptyFence(view, fence)) return
+      view.dispatch({ selection: { anchor: from + this.sourceOffset }, userEvent: "select.pointer" })
     })
     renderMathWhenLoaded(element, this.source, this.display, () => view.requestMeasure())
     return element
@@ -363,22 +386,9 @@ class MermaidWidget extends WidgetType {
       let to = null
       state.field(mermaidPreviews).between(position, position, (_start, end) => { to = end; return false })
       const node = to == null ? null : fencedCodeNode(state, to, -1)
-      if (!node) return
-      const { sourceFrom, sourceTo, closed } = fencedCodeDetails(state, node)
-      const empty = sourceTo <= sourceFrom
-      const openingLine = state.doc.lineAt(node.from)
-      // Inside a quote or list the new line needs the container's prefix,
-      // or the typed text falls outside the fence: copy it from the closing
-      // marker's line, or from the opening line with list markers blanked.
-      const blankedMarker = ({ prefix, indent }) => indent + " ".repeat(prefix.length - indent.length)
-      const prefix = !empty ? ""
-        : closed ? state.sliceDoc(state.doc.lineAt(sourceTo).from, node.lastChild.from)
-        : blankedMarker(listPrefix(state.sliceDoc(openingLine.from, node.from)))
-      view.dispatch({
-        changes: empty ? { from: openingLine.to, insert: "\n" + prefix } : undefined,
-        selection: { anchor: empty ? openingLine.to + 1 + prefix.length : closed ? sourceTo - 1 : sourceTo },
-        userEvent: "select.pointer",
-      })
+      if (!node || openEmptyFence(view, node)) return
+      const { sourceTo, closed } = fencedCodeDetails(state, node)
+      view.dispatch({ selection: { anchor: closed ? sourceTo - 1 : sourceTo }, userEvent: "select.pointer" })
     })
 
     // A widget that shows text instead of a drawing has no size of its own;
@@ -2103,7 +2113,7 @@ function buildMermaidPreviews(state) {
         ranges.push(Decoration.replace({
           block: true,
           widget: new MathWidget(details.source, true,
-            (node.node.getChild("CodeText")?.from ?? details.sourceFrom) - node.from),
+            (node.node.getChild("CodeText")?.from ?? details.sourceFrom) - node.from, true),
         }).range(node.from, node.to))
         return false
       }

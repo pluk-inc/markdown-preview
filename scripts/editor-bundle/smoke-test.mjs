@@ -1369,6 +1369,18 @@ await new Promise(resolve => setTimeout(resolve, 10))
 check("an escaped dollar never closes inline math", !literalDollarHost.querySelector('.math'))
 literalDollarEditor.destroy()
 
+const emptyMathHost = document.createElement("div")
+document.body.append(emptyMathHost)
+const emptyMathEditor = dom.window.MDEditor.create(emptyMathHost, "intro\n\n```math\n```", {})
+emptyMathHost.querySelector(".math")
+  ?.dispatchEvent(new dom.window.MouseEvent("mousedown", { bubbles: true, button: 0, detail: 1 }))
+dom.window.document.dispatchEvent(new dom.window.MouseEvent("mouseup", { bubbles: true, button: 0 }))
+await new Promise(resolve => setTimeout(resolve, 10))
+emptyMathEditor.insert("x")
+check("clicking an empty math fence opens a source line inside it",
+  emptyMathEditor.getMarkdown() === "intro\n\n```math\nx\n```")
+emptyMathEditor.destroy()
+
 const quotedMathHost = document.createElement("div")
 document.body.append(quotedMathHost)
 const quotedMathSource = "> $$\n> x = 1\n> $$\n\nEnd"
