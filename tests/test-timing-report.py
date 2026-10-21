@@ -6,6 +6,7 @@ Prints Markdown: the slowest tests, the slowest classes, and how the
 total test time compares with the wall time of the run.
 """
 from collections import defaultdict
+from pathlib import Path
 import re
 import sys
 
@@ -13,8 +14,8 @@ path = sys.argv[1]
 count = int(sys.argv[2]) if len(sys.argv) > 2 else 25
 
 rows = []
-for line in open(path, encoding='utf-8'):
-    start, end, seconds, result, _pid, name = line.rstrip('\n').split('\t')
+for line in Path(path).read_text(encoding='utf-8').splitlines():
+    start, end, seconds, result, _pid, name = line.split('\t')
     match = re.match(r'-\[(\S+) (\S+)\]', name)
     test_class, test = match.groups() if match else ('?', name)
     rows.append((float(start), float(end), float(seconds), result, test_class, test))
