@@ -18,7 +18,23 @@ jobs:
       - name: Run tests
         env:
           MDP_LAYOUT_ARTIFACTS: ${{ runner.temp }}/md-preview-layout-failures
+          MDP_TEST_TIMING: ${{ runner.temp }}/test-timing.tsv
         run: swift test --package-path tests/swift-tests --parallel
+
+      - name: Report test timing
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/test-timing.tsv" ]; then
+            python3 tests/test-timing-report.py "$RUNNER_TEMP/test-timing.tsv" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload test timing
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-timing
+          path: ${{ runner.temp }}/test-timing.tsv
+          if-no-files-found: ignore
 
       - name: Test editor transition callback ordering
         run: python3 tests/test-mode-transitions.py
