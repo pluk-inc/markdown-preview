@@ -60,9 +60,15 @@ nonisolated extension MarkdownHTML {
         ("--pele-heading-weight", "600"),
         ("--pele-font-mono", codeFontFamily),
     ]
+    /// The theme's document font, or the system body stack.
+    static let documentFontFamilyCSS = "var(--mdp-doc-font, \(bodyFontFamily))"
+    /// Pele draws labels in `--pele-font`, falling back to generic sans-serif
+    /// (Helvetica in WebKit) while it measures them in `fontFamily` below.
+    /// Not a literal popup input: the popup resolves it from the page.
+    static let diagramFontVariableCSS = "--pele-font: \(documentFontFamilyCSS);"
     static let diagramVariablesCSS = (diagramColorVariables + diagramStyleVariables)
         .map { "\($0.name): \($0.value);" }
-        .joined(separator: "\n")
+        .joined(separator: "\n") + "\n" + diagramFontVariableCSS
     static let diagramColorVariableNamesJS = "["
         + diagramColorVariables.map { javaScriptStringLiteral($0.name) }.joined(separator: ", ") + "]"
     static let diagramStyleVariablesJS = "{"
@@ -71,11 +77,30 @@ nonisolated extension MarkdownHTML {
             .joined(separator: ", ") + "}"
 
     /// Options every `pele.render` call shares, in the preview and the editor.
-    /// Pele measures labels in the body font and keeps the author's flowchart
-    /// direction: the figure scales and zooms instead of re-laying out for a
-    /// narrow window.
-    static let diagramRenderOptionsJS =
-        "{ fontFamily: \(javaScriptStringLiteral(bodyFontFamily)), autoDirection: false }"
+    /// Copying the object reads the body's font and size, so theme changes
+    /// reach the next diagram (Pele draws flowchart labels at `fontSize`,
+    /// class and sequence text at 0.875 of it). It keeps the author's
+    /// flowchart direction: the figure scales and zooms instead of re-laying
+    /// out for a narrow window.
+    static let diagramRenderOptionsJS = """
+    { autoDirection: false,
+      get fontFamily() { return getComputedStyle(document.body).fontFamily; },
+      get fontSize() { return parseFloat(getComputedStyle(document.body).fontSize); } }
+    """
+
+    /// Inset between a diagram and its tray, in both modes.
+    static let diagramStagePadding = 16
+    /// Tray geometry shared by the preview figure and the editor widget. The
+    /// tray spans the column like a code block; its height follows the
+    /// diagram's aspect ratio, capped by the window and by the diagram's own
+    /// height plus the stage padding, so a diagram narrower than the column
+    /// draws at its natural size instead of scaling up to the width.
+    static let diagramFigureSizingCSS = """
+    --mm-max-height: min(70vh, 720px);
+    width: 100%;
+    aspect-ratio: var(--mm-aspect, 4 / 3);
+    max-height: min(var(--mm-max-height), calc(var(--mm-height, var(--mm-max-height)) + \(2 * diagramStagePadding)px));
+    """
 
     /// Text shown in a diagram's place (an error, or an empty block), shared
     /// by the preview and the editor widget so both modes match.
@@ -122,7 +147,8 @@ nonisolated extension MarkdownHTML {
            below both get the right appearance without a second palette, and
            labels and separators follow increased-contrast settings.
            Accent colors follow the theme's link color. */
-        --text: -apple-system-label;
+        \(textColorCSS)
+        \(quoteIndentCSS)
         --secondary: -apple-system-secondary-label;
         --tertiary: -apple-system-tertiary-label;
         --quote-border: -apple-system-quaternary-label;
@@ -228,7 +254,7 @@ nonisolated extension MarkdownHTML {
         height: 0;
     }
     body {
-        font-family: var(--mdp-doc-font, \(bodyFontFamily));
+        font-family: \(documentFontFamilyCSS);
         font-size: \(bodyFontSize)px;
         font-weight: var(--mdp-body-weight, 400);
         line-height: var(--mdp-line-height, \(bodyLineHeight));
@@ -238,6 +264,7 @@ nonisolated extension MarkdownHTML {
         background: transparent;
         padding: calc((\(pagePaddingTop)px + var(--mdp-page-top-clearance, 0px)) / var(--mdp-chrome-zoom, 1)) var(--mdp-page-padding, \(pagePaddingHorizontal)px) \(pagePaddingBottom)px;
         -webkit-font-smoothing: antialiased;
+        \(bodyTextRenderingCSS)
     }
     /* Reader spacing tweaks stop at code — whitespace fidelity wins. */
     pre, code {
@@ -501,8 +528,7 @@ nonisolated extension MarkdownHTML {
         padding: 0;
         background: transparent;
         border: 0;
-        /* Block code reads at the body size; only inline code steps down. */
-        font-size: 1em;
+        \(codeBlockTypeCSS)
     }
     .md-code-wrap {
         position: relative;
@@ -544,12 +570,8 @@ nonisolated extension MarkdownHTML {
         overflow: hidden;
         outline: none;
         /* The stage is absolutely positioned, so the figure needs an explicit
-           width: the tray spans the column like a code block, and a tall
-           diagram hits the height cap and stays centred inside it. */
-        --mm-max-height: min(70vh, 720px);
-        width: 100%;
-        aspect-ratio: var(--mm-aspect, 4 / 3);
-        max-height: var(--mm-max-height);
+           width; a tall diagram stays centred inside the height cap. */
+        \(diagramFigureSizingCSS)
         contain: layout paint;
         \(diagramVariablesCSS)
     }
@@ -573,7 +595,7 @@ nonisolated extension MarkdownHTML {
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 16px;
+        padding: \(diagramStagePadding)px;
         box-sizing: border-box;
     }
     .mermaid svg {
@@ -709,7 +731,7 @@ nonisolated extension MarkdownHTML {
         position: relative;
         margin: \(quoteSpacing)px 0 0;
         padding: 0.4em 1em;
-        padding-inline-start: 1.5em;
+        padding-inline-start: var(--mdp-quote-indent);
         color: var(--secondary);
     }
     blockquote::before {

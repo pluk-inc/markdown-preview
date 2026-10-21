@@ -241,7 +241,9 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             <html><head>\(styleBlocks)</head>
             <body><article class="markdown-body">\(rendered.articleHTML)</article></body></html>
             """
-            let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1700, height: 600))
+            // Tall enough that the page never scrolls: a classic scrollbar
+            // (CI has no trackpad) would narrow the viewport and the centering.
+            let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1700, height: 1200))
             webView.loadHTMLString(html, baseURL: nil)
             while webView.isLoading {
                 try await Task.sleep(for: .milliseconds(10))
@@ -489,9 +491,12 @@ final class MarkdownHTMLRenderTests: XCTestCase {
     }
 
     func testTypographyFollowsTheSystemTextStyles() {
-        XCTAssertEqual(MarkdownHTML.bodyFontSize, 14)
+        XCTAssertEqual(MarkdownHTML.bodyFontSize, 15)
+        // At 1x the editor snaps line boxes to whole pixels; a fractional
+        // body line would drift from the reader line by line.
+        XCTAssertEqual(MarkdownHTML.sourceLineHeight, MarkdownHTML.sourceLineHeight.rounded())
         let css = MarkdownHTML.stylesheet
-        XCTAssertTrue(css.contains("--text: -apple-system-label;"))
+        XCTAssertTrue(css.contains(MarkdownHTML.textColorCSS))
         XCTAssertTrue(css.contains("--secondary: -apple-system-secondary-label;"))
         XCTAssertTrue(css.contains("--grid: -apple-system-separator;"))
         XCTAssertTrue(css.contains("--accent: var(--link);"))
@@ -537,8 +542,8 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         let metrics = try XCTUnwrap(result as? [String: Any])
         let light = try XCTUnwrap(metrics["light"] as? [String: String])
         let dark = try XCTUnwrap(metrics["dark"] as? [String: String])
-        // Label colors: 85% black on light, 85% white on dark.
-        XCTAssertTrue(light["text"]?.hasPrefix("rgba(0, 0, 0, 0.8") == true, light["text"] ?? "")
+        // Pure black on light; the label color (85% white) on dark.
+        XCTAssertEqual(light["text"], "rgb(0, 0, 0)")
         XCTAssertTrue(dark["text"]?.hasPrefix("rgba(255, 255, 255, 0.8") == true, dark["text"] ?? "")
         XCTAssertNotEqual(light["bullet"], light["text"], "bullets use the accent color")
         XCTAssertEqual(metrics["display"] as? String, "flex")

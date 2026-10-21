@@ -375,6 +375,7 @@ class MermaidWidget extends WidgetType {
       const box = diagram?.viewBox?.baseVal
       if (diagram && box?.width > 0 && box?.height > 0) {
         figure.style.setProperty("--mm-aspect", `${box.width} / ${box.height}`)
+        figure.style.setProperty("--mm-height", `${box.height}px`)
         diagram.removeAttribute("width")
         diagram.removeAttribute("height")
         diagram.setAttribute("preserveAspectRatio", "xMidYMid meet")
@@ -1564,9 +1565,10 @@ const quoteLineCache = new Map()
 const quoteGeometry = (depth, top) => {
   const levels = Array.from({ length: depth }, (_, level) => level)
   return {
-    padding: `${depth * 1.5}em`,
+    // The preview's blockquote indent, from the shared --mdp-quote-indent.
+    padding: `calc(${depth} * var(--mdp-quote-indent))`,
     images: levels.map(() => "linear-gradient(var(--quote-border), var(--quote-border))").join(","),
-    positions: levels.map((level) => `calc(0.3em + ${level * 1.5}em) ${top}`).join(","),
+    positions: levels.map((level) => `calc(0.3 * var(--mdp-body-em) + ${level} * var(--mdp-quote-indent)) ${top}`).join(","),
   }
 }
 const quoteLine = (depth, starts, ends, gap) => {
@@ -1637,9 +1639,10 @@ const listItemLine = Decoration.line({ class: "cm-md-list-item" })
 const listDepthLineCache = new Map()
 // The list's text column, shared by list lines and by diagram widgets nested
 // in lists: one marker box per level plus 1ch per extra ordered digit.
+// In body ems (--mdp-body-em), so a code line's smaller font keeps the column.
 const listTextIndent = (depth, extraTotal) => extraTotal > 0
-  ? `calc(${depth * MARKER_BOX_EM}em + ${extraTotal}ch)`
-  : `${depth * MARKER_BOX_EM}em`
+  ? `calc(${depth * MARKER_BOX_EM} * var(--mdp-body-em) + ${extraTotal}ch)`
+  : `calc(${depth * MARKER_BOX_EM} * var(--mdp-body-em))`
 const listDepthLine = (depth, extraDigits = []) => {
   const extraTotal = extraDigits.reduce((sum, extra) => sum + extra, 0)
   const extraHanging = extraDigits[extraDigits.length - 1] ?? 0
