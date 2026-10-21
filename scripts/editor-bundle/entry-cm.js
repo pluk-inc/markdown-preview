@@ -1966,11 +1966,20 @@ function collectMath(state) {
   return items
 }
 const setMathFocus = StateEffect.define()
-function decorateMath(state, items, focused) {
+function decorateMath(state, items, focused, previous = null) {
   const selection = state.field(pointerPreview)?.selection ?? state.selection.main
   const ranges = []
+  // As with fenced code, a range selection never opens a formula, but one
+  // that still overlaps the open formula (a drag through its source) keeps
+  // it open instead of rendering it under the user.
+  const open = !focused ? null
+    : selection.empty
+      ? items.find(item => selection.head >= item.from && selection.head <= item.to)
+      : previous && selection.from <= previous.to && selection.to >= previous.from
+        ? items.find(item => item.from === previous.from && item.to === previous.to)
+        : null
   for (const item of items) {
-    const active = focused && selection.empty && selection.head >= item.from && selection.head <= item.to
+    const active = item === open
     if (item.closed && !active && !currentFindTouches(state, item.from, item.to)) {
       ranges.push(Decoration.replace({ widget: new MathWidget(item.renderSource ?? item.source, item.display,
         item.sourceFrom - item.from),
@@ -1986,7 +1995,8 @@ function decorateMath(state, items, focused) {
       })
     }
   }
-  return { items, focused, decorations: Decoration.set(ranges, true) }
+  return { items, focused, active: open ? { from: open.from, to: open.to } : null,
+    decorations: Decoration.set(ranges, true) }
 }
 
 const mathPreviews = StateField.define({
@@ -2007,7 +2017,10 @@ const mathPreviews = StateField.define({
       ? collectMath(tr.state) : value.items
     if (items === value.items && !tr.selection && !tr.effects.length) return value
     const focused = tr.effects.find(effect => effect.is(setMathFocus))?.value ?? value.focused
-    return { ...decorateMath(tr.state, items, focused), hasDollars }
+    const previous = value.active && tr.docChanged
+      ? { from: tr.changes.mapPos(value.active.from, 1), to: tr.changes.mapPos(value.active.to, -1) }
+      : value.active
+    return { ...decorateMath(tr.state, items, focused, previous), hasDollars }
   },
   provide: field => EditorView.decorations.from(field, value => value.decorations),
 })
@@ -2354,7 +2367,8 @@ function buildDecorations(view, detectedCodeCache) {
           const paragraph = node.node.parent
           const standalone = name === "MathBlock" || (name === "DisplayMath"
             && paragraph?.name === "Paragraph" && paragraph.from === node.from && paragraph.to === node.to)
-          const editing = sourceCaret != null && sourceCaret >= node.from && sourceCaret <= node.to
+          const open = state.field(mathPreviews).active
+          const editing = open != null && open.from === node.from && open.to === node.to
           if (standalone && (editing || currentFindTouches(state, node.from, node.to))) {
             const first = state.doc.lineAt(node.from)
             const last = state.doc.lineAt(node.to)

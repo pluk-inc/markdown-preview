@@ -216,7 +216,8 @@ nonisolated enum EditorHTML {
            rule per nesting level as background images (positions inline).
            The rule stops above the block gap the bundle adds when another
            block follows the quotation without a blank line. */
-        #editor .cm-content > .cm-line.cm-md-quote {
+        #editor .cm-content > .cm-line.cm-md-quote,
+        #editor .cm-md-code-card > .cm-line.cm-md-quote {
             padding-inline-end: 1em;
             padding-top: var(--cm-md-quote-top);
             padding-bottom: calc(var(--cm-md-quote-bottom) + var(--cm-md-block-gap, 0px));
