@@ -389,6 +389,18 @@
 /* Table fullscreen control. */
 "Expand Table" = "گسترش جدول";
 
+/* Save conflict comparison controls */
+"Show Whole File" = "نمایش کل فایل";
+"On Disk" = "روی دیسک";
+"Your Draft" = "پیش‌نویس شما";
+"Previous Change" = "تغییر قبلی";
+"Next Change" = "تغییر بعدی";
+"$ unchanged lines" = "$ خط بدون تغییر";
+"None" = "هیچ‌کدام";
+"Line endings differ. On disk: %1$@; draft: %2$@." = "پایان خط‌ها متفاوت است. روی دیسک: %1$@؛ پیش‌نویس: %2$@.";
+"This document changed on disk again" = "این سند دوباره روی دیسک تغییر کرده است";
+"The comparison could not be displayed. Cancel to return to your unsaved draft." = "نمایش مقایسه ممکن نشد. برای بازگشت به پیش‌نویس ذخیره‌نشده، لغو کنید.";
+
 /* Additional settings, navigation, formatting, and export strings. */
 "GitHub Project" = "پروژهٔ GitHub";
 "Bold Text" = "متن ضخیم";
@@ -416,7 +428,6 @@
 "Text Style" = "سبک متن";
 "Lists" = "فهرست‌ها";
 "More Formatting" = "قالب‌بندی بیشتر";
-"None" = "هیچ‌کدام";
 "PNG Image" = "تصویر PNG";
 "Wrap code" = "شکستن خطوط کد";
 "Unwrap code" = "لغو شکستن خطوط کد";

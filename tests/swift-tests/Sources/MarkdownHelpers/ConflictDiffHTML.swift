@@ -1,0 +1,1 @@
+../../../../md-preview/Features/Editor/ConflictDiffHTML.swift
