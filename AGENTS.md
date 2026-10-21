@@ -35,6 +35,17 @@ before opening a PR. Push fixes for review findings after an app build, without
 running the suites first: CI runs them on the push, and a red check gets fixed
 in the next push.
 
+When you do run tests before the PR step, run only the test classes that cover
+the code you changed, in parallel:
+
+```bash
+swift test --package-path tests/swift-tests --parallel --filter 'EditorFormattingTests|EditorScrollAnchorTests'
+```
+
+`--filter` takes a regular expression over `Class/testName`. Find the classes
+with `grep -rl <changed type or function> tests/swift-tests/Tests`. The full
+suite runs once, before opening the PR.
+
 ## Pull requests
 
 Branch naming, PR titles and descriptions, what to run before opening a PR
