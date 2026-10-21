@@ -147,12 +147,24 @@ nonisolated extension MarkdownHTML {
                     location: cursor,
                     length: match.range.location - cursor
                 ))
-                let capture = nsSource.substring(with: match.range(at: 1))
+                // Math is cut out before Markdown parsing, so a formula in a
+                // quotation still carries the `>` markers of its later lines.
+                // Strip them from the TeX and keep them on the replacement
+                // lines so the quotation continues around the formula.
+                let quotePrefix = quoteMarkerPrefix(in: nsSource, before: match.range.location)
+                var capture = nsSource.substring(with: match.range(at: 1))
+                if !quotePrefix.isEmpty {
+                    capture = quoteContinuationRegex.stringByReplacingMatches(
+                        in: capture,
+                        range: NSRange(location: 0, length: (capture as NSString).length),
+                        withTemplate: "\n"
+                    )
+                }
                 let fullMatch = nsSource.substring(with: match.range)
                 let newlineCount = fullMatch.count(where: \.isNewline)
                 blockLineCounts.append(newlineCount + 1)
                 result += "MdPreviewMathBlock\(blocks.count)Token"
-                result += String(repeating: "\n", count: newlineCount)
+                result += String(repeating: "\n" + quotePrefix, count: newlineCount)
                 blocks.append(capture)
                 cursor = match.range.location + match.range.length
             }
@@ -204,6 +216,29 @@ nonisolated extension MarkdownHTML {
             blockLineCounts: blockLineCounts,
             inlines: inlines
         )
+    }
+
+    private static let quoteMarkersRegex: NSRegularExpression = {
+        // swiftlint:disable:next force_try
+        try! NSRegularExpression(pattern: #"^(?:[ \t]{0,3}>[ \t]?)+"#)
+    }()
+
+    // A line break followed by optional quote markers (lazy continuation
+    // lines carry none).
+    private static let quoteContinuationRegex: NSRegularExpression = {
+        // swiftlint:disable:next force_try
+        try! NSRegularExpression(pattern: #"\n(?:[ \t]{0,3}>[ \t]?)*"#)
+    }()
+
+    /// The quote markers that open the line containing `location`, or "".
+    private static func quoteMarkerPrefix(in source: NSString, before location: Int) -> String {
+        let lineStart = source.lineRange(for: NSRange(location: location, length: 0)).location
+        let lead = source.substring(with: NSRange(location: lineStart, length: location - lineStart))
+        guard let match = quoteMarkersRegex.firstMatch(
+            in: lead,
+            range: NSRange(location: 0, length: (lead as NSString).length)
+        ) else { return "" }
+        return (lead as NSString).substring(with: match.range)
     }
 
     private static func protectEscapedBracketsInLinks(

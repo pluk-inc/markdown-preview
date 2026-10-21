@@ -2340,6 +2340,25 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(rendered.articleHTML.contains("<p data-source-line=\"1\" data-source-start=\"1\" data-source-end=\"3\"><div"))
     }
 
+    func testQuotedDisplayMathDropsQuoteMarkers() {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            > $$
+            > x = \\sqrt{y}
+            > $$
+            >
+            > After
+            """,
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "class=\"math math-display\">\nx = \\sqrt{y}\n</div>"
+        ), rendered.articleHTML)
+        XCTAssertEqual(rendered.articleHTML.components(separatedBy: "<blockquote").count, 2, rendered.articleHTML)
+        XCTAssertTrue(rendered.articleHTML.contains("After</p>"), rendered.articleHTML)
+    }
+
     func testLatexDelimitersRenderAsMath() {
         let rendered = MarkdownHTML.render(
             markdown: #"""
