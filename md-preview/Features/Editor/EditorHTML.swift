@@ -37,7 +37,8 @@ nonisolated enum EditorHTML {
         :root {
             color-scheme: light dark;
             /* Semantic system colors resolve per appearance on their own. */
-            --text: -apple-system-label;
+            \(MarkdownHTML.textColorCSS)
+            \(MarkdownHTML.quoteIndentCSS)
             --secondary: -apple-system-secondary-label;
             --quote-border: -apple-system-quaternary-label;
             --grid: -apple-system-separator;
@@ -73,6 +74,15 @@ nonisolated enum EditorHTML {
             line-height: \(MarkdownHTML.bodyLineHeight);
             color: var(--text);
             -webkit-font-smoothing: antialiased;
+            \(MarkdownHTML.bodyTextRenderingCSS)
+        }
+        /* The body em as a computed length: a line's own em shrinks on code
+           lines (0.9em), but a list indent on that line must keep the text
+           column, as the preview's list item does around its pre. */
+        @property --mdp-body-em {
+            syntax: "<length>";
+            inherits: true;
+            initial-value: \(MarkdownHTML.bodyFontSize)px;
         }
         #editor {
             height: 100%;
@@ -109,6 +119,7 @@ nonisolated enum EditorHTML {
             line-height: \(MarkdownHTML.bodyLineHeight);
         }
         #editor .cm-content {
+            --mdp-body-em: 1em;
             width: 100%;
             max-width: \(columnMaxWidth);
             min-height: 100%;
@@ -295,8 +306,7 @@ nonisolated enum EditorHTML {
             text-indent: -2.1em;
         }
         .cm-md-task-completed {
-            color: var(--secondary);
-            text-decoration: line-through;
+            color: color-mix(in srgb, var(--secondary), var(--text) 30%);
         }
         #editor .cm-md-task-line {
             text-indent: 0 !important;
@@ -304,34 +314,17 @@ nonisolated enum EditorHTML {
         .cm-md-task-marker {
             display: inline;
         }
+        /* The system draws the box, as in the preview. */
         .cm-md-task-marker input {
-            appearance: none;
-            -webkit-appearance: none;
             font: inherit;
-            width: 0.9em;
-            height: 0.9em;
+            width: 1.1em;
+            height: 1.1em;
             margin: 0;
-            margin-inline-start: calc(-0.9em - 0.25em);
+            margin-inline-start: calc(-1.1em - 0.25em);
             margin-inline-end: 0.25em;
-            vertical-align: calc(0.5cap - 0.45em);
-            border: 1.5px solid var(--grid);
-            border-radius: 25%;
-            background: transparent;
+            vertical-align: middle;
             position: relative;
-            cursor: pointer;
-        }
-        .cm-md-task-marker input:checked {
-            border-color: var(--accent);
-            background: var(--accent);
-        }
-        .cm-md-task-marker input:checked::after {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4.4 8.4 L7 11 L11.6 5.4" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
-            background-repeat: no-repeat;
-            background-position: center;
-            background-size: 100% 100%;
+            top: calc(0.5ex - 0.5cap);
         }
         .cm-md-bullet {
             display: inline-block;
@@ -432,8 +425,7 @@ nonisolated enum EditorHTML {
         }
         #editor .cm-md-codeblock {
             font-family: ui-monospace, "SF Mono", Menlo, monospace;
-            font-size: 1em;
-            line-height: 1.3;
+            \(MarkdownHTML.codeBlockTypeCSS)
             position: relative;
             padding: 0;
             white-space: pre;
@@ -550,10 +542,7 @@ nonisolated enum EditorHTML {
                the preview's .mermaid-figure margin. */
             position: relative;
             margin: 0;
-            width: 100%;
-            --mm-max-height: min(70vh, 720px);
-            aspect-ratio: var(--mm-aspect, 4 / 3);
-            max-height: var(--mm-max-height);
+            \(MarkdownHTML.diagramFigureSizingCSS)
             overflow: hidden;
             border-radius: 15px;
             background: var(--code-bg);
@@ -564,7 +553,7 @@ nonisolated enum EditorHTML {
         .cm-md-mermaid-stage {
             position: absolute;
             inset: 0;
-            padding: 16px;
+            padding: \(MarkdownHTML.diagramStagePadding)px;
             box-sizing: border-box;
             display: flex;
             align-items: center;

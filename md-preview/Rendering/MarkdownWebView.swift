@@ -868,6 +868,20 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         }
     }
 
+    /// Runs `body` once the page's next paint is on screen. Native changes
+    /// that must land together with a web-process relayout (such as a
+    /// pageZoom change) wait for this; applied immediately, they show up a
+    /// frame before the page catches up. A page-side requestAnimationFrame
+    /// round trip still landed a frame early or late, so this uses WebKit's
+    /// private presentation-update hook and runs `body` at once without it.
+    func afterNextPagePaint(_ body: @escaping () -> Void) {
+        let selector = NSSelectorFromString("_doAfterNextPresentationUpdate:")
+        guard webView.responds(to: selector) else { body(); return }
+        typealias Method = @convention(c) (AnyObject, Selector, @escaping @convention(block) () -> Void) -> Void
+        let method = unsafeBitCast(webView.method(for: selector), to: Method.self)
+        method(webView, selector, body)
+    }
+
     private func updateChromeZoom() {
         guard #available(macOS 26.0, *) else { return }
         webView.evaluateJavaScript("document.documentElement.style.setProperty('--mdp-chrome-zoom', '\(max(webView.pageZoom, 0.001))')", completionHandler: nil)

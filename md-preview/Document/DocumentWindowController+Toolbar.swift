@@ -344,14 +344,12 @@ extension DocumentWindowController {
 
     private func makePrintItem() -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: .printDocument)
-        let print = NSLocalizedString("Print", comment: "Print toolbar item label")
-        item.label = print
-        item.paletteLabel = print
+        item.label = DocumentAction.print.title
+        item.paletteLabel = DocumentAction.print.title
         item.toolTip = NSLocalizedString("Print document", comment: "Print toolbar item tooltip")
-        item.image = NSImage(systemSymbolName: "printer",
-                             accessibilityDescription: print)
+        item.image = DocumentAction.print.image
         item.isBordered = true
-        item.action = #selector(MainSplitViewController.printMarkdown(_:))
+        item.action = DocumentAction.print.action
         return item
     }
 
@@ -372,16 +370,13 @@ extension DocumentWindowController {
 
     private func makeExportItem() -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: .exportDocument)
-        let label = NSLocalizedString(
-            "Export", comment: "Export toolbar item label")
-        item.label = label
-        item.paletteLabel = label
+        item.label = DocumentAction.export.title
+        item.paletteLabel = DocumentAction.export.title
         item.toolTip = NSLocalizedString(
             "Export document", comment: "Export toolbar item tooltip")
-        item.image = NSImage(systemSymbolName: "document.badge.arrow.up",
-                             accessibilityDescription: label)
+        item.image = DocumentAction.export.image
         item.isBordered = true
-        item.action = #selector(MainSplitViewController.exportMarkdownDocument(_:))
+        item.action = DocumentAction.export.action
         return item
     }
 
@@ -596,6 +591,50 @@ extension DocumentWindowController {
 
     func items(for pickerToolbarItem: NSSharingServicePickerToolbarItem) -> [Any] {
         guard let currentMarkdown else { return [] }
-        return [currentMarkdown]
+        let title = currentFileURL?.lastPathComponent ?? documentWindow.title
+        return [SharePreviewItem.make(markdown: currentMarkdown, title: title)]
+    }
+
+    /// Export and Print sit in their own section above the system services,
+    /// the way Safari puts Open in Safari and Print above Copy. They send the
+    /// same actions as the toolbar buttons, down the same responder chain.
+    func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker,
+                              sharingServicesForItems items: [Any],
+                              proposedSharingServices proposedServices: [NSSharingService]) -> [NSSharingService] {
+        let services = [DocumentAction.export, .print].map { action in
+            NSSharingService(title: action.title, image: action.image ?? NSImage(),
+                             alternateImage: nil) { [weak self] in
+                NSApp.sendAction(action.action, to: nil, from: self)
+            }
+        }
+        return services + proposedServices
+    }
+}
+
+/// The label, symbol and action shared by a toolbar button and its row in the
+/// share popover.
+private enum DocumentAction {
+    case export, print
+
+    var title: String {
+        switch self {
+        case .export: NSLocalizedString("Export", comment: "Export toolbar item label")
+        case .print: NSLocalizedString("Print", comment: "Print toolbar item label")
+        }
+    }
+
+    var image: NSImage? {
+        let symbol = switch self {
+        case .export: "document.badge.arrow.up"
+        case .print: "printer"
+        }
+        return NSImage(systemSymbolName: symbol, accessibilityDescription: title)
+    }
+
+    var action: Selector {
+        switch self {
+        case .export: #selector(MainSplitViewController.exportMarkdownDocument(_:))
+        case .print: #selector(MainSplitViewController.printMarkdown(_:))
+        }
     }
 }

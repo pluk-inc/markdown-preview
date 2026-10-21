@@ -162,8 +162,8 @@ nonisolated struct ThemeColorsSetting: Equatable, Codable, Sendable {
         case (.codeBlockBackground, .dark):
             return NSColor(srgbRed: 42 / 255, green: 40 / 255, blue: 40 / 255, alpha: 1)
         case (.textColor, .light):
-            // --text in MarkdownHTML.stylesheet: #1d1d1f / #f5f5f7.
-            return NSColor(srgbRed: 29 / 255, green: 29 / 255, blue: 31 / 255, alpha: 1)
+            // --text in MarkdownHTML.stylesheet: #000 / #f5f5f7.
+            return NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 1)
         case (.textColor, .dark):
             return NSColor(srgbRed: 245 / 255, green: 245 / 255, blue: 247 / 255, alpha: 1)
         case (.linkColor, .light):

@@ -172,8 +172,11 @@ nonisolated extension MarkdownHTML {
 
             // pele.render is synchronous, so a batch draws in one pass and
             // announces itself once for the host's height and scroll sync.
+            // The options are copied once per batch: copying reads the body's
+            // style, which would otherwise flush per figure after each insert.
             function renderFigures(figures) {
-                for (const figure of figures) renderOne(figure);
+                const options = Object.assign({}, renderOptions);
+                for (const figure of figures) renderOne(figure, options);
                 window.dispatchEvent(new Event('md-preview-mermaid-rendered'));
             }
 
@@ -195,7 +198,7 @@ nonisolated extension MarkdownHTML {
                 figure.classList.add('mermaid-error');
             }
 
-            function renderOne(figure) {
+            function renderOne(figure, batchOptions) {
                 const node = figure.querySelector('.mermaid');
                 if (!node || node.dataset.mmDone === '1') return;
                 if (node.dataset.mmUnavailable === '1') {
@@ -218,7 +221,7 @@ nonisolated extension MarkdownHTML {
                 try {
                     // A unique prefix keeps each diagram's accessible title and
                     // description IDs apart.
-                    const options = Object.assign({ idPrefix: 'mdp-diagram-' + (++renderCount) + '-' }, renderOptions);
+                    const options = Object.assign({ idPrefix: 'mdp-diagram-' + (++renderCount) + '-' }, batchOptions);
                     node.innerHTML = pele.render(node.__mdSrc, options).svg;
                     svg = node.querySelector('svg');
                 } catch (err) {
@@ -256,6 +259,7 @@ nonisolated extension MarkdownHTML {
                 // capped by max-height so massive diagrams don't push the page.
                 if (vbW > 0 && vbH > 0) {
                     figure.style.setProperty('--mm-aspect', vbW + ' / ' + vbH);
+                    figure.style.setProperty('--mm-height', vbH + 'px');
                 }
 
                 const alreadyWired = states.has(figure);
@@ -351,6 +355,8 @@ nonisolated extension MarkdownHTML {
                 for (const [name, value] of Object.entries(peleStyleVariables)) {
                     clone.style.setProperty(name, value);
                 }
+                clone.style.setProperty('--pele-font',
+                    getComputedStyle(figure).getPropertyValue('--pele-font').trim());
                 clone.setAttribute('preserveAspectRatio', 'xMidYMid meet');
                 clone.removeAttribute('width');
                 clone.removeAttribute('height');

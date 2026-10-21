@@ -66,6 +66,7 @@ struct Deadline { static func now() -> Self { Self() }; static func +(lhs: Self,
     func zoomOut() { pageZoom -= 0.25 }
     func resetZoom() { pageZoom = 1 }
     func applyPersistedZoom() { pageZoom = persistedZoom }
+    func afterNextPagePaint(_ body: @escaping () -> Void) { body() }
 }
 enum MarkdownHTML { static let preferredPageWidth: Double = 820 }
 final class Constraint { var constant: Double = 0 }
