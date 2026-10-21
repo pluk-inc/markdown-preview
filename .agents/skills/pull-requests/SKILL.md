@@ -58,12 +58,15 @@ Do these without being asked, in order:
    reason you can state.
 2. Run the checks CI runs (`.github/workflows/swift-tests.yml`), plus an app build:
    ```bash
-   swift test --package-path tests/swift-tests
+   swift test --package-path tests/swift-tests --parallel
    python3 tests/test-mode-transitions.py
    python3 tests/test-checkbox-saves.py
    xcodebuild -project md-preview.xcodeproj -scheme md-preview -configuration Debug build
    ```
-   Fix failures before opening the PR. Do not open a PR on red checks.
+   Fix failures before opening the PR. Do not open a PR on red checks. If a
+   test also fails on `main` on this Mac, it is not from your change (some
+   WebKit tests depend on the macOS version; CI runs macOS 15): say so in the
+   PR description instead of changing the test.
 3. Check `git diff` for a `DEVELOPMENT_TEAM` hunk in `project.pbxproj` and
    revert it (see "Signing & secrets" in `AGENTS.md`), and grep docs for claims the change made false.
 4. Open the PR ready for review (`gh pr create`), not as a draft. Say in the PR
