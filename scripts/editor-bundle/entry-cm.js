@@ -189,6 +189,15 @@ class TextWidget extends WidgetType {
   ignoreEvent() { return false }
 }
 
+// KaTeX loads on the first formula; an element replaced meanwhile is skipped.
+function renderMathWhenLoaded(element, tex, display, rendered) {
+  window.__mdLoadMath?.().then(() => {
+    if (!element.isConnected) return
+    window.__mdRenderMathElement(element, tex, display)
+    rendered?.()
+  }).catch(() => { /* Keep source visible if the bundled renderer is unavailable. */ })
+}
+
 class MathWidget extends WidgetType {
   constructor(source, display, sourceOffset) {
     super(); this.source = source; this.display = display; this.sourceOffset = sourceOffset
@@ -208,11 +217,7 @@ class MathWidget extends WidgetType {
       view.focus()
       view.dispatch({ selection: { anchor }, userEvent: "select.pointer" })
     })
-    window.__mdLoadMath?.().then(() => {
-      if (!element.isConnected) return
-      window.__mdRenderMathElement(element, this.source, this.display)
-      view.requestMeasure()
-    }).catch(() => { /* Keep source visible if the bundled renderer is unavailable. */ })
+    renderMathWhenLoaded(element, this.source, this.display, () => view.requestMeasure())
     return element
   }
   ignoreEvent() { return true }
@@ -779,9 +784,7 @@ function renderTableCell(element, source) {
       const tex = source.slice(node.from + size, node.to - size)
       appendText(span, source.slice(node.from, node.to), node.from)
       parent.append(span)
-      window.__mdLoadMath?.().then(() => {
-        if (span.isConnected) window.__mdRenderMathElement(span, tex, display)
-      }).catch(() => {})
+      renderMathWhenLoaded(span, tex, display)
     } else if (node.name === 'InlineCode') {
       const code = document.createElement('code')
       code.className = 'cm-md-inline-code'
@@ -1559,7 +1562,7 @@ const METRICS = {
   line: 22.8,
   blankGap: 4,    // final blank of a run (.md-source-blank-line)
   paragraph: 12,  // p / ul / ol / pre / .md-code-wrap
-  math: 18.24, // .math-display (1.2em)
+  math: 18,       // .math-display (1.2em)
   quote: 18,      // blockquote
   alert: 24,      // .markdown-alert
   table: 24,      // .md-table-scroll
@@ -1788,12 +1791,14 @@ function fencedCodeDetails(state, node) {
   }
 }
 
-// The info string alone decides a diagram: language detection never yields
-// "mermaid", so this skips fencedCodeDetails' source work on hot paths.
-function isMermaidFence(state, node) {
+// The info string alone decides a rendered fence: language detection never
+// yields "mermaid" or "math", so this skips fencedCodeDetails' source work on
+// hot paths.
+function fenceInfoLanguage(state, node) {
   const info = node.node.getChild("CodeInfo")
-  return !!info && state.sliceDoc(info.from, info.to).trim().split(/\s+/, 1)[0].toLowerCase() === "mermaid"
+  return info ? state.sliceDoc(info.from, info.to).trim().split(/\s+/, 1)[0].toLowerCase() : ""
 }
+const isMermaidFence = (state, node) => fenceInfoLanguage(state, node) === "mermaid"
 
 function fencedCodeNode(state, pos, side) {
   // Stay in the outer Markdown tree—the innermost mounted language tree does
@@ -1951,40 +1956,49 @@ const activeCodeBlock = StateField.define({
   },
 })
 
+const MATH_NODES = new Set(["InlineMath", "DisplayMath", "MathBlock", "UnclosedMathBlock"])
+// A $$…$$ that fills its whole paragraph is laid out as a display block.
+function isStandaloneDisplayMath(paragraph) {
+  const math = paragraph?.name === "Paragraph" ? paragraph.firstChild : null
+  return math?.name === "DisplayMath" && math.from === paragraph.from && math.to === paragraph.to
+}
+
 function collectMath(state) {
   const items = []
   const tree = ensureSyntaxTree(state, state.doc.length, 80) || syntaxTree(state)
   tree.iterate({ enter(node) {
     if (["Table", "FencedCode", "CodeBlock", "InlineCode", "Frontmatter"].includes(node.name)) return false
-    if (!["InlineMath", "DisplayMath", "MathBlock", "UnclosedMathBlock"].includes(node.name)) return
+    if (!MATH_NODES.has(node.name)) return
     const display = node.name !== "InlineMath"
     const size = display ? 2 : 1
     const closed = node.name !== "UnclosedMathBlock"
     const lines = node.node.getChildren("MathLine")
-    items.push({ renderSource: lines.length ? lines.map(line => state.doc.sliceString(line.from, line.to)).join("\n") : null,
-      from: node.from, to: node.to, sourceFrom: lines[0]?.from ?? node.from + size, display, closed,
-      source: state.doc.sliceString(node.from + size, node.to - (closed ? size : 0)) })
+    const source = state.doc.sliceString(node.from + size, node.to - (closed ? size : 0))
+    items.push({ renderSource: lines.length ? lines.map(line => state.doc.sliceString(line.from, line.to)).join("\n") : source,
+      from: node.from, to: node.to, contentFrom: node.from + size, sourceFrom: lines[0]?.from ?? node.from + size,
+      display, closed, source })
     return false
   } })
   return items
 }
 const setMathFocus = StateEffect.define()
-function decorateMath(state, items, focused, previous = null) {
+// As with fenced code, a range selection never opens a formula, but one that
+// still overlaps the open formula (a drag through its source) keeps it open
+// instead of rendering it under the user.
+function openMath(state, items, focused, previous) {
+  if (!focused) return null
   const selection = state.field(pointerPreview)?.selection ?? state.selection.main
+  if (selection.empty) return items.find(item => selection.head >= item.from && selection.head <= item.to) ?? null
+  return previous && selection.from <= previous.to && selection.to >= previous.from
+    ? items.find(item => item.from === previous.from && item.to === previous.to) ?? null
+    : null
+}
+function decorateMath(state, items, focused, open) {
   const ranges = []
-  // As with fenced code, a range selection never opens a formula, but one
-  // that still overlaps the open formula (a drag through its source) keeps
-  // it open instead of rendering it under the user.
-  const open = !focused ? null
-    : selection.empty
-      ? items.find(item => selection.head >= item.from && selection.head <= item.to)
-      : previous && selection.from <= previous.to && selection.to >= previous.from
-        ? items.find(item => item.from === previous.from && item.to === previous.to)
-        : null
   for (const item of items) {
     const active = item === open
     if (item.closed && !active && !currentFindTouches(state, item.from, item.to)) {
-      ranges.push(Decoration.replace({ widget: new MathWidget(item.renderSource ?? item.source, item.display,
+      ranges.push(Decoration.replace({ widget: new MathWidget(item.renderSource, item.display,
         item.sourceFrom - item.from),
         block: item.display && state.doc.lineAt(item.from).from === item.from
           && state.doc.lineAt(item.to).to === item.to,
@@ -1993,8 +2007,7 @@ function decorateMath(state, items, focused, previous = null) {
       if (!item.display) ranges.push(Decoration.mark({ class: "cm-md-inline-code" })
         .range(item.from + 1, item.to - 1))
       highlightTree(texLanguage.parser.parse(item.source), codeHighlight, (from, to, classes) => {
-        ranges.push(Decoration.mark({ class: classes }).range(item.from + (item.display ? 2 : 1) + from,
-          item.from + (item.display ? 2 : 1) + to))
+        ranges.push(Decoration.mark({ class: classes }).range(item.contentFrom + from, item.contentFrom + to))
       })
     }
   }
@@ -2004,8 +2017,9 @@ function decorateMath(state, items, focused, previous = null) {
 
 const mathPreviews = StateField.define({
   create(state) {
-    const hasDollars = state.doc.toString().includes('$')
-    return { ...decorateMath(state, hasDollars ? collectMath(state) : [], false), hasDollars }
+    let hasDollars = false
+    for (const chunks = state.doc.iter(); !hasDollars && !chunks.next().done;) hasDollars = chunks.value.includes('$')
+    return { ...decorateMath(state, hasDollars ? collectMath(state) : [], false, null), hasDollars }
   },
   update(value, tr) {
     // Plain documents pay no tree walk per keystroke. A newly typed/pasted
@@ -2023,7 +2037,12 @@ const mathPreviews = StateField.define({
     const previous = value.active && tr.docChanged
       ? { from: tr.changes.mapPos(value.active.from, 1), to: tr.changes.mapPos(value.active.to, -1) }
       : value.active
-    return { ...decorateMath(tr.state, items, focused, previous), hasDollars }
+    const open = openMath(tr.state, items, focused, previous)
+    // A caret move that neither opens nor closes a formula keeps the set,
+    // so arrow keys do not rebuild widgets or reparse TeX.
+    if (items === value.items && !tr.docChanged && !tr.effects.length
+        && open?.from === value.active?.from && open?.to === value.active?.to) return value
+    return { ...decorateMath(tr.state, items, focused, open), hasDollars }
   },
   provide: field => EditorView.decorations.from(field, value => value.decorations),
 })
@@ -2294,16 +2313,12 @@ function buildDecorations(view, detectedCodeCache) {
           ? METRICS.alert : METRICS.quote
       }
       case "MathBlock": return METRICS.math
-      case "Paragraph": {
-        const math = node.node.firstChild
-        return math?.name === "DisplayMath" && math.from === node.from && math.to === node.to
-          ? METRICS.math : METRICS.paragraph
-      }
+      case "Paragraph": return isStandaloneDisplayMath(node.node) ? METRICS.math : METRICS.paragraph
       case "Table": return METRICS.table
       case "HorizontalRule": return METRICS.hr
       case "FencedCode":
         // Mermaid fences render as .mermaid-figure (same margin as tables).
-        return { mermaid: METRICS.table, math: METRICS.math }[fencedCodeDetails(state, node).language]
+        return { mermaid: METRICS.table, math: METRICS.math }[fenceInfoLanguage(state, node)]
           ?? METRICS.paragraph
       default: return METRICS.paragraph
     }
@@ -2366,10 +2381,8 @@ function buildDecorations(view, detectedCodeCache) {
           }
         }
 
-        if (["InlineMath", "DisplayMath", "MathBlock", "UnclosedMathBlock"].includes(name)) {
-          const paragraph = node.node.parent
-          const standalone = name === "MathBlock" || (name === "DisplayMath"
-            && paragraph?.name === "Paragraph" && paragraph.from === node.from && paragraph.to === node.to)
+        if (MATH_NODES.has(name)) {
+          const standalone = name === "MathBlock" || isStandaloneDisplayMath(node.node.parent)
           const open = state.field(mathPreviews).active
           const editing = open != null && open.from === node.from && open.to === node.to
           if (standalone && (editing || currentFindTouches(state, node.from, node.to))) {

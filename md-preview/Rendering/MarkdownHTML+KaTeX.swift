@@ -35,12 +35,11 @@ nonisolated extension MarkdownHTML {
                 throwOnError: false,
                 output: 'htmlAndMathml'
             });
-            el.dataset.mathDone = '1';
         } catch (err) {
             el.classList.add('math-error');
             el.textContent = String((err && err.message) || err);
-            el.dataset.mathDone = '1';
         }
+        el.dataset.mathDone = '1';
     }
     """
 

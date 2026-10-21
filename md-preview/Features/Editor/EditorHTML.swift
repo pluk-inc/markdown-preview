@@ -695,22 +695,17 @@ nonisolated enum EditorHTML {
         // Loaded once, on the first rendered formula, including newly typed math.
         window.__mdLoadMath = function () {
             if (!window.__mdMathLoading) {
+                const loaded = (element) => new Promise((resolve, reject) => {
+                    element.onload = resolve;
+                    element.onerror = reject;
+                    document.head.appendChild(element);
+                });
                 const css = document.createElement('link');
                 css.rel = 'stylesheet';
                 css.href = '\(MarkdownAssetScheme.vendorURL("katex.min.css"))';
-                const styleReady = new Promise((resolve, reject) => {
-                    css.onload = resolve;
-                    css.onerror = reject;
-                });
-                document.head.appendChild(css);
                 const script = document.createElement('script');
                 script.src = '\(MarkdownAssetScheme.vendorURL("katex.min.js"))';
-                const scriptReady = new Promise((resolve, reject) => {
-                    script.onload = resolve;
-                    script.onerror = reject;
-                });
-                document.head.appendChild(script);
-                window.__mdMathLoading = Promise.all([styleReady, scriptReady]).catch((error) => {
+                window.__mdMathLoading = Promise.all([loaded(css), loaded(script)]).catch((error) => {
                     css.remove();
                     script.remove();
                     window.__mdMathLoading = null;
@@ -778,7 +773,7 @@ nonisolated enum EditorHTML {
                             line: \(MarkdownHTML.sourceLineHeight),
                             blankGap: \(MarkdownHTML.blankLineGap),
                             paragraph: \(MarkdownHTML.paragraphSpacing),
-                            math: \(MarkdownHTML.bodyFontSize * 1.2),
+                            math: \(MarkdownHTML.mathSpacing),
                             quote: \(MarkdownHTML.quoteSpacing),
                             alert: \(MarkdownHTML.largeBlockSpacing),
                             table: \(MarkdownHTML.largeBlockSpacing),

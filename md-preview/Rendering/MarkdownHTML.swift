@@ -263,6 +263,7 @@ nonisolated enum MarkdownHTML {
     /// source line.
     static let blankLineGap: CGFloat = 4
     static let quoteSpacing = bodyFontSize * 1.2
+    static let mathSpacing = bodyFontSize * 1.2  // .math-display (1.2em)
     static let largeBlockSpacing = bodyFontSize * 1.6  // alerts, tables, mermaid
     /// hr margin-top only. The rule carries no margin-bottom: the following
     /// block's own margin-top provides the space below, so the gaps above and
