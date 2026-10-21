@@ -124,10 +124,6 @@ thread query and the rules for reading bot findings:
 - Verify each finding against the current code. Fix the valid ones with the
   smallest change; skip the rest with a reason. Bots are often wrong about
   WebKit, AppKit, and sandbox behavior — check before you change anything.
-- If you changed files, build the app, check `project.pbxproj` for a signing
-  hunk, then commit and push without asking. Don't wait for the step 2 test
-  suites first: CI runs them on the push. If a check goes red, fix it in the
-  next push. No valid findings means nothing to commit.
 - Reply to **every** bot thread with what you did or why you skipped it, then
   mark it resolved.
 - A push starts a new review round. Wait again and repeat until a round has
