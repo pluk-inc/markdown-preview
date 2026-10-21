@@ -18,7 +18,7 @@ jobs:
       - name: Run tests
         env:
           MDP_LAYOUT_ARTIFACTS: ${{ runner.temp }}/md-preview-layout-failures
-        run: swift test --package-path tests/swift-tests
+        run: swift test --package-path tests/swift-tests --parallel
 
       - name: Test editor transition callback ordering
         run: python3 tests/test-mode-transitions.py
