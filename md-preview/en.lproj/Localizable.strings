@@ -451,4 +451,4 @@
 "Nothing you change here reaches your open documents until you tap the check mark, so try a few faces and spacings, then close with the cross to leave everything exactly as you found it. The sample keeps going past the bottom of this panel, the way a page would, so the measure and the margins have somewhere to show themselves before you commit to them." = "Nothing you change here reaches your open documents until you tap the check mark, so try a few faces and spacings, then close with the cross to leave everything exactly as you found it. The sample keeps going past the bottom of this panel, the way a page would, so the measure and the margins have somewhere to show themselves before you commit to them.";
 
 /* Share popover word count */
-"%@ words" = "%@ words";
+"%ld words" = "%ld words";

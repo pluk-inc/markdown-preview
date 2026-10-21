@@ -451,4 +451,4 @@
 "Nothing you change here reaches your open documents until you tap the check mark, so try a few faces and spacings, then close with the cross to leave everything exactly as you found it. The sample keeps going past the bottom of this panel, the way a page would, so the measure and the margins have somewhere to show themselves before you commit to them." = "ここで変更した内容は、チェックマークをクリックするまで開いている書類には反映されません。いくつかの書体や間隔を試してみてください。×ボタンで閉じると変更前の状態に戻ります。このサンプルは実際のページのようにパネルの下まで続いているため、確定する前に行の長さや余白のバランスを確認できます。";
 
 /* Share popover word count */
-"%@ words" = "%@ 語";
+"%ld words" = "%ld 語";

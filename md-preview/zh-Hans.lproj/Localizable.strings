@@ -451,4 +451,4 @@
 "Nothing you change here reaches your open documents until you tap the check mark, so try a few faces and spacings, then close with the cross to leave everything exactly as you found it. The sample keeps going past the bottom of this panel, the way a page would, so the measure and the margins have somewhere to show themselves before you commit to them." = "在此处进行的任何更改，只有在点按勾选标记后才会应用到已打开的文稿中。您可以尽情尝试不同的字体和间距，点按叉号关闭即可完全保留原样。样例文本会像真实页面一样延伸至面板底部之外，让您在确认应用之前，能够充分预览行宽与页边距的排版效果。";
 
 /* Share popover word count */
-"%@ words" = "%@ 个词";
+"%ld words" = "%ld 个词";

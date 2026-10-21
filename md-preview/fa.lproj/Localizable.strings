@@ -450,4 +450,4 @@
 "Nothing you change here reaches your open documents until you tap the check mark, so try a few faces and spacings, then close with the cross to leave everything exactly as you found it. The sample keeps going past the bottom of this panel, the way a page would, so the measure and the margins have somewhere to show themselves before you commit to them." = "هیچ‌یک از تغییراتی که در اینجا ایجاد می‌کنید، تا زمانی که روی علامت تیک نزنید بر اسناد باز شما اعمال نخواهد شد؛ بنابراین می‌توانید چند قلم و فاصله‌گذاری مختلف را امتحان کنید و سپس با علامت ضربدر پنجره را ببندید تا همه‌چیز دقیقاً به همان صورت اولیه باقی بماند. متن نمونه درست مانند یک صفحهٔ واقعی تا پایین این پنل ادامه پیدا می‌کند تا پیش از اعمال تغییرات، تناسب طول سطرها و حاشیه‌ها به‌خوبی نمایان شود.";
 
 /* Share popover word count */
-"%@ words" = "%@ کلمه";
+"%ld words" = "%ld کلمه";

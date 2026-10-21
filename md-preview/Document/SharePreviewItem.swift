@@ -37,9 +37,10 @@ enum SharePreviewItem {
     /// The size of the text being shared, which matches the file on disk
     /// unless there are unsaved edits.
     private static func subtitle(for markdown: String) -> String {
-        let words = String(
-            format: NSLocalizedString("%@ words", comment: "Share popover word count"),
-            DocumentMetadata.wordCount(of: markdown).formatted())
+        // English singular/plural forms live in Localizable.stringsdict.
+        let words = String.localizedStringWithFormat(
+            NSLocalizedString("%ld words", comment: "Share popover word count"),
+            DocumentMetadata.wordCount(of: markdown))
         let size = Int64(markdown.utf8.count).formatted(.byteCount(style: .file))
         return "\(words) · \(size)"
     }
