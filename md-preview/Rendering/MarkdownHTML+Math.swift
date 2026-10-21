@@ -49,11 +49,11 @@ nonisolated extension MarkdownHTML {
         try! NSRegularExpression(pattern: #"(?<!\\)\\\\\[([\s\S]+?)\\\\\]"#)
     }()
 
-    // Reject leading `\$` (escaped) and require non-whitespace adjacent to
+    // Reject escaped `\$` delimiters and require non-whitespace adjacent to
     // delimiters so prose like "$5 and $10" doesn't match.
     private static let inlineMathRegex: NSRegularExpression = {
         // swiftlint:disable:next force_try
-        try! NSRegularExpression(pattern: #"(?<!\\)\$(?=\S)([^\$\n]+?)(?<=\S)\$"#)
+        try! NSRegularExpression(pattern: #"(?<!\\)\$(?=\S)([^\$\n]+?)(?<=[^\s\\])\$"#)
     }()
 
     private static let parenthesizedInlineMathRegex: NSRegularExpression = {
@@ -154,11 +154,12 @@ nonisolated extension MarkdownHTML {
                 let quotePrefix = quoteMarkerPrefix(in: nsSource, before: match.range.location)
                 var capture = nsSource.substring(with: match.range(at: 1))
                 if !quotePrefix.isEmpty {
-                    capture = quoteContinuationRegex.stringByReplacingMatches(
-                        in: capture,
-                        range: NSRange(location: 0, length: (capture as NSString).length),
-                        withTemplate: "\n"
-                    )
+                    capture = quoteContinuationRegex(depth: quotePrefix.count(where: { $0 == ">" }))
+                        .stringByReplacingMatches(
+                            in: capture,
+                            range: NSRange(location: 0, length: (capture as NSString).length),
+                            withTemplate: "\n"
+                        )
                 }
                 let fullMatch = nsSource.substring(with: match.range)
                 let newlineCount = fullMatch.count(where: \.isNewline)
@@ -223,12 +224,12 @@ nonisolated extension MarkdownHTML {
         try! NSRegularExpression(pattern: #"^(?:[ \t]{0,3}>[ \t]?)+"#)
     }()
 
-    // A line break followed by optional quote markers (lazy continuation
-    // lines carry none).
-    private static let quoteContinuationRegex: NSRegularExpression = {
+    // A line break followed by up to `depth` quote markers: lazy continuation
+    // lines carry none, and a `>` past the quote's depth belongs to the TeX.
+    private static func quoteContinuationRegex(depth: Int) -> NSRegularExpression {
         // swiftlint:disable:next force_try
-        try! NSRegularExpression(pattern: #"\n(?:[ \t]{0,3}>[ \t]?)*"#)
-    }()
+        try! NSRegularExpression(pattern: #"\n(?:[ \t]{0,3}>[ \t]?){0,"# + String(depth) + "}")
+    }
 
     /// The quote markers that open the line containing `location`, or "".
     private static func quoteMarkerPrefix(in source: NSString, before location: Int) -> String {

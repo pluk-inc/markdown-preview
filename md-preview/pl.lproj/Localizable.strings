@@ -284,6 +284,7 @@
 "This diagram is empty." = "Ten diagram jest pusty.";
 "Line %d, column %d" = "Wiersz %d, kolumna %d";
 "Empty diagram. Click to add Mermaid source." = "Pusty diagram. Kliknij, aby dodać kod źródłowy Mermaid.";
+"Math formula. Click to edit source." = "Wzór matematyczny. Kliknij, aby edytować kod źródłowy.";
 "Footnote %d" = "Przypis %d";
 "Back to reference %d" = "Wróć do odsyłacza %d";
 "KaTeX renderer is unavailable.\n\n" = "Mechanizm renderowania KaTeX jest niedostępny.\n\n";

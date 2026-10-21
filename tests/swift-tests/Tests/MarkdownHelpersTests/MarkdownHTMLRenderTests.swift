@@ -2357,6 +2357,18 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         ), rendered.articleHTML)
         XCTAssertEqual(rendered.articleHTML.components(separatedBy: "<blockquote").count, 2, rendered.articleHTML)
         XCTAssertTrue(rendered.articleHTML.contains("After</p>"), rendered.articleHTML)
+
+        let comparison = MarkdownHTML.render(markdown: "> $$\n> a\n> > b\n> $$", vendorLoading: .lazy)
+        XCTAssertTrue(comparison.articleHTML.contains("\na\n&gt; b\n</div>"), comparison.articleHTML)
+    }
+
+    func testEscapedDollarDoesNotCloseInlineMath() {
+        let rendered = MarkdownHTML.render(
+            markdown: #"Prices: $5 and $10. Escaped dollar: \$x$."#,
+            vendorLoading: .lazy
+        )
+
+        XCTAssertFalse(rendered.articleHTML.contains("math-inline"), rendered.articleHTML)
     }
 
     func testLatexDelimitersRenderAsMath() {

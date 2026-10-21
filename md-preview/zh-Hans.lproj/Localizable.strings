@@ -389,7 +389,7 @@
 
 /* Table fullscreen control. */
 "Expand Table" = "展开表格";
-"Math formula. Click to edit source." = "数学公式。点击以编辑源代码。";
+"Math formula. Click to edit source." = "数学公式。点按以编辑源代码。";
 
 /* Additional settings, navigation, formatting, and export strings. */
 "GitHub Project" = "GitHub 项目";

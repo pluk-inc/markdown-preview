@@ -1362,6 +1362,25 @@ mathEditor.find('frac')
 check("find reveals math source", mathHost.textContent.includes('frac') && !!mathHost.querySelector('.cm-find-current'))
 mathEditor.destroy()
 
+const literalDollarHost = document.createElement("div")
+document.body.append(literalDollarHost)
+const literalDollarEditor = dom.window.MDEditor.create(literalDollarHost, "Prices: $5 and $10. Escaped dollar: \\$x$.", {})
+await new Promise(resolve => setTimeout(resolve, 10))
+check("an escaped dollar never closes inline math", !literalDollarHost.querySelector('.math'))
+literalDollarEditor.destroy()
+
+const quotedMathHost = document.createElement("div")
+document.body.append(quotedMathHost)
+const quotedMathSource = "> $$\n> x = 1\n> $$\n\nEnd"
+const quotedMathEditor = dom.window.MDEditor.create(quotedMathHost, quotedMathSource, {})
+quotedMathEditor.focus()
+quotedMathEditor.select(quotedMathSource.indexOf('$$'))
+await new Promise(resolve => setTimeout(resolve, 10))
+const quotedMathLines = Array.from(quotedMathHost.querySelectorAll('.cm-md-codeblock')).map(line => line.textContent)
+check("quoted math source hides the quote markers of its later lines",
+  quotedMathLines.length === 3 && quotedMathLines.slice(1).every(text => !text.includes('>')))
+quotedMathEditor.destroy()
+
 for (const [label, source, count] of [
   ['inline without spaces', '$x^2$', 1],
   ['spaces inside both delimiters', '$ x^2 $', 0],

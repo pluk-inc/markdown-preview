@@ -783,6 +783,8 @@ function renderTableCell(element, source) {
       const span = document.createElement('span')
       const tex = source.slice(node.from + size, node.to - size)
       appendText(span, source.slice(node.from, node.to), node.from)
+      // KaTeX replaces the mapped text node; clicks on its output use this.
+      span.dataset.mathSourceFrom = String(node.from + size)
       parent.append(span)
       renderMathWhenLoaded(span, tex, display)
     } else if (node.name === 'InlineCode') {
@@ -1235,8 +1237,13 @@ class TableEditorWidget extends WidgetType {
           && (cell.textContent !== model.rows[row][column] || cell.childElementCount)) {
         const hit = document.caretRangeFromPoint?.(event.clientX, event.clientY)
         const from = hit && tableRenderedTextOffsets.get(hit.startContainer)
+        const math = hit && from == null ? (hit.startContainer.parentElement ?? hit.startContainer)
+          .closest?.("[data-math-source-from]") : null
         if (from != null && cell.contains(hit.startContainer)) {
           sourceAnchor = from + hit.startOffset
+          event.preventDefault()
+        } else if (math && cell.contains(math)) {
+          sourceAnchor = Number(math.dataset.mathSourceFrom)
           event.preventDefault()
         }
       }
@@ -1973,7 +1980,9 @@ function collectMath(state) {
     const size = display ? 2 : 1
     const closed = node.name !== "UnclosedMathBlock"
     const lines = node.node.getChildren("MathLine")
-    const source = state.doc.sliceString(node.from + size, node.to - (closed ? size : 0))
+    // A closed block's line may carry trailing spaces after its `$$`.
+    const contentTo = closed ? node.from + state.doc.sliceString(node.from, node.to).trimEnd().length - size : node.to
+    const source = state.doc.sliceString(node.from + size, contentTo)
     items.push({ renderSource: lines.length ? lines.map(line => state.doc.sliceString(line.from, line.to)).join("\n") : source,
       from: node.from, to: node.to, contentFrom: node.from + size, sourceFrom: lines[0]?.from ?? node.from + size,
       display, closed, source })
@@ -2093,7 +2102,8 @@ function buildMermaidPreviews(state) {
           && !isActive && !currentFindTouches(state, node.from, node.to)) {
         ranges.push(Decoration.replace({
           block: true,
-          widget: new MathWidget(details.source, true, details.sourceFrom - node.from),
+          widget: new MathWidget(details.source, true,
+            (node.node.getChild("CodeText")?.from ?? details.sourceFrom) - node.from),
         }).range(node.from, node.to))
         return false
       }
@@ -2209,6 +2219,11 @@ function buildDecorations(view, detectedCodeCache) {
   const touchesLineOf = (pos) => {
     const line = state.doc.lineAt(pos)
     return touches(line.from, line.to)
+  }
+  const hideQuoteMark = (mark) => {
+    if (touchesLineOf(mark.from)) return
+    const after = state.doc.sliceString(mark.to, mark.to + 1)
+    ranges.push(hide.range(mark.from, mark.to + (after === " " ? 1 : 0)))
   }
   const isActiveFence = (node) => currentFindTouches(state, node.from, node.to)
     || (activeFence != null && node.from <= activeFence.from && node.to >= activeFence.to)
@@ -2406,6 +2421,9 @@ function buildDecorations(view, detectedCodeCache) {
             const closing = last.from + last.text.lastIndexOf('$$')
             ranges.push(fenceMark.range(closing, closing + 2))
           }
+          // The subtree is declined below, so a $$ block's quote markers on
+          // its later lines are hidden here.
+          for (const mark of node.node.getChildren("QuoteMark")) hideQuoteMark(mark)
           // Lezer skips leave() when enter() declines a subtree.
           depth--
           return false
@@ -2501,10 +2519,7 @@ function buildDecorations(view, detectedCodeCache) {
           return
         }
         if (name === "QuoteMark") {
-          if (!touchesLineOf(node.from)) {
-            const after = state.doc.sliceString(node.to, node.to + 1)
-            ranges.push(hide.range(node.from, node.to + (after === " " ? 1 : 0)))
-          }
+          hideQuoteMark(node)
           return
         }
 

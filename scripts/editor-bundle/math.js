@@ -16,6 +16,12 @@ export const mathSyntax = {
         const ch = cx.char(end)
         if (!display && ch === 10) return -1
         if (ch !== 36) continue
+        // TeX reads \$ as a literal dollar, never a closing delimiter. Like
+        // reading mode, inline math cannot run past one.
+        if (cx.char(end - 1) === 92) {
+          if (!display) return -1
+          continue
+        }
         if (display && cx.char(end + 1) !== 36) continue
         if (end === start || (!display && /\s/.test(cx.slice(end - 1, end)))) break
         return cx.addElement(cx.elt(display ? "DisplayMath" : "InlineMath", pos, end + size))
@@ -38,6 +44,8 @@ export const mathSyntax = {
       const lines = []
       while (cx.nextLine() && line.depth >= cx.stack.length) {
         to = cx.lineStart + line.text.length
+        // Keep quote markers in the tree so the editor can hide them.
+        lines.push(...line.markers)
         if (line.text.slice(line.pos).trim() === "$$") {
           closed = true
           cx.nextLine()
