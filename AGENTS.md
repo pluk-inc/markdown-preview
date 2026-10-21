@@ -24,15 +24,16 @@ Version is managed centrally in `Version.xcconfig` (`MARKETING_VERSION`, `CURREN
 - The maintainer uses Nushell and has `gh` authentication available. Match shell syntax to the actual execution shell.
 - Complete work authorized by the user's request, making reasonable routine implementation choices. A request for a plan authorizes planning only.
 - Apply skills within their stated scope. If an instruction blocks authorized work, identify the exact file and instruction rather than inferring an extra approval requirement.
-- Keep verification proportional: config and documentation changes need validation and diff review; Swift changes need an app build; visible behavior changes need runtime verification. Tests run only when code goes to a PR — before opening it, and before pushing review fixes (`pull-requests` skill).
+- Keep verification proportional: config and documentation changes need validation and diff review; Swift changes need an app build; visible behavior changes need runtime verification. Tests run only before opening a PR; review fixes are pushed after an app build, and CI runs the tests on the push (`pull-requests` skill).
 
 ## While iterating: build and run, no tests
 
 For a small fix, a UI tweak, or a design round, build the app and launch it to
 check the change on screen. Do not run the test suites at this stage — they are
-slow and the change will move again. Run them only when the user asks, or when
-code goes to a PR: before opening it, and before pushing fixes for review
-findings.
+slow and the change will move again. Run them only when the user asks, or
+before opening a PR. Push fixes for review findings after an app build, without
+running the suites first: CI runs them on the push, and a red check gets fixed
+in the next push.
 
 ## Pull requests
 
