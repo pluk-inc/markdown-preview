@@ -327,7 +327,9 @@ final class EditorPreviewLayoutTests: XCTestCase {
                         - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
                 })()
                 """)
-            XCTAssertEqual(try XCTUnwrap(extraHeight as? Double), 0, accuracy: 1, source)
+            // The line's strut can stand a pixel taller than a short formula;
+            // an empty delimiter line would add a whole source line.
+            XCTAssertLessThan(try XCTUnwrap(extraHeight as? Double), MarkdownHTML.sourceLineHeight / 2, source)
             let saved = try await editor.webView.evaluateJavaScript("window.__mdEditor.getMarkdown()")
             XCTAssertEqual(saved as? String, source)
         }
