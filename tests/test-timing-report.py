@@ -3,7 +3,8 @@
 Usage: python3 tests/test-timing-report.py <timing.tsv> [count]
 
 Prints Markdown: the slowest tests, the slowest classes, and how the
-total test time compares with the wall time of the run.
+total test time compares with the span from the first test start to the
+last test end (build and process startup are not included).
 """
 from collections import defaultdict
 from pathlib import Path
@@ -24,12 +25,12 @@ if not rows:
     sys.exit('No timings recorded.')
 
 first = min(r[0] for r in rows)
-wall = max(r[1] for r in rows) - first
+span = max(r[1] for r in rows) - first
 total = sum(r[2] for r in rows)
 failed = sum(r[3] != 'passed' for r in rows)
 
 print('## Test timing\n')
-print(f'{len(rows)} tests, {failed} failed. Test time {total:.0f} s in {wall:.0f} s of wall time.\n')
+print(f'{len(rows)} tests, {failed} failed. Test time {total:.0f} s in a {span:.0f} s span from first test start to last test end.\n')
 
 print(f'### Slowest {count} tests\n')
 print('| Seconds | Starts at | Ends at | Test |')

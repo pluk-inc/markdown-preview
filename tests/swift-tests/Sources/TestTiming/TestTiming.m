@@ -3,6 +3,7 @@
 // and its xUnit report gives every test the same time, so the suite records
 // its own. Active only when MDP_TEST_TIMING names a file; each line is
 // tab-separated: start, end (Unix seconds), seconds, result, pid, test.
+// Test processes only append to the file, so delete it before a new run.
 //
 // Objective-C because only +load can register the observer before the first
 // test runs; SwiftPM test bundles have no principal class to do it.

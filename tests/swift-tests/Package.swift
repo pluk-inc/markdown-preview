@@ -6,7 +6,7 @@
 // `Sources/<Target>/` so SPM can compile them without duplication.
 //
 // Run: `swift test --package-path tests/swift-tests`. To see how long each
-// test takes, set MDP_TEST_TIMING to a file path and pass that file to
+// test takes, set MDP_TEST_TIMING to a new file path and pass that file to
 // `tests/test-timing-report.py`.
 //
 import PackageDescription
