@@ -332,12 +332,14 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let markdown = Self.warmupMarkdown
         let contentWidth = ContentWidthSetting.current.renderWidth
         let themeOverrides = Self.currentThemeOverrides()
+        let chromeZoom = chromeZoom
         Task { @concurrent [weak self] in
             let rendered = Self.timedRender(label: "warmup",
                                             markdown: markdown,
                                             assetBaseHref: baseHref,
                                             contentWidth: contentWidth,
                                             themeOverrides: themeOverrides,
+                                            chromeZoom: chromeZoom,
                                             warmup: true)
             await self?.applyWarmup(rendered)
         }
@@ -463,12 +465,14 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let generation = renderGeneration
         let contentWidth = ContentWidthSetting.current.renderWidth
         let themeOverrides = Self.currentThemeOverrides()
+        let chromeZoom = chromeZoom
         if renderImmediately, markdown.utf8.count <= Self.immediateRenderByteLimit {
             let rendered = Self.timedRender(label: "display",
                                             markdown: markdown,
                                             assetBaseHref: baseHref,
                                             contentWidth: contentWidth,
-                                            themeOverrides: themeOverrides)
+                                            themeOverrides: themeOverrides,
+                                            chromeZoom: chromeZoom)
             applyDisplay(rendered, generation: generation)
             return
         }
@@ -477,7 +481,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                             markdown: markdown,
                                             assetBaseHref: baseHref,
                                             contentWidth: contentWidth,
-                                            themeOverrides: themeOverrides)
+                                            themeOverrides: themeOverrides,
+                                            chromeZoom: chromeZoom)
             #if DEBUG
             let renderFinishedAt = DispatchTime.now().uptimeNanoseconds
             await self?.applyDisplayDebug(
@@ -499,6 +504,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                                 assetBaseHref: String,
                                                 contentWidth: MarkdownHTML.ContentWidth,
                                                 themeOverrides: MarkdownHTML.ThemeOverrides? = nil,
+                                                chromeZoom: CGFloat,
                                                 warmup: Bool = false) -> MarkdownHTML.RenderedHTML {
         let t0 = DispatchTime.now()
         let rendered = MarkdownHTML.render(markdown: markdown,
@@ -508,7 +514,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                            contentWidth: contentWidth,
                                            themeOverrides: themeOverrides,
                                            warmup: warmup,
-                                           pageTopClearance: MarkdownHTML.appPageTopClearance)
+                                           pageTopClearance: MarkdownHTML.appPageTopClearance,
+                                           chromeZoom: chromeZoom)
         let elapsedMs = Int(
             (Double(DispatchTime.now().uptimeNanoseconds - t0.uptimeNanoseconds)
              / 1_000_000).rounded()
@@ -882,9 +889,18 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         method(webView, selector, body)
     }
 
+    /// The page zoom the top padding divides by, so the chrome clearance
+    /// stays the same size at every zoom. Rendered into each page: set only
+    /// after load, the first frame of a zoomed page drew the padding at the
+    /// zoomed size and the text jumped when the value arrived.
+    private var chromeZoom: CGFloat {
+        guard #available(macOS 26.0, *) else { return 1 }
+        return max(webView.pageZoom, 0.001)
+    }
+
     private func updateChromeZoom() {
         guard #available(macOS 26.0, *) else { return }
-        webView.evaluateJavaScript("document.documentElement.style.setProperty('--mdp-chrome-zoom', '\(max(webView.pageZoom, 0.001))')", completionHandler: nil)
+        webView.evaluateJavaScript("document.documentElement.style.setProperty('--mdp-chrome-zoom', '\(chromeZoom)')", completionHandler: nil)
     }
 
     private func clampedZoom(_ value: CGFloat) -> CGFloat {

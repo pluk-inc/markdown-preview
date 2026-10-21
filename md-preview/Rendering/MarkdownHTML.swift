@@ -315,6 +315,7 @@ nonisolated enum MarkdownHTML {
                        textAlignment: TextAlignmentSetting = .current,
                        warmup: Bool = false,
                        pageTopClearance: CGFloat = 0,
+                       chromeZoom: CGFloat = 1,
                        highlightsCode: Bool = true) -> RenderedHTML {
         let frontmatter = MarkdownFrontmatter.split(markdown)
         let body = frontmatter.body
@@ -486,7 +487,7 @@ nonisolated enum MarkdownHTML {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         \(baseTag)
         <style>\(stylesheet)</style>
-        <style>:root { --mdp-page-top-clearance: \(pageTopClearance)px; }</style>
+        <style>:root { --mdp-page-top-clearance: \(pageTopClearance)px; --mdp-chrome-zoom: \(chromeZoom); }</style>
         \(themeStyleBlock)
         \(scrollOverride)
         \(contentWidthOverride)
