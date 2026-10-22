@@ -58,6 +58,10 @@ final class ProjectNavigatorView: NSView {
     /// outline's transient click selection so a pending Save/Don't Save/Cancel
     /// decision cannot make the navigator disagree with the editor.
     private var currentFileURL: URL?
+    /// A file whose read is still in flight — typically a cloud file macOS
+    /// is downloading. Its row shows a spinner because the highlight stays
+    /// on `currentFileURL` until the new document actually displays.
+    private var loadingFileURL: URL?
     // One watcher per loaded directory; kept in sync with which FileNodes
     // currently have a populated children cache.
     private var watchers: [URL: DirectoryWatcher] = [:]
@@ -243,6 +247,23 @@ final class ProjectNavigatorView: NSView {
         }
     }
 
+    func setLoadingFile(_ url: URL?) {
+        let target = url?.standardizedFileURL
+        guard target != loadingFileURL else { return }
+        loadingFileURL = target
+        for row in 0..<outlineView.numberOfRows {
+            guard let cell = outlineView.view(
+                atColumn: 0, row: row, makeIfNecessary: false
+            ) as? FileCellView,
+                  let node = outlineView.item(atRow: row) as? FileNode else { continue }
+            cell.isLoading = isLoading(node)
+        }
+    }
+
+    private func isLoading(_ node: FileNode) -> Bool {
+        !node.isDirectory && node.url.standardizedFileURL == loadingFileURL
+    }
+
     private func collectPath(to targetURL: URL,
                              from root: FileNode,
                              into path: inout [FileNode]) -> Bool {
@@ -426,34 +447,14 @@ extension ProjectNavigatorView: NSOutlineViewDelegate {
                      item: Any) -> NSView? {
         guard let node = item as? FileNode else { return nil }
         let identifier = NSUserInterfaceItemIdentifier("FileCell")
-        let cell: SidebarLabelCellView
-        if let recycled = outlineView.makeView(withIdentifier: identifier, owner: self) as? SidebarLabelCellView {
+        let cell: FileCellView
+        if let recycled = outlineView.makeView(withIdentifier: identifier, owner: self) as? FileCellView {
             cell = recycled
         } else {
-            cell = SidebarLabelCellView(identifier: identifier)
-
-            let imageView = NSImageView()
-            imageView.translatesAutoresizingMaskIntoConstraints = false
-            imageView.imageScaling = .scaleProportionallyDown
-            cell.addSubview(imageView)
-            cell.imageView = imageView
-
-            let textField = cell.label
-            textField.lineBreakMode = .byTruncatingTail
-            textField.cell?.usesSingleLineMode = true
-            textField.maximumNumberOfLines = 1
-
-            NSLayoutConstraint.activate([
-                imageView.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
-                imageView.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                imageView.widthAnchor.constraint(equalToConstant: 16),
-                imageView.heightAnchor.constraint(equalToConstant: 16),
-                textField.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: 6),
-                textField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -6),
-                textField.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
-            ])
+            cell = FileCellView(identifier: identifier)
         }
 
+        cell.isLoading = isLoading(node)
         cell.label.stringValue = node.displayName
         let icon = NSWorkspace.shared.icon(forFile: node.url.path)
         icon.size = NSSize(width: 16, height: 16)
@@ -491,6 +492,71 @@ extension ProjectNavigatorView: NSOutlineViewDelegate {
     func outlineViewItemDidExpand(_ notification: Notification) {
         // Newly-loaded subtree needs its own watcher.
         syncWatchers()
+    }
+}
+
+/// Icon and name, plus a trailing spinner while the file is loading. The
+/// name gives up the spinner's width only while it's shown.
+private final class FileCellView: SidebarLabelCellView {
+    private let spinner = NSProgressIndicator()
+    private var nameTrailingToCell: NSLayoutConstraint!
+    private var nameTrailingToSpinner: NSLayoutConstraint!
+
+    var isLoading = false {
+        didSet {
+            guard isLoading != oldValue else { return }
+            nameTrailingToCell.isActive = !isLoading
+            nameTrailingToSpinner.isActive = isLoading
+            if isLoading {
+                spinner.startAnimation(nil)
+            } else {
+                spinner.stopAnimation(nil)
+            }
+        }
+    }
+
+    override init(identifier: NSUserInterfaceItemIdentifier) {
+        super.init(identifier: identifier)
+
+        let imageView = NSImageView()
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.imageScaling = .scaleProportionallyDown
+        addSubview(imageView)
+        self.imageView = imageView
+
+        let textField = label
+        textField.lineBreakMode = .byTruncatingTail
+        textField.cell?.usesSingleLineMode = true
+        textField.maximumNumberOfLines = 1
+
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        spinner.style = .spinning
+        spinner.controlSize = .small
+        spinner.isIndeterminate = true
+        spinner.isDisplayedWhenStopped = false
+        spinner.setAccessibilityLabel(NSLocalizedString("Loading…", comment: "Project navigator spinner while a file loads"))
+        addSubview(spinner)
+
+        nameTrailingToCell = textField.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6)
+        nameTrailingToSpinner = textField.trailingAnchor.constraint(equalTo: spinner.leadingAnchor, constant: -4)
+
+        NSLayoutConstraint.activate([
+            imageView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            imageView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            imageView.widthAnchor.constraint(equalToConstant: 16),
+            imageView.heightAnchor.constraint(equalToConstant: 16),
+            textField.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: 6),
+            textField.centerYAnchor.constraint(equalTo: centerYAnchor),
+            nameTrailingToCell,
+            spinner.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            spinner.centerYAnchor.constraint(equalTo: centerYAnchor),
+            spinner.widthAnchor.constraint(equalToConstant: 16),
+            spinner.heightAnchor.constraint(equalToConstant: 16)
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 }
 

@@ -88,6 +88,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// When sidebar navigation starts from edit mode, the newly loaded file
     /// should return to edit mode instead of dropping the user into preview.
     var pendingEditModeURL: URL?
+    /// The file read that may show the sidebar's loading spinner, the
+    /// newest read's request ID, and the delayed work that shows it. See
+    /// `scheduleFileLoadIndicator(for:)`.
+    var fileLoadIndicatorURL: URL?
+    var fileLoadIndicatorRequestID: UUID?
+    var fileLoadIndicatorWork: DispatchWorkItem?
     var searchOpenRequestID: UUID?
     var autoSaveTimer: Timer?
     var autoSaveTimerID: UUID?
@@ -678,6 +684,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         refreshOpenActionsItem()
         startWatching(newURL)
         if let markdown = currentMarkdown {
+            // No new read starts here, and a reload still in flight for the
+            // old URL won't apply, so nothing else would clear its spinner.
+            cancelFileLoadIndicator()
             (documentWindow.contentViewController as? MainSplitViewController)?
                 .openFileURLDidChange(newURL, markdown: markdown)
         } else {

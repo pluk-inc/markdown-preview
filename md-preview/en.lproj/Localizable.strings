@@ -246,6 +246,7 @@
 "Open in New Tab" = "Open in New Tab";
 "Open in New Window" = "Open in New Window";
 "Copy Path" = "Copy Path";
+"Loading…" = "Loading…";
 
 /* Table editing */
 "Table" = "Table";

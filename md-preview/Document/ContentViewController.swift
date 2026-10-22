@@ -248,6 +248,32 @@ final class ContentViewController: NSViewController {
         webView.clearContent()
     }
 
+    private var loadingOverlay: DocumentLoadingOverlayView?
+
+    /// The centered "Loading…" panel for a slow file read. Only over a
+    /// blank page: a slow reload of the document already on screen keeps
+    /// it readable and leaves the feedback to the sidebar's row spinner.
+    func setLoading(_ isLoading: Bool) {
+        if isLoading {
+            guard loadingOverlay == nil, exportSource == nil else { return }
+            let overlay = DocumentLoadingOverlayView()
+            overlay.alphaValue = 0
+            view.addSubview(overlay)
+            NSLayoutConstraint.activate([
+                overlay.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
+                overlay.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor)
+            ])
+            loadingOverlay = overlay
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.15
+                overlay.animator().alphaValue = 1
+            }
+        } else {
+            loadingOverlay?.removeFromSuperview()
+            loadingOverlay = nil
+        }
+    }
+
     func sourceFileURLDidChange(_ sourceURL: URL) {
         guard let source = exportSource else { return }
         exportSource = ExportSource(

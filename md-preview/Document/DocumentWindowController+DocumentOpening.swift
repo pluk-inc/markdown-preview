@@ -165,10 +165,12 @@ extension DocumentWindowController {
     }
 
     func loadFile(at url: URL, silentOnFailure: Bool = false) {
+        let indicatorRequestID = scheduleFileLoadIndicator(for: url)
         Task { @concurrent [weak self] in
             do {
                 let text = try String(contentsOf: url, encoding: .utf8)
-                await self?.applyLoadedMarkdown(text, fileURL: url)
+                await self?.applyLoadedMarkdown(text, fileURL: url,
+                                                indicatorRequestID: indicatorRequestID)
             } catch {
                 // Wrap as NSError (Sendable) so the original presentation —
                 // localizedDescription + recovery suggestion — survives the
@@ -176,13 +178,55 @@ extension DocumentWindowController {
                 let nsError = error as NSError
                 await self?.applyLoadFailure(error: nsError,
                                              fileURL: url,
+                                             indicatorRequestID: indicatorRequestID,
                                              silentOnFailure: silentOnFailure)
             }
         }
     }
 
-    func applyLoadedMarkdown(_ text: String, fileURL: URL) {
+    /// Reading a cloud file that isn't on disk yet blocks until macOS
+    /// downloads it. The sidebar keeps highlighting the previous file until
+    /// the new one displays, so a read still running after this delay
+    /// shows a spinner on the file's row. Local reads finish well inside
+    /// it, so they never flash one.
+    private static let fileLoadIndicatorDelay: TimeInterval = 0.2
+
+    /// Returns this read's request ID; the newest read owns the spinner.
+    private func scheduleFileLoadIndicator(for url: URL) -> UUID {
+        let url = url.standardizedFileURL
+        let requestID = UUID()
+        fileLoadIndicatorRequestID = requestID
+        // A reload of the file already loading keeps its spinner; a new
+        // file drops the abandoned one's straight away.
+        guard fileLoadIndicatorURL != url else { return requestID }
+        fileLoadIndicatorWork?.cancel()
+        mainSplit?.setLoadingFile(nil)
+        fileLoadIndicatorURL = url
+        let work = DispatchWorkItem { [weak self] in
+            self?.mainSplit?.setLoadingFile(url)
+        }
+        fileLoadIndicatorWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.fileLoadIndicatorDelay, execute: work)
+        return requestID
+    }
+
+    func cancelFileLoadIndicator() {
+        fileLoadIndicatorWork?.cancel()
+        fileLoadIndicatorWork = nil
+        fileLoadIndicatorURL = nil
+        fileLoadIndicatorRequestID = nil
+        mainSplit?.setLoadingFile(nil)
+    }
+
+    /// `loadFile` passes its read's request ID. A read that a newer one has
+    /// superseded is dropped, so it can neither put older text on screen
+    /// nor clear the newer read's spinner.
+    func applyLoadedMarkdown(_ text: String, fileURL: URL, indicatorRequestID: UUID? = nil) {
         guard currentFileURL?.standardizedFileURL == fileURL.standardizedFileURL else { return }
+        if let indicatorRequestID, indicatorRequestID != fileLoadIndicatorRequestID { return }
+        // The current file is on screen, so any other read in flight is
+        // abandoned — including when Search for Document supplied the text.
+        cancelFileLoadIndicator()
         currentMarkdown = text
         resetAutoSaveFeedback()
         updateWindowSubtitle()
@@ -196,7 +240,14 @@ extension DocumentWindowController {
         }
     }
 
-    private func applyLoadFailure(error: NSError, fileURL: URL, silentOnFailure: Bool) {
+    /// Only the newest read may report a failure: an older read failing
+    /// late — even of the same file — must not clear the newer read's
+    /// spinner, cancel its pending edit mode, or alert over the file now
+    /// on screen.
+    private func applyLoadFailure(error: NSError, fileURL: URL,
+                                  indicatorRequestID: UUID, silentOnFailure: Bool) {
+        guard indicatorRequestID == fileLoadIndicatorRequestID else { return }
+        cancelFileLoadIndicator()
         if pendingEditModeURL == fileURL.standardizedFileURL {
             pendingEditModeURL = nil
             dismissEditChrome()

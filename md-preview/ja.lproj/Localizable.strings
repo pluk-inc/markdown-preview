@@ -246,6 +246,7 @@
 "Open in New Tab" = "新規タブで開く";
 "Open in New Window" = "新規ウインドウで開く";
 "Copy Path" = "パスをコピー";
+"Loading…" = "読み込み中…";
 
 /* Table editing */
 "Table" = "表";

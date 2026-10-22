@@ -246,6 +246,7 @@
 "Open in New Tab" = "在新标签页中打开";
 "Open in New Window" = "在新窗口中打开";
 "Copy Path" = "拷贝路径";
+"Loading…" = "正在载入…";
 
 /* Table editing */
 "Table" = "表格";
