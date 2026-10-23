@@ -607,10 +607,9 @@ extension DocumentWindowController {
                 NSApp.sendAction(action.action, to: nil, from: self)
             }
         }
-        // The share-link rows lead the section, right under the header's
-        // divider: the popover puts every app row in one section and draws
-        // no divider between them.
-        return shareLinkServices() + services + proposedServices
+        // The share-link row ends the section, right above the system's Copy,
+        // which sits in its own section that apps cannot add rows to.
+        return services + shareLinkServices() + proposedServices
     }
 }
 
