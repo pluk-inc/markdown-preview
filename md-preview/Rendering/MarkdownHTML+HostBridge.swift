@@ -432,12 +432,13 @@ nonisolated extension MarkdownHTML {
         // Undoes everything column resize adds to a table (below). The
         // Expand button and export use it, so neither copies dragged widths.
         function clearColumnResize(table) {
+            table.querySelector('.mdp-column-edge-active')?.classList.remove('mdp-column-edge-active');
+            if (!table.classList.contains('mdp-columns-resized')) return;
             const scroller = table.parentElement;
             if (scroller?.classList.contains('md-table-scroll')) scroller.replaceWith(table);
             table.querySelector(':scope > colgroup[data-mdp-resize]')?.remove();
             table.classList.remove('mdp-columns-resized');
             table.style.removeProperty('width');
-            table.querySelector('.mdp-column-edge-active')?.classList.remove('mdp-column-edge-active');
         }
         document.addEventListener('click', event => {
             const button = event.target.closest('.md-table-expand');
@@ -560,6 +561,8 @@ nonisolated extension MarkdownHTML {
             }
 
             document.addEventListener('pointermove', event => {
+                // The release can go to a context menu instead of the page.
+                if (drag && !(event.buttons & 1)) endDrag();
                 if (!drag) {
                     const edge = edgeAt(event);
                     showEdge(edge ? edge.cells[edge.index] : null);
@@ -571,7 +574,8 @@ nonisolated extension MarkdownHTML {
                 drag.table.style.width = `${drag.tableWidth - drag.width + width}px`;
             });
             document.addEventListener('pointerdown', event => {
-                if (event.button !== 0) return;
+                // Control-click opens the context menu on macOS.
+                if (event.button !== 0 || event.ctrlKey) return;
                 const edge = edgeAt(event);
                 if (!edge) return;
                 // Without this the drag selects the header text.

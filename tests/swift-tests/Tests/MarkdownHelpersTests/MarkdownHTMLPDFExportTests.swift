@@ -100,13 +100,13 @@ final class MarkdownHTMLPDFExportTests: XCTestCase {
             (() => {
                 const th = document.querySelector('.md-table-wrap th');
                 const r = th.getBoundingClientRect();
-                const fire = (type, x) => th.dispatchEvent(new PointerEvent(type, {
+                const fire = (type, x, buttons) => th.dispatchEvent(new PointerEvent(type, {
                     bubbles: true, cancelable: true, clientX: x, clientY: r.top + 5,
-                    button: 0, pointerId: 1, isPrimary: true }));
-                fire('pointermove', r.right - 2);
-                fire('pointerdown', r.right - 2);
-                fire('pointermove', r.right - 2 + \(distance));
-                fire('pointerup', r.right - 2 + \(distance));
+                    button: 0, buttons, pointerId: 1, isPrimary: true }));
+                fire('pointermove', r.right - 2, 0);
+                fire('pointerdown', r.right - 2, 1);
+                fire('pointermove', r.right - 2 + \(distance), 1);
+                fire('pointerup', r.right - 2 + \(distance), 0);
                 return true;
             })()
             """)
