@@ -59,13 +59,17 @@ final class ShareLinkProgressSheet: NSObject {
 
     private static func systemProgressPanel(message: String, target: ShareLinkProgressSheet) -> NSWindow? {
         let make = NSSelectorFromString("progressPanelWithNibName:")
+        let outlets = ["captionTextField", "progressIndicator", "cancelButton"]
+        // value(forKey:) raises for a key the class no longer has, so every
+        // outlet's getter is checked before any is read.
         guard let panelClass = NSClassFromString("NSProgressPanel") as? NSObject.Type,
               panelClass.responds(to: make),
+              outlets.allSatisfy({ panelClass.instancesRespond(to: NSSelectorFromString($0)) }),
               let panel = panelClass.perform(make, with: "NSProgressPanel")?
                 .takeUnretainedValue() as? NSWindow,
-              let caption = panel.value(forKey: "captionTextField") as? NSTextField,
-              let bar = panel.value(forKey: "progressIndicator") as? NSProgressIndicator,
-              let cancel = panel.value(forKey: "cancelButton") as? NSButton
+              let caption = panel.value(forKey: outlets[0]) as? NSTextField,
+              let bar = panel.value(forKey: outlets[1]) as? NSProgressIndicator,
+              let cancel = panel.value(forKey: outlets[2]) as? NSButton
         else { return nil }
         caption.stringValue = message
         caption.font = .boldSystemFont(ofSize: NSFont.systemFontSize)

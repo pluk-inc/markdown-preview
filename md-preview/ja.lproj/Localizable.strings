@@ -477,3 +477,6 @@
 
 /* Share links */
 "Keep Document Private" = "書類を非公開のままにする";
+
+/* Share links */
+"Markdown Preview lost the key that manages this link, so it cannot change or stop it. The link stops working on %@." = "Markdown Preview はこのリンクを管理するキーを失ったため、リンクを変更または停止できません。リンクは %@ に無効になります。";

@@ -62,21 +62,30 @@ final class ShareLinkStore {
         for replaced in records where replaced.filePath == record.filePath && replaced.id != record.id {
             ShareLinkKeychain.delete(account: replaced.id)
         }
+        let previous = records
         records.removeAll { $0.id == record.id || $0.filePath == record.filePath }
         records.append(record)
-        save()
+        do {
+            try save()
+        } catch {
+            // A record that is not on disk is lost on the next launch; the
+            // caller revokes the link instead.
+            records = previous
+            ShareLinkKeychain.delete(account: record.id)
+            throw error
+        }
     }
 
     func update(_ record: Record) {
         guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }
         records[index] = record
-        save()
+        saveLogging()
     }
 
     func remove(id: String) {
         ShareLinkKeychain.delete(account: id)
         records.removeAll { $0.id == id }
-        save()
+        saveLogging()
     }
 
     // MARK: - Persistence
@@ -90,18 +99,24 @@ final class ShareLinkStore {
             ShareLinkKeychain.delete(account: expired.id)
         }
         records = stored.filter { $0.expiresAt > now }
-        if records.count != stored.count { save() }
+        if records.count != stored.count { saveLogging() }
     }
 
     /// Posted after the list changes, so windows can update their subtitle.
     static let didChangeNotification = Notification.Name("ShareLinkStoreDidChange")
 
-    private func save() {
+    private func save() throws {
         defer { NotificationCenter.default.post(name: Self.didChangeNotification, object: self) }
+        try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try JSONEncoder().encode(records).write(to: fileURL, options: .atomic)
+    }
+
+    /// For changes that leave nothing unmanaged if they are not saved: a
+    /// later expiry, or a link that is already revoked.
+    private func saveLogging() {
         do {
-            try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(),
-                                                    withIntermediateDirectories: true)
-            try JSONEncoder().encode(records).write(to: fileURL, options: .atomic)
+            try save()
         } catch {
             NSLog("ShareLinkStore: could not save the link list: \(error)")
         }

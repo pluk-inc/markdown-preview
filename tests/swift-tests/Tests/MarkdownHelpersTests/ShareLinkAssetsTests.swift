@@ -60,6 +60,26 @@ final class ShareLinkAssetsTests: XCTestCase {
         XCTAssertEqual(collect(#"<img src="img/link.png">"#), [])
     }
 
+    func testSkipsImagesThePreviewDoesNotShow() {
+        let html = """
+        <!-- <img src="img/a.png"> -->
+        <template><img src="img/a.png"></template>
+        <noscript><img src="img/b.svg"></noscript>
+        <img hidden src="img/My Photo.jpg">
+        <!-- unterminated <img src="img/a.png">
+        """
+        XCTAssertEqual(collect(html), [])
+    }
+
+    func testKeepsTheAuthoredNameOfASymlinkInsideTheFolder() throws {
+        try FileManager.default.createSymbolicLink(
+            at: directory.appendingPathComponent("img/alias.png"),
+            withDestinationURL: directory.appendingPathComponent("img/a.png"))
+        let assets = collect(#"<img src="img/alias.png">"#)
+        XCTAssertEqual(assets.map(\.path), ["img/alias.png"])
+        XCTAssertEqual(assets.first?.data, Data("img/a.png".utf8))
+    }
+
     func testCollectsFromTheAppRenderer() {
         let html = MarkdownHTML.render(markdown: "![a](img/a.png)\n\n![p](<img/My Photo.jpg>)\n").articleHTML
         XCTAssertEqual(collect(html).map(\.path), ["img/a.png", "img/My Photo.jpg"])

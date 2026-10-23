@@ -477,3 +477,6 @@
 
 /* Share links */
 "Keep Document Private" = "Zachowaj dokument jako prywatny";
+
+/* Share links */
+"Markdown Preview lost the key that manages this link, so it cannot change or stop it. The link stops working on %@." = "Markdown Preview utracił klucz zarządzający tym linkiem, więc nie może go zmienić ani zatrzymać. Link przestanie działać %@.";

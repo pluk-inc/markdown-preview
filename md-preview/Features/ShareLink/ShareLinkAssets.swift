@@ -17,36 +17,58 @@ nonisolated enum ShareLinkAssets {
         "webp": "image/webp", "avif": "image/avif", "svg": "image/svg+xml",
     ]
 
-    private static let imgSrc = try! NSRegularExpression(
-        // `\s` before `src`, not `\b`: `\b` also matches inside `data-src`.
-        pattern: #"<img\b[^>]*?\ssrc\s*=\s*(?:"([^"]*)"|'([^']*)')"#,
+    private static let imgTag = try! NSRegularExpression(
+        pattern: #"<img\b[^>]*>"#, options: [.caseInsensitive])
+
+    // `\s` before `src`, not `\b`: `\b` also matches inside `data-src`.
+    private static let srcAttribute = try! NSRegularExpression(
+        pattern: #"\ssrc\s*=\s*(?:"([^"]*)"|'([^']*)')"#, options: [.caseInsensitive])
+
+    private static let hiddenAttribute = try! NSRegularExpression(
+        pattern: #"\shidden(?:\s|=|/?>)"#, options: [.caseInsensitive])
+
+    /// HTML that the preview never shows: comments and the contents of
+    /// elements that do not render. An image written there must not be
+    /// uploaded with the share without the user ever seeing it.
+    private static let inertHTML = try! NSRegularExpression(
+        pattern: #"<!--[\s\S]*?(?:-->|$)|<(script|style|template|textarea|noscript|title|xmp)\b[\s\S]*?</\1\s*>"#,
         options: [.caseInsensitive])
 
-    /// The images `articleHTML` references by relative path, read from
-    /// `directory`. Each asset's path is relative to `directory`.
+    /// The images `articleHTML` shows by relative path, read from
+    /// `directory`. Each asset keeps the path the document uses for it.
     static func collect(articleHTML html: String,
                         directory: URL,
                         reader: (URL) throws -> Data = { try Data(contentsOf: $0) })
         -> [SharePayload.Asset] {
-        let root = directory.standardizedFileURL.resolvingSymlinksInPath()
+        let html = inertHTML.stringByReplacingMatches(
+            in: html, range: NSRange(html.startIndex..., in: html), withTemplate: "")
+        let base = directory.standardizedFileURL
+        let root = base.resolvingSymlinksInPath()
         var seen = Set<String>()
         var assets: [SharePayload.Asset] = []
 
-        let range = NSRange(html.startIndex..., in: html)
-        for match in imgSrc.matches(in: html, range: range) {
-            let captured = [1, 2].lazy
-                .compactMap { Range(match.range(at: $0), in: html) }
-                .first
-            guard let captured,
-                  let source = decodedRelativeSource(String(html[captured]))
+        for match in imgTag.matches(in: html, range: NSRange(html.startIndex..., in: html)) {
+            guard let tagRange = Range(match.range, in: html) else { continue }
+            let tag = String(html[tagRange])
+            let tagNSRange = NSRange(tag.startIndex..., in: tag)
+            guard hiddenAttribute.firstMatch(in: tag, range: tagNSRange) == nil,
+                  let attribute = srcAttribute.firstMatch(in: tag, range: tagNSRange),
+                  let captured = [1, 2].lazy
+                    .compactMap({ Range(attribute.range(at: $0), in: tag) })
+                    .first,
+                  let source = decodedRelativeSource(String(tag[captured]))
             else { continue }
 
-            let file = root.appendingPathComponent(source).standardizedFileURL
-                .resolvingSymlinksInPath()
-            guard file != root, file.isDescendantOrSame(of: root),
+            // The authored path names the asset, because the HTML refers to
+            // it by that name; the resolved file decides confinement and is
+            // what gets read, so a symlink cannot reach outside the folder.
+            let authored = base.appendingPathComponent(source).standardizedFileURL
+            let file = authored.resolvingSymlinksInPath()
+            guard authored != base, authored.isDescendantOrSame(of: base),
+                  file != root, file.isDescendantOrSame(of: root),
                   let type = mediaTypes[file.pathExtension.lowercased()]
             else { continue }
-            let path = String(file.path.dropFirst(root.path.count + 1))
+            let path = String(authored.path.dropFirst(base.path.count + 1))
             guard seen.insert(path).inserted, let data = try? reader(file) else { continue }
             assets.append(.init(path: path, type: type, data: data))
         }
