@@ -46,7 +46,9 @@ final class TablePreviewWindow: NSObject, NSWindowDelegate {
                     html { overflow-x: auto !important; }
                     :where(html) { background: -apple-system-text-background; }
                     article.markdown-body, table { overflow: visible; }
-                    th {
+                    /* Only the column header row: row headers in a raw
+                       HTML table body would pile up at the top. */
+                    thead th {
                         position: sticky;
                         top: 0;
                         background: var(--mdp-page-bg, -apple-system-text-background);
