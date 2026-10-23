@@ -607,7 +607,7 @@ extension DocumentWindowController {
                 NSApp.sendAction(action.action, to: nil, from: self)
             }
         }
-        return services + proposedServices
+        return [shareLinkService()].compactMap { $0 } + services + proposedServices
     }
 }
 
