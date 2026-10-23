@@ -27,6 +27,10 @@ nonisolated enum ShareLinkAssets {
     private static let hiddenAttribute = try! NSRegularExpression(
         pattern: #"\shidden(?:\s|=|/?>)"#, options: [.caseInsensitive])
 
+    // Quoted values are blanked before the `hidden` check, so alt text such
+    // as "a hidden gem" does not hide the image.
+    private static let quotedValue = try! NSRegularExpression(pattern: #""[^"]*"|'[^']*'"#)
+
     /// HTML that the preview never shows: comments and the contents of
     /// elements that do not render. An image written there must not be
     /// uploaded with the share without the user ever seeing it.
@@ -51,7 +55,8 @@ nonisolated enum ShareLinkAssets {
             guard let tagRange = Range(match.range, in: html) else { continue }
             let tag = String(html[tagRange])
             let tagNSRange = NSRange(tag.startIndex..., in: tag)
-            guard hiddenAttribute.firstMatch(in: tag, range: tagNSRange) == nil,
+            let names = quotedValue.stringByReplacingMatches(in: tag, range: tagNSRange, withTemplate: "\"\"")
+            guard hiddenAttribute.firstMatch(in: names, range: NSRange(names.startIndex..., in: names)) == nil,
                   let attribute = srcAttribute.firstMatch(in: tag, range: tagNSRange),
                   let captured = [1, 2].lazy
                     .compactMap({ Range(attribute.range(at: $0), in: tag) })
