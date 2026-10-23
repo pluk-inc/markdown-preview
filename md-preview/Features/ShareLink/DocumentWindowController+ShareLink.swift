@@ -2,8 +2,9 @@
 //  DocumentWindowController+ShareLink.swift
 //  md-preview
 //
-//  "Copy Link" in the Share popover. The picker closes on click, so a
-//  small popover on the Share button reports progress and the result.
+//  "Copy Link" and, while the file has a live link, "Stop Sharing" in the
+//  Share popover. The picker closes on click, so a small popover on the
+//  Share button reports progress and the result.
 //
 
 import AppKit
@@ -12,38 +13,66 @@ import SwiftUI
 
 extension DocumentWindowController {
 
-    /// The Share popover row, or nil while the feature is off or the
-    /// window has no saved file to link.
-    func shareLinkService() -> NSSharingService? {
-        guard ShareLinkFeature.isEnabled, currentFileURL != nil, currentMarkdown != nil else {
-            return nil
+    /// The Share popover rows; none while the feature is off or the window
+    /// has no saved file to link.
+    func shareLinkServices() -> [NSSharingService] {
+        guard ShareLinkFeature.isEnabled, let fileURL = currentFileURL, currentMarkdown != nil else {
+            return []
         }
-        return NSSharingService(title: L("Copy Link"),
-                                image: NSImage(systemSymbolName: "link",
-                                               accessibilityDescription: L("Copy Link")) ?? NSImage(),
-                                alternateImage: nil) { [weak self] in
+        let copyLink = NSSharingService(
+            title: L("Copy Link"),
+            image: NSImage(systemSymbolName: "link", accessibilityDescription: L("Copy Link")) ?? NSImage(),
+            alternateImage: nil
+        ) { [weak self] in
             self?.copyShareLink()
         }
+        guard ShareLinkStore.shared.record(forFile: fileURL) != nil else { return [copyLink] }
+
+        // The picker draws titles in its own color; only the icon can be red.
+        let stopImage = NSImage(systemSymbolName: "xmark.circle", accessibilityDescription: L("Stop Sharing"))?
+            .withSymbolConfiguration(.init(paletteColors: [.systemRed]))
+        stopImage?.isTemplate = false
+        let stopSharing = NSSharingService(title: L("Stop Sharing"), image: stopImage ?? NSImage(),
+                                           alternateImage: nil) { [weak self] in
+            self?.stopShareLink()
+        }
+        return [copyLink, stopSharing]
     }
 
     private func copyShareLink() {
         guard let fileURL = currentFileURL, let markdown = currentMarkdown else { return }
-        let status = ShareLinkStatus()
+        runShareLinkTask(working: L("Creating Link…"), done: L("Link Copied"),
+                         failure: L("Could Not Copy Link")) {
+            let link = try await ShareLinkSession.link(forFile: fileURL, markdown: markdown)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(link.absoluteString, forType: .string)
+        }
+    }
+
+    private func stopShareLink() {
+        guard let fileURL = currentFileURL else { return }
+        runShareLinkTask(working: L("Stopping Sharing…"), done: L("Sharing Stopped"),
+                         failure: L("Could Not Stop Sharing")) {
+            try await ShareLinkSession.stopSharing(fileURL: fileURL)
+        }
+    }
+
+    private func runShareLinkTask(working: String, done: String, failure: String,
+                                  _ work: @escaping @MainActor () async throws -> Void) {
+        let status = ShareLinkStatus(message: working)
         let popover = showShareLinkStatus(status)
 
         Task { @MainActor [weak self] in
             do {
-                let link = try await ShareLinkSession.link(forFile: fileURL, markdown: markdown)
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(link.absoluteString, forType: .string)
-                status.state = .copied
+                try await work()
+                status.finish(done)
                 try? await Task.sleep(for: .seconds(1.5))
                 popover?.close()
             } catch {
                 popover?.close()
                 guard let window = self?.documentWindow else { return }
                 let alert = NSAlert()
-                alert.messageText = L("Could Not Copy Link")
+                alert.messageText = failure
                 alert.informativeText = ShareLinkSession.message(for: error)
                 alert.beginSheetModal(for: window, completionHandler: nil)
             }
@@ -75,8 +104,15 @@ extension DocumentWindowController {
 
 @MainActor @Observable
 private final class ShareLinkStatus {
-    enum State { case working, copied }
-    var state = State.working
+    private(set) var message: String
+    private(set) var isDone = false
+
+    init(message: String) { self.message = message }
+
+    func finish(_ message: String) {
+        self.message = message
+        isDone = true
+    }
 }
 
 private struct ShareLinkStatusView: View {
@@ -84,14 +120,12 @@ private struct ShareLinkStatusView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            switch status.state {
-            case .working:
-                ProgressView().controlSize(.small)
-                Text(L("Creating Link…"))
-            case .copied:
+            if status.isDone {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                Text(L("Link Copied"))
+            } else {
+                ProgressView().controlSize(.small)
             }
+            Text(status.message)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

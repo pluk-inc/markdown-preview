@@ -88,6 +88,20 @@ enum ShareLinkSession {
         return link
     }
 
+    /// Deletes the file's link on the server and forgets it here. A link the
+    /// server no longer has is already stopped.
+    static func stopSharing(fileURL: URL, store: ShareLinkStore = .shared) async throws {
+        guard let record = store.record(forFile: fileURL) else { return }
+        if let baseURL = ShareLinkFeature.baseURL, let secrets = store.secrets(for: record) {
+            do {
+                try await ShareLinkClient(baseURL: baseURL)
+                    .delete(id: record.id, ownerToken: secrets.ownerToken)
+            } catch ShareLinkClient.Failure.notFound {
+            }
+        }
+        store.remove(id: record.id)
+    }
+
     static func message(for error: Error) -> String {
         switch error {
         case ShareLinkCrypto.Failure.tooLarge, ShareLinkClient.Failure.tooLarge:
