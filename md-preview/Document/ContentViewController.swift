@@ -31,6 +31,9 @@ final class ContentViewController: NSViewController {
     private var pendingNavigationScrollTarget: NavigationScrollTarget?
     private var shouldApplyNavigationTargetOnHeight = false
     private var exportSource: ExportSource?
+    /// A received share waiting for its remote-content rules. A newer
+    /// display or a clear cancels it, so it never renders over them.
+    private var pendingShareDisplay: Task<Void, Never>?
     /// Early attempts run against the blanked page shown during a file
     /// switch, where the target can't resolve yet — retry on a short timer
     /// (height events accelerate it), giving up after ~2s.
@@ -216,11 +219,14 @@ final class ContentViewController: NSViewController {
     ) {
         // A received share renders only once its remote content is blocked;
         // the rules compile asynchronously the first time.
+        pendingShareDisplay?.cancel()
+        pendingShareDisplay = nil
         if !ShareLinkOpener.isReceivedCopy(sourceURL) {
             webView.remoteContentBlocker = nil
         } else if webView.remoteContentBlocker == nil {
-            Task { @MainActor [weak self] in
-                guard let blocker = await ShareLinkOpener.remoteContentBlocker(), let self else { return }
+            pendingShareDisplay = Task { @MainActor [weak self] in
+                guard let blocker = await ShareLinkOpener.remoteContentBlocker(),
+                      !Task.isCancelled, let self else { return }
                 self.webView.remoteContentBlocker = blocker
                 self.display(markdown: markdown, sourceURL: sourceURL,
                              assetBaseURL: assetBaseURL, renderImmediately: renderImmediately)
@@ -256,6 +262,8 @@ final class ContentViewController: NSViewController {
     private(set) var hasPaintedFirstDocument = false
 
     func clearContent() {
+        pendingShareDisplay?.cancel()
+        pendingShareDisplay = nil
         exportSource = nil
         resetScrollspy()
         webView.clearContent()
