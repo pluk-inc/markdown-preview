@@ -479,3 +479,18 @@
 
 /* Share links */
 "Markdown Preview lost the key that manages this link, so it cannot change or stop it. The link stops working on %@." = "Markdown Preview کلید مدیریت این پیوند را از دست داده است، بنابراین نمی‌تواند آن را تغییر دهد یا متوقف کند. این پیوند در %@ از کار می‌افتد.";
+
+/* Opening share links */
+"Open Shared Link…" = "باز کردن پیوند اشتراک‌گذاشته‌شده…";
+"Open Shared Link" = "باز کردن پیوند اشتراک‌گذاشته‌شده";
+"Paste a link to a document shared from Markdown Preview." = "پیوند سندی را که از Markdown Preview به اشتراک گذاشته شده است جای‌گذاری کنید.";
+"This is not a complete share link. The part after # is the key; ask the sender to copy the link again." = "این پیوند اشتراک‌گذاری کامل نیست. بخش بعد از # کلید است؛ از فرستنده بخواهید پیوند را دوباره کپی کند.";
+"Enter Password" = "رمز عبور را وارد کنید";
+"Incorrect Password" = "رمز عبور نادرست است";
+"The sender protected this shared document with a password." = "فرستنده این سند اشتراک‌گذاشته‌شده را با رمز عبور محافظت کرده است.";
+"Shared Document" = "سند اشتراک‌گذاشته‌شده";
+"The shared document can’t be opened." = "سند اشتراک‌گذاشته‌شده باز نمی‌شود.";
+"This link has expired, or sharing was stopped." = "این پیوند منقضی شده یا اشتراک‌گذاری آن متوقف شده است.";
+"This link is damaged, or it does not match the shared document." = "این پیوند آسیب دیده است یا با سند اشتراک‌گذاشته‌شده مطابقت ندارد.";
+"Shared documents are read-only" = "سندهای اشتراک‌گذاشته‌شده فقط‌خواندنی هستند";
+"Read only" = "فقط‌خواندنی";

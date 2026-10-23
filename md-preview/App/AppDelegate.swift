@@ -158,6 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         installFormatMenu()
         installNewTabMenuItem()
         installSearchForDocumentMenuItem()
+        installOpenSharedLinkMenuItem()
         installFileExportMenuItems()
         installGoMenu()
         installSettingsMenuItem()
@@ -260,6 +261,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         var malformedSchemeURLs: [URL] = []
         for incoming in urls {
+            if let link = ShareLinkOpener.parse(incoming) {
+                openSharedLink(link)
+                continue
+            }
             guard let url = ExternalOpenScheme.resolvedURL(opening: incoming) else {
                 malformedSchemeURLs.append(incoming)
                 continue
@@ -270,24 +275,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 continue
             }
 
-            pendingOpenURLCount += 1
-            NSDocumentController.shared.openDocument(withContentsOf: url,
-                                                     display: true) { [weak self] document, _, error in
-                if let error {
-                    NSAlert(error: error).runModal()
-                }
-                guard let self else { return }
-                self.showWindowIfNeeded(for: document)
-                self.pendingOpenURLCount -= 1
-                if error != nil {
-                    self.scheduleDocumentPromptIfIdle()
-                }
-            }
+            openDocument(at: url)
         }
 
         if !malformedSchemeURLs.isEmpty {
             presentUnsupportedSchemeURLAlert(malformedSchemeURLs)
             scheduleDocumentPromptIfIdle()
+        }
+    }
+
+    private func openDocument(at url: URL) {
+        pendingOpenURLCount += 1
+        NSDocumentController.shared.openDocument(withContentsOf: url,
+                                                 display: true) { [weak self] document, _, error in
+            if let error {
+                NSAlert(error: error).runModal()
+            }
+            guard let self else { return }
+            self.showWindowIfNeeded(for: document)
+            self.pendingOpenURLCount -= 1
+            if error != nil {
+                self.scheduleDocumentPromptIfIdle()
+            }
+        }
+    }
+
+    /// Unpacks a received share and opens it read-only. A window already
+    /// showing that share comes forward instead of being replaced.
+    private func openSharedLink(_ link: ShareLink) {
+        if let document = NSDocumentController.shared.documents.first(where: {
+            ShareLinkOpener.isReceivedCopy($0.fileURL, id: link.id)
+        }) {
+            document.showWindows()
+            return
+        }
+        pendingOpenURLCount += 1
+        Task { @MainActor in
+            let file = await ShareLinkOpener.download(link)
+            pendingOpenURLCount -= 1
+            if let file {
+                openDocument(at: file)
+            } else {
+                scheduleDocumentPromptIfIdle()
+            }
+        }
+    }
+
+    @objc func openSharedLinkFromMenu(_ sender: Any?) {
+        cancelScheduledDocumentPrompt()
+        if let link = ShareLinkOpener.promptForLink() {
+            openSharedLink(link)
         }
     }
 
@@ -982,6 +1019,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let openIndex = fileMenu.items
             .firstIndex { $0.action == #selector(openDocument(_:)) }
         fileMenu.insertItem(item, at: openIndex.map { $0 + 1 } ?? 0)
+    }
+
+    private func installOpenSharedLinkMenuItem() {
+        guard ShareLinkFeature.isEnabled,
+              let fileMenu = topLevelSubmenu(matching: Self.fileMenuTitles),
+              let searchIndex = fileMenu.items.firstIndex(where: {
+                  $0.action == #selector(DocumentWindowController.searchForDocument(_:))
+              })
+        else { return }
+
+        let item = NSMenuItem(title: NSLocalizedString("Open Shared Link…", comment: "File menu item"),
+                              action: #selector(openSharedLinkFromMenu(_:)),
+                              keyEquivalent: "")
+        item.target = self
+        fileMenu.insertItem(item, at: searchIndex + 1)
     }
 
     private func installFileExportMenuItems() {

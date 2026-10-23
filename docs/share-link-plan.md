@@ -3,8 +3,8 @@
 Status: draft, 2026-10-16; revised 2026-10-23. Built behind the hidden
 `MarkdownPreview.shareLinksEnabled` default: the format and crypto (§2), the
 Worker API and its deploy setup on `md-preview.app` (§3), and sharing from the
-app (§4.1–4.4), and the web viewer (§5, without diagrams yet). Still planned:
-opening links in the app and Universal Links (§4.5).
+app (§4.1–4.4), the web viewer (§5, without diagrams yet), and opening links
+in the app (§4.5). Still planned: Universal Links (§4.5).
 
 Goal: from an open Markdown document, the user creates a random link. Anyone
 with the link can read the document in a browser, or open it in Markdown
@@ -310,15 +310,20 @@ test code is kept as a patch outside the repo.
 
 ### 4.5 Opening a share in the app
 
-- `ExternalOpenScheme` gains a `share` host; `AppDelegate.application(_:open:)`
-  (`AppDelegate.swift:255-291`) gets a branch for it. Keep the existing
-  malformed-link alert for anything else.
-- File › "Open Shared Link…" with a field that accepts the `https://` form.
-- Flow: fetch → ask for password if `#p.` → decrypt → write markdown and
-  assets into `Caches/SharedLinks/<id>/` (paths confined to that folder) →
-  open as a **read-only** document with that folder as the asset base. The
-  window title shows the share title and a "Shared" badge. "Save As…" copies it
-  out.
+Built (2026-10-23), except Universal Links:
+
+- `AppDelegate.application(_:open:)` sends `md-preview://share/…` and web
+  links to `ShareLinkOpener` before `ExternalOpenScheme`; anything else keeps
+  the malformed-link alert. Behind the same hidden default as sharing.
+- File › "Open Shared Link…" asks for a link (either form), prefilled from the
+  clipboard when it holds one.
+- Flow: fetch → ask for the password when the link or envelope has one →
+  decrypt → write the Markdown and its assets into
+  `Caches/SharedLinks/<id>/<title>/` (asset paths confined to that folder) →
+  open it. Opening the same link again brings its window forward.
+- The window is **read-only**: subtitle "Read only", Edit disabled, checkbox
+  clicks do not save, no Copy Link. The sidebar starts on Table of Contents
+  for that window only. Saving an editable copy is not built yet.
 - Opening a share needs a new app version, shipped through Sparkle: the
   current app does not know the format. It needs no new sandbox capability for
   the download — `network.client` is already granted.

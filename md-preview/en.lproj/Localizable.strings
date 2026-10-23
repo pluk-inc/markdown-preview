@@ -480,3 +480,18 @@
 
 /* Share links */
 "Markdown Preview lost the key that manages this link, so it cannot change or stop it. The link stops working on %@." = "Markdown Preview lost the key that manages this link, so it cannot change or stop it. The link stops working on %@.";
+
+/* Opening share links */
+"Open Shared Link…" = "Open Shared Link…";
+"Open Shared Link" = "Open Shared Link";
+"Paste a link to a document shared from Markdown Preview." = "Paste a link to a document shared from Markdown Preview.";
+"This is not a complete share link. The part after # is the key; ask the sender to copy the link again." = "This is not a complete share link. The part after # is the key; ask the sender to copy the link again.";
+"Enter Password" = "Enter Password";
+"Incorrect Password" = "Incorrect Password";
+"The sender protected this shared document with a password." = "The sender protected this shared document with a password.";
+"Shared Document" = "Shared Document";
+"The shared document can’t be opened." = "The shared document can’t be opened.";
+"This link has expired, or sharing was stopped." = "This link has expired, or sharing was stopped.";
+"This link is damaged, or it does not match the shared document." = "This link is damaged, or it does not match the shared document.";
+"Shared documents are read-only" = "Shared documents are read-only";
+"Read only" = "Read only";

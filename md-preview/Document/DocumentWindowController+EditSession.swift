@@ -10,7 +10,7 @@ import UniformTypeIdentifiers
 
 extension DocumentWindowController {
     func enterEditMode(autofocus: Bool = false) {
-        guard let split = mainSplit, !split.isEditingDocument,
+        guard let split = mainSplit, !split.isEditingDocument, !isReceivedShare,
               let markdown = editorDraftMarkdown ?? currentMarkdown else {
             NSSound.beep()
             return
@@ -575,7 +575,7 @@ extension DocumentWindowController {
     func saveEditedMarkdown(_ text: String,
                             diskState: DiskFileState,
                             completion: @escaping (EditedMarkdownSaveResult) -> Void) {
-        guard let url = currentFileURL else {
+        guard let url = currentFileURL, !isReceivedShare else {
             completion(.cancelled)
             return
         }

@@ -428,6 +428,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         documentWindow.title = fileURL?.lastPathComponent
             ?? NSLocalizedString("Untitled", comment: "Window title when no document is open")
         updateWindowSubtitle()
+        showOutlineForReceivedShare()
         if let fileURL {
             LaunchSignposts.interval("renderBeforeShow") {
                 renderCurrentDocument(text: markdown, fileURL: fileURL, renderImmediately: true)
