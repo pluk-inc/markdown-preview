@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import XCTest
 @testable import MarkdownHelpers
@@ -157,9 +158,25 @@ final class ShareLinkCryptoTests: XCTestCase {
         }
     }
 
+    func testRefusesToSealMoreThanOpenWouldInflate() {
+        let tooBig = Data(count: ShareLinkCrypto.maxPlaintextBytes + 1)
+        XCTAssertThrowsError(try sealFast(tooBig, password: nil)) {
+            XCTAssertEqual($0 as? ShareLinkCrypto.Failure, .tooLarge)
+        }
+    }
+
     func testStopsInflatingPastThePlaintextLimit() throws {
+        // The app refuses to seal this, so build the envelope the way a
+        // hostile client would: a small DEFLATE stream of 64 MB of zeros.
         let bomb = Data(count: ShareLinkCrypto.maxPlaintextBytes + 1)
-        let envelope = try sealFast(bomb, password: nil)
+        let deflated = try (bomb as NSData).compressed(using: .zlib) as Data
+        var header = Data("MDP1".utf8) + Data([0, 0, 0, 0, 0])
+        header += salt + nonce
+        let contentKey = HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: key), salt: salt,
+                                                info: Data("md-preview share v1".utf8), outputByteCount: 32)
+        let box = try AES.GCM.seal(deflated, using: contentKey,
+                                   nonce: AES.GCM.Nonce(data: nonce), authenticating: header)
+        let envelope = header + box.ciphertext + box.tag
         XCTAssertLessThan(envelope.count, 1024 * 1024)
         XCTAssertThrowsError(try ShareLinkCrypto.open(envelope, key: key, password: nil)) {
             XCTAssertEqual($0 as? ShareLinkCrypto.Failure, .tooLarge)

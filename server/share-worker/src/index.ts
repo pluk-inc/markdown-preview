@@ -121,9 +121,13 @@ async function update(id: string, request: Request, env: Env, url: URL): Promise
   if (body instanceof Response) return body;
 
   const expiresAt = new Date(Date.now() + ttl).toISOString();
-  await env.SHARES.put(PREFIX + id, body, {
-    customMetadata: { ...existing, expiresAt },
+  // Only replace the object that was checked: a Stop Sharing (or another
+  // update) that lands while this upload is read must not be undone.
+  const written = await env.SHARES.put(PREFIX + id, body, {
+    customMetadata: { ...existing.metadata, expiresAt },
+    onlyIf: { etagMatches: existing.etag },
   });
+  if (!written) return error(404, "not_found");
   return json(200, { expiresAt });
 }
 
@@ -182,7 +186,7 @@ async function authorizedShare(
   id: string,
   request: Request,
   env: Env,
-): Promise<ShareMetadata | Response> {
+): Promise<{ metadata: ShareMetadata; etag: string } | Response> {
   const header = request.headers.get("Authorization") ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
   if (!token) return error(401, "unauthorized");
@@ -196,21 +200,46 @@ async function authorizedShare(
   if (given.byteLength !== stored.byteLength || !crypto.subtle.timingSafeEqual(given, stored)) {
     return error(404, "not_found");
   }
-  return metadata;
+  return { metadata, etag: object!.etag };
 }
 
 // The request body when it is an MDP1 envelope within the size limits.
-async function envelope(request: Request): Promise<ArrayBuffer | Response> {
+async function envelope(request: Request): Promise<Uint8Array | Response> {
   const declared = Number(request.headers.get("Content-Length") ?? "0");
   if (declared > MAX_ENVELOPE_BYTES) return error(413, "too_large");
 
-  const body = await request.arrayBuffer();
-  if (body.byteLength > MAX_ENVELOPE_BYTES) return error(413, "too_large");
-  const bytes = new Uint8Array(body);
+  const bytes = await readCapped(request, MAX_ENVELOPE_BYTES);
+  if (!bytes) return error(413, "too_large");
   if (bytes.byteLength < MIN_ENVELOPE_BYTES || !MAGIC.every((b, i) => bytes[i] === b)) {
     return error(400, "invalid_envelope");
   }
-  return body;
+  return bytes;
+}
+
+// The body, or null once it passes `limit`. Read in chunks, so a request
+// without Content-Length cannot make the Worker hold an oversized upload.
+async function readCapped(request: Request, limit: number): Promise<Uint8Array | null> {
+  if (!request.body) return new Uint8Array();
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limit) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 async function limited(limiter: RateLimit | undefined, request: Request): Promise<Response | null> {
@@ -221,7 +250,8 @@ async function limited(limiter: RateLimit | undefined, request: Request): Promis
 }
 
 function ttlMillis(url: URL): number | undefined {
-  return TTLS[url.searchParams.get("ttl") ?? DEFAULT_TTL];
+  const ttl = url.searchParams.get("ttl") ?? DEFAULT_TTL;
+  return Object.hasOwn(TTLS, ttl) ? TTLS[ttl] : undefined;
 }
 
 function isExpired(metadata: Record<string, string> | undefined, now: number): boolean {

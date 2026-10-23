@@ -41,9 +41,16 @@ enum ShareLinkSession {
     enum Failure: Error {
         /// No server address: the feature is off in this build.
         case notConfigured
+        /// The file has a live link, but its owner token is gone, so the
+        /// link can neither be updated nor stopped until it expires.
+        case lostCredentials(expiresAt: Date)
     }
 
     static let expiry = ShareLinkClient.Expiry.week
+
+    /// One job per file: two windows of the same file must not both create
+    /// a share, or the later one would drop the earlier one's owner token.
+    private static var jobs: [String: Task<URL, Error>] = [:]
 
     /// Creates or refreshes the link for `fileURL` and puts it on the
     /// clipboard, unless the task was cancelled while it uploaded.
@@ -58,42 +65,67 @@ enum ShareLinkSession {
     static func link(forFile fileURL: URL,
                      markdown: String,
                      store: ShareLinkStore = .shared) async throws -> URL {
+        let path = fileURL.standardizedFileURL.path
+        while let running = jobs[path] { _ = try? await running.value }
+        let job = Task { try await makeLink(forFile: fileURL, markdown: markdown, store: store) }
+        jobs[path] = job
+        defer { jobs[path] = nil }
+        return try await withTaskCancellationHandler {
+            try await job.value
+        } onCancel: {
+            job.cancel()
+        }
+    }
+
+    private static func makeLink(forFile fileURL: URL,
+                                 markdown: String,
+                                 store: ShareLinkStore) async throws -> URL {
         guard let baseURL = ShareLinkFeature.baseURL else { throw Failure.notConfigured }
         let client = ShareLinkClient(baseURL: baseURL)
         let fileURL = fileURL.standardizedFileURL
+        let payload = await makePayload(fileURL: fileURL, markdown: markdown)
 
-        // The app's own renderer, so the web viewer shows what the app shows.
-        let html = MarkdownHTML.render(markdown: markdown).articleHTML
-        let assets = ShareLinkAssets.collect(articleHTML: html,
-                                             directory: fileURL.deletingLastPathComponent())
-        let payload = SharePayload(title: fileURL.lastPathComponent, markdown: markdown,
-                                   html: html, assets: assets)
-
-        if var record = store.record(forFile: fileURL),
-           let secrets = store.secrets(for: record),
-           let key = Base64URL.decode(secrets.key) {
-            do {
-                let envelope = try await seal(payload, key: key)
-                record.expiresAt = try await client.update(id: record.id, envelope: envelope,
-                                                           ownerToken: secrets.ownerToken,
-                                                           expiry: expiry)
-                record.title = payload.title
-                store.update(record)
-                return try webLink(id: record.id, key: key, base: baseURL)
-            } catch ShareLinkClient.Failure.notFound {
-                // Gone from the server; make a new link below.
-                store.remove(id: record.id)
+        if var record = store.record(forFile: fileURL) {
+            // Without the owner token the old link can be neither updated
+            // nor revoked; replacing it would leave it live and unmanaged.
+            guard let secrets = store.secrets(for: record) else {
+                throw Failure.lostCredentials(expiresAt: record.expiresAt)
             }
+            if let key = Base64URL.decode(secrets.key) {
+                do {
+                    let envelope = try await seal(payload, key: key)
+                    record.expiresAt = try await client.update(id: record.id, envelope: envelope,
+                                                               ownerToken: secrets.ownerToken,
+                                                               expiry: expiry)
+                    record.title = payload.title
+                    store.update(record)
+                    return try webLink(id: record.id, key: key, base: baseURL)
+                } catch ShareLinkClient.Failure.notFound {
+                    // Gone from the server; make a new link below.
+                }
+            } else {
+                // A damaged key cannot seal; revoke the old link before
+                // replacing it, while its owner token still exists.
+                try await revoke(record.id, ownerToken: secrets.ownerToken, client: client)
+            }
+            store.remove(id: record.id)
         }
 
         let key = ShareLinkCrypto.randomKey()
         let envelope = try await seal(payload, key: key)
+        try Task.checkCancellation()
         let created = try await client.create(envelope, expiry: expiry)
         let record = ShareLinkStore.Record(id: created.id, title: payload.title,
                                            filePath: fileURL.path, createdAt: .now,
                                            expiresAt: created.expiresAt)
-        try store.add(record, secrets: .init(key: Base64URL.encode(key),
-                                             ownerToken: created.ownerToken))
+        do {
+            try store.add(record, secrets: .init(key: Base64URL.encode(key),
+                                                 ownerToken: created.ownerToken))
+        } catch {
+            // A link this Mac cannot remember could never be stopped.
+            try? await revoke(created.id, ownerToken: created.ownerToken, client: client)
+            throw error
+        }
         return try webLink(id: created.id, key: key, base: baseURL)
     }
 
@@ -101,13 +133,12 @@ enum ShareLinkSession {
     /// server no longer has is already stopped.
     static func stopSharing(fileURL: URL, store: ShareLinkStore = .shared) async throws {
         guard let record = store.record(forFile: fileURL) else { return }
-        if let baseURL = ShareLinkFeature.baseURL, let secrets = store.secrets(for: record) {
-            do {
-                try await ShareLinkClient(baseURL: baseURL)
-                    .delete(id: record.id, ownerToken: secrets.ownerToken)
-            } catch ShareLinkClient.Failure.notFound {
-            }
+        guard let baseURL = ShareLinkFeature.baseURL else { throw Failure.notConfigured }
+        guard let secrets = store.secrets(for: record) else {
+            throw Failure.lostCredentials(expiresAt: record.expiresAt)
         }
+        try await revoke(record.id, ownerToken: secrets.ownerToken,
+                         client: ShareLinkClient(baseURL: baseURL))
         store.remove(id: record.id)
     }
 
@@ -119,12 +150,36 @@ enum ShareLinkSession {
             L("Too many links in a short time. Wait a minute, then try again.")
         case let error as URLError where error.code == .notConnectedToInternet:
             L("You are offline. Connect to the internet, then try again.")
+        case Failure.lostCredentials(let expiresAt):
+            String(format: L("Markdown Preview lost the key that manages this link, so it cannot change or stop it. The link stops working on %@."),
+                   expiresAt.formatted(date: .abbreviated, time: .shortened))
         default:
             L("Markdown Preview could not reach the sharing server. Try again later.")
         }
     }
 
     // MARK: - Private
+
+    private static func revoke(_ id: String, ownerToken: String, client: ShareLinkClient) async throws {
+        do {
+            try await client.delete(id: id, ownerToken: ownerToken)
+        } catch ShareLinkClient.Failure.notFound {
+            // Already gone from the server.
+        }
+    }
+
+    /// Renders with the app's own renderer, so the web viewer shows what the
+    /// app shows, and reads the local images it uses. Off the main thread:
+    /// a long document or images on a slow volume would freeze the window.
+    private static func makePayload(fileURL: URL, markdown: String) async -> SharePayload {
+        await Task.detached(priority: .userInitiated) {
+            let html = MarkdownHTML.render(markdown: markdown).articleHTML
+            let assets = ShareLinkAssets.collect(articleHTML: html,
+                                                 directory: fileURL.deletingLastPathComponent())
+            return SharePayload(title: fileURL.lastPathComponent, markdown: markdown,
+                                html: html, assets: assets)
+        }.value
+    }
 
     /// Built from the key in hand, so the Keychain is not read back.
     private static func webLink(id: String, key: Data, base: URL) throws -> URL {

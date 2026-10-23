@@ -75,6 +75,9 @@ nonisolated enum ShareLinkCrypto {
         // ever come from code.
         guard key.count == keyByteCount else { throw Failure.invalidKey }
         precondition(salt.count == saltByteCount && nonce.count == nonceByteCount)
+        // `open` refuses to inflate more than this, so a larger plaintext
+        // would seal into a link nobody can open.
+        guard plaintext.count <= maxPlaintextBytes else { throw Failure.tooLarge }
 
         guard let deflated = try? (plaintext as NSData).compressed(using: .zlib) as Data else {
             throw Failure.compressionFailed

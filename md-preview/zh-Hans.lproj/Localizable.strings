@@ -491,3 +491,6 @@
 
 /* Share links */
 "Keep Document Private" = "保持文稿私密";
+
+/* Share links */
+"Markdown Preview lost the key that manages this link, so it cannot change or stop it. The link stops working on %@." = "Markdown Preview 丢失了管理此链接的密钥，因此无法更改或停止它。此链接将于 %@ 失效。";

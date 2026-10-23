@@ -51,7 +51,7 @@ describe("create and read", () => {
     for (const value of ["1h", "1d", "30d"]) {
       expect((await create(envelope, `?ttl=${value}`)).response.status).toBe(201);
     }
-    for (const value of ["never", "2d", ""]) {
+    for (const value of ["never", "2d", "", "constructor", "__proto__", "toString"]) {
       const { response, body } = await create(envelope, `?ttl=${value}`);
       expect(response.status, value).toBe(400);
       expect(body.error).toBe("invalid_ttl");
@@ -81,6 +81,24 @@ describe("create and read", () => {
     const { response, body } = await create(big);
     expect(response.status).toBe(413);
     expect(body.error).toBe("too_large");
+  });
+
+  it("stops reading an upload without Content-Length once it passes 5 MB", async () => {
+    let sent = 0;
+    const chunk = new Uint8Array(1024 * 1024);
+    chunk.set(envelope);
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        // Far more than the limit, if the Worker kept reading.
+        if (sent >= 64) return controller.close();
+        sent += 1;
+        controller.enqueue(chunk);
+      },
+    });
+    const { response, body } = await create(stream as unknown as BodyInit);
+    expect(response.status).toBe(413);
+    expect(body.error).toBe("too_large");
+    expect(sent).toBeLessThan(64);
   });
 
   it("answers 404 for unknown and malformed IDs", async () => {
