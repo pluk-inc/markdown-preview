@@ -453,3 +453,24 @@
 
 /* Share popover word count */
 "%ld words" = "%ld 語";
+
+/* Share links */
+"Copy Link to Share" = "共有用のリンクをコピー";
+"Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "リンクを知っている人は誰でも、共有を停止するか7日後にリンクの有効期限が切れるまで、この書類を読むことができます。書類は暗号化されており、このリンクでのみ開けます。";
+"Uploading Document…" = "書類をアップロード中…";
+"Could Not Copy Link" = "リンクをコピーできませんでした";
+"Manage Shared Document…" = "共有書類を管理…";
+"Shared" = "共有中";
+"Shared · Link expires %@" = "共有中 · リンクの有効期限: %@";
+"Permissions" = "アクセス権";
+"Anyone with the link" = "リンクを知っている全員";
+"People you choose" = "選択した人";
+"can view only" = "閲覧のみ";
+"can edit" = "編集可能";
+"Stop Sharing" = "共有を停止";
+"Stop sharing this document?" = "この書類の共有を停止しますか?";
+"If you stop sharing, people with the link can no longer open this document, and its copy is deleted from the server." = "共有を停止すると、リンクを知っている人はこの書類を開けなくなり、サーバ上のコピーは削除されます。";
+"This document is too large to share as a link." = "この書類は大きすぎるため、リンクで共有できません。";
+"Too many links in a short time. Wait a minute, then try again." = "短時間に作成されたリンクが多すぎます。1分ほど待ってから、もう一度お試しください。";
+"You are offline. Connect to the internet, then try again." = "オフラインです。インターネットに接続してから、もう一度お試しください。";
+"Markdown Preview could not reach the sharing server. Try again later." = "Markdown Preview は共有サーバに接続できませんでした。しばらくしてからもう一度お試しください。";

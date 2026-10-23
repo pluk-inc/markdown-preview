@@ -256,31 +256,52 @@ Symlink these into `tests/swift-tests/Sources/MarkdownHelpers/` and add
   do not start using it for this.
 - Expired entries are removed from the list on launch.
 
-### 4.4 UI
+### 4.4 UI (built, 2026-10-23)
 
-- **Entry points:**
-  - A custom `NSSharingService` "Copy Share Link" added to the existing Share
-    toolbar picker (`DocumentWindowController+Toolbar.swift:336-343`, through
-    `sharingServicePicker(_:sharingServicesForItems:proposedSharingServices:)`).
-  - File › "Share Link…" (⇧⌘L if free) built in `AppDelegate`.
-- **Share sheet** (attached to the window):
-  - Expiry pop-up: 1 hour / 1 day / **7 days** / 30 days.
-  - Optional password field.
-  - "Include images" checkbox, on by default, with the total size; disabled
-    with an explanation when over 5 MB.
-  - Plain warning: "Anyone with the link can read this document. The link
-    contains the key; we cannot read or recover it."
-  - Button "Create Link" → progress → link field + Copy button + "Stop Sharing".
-- **Existing share:** when the current file already has a live share, the
-  sheet shows it with "Update Link Content", "Copy Link", and "Stop Sharing".
-- **Shared Links list:** a new section in the Privacy settings pane
-  (`PrivacySettingsView.swift`): title, expiry, Copy, Stop Sharing, and
-  "Stop All".
+The user asked for a minimal UI: one row in the existing Share popover, no
+options sheet. Links always last 7 days, have no password, and carry the
+document's local images when they fit (5 MB). Every surface below is a native
+AppKit control; the custom options sheet, the "Shared Links" settings list,
+and the File menu item from the first draft are dropped.
+
+- **Share popover row** (last row of the app's section, right above the
+  system's Copy; the popover gives app rows one section, and apps cannot add
+  rows next to Copy — checked against Pages and ShareKit, see below):
+  - **Copy Link** while the file has no live link.
+  - **Manage Shared Document…** while it has one.
+- **Copy Link** → `NSAlert` sheet "Copy Link to Share" (Continue / Cancel).
+  On macOS 26 a sheet alert hides the default app icon, matching ShareKit's
+  own Copy Link alert, which is also a plain `NSAlert`.
+- **Upload progress:** AppKit's private `NSProgressPanel` (from AppKit's
+  `NSProgressPanel.nib`, the standard progress sheet) with a bold caption
+  "Uploading Document…" and a round ✕ in place of its Cancel button, as in
+  Pages' own progress panel. Shown only when the upload takes over 0.5 s;
+  falls back to an `NSAlert` with a bar if the class or nib disappears. No
+  "copied" message afterwards.
+- **Manage sheet:** document icon, words · size, "Shared · Link expires …";
+  Permissions pop-ups "Anyone with the link" / "can view only" with "People
+  you choose" / "can edit" shown disabled; Stop Sharing (red), Copy Link
+  (re-uploads the current text, briefly reads "Copied"), Done.
+- **Stop Sharing** → `NSAlert` "Stop sharing this document?" with the app icon
+  set explicitly (sheet alerts hide it otherwise).
+- **Window subtitle:** "Shared", or "Shared · Edited", while the file has a
+  live link. The subtitle is not clickable; a Pages-style "Shared" toolbar
+  button that opens the manage content as a popover is an open option.
+- **Share popover header:** the document's own Finder icon, drawn 1.3× so the
+  page fills the system's white tile.
 - Read the text from `DocumentWindowController.currentMarkdown` /
   `currentFileURL`, not `document.markdown` (the sidebar can switch files).
-- Images: reuse the collector from the EPUB export
-  (`DocumentExportSession.swift:223-262`). Remote image URLs stay as they are.
-- Copy feedback reuses `flashCopyFeedback` (`+Toolbar.swift:413-436`).
+- Images: `ShareLinkAssets` collects the local images the rendered HTML
+  references, confined to the document's folder. Remote image URLs stay links.
+
+**Not possible without collaboration (investigated, rejected):** Pages' Copy
+Link sits next to Copy because Pages adds its rows to an iCloud collaboration
+item, and the popover then runs in a collaboration mode. For our own link the
+only route is a Shared with You item (`SWCollaborationMetadata`), which needs
+the restricted `com.apple.developer.shared-with-you[.collaboration]`
+entitlements, a Developer ID profile in release signing, and crashes inside
+ShareKit whenever the user has turned off the Messages share extension. The
+test code is kept as a patch outside the repo.
 
 ### 4.5 Opening a share in the app
 
@@ -329,7 +350,7 @@ app is missing.
 
 ### 4.6 Strings, docs, analytics
 
-- New strings in all four `Localizable.strings` (en, fa, ja, zh-Hans).
+- New strings in all five `Localizable.strings` (en, fa, ja, pl, zh-Hans).
 - README section and a CHANGELOG entry in the same PR that makes the feature
   visible (AGENTS.md rule). The README must state the trust model.
 - Analytics: at most a `"share link created"` count with no content, title,

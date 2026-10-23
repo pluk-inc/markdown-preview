@@ -453,3 +453,24 @@
 
 /* Share popover word count */
 "%ld words" = "%ld words";
+
+/* Share links */
+"Copy Link to Share" = "Copy Link to Share";
+"Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it.";
+"Uploading Document…" = "Uploading Document…";
+"Could Not Copy Link" = "Could Not Copy Link";
+"Manage Shared Document…" = "Manage Shared Document…";
+"Shared" = "Shared";
+"Shared · Link expires %@" = "Shared · Link expires %@";
+"Permissions" = "Permissions";
+"Anyone with the link" = "Anyone with the link";
+"People you choose" = "People you choose";
+"can view only" = "can view only";
+"can edit" = "can edit";
+"Stop Sharing" = "Stop Sharing";
+"Stop sharing this document?" = "Stop sharing this document?";
+"If you stop sharing, people with the link can no longer open this document, and its copy is deleted from the server." = "If you stop sharing, people with the link can no longer open this document, and its copy is deleted from the server.";
+"This document is too large to share as a link." = "This document is too large to share as a link.";
+"Too many links in a short time. Wait a minute, then try again." = "Too many links in a short time. Wait a minute, then try again.";
+"You are offline. Connect to the internet, then try again." = "You are offline. Connect to the internet, then try again.";
+"Markdown Preview could not reach the sharing server. Try again later." = "Markdown Preview could not reach the sharing server. Try again later.";
