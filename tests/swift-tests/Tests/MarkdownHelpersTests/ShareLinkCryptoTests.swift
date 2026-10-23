@@ -131,6 +131,14 @@ final class ShareLinkCryptoTests: XCTestCase {
         XCTAssertThrowsError(try ShareLinkCrypto.open(envelope, key: key.prefix(16), password: nil))
     }
 
+    func testRefusesToSealWithAWrongLengthKey() {
+        for badKey in [Data(count: 16), Data(count: 33), Data()] {
+            XCTAssertThrowsError(try ShareLinkCrypto.seal(plaintext, key: badKey, password: nil)) {
+                XCTAssertEqual($0 as? ShareLinkCrypto.Failure, .invalidKey)
+            }
+        }
+    }
+
     func testOpensAnEnvelopeSlice() throws {
         let envelope = try sealFast(plaintext, password: nil)
         let slice = (Data([0xFF]) + envelope).dropFirst()

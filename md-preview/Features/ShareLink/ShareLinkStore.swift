@@ -55,9 +55,14 @@ final class ShareLinkStore {
             .flatMap { try? JSONDecoder().decode(Secrets.self, from: $0) }
     }
 
+    /// Replaces any earlier record for the same file, so `record(forFile:)`
+    /// finds this one; an older record whose secrets were lost would hide it.
     func add(_ record: Record, secrets: Secrets) throws {
         try ShareLinkKeychain.write(JSONEncoder().encode(secrets), account: record.id)
-        records.removeAll { $0.id == record.id }
+        for replaced in records where replaced.filePath == record.filePath && replaced.id != record.id {
+            ShareLinkKeychain.delete(account: replaced.id)
+        }
+        records.removeAll { $0.id == record.id || $0.filePath == record.filePath }
         records.append(record)
         save()
     }

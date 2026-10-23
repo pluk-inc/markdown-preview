@@ -18,6 +18,8 @@ nonisolated enum ShareLinkCrypto {
     enum Failure: Error, Equatable {
         /// Not an `MDP1` envelope, or truncated.
         case malformedEnvelope
+        /// A sealing key that is not `keyByteCount` long.
+        case invalidKey
         /// The envelope is password-protected and no password was given.
         case passwordRequired
         /// Authentication failed: wrong key, wrong password, or tampering.
@@ -69,9 +71,10 @@ nonisolated enum ShareLinkCrypto {
                      salt: Data,
                      nonce: Data,
                      iterations: UInt32) throws -> Data {
-        precondition(key.count == keyByteCount
-                     && salt.count == saltByteCount
-                     && nonce.count == nonceByteCount)
+        // The key can come from a damaged Keychain item; salt and nonce only
+        // ever come from code.
+        guard key.count == keyByteCount else { throw Failure.invalidKey }
+        precondition(salt.count == saltByteCount && nonce.count == nonceByteCount)
 
         guard let deflated = try? (plaintext as NSData).compressed(using: .zlib) as Data else {
             throw Failure.compressionFailed
