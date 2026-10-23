@@ -214,6 +214,19 @@ final class ContentViewController: NSViewController {
         assetBaseURL: URL? = nil,
         renderImmediately: Bool = false
     ) {
+        // A received share renders only once its remote content is blocked;
+        // the rules compile asynchronously the first time.
+        if !ShareLinkOpener.isReceivedCopy(sourceURL) {
+            webView.remoteContentBlocker = nil
+        } else if webView.remoteContentBlocker == nil {
+            Task { @MainActor [weak self] in
+                guard let blocker = await ShareLinkOpener.remoteContentBlocker(), let self else { return }
+                self.webView.remoteContentBlocker = blocker
+                self.display(markdown: markdown, sourceURL: sourceURL,
+                             assetBaseURL: assetBaseURL, renderImmediately: renderImmediately)
+            }
+            return
+        }
         if !webView.hasRequestedDocument, let sourceURL {
             snapshotSource = (sourceURL, DocumentSnapshotCache.hash(markdown))
         }

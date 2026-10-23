@@ -324,6 +324,9 @@ Built (2026-10-23), except Universal Links:
 - The window is **read-only**: subtitle "Read only", Edit disabled, checkbox
   clicks do not save, no Copy Link. The sidebar starts on Table of Contents
   for that window only. Saving an editable copy is not built yet.
+- Remote images, styles, fonts, and media do not load in that window (a
+  WebKit content rule list), as in the web viewer: they would tell the
+  sender's server who opened the link. Link clicks still work.
 - Opening a share needs a new app version, shipped through Sparkle: the
   current app does not know the format. It needs no new sandbox capability for
   the download — `network.client` is already granted.
