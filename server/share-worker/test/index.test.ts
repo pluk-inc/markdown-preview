@@ -197,14 +197,18 @@ describe("headers and routing", () => {
     });
   });
 
-  it("serves a script-free page for a link opened in a browser", async () => {
+  it("serves the viewer page for a link, locked to same-origin scripts", async () => {
     const response = await call("/s/AAAAAAAAAAAAAAAAAAAAAA");
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
-    expect(response.headers.get("Content-Security-Policy")).toContain("default-src 'none'");
+    const csp = response.headers.get("Content-Security-Policy") ?? "";
+    expect(csp).toContain("default-src 'none'");
+    expect(csp).toContain("script-src 'self'");
+    expect(csp).not.toMatch(/script-src[^;]*unsafe/);
+    expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
     const html = await response.text();
-    expect(html).toContain("Markdown Preview");
-    expect(html).not.toContain("<script");
+    expect(html).toContain('src="/s/_viewer/main.js"');
+    expect(html).not.toMatch(/<script>(?!<\/script>)/);
   });
 
   it("rejects other methods and paths", async () => {

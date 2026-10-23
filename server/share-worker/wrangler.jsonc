@@ -13,6 +13,10 @@
     { "pattern": "md-preview.app/.well-known/apple-app-site-association", "zone_name": "md-preview.app" }
   ],
   "workers_dev": false,
+  // The web viewer (viewer/, built into public/ by `npm run build:viewer`).
+  // Files under /s/_viewer/ are served as they are; /s/<id> runs the Worker,
+  // which answers with the viewer page.
+  "assets": { "directory": "./public", "binding": "ASSETS" },
   "r2_buckets": [
     { "binding": "SHARES", "bucket_name": "md-preview-shares" }
   ],

@@ -3,9 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:viewer": "node viewer/build.mjs",
+    "predev": "npm run build:viewer",
     "dev": "wrangler dev",
+    "pretest": "npm run build:viewer",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "predeploy": "npm run build:viewer",
     "deploy": "wrangler deploy"
   },
   "devDependencies": {

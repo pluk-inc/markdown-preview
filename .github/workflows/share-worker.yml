@@ -5,12 +5,15 @@ on:
     paths:
       - server/share-worker/**
       - tests/fixtures/share-link/**
+      # The web viewer ships the app's vendor scripts.
+      - md-preview/Vendor/**
       - .github/workflows/share-worker.yml
   push:
     branches: [main]
     paths:
       - server/share-worker/**
       - tests/fixtures/share-link/**
+      - md-preview/Vendor/**
       - .github/workflows/share-worker.yml
 
 permissions:
