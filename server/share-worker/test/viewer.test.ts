@@ -5,6 +5,27 @@ import { describe, expect, it } from "vitest";
 import fixture from "../../../tests/fixtures/share-link/vectors.json";
 import { ShareError, openEnvelope, parseLink, requiresPassword } from "../viewer/share-crypto.js";
 import { assetPathForSource, decodePayload, displayTitle, normalizedAssetPath } from "../viewer/payload.js";
+import { LANGUAGES, pickLanguage, strings } from "../viewer/strings.js";
+
+describe("page text", () => {
+  it("has every string in every language", () => {
+    const keys = Object.keys(strings("en")).sort();
+    expect(LANGUAGES.sort()).toEqual(["en", "fa", "ja", "pl", "zh-Hans"]);
+    for (const language of LANGUAGES) {
+      const table = strings(language) as Record<string, string>;
+      expect(Object.keys(table).sort(), language).toEqual(keys);
+      expect(table.hiddenImageMany, language).toContain("{count}");
+    }
+  });
+
+  it("picks the reader's language, falling back to English", () => {
+    expect(pickLanguage(["ja-JP", "en-US"])).toBe("ja");
+    expect(pickLanguage(["zh-CN"])).toBe("zh-Hans");
+    expect(pickLanguage(["zh-TW", "fa-IR"])).toBe("fa");
+    expect(pickLanguage(["de-DE", "fr"])).toBe("en");
+    expect(pickLanguage([])).toBe("en");
+  });
+});
 
 function hex(text: string): Uint8Array {
   return new Uint8Array(text.match(/../g)!.map((byte) => parseInt(byte, 16)));

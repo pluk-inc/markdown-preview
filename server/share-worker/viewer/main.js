@@ -5,6 +5,7 @@
 
 import { ShareError, openEnvelope, parseLink } from "./share-crypto.js";
 import { assetPathForSource, decodePayload, displayTitle } from "./payload.js";
+import { pickLanguage, strings } from "./strings.js";
 
 // An explicit allowlist (never USE_PROFILES, which resets ALLOWED_ATTR):
 // the HTML comes from whoever made the envelope, not necessarily the app.
@@ -25,13 +26,8 @@ const SANITIZE_CONFIG = {
   ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
 };
 
-const MESSAGES = {
-  incomplete: "This link is incomplete. Ask the sender to copy it again; the part after # is the key.",
-  password: "This link is protected with a password, which this page cannot open yet. Open it in Markdown Preview.",
-  gone: "This link has expired, or sharing was stopped.",
-  damaged: "This link is damaged, or it does not match the shared document.",
-  unavailable: "The shared document could not be loaded. Try again later.",
-};
+const language = pickLanguage(navigator.languages?.length ? navigator.languages : [navigator.language]);
+const text = strings(language);
 
 const page = {
   title: document.getElementById("doc-title"),
@@ -42,6 +38,19 @@ const page = {
   article: document.querySelector("article.markdown-body"),
 };
 
+// The page's own text; the shared document keeps its own language.
+function localizePage() {
+  document.documentElement.lang = language;
+  for (const element of document.querySelectorAll("[data-l10n]")) {
+    element.textContent = text[element.dataset.l10n];
+  }
+  if (language === "fa") {
+    for (const element of document.querySelectorAll(".mdp-share-bar, .mdp-share-notice, .mdp-share-status, .mdp-share-footer")) {
+      element.setAttribute("dir", "rtl");
+    }
+  }
+}
+
 function showStatus(message) {
   page.status.textContent = message;
   page.status.hidden = false;
@@ -49,32 +58,32 @@ function showStatus(message) {
 
 async function main() {
   const link = parseLink(location.pathname, location.hash);
-  if (!link) return showStatus(MESSAGES.incomplete);
+  if (!link) return showStatus(text.incomplete);
   page.open.href = `md-preview://share/${link.id}#${link.fragment}`;
-  if (link.hasPassword) return showStatus(MESSAGES.password);
+  if (link.hasPassword) return showStatus(text.password);
 
   let envelope;
   try {
     const response = await fetch(`/shares/${link.id}`, { cache: "no-store", referrerPolicy: "no-referrer" });
-    if (response.status === 404) return showStatus(MESSAGES.gone);
-    if (!response.ok) return showStatus(MESSAGES.unavailable);
+    if (response.status === 404) return showStatus(text.gone);
+    if (!response.ok) return showStatus(text.unavailable);
     envelope = new Uint8Array(await response.arrayBuffer());
   } catch {
-    return showStatus(MESSAGES.unavailable);
+    return showStatus(text.unavailable);
   }
 
   let payload;
   try {
     payload = decodePayload(await openEnvelope(envelope, link.key, null));
   } catch (error) {
-    if (error instanceof ShareError && error.code === "password") return showStatus(MESSAGES.password);
-    return showStatus(MESSAGES.damaged);
+    if (error instanceof ShareError && error.code === "password") return showStatus(text.password);
+    return showStatus(text.damaged);
   }
   render(payload);
 }
 
 function render(payload) {
-  const title = displayTitle(payload.title) || "Shared document";
+  const title = displayTitle(payload.title) || text.untitled;
   document.title = `${title} · Markdown Preview`;
   page.title.textContent = title;
 
@@ -87,8 +96,8 @@ function render(payload) {
   const blockedImages = attachImages(payload.assets);
   if (blockedImages > 0) {
     page.notice.textContent = blockedImages === 1
-      ? "1 image from the web is hidden, to keep this page private."
-      : `${blockedImages} images from the web are hidden, to keep this page private.`;
+      ? text.hiddenImageOne
+      : text.hiddenImageMany.replace("{count}", String(blockedImages));
     page.notice.hidden = false;
   }
 
@@ -114,7 +123,7 @@ function attachImages(assets) {
       if (/^https?:/i.test(source)) blocked += 1;
       const placeholder = document.createElement("span");
       placeholder.className = "mdp-missing-image";
-      placeholder.textContent = image.alt || "Image";
+      placeholder.textContent = image.alt || text.image;
       image.replaceWith(placeholder);
     }
   }
@@ -136,4 +145,5 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
   }
 });
 
+localizePage();
 main();
