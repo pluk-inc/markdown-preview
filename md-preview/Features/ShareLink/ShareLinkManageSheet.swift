@@ -56,14 +56,21 @@ final class ShareLinkManageModel {
     enum Activity: Equatable { case idle, copying, copied, stopping }
 
     let fileURL: URL
-    let markdown: String
+    private let markdown: String
+    /// Worked out once; the view re-evaluates on every activity change.
+    let icon: NSImage
+    let summary: String
     private(set) var activity = Activity.idle
     private(set) var errorMessage: String?
     private(set) var record: ShareLinkStore.Record?
 
+    var isBusy: Bool { activity == .copying || activity == .stopping }
+
     init(fileURL: URL, markdown: String) {
         self.fileURL = fileURL
         self.markdown = markdown
+        icon = NSWorkspace.shared.icon(forFile: fileURL.path)
+        summary = SharePreviewItem.subtitle(for: markdown)
         record = ShareLinkStore.shared.record(forFile: fileURL)
     }
 
@@ -71,9 +78,7 @@ final class ShareLinkManageModel {
         activity = .copying
         errorMessage = nil
         do {
-            let link = try await ShareLinkSession.link(forFile: fileURL, markdown: markdown)
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(link.absoluteString, forType: .string)
+            try await ShareLinkSession.copyLink(forFile: fileURL, markdown: markdown)
             record = ShareLinkStore.shared.record(forFile: fileURL)
             activity = .copied
             try? await Task.sleep(for: .seconds(1.5))
@@ -140,14 +145,16 @@ struct ShareLinkManageView: View {
                     // A share link has one audience and one access level.
                     // The pop-ups match Pages; the other choices are shown
                     // but disabled.
-                    permissionMenu([
+                    PermissionPopUp(choices: [
                         (L("Anyone with the link"), true),
                         (L("People you choose"), false),
                     ])
-                    permissionMenu([
+                    .frame(maxWidth: .infinity)
+                    PermissionPopUp(choices: [
                         (L("can view only"), true),
                         (L("can edit"), false),
                     ])
+                    .frame(maxWidth: .infinity)
                 }
                 if let errorMessage = model.errorMessage {
                     Text(errorMessage)
@@ -169,13 +176,13 @@ struct ShareLinkManageView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: model.fileURL.path))
+            Image(nsImage: model.icon)
                 .resizable()
                 .frame(width: 48, height: 48)
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.fileURL.lastPathComponent)
                     .font(.headline)
-                Text(SharePreviewItem.subtitle(for: model.markdown))
+                Text(model.summary)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 if let record = model.record {
@@ -188,11 +195,6 @@ struct ShareLinkManageView: View {
         }
     }
 
-    private func permissionMenu(_ choices: [(title: String, enabled: Bool)]) -> some View {
-        PermissionPopUp(choices: choices)
-            .frame(maxWidth: .infinity)
-    }
-
     private var footer: some View {
         HStack(spacing: 8) {
             Button(role: .destructive) {
@@ -203,12 +205,12 @@ struct ShareLinkManageView: View {
                 Text(L("Stop Sharing"))
                     .foregroundStyle(.red)
             }
-            .disabled(model.activity == .copying || model.activity == .stopping)
+            .disabled(model.isBusy)
 
             Button(model.activity == .copied ? L("Copied") : L("Copy Link")) {
                 Task { await model.copyLink() }
             }
-            .disabled(model.activity == .copying || model.activity == .stopping)
+            .disabled(model.isBusy)
 
             Spacer()
 

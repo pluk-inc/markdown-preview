@@ -109,7 +109,6 @@ nonisolated struct SharePayload: Codable, Equatable, Sendable {
         guard let normalized = normalizedAssetPath(path) else { return nil }
         let root = directory.standardizedFileURL.resolvingSymlinksInPath()
         let url = root.appendingPathComponent(normalized).standardizedFileURL
-        let rootPath = root.path.hasSuffix("/") ? root.path : root.path + "/"
-        return url.path.hasPrefix(rootPath) ? url : nil
+        return url != root && url.isDescendantOrSame(of: root) ? url : nil
     }
 }

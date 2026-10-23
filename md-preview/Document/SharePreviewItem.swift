@@ -24,8 +24,7 @@ enum SharePreviewItem {
     static func make(markdown: String, title: String, fileURL: URL?) -> NSPreviewRepresentingActivityItem {
         // The page covers about 1/1.3 of a document icon's height; drawn
         // larger it fills the tile instead of floating in white.
-        let image = fileURL.map { filling(NSWorkspace.shared.icon(forFile: $0.path), scale: 1.3) }
-            ?? headerIcon
+        let image = fileURL.map(documentIcon) ?? headerIcon
         let preview = NSPreviewRepresentingActivityItem(
             item: markdown, title: title, image: image, icon: nil)
         guard supportsSubtitle else { return preview }
@@ -35,6 +34,17 @@ enum SharePreviewItem {
         metadata.imageProvider = NSItemProvider(object: image)
         preview.setValue(metadata, forKey: "linkMetadata")
         return preview
+    }
+
+    /// The toolbar asks for its items while it is built, so the last icon is
+    /// kept rather than looked up and redrawn on every call.
+    private static var cachedDocumentIcon: (path: String, image: NSImage)?
+
+    private static func documentIcon(for fileURL: URL) -> NSImage {
+        if let cached = cachedDocumentIcon, cached.path == fileURL.path { return cached.image }
+        let image = filling(NSWorkspace.shared.icon(forFile: fileURL.path), scale: 1.3)
+        cachedDocumentIcon = (fileURL.path, image)
+        return image
     }
 
     private static let supportsSubtitle =

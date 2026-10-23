@@ -18,7 +18,8 @@ nonisolated enum ShareLinkAssets {
     ]
 
     private static let imgSrc = try! NSRegularExpression(
-        pattern: #"<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)')"#,
+        // `\s` before `src`, not `\b`: `\b` also matches inside `data-src`.
+        pattern: #"<img\b[^>]*?\ssrc\s*=\s*(?:"([^"]*)"|'([^']*)')"#,
         options: [.caseInsensitive])
 
     /// The images `articleHTML` references by relative path, read from
@@ -28,7 +29,6 @@ nonisolated enum ShareLinkAssets {
                         reader: (URL) throws -> Data = { try Data(contentsOf: $0) })
         -> [SharePayload.Asset] {
         let root = directory.standardizedFileURL.resolvingSymlinksInPath()
-        let rootPath = root.path.hasSuffix("/") ? root.path : root.path + "/"
         var seen = Set<String>()
         var assets: [SharePayload.Asset] = []
 
@@ -43,10 +43,10 @@ nonisolated enum ShareLinkAssets {
 
             let file = root.appendingPathComponent(source).standardizedFileURL
                 .resolvingSymlinksInPath()
-            guard file.path.hasPrefix(rootPath),
+            guard file != root, file.isDescendantOrSame(of: root),
                   let type = mediaTypes[file.pathExtension.lowercased()]
             else { continue }
-            let path = String(file.path.dropFirst(rootPath.count))
+            let path = String(file.path.dropFirst(root.path.count + 1))
             guard seen.insert(path).inserted, let data = try? reader(file) else { continue }
             assets.append(.init(path: path, type: type, data: data))
         }

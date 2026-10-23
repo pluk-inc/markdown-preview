@@ -8,15 +8,15 @@
 //
 
 import Foundation
-import Observation
 import Security
 
-@MainActor @Observable
+/// Windows learn about changes through `didChangeNotification`.
+@MainActor
 final class ShareLinkStore {
 
     static let shared = ShareLinkStore()
 
-    struct Record: Codable, Equatable, Identifiable {
+    struct Record: Codable, Equatable {
         let id: String
         var title: String
         /// Standardized path of the shared file, to find its link again.
@@ -53,14 +53,6 @@ final class ShareLinkStore {
     func secrets(for record: Record) -> Secrets? {
         ShareLinkKeychain.read(account: record.id)
             .flatMap { try? JSONDecoder().decode(Secrets.self, from: $0) }
-    }
-
-    func link(for record: Record, base: URL) -> URL? {
-        guard let secrets = secrets(for: record),
-              let key = Base64URL.decode(secrets.key),
-              let link = ShareLink(id: record.id, key: key, hasPassword: false)
-        else { return nil }
-        return link.webURL(base: base)
     }
 
     func add(_ record: Record, secrets: Secrets) throws {

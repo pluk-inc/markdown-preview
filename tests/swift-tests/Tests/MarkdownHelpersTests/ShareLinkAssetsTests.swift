@@ -43,6 +43,7 @@ final class ShareLinkAssetsTests: XCTestCase {
         <img src="https://example.com/x.png"><img src="//cdn.example/x.png">
         <img src="data:image/png;base64,AAAA"><img src="/etc/x.png">
         <img src="../outside.png"><img src="notes.txt"><img src="missing.png">
+        <img data-src="img/a.png" src="https://example.com/lazy.png">
         """
         XCTAssertEqual(collect(html), [])
     }

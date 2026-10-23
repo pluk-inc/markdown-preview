@@ -84,12 +84,10 @@ extension DocumentWindowController {
         case .none:
             let edited = NSLocalizedString("Edited", comment: "Window subtitle for unsaved changes")
             let shared = NSLocalizedString("Shared", comment: "Window subtitle for a document with a live share link")
-            switch (isSharedByLink, hasUnsavedEditorChanges) {
-            case (true, true): documentWindow.subtitle = "\(shared) · \(edited)"
-            case (true, false): documentWindow.subtitle = shared
-            case (false, true): documentWindow.subtitle = edited
-            case (false, false): documentWindow.subtitle = ""
-            }
+            documentWindow.subtitle = [isSharedByLink ? shared : nil,
+                                       hasUnsavedEditorChanges ? edited : nil]
+                .compactMap { $0 }
+                .joined(separator: " · ")
         }
     }
 }
