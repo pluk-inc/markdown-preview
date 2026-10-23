@@ -472,7 +472,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         case "tablePopup":
             guard let markdown = payload["markdown"] as? String else { return }
             TablePreviewWindow.shared.present(markdown: markdown, title: nil,
-                                              assetBaseURL: currentAssetBaseURL, relativeTo: view.window)
+                                              assetBaseURL: currentAssetBaseURL, pageZoom: webView.pageZoom,
+                                              relativeTo: view.window)
         default:
             break
         }
