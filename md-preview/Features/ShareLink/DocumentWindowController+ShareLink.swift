@@ -30,26 +30,19 @@ extension DocumentWindowController {
     /// The Share popover row; none while the feature is off or the window
     /// has no saved file to link.
     func shareLinkServices() -> [NSSharingService] {
-        guard ShareLinkFeature.isEnabled, let fileURL = currentFileURL, currentMarkdown != nil else {
+        guard ShareLinkFeature.isEnabled, currentFileURL != nil, currentMarkdown != nil else {
             return []
         }
-        if ShareLinkStore.shared.record(forFile: fileURL) != nil {
-            let title = L("Manage Shared Document…")
-            return [NSSharingService(
-                title: title,
-                image: NSImage(systemSymbolName: "person.crop.circle.badge.checkmark",
-                               accessibilityDescription: title) ?? NSImage(),
-                alternateImage: nil
-            ) { [weak self] in
-                self?.showManageSharedDocument()
-            }]
-        }
+        // Same test as the "Shared" subtitle, so the row and the subtitle agree.
+        let shared = isSharedByLink
+        let title = shared ? L("Manage Shared Document…") : L("Copy Link")
+        let symbol = shared ? "person.crop.circle.badge.checkmark" : "link"
         return [NSSharingService(
-            title: L("Copy Link"),
-            image: NSImage(systemSymbolName: "link", accessibilityDescription: L("Copy Link")) ?? NSImage(),
+            title: title,
+            image: NSImage(systemSymbolName: symbol, accessibilityDescription: title) ?? NSImage(),
             alternateImage: nil
         ) { [weak self] in
-            self?.confirmAndCopyShareLink()
+            if shared { self?.showManageSharedDocument() } else { self?.confirmAndCopyShareLink() }
         }]
     }
 
@@ -89,10 +82,7 @@ extension DocumentWindowController {
         upload = Task { @MainActor [weak self] in
             defer { progress.finish() }
             do {
-                let link = try await ShareLinkSession.link(forFile: fileURL, markdown: markdown)
-                try Task.checkCancellation()
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(link.absoluteString, forType: .string)
+                try await ShareLinkSession.copyLink(forFile: fileURL, markdown: markdown)
             } catch is CancellationError {
             } catch let error as URLError where error.code == .cancelled {
             } catch {
