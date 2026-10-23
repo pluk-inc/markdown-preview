@@ -429,8 +429,11 @@ nonisolated extension MarkdownHTML {
                 wrap.prepend(actions);
             });
         }
-        // Undoes everything column resize adds to a table (below).
+        // Undoes everything column resize adds to a table (below). The
+        // Expand button and export use it, so neither copies dragged widths.
         function clearColumnResize(table) {
+            const scroller = table.parentElement;
+            if (scroller?.classList.contains('md-table-scroll')) scroller.replaceWith(table);
             table.querySelector(':scope > colgroup[data-mdp-resize]')?.remove();
             table.classList.remove('mdp-columns-resized');
             table.style.removeProperty('width');
@@ -511,12 +514,17 @@ nonisolated extension MarkdownHTML {
                 // Fixed widths need a real table box, which cannot scroll, so
                 // an inner box scrolls it. The wrapper stays put, and with it
                 // the Expand button.
+                // Keep the reader's place: before this, the table itself
+                // scrolled horizontally.
+                const scrollLeft = table.scrollLeft;
                 const scroller = document.createElement('div');
                 scroller.className = 'md-table-scroll';
                 table.before(scroller);
                 scroller.append(table);
                 table.classList.add('mdp-columns-resized');
                 table.style.width = `${widths.reduce((sum, width) => sum + width, 0)}px`;
+                // Only after the width is set: until then the table fits the box.
+                scroller.scrollLeft = scrollLeft;
                 return cols;
             }
 
@@ -1041,6 +1049,7 @@ nonisolated extension MarkdownHTML {
         // second update without the flag once the real document arrives,
         // which clears the inline style and reveals the article.
         window.MdPreview.markdownForSelection = markdownForSelection;
+        window.MdPreview.clearColumnResize = clearColumnResize;
 
         window.MdPreview.update = (articleHTML, opts) => {
             // The Markdown behind the article, for copy-as-source.

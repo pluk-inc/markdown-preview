@@ -50,6 +50,8 @@ final class DocumentExportSession {
             await document.fonts.ready;
             const copy = document.documentElement.cloneNode(true);
             copy.querySelectorAll('script, .md-table-actions').forEach(node => node.remove());
+            // Dragged column widths are for reading; exports use natural widths.
+            copy.querySelectorAll('table').forEach(table => window.MdPreview?.clearColumnResize?.(table));
             copy.querySelectorAll('.md-table-wrap').forEach(wrap => wrap.replaceWith(...wrap.childNodes));
             const checkboxes = document.querySelectorAll('input[type="checkbox"]');
             copy.querySelectorAll('input[type="checkbox"]').forEach((box, index) => {

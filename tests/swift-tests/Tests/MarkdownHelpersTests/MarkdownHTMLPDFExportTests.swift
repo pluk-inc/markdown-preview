@@ -93,6 +93,66 @@ final class MarkdownHTMLPDFExportTests: XCTestCase {
         }
     }
 
+    /// Drags the first column edge of the first table by `distance` points
+    /// with synthetic pointer events, as the reader would.
+    private func dragFirstColumnEdge(_ webView: WKWebView, by distance: Int) async throws {
+        _ = try await webView.evaluateJavaScript("""
+            (() => {
+                const th = document.querySelector('.md-table-wrap th');
+                const r = th.getBoundingClientRect();
+                const fire = (type, x) => th.dispatchEvent(new PointerEvent(type, {
+                    bubbles: true, cancelable: true, clientX: x, clientY: r.top + 5,
+                    button: 0, pointerId: 1, isPrimary: true }));
+                fire('pointermove', r.right - 2);
+                fire('pointerdown', r.right - 2);
+                fire('pointermove', r.right - 2 + \(distance));
+                fire('pointerup', r.right - 2 + \(distance));
+                return true;
+            })()
+            """)
+    }
+
+    func testResizedColumnWidthsStayOutOfExports() async throws {
+        _ = NSApplication.shared
+        let markdown = "| Module | Notes |\n| --- | --- |\n| Auth | Short |"
+        let html = MarkdownHTML.render(markdown: markdown, allowsScroll: true).html
+        let harness = WebViewLayoutHarness(html: html, width: 500, isEditor: false,
+                                          messageHandler: ExportTestHostMessages())
+        defer { harness.close() }
+        _ = try await harness.layout(texts: [], imageCount: 0)
+        try await dragFirstColumnEdge(harness.webView, by: 120)
+        let resizeMarkers = """
+            document.querySelectorAll('colgroup[data-mdp-resize], .md-table-scroll, .mdp-columns-resized').length
+            """
+        let live = try await harness.webView.evaluateJavaScript(resizeMarkers) as? Int
+        XCTAssertEqual(live, 3, "The drag resized the column")
+        let session = try await DocumentExportSession.capture(from: harness.webView)
+        defer { session.close() }
+        let view = try await session.webView(for: .png)
+        let exported = try await view.evaluateJavaScript(resizeMarkers) as? Int
+        XCTAssertEqual(exported, 0)
+        let after = try await harness.webView.evaluateJavaScript(resizeMarkers) as? Int
+        XCTAssertEqual(after, 3, "Export leaves the document's widths alone")
+    }
+
+    func testFirstColumnResizeKeepsTheHorizontalScrollPosition() async throws {
+        _ = NSApplication.shared
+        let markdown = "| Module | Notes |\n| --- | --- |\n| Auth | \(longValue) |"
+        let html = MarkdownHTML.render(markdown: markdown, allowsScroll: true).html
+        let harness = WebViewLayoutHarness(html: html, width: 500, isEditor: false,
+                                          messageHandler: ExportTestHostMessages())
+        defer { harness.close() }
+        _ = try await harness.layout(texts: [], imageCount: 0)
+        let before = try await harness.webView.evaluateJavaScript("""
+            (() => { const table = document.querySelector('table'); table.scrollLeft = 80; return table.scrollLeft; })()
+            """) as? Double
+        XCTAssertGreaterThan(before ?? 0, 0, "The table scrolls horizontally")
+        try await dragFirstColumnEdge(harness.webView, by: 10)
+        let after = try await harness.webView.evaluateJavaScript(
+            "document.querySelector('.md-table-scroll')?.scrollLeft ?? -1") as? Double
+        XCTAssertEqual(after ?? -1, before ?? 0, accuracy: 1)
+    }
+
     func testExpandedTableControlsStayOutOfAllExports() async throws {
         _ = NSApplication.shared
         let markdown = "| Module | Notes |\n| --- | --- |\n| `AuthenticationService` | \(longValue) |"
