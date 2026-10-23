@@ -330,10 +330,14 @@
 "What’s New in Markdown Preview %@" = "Co nowego w Markdown Preview %@";
 "Release Notes" = "Informacje o wydaniu";
 "Continue" = "Dalej";
-"Faster Mermaid diagrams" = "Szybsze diagramy Mermaid";
-"Diagrams draw faster and take their colors from your theme." = "Diagramy są rysowane szybciej i korzystają z kolorów wybranego motywu.";
-"Counts for selected text" = "Statystyki zaznaczonego tekstu";
-"Select text, and the inspector shows its words, characters, and lines." = "Zaznacz tekst, aby zobaczyć w inspektorze liczbę jego słów, znaków i wierszy.";
+"New files and a filter in the navigator" = "Nowe pliki i filtr w nawigatorze";
+"Use + under the file list to make a file or folder, and type to filter the tree." = "Użyj + pod listą plików, aby utworzyć plik lub folder, i pisz, aby filtrować drzewo.";
+"Math in Edit Mode" = "Matematyka w trybie edycji";
+"LaTeX formulas render while you edit. Move the caret into one to change its source." = "Formuły LaTeX są wyświetlane podczas edycji. Umieść w nich kursor, aby zmienić ich źródło.";
+"Resize table columns" = "Zmiana szerokości kolumn tabeli";
+"Drag the divider between header cells. Double-click it to fit the column." = "Przeciągnij separator między komórkami nagłówka. Kliknij dwukrotnie, aby dopasować kolumnę.";
+"Easier-to-read text" = "Bardziej czytelny tekst";
+"Body text is larger and darker, and diagrams draw at their natural size." = "Tekst główny jest większy i ciemniejszy, a diagramy mają naturalny rozmiar.";
 
 /* Reading preferences */
 "Strict line breaks" = "Ścisłe reguły podziału wierszy";

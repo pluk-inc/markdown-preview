@@ -329,10 +329,14 @@
 "What’s New in Markdown Preview %@" = "What’s New in Markdown Preview %@";
 "Release Notes" = "Release Notes";
 "Continue" = "Continue";
-"Faster Mermaid diagrams" = "Faster Mermaid diagrams";
-"Diagrams draw faster and take their colors from your theme." = "Diagrams draw faster and take their colors from your theme.";
-"Counts for selected text" = "Counts for selected text";
-"Select text, and the inspector shows its words, characters, and lines." = "Select text, and the inspector shows its words, characters, and lines.";
+"New files and a filter in the navigator" = "New files and a filter in the navigator";
+"Use + under the file list to make a file or folder, and type to filter the tree." = "Use + under the file list to make a file or folder, and type to filter the tree.";
+"Math in Edit Mode" = "Math in Edit Mode";
+"LaTeX formulas render while you edit. Move the caret into one to change its source." = "LaTeX formulas render while you edit. Move the caret into one to change its source.";
+"Resize table columns" = "Resize table columns";
+"Drag the divider between header cells. Double-click it to fit the column." = "Drag the divider between header cells. Double-click it to fit the column.";
+"Easier-to-read text" = "Easier-to-read text";
+"Body text is larger and darker, and diagrams draw at their natural size." = "Body text is larger and darker, and diagrams draw at their natural size.";
 
 /* Reading preferences */
 "Strict line breaks" = "Strict line breaks";

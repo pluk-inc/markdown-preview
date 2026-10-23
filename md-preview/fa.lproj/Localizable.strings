@@ -328,10 +328,14 @@
 "What’s New in Markdown Preview %@" = "ویژگی‌های جدید Markdown Preview %@";
 "Release Notes" = "یادداشت‌های انتشار";
 "Continue" = "ادامه";
-"Faster Mermaid diagrams" = "نمودارهای Mermaid سریع‌تر";
-"Diagrams draw faster and take their colors from your theme." = "نمودارها سریع‌تر رسم می‌شوند و رنگ‌های پوستهٔ شما را می‌گیرند.";
-"Counts for selected text" = "شمارش متن انتخاب‌شده";
-"Select text, and the inspector shows its words, characters, and lines." = "متنی را انتخاب کنید تا بازرس تعداد واژه‌ها، نویسه‌ها و خط‌های آن را نشان دهد.";
+"New files and a filter in the navigator" = "فایل جدید و فیلتر در ناوبر";
+"Use + under the file list to make a file or folder, and type to filter the tree." = "با + زیر فهرست فایل‌ها فایل یا پوشه بسازید و برای فیلتر کردن درخت تایپ کنید.";
+"Math in Edit Mode" = "ریاضی در حالت ویرایش";
+"LaTeX formulas render while you edit. Move the caret into one to change its source." = "فرمول‌های LaTeX هنگام ویرایش نمایش داده می‌شوند. برای تغییر منبع، نشانگر را داخل فرمول ببرید.";
+"Resize table columns" = "تغییر عرض ستون‌های جدول";
+"Drag the divider between header cells. Double-click it to fit the column." = "جداکننده بین خانه‌های سرستون را بکشید. با دوبار کلیک، ستون را متناسب کنید.";
+"Easier-to-read text" = "متن خواناتر";
+"Body text is larger and darker, and diagrams draw at their natural size." = "متن اصلی بزرگ‌تر و تیره‌تر است و نمودارها در اندازهٔ طبیعی خود رسم می‌شوند.";
 
 /* Reading preferences */
 "Strict line breaks" = "شکست دقیق خطوط";

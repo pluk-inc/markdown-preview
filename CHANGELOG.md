@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.0.69] – 2026-10-23
+
+This release adds a **+** menu and a filter to the project navigator, live LaTeX math in Edit Mode, resizable table columns, Export and Print in the share popover, and a Polish translation. Body text is larger and darker, diagrams draw at their natural size, and completed tasks are easier to read.
+
+### Added
+
+- **Add files and filter the project navigator.** A bar under the file navigator has a **+** menu that makes an empty file, a file from the clipboard, or a folder right in the tree with its name ready to type, and copies files into a folder. The **Filter** field narrows the tree to matching file names, and the clock button shows only recently opened files. The app asks once for write access to a project folder and remembers it ([#566](https://github.com/pluk-inc/markdown-preview/pull/566)).
+- **LaTeX math in Edit Mode.** Inline `$…$`, display `$$…$$`, and fenced `math` blocks render in Edit Mode as they do in Read Mode. Move the caret into a formula to edit its source ([#555](https://github.com/pluk-inc/markdown-preview/pull/555), from [#527](https://github.com/pluk-inc/markdown-preview/pull/527)).
+- **Resize table columns.** In Read Mode and the expanded table window, drag the divider between two header cells to resize a column, or double-click it to fit the column to its header. Widths are not saved ([#564](https://github.com/pluk-inc/markdown-preview/pull/564)).
+- **Header row stays in view in the expanded table.** In the expanded table window, the header row stays at the top while you scroll a long table ([#563](https://github.com/pluk-inc/markdown-preview/pull/563)).
+- **Export and Print in the share popover.** The share popover shows the document's name, word count, and size, with Export and Print above Copy ([#553](https://github.com/pluk-inc/markdown-preview/pull/553)).
+- **Polish translation.** Menus, settings, dialogs, and toolbars are available in Polish. Choose it in Settings → General → Language, or let it follow your system language ([#543](https://github.com/pluk-inc/markdown-preview/pull/543)).
+
+### Changed
+
+- **Larger, darker body text.** Body text is 15 px instead of 14 px, pure black on light themes, with fuller kerning and fewer paragraphs that end on one short word. Code blocks match inline code at 0.9em. Quick Look changes the same way ([#548](https://github.com/pluk-inc/markdown-preview/pull/548)).
+- **Diagrams at their natural size.** Diagrams no longer stretch to fill the column: a small diagram draws at its own size, centered, and its labels use the document font at the body size. Wide diagrams still shrink to fit ([#549](https://github.com/pluk-inc/markdown-preview/pull/549), [#550](https://github.com/pluk-inc/markdown-preview/pull/550)).
+- **Completed tasks are easier to read.** A checked task is muted without a strikethrough, and checking a sub-item no longer marks its parent as done. Checkboxes are drawn by macOS, so they follow the accent color and dark mode ([#546](https://github.com/pluk-inc/markdown-preview/pull/546)).
+
+### Fixed
+
+- **Expanded table text size.** The expanded table window opens at the document's text size, and ⌘+, ⌘−, and ⌘0 zoom it ([#562](https://github.com/pluk-inc/markdown-preview/pull/562)).
+- **Zoomed documents open without a jump.** At a text size other than 100%, the text no longer moves on the first frame after a document opens ([#557](https://github.com/pluk-inc/markdown-preview/pull/557)).
+- **Zooming in normal width.** The column no longer jumps sideways on each zoom step ([#545](https://github.com/pluk-inc/markdown-preview/pull/545)).
+- **macOS 27 layout.** The formatting bar no longer sits on the tab bar when more than one tab is open ([#547](https://github.com/pluk-inc/markdown-preview/pull/547)), and selected sidebar rows keep plain text ([#552](https://github.com/pluk-inc/markdown-preview/pull/552)).
+
+### Contributors
+
+- [@Kruszoneq](https://github.com/Kruszoneq) — added the Polish translation ([#543](https://github.com/pluk-inc/markdown-preview/pull/543)).
+- [@manemajef](https://github.com/manemajef) — rendered LaTeX math in Edit Mode ([#527](https://github.com/pluk-inc/markdown-preview/pull/527), carried into [#555](https://github.com/pluk-inc/markdown-preview/pull/555)).
+- [@andreskebe](https://github.com/andreskebe) — reported that the expanded table ignored the text size and asked for a header row that stays in view ([#561](https://github.com/pluk-inc/markdown-preview/issues/561)).
+- [@detailles](https://github.com/detailles) — reported that completed tasks were hard to read ([#465](https://github.com/pluk-inc/markdown-preview/issues/465)).
+
 ## [0.0.68] – 2026-10-18
 
 This release draws Mermaid diagrams with a faster renderer that follows your theme, shows counts for selected text in the inspector, and translates more of the interface. New Tab no longer offers New Document.

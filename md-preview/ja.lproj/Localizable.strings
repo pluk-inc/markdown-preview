@@ -329,10 +329,14 @@
 "What’s New in Markdown Preview %@" = "Markdown Preview %@ の新機能";
 "Release Notes" = "リリースノート";
 "Continue" = "続ける";
-"Faster Mermaid diagrams" = "より速い Mermaid 図";
-"Diagrams draw faster and take their colors from your theme." = "図の描画がより速くなり、テーマの色で表示されます。";
-"Counts for selected text" = "選択したテキストのカウント";
-"Select text, and the inspector shows its words, characters, and lines." = "テキストを選択すると、インスペクタにその単語数、文字数、行数が表示されます。";
+"New files and a filter in the navigator" = "ナビゲータでの新規作成とフィルタ";
+"Use + under the file list to make a file or folder, and type to filter the tree." = "ファイル一覧の下の + でファイルやフォルダを作成し、入力してツリーを絞り込めます。";
+"Math in Edit Mode" = "編集モードでの数式";
+"LaTeX formulas render while you edit. Move the caret into one to change its source." = "編集中も LaTeX の数式が表示されます。キャレットを数式に移すとソースを変更できます。";
+"Resize table columns" = "表の列幅の変更";
+"Drag the divider between header cells. Double-click it to fit the column." = "見出しセルの間の区切りをドラッグします。ダブルクリックで列幅を合わせます。";
+"Easier-to-read text" = "読みやすくなったテキスト";
+"Body text is larger and darker, and diagrams draw at their natural size." = "本文が大きく濃くなり、図は本来のサイズで描画されます。";
 
 /* Reading preferences */
 "Strict line breaks" = "厳密な改行";

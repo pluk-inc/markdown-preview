@@ -329,10 +329,14 @@
 "What’s New in Markdown Preview %@" = "Markdown Preview %@ 的新功能";
 "Release Notes" = "发布说明";
 "Continue" = "继续";
-"Faster Mermaid diagrams" = "更快的 Mermaid 图表";
-"Diagrams draw faster and take their colors from your theme." = "图表绘制更快，并采用当前主题的颜色。";
-"Counts for selected text" = "所选文本的统计";
-"Select text, and the inspector shows its words, characters, and lines." = "选择文本后，检查器会显示其字数、字符数和行数。";
+"New files and a filter in the navigator" = "导航器中的新建文件和过滤";
+"Use + under the file list to make a file or folder, and type to filter the tree." = "使用文件列表下方的 + 新建文件或文件夹，输入文字即可过滤文件树。";
+"Math in Edit Mode" = "编辑模式中的数学公式";
+"LaTeX formulas render while you edit. Move the caret into one to change its source." = "编辑时 LaTeX 公式会直接显示。将插入点移入公式即可修改其源代码。";
+"Resize table columns" = "调整表格列宽";
+"Drag the divider between header cells. Double-click it to fit the column." = "拖移表头单元格之间的分隔线。连按两次可让列宽适合内容。";
+"Easier-to-read text" = "更易阅读的文字";
+"Body text is larger and darker, and diagrams draw at their natural size." = "正文更大、更清晰，图表以原始大小绘制。";
 
 /* Reading preferences */
 "Strict line breaks" = "严格换行";

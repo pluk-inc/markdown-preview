@@ -20,16 +20,28 @@ struct WhatsNewFeature: Identifiable {
     static var current: [WhatsNewFeature] {
         [
             WhatsNewFeature(
-                id: "faster-mermaid-diagrams",
-                symbol: "chart.xyaxis.line",
-                title: L("Faster Mermaid diagrams"),
-                detail: L("Diagrams draw faster and take their colors from your theme.")
+                id: "navigator-add-and-filter",
+                symbol: "line.3.horizontal.decrease.circle",
+                title: L("New files and a filter in the navigator"),
+                detail: L("Use + under the file list to make a file or folder, and type to filter the tree.")
             ),
             WhatsNewFeature(
-                id: "selection-counts",
-                symbol: "text.word.spacing",
-                title: L("Counts for selected text"),
-                detail: L("Select text, and the inspector shows its words, characters, and lines.")
+                id: "edit-mode-math",
+                symbol: "function",
+                title: L("Math in Edit Mode"),
+                detail: L("LaTeX formulas render while you edit. Move the caret into one to change its source.")
+            ),
+            WhatsNewFeature(
+                id: "resize-table-columns",
+                symbol: "tablecells",
+                title: L("Resize table columns"),
+                detail: L("Drag the divider between header cells. Double-click it to fit the column.")
+            ),
+            WhatsNewFeature(
+                id: "easier-to-read-text",
+                symbol: "textformat.size",
+                title: L("Easier-to-read text"),
+                detail: L("Body text is larger and darker, and diagrams draw at their natural size.")
             ),
         ]
     }
