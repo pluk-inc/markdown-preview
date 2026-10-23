@@ -2,9 +2,10 @@
 //  DocumentWindowController+ShareLink.swift
 //  md-preview
 //
-//  "Copy Link" and, while the file has a live link, "Stop Sharing" in the
-//  Share popover. The picker closes on click, so a small popover on the
-//  Share button reports progress and the result.
+//  The Share popover's share-link row: "Copy Link" while the file has no
+//  link, "Manage Shared Document…" while it has one. The picker closes on
+//  click, so a small popover on the Share button reports progress and the
+//  result of creating a link.
 //
 
 import AppKit
@@ -13,47 +14,60 @@ import SwiftUI
 
 extension DocumentWindowController {
 
-    /// The Share popover rows; none while the feature is off or the window
+    /// The Share popover row; none while the feature is off or the window
     /// has no saved file to link.
     func shareLinkServices() -> [NSSharingService] {
         guard ShareLinkFeature.isEnabled, let fileURL = currentFileURL, currentMarkdown != nil else {
             return []
         }
-        let copyLink = NSSharingService(
+        if ShareLinkStore.shared.record(forFile: fileURL) != nil {
+            let title = L("Manage Shared Document…")
+            return [NSSharingService(
+                title: title,
+                image: NSImage(systemSymbolName: "person.crop.circle.badge.checkmark",
+                               accessibilityDescription: title) ?? NSImage(),
+                alternateImage: nil
+            ) { [weak self] in
+                self?.showManageSharedDocument()
+            }]
+        }
+        return [NSSharingService(
             title: L("Copy Link"),
             image: NSImage(systemSymbolName: "link", accessibilityDescription: L("Copy Link")) ?? NSImage(),
             alternateImage: nil
         ) { [weak self] in
-            self?.copyShareLink()
-        }
-        guard ShareLinkStore.shared.record(forFile: fileURL) != nil else { return [copyLink] }
-
-        // The picker draws titles in its own color; only the icon can be red.
-        let stopImage = NSImage(systemSymbolName: "xmark.circle", accessibilityDescription: L("Stop Sharing"))?
-            .withSymbolConfiguration(.init(paletteColors: [.systemRed]))
-        stopImage?.isTemplate = false
-        let stopSharing = NSSharingService(title: L("Stop Sharing"), image: stopImage ?? NSImage(),
-                                           alternateImage: nil) { [weak self] in
-            self?.stopShareLink()
-        }
-        return [copyLink, stopSharing]
+            self?.confirmAndCopyShareLink()
+        }]
     }
 
-    private func copyShareLink() {
+    private func showManageSharedDocument() {
+        guard let fileURL = currentFileURL, let markdown = currentMarkdown,
+              let host = documentWindow.contentViewController,
+              documentWindow.attachedSheet == nil
+        else { return }
+        ShareLinkManageSheet.present(on: host, fileURL: fileURL, markdown: markdown)
+    }
+
+    /// Creating the first link starts sharing, so it asks first.
+    private func confirmAndCopyShareLink() {
+        let alert = NSAlert()
+        alert.messageText = L("Copy Link to Share")
+        alert.informativeText = L("Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it.")
+        alert.addButton(withTitle: L("Continue"))
+        alert.addButton(withTitle: L("Cancel"))
+        alert.beginSheetModal(for: documentWindow) { [weak self] response in
+            guard response == .alertFirstButtonReturn else { return }
+            self?.createAndCopyShareLink()
+        }
+    }
+
+    private func createAndCopyShareLink() {
         guard let fileURL = currentFileURL, let markdown = currentMarkdown else { return }
         runShareLinkTask(working: L("Creating Link…"), done: L("Link Copied"),
                          failure: L("Could Not Copy Link")) {
             let link = try await ShareLinkSession.link(forFile: fileURL, markdown: markdown)
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(link.absoluteString, forType: .string)
-        }
-    }
-
-    private func stopShareLink() {
-        guard let fileURL = currentFileURL else { return }
-        runShareLinkTask(working: L("Stopping Sharing…"), done: L("Sharing Stopped"),
-                         failure: L("Could Not Stop Sharing")) {
-            try await ShareLinkSession.stopSharing(fileURL: fileURL)
         }
     }
 
