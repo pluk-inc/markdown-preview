@@ -19,7 +19,7 @@ const TTLS: Record<string, number> = {
 };
 const DEFAULT_TTL = "7d";
 const ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
-const SHARE_PATH = /^\/api\/v1\/shares\/([^/]+)$/;
+const SHARE_PATH = /^\/shares\/([^/]+)$/;
 const PREFIX = "shares/";
 
 const BASE_HEADERS = {
@@ -41,7 +41,7 @@ export default {
         : error(405, "method_not_allowed");
     }
 
-    if (pathname === "/api/v1/shares") {
+    if (pathname === "/shares") {
       if (request.method !== "POST") return error(405, "method_not_allowed");
       return (await limited(env.CREATE_LIMITER, request)) ?? create(request, env, url);
     }

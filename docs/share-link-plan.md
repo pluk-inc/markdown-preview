@@ -172,11 +172,16 @@ app or the Worker. The Worker reaches R2 through a binding.
 
 | Method | Path | Auth | Body | Result |
 | --- | --- | --- | --- | --- |
-| `POST` | `/api/v1/shares?ttl=7d` | — | envelope (`application/octet-stream`) | `201 {id, ownerToken, expiresAt}` |
-| `GET` | `/api/v1/shares/<id>` | — | — | `200` envelope, or `404` |
-| `PUT` | `/api/v1/shares/<id>?ttl=7d` | `Authorization: Bearer <ownerToken>` | envelope | `200 {expiresAt}` |
-| `DELETE` | `/api/v1/shares/<id>` | `Authorization: Bearer <ownerToken>` | — | `204` |
+| `POST` | `/shares?ttl=7d` | — | envelope (`application/octet-stream`) | `201 {id, ownerToken, expiresAt}` |
+| `GET` | `/shares/<id>` | — | — | `200` envelope, or `404` |
+| `PUT` | `/shares/<id>?ttl=7d` | `Authorization: Bearer <ownerToken>` | envelope | `200 {expiresAt}` |
+| `DELETE` | `/shares/<id>` | `Authorization: Bearer <ownerToken>` | — | `204` |
 | `GET` | `/.well-known/apple-app-site-association` | — | — | `200` JSON, `Content-Type: application/json`, no redirect |
+
+Routes carry no `/api` prefix and no version number (decided 2026-10-23).
+The format is versioned inside the data instead: the envelope's `MDP1` magic
+and the payload's `"v"`. A breaking API change would add a new route name
+rather than a `/v2` prefix.
 
 The `apple-app-site-association` file claims `/s/*` for
 `5P3TSMNV42.doc.md-preview` (Universal Links, §4.5). Apple's CDN fetches and
@@ -335,7 +340,7 @@ app is missing.
 ## 5. Web — phase 2
 
 - Viewer at `GET /s/<id>`: static HTML + one JS bundle from the same origin.
-  It reads the fragment, fetches `/api/v1/shares/<id>`, decrypts with
+  It reads the fragment, fetches `/shares/<id>`, decrypts with
   WebCrypto, inflates with `DecompressionStream`, and renders.
 - Rendering: **the same output as the app, without a second parser.** The
   viewer takes `html` from the payload (rendered by `MarkdownHTML` at upload)

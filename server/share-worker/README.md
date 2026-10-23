@@ -16,10 +16,10 @@ No Cloudflare account is needed. Round trip with a test vector:
 
 ```sh
 python3 -c "import json; v = json.load(open('../../tests/fixtures/share-link/vectors.json'))['vectors'][0]; open('/tmp/envelope.bin', 'wb').write(bytes.fromhex(v['envelope']))"
-curl -s -X POST --data-binary @/tmp/envelope.bin 'http://localhost:8787/api/v1/shares?ttl=1d'
+curl -s -X POST --data-binary @/tmp/envelope.bin 'http://localhost:8787/shares?ttl=1d'
 # → {"id":"…","ownerToken":"…","expiresAt":"…"}
-curl -s http://localhost:8787/api/v1/shares/<id> -o /tmp/back.bin && cmp /tmp/envelope.bin /tmp/back.bin
-curl -s -X DELETE -H 'Authorization: Bearer <ownerToken>' http://localhost:8787/api/v1/shares/<id>
+curl -s http://localhost:8787/shares/<id> -o /tmp/back.bin && cmp /tmp/envelope.bin /tmp/back.bin
+curl -s -X DELETE -H 'Authorization: Bearer <ownerToken>' http://localhost:8787/shares/<id>
 ```
 
 Cron triggers do not run locally. Trigger the expiry purge by hand with

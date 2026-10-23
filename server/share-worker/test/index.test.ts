@@ -19,7 +19,7 @@ function call(path: string, init: RequestInit = {}, ip = crypto.randomUUID()): P
 }
 
 async function create(body: BodyInit = envelope, query = "") {
-  const response = await call(`/api/v1/shares${query}`, { method: "POST", body });
+  const response = await call(`/shares${query}`, { method: "POST", body });
   return { response, body: (await response.json()) as Record<string, string> };
 }
 
@@ -34,7 +34,7 @@ describe("create and read", () => {
       expect(body.id).toMatch(/^[A-Za-z0-9_-]{22}$/);
       expect(body.ownerToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
 
-      const read = await call(`/api/v1/shares/${body.id}`);
+      const read = await call(`/shares/${body.id}`);
       expect(read.status).toBe(200);
       expect(read.headers.get("Content-Type")).toBe("application/octet-stream");
       expect(new Uint8Array(await read.arrayBuffer())).toEqual(bytes);
@@ -85,7 +85,7 @@ describe("create and read", () => {
 
   it("answers 404 for unknown and malformed IDs", async () => {
     for (const id of ["AAAAAAAAAAAAAAAAAAAAAA", "short", "..%2F..%2Fsecret"]) {
-      const response = await call(`/api/v1/shares/${id}`);
+      const response = await call(`/shares/${id}`);
       expect(response.status, id).toBe(404);
     }
   });
@@ -98,7 +98,7 @@ describe("create and read", () => {
       customMetadata: { ...object!.customMetadata, expiresAt: new Date(Date.now() - 1).toISOString() },
     });
 
-    expect((await call(`/api/v1/shares/${body.id}`)).status).toBe(404);
+    expect((await call(`/shares/${body.id}`)).status).toBe(404);
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(await env.SHARES.head(key)).toBeNull();
   });
@@ -108,7 +108,7 @@ describe("update and delete", () => {
   it("replaces the content and extends the expiry with the owner token", async () => {
     const { body } = await create(envelope, "?ttl=1h");
     const replacement = hex(fixture.vectors[1].envelope);
-    const response = await call(`/api/v1/shares/${body.id}?ttl=30d`, {
+    const response = await call(`/shares/${body.id}?ttl=30d`, {
       method: "PUT",
       headers: auth(body.ownerToken),
       body: replacement,
@@ -117,35 +117,35 @@ describe("update and delete", () => {
     const updated = (await response.json()) as { expiresAt: string };
     expect(Date.parse(updated.expiresAt)).toBeGreaterThan(Date.parse(body.expiresAt));
 
-    const read = await call(`/api/v1/shares/${body.id}`);
+    const read = await call(`/shares/${body.id}`);
     expect(new Uint8Array(await read.arrayBuffer())).toEqual(replacement);
   });
 
   it("deletes with the owner token", async () => {
     const { body } = await create();
-    const response = await call(`/api/v1/shares/${body.id}`, {
+    const response = await call(`/shares/${body.id}`, {
       method: "DELETE",
       headers: auth(body.ownerToken),
     });
     expect(response.status).toBe(204);
-    expect((await call(`/api/v1/shares/${body.id}`)).status).toBe(404);
+    expect((await call(`/shares/${body.id}`)).status).toBe(404);
   });
 
   it("refuses a missing or wrong token without revealing the share", async () => {
     const { body } = await create();
     const other = await create();
-    const noToken = await call(`/api/v1/shares/${body.id}`, { method: "DELETE" });
+    const noToken = await call(`/shares/${body.id}`, { method: "DELETE" });
     expect(noToken.status).toBe(401);
 
     for (const method of ["PUT", "DELETE"]) {
-      const response = await call(`/api/v1/shares/${body.id}`, {
+      const response = await call(`/shares/${body.id}`, {
         method,
         headers: auth(other.body.ownerToken),
         body: method === "PUT" ? envelope : undefined,
       });
       expect(response.status, method).toBe(404);
     }
-    expect((await call(`/api/v1/shares/${body.id}`)).status).toBe(200);
+    expect((await call(`/shares/${body.id}`)).status).toBe(200);
   });
 });
 
@@ -180,15 +180,15 @@ describe("headers and routing", () => {
   });
 
   it("rejects other methods and paths", async () => {
-    expect((await call("/api/v1/shares")).status).toBe(405);
-    expect((await call("/api/v1/shares/AAAAAAAAAAAAAAAAAAAAAA", { method: "POST" })).status).toBe(405);
+    expect((await call("/shares")).status).toBe(405);
+    expect((await call("/shares/AAAAAAAAAAAAAAAAAAAAAA", { method: "POST" })).status).toBe(405);
     expect((await call("/")).status).toBe(404);
   });
 
   it("rate-limits creates per IP", async () => {
     const statuses: number[] = [];
     for (let i = 0; i < 12; i++) {
-      const response = await call("/api/v1/shares", { method: "POST", body: envelope }, "203.0.113.9");
+      const response = await call("/shares", { method: "POST", body: envelope }, "203.0.113.9");
       statuses.push(response.status);
     }
     expect(statuses.slice(0, 10).every((status) => status === 201)).toBe(true);
