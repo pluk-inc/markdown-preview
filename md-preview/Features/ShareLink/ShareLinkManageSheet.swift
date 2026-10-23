@@ -34,7 +34,7 @@ enum ShareLinkManageSheet {
 @MainActor @Observable
 final class ShareLinkManageModel {
 
-    enum Activity: Equatable { case idle, copying, copied, stopping }
+    enum Activity: Equatable { case idle, copying, stopping }
 
     let fileURL: URL
     private let markdown: String
@@ -48,11 +48,6 @@ final class ShareLinkManageModel {
         record = ShareLinkStore.shared.record(forFile: fileURL)
     }
 
-    var link: String {
-        guard let record, let base = ShareLinkFeature.baseURL else { return "" }
-        return ShareLinkStore.shared.link(for: record, base: base)?.absoluteString ?? ""
-    }
-
     func copyLink() async {
         activity = .copying
         errorMessage = nil
@@ -61,9 +56,7 @@ final class ShareLinkManageModel {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(link.absoluteString, forType: .string)
             record = ShareLinkStore.shared.record(forFile: fileURL)
-            activity = .copied
-            try? await Task.sleep(for: .seconds(1.5))
-            if activity == .copied { activity = .idle }
+            activity = .idle
         } catch {
             errorMessage = ShareLinkSession.message(for: error)
             activity = .idle
@@ -134,12 +127,6 @@ struct ShareLinkManageView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                Text(model.link)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
             }
         }
     }
@@ -157,21 +144,15 @@ struct ShareLinkManageView: View {
             Button(role: .destructive) {
                 Task { if await model.stopSharing() { dismiss() } }
             } label: {
-                Text(model.activity == .stopping ? L("Stopping…") : L("Stop Sharing"))
+                Text(L("Stop Sharing"))
                     .foregroundStyle(.red)
             }
-            .disabled(model.activity != .idle && model.activity != .copied)
+            .disabled(model.activity != .idle)
 
-            Button {
+            Button(L("Copy Link")) {
                 Task { await model.copyLink() }
-            } label: {
-                switch model.activity {
-                case .copying: Text(L("Copying…"))
-                case .copied: Label(L("Copied"), systemImage: "checkmark")
-                default: Text(L("Copy Link"))
-                }
             }
-            .disabled(model.activity == .copying || model.activity == .stopping)
+            .disabled(model.activity != .idle)
 
             Spacer()
 
