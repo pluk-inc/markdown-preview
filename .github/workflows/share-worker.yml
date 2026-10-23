@@ -36,5 +36,36 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
-  # Deploy job (wrangler deploy with a CLOUDFLARE_API_TOKEN secret) comes
-  # once the Cloudflare account, R2 bucket, and share domain exist.
+  # Deploys main to the md-preview.app routes. Skips with a notice until the
+  # CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets exist; see
+  # server/share-worker/README.md, "Deploy".
+  deploy:
+    name: worker deploy
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: share-worker-deploy
+    defaults:
+      run:
+        working-directory: server/share-worker
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/share-worker/package-lock.json
+
+      - run: npm ci
+
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::Cloudflare secrets are not set; skipping the deploy."
+            exit 0
+          fi
+          npm run deploy

@@ -4,6 +4,15 @@
   "name": "md-preview-share",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
+  // Production lives on paths of md-preview.app, whose other paths redirect
+  // to the website at markdownpreview.app. Cloudflare runs Redirect Rules
+  // before Workers, so that rule must skip these paths (README, Deploy).
+  "routes": [
+    { "pattern": "md-preview.app/s/*", "zone_name": "md-preview.app" },
+    { "pattern": "md-preview.app/shares*", "zone_name": "md-preview.app" },
+    { "pattern": "md-preview.app/.well-known/apple-app-site-association", "zone_name": "md-preview.app" }
+  ],
+  "workers_dev": false,
   "r2_buckets": [
     { "binding": "SHARES", "bucket_name": "md-preview-shares" }
   ],

@@ -41,6 +41,12 @@ export default {
         : error(405, "method_not_allowed");
     }
 
+    if (pathname.startsWith("/s/")) {
+      return request.method === "GET" || request.method === "HEAD"
+        ? linkPage()
+        : error(405, "method_not_allowed");
+    }
+
     if (pathname === "/shares") {
       if (request.method !== "POST") return error(405, "method_not_allowed");
       return (await limited(env.CREATE_LIMITER, request)) ?? create(request, env, url);
@@ -126,6 +132,34 @@ async function remove(id: string, request: Request, env: Env): Promise<Response>
   if (existing instanceof Response) return existing;
   await env.SHARES.delete(PREFIX + id);
   return new Response(null, { status: 204, headers: BASE_HEADERS });
+}
+
+// Until the web viewer (plan §5) exists, a link opened in a browser gets a
+// static page that points to the app. It has no script, so nothing on it can
+// read the key in the URL fragment.
+const LINK_PAGE = `<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Shared document · Markdown Preview</title>
+<body style="font: 16px -apple-system, system-ui, sans-serif; max-width: 32rem; margin: 15vh auto; padding: 0 1.5rem; line-height: 1.5">
+<h1 style="font-size: 1.4rem">This document was shared with Markdown Preview</h1>
+<p>Open this link on a Mac with Markdown Preview installed. Reading shared documents in the browser is coming soon.</p>
+<p><a href="https://markdownpreview.app">Get Markdown Preview</a></p>
+</body>
+</html>
+`;
+
+function linkPage(): Response {
+  return new Response(LINK_PAGE, {
+    headers: {
+      ...BASE_HEADERS,
+      "Content-Type": "text/html; charset=utf-8",
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "X-Frame-Options": "DENY",
+    },
+  });
 }
 
 function appleAppSiteAssociation(env: Env): Response {
