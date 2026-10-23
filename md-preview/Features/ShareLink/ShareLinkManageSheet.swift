@@ -34,7 +34,7 @@ enum ShareLinkManageSheet {
 @MainActor @Observable
 final class ShareLinkManageModel {
 
-    enum Activity: Equatable { case idle, copying, stopping }
+    enum Activity: Equatable { case idle, copying, copied, stopping }
 
     let fileURL: URL
     let markdown: String
@@ -56,7 +56,9 @@ final class ShareLinkManageModel {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(link.absoluteString, forType: .string)
             record = ShareLinkStore.shared.record(forFile: fileURL)
-            activity = .idle
+            activity = .copied
+            try? await Task.sleep(for: .seconds(1.5))
+            if activity == .copied { activity = .idle }
         } catch {
             errorMessage = ShareLinkSession.message(for: error)
             activity = .idle
@@ -150,12 +152,12 @@ struct ShareLinkManageView: View {
                 Text(L("Stop Sharing"))
                     .foregroundStyle(.red)
             }
-            .disabled(model.activity != .idle)
+            .disabled(model.activity == .copying || model.activity == .stopping)
 
-            Button(L("Copy Link")) {
+            Button(model.activity == .copied ? L("Copied") : L("Copy Link")) {
                 Task { await model.copyLink() }
             }
-            .disabled(model.activity != .idle)
+            .disabled(model.activity == .copying || model.activity == .stopping)
 
             Spacer()
 
