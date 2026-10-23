@@ -1,0 +1,1032 @@
+/* Generated from the app's MarkdownHTML by ShareViewerKitTests.
+   Do not edit; run MDP_WRITE_VIEWER_KIT=1 swift test --filter ShareViewerKitTests. */
+:root {
+    color-scheme: light dark;
+    /* Semantic system colors. WebKit resolves them for the element's own
+       color scheme, so the forced-scheme attribute and the media query
+       below both get the right appearance without a second palette, and
+       labels and separators follow increased-contrast settings.
+       Accent colors follow the theme's link color. */
+    --text: light-dark(#000, -apple-system-label);
+    --mdp-quote-indent: round(calc(1.5 * var(--mdp-body-em, 1em)), 1px);
+    --secondary: -apple-system-secondary-label;
+    --tertiary: -apple-system-tertiary-label;
+    --quote-border: -apple-system-quaternary-label;
+    --grid: -apple-system-separator;
+    --accent: var(--link);
+    --link: rgb(0, 104, 218);
+    --aside-bg: #f5f5f7;
+    --aside-border: #696969;
+    --code-bg: #f9f9f9;
+    --code-border: #f0f0f0;
+    /* Shared with the editor; class mappings live in MarkdownHTML+Highlight.swift. */
+    --hl-plain: var(--text);
+--hl-keyword: #9b2393;
+--hl-string: #c41a16;
+--hl-comment: #5d6c79;
+--hl-doc-keyword: #4a5560;
+--hl-number: #1c00cf;
+--hl-type: #3900a0;
+--hl-builtin: #6c36a9;
+--hl-declaration: #0b4f79;
+--hl-function: #0f68a0;
+--hl-variable: #326d74;
+--hl-preprocessor: #643820;
+--hl-attribute: #815f03;
+--hl-url: #0e0eff;
+    --mdp-list-indent: 2.1em;
+    --mdp-list-gap: 0.75em;
+}
+:root[data-mdp-color-scheme="light"] {
+    color-scheme: light;
+}
+:root[data-mdp-color-scheme="dark"] {
+    color-scheme: dark;
+    --link: rgb(65, 156, 255);
+    --aside-bg: #323232;
+    --aside-border: #9a9a9e;
+    --code-bg: #262626;
+    --code-border: #323232;
+    --hl-keyword: #fc5fa3;
+--hl-string: #fc6a5d;
+--hl-comment: #6c7986;
+--hl-doc-keyword: #92a1b1;
+--hl-number: #d0bf69;
+--hl-type: #d0a8ff;
+--hl-builtin: #a167e6;
+--hl-declaration: #5dd8ff;
+--hl-function: #41a1c0;
+--hl-variable: #67b7a4;
+--hl-preprocessor: #fd8f3f;
+--hl-attribute: #bf8555;
+--hl-url: #5482ff;
+}
+:root[data-mdp-color-scheme],
+:root[data-mdp-color-scheme] body {
+    background: Canvas;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-mdp-color-scheme="light"]) {
+        --link: rgb(65, 156, 255);
+        --aside-bg: #323232;
+        --aside-border: #9a9a9e;
+        --code-bg: #262626;
+        --code-border: #323232;
+        --hl-keyword: #fc5fa3;
+--hl-string: #fc6a5d;
+--hl-comment: #6c7986;
+--hl-doc-keyword: #92a1b1;
+--hl-number: #d0bf69;
+--hl-type: #d0a8ff;
+--hl-builtin: #a167e6;
+--hl-declaration: #5dd8ff;
+--hl-function: #41a1c0;
+--hl-variable: #67b7a4;
+--hl-preprocessor: #fd8f3f;
+--hl-attribute: #bf8555;
+--hl-url: #5482ff;
+    }
+}
+
+* { box-sizing: border-box; }
+mark.md-search-highlight {
+    background: #ffd84d;
+    color: #1d1d1f;
+    -webkit-box-decoration-break: clone;
+}
+mark.md-search-highlight-current {
+    background: #ffbf00;
+}
+mark.md-highlight {
+    background: rgba(255, 216, 77, 0.55);
+    color: inherit;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+}
+.md-search-burst {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(255, 191, 0, 0.5);
+    border-radius: 6px;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.12),
+                0 2px 6px rgba(0, 0, 0, 0.15);
+    z-index: 9999;
+    transform-origin: center center;
+    will-change: transform;
+    animation: md-search-burst 250ms forwards;
+}
+/* Per-segment timing: accelerate into the peak (cubic-bezier ease-in),
+   then decelerate out of it (strong ease-out). High matching velocity
+   at the peak means the motion flows through without pausing — the
+   "stuck" feel of multi-stop ease-out keyframes. */
+@keyframes md-search-burst {
+    0% {
+        transform: scale(1.0);
+        animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45);
+    }
+    50% {
+        transform: scale(1.32);
+        animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1);
+    }
+    100% {
+        transform: scale(1.0);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .md-search-burst { animation-duration: 1ms; }
+}
+html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+/* Hide inner scrollers' bars (tables, math) but never match the root:
+   any custom ::-webkit-scrollbar style on <html>/<body> — including a
+   later "restore" override — swaps the page's native macOS overlay
+   scrollbar for WebKit's legacy one. Exclude code blocks as well so
+   horizontal overflow retains its native scrollbar. */
+:where(:not(html):not(body):not(pre))::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+}
+body {
+    font-family: var(--mdp-doc-font, -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif);
+    font-size: 15.0px;
+    font-weight: var(--mdp-body-weight, 400);
+    line-height: var(--mdp-line-height, 1.6);
+    letter-spacing: var(--mdp-letter-spacing, normal);
+    word-spacing: var(--mdp-word-spacing, normal);
+    color: var(--text);
+    background: transparent;
+    padding: calc((32.0px + var(--mdp-page-top-clearance, 0px)) / var(--mdp-chrome-zoom, 1)) var(--mdp-page-padding, 40.0px) 48.0px;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility; text-wrap: pretty;
+}
+/* Reader spacing tweaks stop at code — whitespace fidelity wins. */
+pre, code {
+    letter-spacing: normal;
+    word-spacing: normal;
+}
+
+article.markdown-body {
+    max-width: 820px;
+    margin-left: auto;
+    margin-right: auto;
+    /* Reader margins: symmetric padding inside the column, so they hold
+       in every content-width mode instead of fighting max-width. */
+    padding-left: var(--mdp-page-inset, 0);
+    padding-right: var(--mdp-page-inset, 0);
+}
+article.markdown-body > *:first-child { margin-top: 0 !important; }
+/* A flex column keeps WebKit from painting the selection across the gaps
+   between blocks, so a selection highlights text, not empty space. The
+   same applies inside every block container that holds other blocks:
+   lists, quotations, alerts, and code blocks. List items stay list items, so their
+   markers survive copy and paste. Screen only: flex containers do not
+   fragment across printed pages. Blocks keep their top-only margins, so
+   nothing relied on margin collapsing. */
+@media screen {
+    article.markdown-body,
+    article.markdown-body ul,
+    article.markdown-body ol,
+    article.markdown-body blockquote,
+    article.markdown-body .markdown-alert,
+    article.markdown-body .md-code-wrap,
+    article.markdown-body pre {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+    }
+    /* Stretching suits block content, but an inline-level element sitting
+       at the top level gets stretched too, and a <button> drawn edge to
+       edge reads as a real control rather than the inert leftover it is:
+       DOMPurify removes a <form> and keeps its children, so a credential
+       prompt's button lands here. Media keeps its own width for the same
+       reason — a raw <img> should not be widened to the column. */
+    article.markdown-body > button,
+    article.markdown-body > input,
+    article.markdown-body > select,
+    article.markdown-body > textarea,
+    article.markdown-body > img,
+    article.markdown-body > svg,
+    article.markdown-body > video,
+    article.markdown-body > audio {
+        align-self: flex-start;
+    }
+}
+.md-inline-tab {
+    white-space: pre;
+    tab-size: 4;
+}
+.md-source-list-indent-step {
+    display: block;
+    box-sizing: border-box;
+    padding-inline-start: var(--mdp-list-indent);
+}
+.md-source-list-line {
+    display: block;
+    margin-top: 3.0px;
+}
+.md-source-list-marker {
+    display: inline-block;
+    box-sizing: border-box;
+    width: var(--mdp-list-indent);
+    margin-inline-start: calc(-1 * var(--mdp-list-indent));
+    padding-inline-end: var(--mdp-list-gap);
+    text-align: end;
+}
+.md-source-task-marker {
+    text-align: center;
+    padding-inline-end: 0.25em;
+}
+
+/* Frontmatter properties — a quiet metadata panel. Deliberately
+   quieter than document content: no row borders (content tables own
+   horizontal rules), a muted key column, and a single hairline that
+   hands off to the document body. */
+.md-frontmatter {
+    margin: 0 0 1.2em;
+    padding: 0 0 1em;
+    border-bottom: 1px solid var(--grid);
+}
+.md-frontmatter table {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    margin: 0;
+    overflow: visible;
+    font-size: 0.92em;
+    line-height: 1.5;
+}
+.md-frontmatter th,
+.md-frontmatter td {
+    padding: 0.28em 0;
+    border: 0;
+    vertical-align: baseline;
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+.md-frontmatter th {
+    width: 26%;
+    padding-right: 1.4em;
+    font-weight: 500;
+    color: var(--secondary);
+}
+.md-frontmatter td {
+    white-space: pre-wrap;
+}
+.md-fm-pill {
+    display: inline-block;
+    margin: 0 0.4em 0.2em 0;
+    padding: 0.08em 0.7em;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--link) 12%, transparent);
+    color: var(--link);
+    font-size: 0.95em;
+    overflow-wrap: anywhere;
+}
+.md-fm-empty::before {
+    content: "—";
+    color: var(--secondary);
+}
+
+p {
+    margin: 12.0px 0 0;
+}
+/* The final blank of a run shrinks to a small gap so a single authored
+   blank plus the next block's margin matches other renderers' paragraph
+   rhythm. Earlier blanks in the run keep their natural line height, so
+   extra authored blanks still grow the gap. */
+.md-source-blank-line {
+    height: 4.0px;
+}
+.md-source-blank-line:has(+ .md-source-blank-line) {
+    height: 24.0px;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    line-height: 1.25;
+    /* Top-only, like every block: the next block's own top margin is the
+       gap below a heading. In the flex column margins no longer collapse,
+       so a bottom margin here would add to it. */
+    margin: calc(0.6rem + 0.5em) 0 0;
+    overflow-wrap: anywhere;
+}
+/* System title scale as ratios of a 13px body: Large Title 26, Title 1
+   22, Title 2 17, Title 3 15, Headline 13, Subheadline 11. */
+h1 { font-size: 2em; }
+h2 { font-size: 1.692em; }
+h3 { font-size: 1.308em; }
+h4 { font-size: 1.154em; }
+h5 { font-size: 1em; }
+h6 { font-size: 0.846em; }
+:is(h1, h2, h3, h4, h5, h6) code { font-size: inherit; }
+/* The blank before a heading shrinks like every final blank; the
+   heading's own margin restores the one-line gap, keeping the total at
+   one source line plus the small breathing room (blank + margin). */
+.md-source-blank-line + h1,
+.md-source-blank-line + h2,
+.md-source-blank-line + h3,
+.md-source-blank-line + h4,
+.md-source-blank-line + h5,
+.md-source-blank-line + h6 {
+    margin-top: 24.0px;
+}
+
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.footnote-ref {
+    font-size: 0.75em;
+    line-height: 0;
+    vertical-align: super;
+}
+.footnote-ref a {
+    padding: 0 0.12em;
+}
+.footnotes {
+    margin-top: 2.35em;
+    color: var(--text);
+    font-size: 0.9em;
+    line-height: 1.45;
+}
+.footnotes hr {
+    margin: 0 0 1em;
+}
+.footnotes ol {
+    margin-top: 0;
+    padding-left: 1.45em;
+}
+.footnotes li {
+    margin-top: 0.72em;
+    padding-left: 0.12em;
+}
+.footnotes li:first-child {
+    margin-top: 0;
+}
+.footnotes li > p:first-child {
+    margin-top: 0;
+}
+.footnote-backrefs {
+    display: inline-flex;
+    gap: 0.28em;
+    margin-left: 0.28em;
+    white-space: nowrap;
+}
+.footnote-backref {
+    font-size: 0.78em;
+    opacity: 0.65;
+    vertical-align: baseline;
+}
+.footnote-backref:hover {
+    opacity: 1;
+}
+
+code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: var(--mdp-code-font-size, 0.9em);
+    padding: 0.15em 0.3em;
+    background: var(--code-bg);
+    border: 0.5px solid var(--code-border);
+    border-radius: 5px;
+}
+:not(pre) > code {
+    overflow-wrap: anywhere;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+}
+pre {
+    position: relative;
+    margin: 12.0px 0 0;
+    padding: 16px;
+    background: var(--code-bg);
+    border: 0.5px solid var(--code-border);
+    border-radius: 8px;
+    overflow-x: auto;
+    line-height: 1.3;
+}
+pre[data-code-language]::before {
+    content: attr(data-code-language);
+    display: block;
+    position: sticky;
+    left: 0;
+    height: 20px;
+    color: var(--secondary);
+    font: 11px/14px -apple-system, BlinkMacSystemFont, sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+}
+pre code {
+    /* highlight.js adds display:block with the .hljs class after its
+       deferred pass. Match that layout from first paint so syntax
+       coloring cannot change the code block's line boxes. */
+    display: block;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    font-size: 0.9em; line-height: round(1.3em, 1px); text-wrap-style: auto;
+}
+.md-code-wrap {
+    position: relative;
+    margin: 12.0px 0 0;
+    background: var(--code-bg);
+    border: 0.5px solid var(--code-border);
+    border-radius: 16px;
+    overflow: hidden;
+}
+.md-code-wrap > pre { margin: 0; border: 0; border-radius: 0; padding-top: 8px; }
+.md-code-wrap > pre::before { display: none; }
+.md-code-wrap.is-wrapped > pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.md-code-header {
+    box-sizing: content-box;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 8px 10px 0 16px;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+}
+.md-code-language { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    color: var(--secondary); font: 11px/14px -apple-system, BlinkMacSystemFont, sans-serif; }
+.md-code-action {
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: none; width: 28px; height: 28px; padding: 0;
+    appearance: none; border: 0; border-radius: 50%;
+    color: var(--secondary); background: transparent; cursor: pointer;
+}
+.md-code-action:hover { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
+.md-code-action:focus-visible { outline: 2px solid AccentColor; outline-offset: 1px; }
+.mermaid-figure {
+    position: relative;
+    margin: 24.0px 0 0;
+    background: var(--code-bg);
+    border-radius: 15px;
+    overflow: hidden;
+    outline: none;
+    /* The stage is absolutely positioned, so the figure needs an explicit
+       width; a tall diagram stays centred inside the height cap. */
+    --mm-max-height: min(70vh, 720px);
+width: 100%;
+aspect-ratio: var(--mm-aspect, 4 / 3);
+max-height: min(var(--mm-max-height), calc(var(--mm-height, var(--mm-max-height)) + 32px));
+    contain: layout paint;
+    --pele-bg: var(--code-bg);
+--pele-fg: var(--text);
+--pele-muted: color-mix(in srgb, var(--text) 60%, var(--code-bg));
+--pele-line: color-mix(in srgb, var(--text) 50%, var(--code-bg));
+--pele-surface: color-mix(in srgb, var(--text) 3%, var(--code-bg));
+--pele-surface-alt: color-mix(in srgb, var(--text) 5%, var(--code-bg));
+--pele-border: color-mix(in srgb, var(--text) 20%, var(--code-bg));
+--pele-accent: var(--link);
+--pele-critical: var(--hl-string);
+--pele-series-1: var(--link);
+--pele-series-2: var(--hl-keyword);
+--pele-series-3: var(--hl-variable);
+--pele-series-4: var(--hl-attribute);
+--pele-series-5: var(--hl-string);
+--pele-series-6: var(--hl-type);
+--pele-series-7: var(--hl-preprocessor);
+--pele-series-8: var(--hl-comment);
+--pele-radius: 6px;
+--pele-title-weight: 600;
+--pele-heading-weight: 600;
+--pele-font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+--pele-font: var(--mdp-doc-font, -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif);
+}
+.mermaid-figure.mermaid-width-expanded {
+    max-height: none;
+}
+.mermaid-figure:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in srgb, AccentColor 60%, transparent);
+}
+.mermaid-stage {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    contain: strict;
+}
+.mermaid-figure .mermaid-stage { cursor: grab; }
+.mermaid-figure .mermaid-stage:active { cursor: grabbing; }
+.mermaid {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+}
+.mermaid svg {
+    display: block;
+    width: 100%;
+    max-width: none !important;
+    height: 100%;
+}
+.mermaid-hud {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px 8px;
+    max-width: calc(100% - 16px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+    z-index: 2;
+    font-size: 12px;
+    line-height: 1;
+    color: var(--text);
+}
+.mermaid-hud-group {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 9px;
+    background: color-mix(in srgb, Canvas 75%, transparent);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+.mermaid-figure:hover .mermaid-hud,
+.mermaid-figure:focus-within .mermaid-hud {
+    opacity: 1;
+    pointer-events: auto;
+}
+.mermaid-hud-btn {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 500;
+    padding: 5px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+    min-width: 26px;
+    text-align: center;
+}
+.mermaid-hud-btn:hover {
+    background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+.mermaid-hud-btn:active {
+    background: color-mix(in srgb, var(--text) 18%, transparent);
+}
+/* −, + and ⛶ draw about 1px below the middle of the text box (− and +
+   sit on the font's maths axis); shift them up inside the same button
+   box, measured centred to a quarter point. */
+.mermaid-hud-btn[data-mm-act="out"],
+.mermaid-hud-btn[data-mm-act="in"],
+.mermaid-hud-btn[data-mm-act="popup"] {
+    padding-top: 4px;
+    padding-bottom: 6px;
+}
+.mermaid-hud-level {
+    min-width: 46px;
+    font-variant-numeric: tabular-nums;
+}
+.mermaid-hud-width {
+    line-height: 12px;
+}
+.mermaid-hud-width-symbol {
+    display: inline-block;
+    font-size: 22px;
+    font-weight: 600;
+}
+.mermaid-hud-popup {
+    font-size: 16px;
+    line-height: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .mermaid-hud { transition: none; }
+}
+/* A diagram that cannot be drawn shows the message and its source in
+   flow, so the figure sizes to the text instead of the aspect ratio. */
+.mermaid-figure.mermaid-error {
+    aspect-ratio: auto;
+    max-width: none;
+    max-height: none;
+}
+.mermaid-figure.mermaid-error .mermaid-stage {
+    position: static;
+    contain: none;
+}
+.mermaid-figure.mermaid-error .mermaid-hud { display: none; }
+.mermaid-figure.mermaid-error .mermaid {
+    position: static;
+    display: block;
+    padding: 12px 16px;
+text-align: start;
+white-space: pre-wrap;
+font-family: ui-monospace, "SF Mono", Menlo, monospace;
+font-size: 0.88em;
+}
+/* An empty block is a placeholder, not content. */
+.mermaid-figure.mermaid-empty .mermaid { color: var(--secondary); }
+.math-display {
+    margin: 1.2em 0 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+.math-display .katex-display {
+    margin: 0;
+}
+.math-error {
+    color: #b00020;
+    background: var(--code-bg);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.88em;
+    white-space: pre-wrap;
+}
+:root[data-mdp-color-scheme="dark"] .math-error {
+    color: #ff6e6e;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-mdp-color-scheme="light"]) .math-error { color: #ff6e6e; }
+}
+.katex { direction: ltr !important; unicode-bidi: isolate; }
+
+blockquote {
+    position: relative;
+    margin: 18.0px 0 0;
+    padding: 0.4em 1em;
+    padding-inline-start: var(--mdp-quote-indent);
+    color: var(--secondary);
+}
+blockquote::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: 0.3em;
+    top: 0.4em;
+    bottom: 0.4em;
+    border-inline-start: 4px solid var(--quote-border);
+    border-radius: 999px;
+    pointer-events: none;
+}
+blockquote > *:first-child { margin-top: 0; }
+
+.markdown-alert {
+    margin: 24.0px 0 0;
+    padding: 12px 16px;
+    background: var(--aside-bg);
+    border-left: 4px solid var(--aside-border);
+    border-radius: 6px;
+    color: var(--text);
+}
+.markdown-alert > *:first-child { margin-top: 0; }
+.markdown-alert-title {
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    line-height: 1;
+}
+.markdown-alert-icon {
+    width: 1em;
+    height: 1em;
+    margin-right: 0.5em;
+    flex: 0 0 auto;
+    fill: currentColor;
+}
+.markdown-alert-note { border-left-color: #0969da; }
+.markdown-alert-note .markdown-alert-title { color: #0969da; }
+.markdown-alert-tip { border-left-color: #1a7f37; }
+.markdown-alert-tip .markdown-alert-title { color: #1a7f37; }
+.markdown-alert-important { border-left-color: #8250df; }
+.markdown-alert-important .markdown-alert-title { color: #8250df; }
+.markdown-alert-warning { border-left-color: #9a6700; }
+.markdown-alert-warning .markdown-alert-title { color: #9a6700; }
+.markdown-alert-caution { border-left-color: #d1242f; }
+.markdown-alert-caution .markdown-alert-title { color: #d1242f; }
+
+ul, ol {
+    /* Each list owns its gutter, so a nested list does not inherit the
+       wider gutter of a long ordered list around it. */
+    --mdp-list-indent: 2.1em;
+    margin: 12.0px 0 0;
+    padding-inline-start: var(--mdp-list-indent);
+    padding-inline-end: 0;
+}
+/* A two-digit marker fits the default gutter; from "100." on, the
+   formatter tags the list with its digit count and the gutter grows by one
+   digit per extra digit. 1ch is the width of "0", which no document font
+   renders narrower than its tabular digits, so the marker never wraps or
+   hangs past the page edge. The editor mirrors this in entry-cm.js. */
+ol[data-mdp-digits="3"] { --mdp-list-indent: calc(2.1em + 1ch); }
+    ol[data-mdp-digits="4"] { --mdp-list-indent: calc(2.1em + 2ch); }
+    ol[data-mdp-digits="5"] { --mdp-list-indent: calc(2.1em + 3ch); }
+    ol[data-mdp-digits="6"] { --mdp-list-indent: calc(2.1em + 4ch); }
+    ol[data-mdp-digits="7"] { --mdp-list-indent: calc(2.1em + 5ch); }
+    ol[data-mdp-digits="8"] { --mdp-list-indent: calc(2.1em + 6ch); }
+    ol[data-mdp-digits="9"] { --mdp-list-indent: calc(2.1em + 7ch); }
+ol > li::marker { color: var(--link); font-variant-numeric: tabular-nums; }
+/* A numbered item that opens with a diagram has no text line for its
+   ::marker (the drawing is absolutely positioned), so the number never
+   painted. A zero-height first line gives it one without moving the
+   diagram; bulleted items paint their own dot in ::before. */
+ol > li:has(> .mermaid-figure:first-child)::before {
+    content: "​";
+    display: block;
+    height: 0;
+}
+/* No text marker: it would paint as a selected box beside every item.
+   The gutter comes from the list padding, a 0.4em circle is painted in
+   its place, and copying a list yields its Markdown source, bullets
+   included. Drawn with a border, not a background, so PDF export keeps
+   it even when backgrounds are not printed. */
+ul { list-style: none; }
+ul > li { position: relative; }
+ul > li:not(.task-list-item)::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: calc(-1 * var(--mdp-list-gap) - 0.4em);
+    top: calc(0.5lh - 0.2em);
+    width: 0;
+    height: 0;
+    border: 0.2em solid var(--link);
+    border-radius: 50%;
+}
+li { margin-top: 3.0px; }
+li:first-child { margin-top: 0; }
+li > ul, li > ol { margin-top: 3.0px; }
+li > p:first-child { margin-top: 0; }
+
+li.task-list-item { list-style: none; }
+/* Completed tasks read as done by muting, without a strikethrough, so a
+   long checklist stays legible. The mute stops short of --secondary so
+   the text stays readable beside its checkbox. Only the item's own
+   checkbox counts, and nested lists keep their own state: a checked
+   sub-item must not mark its parent done, and a checked parent must not
+   mute unchecked sub-items. */
+li.task-list-item:has(> input.task-list-item-checkbox:checked) > :not(ul, ol) {
+    color: color-mix(in srgb, var(--secondary), var(--text) 30%);
+}
+li.task-list-item > p:first-of-type { display: inline; margin-top: 0; }
+/* The system draws the box, so it matches every other macOS checkbox:
+   accent colour, dark mode, and the grey tick of an inactive window.
+   Left to itself WebKit draws it 12px square at any font-size, which
+   reads tiny beside body text; an explicit size scales the system
+   drawing, so it is sized in em like the text. Its baseline does not
+   scale with the text, so it is centred with `middle` (half the
+   x-height) and moved up to half the cap height instead. */
+.task-list-item-checkbox {
+    font: inherit;
+    width: 1.1em;
+    height: 1.1em;
+    margin: 0;
+    margin-inline-start: calc(-1.1em - 0.25em);
+    margin-inline-end: 0.25em;
+    vertical-align: middle;
+    position: relative;
+    top: calc(0.5ex - 0.5cap);
+    flex: 0 0 auto;
+}
+
+table {
+    margin: 24.0px 0 0;
+    border-collapse: collapse;
+    display: block;
+    overflow-x: auto;
+    max-width: 100%;
+}
+th, td {
+    padding: 8px 12px;
+    border-top: 1px solid var(--grid);
+    border-bottom: 1px solid var(--grid);
+    text-align: start;
+    vertical-align: top;
+}
+/* Chinese and Japanese have no spaces, so a cell's min-content width is
+   otherwise one character and short labels wrap two or three characters
+   per line. keep-all keeps CJK runs whole; the renderer adds <wbr> after
+   CJK punctuation in Markdown cells so long text still wraps by phrase.
+   Latin text is unaffected. Raw HTML tables keep the default. */
+:is(th, td)[data-table-row] { word-break: keep-all; }
+th { font-weight: 600; }
+:is(th, td)[align="center"] { text-align: center; }
+:is(th, td)[align="right"] { text-align: right; }
+:is(th, td)[align="left"] { text-align: left; }
+
+hr {
+    border: 0;
+    height: 1px;
+    background: var(--grid);
+    margin: 12.0px 0 0;
+}
+
+img {
+    /* Follow the surrounding text, including explicit HTML alignment. */
+    display: inline-block;
+    max-width: 100%;
+    margin: 12.0px 0 0;
+    border-radius: 8px;
+}
+/* Keep downscaled images proportional, but let explicit width/height
+   attributes (e.g. GitHub-style <img height="54">) take effect. */
+img:not([width]):not([height]) {
+    height: auto;
+}
+/* The paragraph owns the block gap; image margins must not add to it. */
+p img {
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0 0.35em 0 0;
+}
+p > img:only-child {
+    margin: 0;
+}
+
+strong { font-weight: 600; }
+em { font-style: italic; }
+
+[dir="rtl"] { text-align: right; }
+
+/* ---------------------------------------------------------------------
+   Paper-optimized printing.
+
+   WebKit lays print out at a viewport of the printable width in CSS px
+   (96px per inch), and 1 CSS px maps to exactly 0.75pt on paper. Sizing
+   the body in `pt` here therefore lands at that literal point size, with
+   no scaling factor to compensate for. The app applies the selected
+   point size to a temporary copy before printing.
+
+   The on-screen palette is dark-mode aware; paper is not, so regular
+   printing restores the light values unconditionally. PDF export adds
+   `previewPrintClass` before entering WebKit's print pipeline, which
+   excludes these paper-only changes and preserves the read-only page.
+   --------------------------------------------------------------------- */
+@media print {
+    :root:not(.md-preview-print-fidelity) {
+        color-scheme: light;
+        --text: #1d1d1f;
+        --secondary: #6e6e73;
+        --link: #0066cc;
+        --aside-bg: #f5f5f7;
+        --aside-border: #696969;
+        --quote-border: #d2d2d7;
+        --code-bg: #f9f9f9;
+        --code-border: #f0f0f0;
+        --grid: #d2d2d7;
+    }
+    html,
+    body {
+        overflow: visible;
+    }
+    :root:not(.md-preview-print-fidelity),
+    :root:not(.md-preview-print-fidelity) body {
+        background: #fff;
+    }
+    @page {
+        margin: 36.0pt 54.0pt 43.2pt;
+    }
+    body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    :root:not(.md-preview-print-fidelity) body {
+        font-size: 12pt;
+        padding: 0;
+    }
+    /* The article fills the area inside the CSS page margins. */
+    :root:not(.md-preview-print-fidelity) article.markdown-body {
+        max-width: none;
+        margin: 0;
+    }
+
+    /* Interaction affordances are screen-only. */
+    .md-code-action,
+    .md-search-burst,
+    .mermaid-hud { display: none !important; }
+    mark.md-search-highlight,
+    mark.md-search-highlight-current {
+        background: transparent;
+        color: inherit;
+    }
+
+    /* Splitting these across a page break loses the reading order. */
+    :root:not(.md-preview-print-fidelity) pre,
+    :root:not(.md-preview-print-fidelity) blockquote,
+    :root:not(.md-preview-print-fidelity) table,
+    :root:not(.md-preview-print-fidelity) figure,
+    :root:not(.md-preview-print-fidelity) .md-frontmatter,
+    :root:not(.md-preview-print-fidelity) .markdown-alert {
+        break-inside: avoid;
+    }
+    :root:not(.md-preview-print-fidelity) tr,
+    :root:not(.md-preview-print-fidelity) li { break-inside: avoid; }
+    :root:not(.md-preview-print-fidelity) h1,
+    :root:not(.md-preview-print-fidelity) h2,
+    :root:not(.md-preview-print-fidelity) h3,
+    :root:not(.md-preview-print-fidelity) h4,
+    :root:not(.md-preview-print-fidelity) h5,
+    :root:not(.md-preview-print-fidelity) h6 { break-after: avoid; }
+    :root:not(.md-preview-print-fidelity) pre {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+    /* Inner scrollers can't scroll on paper — let them wrap instead of
+       clipping their overflow. */
+    :root:not(.md-preview-print-fidelity) .md-code-wrap,
+    :root:not(.md-preview-print-fidelity) table,
+    :root:not(.md-preview-print-fidelity) pre {
+        overflow: visible !important;
+    }
+    :root:not(.md-preview-print-fidelity) img,
+    :root:not(.md-preview-print-fidelity) svg {
+        max-width: 100% !important;
+        height: auto;
+    }
+    /* Anything wider than the printable area makes WebKit shrink the whole
+       document to fit, which silently overrides the chosen point size — a
+       request for 18pt came out at ~15pt. Keep every block inside the
+       measure so the size stays honest. */
+    :root:not(.md-preview-print-fidelity) body { overflow-wrap: break-word; }
+    :root:not(.md-preview-print-fidelity) table { width: 100%; }
+    :root:not(.md-preview-print-fidelity) th,
+    :root:not(.md-preview-print-fidelity) td { overflow-wrap: anywhere; }
+    :root:not(.md-preview-print-fidelity) pre,
+    :root:not(.md-preview-print-fidelity) code { overflow-wrap: anywhere; }
+}
+
+.hljs { color: var(--hl-plain); background: transparent; }
+.hljs-keyword,
+.hljs-literal,
+.hljs-variable.language_,
+.hljs-template-tag,
+.hljs-name,
+.hljs-selector-tag,
+.hljs-section,
+.hljs-bullet { color: var(--hl-keyword); }
+.hljs-string,
+.hljs-regexp,
+.hljs-meta .hljs-string { color: var(--hl-string); }
+.hljs-number,
+.hljs-char,
+.hljs-symbol { color: var(--hl-number); }
+.hljs-comment,
+.hljs-quote,
+.hljs-formula { color: var(--hl-comment); }
+.hljs-doctag { color: var(--hl-doc-keyword); }
+.hljs-type { color: var(--hl-type); }
+.hljs-built_in { color: var(--hl-builtin); }
+.hljs-title.class_,
+.hljs-title.class_.inherited__ { color: var(--hl-declaration); }
+.hljs-title,
+.hljs-title.function_ { color: var(--hl-function); }
+.hljs-variable,
+.hljs-template-variable,
+.hljs-property,
+.hljs-selector-class,
+.hljs-selector-id,
+.hljs-selector-attr,
+.hljs-selector-pseudo { color: var(--hl-variable); }
+.hljs-meta,
+.hljs-meta .hljs-keyword { color: var(--hl-preprocessor); }
+.hljs-attr,
+.hljs-attribute { color: var(--hl-attribute); }
+.hljs-link { color: var(--hl-url); }
+.hljs-subst,
+.hljs-operator,
+.hljs-punctuation,
+.hljs-params { color: var(--hl-plain); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 600; }
+.hljs-addition {
+    color: var(--hl-variable);
+    background-color: color-mix(in srgb, var(--hl-variable) 12%, transparent);
+}
+.hljs-deletion {
+    color: var(--hl-string);
+    background-color: color-mix(in srgb, var(--hl-string) 12%, transparent);
+}
+/* Shrink to the table so the Expand button sits at the table's edge, not the column's. */
+.md-table-wrap { position: relative; margin-top: 24.0px; padding-top: 28px; width: fit-content; max-width: 100%; }
+.md-table-wrap > table { margin-top: 0; }
+.md-table-actions { display: flex; justify-content: flex-end; height: 28px; }
+.md-table-wrap > .md-table-actions { position: absolute; top: 0; inset-inline-end: 0; }
+.md-table-expand {
+    appearance: none; border: 0; border-radius: 5px; padding: 3px 7px;
+    background: transparent; color: var(--secondary, var(--text));
+    font: inherit; font-size: 13px; cursor: pointer;
+}
+.md-table-expand:hover { background: var(--code-bg); color: var(--text); }
+.md-table-expand:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+th code, td code, .cm-md-table-cell .cm-md-inline-code { overflow-wrap: inherit; word-break: inherit; }
+html.md-preview-print-fidelity .md-table-actions { display: none; }
+html.md-preview-print-fidelity .md-table-wrap { padding-top: 0; }
+@media print {
+    .md-table-actions { display: none !important; }
+    .md-table-wrap { padding-top: 0; }
+}
+:root {
+    --mdp-doc-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    --mdp-code-font-size: 0.9em;
+    --mdp-page-top-clearance: 0px;
+    --mdp-chrome-zoom: 1;
+}

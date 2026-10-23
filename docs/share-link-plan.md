@@ -365,6 +365,16 @@ app is missing.
 
 ## 5. Web — phase 2
 
+**Status (2026-10-23):** the viewer is built in `server/share-worker/viewer/`
+(see its README). Done: decrypt, sanitize with an allowlist, the app's
+stylesheet and code/math renderers (exported and checked by
+`ShareViewerKitTests`), local images as `blob:` URLs, remote images blocked
+with a note, Open in Markdown Preview, Download .md, and error states. Not
+yet: diagrams (Pele), password links, Report, burn after reading. Deviations
+from the text below: the page loads a few same-origin files rather than one
+bundle, and `style-src-attr 'unsafe-inline'` is allowed because KaTeX sets
+inline styles; scripts stay `'self'` only.
+
 - Viewer at `GET /s/<id>`: static HTML + one JS bundle from the same origin.
   It reads the fragment, fetches `/shares/<id>`, decrypts with
   WebCrypto, inflates with `DecompressionStream`, and renders.

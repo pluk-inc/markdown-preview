@@ -1,8 +1,12 @@
 // Share-link API (docs/share-link-plan.md §3). Stores MDP1 envelopes in R2.
 // The server never sees a key: it only checks the envelope's magic and size.
+// It also serves the web viewer (§5), which decrypts in the browser.
+
+import { VIEWER_CSP } from "./viewer-csp.ts";
 
 export interface Env {
   SHARES: R2Bucket;
+  ASSETS: Fetcher;
   CREATE_LIMITER?: RateLimit;
   READ_LIMITER?: RateLimit;
   APPLE_APP_ID: string;
@@ -43,7 +47,7 @@ export default {
 
     if (pathname.startsWith("/s/")) {
       return request.method === "GET" || request.method === "HEAD"
-        ? linkPage()
+        ? viewerPage(request, env)
         : error(405, "method_not_allowed");
     }
 
@@ -138,30 +142,19 @@ async function remove(id: string, request: Request, env: Env): Promise<Response>
   return new Response(null, { status: 204, headers: BASE_HEADERS });
 }
 
-// Until the web viewer (plan §5) exists, a link opened in a browser gets a
-// static page that points to the app. It has no script, so nothing on it can
-// read the key in the URL fragment.
-const LINK_PAGE = `<!doctype html>
-<html lang="en">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex">
-<title>Shared document · Markdown Preview</title>
-<body style="font: 16px -apple-system, system-ui, sans-serif; max-width: 32rem; margin: 15vh auto; padding: 0 1.5rem; line-height: 1.5">
-<h1 style="font-size: 1.4rem">This document was shared with Markdown Preview</h1>
-<p>Open this link on a Mac with Markdown Preview installed. Reading shared documents in the browser is coming soon.</p>
-<p><a href="https://markdownpreview.app">Get Markdown Preview</a></p>
-</body>
-</html>
-`;
-
-function linkPage(): Response {
-  return new Response(LINK_PAGE, {
+// /s/<id> answers with the viewer page; the page reads the key from the URL
+// fragment, which never reaches this Worker. Its files under /s/_viewer/
+// are static assets and never reach the Worker either.
+async function viewerPage(request: Request, env: Env): Promise<Response> {
+  const page = await env.ASSETS.fetch(new URL("/s/_viewer/index.html", request.url));
+  if (!page.ok) return error(404, "not_found");
+  return new Response(request.method === "HEAD" ? null : page.body, {
     headers: {
       ...BASE_HEADERS,
       "Content-Type": "text/html; charset=utf-8",
-      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "Content-Security-Policy": VIEWER_CSP,
       "X-Frame-Options": "DENY",
+      "Cross-Origin-Opener-Policy": "same-origin",
     },
   });
 }
