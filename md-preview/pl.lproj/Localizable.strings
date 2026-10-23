@@ -488,3 +488,6 @@
 "Too many links in a short time. Wait a minute, then try again." = "Zbyt wiele linków w krótkim czasie. Poczekaj minutę i spróbuj ponownie.";
 "You are offline. Connect to the internet, then try again." = "Jesteś offline. Połącz się z internetem i spróbuj ponownie.";
 "Markdown Preview could not reach the sharing server. Try again later." = "Markdown Preview nie może połączyć się z serwerem udostępniania. Spróbuj ponownie później.";
+
+/* Share links */
+"Keep Document Private" = "Zachowaj dokument jako prywatny";

@@ -488,3 +488,6 @@
 "Too many links in a short time. Wait a minute, then try again." = "Too many links in a short time. Wait a minute, then try again.";
 "You are offline. Connect to the internet, then try again." = "You are offline. Connect to the internet, then try again.";
 "Markdown Preview could not reach the sharing server. Try again later." = "Markdown Preview could not reach the sharing server. Try again later.";
+
+/* Share links */
+"Keep Document Private" = "Keep Document Private";
