@@ -607,9 +607,10 @@ extension DocumentWindowController {
                 NSApp.sendAction(action.action, to: nil, from: self)
             }
         }
-        // Copy Link goes last in this section, right above the system's Copy,
-        // which sits in its own section that apps cannot add rows to.
-        return services + [shareLinkService()].compactMap { $0 } + proposedServices
+        // The share-link rows lead the section, right under the header's
+        // divider: the popover puts every app row in one section and draws
+        // no divider between them.
+        return shareLinkServices() + services + proposedServices
     }
 }
 
