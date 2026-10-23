@@ -707,7 +707,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         case "tablePopup":
             guard let markdown = dict["markdown"] as? String else { return }
             TablePreviewWindow.shared.present(markdown: markdown, title: dict["title"] as? String,
-                                              assetBaseURL: currentAssetBase, relativeTo: window)
+                                              assetBaseURL: currentAssetBase, pageZoom: pageZoom,
+                                              relativeTo: window)
         #endif
         case "copyCode":
             guard let text = dict["value"] as? String else { return }
@@ -800,6 +801,12 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     func zoomIn() { setPageZoom(nextZoomStep(from: webView.pageZoom, increasing: true)) }
     func zoomOut() { setPageZoom(nextZoomStep(from: webView.pageZoom, increasing: false)) }
     func resetZoom() { setPageZoom(1.0) }
+
+    /// Sets the zoom without saving it, for a view that copies another
+    /// view's text size.
+    func applyPageZoom(_ value: CGFloat) {
+        setPageZoom(value, persist: false, notifyHeight: false)
+    }
 
     fileprivate func beginMagnificationZoom() {
         magnificationStartZoom = webView.pageZoom

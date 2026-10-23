@@ -4,15 +4,18 @@ import WebKit
 /// A read-only snapshot of one table, using the regular sanitized renderer and
 /// link/asset policies. The source document and its editing state stay intact.
 /// It opens as an ordinary window: the reader decides whether to make it
-/// fullscreen, minimize it, or resize it, and Escape closes it.
+/// fullscreen, minimize it, or resize it, and Escape closes it. It opens at
+/// the text size of the view it came from; zooming it does not change the
+/// saved text size.
 @MainActor
-final class TablePreviewWindow: NSObject, NSWindowDelegate {
+final class TablePreviewWindow: NSObject, NSWindowDelegate, NSMenuItemValidation {
     static let shared = TablePreviewWindow()
     private var tableWindow: NSWindow?
     private var preview: MarkdownWebView?
     private var escapeMonitor: Any?
 
-    func present(markdown: String, title: String?, assetBaseURL: URL?, relativeTo parent: NSWindow?) {
+    func present(markdown: String, title: String?, assetBaseURL: URL?, pageZoom: CGFloat,
+                 relativeTo parent: NSWindow?) {
         guard !markdown.isEmpty else { return }
         let window: NSWindow
         let preview: MarkdownWebView
@@ -55,9 +58,10 @@ final class TablePreviewWindow: NSObject, NSWindowDelegate {
                     html { overflow-x: auto !important; }
                     :where(html) { background: -apple-system-text-background; }
                     article.markdown-body, table, .md-table-scroll { overflow: visible; }
-                    /* Only the column header row: row headers in a raw
-                       HTML table body would pile up at the top. */
-                    .md-table-wrap thead th {
+                    /* Only a single column header row: row headers in a raw
+                       HTML table body, or several header rows, would pile
+                       up at the top. */
+                    thead > tr:only-child > th {
                         position: sticky;
                         top: 0;
                         background: var(--mdp-page-bg, -apple-system-text-background);
@@ -76,6 +80,7 @@ final class TablePreviewWindow: NSObject, NSWindowDelegate {
             preview?.contentDidReplace = nil
             window?.makeKeyAndOrderFront(nil)
         }
+        preview.applyPageZoom(pageZoom)
         preview.display(markdown: markdown, assetBaseURL: assetBaseURL)
         // The web view consumes key events, so Escape is caught before it.
         if escapeMonitor == nil {
@@ -91,6 +96,19 @@ final class TablePreviewWindow: NSObject, NSWindowDelegate {
         }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate()
+    }
+
+    // The window delegate is in the responder chain, so View > Zoom reaches
+    // the table window here instead of being disabled.
+    @IBAction func zoomInDocument(_ sender: Any?) { preview?.zoomIn() }
+    @IBAction func zoomOutDocument(_ sender: Any?) { preview?.zoomOut() }
+    @IBAction func resetDocumentZoom(_ sender: Any?) { preview?.resetZoom() }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(resetDocumentZoom(_:)) {
+            return abs((preview?.pageZoom ?? 1.0) - 1.0) > 0.001
+        }
+        return true
     }
 
     func windowWillClose(_ notification: Notification) {
