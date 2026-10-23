@@ -41,6 +41,7 @@ const page = {
 // The page's own text; the shared document keeps its own language.
 function localizePage() {
   document.documentElement.lang = language;
+  document.title = `${text.untitled} · Markdown Preview`;
   for (const element of document.querySelectorAll("[data-l10n]")) {
     element.textContent = text[element.dataset.l10n];
   }
@@ -129,6 +130,20 @@ function attachImages(assets) {
   }
   return blocked;
 }
+
+// The app's renderers log timings through this; the page has no use for them.
+globalThis.MdPreviewPerf = { log() {}, now: () => performance.now() };
+
+// The URL fragment holds the key, so in-page links (footnotes, headings)
+// scroll to their target instead of replacing the fragment.
+page.article.addEventListener("click", (event) => {
+  const link = event.target.closest?.('a[href^="#"]');
+  if (!link) return;
+  event.preventDefault();
+  let id = link.getAttribute("href").slice(1);
+  try { id = decodeURIComponent(id); } catch {}
+  document.getElementById(id)?.scrollIntoView();
+});
 
 // Links leave the page without the key: no referrer, no opener.
 DOMPurify.addHook("afterSanitizeAttributes", (node) => {
