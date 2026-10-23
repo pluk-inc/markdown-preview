@@ -184,7 +184,6 @@ extension DocumentWindowController {
     func applyLoadedMarkdown(_ text: String, fileURL: URL) {
         guard currentFileURL?.standardizedFileURL == fileURL.standardizedFileURL else { return }
         currentMarkdown = text
-        showOutlineForReceivedShare()
         resetAutoSaveFeedback()
         updateWindowSubtitle()
         refreshOpenInLLMItem()

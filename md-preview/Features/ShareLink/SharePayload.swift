@@ -124,7 +124,9 @@ nonisolated struct SharePayload: Codable, Equatable, Sendable {
         let folder = shareFolder.appending(path: (name as NSString).deletingPathExtension,
                                            directoryHint: .isDirectory)
         let fileManager = FileManager.default
-        try? fileManager.removeItem(at: shareFolder)
+        if fileManager.fileExists(atPath: shareFolder.path) {
+            try fileManager.removeItem(at: shareFolder)
+        }
         try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
 
         for asset in assets {

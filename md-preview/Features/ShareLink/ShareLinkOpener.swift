@@ -30,17 +30,26 @@ enum ShareLinkOpener {
 
     /// Blocks network loads in a received share's preview: a remote image
     /// would tell the sender's server who opened the link, and when. Link
-    /// clicks (document loads) still work. Nil when WebKit cannot compile it.
+    /// clicks (document loads) still work. Nil when WebKit cannot compile it;
+    /// the share then stays unrendered rather than reach the network, and
+    /// the next display tries again.
     static func remoteContentBlocker() async -> WKContentRuleList? {
         if let compiling = remoteContentBlockerTask { return await compiling.value }
         let task = Task { @MainActor () -> WKContentRuleList? in
             let rules = #"[{"trigger":{"url-filter":"^https?:","resource-type":["image","style-sheet","font","media","raw","svg-document"]},"action":{"type":"block"}}]"#
-            return try? await WKContentRuleListStore.default()
-                .compileContentRuleList(forIdentifier: "ReceivedShareRemoteContent",
-                                        encodedContentRuleList: rules)
+            do {
+                return try await WKContentRuleListStore.default()
+                    .compileContentRuleList(forIdentifier: "ReceivedShareRemoteContent",
+                                            encodedContentRuleList: rules)
+            } catch {
+                NSLog("ShareLinkOpener: could not compile the remote content rules: \(error)")
+                return nil
+            }
         }
         remoteContentBlockerTask = task
-        return await task.value
+        let blocker = await task.value
+        if blocker == nil { remoteContentBlockerTask = nil }
+        return blocker
     }
 
     private static var remoteContentBlockerTask: Task<WKContentRuleList?, Never>?
