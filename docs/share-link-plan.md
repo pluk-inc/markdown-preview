@@ -54,7 +54,7 @@ Spend review effort there.
 ### Link
 
 ```
-https://<share-domain>/s/<id>#<key>
+https://md-preview.app/s/<id>#<key>
 ```
 
 - `id`: 16 random bytes from the server, base64url, no padding (22 chars).
@@ -321,12 +321,12 @@ test code is kept as a patch outside the repo.
 
 #### Universal Links (phase 1)
 
-Goal: when the app is installed, `https://<share-domain>/s/<id>#<key>` opens in
+Goal: when the app is installed, `https://md-preview.app/s/<id>#<key>` opens in
 the app, not the browser. The same link falls back to the web viewer when the
 app is missing.
 
 - Entitlement `com.apple.developer.associated-domains` =
-  `applinks:<share-domain>` in `md-preview.entitlements`. **Entitlement change —
+  `applinks:md-preview.app` in `md-preview.entitlements`. **Entitlement change —
   needs the maintainer's approval (AGENTS.md).** A Developer ID app needs a
   Developer ID provisioning profile with Associated Domains, and the Amore
   signing setup must embed it; read the `release-process` skill first.
@@ -433,10 +433,15 @@ share, so either ship the viewer before step 3 or accept that gap.
 
 ## 8. Open questions
 
-1. **Share domain — now blocks PR 4,** because the Universal Links entitlement
-   contains it. A separate registrable domain (e.g. `mdshare.link`) is safest.
-   A subdomain of `md-preview.app` is easier but shares cookies and reputation
-   with the release domain.
+1. ~~**Share domain.**~~ Decided 2026-10-23: paths on **`md-preview.app`**
+   (`/s/<id>` links, `/shares` API, the Universal Links file), served by the
+   Worker through Workers Routes. That domain only redirects to the website at
+   `markdownpreview.app`, so it carries no website cookies or scripts, it is
+   free, and every link shows the app's name. Accepted risk: shared content
+   that gets the domain flagged (e.g. by Safe Browsing) could put browser
+   warnings on `release.md-preview.app`; Sparkle fetches the feed in the app,
+   so updates themselves are not blocked. The Universal Links entitlement is
+   `applinks:md-preview.app`. Setup: `server/share-worker/README.md`, "Deploy".
 2. **Who can share:** everyone, or licensed users only?
 3. **Images in v1:** bundle them (plan default) or text only?
 4. ~~**Worker location:** `server/` in this repo, or a separate repo?~~

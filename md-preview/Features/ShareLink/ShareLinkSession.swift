@@ -29,7 +29,8 @@ enum ShareLinkFeature {
         // `npm run dev` in server/share-worker.
         return URL(string: "http://localhost:8787")
 #else
-        return nil
+        // The Worker's routes on md-preview.app (server/share-worker/wrangler.jsonc).
+        return URL(string: "https://md-preview.app")
 #endif
     }
 }

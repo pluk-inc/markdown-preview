@@ -179,6 +179,16 @@ describe("headers and routing", () => {
     });
   });
 
+  it("serves a script-free page for a link opened in a browser", async () => {
+    const response = await call("/s/AAAAAAAAAAAAAAAAAAAAAA");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
+    expect(response.headers.get("Content-Security-Policy")).toContain("default-src 'none'");
+    const html = await response.text();
+    expect(html).toContain("Markdown Preview");
+    expect(html).not.toContain("<script");
+  });
+
   it("rejects other methods and paths", async () => {
     expect((await call("/shares")).status).toBe(405);
     expect((await call("/shares/AAAAAAAAAAAAAAAAAAAAAA", { method: "POST" })).status).toBe(405);

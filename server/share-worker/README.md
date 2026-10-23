@@ -37,6 +37,50 @@ the same vectors the app's Swift tests seal and open.
 
 ## Deploy
 
-Not wired yet. It needs the Cloudflare account, the `md-preview-shares` R2
-bucket, the share domain as a custom domain on the Worker, and an R2 lifecycle
-rule that deletes objects after 31 days as a backstop for the daily purge.
+Production runs on three paths of `md-preview.app`, a domain whose other paths
+redirect to the website at `markdownpreview.app`:
+
+| Path | Purpose |
+| --- | --- |
+| `/s/<id>#<key>` | the link people share; a script-free page until the web viewer exists |
+| `/shares`, `/shares/<id>` | the API the app calls |
+| `/.well-known/apple-app-site-association` | Universal Links |
+
+`wrangler.jsonc` declares these as Workers Routes. The `share-worker.yml`
+workflow deploys `main` after the tests pass, once the secrets below exist;
+without them it skips with a notice.
+
+One-time setup in Cloudflare (the account that owns `md-preview.app`):
+
+1. **R2 bucket:** create `md-preview-shares` (R2 › Create bucket, or
+   `npx wrangler r2 bucket create md-preview-shares`).
+2. **Lifecycle rule:** in the bucket's settings, add an object lifecycle rule
+   that deletes objects 31 days after upload. It backs up the daily purge.
+3. **Redirect rule:** Cloudflare runs Redirect Rules before Workers. Edit the
+   rule that sends `md-preview.app` to `markdownpreview.app` so it skips the
+   Worker's paths, for example by adding to its expression:
+
+   ```
+   and not starts_with(http.request.uri.path, "/s/")
+   and not starts_with(http.request.uri.path, "/shares")
+   and http.request.uri.path ne "/.well-known/apple-app-site-association"
+   ```
+
+4. **API token:** My Profile › API Tokens › Create Token › "Edit Cloudflare
+   Workers", limited to this account and the `md-preview.app` zone.
+5. **GitHub secrets** (repository › Settings › Secrets and variables ›
+   Actions): `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+
+To deploy by hand instead: `npx wrangler login`, then `npm run deploy`.
+
+Check after a deploy:
+
+```sh
+curl -s https://md-preview.app/.well-known/apple-app-site-association   # JSON with the app ID
+curl -sI https://md-preview.app/s/AAAAAAAAAAAAAAAAAAAAAA | head -1         # 200, the link page
+curl -sI https://md-preview.app/ | grep -i location                        # still the website redirect
+```
+
+Release builds of the app use `https://md-preview.app`; Debug builds use
+`http://localhost:8787`. The `MarkdownPreview.shareLinkBaseURL` default
+overrides both, for example to test a staging Worker.
