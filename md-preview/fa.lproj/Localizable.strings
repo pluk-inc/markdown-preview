@@ -452,3 +452,13 @@
 
 /* Share popover word count */
 "%ld words" = "%ld کلمه";
+
+/* Project navigator filter bar */
+"Filter" = "فیلتر";
+"Show Only Recent Files" = "فقط فایل‌های اخیر";
+"Add" = "افزودن";
+"New Empty File" = "فایل خالی جدید";
+"New File from Clipboard" = "فایل جدید از کلیپ‌بورد";
+"New Folder" = "پوشه جدید";
+"Add Files to “%@”…" = "افزودن فایل‌ها به «%@»…";
+"Allow Markdown Preview to make files in “%@”." = "به Markdown Preview اجازه دهید در «%@» فایل بسازد.";

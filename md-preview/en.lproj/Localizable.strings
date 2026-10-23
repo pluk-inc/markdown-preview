@@ -453,3 +453,13 @@
 
 /* Share popover word count */
 "%ld words" = "%ld words";
+
+/* Project navigator filter bar */
+"Filter" = "Filter";
+"Show Only Recent Files" = "Show Only Recent Files";
+"Add" = "Add";
+"New Empty File" = "New Empty File";
+"New File from Clipboard" = "New File from Clipboard";
+"New Folder" = "New Folder";
+"Add Files to “%@”…" = "Add Files to “%@”…";
+"Allow Markdown Preview to make files in “%@”." = "Allow Markdown Preview to make files in “%@”.";

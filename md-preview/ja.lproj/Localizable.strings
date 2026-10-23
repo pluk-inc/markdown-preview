@@ -453,3 +453,13 @@
 
 /* Share popover word count */
 "%ld words" = "%ld 語";
+
+/* Project navigator filter bar */
+"Filter" = "フィルタ";
+"Show Only Recent Files" = "最近使ったファイルのみ表示";
+"Add" = "追加";
+"New Empty File" = "新規空ファイル";
+"New File from Clipboard" = "クリップボードから新規ファイル";
+"New Folder" = "新規フォルダ";
+"Add Files to “%@”…" = "“%@”にファイルを追加…";
+"Allow Markdown Preview to make files in “%@”." = "Markdown Preview が“%@”にファイルを作成することを許可します。";

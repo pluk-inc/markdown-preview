@@ -453,3 +453,13 @@
 
 /* Share popover word count */
 "%ld words" = "%ld 个词";
+
+/* Project navigator filter bar */
+"Filter" = "过滤";
+"Show Only Recent Files" = "仅显示最近使用的文件";
+"Add" = "添加";
+"New Empty File" = "新建空白文件";
+"New File from Clipboard" = "从剪贴板新建文件";
+"New Folder" = "新建文件夹";
+"Add Files to “%@”…" = "将文件添加到“%@”…";
+"Allow Markdown Preview to make files in “%@”." = "允许 Markdown Preview 在“%@”中创建文件。";
