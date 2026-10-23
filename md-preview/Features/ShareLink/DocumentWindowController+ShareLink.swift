@@ -63,7 +63,10 @@ extension DocumentWindowController {
         alert.messageText = L("Copy Link to Share")
         alert.informativeText = L("Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it.")
         alert.addButton(withTitle: L("Continue"))
-        alert.addButton(withTitle: L("Cancel"))
+        // Long enough that the alert stacks its buttons full width, as the
+        // system's own Copy Link alert does.
+        alert.addButton(withTitle: L("Keep Document Private"))
+        alert.buttons[1].keyEquivalent = "\u{1b}"
         alert.beginSheetModal(for: documentWindow) { [weak self] response in
             guard response == .alertFirstButtonReturn else { return }
             self?.createAndCopyShareLink()

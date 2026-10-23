@@ -473,3 +473,6 @@
 "Too many links in a short time. Wait a minute, then try again." = "در مدت کوتاهی پیوندهای زیادی ساخته شده است. یک دقیقه صبر کنید و دوباره امتحان کنید.";
 "You are offline. Connect to the internet, then try again." = "آفلاین هستید. به اینترنت وصل شوید و دوباره امتحان کنید.";
 "Markdown Preview could not reach the sharing server. Try again later." = "Markdown Preview نتوانست به سرور اشتراک‌گذاری وصل شود. بعداً دوباره امتحان کنید.";
+
+/* Share links */
+"Keep Document Private" = "سند خصوصی بماند";

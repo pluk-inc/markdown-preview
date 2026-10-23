@@ -474,3 +474,6 @@
 "Too many links in a short time. Wait a minute, then try again." = "短时间内创建的链接过多。请等待一分钟后再试。";
 "You are offline. Connect to the internet, then try again." = "你已离线。请连接互联网后再试。";
 "Markdown Preview could not reach the sharing server. Try again later." = "Markdown Preview 无法连接共享服务器。请稍后再试。";
+
+/* Share links */
+"Keep Document Private" = "保持文稿私密";
