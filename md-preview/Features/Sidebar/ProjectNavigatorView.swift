@@ -937,9 +937,7 @@ private enum FolderWriteAccess {
                                      options: .withSecurityScope,
                                      relativeTo: nil,
                                      bookmarkDataIsStale: &isStale) else {
-                // The folder is gone or moved past recognition.
-                bookmarks[path] = nil
-                UserDefaults.standard.set(bookmarks, forKey: defaultsKey)
+                // Keep it: the folder may be on a drive that is not mounted.
                 continue
             }
             let resolved = url.standardizedFileURL
