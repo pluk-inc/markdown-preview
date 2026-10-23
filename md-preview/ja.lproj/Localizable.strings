@@ -480,3 +480,18 @@
 
 /* Share links */
 "Markdown Preview lost the key that manages this link, so it cannot change or stop it. The link stops working on %@." = "Markdown Preview はこのリンクを管理するキーを失ったため、リンクを変更または停止できません。リンクは %@ に無効になります。";
+
+/* Opening share links */
+"Open Shared Link…" = "共有リンクを開く…";
+"Open Shared Link" = "共有リンクを開く";
+"Paste a link to a document shared from Markdown Preview." = "Markdown Preview から共有された書類のリンクをペーストしてください。";
+"This is not a complete share link. The part after # is the key; ask the sender to copy the link again." = "完全な共有リンクではありません。# 以降の部分がキーです。送信者にもう一度リンクをコピーしてもらってください。";
+"Enter Password" = "パスワードを入力";
+"Incorrect Password" = "パスワードが正しくありません";
+"The sender protected this shared document with a password." = "送信者はこの共有書類をパスワードで保護しています。";
+"Shared Document" = "共有書類";
+"The shared document can’t be opened." = "共有書類を開けません。";
+"This link has expired, or sharing was stopped." = "このリンクは有効期限が切れたか、共有が停止されました。";
+"This link is damaged, or it does not match the shared document." = "このリンクは壊れているか、共有された書類と一致しません。";
+"Shared documents are read-only" = "共有書類は読み出し専用です";
+"Read only" = "読み出し専用";

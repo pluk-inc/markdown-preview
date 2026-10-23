@@ -85,4 +85,42 @@ final class SharePayloadTests: XCTestCase {
         XCTAssertNil(SharePayload.fileURL(forAssetPath: "../x.png", in: directory))
         XCTAssertNil(SharePayload.fileURL(forAssetPath: "/x.png", in: directory))
     }
+
+    func testUnpacksIntoAFolderNamedAfterTheTitle() throws {
+        let shareFolder = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: shareFolder) }
+        let stale = shareFolder.appendingPathComponent("Old/Old.md")
+        try FileManager.default.createDirectory(at: stale.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try Data("old".utf8).write(to: stale)
+
+        let payload = SharePayload(title: "Plan", markdown: "# Plan\n", html: "", assets: [
+            .init(path: "img/a.png", type: "image/png", data: Data("png".utf8)),
+            .init(path: "../outside.png", type: "image/png", data: Data("x".utf8)),
+        ])
+        let file = try payload.unpack(into: shareFolder)
+
+        XCTAssertEqual(file.lastPathComponent, "Plan.md")
+        XCTAssertEqual(file.deletingLastPathComponent().lastPathComponent, "Plan")
+        XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), "# Plan\n")
+        let image = file.deletingLastPathComponent().appendingPathComponent("img/a.png")
+        XCTAssertEqual(try Data(contentsOf: image), Data("png".utf8))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: shareFolder.appendingPathComponent("outside.png").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stale.path))
+    }
+
+    func testUnpacksAnUntitledShareUnderAFallbackName() throws {
+        let shareFolder = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: shareFolder) }
+        for title in ["", ".env"] {
+            let file = try SharePayload(title: title, markdown: "x", html: "", assets: [])
+                .unpack(into: shareFolder)
+            XCTAssertEqual(file.lastPathComponent, "Shared Document.md", title)
+        }
+        let kept = try SharePayload(title: "notes.markdown", markdown: "x", html: "", assets: [])
+            .unpack(into: shareFolder)
+        XCTAssertEqual(kept.lastPathComponent, "notes.markdown")
+    }
 }

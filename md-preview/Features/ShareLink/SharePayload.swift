@@ -111,4 +111,36 @@ nonisolated struct SharePayload: Codable, Equatable, Sendable {
         let url = root.appendingPathComponent(normalized).standardizedFileURL
         return url != root && url.isDescendantOrSame(of: root) ? url : nil
     }
+
+    /// Writes the share into `shareFolder`, replacing what was there. The
+    /// Markdown and its assets go in a subfolder named after the title, so
+    /// a files sidebar shows the title. Returns the Markdown file, which is
+    /// written last, so a half-written folder never opens.
+    func unpack(into shareFolder: URL) throws -> URL {
+        var name = displayTitle
+        if name.isEmpty || name.hasPrefix(".") {
+            name = NSLocalizedString("Shared Document", comment: "File name for a shared document without a title")
+        }
+        let folder = shareFolder.appending(path: (name as NSString).deletingPathExtension,
+                                           directoryHint: .isDirectory)
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: shareFolder.path) {
+            try fileManager.removeItem(at: shareFolder)
+        }
+        try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
+
+        for asset in assets {
+            guard let url = Self.fileURL(forAssetPath: asset.path, in: folder) else { continue }
+            try fileManager.createDirectory(at: url.deletingLastPathComponent(),
+                                            withIntermediateDirectories: true)
+            try asset.data.write(to: url)
+        }
+
+        if !["md", "markdown"].contains((name as NSString).pathExtension.lowercased()) {
+            name += ".md"
+        }
+        let file = folder.appending(path: name, directoryHint: .notDirectory)
+        try Data(markdown.utf8).write(to: file)
+        return file
+    }
 }

@@ -19,7 +19,21 @@ extension DocumentWindowController {
     }
 
     var canToggleEditMode: Bool {
-        isEditing || currentMarkdown != nil
+        isEditing || (currentMarkdown != nil && !isReceivedShare)
+    }
+
+    /// A document opened from someone else's share link: read-only, because
+    /// opening the link again replaces it.
+    var isReceivedShare: Bool {
+        ShareLinkOpener.isReceivedCopy(currentFileURL)
+    }
+
+    /// A received share's folder holds only the document and its images, so
+    /// its window shows the Table of Contents instead of the files.
+    func showOutlineForReceivedShare() {
+        guard isReceivedShare, let split = mainSplit, split.sidebarMode == .files else { return }
+        split.setSidebarMode(.outline, remember: false)
+        syncSidebarToolbarState()
     }
 
     var canFormatMarkdown: Bool { isEditing }
@@ -68,10 +82,14 @@ extension DocumentWindowController {
     private func applyEditToolbarState(to button: NSButton) {
         let editing = isEditing
         button.state = editing ? .on : .off
-        button.toolTip = editing
-            ? NSLocalizedString("Stop editing and return to preview", comment: "Edit toolbar item tooltip while editing")
-            : NSLocalizedString("Edit document", comment: "Edit toolbar item tooltip")
-        button.isEnabled = editing || currentMarkdown != nil
+        if editing {
+            button.toolTip = NSLocalizedString("Stop editing and return to preview", comment: "Edit toolbar item tooltip while editing")
+        } else if isReceivedShare {
+            button.toolTip = NSLocalizedString("Shared documents are read-only", comment: "Edit toolbar item tooltip for a received shared document")
+        } else {
+            button.toolTip = NSLocalizedString("Edit document", comment: "Edit toolbar item tooltip")
+        }
+        button.isEnabled = canToggleEditMode
     }
 
     @objc private func toggleEditAction(_ sender: Any?) {

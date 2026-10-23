@@ -104,10 +104,14 @@ final class SidebarViewController: NSViewController {
         applyMode()
     }
 
-    func setMode(_ newMode: Mode) {
+    /// `remember: false` switches this window only, without changing the
+    /// mode new windows start in.
+    func setMode(_ newMode: Mode, remember: Bool = true) {
         guard newMode != currentMode else { return }
         currentMode = newMode
-        UserDefaults.standard.set(newMode.rawValue, forKey: Self.modeDefaultsKey)
+        if remember {
+            UserDefaults.standard.set(newMode.rawValue, forKey: Self.modeDefaultsKey)
+        }
         if isViewLoaded {
             applyMode()
             if newMode == .files {
