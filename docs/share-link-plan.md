@@ -156,13 +156,17 @@ Repo setup:
 - `.github/workflows/share-worker.yml`: runs on changes to
   `server/share-worker/**` and `tests/fixtures/share-link/**`; runs the Worker
   tests, then `wrangler deploy`. The Cloudflare API token lives in GitHub
-  Actions secrets only.
+  Actions secrets only. (Built in PR 2 with the test job only; the deploy job
+  waits for the Cloudflare account, bucket, and share domain.)
 - Path filters on `swift-tests.yml` and `performance.yml` so Worker-only
   changes do not run them.
 - Worker deploys are separate from app releases: no `release` label, no
   `Version.xcconfig` bump, no `scripts/release.sh`.
-- Rate-limit thresholds live in `wrangler.toml` vars or secrets, not in code,
-  so the public source does not show the exact abuse limits.
+- Rate-limit thresholds: the Rate Limiting binding takes its limits from
+  `wrangler.jsonc`, so they are public. Accepted: they are coarse per-IP
+  limits, and Cloudflare WAF rules (configured in the dashboard, not the repo)
+  can add private ones later.
+
 The Cloudflare API token is only for `wrangler deploy`; it never goes into the
 app or the Worker. The Worker reaches R2 through a binding.
 
@@ -192,7 +196,9 @@ the cron and lifecycle rule below, which KV's TTL would have replaced.
 
 - Real HTTP status codes; errors are `{ "error": "<code>" }`.
 - R2 object key `shares/<id>`; `customMetadata`: `ownerHash`, `expiresAt`, `createdAt`.
-- Owner token: 32 random bytes; compare hashes in constant time.
+- Owner token: 32 random bytes; compare hashes in constant time. A missing
+  token answers `401`; a wrong token answers `404`, like a missing or expired
+  share, so a request cannot tell whether an ID exists.
 - Validation: body starts with `MDP1`, length ≥ 53, size ≤ **5 MB** (after
   compression), `ttl` in `{1h, 1d, 7d, 30d}`, default `7d`. No "never" in v1.
 - Expiry: `GET` returns `404` once `expiresAt` has passed and deletes the
@@ -200,8 +206,9 @@ the cron and lifecycle rule below, which KV's TTL would have replaced.
   is the backstop. (PrivateBin's list+HEAD purge does not scale — avoid it.)
 - Headers on every response: `Cache-Control: no-store`,
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`.
-- Rate limits: Cloudflare Rate Limiting binding, keyed by IP — e.g. 20 creates
-  per hour, 300 reads per minute. Log nothing beyond what Cloudflare already
+- Rate limits: Cloudflare Rate Limiting binding, keyed by IP. The binding only
+  counts over 10 s or 60 s, so "per hour" limits are not possible: 10 writes
+  (create, update, delete) and 300 reads per minute. Log nothing beyond what Cloudflare already
   logs; never log request bodies or the `Authorization` header.
 - No CORS on write routes. `GET` needs CORS only if the viewer is on another
   origin (phase 2 decision).

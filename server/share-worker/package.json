@@ -1,0 +1,18 @@
+{
+  "name": "md-preview-share-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.0",
+    "@cloudflare/workers-types": "5.20261008.1",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11",
+    "wrangler": "4.149.0"
+  }
+}

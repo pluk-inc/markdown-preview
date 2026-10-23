@@ -2,8 +2,12 @@ name: Performance
 
 on:
   pull_request:
+    paths-ignore:
+      - server/share-worker/**
   push:
     branches: [main]
+    paths-ignore:
+      - server/share-worker/**
   workflow_dispatch:
 
 permissions:
