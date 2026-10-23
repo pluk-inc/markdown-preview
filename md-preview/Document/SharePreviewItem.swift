@@ -35,8 +35,9 @@ enum SharePreviewItem {
             && class_getInstanceVariable(NSPreviewRepresentingActivityItem.self, "_linkMetadata") != nil
 
     /// The size of the text being shared, which matches the file on disk
-    /// unless there are unsaved edits.
-    private static func subtitle(for markdown: String) -> String {
+    /// unless there are unsaved edits. Also the manage-sharing sheet's
+    /// subtitle, so both read the same.
+    static func subtitle(for markdown: String) -> String {
         // English singular/plural forms live in Localizable.stringsdict.
         let words = String.localizedStringWithFormat(
             NSLocalizedString("%ld words", comment: "Share popover word count"),
