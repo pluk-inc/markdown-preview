@@ -96,7 +96,11 @@ final class ShareLinkStore {
         if records.count != stored.count { save() }
     }
 
+    /// Posted after the list changes, so windows can update their subtitle.
+    static let didChangeNotification = Notification.Name("ShareLinkStoreDidChange")
+
     private func save() {
+        defer { NotificationCenter.default.post(name: Self.didChangeNotification, object: self) }
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(),
                                                     withIntermediateDirectories: true)

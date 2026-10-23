@@ -4,15 +4,28 @@
 //
 //  The Share popover's share-link row: "Copy Link" while the file has no
 //  link, "Manage Shared Document…" while it has one. The picker closes on
-//  click, so a small popover on the Share button reports progress and the
-//  result of creating a link.
+//  click; creating a link shows nothing unless it fails.
 //
 
 import AppKit
-import Observation
-import SwiftUI
 
 extension DocumentWindowController {
+
+    /// Whether the window's file has a live share link; shown as "Shared"
+    /// in the window subtitle.
+    var isSharedByLink: Bool {
+        guard ShareLinkFeature.isEnabled, let currentFileURL else { return false }
+        return ShareLinkStore.shared.record(forFile: currentFileURL) != nil
+    }
+
+    func observeShareLinks() {
+        NotificationCenter.default.addObserver(self, selector: #selector(shareLinksDidChange(_:)),
+                                               name: ShareLinkStore.didChangeNotification, object: nil)
+    }
+
+    @objc private func shareLinksDidChange(_ notification: Notification) {
+        updateWindowSubtitle()
+    }
 
     /// The Share popover row; none while the feature is off or the window
     /// has no saved file to link.
@@ -49,7 +62,10 @@ extension DocumentWindowController {
     }
 
     /// Creating the first link starts sharing, so it asks first.
+    /// A plain alert sheet: on macOS 26 it hides the app icon and matches
+    /// the system's own "Copy Link to Share" alert (ShareKit uses NSAlert).
     private func confirmAndCopyShareLink() {
+        guard documentWindow.attachedSheet == nil else { return }
         let alert = NSAlert()
         alert.messageText = L("Copy Link to Share")
         alert.informativeText = L("Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it.")
@@ -61,88 +77,31 @@ extension DocumentWindowController {
         }
     }
 
+    /// No "copied" message, as with the system's Copy rows. A slow upload
+    /// shows a progress sheet that can cancel it; an error gets an alert.
     private func createAndCopyShareLink() {
         guard let fileURL = currentFileURL, let markdown = currentMarkdown else { return }
-        runShareLinkTask(working: L("Creating Link…"), done: L("Link Copied"),
-                         failure: L("Could Not Copy Link")) {
-            let link = try await ShareLinkSession.link(forFile: fileURL, markdown: markdown)
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(link.absoluteString, forType: .string)
+        var upload: Task<Void, Never>?
+        let progress = ShareLinkProgressSheet(window: documentWindow,
+                                              message: L("Uploading Document…")) {
+            upload?.cancel()
         }
-    }
-
-    private func runShareLinkTask(working: String, done: String, failure: String,
-                                  _ work: @escaping @MainActor () async throws -> Void) {
-        let status = ShareLinkStatus(message: working)
-        let popover = showShareLinkStatus(status)
-
-        Task { @MainActor [weak self] in
+        upload = Task { @MainActor [weak self] in
+            defer { progress.finish() }
             do {
-                try await work()
-                status.finish(done)
-                try? await Task.sleep(for: .seconds(1.5))
-                popover?.close()
+                let link = try await ShareLinkSession.link(forFile: fileURL, markdown: markdown)
+                try Task.checkCancellation()
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(link.absoluteString, forType: .string)
+            } catch is CancellationError {
+            } catch let error as URLError where error.code == .cancelled {
             } catch {
-                popover?.close()
                 guard let window = self?.documentWindow else { return }
                 let alert = NSAlert()
-                alert.messageText = failure
+                alert.messageText = L("Could Not Copy Link")
                 alert.informativeText = ShareLinkSession.message(for: error)
                 alert.beginSheetModal(for: window, completionHandler: nil)
             }
         }
-    }
-
-    /// Anchored on the Share toolbar button, or the window's top edge when
-    /// the button is not in the toolbar or has no view of its own.
-    private func showShareLinkStatus(_ status: ShareLinkStatus) -> NSPopover? {
-        let popover = NSPopover()
-        popover.behavior = .applicationDefined
-        let host = NSHostingController(rootView: ShareLinkStatusView(status: status))
-        host.sizingOptions = .preferredContentSize
-        popover.contentViewController = host
-
-        if let button = documentWindow.toolbar?.items
-            .first(where: { $0.itemIdentifier == .share })?.view,
-           button.window != nil {
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        } else if let content = documentWindow.contentView {
-            let anchor = NSRect(x: content.bounds.midX, y: content.bounds.maxY - 1, width: 1, height: 1)
-            popover.show(relativeTo: anchor, of: content, preferredEdge: .minY)
-        } else {
-            return nil
-        }
-        return popover
-    }
-}
-
-@MainActor @Observable
-private final class ShareLinkStatus {
-    private(set) var message: String
-    private(set) var isDone = false
-
-    init(message: String) { self.message = message }
-
-    func finish(_ message: String) {
-        self.message = message
-        isDone = true
-    }
-}
-
-private struct ShareLinkStatusView: View {
-    let status: ShareLinkStatus
-
-    var body: some View {
-        HStack(spacing: 8) {
-            if status.isDone {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-            } else {
-                ProgressView().controlSize(.small)
-            }
-            Text(status.message)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .fixedSize()
     }
 }
