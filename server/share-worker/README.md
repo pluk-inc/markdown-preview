@@ -5,6 +5,26 @@ encrypted `MDP1` envelopes in R2. The app encrypts every document before upload
 and keeps the key in the link's URL fragment, so this server never sees a key
 or a readable document. Design and API: [`docs/share-link-plan.md`](../../docs/share-link-plan.md) §2–3.
 
+## Web viewer
+
+`viewer/` is the page at `/s/<id>`. It fetches the envelope from `/shares/<id>`,
+decrypts it in the browser with the key from the URL fragment (WebCrypto and
+`DecompressionStream`, matching the app's `ShareLinkCrypto`), and shows the
+document with the app's own stylesheet and renderers:
+
+- `viewer/generated/` holds the app's `MarkdownHTML` stylesheet and its code
+  and math renderers, exported by the Swift test `ShareViewerKitTests`, which
+  fails when they drift. Regenerate with
+  `MDP_WRITE_VIEWER_KIT=1 swift test --package-path tests/swift-tests --filter ShareViewerKitTests`.
+- DOMPurify, highlight.js, and KaTeX are copied from `md-preview/Vendor` by
+  `npm run build:viewer` (it runs before `dev`, `test`, and `deploy`) into
+  `public/`, which is not committed.
+- The rendered HTML comes from whoever made the envelope, so the page
+  sanitizes it with an explicit allowlist, allows only same-origin scripts
+  (CSP in `src/viewer-csp.ts`), and blocks remote images.
+
+Diagrams (Mermaid through Pele) are not rendered yet; their source shows as code.
+
 ## Run locally
 
 ```sh

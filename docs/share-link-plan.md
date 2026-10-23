@@ -3,8 +3,8 @@
 Status: draft, 2026-10-16; revised 2026-10-23. Built behind the hidden
 `MarkdownPreview.shareLinksEnabled` default: the format and crypto (§2), the
 Worker API and its deploy setup on `md-preview.app` (§3), and sharing from the
-app (§4.1–4.4). Still planned: opening links in the app and Universal Links
-(§4.5) and the web viewer (§5).
+app (§4.1–4.4), and the web viewer (§5, without diagrams yet). Still planned:
+opening links in the app and Universal Links (§4.5).
 
 Goal: from an open Markdown document, the user creates a random link. Anyone
 with the link can read the document in a browser, or open it in Markdown
@@ -364,6 +364,16 @@ app is missing.
   Worker runs in production.
 
 ## 5. Web — phase 2
+
+**Status (2026-10-23):** the viewer is built in `server/share-worker/viewer/`
+(see its README). Done: decrypt, sanitize with an allowlist, the app's
+stylesheet and code/math renderers (exported and checked by
+`ShareViewerKitTests`), local images as `blob:` URLs, remote images blocked
+with a note, Open in Markdown Preview, Download .md, and error states. Not
+yet: diagrams (Pele), password links, Report, burn after reading. Deviations
+from the text below: the page loads a few same-origin files rather than one
+bundle, and `style-src-attr 'unsafe-inline'` is allowed because KaTeX sets
+inline styles; scripts stay `'self'` only.
 
 - Viewer at `GET /s/<id>`: static HTML + one JS bundle from the same origin.
   It reads the fragment, fetches `/shares/<id>`, decrypts with

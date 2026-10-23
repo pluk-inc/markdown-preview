@@ -2,10 +2,17 @@
   "name": "md-preview-share-worker",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "scripts": {
+    "build:viewer": "node viewer/build.mjs",
+    "predev": "npm run build:viewer",
     "dev": "wrangler dev",
+    "pretest": "npm run build:viewer",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "predeploy": "npm run build:viewer",
     "deploy": "wrangler deploy"
   },
   "devDependencies": {
