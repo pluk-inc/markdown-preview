@@ -71,6 +71,12 @@ final class ShareLinkAssetsTests: XCTestCase {
         XCTAssertEqual(collect(html), [])
     }
 
+    func testKeepsImagesWithHiddenInsideAQuotedValue() {
+        let html = MarkdownHTML.render(markdown: "![a hidden gem](img/a.png)\n").articleHTML
+        XCTAssertEqual(collect(html).map(\.path), ["img/a.png"])
+        XCTAssertEqual(collect(#"<img title='x hidden' src="img/a.png">"#).map(\.path), ["img/a.png"])
+    }
+
     func testKeepsTheAuthoredNameOfASymlinkInsideTheFolder() throws {
         try FileManager.default.createSymbolicLink(
             at: directory.appendingPathComponent("img/alias.png"),
