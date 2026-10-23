@@ -142,7 +142,10 @@ page.article.addEventListener("click", (event) => {
   event.preventDefault();
   let id = link.getAttribute("href").slice(1);
   try { id = decodeURIComponent(id); } catch {}
-  document.getElementById(id)?.scrollIntoView();
+  // `#` and `#top` scroll to the top, as browsers do.
+  const target = document.getElementById(id)
+    ?? (id === "" || id.toLowerCase() === "top" ? document.documentElement : null);
+  target?.scrollIntoView();
 });
 
 // Links leave the page without the key: no referrer, no opener.
