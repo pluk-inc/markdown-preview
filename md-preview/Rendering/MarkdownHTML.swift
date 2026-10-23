@@ -139,13 +139,13 @@ nonisolated enum MarkdownHTML {
                 """)
             }
             if let light = Self.sanitizedHexColor(lightPageBackground) {
-                rules.append("html { background: \(light); }")
+                rules.append("html { background: \(light); --mdp-page-bg: \(light); }")
             }
             if let dark = Self.sanitizedHexColor(darkPageBackground) {
-                rules.append(":root[data-mdp-color-scheme=\"dark\"] { background: \(dark); }")
+                rules.append(":root[data-mdp-color-scheme=\"dark\"] { background: \(dark); --mdp-page-bg: \(dark); }")
                 rules.append("""
                 @media (prefers-color-scheme: dark) {
-                    html:not([data-mdp-color-scheme="light"]) { background: \(dark); }
+                    html:not([data-mdp-color-scheme="light"]) { background: \(dark); --mdp-page-bg: \(dark); }
                 }
                 """)
             }
