@@ -466,3 +466,24 @@
 "New Folder" = "پوشه جدید";
 "Add Files to “%@”…" = "افزودن فایل‌ها به «%@»…";
 "Allow Markdown Preview to make files in “%@”." = "به Markdown Preview اجازه دهید در «%@» فایل بسازد.";
+
+/* Share links */
+"Copy Link to Share" = "کپی پیوند برای اشتراک‌گذاری";
+"Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "هر کسی که پیوند را دارد می‌تواند این سند را بخواند، تا زمانی که اشتراک‌گذاری را متوقف کنید یا پیوند پس از ۷ روز منقضی شود. سند رمزگذاری شده است و فقط با این پیوند باز می‌شود.";
+"Uploading Document…" = "در حال بارگذاری سند…";
+"Could Not Copy Link" = "پیوند کپی نشد";
+"Manage Shared Document…" = "مدیریت سند اشتراک‌گذاشته‌شده…";
+"Shared" = "اشتراک‌گذاشته‌شده";
+"Shared · Link expires %@" = "اشتراک‌گذاشته‌شده · انقضای پیوند: %@";
+"Permissions" = "مجوزها";
+"Anyone with the link" = "هر کسی که پیوند را دارد";
+"People you choose" = "افرادی که انتخاب می‌کنید";
+"can view only" = "فقط می‌تواند مشاهده کند";
+"can edit" = "می‌تواند ویرایش کند";
+"Stop Sharing" = "توقف اشتراک‌گذاری";
+"Stop sharing this document?" = "اشتراک‌گذاری این سند متوقف شود؟";
+"If you stop sharing, people with the link can no longer open this document, and its copy is deleted from the server." = "اگر اشتراک‌گذاری را متوقف کنید، افرادی که پیوند را دارند دیگر نمی‌توانند این سند را باز کنند و نسخهٔ آن از سرور حذف می‌شود.";
+"This document is too large to share as a link." = "این سند برای اشتراک‌گذاری با پیوند بیش از حد بزرگ است.";
+"Too many links in a short time. Wait a minute, then try again." = "در مدت کوتاهی پیوندهای زیادی ساخته شده است. یک دقیقه صبر کنید و دوباره امتحان کنید.";
+"You are offline. Connect to the internet, then try again." = "آفلاین هستید. به اینترنت وصل شوید و دوباره امتحان کنید.";
+"Markdown Preview could not reach the sharing server. Try again later." = "Markdown Preview نتوانست به سرور اشتراک‌گذاری وصل شود. بعداً دوباره امتحان کنید.";

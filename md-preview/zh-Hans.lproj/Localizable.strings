@@ -467,3 +467,24 @@
 "New Folder" = "新建文件夹";
 "Add Files to “%@”…" = "将文件添加到“%@”…";
 "Allow Markdown Preview to make files in “%@”." = "允许 Markdown Preview 在“%@”中创建文件。";
+
+/* Share links */
+"Copy Link to Share" = "拷贝链接以共享";
+"Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "在你停止共享或链接于 7 天后过期之前，任何拥有链接的人都可以阅读此文稿。文稿已加密，只有此链接才能打开。";
+"Uploading Document…" = "正在上传文稿…";
+"Could Not Copy Link" = "无法拷贝链接";
+"Manage Shared Document…" = "管理共享文稿…";
+"Shared" = "已共享";
+"Shared · Link expires %@" = "已共享 · 链接到期：%@";
+"Permissions" = "权限";
+"Anyone with the link" = "任何拥有链接的人";
+"People you choose" = "你选择的人";
+"can view only" = "仅可查看";
+"can edit" = "可编辑";
+"Stop Sharing" = "停止共享";
+"Stop sharing this document?" = "要停止共享此文稿吗？";
+"If you stop sharing, people with the link can no longer open this document, and its copy is deleted from the server." = "如果停止共享，拥有链接的人将无法再打开此文稿，服务器上的副本也会被删除。";
+"This document is too large to share as a link." = "此文稿过大，无法通过链接共享。";
+"Too many links in a short time. Wait a minute, then try again." = "短时间内创建的链接过多。请等待一分钟后再试。";
+"You are offline. Connect to the internet, then try again." = "你已离线。请连接互联网后再试。";
+"Markdown Preview could not reach the sharing server. Try again later." = "Markdown Preview 无法连接共享服务器。请稍后再试。";
