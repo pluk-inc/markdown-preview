@@ -285,8 +285,9 @@ and the File menu item from the first draft are dropped.
 - **Stop Sharing** → `NSAlert` "Stop sharing this document?" with the app icon
   set explicitly (sheet alerts hide it otherwise).
 - **Window subtitle:** "Shared", or "Shared · Edited", while the file has a
-  live link. The subtitle is not clickable; a Pages-style "Shared" toolbar
-  button that opens the manage content as a popover is an open option.
+  live link. The subtitle is not clickable. A Pages-style "Shared" toolbar
+  button that opens the manage content as a popover was considered and
+  declined (2026-10-23): Share → Manage Shared Document… is enough.
 - **Share popover header:** the document's own Finder icon, drawn 1.3× so the
   page fills the system's white tile.
 - Read the text from `DocumentWindowController.currentMarkdown` /
