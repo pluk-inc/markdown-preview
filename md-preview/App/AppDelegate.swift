@@ -132,6 +132,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// afterwards, such as a window AppKit restores.
     private(set) var hasFinishedLaunching = false
     private var pendingOpenURLCount = 0
+    /// Shares being downloaded or opened. A second open of the same link
+    /// waits for the first, which would otherwise unpack into the folder the
+    /// first is writing or opening.
+    private var pendingShareIDs: Set<String> = []
     private var isTerminationSaveInProgress = false
     private var pendingTerminationSaveCount = 0
     private var terminationSaveFailed = false
@@ -284,10 +288,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func openDocument(at url: URL) {
+    private func openDocument(at url: URL, completion: (() -> Void)? = nil) {
         pendingOpenURLCount += 1
         NSDocumentController.shared.openDocument(withContentsOf: url,
                                                  display: true) { [weak self] document, _, error in
+            defer { completion?() }
             if let error {
                 NSAlert(error: error).runModal()
             }
@@ -306,16 +311,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let document = NSDocumentController.shared.documents.first(where: {
             ShareLinkOpener.isReceivedCopy($0.fileURL, id: link.id)
         }) {
+            showWindowIfNeeded(for: document)
             document.showWindows()
             return
         }
+        guard pendingShareIDs.insert(link.id).inserted else { return }
         pendingOpenURLCount += 1
         Task { @MainActor in
             let file = await ShareLinkOpener.download(link)
             pendingOpenURLCount -= 1
             if let file {
-                openDocument(at: file)
+                openDocument(at: file) { [weak self] in self?.pendingShareIDs.remove(link.id) }
             } else {
+                pendingShareIDs.remove(link.id)
                 scheduleDocumentPromptIfIdle()
             }
         }
