@@ -37,7 +37,7 @@ final class ShareLinkManageModel {
     enum Activity: Equatable { case idle, copying, stopping }
 
     let fileURL: URL
-    private let markdown: String
+    let markdown: String
     private(set) var activity = Activity.idle
     private(set) var errorMessage: String?
     private(set) var record: ShareLinkStore.Record?
@@ -121,6 +121,9 @@ struct ShareLinkManageView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.fileURL.lastPathComponent)
                     .font(.headline)
+                Text(SharePreviewItem.subtitle(for: model.markdown))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 if let record = model.record {
                     Text(String(format: L("Shared · Link expires %@"),
                                 record.expiresAt.formatted(date: .abbreviated, time: .omitted)))
