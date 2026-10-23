@@ -3,8 +3,8 @@
 Status: draft, 2026-10-16; revised 2026-10-23. Built behind the hidden
 `MarkdownPreview.shareLinksEnabled` default: the format and crypto (§2), the
 Worker API and its deploy setup on `md-preview.app` (§3), and sharing from the
-app (§4.1–4.4). Still planned: opening links in the app and Universal Links
-(§4.5) and the web viewer (§5).
+app (§4.1–4.4), and the web viewer (§5, without diagrams yet). Still planned:
+opening links in the app and Universal Links (§4.5).
 
 Goal: from an open Markdown document, the user creates a random link. Anyone
 with the link can read the document in a browser, or open it in Markdown
