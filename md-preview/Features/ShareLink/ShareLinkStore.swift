@@ -1,0 +1,146 @@
+//
+//  ShareLinkStore.swift
+//  md-preview
+//
+//  The links this Mac created. Secrets (link key, owner token)
+//  live in the Keychain, one item per share; the list without secrets lives
+//  in Application Support. Expired entries drop out when the list loads.
+//
+
+import Foundation
+import Observation
+import Security
+
+@MainActor @Observable
+final class ShareLinkStore {
+
+    static let shared = ShareLinkStore()
+
+    struct Record: Codable, Equatable, Identifiable {
+        let id: String
+        var title: String
+        /// Standardized path of the shared file, to find its link again.
+        let filePath: String
+        let createdAt: Date
+        var expiresAt: Date
+    }
+
+    struct Secrets: Codable, Equatable {
+        /// base64url of the 32-byte link key.
+        let key: String
+        let ownerToken: String
+    }
+
+    private(set) var records: [Record] = []
+    private let fileURL: URL
+
+    init(fileURL: URL = ShareLinkStore.defaultFileURL) {
+        self.fileURL = fileURL
+        load()
+    }
+
+    nonisolated static var defaultFileURL: URL {
+        URL.applicationSupportDirectory
+            .appendingPathComponent("SharedLinks", isDirectory: true)
+            .appendingPathComponent("links.json")
+    }
+
+    func record(forFile url: URL) -> Record? {
+        let path = url.standardizedFileURL.path
+        return records.first { $0.filePath == path && $0.expiresAt > .now }
+    }
+
+    func secrets(for record: Record) -> Secrets? {
+        ShareLinkKeychain.read(account: record.id)
+            .flatMap { try? JSONDecoder().decode(Secrets.self, from: $0) }
+    }
+
+    func link(for record: Record, base: URL) -> URL? {
+        guard let secrets = secrets(for: record),
+              let key = Base64URL.decode(secrets.key),
+              let link = ShareLink(id: record.id, key: key, hasPassword: false)
+        else { return nil }
+        return link.webURL(base: base)
+    }
+
+    func add(_ record: Record, secrets: Secrets) throws {
+        try ShareLinkKeychain.write(JSONEncoder().encode(secrets), account: record.id)
+        records.removeAll { $0.id == record.id }
+        records.append(record)
+        save()
+    }
+
+    func update(_ record: Record) {
+        guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }
+        records[index] = record
+        save()
+    }
+
+    func remove(id: String) {
+        ShareLinkKeychain.delete(account: id)
+        records.removeAll { $0.id == id }
+        save()
+    }
+
+    // MARK: - Persistence
+
+    private func load() {
+        guard let data = try? Data(contentsOf: fileURL),
+              let stored = try? JSONDecoder().decode([Record].self, from: data)
+        else { return }
+        let now = Date.now
+        for expired in stored where expired.expiresAt <= now {
+            ShareLinkKeychain.delete(account: expired.id)
+        }
+        records = stored.filter { $0.expiresAt > now }
+        if records.count != stored.count { save() }
+    }
+
+    private func save() {
+        do {
+            try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try JSONEncoder().encode(records).write(to: fileURL, options: .atomic)
+        } catch {
+            NSLog("ShareLinkStore: could not save the link list: \(error)")
+        }
+    }
+}
+
+/// Generic-password items under one service, keyed by share ID.
+nonisolated enum ShareLinkKeychain {
+
+    static let service = "doc.md-preview.share-link"
+
+    static func read(account: String) -> Data? {
+        var query = baseQuery(account: account)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
+        return result as? Data
+    }
+
+    static func write(_ data: Data, account: String) throws {
+        delete(account: account)
+        var item = baseQuery(account: account)
+        item[kSecValueData as String] = data
+        item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let status = SecItemAdd(item as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
+        }
+    }
+
+    static func delete(account: String) {
+        SecItemDelete(baseQuery(account: account) as CFDictionary)
+    }
+
+    private static func baseQuery(account: String) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+    }
+}
