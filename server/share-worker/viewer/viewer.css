@@ -12,6 +12,18 @@ article.markdown-body {
 }
 article.markdown-body table { overflow-wrap: normal; }
 
+/* The app's stylesheet uses WebKit's system label and separator colors,
+   which other browsers reject; these are their macOS values. */
+@supports not (color: -apple-system-label) {
+  :root {
+    --text: light-dark(rgba(0, 0, 0, 0.85), rgba(255, 255, 255, 0.85));
+    --secondary: light-dark(rgba(0, 0, 0, 0.5), rgba(255, 255, 255, 0.55));
+    --tertiary: light-dark(rgba(0, 0, 0, 0.26), rgba(255, 255, 255, 0.25));
+    --quote-border: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1));
+    --grid: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1));
+  }
+}
+
 :root {
   --mdp-share-gutter: 40px;
   --mdp-share-bar-bg: rgba(255, 255, 255, 0.85);
