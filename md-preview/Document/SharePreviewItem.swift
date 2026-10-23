@@ -2,8 +2,9 @@
 //  SharePreviewItem.swift
 //  md-preview
 //
-//  The share popover's header: the app icon, the file name, and a gray
-//  "N words · size" subtitle in place of the first lines of the raw Markdown.
+//  The share popover's header: the document's Finder icon (the app icon for
+//  an untitled document), the file name, and a gray "N words · size"
+//  subtitle in place of the first lines of the raw Markdown.
 //
 
 import AppKit
@@ -18,14 +19,20 @@ import ObjectiveC
 /// public title-only header.
 @MainActor
 enum SharePreviewItem {
-    static func make(markdown: String, title: String) -> NSPreviewRepresentingActivityItem {
+    /// `fileURL` gives the header the document's own Finder icon, the same
+    /// image the manage-sharing sheet shows.
+    static func make(markdown: String, title: String, fileURL: URL?) -> NSPreviewRepresentingActivityItem {
+        // The page covers about 1/1.3 of a document icon's height; drawn
+        // larger it fills the tile instead of floating in white.
+        let image = fileURL.map { filling(NSWorkspace.shared.icon(forFile: $0.path), scale: 1.3) }
+            ?? headerIcon
         let preview = NSPreviewRepresentingActivityItem(
-            item: markdown, title: title, image: headerIcon, icon: nil)
+            item: markdown, title: title, image: image, icon: nil)
         guard supportsSubtitle else { return preview }
         let metadata = LPLinkMetadata()
         metadata.title = title
         metadata.setValue(subtitle(for: markdown), forKey: "summary")
-        metadata.imageProvider = NSItemProvider(object: headerIcon)
+        metadata.imageProvider = NSItemProvider(object: image)
         preview.setValue(metadata, forKey: "linkMetadata")
         return preview
     }
@@ -49,10 +56,14 @@ enum SharePreviewItem {
     /// The app icon without the transparent margin of the macOS icon grid, so
     /// it fills the header tile the way a site icon does in Safari. Rendered
     /// once into a bitmap so later draws don't rescale the full-size icon.
-    private static let headerIcon: NSImage = {
+    // The icon body covers 824 of the 1024-point canvas.
+    private static let headerIcon = filling(NSApp.applicationIconImage, scale: 1024 / 824)
+
+    /// `source` drawn `scale` times larger on the same 128-point canvas,
+    /// cropping its transparent margin.
+    private static func filling(_ source: NSImage, scale factor: CGFloat) -> NSImage {
         let side: CGFloat = 128
-        // The icon body covers 824 of the 1024-point canvas.
-        let pad = side * (1024 / 824 - 1) / 2
+        let pad = side * (factor - 1) / 2
         let rect = NSRect(x: 0, y: 0, width: side, height: side)
         let image = NSImage(size: rect.size)
         for scale in [1, 2] as [CGFloat] {
@@ -64,10 +75,10 @@ enum SharePreviewItem {
             rep.size = rect.size
             NSGraphicsContext.saveGraphicsState()
             NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-            NSApp.applicationIconImage.draw(in: rect.insetBy(dx: -pad, dy: -pad))
+            source.draw(in: rect.insetBy(dx: -pad, dy: -pad))
             NSGraphicsContext.restoreGraphicsState()
             image.addRepresentation(rep)
         }
         return image
-    }()
+    }
 }

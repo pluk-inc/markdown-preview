@@ -592,7 +592,7 @@ extension DocumentWindowController {
     func items(for pickerToolbarItem: NSSharingServicePickerToolbarItem) -> [Any] {
         guard let currentMarkdown else { return [] }
         let title = currentFileURL?.lastPathComponent ?? documentWindow.title
-        return [SharePreviewItem.make(markdown: currentMarkdown, title: title)]
+        return [SharePreviewItem.make(markdown: currentMarkdown, title: title, fileURL: currentFileURL)]
     }
 
     /// Export and Print sit in their own section above the system services,

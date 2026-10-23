@@ -19,15 +19,34 @@ enum ShareLinkManageSheet {
         let model = ShareLinkManageModel(fileURL: fileURL, markdown: markdown)
         // Built first and given its root view after, so the dismiss closure
         // can hold the controller weakly instead of through its own view.
-        let hosting = NSHostingController(rootView: ShareLinkManageView(model: model, dismiss: {}))
+        let hosting = NSHostingController(rootView: ShareLinkManageView(model: model, dismiss: {},
+                                                                        confirmStop: { _ in }))
         hosting.rootView = ShareLinkManageView(model: model) { [weak hosting] in
             hosting?.dismiss(nil)
+        } confirmStop: { [weak hosting] stop in
+            guard let window = hosting?.view.window else { return }
+            confirmStopSharing(on: window, then: stop)
         }
         // The view decides its own size. A fixed preferredContentSize fought
         // the view's natural height and looped the window's constraint passes
         // until AppKit threw.
         hosting.sizingOptions = .preferredContentSize
         host.presentAsSheet(hosting)
+    }
+
+    /// Stopping cannot be undone: the link stops working for everyone.
+    private static func confirmStopSharing(on window: NSWindow, then stop: @escaping () -> Void) {
+        let alert = NSAlert()
+        // Sheet alerts hide the default icon; set it to show the app icon,
+        // as Pages' stop-sharing alert does.
+        alert.icon = NSApp.applicationIconImage
+        alert.messageText = L("Stop sharing this document?")
+        alert.informativeText = L("If you stop sharing, people with the link can no longer open this document, and its copy is deleted from the server.")
+        alert.addButton(withTitle: L("Continue"))
+        alert.addButton(withTitle: L("Cancel"))
+        alert.beginSheetModal(for: window) { response in
+            if response == .alertFirstButtonReturn { stop() }
+        }
     }
 }
 
@@ -80,24 +99,55 @@ final class ShareLinkManageModel {
     }
 }
 
+/// An AppKit pop-up with the first choice selected: SwiftUI's menu picker
+/// sizes to its title and will not fill the column, and NSMenuItem gives
+/// the other choices the native disabled look.
+private struct PermissionPopUp: NSViewRepresentable {
+    let choices: [(title: String, enabled: Bool)]
+
+    func makeNSView(context: Context) -> NSPopUpButton {
+        let button = NSPopUpButton(frame: .zero, pullsDown: false)
+        button.autoenablesItems = false
+        for choice in choices {
+            button.addItem(withTitle: choice.title)
+            button.lastItem?.isEnabled = choice.enabled
+        }
+        button.selectItem(at: 0)
+        button.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        return button
+    }
+
+    func updateNSView(_ button: NSPopUpButton, context: Context) {}
+}
+
 struct ShareLinkManageView: View {
     let model: ShareLinkManageModel
     let dismiss: () -> Void
+    /// Asks before stopping; calls its argument when the user agrees.
+    let confirmStop: (_ stop: @escaping () -> Void) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-                .padding(20)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
             Divider()
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(L("Permissions"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 8) {
-                    // A share link has one audience and one access level;
-                    // shown like Pages' pop-ups, but there is nothing to pick.
-                    readOnlyChoice(L("Anyone with the link"))
-                    readOnlyChoice(L("can read"))
+                    // A share link has one audience and one access level.
+                    // The pop-ups match Pages; the other choices are shown
+                    // but disabled.
+                    permissionMenu([
+                        (L("Anyone with the link"), true),
+                        (L("People you choose"), false),
+                    ])
+                    permissionMenu([
+                        (L("can view only"), true),
+                        (L("can edit"), false),
+                    ])
                 }
                 if let errorMessage = model.errorMessage {
                     Text(errorMessage)
@@ -105,7 +155,9 @@ struct ShareLinkManageView: View {
                         .foregroundStyle(.red)
                 }
             }
-            .padding(20)
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 16)
             Divider()
             footer
                 .padding(16)
@@ -136,18 +188,17 @@ struct ShareLinkManageView: View {
         }
     }
 
-    private func readOnlyChoice(_ title: String) -> some View {
-        Text(title)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+    private func permissionMenu(_ choices: [(title: String, enabled: Bool)]) -> some View {
+        PermissionPopUp(choices: choices)
+            .frame(maxWidth: .infinity)
     }
 
     private var footer: some View {
         HStack(spacing: 8) {
             Button(role: .destructive) {
-                Task { if await model.stopSharing() { dismiss() } }
+                confirmStop {
+                    Task { if await model.stopSharing() { dismiss() } }
+                }
             } label: {
                 Text(L("Stop Sharing"))
                     .foregroundStyle(.red)

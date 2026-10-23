@@ -172,6 +172,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         window.allowsToolTipsWhenApplicationIsInactive = false
         super.init(window: window)
         setupWindow()
+        observeShareLinks()
         LaunchSignposts.end(signpost)
     }
 

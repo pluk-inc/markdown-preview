@@ -82,9 +82,14 @@ extension DocumentWindowController {
             documentWindow.subtitle = NSLocalizedString(
                 "Auto-save failed", comment: "Window subtitle after an automatic save failure")
         case .none:
-            documentWindow.subtitle = hasUnsavedEditorChanges
-                ? NSLocalizedString("Edited", comment: "Window subtitle for unsaved changes")
-                : ""
+            let edited = NSLocalizedString("Edited", comment: "Window subtitle for unsaved changes")
+            let shared = NSLocalizedString("Shared", comment: "Window subtitle for a document with a live share link")
+            switch (isSharedByLink, hasUnsavedEditorChanges) {
+            case (true, true): documentWindow.subtitle = "\(shared) · \(edited)"
+            case (true, false): documentWindow.subtitle = shared
+            case (false, true): documentWindow.subtitle = edited
+            case (false, false): documentWindow.subtitle = ""
+            }
         }
     }
 }
