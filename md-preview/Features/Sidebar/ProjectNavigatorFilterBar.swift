@@ -18,7 +18,7 @@ final class ProjectNavigatorFilterBar: NSView, NSTextFieldDelegate {
     private static let height: CGFloat = 28
 
     private let addButton = NSButton()
-    private let filterField = NSTextField()
+    private let filterField = ClickToFocusTextField()
     private let recentButton = NSButton()
 
     var filterText: String {
@@ -181,5 +181,31 @@ final class ProjectNavigatorFilterBar: NSView, NSTextFieldDelegate {
         filterField.stringValue = ""
         onFilterChange?()
         return true
+    }
+}
+
+/// A text field that takes keyboard focus only when clicked. AppKit gives a
+/// new window's focus to its first view that accepts it, and in the document
+/// window that is this field: the outline and the toolbar refuse focus.
+private final class ClickToFocusTextField: NSTextField {
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        refusesFirstResponder = true
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        refusesFirstResponder = true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        refusesFirstResponder = false
+        super.mouseDown(with: event)
+    }
+
+    override func textDidEndEditing(_ notification: Notification) {
+        super.textDidEndEditing(notification)
+        refusesFirstResponder = true
     }
 }
