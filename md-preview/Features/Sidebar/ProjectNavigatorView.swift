@@ -65,6 +65,10 @@ final class ProjectNavigatorView: NSView {
     /// index at a time, so filtering on every call would be quadratic.
     private var visibleChildren: [ObjectIdentifier: [FileNode]] = [:]
     private var filterTask: Task<Void, Never>?
+    /// Set when a folder changes while filtering. A flag rather than a task
+    /// argument, so a keystroke that replaces the pending task still drops
+    /// the stale walk.
+    private var indexIsStale = false
     /// The folders that were open before the filter took over the tree, so
     /// clearing the filter puts the tree back as the reader left it.
     private var expandedBeforeFilter: Set<URL> = []
@@ -158,6 +162,7 @@ final class ProjectNavigatorView: NSView {
     /// the cached walk first, for changes on disk.
     private func applyFilter(reloadingIndex: Bool = false) {
         filterTask?.cancel()
+        if reloadingIndex { indexIsStale = true }
         guard let rootNode, isFiltering else {
             clearFilter()
             return
@@ -170,11 +175,14 @@ final class ProjectNavigatorView: NSView {
         filterTask = Task { [weak self] in
             // The field reports every key; wait for a pause in the typing.
             try? await Task.sleep(for: .milliseconds(120))
-            guard !Task.isCancelled else { return }
-            if reloadingIndex { await ProjectFileIndex.shared.invalidate(root: root) }
+            guard !Task.isCancelled, let self else { return }
+            if self.indexIsStale {
+                self.indexIsStale = false
+                await ProjectFileIndex.shared.invalidate(root: root)
+            }
             let snapshot = await ProjectFileIndex.shared.snapshot(for: root)
             let visible = await Self.visiblePaths(in: snapshot, query: query, recentPaths: recentPaths)
-            guard !Task.isCancelled, let self else { return }
+            guard !Task.isCancelled else { return }
             self.showFiltered(visible)
         }
     }
@@ -313,12 +321,14 @@ final class ProjectNavigatorView: NSView {
         panel.prompt = NSLocalizedString("Add", comment: "Project navigator add files panel button")
         panel.beginSheetModal(for: window) { [weak self] response in
             guard let self, response == .OK else { return }
-            let sources = panel.urls
+            // The retry after an access prompt skips the files already copied.
+            var remaining = panel.urls
             self.withWriteAccess(to: folder, {
-                for source in sources {
+                while let source = remaining.first {
                     let name = source.deletingPathExtension().lastPathComponent
                     let target = Self.uniqueURL(in: folder, base: name, extension: source.pathExtension)
                     try FileManager.default.copyItem(at: source, to: target)
+                    remaining.removeFirst()
                 }
             }, then: { [weak self] in
                 self?.handleFolderChange()
@@ -424,8 +434,11 @@ final class ProjectNavigatorView: NSView {
             }
         }
         label.stringValue = finalURL.lastPathComponent
-        if folderChangedWhileRenaming || finalURL != url {
+        if folderChangedWhileRenaming {
+            // Replay the change that waited: it also refreshes the file index.
             folderChangedWhileRenaming = false
+            handleFolderChange()
+        } else if finalURL != url {
             refreshTree()
         }
         if finalURL.hasDirectoryPath {
@@ -601,7 +614,13 @@ final class ProjectNavigatorView: NSView {
     }
 
     func setCurrentFile(_ url: URL?) {
+        let opensOtherFile = url?.standardizedFileURL != currentFileURL
         currentFileURL = url?.standardizedFileURL
+        // A newly opened file has just become recent; let it show.
+        if opensOtherFile, filterBar.showsRecentOnly, let url,
+           visiblePaths?.contains(url.standardizedFileURL.path) == false {
+            applyFilter()
+        }
         guard let url, rootNode != nil else {
             outlineView.deselectAll(nil)
             return
@@ -910,7 +929,9 @@ private enum FolderWriteAccess {
     static func restore(for folder: URL) -> Bool {
         let folder = folder.standardizedFileURL
         var bookmarks = storedBookmarks
-        for (path, data) in bookmarks where folder.isDescendantOrSame(of: URL(filePath: path, directoryHint: .isDirectory)) {
+        // Resolve before matching: a folder renamed or moved since it was
+        // allowed is found at its new location.
+        for (path, data) in bookmarks {
             var isStale = false
             guard let url = try? URL(resolvingBookmarkData: data,
                                      options: .withSecurityScope,
@@ -922,11 +943,15 @@ private enum FolderWriteAccess {
                 continue
             }
             let resolved = url.standardizedFileURL
-            guard accessing.contains(resolved) || url.startAccessingSecurityScopedResource() else { continue }
+            guard folder.isDescendantOrSame(of: resolved),
+                  accessing.contains(resolved) || url.startAccessingSecurityScopedResource() else { continue }
             accessing.insert(resolved)
-            if isStale { remember(resolved) }
-            // A moved folder no longer covers the path asked for.
-            if folder.isDescendantOrSame(of: resolved) { return true }
+            if isStale || resolved.path != path {
+                bookmarks[path] = nil
+                UserDefaults.standard.set(bookmarks, forKey: defaultsKey)
+                remember(resolved)
+            }
+            return true
         }
         return false
     }
