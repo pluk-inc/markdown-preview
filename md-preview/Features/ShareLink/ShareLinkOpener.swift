@@ -9,6 +9,7 @@
 //
 
 import AppKit
+import WebKit
 
 @MainActor
 enum ShareLinkOpener {
@@ -26,6 +27,23 @@ enum ShareLinkOpener {
     static func isReceivedCopy(_ fileURL: URL?, id: String) -> Bool {
         isFile(fileURL, inside: folder(for: id))
     }
+
+    /// Blocks network loads in a received share's preview: a remote image
+    /// would tell the sender's server who opened the link, and when. Link
+    /// clicks (document loads) still work. Nil when WebKit cannot compile it.
+    static func remoteContentBlocker() async -> WKContentRuleList? {
+        if let compiling = remoteContentBlockerTask { return await compiling.value }
+        let task = Task { @MainActor () -> WKContentRuleList? in
+            let rules = #"[{"trigger":{"url-filter":"^https?:","resource-type":["image","style-sheet","font","media","raw","svg-document"]},"action":{"type":"block"}}]"#
+            return try? await WKContentRuleListStore.default()
+                .compileContentRuleList(forIdentifier: "ReceivedShareRemoteContent",
+                                        encodedContentRuleList: rules)
+        }
+        remoteContentBlockerTask = task
+        return await task.value
+    }
+
+    private static var remoteContentBlockerTask: Task<WKContentRuleList?, Never>?
 
     /// Accepts both the web link and the md-preview://share form.
     static func parse(_ url: URL) -> ShareLink? {
