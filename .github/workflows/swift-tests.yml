@@ -2,8 +2,12 @@ name: Swift Tests
 
 on:
   pull_request:
+    paths-ignore:
+      - server/share-worker/**
   push:
     branches: [main]
+    paths-ignore:
+      - server/share-worker/**
 
 jobs:
   test:

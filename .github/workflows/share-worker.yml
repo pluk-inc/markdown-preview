@@ -1,0 +1,40 @@
+name: Share Worker
+
+on:
+  pull_request:
+    paths:
+      - server/share-worker/**
+      - tests/fixtures/share-link/**
+      - .github/workflows/share-worker.yml
+  push:
+    branches: [main]
+    paths:
+      - server/share-worker/**
+      - tests/fixtures/share-link/**
+      - .github/workflows/share-worker.yml
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: worker test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server/share-worker
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/share-worker/package-lock.json
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  # Deploy job (wrangler deploy with a CLOUDFLARE_API_TOKEN secret) comes
+  # once the Cloudflare account, R2 bucket, and share domain exist.
