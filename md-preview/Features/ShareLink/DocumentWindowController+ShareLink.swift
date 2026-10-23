@@ -30,7 +30,8 @@ extension DocumentWindowController {
     /// The Share popover row; none while the feature is off or the window
     /// has no saved file to link.
     func shareLinkServices() -> [NSSharingService] {
-        guard ShareLinkFeature.isEnabled, currentFileURL != nil, currentMarkdown != nil else {
+        guard ShareLinkFeature.isEnabled, currentFileURL != nil, currentMarkdown != nil,
+              !isReceivedShare else {
             return []
         }
         // Same test as the "Shared" subtitle, so the row and the subtitle agree.

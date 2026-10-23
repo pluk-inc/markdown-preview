@@ -494,3 +494,18 @@
 
 /* Share links */
 "Markdown Preview lost the key that manages this link, so it cannot change or stop it. The link stops working on %@." = "Markdown Preview 丢失了管理此链接的密钥，因此无法更改或停止它。此链接将于 %@ 失效。";
+
+/* Opening share links */
+"Open Shared Link…" = "打开共享链接…";
+"Open Shared Link" = "打开共享链接";
+"Paste a link to a document shared from Markdown Preview." = "粘贴从 Markdown Preview 共享的文稿链接。";
+"This is not a complete share link. The part after # is the key; ask the sender to copy the link again." = "这不是完整的共享链接。# 之后的部分是密钥；请让发送者重新拷贝链接。";
+"Enter Password" = "输入密码";
+"Incorrect Password" = "密码不正确";
+"The sender protected this shared document with a password." = "发送者已使用密码保护此共享文稿。";
+"Shared Document" = "共享文稿";
+"The shared document can’t be opened." = "无法打开共享的文稿。";
+"This link has expired, or sharing was stopped." = "此链接已过期，或已停止共享。";
+"This link is damaged, or it does not match the shared document." = "此链接已损坏，或与共享的文稿不符。";
+"Shared documents are read-only" = "共享的文稿为只读";
+"Read only" = "只读";

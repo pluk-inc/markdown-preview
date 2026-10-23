@@ -494,3 +494,18 @@
 
 /* Share links */
 "Markdown Preview lost the key that manages this link, so it cannot change or stop it. The link stops working on %@." = "Markdown Preview utracił klucz zarządzający tym linkiem, więc nie może go zmienić ani zatrzymać. Link przestanie działać %@.";
+
+/* Opening share links */
+"Open Shared Link…" = "Otwórz udostępnione łącze…";
+"Open Shared Link" = "Otwórz udostępnione łącze";
+"Paste a link to a document shared from Markdown Preview." = "Wklej łącze do dokumentu udostępnionego z Markdown Preview.";
+"This is not a complete share link. The part after # is the key; ask the sender to copy the link again." = "To nie jest pełne łącze udostępniania. Część po # to klucz; poproś nadawcę o ponowne skopiowanie łącza.";
+"Enter Password" = "Wprowadź hasło";
+"Incorrect Password" = "Nieprawidłowe hasło";
+"The sender protected this shared document with a password." = "Nadawca zabezpieczył ten udostępniony dokument hasłem.";
+"Shared Document" = "Udostępniony dokument";
+"The shared document can’t be opened." = "Nie można otworzyć udostępnionego dokumentu.";
+"This link has expired, or sharing was stopped." = "To łącze wygasło lub udostępnianie zostało zatrzymane.";
+"This link is damaged, or it does not match the shared document." = "To łącze jest uszkodzone lub nie pasuje do udostępnionego dokumentu.";
+"Shared documents are read-only" = "Udostępnione dokumenty są tylko do odczytu";
+"Read only" = "Tylko do odczytu";

@@ -332,8 +332,8 @@ final class MainSplitViewController: NSSplitViewController {
         sidebarViewController?.currentMode ?? .outline
     }
 
-    func setSidebarMode(_ mode: SidebarViewController.Mode) {
-        sidebarViewController?.setMode(mode)
+    func setSidebarMode(_ mode: SidebarViewController.Mode, remember: Bool = true) {
+        sidebarViewController?.setMode(mode, remember: remember)
     }
 
     func applyReaderLayout() {
