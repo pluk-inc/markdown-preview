@@ -616,9 +616,11 @@ final class ProjectNavigatorView: NSView {
     func setCurrentFile(_ url: URL?) {
         let opensOtherFile = url?.standardizedFileURL != currentFileURL
         currentFileURL = url?.standardizedFileURL
-        // A newly opened file has just become recent; let it show.
+        // A newly opened file has just become recent; let it show. Before
+        // the first filter result arrives, the pending match still holds
+        // the recent list from before this open, so it is redone too.
         if opensOtherFile, filterBar.showsRecentOnly, let url,
-           visiblePaths?.contains(url.standardizedFileURL.path) == false {
+           visiblePaths?.contains(url.standardizedFileURL.path) != true {
             applyFilter()
         }
         guard let url, rootNode != nil else {
