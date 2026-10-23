@@ -4,7 +4,6 @@
 //
 
 import Cocoa
-import UniformTypeIdentifiers
 
 final class MarkdownDocumentController: NSDocumentController {
     static let recentDocumentsDidClear = Notification.Name("MarkdownDocumentController.recentDocumentsDidClear")
@@ -13,8 +12,6 @@ final class MarkdownDocumentController: NSDocumentController {
         super.clearRecentDocuments(sender)
         NotificationCenter.default.post(name: Self.recentDocumentsDidClear, object: self)
     }
-
-    private static let markdownFileExtensions = ["md", "markdown", "mdown", "mdx", "txt"]
 
     override func beginOpenPanel(
         _ openPanel: NSOpenPanel,
@@ -27,8 +24,8 @@ final class MarkdownDocumentController: NSDocumentController {
             "Choose a Markdown file or folder",
             comment: "Open panel prompt"
         )
-        openPanel.allowedContentTypes = Self.markdownFileExtensions
-            .compactMap { UTType(filenameExtension: $0) }
+        // The file types come from `inTypes`, the document types in
+        // Info.plist: super replaces `allowedContentTypes` with them.
         return await super.beginOpenPanel(openPanel, forTypes: inTypes)
     }
 

@@ -103,7 +103,7 @@ Single source newlines remain visible by default. Enable **Settings → Reading 
 
 ## Supported file types
 
-`.md`, `.markdown`, `.mdown`, `.mdx`, `.txt`
+`.md`, `.markdown`, `.mdown`, `.mdx`
 UTI: `net.daringfireball.markdown`
 
 ## Requirements
