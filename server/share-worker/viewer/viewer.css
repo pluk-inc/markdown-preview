@@ -376,8 +376,6 @@ article.markdown-body [id] { scroll-margin-top: 68px; }
 }
 
 .footer svg { width: 13px; height: 13px; }
-.footer a { color: inherit; }
-.footer a:hover { color: var(--ink); }
 
 .toast {
   position: fixed;
