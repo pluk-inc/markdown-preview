@@ -41,11 +41,15 @@ jobs:
 
   # Deploys main to the md-preview.app routes. Skips with a notice until the
   # CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets exist; see
-  # server/share-worker/README.md, "Deploy".
+  # server/share-worker/README.md, "Deploy". The share-worker environment
+  # requires a reviewer, so the job waits for approval before it deploys.
   deploy:
     name: worker deploy
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: share-worker
+      url: https://md-preview.app/s/
     runs-on: ubuntu-latest
     concurrency: share-worker-deploy
     defaults:

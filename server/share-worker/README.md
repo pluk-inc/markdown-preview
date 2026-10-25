@@ -68,7 +68,10 @@ redirect to the website at `markdownpreview.app`:
 
 `wrangler.jsonc` declares these as Workers Routes. The `share-worker.yml`
 workflow deploys `main` after the tests pass, once the secrets below exist;
-without them it skips with a notice.
+without them it skips with a notice. The deploy job runs in the
+`share-worker` environment, which requires a reviewer: each push to `main`
+that changes the Worker waits until someone approves it in the workflow run
+(Review deployments).
 
 One-time setup in Cloudflare (the account that owns `md-preview.app`):
 
@@ -90,6 +93,8 @@ One-time setup in Cloudflare (the account that owns `md-preview.app`):
    Workers", limited to this account and the `md-preview.app` zone.
 5. **GitHub secrets** (repository › Settings › Secrets and variables ›
    Actions): `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+6. **Approval:** repository › Settings › Environments › `share-worker`, with
+   required reviewers and `main` as the only deployment branch.
 
 To deploy by hand instead: `npx wrangler login`, then `npm run deploy`.
 
