@@ -85,7 +85,7 @@ export async function openEnvelope(envelope, key, password) {
       "raw", new TextEncoder().encode(password.normalize("NFC")), "PBKDF2", false, ["deriveBits"]);
     const bits = await crypto.subtle.deriveBits(
       { name: "PBKDF2", hash: "SHA-256", salt, iterations }, passwordKey, 256);
-    inputKeyMaterial = concat(key, new Uint8Array(bits));
+    inputKeyMaterial = concat([key, new Uint8Array(bits)]);
   }
 
   const hkdfKey = await crypto.subtle.importKey("raw", inputKeyMaterial, "HKDF", false, ["deriveKey"]);
@@ -122,14 +122,14 @@ async function inflate(bytes, limit) {
   } catch (error) {
     throw error instanceof ShareError ? error : new ShareError("malformed");
   }
-  return concat(...chunks);
+  return concat(chunks);
 }
 
 function hasMagic(bytes) {
   return MAGIC.every((byte, index) => bytes[index] === byte);
 }
 
-export function concat(...parts) {
+export function concat(parts) {
   const result = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
   let offset = 0;
   for (const part of parts) {

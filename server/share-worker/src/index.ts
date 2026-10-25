@@ -203,15 +203,20 @@ async function pageShare(id: string, request: Request, env: Env, ctx: ExecutionC
 async function* base64Pieces(stream: ReadableStream<Uint8Array>): AsyncGenerator<string> {
   const reader = stream.getReader();
   let carry = new Uint8Array(0);
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const bytes = carry.byteLength > 0 ? concat(carry, value) : value;
-    const whole = bytes.byteLength - (bytes.byteLength % 3);
-    if (whole > 0) yield base64Encode(bytes.subarray(0, whole));
-    carry = bytes.slice(whole);
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const bytes = carry.byteLength > 0 ? concat([carry, value]) : value;
+      const whole = bytes.byteLength - (bytes.byteLength % 3);
+      if (whole > 0) yield base64Encode(bytes.subarray(0, whole));
+      carry = bytes.slice(whole);
+    }
+    if (carry.byteLength > 0) yield base64Encode(carry);
+  } finally {
+    // A reader that closed the page stops the loop early: stop the R2 read too.
+    await reader.cancel().catch(() => {});
   }
-  if (carry.byteLength > 0) yield base64Encode(carry);
 }
 
 function appleAppSiteAssociation(env: Env): Response {
@@ -293,7 +298,7 @@ async function readCapped(request: Request, limit: number): Promise<Uint8Array |
     }
     chunks.push(value);
   }
-  return concat(...chunks);
+  return concat(chunks);
 }
 
 async function limited(limiter: RateLimit | undefined, request: Request): Promise<Response | null> {

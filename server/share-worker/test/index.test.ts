@@ -74,6 +74,21 @@ describe("create and read", () => {
     expect(JSON.stringify(object?.customMetadata)).not.toContain(body.ownerToken);
   });
 
+  it("stores an upload that arrives in many tiny chunks", async () => {
+    const bytes = new Uint8Array(200_000);
+    bytes.set(envelope);
+    let sent = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent === bytes.length) return controller.close();
+        controller.enqueue(bytes.slice(sent, ++sent));
+      },
+    });
+    const { response, body } = await create(stream);
+    expect(response.status).toBe(201);
+    expect(new Uint8Array(await (await call(`/shares/${body.id}`)).arrayBuffer())).toEqual(bytes);
+  });
+
   it("rejects bodies that are not MDP1 envelopes", async () => {
     const wrongMagic = envelope.slice();
     wrongMagic[0] = 0x58;
