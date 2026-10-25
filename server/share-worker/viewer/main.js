@@ -231,9 +231,12 @@ function updateContentsFade() {
 page.contents.addEventListener("scroll", updateContentsFade, { passive: true });
 window.addEventListener("resize", updateContentsFade);
 
-// The rail's width: dragged at its edge, remembered per browser; a
-// double-click on the edge goes back to viewer.css's default. boot.js
-// applied the saved width before the first paint.
+// The rail's width: dragged at its edge or set with the arrow keys on it,
+// remembered per browser; a double-click or Enter on the edge goes back to
+// viewer.css's default. boot.js applied the saved width before the first
+// paint.
+
+const clampRailWidth = (width) => Math.round(Math.min(Math.max(width, window.mdpRail.min), window.mdpRail.max));
 
 /** Saves the rail's width (null for the default) and applies it page-wide. */
 function saveRailWidth(width) {
@@ -241,32 +244,62 @@ function saveRailWidth(width) {
   if (width === null) document.documentElement.style.removeProperty("--rail-width");
   else document.documentElement.style.setProperty("--rail-width", `${width}px`);
   store("mdp.railWidth", width === null ? "" : String(width));
+  updateResizerValue();
+  updateContentsFade();
+}
+
+/** The separator's value for assistive technology: the rail's width. */
+function updateResizerValue() {
+  page.resizer.setAttribute("aria-valuemin", String(window.mdpRail.min));
+  page.resizer.setAttribute("aria-valuemax", String(window.mdpRail.max));
+  page.resizer.setAttribute("aria-valuenow", String(page.contents.offsetWidth));
 }
 
 page.resizer.addEventListener("pointerdown", (event) => {
-  if (event.button !== 0) return;
+  // One drag at a time: a second finger on the edge does nothing.
+  if (event.button !== 0 || document.documentElement.classList.contains("resizing")) return;
   event.preventDefault();
-  const { min, max } = window.mdpRail;
+  const pointer = event.pointerId;
   const startX = event.clientX;
   const startWidth = page.contents.offsetWidth;
   let width = startWidth;
   // Only the rail reads the width, so a drag restyles the rail alone.
   const drag = (move) => {
-    width = Math.round(Math.min(Math.max(startWidth + move.clientX - startX, min), max));
+    if (move.pointerId !== pointer) return;
+    width = clampRailWidth(startWidth + move.clientX - startX);
     page.contents.style.setProperty("--rail-width", `${width}px`);
   };
-  page.resizer.setPointerCapture(event.pointerId);
-  page.resizer.addEventListener("pointermove", drag);
-  page.resizer.addEventListener("lostpointercapture", () => {
+  const end = (lost) => {
+    if (lost.pointerId !== pointer) return;
     page.resizer.removeEventListener("pointermove", drag);
+    page.resizer.removeEventListener("lostpointercapture", end);
     document.documentElement.classList.remove("resizing");
     saveRailWidth(width);
-    updateContentsFade();
-  }, { once: true });
+  };
+  page.resizer.setPointerCapture(pointer);
+  page.resizer.addEventListener("pointermove", drag);
+  page.resizer.addEventListener("lostpointercapture", end);
   document.documentElement.classList.add("resizing");
 });
 
 page.resizer.addEventListener("dblclick", () => saveRailWidth(null));
+
+page.resizer.addEventListener("keydown", (event) => {
+  const step = event.shiftKey ? 40 : 10;
+  const width = page.contents.offsetWidth;
+  const next = {
+    ArrowLeft: width - step,
+    ArrowRight: width + step,
+    Home: window.mdpRail.min,
+    End: window.mdpRail.max,
+  }[event.key];
+  if (event.key === "Enter") saveRailWidth(null);
+  else if (next !== undefined) saveRailWidth(clampRailWidth(next));
+  else return;
+  event.preventDefault();
+});
+
+updateResizerValue();
 
 /** Lists the document's h1–h3. The rail stays in place without them, so
  * the layout never moves once the document arrives. */

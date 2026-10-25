@@ -442,7 +442,10 @@ button {
 }
 
 .resizer:hover::after { background: var(--hairline); transition-delay: 100ms; }
-.resizing .resizer::after { background: var(--hairline); }
+.resizing .resizer::after,
+.resizer:focus-visible::after { background: var(--hairline); }
+/* Focus shows as the edge's line, not a ring around it. */
+.resizer:focus { outline: none; }
 
 /* While dragging, the whole page shows the resize cursor and nothing is selected. */
 .resizing,

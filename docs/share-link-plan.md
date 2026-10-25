@@ -392,8 +392,9 @@ with a note, Open in Markdown Preview, Download .md, Copy link (with a
 "Link copied" toast), an Aa panel in Linear's popover style with the app's
 controls and words (text size, Appearance Automatic/Light/Dark, width; remembered per
 browser), a Contents rail (always in place, "No headings" when empty, its
-shown or hidden state and its width remembered; drag its edge to resize it,
-double-click the edge for the default width), error states (the open
+shown or hidden state and its width remembered; drag its edge, or focus it
+and use the arrow keys, to resize it; double-click or Enter for the default
+width), error states (the open
 button stays), and the app icon as the tab and home-screen icon. In a narrow window the Contents open as a drawer
 over the dimmed page, as Linear's sidebar does on a phone. On phones and
 tablets, which have no app, the open button reads "Get Mac App" and copies
