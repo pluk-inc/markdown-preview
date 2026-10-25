@@ -37,6 +37,11 @@ body { overflow: visible !important; padding: 0 !important; }
   --button-radius: 7px;
   --icon: #6f6f71;
   --icon-hover: #232323;
+  /* Toolbar buttons rise on hover like Linear's round sidebar buttons
+     (measured): the panel color, a 7% hairline, a short shadow below. */
+  --button-raised: #fafafb;
+  --button-raised-edge: 0 0 0 0.5px rgba(0, 0, 0, 0.07), 0 1px 1.5px rgba(0, 0, 0, 0.06),
+    0 2px 4px rgba(0, 0, 0, 0.02);
   --accent: #0068da;
   --on-accent: #ffffff;
   --panel: #ffffff;
@@ -73,6 +78,8 @@ body { overflow: visible !important; padding: 0 !important; }
     --button-hover: rgba(255, 255, 255, 0.05);
     --icon: #949597;
     --icon-hover: #e2e3e5;
+    --button-raised: #111212;
+    --button-raised-edge: 0 0 0 0.5px #232325, 0 1px 2px rgba(0, 0, 0, 0.4);
     --accent: #3b9bff;
     --on-accent: #08111f;
     --panel: #2a2a2d;
@@ -176,7 +183,11 @@ button {
 
 .icon-button:hover,
 .icon-button[aria-expanded="true"],
-.icon-button[aria-pressed="true"] { color: var(--icon-hover); background: var(--button-hover); }
+.icon-button[aria-pressed="true"] {
+  color: var(--icon-hover);
+  background: var(--button-raised);
+  box-shadow: var(--button-raised-edge);
+}
 
 .text-button {
   width: auto;
