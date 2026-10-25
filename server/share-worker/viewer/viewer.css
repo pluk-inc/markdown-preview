@@ -186,14 +186,16 @@ button {
 }
 
 .icon-button:hover,
-.icon-button[aria-expanded="true"],
-.icon-button[aria-pressed="true"] {
+.icon-button[aria-expanded="true"] {
   color: var(--icon-hover);
   background: var(--toolbar-hover);
 }
 
+/* Pressed while the rail shows; boot.js sets data-contents before the first
+   paint, so the toggle never changes state on load. */
 #toggle-contents:hover,
-#toggle-contents[aria-pressed="true"] {
+:root[data-contents="shown"] #toggle-contents {
+  color: var(--icon-hover);
   background: var(--button-raised);
   box-shadow: var(--button-raised-edge);
 }
@@ -208,7 +210,7 @@ button {
 
 /* The one filled button: a pill as tall as the circular icon buttons. */
 .open-button {
-  cursor: pointer;
+  cursor: default;
   display: inline-flex;
   align-items: center;
   height: 28px;
