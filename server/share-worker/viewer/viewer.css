@@ -372,7 +372,7 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
   align-items: center;
   justify-content: center;
   gap: 6px 8px;
-  padding: 9px 20px 10px;
+  padding: 5px 20px 6px;
   font: 12px/1.4 var(--chrome-font);
   color: var(--muted);
 }
