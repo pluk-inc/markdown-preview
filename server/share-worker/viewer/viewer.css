@@ -63,6 +63,8 @@ body { padding: 0; }
      damped spring (omega 21/s, damping ratio 0.95, no overshoot) that
      settles in about 340 ms, sampled for CSS linear(). */
   --rail-motion: 290ms ease;
+  /* The Contents rail's default width; boot.js sets a width the reader dragged. */
+  --rail-width: 220px;
 }
 
 @supports (transition-timing-function: linear(0, 1)) {
@@ -388,7 +390,7 @@ button {
 .contents {
   flex: none;
   box-sizing: border-box;
-  width: var(--rail-width, 220px);
+  width: var(--rail-width);
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 10px 12px 20px 0;
@@ -410,7 +412,7 @@ button {
 @property --fade-top { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @property --fade-bottom { syntax: "<length>"; inherits: false; initial-value: 0px; }
 
-:root[data-contents="hidden"] .contents { margin-inline-start: calc(-1 * var(--rail-width, 220px)); }
+:root[data-contents="hidden"] .contents { margin-inline-start: calc(-1 * var(--rail-width)); }
 .motion .contents {
   transition: margin-inline-start var(--rail-motion), --fade-top 150ms ease-out, --fade-bottom 150ms ease-out;
 }
@@ -439,9 +441,8 @@ button {
   transition: background-color 150ms ease-out;
 }
 
-.resizer:hover::after,
-.resizing .resizer::after { background: var(--hairline); transition-delay: 100ms; }
-.resizing .resizer::after { transition-delay: 0s; }
+.resizer:hover::after { background: var(--hairline); transition-delay: 100ms; }
+.resizing .resizer::after { background: var(--hairline); }
 
 /* While dragging, the whole page shows the resize cursor and nothing is selected. */
 .resizing,

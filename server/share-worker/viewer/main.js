@@ -78,8 +78,9 @@ function localizePage() {
   }
 }
 
-/** Shows why the document cannot be shown. Only a password link keeps
- * "Open in Markdown Preview": the app can open it, but not a broken link. */
+/** Shows why the document cannot be shown. "Open in Markdown Preview"
+ * stays: it opens the link in the app (or, for a link without a key, the
+ * website), so the reader can still reach the app from here. */
 function showStatus(message) {
   page.statusText.textContent = message;
   page.status.hidden = false;
@@ -231,36 +232,41 @@ page.contents.addEventListener("scroll", updateContentsFade, { passive: true });
 window.addEventListener("resize", updateContentsFade);
 
 // The rail's width: dragged at its edge, remembered per browser; a
-// double-click on the edge goes back to the default. boot.js applied the
-// saved width before the first paint.
-const rail = window.mdpRail;
+// double-click on the edge goes back to viewer.css's default. boot.js
+// applied the saved width before the first paint.
 
-function setRailWidth(width) {
-  rail.width = Math.round(Math.min(Math.max(width, rail.min), rail.max));
-  document.documentElement.style.setProperty("--rail-width", `${rail.width}px`);
+/** Saves the rail's width (null for the default) and applies it page-wide. */
+function saveRailWidth(width) {
+  page.contents.style.removeProperty("--rail-width");
+  if (width === null) document.documentElement.style.removeProperty("--rail-width");
+  else document.documentElement.style.setProperty("--rail-width", `${width}px`);
+  store("mdp.railWidth", width === null ? "" : String(width));
 }
 
 page.resizer.addEventListener("pointerdown", (event) => {
   if (event.button !== 0) return;
   event.preventDefault();
+  const { min, max } = window.mdpRail;
   const startX = event.clientX;
-  const startWidth = rail.width;
-  const drag = (move) => setRailWidth(startWidth + move.clientX - startX);
+  const startWidth = page.contents.offsetWidth;
+  let width = startWidth;
+  // Only the rail reads the width, so a drag restyles the rail alone.
+  const drag = (move) => {
+    width = Math.round(Math.min(Math.max(startWidth + move.clientX - startX, min), max));
+    page.contents.style.setProperty("--rail-width", `${width}px`);
+  };
   page.resizer.setPointerCapture(event.pointerId);
   page.resizer.addEventListener("pointermove", drag);
   page.resizer.addEventListener("lostpointercapture", () => {
     page.resizer.removeEventListener("pointermove", drag);
     document.documentElement.classList.remove("resizing");
-    store("mdp.railWidth", String(rail.width));
+    saveRailWidth(width);
     updateContentsFade();
   }, { once: true });
   document.documentElement.classList.add("resizing");
 });
 
-page.resizer.addEventListener("dblclick", () => {
-  setRailWidth(rail.initial);
-  store("mdp.railWidth", String(rail.width));
-});
+page.resizer.addEventListener("dblclick", () => saveRailWidth(null));
 
 /** Lists the document's h1–h3. The rail stays in place without them, so
  * the layout never moves once the document arrives. */
