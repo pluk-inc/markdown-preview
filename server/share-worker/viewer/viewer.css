@@ -29,9 +29,13 @@ body { overflow: visible !important; padding: 0 !important; }
   --muted: rgba(0, 0, 0, 0.5);
   --hairline: rgba(0, 0, 0, 0.08);
   --hover: rgba(0, 0, 0, 0.05);
-  /* Linear's button hover: a full pill, #f3f3f4 on its #fafafb panel,
-     which is black at 2.8%, so it darkens any surface by the same step. */
-  --button-hover: rgba(0, 0, 0, 0.028);
+  /* Linear's hover on its grey sidebar, where these buttons also sit
+     (measured): a 7 px rounded rectangle, #ececed on #f2f2f3 (black at
+     2.5%); icons muted at rest, near black on hover. */
+  --button-hover: rgba(0, 0, 0, 0.025);
+  --button-radius: 7px;
+  --icon: #6f6f71;
+  --icon-hover: #232323;
   --accent: #0068da;
   --on-accent: #ffffff;
   --panel: #ffffff;
@@ -66,6 +70,8 @@ body { overflow: visible !important; padding: 0 !important; }
     --hairline: rgba(255, 255, 255, 0.09);
     --hover: rgba(255, 255, 255, 0.07);
     --button-hover: rgba(255, 255, 255, 0.05);
+    --icon: #949597;
+    --icon-hover: #e2e3e5;
     --accent: #3b9bff;
     --on-accent: #08111f;
     --panel: #2a2a2d;
@@ -157,15 +163,15 @@ button {
   height: 28px;
   padding: 0;
   border: 0;
-  border-radius: 999px;
-  color: var(--ink);
+  border-radius: var(--button-radius);
+  color: var(--icon);
   background: none;
   text-decoration: none;
 }
 
 .icon-button:hover,
 .icon-button[aria-expanded="true"],
-.icon-button[aria-pressed="true"] { background: var(--button-hover); }
+.icon-button[aria-pressed="true"] { color: var(--icon-hover); background: var(--button-hover); }
 
 .text-button {
   width: auto;
@@ -324,14 +330,14 @@ button {
   width: 100%;
   padding: 5px 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--button-radius);
   text-align: start;
   color: var(--muted);
   background: none;
   overflow-wrap: anywhere;
 }
 
-.contents button:hover { color: var(--ink); background: var(--button-hover); }
+.contents button:hover { color: var(--icon-hover); background: var(--button-hover); }
 .contents button.current { color: var(--ink); font-weight: 500; background: var(--hover); }
 .contents .level-2 button { padding-left: 20px; }
 .contents .level-3 button { padding-left: 32px; }
