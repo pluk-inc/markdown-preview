@@ -248,7 +248,7 @@ function buildContents() {
     button.textContent = heading.textContent.trim();
     button.addEventListener("click", () => {
       if (narrow.matches) setDrawerOpen(false);
-      heading.scrollIntoView({ behavior: "smooth" });
+      heading.scrollIntoView();
     });
     item.append(button);
     return item;

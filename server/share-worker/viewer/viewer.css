@@ -459,6 +459,11 @@ button {
   overscroll-behavior: contain;
 }
 
+/* Jumps to a heading or footnote glide there (Tailwind's scroll-smooth).
+   The page scrolls in .page on a computer and in the root on a phone. */
+html,
+.page { scroll-behavior: smooth; }
+
 article.markdown-body {
   max-width: var(--reader-width);
   padding: 40px var(--gutter) 72px;
@@ -557,6 +562,8 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html,
+  .page { scroll-behavior: auto; }
   .reading-panel,
   .toast { animation: none; }
   .loading { animation: loading-in 0.4s ease-out 1s both; }
