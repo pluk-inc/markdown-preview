@@ -296,7 +296,9 @@ button {
 
 .capsule button:hover:not(:disabled) { background: var(--hover); }
 .capsule button:disabled { opacity: 0.3; }
-.capsule-divider { width: 1px; height: 14px; background: var(--hairline); }
+.capsule-divider { width: 1px; height: 14px; background: var(--hairline); transition: opacity 120ms; }
+/* A hovered half fills its side, so the divider steps aside. */
+.capsule:has(button:hover:not(:disabled)) .capsule-divider { opacity: 0; }
 .small-a { font-size: 12px; font-weight: 500; }
 .large-a { font-size: 17px; font-weight: 500; }
 
