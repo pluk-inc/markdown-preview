@@ -23,7 +23,6 @@ body { overflow: visible !important; padding: 0 !important; }
 :root {
   --frame: #f2f2f4;
   --sheet: #ffffff;
-  --rail: #f8f8f9;
   --ink: rgba(0, 0, 0, 0.85);
   --muted: rgba(0, 0, 0, 0.5);
   --hairline: rgba(0, 0, 0, 0.08);
@@ -44,7 +43,6 @@ body { overflow: visible !important; padding: 0 !important; }
   :root {
     --frame: #161618;
     --sheet: #1e1e20;
-    --rail: #1a1a1c;
     --ink: rgba(255, 255, 255, 0.88);
     --muted: rgba(255, 255, 255, 0.52);
     --hairline: rgba(255, 255, 255, 0.09);
@@ -256,13 +254,19 @@ button {
   box-shadow: 0 0 0 0.5px var(--hairline), 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-/* MARK: Sheet */
+/* MARK: Workspace: the Contents rail on the frame, the document on the sheet */
+
+.workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  padding: 0 var(--frame-gap) var(--frame-gap);
+}
 
 .sheet {
   display: flex;
   flex: 1;
-  min-height: 0;
-  margin: 0 var(--frame-gap) var(--frame-gap);
+  min-width: 0;
   border-radius: 12px;
   overflow: hidden;
   background: var(--sheet);
@@ -271,12 +275,10 @@ button {
 
 .contents {
   flex: none;
-  width: 232px;
+  width: 220px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 28px 12px 28px 20px;
-  border-inline-end: 1px solid var(--hairline);
-  background: var(--rail);
+  padding: 10px 12px 20px 0;
   font: 13px/1.35 var(--chrome-font);
 }
 
@@ -301,7 +303,7 @@ button {
 }
 
 .contents button:hover { color: var(--ink); background: var(--hover); }
-.contents button.current { color: var(--ink); font-weight: 500; }
+.contents button.current { color: var(--ink); font-weight: 500; background: var(--hover); }
 .contents .level-2 button { padding-left: 20px; }
 .contents .level-3 button { padding-left: 32px; }
 
