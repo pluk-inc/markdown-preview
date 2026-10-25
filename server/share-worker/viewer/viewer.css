@@ -384,7 +384,7 @@ button {
   overscroll-behavior: contain;
   padding: 10px 12px 20px 0;
   font: 13px/1.35 var(--chrome-font);
-  /* Linear's scroll fade: solid, then transparent over 40 px, at an edge
+  /* Scroll fade: solid, then transparent over 20 px, at an edge
      only while more of the list is past it (main.js sets the classes). */
   --fade-top: 0px;
   --fade-bottom: 0px;
@@ -395,8 +395,8 @@ button {
   transition: --fade-top 150ms ease-out, --fade-bottom 150ms ease-out;
 }
 
-.contents.fade-top { --fade-top: 40px; }
-.contents.fade-bottom { --fade-bottom: 40px; }
+.contents.fade-top { --fade-top: 20px; }
+.contents.fade-bottom { --fade-bottom: 20px; }
 
 @property --fade-top { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @property --fade-bottom { syntax: "<length>"; inherits: false; initial-value: 0px; }
