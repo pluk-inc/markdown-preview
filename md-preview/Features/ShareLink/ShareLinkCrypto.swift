@@ -82,6 +82,11 @@ nonisolated enum ShareLinkCrypto {
         guard let deflated = try? (plaintext as NSData).compressed(using: .zlib) as Data else {
             throw Failure.compressionFailed
         }
+        // GCM's ciphertext is as long as its input, so the envelope's size
+        // is known before the encryption pass.
+        guard headerByteCount + deflated.count + tagByteCount <= maxEnvelopeBytes else {
+            throw Failure.tooLarge
+        }
 
         var header = magic
         header.append(password == nil ? 0 : passwordFlag)
@@ -100,9 +105,7 @@ nonisolated enum ShareLinkCrypto {
                                    nonce: AES.GCM.Nonce(data: nonce),
                                    authenticating: header)
 
-        let envelope = header + box.ciphertext + box.tag
-        guard envelope.count <= maxEnvelopeBytes else { throw Failure.tooLarge }
-        return envelope
+        return header + box.ciphertext + box.tag
     }
 
     /// Decrypts and inflates an envelope. `password` is ignored when the

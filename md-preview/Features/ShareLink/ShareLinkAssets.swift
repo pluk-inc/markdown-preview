@@ -12,7 +12,8 @@ import Foundation
 
 nonisolated enum ShareLinkAssets {
 
-    private static let mediaTypes: [String: String] = [
+    /// File extension to MIME type; `SharePayload` accepts exactly these types.
+    static let mediaTypes: [String: String] = [
         "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif",
         "webp": "image/webp", "avif": "image/avif", "svg": "image/svg+xml",
     ]

@@ -97,7 +97,6 @@ enum ShareLinkSession {
                     record.expiresAt = try await client.update(id: record.id, envelope: envelope,
                                                                ownerToken: secrets.ownerToken,
                                                                expiry: expiry)
-                    record.title = payload.title
                     store.update(record)
                     return try webLink(id: record.id, key: key, base: baseURL)
                 } catch ShareLinkClient.Failure.notFound {
@@ -115,8 +114,7 @@ enum ShareLinkSession {
         let envelope = try await seal(payload, key: key)
         try Task.checkCancellation()
         let created = try await client.create(envelope, expiry: expiry)
-        let record = ShareLinkStore.Record(id: created.id, title: payload.title,
-                                           filePath: fileURL.path, createdAt: .now,
+        let record = ShareLinkStore.Record(id: created.id, filePath: fileURL.path,
                                            expiresAt: created.expiresAt)
         do {
             try store.add(record, secrets: .init(key: Base64URL.encode(key),

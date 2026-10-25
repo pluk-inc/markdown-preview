@@ -115,9 +115,9 @@ async function read(id: string, env: Env, ctx: ExecutionContext): Promise<Respon
 async function update(id: string, request: Request, env: Env, url: URL): Promise<Response> {
   const ttl = ttlMillis(url);
   if (ttl === undefined) return error(400, "invalid_ttl");
-  const existing = await authorizedShare(id, request, env);
+  // The owner check and the upload do not wait for each other.
+  const [existing, body] = await Promise.all([authorizedShare(id, request, env), envelope(request)]);
   if (existing instanceof Response) return existing;
-  const body = await envelope(request);
   if (body instanceof Response) return body;
 
   const expiresAt = new Date(Date.now() + ttl).toISOString();

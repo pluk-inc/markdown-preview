@@ -22,8 +22,6 @@ enum SharePreviewItem {
     /// `fileURL` gives the header the document's own Finder icon, the same
     /// image the manage-sharing sheet shows.
     static func make(markdown: String, title: String, fileURL: URL?) -> NSPreviewRepresentingActivityItem {
-        // The page covers about 1/1.3 of a document icon's height; drawn
-        // larger it fills the tile instead of floating in white.
         let image = fileURL.map(documentIcon) ?? headerIcon
         let preview = NSPreviewRepresentingActivityItem(
             item: markdown, title: title, image: image, icon: nil)
@@ -42,6 +40,8 @@ enum SharePreviewItem {
 
     private static func documentIcon(for fileURL: URL) -> NSImage {
         if let cached = cachedDocumentIcon, cached.path == fileURL.path { return cached.image }
+        // The page covers about 1/1.3 of a document icon's height; drawn
+        // larger it fills the tile instead of floating in white.
         let image = filling(NSWorkspace.shared.icon(forFile: fileURL.path), scale: 1.3)
         cachedDocumentIcon = (fileURL.path, image)
         return image

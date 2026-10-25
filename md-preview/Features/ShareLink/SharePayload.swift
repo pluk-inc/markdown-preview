@@ -29,9 +29,7 @@ nonisolated struct SharePayload: Codable, Equatable, Sendable {
     }
 
     static let currentVersion = 1
-    static let allowedAssetTypes: Set<String> = [
-        "image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/svg+xml",
-    ]
+    static let allowedAssetTypes = Set(ShareLinkAssets.mediaTypes.values)
     private static let maxTitleLength = 200
 
     let version: Int

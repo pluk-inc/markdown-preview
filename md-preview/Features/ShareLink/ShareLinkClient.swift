@@ -21,7 +21,7 @@ nonisolated struct ShareLinkClient: Sendable {
         case invalidResponse
     }
 
-    enum Expiry: String, CaseIterable, Codable, Sendable {
+    enum Expiry: String, Sendable {
         case hour = "1h", day = "1d", week = "7d", month = "30d"
     }
 
@@ -34,10 +34,13 @@ nonisolated struct ShareLinkClient: Sendable {
     let baseURL: URL
     let session: URLSession
 
-    init(baseURL: URL, session: URLSession = Self.makeSession()) {
+    init(baseURL: URL, session: URLSession = Self.sharedSession) {
         self.baseURL = baseURL
         self.session = session
     }
+
+    /// One session for every client, so calls reuse its connections.
+    static let sharedSession = makeSession()
 
     /// No cookies, no cache, like `UsageAnalyticsReporter`.
     static func makeSession(protocolClasses: [AnyClass]? = nil) -> URLSession {

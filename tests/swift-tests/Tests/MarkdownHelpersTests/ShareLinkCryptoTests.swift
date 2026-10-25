@@ -208,13 +208,7 @@ struct ShareLinkVectors: Decodable {
     let vectors: [Vector]
 
     static func load() throws -> [Vector] {
-        let repositoryRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let url = repositoryRoot.appendingPathComponent("tests/fixtures/share-link/vectors.json")
+        let url = TestVendor.repositoryRoot.appendingPathComponent("tests/fixtures/share-link/vectors.json")
         return try JSONDecoder().decode(ShareLinkVectors.self, from: Data(contentsOf: url)).vectors
     }
 }

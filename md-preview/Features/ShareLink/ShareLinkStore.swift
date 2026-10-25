@@ -18,10 +18,8 @@ final class ShareLinkStore {
 
     struct Record: Codable, Equatable {
         let id: String
-        var title: String
         /// Standardized path of the shared file, to find its link again.
         let filePath: String
-        let createdAt: Date
         var expiresAt: Date
     }
 
@@ -95,11 +93,14 @@ final class ShareLinkStore {
               let stored = try? JSONDecoder().decode([Record].self, from: data)
         else { return }
         let now = Date.now
-        for expired in stored where expired.expiresAt <= now {
-            ShareLinkKeychain.delete(account: expired.id)
-        }
         records = stored.filter { $0.expiresAt > now }
-        if records.count != stored.count { saveLogging() }
+        // The list loads on a window's first-paint path, so the Keychain
+        // cleanup waits; the file drops expired entries on its next save.
+        let expired = stored.filter { $0.expiresAt <= now }.map(\.id)
+        guard !expired.isEmpty else { return }
+        Task.detached(priority: .utility) {
+            expired.forEach { ShareLinkKeychain.delete(account: $0) }
+        }
     }
 
     /// Posted after the list changes, so windows can update their subtitle.
