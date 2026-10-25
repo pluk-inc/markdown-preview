@@ -452,6 +452,8 @@ function attachImages(assets) {
   let blocked = 0;
   for (const image of page.article.querySelectorAll("img")) {
     const source = image.getAttribute("src") ?? "";
+    // Images embedded in the document travel with it and reach no server.
+    if (/^data:image\//i.test(source)) continue;
     const url = urlFor(assetPathForSource(source));
     if (url) {
       image.src = url;

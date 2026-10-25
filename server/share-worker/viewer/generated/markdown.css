@@ -1066,12 +1066,15 @@ html.md-preview-print-fidelity .md-table-wrap { padding-top: 0; }
     .md-table-actions { display: none !important; }
     .md-table-wrap { padding-top: 0; }
 }
+/* The app's scroll override; printing uses viewer.css's print layout. */
+@media screen {
 html { overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior-x: none; }
 body { overflow: visible !important; }
 /* Keep vertical gestures on the page: overflow-x:auto otherwise makes
    overflow-y:auto, and even 1px of article overflow can swallow a wheel gesture. */
 article.markdown-body { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; overflow-wrap: anywhere; }
 article.markdown-body table { overflow-wrap: normal; }
+}
 :root {
     --mdp-doc-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
     --mdp-code-font-size: 0.9em;

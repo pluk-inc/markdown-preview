@@ -23,7 +23,10 @@ final class ShareViewerKitTests: XCTestCase {
             // shows a share the way a fresh install would.
             "markdown.css": header + MarkdownHTML.stylesheet + """
 
+            /* The app's scroll override; printing uses viewer.css's print layout. */
+            @media screen {
             \(MarkdownHTML.scrollOverrideCSS)
+            }
             :root {
                 --mdp-doc-font: \(DocumentFontSetting.defaultSetting.fontFamily);
                 --mdp-code-font-size: \(DocumentFontSetting.defaultSetting.codeFontSize);
