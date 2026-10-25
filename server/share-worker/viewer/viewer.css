@@ -23,6 +23,7 @@ body { overflow: visible !important; padding: 0 !important; }
 :root {
   --frame: #f2f2f4;
   --sheet: #ffffff;
+  --rail: #f8f8f9;
   --ink: rgba(0, 0, 0, 0.85);
   --muted: rgba(0, 0, 0, 0.5);
   --hairline: rgba(0, 0, 0, 0.08);
@@ -43,6 +44,7 @@ body { overflow: visible !important; padding: 0 !important; }
   :root {
     --frame: #161618;
     --sheet: #1e1e20;
+    --rail: #1a1a1c;
     --ink: rgba(255, 255, 255, 0.88);
     --muted: rgba(255, 255, 255, 0.52);
     --hairline: rgba(255, 255, 255, 0.09);
@@ -273,6 +275,8 @@ button {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 28px 12px 28px 20px;
+  border-inline-end: 1px solid var(--hairline);
+  background: var(--rail);
   font: 13px/1.35 var(--chrome-font);
 }
 
