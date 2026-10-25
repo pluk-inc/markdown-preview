@@ -119,6 +119,7 @@ function applyReading() {
     button.setAttribute("aria-checked", String(reading.appearance === mode));
   }
   window.mdpSetAppearance?.(reading.appearance);
+  placeThumbs();
   root.dataset.contents = reading.contents ? "shown" : "hidden";
   page.contents.inert = !reading.contents;
   page.toggleContents.setAttribute("aria-pressed", String(reading.contents));
@@ -133,9 +134,26 @@ function setReading(change) {
   applyReading();
 }
 
+/** Moves each switch's thumb under its chosen option. It slides only
+ * once the panel is open, so opening the panel never animates it. */
+function placeThumbs() {
+  if (page.readingPanel.hidden) return;
+  for (const group of page.readingPanel.querySelectorAll(".segmented")) {
+    const chosen = group.querySelector('[aria-checked="true"]');
+    if (!chosen) continue;
+    group.style.setProperty("--thumb-x", `${chosen.offsetLeft - 2}px`);
+    group.style.setProperty("--thumb-width", `${chosen.offsetWidth}px`);
+  }
+}
+
 function setReadingPanelOpen(open) {
   page.readingPanel.hidden = !open;
   page.readingButton.setAttribute("aria-expanded", String(open));
+  const groups = page.readingPanel.querySelectorAll(".segmented");
+  groups.forEach((group) => group.classList.remove("sliding"));
+  if (!open) return;
+  placeThumbs();
+  requestAnimationFrame(() => groups.forEach((group) => group.classList.add("sliding")));
 }
 
 page.readingButton.addEventListener("click", () => setReadingPanelOpen(page.readingPanel.hidden));

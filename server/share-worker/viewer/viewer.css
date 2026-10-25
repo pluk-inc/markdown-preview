@@ -132,10 +132,14 @@ button {
   cursor: default;
 }
 
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
+/* No focus ring on the page's own controls: keyboard focus shows as the
+   control's hover fill instead. Links in the document keep the browser's. */
+:is(.bar, .reading-panel, .contents) :is(button, a):focus { outline: none; }
+.icon-button:focus-visible { color: var(--icon-hover); background: var(--toolbar-hover); }
+.open-button:focus-visible { filter: brightness(1.08); }
+.contents button:focus-visible,
+.capsule button:focus-visible { background: var(--hover); }
+.segmented button:focus-visible:not([aria-checked="true"]) { color: var(--ink); background: var(--hover); }
 
 [hidden] { display: none !important; }
 
@@ -303,11 +307,31 @@ button {
 .large-a { font-size: 17px; font-weight: 500; }
 
 .segmented {
+  position: relative;
+  isolation: isolate;
   display: flex;
   padding: 2px;
   border-radius: 999px;
   background: var(--hover);
 }
+
+/* One thumb behind the options; it slides to the chosen one with the
+   rail's spring. main.js sets its position and width. */
+.segmented::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  z-index: -1;
+  width: var(--thumb-width, 0);
+  transform: translateX(var(--thumb-x, 0));
+  border-radius: 999px;
+  background: var(--popover);
+  box-shadow: 0 0 0 0.5px var(--hairline), 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.segmented.sliding::before { transition: transform var(--rail-motion), width var(--rail-motion); }
 
 .segmented button {
   display: inline-flex;
@@ -322,12 +346,8 @@ button {
   background: none;
 }
 
-.segmented button[aria-checked="true"] {
-  font-weight: 500;
-  color: var(--ink);
-  background: var(--popover);
-  box-shadow: 0 0 0 0.5px var(--hairline), 0 1px 2px rgba(0, 0, 0, 0.08);
-}
+.segmented button { transition: color 150ms; }
+.segmented button[aria-checked="true"] { color: var(--ink); }
 
 /* MARK: Workspace: the Contents rail on the frame, the document on the sheet */
 
@@ -510,7 +530,8 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
   .reading-panel,
   .toast { animation: none; }
   .loading { animation: loading-in 0.4s ease-out 1s both; }
-  .motion .contents { transition: none; }
+  .motion .contents,
+  .segmented.sliding::before { transition: none; }
 }
 
 /* MARK: Narrow windows */
