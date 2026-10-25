@@ -79,6 +79,7 @@ function showStatus(message, { appCanOpen = false } = {}) {
   page.status.hidden = false;
   page.crumbSeparator.setAttribute("hidden", "");
   page.open.hidden = !appCanOpen;
+  document.documentElement.dataset.loaded = "error";
 }
 
 // MARK: - Reading options, remembered per browser
@@ -310,6 +311,7 @@ async function render(payload) {
   }
   MdpRenderers.highlightAll();
   buildContents();
+  document.documentElement.dataset.loaded = "document";
   applyReading();
 }
 
