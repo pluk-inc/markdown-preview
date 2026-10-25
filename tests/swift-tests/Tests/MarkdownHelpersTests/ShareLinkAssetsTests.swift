@@ -38,6 +38,11 @@ final class ShareLinkAssetsTests: XCTestCase {
         XCTAssertEqual(assets.map(\.path), ["img/My Photo.jpg", "img/a.png"])
     }
 
+    func testReadsUnquotedSourcesAndNumericReferences() {
+        let assets = collect(#"<img src=img/a.png alt=a><img src="img/My&#32;Photo.jpg"><img src='img&#x2F;b.svg'>"#)
+        XCTAssertEqual(assets.map(\.path), ["img/a.png", "img/My Photo.jpg", "img/b.svg"])
+    }
+
     func testSkipsRemoteAbsoluteEscapingAndNonImageSources() {
         let html = """
         <img src="https://example.com/x.png"><img src="//cdn.example/x.png">

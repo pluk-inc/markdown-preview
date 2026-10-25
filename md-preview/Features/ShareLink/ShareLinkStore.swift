@@ -31,6 +31,7 @@ final class ShareLinkStore {
 
     private(set) var records: [Record] = []
     private let fileURL: URL
+    private var expiryTimer: Timer?
 
     init(fileURL: URL = ShareLinkStore.defaultFileURL) {
         self.fileURL = fileURL
@@ -94,6 +95,7 @@ final class ShareLinkStore {
         else { return }
         let now = Date.now
         records = stored.filter { $0.expiresAt > now }
+        scheduleExpiryNotice()
         // The list loads on a window's first-paint path, so the Keychain
         // cleanup waits; the file drops expired entries on its next save.
         let expired = stored.filter { $0.expiresAt <= now }.map(\.id)
@@ -107,10 +109,29 @@ final class ShareLinkStore {
     static let didChangeNotification = Notification.Name("ShareLinkStoreDidChange")
 
     private func save() throws {
-        defer { NotificationCenter.default.post(name: Self.didChangeNotification, object: self) }
+        defer {
+            scheduleExpiryNotice()
+            NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+        }
         try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(),
                                                 withIntermediateDirectories: true)
         try JSONEncoder().encode(records).write(to: fileURL, options: .atomic)
+    }
+
+    /// Posts `didChangeNotification` when the next link expires, so a
+    /// window's "Shared" subtitle goes away with it. A timer that comes due
+    /// while the Mac sleeps fires on wake.
+    private func scheduleExpiryNotice() {
+        expiryTimer?.invalidate()
+        guard let next = records.map(\.expiresAt).filter({ $0 > .now }).min() else { return }
+        let timer = Timer(fire: next, interval: 0, repeats: false) { _ in
+            MainActor.assumeIsolated {
+                self.scheduleExpiryNotice()
+                NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        expiryTimer = timer
     }
 
     /// For changes that leave nothing unmanaged if they are not saved: a

@@ -66,10 +66,15 @@ enum ShareLinkSession {
                      markdown: String,
                      store: ShareLinkStore = .shared) async throws -> URL {
         let path = fileURL.standardizedFileURL.path
-        while let running = jobs[path] { _ = try? await running.value }
-        let job = Task { try await makeLink(forFile: fileURL, markdown: markdown, store: store) }
+        // Each job waits for the one before it, so a second window's request
+        // runs after the first finishes instead of polling it.
+        let previous = jobs[path]
+        let job = Task {
+            _ = try? await previous?.value
+            return try await makeLink(forFile: fileURL, markdown: markdown, store: store)
+        }
         jobs[path] = job
-        defer { jobs[path] = nil }
+        defer { if jobs[path] == job { jobs[path] = nil } }
         return try await withTaskCancellationHandler {
             try await job.value
         } onCancel: {

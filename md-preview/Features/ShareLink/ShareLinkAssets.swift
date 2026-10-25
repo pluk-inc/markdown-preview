@@ -23,7 +23,10 @@ nonisolated enum ShareLinkAssets {
 
     // `\s` before `src`, not `\b`: `\b` also matches inside `data-src`.
     private static let srcAttribute = try! NSRegularExpression(
-        pattern: #"\ssrc\s*=\s*(?:"([^"]*)"|'([^']*)')"#, options: [.caseInsensitive])
+        pattern: #"\ssrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))"#, options: [.caseInsensitive])
+
+    private static let numericReference = try! NSRegularExpression(
+        pattern: #"&#(?:[xX]([0-9a-fA-F]{1,6})|([0-9]{1,7}));"#)
 
     private static let hiddenAttribute = try! NSRegularExpression(
         pattern: #"\shidden(?:\s|=|/?>)"#, options: [.caseInsensitive])
@@ -59,7 +62,7 @@ nonisolated enum ShareLinkAssets {
             let names = quotedValue.stringByReplacingMatches(in: tag, range: tagNSRange, withTemplate: "\"\"")
             guard hiddenAttribute.firstMatch(in: names, range: NSRange(names.startIndex..., in: names)) == nil,
                   let attribute = srcAttribute.firstMatch(in: tag, range: tagNSRange),
-                  let captured = [1, 2].lazy
+                  let captured = [1, 2, 3].lazy
                     .compactMap({ Range(attribute.range(at: $0), in: tag) })
                     .first,
                   let source = decodedRelativeSource(String(tag[captured]))
@@ -84,7 +87,7 @@ nonisolated enum ShareLinkAssets {
     /// The percent-decoded path of a relative `src`, without its query or
     /// fragment. Nil for URLs with a scheme, absolute paths, and `//host`.
     private static func decodedRelativeSource(_ source: String) -> String? {
-        let unescaped = source
+        let unescaped = decodingNumericReferences(source)
             .replacingOccurrences(of: "&amp;", with: "&")
             .replacingOccurrences(of: "&quot;", with: "\"")
             .replacingOccurrences(of: "&#39;", with: "'")
@@ -94,5 +97,20 @@ nonisolated enum ShareLinkAssets {
         else { return nil }
         let path = components.percentEncodedPath.removingPercentEncoding ?? components.path
         return path.isEmpty ? nil : path
+    }
+
+    /// `&#32;` and `&#x2F;` style references, as an HTML parser reads them.
+    private static func decodingNumericReferences(_ text: String) -> String {
+        guard text.contains("&#") else { return text }
+        let result = NSMutableString(string: text)
+        for match in numericReference.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
+            let hex = match.range(at: 1).location != NSNotFound
+            guard let digits = Range(match.range(at: hex ? 1 : 2), in: text),
+                  let value = UInt32(text[digits], radix: hex ? 16 : 10),
+                  let scalar = Unicode.Scalar(value)
+            else { continue }
+            result.replaceCharacters(in: match.range, with: String(Character(scalar)))
+        }
+        return result as String
     }
 }

@@ -47,11 +47,26 @@ extension DocumentWindowController {
     }
 
     private func showManageSharedDocument() {
-        guard let fileURL = currentFileURL, let markdown = currentMarkdown,
-              let host = documentWindow.contentViewController,
-              documentWindow.attachedSheet == nil
-        else { return }
-        ShareLinkManageSheet.present(on: host, fileURL: fileURL, markdown: markdown)
+        withSharedMarkdown { [weak self] markdown in
+            guard let self, let fileURL = self.currentFileURL,
+                  let host = self.documentWindow.contentViewController,
+                  self.documentWindow.attachedSheet == nil
+            else { return }
+            ShareLinkManageSheet.present(on: host, fileURL: fileURL, markdown: markdown)
+        }
+    }
+
+    /// The text a link shares: while editing, the editor's live text, which
+    /// `currentMarkdown` only catches up with on save or preview.
+    private func withSharedMarkdown(_ body: @escaping (String) -> Void) {
+        guard isEditing, let editor = mainSplit?.editorViewController else {
+            if let markdown = currentMarkdown { body(markdown) }
+            return
+        }
+        editor.fetchMarkdown { [weak self] markdown in
+            guard let markdown = markdown ?? self?.currentMarkdown else { return }
+            body(markdown)
+        }
     }
 
     /// Creating the first link starts sharing, so it asks first.
@@ -76,7 +91,11 @@ extension DocumentWindowController {
     /// No "copied" message, as with the system's Copy rows. A slow upload
     /// shows a progress sheet that can cancel it; an error gets an alert.
     private func createAndCopyShareLink() {
-        guard let fileURL = currentFileURL, let markdown = currentMarkdown else { return }
+        withSharedMarkdown { [weak self] markdown in self?.createAndCopyShareLink(markdown: markdown) }
+    }
+
+    private func createAndCopyShareLink(markdown: String) {
+        guard let fileURL = currentFileURL else { return }
         var upload: Task<Void, Never>?
         let progress = ShareLinkProgressSheet(window: documentWindow,
                                               message: L("Uploading Document…")) {
