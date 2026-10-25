@@ -398,17 +398,16 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
   color: var(--muted);
 }
 
-/* MARK: Loading, timed as Linear's: nothing for the first second, then
-   the mark fades in (0.4 s) with a ring that pulses every 3.2 s from 1.2 s;
-   "Loading…" only after 8 s (boot.js). Most loads finish before any of it. */
+/* MARK: Loading. Only a slow load shows it: "Loading…" fades in after one
+   second, as Linear's loading screen does, so most opens never see it. */
 
 .loading {
   position: absolute;
   inset: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
+  margin: 0;
   pointer-events: none;
   font: 13px var(--chrome-font);
   color: var(--muted);
@@ -417,41 +416,7 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
 
 :root[data-loaded] .loading { display: none; }
 
-.loading-mark {
-  display: grid;
-  place-items: center;
-  width: 64px;
-  height: 64px;
-}
-
-.loading-mark > svg { grid-area: 1 / 1; }
-.loading-logo { width: 34px; height: auto; fill: currentColor; stroke: none; }
-.loading-logo rect { fill: none; stroke: currentColor; stroke-width: 12; }
-
-.loading-ring {
-  width: 64px;
-  height: 64px;
-  opacity: 0;
-  animation: loading-pulse 3.2s ease-out 1.2s infinite;
-}
-
-.loading-ring circle { fill: none; stroke: currentColor; stroke-opacity: 0.4; stroke-width: 2; }
-
-.loading-text {
-  margin: 8px 0 0;
-  opacity: 0;
-  transition: opacity 0.8s 0.8s ease-out;
-}
-
-:root.slow .loading-text { opacity: 1; }
-
 @keyframes loading-in { from { opacity: 0; } }
-
-@keyframes loading-pulse {
-  0% { opacity: 0; transform: scale(0.8); }
-  70% { opacity: 1; }
-  100% { opacity: 0; transform: scale(1); }
-}
 
 /* MARK: Status (expired, damaged, password) */
 
@@ -500,8 +465,7 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
 
 @media (prefers-reduced-motion: reduce) {
   .reading-panel,
-  .toast,
-  .loading-ring { animation: none; }
+  .toast { animation: none; }
   .motion .contents { transition: none; }
 }
 
