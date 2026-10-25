@@ -141,8 +141,9 @@ button {
 
 .crumb-origin { color: var(--muted); }
 
-/* The Contents label waits for the document, keeping its space so nothing
-   moves when it appears. */
+/* The breadcrumb separator and the Contents label wait for the document,
+   keeping their space so nothing moves when they appear. */
+:root:not([data-loaded]) .crumb-sep,
 :root:not([data-loaded="document"]) .contents .panel-label { visibility: hidden; }
 .crumb-sep { width: 12px; height: 12px; color: var(--muted); flex: none; }
 
