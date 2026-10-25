@@ -60,6 +60,13 @@
   <p id="contents-empty" class="contents-empty" data-l10n="noHeadings" hidden>No headings</p>
 </nav>
 <main class="sheet">
+  <div class="loading" role="status">
+    <div class="loading-mark" aria-hidden="true">
+      <svg class="loading-ring" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30"/></svg>
+      <svg class="loading-logo" viewBox="0 0 208 128"><rect x="5" y="5" width="198" height="118" rx="12"/><path d="M30 98V30h20l20 25 20-25h20v68H90V59L70 84 50 59v39zm125 0-30-33h20V30h20v35h20z"/></svg>
+    </div>
+    <p class="loading-text" data-l10n="loading">Loading…</p>
+  </div>
   <div class="page">
     <p id="notice" class="notice" hidden></p>
     <div id="status" class="status" hidden>

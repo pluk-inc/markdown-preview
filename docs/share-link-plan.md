@@ -376,7 +376,9 @@ shown or hidden state remembered), and error states (only a password link
 keeps the open button). No layout shift while loading (CLS 0 in Chrome):
 `boot.js`, a blocking script in the head, applies the saved layout before
 the first paint and starts the envelope request at once; highlight.js and
-KaTeX load only for documents with code or math. Not
+KaTeX load only for documents with code or math. A slow load shows a
+loading mark timed as Linear's: nothing for 1 s, then the mark with a
+pulsing ring, and "Loading…" after 8 s. Not
 yet: diagrams (Pele), password links, Report, burn after reading. Deviations
 from the text below: the page loads a few same-origin files rather than one
 bundle, and `style-src-attr 'unsafe-inline'` is allowed because KaTeX sets
