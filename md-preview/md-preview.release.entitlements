@@ -10,6 +10,11 @@
     </array>
     <key>com.apple.security.files.user-selected.read-write</key>
     <true/>
+    <!-- Security-scoped bookmarks let the project navigator remember a
+         folder the reader allowed it to write to (New File, New Folder),
+         so it asks once per folder instead of once per launch. -->
+    <key>com.apple.security.files.bookmarks.app-scope</key>
+    <true/>
     <key>com.apple.security.automation.apple-events</key>
     <true/>
     <key>com.apple.security.temporary-exception.apple-events</key>
