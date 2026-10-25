@@ -44,7 +44,6 @@ const page = {
   readingPanel: byId("reading-panel"),
   smaller: byId("text-smaller"),
   larger: byId("text-larger"),
-  sizeDots: byId("text-size-dots"),
   widthFixed: byId("width-fixed"),
   widthFull: byId("width-full"),
   appearance: {
@@ -114,12 +113,6 @@ function applyReading() {
   root.dataset.width = reading.width;
   page.smaller.disabled = reading.size === 0;
   page.larger.disabled = reading.size === TEXT_SIZES.length - 1;
-  page.sizeDots.replaceChildren(...TEXT_SIZES.map((_, index) => {
-    const dot = document.createElement("i");
-    // Filled up to the current step, like the app's scale.
-    if (index <= reading.size) dot.className = "on";
-    return dot;
-  }));
   page.widthFixed.setAttribute("aria-checked", String(reading.width === "fixed"));
   page.widthFull.setAttribute("aria-checked", String(reading.width === "full"));
   for (const [mode, button] of Object.entries(page.appearance)) {

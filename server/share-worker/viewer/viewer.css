@@ -277,14 +277,7 @@ button {
 .panel-row + .panel-row { border-top: 1px solid var(--popover-edge); }
 .panel-row-label { color: var(--popover-label); white-space: nowrap; }
 
-/* Text size: the app's capsule (a small and a large A), its dots below. */
-.size-control {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-
+/* Text size: the app's capsule, a small and a large A. */
 .capsule {
   display: flex;
   align-items: center;
@@ -306,18 +299,6 @@ button {
 .capsule-divider { width: 1px; height: 14px; background: var(--hairline); }
 .small-a { font-size: 12px; font-weight: 500; }
 .large-a { font-size: 17px; font-weight: 500; }
-
-.dots { display: flex; gap: 5px; }
-
-.dots i {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--ink);
-  opacity: 0.15;
-}
-
-.dots i.on { opacity: 0.75; }
 
 .segmented {
   display: flex;
