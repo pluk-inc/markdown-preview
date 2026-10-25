@@ -141,7 +141,9 @@ function placeThumbs() {
   for (const group of page.readingPanel.querySelectorAll(".segmented")) {
     const chosen = group.querySelector('[aria-checked="true"]');
     if (!chosen) continue;
-    group.style.setProperty("--thumb-x", `${chosen.offsetLeft - 2}px`);
+    // Layout offsets, not getBoundingClientRect: the panel is still scaling
+    // in when it opens, and only the layout values ignore that transform.
+    group.style.setProperty("--thumb-x", `${chosen.offsetLeft}px`);
     group.style.setProperty("--thumb-width", `${chosen.offsetWidth}px`);
   }
 }
