@@ -3,10 +3,7 @@
    stylesheet in generated/markdown.css; the reader controls only change
    its text size and column width. */
 
-/* The app's page scrolls inside its web view and adds these same rules
-   (MarkdownHTML's scroll override); a browser page needs them too. */
-html { overflow-x: hidden !important; overflow-y: auto !important; }
-body { overflow: visible !important; padding: 0 !important; }
+body { padding: 0; }
 
 /* The app's stylesheet uses WebKit's system label and separator colors,
    which other browsers reject; these are their macOS values. */
@@ -357,9 +354,9 @@ button {
   border-radius: 999px;
   color: var(--muted);
   background: none;
+  transition: color 150ms;
 }
 
-.segmented button { transition: color 150ms; }
 .segmented button[aria-checked="true"] { color: var(--ink); }
 
 /* MARK: Workspace: the Contents rail on the frame, the document on the sheet */
@@ -468,12 +465,9 @@ article.markdown-body {
   max-width: var(--reader-width);
   padding: 40px var(--gutter) 72px;
   font-size: var(--reader-size);
-  overflow-x: auto;
-  overflow-wrap: anywhere;
   box-sizing: content-box;
 }
 
-article.markdown-body table { overflow-wrap: normal; }
 article.markdown-body [id] { scroll-margin-top: 16px; }
 :root[data-width="full"] { --reader-width: none; }
 
@@ -602,12 +596,8 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
     visibility: visible;
   }
 
-  .motion .contents {
-    transition: transform var(--rail-motion), visibility 0s linear 341ms,
-      --fade-top 150ms ease-out, --fade-bottom 150ms ease-out;
-  }
+  .motion .contents { transition: transform var(--rail-motion), visibility 0s linear 341ms; }
 
-  :root[data-drawer="open"] .motion .contents,
   :root[data-drawer="open"] .contents { transition-delay: 0s; }
 
   .contents button { padding-block: 8px; }

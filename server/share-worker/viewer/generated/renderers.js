@@ -1,6 +1,8 @@
 /* Generated from the app's MarkdownHTML by ShareViewerKitTests.
    Do not edit; run MDP_WRITE_VIEWER_KIT=1 swift test --filter ShareViewerKitTests. */
 (function () {
+// The app's renderers log timings through this; the page has no use for them.
+window.MdPreviewPerf = window.MdPreviewPerf || { log() {}, now: () => performance.now() };
 function autoDetectCodeLanguage(source) {
     const text = (source || '').trim();
     if (!text) return '';

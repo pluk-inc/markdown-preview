@@ -8,12 +8,7 @@ import XCTest
 /// drift from the app. Set MDP_WRITE_VIEWER_KIT=1 to rewrite them.
 final class ShareViewerKitTests: XCTestCase {
 
-    private static let generated: URL = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
+    private static let generated = TestVendor.repositoryRoot
         .appendingPathComponent("server/share-worker/viewer/generated")
 
     private static let header = """
@@ -22,27 +17,13 @@ final class ShareViewerKitTests: XCTestCase {
 
     """
 
-    /// The app hides every inner scroller's bar because its page scrolls in
-    /// the root. The viewer's page scrolls in `.page`, which keeps its bar.
-    static let scrollbarRule = ":where(:not(html):not(body):not(pre))::-webkit-scrollbar"
-
-    static var viewerStylesheet: String {
-        MarkdownHTML.stylesheet.replacingOccurrences(
-            of: scrollbarRule,
-            with: ":where(:not(html):not(body):not(pre):not(.page))::-webkit-scrollbar")
-    }
-
-    func testViewerPageKeepsItsScrollbar() {
-        XCTAssertTrue(MarkdownHTML.stylesheet.contains(Self.scrollbarRule),
-                      "The app's scrollbar rule changed; update ShareViewerKitTests.viewerStylesheet")
-    }
-
     static var files: [String: String] {
         [
             // The app page also sets these per user setting; the viewer
             // shows a share the way a fresh install would.
-            "markdown.css": header + viewerStylesheet + """
+            "markdown.css": header + MarkdownHTML.stylesheet + """
 
+            \(MarkdownHTML.scrollOverrideCSS)
             :root {
                 --mdp-doc-font: \(DocumentFontSetting.defaultSetting.fontFamily);
                 --mdp-code-font-size: \(DocumentFontSetting.defaultSetting.codeFontSize);
@@ -53,6 +34,8 @@ final class ShareViewerKitTests: XCTestCase {
             """,
             "renderers.js": header + """
             (function () {
+            // The app's renderers log timings through this; the page has no use for them.
+            window.MdPreviewPerf = window.MdPreviewPerf || { log() {}, now: () => performance.now() };
             \(MarkdownHTML.highlightAllBody)
             \(MarkdownHTML.mathElementRenderer)
             \(MarkdownHTML.markdownSelectionScript)

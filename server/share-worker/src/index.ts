@@ -2,6 +2,7 @@
 // The server never sees a key: it only checks the envelope's magic and size.
 // It also serves the web viewer (§5), which decrypts in the browser.
 
+import { HEADER_BYTES, MAGIC, TAG_BYTES, base64urlEncode as base64url } from "../viewer/share-crypto.js";
 import { VIEWER_CSP } from "./viewer-csp.ts";
 
 export interface Env {
@@ -12,8 +13,7 @@ export interface Env {
   APPLE_APP_ID: string;
 }
 
-const MAGIC = new TextEncoder().encode("MDP1");
-const MIN_ENVELOPE_BYTES = 53; // 37-byte header + 16-byte tag
+const MIN_ENVELOPE_BYTES = HEADER_BYTES + TAG_BYTES;
 const MAX_ENVELOPE_BYTES = 5 * 1024 * 1024;
 const TTLS: Record<string, number> = {
   "1h": 3_600_000,
@@ -288,12 +288,6 @@ function error(status: number, code: string): Response {
 
 function randomBytes(count: number): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(count));
-}
-
-function base64url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 async function sha256Hex(text: string): Promise<string> {

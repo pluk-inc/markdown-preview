@@ -2,9 +2,10 @@
 // app's ShareLink.swift and ShareLinkCrypto.swift (docs/share-link-plan.md §2).
 // Runs in the browser and in the Workers runtime for tests.
 
-const MAGIC = [0x4d, 0x44, 0x50, 0x31]; // "MDP1"
-const HEADER_BYTES = 37;
-const TAG_BYTES = 16;
+// The envelope format; the Worker checks uploads against these too.
+export const MAGIC = [0x4d, 0x44, 0x50, 0x31]; // "MDP1"
+export const HEADER_BYTES = 37;
+export const TAG_BYTES = 16;
 const KEY_BYTES = 32;
 const ID_BYTES = 16;
 const PASSWORD_FLAG = 0b1;
@@ -55,11 +56,6 @@ export function parseLink(pathname, hash) {
   return { id: match[1], key, hasPassword, fragment };
 }
 
-/** Whether the envelope asks for a password, read without decrypting. */
-export function requiresPassword(envelope) {
-  return hasMagic(envelope) && envelope.length > 4 && (envelope[4] & PASSWORD_FLAG) !== 0;
-}
-
 /** Decrypts and inflates an envelope; `password` is ignored when the envelope has none. */
 export async function openEnvelope(envelope, key, password) {
   if (key.length !== KEY_BYTES || envelope.length < HEADER_BYTES + TAG_BYTES || !hasMagic(envelope)) {
@@ -67,10 +63,11 @@ export async function openEnvelope(envelope, key, password) {
   }
   const flags = envelope[4];
   const iterations = new DataView(envelope.buffer, envelope.byteOffset + 5, 4).getUint32(0);
-  const salt = envelope.slice(9, 25);
-  const nonce = envelope.slice(25, 37);
-  const header = envelope.slice(0, HEADER_BYTES);
-  const sealed = envelope.slice(HEADER_BYTES);
+  // Views, not copies: WebCrypto copies what it is given.
+  const salt = envelope.subarray(9, 25);
+  const nonce = envelope.subarray(25, 37);
+  const header = envelope.subarray(0, HEADER_BYTES);
+  const sealed = envelope.subarray(HEADER_BYTES);
 
   let inputKeyMaterial = key;
   if (flags & PASSWORD_FLAG) {
@@ -99,7 +96,7 @@ export async function openEnvelope(envelope, key, password) {
 }
 
 async function inflate(bytes, limit) {
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  const stream = new Response(bytes).body.pipeThrough(new DecompressionStream("deflate-raw"));
   const reader = stream.getReader();
   const chunks = [];
   let total = 0;

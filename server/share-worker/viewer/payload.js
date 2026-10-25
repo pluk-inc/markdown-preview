@@ -25,7 +25,7 @@ export function decodePayload(plaintext) {
     if (seen.has(path)) throw new Error("duplicate asset path");
     if (typeof asset.data !== "string") throw new Error("invalid asset data");
     seen.add(path);
-    return { path, type, data: Uint8Array.from(atob(asset.data), (c) => c.charCodeAt(0)) };
+    return { path, type, data: base64Bytes(asset.data) };
   });
   return { title: raw.title, markdown: raw.markdown, html: raw.html, assets };
 }
@@ -73,4 +73,13 @@ export function assetPathForSource(source) {
 export function displayTitle(title) {
   const cleaned = title.replace(/[\u0000-\u001f\u007f-\u009f/:]/g, "").trim();
   return cleaned.slice(0, MAX_TITLE_LENGTH);
+}
+
+/** Decodes base64 natively where the browser can, else in one plain loop. */
+function base64Bytes(text) {
+  if (Uint8Array.fromBase64) return Uint8Array.fromBase64(text);
+  const binary = atob(text);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
 }

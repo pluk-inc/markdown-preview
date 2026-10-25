@@ -164,7 +164,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         // ::-webkit-scrollbar style on the root replaces the native macOS
         // overlay scrollbar with WebKit's legacy one.
         XCTAssertFalse(rendered.html.contains("\n    ::-webkit-scrollbar {"))
-        XCTAssertTrue(rendered.html.contains(":where(:not(html):not(body):not(pre))::-webkit-scrollbar"))
+        XCTAssertTrue(rendered.html.contains(":where(:not(html):not(body):not(pre):not([data-mdp-scroller]))::-webkit-scrollbar"))
         let styleBlocks = rendered.html
             .components(separatedBy: "<style>")
             .dropFirst()

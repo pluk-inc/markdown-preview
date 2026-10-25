@@ -8,10 +8,12 @@
   const stored = (key) => {
     try { return localStorage.getItem(key); } catch { return null; }
   };
-  // Keep in step with TEXT_SIZES in main.js.
+  // The reading sizes and the saved choice; main.js reads both from here.
   const sizes = [13, 15, 17, 19, 22];
-  const size = sizes[Number(stored("mdp.textSize"))];
-  if (size) root.style.setProperty("--reader-size", `${size}px`);
+  const saved = Number(stored("mdp.textSize") ?? 1);
+  const size = Number.isInteger(saved) ? Math.min(Math.max(saved, 0), sizes.length - 1) : 1;
+  window.mdpTextSize = { sizes, size };
+  root.style.setProperty("--reader-size", `${sizes[size]}px`);
   root.dataset.width = stored("mdp.width") === "full" ? "full" : "fixed";
   root.dataset.contents = stored("mdp.contents") === "hidden" ? "hidden" : "shown";
 

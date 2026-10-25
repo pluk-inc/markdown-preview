@@ -302,6 +302,18 @@ nonisolated enum MarkdownHTML {
                textAlignment: textAlignment).html
     }
 
+    /// The page scrolls in the root, so a wide table or formula scrolls
+    /// sideways inside the article. Exported to the share viewer by
+    /// ShareViewerKitTests.
+    static let scrollOverrideCSS = """
+    html { overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior-x: none; }
+    body { overflow: visible !important; }
+    /* Keep vertical gestures on the page: overflow-x:auto otherwise makes
+       overflow-y:auto, and even 1px of article overflow can swallow a wheel gesture. */
+    article.markdown-body { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; overflow-wrap: anywhere; }
+    article.markdown-body table { overflow-wrap: normal; }
+    """
+
     static func render(markdown: String,
                        allowsScroll: Bool = false,
                        assetBaseHref: String? = nil,
@@ -365,16 +377,7 @@ nonisolated enum MarkdownHTML {
         let containsMath = mathResult.containsMath || footnoteDefinitions.containsMath
         let containsMermaid = mermaidResult.containsMermaid || footnoteDefinitions.containsMermaid
         let containsCode = detectHighlightableCode(in: bodyHTML)
-        let scrollOverride = allowsScroll ? """
-        <style>
-        html { overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior-x: none; }
-        body { overflow: visible !important; }
-        /* Keep vertical gestures on the page: overflow-x:auto otherwise makes
-           overflow-y:auto, and even 1px of article overflow can swallow a wheel gesture. */
-        article.markdown-body { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; overflow-wrap: anywhere; }
-        article.markdown-body table { overflow-wrap: normal; }
-        </style>
-        """ : ""
+        let scrollOverride = allowsScroll ? "<style>\n\(scrollOverrideCSS)\n</style>" : ""
         let contentWidthOverride: String
         switch contentWidth {
         case .centered:

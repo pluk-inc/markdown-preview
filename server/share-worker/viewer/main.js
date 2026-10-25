@@ -89,8 +89,7 @@ function showStatus(message, { appCanOpen = false } = {}) {
 
 // MARK: - Reading options, remembered per browser
 
-const TEXT_SIZES = [13, 15, 17, 19, 22];
-const DEFAULT_SIZE = 1;
+const TEXT_SIZES = window.mdpTextSize.sizes;
 
 function stored(key) {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -102,7 +101,7 @@ function store(key, value) {
 
 // boot.js has already applied these before the first paint.
 const reading = {
-  size: Math.min(Math.max(Number(stored("mdp.textSize") ?? DEFAULT_SIZE) || 0, 0), TEXT_SIZES.length - 1),
+  size: window.mdpTextSize.size,
   width: document.documentElement.dataset.width === "full" ? "full" : "fixed",
   contents: document.documentElement.dataset.contents !== "hidden",
   appearance: document.documentElement.dataset.appearance ?? "automatic",
@@ -220,8 +219,6 @@ document.addEventListener("keydown", (event) => {
 
 // MARK: - Contents
 
-/** Lists the document's h1–h3. The rail stays in place without them, so
- * the layout never moves once the document arrives. */
 /** Fades the rail's top or bottom edge while more of the list is past it. */
 function updateContentsFade() {
   const rail = page.contents;
@@ -232,6 +229,8 @@ function updateContentsFade() {
 page.contents.addEventListener("scroll", updateContentsFade, { passive: true });
 window.addEventListener("resize", updateContentsFade);
 
+/** Lists the document's h1–h3. The rail stays in place without them, so
+ * the layout never moves once the document arrives. */
 function buildContents() {
   const headings = [...page.article.querySelectorAll("h1, h2, h3")];
   if (headings.length === 0) {
@@ -256,10 +255,11 @@ function buildContents() {
 
   // Marks the heading the reader is in.
   const buttons = [...page.contentsList.querySelectorAll("button")];
+  const scroller = document.querySelector(".page");
   const observer = new IntersectionObserver(() => {
     let current = 0;
     // The reading area's top: the sheet scrolls on a desktop, the page on a phone.
-    const top = Math.max(document.querySelector(".page").getBoundingClientRect().top, 0) + 60;
+    const top = Math.max(scroller.getBoundingClientRect().top, 0) + 60;
     headings.forEach((heading, index) => {
       if (heading.getBoundingClientRect().top < top) current = index;
     });
@@ -295,13 +295,11 @@ page.copy.addEventListener("click", async () => {
 const OPENS_IN_APP_KEY = "mdp.opensInApp";
 
 function opensInApp() {
-  try { return localStorage.getItem(OPENS_IN_APP_KEY) === "1"; } catch { return false; }
+  return stored(OPENS_IN_APP_KEY) === "1";
 }
 
 function rememberAppOpened() {
-  const remember = () => {
-    try { localStorage.setItem(OPENS_IN_APP_KEY, "1"); } catch {}
-  };
+  const remember = () => store(OPENS_IN_APP_KEY, "1");
   window.addEventListener("blur", remember, { once: true });
   setTimeout(() => window.removeEventListener("blur", remember), 3000);
 }
@@ -433,12 +431,17 @@ window.addEventListener("copy", (event) => {
 
 /** Points images at the share's own files; returns how many remote images were hidden. */
 function attachImages(assets) {
-  const urls = new Map(assets.map((asset) =>
-    [asset.path, URL.createObjectURL(new Blob([asset.data], { type: asset.type }))]));
+  const byPath = new Map(assets.map((asset) => [asset.path, asset]));
+  const urls = new Map();
+  const urlFor = (path) => {
+    const asset = byPath.get(path);
+    if (asset && !urls.has(path)) urls.set(path, URL.createObjectURL(new Blob([asset.data], { type: asset.type })));
+    return urls.get(path);
+  };
   let blocked = 0;
   for (const image of page.article.querySelectorAll("img")) {
     const source = image.getAttribute("src") ?? "";
-    const url = urls.get(assetPathForSource(source));
+    const url = urlFor(assetPathForSource(source));
     if (url) {
       image.src = url;
     } else {
@@ -454,8 +457,6 @@ function attachImages(assets) {
   return blocked;
 }
 
-// The app's renderers log timings through this; the page has no use for them.
-globalThis.MdPreviewPerf = { log() {}, now: () => performance.now() };
 
 // The URL fragment holds the key, so in-page links (footnotes, headings)
 // scroll to their target instead of replacing the fragment.

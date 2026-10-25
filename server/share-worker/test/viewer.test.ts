@@ -3,7 +3,7 @@
 // vectors are the ones the app's Swift tests seal.
 import { describe, expect, it } from "vitest";
 import fixture from "../../../tests/fixtures/share-link/vectors.json";
-import { ShareError, openEnvelope, parseLink, requiresPassword } from "../viewer/share-crypto.js";
+import { ShareError, openEnvelope, parseLink } from "../viewer/share-crypto.js";
 import { assetPathForSource, decodePayload, displayTitle, normalizedAssetPath } from "../viewer/payload.js";
 import { LANGUAGES, pickLanguage, strings } from "../viewer/strings.js";
 
@@ -72,7 +72,6 @@ describe("envelopes", () => {
   it("asks for a password before decrypting a password envelope", async () => {
     const vector = fixture.vectors.find((v) => v.password !== null)!;
     const envelope = hex(vector.envelope);
-    expect(requiresPassword(envelope)).toBe(true);
     await expect(openEnvelope(envelope, linkParts(vector.link)!.key, null))
       .rejects.toMatchObject({ code: "password" });
   });

@@ -314,8 +314,10 @@ nonisolated extension MarkdownHTML {
        any custom ::-webkit-scrollbar style on <html>/<body> — including a
        later "restore" override — swaps the page's native macOS overlay
        scrollbar for WebKit's legacy one. Exclude code blocks as well so
-       horizontal overflow retains its native scrollbar. */
-    :where(:not(html):not(body):not(pre))::-webkit-scrollbar {
+       horizontal overflow retains its native scrollbar, and any element
+       marked data-mdp-scroller (a page that scrolls in a box, such as the
+       share viewer's). */
+    :where(:not(html):not(body):not(pre):not([data-mdp-scroller]))::-webkit-scrollbar {
         display: none;
         width: 0;
         height: 0;
