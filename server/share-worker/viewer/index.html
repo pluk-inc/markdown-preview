@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
 <title>Shared document · Markdown Preview</title>
 <link rel="stylesheet" href="/s/_viewer/generated/markdown.css">
 <link rel="stylesheet" href="/s/_viewer/vendor/katex.min.css">
@@ -16,20 +17,60 @@
 <script type="module" src="/s/_viewer/main.js"></script>
 </head>
 <body>
-<header class="mdp-share-bar">
-  <span class="mdp-share-brand" data-l10n="brand">Shared with Markdown Preview</span>
-  <span id="doc-title" class="mdp-share-title"></span>
-  <nav class="mdp-share-actions">
-    <a id="download" class="mdp-share-button" hidden><span class="mdp-share-long" data-l10n="download">Download .md</span><span class="mdp-share-short" data-l10n="downloadShort">.md</span></a>
-    <a id="open-in-app" class="mdp-share-button mdp-share-primary" href="https://markdownpreview.app"><span class="mdp-share-long" data-l10n="open">Open in Markdown Preview</span><span class="mdp-share-short" data-l10n="openShort">Open in App</span></a>
+<header class="bar">
+  <button id="toggle-contents" class="icon-button" type="button" hidden data-l10n-label="toggleContents">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h7"/></svg>
+  </button>
+  <nav class="crumbs">
+    <span class="crumb-origin" data-l10n="sharedWithYou">Shared with you</span>
+    <svg class="crumb-sep" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
+    <span id="doc-title" class="crumb-title"></span>
   </nav>
+  <div class="actions">
+    <div class="reading">
+      <button id="reading-button" class="icon-button text-button" type="button" aria-expanded="false" aria-controls="reading-panel" data-l10n-label="readingOptions" hidden>Aa</button>
+      <div id="reading-panel" class="reading-panel" hidden>
+        <p class="panel-label" data-l10n="textSize">Text size</p>
+        <div class="stepper">
+          <button id="text-smaller" type="button" data-l10n-label="smaller"><span class="small-a">A</span></button>
+          <span id="text-size-dots" class="dots" aria-hidden="true"></span>
+          <button id="text-larger" type="button" data-l10n-label="larger"><span class="large-a">A</span></button>
+        </div>
+        <p class="panel-label" data-l10n="width">Width</p>
+        <div class="segmented" role="radiogroup">
+          <button id="width-fixed" type="button" role="radio" data-l10n="fixedWidth">Fixed</button>
+          <button id="width-full" type="button" role="radio" data-l10n="fullWidth">Full</button>
+        </div>
+      </div>
+    </div>
+    <button id="copy-link" class="icon-button" type="button" data-l10n-label="copyLink" hidden>
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2.2-2.2a2.6 2.6 0 0 0-3.7-3.7l-.9.9M9.2 6.8a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.9-.9"/></svg>
+    </button>
+    <a id="download" class="icon-button" data-l10n-label="download" hidden>
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>
+    </a>
+    <a id="open-in-app" class="open-button" href="https://markdownpreview.app"><span class="long" data-l10n="open">Open in Markdown Preview</span><span class="short" data-l10n="openShort">Open in App</span></a>
+  </div>
 </header>
-<p id="notice" class="mdp-share-notice" hidden></p>
-<p id="status" class="mdp-share-status" hidden></p>
-<article class="markdown-body"></article>
-<footer class="mdp-share-footer">
-  <span data-l10n="footer">This document is encrypted. Only people with the link can read it, and the server cannot.</span>
+<main class="sheet">
+  <nav id="contents" class="contents" hidden>
+    <p class="panel-label" data-l10n="contents">Contents</p>
+    <ol id="contents-list"></ol>
+  </nav>
+  <div class="page">
+    <p id="notice" class="notice" hidden></p>
+    <div id="status" class="status" hidden>
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M9 14V10.5a7 7 0 0 1 14 0V14M7.5 14h17v12.5h-17z"/></svg>
+      <p id="status-text"></p>
+    </div>
+    <article class="markdown-body"></article>
+  </div>
+</main>
+<footer class="footer">
+  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 7V5.3a3 3 0 0 1 6 0V7M4 7h8v6.5H4z"/></svg>
+  <span data-l10n="footer">End-to-end encrypted. Only people with this link can read it.</span>
   <a href="https://markdownpreview.app" data-l10n="getApp">Get Markdown Preview</a>
 </footer>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>

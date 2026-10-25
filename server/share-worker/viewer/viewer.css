@@ -1,16 +1,12 @@
-/* The share page's own chrome. The document itself uses the app's
-   stylesheet in generated/markdown.css. */
+/* The share page's own chrome: a grey frame holding the document on a
+   sheet, like the app's window. The document itself uses the app's
+   stylesheet in generated/markdown.css; the reader controls only change
+   its text size and column width. */
 
 /* The app's page scrolls inside its web view and adds these same rules
    (MarkdownHTML's scroll override); a browser page needs them too. */
 html { overflow-x: hidden !important; overflow-y: auto !important; }
 body { overflow: visible !important; padding: 0 !important; }
-article.markdown-body {
-  overflow-x: auto;
-  overflow-wrap: anywhere;
-  padding: 24px var(--mdp-share-gutter) 48px;
-}
-article.markdown-body table { overflow-wrap: normal; }
 
 /* The app's stylesheet uses WebKit's system label and separator colors,
    which other browsers reject; these are their macOS values. */
@@ -25,118 +21,409 @@ article.markdown-body table { overflow-wrap: normal; }
 }
 
 :root {
-  --mdp-share-gutter: 40px;
-  --mdp-share-bar-bg: rgba(255, 255, 255, 0.85);
-  --mdp-share-border: rgba(0, 0, 0, 0.1);
-  --mdp-share-muted: rgba(0, 0, 0, 0.55);
-  --mdp-share-button-bg: rgba(0, 0, 0, 0.06);
+  --frame: #f2f2f4;
+  --sheet: #ffffff;
+  --ink: rgba(0, 0, 0, 0.85);
+  --muted: rgba(0, 0, 0, 0.5);
+  --hairline: rgba(0, 0, 0, 0.08);
+  --hover: rgba(0, 0, 0, 0.05);
+  --accent: #0068da;
+  --on-accent: #ffffff;
+  --panel: #ffffff;
+  --panel-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 8px 28px rgba(0, 0, 0, 0.12);
+  --sheet-edge: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --chrome-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --frame-gap: 12px;
+  --gutter: 48px;
+  --reader-size: 15px;
+  --reader-width: 820px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --mdp-share-bar-bg: rgba(30, 30, 30, 0.85);
-    --mdp-share-border: rgba(255, 255, 255, 0.12);
-    --mdp-share-muted: rgba(255, 255, 255, 0.6);
-    --mdp-share-button-bg: rgba(255, 255, 255, 0.1);
+    --frame: #161618;
+    --sheet: #1e1e20;
+    --ink: rgba(255, 255, 255, 0.88);
+    --muted: rgba(255, 255, 255, 0.52);
+    --hairline: rgba(255, 255, 255, 0.09);
+    --hover: rgba(255, 255, 255, 0.07);
+    --accent: #3b9bff;
+    --on-accent: #08111f;
+    --panel: #2a2a2d;
+    --panel-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.14), 0 10px 32px rgba(0, 0, 0, 0.5);
+    --sheet-edge: 0 0 0 0.5px rgba(255, 255, 255, 0.07);
   }
 }
 
-.mdp-share-bar {
+html { background: var(--frame); }
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+[hidden] { display: none !important; }
+
+/* MARK: Bar */
+
+.bar {
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 20;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  font: 13px -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  background: var(--mdp-share-bar-bg);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--mdp-share-border);
+  gap: 10px;
+  height: 52px;
+  padding: 0 calc(var(--frame-gap) + 8px);
+  font: 13px/1 var(--chrome-font);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--frame) 88%, transparent);
+  -webkit-backdrop-filter: saturate(1.4) blur(16px);
+  backdrop-filter: saturate(1.4) blur(16px);
 }
 
-.mdp-share-brand {
-  color: var(--mdp-share-muted);
-  white-space: nowrap;
-}
-
-.mdp-share-title {
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex: 1;
   min-width: 0;
+  white-space: nowrap;
+}
+
+.crumb-origin { color: var(--muted); }
+.crumb-sep { width: 12px; height: 12px; color: var(--muted); flex: none; }
+
+.crumb-title {
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
   font-weight: 600;
 }
 
-.mdp-share-actions {
+.actions {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 2px;
 }
 
-.mdp-share-button {
-  padding: 5px 12px;
-  border-radius: 999px;
-  color: inherit;
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: var(--ink);
+  background: none;
+  text-decoration: none;
+}
+
+.icon-button:hover,
+.icon-button[aria-expanded="true"],
+.icon-button[aria-pressed="true"] { background: var(--hover); }
+
+.text-button {
+  width: auto;
+  padding: 0 8px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.open-button {
+  margin-left: 8px;
+  padding: 7px 12px;
+  border-radius: 7px;
+  font-weight: 500;
+  color: var(--on-accent);
+  background: var(--accent);
   text-decoration: none;
   white-space: nowrap;
-  background: var(--mdp-share-button-bg);
 }
 
-.mdp-share-button[hidden] {
-  display: none;
+.open-button:hover { filter: brightness(1.08); }
+.open-button .short { display: none; }
+
+/* MARK: Reading panel — the one Apple Books-like moment on the page */
+
+.reading { position: relative; }
+
+.reading-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 232px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--panel-shadow);
+  transform-origin: top right;
+  animation: panel-in 140ms ease-out;
 }
 
-.mdp-share-primary {
-  color: #fff;
-  background: #0a7aff;
+@keyframes panel-in {
+  from { opacity: 0; transform: scale(0.96); }
 }
 
-.mdp-share-notice,
-.mdp-share-status,
-.mdp-share-footer {
-  max-width: 820px;
-  margin: 16px auto;
-  padding: 0 var(--mdp-share-gutter);
-  font: 13px -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  color: var(--mdp-share-muted);
+.panel-label {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--muted);
 }
 
-.mdp-share-status {
-  margin-top: 20vh;
-  font-size: 15px;
-  text-align: center;
+.panel-label + * { margin-bottom: 14px; }
+.reading-panel > :last-child { margin-bottom: 0; }
+
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--hover);
+}
+
+.stepper button {
+  width: 48px;
+  height: 100%;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+}
+
+.stepper button:hover:not(:disabled) { background: var(--hover); }
+.stepper button:disabled { opacity: 0.3; cursor: default; }
+.small-a { font-size: 12px; }
+.large-a { font-size: 19px; }
+
+.dots { display: flex; gap: 5px; }
+
+.dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.35;
+}
+
+.dots i.on { opacity: 1; background: var(--ink); }
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--hover);
+}
+
+.segmented button {
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+}
+
+.segmented button[aria-checked="true"] {
+  font-weight: 500;
+  background: var(--panel);
+  box-shadow: 0 0 0 0.5px var(--hairline), 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* MARK: Sheet */
+
+.sheet {
+  display: flex;
+  flex: 1;
+  margin: 0 var(--frame-gap);
+  border-radius: 12px;
+  background: var(--sheet);
+  box-shadow: var(--sheet-edge);
+}
+
+.contents {
+  position: sticky;
+  top: 52px;
+  align-self: flex-start;
+  flex: none;
+  width: 232px;
+  max-height: calc(100vh - 52px - var(--frame-gap));
+  overflow-y: auto;
+  padding: 28px 12px 28px 20px;
+  font: 13px/1.35 var(--chrome-font);
+}
+
+.contents .panel-label { padding-left: 8px; }
+
+.contents ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.contents button {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  text-align: start;
+  color: var(--muted);
+  background: none;
+  overflow-wrap: anywhere;
+}
+
+.contents button:hover { color: var(--ink); background: var(--hover); }
+.contents button.current { color: var(--ink); font-weight: 500; }
+.contents .level-2 button { padding-left: 20px; }
+.contents .level-3 button { padding-left: 32px; }
+
+.page {
+  flex: 1;
+  min-width: 0;
+}
+
+article.markdown-body {
+  max-width: var(--reader-width);
+  padding: 40px var(--gutter) 72px;
+  font-size: var(--reader-size);
+  overflow-x: auto;
+  overflow-wrap: anywhere;
+  box-sizing: content-box;
+}
+
+article.markdown-body table { overflow-wrap: normal; }
+article.markdown-body [id] { scroll-margin-top: 68px; }
+:root[data-width="full"] { --reader-width: none; }
+
+.notice {
+  max-width: var(--reader-width);
+  margin: 24px auto 0;
+  padding: 0 var(--gutter);
+  font: 13px/1.45 var(--chrome-font);
+  color: var(--muted);
+  box-sizing: content-box;
 }
 
 .mdp-missing-image {
   display: inline-block;
   padding: 2px 8px;
-  border: 1px dashed var(--mdp-share-border);
+  border: 1px dashed var(--hairline);
   border-radius: 6px;
-  color: var(--mdp-share-muted);
+  font: 13px var(--chrome-font);
+  color: var(--muted);
 }
 
-.mdp-share-short {
-  display: none;
+/* MARK: Status (expired, damaged, password) */
+
+.status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 360px;
+  margin: 18vh auto 0;
+  padding: 0 24px 48px;
+  font: 15px/1.5 var(--chrome-font);
+  text-align: center;
+  color: var(--ink);
 }
 
-@media (max-width: 600px) {
+.status svg {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 14px;
+  color: var(--muted);
+  stroke-width: 1.6;
+}
+
+.status p { margin: 0; }
+
+/* MARK: Footer and toast */
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 8px;
+  padding: 16px 20px 20px;
+  font: 12px/1.4 var(--chrome-font);
+  color: var(--muted);
+}
+
+.footer svg { width: 13px; height: 13px; }
+.footer a { color: inherit; }
+.footer a:hover { color: var(--ink); }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 30;
+  padding: 9px 14px;
+  border-radius: 10px;
+  font: 13px var(--chrome-font);
+  color: var(--ink);
+  background: var(--panel);
+  box-shadow: var(--panel-shadow);
+  transform: translateX(-50%);
+  animation: toast-in 160ms ease-out;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reading-panel,
+  .toast { animation: none; }
+}
+
+/* MARK: Narrow windows */
+
+@media (max-width: 980px) {
+  .contents { display: none; }
+  #toggle-contents { display: none !important; }
+}
+
+@media (max-width: 640px) {
   :root {
-    --mdp-share-gutter: 16px;
+    --frame-gap: 0px;
+    --gutter: 16px;
   }
 
-  .mdp-share-bar {
-    gap: 8px;
-    padding: 8px var(--mdp-share-gutter);
-  }
-
-  .mdp-share-brand,
-  .mdp-share-long {
-    display: none;
-  }
-
-  .mdp-share-short {
-    display: inline;
-  }
+  .bar { gap: 6px; padding: 0 8px 0 16px; }
+  .crumb-origin,
+  .crumb-sep,
+  #copy-link,
+  #download { display: none !important; }
+  .open-button { margin-left: 4px; padding: 7px 10px; }
+  .open-button .long { display: none; }
+  .open-button .short { display: inline; }
+  .sheet { border-radius: 0; box-shadow: none; }
+  article.markdown-body { padding-top: 20px; }
 }

@@ -29,13 +29,28 @@ const SANITIZE_CONFIG = {
 const language = pickLanguage(navigator.languages?.length ? navigator.languages : [navigator.language]);
 const text = strings(language);
 
+const byId = (id) => document.getElementById(id);
 const page = {
-  title: document.getElementById("doc-title"),
-  open: document.getElementById("open-in-app"),
-  download: document.getElementById("download"),
-  notice: document.getElementById("notice"),
-  status: document.getElementById("status"),
+  title: byId("doc-title"),
+  crumbSeparator: document.querySelector(".crumb-sep"),
+  open: byId("open-in-app"),
+  download: byId("download"),
+  copy: byId("copy-link"),
+  notice: byId("notice"),
+  status: byId("status"),
+  statusText: byId("status-text"),
   article: document.querySelector("article.markdown-body"),
+  readingButton: byId("reading-button"),
+  readingPanel: byId("reading-panel"),
+  smaller: byId("text-smaller"),
+  larger: byId("text-larger"),
+  sizeDots: byId("text-size-dots"),
+  widthFixed: byId("width-fixed"),
+  widthFull: byId("width-full"),
+  toggleContents: byId("toggle-contents"),
+  contents: byId("contents"),
+  contentsList: byId("contents-list"),
+  toast: byId("toast"),
 };
 
 // The page's own text; the shared document keeps its own language.
@@ -45,17 +60,143 @@ function localizePage() {
   for (const element of document.querySelectorAll("[data-l10n]")) {
     element.textContent = text[element.dataset.l10n];
   }
+  for (const element of document.querySelectorAll("[data-l10n-label]")) {
+    element.setAttribute("aria-label", text[element.dataset.l10nLabel]);
+    element.title = text[element.dataset.l10nLabel];
+  }
   if (language === "fa") {
-    for (const element of document.querySelectorAll(".mdp-share-bar, .mdp-share-notice, .mdp-share-status, .mdp-share-footer")) {
+    for (const element of document.querySelectorAll(".bar, .notice, .status, .contents, .footer")) {
       element.setAttribute("dir", "rtl");
     }
   }
 }
 
-function showStatus(message) {
-  page.status.textContent = message;
+/** Shows why the document cannot be shown. Only a password link keeps
+ * "Open in Markdown Preview": the app can open it, but not a broken link. */
+function showStatus(message, { appCanOpen = false } = {}) {
+  page.statusText.textContent = message;
   page.status.hidden = false;
+  page.crumbSeparator.setAttribute("hidden", "");
+  page.open.hidden = !appCanOpen;
 }
+
+// MARK: - Reading options, remembered per browser
+
+const TEXT_SIZES = [13, 15, 17, 19, 22];
+const DEFAULT_SIZE = 1;
+
+function stored(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+function store(key, value) {
+  try { localStorage.setItem(key, value); } catch {}
+}
+
+const reading = {
+  size: Math.min(Math.max(Number(stored("mdp.textSize") ?? DEFAULT_SIZE) || 0, 0), TEXT_SIZES.length - 1),
+  width: stored("mdp.width") === "full" ? "full" : "fixed",
+  contents: stored("mdp.contents") !== "hidden",
+};
+
+function applyReading() {
+  const root = document.documentElement;
+  root.style.setProperty("--reader-size", `${TEXT_SIZES[reading.size]}px`);
+  root.dataset.width = reading.width;
+  page.smaller.disabled = reading.size === 0;
+  page.larger.disabled = reading.size === TEXT_SIZES.length - 1;
+  page.sizeDots.replaceChildren(...TEXT_SIZES.map((_, index) => {
+    const dot = document.createElement("i");
+    if (index === reading.size) dot.className = "on";
+    return dot;
+  }));
+  page.widthFixed.setAttribute("aria-checked", String(reading.width === "fixed"));
+  page.widthFull.setAttribute("aria-checked", String(reading.width === "full"));
+  if (page.contentsList.childElementCount > 0) {
+    page.contents.hidden = !reading.contents;
+    page.toggleContents.setAttribute("aria-pressed", String(reading.contents));
+  }
+}
+
+function setReading(change) {
+  Object.assign(reading, change);
+  store("mdp.textSize", String(reading.size));
+  store("mdp.width", reading.width);
+  store("mdp.contents", reading.contents ? "shown" : "hidden");
+  applyReading();
+}
+
+function setReadingPanelOpen(open) {
+  page.readingPanel.hidden = !open;
+  page.readingButton.setAttribute("aria-expanded", String(open));
+}
+
+page.readingButton.addEventListener("click", () => setReadingPanelOpen(page.readingPanel.hidden));
+page.smaller.addEventListener("click", () => setReading({ size: reading.size - 1 }));
+page.larger.addEventListener("click", () => setReading({ size: reading.size + 1 }));
+page.widthFixed.addEventListener("click", () => setReading({ width: "fixed" }));
+page.widthFull.addEventListener("click", () => setReading({ width: "full" }));
+page.toggleContents.addEventListener("click", () => setReading({ contents: !reading.contents }));
+document.addEventListener("click", (event) => {
+  if (!page.readingPanel.hidden && !event.target.closest(".reading")) setReadingPanelOpen(false);
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !page.readingPanel.hidden) {
+    setReadingPanelOpen(false);
+    page.readingButton.focus();
+  }
+});
+
+// MARK: - Contents
+
+/** Lists the document's h1–h3 when there are at least three. */
+function buildContents() {
+  const headings = [...page.article.querySelectorAll("h1, h2, h3")];
+  if (headings.length < 3) return;
+  const top = Math.min(...headings.map((heading) => Number(heading.tagName[1])));
+  page.contentsList.replaceChildren(...headings.map((heading, index) => {
+    if (!heading.id) heading.id = `mdp-heading-${index}`;
+    const item = document.createElement("li");
+    item.className = `level-${Number(heading.tagName[1]) - top + 1}`;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = heading.textContent.trim();
+    button.addEventListener("click", () => heading.scrollIntoView({ behavior: "smooth" }));
+    item.append(button);
+    return item;
+  }));
+  page.toggleContents.hidden = false;
+
+  // Marks the heading the reader is in.
+  const buttons = [...page.contentsList.querySelectorAll("button")];
+  const observer = new IntersectionObserver(() => {
+    let current = 0;
+    headings.forEach((heading, index) => {
+      if (heading.getBoundingClientRect().top < 120) current = index;
+    });
+    buttons.forEach((button, index) => button.classList.toggle("current", index === current));
+  }, { rootMargin: "0px 0px -60% 0px" });
+  headings.forEach((heading) => observer.observe(heading));
+}
+
+// MARK: - Copy link
+
+let toastTimer;
+function showToast(message) {
+  page.toast.textContent = message;
+  page.toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { page.toast.hidden = true; }, 1800);
+}
+
+page.copy.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(location.href);
+    showToast(text.linkCopied);
+  } catch {
+    showToast(text.copyFailed);
+  }
+});
 
 // A page cannot tell whether the app is installed, so it opens the app by
 // itself only in a browser where "Open in Markdown Preview" has already
@@ -86,7 +227,7 @@ async function main() {
   page.open.addEventListener("click", rememberAppOpened);
   if (link.hasPassword) {
     openInAppIfRemembered();
-    return showStatus(text.password);
+    return showStatus(text.password, { appCanOpen: true });
   }
 
   let envelope;
@@ -105,7 +246,7 @@ async function main() {
   try {
     payload = decodePayload(await openEnvelope(envelope, link.key, null));
   } catch (error) {
-    if (error instanceof ShareError && error.code === "password") return showStatus(text.password);
+    if (error instanceof ShareError && error.code === "password") return showStatus(text.password, { appCanOpen: true });
     return showStatus(text.damaged);
   }
   render(payload);
@@ -120,6 +261,8 @@ function render(payload) {
   page.download.href = URL.createObjectURL(markdown);
   page.download.download = /\.(md|markdown)$/i.test(title) ? title : `${title}.md`;
   page.download.hidden = false;
+  page.copy.hidden = false;
+  page.readingButton.hidden = false;
 
   page.article.innerHTML = DOMPurify.sanitize(payload.html, SANITIZE_CONFIG);
   const blockedImages = attachImages(payload.assets);
@@ -134,6 +277,8 @@ function render(payload) {
     MdpRenderers.renderMathElement(element, element.textContent, element.classList.contains("math-display"));
   }
   MdpRenderers.highlightAll();
+  buildContents();
+  applyReading();
 }
 
 /** Points images at the share's own files; returns how many remote images were hidden. */
@@ -192,4 +337,5 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
 });
 
 localizePage();
+applyReading();
 main();
