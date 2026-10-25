@@ -171,8 +171,10 @@ function buildContents() {
   const buttons = [...page.contentsList.querySelectorAll("button")];
   const observer = new IntersectionObserver(() => {
     let current = 0;
+    // The reading area's top: the sheet scrolls on a desktop, the page on a phone.
+    const top = Math.max(document.querySelector(".page").getBoundingClientRect().top, 0) + 60;
     headings.forEach((heading, index) => {
-      if (heading.getBoundingClientRect().top < 120) current = index;
+      if (heading.getBoundingClientRect().top < top) current = index;
     });
     buttons.forEach((button, index) => button.classList.toggle("current", index === current));
   }, { rootMargin: "0px 0px -60% 0px" });

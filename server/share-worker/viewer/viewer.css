@@ -57,11 +57,13 @@ body { overflow: visible !important; padding: 0 !important; }
 
 html { background: var(--frame); }
 
+/* The frame stays put and the document scrolls inside the sheet, so the
+   sheet keeps its rounded corners, like the app's window. */
 body {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
 }
 
 svg {
@@ -90,19 +92,17 @@ button {
 /* MARK: Bar */
 
 .bar {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 20;
   display: flex;
+  flex: none;
   align-items: center;
   gap: 10px;
   height: 52px;
   padding: 0 calc(var(--frame-gap) + 8px);
   font: 13px/1 var(--chrome-font);
   color: var(--ink);
-  background: color-mix(in srgb, var(--frame) 88%, transparent);
-  -webkit-backdrop-filter: saturate(1.4) blur(16px);
-  backdrop-filter: saturate(1.4) blur(16px);
+  background: var(--frame);
 }
 
 .crumbs {
@@ -259,20 +259,19 @@ button {
 .sheet {
   display: flex;
   flex: 1;
+  min-height: 0;
   margin: 0 var(--frame-gap);
   border-radius: 12px;
+  overflow: hidden;
   background: var(--sheet);
   box-shadow: var(--sheet-edge);
 }
 
 .contents {
-  position: sticky;
-  top: 52px;
-  align-self: flex-start;
   flex: none;
   width: 232px;
-  max-height: calc(100vh - 52px - var(--frame-gap));
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 28px 12px 28px 20px;
   font: 13px/1.35 var(--chrome-font);
 }
@@ -305,6 +304,8 @@ button {
 .page {
   flex: 1;
   min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 article.markdown-body {
@@ -317,7 +318,7 @@ article.markdown-body {
 }
 
 article.markdown-body table { overflow-wrap: normal; }
-article.markdown-body [id] { scroll-margin-top: 68px; }
+article.markdown-body [id] { scroll-margin-top: 16px; }
 :root[data-width="full"] { --reader-width: none; }
 
 .notice {
@@ -365,6 +366,7 @@ article.markdown-body [id] { scroll-margin-top: 68px; }
 /* MARK: Footer and toast */
 
 .footer {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -422,6 +424,11 @@ article.markdown-body [id] { scroll-margin-top: 68px; }
   .open-button { margin-left: 4px; padding: 7px 10px; }
   .open-button .long { display: none; }
   .open-button .short { display: inline; }
-  .sheet { border-radius: 0; box-shadow: none; }
+  /* A phone scrolls the whole page, so the browser can hide its bars. */
+  body { height: auto; min-height: 100dvh; }
+  .bar { position: sticky; top: 0; }
+  .sheet { border-radius: 0; box-shadow: none; overflow: visible; }
+  .page { overflow: visible; }
   article.markdown-body { padding-top: 20px; }
+  article.markdown-body [id] { scroll-margin-top: 64px; }
 }
