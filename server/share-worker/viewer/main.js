@@ -238,6 +238,10 @@ window.addEventListener("resize", updateContentsFade);
 
 const clampRailWidth = (width) => Math.round(Math.min(Math.max(width, window.mdpRail.min), window.mdpRail.max));
 
+/** The rail's width beside the page. It is read from --rail-width, not the
+ * layout, because a narrow window shows the rail as a wider drawer. */
+const railWidth = () => parseFloat(getComputedStyle(page.contents).getPropertyValue("--rail-width"));
+
 /** Saves the rail's width (null for the default) and applies it page-wide. */
 function saveRailWidth(width) {
   page.contents.style.removeProperty("--rail-width");
@@ -252,7 +256,7 @@ function saveRailWidth(width) {
 function updateResizerValue() {
   page.resizer.setAttribute("aria-valuemin", String(window.mdpRail.min));
   page.resizer.setAttribute("aria-valuemax", String(window.mdpRail.max));
-  page.resizer.setAttribute("aria-valuenow", String(page.contents.offsetWidth));
+  page.resizer.setAttribute("aria-valuenow", String(railWidth()));
 }
 
 page.resizer.addEventListener("pointerdown", (event) => {
@@ -261,7 +265,7 @@ page.resizer.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   const pointer = event.pointerId;
   const startX = event.clientX;
-  const startWidth = page.contents.offsetWidth;
+  const startWidth = railWidth();
   let width = startWidth;
   // Only the rail reads the width, so a drag restyles the rail alone.
   const drag = (move) => {
@@ -286,7 +290,7 @@ page.resizer.addEventListener("dblclick", () => saveRailWidth(null));
 
 page.resizer.addEventListener("keydown", (event) => {
   const step = event.shiftKey ? 40 : 10;
-  const width = page.contents.offsetWidth;
+  const width = railWidth();
   const next = {
     ArrowLeft: width - step,
     ArrowRight: width + step,
