@@ -127,8 +127,10 @@ async function update(id: string, request: Request, env: Env, url: URL): Promise
     customMetadata: { ...existing.metadata, expiresAt },
     onlyIf: { etagMatches: existing.etag },
   });
-  if (!written) return error(404, "not_found");
-  return json(200, { expiresAt });
+  if (written) return json(200, { expiresAt });
+  // The object changed after the check: gone means revoked; still there
+  // means another update won, and the link is still live and owned.
+  return (await env.SHARES.head(PREFIX + id)) ? error(409, "conflict") : error(404, "not_found");
 }
 
 async function remove(id: string, request: Request, env: Env): Promise<Response> {

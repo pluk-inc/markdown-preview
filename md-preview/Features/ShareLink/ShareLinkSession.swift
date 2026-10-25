@@ -96,7 +96,8 @@ enum ShareLinkSession {
             guard let secrets = store.secrets(for: record) else {
                 throw Failure.lostCredentials(expiresAt: record.expiresAt)
             }
-            if let key = Base64URL.decode(secrets.key) {
+            // A key of the wrong length cannot seal either: treat it as damaged.
+            if let key = Base64URL.decode(secrets.key), key.count == ShareLinkCrypto.keyByteCount {
                 do {
                     let envelope = try await seal(payload, key: key)
                     record.expiresAt = try await client.update(id: record.id, envelope: envelope,

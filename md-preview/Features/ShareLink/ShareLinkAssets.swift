@@ -18,8 +18,9 @@ nonisolated enum ShareLinkAssets {
         "webp": "image/webp", "avif": "image/avif", "svg": "image/svg+xml",
     ]
 
+    // A `>` inside a quoted value (alt="a > b") does not end the tag.
     private static let imgTag = try! NSRegularExpression(
-        pattern: #"<img\b[^>]*>"#, options: [.caseInsensitive])
+        pattern: #"<img\b(?:[^>"']|"[^"]*"|'[^']*')*>"#, options: [.caseInsensitive])
 
     /// One attribute: a name and an optional double-quoted, single-quoted,
     /// or unquoted value. Read one after another from the tag's start, so
