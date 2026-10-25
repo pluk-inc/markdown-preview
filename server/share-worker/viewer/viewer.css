@@ -184,7 +184,7 @@ button {
 
 /* The one filled button: a pill as tall as the circular icon buttons. */
 .open-button {
-  cursor: default;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   height: 28px;
