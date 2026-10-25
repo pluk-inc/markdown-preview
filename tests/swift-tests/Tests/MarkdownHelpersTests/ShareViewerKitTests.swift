@@ -22,11 +22,26 @@ final class ShareViewerKitTests: XCTestCase {
 
     """
 
+    /// The app hides every inner scroller's bar because its page scrolls in
+    /// the root. The viewer's page scrolls in `.page`, which keeps its bar.
+    static let scrollbarRule = ":where(:not(html):not(body):not(pre))::-webkit-scrollbar"
+
+    static var viewerStylesheet: String {
+        MarkdownHTML.stylesheet.replacingOccurrences(
+            of: scrollbarRule,
+            with: ":where(:not(html):not(body):not(pre):not(.page))::-webkit-scrollbar")
+    }
+
+    func testViewerPageKeepsItsScrollbar() {
+        XCTAssertTrue(MarkdownHTML.stylesheet.contains(Self.scrollbarRule),
+                      "The app's scrollbar rule changed; update ShareViewerKitTests.viewerStylesheet")
+    }
+
     static var files: [String: String] {
         [
             // The app page also sets these per user setting; the viewer
             // shows a share the way a fresh install would.
-            "markdown.css": header + MarkdownHTML.stylesheet + """
+            "markdown.css": header + viewerStylesheet + """
 
             :root {
                 --mdp-doc-font: \(DocumentFontSetting.defaultSetting.fontFamily);

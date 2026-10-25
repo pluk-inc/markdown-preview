@@ -145,7 +145,7 @@ html, body {
    later "restore" override — swaps the page's native macOS overlay
    scrollbar for WebKit's legacy one. Exclude code blocks as well so
    horizontal overflow retains its native scrollbar. */
-:where(:not(html):not(body):not(pre))::-webkit-scrollbar {
+:where(:not(html):not(body):not(pre):not(.page))::-webkit-scrollbar {
     display: none;
     width: 0;
     height: 0;
