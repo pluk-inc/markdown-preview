@@ -15,7 +15,10 @@ import WebKit
 enum ShareLinkOpener {
 
     /// Where received shares are unpacked, one folder per share id.
-    static let directory = URL.cachesDirectory.appending(path: "SharedLinks", directoryHint: .isDirectory)
+    /// Standardized once: menu validation and every display ask about it.
+    static let directory = URL.cachesDirectory
+        .appending(path: "SharedLinks", directoryHint: .isDirectory)
+        .standardizedFileURL
 
     /// True for a file unpacked from a received share. Such a copy is
     /// replaced whenever the link is opened again, so it must not be edited.
@@ -37,10 +40,14 @@ enum ShareLinkOpener {
         if let compiling = remoteContentBlockerTask { return await compiling.value }
         let task = Task { @MainActor () -> WKContentRuleList? in
             let rules = #"[{"trigger":{"url-filter":"^https?:","resource-type":["image","style-sheet","font","media","raw","svg-document"]},"action":{"type":"block"}}]"#
+            // The store keeps compiled lists on disk, so later launches only
+            // look the list up. Change the version when the rules change.
+            let identifier = "ReceivedShareRemoteContent.v1"
+            let store = WKContentRuleListStore.default()!
+            if let stored = try? await store.contentRuleList(forIdentifier: identifier) { return stored }
             do {
-                return try await WKContentRuleListStore.default()
-                    .compileContentRuleList(forIdentifier: "ReceivedShareRemoteContent",
-                                            encodedContentRuleList: rules)
+                return try await store.compileContentRuleList(forIdentifier: identifier,
+                                                              encodedContentRuleList: rules)
             } catch {
                 NSLog("ShareLinkOpener: could not compile the remote content rules: \(error)")
                 return nil
@@ -114,7 +121,7 @@ enum ShareLinkOpener {
     }
 
     private static func isFile(_ fileURL: URL?, inside folder: URL) -> Bool {
-        fileURL?.standardizedFileURL.isDescendantOrSame(of: folder.standardizedFileURL) ?? false
+        fileURL?.isDescendantOrSame(of: folder) ?? false
     }
 
     /// Decrypts, decodes, and writes the share off the main thread: the

@@ -134,7 +134,7 @@ nonisolated struct SharePayload: Codable, Equatable, Sendable {
             try asset.data.write(to: url)
         }
 
-        if !["md", "markdown"].contains((name as NSString).pathExtension.lowercased()) {
+        if !ProjectFileIndex.markdownExtensions.contains((name as NSString).pathExtension.lowercased()) {
             name += ".md"
         }
         let file = folder.appending(path: name, directoryHint: .notDirectory)
