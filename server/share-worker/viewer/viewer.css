@@ -384,10 +384,27 @@ button {
   overscroll-behavior: contain;
   padding: 10px 12px 20px 0;
   font: 13px/1.35 var(--chrome-font);
+  /* Linear's scroll fade: solid, then transparent over 40 px, at an edge
+     only while more of the list is past it (main.js sets the classes). */
+  --fade-top: 0px;
+  --fade-bottom: 0px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-top),
+    #000 calc(100% - var(--fade-bottom)), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-top),
+    #000 calc(100% - var(--fade-bottom)), transparent 100%);
+  transition: --fade-top 150ms ease-out, --fade-bottom 150ms ease-out;
 }
 
+.contents.fade-top { --fade-top: 40px; }
+.contents.fade-bottom { --fade-bottom: 40px; }
+
+@property --fade-top { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --fade-bottom { syntax: "<length>"; inherits: false; initial-value: 0px; }
+
 :root[data-contents="hidden"] .contents { margin-inline-start: -220px; }
-.motion .contents { transition: margin-inline-start var(--rail-motion); }
+.motion .contents {
+  transition: margin-inline-start var(--rail-motion), --fade-top 150ms ease-out, --fade-bottom 150ms ease-out;
+}
 
 .contents .panel-label,
 .contents-empty { padding-left: 8px; }

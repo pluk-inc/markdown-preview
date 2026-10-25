@@ -185,6 +185,16 @@ document.addEventListener("keydown", (event) => {
 
 /** Lists the document's h1–h3. The rail stays in place without them, so
  * the layout never moves once the document arrives. */
+/** Fades the rail's top or bottom edge while more of the list is past it. */
+function updateContentsFade() {
+  const rail = page.contents;
+  rail.classList.toggle("fade-top", rail.scrollTop > 0);
+  rail.classList.toggle("fade-bottom", rail.scrollTop + rail.clientHeight < rail.scrollHeight - 1);
+}
+
+page.contents.addEventListener("scroll", updateContentsFade, { passive: true });
+window.addEventListener("resize", updateContentsFade);
+
 function buildContents() {
   const headings = [...page.article.querySelectorAll("h1, h2, h3")];
   if (headings.length === 0) {
@@ -216,6 +226,7 @@ function buildContents() {
     buttons.forEach((button, index) => button.classList.toggle("current", index === current));
   }, { rootMargin: "0px 0px -60% 0px" });
   headings.forEach((heading) => observer.observe(heading));
+  updateContentsFade();
 }
 
 // MARK: - Copy link
