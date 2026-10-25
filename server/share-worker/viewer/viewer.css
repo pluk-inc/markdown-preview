@@ -49,6 +49,12 @@ body { overflow: visible !important; padding: 0 !important; }
   --on-accent: #ffffff;
   --panel: #ffffff;
   --panel-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 8px 28px rgba(0, 0, 0, 0.12);
+  /* Linear's popover (measured): white, a #ededed hairline edge and row
+     dividers, #717173 labels, a soft shadow that is deeper below. */
+  --popover: #ffffff;
+  --popover-edge: #ededed;
+  --popover-label: #717173;
+  --popover-shadow: 0 0 0 0.5px #ededed, 0 4px 16px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
   --sheet-edge: 0 0 0 0.5px #e8e8e8, 0 1px 1.5px rgba(0, 0, 0, 0.04), 0 2.5px 2.5px rgba(0, 0, 0, 0.008),
     0 4px 5px rgba(0, 0, 0, 0.005);
   --chrome-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
@@ -70,8 +76,8 @@ body { overflow: visible !important; padding: 0 !important; }
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+/* Dark, by the scheme boot.js resolves (system or the reader's choice). */
+:root[data-mdp-color-scheme="dark"] {
     --frame: #09090a;
     --sheet: #111212;
     --ink: rgba(255, 255, 255, 0.88);
@@ -89,8 +95,15 @@ body { overflow: visible !important; padding: 0 !important; }
     --panel: #2a2a2d;
     --panel-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.14), 0 10px 32px rgba(0, 0, 0, 0.5);
     --sheet-edge: 0 0 0 0.5px #232325, 0 1px 3px rgba(0, 0, 0, 0.3);
-  }
+    --popover: #18191b;
+    --popover-edge: #2c2d2f;
+    --popover-label: #949597;
+    --popover-shadow: 0 0 0 0.5px #2c2d2f, 0 4px 16px rgba(0, 0, 0, 0.5);
 }
+
+/* The app's stylesheet paints a forced scheme with Canvas; the frame stays. */
+:root[data-mdp-color-scheme] { background: var(--frame); }
+:root[data-mdp-color-scheme] body { background: transparent; }
 
 html { background: var(--frame); }
 
@@ -230,7 +243,7 @@ button {
 .bar a:hover { text-decoration: none; }
 .open-button .short { display: none; }
 
-/* MARK: Reading panel — the one Apple Books-like moment on the page */
+/* MARK: Reading panel: Linear's popover rows, the app's controls and words */
 
 .reading { position: relative; }
 
@@ -238,11 +251,11 @@ button {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  width: 232px;
-  padding: 12px;
+  z-index: 30;
+  width: 300px;
   border-radius: 12px;
-  background: var(--panel);
-  box-shadow: var(--panel-shadow);
+  background: var(--popover);
+  box-shadow: var(--popover-shadow);
   transform-origin: top right;
   animation: panel-in 140ms ease-out;
 }
@@ -251,36 +264,48 @@ button {
   from { opacity: 0; transform: scale(0.96); }
 }
 
-.panel-label {
-  margin: 0 0 8px;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.panel-label + * { margin-bottom: 14px; }
-.reading-panel > :last-child { margin-bottom: 0; }
-
-.stepper {
+.panel-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 36px;
-  border-radius: 9px;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 14px;
+  box-sizing: border-box;
+}
+
+.panel-row + .panel-row { border-top: 1px solid var(--popover-edge); }
+.panel-row-label { color: var(--popover-label); white-space: nowrap; }
+
+/* Text size: the app's capsule (a small and a large A), its dots below. */
+.size-control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.capsule {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  border-radius: 999px;
   background: var(--hover);
 }
 
-.stepper button {
+.capsule button {
   width: 48px;
   height: 100%;
   border: 0;
-  border-radius: 9px;
+  border-radius: 999px;
   background: none;
 }
 
-.stepper button:hover:not(:disabled) { background: var(--hover); }
-.stepper button:disabled { opacity: 0.3; cursor: default; }
-.small-a { font-size: 12px; }
-.large-a { font-size: 19px; }
+.capsule button:hover:not(:disabled) { background: var(--hover); }
+.capsule button:disabled { opacity: 0.3; }
+.capsule-divider { width: 1px; height: 14px; background: var(--hairline); }
+.small-a { font-size: 12px; font-weight: 500; }
+.large-a { font-size: 17px; font-weight: 500; }
 
 .dots { display: flex; gap: 5px; }
 
@@ -288,30 +313,36 @@ button {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--muted);
-  opacity: 0.35;
+  background: var(--ink);
+  opacity: 0.15;
 }
 
-.dots i.on { opacity: 1; background: var(--ink); }
+.dots i.on { opacity: 0.75; }
 
 .segmented {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
   padding: 2px;
-  border-radius: 9px;
+  border-radius: 999px;
   background: var(--hover);
 }
 
 .segmented button {
-  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 26px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 999px;
+  color: var(--muted);
   background: none;
 }
 
 .segmented button[aria-checked="true"] {
   font-weight: 500;
-  background: var(--panel);
+  color: var(--ink);
+  background: var(--popover);
   box-shadow: 0 0 0 0.5px var(--hairline), 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
@@ -357,6 +388,12 @@ button {
 .contents-empty { padding-left: 8px; }
 
 .contents-empty { margin: 0; color: var(--muted); }
+
+.contents .panel-label {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
 
 
 .contents ol {

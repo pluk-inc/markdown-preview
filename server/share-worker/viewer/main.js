@@ -47,6 +47,11 @@ const page = {
   sizeDots: byId("text-size-dots"),
   widthFixed: byId("width-fixed"),
   widthFull: byId("width-full"),
+  appearance: {
+    automatic: byId("appearance-automatic"),
+    light: byId("appearance-light"),
+    dark: byId("appearance-dark"),
+  },
   toggleContents: byId("toggle-contents"),
   contents: byId("contents"),
   contentsList: byId("contents-list"),
@@ -100,6 +105,7 @@ const reading = {
   size: Math.min(Math.max(Number(stored("mdp.textSize") ?? DEFAULT_SIZE) || 0, 0), TEXT_SIZES.length - 1),
   width: document.documentElement.dataset.width === "full" ? "full" : "fixed",
   contents: document.documentElement.dataset.contents !== "hidden",
+  appearance: document.documentElement.dataset.appearance ?? "automatic",
 };
 
 function applyReading() {
@@ -110,11 +116,16 @@ function applyReading() {
   page.larger.disabled = reading.size === TEXT_SIZES.length - 1;
   page.sizeDots.replaceChildren(...TEXT_SIZES.map((_, index) => {
     const dot = document.createElement("i");
-    if (index === reading.size) dot.className = "on";
+    // Filled up to the current step, like the app's scale.
+    if (index <= reading.size) dot.className = "on";
     return dot;
   }));
   page.widthFixed.setAttribute("aria-checked", String(reading.width === "fixed"));
   page.widthFull.setAttribute("aria-checked", String(reading.width === "full"));
+  for (const [mode, button] of Object.entries(page.appearance)) {
+    button.setAttribute("aria-checked", String(reading.appearance === mode));
+  }
+  window.mdpSetAppearance?.(reading.appearance);
   root.dataset.contents = reading.contents ? "shown" : "hidden";
   page.contents.inert = !reading.contents;
   page.toggleContents.setAttribute("aria-pressed", String(reading.contents));
@@ -125,6 +136,7 @@ function setReading(change) {
   store("mdp.textSize", String(reading.size));
   store("mdp.width", reading.width);
   store("mdp.contents", reading.contents ? "shown" : "hidden");
+  store("mdp.appearance", reading.appearance);
   applyReading();
 }
 
@@ -138,6 +150,9 @@ page.smaller.addEventListener("click", () => setReading({ size: reading.size - 1
 page.larger.addEventListener("click", () => setReading({ size: reading.size + 1 }));
 page.widthFixed.addEventListener("click", () => setReading({ width: "fixed" }));
 page.widthFull.addEventListener("click", () => setReading({ width: "full" }));
+for (const [mode, button] of Object.entries(page.appearance)) {
+  button.addEventListener("click", () => setReading({ appearance: mode }));
+}
 page.toggleContents.addEventListener("click", () => {
   // Animate only what the reader does, never the first layout.
   document.body.classList.add("motion");

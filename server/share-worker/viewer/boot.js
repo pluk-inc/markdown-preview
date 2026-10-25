@@ -15,6 +15,18 @@
   root.dataset.width = stored("mdp.width") === "full" ? "full" : "fixed";
   root.dataset.contents = stored("mdp.contents") === "hidden" ? "hidden" : "shown";
 
+  // Appearance, as in the app: Automatic follows the system, live. The
+  // page always carries an explicit scheme, which the app's stylesheet
+  // (data-mdp-color-scheme) and viewer.css both read.
+  const systemDark = matchMedia("(prefers-color-scheme: dark)");
+  window.mdpSetAppearance = (mode) => {
+    root.dataset.appearance = mode;
+    root.dataset.mdpColorScheme = mode === "automatic" ? (systemDark.matches ? "dark" : "light") : mode;
+  };
+  systemDark.addEventListener("change", () => window.mdpSetAppearance(root.dataset.appearance));
+  const appearance = stored("mdp.appearance");
+  window.mdpSetAppearance(appearance === "light" || appearance === "dark" ? appearance : "automatic");
+
   // A share id is 16 bytes of base64url. Password links wait for main.js.
   const id = /^\/s\/([A-Za-z0-9_-]{22})\/?$/.exec(location.pathname)?.[1];
   if (id && location.hash.length > 1 && !location.hash.startsWith("#p.")) {

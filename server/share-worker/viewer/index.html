@@ -31,16 +31,37 @@
     <div class="reading">
       <button id="reading-button" class="icon-button text-button" type="button" aria-expanded="false" aria-controls="reading-panel" data-l10n-label="readingOptions">Aa</button>
       <div id="reading-panel" class="reading-panel" hidden>
-        <p class="panel-label" data-l10n="textSize">Text size</p>
-        <div class="stepper">
-          <button id="text-smaller" type="button" data-l10n-label="smaller"><span class="small-a">A</span></button>
-          <span id="text-size-dots" class="dots" aria-hidden="true"></span>
-          <button id="text-larger" type="button" data-l10n-label="larger"><span class="large-a">A</span></button>
+        <div class="panel-row">
+          <span class="panel-row-label" data-l10n="textSize">Text size</span>
+          <div class="size-control">
+            <div class="capsule">
+              <button id="text-smaller" type="button" data-l10n-label="smaller"><span class="small-a">A</span></button>
+              <span class="capsule-divider" aria-hidden="true"></span>
+              <button id="text-larger" type="button" data-l10n-label="larger"><span class="large-a">A</span></button>
+            </div>
+            <span id="text-size-dots" class="dots" aria-hidden="true"></span>
+          </div>
         </div>
-        <p class="panel-label" data-l10n="width">Width</p>
-        <div class="segmented" role="radiogroup">
-          <button id="width-fixed" type="button" role="radio" data-l10n="fixedWidth">Fixed</button>
-          <button id="width-full" type="button" role="radio" data-l10n="fullWidth">Full</button>
+        <div class="panel-row">
+          <span class="panel-row-label" data-l10n="appearance">Appearance</span>
+          <div class="segmented" role="radiogroup">
+            <button id="appearance-automatic" type="button" role="radio" data-l10n-label="automatic">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11a5.5 5.5 0 0 0 0-11z" fill="currentColor" stroke="none"/></svg>
+            </button>
+            <button id="appearance-light" type="button" role="radio" data-l10n-label="light">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.75"/><path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.06 1.06M11.54 11.54l1.06 1.06M3.4 12.6l1.06-1.06M11.54 4.46l1.06-1.06"/></svg>
+            </button>
+            <button id="appearance-dark" type="button" role="radio" data-l10n-label="dark">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.2 10.1A5.6 5.6 0 0 1 5.9 2.8a5.6 5.6 0 1 0 7.3 7.3z"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="panel-row">
+          <span class="panel-row-label" data-l10n="width">Width</span>
+          <div class="segmented" role="radiogroup">
+            <button id="width-fixed" type="button" role="radio" data-l10n="fixedWidth">Fixed</button>
+            <button id="width-full" type="button" role="radio" data-l10n="fullWidth">Full</button>
+          </div>
         </div>
       </div>
     </div>
