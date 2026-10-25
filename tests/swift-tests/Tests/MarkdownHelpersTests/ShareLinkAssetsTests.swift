@@ -49,6 +49,10 @@ final class ShareLinkAssetsTests: XCTestCase {
         XCTAssertEqual(assets.map(\.path), ["img/a.png"])
     }
 
+    func testKeepsEqualsSignsInUnquotedSources() {
+        XCTAssertEqual(collect("<img src=img/a.png?v=1 alt=a>").map(\.path), ["img/a.png"])
+    }
+
     func testKeepsTagsWithAnAngleBracketInAQuotedValue() {
         XCTAssertEqual(collect(#"<img src="img/a.png" alt="a > b">"#).map(\.path), ["img/a.png"])
     }

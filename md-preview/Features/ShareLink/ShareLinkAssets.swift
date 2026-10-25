@@ -26,7 +26,9 @@ nonisolated enum ShareLinkAssets {
     /// or unquoted value. Read one after another from the tag's start, so
     /// text inside a quoted value (alt="a src=b.png") is never a name.
     private static let attribute = try! NSRegularExpression(
-        pattern: #"([^\s"'=<>/`]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?"#)
+        // An unquoted value runs to whitespace or `>`, as HTML reads it,
+        // so `src=img/a.png?v=1` keeps its `=`.
+        pattern: #"([^\s"'=<>/`]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>][^\s>]*)))?"#)
 
     private static let characterReference = try! NSRegularExpression(
         pattern: #"&(?:#[xX]([0-9a-fA-F]{1,6})|#([0-9]{1,7})|(amp|quot|apos|lt|gt));"#)
