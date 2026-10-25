@@ -7,13 +7,7 @@ import XCTest
 /// when anything else drifts between them.
 final class EntitlementsParityTests: XCTestCase {
 
-    private static let appFolder: URL = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .appendingPathComponent("md-preview")
+    private static let appFolder = TestVendor.repositoryRoot.appendingPathComponent("md-preview")
 
     private static let releaseOnlyKey = "com.apple.developer.associated-domains"
 
