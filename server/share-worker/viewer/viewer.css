@@ -30,8 +30,9 @@ body { overflow: visible !important; padding: 0 !important; }
   --hairline: rgba(0, 0, 0, 0.08);
   --hover: rgba(0, 0, 0, 0.05);
   /* Linear's hover on its grey sidebar, where these buttons also sit
-     (measured): a 7 px rounded rectangle, #ececed on #f2f2f3 (black at
-     2.5%); icons muted at rest, near black on hover. */
+     (measured): #ececed on #f2f2f3 (black at
+     2.5%); icons muted at rest, near black on hover. Contents items use
+     its 7 px corners; the bar buttons stay circular. */
   --button-hover: rgba(0, 0, 0, 0.025);
   --button-radius: 7px;
   --icon: #6f6f71;
@@ -163,7 +164,7 @@ button {
   height: 28px;
   padding: 0;
   border: 0;
-  border-radius: var(--button-radius);
+  border-radius: 999px;
   color: var(--icon);
   background: none;
   text-decoration: none;
@@ -181,11 +182,15 @@ button {
   letter-spacing: -0.01em;
 }
 
+/* The one filled button: a pill as tall as the circular icon buttons. */
 .open-button {
   cursor: default;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
   margin-left: 8px;
-  padding: 7px 12px;
-  border-radius: 7px;
+  padding: 0 14px;
+  border-radius: 999px;
   font-weight: 500;
   color: var(--on-accent);
   background: var(--accent);
@@ -449,7 +454,7 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
   .crumb-sep,
   #copy-link,
   #download { display: none !important; }
-  .open-button { margin-left: 4px; padding: 7px 10px; }
+  .open-button { margin-left: 4px; padding: 0 12px; }
   .open-button .long { display: none; }
   .open-button .short { display: inline; }
   /* A phone scrolls the whole page, so the browser can hide its bars. */
