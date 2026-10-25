@@ -199,6 +199,9 @@ button {
 }
 
 .open-button:hover { filter: brightness(1.08); }
+
+/* The document's stylesheet underlines hovered links; the bar's links are buttons. */
+.bar a:hover { text-decoration: none; }
 .open-button .short { display: none; }
 
 /* MARK: Reading panel — the one Apple Books-like moment on the page */
