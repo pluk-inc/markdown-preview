@@ -14,7 +14,10 @@ final class TablePreviewWindow: NSObject, NSWindowDelegate, NSMenuItemValidation
     private var preview: MarkdownWebView?
     private var escapeMonitor: Any?
 
+    /// `remoteContentBlocker` comes from the page the table was expanded
+    /// from, so a received share's table cannot reach the network either.
     func present(markdown: String, title: String?, assetBaseURL: URL?, pageZoom: CGFloat,
+                 remoteContentBlocker: WKContentRuleList? = nil,
                  relativeTo parent: NSWindow?) {
         guard !markdown.isEmpty else { return }
         let window: NSWindow
@@ -81,6 +84,7 @@ final class TablePreviewWindow: NSObject, NSWindowDelegate, NSMenuItemValidation
             window?.makeKeyAndOrderFront(nil)
         }
         preview.applyPageZoom(pageZoom)
+        preview.remoteContentBlocker = remoteContentBlocker
         preview.display(markdown: markdown, assetBaseURL: assetBaseURL)
         // The web view consumes key events, so Escape is caught before it.
         if escapeMonitor == nil {

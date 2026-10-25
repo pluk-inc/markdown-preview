@@ -110,17 +110,42 @@ nonisolated struct SharePayload: Codable, Equatable, Sendable {
         return url != root && url.isDescendantOrSame(of: root) ? url : nil
     }
 
+    /// APFS names hold 255 bytes of UTF-8; a title of 100 Japanese
+    /// characters is 300. Cut at a character boundary, leaving room for a
+    /// number and the ".md" this adds.
+    static func fittingFileName(_ title: String, maxBytes: Int = 240) -> String {
+        guard title.utf8.count > maxBytes else { return title }
+        var fitted = ""
+        for character in title {
+            guard fitted.utf8.count + character.utf8.count <= maxBytes else { break }
+            fitted.append(character)
+        }
+        return fitted.trimmingCharacters(in: .whitespaces)
+    }
+
     /// Writes the share into `shareFolder`, replacing what was there. The
     /// Markdown and its assets go in a subfolder named after the title, so
     /// a files sidebar shows the title. Returns the Markdown file, which is
     /// written last, so a half-written folder never opens.
     func unpack(into shareFolder: URL) throws -> URL {
-        var name = displayTitle
+        var name = Self.fittingFileName(displayTitle)
         if name.isEmpty || name.hasPrefix(".") {
             name = NSLocalizedString("Shared Document", comment: "File name for a shared document without a title")
         }
         let folder = shareFolder.appending(path: (name as NSString).deletingPathExtension,
                                            directoryHint: .isDirectory)
+        if !ProjectFileIndex.markdownExtensions.contains((name as NSString).pathExtension.lowercased()) {
+            name += ".md"
+        }
+        // An asset folder can carry the Markdown file's own name; number
+        // the file instead of failing to write it.
+        let stem = (name as NSString).deletingPathExtension
+        let fileExtension = (name as NSString).pathExtension
+        var number = 1
+        while assets.contains(where: { $0.path == name || $0.path.hasPrefix(name + "/") }) {
+            number += 1
+            name = "\(stem) \(number).\(fileExtension)"
+        }
         let fileManager = FileManager.default
         if fileManager.fileExists(atPath: shareFolder.path) {
             try fileManager.removeItem(at: shareFolder)
@@ -134,9 +159,6 @@ nonisolated struct SharePayload: Codable, Equatable, Sendable {
             try asset.data.write(to: url)
         }
 
-        if !ProjectFileIndex.markdownExtensions.contains((name as NSString).pathExtension.lowercased()) {
-            name += ".md"
-        }
         let file = folder.appending(path: name, directoryHint: .notDirectory)
         try Data(markdown.utf8).write(to: file)
         return file

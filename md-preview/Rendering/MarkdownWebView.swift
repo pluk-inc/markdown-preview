@@ -719,6 +719,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             guard let markdown = dict["markdown"] as? String else { return }
             TablePreviewWindow.shared.present(markdown: markdown, title: dict["title"] as? String,
                                               assetBaseURL: currentAssetBase, pageZoom: pageZoom,
+                                              remoteContentBlocker: remoteContentBlocker,
                                               relativeTo: window)
         #endif
         case "copyCode":

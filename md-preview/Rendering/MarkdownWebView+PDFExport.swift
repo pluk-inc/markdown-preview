@@ -902,6 +902,10 @@ extension MarkdownWebView {
         let assets = MarkdownAssetScheme()
         assets.setBaseURL(assetBaseURL)
         configuration.setURLSchemeHandler(assets, forURLScheme: MarkdownAssetScheme.scheme)
+        // A received share's export must not reach the network either.
+        if let remoteContentBlocker {
+            configuration.userContentController.add(remoteContentBlocker)
+        }
         return try await DocumentExportSession.capture(from: webView, configuration: configuration)
     }
 

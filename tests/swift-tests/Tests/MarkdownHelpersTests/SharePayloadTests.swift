@@ -123,4 +123,12 @@ final class SharePayloadTests: XCTestCase {
             .unpack(into: shareFolder)
         XCTAssertEqual(kept.lastPathComponent, "notes.markdown")
     }
+
+    func testFitsLongTitlesIntoAFileName() {
+        let title = String(repeating: "日", count: 100) // 300 bytes of UTF-8
+        let fitted = SharePayload.fittingFileName(title)
+        XCTAssertLessThanOrEqual(fitted.utf8.count, 240)
+        XCTAssertEqual(fitted, String(repeating: "日", count: 80))
+        XCTAssertEqual(SharePayload.fittingFileName("Notes"), "Notes")
+    }
 }
