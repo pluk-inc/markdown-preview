@@ -52,6 +52,7 @@ const page = {
     dark: byId("appearance-dark"),
   },
   toggleContents: byId("toggle-contents"),
+  scrim: byId("scrim"),
   contents: byId("contents"),
   contentsList: byId("contents-list"),
   contentsEmpty: byId("contents-empty"),
@@ -121,9 +122,27 @@ function applyReading() {
   window.mdpSetAppearance?.(reading.appearance);
   placeThumbs();
   root.dataset.contents = reading.contents ? "shown" : "hidden";
-  page.contents.inert = !reading.contents;
-  page.toggleContents.setAttribute("aria-pressed", String(reading.contents));
+  updateContentsAccess();
 }
+
+// Narrow windows show the contents as a drawer over the page instead of a
+// rail beside it. The drawer always starts closed and is not remembered.
+const narrow = matchMedia("(max-width: 980px)");
+
+function updateContentsAccess() {
+  const shown = narrow.matches ? document.documentElement.dataset.drawer === "open" : reading.contents;
+  page.contents.inert = !shown;
+  page.toggleContents.setAttribute("aria-pressed", String(shown));
+}
+
+function setDrawerOpen(open) {
+  document.body.classList.add("motion");
+  if (open) document.documentElement.dataset.drawer = "open";
+  else delete document.documentElement.dataset.drawer;
+  updateContentsAccess();
+}
+
+narrow.addEventListener("change", () => setDrawerOpen(false));
 
 function setReading(change) {
   Object.assign(reading, change);
@@ -167,10 +186,15 @@ for (const [mode, button] of Object.entries(page.appearance)) {
   button.addEventListener("click", () => setReading({ appearance: mode }));
 }
 page.toggleContents.addEventListener("click", () => {
+  if (narrow.matches) {
+    setDrawerOpen(document.documentElement.dataset.drawer !== "open");
+    return;
+  }
   // Animate only what the reader does, never the first layout.
   document.body.classList.add("motion");
   setReading({ contents: !reading.contents });
 });
+page.scrim.addEventListener("click", () => setDrawerOpen(false));
 document.addEventListener("click", (event) => {
   if (!page.readingPanel.hidden && !event.target.closest(".reading")) setReadingPanelOpen(false);
 });
@@ -178,6 +202,9 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !page.readingPanel.hidden) {
     setReadingPanelOpen(false);
     page.readingButton.focus();
+  } else if (event.key === "Escape" && document.documentElement.dataset.drawer === "open") {
+    setDrawerOpen(false);
+    page.toggleContents.focus();
   }
   // Select All takes the document only, as the app's reader does, unless
   // the reader is typing in a field.
@@ -219,7 +246,10 @@ function buildContents() {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = heading.textContent.trim();
-    button.addEventListener("click", () => heading.scrollIntoView({ behavior: "smooth" }));
+    button.addEventListener("click", () => {
+      if (narrow.matches) setDrawerOpen(false);
+      heading.scrollIntoView({ behavior: "smooth" });
+    });
     item.append(button);
     return item;
   }));
@@ -276,6 +306,24 @@ function rememberAppOpened() {
   setTimeout(() => window.removeEventListener("blur", remember), 3000);
 }
 
+// Phones and tablets have no app to open the share in. The button still
+// names the app the document came from, and copies the link to the Mac app
+// so the reader can get it on their Mac.
+const touchDevice = matchMedia("(hover: none) and (pointer: coarse)");
+
+function offerMacApp() {
+  for (const label of page.open.querySelectorAll("span")) label.textContent = text.getMacApp;
+  page.open.addEventListener("click", async (event) => {
+    event.preventDefault();
+    try {
+      await navigator.clipboard.writeText(page.open.href);
+      showToast(text.macAppLinkCopied);
+    } catch {
+      location.assign(page.open.href);
+    }
+  });
+}
+
 function openInAppIfRemembered() {
   if (opensInApp()) location.assign(page.open.href);
 }
@@ -283,8 +331,11 @@ function openInAppIfRemembered() {
 async function main() {
   const link = parseLink(location.pathname, location.hash);
   if (!link) return showStatus(text.incomplete);
-  page.open.href = `md-preview://share/${link.id}#${link.fragment}`;
-  page.open.addEventListener("click", rememberAppOpened);
+  if (touchDevice.matches) offerMacApp();
+  else {
+    page.open.href = `md-preview://share/${link.id}#${link.fragment}`;
+    page.open.addEventListener("click", rememberAppOpened);
+  }
   if (link.hasPassword) {
     openInAppIfRemembered();
     return showStatus(text.password, { appCanOpen: true });

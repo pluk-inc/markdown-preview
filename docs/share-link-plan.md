@@ -374,7 +374,10 @@ with a note, Open in Markdown Preview, Download .md, Copy link (with a
 controls and words (text size, Appearance Automatic/Light/Dark, width; remembered per
 browser), a Contents rail (always in place, "No headings" when empty, its
 shown or hidden state remembered), and error states (only a password link
-keeps the open button). Select All selects only the document (the page's
+keeps the open button). In a narrow window the Contents open as a drawer
+over the dimmed page, as Linear's sidebar does on a phone. On phones and
+tablets, which have no app, the open button reads "Get Mac App" and copies
+the link to markdownpreview.app. Select All selects only the document (the page's
 controls are not selectable), and copying whole blocks puts their Markdown
 source on the clipboard with the app's own code (`markdownSelectionScript`,
 exported in `renderers.js`). No layout shift while loading (CLS 0 in Chrome):

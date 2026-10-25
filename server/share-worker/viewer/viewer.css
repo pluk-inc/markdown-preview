@@ -566,9 +566,70 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
 
 /* MARK: Narrow windows */
 
+.scrim { display: none; }
+
+/* Narrow windows: the contents slide in over the page from the left, as
+   Linear's sidebar does on a phone, behind a dimmed page. */
 @media (max-width: 980px) {
-  .contents { display: none; }
-  #toggle-contents { display: none !important; }
+  .contents,
+  :root[data-contents="hidden"] .contents {
+    position: fixed;
+    z-index: 40;
+    inset: 0 auto 0 0;
+    width: min(300px, 82vw);
+    margin: 0;
+    padding: max(16px, env(safe-area-inset-top)) 12px max(20px, env(safe-area-inset-bottom)) 12px;
+    font-size: 15px;
+    background: var(--sheet);
+    border-radius: 0 12px 12px 0;
+    box-shadow: var(--sheet-edge), 0 8px 32px rgba(0, 0, 0, 0.12);
+    transform: translateX(calc(-100% - 40px));
+    visibility: hidden;
+  }
+
+  :root[data-drawer="open"] .contents {
+    transform: none;
+    visibility: visible;
+  }
+
+  .motion .contents {
+    transition: transform var(--rail-motion), visibility 0s linear 341ms,
+      --fade-top 150ms ease-out, --fade-bottom 150ms ease-out;
+  }
+
+  :root[data-drawer="open"] .motion .contents,
+  :root[data-drawer="open"] .contents { transition-delay: 0s; }
+
+  .contents button { padding-block: 8px; }
+
+  .scrim {
+    display: block;
+    position: fixed;
+    z-index: 39;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.25);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 250ms ease-out;
+  }
+
+  :root[data-drawer="open"] .scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* The rail's pressed look follows the drawer here, not the saved rail. */
+  :root[data-contents="shown"] #toggle-contents:not(:hover) {
+    color: var(--icon);
+    background: none;
+    box-shadow: none;
+  }
+
+  :root[data-drawer="open"] #toggle-contents {
+    color: var(--icon-hover);
+    background: var(--button-raised);
+    box-shadow: var(--button-raised-edge);
+  }
 }
 
 @media (max-width: 640px) {
@@ -579,9 +640,7 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
 
   .bar { gap: 6px; padding: 0 8px 0 16px; }
   .crumb-origin,
-  .crumb-sep,
-  #copy-link,
-  #download { display: none !important; }
+  .crumb-sep { display: none !important; }
   .open-button { margin-left: 4px; padding: 0 12px; }
   .open-button .long { display: none; }
   .open-button .short { display: inline; }
