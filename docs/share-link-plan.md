@@ -401,9 +401,13 @@ inline styles; scripts stay `'self'` only.
   can read the key from `location.hash`.
 - Buttons: "Open in Markdown Preview" (`md-preview://share/…`), "Download .md",
   "Report". The open button is always visible at the top: it is the only path
-  into the app from Chrome and Firefox. **Never redirect to `md-preview://`
-  automatically** — a page cannot tell whether the app is installed, and Safari
-  shows an error alert when it is not.
+  into the app from Chrome and Firefox. A page cannot tell whether the app is
+  installed, and Safari shows an error alert when it is not, so the page opens
+  `md-preview://` by itself only in a browser where the button has already
+  worked (decided 2026-10-25, as Slack and Zoom do): when the window loses
+  focus within 3 s of a click, the page stores `mdp.opensInApp` in local
+  storage, and later live shares open the app on load. The document still
+  renders behind the browser's prompt.
 - Burn after reading: a Durable Object per share makes "read once" atomic;
   confirm step before fetch. Not in phase 1.
 - Report: form posts the ID (and optionally the full link, which lets us read

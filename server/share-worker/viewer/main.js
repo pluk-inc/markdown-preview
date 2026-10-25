@@ -57,17 +57,45 @@ function showStatus(message) {
   page.status.hidden = false;
 }
 
+// A page cannot tell whether the app is installed, so it opens the app by
+// itself only in a browser where "Open in Markdown Preview" has already
+// worked: the page lost focus right after the click. Elsewhere, Safari would
+// show an error for a scheme no app handles.
+const OPENS_IN_APP_KEY = "mdp.opensInApp";
+
+function opensInApp() {
+  try { return localStorage.getItem(OPENS_IN_APP_KEY) === "1"; } catch { return false; }
+}
+
+function rememberAppOpened() {
+  const remember = () => {
+    try { localStorage.setItem(OPENS_IN_APP_KEY, "1"); } catch {}
+  };
+  window.addEventListener("blur", remember, { once: true });
+  setTimeout(() => window.removeEventListener("blur", remember), 3000);
+}
+
+function openInAppIfRemembered() {
+  if (opensInApp()) location.assign(page.open.href);
+}
+
 async function main() {
   const link = parseLink(location.pathname, location.hash);
   if (!link) return showStatus(text.incomplete);
   page.open.href = `md-preview://share/${link.id}#${link.fragment}`;
-  if (link.hasPassword) return showStatus(text.password);
+  page.open.addEventListener("click", rememberAppOpened);
+  if (link.hasPassword) {
+    openInAppIfRemembered();
+    return showStatus(text.password);
+  }
 
   let envelope;
   try {
     const response = await fetch(`/shares/${link.id}`, { cache: "no-store", referrerPolicy: "no-referrer" });
     if (response.status === 404) return showStatus(text.gone);
     if (!response.ok) return showStatus(text.unavailable);
+    // Only a live share is worth the app's attention.
+    openInAppIfRemembered();
     envelope = new Uint8Array(await response.arrayBuffer());
   } catch {
     return showStatus(text.unavailable);
