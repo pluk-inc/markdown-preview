@@ -582,7 +582,10 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
     font-size: 15px;
     background: var(--sheet);
     border-radius: 0 12px 12px 0;
-    box-shadow: var(--sheet-edge), 0 8px 32px rgba(0, 0, 0, 0.12);
+    /* Only the right edge casts a shadow; the top meets the screen edge. */
+    box-shadow: 6px 0 24px -8px rgba(0, 0, 0, 0.18);
+    -webkit-mask-image: none;
+    mask-image: none;
     transform: translateX(calc(-100% - 40px));
     visibility: hidden;
   }
