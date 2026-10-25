@@ -75,19 +75,24 @@ describe("create and read", () => {
   });
 
   it("stores an upload that arrives in many tiny chunks", async () => {
+    // More chunks than a function call takes arguments, one byte each.
     const bytes = new Uint8Array(200_000);
     bytes.set(envelope);
+    // One byte per pull: chunks queued all at once reach the Worker joined.
     let sent = 0;
     const stream = new ReadableStream<Uint8Array>({
       pull(controller) {
         if (sent === bytes.length) return controller.close();
-        controller.enqueue(bytes.slice(sent, ++sent));
+        controller.enqueue(bytes.subarray(sent, ++sent));
       },
     });
     const { response, body } = await create(stream);
     expect(response.status).toBe(201);
-    expect(new Uint8Array(await (await call(`/shares/${body.id}`)).arrayBuffer())).toEqual(bytes);
-  });
+    const stored = new Uint8Array(await (await call(`/shares/${body.id}`)).arrayBuffer());
+    // Compared in one step: an element-by-element diff of 200,000 bytes is slow.
+    expect(stored.length).toBe(bytes.length);
+    expect(stored.every((byte, i) => byte === bytes[i])).toBe(true);
+  }, 30_000); // 200,000 pulls take a few seconds on a CI runner.
 
   it("rejects bodies that are not MDP1 envelopes", async () => {
     const wrongMagic = envelope.slice();
