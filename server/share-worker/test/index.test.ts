@@ -24,6 +24,14 @@ async function create(body: BodyInit = envelope, query = "") {
   return { response, body: (await response.json()) as Record<string, string> };
 }
 
+/** Moves a share's expiry into the past, as if its time ran out. */
+async function expireShare(id: string) {
+  const object = await env.SHARES.get(`shares/${id}`);
+  await env.SHARES.put(`shares/${id}`, await object!.arrayBuffer(), {
+    customMetadata: { ...object!.customMetadata, expiresAt: new Date(Date.now() - 1000).toISOString() },
+  });
+}
+
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 describe("create and read", () => {
@@ -111,15 +119,11 @@ describe("create and read", () => {
 
   it("deletes a share on the first read after it expires", async () => {
     const { body } = await create();
-    const key = `shares/${body.id}`;
-    const object = await env.SHARES.get(key);
-    await env.SHARES.put(key, await object!.arrayBuffer(), {
-      customMetadata: { ...object!.customMetadata, expiresAt: new Date(Date.now() - 1).toISOString() },
-    });
+    await expireShare(body.id);
 
     expect((await call(`/shares/${body.id}`)).status).toBe(404);
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(await env.SHARES.head(key)).toBeNull();
+    expect(await env.SHARES.head(`shares/${body.id}`)).toBeNull();
   });
 });
 
@@ -208,7 +212,7 @@ describe("headers and routing", () => {
     expect(csp).not.toMatch(/script-src[^;]*unsafe/);
     expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
     const html = await response.text();
-    expect(html).toMatch(/src="\/s\/_viewer\/[0-9a-f]{12}\/viewer\.js" defer/);
+    expect(html).toMatch(/src="\/s\/_viewer\/assets\/viewer\.[0-9a-f]{12}\.js" defer/);
     expect(html).not.toMatch(/<script>(?!<\/script>)/);
   });
 
@@ -243,17 +247,13 @@ describe("headers and routing", () => {
     expect(envelopeBlock(await (await call("/s/AAAAAAAAAAAAAAAAAAAAAA")).text())?.slice(1)).toEqual(["not_found", ""]);
 
     const { body } = await create();
-    const key = `shares/${body.id}`;
-    const object = await env.SHARES.get(key);
-    await env.SHARES.put(key, await object!.arrayBuffer(), {
-      customMetadata: { ...object!.customMetadata, expiresAt: new Date(Date.now() - 1000).toISOString() },
-    });
+    await expireShare(body.id);
     expect(envelopeBlock(await (await call(`/s/${body.id}`)).text())?.[1]).toBe("not_found");
   });
 
-  it("caches the viewer's files for good, in a folder named by their content", async () => {
+  it("caches the viewer's files for good, named by their content", async () => {
     const html = await (await call("/s/AAAAAAAAAAAAAAAAAAAAAA")).text();
-    const script = /src="(\/s\/_viewer\/[0-9a-f]{12}\/viewer\.js)"/.exec(html)![1];
+    const script = /src="(\/s\/_viewer\/assets\/viewer\.[0-9a-f]{12}\.js)"/.exec(html)![1];
     const response = await env.ASSETS.fetch(new URL(script, ORIGIN));
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");

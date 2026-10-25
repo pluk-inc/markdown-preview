@@ -40,8 +40,9 @@ export function base64urlEncode(bytes) {
   return base64Encode(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-/** Standard base64, built in pieces so large input stays fast. */
+/** Standard base64: native where the runtime has it, else built in pieces. */
 export function base64Encode(bytes) {
+  if (bytes.toBase64) return bytes.toBase64();
   let binary = "";
   for (let offset = 0; offset < bytes.length; offset += 8192) {
     binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
@@ -128,7 +129,7 @@ function hasMagic(bytes) {
   return MAGIC.every((byte, index) => bytes[index] === byte);
 }
 
-function concat(...parts) {
+export function concat(...parts) {
   const result = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
   let offset = 0;
   for (const part of parts) {

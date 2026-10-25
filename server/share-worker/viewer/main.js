@@ -347,12 +347,7 @@ async function main() {
     return showStatus(text.password, { appCanOpen: true });
   }
 
-  let envelope;
-  try {
-    envelope = pageEnvelope();
-  } catch {
-    return showStatus(text.unavailable);
-  }
+  const envelope = pageEnvelope();
   if (envelope.status === "not_found") return showStatus(text.gone);
   if (!envelope.bytes) return showStatus(text.unavailable);
   // Only a live share is worth the app's attention.
@@ -378,11 +373,13 @@ function pageEnvelope() {
   if (!block) return { status: "unavailable" };
   block.remove();
   const { status } = block.dataset;
-  return status === "ok" ? { bytes: base64Bytes(block.textContent) } : { status };
+  if (status !== "ok") return { status };
+  try {
+    return { bytes: base64Bytes(block.textContent) };
+  } catch {
+    return { status: "unavailable" };
+  }
 }
-
-// Vendor files sit next to this script, in the build's hashed folder.
-const vendorBase = new URL("vendor/", document.currentScript?.src ?? location.href);
 
 /** Loads a vendor script or stylesheet once, only when a document needs it. */
 const loaded = new Map();
@@ -391,7 +388,8 @@ function loadVendor(file) {
     loaded.set(file, new Promise((resolve) => {
       const isStyle = file.endsWith(".css");
       const element = document.createElement(isStyle ? "link" : "script");
-      const url = new URL(file, vendorBase).href;
+      // File name to content-hashed URL, written in by viewer/build.mjs.
+      const url = VENDOR_URLS[file];
       if (isStyle) { element.rel = "stylesheet"; element.href = url; }
       else element.src = url;
       element.onload = element.onerror = resolve;

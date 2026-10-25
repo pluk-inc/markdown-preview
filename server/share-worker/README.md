@@ -20,8 +20,9 @@ document with the app's own stylesheet and renderers:
   bundles the viewer into `public/`, which is not committed: `boot.js`, one
   stylesheet, and one script (DOMPurify, the renderers, and `main.js`), with
   highlight.js and KaTeX from `md-preview/Vendor` next to them. They go in
-  `public/s/_viewer/<content hash>/`, served with a one-year immutable
-  `Cache-Control`.
+  `public/s/_viewer/assets/` as `name.<content hash>.ext`, served with a
+  one-year immutable `Cache-Control`, so a file keeps its name (and stays
+  cached) until its content changes.
 - `/s/<id>` carries the encrypted envelope at the end of the page, so a
   reader needs no second request. `/shares/<id>` still serves it to the app.
 - The rendered HTML comes from whoever made the envelope, so the page

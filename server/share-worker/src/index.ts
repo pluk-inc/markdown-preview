@@ -2,8 +2,9 @@
 // The server never sees a key: it only checks the envelope's magic and size.
 // It also serves the web viewer (§5), which decrypts in the browser.
 
-import { HEADER_BYTES, MAGIC, TAG_BYTES, base64Encode, base64urlEncode as base64url } from "../viewer/share-crypto.js";
+import { HEADER_BYTES, MAGIC, TAG_BYTES, base64Encode, base64urlEncode as base64url, concat } from "../viewer/share-crypto.js";
 import { VIEWER_CSP } from "./viewer-csp.ts";
+import { ENVELOPE_MARKER } from "./viewer-page.ts";
 
 export interface Env {
   SHARES: R2Bucket;
@@ -25,8 +26,6 @@ const DEFAULT_TTL = "7d";
 const ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 const SHARE_PATH = /^\/shares\/([^/]+)$/;
 const VIEWER_PATH = /^\/s\/([^/]+)\/?$/;
-// Where the Worker streams the envelope into viewer/index.html.
-const ENVELOPE_MARKER = "<!--mdp-envelope-->";
 const PREFIX = "shares/";
 
 const BASE_HEADERS = {
@@ -207,9 +206,7 @@ async function* base64Pieces(stream: ReadableStream<Uint8Array>): AsyncGenerator
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    const bytes = new Uint8Array(carry.byteLength + value.byteLength);
-    bytes.set(carry);
-    bytes.set(value, carry.byteLength);
+    const bytes = carry.byteLength > 0 ? concat(carry, value) : value;
     const whole = bytes.byteLength - (bytes.byteLength % 3);
     if (whole > 0) yield base64Encode(bytes.subarray(0, whole));
     carry = bytes.slice(whole);
@@ -296,13 +293,7 @@ async function readCapped(request: Request, limit: number): Promise<Uint8Array |
     }
     chunks.push(value);
   }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return bytes;
+  return concat(...chunks);
 }
 
 async function limited(limiter: RateLimit | undefined, request: Request): Promise<Response | null> {

@@ -406,8 +406,8 @@ or math. One request carries the document: the Worker sends the page's
 head at once and streams the encrypted envelope into the end of the body
 (a `<script type="application/octet-stream">` data block, which runs
 nothing), so the scripts download while R2 is read. The page loads three
-files (`boot.js`, one stylesheet, one script) from a folder named by a
-hash of their content, cached for a year as immutable. A slow load shows only
+files (`boot.js`, one stylesheet, one script) whose names carry a hash of
+their content, cached for a year as immutable. A slow load shows only
 the text "Loading…", faded in after 1 s as on Linear's loading screen. Not
 yet: diagrams (Pele; a diagram shows its source for now), password links, Report, burn after reading. Deviation
 from the text below: `style-src-attr 'unsafe-inline'` is allowed because KaTeX sets
