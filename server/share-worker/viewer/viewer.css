@@ -29,6 +29,9 @@ body { overflow: visible !important; padding: 0 !important; }
   --muted: rgba(0, 0, 0, 0.5);
   --hairline: rgba(0, 0, 0, 0.08);
   --hover: rgba(0, 0, 0, 0.05);
+  /* Linear's button hover: a full pill, #f3f3f4 on its #fafafb panel,
+     which is black at 2.8%, so it darkens any surface by the same step. */
+  --button-hover: rgba(0, 0, 0, 0.028);
   --accent: #0068da;
   --on-accent: #ffffff;
   --panel: #ffffff;
@@ -62,6 +65,7 @@ body { overflow: visible !important; padding: 0 !important; }
     --muted: rgba(255, 255, 255, 0.52);
     --hairline: rgba(255, 255, 255, 0.09);
     --hover: rgba(255, 255, 255, 0.07);
+    --button-hover: rgba(255, 255, 255, 0.05);
     --accent: #3b9bff;
     --on-accent: #08111f;
     --panel: #2a2a2d;
@@ -94,7 +98,7 @@ svg {
 button {
   font: inherit;
   color: inherit;
-  cursor: pointer;
+  cursor: default;
 }
 
 :focus-visible {
@@ -145,14 +149,15 @@ button {
 }
 
 .icon-button {
+  cursor: default;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
-  border-radius: 7px;
+  border-radius: 999px;
   color: var(--ink);
   background: none;
   text-decoration: none;
@@ -160,17 +165,18 @@ button {
 
 .icon-button:hover,
 .icon-button[aria-expanded="true"],
-.icon-button[aria-pressed="true"] { background: var(--hover); }
+.icon-button[aria-pressed="true"] { background: var(--button-hover); }
 
 .text-button {
   width: auto;
-  padding: 0 8px;
+  padding: 0 10px;
   font-size: 14px;
   font-weight: 500;
   letter-spacing: -0.01em;
 }
 
 .open-button {
+  cursor: default;
   margin-left: 8px;
   padding: 7px 12px;
   border-radius: 7px;
@@ -325,7 +331,7 @@ button {
   overflow-wrap: anywhere;
 }
 
-.contents button:hover { color: var(--ink); background: var(--hover); }
+.contents button:hover { color: var(--ink); background: var(--button-hover); }
 .contents button.current { color: var(--ink); font-weight: 500; background: var(--hover); }
 .contents .level-2 button { padding-left: 20px; }
 .contents .level-3 button { padding-left: 32px; }
