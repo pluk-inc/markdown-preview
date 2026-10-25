@@ -144,6 +144,7 @@ button {
 /* Labels that only make sense with a document wait for it, keeping their
    space so nothing moves when they appear. */
 :root:not([data-loaded]) .crumbs,
+:root:not([data-loaded]) .bar :is(button, a),
 :root:not([data-loaded="document"]) .contents .panel-label { visibility: hidden; }
 .crumb-sep { width: 12px; height: 12px; color: var(--muted); flex: none; }
 
