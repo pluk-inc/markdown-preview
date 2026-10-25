@@ -411,12 +411,13 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
   pointer-events: none;
   font: 13px var(--chrome-font);
   color: var(--muted);
-  animation: loading-in 0.4s ease-out 1s both;
+  animation: loading-in 0.4s ease-out 1s both, loading-pulse 1.6s ease-in-out 1.4s infinite;
 }
 
 :root[data-loaded] .loading { display: none; }
 
 @keyframes loading-in { from { opacity: 0; } }
+@keyframes loading-pulse { 50% { opacity: 0.45; } }
 
 /* MARK: Status (expired, damaged, password) */
 
@@ -466,6 +467,7 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
 @media (prefers-reduced-motion: reduce) {
   .reading-panel,
   .toast { animation: none; }
+  .loading { animation: loading-in 0.4s ease-out 1s both; }
   .motion .contents { transition: none; }
 }
 
