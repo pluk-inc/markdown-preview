@@ -2,6 +2,7 @@ import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import fixture from "../../../tests/fixtures/share-link/vectors.json";
 import { purgeExpired } from "../src/index";
+import { base64Bytes } from "../viewer/payload.js";
 
 const ORIGIN = "https://share.example";
 
@@ -207,8 +208,55 @@ describe("headers and routing", () => {
     expect(csp).not.toMatch(/script-src[^;]*unsafe/);
     expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
     const html = await response.text();
-    expect(html).toContain('src="/s/_viewer/main.js"');
+    expect(html).toMatch(/src="\/s\/_viewer\/[0-9a-f]{12}\/viewer\.js" defer/);
     expect(html).not.toMatch(/<script>(?!<\/script>)/);
+  });
+
+  // The page's envelope block, as the browser reads it.
+  const envelopeBlock = (html: string) =>
+    /<script id="mdp-envelope" type="application\/octet-stream" data-status="(\w+)">([^<]*)<\/script>\s*<\/body>/.exec(html);
+
+  it("streams the envelope into the viewer page", async () => {
+    for (const vector of fixture.vectors) {
+      const bytes = hex(vector.envelope);
+      const { body } = await create(bytes);
+      const block = envelopeBlock(await (await call(`/s/${body.id}`)).text());
+      expect(block?.[1], vector.name).toBe("ok");
+      expect(base64Bytes(block![2])).toEqual(bytes);
+    }
+  });
+
+  it("streams a large envelope whole, across R2's chunks", async () => {
+    // Not a multiple of 3, so the pieces must carry bytes between chunks.
+    const bytes = new Uint8Array(1_000_001);
+    for (let offset = 0; offset < bytes.length; offset += 65_536) {
+      crypto.getRandomValues(bytes.subarray(offset, offset + 65_536));
+    }
+    bytes.set(envelope.subarray(0, 4));
+    const { body } = await create(bytes);
+    const block = envelopeBlock(await (await call(`/s/${body.id}`)).text());
+    expect(block?.[1]).toBe("ok");
+    expect(base64Bytes(block![2])).toEqual(bytes);
+  });
+
+  it("marks a missing or expired share in the viewer page", async () => {
+    expect(envelopeBlock(await (await call("/s/AAAAAAAAAAAAAAAAAAAAAA")).text())?.slice(1)).toEqual(["not_found", ""]);
+
+    const { body } = await create();
+    const key = `shares/${body.id}`;
+    const object = await env.SHARES.get(key);
+    await env.SHARES.put(key, await object!.arrayBuffer(), {
+      customMetadata: { ...object!.customMetadata, expiresAt: new Date(Date.now() - 1000).toISOString() },
+    });
+    expect(envelopeBlock(await (await call(`/s/${body.id}`)).text())?.[1]).toBe("not_found");
+  });
+
+  it("caches the viewer's files for good, in a folder named by their content", async () => {
+    const html = await (await call("/s/AAAAAAAAAAAAAAAAAAAAAA")).text();
+    const script = /src="(\/s\/_viewer\/[0-9a-f]{12}\/viewer\.js)"/.exec(html)![1];
+    const response = await env.ASSETS.fetch(new URL(script, ORIGIN));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
   });
 
   it("rejects other methods and paths", async () => {

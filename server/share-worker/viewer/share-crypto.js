@@ -37,9 +37,16 @@ export function base64urlDecode(text) {
 }
 
 export function base64urlEncode(bytes) {
+  return base64Encode(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** Standard base64, built in pieces so large input stays fast. */
+export function base64Encode(bytes) {
   let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  for (let offset = 0; offset < bytes.length; offset += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
+  }
+  return btoa(binary);
 }
 
 /**

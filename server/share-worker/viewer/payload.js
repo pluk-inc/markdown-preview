@@ -76,7 +76,7 @@ export function displayTitle(title) {
 }
 
 /** Decodes base64 natively where the browser can, else in one plain loop. */
-function base64Bytes(text) {
+export function base64Bytes(text) {
   if (Uint8Array.fromBase64) return Uint8Array.fromBase64(text);
   const binary = atob(text);
   const bytes = new Uint8Array(binary.length);

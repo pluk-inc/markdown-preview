@@ -1,8 +1,8 @@
 // Runs before the first paint, as a blocking script in <head> (the page's
 // CSP forbids inline scripts). It applies the reader's saved layout so the
-// page never shifts, and starts fetching the encrypted document at once,
-// before the larger scripts load. main.js picks up both. The same idea as
-// Linear's boot script, which reads its saved layout from localStorage.
+// page never shifts; main.js picks it up. The same idea as Linear's boot
+// script, which reads its saved layout from localStorage. The encrypted
+// document needs no request: the Worker streams it into the page.
 (() => {
   const root = document.documentElement;
   const stored = (key) => {
@@ -28,11 +28,4 @@
   systemDark.addEventListener("change", () => window.mdpSetAppearance(root.dataset.appearance));
   const appearance = stored("mdp.appearance");
   window.mdpSetAppearance(appearance === "light" || appearance === "dark" ? appearance : "automatic");
-
-  // A share id is 16 bytes of base64url. Password links wait for main.js.
-  const id = /^\/s\/([A-Za-z0-9_-]{22})\/?$/.exec(location.pathname)?.[1];
-  if (id && location.hash.length > 1 && !location.hash.startsWith("#p.")) {
-    window.mdpEnvelope = fetch(`/shares/${id}`, { cache: "no-store", referrerPolicy: "no-referrer" });
-    window.mdpEnvelope.catch(() => {}); // main.js reports the failure
-  }
 })();

@@ -2,7 +2,7 @@
 // The server never sees a key: it only checks the envelope's magic and size.
 // It also serves the web viewer (§5), which decrypts in the browser.
 
-import { HEADER_BYTES, MAGIC, TAG_BYTES, base64urlEncode as base64url } from "../viewer/share-crypto.js";
+import { HEADER_BYTES, MAGIC, TAG_BYTES, base64Encode, base64urlEncode as base64url } from "../viewer/share-crypto.js";
 import { VIEWER_CSP } from "./viewer-csp.ts";
 
 export interface Env {
@@ -24,6 +24,9 @@ const TTLS: Record<string, number> = {
 const DEFAULT_TTL = "7d";
 const ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 const SHARE_PATH = /^\/shares\/([^/]+)$/;
+const VIEWER_PATH = /^\/s\/([^/]+)\/?$/;
+// Where the Worker streams the envelope into viewer/index.html.
+const ENVELOPE_MARKER = "<!--mdp-envelope-->";
 const PREFIX = "shares/";
 
 const BASE_HEADERS = {
@@ -47,7 +50,7 @@ export default {
 
     if (pathname.startsWith("/s/")) {
       return request.method === "GET" || request.method === "HEAD"
-        ? viewerPage(request, env)
+        ? viewerPage(request, env, ctx)
         : error(405, "method_not_allowed");
     }
 
@@ -101,12 +104,8 @@ async function create(request: Request, env: Env, url: URL): Promise<Response> {
 }
 
 async function read(id: string, env: Env, ctx: ExecutionContext): Promise<Response> {
-  const object = await env.SHARES.get(PREFIX + id);
+  const object = await liveShare(id, env, ctx);
   if (!object) return error(404, "not_found");
-  if (isExpired(object.customMetadata, Date.now())) {
-    ctx.waitUntil(env.SHARES.delete(PREFIX + id));
-    return error(404, "not_found");
-  }
   return new Response(object.body, {
     headers: {
       ...BASE_HEADERS,
@@ -147,18 +146,75 @@ async function remove(id: string, request: Request, env: Env): Promise<Response>
 // /s/<id> answers with the viewer page; the page reads the key from the URL
 // fragment, which never reaches this Worker. Its files under /s/_viewer/
 // are static assets and never reach the Worker either.
-async function viewerPage(request: Request, env: Env): Promise<Response> {
+//
+// The page carries the encrypted envelope, so the reader needs one request,
+// not a page and then a fetch. The head goes out at once, so the browser
+// gets the scripts and styles while R2 is read; the envelope follows at the
+// end of the body as a data block, which runs nothing and so passes the CSP.
+async function viewerPage(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const headers = {
+    ...BASE_HEADERS,
+    "Content-Type": "text/html; charset=utf-8",
+    "Content-Security-Policy": VIEWER_CSP,
+    "X-Frame-Options": "DENY",
+    "Cross-Origin-Opener-Policy": "same-origin",
+  };
+  // The share lookup does not wait for the page file.
+  const id = VIEWER_PATH.exec(new URL(request.url).pathname)?.[1] ?? "";
+  const share = request.method === "HEAD" ? null : pageShare(id, request, env, ctx);
   const page = await env.ASSETS.fetch(new URL("/s/_viewer/index.html", request.url));
   if (!page.ok) return error(404, "not_found");
-  return new Response(request.method === "HEAD" ? null : page.body, {
-    headers: {
-      ...BASE_HEADERS,
-      "Content-Type": "text/html; charset=utf-8",
-      "Content-Security-Policy": VIEWER_CSP,
-      "X-Frame-Options": "DENY",
-      "Cross-Origin-Opener-Policy": "same-origin",
-    },
-  });
+  if (!share) return new Response(null, { headers });
+
+  // build.mjs checks that the page has the marker exactly once.
+  const [head, tail] = (await page.text()).split(ENVELOPE_MARKER);
+  const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+  const writer = writable.getWriter();
+  const encoder = new TextEncoder();
+  const write = (text: string) => writer.write(encoder.encode(text));
+  ctx.waitUntil((async () => {
+    await write(head);
+    const found = await share;
+    await write(`<script id="mdp-envelope" type="application/octet-stream" data-status="${found.status}">`);
+    if (found.status === "ok") {
+      for await (const piece of base64Pieces(found.object.body)) await write(piece);
+    }
+    await write(`</script>${tail}`);
+    await writer.close();
+  })().catch((reason) => writer.abort(reason)));
+  return new Response(readable, { headers });
+}
+
+type PageShare = { status: "ok"; object: R2ObjectBody } | { status: "not_found" | "unavailable" };
+
+// The share for /s/<id>, or the status the page shows instead.
+async function pageShare(id: string, request: Request, env: Env, ctx: ExecutionContext): Promise<PageShare> {
+  if (!ID_PATTERN.test(id)) return { status: "not_found" };
+  try {
+    if (await limited(env.READ_LIMITER, request)) return { status: "unavailable" };
+    const object = await liveShare(id, env, ctx);
+    return object ? { status: "ok", object } : { status: "not_found" };
+  } catch {
+    return { status: "unavailable" };
+  }
+}
+
+// The stream as base64, piece by piece, as R2 delivers it. Each piece ends on
+// a multiple of 3 bytes, so the pieces join into one valid base64 text.
+async function* base64Pieces(stream: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+  const reader = stream.getReader();
+  let carry = new Uint8Array(0);
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const bytes = new Uint8Array(carry.byteLength + value.byteLength);
+    bytes.set(carry);
+    bytes.set(value, carry.byteLength);
+    const whole = bytes.byteLength - (bytes.byteLength % 3);
+    if (whole > 0) yield base64Encode(bytes.subarray(0, whole));
+    carry = bytes.slice(whole);
+  }
+  if (carry.byteLength > 0) yield base64Encode(carry);
 }
 
 function appleAppSiteAssociation(env: Env): Response {
@@ -173,6 +229,18 @@ function appleAppSiteAssociation(env: Env): Response {
 }
 
 // MARK: - Checks
+
+// The share's object, or null when it is missing or expired; an expired
+// one is deleted on the way.
+async function liveShare(id: string, env: Env, ctx: ExecutionContext): Promise<R2ObjectBody | null> {
+  const object = await env.SHARES.get(PREFIX + id);
+  if (!object) return null;
+  if (isExpired(object.customMetadata, Date.now())) {
+    ctx.waitUntil(env.SHARES.delete(PREFIX + id));
+    return null;
+  }
+  return object;
+}
 
 // The share's metadata when the bearer token matches its owner hash.
 // Missing, expired, and wrong-token shares all answer 404, so a request

@@ -16,9 +16,14 @@ document with the app's own stylesheet and renderers:
   and math renderers, exported by the Swift test `ShareViewerKitTests`, which
   fails when they drift. Regenerate with
   `MDP_WRITE_VIEWER_KIT=1 swift test --package-path tests/swift-tests --filter ShareViewerKitTests`.
-- DOMPurify, highlight.js, and KaTeX are copied from `md-preview/Vendor` by
-  `npm run build:viewer` (it runs before `dev`, `test`, and `deploy`) into
-  `public/`, which is not committed.
+- `npm run build:viewer` (it runs before `dev`, `test`, and `deploy`)
+  bundles the viewer into `public/`, which is not committed: `boot.js`, one
+  stylesheet, and one script (DOMPurify, the renderers, and `main.js`), with
+  highlight.js and KaTeX from `md-preview/Vendor` next to them. They go in
+  `public/s/_viewer/<content hash>/`, served with a one-year immutable
+  `Cache-Control`.
+- `/s/<id>` carries the encrypted envelope at the end of the page, so a
+  reader needs no second request. `/shares/<id>` still serves it to the app.
 - The rendered HTML comes from whoever made the envelope, so the page
   sanitizes it with an explicit allowlist, allows only same-origin scripts
   (CSP in `src/viewer-csp.ts`), and blocks remote images.

@@ -401,16 +401,20 @@ controls are not selectable), and copying whole blocks puts their Markdown
 source on the clipboard with the app's own code (`markdownSelectionScript`,
 exported in `renderers.js`). No layout shift while loading (CLS 0 in Chrome):
 `boot.js`, a blocking script in the head, applies the saved layout before
-the first paint and starts the envelope request at once; highlight.js and
-KaTeX load only for documents with code or math. A slow load shows only
+the first paint; highlight.js and KaTeX load only for documents with code
+or math. One request carries the document: the Worker sends the page's
+head at once and streams the encrypted envelope into the end of the body
+(a `<script type="application/octet-stream">` data block, which runs
+nothing), so the scripts download while R2 is read. The page loads three
+files (`boot.js`, one stylesheet, one script) from a folder named by a
+hash of their content, cached for a year as immutable. A slow load shows only
 the text "Loading…", faded in after 1 s as on Linear's loading screen. Not
-yet: diagrams (Pele; a diagram shows its source for now), password links, Report, burn after reading. Deviations
-from the text below: the page loads a few same-origin files rather than one
-bundle, and `style-src-attr 'unsafe-inline'` is allowed because KaTeX sets
+yet: diagrams (Pele; a diagram shows its source for now), password links, Report, burn after reading. Deviation
+from the text below: `style-src-attr 'unsafe-inline'` is allowed because KaTeX sets
 inline styles; scripts stay `'self'` only.
 
 - Viewer at `GET /s/<id>`: static HTML + one JS bundle from the same origin.
-  It reads the fragment, fetches `/shares/<id>`, decrypts with
+  It reads the fragment, takes the envelope from the page, decrypts with
   WebCrypto, inflates with `DecompressionStream`, and renders.
 - Rendering: **the same output as the app, without a second parser.** The
   viewer takes `html` from the payload (rendered by `MarkdownHTML` at upload)
