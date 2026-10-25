@@ -322,10 +322,14 @@ button {
   font: 13px/1.35 var(--chrome-font);
 }
 
-.contents[data-collapsed] { margin-inline-start: -220px; }
+:root[data-contents="hidden"] .contents { margin-inline-start: -220px; }
 .motion .contents { transition: margin-inline-start var(--rail-motion); }
 
-.contents .panel-label { padding-left: 8px; }
+.contents .panel-label,
+.contents-empty { padding-left: 8px; }
+
+.contents-empty { margin: 0; color: var(--muted); }
+
 
 .contents ol {
   margin: 0;

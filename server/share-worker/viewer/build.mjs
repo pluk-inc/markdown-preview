@@ -13,7 +13,7 @@ const out = join(here, "../public/s/_viewer");
 rmSync(join(here, "../public"), { recursive: true, force: true });
 mkdirSync(join(out, "vendor"), { recursive: true });
 
-for (const file of ["index.html", "main.js", "share-crypto.js", "payload.js", "strings.js", "viewer.css"]) {
+for (const file of ["index.html", "boot.js", "main.js", "share-crypto.js", "payload.js", "strings.js", "viewer.css"]) {
   cpSync(join(here, file), join(out, file));
 }
 cpSync(join(here, "generated"), join(out, "generated"), { recursive: true });

@@ -5,6 +5,7 @@ const STRINGS = {
   en: {
     sharedWithYou: "Shared with you",
     contents: "Contents",
+    noHeadings: "No headings",
     toggleContents: "Show or hide contents",
     readingOptions: "Reading options",
     textSize: "Text size",
@@ -32,6 +33,7 @@ const STRINGS = {
   ja: {
     sharedWithYou: "あなたと共有",
     contents: "目次",
+    noHeadings: "見出しがありません",
     toggleContents: "目次を表示/非表示",
     readingOptions: "表示オプション",
     textSize: "文字サイズ",
@@ -59,6 +61,7 @@ const STRINGS = {
   "zh-Hans": {
     sharedWithYou: "与你共享",
     contents: "目录",
+    noHeadings: "没有标题",
     toggleContents: "显示或隐藏目录",
     readingOptions: "阅读选项",
     textSize: "文字大小",
@@ -86,6 +89,7 @@ const STRINGS = {
   pl: {
     sharedWithYou: "Udostępnione Tobie",
     contents: "Spis treści",
+    noHeadings: "Brak nagłówków",
     toggleContents: "Pokaż lub ukryj spis treści",
     readingOptions: "Opcje czytania",
     textSize: "Rozmiar tekstu",
@@ -113,6 +117,7 @@ const STRINGS = {
   fa: {
     sharedWithYou: "اشتراک‌گذاشته‌شده با شما",
     contents: "فهرست مطالب",
+    noHeadings: "بدون سرفصل",
     toggleContents: "نمایش یا پنهان کردن فهرست مطالب",
     readingOptions: "گزینه‌های خواندن",
     textSize: "اندازهٔ متن",

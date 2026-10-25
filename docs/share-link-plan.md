@@ -371,8 +371,12 @@ stylesheet and code/math renderers (exported and checked by
 `ShareViewerKitTests`), local images as `blob:` URLs, remote images blocked
 with a note, Open in Markdown Preview, Download .md, Copy link (with a
 "Link copied" toast), an Aa panel for text size and width (remembered per
-browser), a Contents rail for documents with three or more headings, and
-error states (only a password link keeps the open button). Not
+browser), a Contents rail (always in place, "No headings" when empty, its
+shown or hidden state remembered), and error states (only a password link
+keeps the open button). No layout shift while loading (CLS 0 in Chrome):
+`boot.js`, a blocking script in the head, applies the saved layout before
+the first paint and starts the envelope request at once; highlight.js and
+KaTeX load only for documents with code or math. Not
 yet: diagrams (Pele), password links, Report, burn after reading. Deviations
 from the text below: the page loads a few same-origin files rather than one
 bundle, and `style-src-attr 'unsafe-inline'` is allowed because KaTeX sets

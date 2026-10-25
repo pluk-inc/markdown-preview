@@ -50,6 +50,7 @@ const page = {
   toggleContents: byId("toggle-contents"),
   contents: byId("contents"),
   contentsList: byId("contents-list"),
+  contentsEmpty: byId("contents-empty"),
   toast: byId("toast"),
 };
 
@@ -93,10 +94,11 @@ function store(key, value) {
   try { localStorage.setItem(key, value); } catch {}
 }
 
+// boot.js has already applied these before the first paint.
 const reading = {
   size: Math.min(Math.max(Number(stored("mdp.textSize") ?? DEFAULT_SIZE) || 0, 0), TEXT_SIZES.length - 1),
-  width: stored("mdp.width") === "full" ? "full" : "fixed",
-  contents: stored("mdp.contents") !== "hidden",
+  width: document.documentElement.dataset.width === "full" ? "full" : "fixed",
+  contents: document.documentElement.dataset.contents !== "hidden",
 };
 
 function applyReading() {
@@ -112,12 +114,9 @@ function applyReading() {
   }));
   page.widthFixed.setAttribute("aria-checked", String(reading.width === "fixed"));
   page.widthFull.setAttribute("aria-checked", String(reading.width === "full"));
-  if (page.contentsList.childElementCount > 0) {
-    page.contents.hidden = false;
-    page.contents.toggleAttribute("data-collapsed", !reading.contents);
-    page.contents.inert = !reading.contents;
-    page.toggleContents.setAttribute("aria-pressed", String(reading.contents));
-  }
+  root.dataset.contents = reading.contents ? "shown" : "hidden";
+  page.contents.inert = !reading.contents;
+  page.toggleContents.setAttribute("aria-pressed", String(reading.contents));
 }
 
 function setReading(change) {
@@ -155,10 +154,14 @@ document.addEventListener("keydown", (event) => {
 
 // MARK: - Contents
 
-/** Lists the document's h1–h3 when there are at least three. */
+/** Lists the document's h1–h3. The rail stays in place without them, so
+ * the layout never moves once the document arrives. */
 function buildContents() {
   const headings = [...page.article.querySelectorAll("h1, h2, h3")];
-  if (headings.length < 3) return;
+  if (headings.length === 0) {
+    page.contentsEmpty.hidden = false;
+    return;
+  }
   const top = Math.min(...headings.map((heading) => Number(heading.tagName[1])));
   page.contentsList.replaceChildren(...headings.map((heading, index) => {
     if (!heading.id) heading.id = `mdp-heading-${index}`;
@@ -171,7 +174,6 @@ function buildContents() {
     item.append(button);
     return item;
   }));
-  page.toggleContents.hidden = false;
 
   // Marks the heading the reader is in.
   const buttons = [...page.contentsList.querySelectorAll("button")];
@@ -240,7 +242,9 @@ async function main() {
 
   let envelope;
   try {
-    const response = await fetch(`/shares/${link.id}`, { cache: "no-store", referrerPolicy: "no-referrer" });
+    // boot.js started this request before the larger scripts loaded.
+    const response = await (window.mdpEnvelope ??
+      fetch(`/shares/${link.id}`, { cache: "no-store", referrerPolicy: "no-referrer" }));
     if (response.status === 404) return showStatus(text.gone);
     if (!response.ok) return showStatus(text.unavailable);
     // Only a live share is worth the app's attention.
@@ -257,10 +261,26 @@ async function main() {
     if (error instanceof ShareError && error.code === "password") return showStatus(text.password, { appCanOpen: true });
     return showStatus(text.damaged);
   }
-  render(payload);
+  await render(payload);
 }
 
-function render(payload) {
+/** Loads a vendor script or stylesheet once, only when a document needs it. */
+const loaded = new Map();
+function loadVendor(file) {
+  if (!loaded.has(file)) {
+    loaded.set(file, new Promise((resolve) => {
+      const isStyle = file.endsWith(".css");
+      const element = document.createElement(isStyle ? "link" : "script");
+      if (isStyle) { element.rel = "stylesheet"; element.href = `/s/_viewer/vendor/${file}`; }
+      else element.src = `/s/_viewer/vendor/${file}`;
+      element.onload = element.onerror = resolve;
+      document.head.append(element);
+    }));
+  }
+  return loaded.get(file);
+}
+
+async function render(payload) {
   const title = displayTitle(payload.title) || text.untitled;
   document.title = `${title} · Markdown Preview`;
   page.title.textContent = title;
@@ -268,9 +288,6 @@ function render(payload) {
   const markdown = new Blob([payload.markdown], { type: "text/markdown;charset=utf-8" });
   page.download.href = URL.createObjectURL(markdown);
   page.download.download = /\.(md|markdown)$/i.test(title) ? title : `${title}.md`;
-  page.download.hidden = false;
-  page.copy.hidden = false;
-  page.readingButton.hidden = false;
 
   page.article.innerHTML = DOMPurify.sanitize(payload.html, SANITIZE_CONFIG);
   const blockedImages = attachImages(payload.assets);
@@ -281,7 +298,14 @@ function render(payload) {
     page.notice.hidden = false;
   }
 
-  for (const element of page.article.querySelectorAll(".math")) {
+  // Highlighting and math load only for documents that use them.
+  const math = page.article.querySelectorAll(".math");
+  await Promise.all([
+    math.length && loadVendor("katex.min.css"),
+    math.length && loadVendor("katex.min.js"),
+    page.article.querySelector("pre > code") && loadVendor("highlight.min.js"),
+  ]);
+  for (const element of math) {
     MdpRenderers.renderMathElement(element, element.textContent, element.classList.contains("math-display"));
   }
   MdpRenderers.highlightAll();

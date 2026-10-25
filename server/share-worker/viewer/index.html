@@ -7,18 +7,19 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
 <title>Shared document · Markdown Preview</title>
+<script src="/s/_viewer/boot.js"></script>
 <link rel="stylesheet" href="/s/_viewer/generated/markdown.css">
-<link rel="stylesheet" href="/s/_viewer/vendor/katex.min.css">
 <link rel="stylesheet" href="/s/_viewer/viewer.css">
+<link rel="modulepreload" href="/s/_viewer/share-crypto.js">
+<link rel="modulepreload" href="/s/_viewer/payload.js">
+<link rel="modulepreload" href="/s/_viewer/strings.js">
 <script src="/s/_viewer/vendor/purify.min.js" defer></script>
-<script src="/s/_viewer/vendor/highlight.min.js" defer></script>
-<script src="/s/_viewer/vendor/katex.min.js" defer></script>
 <script src="/s/_viewer/generated/renderers.js" defer></script>
 <script type="module" src="/s/_viewer/main.js"></script>
 </head>
 <body>
 <header class="bar">
-  <button id="toggle-contents" class="icon-button" type="button" hidden data-l10n-label="toggleContents">
+  <button id="toggle-contents" class="icon-button" type="button" data-l10n-label="toggleContents">
     <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h7"/></svg>
   </button>
   <nav class="crumbs">
@@ -28,7 +29,7 @@
   </nav>
   <div class="actions">
     <div class="reading">
-      <button id="reading-button" class="icon-button text-button" type="button" aria-expanded="false" aria-controls="reading-panel" data-l10n-label="readingOptions" hidden>Aa</button>
+      <button id="reading-button" class="icon-button text-button" type="button" aria-expanded="false" aria-controls="reading-panel" data-l10n-label="readingOptions">Aa</button>
       <div id="reading-panel" class="reading-panel" hidden>
         <p class="panel-label" data-l10n="textSize">Text size</p>
         <div class="stepper">
@@ -43,19 +44,20 @@
         </div>
       </div>
     </div>
-    <button id="copy-link" class="icon-button" type="button" data-l10n-label="copyLink" hidden>
+    <button id="copy-link" class="icon-button" type="button" data-l10n-label="copyLink">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.8 9.2a2.6 2.6 0 0 0 3.7 0l2.2-2.2a2.6 2.6 0 0 0-3.7-3.7l-.9.9M9.2 6.8a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.9-.9"/></svg>
     </button>
-    <a id="download" class="icon-button" data-l10n-label="download" hidden>
+    <a id="download" class="icon-button" data-l10n-label="download">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7 8 10.2 11.2 7M3 13h10"/></svg>
     </a>
     <a id="open-in-app" class="open-button" href="https://markdownpreview.app"><span class="long" data-l10n="open">Open in Markdown Preview</span><span class="short" data-l10n="openShort">Open in App</span></a>
   </div>
 </header>
 <div class="workspace">
-<nav id="contents" class="contents" hidden>
+<nav id="contents" class="contents">
   <p class="panel-label" data-l10n="contents">Contents</p>
   <ol id="contents-list"></ol>
+  <p id="contents-empty" class="contents-empty" data-l10n="noHeadings" hidden>No headings</p>
 </nav>
 <main class="sheet">
   <div class="page">
