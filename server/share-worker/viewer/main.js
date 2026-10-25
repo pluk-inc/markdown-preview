@@ -65,7 +65,7 @@ function localizePage() {
     element.title = text[element.dataset.l10nLabel];
   }
   if (language === "fa") {
-    for (const element of document.querySelectorAll(".bar, .notice, .status, .contents, .footer")) {
+    for (const element of document.querySelectorAll(".bar, .notice, .status, .contents")) {
       element.setAttribute("dir", "rtl");
     }
   }

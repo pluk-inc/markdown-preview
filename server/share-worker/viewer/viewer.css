@@ -260,7 +260,7 @@ button {
   display: flex;
   flex: 1;
   min-height: 0;
-  margin: 0 var(--frame-gap);
+  margin: 0 var(--frame-gap) var(--frame-gap);
   border-radius: 12px;
   overflow: hidden;
   background: var(--sheet);
@@ -363,21 +363,7 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
 
 .status p { margin: 0; }
 
-/* MARK: Footer and toast */
-
-.footer {
-  flex: none;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 6px 8px;
-  padding: 5px 20px 6px;
-  font: 12px/1.4 var(--chrome-font);
-  color: var(--muted);
-}
-
-.footer svg { width: 13px; height: 13px; }
+/* MARK: Toast */
 
 .toast {
   position: fixed;
