@@ -143,6 +143,17 @@ button {
 
 [hidden] { display: none !important; }
 
+/* Only the document is text to copy; the page's own controls and labels
+   are not, as in a Mac app. Error messages stay selectable. */
+.bar,
+.contents,
+.reading-panel,
+.toast,
+.loading {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* MARK: Bar */
 
 .bar {

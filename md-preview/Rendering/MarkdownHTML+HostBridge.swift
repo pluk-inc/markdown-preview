@@ -68,6 +68,97 @@ nonisolated extension MarkdownHTML {
     private static let tablePopupEnabled = true
     #endif
 
+    /// Copy as Markdown, shared by the app's page script and the share
+    /// viewer (exported by ShareViewerKitTests): maps a selection back to
+    /// the Markdown source through the blocks' data-source-* lines.
+    static let markdownSelectionScript: String = """
+        // Copy as Markdown. The host keeps `window.MdPreview.source` (the
+        // document's Markdown) current, and block elements carry their
+        // source line range. A selection that covers whole blocks copies
+        // those source lines, so lists keep their bullets, links their
+        // targets, and code its fences. Partial first or last blocks
+        // contribute their selected text; a selection inside one block
+        // returns null and copies as text.
+        let sourceLineCache = null;
+        function sourceLines() {
+            const source = window.MdPreview.source;
+            if (typeof source !== 'string') return null;
+            if (!sourceLineCache || sourceLineCache.source !== source) {
+                sourceLineCache = { source, lines: source.split('\\n') };
+            }
+            return sourceLineCache.lines;
+        }
+        function sourceSpan(block) {
+            const start = Number(block.dataset.sourceStart || block.dataset.sourceLine);
+            const end = Number(block.dataset.sourceEnd || block.dataset.sourceLine);
+            return Number.isInteger(start) && Number.isInteger(end) && start > 0 && end >= start
+                ? { start, end } : null;
+        }
+        function coversBlockEdge(range, block, edge) {
+            const probe = document.createRange();
+            probe.selectNodeContents(block);
+            if (edge === 'start') probe.setEnd(range.startContainer, range.startOffset);
+            else probe.setStart(range.endContainer, range.endOffset);
+            return probe.toString().trim() === '';
+        }
+        function selectedTextWithin(range, block) {
+            const clipped = document.createRange();
+            clipped.selectNodeContents(block);
+            if (clipped.compareBoundaryPoints(Range.START_TO_START, range) < 0) {
+                clipped.setStart(range.startContainer, range.startOffset);
+            }
+            if (clipped.compareBoundaryPoints(Range.END_TO_END, range) > 0) {
+                clipped.setEnd(range.endContainer, range.endOffset);
+            }
+            return clipped.toString();
+        }
+        function markdownForSelection(selection) {
+            selection = selection || window.getSelection();
+            const lines = sourceLines();
+            if (!lines || !selection || selection.rangeCount !== 1) return null;
+            const range = selection.getRangeAt(0);
+            if (range.collapsed) return null;
+            // Select All ranges over the whole body, so ask for overlap, not
+            // containment; the block lookups below stay inside the article.
+            const article = document.querySelector('.markdown-body');
+            if (!article || !range.intersectsNode(article)) return null;
+            // DOM order is not source order: footnote definitions render at
+            // the end of the article. Take the earliest source start and the
+            // latest source end over every block the selection touches,
+            // preferring the innermost block on ties so a partial list item
+            // contributes its text while the rest of the list copies as source.
+            let startBlock = null, endBlock = null, first = null, last = null;
+            for (const block of article.querySelectorAll('[data-source-line]')) {
+                if (!range.intersectsNode(block)) continue;
+                const span = sourceSpan(block);
+                if (!span) continue;
+                if (!first || span.start <= first.start) { first = span; startBlock = block; }
+                if (!last || span.end >= last.end) { last = span; endBlock = block; }
+            }
+            if (!startBlock || !endBlock) return null;
+            if (last.end < first.start) return null;
+            const slice = (from, to) => lines.slice(from - 1, to).join('\\n');
+            const startWhole = coversBlockEdge(range, startBlock, 'start');
+            const endWhole = coversBlockEdge(range, endBlock, 'end');
+            // Nothing rendered lies outside the selection at an edge: extend
+            // that edge to the document boundary, so a whole-document copy
+            // also carries what renders nothing, such as link reference
+            // definitions at the end.
+            if (startWhole && coversBlockEdge(range, article, 'start')) first = { start: 1, end: first.end };
+            if (endWhole && coversBlockEdge(range, article, 'end')) last = { start: last.start, end: lines.length };
+            if (startBlock === endBlock || startBlock.contains(endBlock) || endBlock.contains(startBlock)) {
+                if (!startWhole || !endWhole) return null;
+                return slice(Math.min(first.start, last.start), Math.max(first.end, last.end));
+            }
+            if (last.start <= first.end) return null;
+            const parts = [];
+            parts.push(startWhole ? slice(first.start, first.end) : selectedTextWithin(range, startBlock));
+            if (last.start > first.end + 1) parts.push(slice(first.end + 1, last.start - 1));
+            parts.push(endWhole ? slice(last.start, last.end) : selectedTextWithin(range, endBlock));
+            return parts.join('\\n');
+        }
+    """
+
     static let hostBridgeScript: String = """
     <script>
     (() => {
@@ -614,91 +705,7 @@ nonisolated extension MarkdownHTML {
             return { fragment, removedButtons: buttons.length > 0 };
         }
 
-        // Copy as Markdown. The host keeps `window.MdPreview.source` (the
-        // document's Markdown) current, and block elements carry their
-        // source line range. A selection that covers whole blocks copies
-        // those source lines, so lists keep their bullets, links their
-        // targets, and code its fences. Partial first or last blocks
-        // contribute their selected text; a selection inside one block
-        // returns null and copies as text.
-        let sourceLineCache = null;
-        function sourceLines() {
-            const source = window.MdPreview.source;
-            if (typeof source !== 'string') return null;
-            if (!sourceLineCache || sourceLineCache.source !== source) {
-                sourceLineCache = { source, lines: source.split('\\n') };
-            }
-            return sourceLineCache.lines;
-        }
-        function sourceSpan(block) {
-            const start = Number(block.dataset.sourceStart || block.dataset.sourceLine);
-            const end = Number(block.dataset.sourceEnd || block.dataset.sourceLine);
-            return Number.isInteger(start) && Number.isInteger(end) && start > 0 && end >= start
-                ? { start, end } : null;
-        }
-        function coversBlockEdge(range, block, edge) {
-            const probe = document.createRange();
-            probe.selectNodeContents(block);
-            if (edge === 'start') probe.setEnd(range.startContainer, range.startOffset);
-            else probe.setStart(range.endContainer, range.endOffset);
-            return probe.toString().trim() === '';
-        }
-        function selectedTextWithin(range, block) {
-            const clipped = document.createRange();
-            clipped.selectNodeContents(block);
-            if (clipped.compareBoundaryPoints(Range.START_TO_START, range) < 0) {
-                clipped.setStart(range.startContainer, range.startOffset);
-            }
-            if (clipped.compareBoundaryPoints(Range.END_TO_END, range) > 0) {
-                clipped.setEnd(range.endContainer, range.endOffset);
-            }
-            return clipped.toString();
-        }
-        function markdownForSelection(selection) {
-            selection = selection || window.getSelection();
-            const lines = sourceLines();
-            if (!lines || !selection || selection.rangeCount !== 1) return null;
-            const range = selection.getRangeAt(0);
-            if (range.collapsed) return null;
-            // Select All ranges over the whole body, so ask for overlap, not
-            // containment; the block lookups below stay inside the article.
-            const article = document.querySelector('.markdown-body');
-            if (!article || !range.intersectsNode(article)) return null;
-            // DOM order is not source order: footnote definitions render at
-            // the end of the article. Take the earliest source start and the
-            // latest source end over every block the selection touches,
-            // preferring the innermost block on ties so a partial list item
-            // contributes its text while the rest of the list copies as source.
-            let startBlock = null, endBlock = null, first = null, last = null;
-            for (const block of article.querySelectorAll('[data-source-line]')) {
-                if (!range.intersectsNode(block)) continue;
-                const span = sourceSpan(block);
-                if (!span) continue;
-                if (!first || span.start <= first.start) { first = span; startBlock = block; }
-                if (!last || span.end >= last.end) { last = span; endBlock = block; }
-            }
-            if (!startBlock || !endBlock) return null;
-            if (last.end < first.start) return null;
-            const slice = (from, to) => lines.slice(from - 1, to).join('\\n');
-            const startWhole = coversBlockEdge(range, startBlock, 'start');
-            const endWhole = coversBlockEdge(range, endBlock, 'end');
-            // Nothing rendered lies outside the selection at an edge: extend
-            // that edge to the document boundary, so a whole-document copy
-            // also carries what renders nothing, such as link reference
-            // definitions at the end.
-            if (startWhole && coversBlockEdge(range, article, 'start')) first = { start: 1, end: first.end };
-            if (endWhole && coversBlockEdge(range, article, 'end')) last = { start: last.start, end: lines.length };
-            if (startBlock === endBlock || startBlock.contains(endBlock) || endBlock.contains(startBlock)) {
-                if (!startWhole || !endWhole) return null;
-                return slice(Math.min(first.start, last.start), Math.max(first.end, last.end));
-            }
-            if (last.start <= first.end) return null;
-            const parts = [];
-            parts.push(startWhole ? slice(first.start, first.end) : selectedTextWithin(range, startBlock));
-            if (last.start > first.end + 1) parts.push(slice(first.end + 1, last.start - 1));
-            parts.push(endWhole ? slice(last.start, last.end) : selectedTextWithin(range, endBlock));
-            return parts.join('\\n');
-        }
+        \(markdownSelectionScript)
 
         function plainTextFromFragment(fragment) {
             const div = document.createElement('div');

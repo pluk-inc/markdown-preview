@@ -179,6 +179,16 @@ document.addEventListener("keydown", (event) => {
     setReadingPanelOpen(false);
     page.readingButton.focus();
   }
+  // Select All takes the document only, as the app's reader does, unless
+  // the reader is typing in a field.
+  const selectAll = (event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "a";
+  if (selectAll && page.article.childElementCount > 0 && !event.target.closest?.("input, textarea, [contenteditable]")) {
+    event.preventDefault();
+    const range = document.createRange();
+    range.selectNodeContents(page.article);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+  }
 });
 
 // MARK: - Contents
@@ -329,6 +339,8 @@ async function render(payload) {
   page.download.href = URL.createObjectURL(markdown);
   page.download.download = /\.(md|markdown)$/i.test(title) ? title : `${title}.md`;
 
+  // The app's copy-as-Markdown code reads the source from here.
+  window.MdPreview = { source: payload.markdown };
   page.article.innerHTML = DOMPurify.sanitize(payload.html, SANITIZE_CONFIG);
   const blockedImages = attachImages(payload.assets);
   if (blockedImages > 0) {
@@ -353,6 +365,20 @@ async function render(payload) {
   document.documentElement.dataset.loaded = "document";
   applyReading();
 }
+
+// Copying whole blocks puts their Markdown source on the clipboard, as the
+// app does; a selection inside one block copies as text.
+window.addEventListener("copy", (event) => {
+  const selection = getSelection();
+  if (!window.MdPreview || !event.clipboardData) return;
+  const markdown = MdpRenderers.markdownForSelection(selection);
+  if (markdown === null) return;
+  const html = document.createElement("div");
+  for (let i = 0; i < selection.rangeCount; i++) html.append(selection.getRangeAt(i).cloneContents());
+  event.clipboardData.setData("text/plain", markdown);
+  event.clipboardData.setData("text/html", html.innerHTML);
+  event.preventDefault();
+});
 
 /** Points images at the share's own files; returns how many remote images were hidden. */
 function attachImages(assets) {

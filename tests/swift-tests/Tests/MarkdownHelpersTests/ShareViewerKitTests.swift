@@ -40,7 +40,12 @@ final class ShareViewerKitTests: XCTestCase {
             (function () {
             \(MarkdownHTML.highlightAllBody)
             \(MarkdownHTML.mathElementRenderer)
-            window.MdpRenderers = { highlightAll: highlightAll, renderMathElement: renderMathElement };
+            \(MarkdownHTML.markdownSelectionScript)
+            window.MdpRenderers = {
+                highlightAll: highlightAll,
+                renderMathElement: renderMathElement,
+                markdownForSelection: markdownForSelection,
+            };
             })();
 
             """,

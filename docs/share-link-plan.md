@@ -374,7 +374,10 @@ with a note, Open in Markdown Preview, Download .md, Copy link (with a
 controls and words (text size, Appearance Automatic/Light/Dark, width; remembered per
 browser), a Contents rail (always in place, "No headings" when empty, its
 shown or hidden state remembered), and error states (only a password link
-keeps the open button). No layout shift while loading (CLS 0 in Chrome):
+keeps the open button). Select All selects only the document (the page's
+controls are not selectable), and copying whole blocks puts their Markdown
+source on the clipboard with the app's own code (`markdownSelectionScript`,
+exported in `renderers.js`). No layout shift while loading (CLS 0 in Chrome):
 `boot.js`, a blocking script in the head, applies the saved layout before
 the first paint and starts the envelope request at once; highlight.js and
 KaTeX load only for documents with code or math. A slow load shows only
