@@ -128,7 +128,6 @@ button {
   padding: 0 calc(var(--frame-gap) + 8px);
   font: 13px/1 var(--chrome-font);
   color: var(--ink);
-  background: var(--frame);
 }
 
 .crumbs {
@@ -296,15 +295,16 @@ button {
   flex: 1;
   min-height: 0;
   padding: 0 var(--frame-gap) var(--frame-gap);
-  /* The rail slides off past the window edge, as in Linear. */
-  overflow: hidden;
+  /* The rail slides off past the window edge, as in Linear. Clip only
+     sideways, so the sheet's top hairline (drawn just outside it) stays. */
+  overflow-x: clip;
 }
 
 .sheet {
   display: flex;
   flex: 1;
   min-width: 0;
-  border-radius: 11px;
+  border-radius: 10px;
   overflow: hidden;
   background: var(--sheet);
   box-shadow: var(--sheet-edge);
@@ -466,7 +466,7 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
   .open-button .short { display: inline; }
   /* A phone scrolls the whole page, so the browser can hide its bars. */
   body { height: auto; min-height: 100dvh; }
-  .bar { position: sticky; top: 0; }
+  .bar { position: sticky; top: 0; background: var(--frame); }
   .sheet { border-radius: 0; box-shadow: none; overflow: visible; }
   .page { overflow: visible; }
   article.markdown-body { padding-top: 20px; }
