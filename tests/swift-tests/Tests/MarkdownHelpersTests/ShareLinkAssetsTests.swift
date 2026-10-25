@@ -43,6 +43,22 @@ final class ShareLinkAssetsTests: XCTestCase {
         XCTAssertEqual(assets.map(\.path), ["img/a.png", "img/My Photo.jpg", "img/b.svg"])
     }
 
+    func testReadsSrcOnlyOutsideQuotedValues() {
+        // The image shows img/a.png; the alt text's src=… is not an attribute.
+        let assets = collect(#"<img alt="example src=img/b.svg" src="img/a.png"><img alt='x src=img/b.svg'>"#)
+        XCTAssertEqual(assets.map(\.path), ["img/a.png"])
+    }
+
+    func testSkipsTagsWithAnUnclosedQuote() {
+        XCTAssertEqual(collect(#"<img alt="open src=img/a.png>"#).map(\.path), [])
+    }
+
+    func testDecodesCharacterReferencesOnce() {
+        try? Data("x".utf8).write(to: directory.appendingPathComponent("img/A&quot;B.png"))
+        let assets = collect(#"<img src="img/A&#38;quot;B.png"><img src="img/a.png?v=1&amp;x=2">"#)
+        XCTAssertEqual(assets.map(\.path), ["img/A&quot;B.png", "img/a.png"])
+    }
+
     func testSkipsRemoteAbsoluteEscapingAndNonImageSources() {
         let html = """
         <img src="https://example.com/x.png"><img src="//cdn.example/x.png">

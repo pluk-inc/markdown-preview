@@ -21,19 +21,14 @@ nonisolated enum ShareLinkAssets {
     private static let imgTag = try! NSRegularExpression(
         pattern: #"<img\b[^>]*>"#, options: [.caseInsensitive])
 
-    // `\s` before `src`, not `\b`: `\b` also matches inside `data-src`.
-    private static let srcAttribute = try! NSRegularExpression(
-        pattern: #"\ssrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))"#, options: [.caseInsensitive])
+    /// One attribute: a name and an optional double-quoted, single-quoted,
+    /// or unquoted value. Read one after another from the tag's start, so
+    /// text inside a quoted value (alt="a src=b.png") is never a name.
+    private static let attribute = try! NSRegularExpression(
+        pattern: #"([^\s"'=<>/`]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?"#)
 
-    private static let numericReference = try! NSRegularExpression(
-        pattern: #"&#(?:[xX]([0-9a-fA-F]{1,6})|([0-9]{1,7}));"#)
-
-    private static let hiddenAttribute = try! NSRegularExpression(
-        pattern: #"\shidden(?:\s|=|/?>)"#, options: [.caseInsensitive])
-
-    // Quoted values are blanked before the `hidden` check, so alt text such
-    // as "a hidden gem" does not hide the image.
-    private static let quotedValue = try! NSRegularExpression(pattern: #""[^"]*"|'[^']*'"#)
+    private static let characterReference = try! NSRegularExpression(
+        pattern: #"&(?:#[xX]([0-9a-fA-F]{1,6})|#([0-9]{1,7})|(amp|quot|apos|lt|gt));"#)
 
     /// HTML that the preview never shows: comments and the contents of
     /// elements that do not render. An image written there must not be
@@ -57,15 +52,10 @@ nonisolated enum ShareLinkAssets {
 
         for match in imgTag.matches(in: html, range: NSRange(html.startIndex..., in: html)) {
             guard let tagRange = Range(match.range, in: html) else { continue }
-            let tag = String(html[tagRange])
-            let tagNSRange = NSRange(tag.startIndex..., in: tag)
-            let names = quotedValue.stringByReplacingMatches(in: tag, range: tagNSRange, withTemplate: "\"\"")
-            guard hiddenAttribute.firstMatch(in: names, range: NSRange(names.startIndex..., in: names)) == nil,
-                  let attribute = srcAttribute.firstMatch(in: tag, range: tagNSRange),
-                  let captured = [1, 2, 3].lazy
-                    .compactMap({ Range(attribute.range(at: $0), in: tag) })
-                    .first,
-                  let source = decodedRelativeSource(String(tag[captured]))
+            guard let attributes = attributes(ofTag: String(html[tagRange])),
+                  attributes["hidden"] == nil,
+                  let src = attributes["src"],
+                  let source = decodedRelativeSource(src)
             else { continue }
 
             // The authored path names the asset, because the HTML refers to
@@ -84,13 +74,33 @@ nonisolated enum ShareLinkAssets {
         return assets
     }
 
+    /// The tag's attributes by lowercased name, the first of each name
+    /// winning as in HTML. Nil when the tag has text no attribute accounts
+    /// for, such as an unclosed quote: the browser may read that tag
+    /// differently, so its image is not uploaded.
+    private static func attributes(ofTag tag: String) -> [String: String]? {
+        let body = tag.dropFirst(4).dropLast() // "<img" and ">"
+        let text = String(body)
+        var attributes: [String: String] = [:]
+        var cursor = text.startIndex
+        for match in attribute.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let whole = Range(match.range, in: text),
+                  text[cursor..<whole.lowerBound].allSatisfy({ $0.isWhitespace || $0 == "/" }),
+                  let name = Range(match.range(at: 1), in: text)
+            else { return nil }
+            cursor = whole.upperBound
+            let value = [2, 3, 4].lazy.compactMap { Range(match.range(at: $0), in: text) }.first
+            let key = text[name].lowercased()
+            if attributes[key] == nil { attributes[key] = value.map { String(text[$0]) } ?? "" }
+        }
+        guard text[cursor...].allSatisfy({ $0.isWhitespace || $0 == "/" }) else { return nil }
+        return attributes
+    }
+
     /// The percent-decoded path of a relative `src`, without its query or
     /// fragment. Nil for URLs with a scheme, absolute paths, and `//host`.
     private static func decodedRelativeSource(_ source: String) -> String? {
-        let unescaped = decodingNumericReferences(source)
-            .replacingOccurrences(of: "&amp;", with: "&")
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&#39;", with: "'")
+        let unescaped = decodingCharacterReferences(source)
         guard !unescaped.isEmpty, !unescaped.hasPrefix("/"), !unescaped.hasPrefix("#"),
               let components = URLComponents(string: unescaped),
               components.scheme == nil, components.host == nil
@@ -99,17 +109,24 @@ nonisolated enum ShareLinkAssets {
         return path.isEmpty ? nil : path
     }
 
-    /// `&#32;` and `&#x2F;` style references, as an HTML parser reads them.
-    private static func decodingNumericReferences(_ text: String) -> String {
-        guard text.contains("&#") else { return text }
+    /// Numeric (`&#32;`, `&#x2F;`) and the common named references, in one
+    /// pass, as an HTML parser reads them: `&#38;quot;` stays `&quot;`.
+    private static func decodingCharacterReferences(_ text: String) -> String {
+        guard text.contains("&") else { return text }
+        let named = ["amp": "&", "quot": "\"", "apos": "'", "lt": "<", "gt": ">"]
         let result = NSMutableString(string: text)
-        for match in numericReference.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
-            let hex = match.range(at: 1).location != NSNotFound
-            guard let digits = Range(match.range(at: hex ? 1 : 2), in: text),
-                  let value = UInt32(text[digits], radix: hex ? 16 : 10),
-                  let scalar = Unicode.Scalar(value)
-            else { continue }
-            result.replaceCharacters(in: match.range, with: String(Character(scalar)))
+        for match in characterReference.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
+            let replacement: String?
+            if let name = Range(match.range(at: 3), in: text) {
+                replacement = named[String(text[name])]
+            } else {
+                let hex = match.range(at: 1).location != NSNotFound
+                replacement = Range(match.range(at: hex ? 1 : 2), in: text)
+                    .flatMap { UInt32(text[$0], radix: hex ? 16 : 10) }
+                    .flatMap(Unicode.Scalar.init)
+                    .map { String(Character($0)) }
+            }
+            if let replacement { result.replaceCharacters(in: match.range, with: replacement) }
         }
         return result as String
     }
