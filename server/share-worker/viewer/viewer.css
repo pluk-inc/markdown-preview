@@ -285,13 +285,15 @@ button {
 .capsule {
   display: flex;
   align-items: center;
+  box-sizing: border-box;
   height: 30px;
+  padding: 2px;
   border-radius: 999px;
   background: var(--hover);
 }
 
 .capsule button {
-  width: 48px;
+  width: 46px;
   height: 100%;
   border: 0;
   border-radius: 999px;
