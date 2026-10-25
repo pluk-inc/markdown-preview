@@ -84,6 +84,7 @@ function showStatus(message, { appCanOpen = false } = {}) {
   page.status.hidden = false;
   page.crumbSeparator.setAttribute("hidden", "");
   page.open.hidden = !appCanOpen;
+  page.download.hidden = true;
   document.documentElement.dataset.loaded = "error";
 }
 
@@ -256,7 +257,9 @@ function buildContents() {
   // Marks the heading the reader is in.
   const buttons = [...page.contentsList.querySelectorAll("button")];
   const scroller = document.querySelector(".page");
-  const observer = new IntersectionObserver(() => {
+  let pending = false;
+  const markCurrent = () => {
+    pending = false;
     let current = 0;
     // The reading area's top: the sheet scrolls on a desktop, the page on a phone.
     const top = Math.max(scroller.getBoundingClientRect().top, 0) + 60;
@@ -264,8 +267,13 @@ function buildContents() {
       if (heading.getBoundingClientRect().top < top) current = index;
     });
     buttons.forEach((button, index) => button.classList.toggle("current", index === current));
-  }, { rootMargin: "0px 0px -60% 0px" });
-  headings.forEach((heading) => observer.observe(heading));
+  };
+  const onScroll = () => {
+    if (!pending) { pending = true; requestAnimationFrame(markCurrent); }
+  };
+  scroller.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("scroll", onScroll, { passive: true });
+  markCurrent();
   updateContentsFade();
 }
 
@@ -391,6 +399,9 @@ async function render(payload) {
   // The app's copy-as-Markdown code reads the source from here.
   window.MdPreview = { source: payload.markdown };
   page.article.innerHTML = DOMPurify.sanitize(payload.html, SANITIZE_CONFIG);
+  // The viewer does not draw diagrams yet; the app's source layout keeps
+  // their line breaks instead of clipping them in the diagram box.
+  page.article.querySelectorAll(".mermaid-figure").forEach((figure) => figure.classList.add("mermaid-error"));
   const blockedImages = attachImages(payload.assets);
   if (blockedImages > 0) {
     page.notice.textContent = blockedImages === 1

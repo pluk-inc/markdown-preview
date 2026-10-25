@@ -137,6 +137,7 @@ button {
 .contents button:focus-visible,
 .capsule button:focus-visible { background: var(--hover); }
 .segmented button:focus-visible:not([aria-checked="true"]) { color: var(--ink); background: var(--hover); }
+.segmented button[aria-checked="true"]:focus-visible { color: var(--accent); }
 
 [hidden] { display: none !important; }
 
@@ -555,16 +556,6 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
   from { opacity: 0; transform: translate(-50%, 6px); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  html,
-  .page { scroll-behavior: auto; }
-  .reading-panel,
-  .toast { animation: none; }
-  .loading { animation: loading-in 0.4s ease-out 1s both; }
-  .motion .contents,
-  .segmented.sliding::before { transition: none; }
-}
-
 /* MARK: Narrow windows */
 
 .scrim { display: none; }
@@ -641,6 +632,13 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
   .bar { gap: 6px; padding: 0 8px 0 16px; }
   .crumb-origin,
   .crumb-sep { display: none !important; }
+  .reading { position: static; }
+  .reading-panel {
+    position: fixed;
+    top: 60px;
+    right: 8px;
+    width: min(300px, calc(100vw - 16px));
+  }
   .open-button { margin-left: 4px; padding: 0 12px; }
   .open-button .long { display: none; }
   .open-button .short { display: inline; }
@@ -651,4 +649,33 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
   .page { overflow: visible; }
   article.markdown-body { padding-top: 20px; }
   article.markdown-body [id] { scroll-margin-top: 64px; }
+}
+
+/* MARK: Print: the whole document, without the page's controls */
+
+@media print {
+  :root,
+  body { height: auto; overflow: visible !important; background: #fff !important; }
+  .bar,
+  .contents,
+  .scrim,
+  .toast,
+  .loading,
+  .notice { display: none !important; }
+  .workspace,
+  .sheet,
+  .page { display: block; height: auto; overflow: visible; border-radius: 0; box-shadow: none; background: none; }
+  article.markdown-body { max-width: none; padding: 0; }
+}
+
+/* Last, so no rule above (the narrow-window drawer's among them) undoes it. */
+@media (prefers-reduced-motion: reduce) {
+  html,
+  .page { scroll-behavior: auto; }
+  .reading-panel,
+  .toast { animation: none; }
+  .loading { animation: loading-in 0.4s ease-out 1s both; }
+  .motion .contents,
+  .scrim,
+  .segmented.sliding::before { transition: none; }
 }

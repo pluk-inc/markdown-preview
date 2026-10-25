@@ -385,7 +385,7 @@ exported in `renderers.js`). No layout shift while loading (CLS 0 in Chrome):
 the first paint and starts the envelope request at once; highlight.js and
 KaTeX load only for documents with code or math. A slow load shows only
 the text "Loading…", faded in after 1 s as on Linear's loading screen. Not
-yet: diagrams (Pele), password links, Report, burn after reading. Deviations
+yet: diagrams (Pele; a diagram shows its source for now), password links, Report, burn after reading. Deviations
 from the text below: the page loads a few same-origin files rather than one
 bundle, and `style-src-attr 'unsafe-inline'` is allowed because KaTeX sets
 inline styles; scripts stay `'self'` only.
