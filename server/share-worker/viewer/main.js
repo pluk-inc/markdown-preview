@@ -54,6 +54,7 @@ const page = {
   toggleContents: byId("toggle-contents"),
   scrim: byId("scrim"),
   contents: byId("contents"),
+  resizer: byId("contents-resizer"),
   contentsList: byId("contents-list"),
   contentsEmpty: byId("contents-empty"),
   toast: byId("toast"),
@@ -79,11 +80,10 @@ function localizePage() {
 
 /** Shows why the document cannot be shown. Only a password link keeps
  * "Open in Markdown Preview": the app can open it, but not a broken link. */
-function showStatus(message, { appCanOpen = false } = {}) {
+function showStatus(message) {
   page.statusText.textContent = message;
   page.status.hidden = false;
   page.crumbSeparator.setAttribute("hidden", "");
-  page.open.hidden = !appCanOpen;
   page.download.hidden = true;
   document.documentElement.dataset.loaded = "error";
 }
@@ -230,6 +230,38 @@ function updateContentsFade() {
 page.contents.addEventListener("scroll", updateContentsFade, { passive: true });
 window.addEventListener("resize", updateContentsFade);
 
+// The rail's width: dragged at its edge, remembered per browser; a
+// double-click on the edge goes back to the default. boot.js applied the
+// saved width before the first paint.
+const rail = window.mdpRail;
+
+function setRailWidth(width) {
+  rail.width = Math.round(Math.min(Math.max(width, rail.min), rail.max));
+  document.documentElement.style.setProperty("--rail-width", `${rail.width}px`);
+}
+
+page.resizer.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  const startX = event.clientX;
+  const startWidth = rail.width;
+  const drag = (move) => setRailWidth(startWidth + move.clientX - startX);
+  page.resizer.setPointerCapture(event.pointerId);
+  page.resizer.addEventListener("pointermove", drag);
+  page.resizer.addEventListener("lostpointercapture", () => {
+    page.resizer.removeEventListener("pointermove", drag);
+    document.documentElement.classList.remove("resizing");
+    store("mdp.railWidth", String(rail.width));
+    updateContentsFade();
+  }, { once: true });
+  document.documentElement.classList.add("resizing");
+});
+
+page.resizer.addEventListener("dblclick", () => {
+  setRailWidth(rail.initial);
+  store("mdp.railWidth", String(rail.width));
+});
+
 /** Lists the document's h1–h3. The rail stays in place without them, so
  * the layout never moves once the document arrives. */
 function buildContents() {
@@ -344,7 +376,7 @@ async function main() {
   }
   if (link.hasPassword) {
     openInAppIfRemembered();
-    return showStatus(text.password, { appCanOpen: true });
+    return showStatus(text.password);
   }
 
   const envelope = pageEnvelope();
@@ -357,7 +389,7 @@ async function main() {
   try {
     payload = decodePayload(await openEnvelope(envelope.bytes, link.key, null));
   } catch (error) {
-    if (error instanceof ShareError && error.code === "password") return showStatus(text.password, { appCanOpen: true });
+    if (error instanceof ShareError && error.code === "password") return showStatus(text.password);
     return showStatus(text.damaged);
   }
   await render(payload);

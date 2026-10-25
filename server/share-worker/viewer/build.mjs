@@ -61,9 +61,12 @@ const pageURLs = {
     readFileSync(join(here, "generated/renderers.js")), Buffer.from("\n;\n"),
     main.outputFiles[0].contents,
   ])),
+  // The app icon (viewer/icons, made from md-preview/AppIcon.icon).
+  "favicon.png": emit("favicon.png", readFileSync(join(here, "icons/favicon.png"))),
+  "apple-touch-icon.png": emit("apple-touch-icon.png", readFileSync(join(here, "icons/apple-touch-icon.png"))),
 };
 
-const page = readFileSync(join(here, "index.html"), "utf8").replace(/\{\{([\w.]+)\}\}/g, (_, name) => {
+const page = readFileSync(join(here, "index.html"), "utf8").replace(/\{\{([\w.-]+)\}\}/g, (_, name) => {
   if (!pageURLs[name]) throw new Error(`index.html names an unknown file: ${name}`);
   return pageURLs[name];
 });

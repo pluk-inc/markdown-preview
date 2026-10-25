@@ -388,7 +388,7 @@ button {
 .contents {
   flex: none;
   box-sizing: border-box;
-  width: 220px;
+  width: var(--rail-width, 220px);
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 10px 12px 20px 0;
@@ -410,10 +410,44 @@ button {
 @property --fade-top { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @property --fade-bottom { syntax: "<length>"; inherits: false; initial-value: 0px; }
 
-:root[data-contents="hidden"] .contents { margin-inline-start: -220px; }
+:root[data-contents="hidden"] .contents { margin-inline-start: calc(-1 * var(--rail-width, 220px)); }
 .motion .contents {
   transition: margin-inline-start var(--rail-motion), --fade-top 150ms ease-out, --fade-bottom 150ms ease-out;
 }
+
+/* The rail's edge, dragged to set its width (main.js), as in Linear. It
+   takes no room: it straddles the sheet's edge, 8 px over the rail's
+   padding and 4 px over the sheet, and shows a line there on hover. */
+.resizer {
+  flex: none;
+  position: relative;
+  z-index: 2;
+  width: 12px;
+  margin-inline: -8px -4px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.resizer::after {
+  content: "";
+  position: absolute;
+  inset-block: 10px;
+  left: 7px;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background-color 150ms ease-out;
+}
+
+.resizer:hover::after,
+.resizing .resizer::after { background: var(--hairline); transition-delay: 100ms; }
+.resizing .resizer::after { transition-delay: 0s; }
+
+/* While dragging, the whole page shows the resize cursor and nothing is selected. */
+.resizing,
+.resizing * { cursor: col-resize !important; user-select: none !important; }
+
+:root[data-contents="hidden"] .resizer { display: none; }
 
 .contents .panel-label,
 .contents-empty { padding-left: 8px; }
@@ -563,6 +597,8 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
 /* Narrow windows: the contents slide in over the page from the left, as
    Linear's sidebar does on a phone, behind a dimmed page. */
 @media (max-width: 980px) {
+  .resizer { display: none; }
+
   .contents,
   :root[data-contents="hidden"] .contents {
     position: fixed;
@@ -658,6 +694,7 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
   body { height: auto; overflow: visible !important; background: #fff !important; }
   .bar,
   .contents,
+  .resizer,
   .scrim,
   .toast,
   .loading,
