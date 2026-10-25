@@ -337,17 +337,28 @@ Goal: when the app is installed, `https://md-preview.app/s/<id>#<key>` opens in
 the app, not the browser. The same link falls back to the web viewer when the
 app is missing.
 
+Built (2026-10-25), approved by the maintainer; not yet tested end to end,
+which needs the Worker deployed on `md-preview.app` and a signed Release build.
+
 - Entitlement `com.apple.developer.associated-domains` =
-  `applinks:md-preview.app` in `md-preview.entitlements`. **Entitlement change —
-  needs the maintainer's approval (AGENTS.md).** A Developer ID app needs a
-  Developer ID provisioning profile with Associated Domains, and the Amore
-  signing setup must embed it; read the `release-process` skill first.
-- The share domain (open question 1) is baked into the entitlement, so it must
-  be decided before this work starts.
+  `applinks:md-preview.app`, in **Release builds only**:
+  `md-preview.release.entitlements` is `md-preview.entitlements` plus that key
+  (`EntitlementsParityTests` keeps them otherwise equal). Debug builds cannot
+  carry it: the restricted entitlement needs a profile, and
+  `doc.md-preview.dev` belongs to another team, so no profile can be made.
+- A Developer ID app with this entitlement must embed a Developer ID
+  provisioning profile with Associated Domains, or it does not launch.
+  `scripts/release.sh` stops in preflight unless it gets
+  `--provisioning-profile <file>`, `AMORE_PROVISIONING_PROFILE`, or an App
+  Store Connect API key (`ASC_API_KEY_ID`), which Amore uses to sign.
+  Account setup: enable Associated Domains on the `doc.md-preview` App ID and
+  create a Developer ID profile for it.
 - The app receives the link through
   `application(_:continue:restorationHandler:)` with
-  `NSUserActivityTypeBrowsingWeb`; `webpageURL` includes the `#<key>` fragment.
-  Route it into the same open flow as `md-preview://share`.
+  `NSUserActivityTypeBrowsingWeb` and routes it into the same open flow as
+  `md-preview://share`. If share links are off in that build, it hands the
+  link to the default browser (by app, so macOS does not send it back). Still
+  to confirm on a real link: that `webpageURL` keeps the `#<key>` fragment.
 - Works from Safari and from apps that open links through macOS (Messages,
   Mail, Notes). **Chrome and Firefox on macOS open the page themselves** — the
   viewer's "Open in Markdown Preview" button covers them (§5). A link typed or
