@@ -37,8 +37,11 @@ body { overflow: visible !important; padding: 0 !important; }
   --button-radius: 7px;
   --icon: #6f6f71;
   --icon-hover: #232323;
-  /* Toolbar buttons rise on hover like Linear's round sidebar buttons
-     (measured): the panel color, a 7% hairline, a short shadow below. */
+  /* Toolbar buttons hover like Linear's sidebar search button (measured):
+     a flat 28 px circle, #e7e7e8 on #f2f2f3 (black at 4.5%). */
+  --toolbar-hover: rgba(0, 0, 0, 0.045);
+  /* The sidebar toggle rises instead, like Linear's round compose button:
+     the panel color, a 7% hairline, a short shadow below. */
   --button-raised: #fafafb;
   --button-raised-edge: 0 0 0 0.5px rgba(0, 0, 0, 0.07), 0 1px 1.5px rgba(0, 0, 0, 0.06),
     0 2px 4px rgba(0, 0, 0, 0.02);
@@ -78,6 +81,7 @@ body { overflow: visible !important; padding: 0 !important; }
     --button-hover: rgba(255, 255, 255, 0.05);
     --icon: #949597;
     --icon-hover: #e2e3e5;
+    --toolbar-hover: rgba(255, 255, 255, 0.07);
     --button-raised: #111212;
     --button-raised-edge: 0 0 0 0.5px #232325, 0 1px 2px rgba(0, 0, 0, 0.4);
     --accent: #3b9bff;
@@ -185,6 +189,11 @@ button {
 .icon-button[aria-expanded="true"],
 .icon-button[aria-pressed="true"] {
   color: var(--icon-hover);
+  background: var(--toolbar-hover);
+}
+
+#toggle-contents:hover,
+#toggle-contents[aria-pressed="true"] {
   background: var(--button-raised);
   box-shadow: var(--button-raised-edge);
 }
