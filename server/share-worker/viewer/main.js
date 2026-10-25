@@ -113,7 +113,9 @@ function applyReading() {
   page.widthFixed.setAttribute("aria-checked", String(reading.width === "fixed"));
   page.widthFull.setAttribute("aria-checked", String(reading.width === "full"));
   if (page.contentsList.childElementCount > 0) {
-    page.contents.hidden = !reading.contents;
+    page.contents.hidden = false;
+    page.contents.toggleAttribute("data-collapsed", !reading.contents);
+    page.contents.inert = !reading.contents;
     page.toggleContents.setAttribute("aria-pressed", String(reading.contents));
   }
 }
@@ -136,7 +138,11 @@ page.smaller.addEventListener("click", () => setReading({ size: reading.size - 1
 page.larger.addEventListener("click", () => setReading({ size: reading.size + 1 }));
 page.widthFixed.addEventListener("click", () => setReading({ width: "fixed" }));
 page.widthFull.addEventListener("click", () => setReading({ width: "full" }));
-page.toggleContents.addEventListener("click", () => setReading({ contents: !reading.contents }));
+page.toggleContents.addEventListener("click", () => {
+  // Animate only what the reader does, never the first layout.
+  document.body.classList.add("motion");
+  setReading({ contents: !reading.contents });
+});
 document.addEventListener("click", (event) => {
   if (!page.readingPanel.hidden && !event.target.closest(".reading")) setReadingPanelOpen(false);
 });

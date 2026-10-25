@@ -37,6 +37,18 @@ body { overflow: visible !important; padding: 0 !important; }
   --gutter: 48px;
   --reader-size: 15px;
   --reader-width: 820px;
+  /* Linear's sidebar motion, measured frame by frame from a recording: a
+     damped spring (omega 21/s, damping ratio 0.95, no overshoot) that
+     settles in about 340 ms, sampled for CSS linear(). */
+  --rail-motion: 290ms ease;
+}
+
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --rail-motion: 341ms linear(0, 0.037, 0.123, 0.231, 0.344, 0.452, 0.551, 0.637, 0.71, 0.771,
+      0.822, 0.862, 0.894, 0.92, 0.94, 0.955, 0.967, 0.976, 0.982, 0.987, 0.991, 0.994, 0.996,
+      0.997, 1);
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -261,6 +273,8 @@ button {
   flex: 1;
   min-height: 0;
   padding: 0 var(--frame-gap) var(--frame-gap);
+  /* The rail slides off past the window edge, as in Linear. */
+  overflow: hidden;
 }
 
 .sheet {
@@ -273,14 +287,20 @@ button {
   box-shadow: var(--sheet-edge);
 }
 
+/* Hiding the rail slides it out to the start side in one solid piece, and
+   the sheet's edge follows it; nothing fades. */
 .contents {
   flex: none;
+  box-sizing: border-box;
   width: 220px;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 10px 12px 20px 0;
   font: 13px/1.35 var(--chrome-font);
 }
+
+.contents[data-collapsed] { margin-inline-start: -220px; }
+.motion .contents { transition: margin-inline-start var(--rail-motion); }
 
 .contents .panel-label { padding-left: 8px; }
 
@@ -393,6 +413,7 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
 @media (prefers-reduced-motion: reduce) {
   .reading-panel,
   .toast { animation: none; }
+  .motion .contents { transition: none; }
 }
 
 /* MARK: Narrow windows */
