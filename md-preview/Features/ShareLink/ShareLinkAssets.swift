@@ -117,10 +117,13 @@ nonisolated enum ShareLinkAssets {
     /// the document uses, under web/1.png and so on (another folder name
     /// when the document has its own web/ folder). An image that fails, is
     /// too large, or is not a supported type stays out; the web viewer
-    /// shows its description instead.
+    /// shows its description instead. Only `budget` bytes of images are
+    /// kept: past it, the largest is dropped as each download finishes, so
+    /// memory stays near what the share can carry (see `assetsToTry`).
     static func downloadWebImages(
         _ sources: [String],
         takenPaths: Set<String>,
+        budget: Int = ShareLinkCrypto.maxEnvelopeBytes,
         fetch: @escaping @Sendable (URL) async throws -> (Data, URLResponse) = fetchWebImage
     ) async -> [SharePayload.Asset] {
         var folder = "web"
@@ -130,11 +133,19 @@ nonisolated enum ShareLinkAssets {
             (index, await webImage(sources[index], path: "\(webFolder)/\(index + 1)", fetch: fetch))
         }
         var slots = [SharePayload.Asset?](repeating: nil, count: sources.count)
+        var kept = 0
         await withTaskGroup(of: (Int, SharePayload.Asset?).self) { group in
             var next = min(maxParallelDownloads, sources.count)
             for index in 0..<next { group.addTask { await download(index) } }
             for await (index, asset) in group {
                 slots[index] = asset
+                kept += asset?.data.count ?? 0
+                while kept > budget, let largest = slots.indices.max(by: {
+                    (slots[$0]?.data.count ?? 0) < (slots[$1]?.data.count ?? 0)
+                }), let dropped = slots[largest] {
+                    kept -= dropped.data.count
+                    slots[largest] = nil
+                }
                 guard next < sources.count else { continue }
                 let index = next
                 next += 1
@@ -176,10 +187,13 @@ nonisolated enum ShareLinkAssets {
     /// No cookies, no cache, 20 seconds in all for each image.
     private static let webImageSession = ShareLinkClient.makeSession(resourceTimeout: 20)
 
-    /// One image from the web. It stops reading as soon as the image is
-    /// larger than any share can carry.
+    /// One image from the web. It reads no body for an error status, and
+    /// stops reading as soon as the image is larger than any share can carry.
     @Sendable static func fetchWebImage(_ url: URL) async throws -> (Data, URLResponse) {
         let (bytes, response) = try await webImageSession.bytes(from: url)
+        if let status = (response as? HTTPURLResponse)?.statusCode, !(200..<300).contains(status) {
+            throw URLError(.badServerResponse)
+        }
         guard response.expectedContentLength <= maxWebImageBytes else { throw URLError(.dataLengthExceedsMaximum) }
         var data = Data()
         data.reserveCapacity(max(0, Int(response.expectedContentLength)))

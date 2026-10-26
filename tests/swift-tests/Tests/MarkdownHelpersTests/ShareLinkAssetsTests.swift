@@ -188,6 +188,24 @@ final class ShareLinkAssetsTests: XCTestCase {
         XCTAssertNoThrow(try ShareLinkCrypto.seal(payload.encoded(), key: Data(count: 32), password: nil))
     }
 
+    func testKeepsOnlyTheSmallestWebImagesThatFitTheBudgetWhileDownloading() async {
+        let sizes = ["a": 300, "b": 100, "c": 500, "d": 200]
+        let assets = await ShareLinkAssets.downloadWebImages(
+            ["a", "b", "c", "d"].map { "https://example.com/\($0).png" }, takenPaths: [], budget: 350
+        ) { url in
+            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1",
+                                           headerFields: ["Content-Type": "image/png"])!
+            return (Data(count: sizes[url.deletingPathExtension().lastPathComponent]!), response)
+        }
+        XCTAssertEqual(assets.map(\.data.count), [100, 200])
+    }
+
+    func testFallsBackToTextOnlyWhenOnlyWebImagesWereSent() {
+        let web = SharePayload.Asset(path: "web/1.png", type: "image/png", data: Data(count: 10),
+                                     source: "https://example.com/a.png")
+        XCTAssertEqual(ShareLinkAssets.assetsToTry([web]).map(\.count), [1, 0])
+    }
+
     func testLeavesOutTheLargestWebImagesFirst() {
         let asset = { (path: String, bytes: Int, web: Bool) in
             SharePayload.Asset(path: path, type: "image/png", data: Data(count: bytes),

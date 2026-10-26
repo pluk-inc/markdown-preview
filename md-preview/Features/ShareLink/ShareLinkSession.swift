@@ -213,8 +213,10 @@ enum ShareLinkSession {
             let html = MarkdownHTML.render(markdown: markdown).articleHTML
             let local = ShareLinkAssets.collect(articleHTML: html,
                                                 directory: fileURL.deletingLastPathComponent())
-            let web = await ShareLinkAssets.downloadWebImages(ShareLinkAssets.webImageSources(articleHTML: html),
-                                                              takenPaths: Set(local.map(\.path)))
+            let web = await ShareLinkAssets.downloadWebImages(
+                ShareLinkAssets.webImageSources(articleHTML: html),
+                takenPaths: Set(local.map(\.path)),
+                budget: ShareLinkCrypto.maxEnvelopeBytes - local.reduce(0) { $0 + $1.data.count })
             let payload = SharePayload(title: fileURL.lastPathComponent, markdown: markdown,
                                        html: html, assets: local + web)
             let digest = (try? payload.encoded()).map { Base64URL.encode(Data(SHA256.hash(data: $0))) }

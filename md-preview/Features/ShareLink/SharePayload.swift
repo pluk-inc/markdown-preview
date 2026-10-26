@@ -90,7 +90,8 @@ nonisolated struct SharePayload: Codable, Equatable, Sendable {
 
     /// An `http` or `https` address with a host, at most 4096 characters.
     static func isWebSource(_ source: String) -> Bool {
-        guard source.count <= 4096, let components = URLComponents(string: source),
+        // UTF-16 units, as the viewer's `source.length` counts them.
+        guard source.utf16.count <= 4096, let components = URLComponents(string: source),
               let scheme = components.scheme?.lowercased(), components.host?.isEmpty == false
         else { return false }
         return scheme == "http" || scheme == "https"

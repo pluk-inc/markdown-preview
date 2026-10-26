@@ -41,6 +41,14 @@ final class SharePayloadTests: XCTestCase {
         XCTAssertEqual(try SharePayload.decode(payload.encoded()), payload)
     }
 
+    func testCountsASourceLengthInUTF16UnitsAsTheViewerDoes() {
+        // "𝔸" is one Character but two UTF-16 units, as JavaScript counts it.
+        let base = "https://example.com/"
+        let fits = base + String(repeating: "𝔸", count: (4096 - base.utf16.count) / 2)
+        XCTAssertTrue(SharePayload.isWebSource(fits))
+        XCTAssertFalse(SharePayload.isWebSource(fits + "𝔸"))
+    }
+
     func testRejectsASourceThatIsNotAWebAddress() {
         for source in ["javascript:alert(1)", "file:///etc/passwd", "img/x.png", "https://"] {
             let asset = #"[{"path":"web/1.png","type":"image/png","data":"AQ==","source":"\#(source)"}]"#
