@@ -18,27 +18,26 @@ body { padding: 0; }
 }
 
 :root {
-  /* Frame, sheet, hairline, and shadow match Linear's light surfaces,
-     measured from its window in sRGB; dark uses its dark theme tokens. */
+  /* Frame, sheet, hairline, and shadow: light surfaces in sRGB; dark
+     ones below. */
   --frame: #f2f2f3;
   --sheet: #fafafb;
   --ink: rgba(0, 0, 0, 0.85);
   --muted: rgba(0, 0, 0, 0.5);
   --hairline: rgba(0, 0, 0, 0.08);
   --hover: rgba(0, 0, 0, 0.05);
-  /* Linear's hover on its grey sidebar, where these buttons also sit
-     (measured): #ececed on #f2f2f3 (black at
-     2.5%); icons muted at rest, near black on hover. Contents items use
-     its 7 px corners; the bar buttons stay circular. */
+  /* Hover on the grey frame, where these buttons sit: #ececed on #f2f2f3
+     (black at 2.5%); icons muted at rest, near black on hover. Contents
+     items use 7 px corners; the bar buttons stay circular. */
   --button-hover: rgba(0, 0, 0, 0.025);
   --button-radius: 7px;
   --icon: #6f6f71;
   --icon-hover: #232323;
-  /* Toolbar buttons hover like Linear's sidebar search button (measured):
-     a flat 28 px circle, #e7e7e8 on #f2f2f3 (black at 4.5%). */
+  /* Toolbar buttons hover as a flat 28 px circle, #e7e7e8 on #f2f2f3
+     (black at 4.5%). */
   --toolbar-hover: rgba(0, 0, 0, 0.045);
-  /* The sidebar toggle rises instead, like Linear's round compose button:
-     the panel color, a 7% hairline, a short shadow below. */
+  /* The sidebar toggle rises instead: the panel color, a 7% hairline, a
+     short shadow below. */
   --button-raised: #fafafb;
   --button-raised-edge: 0 0 0 0.5px rgba(0, 0, 0, 0.07), 0 1px 1.5px rgba(0, 0, 0, 0.06),
     0 2px 4px rgba(0, 0, 0, 0.02);
@@ -46,8 +45,8 @@ body { padding: 0; }
   --on-accent: #ffffff;
   --panel: #ffffff;
   --panel-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 8px 28px rgba(0, 0, 0, 0.12);
-  /* Linear's popover (measured): white, a #ededed hairline edge and row
-     dividers, #717173 labels, a soft shadow that is deeper below. */
+  /* Popover: white, a #ededed hairline edge and row dividers, #717173
+     labels, a soft shadow that is deeper below. */
   --popover: #ffffff;
   --popover-edge: #ededed;
   --popover-label: #717173;
@@ -59,12 +58,15 @@ body { padding: 0; }
   --gutter: 48px;
   --reader-size: 15px;
   --reader-width: 820px;
-  /* Linear's sidebar motion, measured frame by frame from a recording: a
-     damped spring (omega 21/s, damping ratio 0.95, no overshoot) that
-     settles in about 340 ms, sampled for CSS linear(). */
+  /* The rail's motion: a damped spring (omega 21/s, damping ratio 0.95,
+     no overshoot) that settles in about 340 ms, sampled for CSS linear(). */
   --rail-motion: 290ms ease;
   /* The Contents rail's default width; boot.js sets a width the reader dragged. */
   --rail-width: 220px;
+  /* The rail edge's hover line: a faint track and a darker stretch that
+     follows the pointer. */
+  --resize-track: #d2d2d2;
+  --resize-indicator: rgba(0, 0, 0, 0.35);
 }
 
 @supports (transition-timing-function: linear(0, 1)) {
@@ -82,6 +84,8 @@ body { padding: 0; }
     --ink: rgba(255, 255, 255, 0.88);
     --muted: rgba(255, 255, 255, 0.52);
     --hairline: rgba(255, 255, 255, 0.09);
+    --resize-track: #3f4042;
+    --resize-indicator: rgba(255, 255, 255, 0.35);
     --hover: rgba(255, 255, 255, 0.07);
     --button-hover: rgba(255, 255, 255, 0.05);
     --icon: #949597;
@@ -258,7 +262,7 @@ button {
 .bar a:hover { text-decoration: none; }
 .open-button .short { display: none; }
 
-/* MARK: Reading panel: Linear's popover rows, the app's controls and words */
+/* MARK: Reading panel: popover rows, the app's controls and words */
 
 .reading { position: relative; }
 
@@ -369,8 +373,8 @@ button {
   flex: 1;
   min-height: 0;
   padding: 0 var(--frame-gap) var(--frame-gap);
-  /* The rail slides off past the window edge, as in Linear. Clip only
-     sideways, so the sheet's top hairline (drawn just outside it) stays. */
+  /* The rail slides off past the window edge. Clip only sideways, so the
+     sheet's top hairline (drawn just outside it) stays. */
   overflow-x: clip;
 }
 
@@ -417,8 +421,7 @@ button {
   transition: margin-inline-start var(--rail-motion), --fade-top 150ms ease-out, --fade-bottom 150ms ease-out;
 }
 
-/* The rail's edge, dragged to set its width (main.js), as in Linear. It
-   takes no room: it straddles the sheet's edge, 8 px over the rail's
+/* The rail's edge, dragged to set its width (main.js). It takes no room: it straddles the sheet's edge, 8 px over the rail's
    padding and 4 px over the sheet, and shows a line there on hover. */
 .resizer {
   flex: none;
@@ -430,20 +433,45 @@ button {
   touch-action: none;
 }
 
-.resizer::after {
-  content: "";
+/* The resize line: a half-pixel track on the sheet's edge whose ends
+   fade out, and inside it a darker stretch, twice the track's height and
+   faded on an eased curve, that main.js centers on the pointer. */
+.resizer-track {
   position: absolute;
-  inset-block: 10px;
-  /* One pixel, just outside the sheet's edge. */
-  left: 7px;
-  width: 1px;
-  background: transparent;
-  transition: background-color 150ms ease-out;
+  inset-block: 0;
+  left: 7.75px;
+  width: 0.5px;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--resize-track);
+  -webkit-mask-image: linear-gradient(transparent, #000 10% 90%, transparent);
+  mask-image: linear-gradient(transparent, #000 10% 90%, transparent);
+  opacity: 0;
+  transition: opacity 250ms;
 }
 
-.resizer:hover::after { background: var(--hairline); transition-delay: 100ms; }
-.resizing .resizer::after,
-.resizer:focus-visible::after { background: var(--hairline); }
+.resizer-indicator {
+  position: absolute;
+  inset-inline: 0;
+  top: -50%;
+  height: 200%;
+  background: var(--resize-indicator);
+  --fade: linear-gradient(transparent 5%, rgba(0, 0, 0, 0.1) 11.4%, rgba(0, 0, 0, 0.2) 17.2%,
+    rgba(0, 0, 0, 0.3) 22.2%, rgba(0, 0, 0, 0.4) 26.6%, rgba(0, 0, 0, 0.5) 30.3%,
+    rgba(0, 0, 0, 0.6) 33.4%, rgba(0, 0, 0, 0.7) 35.7%, rgba(0, 0, 0, 0.8) 37.4%,
+    rgba(0, 0, 0, 0.9) 38.4%, #000 38.75% 61.25%, rgba(0, 0, 0, 0.9) 61.6%,
+    rgba(0, 0, 0, 0.8) 62.6%, rgba(0, 0, 0, 0.7) 64.3%, rgba(0, 0, 0, 0.6) 66.6%,
+    rgba(0, 0, 0, 0.5) 69.7%, rgba(0, 0, 0, 0.4) 73.4%, rgba(0, 0, 0, 0.3) 77.8%,
+    rgba(0, 0, 0, 0.2) 82.8%, rgba(0, 0, 0, 0.1) 88.6%, transparent 95%);
+  -webkit-mask-image: var(--fade);
+  mask-image: var(--fade);
+}
+
+@media (any-hover: hover) and (any-pointer: fine) {
+  .resizer:hover .resizer-track { opacity: 1; transition-delay: 100ms; }
+}
+.resizing .resizer-track,
+.resizer:focus-visible .resizer-track { opacity: 1; }
 /* Focus shows as the edge's line, not a ring around it. */
 .resizer:focus { outline: none; }
 
@@ -529,7 +557,7 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
 }
 
 /* MARK: Loading. Only a slow load shows it: "Loading…" fades in after one
-   second, as Linear's loading screen does, so most opens never see it. */
+   second, so most opens never see it. */
 
 .loading {
   position: absolute;
@@ -598,8 +626,8 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
 
 .scrim { display: none; }
 
-/* Narrow windows: the contents slide in over the page from the left, as
-   Linear's sidebar does on a phone, behind a dimmed page. */
+/* Narrow windows: the contents slide in over the page from the left,
+   behind a dimmed page. */
 @media (max-width: 980px) {
   .resizer { display: none; }
 

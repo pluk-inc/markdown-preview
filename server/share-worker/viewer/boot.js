@@ -1,8 +1,7 @@
 // Runs before the first paint, as a blocking script in <head> (the page's
 // CSP forbids inline scripts). It applies the reader's saved layout so the
-// page never shifts; main.js picks it up. The same idea as Linear's boot
-// script, which reads its saved layout from localStorage. The encrypted
-// document needs no request: the Worker streams it into the page.
+// page never shifts; main.js picks it up. The encrypted document needs no
+// request: the Worker streams it into the page.
 (() => {
   const root = document.documentElement;
   const stored = (key) => {

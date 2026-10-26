@@ -389,14 +389,14 @@ which needs the Worker deployed on `md-preview.app` and a signed Release build.
 stylesheet and code/math renderers (exported and checked by
 `ShareViewerKitTests`), local images as `blob:` URLs, remote images blocked
 with a note, Open in Markdown Preview, Download .md, Copy link (with a
-"Link copied" toast), an Aa panel in Linear's popover style with the app's
+"Link copied" toast), an Aa panel in a popover with the app's
 controls and words (text size, Appearance Automatic/Light/Dark, width; remembered per
 browser), a Contents rail (always in place, "No headings" when empty, its
 shown or hidden state and its width remembered; drag its edge, or focus it
 and use the arrow keys, to resize it; double-click or Enter for the default
 width), error states (the open
 button stays), and the app icon as the tab and home-screen icon. In a narrow window the Contents open as a drawer
-over the dimmed page, as Linear's sidebar does on a phone. On phones and
+over the dimmed page. On phones and
 tablets, which have no app, the open button reads "Get Mac App" and copies
 the link to markdownpreview.app. Select All selects only the document (the page's
 controls are not selectable), and copying whole blocks puts their Markdown
@@ -410,7 +410,7 @@ head at once and streams the encrypted envelope into the end of the body
 nothing), so the scripts download while R2 is read. The page loads three
 files (`boot.js`, one stylesheet, one script) whose names carry a hash of
 their content, cached for a year as immutable. A slow load shows only
-the text "Loading…", faded in after 1 s as on Linear's loading screen. Not
+the text "Loading…", faded in after 1 s. Not
 yet: diagrams (Pele; a diagram shows its source for now), password links, Report, burn after reading. Deviation
 from the text below: `style-src-attr 'unsafe-inline'` is allowed because KaTeX sets
 inline styles; scripts stay `'self'` only.
