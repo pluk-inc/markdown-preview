@@ -434,9 +434,9 @@ button {
   content: "";
   position: absolute;
   inset-block: 10px;
+  /* One pixel, just outside the sheet's edge. */
   left: 7px;
-  width: 2px;
-  border-radius: 1px;
+  width: 1px;
   background: transparent;
   transition: background-color 150ms ease-out;
 }
