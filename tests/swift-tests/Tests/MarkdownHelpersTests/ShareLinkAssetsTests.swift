@@ -203,6 +203,17 @@ final class ShareLinkAssetsTests: XCTestCase {
         XCTAssertEqual(assets.map(\.data.count), [100, 200])
     }
 
+    func testDownloadsNothingWhenTheLocalImagesFillTheShare() async {
+        for budget in [0, -1] {
+            let assets = await ShareLinkAssets.downloadWebImages(["https://example.com/a.png"], takenPaths: [],
+                                                                 budget: budget) { url in
+                XCTFail("fetched \(url) with budget \(budget)")
+                throw URLError(.cancelled)
+            }
+            XCTAssertEqual(assets, [], "budget \(budget)")
+        }
+    }
+
     func testFallsBackToTextOnlyWhenOnlyWebImagesWereSent() {
         let web = SharePayload.Asset(path: "web/1.png", type: "image/png", data: Data(count: 10),
                                      source: "https://example.com/a.png")

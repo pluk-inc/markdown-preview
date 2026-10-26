@@ -126,6 +126,8 @@ nonisolated enum ShareLinkAssets {
         budget: Int = ShareLinkCrypto.maxEnvelopeBytes,
         fetch: @escaping @Sendable (URL) async throws -> (Data, URLResponse) = fetchWebImage
     ) async -> [SharePayload.Asset] {
+        // The local images already fill the share: nothing more can go in.
+        guard budget > 0 else { return [] }
         var folder = "web"
         while takenPaths.contains(where: { $0 == folder || $0.hasPrefix(folder + "/") }) { folder += "_" }
         let webFolder = folder
