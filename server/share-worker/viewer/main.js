@@ -333,9 +333,32 @@ function drawDiagrams(figures) {
     figures.forEach((figure) => figure.classList.add("mermaid-error"));
     return;
   }
-  const diagrams = MdpRenderers.mermaidWiring();
+  // The app's words in the reader's language; the HUD in the HTML came in
+  // the author's.
+  const t = MdpRenderers.diagramStrings[language] ?? MdpRenderers.diagramStrings.en;
+  const hudLabels = { out: t.zoomOut, in: t.zoomIn, reset: t.resetZoom, width: t.fillWidth };
+  for (const button of page.article.querySelectorAll(".mermaid-hud button[data-mm-act]")) {
+    const label = hudLabels[button.dataset.mmAct];
+    if (!label) continue;
+    button.setAttribute("aria-label", label);
+    if (button.hasAttribute("title")) button.title = label;
+  }
+  const diagrams = MdpRenderers.mermaidWiring(t);
   diagrams.bootstrap();
-  window.addEventListener("beforeprint", () => diagrams.renderAll());
+  // Print each whole diagram: draw any not drawn yet, and set aside the
+  // reader's zoom and pan, which would crop it, until printing ends.
+  const views = new Map();
+  window.addEventListener("beforeprint", () => {
+    diagrams.renderAll();
+    for (const node of page.article.querySelectorAll(".mermaid-figure .mermaid")) {
+      views.set(node, node.style.transform);
+      node.style.transform = "";
+    }
+  });
+  window.addEventListener("afterprint", () => {
+    for (const [node, transform] of views) node.style.transform = transform;
+    views.clear();
+  });
 }
 
 /** Lists the document's h1–h3. The rail stays in place without them, so
@@ -580,12 +603,16 @@ page.article.addEventListener("click", (event) => {
 });
 
 // Links leave the page without the key: no referrer, no opener.
+const isLocalFileLink = (href) => href !== "" && !/^[a-z][a-z0-9+.-]*:/i.test(href)
+  && !href.startsWith("//") && !href.startsWith("#") && !href.startsWith("?");
+
 DOMPurify.addHook("afterSanitizeAttributes", (node) => {
   if (node.tagName === "A" && node.hasAttribute("href")) {
     const href = node.getAttribute("href");
-    // A link to another of the author's files (notes.md, /docs/plan.pdf) is
-    // not in the share and would open a broken page here: keep its text.
-    if (assetPathForSource(href) !== null || (href.startsWith("/") && !href.startsWith("//"))) {
+    // A link to another of the author's files (notes.md, ../plan.pdf,
+    // /docs/a.md: no scheme, no host, not this page) is not in the share
+    // and would open a broken page here: keep its text.
+    if (isLocalFileLink(href)) {
       node.removeAttribute("href");
       node.classList.add("mdp-unshared-link");
       node.title = text.linkNotShared;

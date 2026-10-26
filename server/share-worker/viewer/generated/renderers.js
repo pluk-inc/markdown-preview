@@ -217,26 +217,18 @@ function renderMathElement(el, tex, display) {
         return parts.join('\n');
     }
 // The app's diagram wiring (drawing, zoom, the HUD), started once
-// pele.global.js has loaded; it returns { bootstrap, renderAll }.
-const mermaidWiring = () => (() => {
-        const fillWidthLabel = "Fill width";
-        const fitDiagramLabel = "Fit diagram";
+// pele.global.js has loaded with the reader's language's texts
+// (diagramStrings); it returns { bootstrap, renderAll }.
+const mermaidWiring = (t) => (() => {
+        const fillWidthLabel = t.fillWidth;
+        const fitDiagramLabel = t.fitDiagram;
         const states = new WeakMap();
         const renderOptions = { autoDirection: false,
   get fontFamily() { return getComputedStyle(document.body).fontFamily; },
   get fontSize() { return parseFloat(getComputedStyle(document.body).fontSize); } };
         const messages = {
-    errors: {
-        'unsupported-diagram': "This diagram type is not supported.",
-        syntax: "The diagram has a syntax error.",
-        semantic: "The diagram is not valid.",
-        limit: "The diagram is too large to draw."
-    },
-    generic: "The diagram could not be drawn.",
-    position: "Line %d, column %d",
-    empty: "This diagram is empty.",
-    emptyHint: "Empty diagram. Click to add Mermaid source.",
-    unavailable: "Mermaid renderer is unavailable.\n\n".trim()
+    errors: { 'unsupported-diagram': t.unsupported, syntax: t.syntax, semantic: t.semantic, limit: t.limit },
+    generic: t.generic, position: t.position, empty: t.empty, emptyHint: '', unavailable: ''
 };
         const errorMessage = (err) => {
     const summary = (err && messages.errors[err.code]) || messages.generic;
@@ -617,10 +609,84 @@ const mermaidWiring = () => (() => {
 
         return { bootstrap, renderAll };
     })();
+// The app's translations of the diagram texts, by language.
+const diagramStrings = {
+  "en" : {
+    "empty" : "This diagram is empty.",
+    "fillWidth" : "Fill width",
+    "fitDiagram" : "Fit diagram",
+    "generic" : "The diagram could not be drawn.",
+    "limit" : "The diagram is too large to draw.",
+    "position" : "Line %d, column %d",
+    "resetZoom" : "Reset zoom",
+    "semantic" : "The diagram is not valid.",
+    "syntax" : "The diagram has a syntax error.",
+    "unsupported" : "This diagram type is not supported.",
+    "zoomIn" : "Zoom In",
+    "zoomOut" : "Zoom Out"
+  },
+  "fa" : {
+    "empty" : "این نمودار خالی است.",
+    "fillWidth" : "پر کردن عرض",
+    "fitDiagram" : "برازش نمودار",
+    "generic" : "رسم نمودار ممکن نشد.",
+    "limit" : "نمودار برای رسم بیش از حد بزرگ است.",
+    "position" : "خط %1$d، ستون %2$d",
+    "resetZoom" : "بازنشانی بزرگ‌نمایی",
+    "semantic" : "نمودار معتبر نیست.",
+    "syntax" : "نمودار خطای نحوی دارد.",
+    "unsupported" : "این نوع نمودار پشتیبانی نمی‌شود.",
+    "zoomIn" : "بزرگ‌نمایی",
+    "zoomOut" : "کوچک‌نمایی"
+  },
+  "ja" : {
+    "empty" : "このダイアグラムは空です。",
+    "fillWidth" : "幅に合わせる",
+    "fitDiagram" : "ダイアグラム全体を表示",
+    "generic" : "ダイアグラムを描画できませんでした。",
+    "limit" : "ダイアグラムが大きすぎるため描画できません。",
+    "position" : "%1$d 行目、%2$d 列目",
+    "resetZoom" : "拡大/縮小をリセット",
+    "semantic" : "ダイアグラムが正しくありません。",
+    "syntax" : "ダイアグラムに構文エラーがあります。",
+    "unsupported" : "この種類のダイアグラムには対応していません。",
+    "zoomIn" : "拡大",
+    "zoomOut" : "縮小"
+  },
+  "pl" : {
+    "empty" : "Ten diagram jest pusty.",
+    "fillWidth" : "Wypełnij szerokość",
+    "fitDiagram" : "Dopasuj diagram",
+    "generic" : "Nie można narysować diagramu.",
+    "limit" : "Diagram jest zbyt duży, aby go narysować.",
+    "position" : "Wiersz %d, kolumna %d",
+    "resetZoom" : "Wyzeruj powiększenie",
+    "semantic" : "Diagram jest nieprawidłowy.",
+    "syntax" : "Diagram zawiera błąd składni.",
+    "unsupported" : "Ten rodzaj diagramu nie jest obsługiwany.",
+    "zoomIn" : "Przybliż",
+    "zoomOut" : "Oddal"
+  },
+  "zh-Hans" : {
+    "empty" : "此图表为空。",
+    "fillWidth" : "填满宽度",
+    "fitDiagram" : "适应图表",
+    "generic" : "无法绘制图表。",
+    "limit" : "图表过大，无法绘制。",
+    "position" : "第 %1$d 行，第 %2$d 列",
+    "resetZoom" : "重置缩放",
+    "semantic" : "图表无效。",
+    "syntax" : "图表存在语法错误。",
+    "unsupported" : "不支持此图表类型。",
+    "zoomIn" : "放大",
+    "zoomOut" : "缩小"
+  }
+};
 window.MdpRenderers = {
     highlightAll: highlightAll,
     renderMathElement: renderMathElement,
     markdownForSelection: markdownForSelection,
     mermaidWiring: mermaidWiring,
+    diagramStrings: diagramStrings,
 };
 })();
