@@ -155,6 +155,35 @@ final class ShareLinkAssetsTests: XCTestCase {
         XCTAssertEqual(assets.first?.data, png)
     }
 
+    func testKeepsSmallWebImagesBesideLargeLocalOnesAndTheyStillSeal() throws {
+        // Like a README: 4.5 MB of screenshots (random bytes do not compress,
+        // like PNG data) and seven small badges.
+        var screenshots = [UInt8](repeating: 0, count: 4_500_000)
+        for index in screenshots.indices { screenshots[index] = UInt8.random(in: 0...255) }
+        let local = SharePayload.Asset(path: "docs/shot.png", type: "image/png", data: Data(screenshots))
+        let badges = (1...7).map {
+            SharePayload.Asset(path: "web/\($0).svg", type: "image/svg+xml", data: Data(count: 2_000),
+                               source: "https://img.shields.io/badge/\($0)")
+        }
+        let first = try XCTUnwrap(ShareLinkAssets.assetsToTry([local] + badges).first)
+        XCTAssertEqual(first.count, 8)
+        let payload = SharePayload(title: "README.md", markdown: "# R", html: "<h1>R</h1>", assets: first)
+        XCTAssertNoThrow(try ShareLinkCrypto.seal(payload.encoded(), key: Data(count: 32), password: nil))
+    }
+
+    func testLeavesOutTheLargestWebImagesFirst() {
+        let asset = { (path: String, bytes: Int, web: Bool) in
+            SharePayload.Asset(path: path, type: "image/png", data: Data(count: bytes),
+                               source: web ? "https://example.com/\(path)" : nil)
+        }
+        let tries = ShareLinkAssets.assetsToTry([
+            asset("local.png", 3_000_000, false),
+            asset("big.png", 3_000_000, true),
+            asset("small.png", 1_000, true),
+        ])
+        XCTAssertEqual(tries.map { $0.map(\.path) }, [["local.png", "small.png"], ["local.png"], []])
+    }
+
     func testCollectsFromTheAppRenderer() {
         let html = MarkdownHTML.render(markdown: "![a](img/a.png)\n\n![p](<img/My Photo.jpg>)\n").articleHTML
         XCTAssertEqual(collect(html).map(\.path), ["img/a.png", "img/My Photo.jpg"])

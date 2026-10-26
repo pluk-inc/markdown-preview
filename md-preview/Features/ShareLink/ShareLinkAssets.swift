@@ -79,9 +79,29 @@ nonisolated enum ShareLinkAssets {
             .filter { SharePayload.isWebSource($0) && seen.insert($0).inserted }
     }
 
-    /// The largest web image that can fit: base64 in the JSON makes an
-    /// image a third larger, so anything bigger never fits the envelope.
-    static let maxWebImageBytes = ShareLinkCrypto.maxEnvelopeBytes / 4 * 3
+    /// The largest web image that can fit. base64 makes an image a third
+    /// larger in the JSON, but DEFLATE takes most of that back, so an image
+    /// costs the envelope about its own size.
+    static let maxWebImageBytes = ShareLinkCrypto.maxEnvelopeBytes
+
+    /// The asset lists to seal, most first: the local images and as many
+    /// web images as fit by size (about its own size each, see
+    /// `maxWebImageBytes`), the largest left out first; then the local
+    /// images alone; then none. Sealing still checks the real size.
+    static func assetsToTry(_ assets: [SharePayload.Asset]) -> [[SharePayload.Asset]] {
+        let local = assets.filter { $0.source == nil }
+        let size = { (assets: [SharePayload.Asset]) in assets.reduce(0) { $0 + $1.data.count } }
+        var web = assets.filter { $0.source != nil }.sorted { $0.data.count < $1.data.count }
+        while !web.isEmpty, size(local) + size(web) > ShareLinkCrypto.maxEnvelopeBytes {
+            web.removeLast()
+        }
+        let kept = Set(web.map(\.path))
+        let first = assets.filter { $0.source == nil || kept.contains($0.path) }
+        var lists = [first]
+        if first.count > local.count { lists.append(local) }
+        if !local.isEmpty { lists.append([]) }
+        return lists
+    }
 
     /// MIME type to the extension a web image's asset gets.
     private static let extensionForType = Dictionary(mediaTypes.map { ($0.value, $0.key) }, uniquingKeysWith: min)

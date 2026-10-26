@@ -310,9 +310,10 @@ and the File menu item from the first draft are dropped.
   `currentFileURL`, not `document.markdown` (the sidebar can switch files).
 - Images: `ShareLinkAssets` collects the local images the rendered HTML
   references, confined to the document's folder, and downloads its `https`
-  images (no cookies, 15 s and 5 MB each, supported types only) as assets
+  images (no cookies, six at a time, 20 s and 5 MB each, supported types only) as assets
   with a `source`. An image that cannot be downloaded stays a link. When the
-  envelope is too large, the web images are left out first, then the local
+  envelope is too large, the largest web images are left out first (each
+  costs about its own size: DEFLATE takes back most of base64), then the local
   ones.
 
 **Not possible without collaboration (investigated, rejected):** Pages' Copy
