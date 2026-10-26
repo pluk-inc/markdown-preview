@@ -292,12 +292,15 @@ and the File menu item from the first draft are dropped.
   `NSProgressPanel.nib`, the standard progress sheet) with a bold caption
   "Uploading Document…" and a round ✕ in place of its Cancel button, as in
   Pages' own progress panel. Shown only when the upload takes over 0.5 s;
-  falls back to an `NSAlert` with a bar if the class or nib disappears. No
-  "copied" message afterwards.
+  falls back to an `NSAlert` with a bar if the class or nib disappears.
+  Once the link is copied, the Manage sheet opens, so the user sees the
+  document is shared and where to stop sharing.
 - **Manage sheet:** document icon, words · size, "Shared · Link expires …";
   Permissions pop-ups "Anyone with the link" / "can view only" with "People
   you choose" / "can edit" shown disabled; Stop Sharing (red), Copy Link
-  (re-uploads the current text, briefly reads "Copied"), Done.
+  (copies the link at once and briefly reads "Copied"; then uploads the
+  current text under the same link only when it changed since the last
+  upload, so an unchanged copy leaves the expiry as it was), Done.
 - **Stop Sharing** → `NSAlert` "Stop sharing this document?" with the app icon
   set explicitly (sheet alerts hide it otherwise).
 - **Window subtitle:** "Shared", or "Shared · Edited", while the file has a

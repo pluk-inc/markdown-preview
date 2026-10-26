@@ -3,8 +3,8 @@
 //  md-preview
 //
 //  "Manage Shared Document…": the sheet for a file that already has a share
-//  link. Copy Link uploads the current text under the same link and copies
-//  it; Stop Sharing deletes the link. Laid out like the Pages sharing sheet,
+//  link. Copy Link copies the link at once, then uploads the current text
+//  under it when the text changed; Stop Sharing deletes the link. Laid out like the Pages sharing sheet,
 //  without participants: a share link has none.
 //
 
@@ -63,8 +63,10 @@ final class ShareLinkManageModel {
     private(set) var activity = Activity.idle
     private(set) var errorMessage: String?
     private(set) var record: ShareLinkStore.Record?
+    /// The upload after a Copy Link that copied the stored link at once.
+    private(set) var isUpdating = false
 
-    var isBusy: Bool { activity == .copying || activity == .stopping }
+    var isBusy: Bool { activity == .copying || activity == .stopping || isUpdating }
 
     init(fileURL: URL, markdown: String) {
         self.fileURL = fileURL
@@ -75,18 +77,35 @@ final class ShareLinkManageModel {
     }
 
     func copyLink() async {
-        activity = .copying
         errorMessage = nil
-        do {
-            try await ShareLinkSession.copyLink(forFile: fileURL, markdown: markdown)
-            record = ShareLinkStore.shared.record(forFile: fileURL)
+        if let link = ShareLinkSession.storedLink(forFile: fileURL) {
+            // The link does not change, so it is copied before the upload,
+            // which is skipped when the text has not changed.
+            ShareLinkSession.copyToPasteboard(link)
             activity = .copied
-            try? await Task.sleep(for: .seconds(1.5))
-            if activity == .copied { activity = .idle }
-        } catch {
-            errorMessage = ShareLinkSession.message(for: error)
-            activity = .idle
+            isUpdating = true
+            do {
+                // A link that expired or is gone from the server is replaced.
+                let current = try await ShareLinkSession.link(forFile: fileURL, markdown: markdown)
+                if current != link { ShareLinkSession.copyToPasteboard(current) }
+            } catch {
+                errorMessage = ShareLinkSession.message(for: error)
+            }
+            isUpdating = false
+        } else {
+            activity = .copying
+            do {
+                try await ShareLinkSession.copyLink(forFile: fileURL, markdown: markdown)
+                activity = .copied
+            } catch {
+                errorMessage = ShareLinkSession.message(for: error)
+                activity = .idle
+                return
+            }
         }
+        record = ShareLinkStore.shared.record(forFile: fileURL)
+        try? await Task.sleep(for: .seconds(1.5))
+        if activity == .copied { activity = .idle }
     }
 
     /// True when sharing stopped and the sheet can close.

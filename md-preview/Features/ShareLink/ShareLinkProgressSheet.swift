@@ -39,6 +39,7 @@ final class ShareLinkProgressSheet: NSObject {
     func finish() {
         isFinished = true
         guard let sheet else { return }
+        self.sheet = nil
         window.endSheet(sheet, returnCode: .stop)
     }
 

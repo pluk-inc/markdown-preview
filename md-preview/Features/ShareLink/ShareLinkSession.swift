@@ -4,11 +4,13 @@
 //
 //  The Share popover's "Copy Link": seals the open document, uploads it,
 //  and returns its link. A file that already has a live link keeps it; the
-//  content behind it is replaced. No options: links last 7 days, have no
+//  content behind it is replaced, unless it has not changed since the last
+//  upload. No options: links last 7 days, have no
 //  password, and carry the document's local images when they fit.
 //
 
 import AppKit
+import CryptoKit
 
 /// The hidden switch and the server address. Ships off until the Worker
 /// runs in production (docs/share-link-plan.md §4.6).
@@ -57,8 +59,23 @@ enum ShareLinkSession {
     static func copyLink(forFile fileURL: URL, markdown: String) async throws {
         let link = try await link(forFile: fileURL, markdown: markdown)
         try Task.checkCancellation()
+        copyToPasteboard(link)
+    }
+
+    static func copyToPasteboard(_ link: URL) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(link.absoluteString, forType: .string)
+    }
+
+    /// The file's live link, built from what this Mac stored, with no
+    /// upload: the link stays the same while its content is replaced. Nil
+    /// when there is no link or its key is lost or damaged.
+    static func storedLink(forFile fileURL: URL, store: ShareLinkStore = .shared) -> URL? {
+        guard let baseURL = ShareLinkFeature.baseURL,
+              let record = store.record(forFile: fileURL),
+              let key = store.secrets(for: record).flatMap(sealingKey)
+        else { return nil }
+        return try? webLink(id: record.id, key: key, base: baseURL)
     }
 
     /// The link for `fileURL`, created or refreshed with `markdown`.
@@ -88,7 +105,7 @@ enum ShareLinkSession {
         guard let baseURL = ShareLinkFeature.baseURL else { throw Failure.notConfigured }
         let client = ShareLinkClient(baseURL: baseURL)
         let fileURL = fileURL.standardizedFileURL
-        let payload = try await makePayload(fileURL: fileURL, markdown: markdown)
+        let (payload, digest) = try await makePayload(fileURL: fileURL, markdown: markdown)
 
         if var record = store.record(forFile: fileURL) {
             // Without the owner token the old link can be neither updated
@@ -96,13 +113,17 @@ enum ShareLinkSession {
             guard let secrets = store.secrets(for: record) else {
                 throw Failure.lostCredentials(expiresAt: record.expiresAt)
             }
-            // A key of the wrong length cannot seal either: treat it as damaged.
-            if let key = Base64URL.decode(secrets.key), key.count == ShareLinkCrypto.keyByteCount {
+            if let key = sealingKey(secrets) {
+                // The server already has this content; the link's expiry stays.
+                if let digest, record.contentDigest == digest {
+                    return try webLink(id: record.id, key: key, base: baseURL)
+                }
                 do {
                     let envelope = try await seal(payload, key: key)
                     record.expiresAt = try await client.update(id: record.id, envelope: envelope,
                                                                ownerToken: secrets.ownerToken,
                                                                expiry: expiry)
+                    record.contentDigest = digest
                     store.update(record)
                     return try webLink(id: record.id, key: key, base: baseURL)
                 } catch ShareLinkClient.Failure.notFound {
@@ -121,7 +142,7 @@ enum ShareLinkSession {
         try Task.checkCancellation()
         let created = try await client.create(envelope, expiry: expiry)
         let record = ShareLinkStore.Record(id: created.id, filePath: fileURL.path,
-                                           expiresAt: created.expiresAt)
+                                           expiresAt: created.expiresAt, contentDigest: digest)
         do {
             try store.add(record, secrets: .init(key: Base64URL.encode(key),
                                                  ownerToken: created.ownerToken))
@@ -164,6 +185,14 @@ enum ShareLinkSession {
 
     // MARK: - Private
 
+    /// The link key from `secrets`. A key of the wrong length cannot seal
+    /// either: it is treated as damaged.
+    private static func sealingKey(_ secrets: ShareLinkStore.Secrets) -> Data? {
+        guard let key = Base64URL.decode(secrets.key), key.count == ShareLinkCrypto.keyByteCount
+        else { return nil }
+        return key
+    }
+
     private static func revoke(_ id: String, ownerToken: String, client: ShareLinkClient) async throws {
         do {
             try await client.delete(id: id, ownerToken: ownerToken)
@@ -176,22 +205,26 @@ enum ShareLinkSession {
     /// app shows, reads the local images it uses, and downloads its images
     /// from the web, so readers see them without the page loading anything
     /// from another server. Off the main thread: a long document or images
-    /// on a slow volume would freeze the window.
-    private static func makePayload(fileURL: URL, markdown: String) async throws -> SharePayload {
+    /// on a slow volume would freeze the window. Also returns the payload's
+    /// digest, to compare with the last upload.
+    private static func makePayload(fileURL: URL,
+                                    markdown: String) async throws -> (SharePayload, digest: String?) {
         let work = Task.detached(priority: .userInitiated) {
             let html = MarkdownHTML.render(markdown: markdown).articleHTML
             let local = ShareLinkAssets.collect(articleHTML: html,
                                                 directory: fileURL.deletingLastPathComponent())
             let web = await ShareLinkAssets.downloadWebImages(ShareLinkAssets.webImageSources(articleHTML: html),
                                                               takenPaths: Set(local.map(\.path)))
-            return SharePayload(title: fileURL.lastPathComponent, markdown: markdown,
-                                html: html, assets: local + web)
+            let payload = SharePayload(title: fileURL.lastPathComponent, markdown: markdown,
+                                       html: html, assets: local + web)
+            let digest = (try? payload.encoded()).map { Base64URL.encode(Data(SHA256.hash(data: $0))) }
+            return (payload, digest)
         }
         // A detached task does not inherit cancellation: Cancel on the
         // upload sheet must also stop the downloads.
-        let payload = await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
+        let result = await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
         try Task.checkCancellation()
-        return payload
+        return result
     }
 
     /// Built from the key in hand, so the Keychain is not read back.
