@@ -88,7 +88,7 @@ enum ShareLinkSession {
         guard let baseURL = ShareLinkFeature.baseURL else { throw Failure.notConfigured }
         let client = ShareLinkClient(baseURL: baseURL)
         let fileURL = fileURL.standardizedFileURL
-        let payload = await makePayload(fileURL: fileURL, markdown: markdown)
+        let payload = try await makePayload(fileURL: fileURL, markdown: markdown)
 
         if var record = store.record(forFile: fileURL) {
             // Without the owner token the old link can be neither updated
@@ -177,8 +177,8 @@ enum ShareLinkSession {
     /// from the web, so readers see them without the page loading anything
     /// from another server. Off the main thread: a long document or images
     /// on a slow volume would freeze the window.
-    private static func makePayload(fileURL: URL, markdown: String) async -> SharePayload {
-        await Task.detached(priority: .userInitiated) {
+    private static func makePayload(fileURL: URL, markdown: String) async throws -> SharePayload {
+        let work = Task.detached(priority: .userInitiated) {
             let html = MarkdownHTML.render(markdown: markdown).articleHTML
             let local = ShareLinkAssets.collect(articleHTML: html,
                                                 directory: fileURL.deletingLastPathComponent())
@@ -186,7 +186,12 @@ enum ShareLinkSession {
                                                               takenPaths: Set(local.map(\.path)))
             return SharePayload(title: fileURL.lastPathComponent, markdown: markdown,
                                 html: html, assets: local + web)
-        }.value
+        }
+        // A detached task does not inherit cancellation: Cancel on the
+        // upload sheet must also stop the downloads.
+        let payload = await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
+        try Task.checkCancellation()
+        return payload
     }
 
     /// Built from the key in hand, so the Keychain is not read back.

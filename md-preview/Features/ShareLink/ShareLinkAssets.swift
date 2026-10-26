@@ -72,12 +72,17 @@ nonisolated enum ShareLinkAssets {
 
     /// The `http(s)` addresses of the images `articleHTML` shows, each once,
     /// with character references decoded as the browser reads them.
+    /// At most the first `maxWebImages`, so a page of hundreds of images
+    /// does not hold Copy Link for minutes.
     static func webImageSources(articleHTML html: String) -> [String] {
         var seen = Set<String>()
-        return shownImageSources(in: html)
+        return Array(shownImageSources(in: html)
             .map(decodingCharacterReferences)
             .filter { SharePayload.isWebSource($0) && seen.insert($0).inserted }
+            .prefix(maxWebImages))
     }
+
+    static let maxWebImages = 50
 
     /// The largest web image that can fit. base64 makes an image a third
     /// larger in the JSON, but DEFLATE takes most of that back, so an image
@@ -145,7 +150,7 @@ nonisolated enum ShareLinkAssets {
         _ source: String, path: String,
         fetch: @Sendable (URL) async throws -> (Data, URLResponse)
     ) async -> SharePayload.Asset? {
-        guard let url = URL(string: source), let fetched = try? await fetch(url) else { return nil }
+        guard let url = secureURL(source), let fetched = try? await fetch(url) else { return nil }
         let (data, response) = fetched
         guard (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true,
               !data.isEmpty, data.count <= maxWebImageBytes,
@@ -153,6 +158,19 @@ nonisolated enum ShareLinkAssets {
               let fileExtension = extensionForType[type]
         else { return nil }
         return .init(path: "\(path).\(fileExtension)", type: type, data: data, source: source)
+    }
+
+    /// The address to download from: `https` as is, and an `http` address
+    /// as `https`, since App Transport Security blocks plain `http` and most
+    /// image hosts serve both. The asset keeps the document's address.
+    static func secureURL(_ source: String) -> URL? {
+        guard var components = URLComponents(string: source) else { return nil }
+        switch components.scheme?.lowercased() {
+        case "https": break
+        case "http": components.scheme = "https"
+        default: return nil
+        }
+        return components.url
     }
 
     /// No cookies, no cache, 20 seconds in all for each image.

@@ -128,6 +128,23 @@ final class ShareLinkAssetsTests: XCTestCase {
                        ["https://example.com/a.png?x=1&y=2", "http://example.com/b.png"])
     }
 
+    func testDownloadsHTTPImagesOverHTTPSAndKeepsTheirAddress() async {
+        let assets = await ShareLinkAssets.downloadWebImages(["http://example.com/a.png"], takenPaths: []) { url in
+            XCTAssertEqual(url.absoluteString, "https://example.com/a.png")
+            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1",
+                                           headerFields: ["Content-Type": "image/png"])!
+            return (Data([1]), response)
+        }
+        XCTAssertEqual(assets.map(\.source), ["http://example.com/a.png"])
+    }
+
+    func testListsAtMostFiftyWebImages() {
+        let html = (1...60).map { #"<img src="https://example.com/\#($0).png">"# }.joined()
+        let sources = ShareLinkAssets.webImageSources(articleHTML: html)
+        XCTAssertEqual(sources.count, ShareLinkAssets.maxWebImages)
+        XCTAssertEqual(sources.last, "https://example.com/50.png")
+    }
+
     func testDownloadsSupportedWebImagesUnderTheirSources() async {
         let png = Data([0x89, 0x50, 0x4E, 0x47])
         let assets = await ShareLinkAssets.downloadWebImages([
