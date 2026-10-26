@@ -43,12 +43,18 @@ final class ShareViewerKitTests: XCTestCase {
             \(MarkdownHTML.mathElementRenderer)
             \(MarkdownHTML.markdownSelectionScript)
             \(MarkdownHTML.tableColumnResizeScript)
+            \(MarkdownHTML.codeBlockScript)
             window.MdpRenderers = {
                 highlightAll: highlightAll,
                 renderMathElement: renderMathElement,
                 markdownForSelection: markdownForSelection,
                 wrapTables: wrapTables,
                 enableTableColumnResize: enableTableColumnResize,
+                enableCodeBlocks: enableCodeBlocks,
+                // The app's codeBlockMessagesJS in each of its languages.
+                codeBlockMessages: {
+            \(byLanguage(MarkdownHTML.codeBlockMessagesJS))
+                },
             };
             })();
 
@@ -60,7 +66,7 @@ final class ShareViewerKitTests: XCTestCase {
                 wiring: \(MarkdownHTML.mermaidWiringFunction),
                 // The app's diagramMessagesJS in each of its languages.
                 messages: {
-            \(languages.map { "        \(javaScriptKey($0)): \(diagramMessages(in: $0))," }.joined(separator: "\n"))
+            \(byLanguage(MarkdownHTML.diagramMessagesJS))
                 },
             };
 
@@ -81,34 +87,44 @@ final class ShareViewerKitTests: XCTestCase {
             as? [String: String] ?? [:]
     }
 
-    /// Each string literal of `diagramMessagesJS`, the app's English.
-    private static var diagramTexts: [String] {
+    /// The app's message objects the viewer shows in the reader's language.
+    private static let messageObjects = [MarkdownHTML.diagramMessagesJS, MarkdownHTML.codeBlockMessagesJS]
+
+    /// Each string literal of a message object: the app's English.
+    private static func texts(in js: String) -> [String] {
         let literal = try! NSRegularExpression(pattern: #""(?:[^"\\]|\\.)*""#)
-        let js = MarkdownHTML.diagramMessagesJS
         return literal.matches(in: js, range: NSRange(js.startIndex..., in: js)).map { match in
             let quoted = String(js[Range(match.range, in: js)!])
             return (try! JSONSerialization.jsonObject(with: Data("[\(quoted)]".utf8)) as! [String])[0]
         }
     }
 
-    /// `diagramMessagesJS` with each English text replaced by `language`'s
-    /// translation from the app's Localizable.strings.
-    static func diagramMessages(in language: String) -> String {
+    /// `js` with each English text replaced by `language`'s translation from
+    /// the app's Localizable.strings.
+    static func translated(_ js: String, into language: String) -> String {
         let strings = localizedStrings(language)
-        var js = MarkdownHTML.diagramMessagesJS
-        for text in diagramTexts {
-            js = js.replacingOccurrences(of: MarkdownHTML.javaScriptStringLiteral(text),
-                                         with: MarkdownHTML.javaScriptStringLiteral(strings[text] ?? text))
+        var result = js
+        for text in texts(in: js) {
+            result = result.replacingOccurrences(of: MarkdownHTML.javaScriptStringLiteral(text),
+                                                 with: MarkdownHTML.javaScriptStringLiteral(strings[text] ?? text))
         }
-        return js
+        return result
     }
 
-    func testEveryDiagramTextHasATranslationInEveryLanguage() {
-        XCTAssertFalse(Self.diagramTexts.isEmpty)
-        for language in Self.languages where language != "en" {
-            let strings = Self.localizedStrings(language)
-            for text in Self.diagramTexts {
-                XCTAssertNotNil(strings[text], "\(language) has no translation for \(text.debugDescription)")
+    /// `en: {…}, ja: {…}, …`, one line per language.
+    private static func byLanguage(_ js: String) -> String {
+        languages.map { "        \(javaScriptKey($0)): \(translated(js, into: $0))," }.joined(separator: "\n")
+    }
+
+    func testEveryViewerTextHasATranslationInEveryLanguage() {
+        for js in Self.messageObjects {
+            let texts = Self.texts(in: js)
+            XCTAssertFalse(texts.isEmpty)
+            for language in Self.languages where language != "en" {
+                let strings = Self.localizedStrings(language)
+                for text in texts {
+                    XCTAssertNotNil(strings[text], "\(language) has no translation for \(text.debugDescription)")
+                }
             }
         }
     }

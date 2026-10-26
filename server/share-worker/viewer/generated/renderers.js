@@ -377,11 +377,129 @@ function renderMathElement(el, tex, display) {
             fitColumn(edge.table, edge.cells, edge.index);
         });
     }
+    function enableCodeBlocks(labels, copyText) {
+        const codeIcon = (kind) => '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ({
+            copy: '<rect x="4" y="8" width="12" height="13" rx="3"/><path d="M8 8V6a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-1"/>',
+            check: '<path d="m5 12 4 4L19 6"/>',
+            wrap: '<path d="M4 6h16M4 11h12a4 4 0 0 1 0 8h-5m3-3-3 3 3 3M4 16h3"/>',
+            unwrap: '<path d="M4 6h16M4 12h16m-4-4 4 4-4 4M4 18h7"/>'
+        })[kind] + '</svg>';
+
+        function decorateCodeBlocks(root = document) {
+            root.querySelectorAll('pre > code').forEach((code) => {
+                const pre = code.parentElement;
+                if (!pre || pre.dataset.copyButtonReady === '1') return;
+                pre.dataset.copyButtonReady = '1';
+
+                // Wrap pre in a positioned container so the copy button
+                // stays pinned regardless of horizontal scroll inside pre.
+                const wrap = document.createElement('div');
+                wrap.className = 'md-code-wrap';
+                pre.parentNode.insertBefore(wrap, pre);
+                wrap.appendChild(pre);
+
+                const header = document.createElement('div');
+                header.className = 'md-code-header';
+                const language = document.createElement('span');
+                language.className = 'md-code-language';
+                language.textContent = pre.dataset.codeLanguage || 'text';
+                header.appendChild(language);
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'md-code-action md-code-toggle-wrap';
+                toggle.innerHTML = codeIcon('wrap');
+                toggle.title = labels.wrapCode;
+                toggle.setAttribute('aria-label', toggle.title);
+                toggle.setAttribute('aria-pressed', 'false');
+                header.appendChild(toggle);
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'md-code-action md-code-copy';
+                button.innerHTML = codeIcon('copy');
+                button.title = labels.copyCode;
+                button.setAttribute('aria-label', labels.copyCode);
+                header.appendChild(button);
+                wrap.insertBefore(header, pre);
+            });
+        }
+
+        async function copyCodeBlock(button) {
+            const code = button.closest('.md-code-wrap')?.querySelector('pre > code');
+            if (!code || !(await copyText(code.textContent || '', code))) return;
+            button.innerHTML = codeIcon('check');
+            button.title = labels.codeCopied;
+            button.setAttribute('aria-label', labels.codeCopied);
+            button.classList.add('is-copied');
+            clearTimeout(button.__mdCopyTimer);
+            button.__mdCopyTimer = setTimeout(() => {
+                button.innerHTML = codeIcon('copy');
+                button.title = labels.copyCode;
+                button.setAttribute('aria-label', labels.copyCode);
+                button.classList.remove('is-copied');
+            }, 1100);
+        }
+
+        document.addEventListener('click', (event) => {
+            const toggle = event.target.closest('.md-code-toggle-wrap');
+            if (toggle) {
+                event.preventDefault();
+                event.stopPropagation();
+                // A toggle keeps one name ("Wrap code") and reports its
+                // state with aria-pressed; the tooltip names the next action.
+                const wrapped = toggle.closest('.md-code-wrap').classList.toggle('is-wrapped');
+                toggle.setAttribute('aria-pressed', String(wrapped));
+                toggle.title = wrapped ? labels.unwrapCode : labels.wrapCode;
+                toggle.innerHTML = codeIcon(wrapped ? 'unwrap' : 'wrap');
+                return;
+            }
+            const button = event.target.closest('.md-code-copy');
+            if (!button) return;
+            event.preventDefault();
+            event.stopPropagation();
+            copyCodeBlock(button);
+        });
+
+        return decorateCodeBlocks;
+    }
 window.MdpRenderers = {
     highlightAll: highlightAll,
     renderMathElement: renderMathElement,
     markdownForSelection: markdownForSelection,
     wrapTables: wrapTables,
     enableTableColumnResize: enableTableColumnResize,
+    enableCodeBlocks: enableCodeBlocks,
+    // The app's codeBlockMessagesJS in each of its languages.
+    codeBlockMessages: {
+        en: {
+    wrapCode: "Wrap code",
+    unwrapCode: "Unwrap code",
+    copyCode: "Copy code",
+    codeCopied: "Code copied"
+},
+        ja: {
+    wrapCode: "コードを折り返す",
+    unwrapCode: "コードの折り返しを解除",
+    copyCode: "コードをコピー",
+    codeCopied: "コードをコピーしました"
+},
+        "zh-Hans": {
+    wrapCode: "代码换行",
+    unwrapCode: "取消代码换行",
+    copyCode: "拷贝代码",
+    codeCopied: "代码已拷贝"
+},
+        pl: {
+    wrapCode: "Zawijaj wiersze kodu",
+    unwrapCode: "Nie zawijaj wierszy kodu",
+    copyCode: "Kopiuj kod",
+    codeCopied: "Kod skopiowany"
+},
+        fa: {
+    wrapCode: "شکستن خطوط کد",
+    unwrapCode: "لغو شکستن خطوط کد",
+    copyCode: "کپی کد",
+    codeCopied: "کد کپی شد"
+},
+    },
 };
 })();
