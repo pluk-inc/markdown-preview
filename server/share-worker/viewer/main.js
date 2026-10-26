@@ -386,22 +386,6 @@ page.copy.addEventListener("click", async () => {
   }
 });
 
-// A page cannot tell whether the app is installed, so it opens the app by
-// itself only in a browser where "Open in Markdown Preview" has already
-// worked: the page lost focus right after the click. Elsewhere, Safari would
-// show an error for a scheme no app handles.
-const OPENS_IN_APP_KEY = "mdp.opensInApp";
-
-function opensInApp() {
-  return stored(OPENS_IN_APP_KEY) === "1";
-}
-
-function rememberAppOpened() {
-  const remember = () => store(OPENS_IN_APP_KEY, "1");
-  window.addEventListener("blur", remember, { once: true });
-  setTimeout(() => window.removeEventListener("blur", remember), 3000);
-}
-
 // Phones and tablets have no app to open the share in. The button still
 // names the app the document came from, and copies the link to the Mac app
 // so the reader can get it on their Mac.
@@ -420,28 +404,16 @@ function offerMacApp() {
   });
 }
 
-function openInAppIfRemembered() {
-  if (opensInApp()) location.assign(page.open.href);
-}
-
 async function main() {
   const link = parseLink(location.pathname, location.hash);
   if (!link) return showStatus(text.incomplete);
   if (touchDevice.matches) offerMacApp();
-  else {
-    page.open.href = `md-preview://share/${link.id}#${link.fragment}`;
-    page.open.addEventListener("click", rememberAppOpened);
-  }
-  if (link.hasPassword) {
-    openInAppIfRemembered();
-    return showStatus(text.password);
-  }
+  else page.open.href = `md-preview://share/${link.id}#${link.fragment}`;
+  if (link.hasPassword) return showStatus(text.password);
 
   const envelope = pageEnvelope();
   if (envelope.status === "not_found") return showStatus(text.gone);
   if (!envelope.bytes) return showStatus(text.unavailable);
-  // Only a live share is worth the app's attention.
-  openInAppIfRemembered();
 
   let payload;
   try {
