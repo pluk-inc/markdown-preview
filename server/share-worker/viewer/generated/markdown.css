@@ -594,10 +594,12 @@ max-height: min(var(--mm-max-height), calc(var(--mm-height, var(--mm-max-height)
 .mermaid-hud-width {
     line-height: 12px;
 }
+/* ⤢ comes from Apple Symbols, which has one weight: WebKit draws it the
+   same at any weight, other browsers thicken it above 400. */
 .mermaid-hud-width-symbol {
     display: inline-block;
     font-size: 22px;
-    font-weight: 600;
+    font-weight: 400;
 }
 .mermaid-hud-popup {
     font-size: 16px;
