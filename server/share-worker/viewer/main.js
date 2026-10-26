@@ -330,15 +330,19 @@ page.resizer.addEventListener("pointermove", (event) => {
  */
 async function drawDiagrams(figures) {
   if (!figures.length) return;
+  // A print can start before diagrams.js arrives: it then shows each
+  // diagram's source laid out as text, as a failed load does.
+  let diagrams = null;
+  const undrawn = () => figures.forEach((figure) => figure.classList.add("mermaid-error"));
+  window.addEventListener("beforeprint", () => (diagrams ? diagrams.renderAll() : undrawn()));
+  window.addEventListener("afterprint", () => {
+    if (!diagrams) figures.forEach((figure) => figure.classList.remove("mermaid-error"));
+  });
   await loadVendor("diagrams.js");
-  if (!window.pele || !window.MdpDiagrams) {
-    figures.forEach((figure) => figure.classList.add("mermaid-error"));
-    return;
-  }
+  if (!window.pele || !window.MdpDiagrams) return undrawn();
   const { wiring, messages } = window.MdpDiagrams;
-  const diagrams = wiring(messages[language] ?? messages.en);
+  diagrams = wiring(messages[language] ?? messages.en);
   diagrams.bootstrap();
-  window.addEventListener("beforeprint", () => diagrams.renderAll());
 }
 
 /** Lists the document's h1–h3. The rail stays in place without them, so
