@@ -545,9 +545,10 @@ page.article.addEventListener("click", async (event) => {
   const toggle = event.target.closest(".md-code-toggle-wrap");
   if (toggle) {
     const wrapped = toggle.closest(".md-code-wrap").classList.toggle("is-wrapped");
+    // A toggle keeps one label ("Wrap code") and reports its state with
+    // aria-pressed; only the tooltip names the next action.
     toggle.setAttribute("aria-pressed", String(wrapped));
     toggle.title = wrapped ? text.unwrapCode : text.wrapCode;
-    toggle.setAttribute("aria-label", toggle.title);
     toggle.innerHTML = codeIcon(wrapped ? "unwrap" : "wrap");
     return;
   }
@@ -578,6 +579,8 @@ window.addEventListener("copy", (event) => {
   if (markdown === null) return;
   const html = document.createElement("div");
   for (let i = 0; i < selection.rangeCount; i++) html.append(selection.getRangeAt(i).cloneContents());
+  // The code header (language, buttons) is page chrome, not document.
+  html.querySelectorAll(".md-code-header").forEach((header) => header.remove());
   event.clipboardData.setData("text/plain", markdown);
   event.clipboardData.setData("text/html", html.innerHTML);
   event.preventDefault();

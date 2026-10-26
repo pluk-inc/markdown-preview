@@ -558,16 +558,19 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
 
 /* MARK: Code blocks. The app's code background (#f9f9f9) all but matches
    the sheet here, so code sits on its own surface: white with a hairline
-   edge in light, a step above the sheet in dark. Diagrams use the same. */
+   edge in light, a step above the sheet in dark. Diagrams use the same.
+   On screen only: print keeps the app's light print colors. */
 
-article.markdown-body {
-  --code-bg: #ffffff;
-  --code-border: rgba(0, 0, 0, 0.09);
-}
+@media screen {
+  article.markdown-body {
+    --code-bg: #ffffff;
+    --code-border: rgba(0, 0, 0, 0.09);
+  }
 
-:root[data-mdp-color-scheme="dark"] article.markdown-body {
-  --code-bg: #1a1a1b;
-  --code-border: rgba(255, 255, 255, 0.08);
+  :root[data-mdp-color-scheme="dark"] article.markdown-body {
+    --code-bg: #1a1a1b;
+    --code-border: rgba(255, 255, 255, 0.08);
+  }
 }
 
 /* MARK: Loading. Only a slow load shows it: "Loading…" fades in after one
