@@ -691,7 +691,16 @@ function applyLinkRules(link) {
     link.removeAttribute("href");
     link.removeAttributeNS(XLINK, "href");
     link.classList.add("mdp-unshared-link");
-    link.setAttribute("title", text.linkNotShared);
+    if (link instanceof SVGElement) {
+      // SVG shows and reads a <title> child, not a title attribute.
+      if (!link.querySelector(":scope > title")) {
+        const note = document.createElementNS("http://www.w3.org/2000/svg", "title");
+        note.textContent = text.linkNotShared;
+        link.prepend(note);
+      }
+    } else {
+      link.setAttribute("title", text.linkNotShared);
+    }
   } else if (!href.startsWith("#")) {
     link.setAttribute("rel", "noopener noreferrer nofollow");
     link.setAttribute("target", "_blank");
