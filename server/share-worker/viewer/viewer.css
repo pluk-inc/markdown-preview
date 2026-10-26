@@ -119,7 +119,9 @@ body {
   height: 100dvh;
 }
 
-svg {
+/* The viewer's own icons. Images in the document (diagrams, code block
+   icons) draw with the app's styles: an outline here would trace their text. */
+:where(svg:not(.markdown-body svg)) {
   width: 16px;
   height: 16px;
   fill: none;
