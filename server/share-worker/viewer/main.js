@@ -323,6 +323,23 @@ page.resizer.addEventListener("pointermove", (event) => {
 });
 
 /**
+ * Table columns resize as in the app, with its code: drag the edge between
+ * two header cells, double-click it to fit the column to its header. The
+ * app's code works on tables in .md-table-wrap, which the app adds with its
+ * Expand button; the viewer adds the wrap alone, for the same tables.
+ */
+function enableColumnResize() {
+  for (const table of page.article.querySelectorAll("table")) {
+    if (table.closest(".md-frontmatter") || table.parentElement.closest("table")) continue;
+    const wrap = document.createElement("div");
+    wrap.className = "md-table-wrap";
+    table.before(wrap);
+    wrap.append(table);
+  }
+  MdpRenderers.enableTableColumnResize(".md-table-wrap, .md-table-scroll");
+}
+
+/**
  * Diagrams, drawn as the app draws them: its wiring (zoom, Fill width, the
  * HUD) on Pele, each as it nears the screen, and all at once to print.
  * Without Pele the figures show their source, with its line breaks.
@@ -536,6 +553,7 @@ async function render(payload) {
   }
   MdpRenderers.highlightAll();
   drawDiagrams(diagrams);
+  enableColumnResize();
   buildContents();
   document.documentElement.dataset.loaded = "document";
   applyReading();

@@ -435,7 +435,9 @@ the text "Loading…", faded in after 1 s. Not
 yet: password links, Report, burn after reading. Diagrams draw with the app's wiring
 (exported as `mermaidWiring` in `renderers.js`) on Pele, loaded only for documents with
 diagrams, with the app's HUD less its window button. A link to another of the author's
-files (a relative or root path) stays as text with a note, since the share does not carry it. Deviation
+files (a relative or root path) stays as text with a note, since the share does not carry it.
+Table columns resize with the app's own code (`tableColumnResizeScript`, exported as
+`enableTableColumnResize`): drag a header edge, double-click it to fit the header. Deviation
 from the text below: `style-src-attr 'unsafe-inline'` is allowed because KaTeX sets
 inline styles; scripts stay `'self'` only.
 

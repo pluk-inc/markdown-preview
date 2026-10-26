@@ -556,6 +556,11 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
   color: var(--muted);
 }
 
+/* MARK: Tables. The app's wrap leaves room above for its Expand button,
+   which the viewer has no window for (main.js enableColumnResize). */
+
+.markdown-body .md-table-wrap { padding-top: 0; }
+
 /* MARK: Links to the author's other files, which the share does not carry:
    still text, not a link, with a note on hover (main.js). */
 

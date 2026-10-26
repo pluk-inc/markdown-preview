@@ -42,6 +42,7 @@ final class ShareViewerKitTests: XCTestCase {
             \(MarkdownHTML.highlightAllBody)
             \(MarkdownHTML.mathElementRenderer)
             \(MarkdownHTML.markdownSelectionScript)
+            \(MarkdownHTML.tableColumnResizeScript)
             // The app's diagram wiring (drawing, zoom, the HUD), started once
             // pele.global.js has loaded with the reader's language's texts
             // (diagramStrings); it returns { bootstrap, renderAll }.
@@ -52,6 +53,7 @@ final class ShareViewerKitTests: XCTestCase {
                 highlightAll: highlightAll,
                 renderMathElement: renderMathElement,
                 markdownForSelection: markdownForSelection,
+                enableTableColumnResize: enableTableColumnResize,
                 mermaidWiring: mermaidWiring,
                 diagramStrings: diagramStrings,
             };
