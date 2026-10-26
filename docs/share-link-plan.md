@@ -113,8 +113,11 @@ An asset with `source` is an image from the web, downloaded by the app when
 it made the link; `source` is the address the document uses for it (`http`
 or `https` only). The web viewer shows the asset wherever the HTML uses that
 address, so the image travels inside the encrypted share and no other server
-learns who opened the link. The app does not write these assets to disk when
-it opens a share, because the Markdown names them by their web address.
+learns who opened the link. Not yet: a share opened in the app does not show
+these images. The app blocks web content in a received share and does not
+write these assets to disk, because the Markdown names them by their web
+address; showing them needs the app's renderer to map each address to its
+asset, as the viewer does.
 
 `html` is the body the app's own renderer (`MarkdownHTML`, swift-markdown)
 produced at upload time. Only the web viewer uses it (§5), so the browser shows

@@ -199,20 +199,39 @@ enum ShareLinkSession {
 
     /// Encodes and seals off the main thread (PBKDF2, DEFLATE, and base64
     /// images are all slow). When the images push the envelope over the
-    /// upload limit, the web images go first, then the local ones, until
-    /// the text fits.
+    /// upload limit, fewer go along: see `assetsToTry`.
     private static func seal(_ payload: SharePayload, key: Data) async throws -> Data {
         try await Task.detached(priority: .userInitiated) {
-            var assets = payload.assets
-            while true {
+            for assets in assetsToTry(payload) {
                 do {
                     let attempt = SharePayload(title: payload.title, markdown: payload.markdown,
                                                html: payload.html, assets: assets)
                     return try ShareLinkCrypto.seal(attempt.encoded(), key: key, password: nil)
                 } catch ShareLinkCrypto.Failure.tooLarge where !assets.isEmpty {
-                    assets = assets.contains { $0.source != nil } ? assets.filter { $0.source == nil } : []
+                    continue
                 }
             }
+            throw ShareLinkCrypto.Failure.tooLarge
         }.value
+    }
+
+    /// The asset lists to seal, most first: the local images and as many
+    /// web images as fit by size, the largest left out first; then the
+    /// local images alone; then none.
+    private nonisolated static func assetsToTry(_ payload: SharePayload) -> [[SharePayload.Asset]] {
+        let local = payload.assets.filter { $0.source == nil }
+        // base64 makes each image a third larger, and DEFLATE barely shrinks
+        // images, so this is close to the envelope's size.
+        let estimate = { (assets: [SharePayload.Asset]) in assets.reduce(0) { $0 + $1.data.count / 3 * 4 } }
+        var web = payload.assets.filter { $0.source != nil }.sorted { $0.data.count < $1.data.count }
+        while !web.isEmpty, estimate(local) + estimate(web) > ShareLinkCrypto.maxEnvelopeBytes {
+            web.removeLast()
+        }
+        let kept = Set(web.map(\.path))
+        let first = payload.assets.filter { $0.source == nil || kept.contains($0.path) }
+        var lists = [first]
+        if first.count > local.count { lists.append(local) }
+        if !local.isEmpty { lists.append([]) }
+        return lists
     }
 }

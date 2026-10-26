@@ -79,15 +79,20 @@ nonisolated enum ShareLinkAssets {
             .filter { SharePayload.isWebSource($0) && seen.insert($0).inserted }
     }
 
-    /// The largest web image a share carries; the envelope's own limit
-    /// leaves out what does not fit.
-    static let maxWebImageBytes = 5 * 1024 * 1024
+    /// The largest web image that can fit: base64 in the JSON makes an
+    /// image a third larger, so anything bigger never fits the envelope.
+    static let maxWebImageBytes = ShareLinkCrypto.maxEnvelopeBytes / 4 * 3
 
-    /// Downloads the web images in parallel. Each asset keeps the address
+    /// MIME type to the extension a web image's asset gets.
+    private static let extensionForType = Dictionary(mediaTypes.map { ($0.value, $0.key) }, uniquingKeysWith: min)
+
+    private static let maxParallelDownloads = 6
+
+    /// Downloads the web images, six at a time. Each asset keeps the address
     /// the document uses, under web/1.png and so on (another folder name
     /// when the document has its own web/ folder). An image that fails, is
-    /// too large, or is not a supported type stays out; the web viewer then
-    /// shows its description, as before.
+    /// too large, or is not a supported type stays out; the web viewer
+    /// shows its description instead.
     static func downloadWebImages(
         _ sources: [String],
         takenPaths: Set<String>,
@@ -96,14 +101,22 @@ nonisolated enum ShareLinkAssets {
         var folder = "web"
         while takenPaths.contains(where: { $0 == folder || $0.hasPrefix(folder + "/") }) { folder += "_" }
         let webFolder = folder
-        return await withTaskGroup(of: (Int, SharePayload.Asset?).self) { group in
-            for (index, source) in sources.enumerated() {
-                group.addTask { (index, await webImage(source, path: "\(webFolder)/\(index + 1)", fetch: fetch)) }
-            }
-            var found: [(Int, SharePayload.Asset)] = []
-            for await (index, asset) in group { if let asset { found.append((index, asset)) } }
-            return found.sorted { $0.0 < $1.0 }.map(\.1)
+        let download: @Sendable (Int) async -> (Int, SharePayload.Asset?) = { index in
+            (index, await webImage(sources[index], path: "\(webFolder)/\(index + 1)", fetch: fetch))
         }
+        var slots = [SharePayload.Asset?](repeating: nil, count: sources.count)
+        await withTaskGroup(of: (Int, SharePayload.Asset?).self) { group in
+            var next = min(maxParallelDownloads, sources.count)
+            for index in 0..<next { group.addTask { await download(index) } }
+            for await (index, asset) in group {
+                slots[index] = asset
+                guard next < sources.count else { continue }
+                let index = next
+                next += 1
+                group.addTask { await download(index) }
+            }
+        }
+        return slots.compactMap { $0 }
     }
 
     /// The image at `source` as an asset at `path` plus its extension, or
@@ -117,14 +130,26 @@ nonisolated enum ShareLinkAssets {
         guard (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true,
               !data.isEmpty, data.count <= maxWebImageBytes,
               let type = webImageType(response: response, url: url),
-              let fileExtension = mediaTypes.filter({ $0.value == type }).keys.min()
+              let fileExtension = extensionForType[type]
         else { return nil }
         return .init(path: "\(path).\(fileExtension)", type: type, data: data, source: source)
     }
 
-    /// One image from the web: no cookies, no cache, 15 seconds at most.
+    /// No cookies, no cache, 20 seconds in all for each image.
+    private static let webImageSession = ShareLinkClient.makeSession(resourceTimeout: 20)
+
+    /// One image from the web. It stops reading as soon as the image is
+    /// larger than any share can carry.
     @Sendable static func fetchWebImage(_ url: URL) async throws -> (Data, URLResponse) {
-        try await ShareLinkClient.sharedSession.data(for: URLRequest(url: url, timeoutInterval: 15))
+        let (bytes, response) = try await webImageSession.bytes(from: url)
+        guard response.expectedContentLength <= maxWebImageBytes else { throw URLError(.dataLengthExceedsMaximum) }
+        var data = Data()
+        data.reserveCapacity(max(0, Int(response.expectedContentLength)))
+        for try await byte in bytes {
+            data.append(byte)
+            if data.count > maxWebImageBytes { throw URLError(.dataLengthExceedsMaximum) }
+        }
+        return (data, response)
     }
 
     /// The image's type from the server, or from its address's extension

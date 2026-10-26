@@ -4,7 +4,7 @@
 // ever sees the encrypted envelope. docs/share-link-plan.md §5.
 
 import { ShareError, openEnvelope, parseLink } from "./share-crypto.js";
-import { assetPathForSource, base64Bytes, decodePayload, displayTitle } from "./payload.js";
+import { assetPathForSource, base64Bytes, decodePayload, displayTitle, isWebSource } from "./payload.js";
 import { pickLanguage, strings } from "./strings.js";
 
 // An explicit allowlist (never USE_PROFILES, which resets ALLOWED_ATTR):
@@ -564,7 +564,7 @@ function attachImages(assets) {
     } else {
       // Remote images would tell their server who opened the link; the
       // page's CSP blocks them anyway, so show the description instead.
-      if (/^https?:/i.test(source)) blocked += 1;
+      if (isWebSource(source)) blocked += 1;
       const placeholder = document.createElement("span");
       placeholder.className = "mdp-missing-image";
       placeholder.textContent = image.alt || text.image;

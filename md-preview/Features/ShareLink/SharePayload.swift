@@ -19,10 +19,8 @@ nonisolated struct SharePayload: Codable, Equatable, Sendable {
         let type: String
         /// Encoded as base64 in the JSON.
         let data: Data
-        /// For an image from the web: the address the document uses for it.
-        /// The web viewer shows this asset wherever the HTML uses that
-        /// address, so the image travels in the share and no other server
-        /// learns who opened the link. Absent for a local image.
+        /// For an image from the web, the address the document uses for it
+        /// (docs/share-link-plan.md §2). Absent for a local image.
         var source: String? = nil
     }
 
@@ -90,7 +88,7 @@ nonisolated struct SharePayload: Codable, Equatable, Sendable {
         return SharePayload(title: raw.title, markdown: raw.markdown, html: raw.html, assets: assets)
     }
 
-    /// An `http` or `https` address, as the document's image tags use them.
+    /// An `http` or `https` address with a host, at most 4096 characters.
     static func isWebSource(_ source: String) -> Bool {
         guard source.count <= 4096, let components = URLComponents(string: source),
               let scheme = components.scheme?.lowercased(), components.host?.isEmpty == false

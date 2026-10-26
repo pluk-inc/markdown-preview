@@ -42,13 +42,15 @@ nonisolated struct ShareLinkClient: Sendable {
     /// One session for every client, so calls reuse its connections.
     static let sharedSession = makeSession()
 
-    /// No cookies, no cache, like `UsageAnalyticsReporter`.
-    static func makeSession(protocolClasses: [AnyClass]? = nil) -> URLSession {
+    /// No cookies, no cache, like `UsageAnalyticsReporter`. A
+    /// `resourceTimeout` limits each request's whole duration.
+    static func makeSession(protocolClasses: [AnyClass]? = nil, resourceTimeout: TimeInterval? = nil) -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpCookieStorage = nil
         configuration.urlCache = nil
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.timeoutIntervalForRequest = 30
+        if let resourceTimeout { configuration.timeoutIntervalForResource = resourceTimeout }
         if let protocolClasses { configuration.protocolClasses = protocolClasses }
         return URLSession(configuration: configuration)
     }
