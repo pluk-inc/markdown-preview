@@ -207,8 +207,10 @@ nonisolated extension MarkdownHTML {
                 drag.table.style.width = `${drag.tableWidth - drag.width + width}px`;
             });
             document.addEventListener('pointerdown', event => {
-                // Control-click opens the context menu on macOS.
-                if (event.button !== 0 || event.ctrlKey) return;
+                // Control-click opens the context menu on macOS. A finger
+                // can't aim at a 5 px edge, and the browser takes its drag
+                // to scroll the table, so touch only scrolls.
+                if (event.button !== 0 || event.ctrlKey || event.pointerType === 'touch') return;
                 const edge = edgeAt(event);
                 if (!edge) return;
                 // Without this the drag selects the header text.
