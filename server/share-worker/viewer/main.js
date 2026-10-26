@@ -476,6 +476,7 @@ async function render(payload) {
   // The viewer does not draw diagrams yet; the app's source layout keeps
   // their line breaks instead of clipping them in the diagram box.
   page.article.querySelectorAll(".mermaid-figure").forEach((figure) => figure.classList.add("mermaid-error"));
+  decorateCodeBlocks();
   const blockedImages = attachImages(payload.assets);
   if (blockedImages > 0) {
     page.notice.textContent = blockedImages === 1
@@ -499,6 +500,74 @@ async function render(payload) {
   document.documentElement.dataset.loaded = "document";
   applyReading();
 }
+
+// MARK: - Code blocks
+
+// The app's code block header (MarkdownHTML+HostBridge.swift): the
+// language, then Wrap and Copy, with the app's class names and icons, so
+// the app's stylesheet draws it.
+const codeIcon = (kind) => '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ({
+  copy: '<rect x="4" y="8" width="12" height="13" rx="3"/><path d="M8 8V6a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-1"/>',
+  check: '<path d="m5 12 4 4L19 6"/>',
+  wrap: '<path d="M4 6h16M4 11h12a4 4 0 0 1 0 8h-5m3-3-3 3 3 3M4 16h3"/>',
+  unwrap: '<path d="M4 6h16M4 12h16m-4-4 4 4-4 4M4 18h7"/>',
+})[kind] + "</svg>";
+
+function codeAction(className, icon, label) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `md-code-action ${className}`;
+  button.innerHTML = codeIcon(icon);
+  button.title = label;
+  button.setAttribute("aria-label", label);
+  return button;
+}
+
+function decorateCodeBlocks() {
+  for (const code of page.article.querySelectorAll("pre > code")) {
+    const pre = code.parentElement;
+    const wrap = document.createElement("div");
+    wrap.className = "md-code-wrap";
+    pre.before(wrap);
+    const header = document.createElement("div");
+    header.className = "md-code-header";
+    const language = document.createElement("span");
+    language.className = "md-code-language";
+    language.textContent = pre.dataset.codeLanguage || "text";
+    const toggle = codeAction("md-code-toggle-wrap", "wrap", text.wrapCode);
+    toggle.setAttribute("aria-pressed", "false");
+    header.append(language, toggle, codeAction("md-code-copy", "copy", text.copyCode));
+    wrap.append(header, pre);
+  }
+}
+
+page.article.addEventListener("click", async (event) => {
+  const toggle = event.target.closest(".md-code-toggle-wrap");
+  if (toggle) {
+    const wrapped = toggle.closest(".md-code-wrap").classList.toggle("is-wrapped");
+    toggle.setAttribute("aria-pressed", String(wrapped));
+    toggle.title = wrapped ? text.unwrapCode : text.wrapCode;
+    toggle.setAttribute("aria-label", toggle.title);
+    toggle.innerHTML = codeIcon(wrapped ? "unwrap" : "wrap");
+    return;
+  }
+  const button = event.target.closest(".md-code-copy");
+  if (!button) return;
+  try {
+    await navigator.clipboard.writeText(button.closest(".md-code-wrap").querySelector("pre > code").textContent);
+  } catch {
+    return; // As in the app: no check mark, and the button stays as it was.
+  }
+  button.innerHTML = codeIcon("check");
+  button.title = text.codeCopied;
+  button.setAttribute("aria-label", text.codeCopied);
+  clearTimeout(button.copiedTimer);
+  button.copiedTimer = setTimeout(() => {
+    button.innerHTML = codeIcon("copy");
+    button.title = text.copyCode;
+    button.setAttribute("aria-label", text.copyCode);
+  }, 1100);
+});
 
 // Copying whole blocks puts their Markdown source on the clipboard, as the
 // app does; a selection inside one block copies as text.

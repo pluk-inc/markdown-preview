@@ -408,7 +408,9 @@ which needs the Worker deployed on `md-preview.app` and a signed Release build.
 **Status (2026-10-23):** the viewer is built in `server/share-worker/viewer/`
 (see its README). Done: decrypt, sanitize with an allowlist, the app's
 stylesheet and code/math renderers (exported and checked by
-`ShareViewerKitTests`), local and downloaded web images as `blob:` URLs,
+`ShareViewerKitTests`), the app's code block header (language, Wrap, Copy)
+with code on its own surface (white with a hairline edge in light, a step
+above the sheet in dark), local and downloaded web images as `blob:` URLs,
 web images the app could not download blocked with a note, Open in Markdown Preview, Download .md, Copy link (with a
 "Link copied" toast), an Aa panel in a popover with the app's
 controls and words (text size, Appearance Automatic/Light/Dark, width; remembered per
