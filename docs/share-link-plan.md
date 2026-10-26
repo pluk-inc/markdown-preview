@@ -286,7 +286,9 @@ and the File menu item from the first draft are dropped.
 - **Manage sheet:** document icon, words · size, "Shared · Link expires …";
   Permissions pop-ups "Anyone with the link" / "can view only" with "People
   you choose" / "can edit" shown disabled; Stop Sharing (red), Copy Link
-  (re-uploads the current text, briefly reads "Copied"), Done.
+  (copies the link at once and briefly reads "Copied"; then uploads the
+  current text under the same link only when it changed since the last
+  upload, so an unchanged copy leaves the expiry as it was), Done.
 - **Stop Sharing** → `NSAlert` "Stop sharing this document?" with the app icon
   set explicitly (sheet alerts hide it otherwise).
 - **Window subtitle:** "Shared", or "Shared · Edited", while the file has a

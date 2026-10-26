@@ -21,6 +21,9 @@ final class ShareLinkStore {
         /// Standardized path of the shared file, to find its link again.
         let filePath: String
         var expiresAt: Date
+        /// SHA-256 of the payload last uploaded, so an unchanged document
+        /// is not uploaded again. Nil for records saved before it existed.
+        var contentDigest: String? = nil
     }
 
     struct Secrets: Codable, Equatable {
