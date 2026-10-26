@@ -16,6 +16,8 @@ const SANITIZE_CONFIG = {
     "h6", "hr", "i", "img", "input", "ins", "kbd", "li", "mark", "ol", "p", "pre", "q", "s",
     "samp", "section", "small", "span", "strong", "sub", "summary", "sup", "table", "tbody",
     "td", "tfoot", "th", "thead", "tr", "u", "ul", "var", "wbr",
+    // Only the diagram HUD's buttons stay (see the afterSanitizeAttributes hook).
+    "button",
   ],
   ALLOWED_ATTR: [
     "align", "alt", "aria-hidden", "aria-label", "checked", "class", "colspan", "dir",
@@ -320,6 +322,22 @@ page.resizer.addEventListener("pointermove", (event) => {
   resizerPointerY = event.clientY;
 });
 
+/**
+ * Diagrams, drawn as the app draws them: its wiring (zoom, Fill width, the
+ * HUD) on Pele, each as it nears the screen, and all at once to print.
+ * Without Pele the figures show their source, with its line breaks.
+ */
+function drawDiagrams(figures) {
+  if (!figures.length) return;
+  if (!window.pele) {
+    figures.forEach((figure) => figure.classList.add("mermaid-error"));
+    return;
+  }
+  const diagrams = MdpRenderers.mermaidWiring();
+  diagrams.bootstrap();
+  window.addEventListener("beforeprint", () => diagrams.renderAll());
+}
+
 /** Lists the document's h1–h3. The rail stays in place without them, so
  * the layout never moves once the document arrives. */
 function buildContents() {
@@ -473,9 +491,6 @@ async function render(payload) {
   // The app's copy-as-Markdown code reads the source from here.
   window.MdPreview = { source: payload.markdown };
   page.article.innerHTML = DOMPurify.sanitize(payload.html, SANITIZE_CONFIG);
-  // The viewer does not draw diagrams yet; the app's source layout keeps
-  // their line breaks instead of clipping them in the diagram box.
-  page.article.querySelectorAll(".mermaid-figure").forEach((figure) => figure.classList.add("mermaid-error"));
   const blockedImages = attachImages(payload.assets);
   if (blockedImages > 0) {
     page.notice.textContent = blockedImages === 1
@@ -484,17 +499,20 @@ async function render(payload) {
     page.notice.hidden = false;
   }
 
-  // Highlighting and math load only for documents that use them.
+  // Highlighting, math, and diagrams load only for documents that use them.
   const math = page.article.querySelectorAll(".math");
+  const diagrams = page.article.querySelectorAll(".mermaid-figure");
   await Promise.all([
     math.length && loadVendor("katex.min.css"),
     math.length && loadVendor("katex.min.js"),
     page.article.querySelector("pre > code") && loadVendor("highlight.min.js"),
+    diagrams.length && loadVendor("pele.global.js"),
   ]);
   for (const element of math) {
     MdpRenderers.renderMathElement(element, element.textContent, element.classList.contains("math-display"));
   }
   MdpRenderers.highlightAll();
+  drawDiagrams(diagrams);
   buildContents();
   document.documentElement.dataset.loaded = "document";
   applyReading();
@@ -565,10 +583,21 @@ page.article.addEventListener("click", (event) => {
 DOMPurify.addHook("afterSanitizeAttributes", (node) => {
   if (node.tagName === "A" && node.hasAttribute("href")) {
     const href = node.getAttribute("href");
-    if (!href.startsWith("#")) {
+    // A link to another of the author's files (notes.md, /docs/plan.pdf) is
+    // not in the share and would open a broken page here: keep its text.
+    if (assetPathForSource(href) !== null || (href.startsWith("/") && !href.startsWith("//"))) {
+      node.removeAttribute("href");
+      node.classList.add("mdp-unshared-link");
+      node.title = text.linkNotShared;
+    } else if (!href.startsWith("#")) {
       node.setAttribute("rel", "noopener noreferrer nofollow");
       node.setAttribute("target", "_blank");
     }
+  }
+  // Buttons only for the diagram HUD; its window button needs the app.
+  if (node.tagName === "BUTTON"
+      && (!node.closest(".mermaid-hud") || node.dataset.mmAct === "popup")) {
+    node.remove();
   }
   if (node.tagName === "INPUT") {
     if (node.getAttribute("type") !== "checkbox") node.remove();

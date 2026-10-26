@@ -556,6 +556,16 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
   color: var(--muted);
 }
 
+/* MARK: Links to the author's other files, which the share does not carry:
+   still text, not a link, with a note on hover (main.js). */
+
+.markdown-body a.mdp-unshared-link {
+  color: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: help;
+}
+
 /* MARK: Loading. Only a slow load shows it: "Loading…" fades in after one
    second, so most opens never see it. */
 

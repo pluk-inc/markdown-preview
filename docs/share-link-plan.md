@@ -3,7 +3,7 @@
 Status: draft, 2026-10-16; revised 2026-10-23. Built behind the hidden
 `MarkdownPreview.shareLinksEnabled` default: the format and crypto (§2), the
 Worker API and its deploy setup on `md-preview.app` (§3), and sharing from the
-app (§4.1–4.4), the web viewer (§5, without diagrams yet), and opening links
+app (§4.1–4.4), the web viewer (§5), and opening links
 in the app (§4.5). Still planned: Universal Links (§4.5).
 
 Goal: from an open Markdown document, the user creates a random link. Anyone
@@ -432,7 +432,10 @@ nothing), so the scripts download while R2 is read. The page loads three
 files (`boot.js`, one stylesheet, one script) whose names carry a hash of
 their content, cached for a year as immutable. A slow load shows only
 the text "Loading…", faded in after 1 s. Not
-yet: diagrams (Pele; a diagram shows its source for now), password links, Report, burn after reading. Deviation
+yet: password links, Report, burn after reading. Diagrams draw with the app's wiring
+(exported as `mermaidWiring` in `renderers.js`) on Pele, loaded only for documents with
+diagrams, with the app's HUD less its window button. A link to another of the author's
+files (a relative or root path) stays as text with a note, since the share does not carry it. Deviation
 from the text below: `style-src-attr 'unsafe-inline'` is allowed because KaTeX sets
 inline styles; scripts stay `'self'` only.
 

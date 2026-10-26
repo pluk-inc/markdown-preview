@@ -42,10 +42,14 @@ final class ShareViewerKitTests: XCTestCase {
             \(MarkdownHTML.highlightAllBody)
             \(MarkdownHTML.mathElementRenderer)
             \(MarkdownHTML.markdownSelectionScript)
+            // The app's diagram wiring (drawing, zoom, the HUD), started once
+            // pele.global.js has loaded; it returns { bootstrap, renderAll }.
+            const mermaidWiring = () => \(MarkdownHTML.mermaidInitWiring);
             window.MdpRenderers = {
                 highlightAll: highlightAll,
                 renderMathElement: renderMathElement,
                 markdownForSelection: markdownForSelection,
+                mermaidWiring: mermaidWiring,
             };
             })();
 
