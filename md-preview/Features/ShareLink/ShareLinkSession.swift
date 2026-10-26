@@ -173,15 +173,19 @@ enum ShareLinkSession {
     }
 
     /// Renders with the app's own renderer, so the web viewer shows what the
-    /// app shows, and reads the local images it uses. Off the main thread:
-    /// a long document or images on a slow volume would freeze the window.
+    /// app shows, reads the local images it uses, and downloads its images
+    /// from the web, so readers see them without the page loading anything
+    /// from another server. Off the main thread: a long document or images
+    /// on a slow volume would freeze the window.
     private static func makePayload(fileURL: URL, markdown: String) async -> SharePayload {
         await Task.detached(priority: .userInitiated) {
             let html = MarkdownHTML.render(markdown: markdown).articleHTML
-            let assets = ShareLinkAssets.collect(articleHTML: html,
-                                                 directory: fileURL.deletingLastPathComponent())
+            let local = ShareLinkAssets.collect(articleHTML: html,
+                                                directory: fileURL.deletingLastPathComponent())
+            let web = await ShareLinkAssets.downloadWebImages(ShareLinkAssets.webImageSources(articleHTML: html),
+                                                              takenPaths: Set(local.map(\.path)))
             return SharePayload(title: fileURL.lastPathComponent, markdown: markdown,
-                                html: html, assets: assets)
+                                html: html, assets: local + web)
         }.value
     }
 
@@ -195,15 +199,19 @@ enum ShareLinkSession {
 
     /// Encodes and seals off the main thread (PBKDF2, DEFLATE, and base64
     /// images are all slow). When the images push the envelope over the
-    /// upload limit, the link carries the text alone.
+    /// upload limit, the web images go first, then the local ones, until
+    /// the text fits.
     private static func seal(_ payload: SharePayload, key: Data) async throws -> Data {
         try await Task.detached(priority: .userInitiated) {
-            do {
-                return try ShareLinkCrypto.seal(payload.encoded(), key: key, password: nil)
-            } catch ShareLinkCrypto.Failure.tooLarge where !payload.assets.isEmpty {
-                let textOnly = SharePayload(title: payload.title, markdown: payload.markdown,
-                                            html: payload.html, assets: [])
-                return try ShareLinkCrypto.seal(textOnly.encoded(), key: key, password: nil)
+            var assets = payload.assets
+            while true {
+                do {
+                    let attempt = SharePayload(title: payload.title, markdown: payload.markdown,
+                                               html: payload.html, assets: assets)
+                    return try ShareLinkCrypto.seal(attempt.encoded(), key: key, password: nil)
+                } catch ShareLinkCrypto.Failure.tooLarge where !assets.isEmpty {
+                    assets = assets.contains { $0.source != nil } ? assets.filter { $0.source == nil } : []
+                }
             }
         }.value
     }

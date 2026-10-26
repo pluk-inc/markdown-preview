@@ -2,10 +2,10 @@
 //  ShareLinkAssets.swift
 //  md-preview
 //
-//  Finds the local images a rendered document uses, so a share can carry
-//  them. Only files inside the document's folder go along; remote images
-//  stay links. Kept free of AppKit so the SPM helper tests can exercise it
-//  without a GUI host.
+//  Finds the images a rendered document uses, so a share can carry them:
+//  files inside the document's folder, and images from the web, downloaded
+//  when the link is made. Kept free of AppKit so the SPM helper tests can
+//  exercise it without a GUI host.
 //
 
 import Foundation
@@ -46,20 +46,13 @@ nonisolated enum ShareLinkAssets {
                         directory: URL,
                         reader: (URL) throws -> Data = { try Data(contentsOf: $0) })
         -> [SharePayload.Asset] {
-        let html = inertHTML.stringByReplacingMatches(
-            in: html, range: NSRange(html.startIndex..., in: html), withTemplate: "")
         let base = directory.standardizedFileURL
         let root = base.resolvingSymlinksInPath()
         var seen = Set<String>()
         var assets: [SharePayload.Asset] = []
 
-        for match in imgTag.matches(in: html, range: NSRange(html.startIndex..., in: html)) {
-            guard let tagRange = Range(match.range, in: html) else { continue }
-            guard let attributes = attributes(ofTag: String(html[tagRange])),
-                  attributes["hidden"] == nil,
-                  let src = attributes["src"],
-                  let source = decodedRelativeSource(src)
-            else { continue }
+        for src in shownImageSources(in: html) {
+            guard let source = decodedRelativeSource(src) else { continue }
 
             // The authored path names the asset, because the HTML refers to
             // it by that name; the resolved file decides confinement and is
@@ -75,6 +68,85 @@ nonisolated enum ShareLinkAssets {
             assets.append(.init(path: path, type: type, data: data))
         }
         return assets
+    }
+
+    /// The `http(s)` addresses of the images `articleHTML` shows, each once,
+    /// with character references decoded as the browser reads them.
+    static func webImageSources(articleHTML html: String) -> [String] {
+        var seen = Set<String>()
+        return shownImageSources(in: html)
+            .map(decodingCharacterReferences)
+            .filter { SharePayload.isWebSource($0) && seen.insert($0).inserted }
+    }
+
+    /// The largest web image a share carries; the envelope's own limit
+    /// leaves out what does not fit.
+    static let maxWebImageBytes = 5 * 1024 * 1024
+
+    /// Downloads the web images in parallel. Each asset keeps the address
+    /// the document uses, under web/1.png and so on (another folder name
+    /// when the document has its own web/ folder). An image that fails, is
+    /// too large, or is not a supported type stays out; the web viewer then
+    /// shows its description, as before.
+    static func downloadWebImages(
+        _ sources: [String],
+        takenPaths: Set<String>,
+        fetch: @escaping @Sendable (URL) async throws -> (Data, URLResponse) = fetchWebImage
+    ) async -> [SharePayload.Asset] {
+        var folder = "web"
+        while takenPaths.contains(where: { $0 == folder || $0.hasPrefix(folder + "/") }) { folder += "_" }
+        let webFolder = folder
+        return await withTaskGroup(of: (Int, SharePayload.Asset?).self) { group in
+            for (index, source) in sources.enumerated() {
+                group.addTask { (index, await webImage(source, path: "\(webFolder)/\(index + 1)", fetch: fetch)) }
+            }
+            var found: [(Int, SharePayload.Asset)] = []
+            for await (index, asset) in group { if let asset { found.append((index, asset)) } }
+            return found.sorted { $0.0 < $1.0 }.map(\.1)
+        }
+    }
+
+    /// The image at `source` as an asset at `path` plus its extension, or
+    /// nil when it cannot go in the share.
+    private static func webImage(
+        _ source: String, path: String,
+        fetch: @Sendable (URL) async throws -> (Data, URLResponse)
+    ) async -> SharePayload.Asset? {
+        guard let url = URL(string: source), let fetched = try? await fetch(url) else { return nil }
+        let (data, response) = fetched
+        guard (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true,
+              !data.isEmpty, data.count <= maxWebImageBytes,
+              let type = webImageType(response: response, url: url),
+              let fileExtension = mediaTypes.filter({ $0.value == type }).keys.min()
+        else { return nil }
+        return .init(path: "\(path).\(fileExtension)", type: type, data: data, source: source)
+    }
+
+    /// One image from the web: no cookies, no cache, 15 seconds at most.
+    @Sendable static func fetchWebImage(_ url: URL) async throws -> (Data, URLResponse) {
+        try await ShareLinkClient.sharedSession.data(for: URLRequest(url: url, timeoutInterval: 15))
+    }
+
+    /// The image's type from the server, or from its address's extension
+    /// when the server's type is generic; nil when neither is supported.
+    private static func webImageType(response: URLResponse, url: URL) -> String? {
+        if let type = response.mimeType?.lowercased(), SharePayload.allowedAssetTypes.contains(type) {
+            return type
+        }
+        return mediaTypes[url.pathExtension.lowercased()]
+    }
+
+    /// The `src` of each image the preview shows, as written in the HTML.
+    private static func shownImageSources(in html: String) -> [String] {
+        let html = inertHTML.stringByReplacingMatches(
+            in: html, range: NSRange(html.startIndex..., in: html), withTemplate: "")
+        return imgTag.matches(in: html, range: NSRange(html.startIndex..., in: html)).compactMap { match in
+            guard let tagRange = Range(match.range, in: html),
+                  let attributes = attributes(ofTag: String(html[tagRange])),
+                  attributes["hidden"] == nil
+            else { return nil }
+            return attributes["src"]
+        }
     }
 
     /// The tag's attributes by lowercased name, the first of each name

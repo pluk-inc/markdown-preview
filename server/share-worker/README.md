@@ -27,7 +27,9 @@ document with the app's own stylesheet and renderers:
   reader needs no second request. `/shares/<id>` still serves it to the app.
 - The rendered HTML comes from whoever made the envelope, so the page
   sanitizes it with an explicit allowlist, allows only same-origin scripts
-  (CSP in `src/viewer-csp.ts`), and blocks remote images.
+  (CSP in `src/viewer-csp.ts`), and blocks remote images. Images from the
+  web come inside the share instead: the app downloads them when it makes
+  the link, and the page shows them by their address (an asset's `source`).
 
 Diagrams (Mermaid through Pele) are not rendered yet; their source shows as code.
 

@@ -24,10 +24,23 @@ export function decodePayload(plaintext) {
     if (!ALLOWED_ASSET_TYPES.has(type)) throw new Error("unsupported asset type");
     if (seen.has(path)) throw new Error("duplicate asset path");
     if (typeof asset.data !== "string") throw new Error("invalid asset data");
+    // A web image's address in the document, as SharePayload.isWebSource checks it.
+    if (asset.source != null && !isWebSource(asset.source)) throw new Error("invalid asset source");
     seen.add(path);
-    return { path, type, data: base64Bytes(asset.data) };
+    return { path, type, data: base64Bytes(asset.data), source: asset.source ?? null };
   });
   return { title: raw.title, markdown: raw.markdown, html: raw.html, assets };
+}
+
+/** An `http` or `https` address with a host, at most 4096 characters. */
+export function isWebSource(source) {
+  if (typeof source !== "string" || source.length > 4096) return false;
+  try {
+    const url = new URL(source);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.hostname !== "";
+  } catch {
+    return false;
+  }
 }
 
 /**

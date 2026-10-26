@@ -19,11 +19,17 @@ nonisolated struct SharePayload: Codable, Equatable, Sendable {
         let type: String
         /// Encoded as base64 in the JSON.
         let data: Data
+        /// For an image from the web: the address the document uses for it.
+        /// The web viewer shows this asset wherever the HTML uses that
+        /// address, so the image travels in the share and no other server
+        /// learns who opened the link. Absent for a local image.
+        var source: String? = nil
     }
 
     enum Failure: Error, Equatable {
         case unsupportedVersion(Int)
         case invalidAssetPath(String)
+        case invalidAssetSource(String)
         case unsupportedAssetType(String)
         case duplicateAssetPath(String)
     }
@@ -59,7 +65,8 @@ nonisolated struct SharePayload: Codable, Equatable, Sendable {
     }
 
     /// Decodes and validates: known version, confined asset paths, allowed
-    /// asset types, no duplicate paths. Asset paths come back normalized.
+    /// asset types, web sources only for web images, no duplicate paths.
+    /// Asset paths come back normalized.
     static func decode(_ data: Data) throws -> SharePayload {
         let raw = try JSONDecoder().decode(SharePayload.self, from: data)
         guard raw.version == currentVersion else {
@@ -74,10 +81,21 @@ nonisolated struct SharePayload: Codable, Equatable, Sendable {
             guard allowedAssetTypes.contains(asset.type.lowercased()) else {
                 throw Failure.unsupportedAssetType(asset.type)
             }
+            if let source = asset.source, !isWebSource(source) {
+                throw Failure.invalidAssetSource(source)
+            }
             guard seen.insert(path).inserted else { throw Failure.duplicateAssetPath(path) }
-            return Asset(path: path, type: asset.type.lowercased(), data: asset.data)
+            return Asset(path: path, type: asset.type.lowercased(), data: asset.data, source: asset.source)
         }
         return SharePayload(title: raw.title, markdown: raw.markdown, html: raw.html, assets: assets)
+    }
+
+    /// An `http` or `https` address, as the document's image tags use them.
+    static func isWebSource(_ source: String) -> Bool {
+        guard source.count <= 4096, let components = URLComponents(string: source),
+              let scheme = components.scheme?.lowercased(), components.host?.isEmpty == false
+        else { return false }
+        return scheme == "http" || scheme == "https"
     }
 
     /// The title safe to show in a window title or a file name stem:
@@ -152,7 +170,9 @@ nonisolated struct SharePayload: Codable, Equatable, Sendable {
         }
         try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
 
-        for asset in assets {
+        // Web images stay out: the Markdown names them by their web address,
+        // not by a file in this folder.
+        for asset in assets where asset.source == nil {
             guard let url = Self.fileURL(forAssetPath: asset.path, in: folder) else { continue }
             try fileManager.createDirectory(at: url.deletingLastPathComponent(),
                                             withIntermediateDirectories: true)

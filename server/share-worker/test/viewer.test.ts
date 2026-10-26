@@ -99,6 +99,17 @@ describe("payloads", () => {
     expect(payload.assets[0].data[1]).toBe(0x50); // "P" of the PNG signature
   });
 
+  it("keeps a web image's source and refuses one that is not a web address", () => {
+    const payload = (source: string) => new TextEncoder().encode(JSON.stringify({
+      v: 1, title: "a.md", markdown: "m", html: "h",
+      assets: [{ path: "web/1.png", type: "image/png", data: "AQ==", source }],
+    }));
+    expect(decodePayload(payload("https://example.com/x.png")).assets[0].source).toBe("https://example.com/x.png");
+    for (const source of ["javascript:alert(1)", "file:///etc/passwd", "img/x.png", "https://"]) {
+      expect(() => decodePayload(payload(source)), source).toThrow();
+    }
+  });
+
   it("refuses asset paths that leave the document's folder", () => {
     for (const path of ["../x.png", "/x.png", "a\\b.png", "", "./", "a/../../x.png"]) {
       expect(normalizedAssetPath(path), path).toBeNull();

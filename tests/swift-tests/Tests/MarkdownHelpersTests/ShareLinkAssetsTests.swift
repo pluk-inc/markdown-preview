@@ -115,6 +115,46 @@ final class ShareLinkAssetsTests: XCTestCase {
         XCTAssertEqual(assets.first?.data, Data("img/a.png".utf8))
     }
 
+    // MARK: - Web images
+
+    func testListsShownWebImagesOnceWithReferencesDecoded() {
+        let html = """
+        <img src="https://example.com/a.png?x=1&amp;y=2"><img src="https://example.com/a.png?x=1&amp;y=2">
+        <img src="http://example.com/b.png"><img src="img/a.png"><img src="data:image/png;base64,AA">
+        <img src="ftp://example.com/c.png"><img hidden src="https://example.com/hidden.png">
+        <!-- <img src="https://example.com/comment.png"> -->
+        """
+        XCTAssertEqual(ShareLinkAssets.webImageSources(articleHTML: html),
+                       ["https://example.com/a.png?x=1&y=2", "http://example.com/b.png"])
+    }
+
+    func testDownloadsSupportedWebImagesUnderTheirSources() async {
+        let png = Data([0x89, 0x50, 0x4E, 0x47])
+        let assets = await ShareLinkAssets.downloadWebImages([
+            "https://example.com/ok.png",
+            "https://example.com/missing.png",
+            "https://example.com/page",
+            "https://example.com/photo.jpg",
+            "https://example.com/huge.png",
+        ], takenPaths: ["web/1.png"]) { url in
+            let (status, type, data): (Int, String, Data) = switch url.lastPathComponent {
+            case "ok.png": (200, "image/png", png)
+            case "missing.png": (404, "image/png", png)
+            case "page": (200, "text/html", Data("<html>".utf8))
+            case "photo.jpg": (200, "application/octet-stream", Data([0xFF, 0xD8]))
+            default: (200, "image/png", Data(count: ShareLinkAssets.maxWebImageBytes + 1))
+            }
+            let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1",
+                                           headerFields: ["Content-Type": type])!
+            return (data, response)
+        }
+        // The document's own web/ folder is taken, so web images go in web_/.
+        XCTAssertEqual(assets.map(\.path), ["web_/1.png", "web_/4.jpeg"])
+        XCTAssertEqual(assets.map(\.type), ["image/png", "image/jpeg"])
+        XCTAssertEqual(assets.map(\.source), ["https://example.com/ok.png", "https://example.com/photo.jpg"])
+        XCTAssertEqual(assets.first?.data, png)
+    }
+
     func testCollectsFromTheAppRenderer() {
         let html = MarkdownHTML.render(markdown: "![a](img/a.png)\n\n![p](<img/My Photo.jpg>)\n").articleHTML
         XCTAssertEqual(collect(html).map(\.path), ["img/a.png", "img/My Photo.jpg"])

@@ -102,10 +102,19 @@ Raw DEFLATE (Swift `NSData.compressed(using: .zlib)`; web
   "markdown": "# Hello…",
   "html": "<rendered body from MarkdownHTML>",
   "assets": [
-    { "path": "img/diagram.png", "type": "image/png", "data": "<base64>" }
+    { "path": "img/diagram.png", "type": "image/png", "data": "<base64>" },
+    { "path": "web/1.png", "type": "image/png", "data": "<base64>",
+      "source": "https://example.com/chart.png" }
   ]
 }
 ```
+
+An asset with `source` is an image from the web, downloaded by the app when
+it made the link; `source` is the address the document uses for it (`http`
+or `https` only). The web viewer shows the asset wherever the HTML uses that
+address, so the image travels inside the encrypted share and no other server
+learns who opened the link. The app does not write these assets to disk when
+it opens a share, because the Markdown names them by their web address.
 
 `html` is the body the app's own renderer (`MarkdownHTML`, swift-markdown)
 produced at upload time. Only the web viewer uses it (§5), so the browser shows
@@ -297,7 +306,11 @@ and the File menu item from the first draft are dropped.
 - Read the text from `DocumentWindowController.currentMarkdown` /
   `currentFileURL`, not `document.markdown` (the sidebar can switch files).
 - Images: `ShareLinkAssets` collects the local images the rendered HTML
-  references, confined to the document's folder. Remote image URLs stay links.
+  references, confined to the document's folder, and downloads its `https`
+  images (no cookies, 15 s and 5 MB each, supported types only) as assets
+  with a `source`. An image that cannot be downloaded stays a link. When the
+  envelope is too large, the web images are left out first, then the local
+  ones.
 
 **Not possible without collaboration (investigated, rejected):** Pages' Copy
 Link sits next to Copy because Pages adds its rows to an iCloud collaboration
@@ -387,8 +400,8 @@ which needs the Worker deployed on `md-preview.app` and a signed Release build.
 **Status (2026-10-23):** the viewer is built in `server/share-worker/viewer/`
 (see its README). Done: decrypt, sanitize with an allowlist, the app's
 stylesheet and code/math renderers (exported and checked by
-`ShareViewerKitTests`), local images as `blob:` URLs, remote images blocked
-with a note, Open in Markdown Preview, Download .md, Copy link (with a
+`ShareViewerKitTests`), local and downloaded web images as `blob:` URLs,
+web images the app could not download blocked with a note, Open in Markdown Preview, Download .md, Copy link (with a
 "Link copied" toast), an Aa panel in a popover with the app's
 controls and words (text size, Appearance Automatic/Light/Dark, width; remembered per
 browser), a Contents rail (always in place, "No headings" when empty, its
@@ -436,7 +449,8 @@ inline styles; scripts stay `'self'` only.
   plus `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`,
   `X-Content-Type-Options: nosniff`, `Cross-Origin-Opener-Policy: same-origin`,
   `Cache-Control: no-store`. Remote images are blocked by `img-src` (stops
-  tracking pixels); show a note when the document has some.
+  tracking pixels); the app downloads them into the share instead, and the
+  page shows a note for any it could not.
 - **No analytics or third-party scripts on the viewer.** Any script on the page
   can read the key from `location.hash`.
 - Buttons: "Open in Markdown Preview" (`md-preview://share/…`), "Download .md",
