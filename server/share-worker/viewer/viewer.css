@@ -65,6 +65,10 @@ body { padding: 0; }
   --rail-motion: 290ms ease;
   /* The Contents rail's default width; boot.js sets a width the reader dragged. */
   --rail-width: 220px;
+  /* The rail edge's hover line (Linear's): a faint track and a darker
+     stretch that follows the pointer. */
+  --resize-track: #d2d2d2;
+  --resize-indicator: rgba(0, 0, 0, 0.35);
 }
 
 @supports (transition-timing-function: linear(0, 1)) {
@@ -82,6 +86,8 @@ body { padding: 0; }
     --ink: rgba(255, 255, 255, 0.88);
     --muted: rgba(255, 255, 255, 0.52);
     --hairline: rgba(255, 255, 255, 0.09);
+    --resize-track: #3f4042;
+    --resize-indicator: rgba(255, 255, 255, 0.35);
     --hover: rgba(255, 255, 255, 0.07);
     --button-hover: rgba(255, 255, 255, 0.05);
     --icon: #949597;
@@ -430,20 +436,45 @@ button {
   touch-action: none;
 }
 
-.resizer::after {
-  content: "";
+/* Linear's resize line: a half-pixel track on the sheet's edge whose ends
+   fade out, and inside it a darker stretch, twice the track's height and
+   faded on an eased curve, that main.js centers on the pointer. */
+.resizer-track {
   position: absolute;
-  inset-block: 10px;
-  /* One pixel, just outside the sheet's edge. */
-  left: 7px;
-  width: 1px;
-  background: transparent;
-  transition: background-color 150ms ease-out;
+  inset-block: 0;
+  left: 7.75px;
+  width: 0.5px;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--resize-track);
+  -webkit-mask-image: linear-gradient(transparent, #000 10% 90%, transparent);
+  mask-image: linear-gradient(transparent, #000 10% 90%, transparent);
+  opacity: 0;
+  transition: opacity 250ms;
 }
 
-.resizer:hover::after { background: var(--hairline); transition-delay: 100ms; }
-.resizing .resizer::after,
-.resizer:focus-visible::after { background: var(--hairline); }
+.resizer-indicator {
+  position: absolute;
+  inset-inline: 0;
+  top: -50%;
+  height: 200%;
+  background: var(--resize-indicator);
+  --fade: linear-gradient(transparent 5%, rgba(0, 0, 0, 0.1) 11.4%, rgba(0, 0, 0, 0.2) 17.2%,
+    rgba(0, 0, 0, 0.3) 22.2%, rgba(0, 0, 0, 0.4) 26.6%, rgba(0, 0, 0, 0.5) 30.3%,
+    rgba(0, 0, 0, 0.6) 33.4%, rgba(0, 0, 0, 0.7) 35.7%, rgba(0, 0, 0, 0.8) 37.4%,
+    rgba(0, 0, 0, 0.9) 38.4%, #000 38.75% 61.25%, rgba(0, 0, 0, 0.9) 61.6%,
+    rgba(0, 0, 0, 0.8) 62.6%, rgba(0, 0, 0, 0.7) 64.3%, rgba(0, 0, 0, 0.6) 66.6%,
+    rgba(0, 0, 0, 0.5) 69.7%, rgba(0, 0, 0, 0.4) 73.4%, rgba(0, 0, 0, 0.3) 77.8%,
+    rgba(0, 0, 0, 0.2) 82.8%, rgba(0, 0, 0, 0.1) 88.6%, transparent 95%);
+  -webkit-mask-image: var(--fade);
+  mask-image: var(--fade);
+}
+
+@media (any-hover: hover) and (any-pointer: fine) {
+  .resizer:hover .resizer-track { opacity: 1; transition-delay: 100ms; }
+}
+.resizing .resizer-track,
+.resizer:focus-visible .resizer-track { opacity: 1; }
 /* Focus shows as the edge's line, not a ring around it. */
 .resizer:focus { outline: none; }
 

@@ -55,6 +55,7 @@ const page = {
   scrim: byId("scrim"),
   contents: byId("contents"),
   resizer: byId("contents-resizer"),
+  resizerIndicator: byId("resizer-indicator"),
   contentsList: byId("contents-list"),
   contentsEmpty: byId("contents-empty"),
   toast: byId("toast"),
@@ -304,6 +305,20 @@ page.resizer.addEventListener("keydown", (event) => {
 });
 
 updateResizerValue();
+
+// The darker stretch of the edge's line follows the pointer, once a frame,
+// as in Linear: centered on it, and held at the track's ends.
+let resizerPointerY;
+function placeResizerIndicator() {
+  const track = page.resizerIndicator.parentElement.getBoundingClientRect();
+  const offset = Math.min(Math.max(resizerPointerY - track.top, 0), track.height) - track.height / 2;
+  page.resizerIndicator.style.transform = `translate3d(0, ${offset}px, 0)`;
+  resizerPointerY = undefined;
+}
+page.resizer.addEventListener("pointermove", (event) => {
+  if (resizerPointerY === undefined) requestAnimationFrame(placeResizerIndicator);
+  resizerPointerY = event.clientY;
+});
 
 /** Lists the document's h1–h3. The rail stays in place without them, so
  * the layout never moves once the document arrives. */
