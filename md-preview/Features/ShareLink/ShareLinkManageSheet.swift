@@ -81,13 +81,16 @@ final class ShareLinkManageModel {
         if let link = ShareLinkSession.storedLink(forFile: fileURL) {
             // The link does not change, so it is copied before the upload,
             // which is skipped when the text has not changed.
-            ShareLinkSession.copyToPasteboard(link)
+            let copied = ShareLinkSession.copyToPasteboard(link)
             activity = .copied
             isUpdating = true
             do {
-                // A link that expired or is gone from the server is replaced.
+                // A link that expired or is gone from the server is replaced;
+                // the replacement is copied unless the user copied since.
                 let current = try await ShareLinkSession.link(forFile: fileURL, markdown: markdown)
-                if current != link { ShareLinkSession.copyToPasteboard(current) }
+                if current != link, NSPasteboard.general.changeCount == copied {
+                    ShareLinkSession.copyToPasteboard(current)
+                }
             } catch {
                 errorMessage = ShareLinkSession.message(for: error)
             }

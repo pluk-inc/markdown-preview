@@ -62,9 +62,12 @@ enum ShareLinkSession {
         copyToPasteboard(link)
     }
 
-    static func copyToPasteboard(_ link: URL) {
+    /// Returns the pasteboard's change count after the copy.
+    @discardableResult
+    static func copyToPasteboard(_ link: URL) -> Int {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(link.absoluteString, forType: .string)
+        return NSPasteboard.general.changeCount
     }
 
     /// The file's live link, built from what this Mac stored, with no
