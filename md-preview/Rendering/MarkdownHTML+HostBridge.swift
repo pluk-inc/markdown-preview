@@ -70,9 +70,28 @@ nonisolated extension MarkdownHTML {
 
     /// Table column resize, shared by the app's page script and the share
     /// viewer (exported by ShareViewerKitTests). Defines
+    /// `wrapTables(root, tableParentSelector)`, which puts each document table
+    /// in the `.md-table-wrap` box the rest works in, and
     /// `enableTableColumnResize(tableParentSelector)`, which works on tables
     /// whose parent matches the selector.
     static let tableColumnResizeScript: String = """
+        // Wraps each table of the document in .md-table-wrap: not one in the
+        // frontmatter, inside another table, or already wrapped. Returns the
+        // new wraps, for the app to add its Expand button to.
+        function wrapTables(root, tableParentSelector) {
+            const wraps = [];
+            root.querySelectorAll('table').forEach(table => {
+                if (table.closest('.md-frontmatter') || table.parentElement.closest('table')
+                    || table.parentElement.matches(tableParentSelector)) return;
+                const wrap = document.createElement('div');
+                wrap.className = 'md-table-wrap';
+                table.before(wrap);
+                wrap.append(table);
+                wraps.push(wrap);
+            });
+            return wraps;
+        }
+
         // Drag the edge between two header cells to resize a column, in the
         // document and in the table window; double-click an edge to fit that
         // column to its header text. The first drag fixes each column at its
@@ -652,13 +671,7 @@ nonisolated extension MarkdownHTML {
 
         function decorateTables(root = document) {
             if (!hasHostBridge || !\(tablePopupEnabled)) return;
-            root.querySelectorAll('table').forEach(table => {
-                if (table.closest('.md-frontmatter') || table.parentElement.closest('table')
-                    || table.parentElement.matches(MD_TABLE_PARENT_SELECTOR)) return;
-                const wrap = document.createElement('div');
-                wrap.className = 'md-table-wrap';
-                table.before(wrap);
-                wrap.append(table);
+            wrapTables(root, MD_TABLE_PARENT_SELECTOR).forEach(wrap => {
                 const actions = document.createElement('div');
                 actions.className = 'md-table-actions';
                 const button = document.createElement('button');

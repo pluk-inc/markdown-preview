@@ -43,86 +43,72 @@ final class ShareViewerKitTests: XCTestCase {
             \(MarkdownHTML.mathElementRenderer)
             \(MarkdownHTML.markdownSelectionScript)
             \(MarkdownHTML.tableColumnResizeScript)
-            // The app's diagram wiring (drawing, zoom, the HUD), started once
-            // pele.global.js has loaded with the reader's language's texts
-            // (diagramStrings); it returns { bootstrap, renderAll }.
-            const mermaidWiring = (t) => \(localizedMermaidWiring);
-            // The app's translations of the diagram texts, by language.
-            const diagramStrings = \(diagramStrings);
             window.MdpRenderers = {
                 highlightAll: highlightAll,
                 renderMathElement: renderMathElement,
                 markdownForSelection: markdownForSelection,
+                wrapTables: wrapTables,
                 enableTableColumnResize: enableTableColumnResize,
-                mermaidWiring: mermaidWiring,
-                diagramStrings: diagramStrings,
             };
             })();
+
+            """,
+            // Loaded after pele.global.js, only for documents with diagrams.
+            "diagrams.js": header + """
+            window.MdpDiagrams = {
+                // (messages) => { bootstrap, renderAll }
+                wiring: \(MarkdownHTML.mermaidWiringFunction),
+                // The app's diagramMessagesJS in each of its languages.
+                messages: {
+            \(languages.map { "        \(javaScriptKey($0)): \(diagramMessages(in: $0))," }.joined(separator: "\n"))
+                },
+            };
 
             """,
         ]
     }
 
-    /// The diagram texts the viewer shows, keyed for `t` in the wiring, to
-    /// the app's English source text.
-    private static let diagramKeys: KeyValuePairs<String, String> = [
-        "zoomOut": "Zoom Out", "zoomIn": "Zoom In", "resetZoom": "Reset zoom",
-        "fillWidth": "Fill width", "fitDiagram": "Fit diagram",
-        "unsupported": "This diagram type is not supported.",
-        "syntax": "The diagram has a syntax error.",
-        "semantic": "The diagram is not valid.",
-        "limit": "The diagram is too large to draw.",
-        "generic": "The diagram could not be drawn.",
-        "position": "Line %d, column %d",
-        "empty": "This diagram is empty.",
-    ]
-
     /// The viewer's languages, named as the app's .lproj folders.
     private static let languages = ["en", "ja", "zh-Hans", "pl", "fa"]
 
-    /// `{ en: { zoomOut: "Zoom Out", … }, ja: { … }, … }` from the app's
-    /// Localizable.strings, so the viewer says what the app says.
-    static var diagramStrings: String {
-        var table: [String: [String: String]] = [:]
-        for language in languages {
-            let url = TestVendor.repositoryRoot.appendingPathComponent("md-preview/\(language).lproj/Localizable.strings")
-            let strings = (try? PropertyListSerialization.propertyList(
-                from: Data(contentsOf: url), format: nil)) as? [String: String] ?? [:]
-            table[language] = Dictionary(uniqueKeysWithValues: diagramKeys.map { ($0.key, strings[$0.value] ?? $0.value) })
-        }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
-        return String(decoding: (try? encoder.encode(table)) ?? Data("{}".utf8), as: UTF8.self)
+    private static func javaScriptKey(_ language: String) -> String {
+        language.contains("-") ? MarkdownHTML.javaScriptStringLiteral(language) : language
     }
 
-    /// The app's wiring with its English texts read from `t` instead.
-    static var localizedMermaidWiring: String {
-        var wiring = MarkdownHTML.mermaidInitWiring
-        let replacements = [
-            (#"const fillWidthLabel = "Fill width";"#, "const fillWidthLabel = t.fillWidth;"),
-            (#"const fitDiagramLabel = "Fit diagram";"#, "const fitDiagramLabel = t.fitDiagram;"),
-            (MarkdownHTML.diagramMessagesJS, """
-            {
-                errors: { 'unsupported-diagram': t.unsupported, syntax: t.syntax, semantic: t.semantic, limit: t.limit },
-                generic: t.generic, position: t.position, empty: t.empty, emptyHint: '', unavailable: ''
-            }
-            """),
-        ]
-        for (english, localized) in replacements {
-            precondition(wiring.components(separatedBy: english).count == 2,
-                         "The app's diagram wiring changed; update ShareViewerKitTests.localizedMermaidWiring")
-            wiring = wiring.replacingOccurrences(of: english, with: localized)
-        }
-        return wiring
+    private static func localizedStrings(_ language: String) -> [String: String] {
+        let url = TestVendor.repositoryRoot.appendingPathComponent("md-preview/\(language).lproj/Localizable.strings")
+        return (try? PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil))
+            as? [String: String] ?? [:]
     }
 
-    func testDiagramStringsHaveEveryTextInEveryLanguage() {
+    /// Each string literal of `diagramMessagesJS`, the app's English.
+    private static var diagramTexts: [String] {
+        let literal = try! NSRegularExpression(pattern: #""(?:[^"\\]|\\.)*""#)
+        let js = MarkdownHTML.diagramMessagesJS
+        return literal.matches(in: js, range: NSRange(js.startIndex..., in: js)).map { match in
+            let quoted = String(js[Range(match.range, in: js)!])
+            return (try! JSONSerialization.jsonObject(with: Data("[\(quoted)]".utf8)) as! [String])[0]
+        }
+    }
+
+    /// `diagramMessagesJS` with each English text replaced by `language`'s
+    /// translation from the app's Localizable.strings.
+    static func diagramMessages(in language: String) -> String {
+        let strings = localizedStrings(language)
+        var js = MarkdownHTML.diagramMessagesJS
+        for text in diagramTexts {
+            js = js.replacingOccurrences(of: MarkdownHTML.javaScriptStringLiteral(text),
+                                         with: MarkdownHTML.javaScriptStringLiteral(strings[text] ?? text))
+        }
+        return js
+    }
+
+    func testEveryDiagramTextHasATranslationInEveryLanguage() {
+        XCTAssertFalse(Self.diagramTexts.isEmpty)
         for language in Self.languages where language != "en" {
-            let url = TestVendor.repositoryRoot.appendingPathComponent("md-preview/\(language).lproj/Localizable.strings")
-            let strings = (try? PropertyListSerialization.propertyList(
-                from: Data(contentsOf: url), format: nil)) as? [String: String] ?? [:]
-            for (key, english) in Self.diagramKeys {
-                XCTAssertNotNil(strings[english], "\(language) has no translation for \(key)")
+            let strings = Self.localizedStrings(language)
+            for text in Self.diagramTexts {
+                XCTAssertNotNil(strings[text], "\(language) has no translation for \(text.debugDescription)")
             }
         }
     }

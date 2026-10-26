@@ -4,7 +4,7 @@
 // ever sees the encrypted envelope. docs/share-link-plan.md §5.
 
 import { ShareError, openEnvelope, parseLink } from "./share-crypto.js";
-import { assetPathForSource, base64Bytes, decodePayload, displayTitle, isWebSource } from "./payload.js";
+import { assetPathForSource, base64Bytes, decodePayload, displayTitle, hasScheme, isWebSource } from "./payload.js";
 import { pickLanguage, strings } from "./strings.js";
 
 // An explicit allowlist (never USE_PROFILES, which resets ALLOWED_ATTR):
@@ -325,57 +325,34 @@ page.resizer.addEventListener("pointermove", (event) => {
 /**
  * Table columns resize as in the app, with its code: drag the edge between
  * two header cells, double-click it to fit the column to its header. The
- * app's code works on tables in .md-table-wrap, which the app adds with its
- * Expand button; the viewer adds the wrap alone, for the same tables.
+ * app wraps the same tables and adds its Expand button, which needs its
+ * window; the viewer keeps the wrap alone.
  */
 function enableColumnResize() {
-  for (const table of page.article.querySelectorAll("table")) {
-    if (table.closest(".md-frontmatter") || table.parentElement.closest("table")) continue;
-    const wrap = document.createElement("div");
-    wrap.className = "md-table-wrap";
-    table.before(wrap);
-    wrap.append(table);
+  // The app's MD_TABLE_PARENT_SELECTOR.
+  const tableParents = ".md-table-wrap, .md-table-scroll";
+  if (MdpRenderers.wrapTables(page.article, tableParents).length) {
+    MdpRenderers.enableTableColumnResize(tableParents);
   }
-  MdpRenderers.enableTableColumnResize(".md-table-wrap, .md-table-scroll");
 }
 
 /**
- * Diagrams, drawn as the app draws them: its wiring (zoom, Fill width, the
- * HUD) on Pele, each as it nears the screen, and all at once to print.
- * Without Pele the figures show their source, with its line breaks.
+ * Diagrams, drawn as the app draws them: diagrams.js is Pele and the app's
+ * wiring (zoom, Fill width, the HUD), loaded only for documents that have
+ * diagrams and not waited for. Each draws as it nears the screen, and all
+ * at once to print. Without Pele the figures show their source.
  */
-function drawDiagrams(figures) {
+async function drawDiagrams(figures) {
   if (!figures.length) return;
-  if (!window.pele) {
+  await loadVendor("diagrams.js");
+  if (!window.pele || !window.MdpDiagrams) {
     figures.forEach((figure) => figure.classList.add("mermaid-error"));
     return;
   }
-  // The app's words in the reader's language; the HUD in the HTML came in
-  // the author's.
-  const t = MdpRenderers.diagramStrings[language] ?? MdpRenderers.diagramStrings.en;
-  const hudLabels = { out: t.zoomOut, in: t.zoomIn, reset: t.resetZoom, width: t.fillWidth };
-  for (const button of page.article.querySelectorAll(".mermaid-hud button[data-mm-act]")) {
-    const label = hudLabels[button.dataset.mmAct];
-    if (!label) continue;
-    button.setAttribute("aria-label", label);
-    if (button.hasAttribute("title")) button.title = label;
-  }
-  const diagrams = MdpRenderers.mermaidWiring(t);
+  const { wiring, messages } = window.MdpDiagrams;
+  const diagrams = wiring(messages[language] ?? messages.en);
   diagrams.bootstrap();
-  // Print each whole diagram: draw any not drawn yet, and set aside the
-  // reader's zoom and pan, which would crop it, until printing ends.
-  const views = new Map();
-  window.addEventListener("beforeprint", () => {
-    diagrams.renderAll();
-    for (const node of page.article.querySelectorAll(".mermaid-figure .mermaid")) {
-      views.set(node, node.style.transform);
-      node.style.transform = "";
-    }
-  });
-  window.addEventListener("afterprint", () => {
-    for (const [node, transform] of views) node.style.transform = transform;
-    views.clear();
-  });
+  window.addEventListener("beforeprint", () => diagrams.renderAll());
 }
 
 /** Lists the document's h1–h3. The rail stays in place without them, so
@@ -540,14 +517,14 @@ async function render(payload) {
     page.notice.hidden = false;
   }
 
-  // Highlighting, math, and diagrams load only for documents that use them.
+  // Highlighting and math load only for documents that use them; diagrams
+  // load on their own, after the text is in place.
   const math = page.article.querySelectorAll(".math");
   const diagrams = page.article.querySelectorAll(".mermaid-figure");
   await Promise.all([
     math.length && loadVendor("katex.min.css"),
     math.length && loadVendor("katex.min.js"),
     page.article.querySelector("pre > code") && loadVendor("highlight.min.js"),
-    diagrams.length && loadVendor("pele.global.js"),
   ]);
   for (const element of math) {
     MdpRenderers.renderMathElement(element, element.textContent, element.classList.contains("math-display"));
@@ -692,25 +669,39 @@ page.article.addEventListener("click", (event) => {
   target?.scrollIntoView();
 });
 
-// Links leave the page without the key: no referrer, no opener.
-const isLocalFileLink = (href) => href !== "" && !/^[a-z][a-z0-9+.-]*:/i.test(href)
+const isLocalFileLink = (href) => href !== "" && !hasScheme(href)
   && !href.startsWith("//") && !href.startsWith("#") && !href.startsWith("?");
 
-DOMPurify.addHook("afterSanitizeAttributes", (node) => {
-  if (node.tagName === "A" && node.hasAttribute("href")) {
-    const href = node.getAttribute("href");
-    // A link to another of the author's files (notes.md, ../plan.pdf,
-    // /docs/a.md: no scheme, no host, not this page) is not in the share
-    // and would open a broken page here: keep its text.
-    if (isLocalFileLink(href)) {
-      node.removeAttribute("href");
-      node.classList.add("mdp-unshared-link");
-      node.title = text.linkNotShared;
-    } else if (!href.startsWith("#")) {
-      node.setAttribute("rel", "noopener noreferrer nofollow");
-      node.setAttribute("target", "_blank");
-    }
+const XLINK = "http://www.w3.org/1999/xlink";
+
+/**
+ * A link in the document or in a drawn diagram (SVG <a>, href or
+ * xlink:href). One to another of the author's files (notes.md, ../plan.pdf,
+ * /docs/a.md: no scheme, no host, not this page) is not in the share and
+ * would open a broken page here: it keeps its text. Others leave the page
+ * without the key: no referrer, no opener.
+ */
+function applyLinkRules(link) {
+  const href = link.getAttribute("href") ?? link.getAttributeNS(XLINK, "href");
+  if (href === null) return;
+  if (isLocalFileLink(href)) {
+    link.removeAttribute("href");
+    link.removeAttributeNS(XLINK, "href");
+    link.classList.add("mdp-unshared-link");
+    link.setAttribute("title", text.linkNotShared);
+  } else if (!href.startsWith("#")) {
+    link.setAttribute("rel", "noopener noreferrer nofollow");
+    link.setAttribute("target", "_blank");
   }
+}
+
+// Pele draws diagrams after sanitizing, so their links get the rules here.
+window.addEventListener("md-preview-mermaid-rendered", () => {
+  page.article.querySelectorAll(".mermaid-figure svg a").forEach(applyLinkRules);
+});
+
+DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+  if (node.tagName === "A") applyLinkRules(node);
   // Buttons only for the diagram HUD; its window button needs the app.
   if (node.tagName === "BUTTON"
       && (!node.closest(".mermaid-hud") || node.dataset.mmAct === "popup")) {

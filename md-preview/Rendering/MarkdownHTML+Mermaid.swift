@@ -100,7 +100,12 @@ nonisolated extension MarkdownHTML {
         position: \(javaScriptStringLiteral(NSLocalizedString("Line %d, column %d", comment: "Position of a Mermaid diagram error: line, then column"))),
         empty: \(javaScriptStringLiteral(NSLocalizedString("This diagram is empty.", comment: "Shown for a Mermaid code block with no source"))),
         emptyHint: \(javaScriptStringLiteral(NSLocalizedString("Empty diagram. Click to add Mermaid source.", comment: "Edit-mode placeholder for a Mermaid code block with no source"))),
-        unavailable: \(javaScriptStringLiteral(NSLocalizedString("Mermaid renderer is unavailable.\n\n", comment: "Mermaid rendering error"))).trim()
+        unavailable: \(javaScriptStringLiteral(NSLocalizedString("Mermaid renderer is unavailable.\n\n", comment: "Mermaid rendering error"))).trim(),
+        zoomOut: \(javaScriptStringLiteral(NSLocalizedString("Zoom Out", comment: "Mermaid diagram control"))),
+        zoomIn: \(javaScriptStringLiteral(NSLocalizedString("Zoom In", comment: "Mermaid diagram control"))),
+        resetZoom: \(javaScriptStringLiteral(NSLocalizedString("Reset zoom", comment: "Mermaid diagram control"))),
+        fillWidth: \(javaScriptStringLiteral(NSLocalizedString("Fill width", comment: "Mermaid diagram control"))),
+        fitDiagram: \(javaScriptStringLiteral(NSLocalizedString("Fit diagram", comment: "Mermaid diagram control")))
     }
     """
 
@@ -146,23 +151,24 @@ nonisolated extension MarkdownHTML {
     </script>
     """
 
-    /// Mermaid render, pan/zoom, HUD and popup wiring. Assumes the `pele`
+    /// Mermaid render, pan/zoom, HUD and popup wiring, as the app runs it:
+    /// `mermaidWiringFunction` with the app's own messages. Assumes the `pele`
     /// global has been (or will be) defined by the time DOMContentLoaded
     /// fires — true for both inline vendor `<script>` and `<script defer
     /// src=...>` delivery, since `defer` scripts run before DOMContentLoaded.
     /// Internal so SPM helper tests can drive the real bootstrap path (with a
     /// stub `pele` + message host).
-    static let mermaidInitWiring = """
-    (() => {
-            const fillWidthLabel = \(javaScriptStringLiteral(
-                NSLocalizedString("Fill width", comment: "Mermaid diagram control")
-            ));
-            const fitDiagramLabel = \(javaScriptStringLiteral(
-                NSLocalizedString("Fit diagram", comment: "Mermaid diagram control")
-            ));
+    static let mermaidInitWiring = "(\(mermaidWiringFunction))(\(diagramMessagesJS))"
+
+    /// `(messages) => { bootstrap, renderAll }`: the wiring, taking its words
+    /// in the shape of `diagramMessagesJS`. The share viewer (exported by
+    /// ShareViewerKitTests) passes the reader's language instead of the app's.
+    static let mermaidWiringFunction = """
+    (messages) => {
+            const fillWidthLabel = messages.fillWidth;
+            const fitDiagramLabel = messages.fitDiagram;
             const states = new WeakMap();
             const renderOptions = \(diagramRenderOptionsJS);
-            const messages = \(diagramMessagesJS);
             const errorMessage = \(diagramErrorMessageJS);
             const genericError = messages.generic;
             const emptyDiagram = messages.empty;
@@ -516,9 +522,25 @@ nonisolated extension MarkdownHTML {
                 for (const entry of entries) cacheRect(entry.target);
             });
 
+            // The HUD in the HTML carries the words of whoever rendered it;
+            // these are the reader's (the same in the app).
+            const hudLabels = { out: messages.zoomOut, in: messages.zoomIn, reset: messages.resetZoom };
+            function labelHud(figure) {
+                figure.querySelectorAll('.mermaid-hud [data-mm-act]').forEach((button) => {
+                    const pressed = button.getAttribute('aria-pressed') === 'true';
+                    const label = button.dataset.mmAct === 'width'
+                        ? (pressed ? fitDiagramLabel : fillWidthLabel)
+                        : hudLabels[button.dataset.mmAct];
+                    if (!label) return;
+                    button.setAttribute('aria-label', label);
+                    if (button.hasAttribute('title')) button.title = label;
+                });
+            }
+
             function bootstrap() {
                 const figures = document.querySelectorAll('.mermaid-figure');
                 if (!figures.length) return;
+                figures.forEach(labelHud);
                 const io = new IntersectionObserver((entries) => {
                     const visible = entries.filter((entry) => entry.isIntersecting).map((entry) => entry.target);
                     if (!visible.length) return;
@@ -535,7 +557,7 @@ nonisolated extension MarkdownHTML {
             window.MdPreview.mermaidRenderAll = renderAll;
 
             return { bootstrap, renderAll };
-        })()
+        }
     """
 
     static func mermaidScript(mode: VendorLoading) -> VendorEmission {

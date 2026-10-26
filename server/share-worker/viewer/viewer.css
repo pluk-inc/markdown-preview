@@ -588,6 +588,13 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
   }
 }
 
+/* MARK: Diagrams print whole: the reader's zoom and pan (an inline
+   transform the app's wiring sets) does not reach the page. */
+
+@media print {
+  .mermaid-figure .mermaid { transform: none !important; }
+}
+
 /* MARK: Loading. Only a slow load shows it: "Loading…" fades in after one
    second, so most opens never see it. */
 
