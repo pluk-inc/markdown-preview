@@ -31,8 +31,9 @@ document with the app's own stylesheet and renderers:
   web come inside the share instead: the app downloads them when it makes
   the link, and the page shows them by their address (an asset's `source`).
 
-Diagrams (Mermaid through Pele) draw with the app's own wiring from `renderers.js`;
-`pele.global.js` loads only for documents that have them.
+Diagrams (Mermaid through Pele) draw with the app's own wiring and words from
+`generated/diagrams.js`; the build joins it to `pele.global.js` as one file that loads
+only for documents that have diagrams.
 
 ## Run locally
 

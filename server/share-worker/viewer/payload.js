@@ -59,8 +59,11 @@ export function normalizedAssetPath(path) {
  * `.` and `..` the way the app's collector does; null for a URL with a
  * scheme, an absolute path, or one that leaves the document's folder.
  */
+/** Whether the address starts with a scheme (https:, data:, mailto:). */
+export const hasScheme = (source) => /^[a-z][a-z0-9+.-]*:/i.test(source);
+
 export function assetPathForSource(source) {
-  if (!source || /^[a-z][a-z0-9+.-]*:/i.test(source) || source.startsWith("/") || source.startsWith("#")) {
+  if (!source || hasScheme(source) || source.startsWith("/") || source.startsWith("#")) {
     return null;
   }
   let path = source.split(/[?#]/)[0];

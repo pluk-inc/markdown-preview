@@ -435,9 +435,11 @@ files (`boot.js`, one stylesheet, one script) whose names carry a hash of
 their content, cached for a year as immutable. A slow load shows only
 the text "Loading…", faded in after 1 s. Not
 yet: password links, Report, burn after reading. Diagrams draw with the app's wiring
-(exported as `mermaidWiring` in `renderers.js`) on Pele, loaded only for documents with
-diagrams, with the app's HUD less its window button. A link to another of the author's
-files (a relative or root path) stays as text with a note, since the share does not carry it. Deviation
+(`mermaidWiringFunction`, in the kit's `diagrams.js` with the app's words in each of its
+languages) on Pele, loaded together only for documents with diagrams and after the text,
+with the app's HUD less its window button. A link to another of the author's files (a
+relative or root path), in the text or in a diagram, stays as text with a note, since the
+share does not carry it. Deviation
 from the text below: `style-src-attr 'unsafe-inline'` is allowed because KaTeX sets
 inline styles; scripts stay `'self'` only.
 

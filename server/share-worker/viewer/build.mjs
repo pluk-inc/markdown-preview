@@ -36,7 +36,11 @@ const vendorURLs = {
   "highlight.min.js": emit("highlight.min.js", readFileSync(join(vendor, "Highlight/highlight.min.js"))),
   "katex.min.js": emit("katex.min.js", readFileSync(join(vendor, "KaTeX/katex.min.js"))),
   "katex.min.css": emit("katex.min.css", readFileSync(join(vendor, "KaTeX/katex.min.css"))),
-  "pele.global.js": emit("pele.global.js", readFileSync(join(vendor, "Pele/pele.global.js"))),
+  // Pele, then the app's diagram wiring and its words (generated/diagrams.js).
+  "diagrams.js": emit("diagrams.js", Buffer.concat([
+    readFileSync(join(vendor, "Pele/pele.global.js")), Buffer.from("\n;\n"),
+    readFileSync(join(here, "generated/diagrams.js")),
+  ])),
 };
 for (const license of [
   "DOMPurify/DOMPurify-LICENSE.txt", "Highlight/Highlight-LICENSE.txt", "KaTeX/KaTeX-LICENSE.txt", "Pele/Pele-LICENSE.txt",
