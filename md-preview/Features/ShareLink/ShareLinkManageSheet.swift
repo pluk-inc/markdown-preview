@@ -85,7 +85,9 @@ final class ShareLinkManageModel {
             activity = .copied
             isUpdating = true
             do {
-                _ = try await ShareLinkSession.link(forFile: fileURL, markdown: markdown)
+                // A link that expired or is gone from the server is replaced.
+                let current = try await ShareLinkSession.link(forFile: fileURL, markdown: markdown)
+                if current != link { ShareLinkSession.copyToPasteboard(current) }
             } catch {
                 errorMessage = ShareLinkSession.message(for: error)
             }
