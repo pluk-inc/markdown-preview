@@ -153,11 +153,14 @@ final class ShareLinkAssetsTests: XCTestCase {
             "https://example.com/page",
             "https://example.com/photo.jpg",
             "https://example.com/huge.png",
+            "https://example.com/error.png",
         ], takenPaths: ["web/1.png"]) { url in
             let (status, type, data): (Int, String, Data) = switch url.lastPathComponent {
             case "ok.png": (200, "image/png", png)
             case "missing.png": (404, "image/png", png)
             case "page": (200, "text/html", Data("<html>".utf8))
+            // An error page for a .png address: the extension must not make it an image.
+            case "error.png": (200, "text/html", Data("<html>".utf8))
             case "photo.jpg": (200, "application/octet-stream", Data([0xFF, 0xD8]))
             default: (200, "image/png", Data(count: ShareLinkAssets.maxWebImageBytes + 1))
             }

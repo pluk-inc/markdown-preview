@@ -204,13 +204,16 @@ nonisolated enum ShareLinkAssets {
         return (data, response)
     }
 
+    /// Server types that say nothing about the content.
+    private static let genericTypes: Set<String> = ["", "application/octet-stream", "binary/octet-stream"]
+
     /// The image's type from the server, or from its address's extension
-    /// when the server's type is generic; nil when neither is supported.
+    /// when the server gives none or a generic one; nil otherwise, so an
+    /// error page served for a .png address is not taken for an image.
     private static func webImageType(response: URLResponse, url: URL) -> String? {
-        if let type = response.mimeType?.lowercased(), SharePayload.allowedAssetTypes.contains(type) {
-            return type
-        }
-        return mediaTypes[url.pathExtension.lowercased()]
+        let type = response.mimeType?.lowercased() ?? ""
+        if SharePayload.allowedAssetTypes.contains(type) { return type }
+        return genericTypes.contains(type) ? mediaTypes[url.pathExtension.lowercased()] : nil
     }
 
     /// The `src` of each image the preview shows, as written in the HTML.
