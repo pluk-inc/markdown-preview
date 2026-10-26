@@ -4,7 +4,8 @@
 //
 //  The Share popover's share-link row: "Copy Link" while the file has no
 //  link, "Manage Shared Document…" while it has one. The picker closes on
-//  click; creating a link shows nothing unless it fails.
+//  click; once Copy Link has created the link, the Manage Shared Document
+//  sheet opens, so the user sees it was copied and where to stop sharing.
 //
 
 import AppKit
@@ -89,8 +90,8 @@ extension DocumentWindowController {
         }
     }
 
-    /// No "copied" message, as with the system's Copy rows. A slow upload
-    /// shows a progress sheet that can cancel it; an error gets an alert.
+    /// A slow upload shows a progress sheet that can cancel it; success
+    /// opens the Manage Shared Document sheet; an error gets an alert.
     private func createAndCopyShareLink() {
         withSharedMarkdown { [weak self] markdown in self?.createAndCopyShareLink(markdown: markdown) }
     }
@@ -106,6 +107,9 @@ extension DocumentWindowController {
             defer { progress.finish() }
             do {
                 try await ShareLinkSession.copyLink(forFile: fileURL, markdown: markdown)
+                progress.finish()
+                guard let self, let host = self.documentWindow.contentViewController else { return }
+                ShareLinkManageSheet.present(on: host, fileURL: fileURL, markdown: markdown)
             } catch is CancellationError {
             } catch let error as URLError where error.code == .cancelled {
             } catch {
