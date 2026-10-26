@@ -346,14 +346,28 @@ async function drawDiagrams(figures) {
   if (!figures.length) return;
   // A print can start before diagrams.js arrives: it then shows each
   // diagram's source laid out as text, as a failed load does.
+  // Printing undoes only what it added: a failed load keeps its source, and
+  // diagrams drawn during the print get their controls back after it.
   let diagrams = null;
-  const undrawn = () => figures.forEach((figure) => figure.classList.add("mermaid-error"));
-  window.addEventListener("beforeprint", () => (diagrams ? diagrams.renderAll() : undrawn()));
+  let failed = false;
+  let printingSource = false;
+  const showSource = (shown) => figures.forEach((figure) => figure.classList.toggle("mermaid-error", shown));
+  window.addEventListener("beforeprint", () => {
+    if (diagrams) diagrams.renderAll();
+    else if (!failed) {
+      printingSource = true;
+      showSource(true);
+    }
+  });
   window.addEventListener("afterprint", () => {
-    if (!diagrams) figures.forEach((figure) => figure.classList.remove("mermaid-error"));
+    if (printingSource && !failed) showSource(false);
+    printingSource = false;
   });
   await loadVendor("diagrams.js");
-  if (!window.pele || !window.MdpDiagrams) return undrawn();
+  if (!window.pele || !window.MdpDiagrams) {
+    failed = true;
+    return showSource(true);
+  }
   const { wiring, messages } = window.MdpDiagrams;
   diagrams = wiring(messages[language] ?? messages.en);
   diagrams.bootstrap();
