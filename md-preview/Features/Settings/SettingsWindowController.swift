@@ -65,8 +65,9 @@ final class SettingsWindowController: NSWindowController {
         super.init(window: window)
 
         window.contentViewController = tabViewController
+        // Not autosaved: the size comes from the selected pane, and the old
+        // sidebar window saved a larger frame under the same name.
         window.center()
-        window.setFrameAutosaveName("MarkdownPreviewSettingsWindowFrame")
     }
 
     @available(*, unavailable)

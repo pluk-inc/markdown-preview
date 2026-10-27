@@ -82,6 +82,9 @@ struct ThemeSettingsView: View {
                     sectionContent(candidate)
                         .opacity(candidate == section ? 1 : 0)
                         .allowsHitTesting(candidate == section)
+                        // Hidden sections stay laid out; keep them out of
+                        // keyboard focus too.
+                        .disabled(candidate != section)
                         .accessibilityHidden(candidate != section)
                 }
                 // Colors has one layout for Automatic and another for a
@@ -90,6 +93,7 @@ struct ThemeSettingsView: View {
                 // Reset Theme below.
                 colorsSection(automatic: model.appearance != .automatic)
                     .hidden()
+                    .disabled(true)
             }
             .frame(maxWidth: .infinity)
 
