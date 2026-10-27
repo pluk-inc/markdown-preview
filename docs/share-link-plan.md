@@ -283,9 +283,9 @@ and the File menu item from the first draft are dropped.
 - **Share popover row** (last row of the app's section, right above the
   system's Copy; the popover gives app rows one section, and apps cannot add
   rows next to Copy — checked against Pages and ShareKit, see below):
-  - **Copy Link** while the file has no live link.
+  - **Publish to Web** while the file has no live link.
   - **Manage Shared Document…** while it has one.
-- **Copy Link** → `NSAlert` sheet "Copy Link to Share" (Continue / Cancel).
+- **Publish to Web** → `NSAlert` sheet "Publish to Web" (Publish / Keep Document Private).
   On macOS 26 a sheet alert hides the default app icon, matching ShareKit's
   own Copy Link alert, which is also a plain `NSAlert`.
 - **Upload progress:** AppKit's private `NSProgressPanel` (from AppKit's

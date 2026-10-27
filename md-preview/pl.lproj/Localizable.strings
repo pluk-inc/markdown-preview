@@ -469,10 +469,11 @@
 "Allow Markdown Preview to make files in “%@”." = "Zezwól aplikacji Markdown Preview na tworzenie plików w „%@”.";
 
 /* Share links */
-"Copy Link to Share" = "Skopiuj link do udostępnienia";
+"Publish to Web" = "Opublikuj w internecie";
+"Publish" = "Opublikuj";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "Każdy, kto ma link, może czytać ten dokument, dopóki nie zatrzymasz udostępniania lub link nie wygaśnie po 7 dniach. Dokument jest zaszyfrowany i można go otworzyć tylko za pomocą tego linku.";
 "Uploading Document…" = "Wysyłanie dokumentu…";
-"Could Not Copy Link" = "Nie można skopiować linku";
+"Could Not Publish Document" = "Nie można opublikować dokumentu";
 "Manage Shared Document…" = "Zarządzaj udostępnionym dokumentem…";
 "Shared" = "Udostępniony";
 "Shared · Link expires %@" = "Udostępniony · Link wygasa %@";

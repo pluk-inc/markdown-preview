@@ -469,10 +469,11 @@
 "Allow Markdown Preview to make files in “%@”." = "允许 Markdown Preview 在“%@”中创建文件。";
 
 /* Share links */
-"Copy Link to Share" = "拷贝链接以共享";
+"Publish to Web" = "发布到网页";
+"Publish" = "发布";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "在你停止共享或链接于 7 天后过期之前，任何拥有链接的人都可以阅读此文稿。文稿已加密，只有此链接才能打开。";
 "Uploading Document…" = "正在上传文稿…";
-"Could Not Copy Link" = "无法拷贝链接";
+"Could Not Publish Document" = "无法发布文稿";
 "Manage Shared Document…" = "管理共享文稿…";
 "Shared" = "已共享";
 "Shared · Link expires %@" = "已共享 · 链接到期：%@";

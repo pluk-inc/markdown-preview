@@ -2,9 +2,9 @@
 //  DocumentWindowController+ShareLink.swift
 //  md-preview
 //
-//  The Share popover's share-link row: "Copy Link" while the file has no
+//  The Share popover's share-link row: "Publish to Web" while the file has no
 //  link, "Manage Shared Document…" while it has one. The picker closes on
-//  click; once Copy Link has created the link, the Manage Shared Document
+//  click; once Publish to Web has created the link, the Manage Shared Document
 //  sheet opens, so the user sees it was copied and where to stop sharing.
 //
 
@@ -37,8 +37,8 @@ extension DocumentWindowController {
         }
         // Same test as the "Shared" subtitle, so the row and the subtitle agree.
         let shared = isSharedByLink
-        let title = shared ? L("Manage Shared Document…") : L("Copy Link")
-        let symbol = shared ? "person.crop.circle.badge.checkmark" : "link"
+        let title = shared ? L("Manage Shared Document…") : L("Publish to Web")
+        let symbol = shared ? "person.crop.circle.badge.checkmark" : "globe"
         return [NSSharingService(
             title: title,
             image: NSImage(systemSymbolName: symbol, accessibilityDescription: title) ?? NSImage(),
@@ -77,9 +77,9 @@ extension DocumentWindowController {
     private func confirmAndCopyShareLink() {
         guard documentWindow.attachedSheet == nil else { return }
         let alert = NSAlert()
-        alert.messageText = L("Copy Link to Share")
+        alert.messageText = L("Publish to Web")
         alert.informativeText = L("Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it.")
-        alert.addButton(withTitle: L("Continue"))
+        alert.addButton(withTitle: L("Publish"))
         // Long enough that the alert stacks its buttons full width, as the
         // system's own Copy Link alert does.
         alert.addButton(withTitle: L("Keep Document Private"))
@@ -115,7 +115,7 @@ extension DocumentWindowController {
             } catch {
                 guard let window = self?.documentWindow else { return }
                 let alert = NSAlert()
-                alert.messageText = L("Could Not Copy Link")
+                alert.messageText = L("Could Not Publish Document")
                 alert.informativeText = ShareLinkSession.message(for: error)
                 alert.beginSheetModal(for: window, completionHandler: nil)
             }

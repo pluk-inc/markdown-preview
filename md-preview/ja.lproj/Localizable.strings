@@ -469,10 +469,11 @@
 "Allow Markdown Preview to make files in “%@”." = "Markdown Preview が“%@”にファイルを作成することを許可します。";
 
 /* Share links */
-"Copy Link to Share" = "共有用のリンクをコピー";
+"Publish to Web" = "Webに公開";
+"Publish" = "公開";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "リンクを知っている人は誰でも、共有を停止するか7日後にリンクの有効期限が切れるまで、この書類を読むことができます。書類は暗号化されており、このリンクでのみ開けます。";
 "Uploading Document…" = "書類をアップロード中…";
-"Could Not Copy Link" = "リンクをコピーできませんでした";
+"Could Not Publish Document" = "書類を公開できませんでした";
 "Manage Shared Document…" = "共有書類を管理…";
 "Shared" = "共有中";
 "Shared · Link expires %@" = "共有中 · リンクの有効期限: %@";

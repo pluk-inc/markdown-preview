@@ -469,10 +469,11 @@
 "Allow Markdown Preview to make files in “%@”." = "Allow Markdown Preview to make files in “%@”.";
 
 /* Share links */
-"Copy Link to Share" = "Copy Link to Share";
+"Publish to Web" = "Publish to Web";
+"Publish" = "Publish";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it.";
 "Uploading Document…" = "Uploading Document…";
-"Could Not Copy Link" = "Could Not Copy Link";
+"Could Not Publish Document" = "Could Not Publish Document";
 "Manage Shared Document…" = "Manage Shared Document…";
 "Shared" = "Shared";
 "Shared · Link expires %@" = "Shared · Link expires %@";

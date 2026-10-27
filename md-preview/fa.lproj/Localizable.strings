@@ -468,10 +468,11 @@
 "Allow Markdown Preview to make files in “%@”." = "به Markdown Preview اجازه دهید در «%@» فایل بسازد.";
 
 /* Share links */
-"Copy Link to Share" = "کپی پیوند برای اشتراک‌گذاری";
+"Publish to Web" = "انتشار در وب";
+"Publish" = "انتشار";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "هر کسی که پیوند را دارد می‌تواند این سند را بخواند، تا زمانی که اشتراک‌گذاری را متوقف کنید یا پیوند پس از ۷ روز منقضی شود. سند رمزگذاری شده است و فقط با این پیوند باز می‌شود.";
 "Uploading Document…" = "در حال بارگذاری سند…";
-"Could Not Copy Link" = "پیوند کپی نشد";
+"Could Not Publish Document" = "سند منتشر نشد";
 "Manage Shared Document…" = "مدیریت سند اشتراک‌گذاشته‌شده…";
 "Shared" = "اشتراک‌گذاشته‌شده";
 "Shared · Link expires %@" = "اشتراک‌گذاشته‌شده · انقضای پیوند: %@";
