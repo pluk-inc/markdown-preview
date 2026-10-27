@@ -468,6 +468,7 @@
 
 /* Share links */
 "Publish to Web" = "Publish to Web";
+"Publish to Web…" = "Publish to Web…";
 "Publish" = "Publish";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it.";
 "Uploading Document…" = "Uploading Document…";
@@ -498,10 +499,6 @@
 "Markdown Preview lost the key for this link, so it cannot delete the copy on the server. People with the link can open this document until %@." = "Markdown Preview lost the key for this link, so it cannot delete the copy on the server. People with the link can open this document until %@.";
 
 /* Opening share links */
-"Open Shared Link…" = "Open Shared Link…";
-"Open Shared Link" = "Open Shared Link";
-"Paste a link to a document shared from Markdown Preview." = "Paste a link to a document shared from Markdown Preview.";
-"This is not a complete share link. The part after # is the key; ask the sender to copy the link again." = "This is not a complete share link. The part after # is the key; ask the sender to copy the link again.";
 "Enter Password" = "Enter Password";
 "Incorrect Password" = "Incorrect Password";
 "The sender protected this shared document with a password." = "The sender protected this shared document with a password.";

@@ -146,7 +146,7 @@ nonisolated extension MarkdownHTML {
     display: inline-flex; align-items: center; justify-content: center;
     flex: none; width: 24px; height: 24px; padding: 0;
     appearance: none; border: 0; border-radius: 12px;
-    color: var(--secondary); background: transparent; cursor: pointer;
+    color: var(--text); background: transparent; cursor: pointer;
     """
 
     /// Inset between a diagram and its tray, in both modes.
@@ -680,7 +680,7 @@ nonisolated extension MarkdownHTML {
         \(controlPillCSS)
     }
     .md-code-action { \(controlPillButtonCSS) }
-    .md-code-action:hover { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
+    .md-code-action:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
     .md-code-action:active { background: color-mix(in srgb, var(--text) 16%, transparent); }
     /* Inside the button, so the ring stays within the pill. */
     .md-code-action:focus-visible { outline: 2px solid AccentColor; outline-offset: -2px; }
@@ -761,7 +761,6 @@ nonisolated extension MarkdownHTML {
     }
     .mermaid-hud-btn { \(controlPillButtonCSS) }
     .mermaid-hud-btn:hover {
-        color: var(--text);
         background: color-mix(in srgb, var(--text) 10%, transparent);
     }
     .mermaid-hud-btn:active {

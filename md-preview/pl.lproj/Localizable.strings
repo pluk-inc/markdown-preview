@@ -468,6 +468,7 @@
 
 /* Share links */
 "Publish to Web" = "Opublikuj w internecie";
+"Publish to Web…" = "Opublikuj w internecie…";
 "Publish" = "Opublikuj";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "Każdy, kto ma link, może czytać ten dokument, dopóki nie zatrzymasz udostępniania lub link nie wygaśnie po 7 dniach. Dokument jest zaszyfrowany i można go otworzyć tylko za pomocą tego linku.";
 "Uploading Document…" = "Wysyłanie dokumentu…";
@@ -498,10 +499,6 @@
 "Markdown Preview lost the key for this link, so it cannot delete the copy on the server. People with the link can open this document until %@." = "Markdown Preview utracił klucz tego linku, więc nie może usunąć kopii z serwera. Osoby mające link mogą otworzyć ten dokument do %@.";
 
 /* Opening share links */
-"Open Shared Link…" = "Otwórz udostępnione łącze…";
-"Open Shared Link" = "Otwórz udostępnione łącze";
-"Paste a link to a document shared from Markdown Preview." = "Wklej łącze do dokumentu udostępnionego z Markdown Preview.";
-"This is not a complete share link. The part after # is the key; ask the sender to copy the link again." = "To nie jest pełne łącze udostępniania. Część po # to klucz; poproś nadawcę o ponowne skopiowanie łącza.";
 "Enter Password" = "Wprowadź hasło";
 "Incorrect Password" = "Nieprawidłowe hasło";
 "The sender protected this shared document with a password." = "Nadawca zabezpieczył ten udostępniony dokument hasłem.";

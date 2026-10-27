@@ -28,13 +28,21 @@ extension DocumentWindowController {
         updateWindowSubtitle()
     }
 
-    /// The Share popover row; none while the feature is off or the window
-    /// has no saved file to link.
+    /// False while the feature is off or the window has no saved file to link.
+    var canPublishToWeb: Bool {
+        ShareLinkFeature.isEnabled && currentFileURL != nil && currentMarkdown != nil
+            && !isReceivedShare
+    }
+
+    /// File › Publish to Web…: the same as the Share popover row.
+    @objc func publishToWeb(_ sender: Any?) {
+        guard canPublishToWeb else { return }
+        if isSharedByLink { showManageSharedDocument() } else { confirmAndCopyShareLink() }
+    }
+
+    /// The Share popover row; none when the window cannot publish.
     func shareLinkServices() -> [NSSharingService] {
-        guard ShareLinkFeature.isEnabled, currentFileURL != nil, currentMarkdown != nil,
-              !isReceivedShare else {
-            return []
-        }
+        guard canPublishToWeb else { return [] }
         // Same test as the "Shared" subtitle, so the row and the subtitle agree.
         let shared = isSharedByLink
         let title = shared ? L("Manage Shared Document…") : L("Publish to Web")
@@ -43,9 +51,7 @@ extension DocumentWindowController {
             title: title,
             image: NSImage(systemSymbolName: symbol, accessibilityDescription: title) ?? NSImage(),
             alternateImage: nil
-        ) { [weak self] in
-            if shared { self?.showManageSharedDocument() } else { self?.confirmAndCopyShareLink() }
-        }]
+        ) { [weak self] in self?.publishToWeb(nil) }]
     }
 
     private func showManageSharedDocument() {

@@ -91,29 +91,6 @@ enum ShareLinkOpener {
         }
     }
 
-    /// File › Open Shared Link…: asks for a link, prefilled from the
-    /// clipboard when it holds one.
-    static func promptForLink() -> ShareLink? {
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-        field.placeholderString = ShareLinkFeature.baseURL.map { "\($0.absoluteString)/s/…" }
-        if let string = NSPasteboard.general.string(forType: .string),
-           let url = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines)),
-           parse(url) != nil {
-            field.stringValue = url.absoluteString
-        }
-        let alert = fieldAlert(title: L("Open Shared Link"),
-                               message: L("Paste a link to a document shared from Markdown Preview."),
-                               field: field)
-
-        while alert.runModal() == .alertFirstButtonReturn {
-            let text = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let url = URL(string: text), let link = parse(url) { return link }
-            NSSound.beep()
-            alert.informativeText = L("This is not a complete share link. The part after # is the key; ask the sender to copy the link again.")
-        }
-        return nil
-    }
-
     // MARK: - Private
 
     private static func folder(for id: String) -> URL {

@@ -347,8 +347,9 @@ Built (2026-10-23), except Universal Links:
 - `AppDelegate.application(_:open:)` sends `md-preview://share/…` and web
   links to `ShareLinkOpener` before `ExternalOpenScheme`; anything else keeps
   the malformed-link alert. Behind the same hidden default as sharing.
-- File › "Open Shared Link…" asks for a link (either form), prefilled from the
-  clipboard when it holds one.
+- There is no File menu item to paste a link; links open from a click.
+  File › "Publish to Web…" (after Export as PDF…) runs the Share popover's
+  row: it publishes, or shows Manage Shared Document… once the file has a link.
 - Flow: fetch → ask for the password when the link or envelope has one →
   decrypt → write the Markdown and its assets into
   `Caches/SharedLinks/<id>/<title>/` (asset paths confined to that folder) →
@@ -519,7 +520,7 @@ Firefox Send closed because of malware abuse. Our defences:
 | 1 | This plan → format spec in `docs/`, `ShareLinkCrypto`, `ShareLink`, `SharePayload`, test vectors | `swift test` |
 | 2 | Worker API + R2 + cron + rate limits, `share-worker.yml` deploy workflow, CI path filters, staging deploy | Worker unit tests, `curl` round trip with the app's test vectors |
 | 3 | App: client, Keychain store, share sheet, Shared Links list (hidden default) | `swift test`, app build, runtime check against staging |
-| 4 | App: open shares (`md-preview://share`, Open Shared Link…, Universal Links + `apple-app-site-association`) | runtime check: create → open → images show; a Safari click on the `https://` link opens the app |
+| 4 | App: open shares (`md-preview://share`, Universal Links + `apple-app-site-association`) | runtime check: create → open → images show; a Safari click on the `https://` link opens the app |
 | 5 | Enable by default, README, CHANGELOG, privacy policy | release PR |
 | 6+ | Phase 2: viewer, report flow, burn after reading | browser tests, XSS corpus against the sanitiser |
 

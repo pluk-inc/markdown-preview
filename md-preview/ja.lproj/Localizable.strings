@@ -468,6 +468,7 @@
 
 /* Share links */
 "Publish to Web" = "Webに公開";
+"Publish to Web…" = "Webに公開…";
 "Publish" = "公開";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "リンクを知っている人は誰でも、共有を停止するか7日後にリンクの有効期限が切れるまで、この書類を読むことができます。書類は暗号化されており、このリンクでのみ開けます。";
 "Uploading Document…" = "書類をアップロード中…";
@@ -498,10 +499,6 @@
 "Markdown Preview lost the key for this link, so it cannot delete the copy on the server. People with the link can open this document until %@." = "Markdown Preview はこのリンクのキーを失ったため、サーバ上のコピーを削除できません。リンクを知っている人は %@ までこの書類を開けます。";
 
 /* Opening share links */
-"Open Shared Link…" = "共有リンクを開く…";
-"Open Shared Link" = "共有リンクを開く";
-"Paste a link to a document shared from Markdown Preview." = "Markdown Preview から共有された書類のリンクをペーストしてください。";
-"This is not a complete share link. The part after # is the key; ask the sender to copy the link again." = "完全な共有リンクではありません。# 以降の部分がキーです。送信者にもう一度リンクをコピーしてもらってください。";
 "Enter Password" = "パスワードを入力";
 "Incorrect Password" = "パスワードが正しくありません";
 "The sender protected this shared document with a password." = "送信者はこの共有書類をパスワードで保護しています。";

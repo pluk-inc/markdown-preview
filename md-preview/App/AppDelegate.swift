@@ -162,7 +162,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         installFormatMenu()
         installNewTabMenuItem()
         installSearchForDocumentMenuItem()
-        installOpenSharedLinkMenuItem()
         installFileExportMenuItems()
         installGoMenu()
         installSettingsMenuItem()
@@ -355,13 +354,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 pendingShareIDs.remove(link.id)
                 scheduleDocumentPromptIfIdle()
             }
-        }
-    }
-
-    @objc func openSharedLinkFromMenu(_ sender: Any?) {
-        cancelScheduledDocumentPrompt()
-        if let link = ShareLinkOpener.promptForLink() {
-            openSharedLink(link)
         }
     }
 
@@ -1058,21 +1050,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         fileMenu.insertItem(item, at: openIndex.map { $0 + 1 } ?? 0)
     }
 
-    private func installOpenSharedLinkMenuItem() {
-        guard ShareLinkFeature.isEnabled,
-              let fileMenu = topLevelSubmenu(matching: Self.fileMenuTitles),
-              let searchIndex = fileMenu.items.firstIndex(where: {
-                  $0.action == #selector(DocumentWindowController.searchForDocument(_:))
-              })
-        else { return }
-
-        let item = NSMenuItem(title: NSLocalizedString("Open Shared Link…", comment: "File menu item"),
-                              action: #selector(openSharedLinkFromMenu(_:)),
-                              keyEquivalent: "")
-        item.target = self
-        fileMenu.insertItem(item, at: searchIndex + 1)
-    }
-
     private func installFileExportMenuItems() {
         guard let fileMenu = topLevelSubmenu(matching: Self.fileMenuTitles),
               let pdfIndex = fileMenu.items.firstIndex(where: {
@@ -1083,6 +1060,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let shareItem = NSDocumentController.shared.standardShareMenuItem()
         fileMenu.insertItem(shareItem, at: pdfIndex + 1)
+
+        // nil target: the key document window's controller handles it, and
+        // retitles it Manage Shared Document… once the file has a link.
+        let publishItem = ShareLinkFeature.isEnabled
+            ? NSMenuItem(title: L("Publish to Web…"),
+                         action: #selector(DocumentWindowController.publishToWeb(_:)),
+                         keyEquivalent: "")
+            : nil
+        if let publishItem { fileMenu.insertItem(publishItem, at: pdfIndex + 1) }
 
         guard #available(macOS 26.0, *) else { return }
         let icons: [(item: NSMenuItem?, symbol: String)] = [
@@ -1100,6 +1086,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 },
                 "arrow.up.document"
             ),
+            (publishItem, "globe"),
             (shareItem, "square.and.arrow.up"),
             (
                 fileMenu.items.first {

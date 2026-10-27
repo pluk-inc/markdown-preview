@@ -3,6 +3,7 @@
 // It also serves the web viewer (§5), which decrypts in the browser.
 
 import { HEADER_BYTES, MAGIC, TAG_BYTES, base64Encode, base64urlEncode as base64url, concat } from "../viewer/share-crypto.js";
+import { ENVELOPE_TYPE } from "./envelope-type.ts";
 import { VIEWER_CSP } from "./viewer-csp.ts";
 import { ENVELOPE_MARKER } from "./viewer-page.ts";
 import type { UploadQuota } from "./upload-quota.ts";
@@ -32,11 +33,6 @@ const ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 const SHARE_PATH = /^\/shares\/([^/]+)$/;
 const VIEWER_PATH = /^\/s\/([^/]+)\/?$/;
 const PREFIX = "shares/";
-// The app asks for an envelope with this Accept header. A browser that opens
-// /shares/<id> as a link cannot send it, so the route is no file host: the
-// bytes reach the app, and readers in a browser use /s/<id>.
-export const ENVELOPE_TYPE = "application/vnd.md-preview.envelope";
-
 const BASE_HEADERS = {
   "Cache-Control": "no-store",
   "X-Content-Type-Options": "nosniff",

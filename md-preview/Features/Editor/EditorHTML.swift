@@ -499,7 +499,7 @@ nonisolated enum EditorHTML {
             \(MarkdownHTML.controlPillCSS)
         }
         #editor .cm-md-code-action { \(MarkdownHTML.controlPillButtonCSS) }
-        #editor .cm-md-code-action:hover { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
+        #editor .cm-md-code-action:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
         #editor .cm-md-code-action:active { background: color-mix(in srgb, var(--text) 16%, transparent); }
         #editor .cm-md-code-action:focus-visible { outline: 2px solid AccentColor; outline-offset: -2px; }
         #editor .cm-md-code-card-wrapped { grid-template-columns: minmax(0, 1fr); }

@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import fixture from "../../../tests/fixtures/share-link/vectors.json";
-import { ENVELOPE_TYPE, purgeExpired } from "../src/index";
+import { ENVELOPE_TYPE } from "../src/envelope-type";
+import { purgeExpired } from "../src/index";
 import { base64Bytes } from "../viewer/payload.js";
 import { ORIGIN, auth, call, envelope, hex } from "./helpers.ts";
 

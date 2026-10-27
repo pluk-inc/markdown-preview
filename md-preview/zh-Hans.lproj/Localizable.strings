@@ -468,6 +468,7 @@
 
 /* Share links */
 "Publish to Web" = "发布到网页";
+"Publish to Web…" = "发布到网页…";
 "Publish" = "发布";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "在你停止共享或链接于 7 天后过期之前，任何拥有链接的人都可以阅读此文稿。文稿已加密，只有此链接才能打开。";
 "Uploading Document…" = "正在上传文稿…";
@@ -498,10 +499,6 @@
 "Markdown Preview lost the key for this link, so it cannot delete the copy on the server. People with the link can open this document until %@." = "Markdown Preview 丢失了此链接的密钥，因此无法删除服务器上的副本。拥有链接的人在 %@ 之前仍可打开此文稿。";
 
 /* Opening share links */
-"Open Shared Link…" = "打开共享链接…";
-"Open Shared Link" = "打开共享链接";
-"Paste a link to a document shared from Markdown Preview." = "粘贴从 Markdown Preview 共享的文稿链接。";
-"This is not a complete share link. The part after # is the key; ask the sender to copy the link again." = "这不是完整的共享链接。# 之后的部分是密钥；请让发送者重新拷贝链接。";
 "Enter Password" = "输入密码";
 "Incorrect Password" = "密码不正确";
 "The sender protected this shared document with a password." = "发送者已使用密码保护此共享文稿。";

@@ -467,6 +467,7 @@
 
 /* Share links */
 "Publish to Web" = "انتشار در وب";
+"Publish to Web…" = "انتشار در وب…";
 "Publish" = "انتشار";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "هر کسی که پیوند را دارد می‌تواند این سند را بخواند، تا زمانی که اشتراک‌گذاری را متوقف کنید یا پیوند پس از ۷ روز منقضی شود. سند رمزگذاری شده است و فقط با این پیوند باز می‌شود.";
 "Uploading Document…" = "در حال بارگذاری سند…";
@@ -497,10 +498,6 @@
 "Markdown Preview lost the key for this link, so it cannot delete the copy on the server. People with the link can open this document until %@." = "Markdown Preview کلید این پیوند را از دست داده است، بنابراین نمی‌تواند نسخهٔ روی سرور را حذف کند. افرادی که پیوند را دارند تا %@ می‌توانند این سند را باز کنند.";
 
 /* Opening share links */
-"Open Shared Link…" = "باز کردن پیوند اشتراک‌گذاشته‌شده…";
-"Open Shared Link" = "باز کردن پیوند اشتراک‌گذاشته‌شده";
-"Paste a link to a document shared from Markdown Preview." = "پیوند سندی را که از Markdown Preview به اشتراک گذاشته شده است جای‌گذاری کنید.";
-"This is not a complete share link. The part after # is the key; ask the sender to copy the link again." = "این پیوند اشتراک‌گذاری کامل نیست. بخش بعد از # کلید است؛ از فرستنده بخواهید پیوند را دوباره کپی کند.";
 "Enter Password" = "رمز عبور را وارد کنید";
 "Incorrect Password" = "رمز عبور نادرست است";
 "The sender protected this shared document with a password." = "فرستنده این سند اشتراک‌گذاشته‌شده را با رمز عبور محافظت کرده است.";

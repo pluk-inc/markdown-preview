@@ -276,6 +276,8 @@ private final class HUDButton: NSView {
                                        owner: self))
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
+        imageView.contentTintColor = .labelColor
+        textField.textColor = .labelColor
         updateFill()
     }
 
@@ -342,9 +344,6 @@ private final class HUDButton: NSView {
     }
 
     private func updateFill() {
-        let tint: NSColor = isHovered ? .labelColor : .secondaryLabelColor
-        imageView.contentTintColor = tint
-        textField.textColor = tint
         let alpha: CGFloat = isPressed ? 0.16 : isHovered ? 0.1 : 0
         effectiveAppearance.performAsCurrentDrawingAppearance {
             layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(alpha).cgColor
