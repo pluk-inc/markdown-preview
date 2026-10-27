@@ -72,8 +72,8 @@ nonisolated enum ShareLinkAssets {
 
     /// The `http(s)` addresses of the images `articleHTML` shows, each once,
     /// with character references decoded as the browser reads them.
-    /// At most the first `maxWebImages`, so a page of hundreds of images
-    /// does not hold Publish to Web for minutes.
+    /// At most the first `maxWebImages`, so Publish to Web does not wait on
+    /// every image of a page with hundreds of them.
     static func webImageSources(articleHTML html: String) -> [String] {
         var seen = Set<String>()
         return Array(shownImageSources(in: html)
