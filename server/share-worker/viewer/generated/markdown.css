@@ -469,9 +469,10 @@ pre code {
 padding: 3.5px;
 border: 0.5px solid color-mix(in srgb, var(--text) 12%, transparent);
 border-radius: 16px;
-/* No page colour in CSS: the app's window paints the theme behind a
-   clear page, so a faint tint lets that colour through. */
-background: color-mix(in srgb, var(--text) 4%, transparent);
+/* Solid page colour, so the pill reads as part of the page over a code
+   tray or a drawing. The app's window paints the theme behind a clear
+   page; a theme sets --mdp-page-bg, and Canvas is the window's own. */
+background: var(--mdp-page-bg, Canvas);
 }
 .md-code-action { display: inline-flex; align-items: center; justify-content: center;
 flex: none; width: 24px; height: 24px; padding: 0;
@@ -559,12 +560,10 @@ max-height: min(var(--mm-max-height), calc(var(--mm-height, var(--mm-max-height)
 padding: 3.5px;
 border: 0.5px solid color-mix(in srgb, var(--text) 12%, transparent);
 border-radius: 16px;
-/* No page colour in CSS: the app's window paints the theme behind a
-   clear page, so a faint tint lets that colour through. */
-background: color-mix(in srgb, var(--text) 4%, transparent);
-    /* Over the drawing, a blur keeps its lines from showing through. */
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+/* Solid page colour, so the pill reads as part of the page over a code
+   tray or a drawing. The app's window paints the theme behind a clear
+   page; a theme sets --mdp-page-bg, and Canvas is the window's own. */
+background: var(--mdp-page-bg, Canvas);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.12s ease;

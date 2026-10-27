@@ -138,9 +138,10 @@ nonisolated extension MarkdownHTML {
     padding: 3.5px;
     border: 0.5px solid \(blockEdgeColor);
     border-radius: 16px;
-    /* No page colour in CSS: the app's window paints the theme behind a
-       clear page, so a faint tint lets that colour through. */
-    background: color-mix(in srgb, var(--text) 4%, transparent);
+    /* Solid page colour, so the pill reads as part of the page over a code
+       tray or a drawing. The app's window paints the theme behind a clear
+       page; a theme sets --mdp-page-bg, and Canvas is the window's own. */
+    background: var(--mdp-page-bg, Canvas);
     """
     static let controlPillButtonCSS = """
     display: inline-flex; align-items: center; justify-content: center;
@@ -733,9 +734,6 @@ nonisolated extension MarkdownHTML {
         justify-content: flex-end;
         max-width: calc(100% - 13px);
         \(controlPillCSS)
-        /* Over the drawing, a blur keeps its lines from showing through. */
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.12s ease;

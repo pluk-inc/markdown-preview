@@ -226,6 +226,7 @@ nonisolated struct ThemeColorsSetting: Equatable, Codable, Sendable {
                 ?? sanitizedHex(.windowBackground, scheme)
                 ?? "transparent"
             lines.append("html, body { background: \(page); }")
+            lines.append(":root { --mdp-page-bg: \(page == "transparent" ? "Canvas" : page); }")
             return lines.joined(separator: "\n")
         }
         let light = rules(for: .light)
