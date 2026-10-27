@@ -322,7 +322,7 @@
 "Redesigned Settings" = "設定のデザインを一新";
 "Settings has new tabs, and the Appearance pane shows your changes on a live sample page." = "設定は新しいタブ形式になり、「外観」パネルでは変更がライブのサンプルページに表示されます。";
 "Liquid Glass buttons on code and diagrams" = "コードと図の Liquid Glass ボタン";
-"On macOS 26 and later, code blocks and diagrams share Liquid Glass buttons, including Copy for a diagram’s Mermaid source." = "macOS 26 以降では、コードブロックと図で同じ Liquid Glass ボタンを使います。図の Mermaid ソースもコピーできます。";
+"On macOS 26 and later, code blocks and diagrams share one set of Liquid Glass buttons." = "macOS 26 以降では、コードブロックと図で同じ Liquid Glass ボタンを使います。";
 "Switch tabs with ⌘1 to ⌘9" = "⌘1〜⌘9 でタブを切り替え";
 "Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one." = "⌘1〜⌘8 でそのタブに、⌘9 で最後のタブに移動します。";
 "Search keeps its place" = "検索の位置を保持";

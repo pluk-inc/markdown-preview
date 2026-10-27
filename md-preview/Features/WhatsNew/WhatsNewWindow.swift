@@ -49,7 +49,7 @@ struct WhatsNewFeature: Identifiable {
                 id: "glass-block-buttons",
                 symbol: "square.on.square",
                 title: L("Liquid Glass buttons on code and diagrams"),
-                detail: L("On macOS 26 and later, code blocks and diagrams share Liquid Glass buttons, including Copy for a diagram’s Mermaid source.")
+                detail: L("On macOS 26 and later, code blocks and diagrams share one set of Liquid Glass buttons.")
             ), at: 2)
         }
         return features

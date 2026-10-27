@@ -323,7 +323,7 @@
 "Redesigned Settings" = "Nowe ustawienia";
 "Settings has new tabs, and the Appearance pane shows your changes on a live sample page." = "Ustawienia mają nowe karty, a panel Wygląd pokazuje zmiany na żywej stronie przykładowej.";
 "Liquid Glass buttons on code and diagrams" = "Przyciski Liquid Glass przy kodzie i diagramach";
-"On macOS 26 and later, code blocks and diagrams share Liquid Glass buttons, including Copy for a diagram’s Mermaid source." = "W systemie macOS 26 i nowszym bloki kodu i diagramy mają wspólne przyciski Liquid Glass, w tym Kopiuj dla źródła Mermaid diagramu.";
+"On macOS 26 and later, code blocks and diagrams share one set of Liquid Glass buttons." = "W systemie macOS 26 i nowszym bloki kodu i diagramy mają wspólny zestaw przycisków Liquid Glass.";
 "Switch tabs with ⌘1 to ⌘9" = "Przełączaj karty skrótami ⌘1–⌘9";
 "Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one." = "Naciśnij ⌘1–⌘8, aby przejść do karty, lub ⌘9, aby przejść do ostatniej.";
 "Search keeps its place" = "Wyszukiwanie zostaje na miejscu";
