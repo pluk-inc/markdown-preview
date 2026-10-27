@@ -31,18 +31,12 @@ final class BlockGlassHUD: NSView {
         var wrapped = false
     }
 
-    /// Runs an action in the page: for a diagram `out`, `reset`, `in`,
-    /// `copy` or `popup`; for a code block `wrap` or `copy`.
-    var perform: ((Kind, String) -> Void)?
+    /// Runs an action in the page on the block shown, named by its kind and
+    /// id: for a diagram `out`, `reset`, `in`, `copy` or `popup`; for a code
+    /// block `wrap` or `copy`.
+    var perform: ((Block, String) -> Void)?
     /// The web view under the pill, which scrolls when the wheel turns over it.
     weak var scrollTarget: NSView?
-    /// The pill went from shown to hidden: the page stops holding on to the
-    /// block it showed.
-    var didHide: (() -> Void)?
-
-    override var isHidden: Bool {
-        didSet { if isHidden && !oldValue { didHide?() } }
-    }
 
     /// The gap from the block's top and right edges to the pill, in CSS
     /// pixels: the same on both sides, and where the page's own pills sit
@@ -73,8 +67,8 @@ final class BlockGlassHUD: NSView {
                               label: NSLocalizedString("Open in Window", comment: "Mermaid diagram control"))
         for button in [zoomOut, levelButton, zoomIn, wrapButton, copyButton, popupButton] {
             button.onPress = { [weak self] act in
-                guard let self, let kind = self.current?.kind else { return }
-                self.perform?(kind, act)
+                guard let self, let block = self.current else { return }
+                self.perform?(block, act)
                 if act == "copy" { self.showCopied() }
             }
         }

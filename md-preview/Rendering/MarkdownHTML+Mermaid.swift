@@ -341,11 +341,15 @@ nonisolated extension MarkdownHTML {
             if (diagramHUD) {
                 // No focus here: the click was on the host's glass, and
                 // focusing the figure from script would draw its focus ring.
-                window.mdpDiagramHUDAction = (act) => {
-                    if (diagramHUD.target?.isConnected) runHudAction(diagramHUD.target, act);
+                window.mdpDiagramHUDAction = (act, id) => {
+                    const figure = diagramHUD.block(id);
+                    if (!figure) return;
+                    runHudAction(figure, act);
+                    // After apply() has drawn the new level.
+                    requestAnimationFrame(() => diagramHUD.refresh(figure));
                 };
                 // A figure under the pointer that draws later gets its HUD then.
-                window.addEventListener('md-preview-mermaid-rendered', () => diagramHUD.refreshHovered());
+                window.addEventListener('md-preview-mermaid-rendered', () => diagramHUD.refresh());
             }
 
             // Text of the closest heading before the figure in document

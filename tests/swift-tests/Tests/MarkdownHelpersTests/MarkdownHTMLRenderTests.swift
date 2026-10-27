@@ -1312,11 +1312,11 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             figure.dispatchEvent(new PointerEvent('pointerenter'));
             const shown = last();
             window.__posted = [];
-            window.mdpDiagramHUDAction('in');
+            window.mdpDiagramHUDAction('in', shown.id);
             const zoomed = last();
             const focused = document.activeElement === figure;
             window.__posted = [];
-            window.mdpDiagramHUDAction('copy');
+            window.mdpDiagramHUDAction('copy', shown.id);
             const copied = window.__posted.find((m) => m.kind === 'copyCode');
             const htmlHUD = getComputedStyle(figure.querySelector('.mermaid-hud'));
             figure.dispatchEvent(new PointerEvent('pointerleave'));
@@ -1324,7 +1324,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             // The page sees the pointer leave for the host's glass; the
             // glass's clicks still act on that figure.
             window.__posted = [];
-            window.mdpDiagramHUDAction('reset');
+            window.mdpDiagramHUDAction('reset', shown.id);
             const afterLeave = last();
             return JSON.stringify({
                 afterLeaveVisible: afterLeave?.visible, afterLeaveLevel: afterLeave?.level,
@@ -1408,8 +1408,10 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         (() => {
             const code = document.querySelector('.md-code-wrap pre code');
             code.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
-            window.mdpCodeHUDAction('wrap');
-            window.mdpCodeHUDAction('copy');
+            const id = window.__posted.filter((m) => m.kind === 'codeHUD').pop().id;
+            window.__codeID = id;
+            window.mdpCodeHUDAction('wrap', id);
+            window.mdpCodeHUDAction('copy', id);
             return true;
         })()
         """)
@@ -1433,27 +1435,20 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                 pillWidth: actions.getBoundingClientRect().width,
                 afterLeave: (() => {
                     // The page sees the pointer leave for the host's glass;
-                    // the glass's clicks still act on that block.
+                    // the glass's clicks name the block, so they still act
+                    // on it, and the glass hears its new state.
                     document.querySelector('.md-code-wrap pre code')
                         .dispatchEvent(new PointerEvent('pointerout', { bubbles: true }));
-                    window.mdpCodeHUDAction('wrap');
-                    return document.querySelector('.md-code-wrap').classList.contains('is-wrapped');
+                    window.__posted = [];
+                    window.mdpCodeHUDAction('wrap', window.__codeID);
+                    const reported = window.__posted.filter((m) => m.kind === 'codeHUD').pop();
+                    return {
+                        wrapped: document.querySelector('.md-code-wrap').classList.contains('is-wrapped'),
+                        reportedWrapped: reported?.wrapped
+                    };
                 })(),
-                keptWhileHovered: (() => {
-                    // A late hide notice keeps the block under the pointer.
-                    const code = document.querySelector('.md-code-wrap pre code');
-                    code.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
-                    window.mdpNativeHUDHidden();
-                    code.dispatchEvent(new PointerEvent('pointerout', { bubbles: true }));
-                    window.mdpCodeHUDAction('wrap');
-                    const wrapped = document.querySelector('.md-code-wrap').classList.contains('is-wrapped');
-                    window.mdpCodeHUDAction('wrap');
-                    return wrapped;
-                })(),
-                afterHidden: (() => {
-                    // Once the host's glass hides, the page lets the block go.
-                    window.mdpNativeHUDHidden();
-                    window.mdpCodeHUDAction('wrap');
+                unknownID: (() => {
+                    window.mdpCodeHUDAction('wrap', 999);
                     return document.querySelector('.md-code-wrap').classList.contains('is-wrapped');
                 })()
             });
@@ -1473,9 +1468,10 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(state["pillOpacity"] as? String, "0", json)
         XCTAssertEqual(state["pillVisibility"] as? String, "visible", json)
         XCTAssertGreaterThan(state["pillWidth"] as? Double ?? 0, 0, "the hidden pill keeps its space")
-        XCTAssertEqual(state["afterLeave"] as? Bool, false, "Wrap after the leave unwraps the same block")
-        XCTAssertEqual(state["keptWhileHovered"] as? Bool, true, "a late hide notice keeps the hovered block")
-        XCTAssertEqual(state["afterHidden"] as? Bool, false, "Wrap after the glass hid acts on nothing")
+        let afterLeave = try XCTUnwrap(state["afterLeave"] as? [String: Any], json)
+        XCTAssertEqual(afterLeave["wrapped"] as? Bool, false, "Wrap after the leave unwraps the same block")
+        XCTAssertEqual(afterLeave["reportedWrapped"] as? Bool, false, "the glass hears the new state")
+        XCTAssertEqual(state["unknownID"] as? Bool, false, "an id the page never gave acts on nothing")
     }
 
     @MainActor

@@ -94,70 +94,62 @@ nonisolated extension MarkdownHTML {
     /// blocks have controls. With `data-mdp-native-hud` on the root (the app
     /// on macOS 26) the host draws those controls as native glass over the
     /// block under the pointer (`BlockGlassHUD`); the reporter tells it
-    /// which block that is and where, once a frame while the page scrolls.
-    /// `describe(el)` gives the block's extra state, or null when it has no
-    /// controls to show. Null without the attribute, so other hosts skip it.
-    /// The host calls `window.mdpRefreshNativeHUD()` after it rebuilt the
-    /// page around the hovered blocks, and `window.mdpNativeHUDHidden()`
-    /// when its glass hides.
+    /// which block that is, by an id, and where, once a frame while the page
+    /// scrolls. The host's clicks name the block by that id (`block(id)`),
+    /// so they act on the block the glass shows even when the page saw the
+    /// pointer leave it for the glass. `describe(el)` gives the block's
+    /// extra state, or null when it has no controls to show. Null without
+    /// the attribute, so other hosts skip it. The host calls
+    /// `window.mdpRefreshNativeHUD()` after it rebuilt the page around the
+    /// hovered blocks.
     static let nativeHUDReporterJS = """
     function makeNativeHUDReporter(kind, describe) {
         if (!document.documentElement.hasAttribute('data-mdp-native-hud')) return null;
         let target = null;
-        // The page may see the pointer leave a block for the glass drawn
-        // over it. Until the host says the glass hid, the glass's clicks and
-        // the page's scrolling stay with that block.
-        let retained = null;
         let frame = 0;
         const ids = new WeakMap();
+        const blocks = new Map();
         let nextID = 0;
-        const live = (el) => el?.isConnected ? el : null;
         function post(el) {
-            const extras = el ? describe(el) : null;
+            const extras = el?.isConnected ? describe(el) : null;
             const message = { kind, visible: !!extras };
             if (extras) {
-                if (!ids.has(el)) ids.set(el, nextID++);
+                if (!ids.has(el)) {
+                    ids.set(el, nextID);
+                    blocks.set(nextID++, new WeakRef(el));
+                }
                 const r = el.getBoundingClientRect();
                 Object.assign(message, { id: ids.get(el), x: r.left, y: r.top, width: r.width, height: r.height }, extras);
             }
             try { window.webkit?.messageHandlers?.mdPreviewHost?.postMessage(message); } catch (_) {}
         }
+        window.addEventListener('scroll', () => {
+            if (!target || frame) return;
+            frame = requestAnimationFrame(() => { frame = 0; post(target); });
+        }, { passive: true });
+        window.addEventListener('resize', () => { if (target) post(target); });
         const reporter = {
-            // The block the glass's controls act on.
-            get target() { return live(target) || live(retained); },
+            // The block under the pointer.
+            get target() { return target; },
             set(el) {
                 if (el === target) return;
                 target = el;
-                if (el) retained = el;
-                post(live(el));
+                post(el);
             },
-            // After an action on the target: its new state (a zoom level,
-            // Wrap) reaches the glass the pointer is on.
-            refresh() {
-                const el = reporter.target;
-                if (el) post(el);
+            // The block a host click names, while it is in the page.
+            block(id) {
+                const el = blocks.get(id)?.deref();
+                return el?.isConnected ? el : null;
             },
-            // In the background: only the block under the pointer.
-            refreshHovered() {
-                if (live(target)) post(target);
-            },
+            // Reports `el` again: the hovered block after the page changed,
+            // or the block a host click just changed (a zoom level, Wrap),
+            // so the glass the pointer is on shows its new state.
+            refresh(el = target) { if (el) post(el); },
         };
-        window.addEventListener('scroll', () => {
-            if (!reporter.target || frame) return;
-            frame = requestAnimationFrame(() => { frame = 0; reporter.refresh(); });
-        }, { passive: true });
-        window.addEventListener('resize', () => reporter.refresh());
         const refreshOthers = window.mdpRefreshNativeHUD;
         window.mdpRefreshNativeHUD = () => {
             refreshOthers?.();
-            reporter.refreshHovered();
-        };
-        const hidden = window.mdpNativeHUDHidden;
-        // The notice can come after the pointer reached another block,
-        // which then keeps its hold.
-        window.mdpNativeHUDHidden = () => {
-            hidden?.();
-            if (retained !== target) retained = null;
+            reporter.refresh();
         };
         return reporter;
     }
@@ -185,9 +177,13 @@ nonisolated extension MarkdownHTML {
                 document.addEventListener('pointerout', (event) => {
                     if (!event.relatedTarget) codeHUD.set(null);
                 });
-                window.mdpCodeHUDAction = (act) => {
+                window.mdpCodeHUDAction = (act, id) => {
+                    const wrap = codeHUD.block(id);
                     const selector = act === 'wrap' ? '.md-code-toggle-wrap' : act === 'copy' ? '.md-code-copy' : null;
-                    if (selector && codeHUD.target?.isConnected) codeHUD.target.querySelector(selector)?.click();
+                    if (!wrap || !selector) return;
+                    wrap.querySelector(selector)?.click();
+                    // The click handler reports the hovered block itself.
+                    if (wrap !== codeHUD.target) codeHUD.refresh(wrap);
                 };
             }
 
