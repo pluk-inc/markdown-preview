@@ -32,8 +32,9 @@ struct PublishToWebTip: Tip {
 extension DocumentWindowController {
 
     /// TipKit wants one configure call per launch, before any tip shows.
-    /// Weekly, so a tip the user has not acted on does not return on every
-    /// window switch.
+    /// Weekly only spaces out different tips: a tip that has already shown
+    /// returns on each window switch, and each return counts toward its
+    /// MaxDisplayCount.
     private static let tipsConfigured: Void = {
         try? Tips.configure([.displayFrequency(.weekly)])
     }()
@@ -57,10 +58,11 @@ extension DocumentWindowController {
     }
 
     /// A new file loaded in the window: retire the tip if the file already has
-    /// a link, or start it if the window became key before the file loaded.
+    /// a link, hide it if the file cannot be published, or start it if the
+    /// window became key before the file loaded.
     func refreshPublishToWebTip() {
         guard documentWindow.isKeyWindow else { return }
-        if isSharedByLink { stopPublishToWebTip() }
+        if isSharedByLink || !canPublishToWeb { stopPublishToWebTip() }
         startPublishToWebTip()
     }
 
