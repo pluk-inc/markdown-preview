@@ -1439,6 +1439,17 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                     window.mdpCodeHUDAction('wrap');
                     return document.querySelector('.md-code-wrap').classList.contains('is-wrapped');
                 })(),
+                keptWhileHovered: (() => {
+                    // A late hide notice keeps the block under the pointer.
+                    const code = document.querySelector('.md-code-wrap pre code');
+                    code.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+                    window.mdpNativeHUDHidden();
+                    code.dispatchEvent(new PointerEvent('pointerout', { bubbles: true }));
+                    window.mdpCodeHUDAction('wrap');
+                    const wrapped = document.querySelector('.md-code-wrap').classList.contains('is-wrapped');
+                    window.mdpCodeHUDAction('wrap');
+                    return wrapped;
+                })(),
                 afterHidden: (() => {
                     // Once the host's glass hides, the page lets the block go.
                     window.mdpNativeHUDHidden();
@@ -1463,6 +1474,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(state["pillVisibility"] as? String, "visible", json)
         XCTAssertGreaterThan(state["pillWidth"] as? Double ?? 0, 0, "the hidden pill keeps its space")
         XCTAssertEqual(state["afterLeave"] as? Bool, false, "Wrap after the leave unwraps the same block")
+        XCTAssertEqual(state["keptWhileHovered"] as? Bool, true, "a late hide notice keeps the hovered block")
         XCTAssertEqual(state["afterHidden"] as? Bool, false, "Wrap after the glass hid acts on nothing")
     }
 

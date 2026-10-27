@@ -153,9 +153,11 @@ nonisolated extension MarkdownHTML {
             reporter.refreshHovered();
         };
         const hidden = window.mdpNativeHUDHidden;
+        // The notice can come after the pointer reached another block,
+        // which then keeps its hold.
         window.mdpNativeHUDHidden = () => {
             hidden?.();
-            retained = null;
+            if (retained !== target) retained = null;
         };
         return reporter;
     }
