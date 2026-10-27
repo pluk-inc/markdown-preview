@@ -25,7 +25,8 @@ enum ShareLinkManageSheet {
             hosting?.dismiss(nil)
         } confirmStop: { [weak hosting] stop in
             guard let window = hosting?.view.window else { return }
-            confirmStopSharing(on: window, then: stop)
+            confirmStopSharing(on: window, lostKeyExpiry: model.keyLost ? model.record?.expiresAt : nil,
+                               then: stop)
         }
         // The view decides its own size. A fixed preferredContentSize fought
         // the view's natural height and looped the window's constraint passes
@@ -34,14 +35,23 @@ enum ShareLinkManageSheet {
         host.presentAsSheet(hosting)
     }
 
-    /// Stopping cannot be undone: the link stops working for everyone.
-    private static func confirmStopSharing(on window: NSWindow, then stop: @escaping () -> Void) {
+    /// Stopping cannot be undone: the link stops working for everyone. A
+    /// link whose key is lost is only forgotten, so the alert says it runs
+    /// until it expires.
+    private static func confirmStopSharing(on window: NSWindow, lostKeyExpiry: Date?,
+                                           then stop: @escaping () -> Void) {
         let alert = NSAlert()
         // Sheet alerts hide the default icon; set it to show the app icon,
         // as Pages' stop-sharing alert does.
         alert.icon = NSApp.applicationIconImage
         alert.messageText = L("Stop sharing this document?")
-        alert.informativeText = L("If you stop sharing, people with the link can no longer open this document, and its copy is deleted from the server.")
+        if let lostKeyExpiry {
+            alert.informativeText = String(
+                format: L("Markdown Preview lost the key for this link, so it cannot delete the copy on the server. People with the link can open this document until %@."),
+                lostKeyExpiry.formatted(date: .abbreviated, time: .shortened))
+        } else {
+            alert.informativeText = L("If you stop sharing, people with the link can no longer open this document, and its copy is deleted from the server.")
+        }
         alert.addButton(withTitle: L("Continue"))
         alert.addButton(withTitle: L("Cancel"))
         alert.beginSheetModal(for: window) { response in
@@ -63,6 +73,9 @@ final class ShareLinkManageModel {
     private(set) var activity = Activity.idle
     private(set) var errorMessage: String?
     private(set) var record: ShareLinkStore.Record?
+    /// True while the record's owner token is lost: Copy Link then makes a
+    /// new link, and Stop Sharing only forgets the old one.
+    private(set) var keyLost = false
     /// The upload after a Copy Link that copied the stored link at once.
     private(set) var isUpdating = false
 
@@ -74,6 +87,7 @@ final class ShareLinkManageModel {
         icon = NSWorkspace.shared.icon(forFile: fileURL.path)
         summary = SharePreviewItem.subtitle(for: markdown)
         record = ShareLinkStore.shared.record(forFile: fileURL)
+        keyLost = record.map { ShareLinkStore.shared.secrets(for: $0) == nil } ?? false
     }
 
     func copyLink() async {
@@ -104,6 +118,8 @@ final class ShareLinkManageModel {
             }
         }
         record = ShareLinkStore.shared.record(forFile: fileURL)
+        // A copy that worked used the stored secrets or saved new ones.
+        keyLost = false
         try? await Task.sleep(for: .seconds(1.5))
         if activity == .copied { activity = .idle }
     }
@@ -174,6 +190,12 @@ struct ShareLinkManageView: View {
                         (L("can edit"), false),
                     ])
                     .frame(maxWidth: .infinity)
+                }
+                if model.keyLost, let record = model.record {
+                    Text(String(format: L("Markdown Preview lost the key for this link, so it cannot change or stop it. The link works until %@. Copy Link makes a new link."),
+                                record.expiresAt.formatted(date: .abbreviated, time: .shortened)))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                 }
                 if let errorMessage = model.errorMessage {
                     Text(errorMessage)

@@ -492,7 +492,8 @@
 "Keep Document Private" = "保持文稿私密";
 
 /* Share links */
-"Markdown Preview lost the key that manages this link, so it cannot change or stop it. The link stops working on %@." = "Markdown Preview 丢失了管理此链接的密钥，因此无法更改或停止它。此链接将于 %@ 失效。";
+"Markdown Preview lost the key for this link, so it cannot change or stop it. The link works until %@. Copy Link makes a new link." = "Markdown Preview 丢失了此链接的密钥，因此无法更改或停止它。此链接在 %@ 之前有效。“拷贝链接”会创建新链接。";
+"Markdown Preview lost the key for this link, so it cannot delete the copy on the server. People with the link can open this document until %@." = "Markdown Preview 丢失了此链接的密钥，因此无法删除服务器上的副本。拥有链接的人在 %@ 之前仍可打开此文稿。";
 
 /* Opening share links */
 "Open Shared Link…" = "打开共享链接…";

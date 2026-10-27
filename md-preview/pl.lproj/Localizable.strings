@@ -492,7 +492,8 @@
 "Keep Document Private" = "Zachowaj dokument jako prywatny";
 
 /* Share links */
-"Markdown Preview lost the key that manages this link, so it cannot change or stop it. The link stops working on %@." = "Markdown Preview utracił klucz zarządzający tym linkiem, więc nie może go zmienić ani zatrzymać. Link przestanie działać %@.";
+"Markdown Preview lost the key for this link, so it cannot change or stop it. The link works until %@. Copy Link makes a new link." = "Markdown Preview utracił klucz tego linku, więc nie może go zmienić ani zatrzymać. Link działa do %@. „Kopiuj łącze” tworzy nowy link.";
+"Markdown Preview lost the key for this link, so it cannot delete the copy on the server. People with the link can open this document until %@." = "Markdown Preview utracił klucz tego linku, więc nie może usunąć kopii z serwera. Osoby mające link mogą otworzyć ten dokument do %@.";
 
 /* Opening share links */
 "Open Shared Link…" = "Otwórz udostępnione łącze…";

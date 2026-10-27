@@ -492,7 +492,8 @@
 "Keep Document Private" = "Keep Document Private";
 
 /* Share links */
-"Markdown Preview lost the key that manages this link, so it cannot change or stop it. The link stops working on %@." = "Markdown Preview lost the key that manages this link, so it cannot change or stop it. The link stops working on %@.";
+"Markdown Preview lost the key for this link, so it cannot change or stop it. The link works until %@. Copy Link makes a new link." = "Markdown Preview lost the key for this link, so it cannot change or stop it. The link works until %@. Copy Link makes a new link.";
+"Markdown Preview lost the key for this link, so it cannot delete the copy on the server. People with the link can open this document until %@." = "Markdown Preview lost the key for this link, so it cannot delete the copy on the server. People with the link can open this document until %@.";
 
 /* Opening share links */
 "Open Shared Link…" = "Open Shared Link…";

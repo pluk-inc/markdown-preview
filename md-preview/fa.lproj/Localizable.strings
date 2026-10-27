@@ -491,7 +491,8 @@
 "Keep Document Private" = "سند خصوصی بماند";
 
 /* Share links */
-"Markdown Preview lost the key that manages this link, so it cannot change or stop it. The link stops working on %@." = "Markdown Preview کلید مدیریت این پیوند را از دست داده است، بنابراین نمی‌تواند آن را تغییر دهد یا متوقف کند. این پیوند در %@ از کار می‌افتد.";
+"Markdown Preview lost the key for this link, so it cannot change or stop it. The link works until %@. Copy Link makes a new link." = "Markdown Preview کلید این پیوند را از دست داده است، بنابراین نمی‌تواند آن را تغییر دهد یا متوقف کند. این پیوند تا %@ کار می‌کند. «کپی پیوند» یک پیوند تازه می‌سازد.";
+"Markdown Preview lost the key for this link, so it cannot delete the copy on the server. People with the link can open this document until %@." = "Markdown Preview کلید این پیوند را از دست داده است، بنابراین نمی‌تواند نسخهٔ روی سرور را حذف کند. افرادی که پیوند را دارند تا %@ می‌توانند این سند را باز کنند.";
 
 /* Opening share links */
 "Open Shared Link…" = "باز کردن پیوند اشتراک‌گذاشته‌شده…";

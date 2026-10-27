@@ -43,9 +43,6 @@ enum ShareLinkSession {
     enum Failure: Error {
         /// No server address: the feature is off in this build.
         case notConfigured
-        /// The file has a live link, but its owner token is gone, so the
-        /// link can neither be updated nor stopped until it expires.
-        case lostCredentials(expiresAt: Date)
     }
 
     static let expiry = ShareLinkClient.Expiry.week
@@ -107,12 +104,11 @@ enum ShareLinkSession {
         let fileURL = fileURL.standardizedFileURL
         let (payload, digest) = try await makePayload(fileURL: fileURL, markdown: markdown)
 
-        if var record = store.record(forFile: fileURL) {
-            // Without the owner token the old link can be neither updated
-            // nor revoked; replacing it would leave it live and unmanaged.
-            guard let secrets = store.secrets(for: record) else {
-                throw Failure.lostCredentials(expiresAt: record.expiresAt)
-            }
+        // Without the owner token the old link can be neither updated nor
+        // revoked, and it stays live until it expires whatever happens here;
+        // refusing would only stop the user from sharing the file again. Such
+        // a record is skipped, and `store.add` below replaces it.
+        if var record = store.record(forFile: fileURL), let secrets = store.secrets(for: record) {
             if let key = sealingKey(secrets) {
                 // The server already has this content; the link's expiry stays.
                 if let digest, record.contentDigest == digest {
@@ -155,13 +151,16 @@ enum ShareLinkSession {
     }
 
     /// Deletes the file's link on the server and forgets it here. A link the
-    /// server no longer has is already stopped.
+    /// server no longer has is already stopped. A link whose owner token is
+    /// gone cannot be deleted, so it is only forgotten and runs until it
+    /// expires; the caller warns about that first.
     static func stopSharing(fileURL: URL, store: ShareLinkStore = .shared) async throws {
         guard let record = store.record(forFile: fileURL) else { return }
-        guard let baseURL = ShareLinkFeature.baseURL else { throw Failure.notConfigured }
         guard let secrets = store.secrets(for: record) else {
-            throw Failure.lostCredentials(expiresAt: record.expiresAt)
+            store.remove(id: record.id)
+            return
         }
+        guard let baseURL = ShareLinkFeature.baseURL else { throw Failure.notConfigured }
         try await revoke(record.id, ownerToken: secrets.ownerToken,
                          client: ShareLinkClient(baseURL: baseURL))
         store.remove(id: record.id)
@@ -175,9 +174,6 @@ enum ShareLinkSession {
             L("Too many links in a short time. Wait a minute, then try again.")
         case let error as URLError where error.code == .notConnectedToInternet:
             L("You are offline. Connect to the internet, then try again.")
-        case Failure.lostCredentials(let expiresAt):
-            String(format: L("Markdown Preview lost the key that manages this link, so it cannot change or stop it. The link stops working on %@."),
-                   expiresAt.formatted(date: .abbreviated, time: .shortened))
         default:
             L("Markdown Preview could not reach the sharing server. Try again later.")
         }
