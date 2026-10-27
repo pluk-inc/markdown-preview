@@ -175,7 +175,7 @@ enum ShareLinkSession {
             L("Too many links in a short time. Wait a minute, then try again.")
         case ShareLinkClient.Failure.quotaExceeded:
             String(format: L("Sharing reached its daily limit. Try again after %@."),
-                   quotaResetDate().formatted(date: .omitted, time: .shortened))
+                   quotaResetDate().formatted(date: .abbreviated, time: .shortened))
         case let error as URLError where error.code == .notConnectedToInternet:
             L("You are offline. Connect to the internet, then try again.")
         case Failure.lostCredentials(let expiresAt):
