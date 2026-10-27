@@ -394,6 +394,11 @@
 
 /* Additional settings, navigation, formatting, and export strings. */
 "GitHub Project" = "پروژهٔ GitHub";
+"Discord Community" = "انجمن Discord";
+"Buy Me a Coffee" = "Buy Me a Coffee";
+"Close" = "بستن";
+"Support Markdown Preview" = "از Markdown Preview حمایت کنید";
+"Markdown Preview is free and open source. A coffee helps keep it that way." = "Markdown Preview رایگان و متن‌باز است. یک قهوه کمک می‌کند همین‌طور بماند.";
 "Bold Text" = "متن ضخیم";
 "Accessibility & Layout Options" = "گزینه‌های دسترس‌پذیری و طرح‌بندی";
 "Customize" = "سفارشی‌سازی";

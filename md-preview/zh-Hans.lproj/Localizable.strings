@@ -395,6 +395,11 @@
 
 /* Additional settings, navigation, formatting, and export strings. */
 "GitHub Project" = "GitHub 项目";
+"Discord Community" = "Discord 社区";
+"Buy Me a Coffee" = "Buy Me a Coffee";
+"Close" = "关闭";
+"Support Markdown Preview" = "支持 Markdown Preview";
+"Markdown Preview is free and open source. A coffee helps keep it that way." = "Markdown Preview 免费且开源。一杯咖啡能帮助它保持下去。";
 "Bold Text" = "粗体文本";
 "Accessibility & Layout Options" = "辅助功能与布局选项";
 "Customize" = "自定";

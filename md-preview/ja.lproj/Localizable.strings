@@ -395,6 +395,11 @@
 
 /* Additional settings, navigation, formatting, and export strings. */
 "GitHub Project" = "GitHub プロジェクト";
+"Discord Community" = "Discord コミュニティ";
+"Buy Me a Coffee" = "Buy Me a Coffee";
+"Close" = "閉じる";
+"Support Markdown Preview" = "Markdown Previewを応援する";
+"Markdown Preview is free and open source. A coffee helps keep it that way." = "Markdown Previewは無料のオープンソースです。コーヒー1杯の支援が、この状態を続ける力になります。";
 "Bold Text" = "太字";
 "Accessibility & Layout Options" = "アクセシビリティとレイアウトのオプション";
 "Customize" = "カスタマイズ";

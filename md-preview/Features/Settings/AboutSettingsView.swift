@@ -43,6 +43,8 @@ struct AboutSettingsView: View {
 
             Section {
                 Link(L("GitHub Project"), destination: URL(string: "https://github.com/pluk-inc/markdown-preview")!)
+                Link(L("Discord Community"), destination: URL(string: "https://discord.com/invite/NUtNMK7re2")!)
+                Link(L("Buy Me a Coffee"), destination: BuyMeACoffee.url)
             }
 
             Section {

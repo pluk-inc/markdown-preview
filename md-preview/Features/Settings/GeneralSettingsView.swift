@@ -9,9 +9,14 @@ import SwiftUI
 
 struct GeneralSettingsView: View {
     @Bindable private var model = SettingsModel.shared
+    @AppStorage("MarkdownPreview.coffeeRowClosed") private var coffeeRowClosed = false
 
     var body: some View {
         Form {
+            if !coffeeRowClosed {
+                BuyMeACoffeeSection { coffeeRowClosed = true }
+            }
+
             Section {
                 Picker(L("Language"), selection: $model.appLanguage) {
                     Text(L("System Default")).tag(AppLanguageSetting.systemDefault)

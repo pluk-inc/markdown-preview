@@ -395,6 +395,11 @@
 
 /* Additional settings, navigation, formatting, and export strings. */
 "GitHub Project" = "Projekt w GitHub";
+"Discord Community" = "Społeczność na Discordzie";
+"Buy Me a Coffee" = "Buy Me a Coffee";
+"Close" = "Zamknij";
+"Support Markdown Preview" = "Wesprzyj Markdown Preview";
+"Markdown Preview is free and open source. A coffee helps keep it that way." = "Markdown Preview jest darmowy i otwartoźródłowy. Kawa pomaga, by tak zostało.";
 "Bold Text" = "Tekst pogrubiony";
 "Accessibility & Layout Options" = "Opcje dostępności i układu";
 "Customize" = "Dostosuj";

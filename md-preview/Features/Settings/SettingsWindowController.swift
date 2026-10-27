@@ -62,21 +62,35 @@ struct SettingsPaneIcon: View {
 
     /// Match the sidebar tile geometry for panes without bundled icons.
     private var generatedTile: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 4.4, style: .continuous)
-                .fill(LinearGradient(
-                    colors: [
-                        pane == .reading ? Color(red: 0.2, green: 0.55, blue: 0.95) : Color(red: 0.25, green: 0.25, blue: 0.27),
-                        pane == .reading ? Color(red: 0.05, green: 0.3, blue: 0.75) : Color(red: 0.05, green: 0.05, blue: 0.06)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ))
-                .frame(width: 20, height: 20)
-                .shadow(color: .black.opacity(0.22), radius: 0.6, y: 0.6)
+        SettingsIconTile(size: 20, fill: LinearGradient(
+            colors: [
+                pane == .reading ? Color(red: 0.2, green: 0.55, blue: 0.95) : Color(red: 0.25, green: 0.25, blue: 0.27),
+                pane == .reading ? Color(red: 0.05, green: 0.3, blue: 0.75) : Color(red: 0.05, green: 0.05, blue: 0.06)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )) {
             Image(systemName: pane == .reading ? "book.closed.fill" : "circle.lefthalf.filled")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.white)
+        }
+    }
+}
+
+/// The rounded, shadowed tile behind a settings icon. The corner radius
+/// scales with the 20-point sidebar tile.
+struct SettingsIconTile<Fill: ShapeStyle, Content: View>: View {
+    let size: CGFloat
+    let fill: Fill
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
+                .fill(fill)
+                .frame(width: size, height: size)
+                .shadow(color: .black.opacity(0.22), radius: 0.6, y: 0.6)
+            content
         }
     }
 }

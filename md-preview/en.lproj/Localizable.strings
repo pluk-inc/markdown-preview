@@ -395,6 +395,11 @@
 
 /* Additional settings, navigation, formatting, and export strings. */
 "GitHub Project" = "GitHub Project";
+"Discord Community" = "Discord Community";
+"Buy Me a Coffee" = "Buy Me a Coffee";
+"Close" = "Close";
+"Support Markdown Preview" = "Support Markdown Preview";
+"Markdown Preview is free and open source. A coffee helps keep it that way." = "Markdown Preview is free and open source. A coffee helps keep it that way.";
 "Bold Text" = "Bold Text";
 "Accessibility & Layout Options" = "Accessibility & Layout Options";
 "Customize" = "Customize";
