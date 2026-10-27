@@ -2,7 +2,7 @@
 //  ShareLinkSession.swift
 //  md-preview
 //
-//  The Share popover's "Copy Link": seals the open document, uploads it,
+//  The Share popover's "Publish to Web": seals the open document, uploads it,
 //  and returns its link. A file that already has a live link keeps it; the
 //  content behind it is replaced, unless it has not changed since the last
 //  upload. No options: links last 7 days, have no
