@@ -25,6 +25,9 @@ enum ShareLinkManageSheet {
             hosting?.dismiss(nil)
         } confirmStop: { [weak hosting] stop in
             guard let window = hosting?.view.window else { return }
+            // The key can be lost while the sheet is open; the alert must
+            // not promise a deletion that Stop Sharing cannot do.
+            model.refreshRecord()
             confirmStopSharing(on: window, lostKeyExpiry: model.keyLost ? model.record?.expiresAt : nil,
                                then: stop)
         }
@@ -86,6 +89,10 @@ final class ShareLinkManageModel {
         self.markdown = markdown
         icon = NSWorkspace.shared.icon(forFile: fileURL.path)
         summary = SharePreviewItem.subtitle(for: markdown)
+        refreshRecord()
+    }
+
+    func refreshRecord() {
         record = ShareLinkStore.shared.record(forFile: fileURL)
         keyLost = record.map { ShareLinkStore.shared.secrets(for: $0) == nil } ?? false
     }
