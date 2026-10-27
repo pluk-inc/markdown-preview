@@ -75,4 +75,13 @@ jobs:
             echo "::notice::Cloudflare secrets are not set; skipping the deploy."
             exit 0
           fi
-          npm run deploy
+          # The Cloudflare API sometimes fails a request with an unknown
+          # error (code 10013). A deploy is safe to repeat, so try again.
+          for attempt in 1 2 3; do
+            npm run deploy && exit 0
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::Deploy attempt $attempt failed; trying again in $((attempt * 30)) s."
+              sleep $((attempt * 30))
+            fi
+          done
+          exit 1
