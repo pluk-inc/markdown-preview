@@ -468,7 +468,6 @@
 
 /* Share links */
 "Publish to Web" = "发布到网页";
-"Create a link anyone can use to read this document in a web browser." = "创建一个链接，任何人都可以在网页浏览器中阅读此文稿。";
 "Publish to Web…" = "发布到网页…";
 "Publish" = "发布";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "在你停止共享或链接于 7 天后过期之前，任何拥有链接的人都可以阅读此文稿。文稿已加密，只有此链接才能打开。";

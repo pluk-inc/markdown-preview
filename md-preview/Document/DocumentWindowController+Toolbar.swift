@@ -601,8 +601,6 @@ extension DocumentWindowController {
     func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker,
                               sharingServicesForItems items: [Any],
                               proposedSharingServices proposedServices: [NSSharingService]) -> [NSSharingService] {
-        // The picker is open, so the user now sees the Publish to Web row.
-        if canPublishToWeb { invalidatePublishToWebTip() }
         let services = [DocumentAction.export, .print].map { action in
             NSSharingService(title: action.title, image: action.image ?? NSImage(),
                              alternateImage: nil) { [weak self] in

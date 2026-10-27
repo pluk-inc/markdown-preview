@@ -37,7 +37,6 @@ extension DocumentWindowController {
     /// File › Publish to Web…: the same as the Share popover row.
     @objc func publishToWeb(_ sender: Any?) {
         guard canPublishToWeb else { return }
-        invalidatePublishToWebTip()
         if isSharedByLink { showManageSharedDocument() } else { confirmAndCopyShareLink() }
     }
 
