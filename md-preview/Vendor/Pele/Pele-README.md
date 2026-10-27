@@ -1,13 +1,13 @@
 # Pele
 
-Version: **1.6.0** (also recorded in `Pele-VERSION`).
+Version: **1.12.0** (also recorded in `Pele-VERSION`).
 
 `pele.global.js` and `Pele-LICENSE.txt` are copied without modification from the
-official [`pele@1.6.0` npm package](https://registry.npmjs.org/pele/-/pele-1.6.0.tgz)
+official [`pele@1.12.0` npm package](https://registry.npmjs.org/pele/-/pele-1.12.0.tgz)
 (`dist/pele.global.js` and `LICENSE`). The package SHA-512 integrity is:
 
 ```
-sha512-VfAiVItsOGlGhvnBfphdT28VCG7mXMZxQNOwAGsCtxI2ztbUsT39MraEOYjsapLxVETkdUZscm0DdotYDQMLdw==
+sha512-3OdOK6rvkaTB569R4/I8U0H82MqPRxj7vfkbowa2rRhgSBPFhvWlfFy5eae0jP+2A6hE8abE17nsdyxJz2VBiQ==
 ```
 
 Pele renders Mermaid syntax to SVG synchronously, with no dependencies
