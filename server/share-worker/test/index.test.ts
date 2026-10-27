@@ -1,22 +1,13 @@
-import { env, exports } from "cloudflare:workers";
+import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import fixture from "../../../tests/fixtures/share-link/vectors.json";
-import { purgeExpired } from "../src/index";
+import { ENVELOPE_TYPE, purgeExpired } from "../src/index";
 import { base64Bytes } from "../viewer/payload.js";
+import { ORIGIN, auth, call, envelope, hex } from "./helpers.ts";
 
-const ORIGIN = "https://share.example";
-
-function hex(text: string): Uint8Array {
-  return new Uint8Array(text.match(/../g)!.map((byte) => parseInt(byte, 16)));
-}
-
-const envelope = hex(fixture.vectors[0].envelope);
-
-// Each test gets its own IP so the rate limiter does not carry over.
-function call(path: string, init: RequestInit = {}, ip = crypto.randomUUID()): Promise<Response> {
-  const headers = new Headers(init.headers);
-  headers.set("CF-Connecting-IP", ip);
-  return exports.default.fetch(new Request(ORIGIN + path, { ...init, headers }));
+/** Reads a share as the app does. */
+function read(id: string): Promise<Response> {
+  return call(`/shares/${id}`, { headers: { Accept: ENVELOPE_TYPE } });
 }
 
 async function create(body: BodyInit = envelope, query = "") {
@@ -32,7 +23,6 @@ async function expireShare(id: string) {
   });
 }
 
-const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 describe("create and read", () => {
   it("stores every vector envelope and returns the same bytes", async () => {
@@ -43,10 +33,10 @@ describe("create and read", () => {
       expect(body.id).toMatch(/^[A-Za-z0-9_-]{22}$/);
       expect(body.ownerToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
 
-      const read = await call(`/shares/${body.id}`);
-      expect(read.status).toBe(200);
-      expect(read.headers.get("Content-Type")).toBe("application/octet-stream");
-      expect(new Uint8Array(await read.arrayBuffer())).toEqual(bytes);
+      const stored = await read(body.id);
+      expect(stored.status).toBe(200);
+      expect(stored.headers.get("Content-Type")).toBe(ENVELOPE_TYPE);
+      expect(new Uint8Array(await stored.arrayBuffer())).toEqual(bytes);
     }
   });
 
@@ -88,7 +78,7 @@ describe("create and read", () => {
     });
     const { response, body } = await create(stream);
     expect(response.status).toBe(201);
-    const stored = new Uint8Array(await (await call(`/shares/${body.id}`)).arrayBuffer());
+    const stored = new Uint8Array(await (await read(body.id)).arrayBuffer());
     // Compared in one step: an element-by-element diff of 200,000 bytes is slow.
     expect(stored.length).toBe(bytes.length);
     expect(stored.every((byte, i) => byte === bytes[i])).toBe(true);
@@ -130,9 +120,18 @@ describe("create and read", () => {
     expect(sent).toBeLessThan(64);
   });
 
+  it("serves the envelope only to the app, not to a browser opening the URL", async () => {
+    const { body } = await create();
+    for (const accept of [null, "*/*", "text/html,application/xhtml+xml,*/*;q=0.8", "application/octet-stream"]) {
+      const response = await call(`/shares/${body.id}`, accept ? { headers: { Accept: accept } } : {});
+      expect(response.status, String(accept)).toBe(404);
+    }
+    expect((await read(body.id)).status).toBe(200);
+  });
+
   it("answers 404 for unknown and malformed IDs", async () => {
     for (const id of ["AAAAAAAAAAAAAAAAAAAAAA", "short", "..%2F..%2Fsecret"]) {
-      const response = await call(`/shares/${id}`);
+      const response = await read(id);
       expect(response.status, id).toBe(404);
     }
   });
@@ -141,7 +140,7 @@ describe("create and read", () => {
     const { body } = await create();
     await expireShare(body.id);
 
-    expect((await call(`/shares/${body.id}`)).status).toBe(404);
+    expect((await read(body.id)).status).toBe(404);
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(await env.SHARES.head(`shares/${body.id}`)).toBeNull();
   });
@@ -160,8 +159,7 @@ describe("update and delete", () => {
     const updated = (await response.json()) as { expiresAt: string };
     expect(Date.parse(updated.expiresAt)).toBeGreaterThan(Date.parse(body.expiresAt));
 
-    const read = await call(`/shares/${body.id}`);
-    expect(new Uint8Array(await read.arrayBuffer())).toEqual(replacement);
+    expect(new Uint8Array(await (await read(body.id)).arrayBuffer())).toEqual(replacement);
   });
 
   it("deletes with the owner token", async () => {
@@ -171,7 +169,7 @@ describe("update and delete", () => {
       headers: auth(body.ownerToken),
     });
     expect(response.status).toBe(204);
-    expect((await call(`/shares/${body.id}`)).status).toBe(404);
+    expect((await read(body.id)).status).toBe(404);
   });
 
   it("refuses a missing or wrong token without revealing the share", async () => {
@@ -188,7 +186,7 @@ describe("update and delete", () => {
       });
       expect(response.status, method).toBe(404);
     }
-    expect((await call(`/shares/${body.id}`)).status).toBe(200);
+    expect((await read(body.id)).status).toBe(200);
   });
 });
 

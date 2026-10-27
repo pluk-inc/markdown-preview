@@ -25,9 +25,16 @@
     { "name": "CREATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } },
     { "name": "READ_LIMITER", "namespace_id": "1002", "simple": { "limit": 300, "period": 60 } }
   ],
+  // All IPs together may upload this many bytes a UTC day (src/upload-quota.ts).
+  // With 30-day links, the bucket holds at most 30 days of it: 150 GB.
+  "durable_objects": {
+    "bindings": [{ "name": "UPLOAD_QUOTA", "class_name": "UploadQuota" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UploadQuota"] }],
   "triggers": { "crons": ["17 3 * * *"] },
   "vars": {
-    "APPLE_APP_ID": "5P3TSMNV42.doc.md-preview"
+    "APPLE_APP_ID": "5P3TSMNV42.doc.md-preview",
+    "DAILY_UPLOAD_BYTES": 5000000000
   },
   "observability": { "enabled": true }
 }

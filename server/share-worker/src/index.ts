@@ -5,12 +5,17 @@
 import { HEADER_BYTES, MAGIC, TAG_BYTES, base64Encode, base64urlEncode as base64url, concat } from "../viewer/share-crypto.js";
 import { VIEWER_CSP } from "./viewer-csp.ts";
 import { ENVELOPE_MARKER } from "./viewer-page.ts";
+import type { UploadQuota } from "./upload-quota.ts";
+
+export { UploadQuota } from "./upload-quota.ts";
 
 export interface Env {
   SHARES: R2Bucket;
   ASSETS: Fetcher;
   CREATE_LIMITER?: RateLimit;
   READ_LIMITER?: RateLimit;
+  UPLOAD_QUOTA: DurableObjectNamespace<UploadQuota>;
+  DAILY_UPLOAD_BYTES: number;
   APPLE_APP_ID: string;
 }
 
@@ -27,6 +32,10 @@ const ID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 const SHARE_PATH = /^\/shares\/([^/]+)$/;
 const VIEWER_PATH = /^\/s\/([^/]+)\/?$/;
 const PREFIX = "shares/";
+// The app asks for an envelope with this Accept header. A browser that opens
+// /shares/<id> as a link cannot send it, so the route is no file host: the
+// bytes reach the app, and readers in a browser use /s/<id>.
+export const ENVELOPE_TYPE = "application/vnd.md-preview.envelope";
 
 const BASE_HEADERS = {
   "Cache-Control": "no-store",
@@ -65,6 +74,7 @@ export default {
 
     switch (request.method) {
       case "GET":
+        if (request.headers.get("Accept") !== ENVELOPE_TYPE) return error(404, "not_found");
         return (await limited(env.READ_LIMITER, request)) ?? read(id, env, ctx);
       case "PUT":
         return (await limited(env.CREATE_LIMITER, request)) ?? update(id, request, env, url);
@@ -88,6 +98,8 @@ async function create(request: Request, env: Env, url: URL): Promise<Response> {
   if (ttl === undefined) return error(400, "invalid_ttl");
   const body = await envelope(request);
   if (body instanceof Response) return body;
+  const full = await overQuota(env, body.byteLength);
+  if (full) return full;
 
   const id = base64url(randomBytes(16));
   const ownerToken = base64url(randomBytes(32));
@@ -108,7 +120,7 @@ async function read(id: string, env: Env, ctx: ExecutionContext): Promise<Respon
   return new Response(object.body, {
     headers: {
       ...BASE_HEADERS,
-      "Content-Type": "application/octet-stream",
+      "Content-Type": ENVELOPE_TYPE,
       "Content-Length": String(object.size),
     },
   });
@@ -121,6 +133,10 @@ async function update(id: string, request: Request, env: Env, url: URL): Promise
   const [existing, body] = await Promise.all([authorizedShare(id, request, env), envelope(request)]);
   if (existing instanceof Response) return existing;
   if (body instanceof Response) return body;
+  // The full size counts, not the growth: an update also renews the expiry,
+  // and the quota bounds the bucket only if every renewal pays for its bytes.
+  const full = await overQuota(env, body.byteLength);
+  if (full) return full;
 
   const expiresAt = new Date(Date.now() + ttl).toISOString();
   // Only replace the object that was checked: a Stop Sharing (or another
@@ -306,6 +322,12 @@ async function limited(limiter: RateLimit | undefined, request: Request): Promis
   const key = request.headers.get("CF-Connecting-IP") ?? "unknown";
   const { success } = await limiter.limit({ key });
   return success ? null : error(429, "rate_limited");
+}
+
+// 503 once today's uploaded bytes, from every IP together, would pass the limit.
+async function overQuota(env: Env, bytes: number): Promise<Response | null> {
+  const quota = env.UPLOAD_QUOTA.getByName("global");
+  return (await quota.reserve(bytes, env.DAILY_UPLOAD_BYTES)) ? null : error(503, "quota_exceeded");
 }
 
 function ttlMillis(url: URL): number | undefined {

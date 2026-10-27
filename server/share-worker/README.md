@@ -7,8 +7,8 @@ or a readable document. Design and API: [`docs/share-link-plan.md`](../../docs/s
 
 ## Web viewer
 
-`viewer/` is the page at `/s/<id>`. It fetches the envelope from `/shares/<id>`,
-decrypts it in the browser with the key from the URL fragment (WebCrypto and
+`viewer/` is the page at `/s/<id>`. It reads the envelope the Worker puts in
+the page, decrypts it in the browser with the key from the URL fragment (WebCrypto and
 `DecompressionStream`, matching the app's `ShareLinkCrypto`), and shows the
 document with the app's own stylesheet and renderers:
 
@@ -24,7 +24,9 @@ document with the app's own stylesheet and renderers:
   one-year immutable `Cache-Control`, so a file keeps its name (and stays
   cached) until its content changes.
 - `/s/<id>` carries the encrypted envelope at the end of the page, so a
-  reader needs no second request. `/shares/<id>` still serves it to the app.
+  reader needs no second request. `/shares/<id>` still serves it to the app,
+  and only to a request with `Accept: application/vnd.md-preview.envelope`:
+  opened as a link in a browser, it answers `404`, so it cannot pass files on.
 - The rendered HTML comes from whoever made the envelope, so the page
   sanitizes it with an explicit allowlist, allows only same-origin scripts
   (CSP in `src/viewer-csp.ts`), and blocks remote images. Images from the
@@ -48,7 +50,7 @@ No Cloudflare account is needed. Round trip with a test vector:
 python3 -c "import json; v = json.load(open('../../tests/fixtures/share-link/vectors.json'))['vectors'][0]; open('/tmp/envelope.bin', 'wb').write(bytes.fromhex(v['envelope']))"
 curl -s -X POST --data-binary @/tmp/envelope.bin 'http://localhost:8787/shares?ttl=1d'
 # → {"id":"…","ownerToken":"…","expiresAt":"…"}
-curl -s http://localhost:8787/shares/<id> -o /tmp/back.bin && cmp /tmp/envelope.bin /tmp/back.bin
+curl -s -H 'Accept: application/vnd.md-preview.envelope' http://localhost:8787/shares/<id> -o /tmp/back.bin && cmp /tmp/envelope.bin /tmp/back.bin
 curl -s -X DELETE -H 'Authorization: Bearer <ownerToken>' http://localhost:8787/shares/<id>
 ```
 
@@ -58,7 +60,7 @@ Cron triggers do not run locally. Trigger the expiry purge by hand with
 ## Test
 
 ```sh
-npm test           # vitest inside the Workers runtime (local R2, rate limits)
+npm test           # vitest inside the Workers runtime (local R2, rate limits, upload quota)
 npm run typecheck
 ```
 

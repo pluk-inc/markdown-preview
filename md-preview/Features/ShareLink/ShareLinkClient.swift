@@ -87,8 +87,14 @@ nonisolated struct ShareLinkClient: Sendable {
         _ = try await send(request, body: nil, expecting: 204)
     }
 
+    /// The Worker serves an envelope only with this Accept header, which a
+    /// browser opening the URL as a link cannot send.
+    static let envelopeType = "application/vnd.md-preview.envelope"
+
     func fetch(id: String) async throws -> Data {
-        try await send(URLRequest(url: url(id: id, expiry: nil)), body: nil, expecting: 200)
+        var request = URLRequest(url: url(id: id, expiry: nil))
+        request.setValue(Self.envelopeType, forHTTPHeaderField: "Accept")
+        return try await send(request, body: nil, expecting: 200)
     }
 
     // MARK: - Private

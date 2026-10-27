@@ -3,6 +3,7 @@
 // vectors are the ones the app's Swift tests seal.
 import { describe, expect, it } from "vitest";
 import fixture from "../../../tests/fixtures/share-link/vectors.json";
+import { hex } from "./helpers.ts";
 import { ShareError, openEnvelope, parseLink } from "../viewer/share-crypto.js";
 import { assetPathForSource, decodePayload, displayTitle, normalizedAssetPath } from "../viewer/payload.js";
 import { LANGUAGES, pickLanguage, strings } from "../viewer/strings.js";
@@ -26,10 +27,6 @@ describe("page text", () => {
     expect(pickLanguage([])).toBe("en");
   });
 });
-
-function hex(text: string): Uint8Array {
-  return new Uint8Array(text.match(/../g)!.map((byte) => parseInt(byte, 16)));
-}
 
 function linkParts(link: string) {
   const url = new URL(link);

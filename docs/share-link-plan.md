@@ -189,7 +189,7 @@ app or the Worker. The Worker reaches R2 through a binding.
 | Method | Path | Auth | Body | Result |
 | --- | --- | --- | --- | --- |
 | `POST` | `/shares?ttl=7d` | — | envelope (`application/octet-stream`) | `201 {id, ownerToken, expiresAt}` |
-| `GET` | `/shares/<id>` | — | — | `200` envelope, or `404` |
+| `GET` | `/shares/<id>` | `Accept: application/vnd.md-preview.envelope` | — | `200` envelope, or `404` (also without that `Accept`) |
 | `PUT` | `/shares/<id>?ttl=7d` | `Authorization: Bearer <ownerToken>` | envelope | `200 {expiresAt}` |
 | `DELETE` | `/shares/<id>` | `Authorization: Bearer <ownerToken>` | — | `204` |
 | `GET` | `/.well-known/apple-app-site-association` | — | — | `200` JSON, `Content-Type: application/json`, no redirect |
@@ -229,8 +229,17 @@ the cron and lifecycle rule below, which KV's TTL would have replaced.
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`.
 - Rate limits: Cloudflare Rate Limiting binding, keyed by IP. The binding only
   counts over 10 s or 60 s, so "per hour" limits are not possible: 10 writes
-  (create, update, delete) and 300 reads per minute. Log nothing beyond what Cloudflare already
-  logs; never log request bodies or the `Authorization` header.
+  (create, update, delete) and 300 reads per minute. Log nothing beyond what
+  Cloudflare already logs; never log request bodies or the `Authorization`
+  header.
+- Daily upload quota: a Durable Object (`src/upload-quota.ts`) counts the
+  bytes that all IPs together upload each UTC day, creates and updates
+  alike. An update counts its full size, because it also renews the link's
+  expiry: every object then lives on bytes counted in the last 30 days. Past
+  `DAILY_UPLOAD_BYTES` (5 GB) uploads answer `503 {"error":"quota_exceeded"}`
+  until the next day, so the bucket holds at most 30 × 5 GB. The trade-off:
+  an abuser who reaches the quota stops new links for everyone until
+  midnight UTC.
 - No CORS on write routes. `GET` needs CORS only if the viewer is on another
   origin (phase 2 decision).
 
@@ -488,8 +497,12 @@ Firefox Send closed because of malware abuse. Our defences:
 - Short expiry (max 30 days), 5 MB limit, IP rate limits.
 - The viewer renders sanitised Markdown only; it never serves raw HTML or
   arbitrary files, so it is a poor phishing or malware host.
-- Uploads need the `MDP1` envelope — trivial to fake, but it stops casual
-  misuse of the bucket as a file host.
+- Uploads need the `MDP1` envelope — trivial to fake, so it does not stop
+  the bucket being used as a file host by itself. What does: `/shares/<id>`
+  answers only a request with the app's `Accept` header, so its URL opened in
+  a browser downloads nothing, and `/s/<id>` shows the envelope only as
+  base64 inside the page.
+- A daily upload quota across all IPs (§3) caps the bucket's size and cost.
 - Report button, abuse e-mail, terms of use, privacy-policy update.
 - Option: limit link sharing to licensed users through Amore licensing. Strongest
   control; product decision.

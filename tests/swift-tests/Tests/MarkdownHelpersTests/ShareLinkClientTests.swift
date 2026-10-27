@@ -48,6 +48,7 @@ final class ShareLinkClientTests: XCTestCase {
     func testFetchReturnsTheBody() async throws {
         let client = client { request, _ in
             XCTAssertEqual(request.httpMethod, "GET")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Accept"), "application/vnd.md-preview.envelope")
             return (200, "MDP1-bytes")
         }
         let data = try await client.fetch(id: "abc")
