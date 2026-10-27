@@ -148,6 +148,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     weak var findBarOverlay: NSView?
     var searchMode: SearchMode = .contains
     var pendingFindWork: DispatchWorkItem?
+    /// The query of the last find, run or pending. The search field sends
+    /// its action again when focus moves in or out of it, and a repeat of
+    /// the same query would advance to the next match.
+    var lastFindQuery = ""
     static let findDebounceDelay: TimeInterval = 0.10
 
     var documentWindow: NSWindow {

@@ -32,6 +32,8 @@ extension DocumentWindowController {
         // Empty queries (e.g. user cleared the field) bypass the debounce so
         // the highlight teardown happens immediately.
         let query = sender.stringValue
+        guard query != lastFindQuery else { return }
+        lastFindQuery = query
         pendingFindWork?.cancel()
         if query.isEmpty {
             pendingFindWork = nil
@@ -52,6 +54,7 @@ extension DocumentWindowController {
         // debounce so the user navigates the freshest results.
         pendingFindWork?.cancel()
         pendingFindWork = nil
+        lastFindQuery = query
         (documentWindow.contentViewController as? MainSplitViewController)?
             .find(query, backwards: backwards, mode: searchMode) { [weak self] result in
                 self?.applyFindResult(result, query: query)
