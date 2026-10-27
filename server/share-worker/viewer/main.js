@@ -681,11 +681,16 @@ window.addEventListener("md-preview-mermaid-rendered", () => {
 DOMPurify.addHook("afterSanitizeAttributes", (node) => {
   if (node.tagName === "A") applyLinkRules(node);
   // Buttons only for the diagram HUD; its window button needs the app.
-  // Pages shared by older apps also carry Fill width, and text glyphs
-  // where the HUD now draws icons.
+  // Pages shared by older apps carry Fill width where the HUD now has
+  // Copy, and text glyphs where it now draws icons.
   if (node.tagName === "BUTTON") {
+    if (node.dataset.mmAct === "width") {
+      node.dataset.mmAct = "copy";
+      node.className = "mermaid-hud-btn mermaid-hud-copy";
+      node.removeAttribute("aria-pressed");
+    }
     const act = node.dataset.mmAct;
-    if (!node.closest(".mermaid-hud") || act === "popup" || act === "width") node.remove();
+    if (!node.closest(".mermaid-hud") || act === "popup") node.remove();
     else if (act !== "reset") node.textContent = "";
   }
   if (node.tagName === "INPUT") {

@@ -819,3 +819,9 @@ article.markdown-body [id] { scroll-margin-top: 16px; }
   .scrim,
   .segmented.sliding::before { transition: none; }
 }
+
+/* The diagram pill takes the sheet's colour in light mode: the app's faint
+   tint reads as a grey patch on the sheet. */
+.markdown-body .mermaid-hud {
+  background: light-dark(var(--sheet), color-mix(in srgb, var(--text) 4%, transparent));
+}
