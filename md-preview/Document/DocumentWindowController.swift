@@ -584,6 +584,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let isFileSwitch = currentFileURL != nil && currentFileURL != url
         currentFileURL = url
         currentMarkdown = nil
+        // The new page has no highlights, so the same query searches again.
+        lastFindQuery = ""
         pendingEditModeURL = preservingEditMode ? url.standardizedFileURL : nil
         markdownDocument?.replaceFileURL(url)
         documentWindow.title = url.lastPathComponent
