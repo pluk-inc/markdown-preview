@@ -222,6 +222,13 @@ window.MdpDiagrams = {
         refreshOthers?.();
         reporter.refresh();
     };
+    // The host scrolled the page under its glass (the pointer on the
+    // glass, not on the block): report the glass's block where it is now.
+    const reportOthers = window.mdpReportNativeHUD;
+    window.mdpReportNativeHUD = (blockKind, id) => {
+        if (blockKind !== kind) return reportOthers?.(blockKind, id);
+        reporter.refresh(reporter.block(id));
+    };
     return reporter;
 }
         const diagramHUD = makeNativeHUDReporter('diagramHUD', (figure) =>

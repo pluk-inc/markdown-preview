@@ -101,7 +101,8 @@ nonisolated extension MarkdownHTML {
     /// extra state, or null when it has no controls to show. Null without
     /// the attribute, so other hosts skip it. The host calls
     /// `window.mdpRefreshNativeHUD()` after it rebuilt the page around the
-    /// hovered blocks.
+    /// hovered blocks, and `window.mdpReportNativeHUD(kind, id)` after it
+    /// scrolled the page under its glass.
     static let nativeHUDReporterJS = """
     function makeNativeHUDReporter(kind, describe) {
         if (!document.documentElement.hasAttribute('data-mdp-native-hud')) return null;
@@ -150,6 +151,13 @@ nonisolated extension MarkdownHTML {
         window.mdpRefreshNativeHUD = () => {
             refreshOthers?.();
             reporter.refresh();
+        };
+        // The host scrolled the page under its glass (the pointer on the
+        // glass, not on the block): report the glass's block where it is now.
+        const reportOthers = window.mdpReportNativeHUD;
+        window.mdpReportNativeHUD = (blockKind, id) => {
+            if (blockKind !== kind) return reportOthers?.(blockKind, id);
+            reporter.refresh(reporter.block(id));
         };
         return reporter;
     }

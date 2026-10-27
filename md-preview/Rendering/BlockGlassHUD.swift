@@ -37,6 +37,9 @@ final class BlockGlassHUD: NSView {
     var perform: ((Block, String) -> Void)?
     /// The web view under the pill, which scrolls when the wheel turns over it.
     weak var scrollTarget: NSView?
+    /// The page scrolled under the pill: report this block's place again.
+    var didScroll: ((Block) -> Void)?
+    private var settleReport: DispatchWorkItem?
 
     /// The gap from the block's top and right edges to the pill, in CSS
     /// pixels: the same on both sides, and where the page's own pills sit
@@ -185,6 +188,18 @@ final class BlockGlassHUD: NSView {
     /// The page goes on scrolling under the pill, which follows its block.
     override func scrollWheel(with event: NSEvent) {
         if let scrollTarget { scrollTarget.scrollWheel(with: event) } else { super.scrollWheel(with: event) }
+        // The page reports the block under the pointer, and the pointer is
+        // on the glass: ask for the glass's block now and once the scroll,
+        // applied off the main thread, has settled.
+        guard let current else { return }
+        didScroll?(current)
+        settleReport?.cancel()
+        let settle = DispatchWorkItem { [weak self] in
+            guard let self, let current = self.current else { return }
+            self.didScroll?(current)
+        }
+        settleReport = settle
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: settle)
     }
 
     /// A check mark for a moment after Copy, as the page's copy button shows.

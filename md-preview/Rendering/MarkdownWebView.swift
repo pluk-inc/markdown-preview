@@ -309,6 +309,10 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         if let hud = blockHUD as? BlockGlassHUD { return hud }
         let hud = BlockGlassHUD()
         hud.scrollTarget = webView
+        hud.didScroll = { [weak self] block in
+            let kind = block.kind == .diagram ? "diagramHUD" : "codeHUD"
+            self?.webView.evaluateJavaScript("window.mdpReportNativeHUD?.('\(kind)', \(block.id))") { _, _ in }
+        }
         hud.perform = { [weak self] block, act in
             let function = block.kind == .diagram ? "mdpDiagramHUDAction" : "mdpCodeHUDAction"
             self?.webView.evaluateJavaScript(

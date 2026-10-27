@@ -1447,6 +1447,14 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                         reportedWrapped: reported?.wrapped
                     };
                 })(),
+                hostReport: (() => {
+                    // The host scrolled under its glass and asks for the
+                    // glass's block by id.
+                    window.__posted = [];
+                    window.mdpReportNativeHUD('codeHUD', window.__codeID);
+                    const reported = window.__posted.filter((m) => m.kind === 'codeHUD').pop();
+                    return reported?.visible === true && reported?.id === window.__codeID;
+                })(),
                 unknownID: (() => {
                     window.mdpCodeHUDAction('wrap', 999);
                     return document.querySelector('.md-code-wrap').classList.contains('is-wrapped');
@@ -1471,6 +1479,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         let afterLeave = try XCTUnwrap(state["afterLeave"] as? [String: Any], json)
         XCTAssertEqual(afterLeave["wrapped"] as? Bool, false, "Wrap after the leave unwraps the same block")
         XCTAssertEqual(afterLeave["reportedWrapped"] as? Bool, false, "the glass hears the new state")
+        XCTAssertEqual(state["hostReport"] as? Bool, true, "the host's report request names the glass's block")
         XCTAssertEqual(state["unknownID"] as? Bool, false, "an id the page never gave acts on nothing")
     }
 
