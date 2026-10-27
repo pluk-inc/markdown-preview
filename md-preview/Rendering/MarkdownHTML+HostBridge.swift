@@ -97,17 +97,25 @@ nonisolated extension MarkdownHTML {
     /// which block that is and where, once a frame while the page scrolls.
     /// `describe(el)` gives the block's extra state, or null when it has no
     /// controls to show. Null without the attribute, so other hosts skip it.
+    /// `window.mdpRefreshNativeHUD()` reports every hovered block again, for
+    /// the host after it rebuilt the page around them.
     static let nativeHUDReporterJS = """
     function makeNativeHUDReporter(kind, describe) {
         if (!document.documentElement.hasAttribute('data-mdp-native-hud')) return null;
         let target = null;
+        // The host's clicks act on the last block reported: the page may see
+        // the pointer leave it for the glass drawn over it.
+        let last = null;
         let frame = 0;
+        const ids = new WeakMap();
+        let nextID = 0;
         function post() {
             const extras = target?.isConnected ? describe(target) : null;
             const message = { kind, visible: !!extras };
             if (extras) {
+                if (!ids.has(target)) ids.set(target, nextID++);
                 const r = target.getBoundingClientRect();
-                Object.assign(message, { x: r.left, y: r.top, width: r.width, height: r.height }, extras);
+                Object.assign(message, { id: ids.get(target), x: r.left, y: r.top, width: r.width, height: r.height }, extras);
             }
             try { window.webkit?.messageHandlers?.mdPreviewHost?.postMessage(message); } catch (_) {}
         }
@@ -116,15 +124,19 @@ nonisolated extension MarkdownHTML {
             frame = requestAnimationFrame(() => { frame = 0; post(); });
         }, { passive: true });
         window.addEventListener('resize', () => { if (target) post(); });
-        return {
-            get target() { return target; },
+        const reporter = {
+            get target() { return target?.isConnected ? target : last?.isConnected ? last : null; },
             set(el) {
                 if (el === target) return;
                 target = el;
+                if (el) last = el;
                 post();
             },
             refresh() { if (target) post(); },
         };
+        const refreshAll = window.mdpRefreshNativeHUD;
+        window.mdpRefreshNativeHUD = () => { refreshAll?.(); reporter.refresh(); };
+        return reporter;
     }
     """
 

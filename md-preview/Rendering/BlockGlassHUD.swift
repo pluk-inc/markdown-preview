@@ -21,6 +21,8 @@ final class BlockGlassHUD: NSView {
     /// The block the page reported, in this view's superview coordinates.
     struct Block {
         var kind: Kind
+        /// The page's number for the block, unique within its kind.
+        var id: Int
         var frame: NSRect
         /// Diagrams: the zoom level shown, and whether Open in Window works.
         var level = "100%"
@@ -116,7 +118,8 @@ final class BlockGlassHUD: NSView {
     /// rather than draw over it.
     func show(_ block: Block, scale: CGFloat, visibleTop: CGFloat) {
         guard let superview else { return }
-        if current?.kind != block.kind {
+        // A check mark belongs to the block it copied.
+        if current?.kind != block.kind || current?.id != block.id {
             copiedReset?.cancel()
             showCopyIcon()
         }
@@ -152,7 +155,10 @@ final class BlockGlassHUD: NSView {
         let x = block.frame.maxX - inset - size.width
         let y = superview.isFlipped ? top : height - top - size.height
         frame = NSRect(x: x, y: y, width: size.width, height: size.height)
-        let fits = top + size.height + inset <= blockBottom && frame.minX >= block.frame.minX
+        // A block too small for the pill still gets it, over its edges,
+        // while its top shows; one scrolled under the toolbar keeps it only
+        // while the pill fits above its bottom.
+        let fits = blockTop >= visibleTop || top + size.height + inset <= blockBottom
         // The block moves under a still pointer while the page scrolls.
         let pointer = window.map { superview.convert($0.mouseLocationOutsideOfEventStream, from: nil) }
         let pointerOn = pointer.map { block.frame.contains($0) || frame.contains($0) } ?? true

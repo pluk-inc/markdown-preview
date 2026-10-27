@@ -333,6 +333,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let top = webView.obscuredContentInsets.top
         let inWebView = NSRect(x: x * zoom, y: top + y * zoom, width: width * zoom, height: height * zoom)
         hud.show(.init(kind: kind,
+                       id: message["id"] as? Int ?? 0,
                        frame: convert(inWebView, from: webView),
                        level: message["level"] as? String ?? "100%",
                        hasPopup: message["popup"] as? Bool ?? false,
@@ -662,6 +663,11 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             ) { [weak self] _ in
                 #if !QUICK_LOOK_EXTENSION
                 self?.applyThemeColors()
+                // display() hid the glass pill; a block that survived the
+                // update under the pointer gets it back.
+                if self?.blockHUD != nil {
+                    self?.webView.evaluateJavaScript("window.mdpRefreshNativeHUD?.()") { _, _ in }
+                }
                 #endif
                 self?.contentDidReplace?()
             }

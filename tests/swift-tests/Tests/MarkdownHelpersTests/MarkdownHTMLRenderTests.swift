@@ -1318,13 +1318,18 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             window.__posted = [];
             window.mdpDiagramHUDAction('copy');
             const copied = window.__posted.find((m) => m.kind === 'copyCode');
-            const htmlHUD = getComputedStyle(figure.querySelector('.mermaid-hud')).display;
+            const htmlHUD = getComputedStyle(figure.querySelector('.mermaid-hud'));
             figure.dispatchEvent(new PointerEvent('pointerleave'));
             const left = last();
+            // The page sees the pointer leave for the host's glass; the
+            // glass's clicks still act on that figure.
+            window.mdpDiagramHUDAction('reset');
             return JSON.stringify({
                 shownVisible: shown?.visible, shownLevel: shown?.level, shownPopup: shown?.popup,
-                shownWidth: shown?.width, zoomedLevel: zoomed?.level, focused,
-                copied: copied?.value, htmlHUD, leftVisible: left?.visible
+                shownWidth: shown?.width, shownID: shown?.id, zoomedLevel: zoomed?.level, focused,
+                copied: copied?.value, htmlHUDOpacity: htmlHUD.opacity, htmlHUDDisplay: htmlHUD.display,
+                leftVisible: left?.visible,
+                levelAfterLeave: figure.querySelector('.mermaid-hud-level').textContent
             });
         })()
         """)
@@ -1337,8 +1342,12 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(state["zoomedLevel"] as? String, "125%", json)
         XCTAssertEqual(state["focused"] as? Bool, false, "a native click must not draw the figure's focus ring")
         XCTAssertEqual(state["copied"] as? String, "flowchart LR\n    A --> B", json)
-        XCTAssertEqual(state["htmlHUD"] as? String, "none", json)
+        XCTAssertNotNil(state["shownID"] as? Int, json)
+        // Unseen, but still in the page for the keyboard.
+        XCTAssertEqual(state["htmlHUDOpacity"] as? String, "0", json)
+        XCTAssertNotEqual(state["htmlHUDDisplay"] as? String, "none", json)
         XCTAssertEqual(state["leftVisible"] as? Bool, false, json)
+        XCTAssertEqual(state["levelAfterLeave"] as? String, "100%", json)
     }
 
     /// Code blocks get the same native glass HUD on hover: the page reports
@@ -1413,8 +1422,17 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                 wrappedAfter: beforeScroll?.wrapped,
                 scrolledVisible: afterScroll?.visible, scrolledBy: beforeScroll && afterScroll ? beforeScroll.y - afterScroll.y : null,
                 copied: window.__copied[0],
+                pillOpacity: getComputedStyle(actions).opacity,
                 pillVisibility: getComputedStyle(actions).visibility,
-                pillWidth: actions.getBoundingClientRect().width
+                pillWidth: actions.getBoundingClientRect().width,
+                afterLeave: (() => {
+                    // The page sees the pointer leave for the host's glass;
+                    // the glass's clicks still act on that block.
+                    document.querySelector('.md-code-wrap pre code')
+                        .dispatchEvent(new PointerEvent('pointerout', { bubbles: true }));
+                    window.mdpCodeHUDAction('wrap');
+                    return document.querySelector('.md-code-wrap').classList.contains('is-wrapped');
+                })()
             });
         })()
         """)
@@ -1428,8 +1446,11 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(state["scrolledBy"] as? Double, 100, json)
         // The same text the HTML Copy button copies.
         XCTAssertEqual(state["copied"] as? String, "let answer = 42\n", json)
-        XCTAssertEqual(state["pillVisibility"] as? String, "hidden", json)
+        // Unseen, but still in the page for the keyboard, in its place.
+        XCTAssertEqual(state["pillOpacity"] as? String, "0", json)
+        XCTAssertEqual(state["pillVisibility"] as? String, "visible", json)
         XCTAssertGreaterThan(state["pillWidth"] as? Double ?? 0, 0, "the hidden pill keeps its space")
+        XCTAssertEqual(state["afterLeave"] as? Bool, false, "Wrap after the leave unwraps the same block")
     }
 
     @MainActor

@@ -790,10 +790,14 @@ nonisolated extension MarkdownHTML {
     @media (prefers-reduced-motion: reduce) {
         .mermaid-hud { transition: none; }
     }
-    /* The app on macOS 26 draws these as native glass on hover (BlockGlassHUD);
-       the code pill keeps its space so the header does not move. */
-    :root[data-mdp-native-hud] .mermaid-hud { display: none !important; }
-    :root[data-mdp-native-hud] .md-code-actions { visibility: hidden; }
+    /* The app on macOS 26 draws these as native glass on hover
+       (BlockGlassHUD). The HTML ones stay, unseen, for the keyboard: they
+       show while keyboard focus is in them, or on their diagram. */
+    :root[data-mdp-native-hud] .mermaid-figure:not(:focus-visible):not(:has(:focus-visible)) .mermaid-hud,
+    :root[data-mdp-native-hud] .md-code-actions:not(:has(:focus-visible)) {
+        opacity: 0;
+        pointer-events: none;
+    }
     /* A diagram that cannot be drawn shows the message and its source in
        flow, so the figure sizes to the text instead of the aspect ratio. */
     .mermaid-figure.mermaid-error {
