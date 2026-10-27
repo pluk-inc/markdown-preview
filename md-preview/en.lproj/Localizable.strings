@@ -468,6 +468,7 @@
 
 /* Share links */
 "Publish to Web" = "Publish to Web";
+"Create a link anyone can use to read this document in a web browser." = "Create a link anyone can use to read this document in a web browser.";
 "Publish to Web…" = "Publish to Web…";
 "Publish" = "Publish";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it.";

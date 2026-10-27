@@ -1534,9 +1534,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         topLevelMenuItem(matching: titles)?.submenu
     }
 
-    private static let fileMenuTitles: Set<String> = ["File", "文件"]
-    private static let viewMenuTitles: Set<String> = ["View", "显示"]
-    private static let windowMenuTitles: Set<String> = ["Window", "窗口"]
+    private static let fileMenuTitles: Set<String> = ["File", "文件", "پرونده", "ファイル", "Plik"]
+    private static let viewMenuTitles: Set<String> = ["View", "显示", "نمایش", "表示", "Widok"]
+    private static let windowMenuTitles: Set<String> = ["Window", "窗口", "پنجره", "ウインドウ", "Okno"]
     private static let formatMenuTitles: Set<String> = ["Format", "格式"]
     private static let goMenuTitles: Set<String> = ["Go", "前往"]
     private static let appearanceMenuTitles: Set<String> = ["Appearance", "外观"]

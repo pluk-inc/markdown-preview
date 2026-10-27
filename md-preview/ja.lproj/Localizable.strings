@@ -468,6 +468,7 @@
 
 /* Share links */
 "Publish to Web" = "Webに公開";
+"Create a link anyone can use to read this document in a web browser." = "誰でもWebブラウザでこの書類を読めるリンクを作成します。";
 "Publish to Web…" = "Webに公開…";
 "Publish" = "公開";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "リンクを知っている人は誰でも、共有を停止するか7日後にリンクの有効期限が切れるまで、この書類を読むことができます。書類は暗号化されており、このリンクでのみ開けます。";
