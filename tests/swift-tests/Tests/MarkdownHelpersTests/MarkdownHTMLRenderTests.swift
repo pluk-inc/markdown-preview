@@ -1438,6 +1438,12 @@ final class MarkdownHTMLRenderTests: XCTestCase {
                         .dispatchEvent(new PointerEvent('pointerout', { bubbles: true }));
                     window.mdpCodeHUDAction('wrap');
                     return document.querySelector('.md-code-wrap').classList.contains('is-wrapped');
+                })(),
+                afterHidden: (() => {
+                    // Once the host's glass hides, the page lets the block go.
+                    window.mdpNativeHUDHidden();
+                    window.mdpCodeHUDAction('wrap');
+                    return document.querySelector('.md-code-wrap').classList.contains('is-wrapped');
                 })()
             });
         })()
@@ -1457,6 +1463,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(state["pillVisibility"] as? String, "visible", json)
         XCTAssertGreaterThan(state["pillWidth"] as? Double ?? 0, 0, "the hidden pill keeps its space")
         XCTAssertEqual(state["afterLeave"] as? Bool, false, "Wrap after the leave unwraps the same block")
+        XCTAssertEqual(state["afterHidden"] as? Bool, false, "Wrap after the glass hid acts on nothing")
     }
 
     @MainActor

@@ -36,6 +36,13 @@ final class BlockGlassHUD: NSView {
     var perform: ((Kind, String) -> Void)?
     /// The web view under the pill, which scrolls when the wheel turns over it.
     weak var scrollTarget: NSView?
+    /// The pill went from shown to hidden: the page stops holding on to the
+    /// block it showed.
+    var didHide: (() -> Void)?
+
+    override var isHidden: Bool {
+        didSet { if isHidden && !oldValue { didHide?() } }
+    }
 
     /// The gap from the block's top and right edges to the pill, in CSS
     /// pixels: the same on both sides, and where the page's own pills sit

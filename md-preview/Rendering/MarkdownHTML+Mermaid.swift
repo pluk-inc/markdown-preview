@@ -345,7 +345,7 @@ nonisolated extension MarkdownHTML {
                     if (diagramHUD.target?.isConnected) runHudAction(diagramHUD.target, act);
                 };
                 // A figure under the pointer that draws later gets its HUD then.
-                window.addEventListener('md-preview-mermaid-rendered', () => diagramHUD.refresh());
+                window.addEventListener('md-preview-mermaid-rendered', () => diagramHUD.refreshHovered());
             }
 
             // Text of the closest heading before the figure in document
