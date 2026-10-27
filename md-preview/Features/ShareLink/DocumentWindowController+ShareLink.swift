@@ -37,12 +37,15 @@ extension DocumentWindowController {
     /// File › Publish to Web…: the same as the Share popover row.
     @objc func publishToWeb(_ sender: Any?) {
         guard canPublishToWeb else { return }
+        invalidatePublishToWebTip()
         if isSharedByLink { showManageSharedDocument() } else { confirmAndCopyShareLink() }
     }
 
     /// The Share popover row; none when the window cannot publish.
     func shareLinkServices() -> [NSSharingService] {
         guard canPublishToWeb else { return [] }
+        // The picker is opening, so the user now sees the row the tip points to.
+        invalidatePublishToWebTip()
         // Same test as the "Shared" subtitle, so the row and the subtitle agree.
         let shared = isSharedByLink
         let title = shared ? L("Manage Shared Document…") : L("Publish to Web")
