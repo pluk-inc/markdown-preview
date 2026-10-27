@@ -321,8 +321,8 @@
 "Get an encrypted link to your document that anyone can read in a browser." = "Get an encrypted link to your document that anyone can read in a browser.";
 "Redesigned Settings" = "Redesigned Settings";
 "Settings has new tabs, and the Appearance pane shows your changes on a live sample page." = "Settings has new tabs, and the Appearance pane shows your changes on a live sample page.";
-"New buttons on code and diagrams" = "New buttons on code and diagrams";
-"Code blocks and diagrams share one set of buttons, and you can copy a diagram’s Mermaid source." = "Code blocks and diagrams share one set of buttons, and you can copy a diagram’s Mermaid source.";
+"Liquid Glass buttons on code and diagrams" = "Liquid Glass buttons on code and diagrams";
+"On macOS 26 and later, code blocks and diagrams share Liquid Glass buttons, including Copy for a diagram’s Mermaid source." = "On macOS 26 and later, code blocks and diagrams share Liquid Glass buttons, including Copy for a diagram’s Mermaid source.";
 "Switch tabs with ⌘1 to ⌘9" = "Switch tabs with ⌘1 to ⌘9";
 "Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one." = "Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one.";
 "Search keeps its place" = "Search keeps its place";

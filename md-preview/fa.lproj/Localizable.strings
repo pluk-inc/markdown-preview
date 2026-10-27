@@ -320,8 +320,8 @@
 "Get an encrypted link to your document that anyone can read in a browser." = "یک پیوند رمزگذاری‌شده به سند خود بسازید که هر کسی می‌تواند در مرورگر بخواند.";
 "Redesigned Settings" = "تنظیمات بازطراحی‌شده";
 "Settings has new tabs, and the Appearance pane shows your changes on a live sample page." = "تنظیمات زبانه‌های تازه دارد و بخش «ظاهر» تغییرات شما را روی یک صفحهٔ نمونهٔ زنده نشان می‌دهد.";
-"New buttons on code and diagrams" = "دکمه‌های تازه برای کد و نمودار";
-"Code blocks and diagrams share one set of buttons, and you can copy a diagram’s Mermaid source." = "بلوک‌های کد و نمودارها یک مجموعه دکمهٔ مشترک دارند و می‌توانید منبع Mermaid نمودار را کپی کنید.";
+"Liquid Glass buttons on code and diagrams" = "دکمه‌های Liquid Glass برای کد و نمودار";
+"On macOS 26 and later, code blocks and diagrams share Liquid Glass buttons, including Copy for a diagram’s Mermaid source." = "در macOS 26 و نسخه‌های بعدی، بلوک‌های کد و نمودارها دکمه‌های Liquid Glass مشترک دارند، از جمله کپی منبع Mermaid نمودار.";
 "Switch tabs with ⌘1 to ⌘9" = "جابه‌جایی بین زبانه‌ها با ⌘1 تا ⌘9";
 "Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one." = "برای رفتن به یک زبانه ⌘1 تا ⌘8 و برای رفتن به آخرین زبانه ⌘9 را فشار دهید.";
 "Search keeps its place" = "جستجو جای خود را حفظ می‌کند";

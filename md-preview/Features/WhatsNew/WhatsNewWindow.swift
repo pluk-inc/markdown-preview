@@ -18,7 +18,7 @@ struct WhatsNewFeature: Identifiable {
     /// The features of `WhatsNewPolicy.featuresVersion`. Features
     /// the running system cannot show are left out rather than announced.
     static var current: [WhatsNewFeature] {
-        [
+        var features = [
             WhatsNewFeature(
                 id: "publish-to-web",
                 symbol: "globe",
@@ -30,12 +30,6 @@ struct WhatsNewFeature: Identifiable {
                 symbol: "gearshape",
                 title: L("Redesigned Settings"),
                 detail: L("Settings has new tabs, and the Appearance pane shows your changes on a live sample page.")
-            ),
-            WhatsNewFeature(
-                id: "block-buttons",
-                symbol: "square.on.square",
-                title: L("New buttons on code and diagrams"),
-                detail: L("Code blocks and diagrams share one set of buttons, and you can copy a diagram’s Mermaid source.")
             ),
             WhatsNewFeature(
                 id: "tab-shortcuts",
@@ -50,6 +44,15 @@ struct WhatsNewFeature: Identifiable {
                 detail: L("Clicking in the document or the search field no longer moves to the next match.")
             ),
         ]
+        if #available(macOS 26, *) {
+            features.insert(WhatsNewFeature(
+                id: "glass-block-buttons",
+                symbol: "square.on.square",
+                title: L("Liquid Glass buttons on code and diagrams"),
+                detail: L("On macOS 26 and later, code blocks and diagrams share Liquid Glass buttons, including Copy for a diagram’s Mermaid source.")
+            ), at: 2)
+        }
+        return features
     }
 }
 

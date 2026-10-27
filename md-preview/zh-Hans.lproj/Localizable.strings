@@ -321,8 +321,8 @@
 "Get an encrypted link to your document that anyone can read in a browser." = "为文稿生成一个加密链接，任何人都可以在浏览器中阅读。";
 "Redesigned Settings" = "重新设计的设置";
 "Settings has new tabs, and the Appearance pane shows your changes on a live sample page." = "设置采用新的标签页，“外观”面板会在实时示例页面上显示你的更改。";
-"New buttons on code and diagrams" = "代码块和图表的新按钮";
-"Code blocks and diagrams share one set of buttons, and you can copy a diagram’s Mermaid source." = "代码块和图表使用同一组按钮，你还可以拷贝图表的 Mermaid 源代码。";
+"Liquid Glass buttons on code and diagrams" = "代码块和图表的 Liquid Glass 按钮";
+"On macOS 26 and later, code blocks and diagrams share Liquid Glass buttons, including Copy for a diagram’s Mermaid source." = "在 macOS 26 及更高版本中，代码块和图表共用 Liquid Glass 按钮，包括拷贝图表 Mermaid 源代码的按钮。";
 "Switch tabs with ⌘1 to ⌘9" = "使用 ⌘1 到 ⌘9 切换标签页";
 "Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one." = "按 ⌘1 到 ⌘8 前往对应的标签页，按 ⌘9 前往最后一个标签页。";
 "Search keeps its place" = "搜索会保持当前位置";
