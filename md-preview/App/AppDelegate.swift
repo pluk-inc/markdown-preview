@@ -72,7 +72,7 @@ private extension AppearanceMode {
 }
 
 @main
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemValidation {
 
     @IBOutlet private weak var checkForUpdatesMenuItem: NSMenuItem?
 
