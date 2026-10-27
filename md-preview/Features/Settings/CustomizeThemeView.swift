@@ -87,7 +87,7 @@ struct CustomizeThemeView: View {
                 } header: {
                     Text(L("Colors"))
                 } footer: {
-                    Text(model.appearance == .automatic
+                    Text(draft.appearance == .automatic
                         ? L("Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override.")
                         : L("Colors apply to the current appearance. Start with Original and choose Automatic to set Light and Dark separately."))
                 }
@@ -261,7 +261,7 @@ struct CustomizeThemeView: View {
     private func colorRow(_ title: String, slot: ThemeColorSlot) -> some View {
         LabeledContent {
             HStack(spacing: 16) {
-                switch model.appearance {
+                switch draft.appearance {
                 case .light:
                     colorWell(L("Light"), slot: slot, scheme: .light, showsLabel: false)
                 case .dark:
