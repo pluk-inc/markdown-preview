@@ -16,11 +16,11 @@
     "deploy": "wrangler deploy"
   },
   "devDependencies": {
-    "@cloudflare/vitest-plugin": "1.4.0",
-    "@cloudflare/workers-types": "5.20261008.1",
+    "@cloudflare/vitest-plugin": "1.4.8",
+    "@cloudflare/workers-types": "5.20261027.1",
     "esbuild": "0.28.2",
-    "typescript": "6.0.3",
-    "vitest": "4.1.11",
-    "wrangler": "4.149.0"
+    "typescript": "7.0.2",
+    "vitest": "5.0.5",
+    "wrangler": "4.153.0"
   }
 }
