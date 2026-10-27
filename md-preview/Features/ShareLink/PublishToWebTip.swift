@@ -56,6 +56,14 @@ extension DocumentWindowController {
         }
     }
 
+    /// A new file loaded in the window: retire the tip if the file already has
+    /// a link, or start it if the window became key before the file loaded.
+    func refreshPublishToWebTip() {
+        guard documentWindow.isKeyWindow else { return }
+        if isSharedByLink { stopPublishToWebTip() }
+        startPublishToWebTip()
+    }
+
     func stopPublishToWebTip() {
         publishTipTask?.cancel()
         publishTipTask = nil
