@@ -91,7 +91,6 @@ extension DocumentWindowController {
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         var identifiers: [NSToolbarItem.Identifier] = [
             .toggleSidebar,
-            .sidebarMenu,
             .sidebarMode,
             .sidebarTrackingSeparator,
             .navigation,
