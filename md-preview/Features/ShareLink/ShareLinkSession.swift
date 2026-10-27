@@ -174,7 +174,8 @@ enum ShareLinkSession {
         case ShareLinkClient.Failure.rateLimited:
             L("Too many links in a short time. Wait a minute, then try again.")
         case ShareLinkClient.Failure.quotaExceeded:
-            L("Sharing reached its limit for today. Try again tomorrow.")
+            String(format: L("Sharing reached its daily limit. Try again after %@."),
+                   quotaResetDate().formatted(date: .omitted, time: .shortened))
         case let error as URLError where error.code == .notConnectedToInternet:
             L("You are offline. Connect to the internet, then try again.")
         case Failure.lostCredentials(let expiresAt):
@@ -186,6 +187,13 @@ enum ShareLinkSession {
     }
 
     // MARK: - Private
+
+    /// The server's daily upload quota starts again at midnight UTC.
+    private static func quotaResetDate(now: Date = .now) -> Date {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = .gmt
+        return utc.date(byAdding: .day, value: 1, to: utc.startOfDay(for: now))!
+    }
 
     /// The link key from `secrets`. A key of the wrong length cannot seal
     /// either: it is treated as damaged.

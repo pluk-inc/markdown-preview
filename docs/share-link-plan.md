@@ -500,11 +500,14 @@ Firefox Send closed because of malware abuse. Our defences:
 - The viewer renders sanitised Markdown only; it never serves raw HTML or
   arbitrary files, so it is a poor phishing or malware host.
 - Uploads need the `MDP1` envelope — trivial to fake, so it does not stop
-  the bucket being used as a file host by itself. What does: `/shares/<id>`
-  answers only a request with the app's `Accept` header, so its URL opened in
-  a browser downloads nothing, and `/s/<id>` shows the envelope only as
-  base64 inside the page.
-- A daily upload quota across all IPs (§3) caps the bucket's size and cost.
+  the bucket being used as a file host by itself. `/shares/<id>` answers only
+  a request with the app's `Accept` header, so its URL opened in a browser
+  downloads nothing, and `/s/<id>` shows the envelope only as base64 inside
+  the page. A client that sends the header still gets the bytes: this removes
+  the one-click download a file host needs, not every way to fetch a file.
+- A daily upload quota across all IPs (§3) caps the bucket's size and so its
+  storage cost. It does not limit reads: those are R2 operations, limited
+  only per IP.
 - Report button, abuse e-mail, terms of use, privacy-policy update.
 - Option: limit link sharing to licensed users through Amore licensing. Strongest
   control; product decision.

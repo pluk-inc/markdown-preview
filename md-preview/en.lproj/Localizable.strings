@@ -485,7 +485,7 @@
 "If you stop sharing, people with the link can no longer open this document, and its copy is deleted from the server." = "If you stop sharing, people with the link can no longer open this document, and its copy is deleted from the server.";
 "This document is too large to share as a link." = "This document is too large to share as a link.";
 "Too many links in a short time. Wait a minute, then try again." = "Too many links in a short time. Wait a minute, then try again.";
-"Sharing reached its limit for today. Try again tomorrow." = "Sharing reached its limit for today. Try again tomorrow.";
+"Sharing reached its daily limit. Try again after %@." = "Sharing reached its daily limit. Try again after %@.";
 "You are offline. Connect to the internet, then try again." = "You are offline. Connect to the internet, then try again.";
 "Markdown Preview could not reach the sharing server. Try again later." = "Markdown Preview could not reach the sharing server. Try again later.";
 

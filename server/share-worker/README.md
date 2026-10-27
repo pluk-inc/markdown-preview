@@ -26,7 +26,9 @@ document with the app's own stylesheet and renderers:
 - `/s/<id>` carries the encrypted envelope at the end of the page, so a
   reader needs no second request. `/shares/<id>` still serves it to the app,
   and only to a request with `Accept: application/vnd.md-preview.envelope`:
-  opened as a link in a browser, it answers `404`, so it cannot pass files on.
+  opened as a link in a browser, it answers `404`, so a link to it downloads
+  nothing. Any client that sends the header still gets the bytes; the gate
+  only takes away the browser download that file-host abuse depends on.
 - The rendered HTML comes from whoever made the envelope, so the page
   sanitizes it with an explicit allowlist, allows only same-origin scripts
   (CSP in `src/viewer-csp.ts`), and blocks remote images. Images from the

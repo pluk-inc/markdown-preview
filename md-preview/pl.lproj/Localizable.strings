@@ -485,7 +485,7 @@
 "If you stop sharing, people with the link can no longer open this document, and its copy is deleted from the server." = "Jeśli zatrzymasz udostępnianie, osoby mające link nie będą mogły już otworzyć tego dokumentu, a jego kopia zostanie usunięta z serwera.";
 "This document is too large to share as a link." = "Ten dokument jest za duży, aby udostępnić go jako link.";
 "Too many links in a short time. Wait a minute, then try again." = "Zbyt wiele linków w krótkim czasie. Poczekaj minutę i spróbuj ponownie.";
-"Sharing reached its limit for today. Try again tomorrow." = "Udostępnianie osiągnęło dzisiejszy limit. Spróbuj ponownie jutro.";
+"Sharing reached its daily limit. Try again after %@." = "Udostępnianie osiągnęło dzienny limit. Spróbuj ponownie po %@.";
 "You are offline. Connect to the internet, then try again." = "Jesteś offline. Połącz się z internetem i spróbuj ponownie.";
 "Markdown Preview could not reach the sharing server. Try again later." = "Markdown Preview nie może połączyć się z serwerem udostępniania. Spróbuj ponownie później.";
 

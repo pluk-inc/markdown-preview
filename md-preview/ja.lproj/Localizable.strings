@@ -485,7 +485,7 @@
 "If you stop sharing, people with the link can no longer open this document, and its copy is deleted from the server." = "共有を停止すると、リンクを知っている人はこの書類を開けなくなり、サーバ上のコピーは削除されます。";
 "This document is too large to share as a link." = "この書類は大きすぎるため、リンクで共有できません。";
 "Too many links in a short time. Wait a minute, then try again." = "短時間に作成されたリンクが多すぎます。1分ほど待ってから、もう一度お試しください。";
-"Sharing reached its limit for today. Try again tomorrow." = "共有は今日の上限に達しました。明日もう一度お試しください。";
+"Sharing reached its daily limit. Try again after %@." = "共有は1日の上限に達しました。%@ 以降にもう一度お試しください。";
 "You are offline. Connect to the internet, then try again." = "オフラインです。インターネットに接続してから、もう一度お試しください。";
 "Markdown Preview could not reach the sharing server. Try again later." = "Markdown Preview は共有サーバに接続できませんでした。しばらくしてからもう一度お試しください。";
 
