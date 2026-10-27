@@ -9,7 +9,6 @@
 "Appearance also applies to Quick Look previews." = "Appearance also applies to Quick Look previews.";
 "Layout" = "Layout";
 "Text size" = "Text size";
-"Size of rendered Markdown in document windows." = "Size of rendered Markdown in document windows.";
 "Small" = "Small";
 "Medium" = "Medium";
 "Large" = "Large";
@@ -17,8 +16,6 @@
 "Zooming a document window with ⌘+ and ⌘− changes this same size." = "Zooming a document window with ⌘+ and ⌘− changes this same size.";
 "Editing" = "Editing";
 "Automatic saving" = "Automatic saving";
-"Save edited documents periodically." = "Save edited documents periodically.";
-"Automatic saving runs while a document has unsaved edits." = "Automatic saving runs while a document has unsaved edits.";
 "Instant" = "Instant";
 "30 seconds" = "30 seconds";
 "1 minute" = "1 minute";
@@ -26,12 +23,10 @@
 "Hand-off" = "Hand-off";
 "Open documents in" = "Open documents in";
 "AI apps" = "AI apps";
-"The app the Open button in the document toolbar uses first. Its menu still offers every other installed app." = "The app the Open button in the document toolbar uses first. Its menu still offers every other installed app.";
 "Command line tools" = "Command line tools";
 "Install…" = "Install…";
 "Adds mdp, md-preview, and markdown-preview to your PATH. Run it again after updating the app to refresh the commands." = "Adds mdp, md-preview, and markdown-preview to your PATH. Run it again after updating the app to refresh the commands.";
 "Markdown Preview" = "Markdown Preview";
-"Version %@ (%@)" = "Version %@ (%@)";
 "Check for Updates" = "Check for Updates";
 "Automatically check for updates" = "Automatically check for updates";
 "Automatically download updates" = "Automatically download updates";
@@ -55,10 +50,8 @@
 "Solarized Dark" = "Solarized Dark";
 "Dracula" = "Dracula";
 "Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override.";
-"Custom colors" = "Custom colors";
 "Reset Colors" = "Reset Colors";
 "Restores the default Normal theme." = "Restores the default Normal theme.";
-"Current theme: %@" = "Current theme: %@";
 "Send anonymous crash reports" = "Send anonymous crash reports";
 "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information.";
 "Share anonymous usage analytics" = "Share anonymous usage analytics";
@@ -307,9 +300,7 @@
 
 /* Settings — Windows */
 "Windows" = "Windows";
-"Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out.";
 "Open documents in tabs" = "Open documents in tabs";
-"A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window.";
 
 /* Search for Document */
 "Search for Document…" = "Search for Document…";
@@ -338,7 +329,6 @@
 
 /* Reading preferences */
 "Strict line breaks" = "Strict line breaks";
-"Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews.";
 
 /* App link approvals */
 "Reset App Link Approvals" = "Reset App Link Approvals";
@@ -354,23 +344,14 @@
 /* App language */
 "Language" = "Language";
 "System Default" = "System Default";
-"Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews." = "Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews.";
 "Restart Markdown Preview to change the language?" = "Restart Markdown Preview to change the language?";
 "The new language applies to menus, settings, and document controls after the app restarts. Quick Look previews keep their system language." = "The new language applies to menus, settings, and document controls after the app restarts. Quick Look previews keep their system language.";
 "Restart Now" = "Restart Now";
 "Later" = "Later";
 
 /* Settings organization */
-"Saving" = "Saving";
-"External apps & tools" = "External apps & tools";
-"Text & layout" = "Text & layout";
 "Markdown" = "Markdown";
 "Outline" = "Outline";
-"Customize the selected theme’s font, spacing and colors. Reset restores that theme’s defaults; global Reading preferences stay unchanged." = "Customize the selected theme’s font, spacing and colors. Reset restores that theme’s defaults; global Reading preferences stay unchanged.";
-"Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window." = "Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window.";
-"Customize…" = "Customize…";
-"Each theme remembers its colors, font and layout. Original also remembers your appearance choice. Reset restores the selected theme’s defaults." = "Each theme remembers its colors, font and layout. Original also remembers your appearance choice. Reset restores the selected theme’s defaults.";
-"Fonts, spacing and colors" = "Fonts, spacing and colors";
 "Highlight outline section under the pointer" = "Highlight outline section under the pointer";
 "Open Markdown links in new windows" = "Open Markdown links in new windows";
 "Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings." = "Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings.";
@@ -383,7 +364,6 @@
 "Center" = "Center";
 "Right" = "Right";
 "Justified" = "Justified";
-"Alignment applies to prose in reading view and Quick Look. Automatic follows the document. Code, tables and explicit HTML alignment are preserved." = "Alignment applies to prose in reading view and Quick Look. Automatic follows the document. Code, tables and explicit HTML alignment are preserved.";
 
 /* Paper print scale, applied before pagination. */
 "Scale:" = "Scale:";
@@ -395,6 +375,19 @@
 
 /* Additional settings, navigation, formatting, and export strings. */
 "GitHub Project" = "GitHub Project";
+"Version" = "Version";
+"Spacing" = "Spacing";
+"Updates" = "Updates";
+"%@:" = "%@:";
+"Advanced" = "Advanced";
+"Opening files" = "Opening files";
+"Takes effect after you reopen Markdown Preview." = "Takes effect after you reopen Markdown Preview.";
+"Turn this off to keep every line break as written." = "Turn this off to keep every line break as written.";
+"Crash reports" = "Crash reports";
+"Analytics" = "Analytics";
+"Contains technical details, not document contents." = "Contains technical details, not document contents.";
+"At most one event a day, to count active installations." = "At most one event a day, to count active installations.";
+"Details" = "Details";
 "Discord Community" = "Discord Community";
 "Buy Me a Coffee" = "Buy Me a Coffee";
 "Close" = "Close";

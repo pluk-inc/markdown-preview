@@ -177,6 +177,33 @@ final class SettingsModel {
     /// reader onto the default one.
     private(set) var appliedPreset = ThemePreset.applied()
 
+    /// Everything a theme reset or the Customize Theme sheet changes at once.
+    struct ReadingLook: Equatable {
+        var readerLayout: ReaderLayoutSetting
+        var documentFont: DocumentFontSetting
+        var themeColors: ThemeColorsSetting
+        var appearance: AppearanceMode
+    }
+
+    var readingLook: ReadingLook {
+        ReadingLook(readerLayout: readerLayout, documentFont: documentFont,
+                    themeColors: themeColors, appearance: appearance)
+    }
+
+    /// The applied theme's own look: what Reset Theme returns to, in both
+    /// the Appearance pane and the Customize Theme sheet.
+    var appliedPresetLook: ReadingLook {
+        ReadingLook(readerLayout: ReaderLayoutSetting(boldText: appliedPreset.boldText),
+                    documentFont: appliedPreset.font,
+                    themeColors: appliedPreset.setting,
+                    appearance: appliedPreset.requiredAppearance ?? .automatic)
+    }
+
+    func applyReadingLook(_ look: ReadingLook) {
+        applyReadingLook(themeColors: look.themeColors, documentFont: look.documentFont,
+                         readerLayout: look.readerLayout, appearance: look.appearance)
+    }
+
     /// Applies a whole reading look at once — what the Customize Theme sheet
     /// hands over when the reader saves. Coalesced, so the open documents
     /// update once rather than once per dimension.

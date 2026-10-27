@@ -2,10 +2,9 @@
 //  SettingsWindowController.swift
 //  md-preview
 //
-//  The Settings window. AppKit owns the window, toolbar, and split view; each
-//  pane is a SwiftUI `Form(.grouped)` in a hosting controller, which is what
-//  draws the inset grouped cards System Settings uses. Built to match the
-//  Settings window in the Pluk app so both stay recognisably the same.
+//  The Settings window, laid out like Safari's and Xcode's: toolbar tabs with
+//  a symbol and a name, and a window that changes height to fit each pane.
+//  Each pane is a SwiftUI form in a hosting controller.
 //
 
 import Cocoa
@@ -13,84 +12,36 @@ import SwiftUI
 
 // MARK: - Panes
 
-enum SettingsPane: String, CaseIterable, Identifiable {
+enum SettingsPane: String, CaseIterable {
     case general = "General"
     case reading = "Reading"
     case theme = "Appearance"
     case privacy = "Privacy"
+    case advanced = "Advanced"
     case about = "About"
-
-    var id: String { rawValue }
 
     var title: String { NSLocalizedString(rawValue, comment: "Settings pane") }
 
-    /// Development-time exports of the icons rendered by each registered
-    /// System Settings extension. They are bundled so the sandboxed app never
-    /// needs to call private IconServices at runtime. Panes without an export
-    /// (Reading and Appearance) draw an equivalent tile in SwiftUI instead.
-    var iconAssetName: String? {
+    var symbolName: String {
         switch self {
-        case .general: "SettingsGeneral"
-        case .reading, .theme: nil
-        case .privacy: "SettingsPrivacy"
-        case .about: "SettingsAbout"
+        case .general: "gearshape"
+        case .reading: "book"
+        case .theme: "paintpalette"
+        case .privacy: "hand.raised"
+        case .advanced: "gearshape.2"
+        case .about: "info.circle"
         }
     }
-}
 
-/// IconServices returns a 24-point image canvas around a 20-point tile so its
-/// native shadow is not clipped. Keep the 20-point layout slot used by `Label`,
-/// while allowing the transparent canvas to extend two points on each side.
-struct SettingsPaneIcon: View {
-    let pane: SettingsPane
-
-    var body: some View {
-        Group {
-            if let assetName = pane.iconAssetName {
-                Image(assetName)
-                    .renderingMode(.original)
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 24, height: 24)
-            } else {
-                generatedTile
-                    .frame(width: 24, height: 24)
-            }
-        }
-        .frame(width: 20, height: 20)
-    }
-
-    /// Match the sidebar tile geometry for panes without bundled icons.
-    private var generatedTile: some View {
-        SettingsIconTile(size: 20, fill: LinearGradient(
-            colors: [
-                pane == .reading ? Color(red: 0.2, green: 0.55, blue: 0.95) : Color(red: 0.25, green: 0.25, blue: 0.27),
-                pane == .reading ? Color(red: 0.05, green: 0.3, blue: 0.75) : Color(red: 0.05, green: 0.05, blue: 0.06)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )) {
-            Image(systemName: pane == .reading ? "book.closed.fill" : "circle.lefthalf.filled")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white)
-        }
-    }
-}
-
-/// The rounded, shadowed tile behind a settings icon. The corner radius
-/// scales with the 20-point sidebar tile.
-struct SettingsIconTile<Fill: ShapeStyle, Content: View>: View {
-    let size: CGFloat
-    let fill: Fill
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
-                .fill(fill)
-                .frame(width: size, height: size)
-                .shadow(color: .black.opacity(0.22), radius: 0.6, y: 0.6)
-            content
+    @MainActor @ViewBuilder
+    var content: some View {
+        switch self {
+        case .general: GeneralSettingsView()
+        case .reading: ReadingSettingsView()
+        case .theme: ThemeSettingsView()
+        case .privacy: PrivacySettingsView()
+        case .advanced: AdvancedSettingsView()
+        case .about: AboutSettingsView()
         }
     }
 }
@@ -98,61 +49,24 @@ struct SettingsIconTile<Fill: ShapeStyle, Content: View>: View {
 // MARK: - Window Controller
 
 @MainActor
-final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
+final class SettingsWindowController: NSWindowController {
 
-    private var splitViewController: SettingsSplitViewController?
-    private var navigationHistory = SettingsNavigationHistory()
-
-    // Wide enough that the three appearance thumbnails and their labels fit
-    // beside the "Appearance" label without clipping at the minimum size.
-    private static let defaultWindowSize = NSSize(width: 800, height: 580)
-    private static let minimumWindowSize = NSSize(width: 720, height: 500)
-    private static let windowFrameAutosaveName = "MarkdownPreviewSettingsWindowFrame"
-    private static let backForwardIdentifier = NSToolbarItem.Identifier("backForward")
+    private let tabViewController = SettingsTabViewController()
 
     init() {
         let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: Self.defaultWindowSize),
-            styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .miniaturizable],
+            contentRect: .zero,
+            styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
-        window.title = SettingsPane.general.title
-        window.titleVisibility = .visible
-        window.toolbarStyle = .automatic
-        // Opaque, like System Settings: scrolled pane content passes
-        // beneath the solid titlebar and the automatic separator appears.
-        // A transparent titlebar let content collide with the window title,
-        // and no public mechanism frosts an AppKit-hosted SwiftUI form.
-        window.titlebarAppearsTransparent = false
-        window.titlebarSeparatorStyle = .automatic
-        window.contentMinSize = Self.minimumWindowSize
+        window.toolbarStyle = .preference
         window.isReleasedWhenClosed = false
-
         super.init(window: window)
 
-        let toolbar = NSToolbar(identifier: "MarkdownPreviewSettingsToolbar")
-        toolbar.delegate = self
-        toolbar.displayMode = .iconOnly
-        toolbar.allowsUserCustomization = false
-        window.toolbar = toolbar
-
-
-        restoreWindowFrame(window)
-
-        let splitVC = SettingsSplitViewController { [weak self] pane, isUserSelection in
-            guard let self else { return }
-            self.window?.title = pane.title
-            if isUserSelection {
-                self.navigationHistory.push(pane)
-            }
-            self.updateToolbarButtons()
-        }
-        splitViewController = splitVC
-        window.contentViewController = splitVC
-
-        navigationHistory.push(.general)
-        updateToolbarButtons()
+        window.contentViewController = tabViewController
+        window.center()
+        window.setFrameAutosaveName("MarkdownPreviewSettingsWindowFrame")
     }
 
     @available(*, unavailable)
@@ -160,26 +74,12 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         fatalError("init(coder:) has not been implemented")
     }
 
-    private func restoreWindowFrame(_ window: NSWindow) {
-        let restored = window.setFrameUsingName(Self.windowFrameAutosaveName)
-        window.setFrameAutosaveName(Self.windowFrameAutosaveName)
-        guard !restored else { return }
-        window.setContentSize(Self.defaultWindowSize)
-        window.center()
-    }
-
     func show() {
         // The controller is cached for the app's lifetime, so without this
         // a reopened window would resume on whatever pane was last visited.
         // Fresh opens always start on General.
         if window?.isVisible != true {
-            splitViewController?.navigate(to: .general)
-            // The visible pane resets, so the back/forward history must
-            // reset with it — stale history made Back jump into the
-            // previous session's panes.
-            navigationHistory = SettingsNavigationHistory()
-            navigationHistory.push(.general)
-            updateToolbarButtons()
+            tabViewController.select(.general)
         }
         applyWindowLevel()
         showWindow(nil)
@@ -199,118 +99,48 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     func show(pane: SettingsPane) {
         // After show(), which resets a fresh window to General.
         show()
-        splitViewController?.navigate(to: pane)
-    }
-
-    // MARK: - Back / forward
-
-    private func updateToolbarButtons() {
-        for item in window?.toolbar?.items ?? [] {
-            guard item.itemIdentifier == Self.backForwardIdentifier,
-                  let segmented = item.view as? NSSegmentedControl else { continue }
-            segmented.setEnabled(navigationHistory.canGoBack, forSegment: 0)
-            segmented.setEnabled(navigationHistory.canGoForward, forSegment: 1)
-        }
-    }
-
-    @objc private func backForwardAction(_ sender: NSSegmentedControl) {
-        let pane = sender.selectedSegment == 0
-            ? navigationHistory.goBack()
-            : navigationHistory.goForward()
-        guard let pane else { return }
-        splitViewController?.navigate(to: pane)
-        window?.title = pane.title
-        updateToolbarButtons()
-    }
-
-    // MARK: - NSToolbarDelegate
-
-    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.sidebarTrackingSeparator, Self.backForwardIdentifier, .flexibleSpace]
-    }
-
-    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        toolbarDefaultItemIdentifiers(toolbar)
-    }
-
-    func toolbar(_ toolbar: NSToolbar,
-                 itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
-                 willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
-        guard itemIdentifier == Self.backForwardIdentifier else { return nil }
-
-        let item = NSToolbarItem(itemIdentifier: itemIdentifier)
-        item.isNavigational = true
-
-        let segmented = NSSegmentedControl()
-        segmented.segmentStyle = .automatic
-        segmented.trackingMode = .momentary
-        segmented.segmentCount = 2
-        segmented.controlSize = .small
-        segmented.setImage(
-            NSImage(systemSymbolName: "chevron.left",
-                    accessibilityDescription: NSLocalizedString("Back", comment: "Settings navigation"))?
-                .withSymbolConfiguration(.init(pointSize: 11, weight: .medium)),
-            forSegment: 0
-        )
-        segmented.setImage(
-            NSImage(systemSymbolName: "chevron.right",
-                    accessibilityDescription: NSLocalizedString("Forward", comment: "Settings navigation"))?
-                .withSymbolConfiguration(.init(pointSize: 11, weight: .medium)),
-            forSegment: 1
-        )
-        segmented.setWidth(24, forSegment: 0)
-        segmented.setWidth(24, forSegment: 1)
-        segmented.setEnabled(false, forSegment: 0)
-        segmented.setEnabled(false, forSegment: 1)
-        segmented.target = self
-        segmented.action = #selector(backForwardAction(_:))
-
-        item.view = segmented
-        return item
+        tabViewController.select(pane)
     }
 }
 
-// MARK: - Navigation history
+// MARK: - Tabs
 
-@MainActor
-final class SettingsNavigationHistory {
-    private var history: [SettingsPane] = []
-    private var currentIndex = -1
+/// Toolbar tabs, sized the way Safari's are: NSTabViewController animates
+/// the window to the selected pane's preferredContentSize on every switch.
+/// Each pane's size is set here from its SwiftUI measurement, never by the
+/// hosting controller itself, so it cannot change in the middle of a switch.
+final class SettingsTabViewController: NSTabViewController {
 
-    var canGoBack: Bool { currentIndex > 0 }
-    var canGoForward: Bool { currentIndex < history.count - 1 }
-
-    func push(_ pane: SettingsPane) {
-        if history.indices.contains(currentIndex), history[currentIndex] == pane { return }
-        if currentIndex < history.count - 1 {
-            history.removeLast(history.count - currentIndex - 1)
-        }
-        history.append(pane)
-        currentIndex = history.count - 1
-    }
-
-    func goBack() -> SettingsPane? {
-        guard canGoBack else { return nil }
-        currentIndex -= 1
-        return history[currentIndex]
-    }
-
-    func goForward() -> SettingsPane? {
-        guard canGoForward else { return nil }
-        currentIndex += 1
-        return history[currentIndex]
-    }
-}
-
-// MARK: - Split view
-
-final class SettingsSplitViewController: NSSplitViewController {
-
-    private let sidebarViewModel = SettingsSidebarViewModel()
-
-    init(onPaneChange: @escaping (SettingsPane, Bool) -> Void) {
+    init() {
         super.init(nibName: nil, bundle: nil)
-        sidebarViewModel.setOnPaneChange(onPaneChange)
+        tabStyle = .toolbar
+        transitionOptions = [.allowUserInteraction]
+        for pane in SettingsPane.allCases {
+            let host = NSHostingController(rootView: AnyView(EmptyView()))
+            host.rootView = AnyView(pane.content
+                .padding(.horizontal, 30)
+                .padding(.vertical, 24)
+                .frame(width: settingsPaneWidth)
+                .fixedSize(horizontal: false, vertical: true)
+                // Picked up on the next switch to this pane; resizing the
+                // window under an open pane would make its content jump.
+                .onGeometryChange(for: CGSize.self) { $0.size } action: { [weak host] size in
+                    host?.preferredContentSize = size
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top))
+            // The hosting controller and view must not size anything
+            // themselves: the view's minimum-size constraint would hold it at
+            // the new pane's full height while the window is still animating.
+            host.sizingOptions = []
+            (host.view as? NSHostingView<AnyView>)?.sizingOptions = []
+            host.title = pane.title
+            host.preferredContentSize = host.sizeThatFits(
+                in: CGSize(width: settingsPaneWidth, height: .greatestFiniteMagnitude))
+            let item = NSTabViewItem(viewController: host)
+            item.label = pane.title
+            item.image = NSImage(systemSymbolName: pane.symbolName, accessibilityDescription: nil)
+            addTabViewItem(item)
+        }
     }
 
     @available(*, unavailable)
@@ -318,81 +148,20 @@ final class SettingsSplitViewController: NSSplitViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override func viewDidLoad() {
-        super.viewDidLoad()
-
-        let sidebarItem = NSSplitViewItem(sidebarWithViewController: NSHostingController(
-            rootView: SettingsSidebarView(viewModel: sidebarViewModel)
-        ))
-        sidebarItem.canCollapse = false
-        sidebarItem.minimumThickness = 190
-        sidebarItem.maximumThickness = 190
-        addSplitViewItem(sidebarItem)
-
-        let detailItem = NSSplitViewItem(viewController: NSHostingController(
-            rootView: SettingsDetailView(viewModel: sidebarViewModel)
-        ))
-        detailItem.minimumThickness = 420
-        addSplitViewItem(detailItem)
+    override func tabView(_ tabView: NSTabView, didSelect tabViewItem: NSTabViewItem?) {
+        super.tabView(tabView, didSelect: tabViewItem)
+        view.window?.title = tabViewItem?.label ?? ""
     }
 
-    func navigate(to pane: SettingsPane) {
-        sidebarViewModel.selectPane(pane, isUserSelection: false)
-    }
-}
-
-// MARK: - Sidebar
-
-@Observable
-@MainActor
-final class SettingsSidebarViewModel {
-    var selectedPane: SettingsPane = .general
-
-    private var onPaneChange: ((SettingsPane, Bool) -> Void)?
-
-    func setOnPaneChange(_ handler: ((SettingsPane, Bool) -> Void)?) {
-        onPaneChange = handler
+    override func viewWillAppear() {
+        super.viewWillAppear()
+        view.window?.title = tabViewItems[selectedTabViewItemIndex].label
     }
 
-    func selectPane(_ pane: SettingsPane, isUserSelection: Bool) {
-        selectedPane = pane
-        onPaneChange?(pane, isUserSelection)
-    }
-}
+    /// A pane's size changing while it is open waits for the next switch.
+    override func preferredContentSizeDidChange(for viewController: NSViewController) {}
 
-struct SettingsSidebarView: View {
-    @Bindable var viewModel: SettingsSidebarViewModel
-
-    var body: some View {
-        List(SettingsPane.allCases, selection: Binding(
-            get: { viewModel.selectedPane },
-            set: { newValue in
-                guard let newValue else { return }
-                viewModel.selectPane(newValue, isUserSelection: true)
-            }
-        )) { pane in
-            Label {
-                Text(pane.title)
-            } icon: {
-                SettingsPaneIcon(pane: pane)
-                    .offset(x: -2)
-            }
-            .tag(pane)
-        }
-        .listStyle(.sidebar)
-    }
-}
-
-struct SettingsDetailView: View {
-    var viewModel: SettingsSidebarViewModel
-
-    var body: some View {
-        switch viewModel.selectedPane {
-        case .general: GeneralSettingsView()
-        case .reading: ReadingSettingsView()
-        case .theme: ThemeSettingsView()
-        case .privacy: PrivacySettingsView()
-        case .about: AboutSettingsView()
-        }
+    func select(_ pane: SettingsPane) {
+        selectedTabViewItemIndex = SettingsPane.allCases.firstIndex(of: pane) ?? 0
     }
 }

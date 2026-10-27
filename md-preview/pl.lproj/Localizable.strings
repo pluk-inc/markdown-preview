@@ -9,7 +9,6 @@
 "Appearance also applies to Quick Look previews." = "Wygląd jest stosowany także w Szybkim przeglądzie.";
 "Layout" = "Układ";
 "Text size" = "Wielkość tekstu";
-"Size of rendered Markdown in document windows." = "Wielkość tekstu Markdown wyświetlanego w oknach dokumentów.";
 "Small" = "Mała";
 "Medium" = "Średnia";
 "Large" = "Duża";
@@ -17,8 +16,6 @@
 "Zooming a document window with ⌘+ and ⌘− changes this same size." = "Przybliżanie i oddalanie widoku w oknie dokumentu za pomocą ⌘+ i ⌘− zmienia tę samą wielkość tekstu.";
 "Editing" = "Edycja";
 "Automatic saving" = "Automatyczne zachowywanie";
-"Save edited documents periodically." = "Zachowuj edytowane dokumenty w regularnych odstępach czasu.";
-"Automatic saving runs while a document has unsaved edits." = "Automatyczne zachowywanie działa, gdy dokument zawiera niezachowane zmiany.";
 "Instant" = "Natychmiast";
 "30 seconds" = "30 sekund";
 "1 minute" = "1 minuta";
@@ -26,12 +23,10 @@
 "Hand-off" = "Przekazywanie";
 "Open documents in" = "Otwieraj dokumenty w";
 "AI apps" = "Aplikacje AI";
-"The app the Open button in the document toolbar uses first. Its menu still offers every other installed app." = "Aplikacja domyślnie używana przez przycisk Otwórz na pasku narzędzi dokumentu. Menu tego przycisku nadal zawiera wszystkie pozostałe zainstalowane aplikacje.";
 "Command line tools" = "Narzędzia wiersza poleceń";
 "Install…" = "Zainstaluj…";
 "Adds mdp, md-preview, and markdown-preview to your PATH. Run it again after updating the app to refresh the commands." = "Dodaje polecenia mdp, md-preview i markdown-preview do ścieżki PATH. Po uaktualnieniu aplikacji uruchom instalację ponownie, aby uaktualnić polecenia.";
 "Markdown Preview" = "Markdown Preview";
-"Version %@ (%@)" = "Wersja %@ (%@)";
 "Check for Updates" = "Sprawdź uaktualnienia";
 "Automatically check for updates" = "Sprawdzaj uaktualnienia automatycznie";
 "Automatically download updates" = "Pobieraj uaktualnienia automatycznie";
@@ -55,10 +50,8 @@
 "Solarized Dark" = "Solarized ciemny";
 "Dracula" = "Dracula";
 "Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "Każdy kolor ma osobną wartość dla jasnego i ciemnego wyglądu. Wybranie koloru domyślnego usuwa własne ustawienie.";
-"Custom colors" = "Własne kolory";
 "Reset Colors" = "Wyzeruj kolory";
 "Restores the default Normal theme." = "Przywraca domyślny motyw Standardowy.";
-"Current theme: %@" = "Bieżący motyw: %@";
 "Send anonymous crash reports" = "Wysyłaj anonimowe raporty o awariach";
 "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "Raporty o awariach zawierają dane diagnostyczne, takie jak ślady stosu oraz wersje systemu i aplikacji. Mogą zawierać techniczne ścieżki do plików; Markdown Preview nie dołącza celowo treści dokumentów ani danych osobowych.";
 "Share anonymous usage analytics" = "Udostępniaj anonimowe dane o użyciu";
@@ -308,9 +301,7 @@
 
 /* Settings — Windows */
 "Windows" = "Okna";
-"Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "Utrzymuje wszystkie okna Markdown Preview przed oknami innych aplikacji, także te otwarte później. Nie dotyczy okien w trybie pełnoekranowym do czasu opuszczenia tego trybu.";
 "Open documents in tabs" = "Otwieraj dokumenty w kartach";
-"A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "Plik otwierany z Findera jest dodawany jako karta do okna na pierwszym planie, zamiast otwierać się we własnym oknie. Polecenie Otwórz w nowym oknie nadal otwiera osobne okno.";
 
 /* Search for Document */
 "Search for Document…" = "Szukaj dokumentu…";
@@ -339,7 +330,6 @@
 
 /* Reading preferences */
 "Strict line breaks" = "Ścisłe reguły podziału wierszy";
-"Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "Łącz zwykłe wiersze źródłowe w ciągłe akapity. Wyłącz tę opcję, aby zachować każdy podział wiersza. Dotyczy widoku czytania i Szybkiego przeglądu.";
 
 /* App link approvals */
 "Reset App Link Approvals" = "Wyzeruj zgody na otwieranie łączy aplikacji";
@@ -355,23 +345,14 @@
 /* App language */
 "Language" = "Język";
 "System Default" = "Domyślny systemowy";
-"Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews." = "Zakończ i ponownie otwórz Markdown Preview, aby zastosować zmianę języka. To ustawienie dotyczy tylko aplikacji, a nie Szybkiego przeglądu.";
 "Restart Markdown Preview to change the language?" = "Czy uruchomić ponownie Markdown Preview, aby zmienić język?";
 "The new language applies to menus, settings, and document controls after the app restarts. Quick Look previews keep their system language." = "Nowy język zostanie zastosowany w menu, ustawieniach i elementach sterujących dokumentów po ponownym uruchomieniu aplikacji. Szybki przegląd nadal będzie używać języka systemowego.";
 "Restart Now" = "Uruchom ponownie teraz";
 "Later" = "Później";
 
 /* Settings organization */
-"Saving" = "Zachowywanie";
-"External apps & tools" = "Zewnętrzne aplikacje i narzędzia";
-"Text & layout" = "Tekst i układ";
 "Markdown" = "Markdown";
 "Outline" = "Konspekt";
-"Customize the selected theme’s font, spacing and colors. Reset restores that theme’s defaults; global Reading preferences stay unchanged." = "Dostosuj czcionkę, odstępy i kolory wybranego motywu. Wyzerowanie przywraca domyślne ustawienia tego motywu; ogólne ustawienia czytania pozostają bez zmian.";
-"Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window." = "Kliknięcie łącza do innego pliku Markdown otwiera go w osobnym oknie. Wyłącz tę opcję, aby otwierać go w bieżącym oknie.";
-"Customize…" = "Dostosuj…";
-"Each theme remembers its colors, font and layout. Original also remembers your appearance choice. Reset restores the selected theme’s defaults." = "Każdy motyw zapamiętuje swoje kolory, czcionkę i układ. Motyw Oryginalny zapamiętuje także wybrany wygląd. Wyzerowanie przywraca domyślne ustawienia wybranego motywu.";
-"Fonts, spacing and colors" = "Czcionki, odstępy i kolory";
 "Highlight outline section under the pointer" = "Wyróżniaj sekcję konspektu pod wskaźnikiem";
 "Open Markdown links in new windows" = "Otwieraj łącza do plików Markdown w nowych oknach";
 "Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings." = "Wielkość tekstu jest stosowana także w Szybkim przeglądzie. Zmienia ją również przybliżanie i oddalanie widoku w oknie dokumentu za pomocą ⌘+ i ⌘−. Czcionki i układ czytania znajdziesz w ustawieniach wyglądu.";
@@ -384,7 +365,6 @@
 "Center" = "Do środka";
 "Right" = "Do prawej";
 "Justified" = "Wyjustowany";
-"Alignment applies to prose in reading view and Quick Look. Automatic follows the document. Code, tables and explicit HTML alignment are preserved." = "Wyrównanie dotyczy zwykłego tekstu w widoku czytania i Szybkim przeglądzie. Wyrównanie automatyczne jest zgodne z dokumentem. Kod, tabele i wyrównanie określone bezpośrednio w HTML pozostają bez zmian.";
 
 /* Paper print scale, applied before pagination. */
 "Scale:" = "Skala:";
@@ -395,6 +375,19 @@
 
 /* Additional settings, navigation, formatting, and export strings. */
 "GitHub Project" = "Projekt w GitHub";
+"Version" = "Wersja";
+"Spacing" = "Odstępy";
+"Updates" = "Aktualizacje";
+"%@:" = "%@:";
+"Advanced" = "Zaawansowane";
+"Opening files" = "Otwieranie plików";
+"Takes effect after you reopen Markdown Preview." = "Zmiana zadziała po ponownym otwarciu Markdown Preview.";
+"Turn this off to keep every line break as written." = "Wyłącz, aby zachować każde złamanie wiersza tak, jak zostało zapisane.";
+"Crash reports" = "Raporty o awariach";
+"Analytics" = "Analityka";
+"Contains technical details, not document contents." = "Zawiera szczegóły techniczne, a nie treść dokumentów.";
+"At most one event a day, to count active installations." = "Najwyżej jedno zdarzenie dziennie, aby policzyć aktywne instalacje.";
+"Details" = "Szczegóły";
 "Discord Community" = "Społeczność na Discordzie";
 "Buy Me a Coffee" = "Buy Me a Coffee";
 "Close" = "Zamknij";

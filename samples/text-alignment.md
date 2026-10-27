@@ -1,6 +1,6 @@
 # Text alignment
 
-Use **Settings → Reading → Text & layout → Text alignment** to try Automatic, Left, Center, Right, and Justified. Automatic keeps the existing document alignment. This sample includes paragraphs, quotes, lists, right-to-left text, code, tables, and explicit HTML alignment.
+Use **Settings → Reading → Text alignment** to try Automatic, Left, Center, Right, and Justified. Automatic keeps the existing document alignment. This sample includes paragraphs, quotes, lists, right-to-left text, code, tables, and explicit HTML alignment.
 
 A long paragraph makes justification easier to inspect. With Justified selected, the words should extend to both edges of the text column, while the final line stays naturally aligned. Resize the window or change Content width to compare a narrow reading column with a wider page. Changing alignment should update this document immediately, without changing its Markdown source or the formatting of code and tables.
 

@@ -12,46 +12,41 @@ struct GeneralSettingsView: View {
     @AppStorage("MarkdownPreview.coffeeRowClosed") private var coffeeRowClosed = false
 
     var body: some View {
-        Form {
+        VStack(spacing: 18) {
             if !coffeeRowClosed {
-                BuyMeACoffeeSection { coffeeRowClosed = true }
+                BuyMeACoffeeCard { coffeeRowClosed = true }
             }
 
-            Section {
-                Picker(L("Language"), selection: $model.appLanguage) {
-                    Text(L("System Default")).tag(AppLanguageSetting.systemDefault)
-                    ForEach(AppLanguageSetting.availableLanguages(), id: \.self) { language in
-                        Text(verbatim: AppLanguageSetting.displayName(for: language)).tag(language)
+            Form {
+                Section {
+                    Picker(columnLabel("Language"), selection: $model.appLanguage) {
+                        Text(L("System Default")).tag(AppLanguageSetting.systemDefault)
+                        ForEach(AppLanguageSetting.availableLanguages(), id: \.self) { language in
+                            Text(verbatim: AppLanguageSetting.displayName(for: language)).tag(language)
+                        }
                     }
-                }
-            } header: {
-                Text(L("Language"))
-            } footer: {
-                Text(L("Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews."))
-            }
-
-            Section {
-                Toggle(isOn: $model.isAlwaysOnTop) {
-                    Text(L("Always on Top"))
-                    Text(L("Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out."))
+                    .fixedSize()
+                    SettingsCaption(L("Takes effect after you reopen Markdown Preview."))
+                        .settingsGroupGap()
                 }
 
-                Toggle(isOn: $model.opensMarkdownLinksInNewWindows) {
-                    Text(L("Open Markdown links in new windows"))
-                    Text(L("Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window."))
+                Section {
+                    LabeledContent(columnLabel("Opening files")) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Toggle(L("Open documents in tabs"), isOn: $model.opensDocumentsInTabs)
+                            Toggle(L("Open Markdown links in new windows"), isOn: $model.opensMarkdownLinksInNewWindows)
+                        }
+                    }
+                    .settingsGroupGap()
+
+                    LabeledContent(columnLabel("Windows")) {
+                        Toggle(L("Always on Top"), isOn: $model.isAlwaysOnTop)
+                    }
+                    .settingsGroupGap()
                 }
 
-                Toggle(isOn: $model.opensDocumentsInTabs) {
-                    Text(L("Open documents in tabs"))
-                    Text(L("A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window."))
-                }
-            } header: {
-                Text(L("Windows"))
-            }
-
-            Section {
-                LabeledContent {
-                    Picker("", selection: $model.autoSaveIntervalMinutes) {
+                Section {
+                    Picker(columnLabel("Automatic saving"), selection: $model.autoSaveIntervalMinutes) {
                         Text(L("Never")).tag(AutoSaveSetting.disabledMinutes)
                         Text(L("Instant")).tag(AutoSaveSetting.instant)
                         Text(L("30 seconds")).tag(AutoSaveSetting.thirtySeconds)
@@ -61,53 +56,24 @@ struct GeneralSettingsView: View {
                                 .tag(minutes)
                         }
                     }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                } label: {
-                    Text(L("Automatic saving"))
-                    Text(L("Save edited documents periodically."))
-                }
-            } header: {
-                Text(L("Saving"))
-            } footer: {
-                Text(L("Automatic saving runs while a document has unsaved edits."))
-            }
+                    .fixedSize()
+                    .settingsGroupGap()
 
-            Section {
-                if model.openTargets.isEmpty {
-                    LabeledContent(L("Open documents in")) {
-                        Text(L("No apps available")).foregroundStyle(.secondary)
-                    }
-                } else {
-                    Picker(L("Open documents in"), selection: $model.openTargetID) {
-                        aiAppItems
-                        editorItems
+                    if model.openTargets.isEmpty {
+                        LabeledContent(columnLabel("Open documents in")) {
+                            Text(L("No apps available")).foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Picker(columnLabel("Open documents in"), selection: $model.openTargetID) {
+                            aiAppItems
+                            editorItems
+                        }
+                        .fixedSize()
                     }
                 }
-
-                LabeledContent(L("Command line tools")) {
-                    Button(L("Install…")) {
-                        appDelegate?.installCommandLineToolsFromSettings()
-                    }
-                }
-            } header: {
-                Text(L("External apps & tools"))
-            } footer: {
-                Text(L("The app the Open button in the document toolbar uses first. Its menu still offers every other installed app."))
-                Text(L("Adds mdp, md-preview, and markdown-preview to your PATH. Run it again after updating the app to refresh the commands."))
             }
-
-            Section {
-                Button(L("Reset App Link Approvals")) {
-                    ExternalLinkPolicy.reset(defaults: AppearanceMode.sharedDefaults())
-                }
-            } header: {
-                Text(L("App links"))
-            } footer: {
-                Text(L("Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look."))
-            }
+            .formStyle(.columns)
         }
-        .formStyle(.grouped)
         .onAppear {
             model.refreshFromExternalSources()
             model.reloadOpenTargets()

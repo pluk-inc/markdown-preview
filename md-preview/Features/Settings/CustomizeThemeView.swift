@@ -19,7 +19,6 @@ import SwiftUI
 
 struct CustomizeThemeView: View {
     @Bindable private var model = SettingsModel.shared
-    @Environment(\.colorScheme) private var colorScheme
     @State private var showsFontList = false
     /// Everything the sheet can change, held locally until ✓.
     @State private var draft: Draft
@@ -32,19 +31,10 @@ struct CustomizeThemeView: View {
 
     init(dismiss: @escaping () -> Void) {
         self.dismiss = dismiss
-        let model = SettingsModel.shared
-        _draft = State(initialValue: Draft(readerLayout: model.readerLayout,
-                                           documentFont: model.documentFont,
-                                           themeColors: model.themeColors,
-                                           appearance: model.appearance))
+        _draft = State(initialValue: SettingsModel.shared.readingLook)
     }
 
-    struct Draft: Equatable {
-        var readerLayout: ReaderLayoutSetting
-        var documentFont: DocumentFontSetting
-        var themeColors: ThemeColorsSetting
-        var appearance: AppearanceMode
-    }
+    typealias Draft = SettingsModel.ReadingLook
 
     var body: some View {
         VStack(spacing: 0) {
@@ -107,7 +97,7 @@ struct CustomizeThemeView: View {
                 // not just the colors above it.
                 Section {
                     Button {
-                        draft = Self.defaultDraft()
+                        draft = model.appliedPresetLook
                     } label: {
                         Text(L("Reset Theme"))
                             .foregroundStyle(.red)
@@ -115,21 +105,12 @@ struct CustomizeThemeView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .disabled(draft == Self.defaultDraft())
+                    .disabled(draft == model.appliedPresetLook)
                 }
             }
             .formStyle(.grouped)
         }
         .frame(width: Self.contentSize.width, height: Self.contentSize.height)
-    }
-
-    /// The applied theme's look, which Reset Theme returns the draft to.
-    private static func defaultDraft() -> Draft {
-        let base = SettingsModel.shared.appliedPreset
-        return Draft(readerLayout: ReaderLayoutSetting(boldText: base.boldText),
-                     documentFont: base.font,
-                     themeColors: base.setting,
-                     appearance: base.requiredAppearance ?? .automatic)
     }
 
     /// Closes without touching the documents — nothing was applied. The ✗
@@ -142,10 +123,7 @@ struct CustomizeThemeView: View {
     /// Writes the draft through in one step, so the open documents re-style
     /// once rather than once per control.
     private func save() {
-        model.applyReadingLook(themeColors: draft.themeColors,
-                               documentFont: draft.documentFont,
-                               readerLayout: draft.readerLayout,
-                               appearance: draft.appearance)
+        model.applyReadingLook(draft)
         dismiss()
     }
 
@@ -224,86 +202,15 @@ struct CustomizeThemeView: View {
     // MARK: - Preview
 
     private var previewPane: some View {
-        let scheme: ThemeColorScheme = colorScheme == .dark ? .dark : .light
-        // Same fallback the colour wells below use, so with no overrides
-        // stored the preview shows what the page actually renders.
-        let page = Color(nsColor: draft.themeColors.color(.windowBackground, scheme)
-            ?? ThemeColorsSetting.defaultColor(.windowBackground, scheme))
-        let text = Color(nsColor: draft.themeColors.color(.textColor, scheme)
-            ?? ThemeColorsSetting.defaultColor(.textColor, scheme))
         // The header rides on the page color rather than a chrome strip of
         // its own, the way Books runs the sample page up under its buttons.
-        return VStack(alignment: .leading, spacing: 16) {
+        ThemeSamplePage(readerLayout: draft.readerLayout,
+                        documentFont: draft.documentFont,
+                        themeColors: draft.themeColors,
+                        columns: ThemeSampleProse.columns) {
             header
-            Text(verbatim: "Aa")
-                .font(draft.documentFont.font(size: Self.sampleTitleSize))
-                .fontWeight(draft.readerLayout.boldText ? .bold : .medium)
-                .foregroundStyle(text)
-                .padding(.horizontal, 28)
-            sampleColumns(text: text)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(page)
     }
-
-    /// Two columns of prose, cut off by a fade at the bottom: reading size,
-    /// wrapped over enough lines that line spacing, word spacing and the
-    /// margins read as themselves. The page continues past the fade the way
-    /// a real page would.
-    private func sampleColumns(text: Color) -> some View {
-        let applied = draft.readerLayout.effective
-        let size = Self.sampleBodySize
-        let extraLeading = size * CGFloat(applied.lineSpacing - 1.0)
-        let kerning = size * CGFloat(applied.characterSpacingPercent / 100)
-        let inset = 28 + CGFloat(applied.pageInset)
-        return HStack(alignment: .top, spacing: 24) {
-            ForEach(Array(Self.sampleColumns.enumerated()), id: \.offset) { column in
-                Text(column.element)
-                    .font(draft.documentFont.font(size: size))
-                    .fontWeight(draft.readerLayout.boldText ? .semibold : .regular)
-                    .kerning(kerning)
-                    .lineSpacing(extraLeading)
-                    .foregroundStyle(text)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(.horizontal, inset)
-        .frame(height: Self.sampleHeight, alignment: .top)
-        .clipped()
-        .mask(
-            LinearGradient(stops: [.init(color: .black, location: 0),
-                                   .init(color: .black, location: 0.55),
-                                   .init(color: .clear, location: 1)],
-                           startPoint: .top,
-                           endPoint: .bottom)
-        )
-    }
-
-    private static let sampleTitleSize: CGFloat = 40
-    private static let sampleBodySize: CGFloat = 18
-    private static let sampleHeight: CGFloat = 250
-
-    /// Reading prose rather than a description of the sheet: the point is to
-    /// judge a face and a spacing, which needs ordinary sentences.
-    private static let sampleColumns: [String] = [
-        L("""
-        The team looking after our recommendation system has been spiking out \
-        some new algorithms, and the results are promising enough that we are \
-        planning to put them in front of readers next month. Long paragraphs \
-        are what make a reading face show its character: the rhythm of the \
-        lines, how the spacing settles, where the eye lands when it returns \
-        from the end of one line to the start of the next.
-        """),
-        L("""
-        Nothing you change here reaches your open documents until you tap the \
-        check mark, so try a few faces and spacings, then close with the cross \
-        to leave everything exactly as you found it. The sample keeps going \
-        past the bottom of this panel, the way a page would, so the measure \
-        and the margins have somewhere to show themselves before you commit \
-        to them.
-        """)
-    ]
 
     // MARK: - Font list
 

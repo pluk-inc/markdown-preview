@@ -9,7 +9,6 @@
 "Appearance also applies to Quick Look previews." = "外観は Quick Look プレビューにも適用されます。";
 "Layout" = "レイアウト";
 "Text size" = "テキストサイズ";
-"Size of rendered Markdown in document windows." = "書類ウインドウに表示される Markdown のサイズです。";
 "Small" = "小";
 "Medium" = "中";
 "Large" = "大";
@@ -17,8 +16,6 @@
 "Zooming a document window with ⌘+ and ⌘− changes this same size." = "⌘+ や ⌘− で書類ウインドウを拡大／縮小しても、この値が変更されます。";
 "Editing" = "編集";
 "Automatic saving" = "自動保存";
-"Save edited documents periodically." = "編集中の書類を定期的に保存します。";
-"Automatic saving runs while a document has unsaved edits." = "自動保存は、書類に未保存の変更があるときに行われます。";
 "Instant" = "即時";
 "30 seconds" = "30秒";
 "1 minute" = "1分";
@@ -26,12 +23,10 @@
 "Hand-off" = "外部アプリで開く";
 "Open documents in" = "書類を開くアプリ";
 "AI apps" = "AI アプリ";
-"The app the Open button in the document toolbar uses first. Its menu still offers every other installed app." = "ツールバーの「開く」ボタンで優先的に使用されるアプリです。メニューからはインストールされている他のアプリも選択できます。";
 "Command line tools" = "コマンドラインツール";
 "Install…" = "インストール…";
 "Adds mdp, md-preview, and markdown-preview to your PATH. Run it again after updating the app to refresh the commands." = "mdp, md-preview, markdown-preview を PATH に追加します。アプリをアップデートした後に再実行するとコマンドが更新されます。";
 "Markdown Preview" = "Markdown Preview";
-"Version %@ (%@)" = "バージョン %@ (%@)";
 "Check for Updates" = "アップデートを確認";
 "Automatically check for updates" = "アップデートを自動的に確認";
 "Automatically download updates" = "アップデートを自動的にダウンロード";
@@ -55,10 +50,8 @@
 "Solarized Dark" = "Solarized Dark";
 "Dracula" = "Dracula";
 "Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "色は外観（ライト/ダーク）ごとに設定されます。デフォルトの色を選択すると上書きが解除されます。";
-"Custom colors" = "カスタムカラー";
 "Reset Colors" = "色をリセット";
 "Restores the default Normal theme." = "デフォルトの「標準」テーマに戻します。";
-"Current theme: %@" = "現在のテーマ: %@";
 "Send anonymous crash reports" = "匿名のクラッシュレポートを送信";
 "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "クラッシュレポートには、スタックトレース、OSおよびアプリのバージョンなどの診断情報が含まれます。技術的なファイルのパスが含まれる場合がありますが、Markdown Preview が意図的に書類の内容や個人情報を送信することはありません。";
 "Share anonymous usage analytics" = "匿名で使用状況の統計を共有";
@@ -307,9 +300,7 @@
 
 /* Settings — Windows */
 "Windows" = "ウインドウ";
-"Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "今後開くウインドウを含め、すべての Markdown Preview ウインドウを他のアプリの手前に表示し続けます。フルスクリーンのウインドウは、フルスクリーンを解除するまで対象外となります。";
 "Open documents in tabs" = "書類をタブで開く";
-"A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "Finder から開かれた書類を、新しいウインドウで表示する代わりに、最前面のウインドウの新規タブとして開きます（「新規ウインドウで開く」設定は引き続き有効です）。";
 
 /* Search for Document */
 "Search for Document…" = "書類を検索…";
@@ -338,7 +329,6 @@
 
 /* Reading preferences */
 "Strict line breaks" = "厳密な改行";
-"Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "ソースコード中のMarkdown書式に沿わない改行を無視し、連続した段落として扱います。オフにすると、通常の改行も改行として扱います。アプリと Quick Look プレビュー双方に適用されます。";
 
 /* App link approvals */
 "Reset App Link Approvals" = "リンクの許可をリセット";
@@ -354,23 +344,14 @@
 /* App language */
 "Language" = "言語";
 "System Default" = "システムのデフォルト";
-"Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews." = "言語の変更を適用するには、Markdown Preview を終了して再度開いてください。この設定はアプリにのみ適用され、Quick Look プレビューには適用されません。";
 "Restart Markdown Preview to change the language?" = "言語を変更するために Markdown Preview を再起動しますか？";
 "The new language applies to menus, settings, and document controls after the app restarts. Quick Look previews keep their system language." = "新しい言語は、アプリの再起動後にメニュー、設定、書類のコントロールに適用されます。Quick Look プレビューはシステムの言語のままです。";
 "Restart Now" = "今すぐ再起動";
 "Later" = "あとで";
 
 /* Settings organization */
-"Saving" = "保存";
-"External apps & tools" = "外部アプリとツール";
-"Text & layout" = "テキストとレイアウト";
 "Markdown" = "Markdown";
 "Outline" = "見出し";
-"Customize the selected theme’s font, spacing and colors. Reset restores that theme’s defaults; global Reading preferences stay unchanged." = "選択したテーマのフォント、間隔と余白、色をカスタマイズします。リセットすると選択中テーマの初期設定に戻りますが、「書類の表示」設定は変更されません。";
-"Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window." = "他の Markdown ファイルへのリンクをクリックすると、新規ウインドウで開きます。オフにすると、現在のウインドウで開きます。";
-"Customize…" = "カスタマイズ…";
-"Each theme remembers its colors, font and layout. Original also remembers your appearance choice. Reset restores the selected theme’s defaults." = "色、フォント、レイアウトはテーマごとに保存されます。「Original」では外観（ライト/ダーク）の選択も保存されます。リセットすると、選択中テーマのデフォルト設定に戻ります。";
-"Fonts, spacing and colors" = "フォント、間隔と余白、色";
 "Highlight outline section under the pointer" = "ポインタの下にある見出しセクションを強調表示";
 "Open Markdown links in new windows" = "Markdown へのリンクを新規ウインドウで開く";
 "Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings." = "テキストサイズは Quick Look プレビューにも適用され、⌘+ や ⌘− で書類を拡大／縮小しても変更されます。フォントと閲覧時のレイアウトは「外観」で設定できます。";
@@ -383,7 +364,6 @@
 "Center" = "中央揃え";
 "Right" = "右揃え";
 "Justified" = "両端揃え";
-"Alignment applies to prose in reading view and Quick Look. Automatic follows the document. Code, tables and explicit HTML alignment are preserved." = "テキストの配置はアプリと Quick Look の双方に適用されます。「自動」では書類の設定に従います。コード、表、HTML で明示的に指定された配置は維持されます。";
 
 /* Paper print scale, applied before pagination. */
 "Scale:" = "拡大／縮小:";
@@ -395,6 +375,19 @@
 
 /* Additional settings, navigation, formatting, and export strings. */
 "GitHub Project" = "GitHub プロジェクト";
+"Version" = "バージョン";
+"Spacing" = "間隔";
+"Updates" = "アップデート";
+"%@:" = "%@：";
+"Advanced" = "詳細";
+"Opening files" = "ファイルを開くとき";
+"Takes effect after you reopen Markdown Preview." = "Markdown Previewを再度開くと反映されます。";
+"Turn this off to keep every line break as written." = "オフにすると、すべての改行を書いたとおりに残します。";
+"Crash reports" = "クラッシュレポート";
+"Analytics" = "解析";
+"Contains technical details, not document contents." = "技術的な情報のみを含み、書類の内容は含みません。";
+"At most one event a day, to count active installations." = "アクティブなインストール数を数えるため、送信は1日に最大1回です。";
+"Details" = "詳細情報";
 "Discord Community" = "Discord コミュニティ";
 "Buy Me a Coffee" = "Buy Me a Coffee";
 "Close" = "閉じる";

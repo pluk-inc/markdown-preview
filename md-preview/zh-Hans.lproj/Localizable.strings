@@ -9,7 +9,6 @@
 "Appearance also applies to Quick Look previews." = "外观设置也会应用于“快速查看”预览。";
 "Layout" = "布局";
 "Text size" = "文本大小";
-"Size of rendered Markdown in document windows." = "文稿窗口中渲染的 Markdown 大小。";
 "Small" = "小";
 "Medium" = "中";
 "Large" = "大";
@@ -17,8 +16,6 @@
 "Zooming a document window with ⌘+ and ⌘− changes this same size." = "使用 ⌘+ 和 ⌘− 缩放文稿窗口会更改同一大小设置。";
 "Editing" = "编辑";
 "Automatic saving" = "自动保存";
-"Save edited documents periodically." = "定期保存编辑中的文稿。";
-"Automatic saving runs while a document has unsaved edits." = "文稿有未保存的编辑时，自动保存会运行。";
 "Instant" = "立即";
 "30 seconds" = "30 秒";
 "1 minute" = "1 分钟";
@@ -26,12 +23,10 @@
 "Hand-off" = "打开方式";
 "Open documents in" = "打开文稿时使用";
 "AI apps" = "AI App";
-"The app the Open button in the document toolbar uses first. Its menu still offers every other installed app." = "文稿工具栏中的“打开”按钮会优先使用此 App。菜单仍会列出所有其他已安装的 App。";
 "Command line tools" = "命令行工具";
 "Install…" = "安装…";
 "Adds mdp, md-preview, and markdown-preview to your PATH. Run it again after updating the app to refresh the commands." = "将 mdp、md-preview 和 markdown-preview 添加到 PATH。更新 App 后请再次运行，以刷新这些命令。";
 "Markdown Preview" = "Markdown Preview";
-"Version %@ (%@)" = "版本 %@（%@）";
 "Check for Updates" = "检查更新";
 "Automatically check for updates" = "自动检查更新";
 "Automatically download updates" = "自动下载更新";
@@ -55,10 +50,8 @@
 "Solarized Dark" = "Solarized 深色";
 "Dracula" = "Dracula";
 "Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "每种颜色在浅色和深色外观下分别设置。选择默认颜色即移除自定义。";
-"Custom colors" = "自定义颜色";
 "Reset Colors" = "重置颜色";
 "Restores the default Normal theme." = "恢复默认的“标准”主题。";
-"Current theme: %@" = "当前主题：%@";
 "Send anonymous crash reports" = "发送匿名崩溃报告";
 "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "崩溃报告包含堆栈跟踪、系统版本和 App 版本等诊断信息，可能包含技术文件路径；Markdown Preview 不会主动附加文稿内容或个人信息。";
 "Share anonymous usage analytics" = "共享匿名使用情况分析";
@@ -307,9 +300,7 @@
 
 /* Settings — Windows */
 "Windows" = "窗口";
-"Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "让所有 Markdown Preview 窗口始终显示在其他 App 前面，包括之后打开的窗口。窗口进入全屏时不会置顶，退出全屏后会恢复。";
 "Open documents in tabs" = "以标签页打开文稿";
-"A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "从“访达”打开的文件会作为标签页加入最前面的窗口，而不是各自新建一个窗口——“在新窗口中打开”仍会打开新窗口。";
 
 /* Search for Document */
 "Search for Document…" = "搜索文稿…";
@@ -338,7 +329,6 @@
 
 /* Reading preferences */
 "Strict line breaks" = "严格换行";
-"Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "将普通源文本行合并为连续段落。关闭此选项可保留每个换行。适用于阅读视图和快速查看预览。";
 
 /* App link approvals */
 "Reset App Link Approvals" = "重置应用链接授权";
@@ -354,23 +344,14 @@
 /* App language */
 "Language" = "语言";
 "System Default" = "跟随系统";
-"Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews." = "退出并重新打开 Markdown Preview 以应用语言更改。此设置仅影响应用，不影响快速查看预览。";
 "Restart Markdown Preview to change the language?" = "重新启动 Markdown Preview 以更改语言？";
 "The new language applies to menus, settings, and document controls after the app restarts. Quick Look previews keep their system language." = "应用重新启动后，新语言将应用于菜单、设置和文稿控件。快速查看预览保持使用系统语言。";
 "Restart Now" = "立即重新启动";
 "Later" = "稍后";
 
 /* Settings organization */
-"Saving" = "保存";
-"External apps & tools" = "外部 App 与工具";
-"Text & layout" = "文本与布局";
 "Markdown" = "Markdown";
 "Outline" = "大纲";
-"Customize the selected theme’s font, spacing and colors. Reset restores that theme’s defaults; global Reading preferences stay unchanged." = "自定所选主题的字体、间距和颜色。重置会恢复该主题的默认设置，不会更改全局阅读偏好设置。";
-"Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window." = "点按指向其他 Markdown 文件的链接时，在新窗口中打开。关闭此选项则在当前窗口中打开。";
-"Customize…" = "自定…";
-"Each theme remembers its colors, font and layout. Original also remembers your appearance choice. Reset restores the selected theme’s defaults." = "每个主题都会保留各自的颜色、字体和布局设置。“Original”主题还会保留您的外观选择。重置会恢复所选主题的默认设置。";
-"Fonts, spacing and colors" = "字体、间距和颜色";
 "Highlight outline section under the pointer" = "高亮显示指针下的大纲章节";
 "Open Markdown links in new windows" = "在新窗口中打开 Markdown 链接";
 "Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings." = "文本大小也适用于快速查看预览。使用 ⌘+ 和 ⌘− 缩放文稿窗口也会更改文本大小。字体和阅读布局可在“外观”设置中调整。";
@@ -383,7 +364,6 @@
 "Center" = "居中";
 "Right" = "右对齐";
 "Justified" = "两端对齐";
-"Alignment applies to prose in reading view and Quick Look. Automatic follows the document. Code, tables and explicit HTML alignment are preserved." = "对齐方式适用于阅读视图和快速查看中的正文。“自动”遵循文稿的对齐方式。代码、表格和 HTML 中明确指定的对齐方式保持不变。";
 
 /* Paper print scale, applied before pagination. */
 "Scale:" = "缩放:";
@@ -395,6 +375,19 @@
 
 /* Additional settings, navigation, formatting, and export strings. */
 "GitHub Project" = "GitHub 项目";
+"Version" = "版本";
+"Spacing" = "间距";
+"Updates" = "更新";
+"%@:" = "%@：";
+"Advanced" = "高级";
+"Opening files" = "打开文件";
+"Takes effect after you reopen Markdown Preview." = "重新打开 Markdown Preview 后生效。";
+"Turn this off to keep every line break as written." = "关闭后将按原样保留每个换行。";
+"Crash reports" = "崩溃报告";
+"Analytics" = "分析";
+"Contains technical details, not document contents." = "仅包含技术细节，不包含文稿内容。";
+"At most one event a day, to count active installations." = "每天最多一次，用于统计活跃安装数。";
+"Details" = "详细信息";
 "Discord Community" = "Discord 社区";
 "Buy Me a Coffee" = "Buy Me a Coffee";
 "Close" = "关闭";

@@ -13,64 +13,54 @@ struct AboutSettingsView: View {
 
     var body: some View {
         Form {
-            Section {
-                HStack(spacing: 16) {
-                    if let appIcon = NSApplication.shared.applicationIconImage {
-                        Image(nsImage: appIcon)
-                            .resizable()
-                            .frame(width: 64, height: 64)
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(L("Markdown Preview"))
-                            .font(.title)
-                            .fontWeight(.medium)
-
-                        Text(versionSummary)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
+            LabeledContent(columnLabel("Version")) {
+                HStack(spacing: 12) {
+                    Text(versionNumber)
+                        .textSelection(.enabled)
+                    Button(L("Check for Updates")) {
+                        appDelegate?.updaterController.updater.checkForUpdates()
                     }
                 }
-                .padding(.vertical, 8)
-
-                Button(L("Check for Updates")) {
-                    appDelegate?.updaterController.updater.checkForUpdates()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
             }
+            .settingsGroupGap()
 
-            Section {
-                Link(L("GitHub Project"), destination: URL(string: "https://github.com/pluk-inc/markdown-preview")!)
-                Link(L("Discord Community"), destination: URL(string: "https://discord.com/invite/NUtNMK7re2")!)
-                Link(L("Buy Me a Coffee"), destination: BuyMeACoffee.url)
-            }
-
-            Section {
-                Toggle(L("Automatically check for updates"),
-                       isOn: $model.checksForUpdatesAutomatically)
-                Toggle(L("Automatically download updates"),
-                       isOn: $model.downloadsUpdatesAutomatically)
-                    .disabled(!model.checksForUpdatesAutomatically)
-                LabeledContent(L("Last checked")) {
-                    Text(lastCheckedSummary).foregroundStyle(.secondary)
+            LabeledContent(columnLabel("Updates")) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle(L("Automatically check for updates"),
+                           isOn: $model.checksForUpdatesAutomatically)
+                    Toggle(L("Automatically download updates"),
+                           isOn: $model.downloadsUpdatesAutomatically)
+                        .disabled(!model.checksForUpdatesAutomatically)
+                    SettingsCaption(L("Downloaded updates install the next time you quit Markdown Preview."))
                 }
-            } footer: {
-                Text(L("Downloaded updates install the next time you quit Markdown Preview."))
+            }
+            .settingsGroupGap()
+
+            LabeledContent(columnLabel("Last checked")) {
+                Text(lastCheckedSummary).foregroundStyle(.secondary)
+            }
+            .settingsGroupGap()
+
+            LabeledContent(columnLabel("Links")) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Link(L("GitHub Project"), destination: URL(string: "https://github.com/pluk-inc/markdown-preview")!)
+                    Link(L("Discord Community"), destination: URL(string: "https://discord.com/invite/NUtNMK7re2")!)
+                    Link(L("Buy Me a Coffee"), destination: BuyMeACoffee.url)
+                }
             }
         }
-        .formStyle(.grouped)
+        .formStyle(.columns)
         .onAppear {
             model.refreshFromExternalSources()
         }
     }
 
-    private var versionSummary: String {
+    /// "0.0.69 (73)": the label already says Version.
+    private var versionNumber: String {
         let info = Bundle.main.infoDictionary
         let marketing = info?["CFBundleShortVersionString"] as? String ?? "—"
         let build = info?["CFBundleVersion"] as? String ?? "—"
-        return String(format: L("Version %@ (%@)"), marketing, build)
+        return "\(marketing) (\(build))"
     }
 
     private var lastCheckedSummary: String {

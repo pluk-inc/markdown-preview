@@ -9,7 +9,6 @@
 "Appearance also applies to Quick Look previews." = "ظاهر بر پیش‌نمایش‌های Quick Look نیز اعمال می‌شود.";
 "Layout" = "طرح‌بندی";
 "Text size" = "اندازهٔ متن";
-"Size of rendered Markdown in document windows." = "اندازهٔ Markdown نمایش‌داده‌شده در پنجره‌های سند.";
 "Small" = "کوچک";
 "Medium" = "متوسط";
 "Large" = "بزرگ";
@@ -17,8 +16,6 @@
 "Zooming a document window with ⌘+ and ⌘− changes this same size." = "بزرگ‌نمایی پنجرهٔ سند با ⌘+ و ⌘− همین اندازه را تغییر می‌دهد.";
 "Editing" = "ویرایش";
 "Automatic saving" = "ذخیرهٔ خودکار";
-"Save edited documents periodically." = "ذخیرهٔ دوره‌ای اسناد ویرایش‌شده.";
-"Automatic saving runs while a document has unsaved edits." = "ذخیرهٔ خودکار زمانی اجرا می‌شود که سند ویرایش‌های ذخیره‌نشده داشته باشد.";
 "Instant" = "فوری";
 "30 seconds" = "۳۰ ثانیه";
 "1 minute" = "۱ دقیقه";
@@ -26,12 +23,10 @@
 "Hand-off" = "انتقال";
 "Open documents in" = "باز کردن اسناد در";
 "AI apps" = "برنامه‌های هوش مصنوعی";
-"The app the Open button in the document toolbar uses first. Its menu still offers every other installed app." = "برنامه‌ای که دکمهٔ «باز کردن» در نوار ابزار سند ابتدا استفاده می‌کند. منوی آن همچنان همهٔ برنامه‌های نصب‌شدهٔ دیگر را ارائه می‌دهد.";
 "Command line tools" = "ابزارهای خط فرمان";
 "Install…" = "نصب…";
 "Adds mdp, md-preview, and markdown-preview to your PATH. Run it again after updating the app to refresh the commands." = "‏mdp،‏ md-preview و markdown-preview را به PATH شما اضافه می‌کند. پس از به‌روزرسانی برنامه، آن را دوباره اجرا کنید تا دستورها تازه‌سازی شوند.";
 "Markdown Preview" = "Markdown Preview";
-"Version %@ (%@)" = "نسخهٔ %@ (%@)";
 "Check for Updates" = "بررسی به‌روزرسانی‌ها";
 "Automatically check for updates" = "بررسی خودکار به‌روزرسانی‌ها";
 "Automatically download updates" = "دانلود خودکار به‌روزرسانی‌ها";
@@ -55,10 +50,8 @@
 "Solarized Dark" = "Solarized Dark";
 "Dracula" = "Dracula";
 "Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "هر رنگ مقدار جداگانه‌ای برای ظاهر روشن و تاریک دارد. انتخاب رنگ پیش‌فرض، مقدار جایگزین را حذف می‌کند.";
-"Custom colors" = "رنگ‌های سفارشی";
 "Reset Colors" = "بازنشانی رنگ‌ها";
 "Restores the default Normal theme." = "پوستهٔ عادی پیش‌فرض را بازیابی می‌کند.";
-"Current theme: %@" = "پوستهٔ فعلی: %@";
 "Send anonymous crash reports" = "ارسال گزارش‌های ناشناس خرابی";
 "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "گزارش‌های خرابی شامل جزئیات تشخیصی مانند رد پشته و نسخه‌های سیستم‌عامل و برنامه هستند. آن‌ها ممکن است شامل مسیرهای فنی فایل باشند؛ Markdown Preview عمداً محتوای سند یا اطلاعات شخصی را پیوست نمی‌کند.";
 "Share anonymous usage analytics" = "اشتراک‌گذاری آمار ناشناس استفاده";
@@ -306,9 +299,7 @@
 
 /* Settings — Windows */
 "Windows" = "پنجره‌ها";
-"Keeps every Markdown Preview window in front of other apps, including windows you open later. A window in full screen is left alone until it comes back out." = "همهٔ پنجره‌های Markdown Preview را جلوتر از سایر برنامه‌ها نگه می‌دارد، از جمله پنجره‌هایی که بعداً باز می‌کنید. پنجره در حالت تمام‌صفحه به همان شکل باقی می‌ماند تا زمانی که از آن خارج شود.";
 "Open documents in tabs" = "باز کردن اسناد در برگه‌ها";
-"A file opened from Finder joins the front window as a tab instead of getting one of its own — Open in New Window still opens a window." = "فایلی که از Finder باز می‌شود، به‌جای باز شدن در پنجره‌ای جداگانه، به‌عنوان یک برگه به پنجرهٔ جلویی می‌پیوندد — «باز کردن در پنجرهٔ جدید» همچنان یک پنجره باز می‌کند.";
 
 /* Search for Document */
 "Search for Document…" = "جستجوی سند…";
@@ -337,7 +328,6 @@
 
 /* Reading preferences */
 "Strict line breaks" = "شکست دقیق خطوط";
-"Join ordinary source lines into flowing paragraphs. Turn this off to preserve every line break. Applies to reading view and Quick Look previews." = "خطوط عادی مبدأ را به پاراگراف‌های پیوسته تبدیل می‌کند. این گزینه را خاموش کنید تا تمام شکست‌های خط حفظ شوند. برای نمای خواندن و پیش‌نمایش‌های Quick Look اعمال می‌شود.";
 
 /* App link approvals */
 "Reset App Link Approvals" = "بازنشانی مجوزهای پیوند برنامه";
@@ -353,23 +343,14 @@
 /* App language */
 "Language" = "زبان";
 "System Default" = "پیش‌فرض سیستم";
-"Quit and reopen Markdown Preview to apply language changes. This setting only affects the app, not Quick Look previews." = "برای اعمال تغییرات زبان، از Markdown Preview خارج شده و آن را دوباره باز کنید. این تنظیم فقط بر برنامه تأثیر می‌گذارد، نه پیش‌نمایش‌های Quick Look.";
 "Restart Markdown Preview to change the language?" = "برای تغییر زبان، Markdown Preview دوباره راه‌اندازی شود؟";
 "The new language applies to menus, settings, and document controls after the app restarts. Quick Look previews keep their system language." = "زبان جدید پس از راه‌اندازی دوبارهٔ برنامه روی منوها، تنظیمات و کنترل‌های سند اعمال می‌شود. پیش‌نمایش‌های Quick Look به زبان سیستم می‌مانند.";
 "Restart Now" = "اکنون راه‌اندازی دوباره";
 "Later" = "بعداً";
 
 /* Settings organization */
-"Saving" = "ذخیره‌سازی";
-"External apps & tools" = "برنامه‌ها و ابزارهای خارجی";
-"Text & layout" = "متن و چیدمان";
 "Markdown" = "Markdown";
 "Outline" = "طرح کلی";
-"Customize the selected theme’s font, spacing and colors. Reset restores that theme’s defaults; global Reading preferences stay unchanged." = "قلم، فاصله‌گذاری و رنگ‌های پوستهٔ انتخاب‌شده را سفارشی‌سازی کنید. گزینهٔ «Reset Theme» پیش‌فرض‌های آن پوسته را بازمی‌گرداند؛ ترجیحات کلی «خواندن» بدون تغییر باقی می‌مانند.";
-"Clicking a link to another Markdown file opens it in a separate window. Turn this off to open it in the current window." = "کلیک روی پیوند به یک فایل Markdown دیگر، آن را در پنجره‌ای جداگانه باز می‌کند. این گزینه را خاموش کنید تا در پنجرهٔ فعلی باز شود.";
-"Customize…" = "سفارشی‌سازی…";
-"Each theme remembers its colors, font and layout. Original also remembers your appearance choice. Reset restores the selected theme’s defaults." = "هر پوسته رنگ‌ها، قلم و چیدمان خود را به خاطر می‌سپارد. پوستهٔ Original همچنین انتخاب ظاهر شما را به یاد می‌سپارد. گزینهٔ «Reset Theme» پیش‌فرض‌های پوستهٔ انتخاب‌شده را بازمی‌گرداند.";
-"Fonts, spacing and colors" = "قلم‌ها، فاصله‌گذاری و رنگ‌ها";
 "Highlight outline section under the pointer" = "برجسته‌سازی بخش طرح کلی در زیر نشانگر";
 "Open Markdown links in new windows" = "باز کردن پیوندهای Markdown در پنجره‌های جدید";
 "Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings." = "اندازهٔ متن برای پیش‌نمایش‌های Quick Look نیز اعمال می‌شود. بزرگ‌نمایی پنجرهٔ سند با ⌘+ و ⌘− نیز آن را تغییر می‌دهد. قلم‌ها و چیدمان خواندن در تنظیمات «ظاهر» قرار دارند.";
@@ -382,7 +363,6 @@
 "Center" = "وسط";
 "Right" = "راست";
 "Justified" = "هم‌تراز";
-"Alignment applies to prose in reading view and Quick Look. Automatic follows the document. Code, tables and explicit HTML alignment are preserved." = "چینش برای متن‌های نثر در نمای خواندن و Quick Look اعمال می‌شود. گزینهٔ «خودکار» از سند پیروی می‌کند. چینش کد، جدول‌ها و تگ‌های صریح HTML حفظ می‌شود.";
 
 /* Paper print scale, applied before pagination. */
 "Scale:" = "مقیاس:";
@@ -394,6 +374,19 @@
 
 /* Additional settings, navigation, formatting, and export strings. */
 "GitHub Project" = "پروژهٔ GitHub";
+"Version" = "نسخه";
+"Spacing" = "فاصله‌گذاری";
+"Updates" = "به‌روزرسانی‌ها";
+"%@:" = "%@:";
+"Advanced" = "پیشرفته";
+"Opening files" = "باز کردن فایل‌ها";
+"Takes effect after you reopen Markdown Preview." = "پس از باز کردن دوبارهٔ Markdown Preview اعمال می‌شود.";
+"Turn this off to keep every line break as written." = "برای حفظ همهٔ شکست‌های خط همان‌طور که نوشته شده‌اند، این را خاموش کنید.";
+"Crash reports" = "گزارش‌های خرابی";
+"Analytics" = "تحلیل‌ها";
+"Contains technical details, not document contents." = "شامل جزئیات فنی است، نه محتوای سند.";
+"At most one event a day, to count active installations." = "حداکثر یک رویداد در روز، برای شمارش نصب‌های فعال.";
+"Details" = "جزئیات";
 "Discord Community" = "انجمن Discord";
 "Buy Me a Coffee" = "Buy Me a Coffee";
 "Close" = "بستن";
