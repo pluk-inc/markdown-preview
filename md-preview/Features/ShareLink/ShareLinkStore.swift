@@ -52,8 +52,10 @@ final class ShareLinkStore {
         return records.first { $0.filePath == path && $0.expiresAt > .now }
     }
 
-    func secrets(for record: Record) -> Secrets? {
-        ShareLinkKeychain.read(account: record.id)
+    /// Nil when the secrets are missing or damaged: the key is lost.
+    /// Throws when the Keychain cannot be read, which may pass.
+    func secrets(for record: Record) throws -> Secrets? {
+        try ShareLinkKeychain.read(account: record.id)
             .flatMap { try? JSONDecoder().decode(Secrets.self, from: $0) }
     }
 
@@ -153,12 +155,18 @@ nonisolated enum ShareLinkKeychain {
 
     static let service = "doc.md-preview.share-link"
 
-    static func read(account: String) -> Data? {
+    /// Nil only when there is no item, so a locked or failing Keychain is
+    /// not taken for a lost key.
+    static func read(account: String) throws -> Data? {
         var query = baseQuery(account: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: AnyObject?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess else {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
+        }
         return result as? Data
     }
 

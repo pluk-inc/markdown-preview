@@ -70,7 +70,7 @@ enum ShareLinkSession {
     static func storedLink(forFile fileURL: URL, store: ShareLinkStore = .shared) -> URL? {
         guard let baseURL = ShareLinkFeature.baseURL,
               let record = store.record(forFile: fileURL),
-              let key = store.secrets(for: record).flatMap(sealingKey)
+              let key = (try? store.secrets(for: record)).flatMap(sealingKey)
         else { return nil }
         return try? webLink(id: record.id, key: key, base: baseURL)
     }
@@ -108,7 +108,7 @@ enum ShareLinkSession {
         // revoked, and it stays live until it expires whatever happens here;
         // refusing would only stop the user from sharing the file again. Such
         // a record is skipped, and `store.add` below replaces it.
-        if var record = store.record(forFile: fileURL), let secrets = store.secrets(for: record) {
+        if var record = store.record(forFile: fileURL), let secrets = try store.secrets(for: record) {
             if let key = sealingKey(secrets) {
                 // The server already has this content; the link's expiry stays.
                 if let digest, record.contentDigest == digest {
@@ -156,7 +156,7 @@ enum ShareLinkSession {
     /// expires; the caller warns about that first.
     static func stopSharing(fileURL: URL, store: ShareLinkStore = .shared) async throws {
         guard let record = store.record(forFile: fileURL) else { return }
-        guard let secrets = store.secrets(for: record) else {
+        guard let secrets = try store.secrets(for: record) else {
             store.remove(id: record.id)
             return
         }
@@ -174,6 +174,8 @@ enum ShareLinkSession {
             L("Too many links in a short time. Wait a minute, then try again.")
         case let error as URLError where error.code == .notConnectedToInternet:
             L("You are offline. Connect to the internet, then try again.")
+        case let error as NSError where error.domain == NSOSStatusErrorDomain:
+            L("Markdown Preview could not use the Keychain. Try again.")
         default:
             L("Markdown Preview could not reach the sharing server. Try again later.")
         }

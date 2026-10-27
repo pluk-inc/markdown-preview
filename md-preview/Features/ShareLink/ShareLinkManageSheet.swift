@@ -94,7 +94,12 @@ final class ShareLinkManageModel {
 
     func refreshRecord() {
         record = ShareLinkStore.shared.record(forFile: fileURL)
-        keyLost = record.map { ShareLinkStore.shared.secrets(for: $0) == nil } ?? false
+        // Only a missing key is lost; a Keychain that fails now may not later.
+        do {
+            keyLost = try record.map { try ShareLinkStore.shared.secrets(for: $0) == nil } ?? false
+        } catch {
+            keyLost = false
+        }
     }
 
     func copyLink() async {

@@ -487,6 +487,7 @@
 "Too many links in a short time. Wait a minute, then try again." = "短時間に作成されたリンクが多すぎます。1分ほど待ってから、もう一度お試しください。";
 "You are offline. Connect to the internet, then try again." = "オフラインです。インターネットに接続してから、もう一度お試しください。";
 "Markdown Preview could not reach the sharing server. Try again later." = "Markdown Preview は共有サーバに接続できませんでした。しばらくしてからもう一度お試しください。";
+"Markdown Preview could not use the Keychain. Try again." = "Markdown Preview はキーチェーンを使用できませんでした。もう一度お試しください。";
 
 /* Share links */
 "Keep Document Private" = "書類を非公開のままにする";
