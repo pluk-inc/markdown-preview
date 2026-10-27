@@ -20,28 +20,34 @@ struct WhatsNewFeature: Identifiable {
     static var current: [WhatsNewFeature] {
         [
             WhatsNewFeature(
-                id: "navigator-add-and-filter",
-                symbol: "line.3.horizontal.decrease.circle",
-                title: L("New files and a filter in the navigator"),
-                detail: L("Use + under the file list to make a file or folder, and type to filter the tree.")
+                id: "publish-to-web",
+                symbol: "globe",
+                title: L("Publish to Web"),
+                detail: L("Get an encrypted link to your document that anyone can read in a browser.")
             ),
             WhatsNewFeature(
-                id: "edit-mode-math",
-                symbol: "function",
-                title: L("Math in Edit Mode"),
-                detail: L("LaTeX formulas render while you edit. Move the caret into one to change its source.")
+                id: "settings-tabs",
+                symbol: "gearshape",
+                title: L("Redesigned Settings"),
+                detail: L("Settings has new tabs, and the Appearance pane shows your changes on a live sample page.")
             ),
             WhatsNewFeature(
-                id: "resize-table-columns",
-                symbol: "tablecells",
-                title: L("Resize table columns"),
-                detail: L("Drag the divider between header cells. Double-click it to fit the column.")
+                id: "block-buttons",
+                symbol: "square.on.square",
+                title: L("New buttons on code and diagrams"),
+                detail: L("Code blocks and diagrams share one set of buttons, and you can copy a diagram’s Mermaid source.")
             ),
             WhatsNewFeature(
-                id: "easier-to-read-text",
-                symbol: "textformat.size",
-                title: L("Easier-to-read text"),
-                detail: L("Body text is larger and darker, and diagrams draw at their natural size.")
+                id: "tab-shortcuts",
+                symbol: "rectangle.stack",
+                title: L("Switch tabs with ⌘1 to ⌘9"),
+                detail: L("Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one.")
+            ),
+            WhatsNewFeature(
+                id: "search-keeps-place",
+                symbol: "magnifyingglass",
+                title: L("Search keeps its place"),
+                detail: L("Clicking in the document or the search field no longer moves to the next match.")
             ),
         ]
     }

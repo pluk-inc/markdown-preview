@@ -15,7 +15,7 @@ extension DocumentWindowController {
     /// Whether the window's file has a live share link; shown as "Shared"
     /// in the window subtitle.
     var isSharedByLink: Bool {
-        guard ShareLinkFeature.isEnabled, let currentFileURL else { return false }
+        guard let currentFileURL else { return false }
         return ShareLinkStore.shared.record(forFile: currentFileURL) != nil
     }
 
@@ -28,9 +28,9 @@ extension DocumentWindowController {
         updateWindowSubtitle()
     }
 
-    /// False while the feature is off or the window has no saved file to link.
+    /// False while the window has no saved file to link.
     var canPublishToWeb: Bool {
-        ShareLinkFeature.isEnabled && currentFileURL != nil && currentMarkdown != nil
+        currentFileURL != nil && currentMarkdown != nil
             && !isReceivedShare
     }
 

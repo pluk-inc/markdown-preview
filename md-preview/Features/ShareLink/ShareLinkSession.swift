@@ -12,16 +12,10 @@
 import AppKit
 import CryptoKit
 
-/// The hidden switch and the server address. Ships off until the Worker
-/// runs in production (docs/share-link-plan.md §4.6).
+/// The server address.
 enum ShareLinkFeature {
-    static let enabledDefaultsKey = "MarkdownPreview.shareLinksEnabled"
     /// Overrides the server, e.g. a staging Worker.
     static let baseURLDefaultsKey = "MarkdownPreview.shareLinkBaseURL"
-
-    static var isEnabled: Bool {
-        UserDefaults.standard.bool(forKey: enabledDefaultsKey) && baseURL != nil
-    }
 
     static var baseURL: URL? {
         let configured = UserDefaults.standard.string(forKey: baseURLDefaultsKey)

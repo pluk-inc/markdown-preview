@@ -318,14 +318,15 @@
 "What’s New in Markdown Preview %@" = "What’s New in Markdown Preview %@";
 "Release Notes" = "Release Notes";
 "Continue" = "Continue";
-"New files and a filter in the navigator" = "New files and a filter in the navigator";
-"Use + under the file list to make a file or folder, and type to filter the tree." = "Use + under the file list to make a file or folder, and type to filter the tree.";
-"Math in Edit Mode" = "Math in Edit Mode";
-"LaTeX formulas render while you edit. Move the caret into one to change its source." = "LaTeX formulas render while you edit. Move the caret into one to change its source.";
-"Resize table columns" = "Resize table columns";
-"Drag the divider between header cells. Double-click it to fit the column." = "Drag the divider between header cells. Double-click it to fit the column.";
-"Easier-to-read text" = "Easier-to-read text";
-"Body text is larger and darker, and diagrams draw at their natural size." = "Body text is larger and darker, and diagrams draw at their natural size.";
+"Get an encrypted link to your document that anyone can read in a browser." = "Get an encrypted link to your document that anyone can read in a browser.";
+"Redesigned Settings" = "Redesigned Settings";
+"Settings has new tabs, and the Appearance pane shows your changes on a live sample page." = "Settings has new tabs, and the Appearance pane shows your changes on a live sample page.";
+"New buttons on code and diagrams" = "New buttons on code and diagrams";
+"Code blocks and diagrams share one set of buttons, and you can copy a diagram’s Mermaid source." = "Code blocks and diagrams share one set of buttons, and you can copy a diagram’s Mermaid source.";
+"Switch tabs with ⌘1 to ⌘9" = "Switch tabs with ⌘1 to ⌘9";
+"Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one." = "Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one.";
+"Search keeps its place" = "Search keeps its place";
+"Clicking in the document or the search field no longer moves to the next match." = "Clicking in the document or the search field no longer moves to the next match.";
 
 /* Reading preferences */
 "Strict line breaks" = "Strict line breaks";

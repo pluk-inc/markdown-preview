@@ -1,7 +1,7 @@
 # Share via link — plan
 
-Status: draft, 2026-10-16; revised 2026-10-23. Built behind the hidden
-`MarkdownPreview.shareLinksEnabled` default: the format and crypto (§2), the
+Status: draft, 2026-10-16; revised 2026-10-27. On for everyone since 0.0.70,
+with no switch: the format and crypto (§2), the
 Worker API and its deploy setup on `md-preview.app` (§3), and sharing from the
 app (§4.1–4.4), the web viewer (§5), and opening links
 in the app (§4.5). Still planned: Universal Links (§4.5).
@@ -346,7 +346,7 @@ Built (2026-10-23), except Universal Links:
 
 - `AppDelegate.application(_:open:)` sends `md-preview://share/…` and web
   links to `ShareLinkOpener` before `ExternalOpenScheme`; anything else keeps
-  the malformed-link alert. Behind the same hidden default as sharing.
+  the malformed-link alert.
 - There is no File menu item to paste a link; links open from a click.
   File › "Publish to Web…" (after Export as PDF…) runs the Share popover's
   row: it publishes, or shows Manage Shared Document… once the file has a link.
@@ -413,7 +413,8 @@ which needs the Worker deployed on `md-preview.app` and a signed Release build.
 - Analytics: at most a `"share link created"` count with no content, title,
   size, or ID — or none at all (open question).
 - Ship behind a hidden default (`MarkdownPreview.shareLinksEnabled`) until the
-  Worker runs in production.
+  Worker runs in production. Done: 0.0.70 removed the default and turned
+  sharing on for everyone.
 
 ## 5. Web — phase 2
 

@@ -63,8 +63,7 @@ enum ShareLinkOpener {
 
     /// Accepts both the web link and the md-preview://share form.
     static func parse(_ url: URL) -> ShareLink? {
-        guard ShareLinkFeature.isEnabled else { return nil }
-        return ShareLink.parse(url, webBase: ShareLinkFeature.baseURL)
+        ShareLink.parse(url, webBase: ShareLinkFeature.baseURL)
     }
 
     /// The unpacked Markdown file for `link`, or nil after telling the user

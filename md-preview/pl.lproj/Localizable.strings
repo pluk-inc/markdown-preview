@@ -319,14 +319,15 @@
 "What’s New in Markdown Preview %@" = "Co nowego w Markdown Preview %@";
 "Release Notes" = "Informacje o wydaniu";
 "Continue" = "Dalej";
-"New files and a filter in the navigator" = "Nowe pliki i filtr w nawigatorze";
-"Use + under the file list to make a file or folder, and type to filter the tree." = "Użyj + pod listą plików, aby utworzyć plik lub folder, i pisz, aby filtrować drzewo.";
-"Math in Edit Mode" = "Matematyka w trybie edycji";
-"LaTeX formulas render while you edit. Move the caret into one to change its source." = "Formuły LaTeX są wyświetlane podczas edycji. Umieść w nich kursor, aby zmienić ich źródło.";
-"Resize table columns" = "Zmiana szerokości kolumn tabeli";
-"Drag the divider between header cells. Double-click it to fit the column." = "Przeciągnij separator między komórkami nagłówka. Kliknij dwukrotnie, aby dopasować kolumnę.";
-"Easier-to-read text" = "Bardziej czytelny tekst";
-"Body text is larger and darker, and diagrams draw at their natural size." = "Tekst główny jest większy i ciemniejszy, a diagramy mają naturalny rozmiar.";
+"Get an encrypted link to your document that anyone can read in a browser." = "Utwórz zaszyfrowany link do dokumentu, który każdy może przeczytać w przeglądarce.";
+"Redesigned Settings" = "Nowe ustawienia";
+"Settings has new tabs, and the Appearance pane shows your changes on a live sample page." = "Ustawienia mają nowe karty, a panel Wygląd pokazuje zmiany na żywej stronie przykładowej.";
+"New buttons on code and diagrams" = "Nowe przyciski przy kodzie i diagramach";
+"Code blocks and diagrams share one set of buttons, and you can copy a diagram’s Mermaid source." = "Bloki kodu i diagramy mają te same przyciski, a źródło Mermaid diagramu można skopiować.";
+"Switch tabs with ⌘1 to ⌘9" = "Przełączaj karty skrótami ⌘1–⌘9";
+"Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one." = "Naciśnij ⌘1–⌘8, aby przejść do karty, lub ⌘9, aby przejść do ostatniej.";
+"Search keeps its place" = "Wyszukiwanie zostaje na miejscu";
+"Clicking in the document or the search field no longer moves to the next match." = "Kliknięcie w dokumencie lub w polu wyszukiwania nie przechodzi już do następnego wyniku.";
 
 /* Reading preferences */
 "Strict line breaks" = "Ścisłe reguły podziału wierszy";

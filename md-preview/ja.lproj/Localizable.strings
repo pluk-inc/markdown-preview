@@ -318,14 +318,15 @@
 "What’s New in Markdown Preview %@" = "Markdown Preview %@ の新機能";
 "Release Notes" = "リリースノート";
 "Continue" = "続ける";
-"New files and a filter in the navigator" = "ナビゲータでの新規作成とフィルタ";
-"Use + under the file list to make a file or folder, and type to filter the tree." = "ファイル一覧の下の + でファイルやフォルダを作成し、入力してツリーを絞り込めます。";
-"Math in Edit Mode" = "編集モードでの数式";
-"LaTeX formulas render while you edit. Move the caret into one to change its source." = "編集中も LaTeX の数式が表示されます。キャレットを数式に移すとソースを変更できます。";
-"Resize table columns" = "表の列幅の変更";
-"Drag the divider between header cells. Double-click it to fit the column." = "見出しセルの間の区切りをドラッグします。ダブルクリックで列幅を合わせます。";
-"Easier-to-read text" = "読みやすくなったテキスト";
-"Body text is larger and darker, and diagrams draw at their natural size." = "本文が大きく濃くなり、図は本来のサイズで描画されます。";
+"Get an encrypted link to your document that anyone can read in a browser." = "誰でもブラウザで読める、書類の暗号化されたリンクを作成できます。";
+"Redesigned Settings" = "設定のデザインを一新";
+"Settings has new tabs, and the Appearance pane shows your changes on a live sample page." = "設定は新しいタブ形式になり、「外観」パネルでは変更がライブのサンプルページに表示されます。";
+"New buttons on code and diagrams" = "コードと図の新しいボタン";
+"Code blocks and diagrams share one set of buttons, and you can copy a diagram’s Mermaid source." = "コードブロックと図で同じボタンを使うようになり、図の Mermaid ソースをコピーできます。";
+"Switch tabs with ⌘1 to ⌘9" = "⌘1〜⌘9 でタブを切り替え";
+"Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one." = "⌘1〜⌘8 でそのタブに、⌘9 で最後のタブに移動します。";
+"Search keeps its place" = "検索の位置を保持";
+"Clicking in the document or the search field no longer moves to the next match." = "書類や検索フィールドをクリックしても、次の一致箇所に移動しなくなりました。";
 
 /* Reading preferences */
 "Strict line breaks" = "厳密な改行";

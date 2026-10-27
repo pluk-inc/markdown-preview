@@ -317,14 +317,15 @@
 "What’s New in Markdown Preview %@" = "ویژگی‌های جدید Markdown Preview %@";
 "Release Notes" = "یادداشت‌های انتشار";
 "Continue" = "ادامه";
-"New files and a filter in the navigator" = "فایل جدید و فیلتر در ناوبر";
-"Use + under the file list to make a file or folder, and type to filter the tree." = "با + زیر فهرست فایل‌ها فایل یا پوشه بسازید و برای فیلتر کردن درخت تایپ کنید.";
-"Math in Edit Mode" = "ریاضی در حالت ویرایش";
-"LaTeX formulas render while you edit. Move the caret into one to change its source." = "فرمول‌های LaTeX هنگام ویرایش نمایش داده می‌شوند. برای تغییر منبع، نشانگر را داخل فرمول ببرید.";
-"Resize table columns" = "تغییر عرض ستون‌های جدول";
-"Drag the divider between header cells. Double-click it to fit the column." = "جداکننده بین خانه‌های سرستون را بکشید. با دوبار کلیک، ستون را متناسب کنید.";
-"Easier-to-read text" = "متن خواناتر";
-"Body text is larger and darker, and diagrams draw at their natural size." = "متن اصلی بزرگ‌تر و تیره‌تر است و نمودارها در اندازهٔ طبیعی خود رسم می‌شوند.";
+"Get an encrypted link to your document that anyone can read in a browser." = "یک پیوند رمزگذاری‌شده به سند خود بسازید که هر کسی می‌تواند در مرورگر بخواند.";
+"Redesigned Settings" = "تنظیمات بازطراحی‌شده";
+"Settings has new tabs, and the Appearance pane shows your changes on a live sample page." = "تنظیمات زبانه‌های تازه دارد و بخش «ظاهر» تغییرات شما را روی یک صفحهٔ نمونهٔ زنده نشان می‌دهد.";
+"New buttons on code and diagrams" = "دکمه‌های تازه برای کد و نمودار";
+"Code blocks and diagrams share one set of buttons, and you can copy a diagram’s Mermaid source." = "بلوک‌های کد و نمودارها یک مجموعه دکمهٔ مشترک دارند و می‌توانید منبع Mermaid نمودار را کپی کنید.";
+"Switch tabs with ⌘1 to ⌘9" = "جابه‌جایی بین زبانه‌ها با ⌘1 تا ⌘9";
+"Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one." = "برای رفتن به یک زبانه ⌘1 تا ⌘8 و برای رفتن به آخرین زبانه ⌘9 را فشار دهید.";
+"Search keeps its place" = "جستجو جای خود را حفظ می‌کند";
+"Clicking in the document or the search field no longer moves to the next match." = "کلیک در سند یا در کادر جستجو دیگر به نتیجهٔ بعدی نمی‌رود.";
 
 /* Reading preferences */
 "Strict line breaks" = "شکست دقیق خطوط";

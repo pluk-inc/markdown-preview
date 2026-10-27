@@ -318,14 +318,15 @@
 "What’s New in Markdown Preview %@" = "Markdown Preview %@ 的新功能";
 "Release Notes" = "发布说明";
 "Continue" = "继续";
-"New files and a filter in the navigator" = "导航器中的新建文件和过滤";
-"Use + under the file list to make a file or folder, and type to filter the tree." = "使用文件列表下方的 + 新建文件或文件夹，输入文字即可过滤文件树。";
-"Math in Edit Mode" = "编辑模式中的数学公式";
-"LaTeX formulas render while you edit. Move the caret into one to change its source." = "编辑时 LaTeX 公式会直接显示。将插入点移入公式即可修改其源代码。";
-"Resize table columns" = "调整表格列宽";
-"Drag the divider between header cells. Double-click it to fit the column." = "拖移表头单元格之间的分隔线。连按两次可让列宽适合内容。";
-"Easier-to-read text" = "更易阅读的文字";
-"Body text is larger and darker, and diagrams draw at their natural size." = "正文更大、更清晰，图表以原始大小绘制。";
+"Get an encrypted link to your document that anyone can read in a browser." = "为文稿生成一个加密链接，任何人都可以在浏览器中阅读。";
+"Redesigned Settings" = "重新设计的设置";
+"Settings has new tabs, and the Appearance pane shows your changes on a live sample page." = "设置采用新的标签页，“外观”面板会在实时示例页面上显示你的更改。";
+"New buttons on code and diagrams" = "代码块和图表的新按钮";
+"Code blocks and diagrams share one set of buttons, and you can copy a diagram’s Mermaid source." = "代码块和图表使用同一组按钮，你还可以拷贝图表的 Mermaid 源代码。";
+"Switch tabs with ⌘1 to ⌘9" = "使用 ⌘1 到 ⌘9 切换标签页";
+"Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one." = "按 ⌘1 到 ⌘8 前往对应的标签页，按 ⌘9 前往最后一个标签页。";
+"Search keeps its place" = "搜索会保持当前位置";
+"Clicking in the document or the search field no longer moves to the next match." = "点按文稿或搜索栏时，不再跳到下一个匹配项。";
 
 /* Reading preferences */
 "Strict line breaks" = "严格换行";
