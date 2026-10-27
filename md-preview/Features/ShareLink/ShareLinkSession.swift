@@ -173,6 +173,8 @@ enum ShareLinkSession {
             L("This document is too large to share as a link.")
         case ShareLinkClient.Failure.rateLimited:
             L("Too many links in a short time. Wait a minute, then try again.")
+        case ShareLinkClient.Failure.quotaExceeded:
+            L("Sharing reached its limit for today. Try again tomorrow.")
         case let error as URLError where error.code == .notConnectedToInternet:
             L("You are offline. Connect to the internet, then try again.")
         case Failure.lostCredentials(let expiresAt):

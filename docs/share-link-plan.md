@@ -237,7 +237,9 @@ the cron and lifecycle rule below, which KV's TTL would have replaced.
   alike. An update counts its full size, because it also renews the link's
   expiry: every object then lives on bytes counted in the last 30 days. Past
   `DAILY_UPLOAD_BYTES` (5 GB) uploads answer `503 {"error":"quota_exceeded"}`
-  until the next day, so the bucket holds at most 30 × 5 GB. The trade-off:
+  until the next day. A 30-day link spans at most 31 UTC days, so live links
+  hold at most 31 × 5 GB (155 GB), plus expired ones until a read or the
+  daily purge deletes them. The trade-off:
   an abuser who reaches the quota stops new links for everyone until
   midnight UTC.
 - No CORS on write routes. `GET` needs CORS only if the viewer is on another

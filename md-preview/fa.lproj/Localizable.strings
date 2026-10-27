@@ -484,6 +484,7 @@
 "If you stop sharing, people with the link can no longer open this document, and its copy is deleted from the server." = "اگر اشتراک‌گذاری را متوقف کنید، افرادی که پیوند را دارند دیگر نمی‌توانند این سند را باز کنند و نسخهٔ آن از سرور حذف می‌شود.";
 "This document is too large to share as a link." = "این سند برای اشتراک‌گذاری با پیوند بیش از حد بزرگ است.";
 "Too many links in a short time. Wait a minute, then try again." = "در مدت کوتاهی پیوندهای زیادی ساخته شده است. یک دقیقه صبر کنید و دوباره امتحان کنید.";
+"Sharing reached its limit for today. Try again tomorrow." = "اشتراک‌گذاری به سقف امروز رسیده است. فردا دوباره امتحان کنید.";
 "You are offline. Connect to the internet, then try again." = "آفلاین هستید. به اینترنت وصل شوید و دوباره امتحان کنید.";
 "Markdown Preview could not reach the sharing server. Try again later." = "Markdown Preview نتوانست به سرور اشتراک‌گذاری وصل شود. بعداً دوباره امتحان کنید.";
 

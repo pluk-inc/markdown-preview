@@ -26,7 +26,8 @@
     { "name": "READ_LIMITER", "namespace_id": "1002", "simple": { "limit": 300, "period": 60 } }
   ],
   // All IPs together may upload this many bytes a UTC day (src/upload-quota.ts).
-  // With 30-day links, the bucket holds at most 30 days of it: 150 GB.
+  // A 30-day link spans at most 31 UTC days, so live links hold at most
+  // 155 GB, plus expired ones until the daily purge deletes them.
   "durable_objects": {
     "bindings": [{ "name": "UPLOAD_QUOTA", "class_name": "UploadQuota" }]
   },
