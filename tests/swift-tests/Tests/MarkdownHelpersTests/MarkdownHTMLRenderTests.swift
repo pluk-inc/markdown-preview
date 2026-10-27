@@ -1323,8 +1323,11 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             const left = last();
             // The page sees the pointer leave for the host's glass; the
             // glass's clicks still act on that figure.
+            window.__posted = [];
             window.mdpDiagramHUDAction('reset');
+            const afterLeave = last();
             return JSON.stringify({
+                afterLeaveVisible: afterLeave?.visible, afterLeaveLevel: afterLeave?.level,
                 shownVisible: shown?.visible, shownLevel: shown?.level, shownPopup: shown?.popup,
                 shownWidth: shown?.width, shownID: shown?.id, zoomedLevel: zoomed?.level, focused,
                 copied: copied?.value, htmlHUDOpacity: htmlHUD.opacity, htmlHUDDisplay: htmlHUD.display,
@@ -1348,6 +1351,9 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertNotEqual(state["htmlHUDDisplay"] as? String, "none", json)
         XCTAssertEqual(state["leftVisible"] as? Bool, false, json)
         XCTAssertEqual(state["levelAfterLeave"] as? String, "100%", json)
+        // ...and the glass hears the new level.
+        XCTAssertEqual(state["afterLeaveVisible"] as? Bool, true, json)
+        XCTAssertEqual(state["afterLeaveLevel"] as? String, "100%", json)
     }
 
     /// Code blocks get the same native glass HUD on hover: the page reports

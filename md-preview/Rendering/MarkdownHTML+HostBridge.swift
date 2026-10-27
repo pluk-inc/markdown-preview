@@ -109,13 +109,13 @@ nonisolated extension MarkdownHTML {
         let frame = 0;
         const ids = new WeakMap();
         let nextID = 0;
-        function post() {
-            const extras = target?.isConnected ? describe(target) : null;
+        function post(el = target) {
+            const extras = el?.isConnected ? describe(el) : null;
             const message = { kind, visible: !!extras };
             if (extras) {
-                if (!ids.has(target)) ids.set(target, nextID++);
-                const r = target.getBoundingClientRect();
-                Object.assign(message, { id: ids.get(target), x: r.left, y: r.top, width: r.width, height: r.height }, extras);
+                if (!ids.has(el)) ids.set(el, nextID++);
+                const r = el.getBoundingClientRect();
+                Object.assign(message, { id: ids.get(el), x: r.left, y: r.top, width: r.width, height: r.height }, extras);
             }
             try { window.webkit?.messageHandlers?.mdPreviewHost?.postMessage(message); } catch (_) {}
         }
@@ -132,7 +132,12 @@ nonisolated extension MarkdownHTML {
                 if (el) last = el;
                 post();
             },
-            refresh() { if (target) post(); },
+            // The block the host's controls act on, so an action's new state
+            // (a zoom level, Wrap) reaches the glass the pointer is on.
+            refresh() {
+                const el = reporter.target;
+                if (el) post(el);
+            },
         };
         const refreshAll = window.mdpRefreshNativeHUD;
         window.mdpRefreshNativeHUD = () => { refreshAll?.(); reporter.refresh(); };
