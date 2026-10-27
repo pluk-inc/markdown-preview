@@ -62,7 +62,7 @@ final class ShareViewerKitTests: XCTestCase {
             // Loaded after pele.global.js, only for documents with diagrams.
             "diagrams.js": header + """
             window.MdpDiagrams = {
-                // (messages) => { bootstrap, renderAll }
+                // (messages, copyText) => { bootstrap, renderAll }
                 wiring: \(MarkdownHTML.mermaidWiringFunction),
                 // The app's diagramMessagesJS in each of its languages.
                 messages: {

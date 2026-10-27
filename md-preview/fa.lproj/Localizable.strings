@@ -271,8 +271,6 @@
 "Mermaid diagram" = "نمودار Mermaid";
 "%@ — Mermaid diagram" = "%@ — نمودار Mermaid";
 "Reset zoom" = "بازنشانی بزرگ‌نمایی";
-"Fill width" = "پر کردن عرض";
-"Fit diagram" = "برازش نمودار";
 "Open in Window" = "باز کردن در پنجره";
 "Mermaid renderer is unavailable.\n\n" = "رندرکنندهٔ Mermaid در دسترس نیست.\n\n";
 "This diagram type is not supported." = "این نوع نمودار پشتیبانی نمی‌شود.";

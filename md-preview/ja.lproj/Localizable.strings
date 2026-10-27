@@ -272,8 +272,6 @@
 "Mermaid diagram" = "Mermaid ダイアグラム";
 "%@ — Mermaid diagram" = "%@ — Mermaid ダイアグラム";
 "Reset zoom" = "拡大/縮小をリセット";
-"Fill width" = "幅に合わせる";
-"Fit diagram" = "ダイアグラム全体を表示";
 "Open in Window" = "ウインドウで開く";
 "Mermaid renderer is unavailable.\n\n" = "Mermaid レンダラーを利用できません。\n\n";
 "This diagram type is not supported." = "この種類のダイアグラムには対応していません。";

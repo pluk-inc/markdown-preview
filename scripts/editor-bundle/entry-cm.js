@@ -540,6 +540,9 @@ class CodeLanguageWidget extends WidgetType {
     })
 
     container.appendChild(input)
+    const actions = document.createElement('span')
+    actions.className = 'cm-md-code-actions'
+    container.appendChild(actions)
     const action = (label, icon, className, run) => {
       const button = document.createElement('button')
       button.type = 'button'
@@ -549,7 +552,7 @@ class CodeLanguageWidget extends WidgetType {
       button.innerHTML = codeActionIcon(icon)
       button.addEventListener('mousedown', event => { event.preventDefault(); event.stopPropagation() })
       button.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); run(button) })
-      container.appendChild(button)
+      actions.appendChild(button)
       return button
     }
     const toggle = action(this.wrapped ? 'Unwrap code' : 'Wrap code', this.wrapped ? 'unwrap' : 'wrap',

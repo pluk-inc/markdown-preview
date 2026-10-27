@@ -115,6 +115,40 @@ nonisolated extension MarkdownHTML {
       get fontSize() { return parseFloat(getComputedStyle(document.body).fontSize); } }
     """
 
+    /// A diagram HUD icon as a CSS mask, drawn like the code block header's
+    /// (`codeBlockScript`). CSS, not inline SVG, because the share viewer's
+    /// sanitizer drops SVG from the shared page.
+    private static func diagramHUDIcon(_ shapes: String) -> String {
+        // Single quotes inside, as the url() is double-quoted.
+        let svg = (lineIconSVGOpen(stroke: "black") + shapes + "</svg>")
+            .replacingOccurrences(of: "\"", with: "'")
+        let encoded = svg.replacingOccurrences(of: "<", with: "%3C").replacingOccurrences(of: ">", with: "%3E")
+        return #"url("data:image/svg+xml,\#(encoded)")"#
+    }
+
+    /// The hairline of a diagram's frame and of the control pills, so the two
+    /// match: the text colour, faint, in light and dark alike.
+    static let blockEdgeColor = "color-mix(in srgb, var(--text) 12%, transparent)"
+
+    /// The control pill shared by code block headers (preview and editor)
+    /// and the diagram HUD: 24px round buttons, 4px inside a 32px pill
+    /// (`BlockGlassHUD` draws the same as native glass).
+    static let controlPillCSS = """
+    box-sizing: border-box;
+    padding: 3.5px;
+    border: 0.5px solid \(blockEdgeColor);
+    border-radius: 16px;
+    /* No page colour in CSS: the app's window paints the theme behind a
+       clear page, so a faint tint lets that colour through. */
+    background: color-mix(in srgb, var(--text) 4%, transparent);
+    """
+    static let controlPillButtonCSS = """
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: none; width: 24px; height: 24px; padding: 0;
+    appearance: none; border: 0; border-radius: 12px;
+    color: var(--secondary); background: transparent; cursor: pointer;
+    """
+
     /// Inset between a diagram and its tray, in both modes.
     static let diagramStagePadding = 16
     /// Tray geometry shared by the preview figure and the editor widget. The
@@ -127,6 +161,14 @@ nonisolated extension MarkdownHTML {
     width: 100%;
     aspect-ratio: var(--mm-aspect, 4 / 3);
     max-height: min(var(--mm-max-height), calc(var(--mm-height, var(--mm-max-height)) + \(2 * diagramStagePadding)px));
+    """
+
+    /// The tray's frame in both modes: no fill, a hairline edge. An inset
+    /// outline, so the frame adds nothing to the sizing above.
+    static let diagramFrameCSS = """
+    background: transparent;
+    outline: 0.5px solid \(blockEdgeColor);
+    outline-offset: -0.5px;
     """
 
     /// Text shown in a diagram's place (an error, or an empty block), shared
@@ -617,35 +659,42 @@ nonisolated extension MarkdownHTML {
         gap: 4px;
         height: 28px;
         padding: 8px 10px 0 16px;
+        /* Above the code, which the pill's lower edge overlaps. */
+        position: relative;
+        z-index: 1;
         user-select: none;
         -webkit-user-select: none;
         cursor: default;
     }
     .md-code-language { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
         color: var(--secondary); font: 11px/14px -apple-system, BlinkMacSystemFont, sans-serif; }
-    .md-code-action {
-        display: inline-flex; align-items: center; justify-content: center;
-        flex: none; width: 28px; height: 28px; padding: 0;
-        appearance: none; border: 0; border-radius: 50%;
-        color: var(--secondary); background: transparent; cursor: pointer;
+    /* The 32px pill hangs 2px above and below the 28px header row and 4px
+       into its end padding, so the code keeps its place and the pill sits
+       6.5px from the block's top and right edges, as a diagram's does. */
+    .md-code-actions {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        flex: none;
+        margin: -2px -4px -2px 0;
+        \(controlPillCSS)
     }
+    .md-code-action { \(controlPillButtonCSS) }
     .md-code-action:hover { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
-    .md-code-action:focus-visible { outline: 2px solid AccentColor; outline-offset: 1px; }
+    .md-code-action:active { background: color-mix(in srgb, var(--text) 16%, transparent); }
+    /* Inside the button, so the ring stays within the pill. */
+    .md-code-action:focus-visible { outline: 2px solid AccentColor; outline-offset: -2px; }
     .mermaid-figure {
         position: relative;
         margin: \(largeBlockSpacing)px 0 0;
-        background: var(--code-bg);
+        \(diagramFrameCSS)
         border-radius: 15px;
         overflow: hidden;
-        outline: none;
         /* The stage is absolutely positioned, so the figure needs an explicit
            width; a tall diagram stays centred inside the height cap. */
         \(diagramFigureSizingCSS)
         contain: layout paint;
         \(diagramVariablesCSS)
-    }
-    .mermaid-figure.mermaid-width-expanded {
-        max-height: none;
     }
     .mermaid-figure:focus-visible {
         box-shadow: 0 0 0 3px color-mix(in srgb, AccentColor 60%, transparent);
@@ -673,87 +722,78 @@ nonisolated extension MarkdownHTML {
         max-width: none !important;
         height: 100%;
     }
+    /* One pill, 6.5px from the figure's top and right edges, where a code
+       block's pill sits. */
     .mermaid-hud {
         position: absolute;
-        top: 8px;
-        right: 8px;
+        top: 6.5px;
+        right: 6.5px;
         display: flex;
         flex-wrap: wrap;
         justify-content: flex-end;
-        gap: 6px 8px;
-        max-width: calc(100% - 16px);
+        max-width: calc(100% - 13px);
+        \(controlPillCSS)
+        /* Over the drawing, a blur keeps its lines from showing through. */
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.12s ease;
         z-index: 2;
-        font-size: 12px;
-        line-height: 1;
-        color: var(--text);
+        color: var(--secondary);
     }
     .mermaid-hud-group {
         display: flex;
+        align-items: center;
         gap: 2px;
-        padding: 3px;
-        border-radius: 9px;
-        background: color-mix(in srgb, Canvas 75%, transparent);
-        backdrop-filter: blur(20px) saturate(160%);
-        -webkit-backdrop-filter: blur(20px) saturate(160%);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    }
+    .mermaid-hud-group + .mermaid-hud-group::before {
+        content: "";
+        width: 1px;
+        height: 16px;
+        margin: 0 4px;
+        background: \(blockEdgeColor);
     }
     .mermaid-figure:hover .mermaid-hud,
     .mermaid-figure:focus-within .mermaid-hud {
         opacity: 1;
         pointer-events: auto;
     }
-    .mermaid-hud-btn {
-        appearance: none;
-        border: none;
-        background: transparent;
-        color: inherit;
-        font: inherit;
-        font-weight: 500;
-        padding: 5px 9px;
-        border-radius: 6px;
-        cursor: pointer;
-        min-width: 26px;
-        text-align: center;
-    }
+    .mermaid-hud-btn { \(controlPillButtonCSS) }
     .mermaid-hud-btn:hover {
-        background: color-mix(in srgb, var(--text) 12%, transparent);
+        color: var(--text);
+        background: color-mix(in srgb, var(--text) 10%, transparent);
     }
     .mermaid-hud-btn:active {
-        background: color-mix(in srgb, var(--text) 18%, transparent);
-    }
-    /* −, + and ⛶ draw about 1px below the middle of the text box (− and +
-       sit on the font's maths axis); shift them up inside the same button
-       box, measured centred to a quarter point. */
-    .mermaid-hud-btn[data-mm-act="out"],
-    .mermaid-hud-btn[data-mm-act="in"],
-    .mermaid-hud-btn[data-mm-act="popup"] {
-        padding-top: 4px;
-        padding-bottom: 6px;
+        background: color-mix(in srgb, var(--text) 16%, transparent);
     }
     .mermaid-hud-level {
-        min-width: 46px;
+        width: auto;
+        min-width: 44px;
+        padding: 0 4px;
+        font: 11px/14px -apple-system, BlinkMacSystemFont, sans-serif;
         font-variant-numeric: tabular-nums;
     }
-    .mermaid-hud-width {
-        line-height: 12px;
+    .mermaid-hud-btn:not(.mermaid-hud-level)::before {
+        content: "";
+        width: 16px;
+        height: 16px;
+        background: currentColor;
+        -webkit-mask: var(--mm-icon) center / 16px no-repeat;
+        mask: var(--mm-icon) center / 16px no-repeat;
     }
-    /* ⤢ comes from Apple Symbols, which has one weight: WebKit draws it the
-       same at any weight, other browsers thicken it above 400. */
-    .mermaid-hud-width-symbol {
-        display: inline-block;
-        font-size: 22px;
-        font-weight: 400;
-    }
-    .mermaid-hud-popup {
-        font-size: 16px;
-        line-height: 12px;
-    }
+    .mermaid-hud-btn[data-mm-act="out"] { --mm-icon: \(diagramHUDIcon("<path d='M6 12h12'/>")); }
+    .mermaid-hud-btn[data-mm-act="in"] { --mm-icon: \(diagramHUDIcon("<path d='M12 6v12M6 12h12'/>")); }
+    .mermaid-hud-btn[data-mm-act="copy"] { --mm-icon: \(diagramHUDIcon(codeIconShapes["copy"] ?? "")); }
+    .mermaid-hud-btn[data-mm-act="copy"].is-copied { --mm-icon: \(diagramHUDIcon(codeIconShapes["check"] ?? "")); }
+    .mermaid-hud-btn[data-mm-act="popup"] { --mm-icon: \(diagramHUDIcon("<path d='M14 4h6v6M10 20H4v-6M20 4l-6 6M4 20l6-6'/>")); }
     @media (prefers-reduced-motion: reduce) {
         .mermaid-hud { transition: none; }
     }
+    /* The app on macOS 26 draws these as native glass on hover (BlockGlassHUD);
+       the code pill keeps its space so the header does not move. */
+    :root[data-mdp-native-hud] .mermaid-hud { display: none !important; }
+    :root[data-mdp-native-hud] .md-code-actions { visibility: hidden; }
     /* A diagram that cannot be drawn shows the message and its source in
        flow, so the figure sizes to the text instead of the aspect ratio. */
     .mermaid-figure.mermaid-error {

@@ -338,7 +338,7 @@ function enableColumnResize() {
 
 /**
  * Diagrams, drawn as the app draws them: diagrams.js is Pele and the app's
- * wiring (zoom, Fill width, the HUD), loaded only for documents that have
+ * wiring (zoom, Copy, the HUD), loaded only for documents that have
  * diagrams and not waited for. Each draws as it nears the screen, and all
  * at once to print. Without Pele the figures show their source.
  */
@@ -369,7 +369,7 @@ async function drawDiagrams(figures) {
     return showSource(true);
   }
   const { wiring, messages } = window.MdpDiagrams;
-  diagrams = wiring(messages[language] ?? messages.en);
+  diagrams = wiring(messages[language] ?? messages.en, copyText);
   diagrams.bootstrap();
 }
 
@@ -557,19 +557,22 @@ async function render(payload) {
 
 // MARK: - Code blocks
 
+// Code blocks and diagrams copy through the Clipboard API; when that fails,
+// the button stays as it was, as in the app.
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // The app's code block header (language, Wrap, Copy), from the kit, in the
-// reader's language. The page copies through the Clipboard API; when that
-// fails, the button stays as it was, as in the app.
+// reader's language.
 const decorateCodeBlocks = MdpRenderers.enableCodeBlocks(
   MdpRenderers.codeBlockMessages[language] ?? MdpRenderers.codeBlockMessages.en,
-  async (code) => {
-    try {
-      await navigator.clipboard.writeText(code);
-      return true;
-    } catch {
-      return false;
-    }
-  },
+  copyText,
 );
 
 // Copying whole blocks puts their Markdown source on the clipboard, as the
@@ -678,9 +681,12 @@ window.addEventListener("md-preview-mermaid-rendered", () => {
 DOMPurify.addHook("afterSanitizeAttributes", (node) => {
   if (node.tagName === "A") applyLinkRules(node);
   // Buttons only for the diagram HUD; its window button needs the app.
-  if (node.tagName === "BUTTON"
-      && (!node.closest(".mermaid-hud") || node.dataset.mmAct === "popup")) {
-    node.remove();
+  // Pages shared by older apps also carry Fill width, and text glyphs
+  // where the HUD now draws icons.
+  if (node.tagName === "BUTTON") {
+    const act = node.dataset.mmAct;
+    if (!node.closest(".mermaid-hud") || act === "popup" || act === "width") node.remove();
+    else if (act !== "reset") node.textContent = "";
   }
   if (node.tagName === "INPUT") {
     if (node.getAttribute("type") !== "checkbox") node.remove();

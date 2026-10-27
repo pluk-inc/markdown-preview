@@ -238,6 +238,10 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     private var accumulatedMagnification: CGFloat = 0
     private var didMagnifyDuringCurrentGesture = false
     private var isPointerOverMermaidFigure = false
+    #if !QUICK_LOOK_EXTENSION
+    /// `BlockGlassHUD` on macOS 26; typed as NSView for older systems.
+    private var blockHUD: NSView?
+    #endif
     private var currentMarkdown: String?
     private weak var webScrollView: NSScrollView?
     nonisolated(unsafe) private var scrollBoundsObserver: NSObjectProtocol?
@@ -267,11 +271,76 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             webView.leadingAnchor.constraint(equalTo: leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: trailingAnchor),
         ])
+        #if !QUICK_LOOK_EXTENSION
+        if #available(macOS 26.0, *), Self.usesBlockGlassHUD { installBlockGlassHUD(in: config) }
+        #endif
         DispatchQueue.main.async { [weak self] in
             self?.configureWebKitScrollView()
             self?.warmupVendors()
         }
     }
+
+    #if !QUICK_LOOK_EXTENSION
+    #if DEBUG
+    /// Debug builds launched with `-MarkdownPreview.htmlBlockControls YES`
+    /// show the HTML pills macOS 15 gets, to check them on a newer system.
+    private static var usesBlockGlassHUD: Bool {
+        !UserDefaults.standard.bool(forKey: "MarkdownPreview.htmlBlockControls")
+    }
+    #else
+    private static let usesBlockGlassHUD = true
+    #endif
+
+    /// Diagram and code block controls as native glass over the page; the
+    /// page hides its HTML ones when the root carries `data-mdp-native-hud`.
+    @available(macOS 26.0, *)
+    private func installBlockGlassHUD(in config: WKWebViewConfiguration) {
+        config.userContentController.addUserScript(WKUserScript(
+            source: "document.documentElement.setAttribute('data-mdp-native-hud', '');",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        ))
+    }
+
+    /// The pill, made on the first hover so spare and prewarmed readers
+    /// never build it.
+    @available(macOS 26.0, *)
+    private var blockGlassHUD: BlockGlassHUD {
+        if let hud = blockHUD as? BlockGlassHUD { return hud }
+        let hud = BlockGlassHUD()
+        hud.scrollTarget = webView
+        hud.perform = { [weak self] kind, act in
+            let function = kind == .diagram ? "mdpDiagramHUDAction" : "mdpCodeHUDAction"
+            self?.webView.evaluateJavaScript(
+                "window.\(function) && \(function)(\(MarkdownHTML.javaScriptStringLiteral(act)))"
+            ) { _, _ in }
+        }
+        addSubview(hud, positioned: .above, relativeTo: webView)
+        blockHUD = hud
+        return hud
+    }
+
+    @available(macOS 26.0, *)
+    private func updateBlockGlassHUD(_ kind: BlockGlassHUD.Kind, _ message: [String: Any]) {
+        let hud = blockGlassHUD
+        guard message["visible"] as? Bool == true,
+              let x = message["x"] as? Double, let y = message["y"] as? Double,
+              let width = message["width"] as? Double, let height = message["height"] as? Double
+        else { return hud.leave(kind) }
+        // The page reports CSS pixels from the top-left of its viewport,
+        // which starts below the toolbar's obscured inset.
+        let zoom = webView.pageZoom
+        let top = webView.obscuredContentInsets.top
+        let inWebView = NSRect(x: x * zoom, y: top + y * zoom, width: width * zoom, height: height * zoom)
+        hud.show(.init(kind: kind,
+                       frame: convert(inWebView, from: webView),
+                       level: message["level"] as? String ?? "100%",
+                       hasPopup: message["popup"] as? Bool ?? false,
+                       wrapped: message["wrapped"] as? Bool ?? false),
+                 scale: zoom,
+                 visibleTop: top)
+    }
+    #endif
 
     deinit {
         if let scrollBoundsObserver {
@@ -469,6 +538,9 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         pendingContentProcessReload = nil
         currentMarkdown = markdown
         isPointerOverMermaidFigure = false
+        #if !QUICK_LOOK_EXTENSION
+        if #available(macOS 26.0, *) { (blockHUD as? BlockGlassHUD)?.hide() }
+        #endif
         assetScheme.setBaseURL(assetBaseURL)
         currentAssetBase = assetBaseURL
         let baseHref = currentBaseHref
@@ -713,6 +785,10 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             guard let value = dict["value"] as? NSNumber else { return }
             isPointerOverMermaidFigure = value.boolValue
         #if !QUICK_LOOK_EXTENSION
+        case "diagramHUD":
+            if #available(macOS 26.0, *) { updateBlockGlassHUD(.diagram, dict) }
+        case "codeHUD":
+            if #available(macOS 26.0, *) { updateBlockGlassHUD(.code, dict) }
         case "mermaidPopup":
             presentMermaidPopup(dict)
         case "tablePopup":

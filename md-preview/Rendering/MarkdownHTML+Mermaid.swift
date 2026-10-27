@@ -44,7 +44,7 @@ nonisolated extension MarkdownHTML {
         let zoomOut = htmlEscape(NSLocalizedString("Zoom Out", comment: "Mermaid diagram control"))
         let resetZoom = htmlEscape(NSLocalizedString("Reset zoom", comment: "Mermaid diagram control"))
         let zoomIn = htmlEscape(NSLocalizedString("Zoom In", comment: "Mermaid diagram control"))
-        let fillWidth = htmlEscape(NSLocalizedString("Fill width", comment: "Mermaid diagram control"))
+        let copy = htmlEscape(NSLocalizedString("Copy", comment: "Mermaid diagram copy button"))
         // The popup is app-only — `MarkdownWebView` compiles its `mermaidPopup`
         // handler out of the Quick Look extension, so emitting the button there
         // would leave a control that does nothing when clicked.
@@ -53,7 +53,7 @@ nonisolated extension MarkdownHTML {
         #else
         let openWindow = htmlEscape(NSLocalizedString("Open in Window", comment: "Mermaid diagram control"))
         let popupButton = """
-        <button type="button" class="mermaid-hud-btn mermaid-hud-popup" data-mm-act="popup" tabindex="-1" aria-label="\(openWindow)" title="\(openWindow)">⛶</button>
+        <button type="button" class="mermaid-hud-btn mermaid-hud-popup" data-mm-act="popup" tabindex="-1" aria-label="\(openWindow)" title="\(openWindow)"></button>
         """
         #endif
         for match in matches {
@@ -68,12 +68,12 @@ nonisolated extension MarkdownHTML {
             <div class="mermaid-stage"><div class="mermaid">\(diagram)</div></div>
             <div class="mermaid-hud" aria-hidden="true">
             <div class="mermaid-hud-group mermaid-hud-zoom">
-            <button type="button" class="mermaid-hud-btn" data-mm-act="out" tabindex="-1" aria-label="\(zoomOut)">−</button>
+            <button type="button" class="mermaid-hud-btn" data-mm-act="out" tabindex="-1" aria-label="\(zoomOut)"></button>
             <button type="button" class="mermaid-hud-btn mermaid-hud-level" data-mm-act="reset" tabindex="-1" aria-label="\(resetZoom)">100%</button>
-            <button type="button" class="mermaid-hud-btn" data-mm-act="in" tabindex="-1" aria-label="\(zoomIn)">+</button>
+            <button type="button" class="mermaid-hud-btn" data-mm-act="in" tabindex="-1" aria-label="\(zoomIn)"></button>
             </div>
             <div class="mermaid-hud-group mermaid-hud-actions">
-            <button type="button" class="mermaid-hud-btn mermaid-hud-width" data-mm-act="width" tabindex="-1" aria-label="\(fillWidth)" aria-pressed="false" title="\(fillWidth)"><span class="mermaid-hud-width-symbol" aria-hidden="true">⤢</span></button>
+            <button type="button" class="mermaid-hud-btn mermaid-hud-copy" data-mm-act="copy" tabindex="-1" aria-label="\(copy)" title="\(copy)"></button>
             \(popupButton)
             </div>
             </div>
@@ -104,8 +104,8 @@ nonisolated extension MarkdownHTML {
         zoomOut: \(javaScriptStringLiteral(NSLocalizedString("Zoom Out", comment: "Mermaid diagram control"))),
         zoomIn: \(javaScriptStringLiteral(NSLocalizedString("Zoom In", comment: "Mermaid diagram control"))),
         resetZoom: \(javaScriptStringLiteral(NSLocalizedString("Reset zoom", comment: "Mermaid diagram control"))),
-        fillWidth: \(javaScriptStringLiteral(NSLocalizedString("Fill width", comment: "Mermaid diagram control"))),
-        fitDiagram: \(javaScriptStringLiteral(NSLocalizedString("Fit diagram", comment: "Mermaid diagram control")))
+        copy: \(javaScriptStringLiteral(NSLocalizedString("Copy", comment: "Mermaid diagram copy button"))),
+        copied: \(javaScriptStringLiteral(NSLocalizedString("Copied", comment: "Mermaid diagram copy confirmation")))
     }
     """
 
@@ -158,15 +158,17 @@ nonisolated extension MarkdownHTML {
     /// src=...>` delivery, since `defer` scripts run before DOMContentLoaded.
     /// Internal so SPM helper tests can drive the real bootstrap path (with a
     /// stub `pele` + message host).
-    static let mermaidInitWiring = "(\(mermaidWiringFunction))(\(diagramMessagesJS))"
+    static let mermaidInitWiring = """
+    (\(mermaidWiringFunction))(\(diagramMessagesJS), async (text) => (await window.MdPreview?.copyText?.(text)) === true)
+    """
 
-    /// `(messages) => { bootstrap, renderAll }`: the wiring, taking its words
-    /// in the shape of `diagramMessagesJS`. The share viewer (exported by
-    /// ShareViewerKitTests) passes the reader's language instead of the app's.
+    /// `(messages, copyText) => { bootstrap, renderAll }`: the wiring, taking
+    /// its words in the shape of `diagramMessagesJS` and `copyText(text)`
+    /// resolving to whether the text reached the clipboard (the app passes
+    /// the code blocks' own). The share viewer (exported by
+    /// ShareViewerKitTests) passes the reader's language and its clipboard.
     static let mermaidWiringFunction = """
-    (messages) => {
-            const fillWidthLabel = messages.fillWidth;
-            const fitDiagramLabel = messages.fitDiagram;
+    (messages, copyText) => {
             const states = new WeakMap();
             const renderOptions = \(diagramRenderOptionsJS);
             const errorMessage = \(diagramErrorMessageJS);
@@ -287,8 +289,14 @@ nonisolated extension MarkdownHTML {
                     return;
                 }
 
-                figure.addEventListener('pointerenter', () => postMermaidHover(true));
-                figure.addEventListener('pointerleave', () => postMermaidHover(false));
+                figure.addEventListener('pointerenter', () => {
+                    postMermaidHover(true);
+                    diagramHUD?.set(figure);
+                });
+                figure.addEventListener('pointerleave', () => {
+                    postMermaidHover(false);
+                    if (diagramHUD?.target === figure) diagramHUD.set(null);
+                });
                 figure.addEventListener('wheel', onWheel, { passive: false });
                 figure.addEventListener('pointerdown', onPointerDown);
                 figure.addEventListener('dblclick', onDoubleClick);
@@ -322,6 +330,22 @@ nonisolated extension MarkdownHTML {
                         value
                     });
                 } catch (_) {}
+            }
+
+            \(MarkdownHTML.nativeHUDReporterJS)
+            const diagramHUD = makeNativeHUDReporter('diagramHUD', (figure) =>
+                figure.classList.contains('mermaid-error') || !figure.querySelector('.mermaid svg') ? null : {
+                    level: figure.querySelector('.mermaid-hud-level')?.textContent || '100%',
+                    popup: !!figure.querySelector('[data-mm-act="popup"]')
+                });
+            if (diagramHUD) {
+                // No focus here: the click was on the host's glass, and
+                // focusing the figure from script would draw its focus ring.
+                window.mdpDiagramHUDAction = (act) => {
+                    if (diagramHUD.target?.isConnected) runHudAction(diagramHUD.target, act);
+                };
+                // A figure under the pointer that draws later gets its HUD then.
+                window.addEventListener('md-preview-mermaid-rendered', () => diagramHUD.refresh());
             }
 
             // Text of the closest heading before the figure in document
@@ -383,7 +407,12 @@ nonisolated extension MarkdownHTML {
                     s.raf = 0;
                     s.surface.style.transform = 'translate(' + s.tx + 'px,' + s.ty + 'px) scale(' + s.scale + ')';
                     const lvl = figure.querySelector('.mermaid-hud-level');
-                    if (lvl) lvl.textContent = Math.round(s.scale * 100) + '%';
+                    const level = Math.round(s.scale * 100) + '%';
+                    // A pan keeps the level: only a new one reaches the host.
+                    if (lvl && lvl.textContent !== level) {
+                        lvl.textContent = level;
+                        if (diagramHUD?.target === figure) diagramHUD.refresh();
+                    }
                 });
             }
 
@@ -411,23 +440,6 @@ nonisolated extension MarkdownHTML {
                 if (!s) return;
                 s.tx = 0; s.ty = 0; s.scale = 1;
                 apply(figure, s);
-            }
-
-            function toggleWidth(figure) {
-                const expanded = figure.classList.toggle('mermaid-width-expanded');
-                const btn = figure.querySelector('[data-mm-act="width"]');
-                if (btn) {
-                    const label = expanded ? fitDiagramLabel : fillWidthLabel;
-                    btn.textContent = expanded ? '⤡' : '⤢';
-                    btn.setAttribute('aria-label', label);
-                    btn.setAttribute('aria-pressed', String(expanded));
-                    btn.setAttribute('title', label);
-                }
-                reset(figure);
-                requestAnimationFrame(() => {
-                    cacheRect(figure);
-                    window.dispatchEvent(new Event('md-preview-mermaid-rendered'));
-                });
             }
 
             function step(figure, factor) {
@@ -509,13 +521,34 @@ nonisolated extension MarkdownHTML {
                 const figure = btn.closest('.mermaid-figure');
                 if (!figure) return;
                 figure.focus();
-                switch (btn.dataset.mmAct) {
+                runHudAction(figure, btn.dataset.mmAct);
+            }
+
+            function runHudAction(figure, act) {
+                switch (act) {
                     case 'in':    step(figure, 1.25); break;
                     case 'out':   step(figure, 0.8);  break;
                     case 'reset': reset(figure);      break;
-                    case 'width': toggleWidth(figure); break;
                     case 'popup': openPopup(figure);  break;
+                    case 'copy':  copySource(figure); break;
                 }
+            }
+
+            // Copies the text the figure was drawn from, through the host's
+            // `copyText`. The HTML button shows a check mark for a moment,
+            // as a code block's does.
+            async function copySource(figure) {
+                const value = figure.querySelector('.mermaid')?.__mdSrc?.replace(/\\s+$/, '');
+                if (!value || !(await copyText(value))) return;
+                const button = figure.querySelector('.mermaid-hud [data-mm-act="copy"]');
+                if (!button) return;
+                button.classList.add('is-copied');
+                button.setAttribute('aria-label', messages.copied);
+                clearTimeout(button.__mdCopyTimer);
+                button.__mdCopyTimer = setTimeout(() => {
+                    button.classList.remove('is-copied');
+                    button.setAttribute('aria-label', messages.copy);
+                }, 1100);
             }
 
             const ro = new ResizeObserver((entries) => {
@@ -524,13 +557,10 @@ nonisolated extension MarkdownHTML {
 
             // The HUD in the HTML carries the words of whoever rendered it;
             // these are the reader's (the same in the app).
-            const hudLabels = { out: messages.zoomOut, in: messages.zoomIn, reset: messages.resetZoom };
+            const hudLabels = { out: messages.zoomOut, in: messages.zoomIn, reset: messages.resetZoom, copy: messages.copy };
             function labelHud(figure) {
                 figure.querySelectorAll('.mermaid-hud [data-mm-act]').forEach((button) => {
-                    const pressed = button.getAttribute('aria-pressed') === 'true';
-                    const label = button.dataset.mmAct === 'width'
-                        ? (pressed ? fitDiagramLabel : fillWidthLabel)
-                        : hudLabels[button.dataset.mmAct];
+                    const label = hudLabels[button.dataset.mmAct];
                     if (!label) return;
                     button.setAttribute('aria-label', label);
                     if (button.hasAttribute('title')) button.title = label;

@@ -478,22 +478,30 @@ nonisolated enum EditorHTML {
             max-width: 100%;
             min-width: 4.5em;
             box-sizing: border-box;
-            padding: 2px 6px;
+            /* A 24px capsule, as the buttons' pill beside it: the padding
+               around the 14px line keeps the text where the preview's is. */
+            padding: 4px 6px;
             border: 1px solid transparent;
-            border-radius: 5px;
+            border-radius: 12px;
             background: transparent;
             color: var(--secondary);
             font: 11px/14px -apple-system, BlinkMacSystemFont, sans-serif;
             outline: none;
         }
-        #editor .cm-md-code-action {
-            display: inline-flex; align-items: center; justify-content: center;
-            flex: none; width: 28px; height: 28px; padding: 0;
-            appearance: none; border: 0; border-radius: 50%;
-            color: var(--secondary); background: transparent; cursor: pointer;
+        /* The preview's code block pill (.md-code-actions): it hangs past
+           the 28px row so the code keeps its place. */
+        #editor .cm-md-code-actions {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            flex: none;
+            margin: -2px -4px -2px 0;
+            \(MarkdownHTML.controlPillCSS)
         }
+        #editor .cm-md-code-action { \(MarkdownHTML.controlPillButtonCSS) }
         #editor .cm-md-code-action:hover { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
-        #editor .cm-md-code-action:focus-visible { outline: 2px solid AccentColor; outline-offset: 1px; }
+        #editor .cm-md-code-action:active { background: color-mix(in srgb, var(--text) 16%, transparent); }
+        #editor .cm-md-code-action:focus-visible { outline: 2px solid AccentColor; outline-offset: -2px; }
         #editor .cm-md-code-card-wrapped { grid-template-columns: minmax(0, 1fr); }
         #editor .cm-md-code-wrapped { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; padding-inline: 16px; }
         #editor .cm-md-code-wrapped .cm-md-code-scroll-text { display: inline; padding-inline: 0; }
@@ -545,7 +553,7 @@ nonisolated enum EditorHTML {
             \(MarkdownHTML.diagramFigureSizingCSS)
             overflow: hidden;
             border-radius: 15px;
-            background: var(--code-bg);
+            \(MarkdownHTML.diagramFrameCSS)
             cursor: text;
             box-sizing: border-box;
             \(MarkdownHTML.diagramVariablesCSS)

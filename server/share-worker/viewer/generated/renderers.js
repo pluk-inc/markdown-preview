@@ -380,12 +380,53 @@ function renderMathElement(el, tex, display) {
         });
     }
     function enableCodeBlocks(labels, copyText) {
-        const codeIcon = (kind) => '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ({
-            copy: '<rect x="4" y="8" width="12" height="13" rx="3"/><path d="M8 8V6a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-1"/>',
-            check: '<path d="m5 12 4 4L19 6"/>',
-            wrap: '<path d="M4 6h16M4 11h12a4 4 0 0 1 0 8h-5m3-3-3 3 3 3M4 16h3"/>',
-            unwrap: '<path d="M4 6h16M4 12h16m-4-4 4 4-4 4M4 18h7"/>'
-        })[kind] + '</svg>';
+        const codeIconShapes = { check: "<path d=\"m5 12 4 4L19 6\"\/>", copy: "<rect x=\"4\" y=\"8\" width=\"12\" height=\"13\" rx=\"3\"\/><path d=\"M8 8V6a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-1\"\/>", unwrap: "<path d=\"M4 6h16M4 12h16m-4-4 4 4-4 4M4 18h7\"\/>", wrap: "<path d=\"M4 6h16M4 11h12a4 4 0 0 1 0 8h-5m3-3-3 3 3 3M4 16h3\"\/>" };
+        const codeIcon = (kind) => "<svg xmlns=\"http:\/\/www.w3.org\/2000\/svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\">" + codeIconShapes[kind] + '</svg>';
+
+        function makeNativeHUDReporter(kind, describe) {
+    if (!document.documentElement.hasAttribute('data-mdp-native-hud')) return null;
+    let target = null;
+    let frame = 0;
+    function post() {
+        const extras = target?.isConnected ? describe(target) : null;
+        const message = { kind, visible: !!extras };
+        if (extras) {
+            const r = target.getBoundingClientRect();
+            Object.assign(message, { x: r.left, y: r.top, width: r.width, height: r.height }, extras);
+        }
+        try { window.webkit?.messageHandlers?.mdPreviewHost?.postMessage(message); } catch (_) {}
+    }
+    window.addEventListener('scroll', () => {
+        if (!target || frame) return;
+        frame = requestAnimationFrame(() => { frame = 0; post(); });
+    }, { passive: true });
+    window.addEventListener('resize', () => { if (target) post(); });
+    return {
+        get target() { return target; },
+        set(el) {
+            if (el === target) return;
+            target = el;
+            post();
+        },
+        refresh() { if (target) post(); },
+    };
+}
+        // The host's clicks run the hidden HTML buttons.
+        const codeHUD = makeNativeHUDReporter('codeHUD', (wrap) => ({
+            wrapped: wrap.classList.contains('is-wrapped')
+        }));
+        if (codeHUD) {
+            document.addEventListener('pointerover', (event) => {
+                codeHUD.set(event.target.closest?.('.md-code-wrap') || null);
+            });
+            document.addEventListener('pointerout', (event) => {
+                if (!event.relatedTarget) codeHUD.set(null);
+            });
+            window.mdpCodeHUDAction = (act) => {
+                const selector = act === 'wrap' ? '.md-code-toggle-wrap' : act === 'copy' ? '.md-code-copy' : null;
+                if (selector && codeHUD.target?.isConnected) codeHUD.target.querySelector(selector)?.click();
+            };
+        }
 
         function decorateCodeBlocks(root = document) {
             root.querySelectorAll('pre > code').forEach((code) => {
@@ -406,6 +447,9 @@ function renderMathElement(el, tex, display) {
                 language.className = 'md-code-language';
                 language.textContent = pre.dataset.codeLanguage || 'text';
                 header.appendChild(language);
+                const actions = document.createElement('span');
+                actions.className = 'md-code-actions';
+                header.appendChild(actions);
                 const toggle = document.createElement('button');
                 toggle.type = 'button';
                 toggle.className = 'md-code-action md-code-toggle-wrap';
@@ -413,14 +457,14 @@ function renderMathElement(el, tex, display) {
                 toggle.title = labels.wrapCode;
                 toggle.setAttribute('aria-label', toggle.title);
                 toggle.setAttribute('aria-pressed', 'false');
-                header.appendChild(toggle);
+                actions.appendChild(toggle);
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.className = 'md-code-action md-code-copy';
                 button.innerHTML = codeIcon('copy');
                 button.title = labels.copyCode;
                 button.setAttribute('aria-label', labels.copyCode);
-                header.appendChild(button);
+                actions.appendChild(button);
                 wrap.insertBefore(header, pre);
             });
         }
@@ -452,6 +496,7 @@ function renderMathElement(el, tex, display) {
                 toggle.setAttribute('aria-pressed', String(wrapped));
                 toggle.title = wrapped ? labels.unwrapCode : labels.wrapCode;
                 toggle.innerHTML = codeIcon(wrapped ? 'unwrap' : 'wrap');
+                if (codeHUD && toggle.closest('.md-code-wrap') === codeHUD.target) codeHUD.refresh();
                 return;
             }
             const button = event.target.closest('.md-code-copy');

@@ -22,10 +22,10 @@ checks = {
         and "svg.setAttribute('preserveAspectRatio', 'xMidYMid meet')" in source
         and "s.surface.style.transform" in source
     ),
-    "toggles full-width diagrams": (
-        'data-mm-act="width"' in source
-        and "classList.toggle('mermaid-width-expanded')" in source
-        and ".mermaid-figure.mermaid-width-expanded" in source
+    "copies diagram source": (
+        'data-mm-act="copy"' in source
+        and "function copySource" in source
+        and "copyText(value)" in source
     ),
     "opens diagram popup with measured size": (
         'data-mm-act="popup"' in source

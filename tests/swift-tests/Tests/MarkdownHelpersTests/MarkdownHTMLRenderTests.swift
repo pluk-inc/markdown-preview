@@ -1091,7 +1091,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             rendered.articleHTML
         )
         XCTAssertTrue(
-            rendered.articleHTML.contains(#"class="mermaid-hud-width-symbol" aria-hidden="true">⤢</span>"#),
+            rendered.articleHTML.contains(#"data-mm-act="copy" tabindex="-1" aria-label="Copy" title="Copy"></button>"#),
             rendered.articleHTML
         )
         // Assert the shared production wiring as well as the emitted controls.
@@ -1236,6 +1236,200 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             "(window.__posted || []).some((m) => m && m.kind === 'mermaidPopup')"
         ) as? Bool
         XCTAssertEqual(postedPopupOnDoubleClick, false, "double-click must not post a mermaidPopup message")
+    }
+
+    /// The app on macOS 26 draws the HUD as native glass: the page reports
+    /// the hovered figure and runs the host's actions without focusing it.
+    @MainActor
+    func testNativeDiagramHUDReportsTheHoveredFigureAndRunsHostActions() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ```mermaid
+            flowchart LR
+                A --> B
+            ```
+            """,
+            vendorLoading: .lazy
+        )
+        let stylesheet = try XCTUnwrap(
+            rendered.html
+                .components(separatedBy: "<style>")
+                .dropFirst()
+                .first?
+                .components(separatedBy: "</style>")
+                .first
+        )
+        let html = """
+        <!DOCTYPE html>
+        <html><head>
+        <style>\(stylesheet)</style>
+        <script>
+        document.documentElement.setAttribute('data-mdp-native-hud', '');
+        // The host bridge's copy path, which the diagram wiring borrows.
+        window.MdPreview = { copyText: async (value) => {
+            window.__posted.push({ kind: 'copyCode', value });
+            return true;
+        } };
+        window.__posted = [];
+        window.requestAnimationFrame = (callback) => callback();
+        window.webkit = { messageHandlers: { mdPreviewHost: {
+            postMessage(msg) { window.__posted.push(msg); }
+        } } };
+        window.pele = { render() {
+            return { svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200"></svg>' };
+        } };
+        </script>
+        </head><body>
+        <article class="markdown-body">\(rendered.articleHTML)</article>
+        <script>
+        const __mdpMermaid = \(MarkdownHTML.mermaidInitWiring);
+        __mdpMermaid.bootstrap();
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        var renderedReady = false
+        for _ in 0..<100 {
+            let done = try await webView.evaluateJavaScript(
+                "document.querySelector('.mermaid')?.dataset?.mmDone || ''"
+            ) as? String
+            if done == "1" {
+                renderedReady = true
+                break
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertTrue(renderedReady, "mermaid figure should finish stub render")
+
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const figure = document.querySelector('.mermaid-figure');
+            const last = () => window.__posted.filter((m) => m.kind === 'diagramHUD').pop();
+            figure.dispatchEvent(new PointerEvent('pointerenter'));
+            const shown = last();
+            window.__posted = [];
+            window.mdpDiagramHUDAction('in');
+            const zoomed = last();
+            const focused = document.activeElement === figure;
+            window.__posted = [];
+            window.mdpDiagramHUDAction('copy');
+            const copied = window.__posted.find((m) => m.kind === 'copyCode');
+            const htmlHUD = getComputedStyle(figure.querySelector('.mermaid-hud')).display;
+            figure.dispatchEvent(new PointerEvent('pointerleave'));
+            const left = last();
+            return JSON.stringify({
+                shownVisible: shown?.visible, shownLevel: shown?.level, shownPopup: shown?.popup,
+                shownWidth: shown?.width, zoomedLevel: zoomed?.level, focused,
+                copied: copied?.value, htmlHUD, leftVisible: left?.visible
+            });
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let state = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        XCTAssertEqual(state["shownVisible"] as? Bool, true, json)
+        XCTAssertEqual(state["shownLevel"] as? String, "100%", json)
+        XCTAssertEqual(state["shownPopup"] as? Bool, true, json)
+        XCTAssertGreaterThan(state["shownWidth"] as? Double ?? 0, 0, json)
+        XCTAssertEqual(state["zoomedLevel"] as? String, "125%", json)
+        XCTAssertEqual(state["focused"] as? Bool, false, "a native click must not draw the figure's focus ring")
+        XCTAssertEqual(state["copied"] as? String, "flowchart LR\n    A --> B", json)
+        XCTAssertEqual(state["htmlHUD"] as? String, "none", json)
+        XCTAssertEqual(state["leftVisible"] as? Bool, false, json)
+    }
+
+    /// Code blocks get the same native glass HUD on hover: the page reports
+    /// the block under the pointer and runs Wrap and Copy for the host.
+    @MainActor
+    func testNativeCodeHUDReportsTheHoveredBlockAndRunsHostActions() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            ```swift
+            let answer = 42
+            ```
+            """,
+            vendorLoading: .lazy
+        )
+        let stylesheet = try XCTUnwrap(
+            rendered.html
+                .components(separatedBy: "<style>")
+                .dropFirst()
+                .first?
+                .components(separatedBy: "</style>")
+                .first
+        )
+        let html = """
+        <!DOCTYPE html>
+        <html data-mdp-native-hud><head>
+        <style>\(stylesheet)</style>
+        <script>
+        window.__posted = [];
+        window.__copied = [];
+        // Off screen, the display link never drives rAF.
+        window.requestAnimationFrame = (callback) => { callback(); return 0; };
+        window.webkit = { messageHandlers: { mdPreviewHost: {
+            postMessage(msg) { window.__posted.push(msg); }
+        } } };
+        </script>
+        </head><body style="min-height: 3000px">
+        <article class="markdown-body" style="padding-top: 200px">\(rendered.articleHTML)</article>
+        <script>
+        \(MarkdownHTML.codeBlockScript)
+        const decorate = enableCodeBlocks(\(MarkdownHTML.codeBlockMessagesJS),
+            async (text) => { window.__copied.push(text); return true; });
+        decorate(document);
+        </script>
+        </body></html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        _ = try await webView.evaluateJavaScript("""
+        (() => {
+            const code = document.querySelector('.md-code-wrap pre code');
+            code.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+            window.mdpCodeHUDAction('wrap');
+            window.mdpCodeHUDAction('copy');
+            return true;
+        })()
+        """)
+        try await Task.sleep(for: .milliseconds(50))
+        // Scrolling keeps reporting the block, at its new place.
+        _ = try await webView.evaluateJavaScript("window.__beforeScroll = window.__posted.length; window.scrollBy(0, 100); true")
+        try await Task.sleep(for: .milliseconds(200))
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const huds = window.__posted.filter((m) => m.kind === 'codeHUD');
+            const actions = document.querySelector('.md-code-actions');
+            const beforeScroll = window.__posted.slice(0, window.__beforeScroll).filter((m) => m.kind === 'codeHUD').pop();
+            const afterScroll = window.__posted.slice(window.__beforeScroll).filter((m) => m.kind === 'codeHUD').pop();
+            return JSON.stringify({
+                shownVisible: huds[0]?.visible, shownWrapped: huds[0]?.wrapped, shownHeight: huds[0]?.height,
+                wrappedAfter: beforeScroll?.wrapped,
+                scrolledVisible: afterScroll?.visible, scrolledBy: beforeScroll && afterScroll ? beforeScroll.y - afterScroll.y : null,
+                copied: window.__copied[0],
+                pillVisibility: getComputedStyle(actions).visibility,
+                pillWidth: actions.getBoundingClientRect().width
+            });
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let state = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        XCTAssertEqual(state["shownVisible"] as? Bool, true, json)
+        XCTAssertEqual(state["shownWrapped"] as? Bool, false, json)
+        XCTAssertGreaterThan(state["shownHeight"] as? Double ?? 0, 0, json)
+        XCTAssertEqual(state["wrappedAfter"] as? Bool, true, json)
+        XCTAssertEqual(state["scrolledVisible"] as? Bool, true, "the HUD follows the block while it scrolls")
+        XCTAssertEqual(state["scrolledBy"] as? Double, 100, json)
+        // The same text the HTML Copy button copies.
+        XCTAssertEqual(state["copied"] as? String, "let answer = 42\n", json)
+        XCTAssertEqual(state["pillVisibility"] as? String, "hidden", json)
+        XCTAssertGreaterThan(state["pillWidth"] as? Double ?? 0, 0, "the hidden pill keeps its space")
     }
 
     @MainActor
@@ -1784,119 +1978,6 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         throw Timeout()
     }
 
-    @MainActor
-    func testMermaidWidthToggleExpandsAndRestoresDiagram() async throws {
-        let rendered = MarkdownHTML.render(
-            markdown: """
-            ```mermaid
-            flowchart LR
-                A --> B
-            ```
-            """,
-            vendorLoading: .lazy
-        )
-        XCTAssertTrue(rendered.articleHTML.contains(
-            #"data-mm-act="width" tabindex="-1" aria-label="Fill width" aria-pressed="false""#
-        ))
-
-        let stylesheet = try XCTUnwrap(
-            rendered.html
-                .components(separatedBy: "<style>")
-                .dropFirst()
-                .first?
-                .components(separatedBy: "</style>")
-                .first
-        )
-        let html = """
-        <!DOCTYPE html>
-        <html><head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>\(stylesheet)</style>
-        </head><body><article class="markdown-body">\(rendered.articleHTML)</article>
-        <script>
-        const figure = document.querySelector('.mermaid-figure');
-        figure.style.setProperty('--mm-aspect', '1 / 4');
-        figure.querySelector('.mermaid').innerHTML = '<svg viewBox="0 0 200 800"></svg>';
-        document.querySelector('.mermaid-hud').addEventListener('click', (event) => {
-            const button = event.target.closest('[data-mm-act="width"]');
-            if (!button) return;
-            const figure = button.closest('.mermaid-figure');
-            const expanded = figure.classList.toggle('mermaid-width-expanded');
-            button.setAttribute('aria-pressed', String(expanded));
-        });
-        </script>
-        </body></html>
-        """
-        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
-
-        webView.loadHTMLString(html, baseURL: nil)
-        while webView.isLoading {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-
-        let metricsScript = """
-        (() => {
-            const host = document.querySelector('.mermaid');
-            const figure = document.querySelector('.mermaid-figure');
-            const article = document.querySelector('.markdown-body');
-            const svg = host.querySelector('svg');
-            const button = figure.querySelector('[data-mm-act="width"]');
-            const style = getComputedStyle(host);
-            return JSON.stringify({
-                articleWidth: article.clientWidth,
-                articleLeft: article.getBoundingClientRect().left,
-                figureWidth: figure.getBoundingClientRect().width,
-                figureHeight: figure.getBoundingClientRect().height,
-                figureLeft: figure.getBoundingClientRect().left,
-                availableWidth: host.clientWidth
-                    - parseFloat(style.paddingLeft)
-                    - parseFloat(style.paddingRight),
-                svgWidth: svg.getBoundingClientRect().width,
-                expanded: figure.classList.contains('mermaid-width-expanded'),
-                buttonPressed: button?.getAttribute('aria-pressed') || '',
-            });
-        })()
-        """
-        let initialResult = try await webView.evaluateJavaScript(metricsScript)
-        let initialJSON = try XCTUnwrap(initialResult as? String)
-        let initial = try JSONDecoder().decode(MermaidLayoutMetrics.self, from: Data(initialJSON.utf8))
-
-        XCTAssertFalse(initial.expanded)
-        XCTAssertEqual(initial.buttonPressed, "false")
-        // Pin the size: a figure collapsed to 0 x 0 would pass looser checks.
-        // The tray spans the column like a code block at the height cap (70vh
-        // of the 600pt view); the 1:4 drawing is centred inside it.
-        XCTAssertEqual(initial.figureHeight, 420, accuracy: 1)
-        XCTAssertEqual(initial.figureWidth, initial.articleWidth, accuracy: 1)
-        XCTAssertEqual(initial.figureLeft, initial.articleLeft, accuracy: 1)
-
-        try await webView.evaluateJavaScript(
-            "document.querySelector('[data-mm-act=\"width\"]').click()"
-        )
-        let expandedResult = try await webView.evaluateJavaScript(metricsScript)
-        let expandedJSON = try XCTUnwrap(expandedResult as? String)
-        let expanded = try JSONDecoder().decode(MermaidLayoutMetrics.self, from: Data(expandedJSON.utf8))
-
-        XCTAssertTrue(expanded.expanded)
-        XCTAssertEqual(expanded.buttonPressed, "true")
-        XCTAssertEqual(expanded.figureWidth, expanded.articleWidth, accuracy: 1)
-        XCTAssertEqual(expanded.svgWidth, expanded.availableWidth, accuracy: 1)
-        // Fill width lifts the height cap, so the drawing itself spans the column.
-        XCTAssertGreaterThan(expanded.figureHeight, initial.figureHeight + 1)
-
-        try await webView.evaluateJavaScript(
-            "document.querySelector('[data-mm-act=\"width\"]').click()"
-        )
-        let restoredResult = try await webView.evaluateJavaScript(metricsScript)
-        let restoredJSON = try XCTUnwrap(restoredResult as? String)
-        let restored = try JSONDecoder().decode(MermaidLayoutMetrics.self, from: Data(restoredJSON.utf8))
-
-        XCTAssertFalse(restored.expanded)
-        XCTAssertEqual(restored.buttonPressed, "false")
-        XCTAssertEqual(restored.figureWidth, initial.figureWidth, accuracy: 1)
-        XCTAssertEqual(restored.figureHeight, initial.figureHeight, accuracy: 1)
-    }
-
     /// The article is a flex column on screen, which stretches its children.
     /// Block content should span the column; an inline-level element left at
     /// the top level should not. A `<button>` whose `<form>` the sanitiser
@@ -2035,7 +2116,7 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         </head><body><article class="markdown-body">\(rendered.articleHTML)</article>
         <script>
         const figure = document.querySelector('.mermaid-figure');
-        figure.style.width = '200px';
+        figure.style.width = '150px';
         </script>
         </body></html>
         """
@@ -2067,8 +2148,8 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             from: Data(json.utf8)
         )
 
-        XCTAssertGreaterThanOrEqual(metrics.hudLeft, metrics.figureLeft + 7)
-        XCTAssertLessThanOrEqual(metrics.hudRight, metrics.figureRight - 7)
+        XCTAssertGreaterThanOrEqual(metrics.hudLeft, metrics.figureLeft + 6)
+        XCTAssertLessThanOrEqual(metrics.hudRight, metrics.figureRight - 6)
         XCTAssertGreaterThan(metrics.actionsTop, metrics.zoomTop)
     }
 
@@ -2849,18 +2930,6 @@ private struct AutoDetectedHighlightValues: Decodable {
     let language: String?
     let keyword: String?
     let done: Bool
-}
-
-private struct MermaidLayoutMetrics: Decodable {
-    let articleWidth: CGFloat
-    let articleLeft: CGFloat
-    let figureWidth: CGFloat
-    let figureHeight: CGFloat
-    let figureLeft: CGFloat
-    let availableWidth: CGFloat
-    let svgWidth: CGFloat
-    let expanded: Bool
-    let buttonPressed: String
 }
 
 private struct TopLevelInlineMetrics: Decodable {

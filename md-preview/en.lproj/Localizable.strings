@@ -272,8 +272,6 @@
 "Mermaid diagram" = "Mermaid diagram";
 "%@ — Mermaid diagram" = "%@ — Mermaid diagram";
 "Reset zoom" = "Reset zoom";
-"Fill width" = "Fill width";
-"Fit diagram" = "Fit diagram";
 "Open in Window" = "Open in Window";
 "Mermaid renderer is unavailable.\n\n" = "Mermaid renderer is unavailable.\n\n";
 "This diagram type is not supported." = "This diagram type is not supported.";
