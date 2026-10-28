@@ -98,11 +98,6 @@ grep -rn "<the behaviour you changed>" README.md samples/ tests/fixtures/ docs/
   `Info.plist` or the entitlements' `mach-lookup` names without reading that
   skill first — they're paired with private material outside the repo (login
   Keychain / Amore), so an unmatched change breaks Sparkle updates silently.
-- `md-preview.release.entitlements` is `md-preview.entitlements` plus
-  Associated Domains (Universal Links for share links), used by Release
-  builds only; change both together (`EntitlementsParityTests`). Releasing
-  with it needs a Developer ID provisioning profile — see the
-  `release-process` skill.
 - `md-preview.entitlements` / `quick-look.entitlements` — the sandbox
   `temporary-exception` entries (Sparkle XPC mach-lookup names, the read-only
   filesystem exception) are narrowly scoped, notarization-review-sensitive

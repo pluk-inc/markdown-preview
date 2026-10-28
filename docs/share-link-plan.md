@@ -4,13 +4,15 @@ Status: draft, 2026-10-16; revised 2026-10-27. On for everyone since 0.0.70,
 with no switch: the format and crypto (§2), the
 Worker API and its deploy setup on `md-preview.app` (§3), and sharing from the
 app (§4.1–4.4), the web viewer (§5), and opening links
-in the app (§4.5). Still planned: Universal Links (§4.5).
+in the app (§4.5). Universal Links (§4.5) are blocked: the `doc.md-preview`
+App ID belongs to another team.
 
 Goal: from an open Markdown document, the user creates a random link. Anyone
 with the link can read the document in a browser, or open it in Markdown
 Preview. The server stores only ciphertext and can never read a document.
-**When the app is installed, the link opens in the app, not the browser**
-(Universal Links, §4.5).
+When the app is installed, the viewer's "Open in Markdown Preview" button
+opens the link in the app. Opening it in the app directly needs Universal
+Links (§4.5), which are blocked for now.
 
 Order of work: **the app first, the web viewer later.** Phase 1 ships a small
 API Worker (the app cannot upload without one) and the full app side. Links
@@ -370,8 +372,15 @@ Goal: when the app is installed, `https://md-preview.app/s/<id>#<key>` opens in
 the app, not the browser. The same link falls back to the web viewer when the
 app is missing.
 
-Built (2026-10-25), approved by the maintainer; not yet tested end to end,
-which needs the Worker deployed on `md-preview.app` and a signed Release build.
+**Blocked, and removed from the app (2026-10-28).** Built in #573, then taken
+out before 0.0.70 shipped: Apple refuses to register the `doc.md-preview` App
+ID for team 5P3TSMNV42 ("not available" — another team holds it), and the
+entitlement needs a Developer ID profile for that App ID. Apple Developer
+Support may be able to move it; until then share links open through the viewer's button.
+Restoring this means reverting the PR that removed it. The Worker still serves
+`apple-app-site-association`; it is harmless without the entitlement.
+
+As built:
 
 - Entitlement `com.apple.developer.associated-domains` =
   `applinks:md-preview.app`, in **Release builds only**:

@@ -9,13 +9,6 @@
 #   scripts/release.sh --beta             Pass --beta to amore + GH prerelease
 #   scripts/release.sh --draft            amore --draft, no GH release
 #   scripts/release.sh --skip-github      Run amore release only
-#   scripts/release.sh --provisioning-profile path/to/profile.provisionprofile
-#
-# The app's entitlements include Associated Domains (Universal Links), so the
-# build must embed a Developer ID provisioning profile: pass
-# --provisioning-profile, or set AMORE_PROVISIONING_PROFILE (base64) or an
-# App Store Connect API key (ASC_API_KEY_ID) for amore. Without one the
-# signed app would not launch, so preflight stops.
 #
 # Source of truth:
 #   - Version.xcconfig  → MARKETING_VERSION, CURRENT_PROJECT_VERSION
@@ -30,14 +23,12 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION_CONFIG="$PROJECT_ROOT/Version.xcconfig"
 CHANGELOG="$PROJECT_ROOT/CHANGELOG.md"
 SCHEME="md-preview"
-ENTITLEMENTS="$PROJECT_ROOT/md-preview/md-preview.release.entitlements"
 
 VERSION_OVERRIDE=""
 BUILD_OVERRIDE=""
 DRAFT_FLAG=""
 BETA_FLAG=""
 SKIP_GH=false
-PROFILE_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -46,7 +37,6 @@ while [[ $# -gt 0 ]]; do
         --draft)   DRAFT_FLAG="--draft";  SKIP_GH=true; shift;;
         --beta)    BETA_FLAG="--beta";    shift;;
         --skip-github) SKIP_GH=true;      shift;;
-        --provisioning-profile) PROFILE_ARGS=(--provisioning-profile "$2"); shift 2;;
         -h|--help) sed -n '/^# Usage:/,/^$/p' "$0" | sed 's/^# //;s/^#//'; exit 0;;
         *) echo "Unknown option: $1" >&2; exit 2;;
     esac
@@ -116,20 +106,6 @@ if ! grep -q "^## \[$VERSION\]" "$CHANGELOG"; then
 fi
 echo "  ✓ CHANGELOG.md entry found for $VERSION"
 
-if grep -q "com.apple.developer.associated-domains" "$ENTITLEMENTS"; then
-    if [[ ${#PROFILE_ARGS[@]} -gt 0 ]]; then
-        if [[ ! -f "${PROFILE_ARGS[1]}" ]]; then
-            echo "  ✗ provisioning profile not found: ${PROFILE_ARGS[1]}"
-            exit 1
-        fi
-    elif [[ -z "${AMORE_PROVISIONING_PROFILE:-}" && -z "${ASC_API_KEY_ID:-}" ]]; then
-        echo "  ✗ the entitlements use Associated Domains, which need a provisioning profile"
-        echo "    pass --provisioning-profile <file>, or set AMORE_PROVISIONING_PROFILE or ASC_API_KEY_ID"
-        exit 1
-    fi
-    echo "  ✓ provisioning for Associated Domains"
-fi
-
 AMORE="$(amore_bin)"
 if ! "$AMORE" whoami >/dev/null 2>&1; then
     echo "  ✗ amore not logged in — run: amore login"
@@ -182,7 +158,7 @@ if ! command -v jq >/dev/null; then
 fi
 LOG="$(mktemp)"
 "$AMORE" release --scheme "$SCHEME" --release-notes "$NOTES" $BETA_FLAG $DRAFT_FLAG \
-    ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} --format json \
+    --format json \
     | tee "$LOG"
 
 # amore --format json prints text progress, then a single JSON object at the end

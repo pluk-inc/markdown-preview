@@ -86,15 +86,7 @@ Running the script before opening a PR publishes first unless `--draft` is passe
 ./scripts/release.sh --beta                     # amore --beta + GH prerelease (still publishes live)
 ./scripts/release.sh --draft                    # amore --draft, no GH release — the only mode that doesn't publish
 ./scripts/release.sh --skip-github              # local amore release only (still publishes live; skips tag + GH release)
-./scripts/release.sh --provisioning-profile P.provisionprofile  # embed the Developer ID profile (required, see below)
 ```
-
-Release builds sign with `md-preview/md-preview.release.entitlements`, which
-adds Associated Domains for share links. That entitlement needs a Developer ID
-provisioning profile with Associated Domains for `doc.md-preview`; without one
-the signed app does not launch. Preflight therefore stops unless the script
-gets `--provisioning-profile <file>`, or `AMORE_PROVISIONING_PROFILE` (base64)
-or an App Store Connect API key (`ASC_API_KEY_ID`) is set for Amore.
 
 Before running, **add a `CHANGELOG.md` entry** for the version being shipped **and commit it** — the script refuses to run on a dirty working tree. **Always invoke the `changelog-maintenance` skill** by reading its `SKILL.md` and following its instructions whenever the user asks you to write, generate, or update a changelog entry — do not draft freeform. The skill enforces the project's house format, the Keep-a-Changelog category split (Added / Changed / Fixed / Security), and contributor crediting (it always inspects `git log` and `gh pr list` for non-maintainer authors and adds a `### Contributors` block with `@username` GitHub tags when any are found).
 

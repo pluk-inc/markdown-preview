@@ -257,35 +257,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         return true
     }
 
-    /// Universal Links: macOS hands an https://md-preview.app/s/… link here
-    /// instead of opening the browser (md-preview.entitlements).
-    func application(_ application: NSApplication,
-                     continue userActivity: NSUserActivity,
-                     restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void) -> Bool {
-        guard userActivity.activityType == NSUserActivityTypeBrowsingWeb,
-              let url = userActivity.webpageURL else { return false }
-        if !hasFinishedLaunching {
-            didReceiveOpenURLsDuringLaunch = true
-        }
-        cancelScheduledDocumentPrompt()
-        if let link = ShareLinkOpener.parse(url) {
-            openSharedLink(link)
-        } else {
-            // Share links are off in this build, or the link is not one:
-            // show it in the browser, which the page can always do. Plain
-            // NSWorkspace.open would hand it straight back to this app.
-            openInBrowser(url)
-        }
-        return true
-    }
-
-    private func openInBrowser(_ url: URL) {
-        guard let browser = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "https://example.com")!)
-        else { return }
-        NSWorkspace.shared.open([url], withApplicationAt: browser,
-                                configuration: NSWorkspace.OpenConfiguration())
-    }
-
     func application(_ application: NSApplication, open urls: [URL]) {
         if !hasFinishedLaunching {
             didReceiveOpenURLsDuringLaunch = true
