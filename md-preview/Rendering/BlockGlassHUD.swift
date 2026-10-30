@@ -254,6 +254,13 @@ final class BlockGlassHUD: NSView {
     override func cursorUpdate(with event: NSEvent) {
         NSCursor.arrow.set()
     }
+
+    /// The gap between the pills shows the diagram, so a click or drag
+    /// there goes to the page.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard let hit = super.hitTest(point) else { return nil }
+        return hit.isDescendant(of: zoomGlass) || hit.isDescendant(of: actionsGlass) ? hit : nil
+    }
 }
 
 /// One HUD button: an icon or a short label over a fill that is a circle
