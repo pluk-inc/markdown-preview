@@ -132,7 +132,8 @@ nonisolated extension MarkdownHTML {
 
     /// The control pill shared by code block headers (preview and editor)
     /// and the diagram HUD: 24px round buttons, 4px inside a 32px pill
-    /// (`BlockGlassHUD` draws the same as native glass).
+    /// (`BlockGlassHUD` draws the same size as native glass, with the
+    /// diagram's zoom and actions as two pills instead of one).
     static let controlPillCSS = """
     box-sizing: border-box;
     padding: 3.5px;
