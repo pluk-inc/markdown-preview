@@ -104,6 +104,17 @@ private final class UpdateDriver: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         return !userInitiated || NSApp.mainWindow?.windowController is DocumentWindowController
     }
 
+    /// Sparkle's choice replies expect one answer; a second Download press
+    /// before the capsule moves on would start a second download.
+    private static func once(_ reply: @escaping (SPUUserUpdateChoice) -> Void) -> (SPUUserUpdateChoice) -> Void {
+        var answered = false
+        return { choice in
+            guard !answered else { return }
+            answered = true
+            reply(choice)
+        }
+    }
+
     private static func versionLabel(_ item: SUAppcastItem) -> String {
         String(format: L("Version %@"), item.displayVersionString)
     }
@@ -132,6 +143,7 @@ private final class UpdateDriver: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         // Downloaded in the background, or resumed after a relaunch: one
         // click installs it.
         let phase: UpdateModel.Phase = state.stage == .notDownloaded ? .available : .ready
+        let reply = Self.once(reply)
         model.show(phase, detail: Self.versionLabel(appcastItem),
                    primary: { reply(.install) },
                    close: { reply(.dismiss) })
@@ -201,6 +213,7 @@ private final class UpdateDriver: NSObject, SPUUserDriver, SPUUpdaterDelegate {
 
     func showReady(toInstallAndRelaunch reply: @escaping (SPUUserUpdateChoice) -> Void) {
         guard routesToPill() else { return standard.showReady(toInstallAndRelaunch: reply) }
+        let reply = Self.once(reply)
         // Dismissed, the update still installs when the app quits.
         model.show(.ready, primary: { reply(.install) }, close: { reply(.dismiss) })
     }
