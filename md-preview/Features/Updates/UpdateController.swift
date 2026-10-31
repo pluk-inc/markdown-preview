@@ -50,23 +50,28 @@ final class UpdateController {
         switch start {
         case "checking": model.show(.checking, close: {})
         case "upToDate": model.show(.upToDate, close: {})
-        case "failed": model.show(.failed, detail: "The update server could not be reached.", close: {})
+        case "failed": model.show(.failed, close: {})
         default:
-            model.show(.available, detail: "Version 9.9.9", primary: { [weak self] in
+            model.show(.available, detail: String(format: L("Version %@"), "9.9.9"), primary: { [weak self] in
                 self?.playDemoDownload()
             }, close: {})
         }
     }
 
+    private var demoTask: Task<Void, Never>?
+
     private func playDemoDownload() {
-        Task { [model] in
-            model.show(.downloading(0), close: {})
+        demoTask = Task { [model] in
+            model.show(.downloading(0), close: { [weak self] in self?.demoTask?.cancel() })
             for percent in stride(from: 0, through: 100, by: 2) {
+                guard !Task.isCancelled else { return }
                 model.update(.downloading(Double(percent) / 100))
                 try? await Task.sleep(for: .milliseconds(60))
             }
+            guard !Task.isCancelled else { return }
             model.show(.preparing(1))
             try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
             model.show(.ready, primary: { model.hide() }, close: {})
         }
     }
@@ -84,6 +89,26 @@ private final class UpdateDriver: NSObject, SPUUserDriver, SPUUpdaterDelegate {
 
     init(model: UpdateModel) {
         self.model = model
+        super.init()
+        NotificationCenter.default.addObserver(self, selector: #selector(windowWillClose(_:)),
+                                               name: NSWindow.willCloseNotification, object: nil)
+    }
+
+    /// The last document window closed while the capsule showed: answer it
+    /// as its close button would (defer to quit, stop a download), so the
+    /// next check starts a session that Sparkle's windows can show.
+    @objc private func windowWillClose(_ notification: Notification) {
+        guard (notification.object as? NSWindow)?.windowController is DocumentWindowController else { return }
+        // The closing window still counts until this turn ends.
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.model.phase != .idle else { return }
+                let hasDocumentWindow = NSApp.windows.contains {
+                    $0.windowController is DocumentWindowController && ($0.isVisible || $0.isMiniaturized)
+                }
+                if !hasDocumentWindow { self.model.performClose() }
+            }
+        }
     }
 
     private func routesToPill(userInitiated: Bool = false) -> Bool {
