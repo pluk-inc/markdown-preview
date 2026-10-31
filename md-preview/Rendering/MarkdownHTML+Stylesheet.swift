@@ -131,9 +131,8 @@ nonisolated extension MarkdownHTML {
     static let blockEdgeColor = "color-mix(in srgb, var(--text) 12%, transparent)"
 
     /// The control pill shared by code block headers (preview and editor)
-    /// and the diagram HUD: 24px round buttons, 4px inside a 32px pill
-    /// (`BlockGlassHUD` draws the same size as native glass, with the
-    /// diagram's zoom and actions as two pills instead of one).
+    /// and the diagram HUD's zoom and actions pills: 24px round buttons, 4px
+    /// inside a 32px pill (`BlockGlassHUD` draws the same as native glass).
     static let controlPillCSS = """
     box-sizing: border-box;
     padding: 3.5px;
@@ -723,8 +722,8 @@ nonisolated extension MarkdownHTML {
         max-width: none !important;
         height: 100%;
     }
-    /* One pill, 6.5px from the figure's top and right edges, where a code
-       block's pill sits. */
+    /* A zoom pill and an actions pill, 6px apart, 6.5px from the figure's
+       top and right edges, where a code block's pill sits. */
     .mermaid-hud {
         position: absolute;
         top: 6.5px;
@@ -732,12 +731,10 @@ nonisolated extension MarkdownHTML {
         display: flex;
         flex-wrap: wrap;
         justify-content: flex-end;
+        gap: 6px;
         max-width: calc(100% - 13px);
-        \(controlPillCSS)
-        /* Over the drawing, a blur keeps its lines from showing through. */
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
         opacity: 0;
+        /* The gap between the pills takes no clicks: a drag there pans. */
         pointer-events: none;
         transition: opacity 0.12s ease;
         z-index: 2;
@@ -747,17 +744,17 @@ nonisolated extension MarkdownHTML {
         display: flex;
         align-items: center;
         gap: 2px;
-    }
-    .mermaid-hud-group + .mermaid-hud-group::before {
-        content: "";
-        width: 1px;
-        height: 16px;
-        margin: 0 4px;
-        background: \(blockEdgeColor);
+        \(controlPillCSS)
+        /* Over the drawing, a blur keeps its lines from showing through. */
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
     }
     .mermaid-figure:hover .mermaid-hud,
     .mermaid-figure:focus-within .mermaid-hud {
         opacity: 1;
+    }
+    .mermaid-figure:hover .mermaid-hud-group,
+    .mermaid-figure:focus-within .mermaid-hud-group {
         pointer-events: auto;
     }
     .mermaid-hud-btn { \(controlPillButtonCSS) }
@@ -794,6 +791,7 @@ nonisolated extension MarkdownHTML {
        (BlockGlassHUD). The HTML ones stay, unseen, for the keyboard: they
        show while keyboard focus is in them, or on their diagram. */
     :root[data-mdp-native-hud] .mermaid-figure:not(:focus-visible):not(:has(:focus-visible)) .mermaid-hud,
+    :root[data-mdp-native-hud] .mermaid-figure:not(:focus-visible):not(:has(:focus-visible)) .mermaid-hud-group,
     :root[data-mdp-native-hud] .md-code-actions:not(:has(:focus-visible)) {
         opacity: 0;
         pointer-events: none;
