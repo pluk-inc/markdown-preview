@@ -26,7 +26,11 @@ final class UpdateModel {
         case failed
     }
 
-    private(set) var phase: Phase = .idle
+    private(set) var phase: Phase = .idle {
+        didSet {
+            if oldValue == .idle, phase != .idle { didAppear?(self) }
+        }
+    }
     /// The version on offer, or the error Sparkle gave; the capsule's tooltip.
     private(set) var detail: String?
     /// Download, or Relaunch Now.
@@ -44,12 +48,10 @@ final class UpdateModel {
               primary: (() -> Void)? = nil, close: (() -> Void)? = nil) {
         autoHide?.cancel()
         autoHide = nil
-        let wasHidden = self.phase == .idle
         self.phase = phase
         self.detail = detail
         primaryAction = primary
         closeAction = close
-        if wasHidden, phase != .idle { didAppear?(self) }
         if phase == .upToDate {
             // Nothing to act on: it goes away by itself.
             autoHide = Task { [weak self] in

@@ -102,7 +102,9 @@ private final class UpdateDriver: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         // The closing window still counts until this turn ends.
         DispatchQueue.main.async { [weak self] in
             MainActor.assumeIsolated {
-                guard let self, self.model.phase != .idle else { return }
+                // A step with no close button (preparing, installing) stays,
+                // and the next document window shows it.
+                guard let self, self.model.closeAction != nil else { return }
                 let hasDocumentWindow = NSApp.windows.contains {
                     $0.windowController is DocumentWindowController && ($0.isVisible || $0.isMiniaturized)
                 }
