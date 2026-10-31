@@ -1,15 +1,33 @@
 {
-  "fill" : {
-    "automatic-gradient" : "extended-gray:1.00000,1.00000"
-  },
+  "fill-specializations" : [
+    {
+      "value" : {
+        "automatic-gradient" : "extended-gray:1.00000,1.00000"
+      }
+    },
+    {
+      "appearance" : "dark",
+      "value" : {
+        "automatic-gradient" : "extended-gray:0.03700,1.00000"
+      }
+    }
+  ],
   "groups" : [
     {
       "layers" : [
         {
           "fill" : "none",
           "hidden" : false,
-          "image-name" : "ChatGPT Image Apr 30, 2026, 06_55_12 PM.png",
-          "name" : "ChatGPT Image Apr 30, 2026, 06_55_12 PM",
+          "image-name-specializations" : [
+            {
+              "value" : "AppIcon Light.png"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "AppIcon Dark.png"
+            }
+          ],
+          "name" : "Loupe",
           "position" : {
             "scale" : 0.82,
             "translation-in-points" : [
