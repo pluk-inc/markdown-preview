@@ -3,7 +3,8 @@
 //  md-preview
 //
 //  The controls of a diagram or a code block as native Liquid Glass on
-//  macOS 26: one pill over the preview, on the block under the pointer.
+//  macOS 26: a zoom pill and an actions pill over the preview, on the block
+//  under the pointer.
 //  The page reports that block (`diagramHUD` messages from the Mermaid
 //  wiring, `codeHUD` from the code block script) and runs each action as its
 //  HTML buttons do (`mdpDiagramHUDAction`, `mdpCodeHUDAction`), so the
@@ -46,14 +47,14 @@ final class BlockGlassHUD: NSView {
     /// (`MarkdownHTML.controlPillCSS`).
     private static let inset: CGFloat = 6.5
 
-    private let glass = NSGlassEffectView()
     private let zoomOut = HUDButton(act: "out", width: 24)
     private let levelButton = HUDButton(act: "reset", width: 44)
     private let zoomIn = HUDButton(act: "in", width: 24)
-    private let divider = NSBox()
     private let wrapButton = HUDButton(act: "wrap", width: 24)
     private let copyButton = HUDButton(act: "copy", width: 24)
     private let popupButton = HUDButton(act: "popup", width: 24)
+    private let zoomGlass = NSGlassEffectView()
+    private let actionsGlass = NSGlassEffectView()
     private var current: Block?
     private var laidOut: (Kind, String, Bool, Bool)?
     private var pillSize: NSSize = .zero
@@ -76,36 +77,32 @@ final class BlockGlassHUD: NSView {
             }
         }
 
-        divider.boxType = .separator
-        divider.translatesAutoresizingMaskIntoConstraints = false
-        divider.heightAnchor.constraint(equalToConstant: 16).isActive = true
+        // Zoom and the other actions are two pills side by side; a code
+        // block shows only the second.
+        Self.fill(zoomGlass, with: [zoomOut, levelButton, zoomIn])
+        Self.fill(actionsGlass, with: [wrapButton, copyButton, popupButton])
+        let pills = NSStackView(views: [zoomGlass, actionsGlass])
+        pills.orientation = .horizontal
+        pills.alignment = .centerY
+        pills.spacing = 6
+        pills.translatesAutoresizingMaskIntoConstraints = false
 
-        let stack = NSStackView(views: [zoomOut, levelButton, zoomIn, divider, wrapButton, copyButton, popupButton])
-        stack.orientation = .horizontal
-        stack.alignment = .centerY
-        stack.spacing = 2
-        stack.setCustomSpacing(6, after: zoomIn)
-        stack.setCustomSpacing(6, after: divider)
-        // The glass sizes its content view to fill it, so the margin that
-        // keeps the hover fill clear of the rounded ends lives here.
-        stack.edgeInsets = NSEdgeInsets(top: 4, left: 4, bottom: 4, right: 4)
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
-        glass.style = .regular
-        glass.cornerRadius = 16
-        glass.contentView = stack
-        glass.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(glass)
+        // The container renders the two glass views together, so they read
+        // as one surface without merging at this gap.
+        let container = NSGlassEffectContainerView()
+        container.spacing = 0
+        container.contentView = pills
+        container.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(container)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: glass.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: glass.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: glass.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: glass.bottomAnchor),
-            glass.heightAnchor.constraint(equalToConstant: 32),
-            glass.leadingAnchor.constraint(equalTo: leadingAnchor),
-            glass.trailingAnchor.constraint(equalTo: trailingAnchor),
-            glass.topAnchor.constraint(equalTo: topAnchor),
-            glass.bottomAnchor.constraint(equalTo: bottomAnchor),
+            pills.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            pills.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            pills.topAnchor.constraint(equalTo: container.topAnchor),
+            pills.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            container.leadingAnchor.constraint(equalTo: leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: trailingAnchor),
+            container.topAnchor.constraint(equalTo: topAnchor),
+            container.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
         // .inVisibleRect follows the pill's size, so the area is added once.
         addTrackingArea(NSTrackingArea(rect: .zero,
@@ -133,7 +130,7 @@ final class BlockGlassHUD: NSView {
         let content = (block.kind, block.level, block.hasPopup, block.wrapped)
         if laidOut.map({ $0 != content }) ?? true {
             let isDiagram = block.kind == .diagram
-            for view in [zoomOut, levelButton, zoomIn, divider] { view.isHidden = !isDiagram }
+            zoomGlass.isHidden = !isDiagram
             wrapButton.isHidden = isDiagram
             popupButton.isHidden = !(isDiagram && block.hasPopup)
             if isDiagram {
@@ -212,6 +209,28 @@ final class BlockGlassHUD: NSView {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.1, execute: reset)
     }
 
+    private static func fill(_ glass: NSGlassEffectView, with buttons: [NSView]) {
+        let stack = NSStackView(views: buttons)
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 2
+        // The glass sizes its content view to fill it, so the margin that
+        // keeps the hover fill clear of the rounded ends lives here.
+        stack.edgeInsets = NSEdgeInsets(top: 4, left: 4, bottom: 4, right: 4)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        glass.style = .regular
+        glass.cornerRadius = 16
+        glass.contentView = stack
+        glass.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: glass.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: glass.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: glass.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: glass.bottomAnchor),
+            glass.heightAnchor.constraint(equalToConstant: 32),
+        ])
+    }
+
     private func showCopyIcon() {
         copyButton.setImage(Self.codeIcons["copy"],
                             label: NSLocalizedString("Copy", comment: "Mermaid diagram copy button"))
@@ -234,6 +253,13 @@ final class BlockGlassHUD: NSView {
 
     override func cursorUpdate(with event: NSEvent) {
         NSCursor.arrow.set()
+    }
+
+    /// The gap between the pills shows the diagram, so a click or drag
+    /// there goes to the page.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard let hit = super.hitTest(point) else { return nil }
+        return hit.isDescendant(of: zoomGlass) || hit.isDescendant(of: actionsGlass) ? hit : nil
     }
 }
 
