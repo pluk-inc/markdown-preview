@@ -508,3 +508,16 @@
 "This link is damaged, or it does not match the shared document." = "此链接已损坏，或与共享的文稿不符。";
 "Shared documents are read-only" = "共享的文稿为只读";
 "Read only" = "只读";
+
+/* Update capsule */
+"Version %@" = "版本 %@";
+"Checking for updates…" = "正在检查更新…";
+"An update is available" = "有可用的更新";
+"Downloading update" = "正在下载更新";
+"Preparing update" = "正在准备更新";
+"Update ready" = "更新已准备就绪";
+"Installing update…" = "正在安装更新…";
+"You’re up to date" = "已是最新版本";
+"Update failed" = "更新失败";
+"Download" = "下载";
+"Relaunch Now" = "立即重新启动";

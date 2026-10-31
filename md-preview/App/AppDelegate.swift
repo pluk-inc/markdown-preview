@@ -79,11 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     /// Started from `startDeferredLaunchServices()`, after the first
     /// document window is on screen, so Sparkle's XPC setup never shares
     /// the launch turn with the first frame.
-    let updaterController = SPUStandardUpdaterController(
-        startingUpdater: false,
-        updaterDelegate: nil,
-        userDriverDelegate: nil
-    )
+    let updaterController = UpdateController()
     private var didStartDeferredLaunchServices = false
     /// The shared reading look the first window was rendered with, compared
     /// again when the deferred services create the settings model.

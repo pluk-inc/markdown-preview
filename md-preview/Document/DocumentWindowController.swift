@@ -233,6 +233,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             }
         }
         documentWindow.contentViewController = split
+        if let updates = appDelegate?.updaterController.model, updates.phase != .idle {
+            split.installUpdatePill(updates)
+        }
         documentWindow.setContentSize(NSSize(width: 1100, height: 720))
         documentWindow.center()
         documentWindow.setFrameAutosaveName("MainWindow")
