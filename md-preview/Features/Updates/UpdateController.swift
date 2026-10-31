@@ -60,7 +60,7 @@ final class UpdateController {
 
     private func playDemoDownload() {
         Task { [model] in
-            model.show(.downloading(0))
+            model.show(.downloading(0), close: {})
             for percent in stride(from: 0, through: 100, by: 2) {
                 model.update(.downloading(Double(percent) / 100))
                 try? await Task.sleep(for: .milliseconds(60))
@@ -166,7 +166,7 @@ private final class UpdateDriver: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         expectedLength = 0
         receivedLength = 0
         guard routesToPill() else { return standard.showDownloadInitiated(cancellation: cancellation) }
-        model.show(.downloading(nil))
+        model.show(.downloading(nil), close: cancellation)
     }
 
     func showDownloadDidReceiveExpectedContentLength(_ expectedContentLength: UInt64) {
@@ -226,7 +226,15 @@ private final class UpdateDriver: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     }
 
     func showUpdateInFocus() {
-        if usesPill == false { standard.showUpdateInFocus() }
+        guard usesPill == true else { return standard.showUpdateInFocus() }
+        // Every document window shows the capsule: bring one forward.
+        if NSApp.mainWindow?.windowController is DocumentWindowController { return }
+        guard let window = NSApp.windows.first(where: {
+            $0.windowController is DocumentWindowController && ($0.isVisible || $0.isMiniaturized)
+        }) else { return }
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate()
     }
 
     func dismissUpdateInstallation() {
