@@ -508,3 +508,16 @@
 "This link is damaged, or it does not match the shared document." = "This link is damaged, or it does not match the shared document.";
 "Shared documents are read-only" = "Shared documents are read-only";
 "Read only" = "Read only";
+
+/* Update capsule */
+"Version %@" = "Version %@";
+"Checking for updates…" = "Checking for updates…";
+"An update is available" = "An update is available";
+"Downloading update" = "Downloading update";
+"Preparing update" = "Preparing update";
+"Update ready" = "Update ready";
+"Installing update…" = "Installing update…";
+"You’re up to date" = "You’re up to date";
+"Update failed" = "Update failed";
+"Download" = "Download";
+"Relaunch Now" = "Relaunch Now";

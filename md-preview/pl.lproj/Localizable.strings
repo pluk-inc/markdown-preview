@@ -508,3 +508,16 @@
 "This link is damaged, or it does not match the shared document." = "To łącze jest uszkodzone lub nie pasuje do udostępnionego dokumentu.";
 "Shared documents are read-only" = "Udostępnione dokumenty są tylko do odczytu";
 "Read only" = "Tylko do odczytu";
+
+/* Update capsule */
+"Version %@" = "Wersja %@";
+"Checking for updates…" = "Sprawdzanie uaktualnień…";
+"An update is available" = "Dostępne jest uaktualnienie";
+"Downloading update" = "Pobieranie uaktualnienia";
+"Preparing update" = "Przygotowywanie uaktualnienia";
+"Update ready" = "Uaktualnienie gotowe";
+"Installing update…" = "Instalowanie uaktualnienia…";
+"You’re up to date" = "Masz najnowszą wersję";
+"Update failed" = "Uaktualnienie nie powiodło się";
+"Download" = "Pobierz";
+"Relaunch Now" = "Uruchom ponownie";

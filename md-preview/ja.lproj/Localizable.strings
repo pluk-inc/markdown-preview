@@ -508,3 +508,16 @@
 "This link is damaged, or it does not match the shared document." = "このリンクは壊れているか、共有された書類と一致しません。";
 "Shared documents are read-only" = "共有書類は読み出し専用です";
 "Read only" = "読み出し専用";
+
+/* Update capsule */
+"Version %@" = "バージョン %@";
+"Checking for updates…" = "アップデートを確認中…";
+"An update is available" = "アップデートがあります";
+"Downloading update" = "アップデートをダウンロード中";
+"Preparing update" = "アップデートを準備中";
+"Update ready" = "アップデートの準備ができました";
+"Installing update…" = "アップデートをインストール中…";
+"You’re up to date" = "最新の状態です";
+"Update failed" = "アップデートに失敗しました";
+"Download" = "ダウンロード";
+"Relaunch Now" = "今すぐ再起動";

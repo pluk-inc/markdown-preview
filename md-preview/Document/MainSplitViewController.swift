@@ -565,6 +565,10 @@ final class MainSplitViewController: NSSplitViewController {
         return accessory
     }
 
+    func installUpdatePill(_ model: UpdateModel) {
+        layeredContentViewController?.installUpdatePill(model)
+    }
+
     /// Mounts the find bar the same way — see installFormattingBar. Stays
     /// mounted for the window's lifetime; visibility toggles via isHidden.
     func installFindOverlay(_ bar: NSView) {
@@ -787,6 +791,22 @@ private final class LayeredContentViewController: NSViewController {
             editorView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
         updateChromeOverlayLayout()
+    }
+
+    private weak var updatePill: NSView?
+
+    /// The update capsule, at the bottom trailing corner over the preview
+    /// and the editor alike. The editor goes in just above the preview, so
+    /// it stays below the capsule.
+    func installUpdatePill(_ model: UpdateModel) {
+        guard updatePill == nil else { return }
+        let host = UpdatePill.host(model)
+        view.addSubview(host)
+        NSLayoutConstraint.activate([
+            host.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            host.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -16),
+        ])
+        updatePill = host
     }
 
     private var legacyEditorTopConstraint: NSLayoutConstraint?

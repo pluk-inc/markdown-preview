@@ -507,3 +507,16 @@
 "This link is damaged, or it does not match the shared document." = "این پیوند آسیب دیده است یا با سند اشتراک‌گذاشته‌شده مطابقت ندارد.";
 "Shared documents are read-only" = "سندهای اشتراک‌گذاشته‌شده فقط‌خواندنی هستند";
 "Read only" = "فقط‌خواندنی";
+
+/* Update capsule */
+"Version %@" = "نسخه %@";
+"Checking for updates…" = "در حال بررسی به‌روزرسانی‌ها…";
+"An update is available" = "به‌روزرسانی در دسترس است";
+"Downloading update" = "در حال دانلود به‌روزرسانی";
+"Preparing update" = "در حال آماده‌سازی به‌روزرسانی";
+"Update ready" = "به‌روزرسانی آماده است";
+"Installing update…" = "در حال نصب به‌روزرسانی…";
+"You’re up to date" = "برنامه به‌روز است";
+"Update failed" = "به‌روزرسانی ناموفق بود";
+"Download" = "دانلود";
+"Relaunch Now" = "راه‌اندازی مجدد";
