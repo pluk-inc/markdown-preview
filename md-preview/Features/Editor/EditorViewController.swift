@@ -92,6 +92,19 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                        assetBaseURL: currentAssetBaseURL)
     }
 
+    func updateAssetBaseURL(_ assetBaseURL: URL) {
+        currentAssetBaseURL = assetBaseURL.standardizedFileURL
+        assetScheme.setBaseURL(currentAssetBaseURL)
+        let script = """
+        (() => {
+            const base = document.querySelector("head > base") || document.createElement("base");
+            base.href = \(EditorHTML.jsStringLiteral(MarkdownAssetResolution.baseHref(forFolder: assetBaseURL)));
+            document.head.prepend(base);
+        })()
+        """
+        webView.evaluateJavaScript(script, completionHandler: nil)
+    }
+
     private func loadEditorPage(markdown: String,
                                 includesMermaid: Bool,
                                 assetBaseURL: URL?) {

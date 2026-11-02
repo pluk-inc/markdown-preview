@@ -1,8 +1,8 @@
-"""Exercise production checkbox/save methods with real temporary files.
+"""Exercise production checkbox/save and image-paste methods with real temporary files.
 
 Like test-mode-transitions.py, extract controller methods because the app
-controllers are not in the helper package. Only AppKit sheet presentation and
-rendering are stand-ins; parsing, conflict decisions and disk writes are real.
+controllers are not in the helper package. AppKit sheets, clipboard, editor
+and rendering are stand-ins; controller decisions and disk writes are real.
 """
 from pathlib import Path
 import subprocess
@@ -10,6 +10,8 @@ import tempfile
 
 root = Path(__file__).resolve().parents[1]
 source = (root / 'md-preview/Document/DocumentWindowController+EditSession.swift').read_text()
+image_source = (root / 'md-preview/Document/DocumentWindowController+ImageHandling.swift').read_text()
+asset_source = (root / 'md-preview/Rendering/MarkdownAssetResolution.swift').read_text()
 
 
 def extract(text, signature):
@@ -24,8 +26,10 @@ def extract(text, signature):
 
 swift = r'''
 import Foundation
+import UniformTypeIdentifiers
 
 enum Response { case alertFirstButtonReturn, alertSecondButtonReturn, cancel, OK }
+final class Window { var title = "" }
 final class NSAlert {
     enum Style { case warning }
     var alertStyle = Style.warning
@@ -33,21 +37,29 @@ final class NSAlert {
     var informativeText = ""
     static var respond: ((Response) -> Void)?
     func addButton(withTitle: String) {}
-    func beginSheetModal(for window: Int, completionHandler: @escaping (Response) -> Void) {
+    func beginSheetModal(for window: Window, completionHandler: @escaping (Response) -> Void) {
         NSAlert.respond = completionHandler
     }
 }
 final class NSSavePanel {
+    var allowedContentTypes: [UTType] = []
+    var allowsOtherFileTypes = false
+    var canCreateDirectories = false
+    var prompt = ""
     var directoryURL: URL?
     var nameFieldStringValue = ""
     var message = ""
     var url: URL?
     static var pending: NSSavePanel?
     static var respond: ((Response) -> Void)?
-    func beginSheetModal(for window: Int, completionHandler: @escaping (Response) -> Void) {
+    func beginSheetModal(for window: Window, completionHandler: @escaping (Response) -> Void) {
         Self.pending = self
         Self.respond = completionHandler
     }
+}
+final class NSDocumentController {
+    static let shared = NSDocumentController()
+    func noteNewRecentDocumentURL(_ url: URL) {}
 }
 final class Document {
     var contents = ""
@@ -56,18 +68,30 @@ final class Document {
 enum NSSound { static func beep() {} }
 final class Editor {
     var markdown = ""
+    var assetBaseURL: URL?
     var cancelRequested: (() -> Void)?
     var contentDidChange: (() -> Void)?
     var formattingDidChange: ((Int, Set<String>, String?) -> Void)?
     var pasteImageRequested: ((Int, Int) -> Void)?
     var imageClicked: ((URL) -> Void)?
     func fetchMarkdown(_ completion: (String?) -> Void) { completion(markdown) }
+    func load(markdown: String, assetBaseURL: URL?) { self.markdown = markdown }
+    func updateAssetBaseURL(_ url: URL) { assetBaseURL = url }
+    func insertMarkdown(_ text: String, from: Int, to: Int,
+                        completion: ((Bool) -> Void)? = nil) {
+        markdown = (markdown as NSString).replacingCharacters(
+            in: NSRange(location: from, length: to - from), with: text)
+        contentDidChange?()
+        completion?(true)
+    }
 }
+typealias EditorViewController = Editor
 final class Split {
     var isEditingDocument = false
     var editorViewController: Editor? = Editor()
     var onLiveMetadataNeedsRefresh: (() -> Void)?
     func updateInspectorSelection(_ text: String?) {}
+    func openFileURLDidChange(_ url: URL, markdown: String) {}
     func enterEditMode(markdown: String, assetBaseURL: URL?, autofocus: Bool) -> Editor {
         isEditingDocument = true
         editorViewController!.markdown = markdown
@@ -83,6 +107,11 @@ final class Controller {
     var editorBaselineMarkdown: String?
     var editorChangeRevision = 0
     var hasUnsavedEditorChanges = false
+    var inspectorRefreshSessionID = UUID()
+    var isEditorCommitInFlight = false
+    var pendingEditorCommitRequested = false
+    var pendingCommitShouldExit = false
+    var pendingCommitCompletions: [(Bool) -> Void] = []
     // Inspector refresh is outside the checkbox/save behavior under test.
     var pendingInspectorComputation: DispatchWorkItem?
     func invalidateInspectorRefresh() {}
@@ -90,12 +119,17 @@ final class Controller {
     func stopAutoSaveTimer() {}
     func startAutoSaveTimerIfNeeded() {}
     func updateFormattingSelection(heading: Int, commands: Set<String>) {}
-    func pasteImage(at: Int, replacing: Int) {}
+    var clipboardData: Data?
+    var imageErrors = 0
+    func clipboardPNGData() -> Data? { clipboardData }
+    func presentImageError(_ error: Error) { imageErrors += 1 }
+    func presentImagePermissionPanel(_ data: Data, markdownURL: URL,
+                                     editor: Editor, from: Int, to: Int) { imageErrors += 1 }
     func renameImage(at: URL) {}
     func showEditAccessory() {}
     func updateEditToolbarItem() {}
-    func exitEditMode(rerender: Bool, preserveUnsavedChanges: Bool,
-                      hidesAccessoryAfterSwap: Bool, completion: () -> Void) {
+    func exitEditMode(rerender: Bool, preserveUnsavedChanges: Bool = false,
+                      hidesAccessoryAfterSwap: Bool = false, completion: () -> Void) {
         mainSplit?.isEditingDocument = false
         if rerender { rerenderCurrentPreview() }
         completion()
@@ -106,22 +140,42 @@ final class Controller {
     var currentMarkdown: String?
     var currentFileURL: URL?
     var markdownDocument: Document? = Document()
-    var documentWindow = 0
+    var documentWindow = Window()
     var rendered = ""
+    func resetAutoSaveFeedback() {}
+    func refreshOpenWithItem() {}
+    func refreshOpenInLLMItem() {}
+    func refreshOpenActionsItem() {}
+    func startWatching(_ url: URL) {}
+    func computeVisibleSidebars(markdown: String, fileURL: URL?, revision: Int, sessionID: UUID) {}
     func renderCurrentDocument(text: String, fileURL: URL) { rendered = text }
     func handleRename(to url: URL) { currentFileURL = url }
 '''
-for name in ['enterEditMode', 'previewPendingEdits', 'diskFileState', 'saveEditedMarkdown', 'toggleTaskCheckbox', 'rerenderCurrentPreview',
+for name in ['enterEditMode', 'previewPendingEdits', 'saveUntitledMarkdown', 'commitEdits',
+             'performPendingEditorCommit', 'handleEditedMarkdownSaveResult', 'adoptExternalMarkdown',
+             'completeSuccessfulEditorCommit', 'finishEditorCommit',
+             'diskFileState', 'saveEditedMarkdown', 'toggleTaskCheckbox', 'rerenderCurrentPreview',
              'presentExternalEditConflict', 'presentUnavailableFileConflict',
              'persistEditedMarkdown', 'write']:
-    signature = ('private ' if name in ['presentExternalEditConflict', 'presentUnavailableFileConflict',
+    signature = ('private ' if name in ['saveUntitledMarkdown', 'performPendingEditorCommit',
+                                       'handleEditedMarkdownSaveResult', 'completeSuccessfulEditorCommit',
+                                       'finishEditorCommit', 'presentExternalEditConflict', 'presentUnavailableFileConflict',
                                        'persistEditedMarkdown', 'write'] else '') + 'func ' + name + '('
     swift += extract(source, signature) + '\n'
+swift += extract(source, 'private func performPendingEditorCommit(body:') + '\n'
+swift += extract(image_source, 'func pasteImage(') + '\n'
+swift += extract(image_source, 'private func pasteImage(') + '\n'
+swift += extract(image_source, 'private func insertPastedImage(') + '\n'
+swift += '}\n'
+swift += 'enum MarkdownAssetResolution {\n'
+for name in ['picturesDirectory', 'nextIntegerFileName', 'savePastedImage', 'markdownPath',
+             'encodedMarkdownPath', 'relativePath', 'atomicWrite']:
+    swift += extract(asset_source, 'static func ' + name + '(') + '\n'
 swift += '}\n'
 swift += extract((root / 'md-preview/Rendering/EscapingHTMLFormatter.swift').read_text(),
                  'nonisolated enum TaskCheckboxSource')
 swift += r'''
-let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+let directory = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 defer { try? FileManager.default.removeItem(at: directory) }
 let original = "# Tasks\n\n- [ ] First\n- [x] Second\n"
@@ -225,9 +279,63 @@ permission.currentMarkdown = original
 NSSavePanel.respond!(.OK)
 precondition(!FileManager.default.fileExists(atPath: chosen.path))
 precondition(tryDisk(other) == original)
+NSSavePanel.respond = nil
+NSSavePanel.pending = nil
+
+let imageData = Data([0x89, 0x50, 0x4e, 0x47])
+let untitled = Controller()
+untitled.currentMarkdown = "Before selected after"
+untitled.enterEditMode()
+untitled.clipboardData = imageData
+untitled.pasteImage(at: 7, replacing: 15)
+guard let imageSavePanel = NSSavePanel.pending, let saveImageDocument = NSSavePanel.respond else {
+    fatalError("Image paste into an untitled document must prompt to save, not silently return")
+}
+let imageDocumentURL = directory.appendingPathComponent("中文 Paste (1).md")
+imageSavePanel.url = imageDocumentURL
+NSSavePanel.respond = nil
+NSSavePanel.pending = nil
+// A save sheet can outlive the clipboard contents; use the image originally pasted.
+untitled.clipboardData = nil
+saveImageDocument(.OK)
+let imagesDirectory = MarkdownAssetResolution.picturesDirectory(forMarkdownFile: imageDocumentURL)
+let firstImage = imagesDirectory.appendingPathComponent("1.png")
+let firstImagePath = MarkdownAssetResolution.markdownPath(for: firstImage, from: imageDocumentURL)!
+let imageMarkdown = "Before ![1](\(firstImagePath)) after"
+precondition(tryDisk(untitled) == imageMarkdown, "First paste must save the image reference at the original selection")
+precondition(untitled.mainSplit!.editorViewController!.markdown == imageMarkdown)
+precondition(try! Data(contentsOf: firstImage) == imageData, "Paste must retain the original image during Save")
+precondition(untitled.mainSplit!.editorViewController!.assetBaseURL?.path == directory.path,
+             "First Save must update the live editor's asset directory")
+precondition(untitled.imageErrors == 0 && untitled.isEditing)
+untitled.clipboardData = imageData
+let end = (imageMarkdown as NSString).length
+untitled.pasteImage(at: end, replacing: end)
+precondition(NSSavePanel.pending == nil, "A saved document must not prompt to save on every image paste")
+precondition(FileManager.default.fileExists(atPath: imagesDirectory.appendingPathComponent("2.png").path))
+precondition(tryDisk(untitled).contains("/2.png)"))
+
+let cancelledPaste = Controller()
+cancelledPaste.currentMarkdown = "Keep this draft"
+cancelledPaste.enterEditMode()
+cancelledPaste.clipboardData = imageData
+cancelledPaste.pasteImage(at: 0, replacing: 0)
+let cancelImageSave = NSSavePanel.respond!
+NSSavePanel.respond = nil
+NSSavePanel.pending = nil
+cancelImageSave(.cancel)
+precondition(cancelledPaste.currentFileURL == nil && cancelledPaste.isEditing)
+precondition(cancelledPaste.mainSplit!.editorViewController!.markdown == "Keep this draft")
+precondition(!cancelledPaste.isEditorCommitInFlight)
+
+cancelledPaste.clipboardData = nil
+cancelledPaste.pasteImage(at: 0, replacing: 0)
+precondition(cancelledPaste.imageErrors == 1 && NSSavePanel.pending == nil,
+             "Invalid image data must report an error before requesting a document location")
+print("PASS: untitled image paste, original clipboard and selection retention, first-save asset base, repeated paste, cancellation")
 print("PASS: checkbox disk writes, draft preview and editor reentry for all conflict choices, rename during conflict, missing-file navigation, permission-panel navigation")
 '''
 with tempfile.TemporaryDirectory(prefix='checkbox-save-tests-') as directory:
     path = Path(directory) / 'probe.swift'
     path.write_text(swift)
-    subprocess.run(['swift', str(path)], check=True)
+    subprocess.run(['swift', str(path), str(Path(directory) / 'files')], check=True)

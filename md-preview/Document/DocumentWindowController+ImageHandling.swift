@@ -7,9 +7,7 @@ import AppKit
 
 extension DocumentWindowController {
     func pasteImage(at from: Int, replacing to: Int) {
-        guard isEditing,
-              let markdownURL = currentFileURL,
-              let editor = mainSplit?.editorViewController else { return }
+        guard isEditing else { return }
         guard let data = clipboardPNGData() else {
             presentImageError(
                 NSError(domain: "MarkdownPreview.ImagePaste", code: 1, userInfo: [
@@ -19,6 +17,18 @@ extension DocumentWindowController {
                     )
                 ])
             )
+            return
+        }
+        pasteImage(data, at: from, replacing: to)
+    }
+
+    private func pasteImage(_ data: Data, at from: Int, replacing to: Int) {
+        guard isEditing, let editor = mainSplit?.editorViewController else { return }
+        guard let markdownURL = currentFileURL else {
+            commitEdits(exitAfter: false) { [weak self, weak editor] saved in
+                guard saved, let self, self.mainSplit?.editorViewController === editor else { return }
+                self.pasteImage(data, at: from, replacing: to)
+            }
             return
         }
 

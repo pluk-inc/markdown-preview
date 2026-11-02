@@ -101,7 +101,8 @@ nonisolated enum MarkdownAssetResolution {
     }
 
     fileprivate static func encodedMarkdownPath(_ path: String) -> String {
-        // 括号可能截断 Markdown 路径；& 可能把文件名中的实体写法解码成其他字符。
+        // Parentheses can terminate Markdown destinations; ampersands can
+        // turn literal filename text into HTML entities.
         let allowedCharacters = CharacterSet.urlPathAllowed
             .subtracting(CharacterSet(charactersIn: "()&"))
         return path
@@ -113,7 +114,8 @@ nonisolated enum MarkdownAssetResolution {
             .joined(separator: "/")
     }
 
-    /// 仅改写图片引用；可同步更新与原文件名一致的自动标签，保留自定义描述和标题。
+    /// Rewrites image destinations and labels matching the old filename,
+    /// preserving custom descriptions and titles.
     static func replacingImagePath(in markdown: String,
                                    from oldPath: String,
                                    to newPath: String) -> String? {
@@ -155,7 +157,7 @@ nonisolated enum MarkdownAssetResolution {
     }
 
     private static func escapedImageLabel(_ label: String) -> String {
-        // 文件名中的标点必须作为文字显示，避免成为 Markdown 格式或 HTML 实体。
+        // Filename punctuation must remain literal, not Markdown or HTML entities.
         label.replacingOccurrences(of: #"([\x21-\x2F\x3A-\x40\x5B-\x60\x7B-\x7E])"#,
                                    with: #"\\$1"#, options: .regularExpression)
     }
