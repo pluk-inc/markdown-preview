@@ -410,6 +410,7 @@
 "Recent Files" = "最近使用的文件";
 "File Results" = "文件搜索结果";
 "The pasted image could not be inserted into the document." = "无法将粘贴的图像插入文稿。";
+"Queued image paste failed (%ld remaining). Please paste again." = "无法完成图像粘贴（剩余 %ld 张）。请重新粘贴。";
 "Export PDF" = "导出 PDF";
 "Export document as PDF" = "将文稿导出为 PDF";
 "Export document" = "导出文稿";

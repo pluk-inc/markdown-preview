@@ -410,6 +410,7 @@
 "Recent Files" = "最近使ったファイル";
 "File Results" = "ファイルの検索結果";
 "The pasted image could not be inserted into the document." = "貼り付けた画像を書類に挿入できませんでした。";
+"Queued image paste failed (%ld remaining). Please paste again." = "画像の貼り付けを完了できませんでした（残り %ld 枚）。もう一度貼り付けてください。";
 "Export PDF" = "PDF を書き出す";
 "Export document as PDF" = "書類を PDF として書き出す";
 "Export document" = "書類を書き出す";

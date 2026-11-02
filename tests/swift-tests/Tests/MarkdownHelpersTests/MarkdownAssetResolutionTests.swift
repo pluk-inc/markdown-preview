@@ -1,3 +1,4 @@
+import Markdown
 import XCTest
 @testable import MarkdownHelpers
 
@@ -318,6 +319,115 @@ final class MarkdownAssetResolutionTests: XCTestCase {
                 to: "notes-pictures/hero%20shot.png"
             ),
             "![one](<notes-pictures/hero%20shot.png> \"caption\")"
+        )
+    }
+
+    func testReplacingImagePathSupportsConsecutiveRenamesOfEncodedPastedImages() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        for name in ["中文笔记", "my notes", "notes)", "100%", "literal%20"] {
+            let markdownURL = root.appendingPathComponent("\(name).md")
+            let imageURL = try MarkdownAssetResolution.savePastedImage(
+                Data([0, 1, 2]),
+                forMarkdownFile: markdownURL
+            )
+            let renamedURL = imageURL.deletingLastPathComponent()
+                .appendingPathComponent("架构 (one)%20.png")
+            let finalURL = imageURL.deletingLastPathComponent()
+                .appendingPathComponent("final image.png")
+            let oldPath = try XCTUnwrap(MarkdownAssetResolution.markdownPath(
+                for: imageURL, from: markdownURL
+            ))
+            let newPath = try XCTUnwrap(MarkdownAssetResolution.markdownPath(
+                for: renamedURL, from: markdownURL
+            ))
+            let finalPath = try XCTUnwrap(MarkdownAssetResolution.markdownPath(
+                for: finalURL, from: markdownURL
+            ))
+            let source = "说明 🙂\n\n![1](\(oldPath) \"caption\")\n\n`![1](\(oldPath))`"
+            let renamed = try XCTUnwrap(MarkdownAssetResolution.replacingImagePath(
+                in: source, from: oldPath, to: newPath
+            ), name)
+
+            XCTAssertEqual(
+                renamed,
+                "说明 🙂\n\n![架构 \\(one\\)\\%20](\(newPath) \"caption\")\n\n`![1](\(oldPath))`",
+                name
+            )
+            XCTAssertEqual(
+                MarkdownAssetResolution.replacingImagePath(
+                    in: renamed, from: newPath, to: finalPath
+                ),
+                "说明 🙂\n\n![final image](\(finalPath) \"caption\")\n\n`![1](\(oldPath))`",
+                name
+            )
+        }
+    }
+
+    func testReplacingImagePathKeepsLiteralPercentEscapesDistinct() {
+        let source = "![literal](notes-pictures/a%2520b.png)\n![space](notes-pictures/a%20b.png)"
+        XCTAssertEqual(
+            MarkdownAssetResolution.replacingImagePath(
+                in: source,
+                from: "notes-pictures/a%2520b.png",
+                to: "notes-pictures/renamed.png"
+            ),
+            "![literal](notes-pictures/renamed.png)\n![space](notes-pictures/a%20b.png)"
+        )
+    }
+
+    func testReplacingImagePathUpdatesGeneratedLabelAndPreservesCustomDescriptions() {
+        let source = """
+        ![1](notes-pictures/1.png "caption")
+        ![自定义描述](<notes-pictures/1.png>)
+        [1](notes-pictures/1.png)
+        `![1](notes-pictures/1.png)`
+        """
+        XCTAssertEqual(
+            MarkdownAssetResolution.replacingImagePath(
+                in: source,
+                from: "notes-pictures/1.png",
+                to: "notes-pictures/hero.png"
+            ),
+            """
+            ![hero](notes-pictures/hero.png "caption")
+            ![自定义描述](<notes-pictures/hero.png>)
+            [1](notes-pictures/1.png)
+            `![1](notes-pictures/1.png)`
+            """
+        )
+    }
+
+    func testReplacingImagePathEscapesGeneratedLabelAndUpdatesItOnTheNextRename() throws {
+        let markdownURL = URL(fileURLWithPath: "/Users/me/中文笔记.md")
+        let pictures = MarkdownAssetResolution.picturesDirectory(forMarkdownFile: markdownURL)
+        let name = "图 [终稿] *v1* _v2_ ~v3~ `code` &copy; <tag> %20"
+        let oldPath = try XCTUnwrap(MarkdownAssetResolution.markdownPath(
+            for: pictures.appendingPathComponent("1.png"), from: markdownURL
+        ))
+        let newPath = try XCTUnwrap(MarkdownAssetResolution.markdownPath(
+            for: pictures.appendingPathComponent("\(name).png"), from: markdownURL
+        ))
+        let finalPath = try XCTUnwrap(MarkdownAssetResolution.markdownPath(
+            for: pictures.appendingPathComponent("final.png"), from: markdownURL
+        ))
+        let renamed = try XCTUnwrap(MarkdownAssetResolution.replacingImagePath(
+            in: "![1](\(oldPath))",
+            from: oldPath,
+            to: newPath
+        ))
+        let parsedImage = try XCTUnwrap(Document(parsing: renamed).child(at: 0)?.child(at: 0) as? Image)
+        XCTAssertEqual(parsedImage.source, newPath)
+        XCTAssertEqual(parsedImage.plainText, name)
+        XCTAssertEqual(
+            MarkdownAssetResolution.replacingImagePath(
+                in: renamed,
+                from: newPath,
+                to: finalPath
+            ),
+            "![final](\(finalPath))"
         )
     }
 

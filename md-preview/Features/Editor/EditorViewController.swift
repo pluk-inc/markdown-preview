@@ -35,6 +35,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     private let bridge = EditorBridge()
     private let assetScheme = MarkdownAssetScheme()
     private var hasLoadedEditorPage = false
+    private var hasPendingAssetBaseUpdate = false
     private var pageSupportsMermaid = false
     private var currentAssetBaseURL: URL?
     private var findCompletion: ((FindResult) -> Void)?
@@ -73,6 +74,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
 
     func load(markdown: String, assetBaseURL: URL? = nil) {
         hasChanges = false
+        hasPendingAssetBaseUpdate = false
         currentAssetBaseURL = assetBaseURL?.standardizedFileURL
         assetScheme.setBaseURL(currentAssetBaseURL)
         let needsMermaid = Self.containsMermaidFence(in: markdown)
@@ -90,6 +92,34 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         loadEditorPage(markdown: markdown,
                        includesMermaid: needsMermaid,
                        assetBaseURL: currentAssetBaseURL)
+    }
+
+    func updateAssetBaseURL(_ assetBaseURL: URL) {
+        currentAssetBaseURL = assetBaseURL.standardizedFileURL
+        assetScheme.setBaseURL(currentAssetBaseURL)
+        guard hasLoadedEditorPage else {
+            hasPendingAssetBaseUpdate = true
+            return
+        }
+        hasPendingAssetBaseUpdate = false
+        let script = """
+        (() => {
+            const base = document.querySelector("head > base") || document.createElement("base");
+            base.href = \(EditorHTML.jsStringLiteral(MarkdownAssetResolution.baseHref(forFolder: assetBaseURL)));
+            document.head.prepend(base);
+            document.querySelectorAll("img").forEach(image => {
+                const source = image.getAttribute("src");
+                if (source === null) return;
+                image.addEventListener("load", () => {
+                    image.closest(".cm-md-image-preview")?.classList.remove("cm-md-image-error");
+                }, { once: true });
+                // WebKit retains a failed request when the same src is reassigned.
+                image.removeAttribute("src");
+                image.setAttribute("src", source);
+            });
+        })()
+        """
+        webView.evaluateJavaScript(script, completionHandler: nil)
     }
 
     private func loadEditorPage(markdown: String,
@@ -396,10 +426,12 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     func insertMarkdown(_ markdown: String,
                         from: Int,
                         to: Int,
+                        expectedMarkdown: String? = nil,
                         completion: ((Bool) -> Void)? = nil) {
         let script = """
         (() => {
             if (!window.__mdEditor) return false;
+            \(expectedMarkdown.map { "if (window.__mdEditor.getMarkdown() !== \(EditorHTML.jsStringLiteral($0))) return false;" } ?? "")
             window.__mdEditor.insertTextAt(\(EditorHTML.jsStringLiteral(markdown)), \(from), \(to));
             return true;
         })()
@@ -424,6 +456,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                 contentDidChange?()
             case "ready":
                 hasLoadedEditorPage = true
+                if hasPendingAssetBaseUpdate, let baseURL = currentAssetBaseURL {
+                    updateAssetBaseURL(baseURL)
+                }
                 updateChromeZoom()
                 // Fresh page — the bar padding lives in the DOM and must be
                 // re-applied even when the tracked value hasn't changed,

@@ -101,11 +101,10 @@ nonisolated enum MarkdownAssetResolution {
     }
 
     fileprivate static func encodedMarkdownPath(_ path: String) -> String {
-        // Parentheses are valid URL path characters but can terminate an
-        // unbracketed Markdown destination when a filename contains only one
-        // side of the pair.
+        // Parentheses can terminate Markdown destinations; ampersands can
+        // turn literal filename text into HTML entities.
         let allowedCharacters = CharacterSet.urlPathAllowed
-            .subtracting(CharacterSet(charactersIn: "()"))
+            .subtracting(CharacterSet(charactersIn: "()&"))
         return path
             .split(separator: "/", omittingEmptySubsequences: false)
             .map {
@@ -115,9 +114,8 @@ nonisolated enum MarkdownAssetResolution {
             .joined(separator: "/")
     }
 
-    /// Rewrites inline image destinations while leaving alt text and titles
-    /// untouched. This is intentionally scoped to image syntax, not arbitrary
-    /// prose or code containing the same path.
+    /// Rewrites image destinations and labels matching the old filename,
+    /// preserving custom descriptions and titles.
     static func replacingImagePath(in markdown: String,
                                    from oldPath: String,
                                    to newPath: String) -> String? {
@@ -125,35 +123,54 @@ nonisolated enum MarkdownAssetResolution {
         collector.visit(Document(parsing: markdown))
         guard !collector.ranges.isEmpty else { return nil }
 
+        let oldLabel = URL(fileURLWithPath: oldPath.removingPercentEncoding ?? oldPath)
+            .deletingPathExtension().lastPathComponent
+        let newLabel = URL(fileURLWithPath: newPath.removingPercentEncoding ?? newPath)
+            .deletingPathExtension().lastPathComponent
         let nsMarkdown = markdown as NSString
-        let destinationRanges = collector.ranges.compactMap {
-            imageDestinationRange(in: markdown, imageRange: $0)
-        }.sorted { $0.location < $1.location }
-        guard !destinationRanges.isEmpty else { return nil }
+        let sourceRanges = collector.ranges.compactMap {
+            imageSourceRanges(in: markdown, imageRange: $0)
+        }.sorted { $0.destination.location < $1.destination.location }
+        guard !sourceRanges.isEmpty else { return nil }
 
         var result = ""
         result.reserveCapacity(markdown.count)
         var cursor = 0
-        for pathRange in destinationRanges {
+        for ranges in sourceRanges {
+            let label = nsMarkdown.substring(with: ranges.label)
+            if label == oldLabel || label == escapedImageLabel(oldLabel) {
+                result += nsMarkdown.substring(with: NSRange(
+                    location: cursor, length: ranges.label.location - cursor
+                ))
+                result += escapedImageLabel(newLabel)
+                cursor = ranges.label.location + ranges.label.length
+            }
             result += nsMarkdown.substring(with: NSRange(
                 location: cursor,
-                length: pathRange.location - cursor
+                length: ranges.destination.location - cursor
             ))
             result += newPath
-            cursor = pathRange.location + pathRange.length
+            cursor = ranges.destination.location + ranges.destination.length
         }
         result += nsMarkdown.substring(from: cursor)
         return result
     }
 
-    private static func imageDestinationRange(in markdown: String,
-                                              imageRange: NSRange) -> NSRange? {
+    private static func escapedImageLabel(_ label: String) -> String {
+        // Filename punctuation must remain literal, not Markdown or HTML entities.
+        label.replacingOccurrences(of: #"([\x21-\x2F\x3A-\x40\x5B-\x60\x7B-\x7E])"#,
+                                   with: #"\\$1"#, options: .regularExpression)
+    }
+
+    private static func imageSourceRanges(in markdown: String,
+                                         imageRange: NSRange) -> (label: NSRange, destination: NSRange)? {
         guard let range = Range(imageRange, in: markdown) else { return nil }
         var index = range.lowerBound
         guard index < range.upperBound, markdown[index] == "!" else { return nil }
         index = markdown.index(after: index)
         guard index < range.upperBound, markdown[index] == "[" else { return nil }
         index = markdown.index(after: index)
+        let labelStart = index
 
         var labelDepth = 1
         while index < range.upperBound, labelDepth > 0 {
@@ -176,6 +193,7 @@ nonisolated enum MarkdownAssetResolution {
         guard labelDepth == 0,
               index < range.upperBound,
               markdown[index] == "(" else { return nil }
+        let labelRange = NSRange(labelStart..<markdown.index(before: index), in: markdown)
         index = markdown.index(after: index)
         while index < range.upperBound, markdown[index].isWhitespace {
             index = markdown.index(after: index)
@@ -192,7 +210,7 @@ nonisolated enum MarkdownAssetResolution {
                         index = markdown.index(after: index)
                     }
                 } else if markdown[index] == ">" {
-                    return NSRange(destinationStart..<index, in: markdown)
+                    return (labelRange, NSRange(destinationStart..<index, in: markdown))
                 } else if markdown[index].isNewline {
                     return nil
                 } else {
@@ -216,13 +234,13 @@ nonisolated enum MarkdownAssetResolution {
                 index = markdown.index(after: index)
             case ")":
                 guard parenthesisDepth > 0 else {
-                    return NSRange(destinationStart..<index, in: markdown)
+                    return (labelRange, NSRange(destinationStart..<index, in: markdown))
                 }
                 parenthesisDepth -= 1
                 index = markdown.index(after: index)
             default:
                 guard !markdown[index].isWhitespace else {
-                    return NSRange(destinationStart..<index, in: markdown)
+                    return (labelRange, NSRange(destinationStart..<index, in: markdown))
                 }
                 index = markdown.index(after: index)
             }
@@ -275,7 +293,9 @@ nonisolated private struct MarkdownImageRangeCollector: MarkupWalker {
 
     mutating func visitImage(_ image: Image) {
         guard let imageSource = image.source,
-              MarkdownAssetResolution.encodedMarkdownPath(imageSource) == matchingSource,
+              MarkdownAssetResolution.encodedMarkdownPath(
+                imageSource.removingPercentEncoding ?? imageSource
+              ) == matchingSource,
               let sourceRange = image.range,
               let lower = index(for: sourceRange.lowerBound),
               let upper = index(for: sourceRange.upperBound),

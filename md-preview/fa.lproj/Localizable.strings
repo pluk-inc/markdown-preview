@@ -409,6 +409,7 @@
 "Recent Files" = "فایل‌های اخیر";
 "File Results" = "نتایج فایل‌ها";
 "The pasted image could not be inserted into the document." = "درج تصویر جای‌گذاری‌شده در سند امکان‌پذیر نبود.";
+"Queued image paste failed (%ld remaining). Please paste again." = "جای‌گذاری تصاویر کامل نشد (%ld تصویر باقی مانده). دوباره جای‌گذاری کنید.";
 "Export PDF" = "خروجی گرفتن PDF";
 "Export document as PDF" = "خروجی گرفتن از سند به‌صورت PDF";
 "Export document" = "خروجی گرفتن از سند";

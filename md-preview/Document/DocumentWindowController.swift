@@ -85,6 +85,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     var pendingEditorCommitRequested = false
     var pendingCommitShouldExit = false
     var pendingCommitCompletions: [(Bool) -> Void] = []
+    var pendingUntitledImagePastes: [(data: Data, from: Int, to: Int)] = []
     /// When sidebar navigation starts from edit mode, the newly loaded file
     /// should return to edit mode instead of dropping the user into preview.
     var pendingEditModeURL: URL?
@@ -705,6 +706,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         } else {
             loadFile(at: newURL, silentOnFailure: true)
         }
+        mainSplit?.editorViewController?.updateAssetBaseURL(newURL.deletingLastPathComponent())
         if isEditing { refreshInspectorAfterRename() }
     }
 
