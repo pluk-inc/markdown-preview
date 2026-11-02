@@ -22,12 +22,22 @@ extension DocumentWindowController {
         pasteImage(data, at: from, replacing: to)
     }
 
-    private func pasteImage(_ data: Data, at from: Int, replacing to: Int) {
-        guard isEditing, let editor = mainSplit?.editorViewController else { return }
+    private func pasteImage(_ data: Data, at from: Int, replacing to: Int,
+                            completion: ((Int?) -> Void)? = nil) {
+        guard isEditing, let editor = mainSplit?.editorViewController else {
+            completion?(nil)
+            return
+        }
         guard let markdownURL = currentFileURL else {
+            pendingUntitledImagePastes.append((data, from, to))
+            guard pendingUntitledImagePastes.count == 1 else { return }
             commitEdits(exitAfter: false) { [weak self, weak editor] saved in
-                guard saved, let self, self.mainSplit?.editorViewController === editor else { return }
-                self.pasteImage(data, at: from, replacing: to)
+                guard let self else { return }
+                let pastes = self.pendingUntitledImagePastes
+                self.pendingUntitledImagePastes.removeAll()
+                guard saved, let editor,
+                      self.mainSplit?.editorViewController === editor else { return }
+                self.pasteUntitledImages(pastes, editor: editor)
             }
             return
         }
@@ -37,13 +47,39 @@ extension DocumentWindowController {
                                   forMarkdownFile: markdownURL,
                                   editor: editor,
                                   from: from,
-                                  to: to)
+                                  to: to,
+                                  completion: completion)
         } catch {
             presentImagePermissionPanel(data,
                                         markdownURL: markdownURL,
                                         editor: editor,
                                         from: from,
-                                        to: to)
+                                        to: to,
+                                        completion: completion)
+        }
+    }
+
+    private func pasteUntitledImages(_ pastes: [(data: Data, from: Int, to: Int)],
+                                     editor: EditorViewController) {
+        guard let paste = pastes.first,
+              mainSplit?.editorViewController === editor,
+              let markdownURL = currentFileURL else { return }
+        pasteImage(paste.data, at: paste.from, replacing: paste.to) { [weak self, weak editor] length in
+            guard let length, let self, let editor,
+                  self.mainSplit?.editorViewController === editor,
+                  self.currentFileURL == markdownURL else { return }
+            let end = paste.from + length
+            let delta = length - (paste.to - paste.from)
+            // Pending ranges refer to the document before the preceding insertion.
+            let remaining = pastes.dropFirst().map { next in
+                guard next.to > paste.from || next.from >= paste.from else { return next }
+                let from = next.from < paste.from ? next.from
+                    : next.from >= paste.to ? next.from + delta : end
+                let to = next.to < paste.from ? next.to
+                    : next.to >= paste.to ? next.to + delta : end
+                return (data: next.data, from: from, to: to)
+            }
+            self.pasteUntitledImages(remaining, editor: editor)
         }
     }
 
@@ -51,7 +87,8 @@ extension DocumentWindowController {
                                    forMarkdownFile markdownURL: URL,
                                    editor: EditorViewController,
                                    from: Int,
-                                   to: Int) throws {
+                                   to: Int,
+                                   completion: ((Int?) -> Void)? = nil) throws {
         let imageURL = try MarkdownAssetResolution.savePastedImage(
             data,
             forMarkdownFile: markdownURL
@@ -69,13 +106,15 @@ extension DocumentWindowController {
                           )])
         }
         let label = imageURL.deletingPathExtension().lastPathComponent
+        let markdown = "![\(label)](\(relativePath))"
         editor.insertMarkdown(
-            "![\(label)](\(relativePath))",
+            markdown,
             from: from,
             to: to
         ) { [weak self] inserted in
             guard inserted else {
                 try? FileManager.default.removeItem(at: imageURL)
+                completion?(nil)
                 self?.presentImageError(
                     NSError(domain: "MarkdownPreview.ImagePaste",
                             code: 4,
@@ -89,6 +128,7 @@ extension DocumentWindowController {
             guard let self else { return }
             self.hasUnsavedEditorChanges = true
             self.commitEdits(exitAfter: false)
+            completion?(markdown.utf16.count)
         }
     }
 
@@ -96,7 +136,8 @@ extension DocumentWindowController {
                                              markdownURL: URL,
                                              editor: EditorViewController,
                                              from: Int,
-                                             to: Int) {
+                                             to: Int,
+                                             completion: ((Int?) -> Void)? = nil) {
         let parentDirectory = markdownURL.deletingLastPathComponent().standardizedFileURL
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
@@ -108,8 +149,17 @@ extension DocumentWindowController {
             comment: "Image paste permission message"
         )
         panel.beginSheetModal(for: documentWindow) { [weak self] response in
-            guard let self, response == .OK, let chosen = panel.url else { return }
+            guard let self, response == .OK, let chosen = panel.url else {
+                completion?(nil)
+                return
+            }
+            guard self.isEditing, self.currentFileURL == markdownURL,
+                  self.mainSplit?.editorViewController === editor else {
+                completion?(nil)
+                return
+            }
             guard chosen.standardizedFileURL == parentDirectory else {
+                completion?(nil)
                 self.presentImageError(
                     NSError(domain: "MarkdownPreview.ImagePaste",
                             code: 3,
@@ -125,8 +175,10 @@ extension DocumentWindowController {
                                            forMarkdownFile: markdownURL,
                                            editor: editor,
                                            from: from,
-                                           to: to)
+                                           to: to,
+                                           completion: completion)
             } catch {
+                completion?(nil)
                 self.presentImageError(error)
             }
         }
@@ -134,7 +186,8 @@ extension DocumentWindowController {
 
     private func clipboardPNGData() -> Data? {
         let pasteboard = NSPasteboard.general
-        if let data = pasteboard.data(forType: .png) {
+        if let data = pasteboard.data(forType: .png),
+           NSBitmapImageRep(data: data) != nil {
             return data
         }
         if let tiff = pasteboard.data(forType: .tiff),

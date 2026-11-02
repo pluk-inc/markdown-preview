@@ -12,6 +12,7 @@ root = Path(__file__).resolve().parents[1]
 source = (root / 'md-preview/Document/DocumentWindowController+EditSession.swift').read_text()
 image_source = (root / 'md-preview/Document/DocumentWindowController+ImageHandling.swift').read_text()
 asset_source = (root / 'md-preview/Rendering/MarkdownAssetResolution.swift').read_text()
+editor_source = (root / 'md-preview/Features/Editor/EditorViewController.swift').read_text()
 
 
 def extract(text, signature):
@@ -25,9 +26,12 @@ def extract(text, signature):
 
 
 swift = r'''
-import Foundation
+import AppKit
 import UniformTypeIdentifiers
 
+enum NSPasteboard {
+    static let general = AppKit.NSPasteboard(name: .init(UUID().uuidString))
+}
 enum Response { case alertFirstButtonReturn, alertSecondButtonReturn, cancel, OK }
 final class Window { var title = "" }
 final class NSAlert {
@@ -66,9 +70,23 @@ final class Document {
     func replaceContents(markdown: String, fileURL: URL? = nil) { contents = markdown }
 }
 enum NSSound { static func beep() {} }
+final class AssetScheme {
+    var baseURL: URL?
+    func setBaseURL(_ url: URL?) { baseURL = url }
+}
+final class WebView {
+    var scripts: [String] = []
+    func evaluateJavaScript(_ script: String, completionHandler: ((Any?, Error?) -> Void)?) {
+        scripts.append(script)
+    }
+}
 final class Editor {
     var markdown = ""
-    var assetBaseURL: URL?
+    var currentAssetBaseURL: URL?
+    let assetScheme = AssetScheme()
+    let webView = WebView()
+    var defersInsertions = false
+    var pendingInsertions: [() -> Void] = []
     var cancelRequested: (() -> Void)?
     var contentDidChange: (() -> Void)?
     var formattingDidChange: ((Int, Set<String>, String?) -> Void)?
@@ -76,13 +94,15 @@ final class Editor {
     var imageClicked: ((URL) -> Void)?
     func fetchMarkdown(_ completion: (String?) -> Void) { completion(markdown) }
     func load(markdown: String, assetBaseURL: URL?) { self.markdown = markdown }
-    func updateAssetBaseURL(_ url: URL) { assetBaseURL = url }
     func insertMarkdown(_ text: String, from: Int, to: Int,
                         completion: ((Bool) -> Void)? = nil) {
-        markdown = (markdown as NSString).replacingCharacters(
-            in: NSRange(location: from, length: to - from), with: text)
-        contentDidChange?()
-        completion?(true)
+        let insert = { [self] in
+            markdown = (markdown as NSString).replacingCharacters(
+                in: NSRange(location: from, length: to - from), with: text)
+            contentDidChange?()
+            completion?(true)
+        }
+        if defersInsertions { pendingInsertions.append(insert) } else { insert() }
     }
 }
 typealias EditorViewController = Editor
@@ -112,6 +132,7 @@ final class Controller {
     var pendingEditorCommitRequested = false
     var pendingCommitShouldExit = false
     var pendingCommitCompletions: [(Bool) -> Void] = []
+    var pendingUntitledImagePastes: [(data: Data, from: Int, to: Int)] = []
     // Inspector refresh is outside the checkbox/save behavior under test.
     var pendingInspectorComputation: DispatchWorkItem?
     func invalidateInspectorRefresh() {}
@@ -119,12 +140,21 @@ final class Controller {
     func stopAutoSaveTimer() {}
     func startAutoSaveTimerIfNeeded() {}
     func updateFormattingSelection(heading: Int, commands: Set<String>) {}
-    var clipboardData: Data?
+    var clipboardData: Data? {
+        get { NSPasteboard.general.data(forType: .png) }
+        set {
+            NSPasteboard.general.clearContents()
+            if let newValue { NSPasteboard.general.setData(newValue, forType: .png) }
+        }
+    }
     var imageErrors = 0
-    func clipboardPNGData() -> Data? { clipboardData }
     func presentImageError(_ error: Error) { imageErrors += 1 }
     func presentImagePermissionPanel(_ data: Data, markdownURL: URL,
-                                     editor: Editor, from: Int, to: Int) { imageErrors += 1 }
+                                     editor: Editor, from: Int, to: Int,
+                                     completion: ((Int?) -> Void)? = nil) {
+        imageErrors += 1
+        completion?(nil)
+    }
     func renameImage(at: URL) {}
     func showEditAccessory() {}
     func updateEditToolbarItem() {}
@@ -165,19 +195,26 @@ for name in ['enterEditMode', 'previewPendingEdits', 'saveUntitledMarkdown', 'co
 swift += extract(source, 'private func performPendingEditorCommit(body:') + '\n'
 swift += extract(image_source, 'func pasteImage(') + '\n'
 swift += extract(image_source, 'private func pasteImage(') + '\n'
+swift += extract(image_source, 'private func pasteUntitledImages(') + '\n'
 swift += extract(image_source, 'private func insertPastedImage(') + '\n'
+swift += extract(image_source, 'private func clipboardPNGData(') + '\n'
 swift += '}\n'
-swift += 'enum MarkdownAssetResolution {\n'
+swift += 'extension Editor {\n' + extract(editor_source, 'func updateAssetBaseURL(') + '\n}\n'
+swift += 'enum MarkdownAssetResolution {\nstatic let scheme = "md-asset"\nstatic let rootBaseHref = "md-asset:///"\n'
 for name in ['picturesDirectory', 'nextIntegerFileName', 'savePastedImage', 'markdownPath',
-             'encodedMarkdownPath', 'relativePath', 'atomicWrite']:
+             'encodedMarkdownPath', 'relativePath', 'atomicWrite', 'baseHref']:
     swift += extract(asset_source, 'static func ' + name + '(') + '\n'
 swift += '}\n'
+swift += 'enum EditorHTML {\n' + extract(
+    (root / 'md-preview/Features/Editor/EditorHTML.swift').read_text(),
+    'static func jsStringLiteral(') + '\n}\n'
 swift += extract((root / 'md-preview/Rendering/EscapingHTMLFormatter.swift').read_text(),
                  'nonisolated enum TaskCheckboxSource')
 swift += r'''
 let directory = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 defer { try? FileManager.default.removeItem(at: directory) }
+defer { NSPasteboard.general.releaseGlobally() }
 let original = "# Tasks\n\n- [ ] First\n- [x] Second\n"
 let checked = "# Tasks\n\n- [x] First\n- [x] Second\n"
 let external = original + "\nExternal change\n"
@@ -282,7 +319,11 @@ precondition(tryDisk(other) == original)
 NSSavePanel.respond = nil
 NSSavePanel.pending = nil
 
-let imageData = Data([0x89, 0x50, 0x4e, 0x47])
+let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1, pixelsHigh: 1,
+    bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+    colorSpaceName: .calibratedRGB, bytesPerRow: 4, bitsPerPixel: 32)!
+bitmap.setColor(.red, atX: 0, y: 0)
+let imageData = bitmap.representation(using: .png, properties: [:])!
 let untitled = Controller()
 untitled.currentMarkdown = "Before selected after"
 untitled.enterEditMode()
@@ -305,8 +346,14 @@ let imageMarkdown = "Before ![1](\(firstImagePath)) after"
 precondition(tryDisk(untitled) == imageMarkdown, "First paste must save the image reference at the original selection")
 precondition(untitled.mainSplit!.editorViewController!.markdown == imageMarkdown)
 precondition(try! Data(contentsOf: firstImage) == imageData, "Paste must retain the original image during Save")
-precondition(untitled.mainSplit!.editorViewController!.assetBaseURL?.path == directory.path,
+let savedEditor = untitled.mainSplit!.editorViewController!
+precondition(savedEditor.currentAssetBaseURL?.path == directory.path,
              "First Save must update the live editor's asset directory")
+precondition(savedEditor.assetScheme.baseURL?.path == directory.path,
+             "First Save must enable the editor's asset scheme")
+precondition(savedEditor.webView.scripts.last?.contains(
+    EditorHTML.jsStringLiteral(MarkdownAssetResolution.baseHref(forFolder: directory))) == true,
+    "First Save must send the saved folder's href to the live page")
 precondition(untitled.imageErrors == 0 && untitled.isEditing)
 untitled.clipboardData = imageData
 let end = (imageMarkdown as NSString).length
@@ -315,10 +362,46 @@ precondition(NSSavePanel.pending == nil, "A saved document must not prompt to sa
 precondition(FileManager.default.fileExists(atPath: imagesDirectory.appendingPathComponent("2.png").path))
 precondition(tryDisk(untitled).contains("/2.png)"))
 
+for (selection, name) in [("selected", "queued"),
+                          (String(repeating: "selected ", count: 12), "long-queued"),
+                          ("", "empty-queued")] {
+    let c = Controller()
+    let prefix = "中文😀 Before "
+    let draft = prefix + selection + " after"
+    c.currentMarkdown = draft
+    c.enterEditMode()
+    let editor = c.mainSplit!.editorViewController!
+    editor.defersInsertions = true
+    c.clipboardData = imageData
+    let from = prefix.utf16.count
+    let to = from + selection.utf16.count
+    c.pasteImage(at: from, replacing: to)
+    let panel = NSSavePanel.pending!
+    let save = NSSavePanel.respond!
+    c.pasteImage(at: from, replacing: to)
+    c.pasteImage(at: from, replacing: to)
+    precondition(NSSavePanel.pending === panel, "Queued pastes must share the first save sheet")
+    panel.url = directory.appendingPathComponent(name + ".md")
+    NSSavePanel.pending = nil
+    NSSavePanel.respond = nil
+    c.clipboardData = nil
+    save(.OK)
+    for _ in 0..<3 {
+        precondition(editor.pendingInsertions.count == 1,
+                     "Each queued paste must wait for the preceding insertion")
+        editor.pendingInsertions.removeFirst()()
+    }
+    let expected = prefix + (1...3).map { "![\($0)](\(name)-pictures/\($0).png)" }.joined() + " after"
+    precondition(tryDisk(c) == expected && editor.markdown == expected,
+                 "Queued pastes must preserve every image reference and the trailing text")
+    precondition(editor.pendingInsertions.isEmpty && c.pendingUntitledImagePastes.isEmpty)
+}
+
 let cancelledPaste = Controller()
 cancelledPaste.currentMarkdown = "Keep this draft"
 cancelledPaste.enterEditMode()
 cancelledPaste.clipboardData = imageData
+cancelledPaste.pasteImage(at: 0, replacing: 0)
 cancelledPaste.pasteImage(at: 0, replacing: 0)
 let cancelImageSave = NSSavePanel.respond!
 NSSavePanel.respond = nil
@@ -327,12 +410,23 @@ cancelImageSave(.cancel)
 precondition(cancelledPaste.currentFileURL == nil && cancelledPaste.isEditing)
 precondition(cancelledPaste.mainSplit!.editorViewController!.markdown == "Keep this draft")
 precondition(!cancelledPaste.isEditorCommitInFlight)
+precondition(cancelledPaste.pendingUntitledImagePastes.isEmpty,
+             "Cancelling Save must discard every pending image paste")
 
-cancelledPaste.clipboardData = nil
+cancelledPaste.clipboardData = Data([0x89, 0x50, 0x4e, 0x47])
 cancelledPaste.pasteImage(at: 0, replacing: 0)
 precondition(cancelledPaste.imageErrors == 1 && NSSavePanel.pending == nil,
              "Invalid image data must report an error before requesting a document location")
-print("PASS: untitled image paste, original clipboard and selection retention, first-save asset base, repeated paste, cancellation")
+let tiff = bitmap.tiffRepresentation!
+NSPasteboard.general.setData(tiff, forType: .tiff)
+cancelledPaste.pasteImage(at: 0, replacing: 0)
+precondition(cancelledPaste.imageErrors == 1 && NSSavePanel.pending != nil,
+             "A malformed PNG must fall through to the valid TIFF representation")
+NSPasteboard.general.clearContents()
+NSSavePanel.respond!(.cancel)
+NSSavePanel.respond = nil
+NSSavePanel.pending = nil
+print("PASS: untitled image paste, original clipboard and selection retention, first-save asset base, queued paste, cancellation, malformed PNG and TIFF fallback")
 print("PASS: checkbox disk writes, draft preview and editor reentry for all conflict choices, rename during conflict, missing-file navigation, permission-panel navigation")
 '''
 with tempfile.TemporaryDirectory(prefix='checkbox-save-tests-') as directory:

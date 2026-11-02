@@ -100,6 +100,16 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             const base = document.querySelector("head > base") || document.createElement("base");
             base.href = \(EditorHTML.jsStringLiteral(MarkdownAssetResolution.baseHref(forFolder: assetBaseURL)));
             document.head.prepend(base);
+            document.querySelectorAll("img").forEach(image => {
+                const source = image.getAttribute("src");
+                if (source === null) return;
+                image.addEventListener("load", () => {
+                    image.closest(".cm-md-image-preview")?.classList.remove("cm-md-image-error");
+                }, { once: true });
+                // WebKit retains a failed request when the same src is reassigned.
+                image.removeAttribute("src");
+                image.setAttribute("src", source);
+            });
         })()
         """
         webView.evaluateJavaScript(script, completionHandler: nil)
