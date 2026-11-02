@@ -81,13 +81,26 @@ extension DocumentWindowController {
             presentQueuedImageError(count: pastes.count)
             return
         }
+        guard !pastes.dropFirst().contains(where: { next in
+            next.from < paste.from && next.to > paste.from
+        }) else {
+            presentQueuedImageError(count: pastes.count)
+            return
+        }
         pasteImage(paste.data, at: paste.from, replacing: paste.to,
                    expectedMarkdown: markdown) { [weak self, weak editor] result in
             guard let result, let self, let editor,
                   self.mainSplit?.editorViewController === editor,
                   self.currentFileURL == markdownURL else { return }
             guard case let .success(insertedMarkdown) = result else {
-                self.presentQueuedImageError(count: pastes.count)
+                if case let .failure(error) = result {
+                    let error = error as NSError
+                    if error.domain == "MarkdownPreview.ImagePaste", error.code == 5 {
+                        if pastes.count > 1 { self.presentQueuedImageError(count: pastes.count - 1) }
+                    } else {
+                        self.presentQueuedImageError(count: pastes.count, reason: error.localizedDescription)
+                    }
+                }
                 return
             }
             let updated = (markdown as NSString).replacingCharacters(
@@ -114,12 +127,13 @@ extension DocumentWindowController {
         }
     }
 
-    private func presentQueuedImageError(count: Int) {
+    private func presentQueuedImageError(count: Int, reason: String? = nil) {
+        let message = String(format: NSLocalizedString(
+            "Queued image paste failed (%ld remaining). Please paste again.",
+            comment: "Queued image paste stopped after an editor change or insertion failure"
+        ), count)
         presentImageError(NSError(domain: "MarkdownPreview.ImagePaste", code: 4, userInfo: [
-            NSLocalizedDescriptionKey: String(format: NSLocalizedString(
-                "Queued image paste failed (%ld remaining). Please paste again.",
-                comment: "Queued image paste stopped after an editor change or insertion failure"
-            ), count)
+            NSLocalizedDescriptionKey: message + (reason.map { "\n\n" + $0 } ?? "")
         ]))
     }
 
@@ -186,7 +200,8 @@ extension DocumentWindowController {
                     completion?(nil)
                     return
                 }
-                completion?(saved ? .success(markdown) : nil)
+                completion?(saved ? .success(markdown)
+                    : .failure(NSError(domain: "MarkdownPreview.ImagePaste", code: 5)))
             }
         }
     }
@@ -219,15 +234,17 @@ extension DocumentWindowController {
                 return
             }
             guard chosen.standardizedFileURL == parentDirectory else {
-                completion?(nil)
-                self.presentImageError(
-                    NSError(domain: "MarkdownPreview.ImagePaste",
+                let error = NSError(domain: "MarkdownPreview.ImagePaste",
                             code: 3,
                             userInfo: [NSLocalizedDescriptionKey: NSLocalizedString(
                                 "Choose the folder containing this Markdown file.",
                                 comment: "Image paste folder validation error"
                             )])
-                )
+                if let completion {
+                    completion(.failure(error))
+                } else {
+                    self.presentImageError(error)
+                }
                 return
             }
             do {

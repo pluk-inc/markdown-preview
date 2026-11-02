@@ -98,6 +98,8 @@ final class WebView {
 }
 final class Editor {
     var markdown = ""
+    var hasLoadedEditorPage = true
+    var hasPendingAssetBaseUpdate = false
     var currentAssetBaseURL: URL?
     let assetScheme = AssetScheme()
     let webView = WebView()
@@ -233,6 +235,8 @@ swift += extract(image_source, 'private func presentImagePermissionPanel(') + '\
 swift += extract(image_source, 'private func clipboardPNGData(') + '\n'
 swift += '}\n'
 swift += 'extension Editor {\n' + extract(editor_source, 'func updateAssetBaseURL(') + '\n}\n'
+ready_source = editor_source.split('case "ready":', 1)[1].split('updateChromeZoom()', 1)[0]
+swift += 'extension Editor {\nfunc markReady() {\n' + ready_source + '\n}\n}\n'
 swift += 'enum MarkdownAssetResolution {\nstatic let scheme = "md-asset"\nstatic let rootBaseHref = "md-asset:///"\n'
 for name in ['picturesDirectory', 'nextIntegerFileName', 'savePastedImage', 'markdownPath',
              'encodedMarkdownPath', 'relativePath', 'atomicWrite', 'baseHref']:
@@ -389,6 +393,22 @@ precondition(savedEditor.webView.scripts.last?.contains(
     "First Save must send the saved folder's href to the live page")
 let movedFolder = directory.appendingPathComponent("moved", isDirectory: true)
 try FileManager.default.createDirectory(at: movedFolder, withIntermediateDirectories: true)
+let loadingEditor = Editor()
+loadingEditor.hasLoadedEditorPage = false
+loadingEditor.updateAssetBaseURL(directory)
+loadingEditor.updateAssetBaseURL(movedFolder)
+precondition(loadingEditor.webView.scripts.isEmpty && loadingEditor.assetScheme.baseURL == movedFolder,
+             "A loading editor must defer the page update while retaining the latest native base")
+loadingEditor.markReady()
+precondition(loadingEditor.webView.scripts.count == 1 && loadingEditor.webView.scripts[0].contains(
+    EditorHTML.jsStringLiteral(MarkdownAssetResolution.baseHref(forFolder: movedFolder))),
+    "The ready page must receive the latest folder rather than the original load folder")
+loadingEditor.markReady()
+precondition(loadingEditor.webView.scripts.count == 1,
+             "Ready without a pending folder change must not reload every image")
+loadingEditor.updateAssetBaseURL(directory)
+precondition(loadingEditor.webView.scripts.count == 2,
+             "An already loaded editor must apply folder changes immediately")
 let movedFile = movedFolder.appendingPathComponent(imageDocumentURL.lastPathComponent)
 try FileManager.default.moveItem(at: imageDocumentURL, to: movedFile)
 untitled.handleRename(to: movedFile)
@@ -456,7 +476,37 @@ let distinctExpected = "![2](distinct-pictures/2.png) before ![1](distinct-pictu
 precondition(tryDisk(distinct) == distinctExpected && distinct.mainSplit!.editorViewController!.markdown == distinctExpected,
              "Pending ranges before and after the first image must retain the intervening text")
 
-for scenario in ["failure", "live-edit", "commit-reload"] {
+for (name, from, to, rejected) in [("partial-overlap", 2, 10, true),
+                                  ("enclosing-overlap", 2, 18, true),
+                                  ("nested-selection", 8, 10, false)] {
+    let c = Controller()
+    let draft = "Before selected after"
+    c.currentMarkdown = draft
+    c.enterEditMode()
+    c.clipboardData = imageData
+    c.pasteImage(at: 7, replacing: 15)
+    let panel = NSSavePanel.pending!
+    let save = NSSavePanel.respond!
+    c.pasteImage(at: from, replacing: to)
+    panel.url = directory.appendingPathComponent(name + ".md")
+    NSSavePanel.pending = nil
+    NSSavePanel.respond = nil
+    save(.OK)
+    if rejected {
+        precondition(tryDisk(c) == draft && c.mainSplit!.editorViewController!.markdown == draft,
+                     "Overlapping captured selections must not remove an earlier image reference")
+        precondition(c.imageErrors == 1 && c.imageMessages[0].contains("(2 remaining)"))
+        let pictures = MarkdownAssetResolution.picturesDirectory(forMarkdownFile: c.currentFileURL!)
+        precondition(!FileManager.default.fileExists(atPath: pictures.path),
+                     "Rejected overlapping pastes must not create unused image files")
+    } else {
+        let expected = "Before ![1](\(name)-pictures/1.png)![2](\(name)-pictures/2.png) after"
+        precondition(tryDisk(c) == expected && c.imageErrors == 0,
+                     "A captured selection inside the replaced text must preserve both image references")
+    }
+}
+
+for scenario in ["failure", "live-edit", "commit-reload", "commit-cancel", "commit-cancel-single"] {
     let c = Controller()
     c.currentMarkdown = "Before selected after"
     c.enterEditMode()
@@ -466,32 +516,43 @@ for scenario in ["failure", "live-edit", "commit-reload"] {
     c.pasteImage(at: 7, replacing: 15)
     let panel = NSSavePanel.pending!
     let save = NSSavePanel.respond!
-    c.pasteImage(at: 7, replacing: 15)
+    if scenario != "commit-cancel-single" { c.pasteImage(at: 7, replacing: 15) }
     panel.url = directory.appendingPathComponent(scenario + ".md")
     NSSavePanel.pending = nil
     NSSavePanel.respond = nil
     save(.OK)
     if scenario == "failure" { editor.failsNextInsertion = true }
     if scenario == "live-edit" { editor.markdown = "Changed " + editor.markdown }
-    if scenario == "commit-reload" { editor.defersFetches = true }
+    if scenario.hasPrefix("commit-") { editor.defersFetches = true }
     let beforeInsertion = editor.markdown
     editor.pendingInsertions.removeFirst()()
     let pictures = MarkdownAssetResolution.picturesDirectory(forMarkdownFile: c.currentFileURL!)
-    if scenario == "commit-reload" {
+    if scenario.hasPrefix("commit-") {
         precondition(c.isEditorCommitInFlight && editor.pendingInsertions.isEmpty && c.imageErrors == 0,
                      "Queued pastes must wait for the preceding save to finish")
         try "Reloaded body".write(to: c.currentFileURL!, atomically: true, encoding: .utf8)
         editor.defersFetches = false
         editor.pendingFetches.removeFirst()()
-        respond(.alertSecondButtonReturn)
-        precondition(editor.markdown == "Reloaded body" && editor.pendingInsertions.isEmpty,
-                     "Reloading the document must stop requests captured for the old body")
-        precondition(!FileManager.default.fileExists(atPath: pictures.appendingPathComponent("1.png").path),
-                     "Reloading must remove the discarded image file")
+        respond(scenario == "commit-reload" ? .alertSecondButtonReturn : .cancel)
+        precondition(editor.pendingInsertions.isEmpty)
+        let imageExists = FileManager.default.fileExists(atPath: pictures.appendingPathComponent("1.png").path)
+        if scenario == "commit-reload" {
+            precondition(editor.markdown == "Reloaded body",
+                         "Reloading the document must stop requests captured for the old body")
+            precondition(!imageExists, "Reloading must remove the discarded image file")
+        } else {
+            precondition(editor.markdown.contains("![1](") && imageExists && c.hasUnsavedEditorChanges,
+                         "Cancelling Save must retain the already inserted image in the unsaved draft")
+            let remaining = scenario == "commit-cancel-single" ? 0 : 1
+            precondition(c.imageErrors == remaining &&
+                         (remaining == 0 || c.imageMessages[0].contains("(1 remaining)")),
+                         "Cancel after insertion must report only the images that remain")
+            precondition(tryDisk(c) == "Reloaded body", "Cancelling Save must preserve the external file")
+        }
     } else {
         precondition(editor.markdown == beforeInsertion && c.imageErrors == 1,
                      "Failed or stale insertion must preserve the draft and report an error")
-        precondition(c.imageMessages[0].contains("2 remaining"),
+        precondition(c.imageMessages[0].contains("(2 remaining)"),
                      "The failure must report all images that were not inserted")
         precondition(!FileManager.default.fileExists(atPath: pictures.appendingPathComponent("1.png").path),
                      "An image that was not inserted must be removed")
@@ -526,6 +587,35 @@ grantPermission(.OK)
 let permittedExpected = "Before ![1](permitted-pictures/1.png)![2](permitted-pictures/2.png) after"
 precondition(tryDisk(permitted) == permittedExpected && permitted.mainSplit!.editorViewController!.markdown == permittedExpected,
              "Granting image-folder access must continue every pending paste")
+
+let invalidFolder = Controller()
+let invalidFolderDraft = "Before selected after"
+invalidFolder.currentMarkdown = invalidFolderDraft
+invalidFolder.enterEditMode()
+invalidFolder.clipboardData = imageData
+invalidFolder.pasteImage(at: 7, replacing: 15)
+let invalidSavePanel = NSSavePanel.pending!
+let invalidSave = NSSavePanel.respond!
+invalidFolder.pasteImage(at: 7, replacing: 15)
+let invalidFile = directory.appendingPathComponent("invalid-folder.md")
+let invalidPictures = MarkdownAssetResolution.picturesDirectory(forMarkdownFile: invalidFile)
+try "Blocked destination".write(to: invalidPictures, atomically: true, encoding: .utf8)
+invalidSavePanel.url = invalidFile
+NSSavePanel.pending = nil
+NSSavePanel.respond = nil
+invalidSave(.OK)
+let wrongFolderPanel = NSOpenPanel.pending!
+let chooseWrongFolder = NSOpenPanel.respond!
+wrongFolderPanel.url = movedFolder
+NSOpenPanel.pending = nil
+NSOpenPanel.respond = nil
+chooseWrongFolder(.OK)
+precondition(invalidFolder.imageErrors == 1 && invalidFolder.imageMessages[0].contains("(2 remaining)")
+             && invalidFolder.imageMessages[0].contains("Choose the folder containing this Markdown file."),
+             "An invalid folder must report the queue count and folder error once")
+precondition(tryDisk(invalidFolder) == invalidFolderDraft
+             && invalidFolder.mainSplit!.editorViewController!.markdown == invalidFolderDraft,
+             "An invalid folder must preserve the body without inserting any image")
 
 let cancelledPaste = Controller()
 cancelledPaste.currentMarkdown = "Keep this draft"

@@ -35,6 +35,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     private let bridge = EditorBridge()
     private let assetScheme = MarkdownAssetScheme()
     private var hasLoadedEditorPage = false
+    private var hasPendingAssetBaseUpdate = false
     private var pageSupportsMermaid = false
     private var currentAssetBaseURL: URL?
     private var findCompletion: ((FindResult) -> Void)?
@@ -73,6 +74,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
 
     func load(markdown: String, assetBaseURL: URL? = nil) {
         hasChanges = false
+        hasPendingAssetBaseUpdate = false
         currentAssetBaseURL = assetBaseURL?.standardizedFileURL
         assetScheme.setBaseURL(currentAssetBaseURL)
         let needsMermaid = Self.containsMermaidFence(in: markdown)
@@ -95,6 +97,11 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     func updateAssetBaseURL(_ assetBaseURL: URL) {
         currentAssetBaseURL = assetBaseURL.standardizedFileURL
         assetScheme.setBaseURL(currentAssetBaseURL)
+        guard hasLoadedEditorPage else {
+            hasPendingAssetBaseUpdate = true
+            return
+        }
+        hasPendingAssetBaseUpdate = false
         let script = """
         (() => {
             const base = document.querySelector("head > base") || document.createElement("base");
@@ -449,6 +456,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                 contentDidChange?()
             case "ready":
                 hasLoadedEditorPage = true
+                if hasPendingAssetBaseUpdate, let baseURL = currentAssetBaseURL {
+                    updateAssetBaseURL(baseURL)
+                }
                 updateChromeZoom()
                 // Fresh page — the bar padding lives in the DOM and must be
                 // re-applied even when the tracked value hasn't changed,
