@@ -706,6 +706,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         } else {
             loadFile(at: newURL, silentOnFailure: true)
         }
+        mainSplit?.editorViewController?.updateAssetBaseURL(newURL.deletingLastPathComponent())
         if isEditing { refreshInspectorAfterRename() }
     }
 

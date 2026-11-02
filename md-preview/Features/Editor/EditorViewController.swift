@@ -419,10 +419,12 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     func insertMarkdown(_ markdown: String,
                         from: Int,
                         to: Int,
+                        expectedMarkdown: String? = nil,
                         completion: ((Bool) -> Void)? = nil) {
         let script = """
         (() => {
             if (!window.__mdEditor) return false;
+            \(expectedMarkdown.map { "if (window.__mdEditor.getMarkdown() !== \(EditorHTML.jsStringLiteral($0))) return false;" } ?? "")
             window.__mdEditor.insertTextAt(\(EditorHTML.jsStringLiteral(markdown)), \(from), \(to));
             return true;
         })()

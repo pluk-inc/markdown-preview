@@ -23,7 +23,8 @@ extension DocumentWindowController {
     }
 
     private func pasteImage(_ data: Data, at from: Int, replacing to: Int,
-                            completion: ((Int?) -> Void)? = nil) {
+                            expectedMarkdown: String? = nil,
+                            completion: ((Result<String, Error>?) -> Void)? = nil) {
         guard isEditing, let editor = mainSplit?.editorViewController else {
             completion?(nil)
             return
@@ -31,13 +32,21 @@ extension DocumentWindowController {
         guard let markdownURL = currentFileURL else {
             pendingUntitledImagePastes.append((data, from, to))
             guard pendingUntitledImagePastes.count == 1 else { return }
+            let revision = editorChangeRevision
+            let sessionID = inspectorRefreshSessionID
             commitEdits(exitAfter: false) { [weak self, weak editor] saved in
                 guard let self else { return }
                 let pastes = self.pendingUntitledImagePastes
                 self.pendingUntitledImagePastes.removeAll()
                 guard saved, let editor,
                       self.mainSplit?.editorViewController === editor else { return }
-                self.pasteUntitledImages(pastes, editor: editor)
+                guard revision == self.editorChangeRevision,
+                      sessionID == self.inspectorRefreshSessionID,
+                      let markdown = self.currentMarkdown else {
+                    self.presentQueuedImageError(count: pastes.count)
+                    return
+                }
+                self.pasteUntitledImages(pastes, editor: editor, markdown: markdown)
             }
             return
         }
@@ -48,6 +57,7 @@ extension DocumentWindowController {
                                   editor: editor,
                                   from: from,
                                   to: to,
+                                  expectedMarkdown: expectedMarkdown,
                                   completion: completion)
         } catch {
             presentImagePermissionPanel(data,
@@ -55,19 +65,40 @@ extension DocumentWindowController {
                                         editor: editor,
                                         from: from,
                                         to: to,
+                                        expectedMarkdown: expectedMarkdown,
                                         completion: completion)
         }
     }
 
     private func pasteUntitledImages(_ pastes: [(data: Data, from: Int, to: Int)],
-                                     editor: EditorViewController) {
+                                     editor: EditorViewController,
+                                     markdown: String) {
         guard let paste = pastes.first,
               mainSplit?.editorViewController === editor,
               let markdownURL = currentFileURL else { return }
-        pasteImage(paste.data, at: paste.from, replacing: paste.to) { [weak self, weak editor] length in
-            guard let length, let self, let editor,
+        guard paste.from >= 0, paste.to >= paste.from,
+              paste.to <= markdown.utf16.count else {
+            presentQueuedImageError(count: pastes.count)
+            return
+        }
+        pasteImage(paste.data, at: paste.from, replacing: paste.to,
+                   expectedMarkdown: markdown) { [weak self, weak editor] result in
+            guard let result, let self, let editor,
                   self.mainSplit?.editorViewController === editor,
                   self.currentFileURL == markdownURL else { return }
+            guard case let .success(insertedMarkdown) = result else {
+                self.presentQueuedImageError(count: pastes.count)
+                return
+            }
+            let updated = (markdown as NSString).replacingCharacters(
+                in: NSRange(location: paste.from, length: paste.to - paste.from), with: insertedMarkdown
+            )
+            // Live edits invalidate the captured ranges even when the save succeeds.
+            guard self.currentMarkdown == updated else {
+                if pastes.count > 1 { self.presentQueuedImageError(count: pastes.count - 1) }
+                return
+            }
+            let length = insertedMarkdown.utf16.count
             let end = paste.from + length
             let delta = length - (paste.to - paste.from)
             // Pending ranges refer to the document before the preceding insertion.
@@ -79,8 +110,17 @@ extension DocumentWindowController {
                     : next.to >= paste.to ? next.to + delta : end
                 return (data: next.data, from: from, to: to)
             }
-            self.pasteUntitledImages(remaining, editor: editor)
+            self.pasteUntitledImages(remaining, editor: editor, markdown: updated)
         }
+    }
+
+    private func presentQueuedImageError(count: Int) {
+        presentImageError(NSError(domain: "MarkdownPreview.ImagePaste", code: 4, userInfo: [
+            NSLocalizedDescriptionKey: String(format: NSLocalizedString(
+                "%ld queued images could not be inserted. Please paste them again.",
+                comment: "Queued image paste stopped after an editor change or insertion failure"
+            ), count)
+        ]))
     }
 
     private func insertPastedImage(_ data: Data,
@@ -88,7 +128,8 @@ extension DocumentWindowController {
                                    editor: EditorViewController,
                                    from: Int,
                                    to: Int,
-                                   completion: ((Int?) -> Void)? = nil) throws {
+                                   expectedMarkdown: String? = nil,
+                                   completion: ((Result<String, Error>?) -> Void)? = nil) throws {
         let imageURL = try MarkdownAssetResolution.savePastedImage(
             data,
             forMarkdownFile: markdownURL
@@ -110,25 +151,43 @@ extension DocumentWindowController {
         editor.insertMarkdown(
             markdown,
             from: from,
-            to: to
-        ) { [weak self] inserted in
+            to: to,
+            expectedMarkdown: expectedMarkdown
+        ) { [weak self, weak editor] inserted in
             guard inserted else {
                 try? FileManager.default.removeItem(at: imageURL)
-                completion?(nil)
-                self?.presentImageError(
-                    NSError(domain: "MarkdownPreview.ImagePaste",
+                let error = NSError(domain: "MarkdownPreview.ImagePaste",
                             code: 4,
                             userInfo: [NSLocalizedDescriptionKey: NSLocalizedString(
                                 "The pasted image could not be inserted into the document.",
                                 comment: "Image paste insertion error"
                             )])
-                )
+                if let completion {
+                    completion(.failure(error))
+                } else {
+                    self?.presentImageError(error)
+                }
                 return
             }
-            guard let self else { return }
+            guard let self, let editor else { return }
             self.hasUnsavedEditorChanges = true
-            self.commitEdits(exitAfter: false)
-            completion?(markdown.utf16.count)
+            let sessionID = self.inspectorRefreshSessionID
+            self.commitEdits(exitAfter: false) { [weak self, weak editor] saved in
+                guard let self, let editor,
+                      self.mainSplit?.editorViewController === editor,
+                      self.currentFileURL == markdownURL else {
+                    completion?(nil)
+                    return
+                }
+                guard sessionID == self.inspectorRefreshSessionID else {
+                    if self.currentMarkdown?.contains(relativePath) != true {
+                        try? FileManager.default.removeItem(at: imageURL)
+                    }
+                    completion?(nil)
+                    return
+                }
+                completion?(saved ? .success(markdown) : nil)
+            }
         }
     }
 
@@ -137,7 +196,8 @@ extension DocumentWindowController {
                                              editor: EditorViewController,
                                              from: Int,
                                              to: Int,
-                                             completion: ((Int?) -> Void)? = nil) {
+                                             expectedMarkdown: String? = nil,
+                                             completion: ((Result<String, Error>?) -> Void)? = nil) {
         let parentDirectory = markdownURL.deletingLastPathComponent().standardizedFileURL
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
@@ -176,10 +236,14 @@ extension DocumentWindowController {
                                            editor: editor,
                                            from: from,
                                            to: to,
+                                           expectedMarkdown: expectedMarkdown,
                                            completion: completion)
             } catch {
-                completion?(nil)
-                self.presentImageError(error)
+                if let completion {
+                    completion(.failure(error))
+                } else {
+                    self.presentImageError(error)
+                }
             }
         }
     }

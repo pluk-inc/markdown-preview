@@ -11,6 +11,7 @@ import tempfile
 root = Path(__file__).resolve().parents[1]
 source = (root / 'md-preview/Document/DocumentWindowController+EditSession.swift').read_text()
 image_source = (root / 'md-preview/Document/DocumentWindowController+ImageHandling.swift').read_text()
+controller_source = (root / 'md-preview/Document/DocumentWindowController.swift').read_text()
 asset_source = (root / 'md-preview/Rendering/MarkdownAssetResolution.swift').read_text()
 editor_source = (root / 'md-preview/Features/Editor/EditorViewController.swift').read_text()
 
@@ -33,7 +34,7 @@ enum NSPasteboard {
     static let general = AppKit.NSPasteboard(name: .init(UUID().uuidString))
 }
 enum Response { case alertFirstButtonReturn, alertSecondButtonReturn, cancel, OK }
-final class Window { var title = "" }
+final class Window { var title = ""; var contentViewController: AnyObject? }
 final class NSAlert {
     enum Style { case warning }
     var alertStyle = Style.warning
@@ -61,6 +62,20 @@ final class NSSavePanel {
         Self.respond = completionHandler
     }
 }
+final class NSOpenPanel {
+    var canChooseFiles = false
+    var canChooseDirectories = false
+    var allowsMultipleSelection = false
+    var directoryURL: URL?
+    var message = ""
+    var url: URL?
+    static var pending: NSOpenPanel?
+    static var respond: ((Response) -> Void)?
+    func beginSheetModal(for window: Window, completionHandler: @escaping (Response) -> Void) {
+        Self.pending = self
+        Self.respond = completionHandler
+    }
+}
 final class NSDocumentController {
     static let shared = NSDocumentController()
     func noteNewRecentDocumentURL(_ url: URL) {}
@@ -68,6 +83,7 @@ final class NSDocumentController {
 final class Document {
     var contents = ""
     func replaceContents(markdown: String, fileURL: URL? = nil) { contents = markdown }
+    func replaceFileURL(_ url: URL) {}
 }
 enum NSSound { static func beep() {} }
 final class AssetScheme {
@@ -86,17 +102,30 @@ final class Editor {
     let assetScheme = AssetScheme()
     let webView = WebView()
     var defersInsertions = false
+    var failsNextInsertion = false
     var pendingInsertions: [() -> Void] = []
+    var defersFetches = false
+    var pendingFetches: [() -> Void] = []
     var cancelRequested: (() -> Void)?
     var contentDidChange: (() -> Void)?
     var formattingDidChange: ((Int, Set<String>, String?) -> Void)?
     var pasteImageRequested: ((Int, Int) -> Void)?
     var imageClicked: ((URL) -> Void)?
-    func fetchMarkdown(_ completion: (String?) -> Void) { completion(markdown) }
+    func fetchMarkdown(_ completion: @escaping (String?) -> Void) {
+        let fetch = { [self] in completion(markdown) }
+        if defersFetches { pendingFetches.append(fetch) } else { fetch() }
+    }
     func load(markdown: String, assetBaseURL: URL?) { self.markdown = markdown }
     func insertMarkdown(_ text: String, from: Int, to: Int,
+                        expectedMarkdown: String? = nil,
                         completion: ((Bool) -> Void)? = nil) {
         let insert = { [self] in
+            guard !failsNextInsertion,
+                  expectedMarkdown == nil || expectedMarkdown == markdown else {
+                failsNextInsertion = false
+                completion?(false)
+                return
+            }
             markdown = (markdown as NSString).replacingCharacters(
                 in: NSRange(location: from, length: to - from), with: text)
             contentDidChange?()
@@ -118,6 +147,7 @@ final class Split {
         return editorViewController!
     }
 }
+typealias MainSplitViewController = Split
 final class Controller {
     enum DiskFileState { case unchanged, modified(String), missing, unreadable }
     enum EditedMarkdownSaveResult { case saved, reloaded(String), cancelled }
@@ -135,7 +165,7 @@ final class Controller {
     var pendingUntitledImagePastes: [(data: Data, from: Int, to: Int)] = []
     // Inspector refresh is outside the checkbox/save behavior under test.
     var pendingInspectorComputation: DispatchWorkItem?
-    func invalidateInspectorRefresh() {}
+    func invalidateInspectorRefresh() { inspectorRefreshSessionID = UUID() }
     func scheduleInspectorRefresh(from editor: Editor) {}
     func stopAutoSaveTimer() {}
     func startAutoSaveTimerIfNeeded() {}
@@ -148,12 +178,10 @@ final class Controller {
         }
     }
     var imageErrors = 0
-    func presentImageError(_ error: Error) { imageErrors += 1 }
-    func presentImagePermissionPanel(_ data: Data, markdownURL: URL,
-                                     editor: Editor, from: Int, to: Int,
-                                     completion: ((Int?) -> Void)? = nil) {
+    var imageMessages: [String] = []
+    func presentImageError(_ error: Error) {
         imageErrors += 1
-        completion?(nil)
+        imageMessages.append(error.localizedDescription)
     }
     func renameImage(at: URL) {}
     func showEditAccessory() {}
@@ -176,10 +204,12 @@ final class Controller {
     func refreshOpenWithItem() {}
     func refreshOpenInLLMItem() {}
     func refreshOpenActionsItem() {}
+    func updateWindowSubtitle() {}
+    func loadFile(at url: URL, silentOnFailure: Bool) {}
+    func refreshInspectorAfterRename() { invalidateInspectorRefresh() }
     func startWatching(_ url: URL) {}
     func computeVisibleSidebars(markdown: String, fileURL: URL?, revision: Int, sessionID: UUID) {}
     func renderCurrentDocument(text: String, fileURL: URL) { rendered = text }
-    func handleRename(to url: URL) { currentFileURL = url }
 '''
 for name in ['enterEditMode', 'previewPendingEdits', 'saveUntitledMarkdown', 'commitEdits',
              'performPendingEditorCommit', 'handleEditedMarkdownSaveResult', 'adoptExternalMarkdown',
@@ -193,10 +223,13 @@ for name in ['enterEditMode', 'previewPendingEdits', 'saveUntitledMarkdown', 'co
                                        'persistEditedMarkdown', 'write'] else '') + 'func ' + name + '('
     swift += extract(source, signature) + '\n'
 swift += extract(source, 'private func performPendingEditorCommit(body:') + '\n'
+swift += extract(controller_source, 'func handleRename(') + '\n'
 swift += extract(image_source, 'func pasteImage(') + '\n'
 swift += extract(image_source, 'private func pasteImage(') + '\n'
 swift += extract(image_source, 'private func pasteUntitledImages(') + '\n'
+swift += extract(image_source, 'private func presentQueuedImageError(') + '\n'
 swift += extract(image_source, 'private func insertPastedImage(') + '\n'
+swift += extract(image_source, 'private func presentImagePermissionPanel(') + '\n'
 swift += extract(image_source, 'private func clipboardPNGData(') + '\n'
 swift += '}\n'
 swift += 'extension Editor {\n' + extract(editor_source, 'func updateAssetBaseURL(') + '\n}\n'
@@ -354,6 +387,15 @@ precondition(savedEditor.assetScheme.baseURL?.path == directory.path,
 precondition(savedEditor.webView.scripts.last?.contains(
     EditorHTML.jsStringLiteral(MarkdownAssetResolution.baseHref(forFolder: directory))) == true,
     "First Save must send the saved folder's href to the live page")
+let movedFolder = directory.appendingPathComponent("moved", isDirectory: true)
+try FileManager.default.createDirectory(at: movedFolder, withIntermediateDirectories: true)
+let movedFile = movedFolder.appendingPathComponent(imageDocumentURL.lastPathComponent)
+try FileManager.default.moveItem(at: imageDocumentURL, to: movedFile)
+untitled.handleRename(to: movedFile)
+precondition(savedEditor.assetScheme.baseURL?.path == movedFolder.path,
+             "Moving an open document must update the editor's image folder")
+try FileManager.default.moveItem(at: movedFile, to: imageDocumentURL)
+untitled.handleRename(to: imageDocumentURL)
 precondition(untitled.imageErrors == 0 && untitled.isEditing)
 untitled.clipboardData = imageData
 let end = (imageMarkdown as NSString).length
@@ -396,6 +438,94 @@ for (selection, name) in [("selected", "queued"),
                  "Queued pastes must preserve every image reference and the trailing text")
     precondition(editor.pendingInsertions.isEmpty && c.pendingUntitledImagePastes.isEmpty)
 }
+
+let distinct = Controller()
+distinct.currentMarkdown = "A before selected after Z"
+distinct.enterEditMode()
+distinct.clipboardData = imageData
+distinct.pasteImage(at: 9, replacing: 17)
+let distinctPanel = NSSavePanel.pending!
+let distinctSave = NSSavePanel.respond!
+distinct.pasteImage(at: 0, replacing: 1)
+distinct.pasteImage(at: 24, replacing: 25)
+distinctPanel.url = directory.appendingPathComponent("distinct.md")
+NSSavePanel.pending = nil
+NSSavePanel.respond = nil
+distinctSave(.OK)
+let distinctExpected = "![2](distinct-pictures/2.png) before ![1](distinct-pictures/1.png) after ![3](distinct-pictures/3.png)"
+precondition(tryDisk(distinct) == distinctExpected && distinct.mainSplit!.editorViewController!.markdown == distinctExpected,
+             "Pending ranges before and after the first image must retain the intervening text")
+
+for scenario in ["failure", "live-edit", "commit-reload"] {
+    let c = Controller()
+    c.currentMarkdown = "Before selected after"
+    c.enterEditMode()
+    c.clipboardData = imageData
+    let editor = c.mainSplit!.editorViewController!
+    editor.defersInsertions = true
+    c.pasteImage(at: 7, replacing: 15)
+    let panel = NSSavePanel.pending!
+    let save = NSSavePanel.respond!
+    c.pasteImage(at: 7, replacing: 15)
+    panel.url = directory.appendingPathComponent(scenario + ".md")
+    NSSavePanel.pending = nil
+    NSSavePanel.respond = nil
+    save(.OK)
+    if scenario == "failure" { editor.failsNextInsertion = true }
+    if scenario == "live-edit" { editor.markdown = "Changed " + editor.markdown }
+    if scenario == "commit-reload" { editor.defersFetches = true }
+    let beforeInsertion = editor.markdown
+    editor.pendingInsertions.removeFirst()()
+    let pictures = MarkdownAssetResolution.picturesDirectory(forMarkdownFile: c.currentFileURL!)
+    if scenario == "commit-reload" {
+        precondition(c.isEditorCommitInFlight && editor.pendingInsertions.isEmpty && c.imageErrors == 0,
+                     "Queued pastes must wait for the preceding save to finish")
+        try "Reloaded body".write(to: c.currentFileURL!, atomically: true, encoding: .utf8)
+        editor.defersFetches = false
+        editor.pendingFetches.removeFirst()()
+        respond(.alertSecondButtonReturn)
+        precondition(editor.markdown == "Reloaded body" && editor.pendingInsertions.isEmpty,
+                     "Reloading the document must stop requests captured for the old body")
+        precondition(!FileManager.default.fileExists(atPath: pictures.appendingPathComponent("1.png").path),
+                     "Reloading must remove the discarded image file")
+    } else {
+        precondition(editor.markdown == beforeInsertion && c.imageErrors == 1,
+                     "Failed or stale insertion must preserve the draft and report an error")
+        precondition(c.imageMessages[0].contains("2 queued images"),
+                     "The failure must report all images that were not inserted")
+        precondition(!FileManager.default.fileExists(atPath: pictures.appendingPathComponent("1.png").path),
+                     "An image that was not inserted must be removed")
+        precondition(editor.pendingInsertions.isEmpty)
+    }
+}
+
+let permitted = Controller()
+permitted.currentMarkdown = "Before selected after"
+permitted.enterEditMode()
+permitted.clipboardData = imageData
+permitted.pasteImage(at: 7, replacing: 15)
+let permissionPanel = NSSavePanel.pending!
+let permissionSave = NSSavePanel.respond!
+permitted.pasteImage(at: 7, replacing: 15)
+let permissionFile = directory.appendingPathComponent("permitted.md")
+let blockedPictures = MarkdownAssetResolution.picturesDirectory(forMarkdownFile: permissionFile)
+try "Blocked destination".write(to: blockedPictures, atomically: true, encoding: .utf8)
+permissionPanel.url = permissionFile
+NSSavePanel.pending = nil
+NSSavePanel.respond = nil
+permissionSave(.OK)
+let openPanel = NSOpenPanel.pending!
+let grantPermission = NSOpenPanel.respond!
+precondition(permitted.mainSplit!.editorViewController!.markdown == "Before selected after",
+             "A denied image write must wait for the folder permission decision")
+try FileManager.default.removeItem(at: blockedPictures)
+openPanel.url = directory
+NSOpenPanel.pending = nil
+NSOpenPanel.respond = nil
+grantPermission(.OK)
+let permittedExpected = "Before ![1](permitted-pictures/1.png)![2](permitted-pictures/2.png) after"
+precondition(tryDisk(permitted) == permittedExpected && permitted.mainSplit!.editorViewController!.markdown == permittedExpected,
+             "Granting image-folder access must continue every pending paste")
 
 let cancelledPaste = Controller()
 cancelledPaste.currentMarkdown = "Keep this draft"
