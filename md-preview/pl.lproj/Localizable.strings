@@ -410,6 +410,7 @@
 "Recent Files" = "Ostatnie pliki";
 "File Results" = "Wyniki wyszukiwania plików";
 "The pasted image could not be inserted into the document." = "Nie można wstawić wklejonego obrazka do dokumentu.";
+"Queued image paste failed (%ld remaining). Please paste again." = "Nie udało się dokończyć wklejania obrazów (pozostało: %ld). Wklej je ponownie.";
 "Export PDF" = "Eksportuj PDF";
 "Export document as PDF" = "Eksportuj dokument jako PDF";
 "Export document" = "Eksportuj dokument";

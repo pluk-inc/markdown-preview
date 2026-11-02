@@ -117,7 +117,7 @@ extension DocumentWindowController {
     private func presentQueuedImageError(count: Int) {
         presentImageError(NSError(domain: "MarkdownPreview.ImagePaste", code: 4, userInfo: [
             NSLocalizedDescriptionKey: String(format: NSLocalizedString(
-                "%ld queued images could not be inserted. Please paste them again.",
+                "Queued image paste failed (%ld remaining). Please paste again.",
                 comment: "Queued image paste stopped after an editor change or insertion failure"
             ), count)
         ]))

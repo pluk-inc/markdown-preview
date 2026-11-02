@@ -491,7 +491,7 @@ for scenario in ["failure", "live-edit", "commit-reload"] {
     } else {
         precondition(editor.markdown == beforeInsertion && c.imageErrors == 1,
                      "Failed or stale insertion must preserve the draft and report an error")
-        precondition(c.imageMessages[0].contains("2 queued images"),
+        precondition(c.imageMessages[0].contains("2 remaining"),
                      "The failure must report all images that were not inserted")
         precondition(!FileManager.default.fileExists(atPath: pictures.appendingPathComponent("1.png").path),
                      "An image that was not inserted must be removed")

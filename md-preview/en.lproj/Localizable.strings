@@ -410,6 +410,7 @@
 "Recent Files" = "Recent Files";
 "File Results" = "File Results";
 "The pasted image could not be inserted into the document." = "The pasted image could not be inserted into the document.";
+"Queued image paste failed (%ld remaining). Please paste again." = "Queued image paste failed (%ld remaining). Please paste again.";
 "Export PDF" = "Export PDF";
 "Export document as PDF" = "Export document as PDF";
 "Export document" = "Export document";
