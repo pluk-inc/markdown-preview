@@ -97,7 +97,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
     func updateAssetBaseURL(_ assetBaseURL: URL) {
         currentAssetBaseURL = assetBaseURL.standardizedFileURL
         assetScheme.setBaseURL(currentAssetBaseURL)
-        guard hasLoadedEditorPage else {
+        // A previous page can post ready while its replacement is still loading.
+        guard hasLoadedEditorPage, !webView.isLoading else {
             hasPendingAssetBaseUpdate = true
             return
         }
@@ -120,6 +121,12 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         })()
         """
         webView.evaluateJavaScript(script, completionHandler: nil)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        if hasPendingAssetBaseUpdate, let baseURL = currentAssetBaseURL {
+            updateAssetBaseURL(baseURL)
+        }
     }
 
     private func loadEditorPage(markdown: String,

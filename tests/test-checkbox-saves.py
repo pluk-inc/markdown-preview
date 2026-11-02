@@ -91,6 +91,7 @@ final class AssetScheme {
     func setBaseURL(_ url: URL?) { baseURL = url }
 }
 final class WebView {
+    var isLoading = false
     var scripts: [String] = []
     func evaluateJavaScript(_ script: String, completionHandler: ((Any?, Error?) -> Void)?) {
         scripts.append(script)
@@ -137,6 +138,8 @@ final class Editor {
     }
 }
 typealias EditorViewController = Editor
+typealias WKWebView = WebView
+final class WKNavigation {}
 final class Split {
     var isEditingDocument = false
     var editorViewController: Editor? = Editor()
@@ -234,7 +237,8 @@ swift += extract(image_source, 'private func insertPastedImage(') + '\n'
 swift += extract(image_source, 'private func presentImagePermissionPanel(') + '\n'
 swift += extract(image_source, 'private func clipboardPNGData(') + '\n'
 swift += '}\n'
-swift += 'extension Editor {\n' + extract(editor_source, 'func updateAssetBaseURL(') + '\n}\n'
+swift += 'extension Editor {\n' + extract(editor_source, 'func updateAssetBaseURL(') + '\n'
+swift += extract(editor_source, 'func webView(_ webView: WKWebView, didFinish navigation:') + '\n}\n'
 ready_source = editor_source.split('case "ready":', 1)[1].split('updateChromeZoom()', 1)[0]
 swift += 'extension Editor {\nfunc markReady() {\n' + ready_source + '\n}\n}\n'
 swift += 'enum MarkdownAssetResolution {\nstatic let scheme = "md-asset"\nstatic let rootBaseHref = "md-asset:///"\n'
@@ -409,6 +413,16 @@ precondition(loadingEditor.webView.scripts.count == 1,
 loadingEditor.updateAssetBaseURL(directory)
 precondition(loadingEditor.webView.scripts.count == 2,
              "An already loaded editor must apply folder changes immediately")
+loadingEditor.webView.isLoading = true
+loadingEditor.hasLoadedEditorPage = false
+loadingEditor.updateAssetBaseURL(movedFolder)
+loadingEditor.markReady()
+precondition(loadingEditor.hasPendingAssetBaseUpdate && loadingEditor.webView.scripts.count == 2,
+             "A ready message during replacement navigation must not consume the pending folder update")
+loadingEditor.webView.isLoading = false
+loadingEditor.webView(loadingEditor.webView, didFinish: nil)
+precondition(!loadingEditor.hasPendingAssetBaseUpdate && loadingEditor.webView.scripts.count == 3,
+             "Navigation completion must apply a folder update deferred by an early ready message")
 let movedFile = movedFolder.appendingPathComponent(imageDocumentURL.lastPathComponent)
 try FileManager.default.moveItem(at: imageDocumentURL, to: movedFile)
 untitled.handleRename(to: movedFile)
