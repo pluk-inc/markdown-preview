@@ -56,9 +56,9 @@ extension DocumentWindowController {
         if menuItem.action == #selector(searchForDocument(_:)) {
             return true
         }
-        if menuItem.action == #selector(publishToWeb(_:)) {
-            menuItem.title = isSharedByLink ? L("Manage Shared Document…") : L("Publish to Web…")
-            return canPublishToWeb
+        if menuItem.action == #selector(shareAsLink(_:)) {
+            menuItem.title = isSharedByLink ? L("Manage Shared Document…") : L("Share as Link…")
+            return canShareAsLink
         }
         if menuItem.action == #selector(toggleAlwaysOnTop(_:)) {
             menuItem.state = isAlwaysOnTop ? .on : .off

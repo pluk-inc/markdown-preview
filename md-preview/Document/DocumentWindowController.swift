@@ -121,8 +121,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     var copyFeedbackWork: DispatchWorkItem?
     /// The Themes & Settings popover while it is on screen.
     var themesPopover: NSPopover?
-    var publishTipPopover: NSPopover?
-    var publishTipTask: Task<Void, Never>?
+    var shareAsLinkTipPopover: NSPopover?
+    var shareAsLinkTipTask: Task<Void, Never>?
     var formattingPopover: NSPopover?
     /// Armed only while the themes popover is open.
     let themesPopoverEscapeMonitor = EscapeKeyMonitor()
@@ -399,15 +399,15 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
-        startPublishToWebTip()
+        startShareAsLinkTip()
     }
 
     func windowDidResignKey(_ notification: Notification) {
-        stopPublishToWebTip()
+        stopShareAsLinkTip()
     }
 
     func windowWillClose(_ notification: Notification) {
-        stopPublishToWebTip()
+        stopShareAsLinkTip()
         searchOpenRequestID = nil
         fullscreenToolbarTheme.restore()
         fileWatcher?.cancel()

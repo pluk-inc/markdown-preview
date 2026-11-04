@@ -1129,10 +1129,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
         // nil target: the key document window's controller handles it, and
         // retitles it Manage Shared Document… once the file has a link.
-        let publishItem = NSMenuItem(title: L("Publish to Web…"),
-                                     action: #selector(DocumentWindowController.publishToWeb(_:)),
-                                     keyEquivalent: "")
-        fileMenu.insertItem(publishItem, at: pdfIndex + 1)
+        let shareLinkItem = NSMenuItem(title: L("Share as Link…"),
+                                       action: #selector(DocumentWindowController.shareAsLink(_:)),
+                                       keyEquivalent: "")
+        fileMenu.insertItem(shareLinkItem, at: pdfIndex + 1)
 
         guard #available(macOS 26.0, *) else { return }
         let icons: [(item: NSMenuItem?, symbol: String)] = [
@@ -1150,7 +1150,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                 },
                 "arrow.up.document"
             ),
-            (publishItem, "globe"),
+            (shareLinkItem, "link"),
             (shareItem, "square.and.arrow.up"),
             (
                 fileMenu.items.first {

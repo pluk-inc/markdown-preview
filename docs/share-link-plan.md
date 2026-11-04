@@ -296,9 +296,9 @@ and the File menu item from the first draft are dropped.
 - **Share popover row** (last row of the app's section, right above the
   system's Copy; the popover gives app rows one section, and apps cannot add
   rows next to Copy — checked against Pages and ShareKit, see below):
-  - **Publish to Web** while the file has no live link.
+  - **Share as Link** while the file has no live link.
   - **Manage Shared Document…** while it has one.
-- **Publish to Web** → `NSAlert` sheet "Publish to Web" (Publish / Keep Document Private).
+- **Share as Link** → `NSAlert` sheet "Share as Link" (Copy Link / Keep Document Private).
   On macOS 26 a sheet alert hides the default app icon, matching ShareKit's
   own Copy Link alert, which is also a plain `NSAlert`.
 - **Upload progress:** AppKit's private `NSProgressPanel` (from AppKit's
@@ -350,8 +350,8 @@ Built (2026-10-23), except Universal Links:
   links to `ShareLinkOpener` before `ExternalOpenScheme`; anything else keeps
   the malformed-link alert.
 - There is no File menu item to paste a link; links open from a click.
-  File › "Publish to Web…" (after Export as PDF…) runs the Share popover's
-  row: it publishes, or shows Manage Shared Document… once the file has a link.
+  File › "Share as Link…" (after Export as PDF…) runs the Share popover's
+  row: it creates the link, or shows Manage Shared Document… once the file has a link.
 - Flow: fetch → ask for the password when the link or envelope has one →
   decrypt → write the Markdown and its assets into
   `Caches/SharedLinks/<id>/<title>/` (asset paths confined to that folder) →
