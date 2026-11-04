@@ -211,6 +211,9 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let math: Bool
         let mermaid: Bool
         let code: Bool
+        /// Release notes bring their own stylesheet, which a body swap
+        /// cannot add or remove.
+        let releaseNotes: Bool
 
         /// True if every renderer the new doc needs is already loaded — the
         /// gate for the fast-path innerHTML swap.
@@ -218,6 +221,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             (!other.math || math)
                 && (!other.mermaid || mermaid)
                 && (!other.code || code)
+                && other.releaseNotes == releaseNotes
         }
     }
     private var loadedFingerprint: RendererFingerprint?
@@ -428,7 +432,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         loadedFingerprint = RendererFingerprint(
             math: rendered.containsMath,
             mermaid: rendered.containsMermaid,
-            code: rendered.containsCode
+            code: rendered.containsCode,
+            releaseNotes: rendered.isReleaseNotes
         )
         webView.loadHTMLString(rendered.html, baseURL: nil)
     }
@@ -638,7 +643,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let fingerprint = RendererFingerprint(
             math: rendered.containsMath,
             mermaid: rendered.containsMermaid,
-            code: rendered.containsCode
+            code: rendered.containsCode,
+            releaseNotes: rendered.isReleaseNotes
         )
         lastDisplayMayChangeAfterFirstPaint = fingerprint.math || fingerprint.mermaid || fingerprint.code
             || rendered.articleHTML.range(of: "<img", options: .caseInsensitive) != nil

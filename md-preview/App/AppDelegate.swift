@@ -132,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     /// waits for the first, which would otherwise unpack into the folder the
     /// first is writing or opening.
     private var pendingShareIDs: Set<String> = []
+    private var isDownloadingReleaseNotes = false
     private var isTerminationSaveInProgress = false
     private var pendingTerminationSaveCount = 0
     private var terminationSaveFailed = false
@@ -139,7 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         LaunchSignposts.event("willFinishLaunching")
-        WhatsNewWindow.noteLaunch()
+        ReleaseNotes.noteLaunch()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -164,7 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         installSettingsMenuItem()
         NSApp.windowsMenu?.delegate = self
         installAppMenuItems()
-        installWhatsNewMenuItem()
+        installReleaseNotesMenuItem()
         installViewMenuItemIcons()
         hasFinishedLaunching = true
         if !didReceiveOpenURLsDuringLaunch {
@@ -307,8 +308,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         if let document = NSDocumentController.shared.documents.first(where: {
             ShareLinkOpener.isReceivedCopy($0.fileURL, id: link.id)
         }) {
-            showWindowIfNeeded(for: document)
-            document.showWindows()
+            bringForward(document)
             return
         }
         guard pendingShareIDs.insert(link.id).inserted else { return }
@@ -323,6 +323,68 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                 scheduleDocumentPromptIfIdle()
             }
         }
+    }
+
+    /// What's New in the update capsule: the notes downloaded while it
+    /// showed, waiting for them if the click came first. When they cannot
+    /// be had, every release opens instead.
+    func openWhatsNew() {
+        Task { @MainActor in
+            do {
+                openReleaseNotesFile(try await ReleaseNotes.whatsNew())
+            } catch {
+                NSLog("ReleaseNotes: could not download What's New: \(error)")
+                openReleaseNotes()
+            }
+        }
+    }
+
+    /// Every release, from Help › Release Notes and the "Previous releases"
+    /// link, downloaded from GitHub once a launch. A window already showing
+    /// them comes forward — after that download, when it was restored from
+    /// before an update; a failed download opens the releases page in the
+    /// browser.
+    func openReleaseNotes() {
+        if ReleaseNotes.hasDownloadedHistory,
+           let document = ReleaseNotes.openDocument(at: ReleaseNotes.historyFile) {
+            bringForward(document)
+            return
+        }
+        guard !isDownloadingReleaseNotes else { return }
+        isDownloadingReleaseNotes = true
+        Task { @MainActor in
+            defer { isDownloadingReleaseNotes = false }
+            do {
+                openReleaseNotesFile(try await ReleaseNotes.downloadHistory())
+            } catch {
+                NSLog("ReleaseNotes: could not download the notes: \(error)")
+                if let document = ReleaseNotes.openDocument(at: ReleaseNotes.historyFile) {
+                    bringForward(document)
+                } else {
+                    NSWorkspace.shared.open(ReleaseNotes.webURL)
+                }
+            }
+        }
+    }
+
+    /// A window already showing `file` — restored from before an update,
+    /// say — comes forward and reloads the rewritten file; otherwise it
+    /// opens as a tab of the front window.
+    private func openReleaseNotesFile(_ file: URL) {
+        if let document = ReleaseNotes.openDocument(at: file) {
+            bringForward(document)
+            return
+        }
+        DocumentWindowController.markNextWindowAsTab()
+        openDocument(at: file) {
+            // Not consumed when no window was created.
+            DocumentWindowController.nextWindowRequestsTab = false
+        }
+    }
+
+    private func bringForward(_ document: NSDocument) {
+        showWindowIfNeeded(for: document)
+        document.showWindows()
     }
 
     /// Re-offers the open panel once every open in the batch has failed —
@@ -412,8 +474,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     // MARK: - Settings
 
-    /// Inserted after About, where macOS puts Settings, since MainMenu.xib
-    /// predates the window and has no item for it.
+    /// Opens the group after About and Check for Updates, where macOS puts
+    /// Settings, since MainMenu.xib predates the window and has no item for
+    /// it.
     private func installSettingsMenuItem() {
         // The app menu is always the first top-level item; its title is the
         // localized app name, so it can't be matched the way the others are.
@@ -430,9 +493,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         let aboutIndex = appMenu.items.firstIndex {
             $0.action == #selector(NSApplication.orderFrontStandardAboutPanel(_:))
         }
-        // MainMenu.xib already separates About from the settings and tools group.
-        let insertIndex = aboutIndex.map { $0 + 2 } ?? 0
-        appMenu.insertItem(item, at: insertIndex)
+        // MainMenu.xib already separates the About group from the settings
+        // and tools group.
+        let separatorIndex = aboutIndex.flatMap { about in
+            appMenu.items[(about + 1)...].firstIndex(where: \.isSeparatorItem)
+        }
+        appMenu.insertItem(item, at: separatorIndex.map { $0 + 1 } ?? 0)
     }
 
     @objc func showSettingsWindow(_ sender: Any?) {
@@ -923,7 +989,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         echo
         echo "Tips:"
         echo "  Use mdp for the shortest command."
-        echo "  Re-run Install CLI... after updating the app to refresh these commands."
+        echo "  Re-run Install CLI after updating the app to refresh these commands."
         echo "  Installed in: $install_dir"
         echo
 
@@ -1343,31 +1409,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         checkForUpdatesMenuItem?.target = self
         checkForUpdatesMenuItem?.action = #selector(checkForUpdates(_:))
 
-        guard let updatesItem = checkForUpdatesMenuItem,
-              let appMenu = updatesItem.menu
+        guard let appMenu = checkForUpdatesMenuItem?.menu,
+              let settingsIndex = appMenu.items.firstIndex(where: {
+                  $0.action == #selector(showSettingsWindow(_:))
+              })
         else { return }
 
-        let cliItem = NSMenuItem(title: L("Install CLI..."),
+        let cliItem = NSMenuItem(title: L("Install CLI"),
                                  action: #selector(installCommandLineTools(_:)),
                                  keyEquivalent: "")
         cliItem.target = self
-        appMenu.insertItem(cliItem, at: appMenu.index(of: updatesItem) + 1)
+        appMenu.insertItem(cliItem, at: settingsIndex + 1)
     }
 
-    private func installWhatsNewMenuItem() {
+    private func installReleaseNotesMenuItem() {
         guard let helpMenu = NSApp.helpMenu,
-              helpMenu.items.first(where: { $0.action == #selector(showWhatsNew(_:)) }) == nil
+              helpMenu.items.first(where: { $0.action == #selector(showReleaseNotes(_:)) }) == nil
         else { return }
 
-        let item = NSMenuItem(title: L("What’s New in Markdown Preview"),
-                              action: #selector(showWhatsNew(_:)),
+        let item = NSMenuItem(title: L("Release Notes"),
+                              action: #selector(showReleaseNotes(_:)),
                               keyEquivalent: "")
         item.target = self
         helpMenu.addItem(item)
     }
 
-    @objc private func showWhatsNew(_ sender: Any?) {
-        WhatsNewWindow.present(over: activeDocumentWindowController?.window)
+    @objc private func showReleaseNotes(_ sender: Any?) {
+        openReleaseNotes()
     }
 
     private func installSidebarViewMenuItems() {

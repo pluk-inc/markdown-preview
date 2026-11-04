@@ -1,0 +1,1 @@
+../../../../md-preview/Features/Updates/ReleaseNotesFormatter.swift

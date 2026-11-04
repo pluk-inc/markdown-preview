@@ -48,7 +48,7 @@ final class UpdateController {
     #if DEBUG
     private func playDemo(_ start: String) {
         switch start {
-        case "checking": model.show(.checking, close: {})
+        case "checking": model.show(.checking)
         case "upToDate": model.show(.upToDate, close: {})
         case "failed": model.show(.failed, close: {})
         default:
@@ -102,9 +102,12 @@ private final class UpdateDriver: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         // The closing window still counts until this turn ends.
         DispatchQueue.main.async { [weak self] in
             MainActor.assumeIsolated {
-                // A step with no close button (preparing, installing) stays,
-                // and the next document window shows it.
+                // A step with no close button (checking, preparing,
+                // installing) stays, and the next document window shows it.
+                // The update announcement waits for the next window too:
+                // closing it would throw its notes away.
                 guard let self, self.model.closeAction != nil else { return }
+                if case .updated = self.model.phase { return }
                 let hasDocumentWindow = NSApp.windows.contains {
                     $0.windowController is DocumentWindowController && ($0.isVisible || $0.isMiniaturized)
                 }
@@ -159,7 +162,8 @@ private final class UpdateDriver: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         guard routesToPill(userInitiated: true) else {
             return standard.showUserInitiatedUpdateCheck(cancellation: cancellation)
         }
-        model.show(.checking, close: cancellation)
+        // Nothing to close: a check ends by itself in a moment.
+        model.show(.checking)
     }
 
     func showUpdateFound(with appcastItem: SUAppcastItem, state: SPUUserUpdateState,

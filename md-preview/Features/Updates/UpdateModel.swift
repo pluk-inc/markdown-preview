@@ -24,6 +24,9 @@ final class UpdateModel {
         case installing
         case upToDate
         case failed
+        /// After the restart: this version is running; What's New opens its
+        /// notes.
+        case updated(String)
     }
 
     private(set) var phase: Phase = .idle {
