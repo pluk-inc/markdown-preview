@@ -1,8 +1,8 @@
 # Changelog
 
-## [0.0.71] – 2026-11-04 – Quieter updates, Share as Link
+## [0.0.71] – 2026-11-04 – Quieter updates, dark icon
 
-Markdown Preview 0.0.71 brings quieter updates, release notes after each update, and Share as Link.
+Markdown Preview 0.0.71 brings quieter updates, release notes after each update, and a dark app icon.
 
 ### Added
 
@@ -12,7 +12,7 @@ Markdown Preview 0.0.71 brings quieter updates, release notes after each update,
 ### Changed
 
 - **Quieter Updates.** A small capsule in the bottom corner of the window shows each update step, from Download to a progress ring to Relaunch Now, so updates no longer open windows over what you’re reading ([#613](https://github.com/pluk-inc/markdown-preview/pull/613)).
-- **Share as Link.** Publish to Web is now Share as Link, with a link icon, in the File menu and the Share popover, to make clear it makes a private, encrypted link that expires in 7 days ([#619](https://github.com/pluk-inc/markdown-preview/pull/619)).
+- **Publish to Web Is Now Share as Link.** The File menu and the Share popover now call it Share as Link, with a link icon, because it makes a private, encrypted link that expires in 7 days, not a public web page ([#619](https://github.com/pluk-inc/markdown-preview/pull/619)).
 - **Separate Zoom and Action Pills on Diagrams.** Diagram controls split into one pill for zoom and one for Copy and Open in Window, making each set of buttons easier to find ([#611](https://github.com/pluk-inc/markdown-preview/pull/611)).
 
 ### Contributors
