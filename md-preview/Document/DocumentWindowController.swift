@@ -599,6 +599,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         documentWindow.title = ReleaseNotes.displayName(for: url)
         resetAutoSaveFeedback()
         updateWindowSubtitle()
+        showOutlineForReadOnlyDocument()
         if isFileSwitch {
             split?.clearContent()
         }

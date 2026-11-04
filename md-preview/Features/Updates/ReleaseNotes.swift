@@ -48,7 +48,7 @@ enum ReleaseNotes {
 
     /// True for `fileURL` being the cached notes file `file`.
     static func isCachedCopy(_ fileURL: URL?, of file: URL) -> Bool {
-        isCachedCopy(fileURL) && fileURL?.lastPathComponent == file.lastPathComponent
+        fileURL?.standardizedFileURL.path == file.standardizedFileURL.path
     }
 
     /// True for the history file, so its link can download it first.
@@ -95,6 +95,8 @@ enum ReleaseNotes {
                                                           after: previousVersion, through: currentVersion)
             guard !releases.isEmpty else { throw URLError(.resourceUnavailable) }
             let footer = "[\(L("Previous releases"))](\(historyFile.lastPathComponent))"
+            // The capsule may have been closed during the download.
+            try Task.checkCancellation()
             try writeDocument(to: whatsNewFile) {
                 ReleaseNotesFormatter.document(releases, authors: $0, footer: footer)
             }
@@ -141,7 +143,10 @@ enum ReleaseNotes {
         try write(render(saved), to: file)
         Task {
             let fresh = await fetchAuthors(updating: cache)
-            if fresh != saved { try? write(render(fresh), to: file) }
+            // A What's New dropped meanwhile stays dropped.
+            if fresh != saved, FileManager.default.fileExists(atPath: file.path) {
+                try? write(render(fresh), to: file)
+            }
         }
     }
 
@@ -203,6 +208,11 @@ enum ReleaseNotes {
             guard NSApp.windows.contains(where: {
                 $0.isVisible && $0.windowController is DocumentWindowController
             }) else { return }
+            // An update step waiting for an answer (Download, Relaunch Now)
+            // keeps the capsule; the next window asks again.
+            if let delegate = NSApp.delegate as? AppDelegate, delegate.updaterController.model.phase != .idle {
+                return
+            }
             didHandleAnnouncement = true
             guard let previousVersion = ReleaseNotesPolicy.claimUpdate(
                 thisBuild: thisBuild, thisVersion: currentVersion,
@@ -359,9 +369,14 @@ enum ReleaseNotes {
         let publishedAt: Date?
     }
 
-    /// One page holds every release so far; GitHub allows 100 per page.
+    /// Every release, newest first, 100 to a page (GitHub's most).
     nonisolated private static func fetchReleases() async throws -> [ReleaseNotesFormatter.Release] {
-        let releases: [Release] = try await get("releases?per_page=100")
+        var releases: [Release] = []
+        for page in 1...10 {
+            let batch: [Release] = try await get("releases?per_page=100&page=\(page)")
+            releases += batch
+            if batch.count < 100 { break }
+        }
         return releases
             .filter { !$0.draft && !$0.prerelease }
             .compactMap { release in

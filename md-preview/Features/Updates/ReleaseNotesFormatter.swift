@@ -110,12 +110,15 @@ nonisolated enum ReleaseNotesFormatter {
 
     /// The releases a reader who updated from `previousVersion` to
     /// `currentVersion` has not seen: newer than the first, up to and
-    /// including the second. An empty `previousVersion` (unknown) gives the
+    /// including the second. An unknown (empty) `previousVersion`, or one
+    /// that is not older — a rebuild of the same version — gives the
     /// current version alone.
     static func releases(_ releases: [Release], after previousVersion: String,
                          through currentVersion: String) -> [Release] {
-        releases.filter { release in
-            guard !previousVersion.isEmpty else { return release.version == currentVersion }
+        let previousIsOlder = !previousVersion.isEmpty
+            && previousVersion.compare(currentVersion, options: .numeric) == .orderedAscending
+        return releases.filter { release in
+            guard previousIsOlder else { return release.version == currentVersion }
             return release.version.compare(previousVersion, options: .numeric) == .orderedDescending
                 && release.version.compare(currentVersion, options: .numeric) != .orderedDescending
         }
@@ -185,7 +188,7 @@ nonisolated enum ReleaseNotesFormatter {
         for link in item.links {
             guard let number = link.firstMatch(of: pullRequestLink).flatMap({ Int($0.output.1) }),
                   let author = authors[number],
-                  !shippers.contains(where: { $0.name == author.name }) else { continue }
+                  !shippers.contains(where: { $0.avatarURL == author.avatarURL }) else { continue }
             shippers.append(author)
         }
         guard !shippers.isEmpty else { return nil }

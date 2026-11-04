@@ -111,7 +111,8 @@ final class ReleaseNotesFormatterTests: XCTestCase {
         XCTAssertEqual(versions("0.0.9", "0.0.11"), ["0.0.10", "0.0.11"])
         XCTAssertEqual(versions("0.0.10", "0.0.11"), ["0.0.11"])
         XCTAssertEqual(versions("", "0.0.11"), ["0.0.11"])
-        XCTAssertEqual(versions("0.0.11", "0.0.11"), [])
+        // A rebuild of the same version shows that version.
+        XCTAssertEqual(versions("0.0.11", "0.0.11"), ["0.0.11"])
     }
 
     func testFooterEndsTheDocument() {

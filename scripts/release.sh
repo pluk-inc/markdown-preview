@@ -70,7 +70,7 @@ extract_notes() {
 # GitHub release, and the app's release notes show it as the title.
 extract_title() {
     awk -v ver="$1" '$0 ~ "^## \\[" ver "\\]" { print; exit }' "$CHANGELOG" \
-        | sed -E 's/^## \[[^]]*\][[:space:]]*(–|-)[[:space:]]*[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]*//; s/^(–|-)[[:space:]]*//'
+        | sed -E 's/^## \[[^]]*\][[:space:]]*//; s/^(–|-)[[:space:]]*[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}[[:space:]]*//; s/^(–|-)[[:space:]]*//'
 }
 
 # ── Resolve version ────────────────────────────────────────────────────────
