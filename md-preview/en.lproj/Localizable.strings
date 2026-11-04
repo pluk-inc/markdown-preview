@@ -313,20 +313,13 @@
 "Search for Document" = "Search for Document";
 "Search for a file by name" = "Search for a file by name";
 
-/* What's New */
-"What’s New in Markdown Preview" = "What’s New in Markdown Preview";
-"What’s New in Markdown Preview %@" = "What’s New in Markdown Preview %@";
+/* Release notes */
 "Release Notes" = "Release Notes";
-"Continue" = "Continue";
-"Get an encrypted link to your document that anyone can read in a browser." = "Get an encrypted link to your document that anyone can read in a browser.";
-"Redesigned Settings" = "Redesigned Settings";
-"Settings has new tabs, and the Appearance pane shows your changes on a live sample page." = "Settings has new tabs, and the Appearance pane shows your changes on a live sample page.";
-"Liquid Glass buttons on code and diagrams" = "Liquid Glass buttons on code and diagrams";
-"On macOS 26 and later, code blocks and diagrams share one set of Liquid Glass buttons." = "On macOS 26 and later, code blocks and diagrams share one set of Liquid Glass buttons.";
-"Switch tabs with ⌘1 to ⌘9" = "Switch tabs with ⌘1 to ⌘9";
-"Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one." = "Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one.";
-"Search keeps its place" = "Search keeps its place";
-"Clicking in the document or the search field no longer moves to the next match." = "Clicking in the document or the search field no longer moves to the next match.";
+"Release notes are read-only" = "Release notes are read-only";
+"Updated to %@" = "Updated to %@";
+"What’s New" = "What’s New";
+"What’s New in Markdown Preview %@" = "What’s New in Markdown Preview %@";
+"Previous releases" = "Previous releases";
 
 /* Reading preferences */
 "Strict line breaks" = "Strict line breaks";
@@ -507,17 +500,18 @@
 "This link has expired, or sharing was stopped." = "This link has expired, or sharing was stopped.";
 "This link is damaged, or it does not match the shared document." = "This link is damaged, or it does not match the shared document.";
 "Shared documents are read-only" = "Shared documents are read-only";
+"Continue" = "Continue";
 "Read only" = "Read only";
 
 /* Update capsule */
 "Version %@" = "Version %@";
-"Checking for updates…" = "Checking for updates…";
+"Checking for updates" = "Checking for updates";
 "An update is available" = "An update is available";
 "Downloading update" = "Downloading update";
 "Preparing update" = "Preparing update";
-"Update ready" = "Update ready";
+"Update installed." = "Update installed.";
 "Installing update…" = "Installing update…";
-"You’re up to date" = "You’re up to date";
+"Markdown Preview is up to date" = "Markdown Preview is up to date";
 "Update failed" = "Update failed";
 "Download" = "Download";
 "Relaunch Now" = "Relaunch Now";

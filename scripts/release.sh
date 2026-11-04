@@ -65,6 +65,14 @@ extract_notes() {
     ' "$CHANGELOG" | awk 'NF{found=1} found' | sed -E '$ { /^[[:space:]]*$/d; }'
 }
 
+# The optional release title after the date in the CHANGELOG.md heading:
+# `## [0.0.71] – 2026-11-10 – Sharper tables, steadier search`. It names the
+# GitHub release, and the app's release notes show it as the title.
+extract_title() {
+    awk -v ver="$1" '$0 ~ "^## \\[" ver "\\]" { print; exit }' "$CHANGELOG" \
+        | sed -E 's/^## \[[^]]*\][[:space:]]*(–|-)[[:space:]]*[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]*//; s/^(–|-)[[:space:]]*//'
+}
+
 # ── Resolve version ────────────────────────────────────────────────────────
 if [[ -n "$VERSION_OVERRIDE" ]]; then
     VERSION="$VERSION_OVERRIDE"
@@ -145,6 +153,7 @@ fi
 
 # ── Extract release notes ──────────────────────────────────────────────────
 NOTES="$(extract_notes "$VERSION")"
+TITLE="$(extract_title "$VERSION")"
 if [[ -z "$NOTES" ]]; then
     echo "error: empty CHANGELOG.md body for [$VERSION]" >&2
     exit 1
@@ -198,7 +207,7 @@ if gh release view "$TAG" >/dev/null 2>&1; then
 else
     echo "▸ Creating GitHub release $TAG"
     gh release create "$TAG" \
-        --title "Markdown Preview $VERSION" \
+        --title "${TITLE:-Markdown Preview $VERSION}" \
         --notes "$NOTES" \
         $PRERELEASE_FLAG \
         "$DMG_PATH"

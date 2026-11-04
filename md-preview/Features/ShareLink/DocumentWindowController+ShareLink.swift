@@ -31,7 +31,7 @@ extension DocumentWindowController {
     /// False while the window has no saved file to link.
     var canPublishToWeb: Bool {
         currentFileURL != nil && currentMarkdown != nil
-            && !isReceivedShare
+            && !isReadOnlyDocument
     }
 
     /// File › Publish to Web…: the same as the Share popover row.

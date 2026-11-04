@@ -181,6 +181,183 @@ nonisolated extension MarkdownHTML {
     font-size: 0.88em;
     """
 
+    /// Marks a page as the app's release notes (see `ReleaseNotesFormatter`):
+    /// an empty element with this class at the top of the Markdown turns on
+    /// `releaseNotesCSS`. Keyed on the content, not the page, so it holds when
+    /// an update swaps the article in place.
+    static let releaseNotesClass = "mdp-release-notes"
+    /// The element itself; a page whose Markdown holds it gets
+    /// `releaseNotesCSS`, and no other page does.
+    static let releaseNotesMarker = "<div class=\"\(releaseNotesClass)\"></div>"
+    /// Every rule is scoped to an article that holds the marker.
+    private static let releaseNotesPage = "article.markdown-body:has(> .\(releaseNotesClass))"
+
+    /// Lays the release notes out as a changelog page: per release a gray
+    /// date, a large serif title, the version in a pill, a bold intro and the
+    /// items in columns. The Markdown is
+    ///
+    ///     October 28, 2026
+    ///     ### Title
+    ///     `v0.0.70`
+    ///
+    ///     Intro.
+    ///
+    ///     - **Item title**
+    ///
+    ///       Text.
+    ///
+    ///       <span class="mdp-rn-shipped">…Shipped by …</span>
+    ///
+    ///       <span class="mdp-rn-links">[#1](…)</span>
+    ///
+    /// under `# Year` and `## Month` headings, which only the outline shows.
+    /// Blank source lines keep their spacer elements in the page, so the
+    /// rules allow one between blocks; the spacing here replaces them.
+    static let releaseNotesCSS = """
+    \(releaseNotesPage) {
+        --mdp-rn-muted: color-mix(in srgb, var(--text) 55%, transparent);
+    }
+    \(releaseNotesPage) > :is(.\(releaseNotesClass), .md-source-blank-line) {
+        display: none;
+    }
+    /* Year and month are the outline's rail, not page labels: each release
+       shows its own date. They stay in the flow at zero size, so the
+       outline still scrolls to them. */
+    \(releaseNotesPage) > :is(h1, h2) {
+        border: 0;
+        font-size: 0;
+        height: 0;
+        line-height: 0;
+        margin: 0;
+        overflow: hidden;
+        padding: 0;
+    }
+    /* The date opens a release; the first one opens the page. */
+    \(releaseNotesPage) > p:has(+ h3) {
+        color: var(--mdp-rn-muted);
+        margin-top: 4.5em;
+    }
+    \(releaseNotesPage) > .\(releaseNotesClass) + .md-source-blank-line + h1 + h2 + p:has(+ h3) {
+        margin-top: 0;
+    }
+    \(releaseNotesPage) > h3 {
+        font-family: ui-serif, "New York", Georgia, serif;
+        font-size: 2.6em;
+        font-weight: 400;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+        margin-top: 0.15em;
+        text-wrap: balance;
+    }
+    /* The version pill. */
+    \(releaseNotesPage) > h3 + p { margin-top: 1.1em; }
+    \(releaseNotesPage) > h3 + p > code {
+        background: transparent;
+        border: 1px solid var(--grid);
+        border-radius: 999px;
+        color: var(--text);
+        font-family: inherit;
+        font-size: 0.923em;
+        font-weight: 500;
+        padding: 0.25em 0.75em;
+    }
+    /* The intro. */
+    \(releaseNotesPage) > h3 + p + .md-source-blank-line + p {
+        font-size: 1.154em;
+        font-weight: 600;
+        line-height: 1.45;
+        margin-top: 1.6em;
+        max-width: 36em;
+    }
+    /* The items in two columns, or one when two would be narrower than
+       15em: each column is at least half the row (less the gap), so a third
+       never fits. */
+    \(releaseNotesPage) > ul {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(max(15em, calc((100% - 3em) / 2)), 1fr));
+        gap: 2.4em 3em;
+        margin-top: 2.6em;
+        padding-inline-start: 0;
+    }
+    \(releaseNotesPage) > ul > li { display: block; margin: 0; }
+    \(releaseNotesPage) > ul > li::before { content: none; }
+    \(releaseNotesPage) > ul > li > p { margin-top: 0.5em; }
+    \(releaseNotesPage) > ul > li > p:first-child { margin-top: 0; }
+    \(releaseNotesPage) > ul > li > p:first-child > strong:only-child {
+        font-size: 1.154em;
+        font-weight: 500;
+    }
+    \(releaseNotesPage) > ul > li > p:not(:first-child),
+    \(releaseNotesPage) > ul > li > p:first-child:not(:has(> strong:only-child)) {
+        color: var(--mdp-rn-muted);
+        line-height: 1.55;
+    }
+    /* Who shipped it: avatars, then the first name in medium weight. */
+    \(releaseNotesPage) > ul > li > p:has(> .mdp-rn-shipped) {
+        color: var(--text);
+        margin-top: 1.2em;
+    }
+    \(releaseNotesPage) .mdp-rn-shipped {
+        align-items: center;
+        display: inline-flex;
+        gap: 0.4em;
+    }
+    \(releaseNotesPage) .mdp-rn-shipped img {
+        background: var(--code-bg);
+        border-radius: 50%;
+        height: 1.85em;
+        object-fit: cover;
+        width: 1.85em;
+    }
+    \(releaseNotesPage) .mdp-rn-shipped img:last-of-type { margin-inline-end: 0.3em; }
+    \(releaseNotesPage) .mdp-rn-name { font-weight: 500; }
+    /* Pull requests and issues as pills, each with its icon; "+N" opens
+       the release, which lists the rest. */
+    \(releaseNotesPage) > ul > li > p:has(> .mdp-rn-links) { margin-top: 0.8em; }
+    \(releaseNotesPage) .mdp-rn-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35em;
+    }
+    \(releaseNotesPage) .mdp-rn-links a {
+        align-items: center;
+        border: 1px solid var(--grid);
+        border-radius: 999px;
+        color: var(--mdp-rn-muted);
+        display: inline-flex;
+        font-size: 0.846em;
+        font-variant-numeric: tabular-nums;
+        gap: 0.3em;
+        line-height: 1.4;
+        padding: 0.2em 0.65em 0.2em 0.5em;
+        text-decoration: none;
+        transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+    }
+    \(releaseNotesPage) .mdp-rn-links a::before {
+        background: currentColor;
+        content: "";
+        height: 1em;
+        width: 1em;
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='4' cy='3.5' r='1.75'/%3E%3Ccircle cx='4' cy='12.5' r='1.75'/%3E%3Ccircle cx='12' cy='12.5' r='1.75'/%3E%3Cpath d='M4 5.25v5.5M12 10.75V6.5A2.5 2.5 0 0 0 9.5 4H7.5M9 2.5 7.5 4 9 5.5'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+    \(releaseNotesPage) .mdp-rn-links a[href*="/issues/"]::before {
+        -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5'%3E%3Ccircle cx='8' cy='8' r='6.25'/%3E%3Ccircle cx='8' cy='8' r='1.25' fill='black' stroke='none'/%3E%3C/svg%3E");
+    }
+    \(releaseNotesPage) .mdp-rn-links a[href*="/releases/"] { padding-inline-start: 0.65em; }
+    \(releaseNotesPage) .mdp-rn-links a[href*="/releases/"]::before { content: none; }
+    \(releaseNotesPage) .mdp-rn-links a:hover {
+        background: color-mix(in srgb, var(--link) 8%, transparent);
+        border-color: color-mix(in srgb, var(--link) 45%, transparent);
+        color: var(--link);
+        text-decoration: none;
+    }
+    /* The contributors line. */
+    \(releaseNotesPage) > ul + .md-source-blank-line + p {
+        color: var(--mdp-rn-muted);
+        margin-top: 2.4em;
+    }
+    """
+
     static let tableControlsCSS = """
     /* Shrink to the table so the Expand button sits at the table's edge, not the column's. */
     .md-table-wrap { position: relative; margin-top: \(largeBlockSpacing)px; padding-top: 28px; width: fit-content; max-width: 100%; }

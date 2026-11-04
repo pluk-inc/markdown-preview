@@ -209,8 +209,7 @@ extension DocumentWindowController {
     func renderCurrentDocument(text: String, fileURL: URL?, renderImmediately: Bool = false) {
         (documentWindow.contentViewController as? MainSplitViewController)?
             .display(markdown: text,
-                     fileName: fileURL?.lastPathComponent
-                         ?? NSLocalizedString("Untitled", comment: "Untitled document name"),
+                     fileName: ReleaseNotes.displayName(for: fileURL),
                      url: fileURL,
                      assetBaseURL: fileURL?.deletingLastPathComponent(),
                      renderImmediately: renderImmediately)

@@ -482,6 +482,10 @@ nonisolated enum MarkdownHTML {
         // element to rewrite instead of creating one per page variant.
         let themeStyleBlock =
             "<style id=\"\(themeStyleElementID)\">\(themeOverrides?.css ?? "")</style>"
+        // Only the app's release notes start with the marker; other pages skip
+        // the rules, and the :has() matching they would cost.
+        let releaseNotesStyleBlock = body.hasPrefix(releaseNotesMarker)
+            ? "<style>\(releaseNotesCSS)</style>" : ""
         let html = """
         <!DOCTYPE html>
         <html\(colorSchemeAttribute)>
@@ -490,6 +494,7 @@ nonisolated enum MarkdownHTML {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         \(baseTag)
         <style>\(stylesheet)</style>
+        \(releaseNotesStyleBlock)
         <style>:root { --mdp-page-top-clearance: \(pageTopClearance)px; --mdp-chrome-zoom: \(chromeZoom); }</style>
         \(themeStyleBlock)
         \(scrollOverride)

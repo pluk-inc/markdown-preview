@@ -101,8 +101,8 @@ final class Controller {
         completion()
     }
     var isPerformingAutomaticSave = false
-    // Documents opened from a share link are read-only; not under test here.
-    var isReceivedShare = false
+    // Received shares and release notes are read-only; not under test here.
+    var isReadOnlyDocument = false
     var currentMarkdown: String?
     var currentFileURL: URL?
     var markdownDocument: Document? = Document()

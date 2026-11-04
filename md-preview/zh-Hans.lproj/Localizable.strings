@@ -313,20 +313,13 @@
 "Search for Document" = "搜索文稿";
 "Search for a file by name" = "按名称搜索文件";
 
-/* What's New */
-"What’s New in Markdown Preview" = "Markdown Preview 的新功能";
-"What’s New in Markdown Preview %@" = "Markdown Preview %@ 的新功能";
+/* Release notes */
 "Release Notes" = "发布说明";
-"Continue" = "继续";
-"Get an encrypted link to your document that anyone can read in a browser." = "为文稿生成一个加密链接，任何人都可以在浏览器中阅读。";
-"Redesigned Settings" = "重新设计的设置";
-"Settings has new tabs, and the Appearance pane shows your changes on a live sample page." = "设置采用新的标签页，“外观”面板会在实时示例页面上显示你的更改。";
-"Liquid Glass buttons on code and diagrams" = "代码块和图表的 Liquid Glass 按钮";
-"On macOS 26 and later, code blocks and diagrams share one set of Liquid Glass buttons." = "在 macOS 26 及更高版本中，代码块和图表共用一组 Liquid Glass 按钮。";
-"Switch tabs with ⌘1 to ⌘9" = "使用 ⌘1 到 ⌘9 切换标签页";
-"Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one." = "按 ⌘1 到 ⌘8 前往对应的标签页，按 ⌘9 前往最后一个标签页。";
-"Search keeps its place" = "搜索会保持当前位置";
-"Clicking in the document or the search field no longer moves to the next match." = "点按文稿或搜索栏时，不再跳到下一个匹配项。";
+"Release notes are read-only" = "发布说明为只读";
+"Updated to %@" = "已更新至 %@";
+"What’s New" = "新功能";
+"What’s New in Markdown Preview %@" = "Markdown Preview %@ 的新功能";
+"Previous releases" = "以前的版本";
 
 /* Reading preferences */
 "Strict line breaks" = "严格换行";
@@ -507,17 +500,18 @@
 "This link has expired, or sharing was stopped." = "此链接已过期，或已停止共享。";
 "This link is damaged, or it does not match the shared document." = "此链接已损坏，或与共享的文稿不符。";
 "Shared documents are read-only" = "共享的文稿为只读";
+"Continue" = "继续";
 "Read only" = "只读";
 
 /* Update capsule */
 "Version %@" = "版本 %@";
-"Checking for updates…" = "正在检查更新…";
+"Checking for updates" = "正在检查更新";
 "An update is available" = "有可用的更新";
 "Downloading update" = "正在下载更新";
 "Preparing update" = "正在准备更新";
-"Update ready" = "更新已准备就绪";
+"Update installed." = "更新已安装。";
 "Installing update…" = "正在安装更新…";
-"You’re up to date" = "已是最新版本";
+"Markdown Preview is up to date" = "Markdown Preview 已是最新版本";
 "Update failed" = "更新失败";
 "Download" = "下载";
 "Relaunch Now" = "立即重新启动";

@@ -313,20 +313,13 @@
 "Search for Document" = "書類を検索";
 "Search for a file by name" = "ファイル名で書類を検索";
 
-/* What's New */
-"What’s New in Markdown Preview" = "Markdown Preview の新機能";
-"What’s New in Markdown Preview %@" = "Markdown Preview %@ の新機能";
+/* Release notes */
 "Release Notes" = "リリースノート";
-"Continue" = "続ける";
-"Get an encrypted link to your document that anyone can read in a browser." = "誰でもブラウザで読める、書類の暗号化されたリンクを作成できます。";
-"Redesigned Settings" = "設定のデザインを一新";
-"Settings has new tabs, and the Appearance pane shows your changes on a live sample page." = "設定は新しいタブ形式になり、「外観」パネルでは変更がライブのサンプルページに表示されます。";
-"Liquid Glass buttons on code and diagrams" = "コードと図の Liquid Glass ボタン";
-"On macOS 26 and later, code blocks and diagrams share one set of Liquid Glass buttons." = "macOS 26 以降では、コードブロックと図で同じ Liquid Glass ボタンを使います。";
-"Switch tabs with ⌘1 to ⌘9" = "⌘1〜⌘9 でタブを切り替え";
-"Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one." = "⌘1〜⌘8 でそのタブに、⌘9 で最後のタブに移動します。";
-"Search keeps its place" = "検索の位置を保持";
-"Clicking in the document or the search field no longer moves to the next match." = "書類や検索フィールドをクリックしても、次の一致箇所に移動しなくなりました。";
+"Release notes are read-only" = "リリースノートは読み出し専用です";
+"Updated to %@" = "%@ にアップデートしました";
+"What’s New" = "新機能";
+"What’s New in Markdown Preview %@" = "Markdown Preview %@ の新機能";
+"Previous releases" = "以前のリリース";
 
 /* Reading preferences */
 "Strict line breaks" = "厳密な改行";
@@ -507,17 +500,18 @@
 "This link has expired, or sharing was stopped." = "このリンクは有効期限が切れたか、共有が停止されました。";
 "This link is damaged, or it does not match the shared document." = "このリンクは壊れているか、共有された書類と一致しません。";
 "Shared documents are read-only" = "共有書類は読み出し専用です";
+"Continue" = "続ける";
 "Read only" = "読み出し専用";
 
 /* Update capsule */
 "Version %@" = "バージョン %@";
-"Checking for updates…" = "アップデートを確認中…";
+"Checking for updates" = "アップデートを確認中";
 "An update is available" = "アップデートがあります";
 "Downloading update" = "アップデートをダウンロード中";
 "Preparing update" = "アップデートを準備中";
-"Update ready" = "アップデートの準備ができました";
+"Update installed." = "アップデートをインストールしました。";
 "Installing update…" = "アップデートをインストール中…";
-"You’re up to date" = "最新の状態です";
+"Markdown Preview is up to date" = "Markdown Preview は最新の状態です";
 "Update failed" = "アップデートに失敗しました";
 "Download" = "ダウンロード";
 "Relaunch Now" = "今すぐ再起動";
