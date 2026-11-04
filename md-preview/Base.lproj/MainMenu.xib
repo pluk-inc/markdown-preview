@@ -29,13 +29,13 @@
                                     <action selector="orderFrontStandardAboutPanel:" target="-1" id="Exp-CZ-Vem"/>
                                 </connections>
                             </menuItem>
-                            <menuItem isSeparatorItem="YES" id="spk-sp-sep"/>
                             <menuItem title="Check for Updates…" id="spk-cu-itm">
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>
                                     <action selector="checkForUpdates:" target="Voe-Tx-rLC" id="spk-cu-act"/>
                                 </connections>
                             </menuItem>
+                            <menuItem isSeparatorItem="YES" id="spk-sp-sep"/>
                             <menuItem isSeparatorItem="YES" id="wFC-TO-SCJ"/>
                             <menuItem title="Services" id="NMo-om-nkz">
                                 <modifierMask key="keyEquivalentModifierMask"/>
