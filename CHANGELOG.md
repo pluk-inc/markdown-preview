@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.0.71] – 2026-11-04 – Quieter updates, Share as Link
+
+Markdown Preview 0.0.71 brings quieter updates, release notes after each update, and Share as Link.
+
+### Added
+
+- **Release Notes After an Update.** After an update, the capsule says “Updated to” the new version with a What’s New button that opens every release since the one you ran before, so nothing you skipped is missed. Help › Release Notes opens the full history ([#618](https://github.com/pluk-inc/markdown-preview/pull/618)).
+- **Dark App Icon.** The app icon has a dark version that macOS shows in dark mode, instead of a bright white tile ([#607](https://github.com/pluk-inc/markdown-preview/pull/607)).
+
+### Changed
+
+- **Quieter Updates.** A small capsule in the bottom corner of the window shows each update step, from Download to a progress ring to Relaunch Now, so updates no longer open windows over what you’re reading ([#613](https://github.com/pluk-inc/markdown-preview/pull/613)).
+- **Share as Link.** Publish to Web is now Share as Link, with a link icon, in the File menu and the Share popover, to make clear it makes a private, encrypted link that expires in 7 days ([#619](https://github.com/pluk-inc/markdown-preview/pull/619)).
+- **Separate Zoom and Action Pills on Diagrams.** Diagram controls split into one pill for zoom and one for Copy and Open in Window, making each set of buttons easier to find ([#611](https://github.com/pluk-inc/markdown-preview/pull/611)).
+
+### Contributors
+
+- [@OpenSource03](https://github.com/OpenSource03) — drew the dark app icon ([#607](https://github.com/pluk-inc/markdown-preview/pull/607)).
+- [@IanAtSalt](https://github.com/IanAtSalt) — pointed out that “Publish to Web” sounded like public web publishing ([#609](https://github.com/pluk-inc/markdown-preview/issues/609)).
+
 ## [0.0.70] – 2026-10-27 – Publish to Web, redesigned Settings
 
 Markdown Preview 0.0.70 brings Publish to Web, a redesigned Settings window, and quicker ways to move between tabs.
