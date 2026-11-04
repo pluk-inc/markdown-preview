@@ -51,12 +51,21 @@ nonisolated enum ReleaseNotesFormatter {
     /// other Markdown viewers.
     static let marker = MarkdownHTML.releaseNotesMarker
 
+    /// The words the document adds around the release text, in the app's
+    /// language; the release text itself stays as written.
+    struct Labels: Sendable {
+        var shippedBy = "Shipped by"
+        /// A format with one `%@`: the contributors.
+        var thanks = "Thanks to %@."
+    }
+
     /// Lines that belong together (year, month, date, title, version) have
     /// no blank line between them: the page keeps a spacer element for each
     /// blank line, and the stylesheet expects them only between blocks.
     static func document(_ releases: [Release],
                          authors: [Int: Author] = [:],
                          footer: String? = nil,
+                         labels: Labels = Labels(),
                          calendar: Calendar = Calendar(identifier: .gregorian),
                          locale: Locale = Locale(identifier: "en_US")) -> String {
         var calendar = calendar
@@ -94,14 +103,16 @@ nonisolated enum ReleaseNotesFormatter {
                 var paragraphs: [String] = []
                 if let title = item.title { paragraphs.append("**\(title)**") }
                 if !item.text.isEmpty { paragraphs.append(item.text) }
-                if let shipped = shippedBy(item, authors: authors) { paragraphs.append(shipped) }
+                if let shipped = shippedBy(item, authors: authors, label: labels.shippedBy, locale: locale) {
+                    paragraphs.append(shipped)
+                }
                 if !item.links.isEmpty { paragraphs.append(linkPills(item.links, version: release.version)) }
                 guard let first = paragraphs.first else { continue }
                 lines += ["- \(first)", ""]
                 for paragraph in paragraphs.dropFirst() { lines += ["  \(paragraph)", ""] }
             }
             if !entry.contributors.isEmpty {
-                lines += ["Thanks to \(list(entry.contributors)).", ""]
+                lines += [String(format: labels.thanks, list(entry.contributors, locale: locale)), ""]
             }
         }
         if let footer { lines += [footer, ""] }
@@ -183,7 +194,8 @@ nonisolated enum ReleaseNotesFormatter {
 
     // MARK: - Private
 
-    private static func shippedBy(_ item: Item, authors: [Int: Author]) -> String? {
+    private static func shippedBy(_ item: Item, authors: [Int: Author],
+                                  label: String, locale: Locale) -> String? {
         var shippers: [Author] = []
         for link in item.links {
             guard let number = link.firstMatch(of: pullRequestLink).flatMap({ Int($0.output.1) }),
@@ -195,8 +207,8 @@ nonisolated enum ReleaseNotesFormatter {
         let avatars = shippers.prefix(3).map {
             #"<img src="\#(MarkdownHTML.htmlEscape($0.avatarURL))" alt="">"#
         }.joined()
-        let names = list(shippers.map { MarkdownHTML.htmlEscape($0.name) })
-        return #"<span class="mdp-rn-shipped">\#(avatars)Shipped by <span class="mdp-rn-name">\#(names)</span></span>"#
+        let names = list(shippers.map { MarkdownHTML.htmlEscape($0.name) }, locale: locale)
+        return #"<span class="mdp-rn-shipped">\#(avatars)\#(MarkdownHTML.htmlEscape(label)) <span class="mdp-rn-name">\#(names)</span></span>"#
     }
 
     private static func linkPills(_ links: [String], version: String) -> String {
@@ -224,9 +236,11 @@ nonisolated enum ReleaseNotesFormatter {
         return Item(title: title, text: text, links: links)
     }
 
-    private static func list(_ names: [String]) -> String {
-        guard names.count > 1 else { return names.first ?? "" }
-        return names.dropLast().joined(separator: ", ") + " and " + names.last!
+    /// "A, B, and C" in the reader's language.
+    private static func list(_ names: [String], locale: Locale) -> String {
+        let formatter = ListFormatter()
+        formatter.locale = locale
+        return formatter.string(from: names) ?? names.joined(separator: ", ")
     }
 
     /// `**Title.**` or `**Title**` at the start of a bullet.

@@ -320,6 +320,8 @@
 "What’s New" = "新功能";
 "What’s New in Markdown Preview %@" = "Markdown Preview %@ 的新功能";
 "Previous releases" = "以前的版本";
+"Shipped by" = "发布者";
+"Thanks to %@." = "感谢 %@。";
 
 /* Reading preferences */
 "Strict line breaks" = "严格换行";

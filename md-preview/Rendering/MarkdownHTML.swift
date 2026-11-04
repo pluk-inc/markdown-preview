@@ -280,6 +280,9 @@ nonisolated enum MarkdownHTML {
         let containsMath: Bool
         let containsMermaid: Bool
         let containsCode: Bool
+        /// The page carries `releaseNotesCSS`; only such a page can take a
+        /// release-notes article in place, and the other way round.
+        let isReleaseNotes: Bool
     }
 
     static func makeHTML(from markdown: String,
@@ -484,8 +487,8 @@ nonisolated enum MarkdownHTML {
             "<style id=\"\(themeStyleElementID)\">\(themeOverrides?.css ?? "")</style>"
         // Only the app's release notes start with the marker; other pages skip
         // the rules, and the :has() matching they would cost.
-        let releaseNotesStyleBlock = body.hasPrefix(releaseNotesMarker)
-            ? "<style>\(releaseNotesCSS)</style>" : ""
+        let isReleaseNotes = body.hasPrefix(releaseNotesMarker)
+        let releaseNotesStyleBlock = isReleaseNotes ? "<style>\(releaseNotesCSS)</style>" : ""
         let html = """
         <!DOCTYPE html>
         <html\(colorSchemeAttribute)>
@@ -522,7 +525,8 @@ nonisolated enum MarkdownHTML {
             markdown: markdown,
             containsMath: containsMath,
             containsMermaid: containsMermaid,
-            containsCode: containsCode
+            containsCode: containsCode,
+            isReleaseNotes: isReleaseNotes
         )
     }
 

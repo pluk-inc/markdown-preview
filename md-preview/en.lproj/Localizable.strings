@@ -320,6 +320,8 @@
 "What’s New" = "What’s New";
 "What’s New in Markdown Preview %@" = "What’s New in Markdown Preview %@";
 "Previous releases" = "Previous releases";
+"Shipped by" = "Shipped by";
+"Thanks to %@." = "Thanks to %@.";
 
 /* Reading preferences */
 "Strict line breaks" = "Strict line breaks";

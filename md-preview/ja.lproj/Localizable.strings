@@ -320,6 +320,8 @@
 "What’s New" = "新機能";
 "What’s New in Markdown Preview %@" = "Markdown Preview %@ の新機能";
 "Previous releases" = "以前のリリース";
+"Shipped by" = "担当";
+"Thanks to %@." = "%@ に感謝します。";
 
 /* Reading preferences */
 "Strict line breaks" = "厳密な改行";

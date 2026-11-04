@@ -321,6 +321,8 @@
 "What’s New" = "Co nowego";
 "What’s New in Markdown Preview %@" = "Co nowego w Markdown Preview %@";
 "Previous releases" = "Poprzednie wydania";
+"Shipped by" = "Wydane przez";
+"Thanks to %@." = "Dziękujemy: %@.";
 
 /* Reading preferences */
 "Strict line breaks" = "Ścisłe reguły podziału wierszy";

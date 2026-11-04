@@ -97,8 +97,10 @@ enum ReleaseNotes {
             let footer = "[\(L("Previous releases"))](\(historyFile.lastPathComponent))"
             // The capsule may have been closed during the download.
             try Task.checkCancellation()
+            let labels = labels, locale = locale
             try writeDocument(to: whatsNewFile) {
-                ReleaseNotesFormatter.document(releases, authors: $0, footer: footer)
+                ReleaseNotesFormatter.document(releases, authors: $0, footer: footer,
+                                               labels: labels, locale: locale)
             }
             return whatsNewFile
         }
@@ -120,12 +122,20 @@ enum ReleaseNotes {
 
     // MARK: - Every release
 
+    /// Whether this launch has written the history; a history tab restored
+    /// from before an update is refreshed first.
+    private(set) static var hasDownloadedHistory = false
+
     /// Downloads every release and returns the history file. Offline, the
     /// copy from an earlier download is good enough.
     static func downloadHistory() async throws -> URL {
         do {
             let releases = try await allReleases()
-            try writeDocument(to: historyFile) { ReleaseNotesFormatter.document(releases, authors: $0) }
+            let labels = labels, locale = locale
+            try writeDocument(to: historyFile) {
+                ReleaseNotesFormatter.document(releases, authors: $0, labels: labels, locale: locale)
+            }
+            hasDownloadedHistory = true
         } catch where FileManager.default.fileExists(atPath: historyFile.path) {
             NSLog("ReleaseNotes: using the saved notes: \(error)")
         }
@@ -164,6 +174,17 @@ enum ReleaseNotes {
             releasesDownload = nil
             throw error
         }
+    }
+
+    /// The words around the release text, in the app's language.
+    private static var labels: ReleaseNotesFormatter.Labels {
+        .init(shippedBy: L("Shipped by"), thanks: L("Thanks to %@."))
+    }
+
+    /// The app's language, which can differ from the system's: dates and
+    /// lists follow it.
+    private static var locale: Locale {
+        Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en")
     }
 
     private static func write(_ markdown: String, to file: URL) throws {
@@ -275,10 +296,12 @@ enum ReleaseNotes {
     /// cannot be downloaded (offline, or over the hourly limit) is left out.
     private static func fetchAuthors(updating cache: AuthorCache) async -> [Int: ReleaseNotesFormatter.Author] {
         var cache = cache
-        // Newest first: stop at the first page that reaches a known one.
+        // Most recently updated first, so a pull request merged since the
+        // last fetch comes before the known ones, however old it is: stop at
+        // the first page that reaches a known one.
         for page in 1...20 {
             guard let pullRequests: [PullRequest] = try? await get(
-                "pulls?state=closed&sort=created&direction=desc&per_page=100&page=\(page)"
+                "pulls?state=closed&sort=updated&direction=desc&per_page=100&page=\(page)"
             ) else { break }
             var reachedKnown = false
             for pullRequest in pullRequests {

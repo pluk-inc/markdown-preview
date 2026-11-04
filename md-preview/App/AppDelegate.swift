@@ -340,10 +340,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     /// Every release, from Help › Release Notes and the "Previous releases"
-    /// link, downloaded from GitHub. A window already showing them comes
-    /// forward; a failed download opens the releases page in the browser.
+    /// link, downloaded from GitHub once a launch. A window already showing
+    /// them comes forward — after that download, when it was restored from
+    /// before an update; a failed download opens the releases page in the
+    /// browser.
     func openReleaseNotes() {
-        if let document = ReleaseNotes.openDocument(at: ReleaseNotes.historyFile) {
+        if ReleaseNotes.hasDownloadedHistory,
+           let document = ReleaseNotes.openDocument(at: ReleaseNotes.historyFile) {
             bringForward(document)
             return
         }
@@ -355,7 +358,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                 openReleaseNotesFile(try await ReleaseNotes.downloadHistory())
             } catch {
                 NSLog("ReleaseNotes: could not download the notes: \(error)")
-                NSWorkspace.shared.open(ReleaseNotes.webURL)
+                if let document = ReleaseNotes.openDocument(at: ReleaseNotes.historyFile) {
+                    bringForward(document)
+                } else {
+                    NSWorkspace.shared.open(ReleaseNotes.webURL)
+                }
             }
         }
     }
