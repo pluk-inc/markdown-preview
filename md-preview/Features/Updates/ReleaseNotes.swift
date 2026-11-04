@@ -176,6 +176,9 @@ enum ReleaseNotes {
     /// Waits for the document to settle before the capsule appears, so it
     /// never competes with the first paint of a launch.
     private static let announcementDelay: TimeInterval = 0.8
+    /// How long to wait before asking again while the capsule shows an
+    /// update step.
+    private static let busyRetryDelay: TimeInterval = 10
     private static var hadUsedAppBeforeLaunch = false
     private static var isAnnouncementScheduled = false
     private static var didHandleAnnouncement = false
@@ -209,8 +212,9 @@ enum ReleaseNotes {
                 $0.isVisible && $0.windowController is DocumentWindowController
             }) else { return }
             // An update step waiting for an answer (Download, Relaunch Now)
-            // keeps the capsule; the next window asks again.
+            // keeps the capsule; ask again once it may have gone.
             if let delegate = NSApp.delegate as? AppDelegate, delegate.updaterController.model.phase != .idle {
+                DispatchQueue.main.asyncAfter(deadline: .now() + busyRetryDelay) { announceUpdateIfNeeded() }
                 return
             }
             didHandleAnnouncement = true
