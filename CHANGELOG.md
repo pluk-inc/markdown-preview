@@ -2,16 +2,15 @@
 
 ## [0.0.71] – 2026-11-04 – Quieter updates, dark icon
 
-Markdown Preview 0.0.71 brings quieter updates, release notes after each update, and a dark app icon.
+Markdown Preview 0.0.71 brings a dark app icon, quieter updates, and a clearer name for Share as Link.
 
 ### Added
 
-- **Release Notes After an Update.** After an update, the capsule says “Updated to” the new version with a What’s New button that opens every release since the one you ran before, so nothing you skipped is missed. Help › Release Notes opens the full history ([#618](https://github.com/pluk-inc/markdown-preview/pull/618)).
 - **Dark App Icon.** The app icon has a dark version that macOS shows in dark mode, instead of a bright white tile ([#607](https://github.com/pluk-inc/markdown-preview/pull/607)).
 
 ### Changed
 
-- **Quieter Updates.** A small capsule in the bottom corner of the window shows each update step, from Download to a progress ring to Relaunch Now, so updates no longer open windows over what you’re reading ([#613](https://github.com/pluk-inc/markdown-preview/pull/613)).
+- **Quieter Updates.** A small capsule in the bottom corner of the window shows each update step, from Download to a progress ring to Relaunch Now, so updates no longer open windows over what you’re reading. After the update, its What’s New button opens every release since the one you ran before ([#613](https://github.com/pluk-inc/markdown-preview/pull/613), [#618](https://github.com/pluk-inc/markdown-preview/pull/618)).
 - **Publish to Web Is Now Share as Link.** The File menu and the Share popover now call it Share as Link, with a link icon, because it makes a private, encrypted link that expires in 7 days, not a public web page ([#619](https://github.com/pluk-inc/markdown-preview/pull/619)).
 - **Separate Zoom and Action Pills on Diagrams.** Diagram controls split into one pill for zoom and one for Copy and Open in Window, making each set of buttons easier to find ([#611](https://github.com/pluk-inc/markdown-preview/pull/611)).
 
