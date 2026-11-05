@@ -7,6 +7,7 @@
 
 import Cocoa
 
+@MainActor
 final class FileWatcher {
     private static let moveResolutionDelay: TimeInterval = 0.20
 
