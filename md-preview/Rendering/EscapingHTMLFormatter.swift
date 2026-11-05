@@ -1344,7 +1344,12 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     /// (#522). Lists that stay below 100 keep the default gutter and carry no
     /// attribute. The editor mirrors the same rule from the source markers.
     static func markerDigitsAttribute(for orderedList: OrderedList) -> String {
-        let lastNumber = Int(orderedList.startIndex) + max(orderedList.childCount, 1) - 1
+        markerDigitsAttribute(lastNumber: Int(orderedList.startIndex) + max(orderedList.childCount, 1) - 1)
+    }
+
+    /// The same attribute for any `<ol>` whose last marker is `lastNumber`,
+    /// such as the footnotes list, which the renderer writes by hand.
+    static func markerDigitsAttribute(lastNumber: Int) -> String {
         let digits = min(String(lastNumber).count, maximumMarkerDigits)
         return digits > 2 ? " data-mdp-digits=\"\(digits)\"" : ""
     }
