@@ -23,6 +23,8 @@ final class FileWatcher {
     /// The pending move resolution or reopen retry. Only one is pending at
     /// a time, and `cancel()` stops it, so no descriptor opens after cancel.
     private var pendingReopen: DispatchWorkItem?
+    /// Failed tries to open the missing file. Tests wait on it.
+    private(set) var failedReopenCount = 0
 
     init(url: URL, onChange: @escaping () -> Void) {
         self.url = url
@@ -97,6 +99,7 @@ final class FileWatcher {
             scheduleChange()
             return
         }
+        failedReopenCount += 1
         schedulePending(after: FileWatcherMoveResolution.reopenDelay(attempt: attempt)) { [weak self] in
             self?.reopenWhenAvailable(attempt: attempt + 1)
         }

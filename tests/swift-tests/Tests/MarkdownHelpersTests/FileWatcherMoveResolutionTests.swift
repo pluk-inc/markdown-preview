@@ -52,6 +52,20 @@ final class FileWatcherMoveResolutionTests: XCTestCase {
         )
     }
 
+    func testOriginalPathIsNotARenameTargetWhenItReappearsDuringTheCheck() {
+        var checks = 0
+        XCTAssertNil(
+            FileWatcherMoveResolution.renameTarget(
+                originalURL: originalURL,
+                movedURL: originalURL,
+                fileExists: { _ in
+                    checks += 1
+                    return checks > 1
+                }
+            )
+        )
+    }
+
     func testReopenDelayStartsShortAndBacksOffToOneSecond() {
         XCTAssertEqual(FileWatcherMoveResolution.reopenDelay(attempt: 0), 0.05, accuracy: 0.0001)
         XCTAssertEqual(FileWatcherMoveResolution.reopenDelay(attempt: 1), 0.10, accuracy: 0.0001)
