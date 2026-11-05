@@ -10,45 +10,53 @@ final class FileWatcherMoveResolutionTests: XCTestCase {
         let existing = Set([originalURL, backupURL])
 
         XCTAssertEqual(
-            FileWatcherMoveResolution.resolve(
+            FileWatcherMoveResolution.renameTarget(
                 originalURL: originalURL,
                 movedURL: backupURL,
                 fileExists: { existing.contains($0) }
             ),
-            .reloadOriginal
+            nil
         )
     }
 
     func testRenameIsFollowedWhenOriginalPathStaysAbsent() {
         XCTAssertEqual(
-            FileWatcherMoveResolution.resolve(
+            FileWatcherMoveResolution.renameTarget(
                 originalURL: originalURL,
                 movedURL: backupURL,
                 fileExists: { $0 == self.backupURL }
             ),
-            .followRename(backupURL)
+            backupURL
         )
     }
 
-    func testDeleteWithoutMovedFileRemainsUnavailable() {
+    func testDeleteWithoutMovedFileKeepsOriginalPath() {
         XCTAssertEqual(
-            FileWatcherMoveResolution.resolve(
+            FileWatcherMoveResolution.renameTarget(
                 originalURL: originalURL,
                 movedURL: nil,
                 fileExists: { _ in false }
             ),
-            .unavailable
+            nil
         )
     }
 
     func testOriginalDescriptorPathIsNotTreatedAsRename() {
         XCTAssertEqual(
-            FileWatcherMoveResolution.resolve(
+            FileWatcherMoveResolution.renameTarget(
                 originalURL: originalURL,
                 movedURL: originalURL,
                 fileExists: { _ in false }
             ),
-            .unavailable
+            nil
         )
+    }
+
+    func testReopenDelayStartsShortAndBacksOffToOneSecond() {
+        XCTAssertEqual(FileWatcherMoveResolution.reopenDelay(attempt: 0), 0.05, accuracy: 0.0001)
+        XCTAssertEqual(FileWatcherMoveResolution.reopenDelay(attempt: 1), 0.10, accuracy: 0.0001)
+        XCTAssertEqual(FileWatcherMoveResolution.reopenDelay(attempt: 4), 0.80, accuracy: 0.0001)
+        XCTAssertEqual(FileWatcherMoveResolution.reopenDelay(attempt: 5), 1.0)
+        XCTAssertEqual(FileWatcherMoveResolution.reopenDelay(attempt: 500), 1.0)
     }
 }

@@ -18,20 +18,25 @@ final class FileWatcher {
     /// new path. Plain deletes don't fire this (path unchanged).
     var onRename: ((URL) -> Void)?
     private var source: DispatchSourceFileSystemObject?
-    private var fileDescriptor: Int32 = -1
     private var debounce: DispatchWorkItem?
-    private var moveResolution: DispatchWorkItem?
+    /// The pending move resolution or reopen retry. Only one is pending at
+    /// a time, and `cancel()` stops it, so no descriptor opens after cancel.
+    private var pendingReopen: DispatchWorkItem?
 
     init(url: URL, onChange: @escaping () -> Void) {
         self.url = url
         self.onChange = onChange
-        open()
+        if !open() {
+            reopenWhenAvailable(attempt: 0)
+        }
     }
 
-    private func open() {
+    /// Opens the path and arms one source on it. Returns false when the
+    /// file is not there (yet).
+    @discardableResult
+    private func open() -> Bool {
         let fd = Darwin.open(url.path, O_EVTONLY)
-        guard fd >= 0 else { return }
-        fileDescriptor = fd
+        guard fd >= 0 else { return false }
 
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
@@ -46,65 +51,66 @@ final class FileWatcher {
             // For an actual user-visible rename, the FD's resolved path
             // differs from the watcher's URL — surface that to the host.
             if !event.intersection([.delete, .rename, .revoke]).isEmpty {
-                self.resolveMove(afterSettlingAt: self.currentPath())
+                self.resolveMove(afterSettlingAt: Self.currentPath(of: fd))
                 return
             }
             self.scheduleChange()
         }
-        source.setCancelHandler { [weak self] in
-            guard let self else { return }
-            if self.fileDescriptor >= 0 {
-                Darwin.close(self.fileDescriptor)
-                self.fileDescriptor = -1
-            }
+        // Close the descriptor this source was made with, never a shared
+        // one: closing a newer descriptor here left this one open on the
+        // old inode.
+        source.setCancelHandler {
+            Darwin.close(fd)
         }
         self.source = source
         source.resume()
+        return true
     }
 
     private func resolveMove(afterSettlingAt movedURL: URL?) {
-        moveResolution?.cancel()
         debounce?.cancel()
         source?.cancel()
         source = nil
 
-        let work = DispatchWorkItem { [weak self] in
+        schedulePending(after: Self.moveResolutionDelay) { [weak self] in
             guard let self else { return }
-            self.moveResolution = nil
-            let resolution = FileWatcherMoveResolution.resolve(
+            if let newURL = FileWatcherMoveResolution.renameTarget(
                 originalURL: self.url,
                 movedURL: movedURL,
                 fileExists: { FileManager.default.fileExists(atPath: $0.path) }
-            )
-            switch resolution {
-            case .reloadOriginal:
-                self.open()
-                self.scheduleChange()
-            case .followRename(let newURL):
+            ) {
                 self.onRename?(newURL)
-            case .unavailable:
-                self.reopen()
+            } else {
+                // A save that deletes the file and writes it again can
+                // leave the path empty for a moment, or for as long as the
+                // writer takes. Keep trying the original path.
+                self.reopenWhenAvailable(attempt: 0)
             }
         }
-        moveResolution = work
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + Self.moveResolutionDelay,
-            execute: work
-        )
     }
 
-    private func reopen() {
-        source?.cancel()
-        source = nil
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-            self?.open()
+    /// Re-arms the watcher on the original path and reloads, or tries
+    /// again later while the path has no file.
+    private func reopenWhenAvailable(attempt: Int) {
+        if open() {
+            scheduleChange()
+            return
+        }
+        schedulePending(after: FileWatcherMoveResolution.reopenDelay(attempt: attempt)) { [weak self] in
+            self?.reopenWhenAvailable(attempt: attempt + 1)
         }
     }
 
-    private func currentPath() -> URL? {
-        guard fileDescriptor >= 0 else { return nil }
+    private func schedulePending(after delay: TimeInterval, _ body: @escaping () -> Void) {
+        pendingReopen?.cancel()
+        let work = DispatchWorkItem(block: body)
+        pendingReopen = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    private static func currentPath(of fd: Int32) -> URL? {
         var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
-        guard fcntl(fileDescriptor, F_GETPATH, &buffer) == 0 else { return nil }
+        guard fcntl(fd, F_GETPATH, &buffer) == 0 else { return nil }
         return URL(fileURLWithFileSystemRepresentation: buffer,
                    isDirectory: false,
                    relativeTo: nil)
@@ -119,7 +125,7 @@ final class FileWatcher {
 
     func cancel() {
         debounce?.cancel()
-        moveResolution?.cancel()
+        pendingReopen?.cancel()
         source?.cancel()
         source = nil
     }
