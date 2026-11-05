@@ -146,7 +146,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Read this synchronously: currentAppleEvent is only meaningful while
         // AppKit is dispatching the launch event, not in the deferred prompt.
-        let launchedAsLoginItem = Self.isLoginItemLaunch(NSAppleEventManager.shared().currentAppleEvent)
+        let launchedAsLoginItem = LaunchReason.isLoginItemLaunch(NSAppleEventManager.shared().currentAppleEvent)
         let signpost = LaunchSignposts.begin("didFinishLaunching")
         defer { LaunchSignposts.end(signpost) }
         let storedAppearance = AppearanceMode.migrateLegacyValue()
@@ -181,17 +181,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) { [weak self] in
             self?.startDeferredLaunchServices()
         }
-    }
-
-    /// Check the launch reason, not whether the app is registered as a login
-    /// item: a registered app can still be opened manually. A missing event
-    /// (for example, an Xcode launch) preserves the normal prompt behavior.
-    static func isLoginItemLaunch(_ event: NSAppleEventDescriptor?) -> Bool {
-        guard let event,
-              event.eventClass == AEEventClass(kCoreEventClass),
-              event.eventID == AEEventID(kAEOpenApplication) else { return false }
-        return event.paramDescriptor(forKeyword: AEKeyword(keyAEPropData))?.enumCodeValue
-            == OSType(keyAELaunchedAsLogInItem)
     }
 
     /// Sparkle and Sentry both do XPC and file work at start; neither is
