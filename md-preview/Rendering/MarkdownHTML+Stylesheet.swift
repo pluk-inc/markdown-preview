@@ -745,9 +745,10 @@ nonisolated extension MarkdownHTML {
     .footnotes hr {
         margin: 0 0 1em;
     }
+    /* No padding of its own: footnotes use the ordered-list gutter, which
+       fits "10." and grows from "100." on. */
     .footnotes ol {
         margin-top: 0;
-        padding-left: 1.45em;
     }
     .footnotes li {
         margin-top: 0.72em;
