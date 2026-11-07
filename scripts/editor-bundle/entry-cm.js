@@ -2344,9 +2344,9 @@ function buildDecorations(view, detectedCodeCache) {
     switch (node.name) {
       case "Blockquote": {
         // Alert blockquotes render as .markdown-alert; recognize the same
-        // five kinds as EscapingHTMLFormatter.
+        // `[!type]` tags as EscapingHTMLFormatter (any type is an alert).
         const firstLine = state.doc.lineAt(node.from)
-        return /^ {0,3}> ?\[!(note|tip|important|warning|caution)\]/i.test(firstLine.text)
+        return /^ {0,3}> ?\[![A-Za-z][A-Za-z0-9_-]*\]/.test(firstLine.text)
           ? METRICS.alert : METRICS.quote
       }
       case "MathBlock": return METRICS.math
