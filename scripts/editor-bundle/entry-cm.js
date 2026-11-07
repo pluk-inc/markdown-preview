@@ -18,7 +18,7 @@ import {
   syntaxTree, syntaxTreeAvailable, ensureSyntaxTree, syntaxHighlighting, HighlightStyle,
   indentUnit, languageDataProp, LanguageDescription, LanguageSupport, StreamLanguage,
 } from "@codemirror/language"
-import { highlightTree, tags as t } from "@lezer/highlight"
+import { highlightTree, styleTags, tags as t } from "@lezer/highlight"
 import { javascript } from "@codemirror/lang-javascript"
 import { python } from "@codemirror/lang-python"
 import { json } from "@codemirror/lang-json"
@@ -35,7 +35,7 @@ import { sql } from "@codemirror/legacy-modes/mode/sql"
 import { toml } from "@codemirror/legacy-modes/mode/toml"
 import { mathSyntax } from "./math.js"
 import { stexMath } from "@codemirror/legacy-modes/mode/stex"
-import { hcl } from "codemirror-lang-hcl"
+import { hclLanguage } from "codemirror-lang-hcl"
 
 // ---------------------------------------------------------------------------
 // Fenced-code languages
@@ -91,7 +91,16 @@ const codeLanguages = [
   LanguageDescription.of({ name: "json", alias: ["jsonc"], support: json() }),
   LanguageDescription.of({ name: "css", alias: ["scss"], support: css() }),
   LanguageDescription.of({ name: "html", alias: ["htm", "xml"], support: html() }),
-  LanguageDescription.of({ name: "hcl", alias: ["terraform", "tf"], support: hcl() }),
+  LanguageDescription.of({
+    name: "hcl",
+    alias: ["terraform", "tf"],
+    // codemirror-lang-hcl 0.2 tags block types as type names and labels as
+    // label names. Keep `resource "aws_instance" "web"` as keyword + strings,
+    // which matches the reader's highlight.js colours.
+    support: new LanguageSupport(hclLanguage.configure({
+      props: [styleTags({ "BlockType!": t.definitionKeyword, "BlockLabel!": t.string })],
+    })),
+  }),
   legacy("swift", [], swift),
   legacy("shell", ["sh", "bash", "zsh", "console"], shell),
   legacy("yaml", ["yml"], yaml),

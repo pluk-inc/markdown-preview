@@ -876,6 +876,9 @@ for (const language of ["hcl", "terraform", "tf"]) {
   check(`${language} fence highlights HCL block keywords`,
     Array.from(hclHost.querySelectorAll(".hl-keyword"))
       .some((node) => node.textContent === "resource"))
+  check(`${language} fence highlights HCL block labels as strings`,
+    Array.from(hclHost.querySelectorAll(".hl-string"))
+      .some((node) => node.textContent.includes("random_pet")))
   check(`${language} fence highlights HCL strings`,
     Array.from(hclHost.querySelectorAll(".hl-string"))
       .some((node) => node.textContent.includes("hashicorp/random")))
