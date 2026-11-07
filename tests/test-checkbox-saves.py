@@ -80,6 +80,9 @@ final class NSDocumentController {
     static let shared = NSDocumentController()
     func noteNewRecentDocumentURL(_ url: URL) {}
 }
+enum ReleaseNotes {
+    static func displayName(for url: URL) -> String { url.lastPathComponent }
+}
 final class Document {
     var contents = ""
     func replaceContents(markdown: String, fileURL: URL? = nil) { contents = markdown }
