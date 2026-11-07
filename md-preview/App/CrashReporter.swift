@@ -34,7 +34,6 @@ enum CrashReporter {
             options.sendDefaultPii = false
             options.enableAutoSessionTracking = false
             options.tracesSampleRate = 0
-            options.profilesSampleRate = 0
             options.enableAppHangTracking = false
             options.enableNetworkTracking = false
             options.enableFileIOTracing = false
