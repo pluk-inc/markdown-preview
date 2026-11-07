@@ -144,6 +144,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Read this synchronously: currentAppleEvent is only meaningful while
+        // AppKit is dispatching the launch event, not in the deferred prompt.
+        let launchedAsLoginItem = LaunchReason.isLoginItemLaunch(NSAppleEventManager.shared().currentAppleEvent)
         let signpost = LaunchSignposts.begin("didFinishLaunching")
         defer { LaunchSignposts.end(signpost) }
         let storedAppearance = AppearanceMode.migrateLegacyValue()
@@ -168,7 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         installReleaseNotesMenuItem()
         installViewMenuItemIcons()
         hasFinishedLaunching = true
-        if !didReceiveOpenURLsDuringLaunch {
+        if !didReceiveOpenURLsDuringLaunch && !launchedAsLoginItem {
             scheduleDocumentPrompt(requiresNoDocuments: true)
         }
         // Nothing below is visible in the first frame. A document opened
