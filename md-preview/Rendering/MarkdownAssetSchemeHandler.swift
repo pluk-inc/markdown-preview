@@ -12,7 +12,8 @@ import WebKit
 /// `<base>` mirrors the document folder — see `MarkdownAssetResolution`),
 /// so links and images may reference parent folders. The host process has
 /// read access, so FileManager reads succeed even though the WKWebView's
-/// content process is sandboxed separately.
+/// content process is sandboxed separately. That access covers the whole
+/// disk, so user files go through `MarkdownAssetResolution.servableFile`.
 nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
 
     nonisolated static let scheme = MarkdownAssetResolution.scheme
@@ -99,7 +100,7 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
             // on the user-file base URL — they must load even before/without
             // sandbox access to the user's folder.
             if let vendorURL = Self.resolveVendor(requestURL) {
-                Self.serve(file: vendorURL, requestURL: requestURL, task: wrapper, cacheable: true)
+                Self.serveVendor(vendorURL, requestURL: requestURL, task: wrapper)
                 return
             }
 
@@ -107,32 +108,38 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
             // location is loaded — the base is nil for unsaved documents
             // and the warmup page.
             guard base != nil,
-                  let resolved = MarkdownAssetResolution.fileURL(for: requestURL) else {
+                  let file = MarkdownAssetResolution.servableFile(for: requestURL) else {
                 wrapper.fail(with: URLError(.badURL))
                 return
             }
-            Self.serve(file: resolved, requestURL: requestURL, task: wrapper, cacheable: false)
+            guard let data = try? Data(contentsOf: file.url) else {
+                wrapper.fail(with: URLError(.fileDoesNotExist))
+                return
+            }
+            Self.respond(with: data, mimeType: Self.mimeType(file.type), requestURL: requestURL, task: wrapper)
         }
     }
 
-    private nonisolated static func serve(file resolved: URL,
-                                          requestURL: URL,
-                                          task: TaskWrapper,
-                                          cacheable: Bool) {
+    private nonisolated static func serveVendor(_ file: URL, requestURL: URL, task: TaskWrapper) {
         let data: Data
-        if cacheable, let cached = vendorDataCache.data(for: resolved) {
+        if let cached = vendorDataCache.data(for: file) {
             data = cached
         } else {
-            guard let read = try? Data(contentsOf: resolved) else {
+            guard let read = try? Data(contentsOf: file) else {
                 task.fail(with: URLError(.fileDoesNotExist))
                 return
             }
-            if cacheable {
-                vendorDataCache.set(read, for: resolved)
-            }
+            vendorDataCache.set(read, for: file)
             data = read
         }
-        let mime = mimeType(for: resolved)
+        respond(with: data, mimeType: mimeType(UTType(filenameExtension: file.pathExtension)),
+                requestURL: requestURL, task: task)
+    }
+
+    private nonisolated static func respond(with data: Data,
+                                            mimeType mime: String,
+                                            requestURL: URL,
+                                            task: TaskWrapper) {
         let response = HTTPURLResponse(
             url: requestURL,
             statusCode: 200,
@@ -231,8 +238,7 @@ nonisolated final class MarkdownAssetScheme: NSObject, WKURLSchemeHandler {
         }
     }
 
-    private nonisolated static func mimeType(for url: URL) -> String {
-        UTType(filenameExtension: url.pathExtension)?.preferredMIMEType
-            ?? "application/octet-stream"
+    private nonisolated static func mimeType(_ type: UTType?) -> String {
+        type?.preferredMIMEType ?? "application/octet-stream"
     }
 }

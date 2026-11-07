@@ -17,7 +17,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/swiftlang/swift-markdown.git",
-            from: "0.7.3"
+            from: "0.9.0"
         ),
     ],
     targets: [

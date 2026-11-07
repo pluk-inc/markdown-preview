@@ -4,19 +4,21 @@
 //
 
 import Foundation
+import ImageIO
 import Markdown
+import UniformTypeIdentifiers
 
-/// Pure-Foundation path logic for the `md-asset` custom scheme, shared by
-/// the scheme handler (asset serving) and the web view's navigation
-/// delegate (link clicks). WebKit-free so it can be unit-tested in the
-/// SPM helper package.
+/// Path logic for the `md-asset` custom scheme, shared by the scheme
+/// handler (asset serving) and the web view's navigation delegate (link
+/// clicks). WebKit-free so it can be unit-tested in the SPM helper package.
 ///
 /// The rendered page's `<base>` mirrors the document folder's absolute
 /// filesystem path, so WebKit resolves relative references — including
 /// `../` links into parent folders — before they ever reach the app. An
 /// `md-asset` URL's path therefore *is* the absolute path of the file it
 /// names. Reads outside the document folder are covered by the app's
-/// read-only absolute-path sandbox exception.
+/// read-only absolute-path sandbox exception, which is why the handler
+/// serves only what `servableFile(for:)` allows.
 nonisolated enum MarkdownAssetResolution {
 
     static let scheme = "md-asset"
@@ -52,6 +54,32 @@ nonisolated enum MarkdownAssetResolution {
         let path = assetURL.path
         guard path.count > 1, path.hasPrefix("/") else { return nil }
         return URL(fileURLWithPath: path).standardizedFileURL
+    }
+
+    // MARK: - What the page may load
+
+    /// The file a page request for `assetURL` may read, and its type, or
+    /// `nil` to refuse it. The page only loads media through this scheme —
+    /// images, video, audio and PDFs; link clicks are opened by the app, not
+    /// fetched — so every other file is refused, and a script that got past
+    /// the sanitizer cannot read SSH keys, `.env` files or other documents.
+    ///
+    /// Symbolic links are followed first, so `pic.png -> ~/.ssh/id_ed25519`
+    /// is judged by its target. A file without a media extension passes only
+    /// when its header decodes as an image, which is read before the file is.
+    static func servableFile(for assetURL: URL) -> (url: URL, type: UTType)? {
+        guard let file = fileURL(for: assetURL)?.resolvingSymlinksInPath(),
+              (try? file.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true
+        else { return nil }
+        if let type = UTType(filenameExtension: file.pathExtension),
+           [.image, .audiovisualContent, .pdf].contains(where: type.conforms(to:)) {
+            return (file, type)
+        }
+        guard let source = CGImageSourceCreateWithURL(file as CFURL, nil),
+              let identifier = CGImageSourceGetType(source),
+              let type = UTType(identifier as String)
+        else { return nil }
+        return (file, type)
     }
 
     // MARK: - Image storage helpers

@@ -20,10 +20,10 @@
     "@codemirror/state": "^6",
     "@codemirror/view": "^6",
     "@lezer/highlight": "^1",
-    "codemirror-lang-hcl": "0.1.0"
+    "codemirror-lang-hcl": "0.2.0"
   },
   "devDependencies": {
-    "esbuild": "^0.25",
+    "esbuild": "^0.28",
     "jsdom": "^24.1.3"
   }
 }
