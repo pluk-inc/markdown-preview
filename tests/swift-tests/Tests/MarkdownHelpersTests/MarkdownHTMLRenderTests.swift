@@ -2584,6 +2584,18 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(rendered.articleHTML.contains("class=\"math"))
     }
 
+    func testEscapedCitationBracketsRemainLiteral() {
+        let rendered = MarkdownHTML.render(
+            markdown: #"- Higher requirements.\[18\]\[19\]\[3, 4\]\[5–7\]"#,
+            vendorLoading: .lazy
+        )
+
+        XCTAssertFalse(rendered.containsMath, rendered.articleHTML)
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "Higher requirements.[18][19][3, 4][5–7]"
+        ), rendered.articleHTML)
+    }
+
     func testEscapedLinkBracketsDoNotHideAdjacentDisplayMath() {
         let rendered = MarkdownHTML.render(
             markdown: #"""
