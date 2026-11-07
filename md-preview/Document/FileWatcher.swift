@@ -5,7 +5,7 @@
 //  Watches an open document's file for changes, renames, and deletion.
 //
 
-import Cocoa
+import Foundation
 
 @MainActor
 final class FileWatcher {
@@ -22,8 +22,9 @@ final class FileWatcher {
     private var debounce: DispatchWorkItem?
     /// The pending move resolution or reopen retry. Only one is pending at
     /// a time, and `cancel()` stops it, so no descriptor opens after cancel.
-    private var pendingReopen: DispatchWorkItem?
-    /// Failed tries to open the missing file. Tests wait on it.
+    private var pendingWork: DispatchWorkItem?
+    /// Failed tries to open the file since it went missing; back to 0 once
+    /// it opens. Tests wait on it.
     private(set) var failedReopenCount = 0
 
     init(url: URL, onChange: @escaping () -> Void) {
@@ -96,6 +97,7 @@ final class FileWatcher {
     /// again later while the path has no file.
     private func reopenWhenAvailable(attempt: Int) {
         if open() {
+            failedReopenCount = 0
             scheduleChange()
             return
         }
@@ -106,9 +108,9 @@ final class FileWatcher {
     }
 
     private func schedulePending(after delay: TimeInterval, _ body: @escaping () -> Void) {
-        pendingReopen?.cancel()
+        pendingWork?.cancel()
         let work = DispatchWorkItem(block: body)
-        pendingReopen = work
+        pendingWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
@@ -129,7 +131,7 @@ final class FileWatcher {
 
     func cancel() {
         debounce?.cancel()
-        pendingReopen?.cancel()
+        pendingWork?.cancel()
         source?.cancel()
         source = nil
     }

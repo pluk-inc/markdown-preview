@@ -42,17 +42,8 @@ final class FileWatcherMoveResolutionTests: XCTestCase {
     }
 
     func testOriginalDescriptorPathIsNotTreatedAsRename() {
-        XCTAssertEqual(
-            FileWatcherMoveResolution.renameTarget(
-                originalURL: originalURL,
-                movedURL: originalURL,
-                fileExists: { _ in false }
-            ),
-            nil
-        )
-    }
-
-    func testOriginalPathIsNotARenameTargetWhenItReappearsDuringTheCheck() {
+        // Missing on the first check, present after: only the same-path
+        // rule keeps the original path from being returned as the target.
         var checks = 0
         XCTAssertNil(
             FileWatcherMoveResolution.renameTarget(

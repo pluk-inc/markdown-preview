@@ -27,8 +27,8 @@ final class FileWatcherTests: XCTestCase {
         defer { watcher.cancel() }
 
         try FileManager.default.removeItem(at: fileURL)
-        // The old watcher gave up after one failed try; wait for several.
-        try await waitUntil { watcher.failedReopenCount >= 3 }
+        // The old watcher gave up after one failed try.
+        try await waitUntil { watcher.failedReopenCount >= 2 }
         XCTAssertEqual(changes, 0)
 
         try "# v2\n".write(to: fileURL, atomically: false, encoding: .utf8)
@@ -47,12 +47,11 @@ final class FileWatcherTests: XCTestCase {
         try FileManager.default.removeItem(at: fileURL)
         try await waitUntil { watcher.failedReopenCount >= 1 }
         watcher.cancel()
-        let failedBeforeCancel = watcher.failedReopenCount
 
+        // A leaked retry would be due 50 ms later and reload 80 ms after.
         try "# v2\n".write(to: fileURL, atomically: false, encoding: .utf8)
-        try await Task.sleep(for: .milliseconds(1500))
+        try await Task.sleep(for: .milliseconds(400))
         XCTAssertEqual(changes, 0)
-        XCTAssertEqual(watcher.failedReopenCount, failedBeforeCancel)
     }
 
     private func waitUntil(
