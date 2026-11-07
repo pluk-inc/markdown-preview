@@ -30,11 +30,11 @@ nonisolated extension MarkdownHTML {
         try! NSRegularExpression(pattern: #"\$\$([\s\S]+?)\$\$"#)
     }()
 
-    // `\[18\]` and `\[3, 4\]` are escaped citation brackets, not display
-    // math: leave them for the Markdown parser to unescape.
+    // `\[18\]` and `\[3, 4\]` on one line are escaped citation brackets, not
+    // display math: leave them for the Markdown parser to unescape.
     private static let bracketedBlockMathRegex: NSRegularExpression = {
         // swiftlint:disable:next force_try
-        try! NSRegularExpression(pattern: #"(?<!\\)\\\[(?!\s*\d+(?:\s*[,–-]\s*\d+)*\s*\\\])([\s\S]+?)\\\]"#)
+        try! NSRegularExpression(pattern: #"(?<!\\)\\\[(?![ \t]*\d+(?:[ \t]*[,–-][ \t]*\d+)*[ \t]*\\\])([\s\S]+?)\\\]"#)
     }()
 
     private static let singleBackslashBracketRegex: NSRegularExpression = {
@@ -303,7 +303,14 @@ nonisolated extension MarkdownHTML {
             let indexRange = wrapped ? match.range(at: 3) : match.range(at: 5)
             let isBlock = nsHtml.substring(with: kindRange) == "Block"
             let index = Int(nsHtml.substring(with: indexRange)) ?? 0
-            let latex = isBlock ? math.blocks[index] : math.inlines[index]
+            let extracted = isBlock ? math.blocks : math.inlines
+            // Source text can spell a token; only indices we produced are math.
+            guard extracted.indices.contains(index) else {
+                rebuilt += nsHtml.substring(with: match.range)
+                cursor = match.range.location + match.range.length
+                continue
+            }
+            let latex = extracted[index]
             let escaped = htmlEscape(latex)
             var sourceAttributes = wrapped
                 ? nsHtml.substring(with: match.range(at: 1))
