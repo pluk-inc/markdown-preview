@@ -69,6 +69,47 @@ final class OrderedListMarkerTests: XCTestCase {
         }
     }
 
+    /// Footnotes render their own `<ol>`, which had a narrower one-digit
+    /// gutter, so "10." hung past it and lost its first digit at the page
+    /// edge (pluk-inc/markdown-preview#617). They now share the ordered-list
+    /// gutter that the test above measures, so this checks only that the
+    /// widest marker fits and that the list carries its digit count.
+    func testFootnoteGutterFitsEveryMarker() async throws {
+        for count in [12, 120] {
+            let references = (1...count).map { "Claim \($0).[^n\($0)]\n" }
+            let definitions = (1...count).map { "[^n\($0)]: Note \($0)." }
+            let markdown = (["# Notes", ""] + references + definitions).joined(separator: "\n")
+            let html = MarkdownHTML.render(markdown: markdown, contentWidth: .full).html
+            let harness = WebViewLayoutHarness(html: html, width: 700, isEditor: false, height: 900)
+            defer { harness.close() }
+            _ = try await harness.layout(texts: ["Note \(count)."], imageCount: 0)
+            let result = try await harness.webView.evaluateJavaScript("""
+                (() => {
+                    const list = document.querySelector('.footnotes ol');
+                    const last = list.lastElementChild;
+                    // The outside ::marker paints "N. " right-aligned in the
+                    // gutter, in the item's own font.
+                    const probe = document.createElement('span');
+                    probe.style.whiteSpace = 'pre';
+                    probe.style.fontVariantNumeric = 'tabular-nums';
+                    probe.textContent = list.children.length + '. ';
+                    last.appendChild(probe);
+                    const markerWidth = probe.getBoundingClientRect().width;
+                    probe.remove();
+                    const gutter = last.getBoundingClientRect().left
+                        + parseFloat(getComputedStyle(last).paddingInlineStart)
+                        - list.getBoundingClientRect().left;
+                    return { digits: list.getAttribute('data-mdp-digits'), markerWidth, gutter };
+                })()
+                """) as! [String: Any]
+            let digits = String(count).count
+            XCTAssertEqual(result["digits"] as? String, digits > 2 ? String(digits) : nil, "\(count) footnotes")
+            let markerWidth = try XCTUnwrap(result["markerWidth"] as? Double)
+            let gutter = try XCTUnwrap(result["gutter"] as? Double)
+            XCTAssertGreaterThanOrEqual(gutter, markerWidth, "\(count) footnotes: marker hangs past the list edge")
+        }
+    }
+
     func testEditorMarkerBoxGrowsAndMarkersStayOnOneLine() async throws {
         let editorScript = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         TestVendor.installHighlighterGrammar()

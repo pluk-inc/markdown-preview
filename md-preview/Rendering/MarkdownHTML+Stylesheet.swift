@@ -119,12 +119,21 @@ nonisolated extension MarkdownHTML {
     /// (`codeBlockScript`). CSS, not inline SVG, because the share viewer's
     /// sanitizer drops SVG from the shared page.
     private static func diagramHUDIcon(_ shapes: String) -> String {
+        cssMaskURL(svg: lineIconSVGOpen(stroke: "black") + shapes + "</svg>")
+    }
+
+    /// An SVG document as a CSS `url()` for a mask.
+    private static func cssMaskURL(svg: String) -> String {
         // Single quotes inside, as the url() is double-quoted.
-        let svg = (lineIconSVGOpen(stroke: "black") + shapes + "</svg>")
-            .replacingOccurrences(of: "\"", with: "'")
-        let encoded = svg.replacingOccurrences(of: "<", with: "%3C").replacingOccurrences(of: ">", with: "%3E")
+        let encoded = svg.replacingOccurrences(of: "\"", with: "'")
+            .replacingOccurrences(of: "<", with: "%3C").replacingOccurrences(of: ">", with: "%3E")
         return #"url("data:image/svg+xml,\#(encoded)")"#
     }
+
+    /// The fold chevron of a foldable callout: the Octicon chevron-right, the
+    /// icon set of the callout kinds. A mask, as the share viewer drops SVG.
+    private static let alertChevronMask = cssMaskURL(
+        svg: #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"/></svg>"#)
 
     /// The hairline of a diagram's frame and of the control pills, so the two
     /// match: the text colour, faint, in light and dark alike.
@@ -179,6 +188,183 @@ nonisolated extension MarkdownHTML {
     white-space: pre-wrap;
     font-family: \(codeFontFamily);
     font-size: 0.88em;
+    """
+
+    /// Marks a page as the app's release notes (see `ReleaseNotesFormatter`):
+    /// an empty element with this class at the top of the Markdown turns on
+    /// `releaseNotesCSS`. Keyed on the content, not the page, so it holds when
+    /// an update swaps the article in place.
+    static let releaseNotesClass = "mdp-release-notes"
+    /// The element itself; a page whose Markdown holds it gets
+    /// `releaseNotesCSS`, and no other page does.
+    static let releaseNotesMarker = "<div class=\"\(releaseNotesClass)\"></div>"
+    /// Every rule is scoped to an article that holds the marker.
+    private static let releaseNotesPage = "article.markdown-body:has(> .\(releaseNotesClass))"
+
+    /// Lays the release notes out as a changelog page: per release a gray
+    /// date, a large serif title, the version in a pill, a bold intro and the
+    /// items in columns. The Markdown is
+    ///
+    ///     October 28, 2026
+    ///     ### Title
+    ///     `v0.0.70`
+    ///
+    ///     Intro.
+    ///
+    ///     - **Item title**
+    ///
+    ///       Text.
+    ///
+    ///       <span class="mdp-rn-shipped">…Shipped by …</span>
+    ///
+    ///       <span class="mdp-rn-links">[#1](…)</span>
+    ///
+    /// under `# Year` and `## Month` headings, which only the outline shows.
+    /// Blank source lines keep their spacer elements in the page, so the
+    /// rules allow one between blocks; the spacing here replaces them.
+    static let releaseNotesCSS = """
+    \(releaseNotesPage) {
+        --mdp-rn-muted: color-mix(in srgb, var(--text) 55%, transparent);
+    }
+    \(releaseNotesPage) > :is(.\(releaseNotesClass), .md-source-blank-line) {
+        display: none;
+    }
+    /* Year and month are the outline's rail, not page labels: each release
+       shows its own date. They stay in the flow at zero size, so the
+       outline still scrolls to them. */
+    \(releaseNotesPage) > :is(h1, h2) {
+        border: 0;
+        font-size: 0;
+        height: 0;
+        line-height: 0;
+        margin: 0;
+        overflow: hidden;
+        padding: 0;
+    }
+    /* The date opens a release; the first one opens the page. */
+    \(releaseNotesPage) > p:has(+ h3) {
+        color: var(--mdp-rn-muted);
+        margin-top: 4.5em;
+    }
+    \(releaseNotesPage) > .\(releaseNotesClass) + .md-source-blank-line + h1 + h2 + p:has(+ h3) {
+        margin-top: 0;
+    }
+    \(releaseNotesPage) > h3 {
+        font-family: ui-serif, "New York", Georgia, serif;
+        font-size: 2.6em;
+        font-weight: 400;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+        margin-top: 0.15em;
+        text-wrap: balance;
+    }
+    /* The version pill. */
+    \(releaseNotesPage) > h3 + p { margin-top: 1.1em; }
+    \(releaseNotesPage) > h3 + p > code {
+        background: transparent;
+        border: 1px solid var(--grid);
+        border-radius: 999px;
+        color: var(--text);
+        font-family: inherit;
+        font-size: 0.923em;
+        font-weight: 500;
+        padding: 0.25em 0.75em;
+    }
+    /* The intro. */
+    \(releaseNotesPage) > h3 + p + .md-source-blank-line + p {
+        font-size: 1.154em;
+        font-weight: 600;
+        line-height: 1.45;
+        margin-top: 1.6em;
+        max-width: 36em;
+    }
+    /* The items in two columns, or one when two would be narrower than
+       15em: each column is at least half the row (less the gap), so a third
+       never fits. */
+    \(releaseNotesPage) > ul {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(max(15em, calc((100% - 3em) / 2)), 1fr));
+        gap: 2.4em 3em;
+        margin-top: 2.6em;
+        padding-inline-start: 0;
+    }
+    \(releaseNotesPage) > ul > li { display: block; margin: 0; }
+    \(releaseNotesPage) > ul > li::before { content: none; }
+    \(releaseNotesPage) > ul > li > p { margin-top: 0.5em; }
+    \(releaseNotesPage) > ul > li > p:first-child { margin-top: 0; }
+    \(releaseNotesPage) > ul > li > p:first-child > strong:only-child {
+        font-size: 1.154em;
+        font-weight: 500;
+    }
+    \(releaseNotesPage) > ul > li > p:not(:first-child),
+    \(releaseNotesPage) > ul > li > p:first-child:not(:has(> strong:only-child)) {
+        color: var(--mdp-rn-muted);
+        line-height: 1.55;
+    }
+    /* Who shipped it: avatars, then the first name in medium weight. */
+    \(releaseNotesPage) > ul > li > p:has(> .mdp-rn-shipped) {
+        color: var(--text);
+        margin-top: 1.2em;
+    }
+    \(releaseNotesPage) .mdp-rn-shipped {
+        align-items: center;
+        display: inline-flex;
+        gap: 0.4em;
+    }
+    \(releaseNotesPage) .mdp-rn-shipped img {
+        background: var(--code-bg);
+        border-radius: 50%;
+        height: 1.85em;
+        object-fit: cover;
+        width: 1.85em;
+    }
+    \(releaseNotesPage) .mdp-rn-shipped img:last-of-type { margin-inline-end: 0.3em; }
+    \(releaseNotesPage) .mdp-rn-name { font-weight: 500; }
+    /* Pull requests and issues as pills, each with its icon; "+N" opens
+       the release, which lists the rest. */
+    \(releaseNotesPage) > ul > li > p:has(> .mdp-rn-links) { margin-top: 0.8em; }
+    \(releaseNotesPage) .mdp-rn-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35em;
+    }
+    \(releaseNotesPage) .mdp-rn-links a {
+        align-items: center;
+        border: 1px solid var(--grid);
+        border-radius: 999px;
+        color: var(--mdp-rn-muted);
+        display: inline-flex;
+        font-size: 0.846em;
+        font-variant-numeric: tabular-nums;
+        gap: 0.3em;
+        line-height: 1.4;
+        padding: 0.2em 0.65em 0.2em 0.5em;
+        text-decoration: none;
+        transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+    }
+    \(releaseNotesPage) .mdp-rn-links a::before {
+        background: currentColor;
+        content: "";
+        height: 1em;
+        width: 1em;
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='4' cy='3.5' r='1.75'/%3E%3Ccircle cx='4' cy='12.5' r='1.75'/%3E%3Ccircle cx='12' cy='12.5' r='1.75'/%3E%3Cpath d='M4 5.25v5.5M12 10.75V6.5A2.5 2.5 0 0 0 9.5 4H7.5M9 2.5 7.5 4 9 5.5'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+    \(releaseNotesPage) .mdp-rn-links a[href*="/issues/"]::before {
+        -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5'%3E%3Ccircle cx='8' cy='8' r='6.25'/%3E%3Ccircle cx='8' cy='8' r='1.25' fill='black' stroke='none'/%3E%3C/svg%3E");
+    }
+    \(releaseNotesPage) .mdp-rn-links a[href*="/releases/"] { padding-inline-start: 0.65em; }
+    \(releaseNotesPage) .mdp-rn-links a[href*="/releases/"]::before { content: none; }
+    \(releaseNotesPage) .mdp-rn-links a:hover {
+        background: color-mix(in srgb, var(--link) 8%, transparent);
+        border-color: color-mix(in srgb, var(--link) 45%, transparent);
+        color: var(--link);
+        text-decoration: none;
+    }
+    /* The contributors line. */
+    \(releaseNotesPage) > ul + .md-source-blank-line + p {
+        color: var(--mdp-rn-muted);
+        margin-top: 2.4em;
+    }
     """
 
     static let tableControlsCSS = """
@@ -264,8 +450,6 @@ nonisolated extension MarkdownHTML {
         --grid: -apple-system-separator;
         --accent: var(--link);
         --link: rgb(0, 104, 218);
-        --aside-bg: #f5f5f7;
-        --aside-border: #696969;
         --code-bg: #f9f9f9;
         --code-border: #f0f0f0;
         /* Shared with the editor; class mappings live in MarkdownHTML+Highlight.swift. */
@@ -279,8 +463,6 @@ nonisolated extension MarkdownHTML {
     :root[data-mdp-color-scheme="dark"] {
         color-scheme: dark;
         --link: rgb(65, 156, 255);
-        --aside-bg: #323232;
-        --aside-border: #9a9a9e;
         --code-bg: #262626;
         --code-border: #323232;
         \(darkCodePaletteCSS)
@@ -292,8 +474,6 @@ nonisolated extension MarkdownHTML {
     @media (prefers-color-scheme: dark) {
         :root:not([data-mdp-color-scheme="light"]) {
             --link: rgb(65, 156, 255);
-            --aside-bg: #323232;
-            --aside-border: #9a9a9e;
             --code-bg: #262626;
             --code-border: #323232;
             \(darkCodePaletteCSS)
@@ -568,9 +748,10 @@ nonisolated extension MarkdownHTML {
     .footnotes hr {
         margin: 0 0 1em;
     }
+    /* No padding of its own: footnotes use the ordered-list gutter, which
+       fits "10." and grows from "100." on. */
     .footnotes ol {
         margin-top: 0;
-        padding-left: 1.45em;
     }
     .footnotes li {
         margin-top: 0.72em;
@@ -641,12 +822,16 @@ nonisolated extension MarkdownHTML {
         border: 0;
         \(codeBlockTypeCSS)
     }
-    .md-code-wrap {
-        position: relative;
-        margin: \(paragraphSpacing)px 0 0;
+    /* Code blocks and alerts share one card. */
+    .md-code-wrap,
+    .markdown-alert {
         background: var(--code-bg);
         border: 0.5px solid var(--code-border);
         border-radius: 16px;
+    }
+    .md-code-wrap {
+        position: relative;
+        margin: \(paragraphSpacing)px 0 0;
         overflow: hidden;
     }
     .md-code-wrap > pre { margin: 0; border: 0; border-radius: 0; padding-top: 8px; }
@@ -836,21 +1021,26 @@ nonisolated extension MarkdownHTML {
     }
     blockquote > *:first-child { margin-top: 0; }
 
+    /* Alerts sit on the code block's card (above). Only the icon and title
+       carry the kind's colour, with a brighter value in dark mode. */
     .markdown-alert {
         margin: \(largeBlockSpacing)px 0 0;
         padding: 12px 16px;
-        background: var(--aside-bg);
-        border-left: 4px solid var(--aside-border);
-        border-radius: 6px;
         color: var(--text);
     }
     .markdown-alert > *:first-child { margin-top: 0; }
+    /* The title labels the body, so it sits closer to the body than to the
+       card's top edge, as the code block's language label does. */
+    .markdown-alert > .markdown-alert-title + * { margin-top: 6px; }
     .markdown-alert-title {
         font-weight: 600;
         margin: 0;
         display: flex;
         align-items: center;
         line-height: 1;
+        /* A step below the body, so it reads as a label. */
+        font-size: 0.87em;
+        color: var(--mdp-alert-color);
     }
     .markdown-alert-icon {
         width: 1em;
@@ -859,16 +1049,45 @@ nonisolated extension MarkdownHTML {
         flex: 0 0 auto;
         fill: currentColor;
     }
-    .markdown-alert-note { border-left-color: #0969da; }
-    .markdown-alert-note .markdown-alert-title { color: #0969da; }
-    .markdown-alert-tip { border-left-color: #1a7f37; }
-    .markdown-alert-tip .markdown-alert-title { color: #1a7f37; }
-    .markdown-alert-important { border-left-color: #8250df; }
-    .markdown-alert-important .markdown-alert-title { color: #8250df; }
-    .markdown-alert-warning { border-left-color: #9a6700; }
-    .markdown-alert-warning .markdown-alert-title { color: #9a6700; }
-    .markdown-alert-caution { border-left-color: #d1242f; }
-    .markdown-alert-caution .markdown-alert-title { color: #d1242f; }
+    /* GitHub's alert colours, light and dark. */
+    .markdown-alert-note,
+    .markdown-alert-info,
+    .markdown-alert-todo { --mdp-alert-color: light-dark(#0969da, #4493f8); }
+    .markdown-alert-tip,
+    .markdown-alert-success { --mdp-alert-color: light-dark(#1a7f37, #3fb950); }
+    .markdown-alert-important,
+    .markdown-alert-example { --mdp-alert-color: light-dark(#8250df, #ab7df8); }
+    .markdown-alert-warning { --mdp-alert-color: light-dark(#9a6700, #d29922); }
+    .markdown-alert-caution,
+    .markdown-alert-failure,
+    .markdown-alert-danger,
+    .markdown-alert-bug { --mdp-alert-color: light-dark(#d1242f, #f85149); }
+    .markdown-alert-abstract { --mdp-alert-color: light-dark(#1b7c83, #39c5cf); }
+    .markdown-alert-question { --mdp-alert-color: light-dark(#bc4c00, #db6d28); }
+    .markdown-alert-quote { --mdp-alert-color: var(--secondary); }
+    /* Foldable callouts (`[!faq]-`, `[!faq]+`): the title is the toggle,
+       with a chevron after it that points down while open. */
+    summary.markdown-alert-title {
+        cursor: default;
+        list-style: none;
+    }
+    summary.markdown-alert-title::-webkit-details-marker { display: none; }
+    summary.markdown-alert-title::after {
+        content: "";
+        flex: 0 0 auto;
+        width: 1em;
+        height: 1em;
+        margin-left: 0.35em;
+        background: currentColor;
+        -webkit-mask: \(alertChevronMask) center / contain no-repeat;
+        transition: transform 0.15s ease;
+    }
+    details.markdown-alert[open] > summary.markdown-alert-title::after {
+        transform: rotate(90deg);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        summary.markdown-alert-title::after { transition: none; }
+    }
 
     ul, ol {
         /* Each list owns its gutter, so a nested list does not inherit the
@@ -1026,8 +1245,6 @@ nonisolated extension MarkdownHTML {
             --text: #1d1d1f;
             --secondary: #6e6e73;
             --link: #0066cc;
-            --aside-bg: #f5f5f7;
-            --aside-border: #696969;
             --quote-border: #d2d2d7;
             --code-bg: #f9f9f9;
             --code-border: #f0f0f0;

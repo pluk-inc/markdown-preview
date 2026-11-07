@@ -121,6 +121,59 @@ final class MdPreviewUpdateTests: XCTestCase {
     }
 
     @MainActor
+    func testFoldableCalloutHidesBodyAndFollowsFoldMarkerEdits() async throws {
+        let webView = try await loadHarness(articleAttributes: "")
+
+        func update(intro: String, marker: String) async throws {
+            let html = MarkdownHTML.render(
+                markdown: "\(intro)\n\n> [!faq]\(marker) Question\n> Hidden answer.",
+                vendorLoading: .lazy
+            ).articleHTML
+            _ = try await webView.evaluateJavaScript(
+                "window.MdPreview.update(\(MarkdownHTML.javaScriptStringLiteral(html))); true"
+            )
+        }
+        // Whether the callout is open, and whether its body is rendered.
+        func state() async throws -> String {
+            let value = try await webView.evaluateJavaScript("""
+            (() => {
+                const details = document.querySelector('.markdown-body details.markdown-alert');
+                const body = details.querySelector(':scope > p:not(.markdown-alert-title)');
+                return (details.open ? 'open' : 'closed') + ' ' + (body.checkVisibility() ? 'shown' : 'hidden');
+            })()
+            """)
+            return try XCTUnwrap(value as? String)
+        }
+        func setOpen(_ open: Bool) async throws {
+            _ = try await webView.evaluateJavaScript(
+                "document.querySelector('details.markdown-alert').open = \(open); true"
+            )
+        }
+
+        try await update(intro: "First draft.", marker: "-")
+        var current = try await state()
+        XCTAssertEqual(current, "closed hidden")
+
+        try await setOpen(true)
+        current = try await state()
+        XCTAssertEqual(current, "open shown")
+
+        // An unrelated edit keeps the reader's choice.
+        try await update(intro: "Second draft.", marker: "-")
+        current = try await state()
+        XCTAssertEqual(current, "open shown")
+
+        // A fold marker edit wins over the reader's choice, both ways.
+        try await setOpen(false)
+        try await update(intro: "Second draft.", marker: "+")
+        current = try await state()
+        XCTAssertEqual(current, "open shown")
+        try await update(intro: "Second draft.", marker: "-")
+        current = try await state()
+        XCTAssertEqual(current, "closed hidden")
+    }
+
+    @MainActor
     func testWarmupArticleTakesInnerHTMLReplaceBeforeMorphing() async throws {
         let webView = try await loadHarness(
             articleAttributes: " data-warmup=\"1\" style=\"opacity:0;pointer-events:none\""

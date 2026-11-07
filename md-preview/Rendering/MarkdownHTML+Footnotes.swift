@@ -280,7 +280,7 @@ nonisolated extension MarkdownHTML {
 
             <section class="footnotes" role="doc-endnotes">
             <hr />
-            <ol>
+            <ol\(EscapingHTMLFormatter.markerDigitsAttribute(lastNumber: footnotes.definitions.count))>
             \(items)
             </ol>
             </section>

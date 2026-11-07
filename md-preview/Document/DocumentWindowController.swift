@@ -122,8 +122,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     var copyFeedbackWork: DispatchWorkItem?
     /// The Themes & Settings popover while it is on screen.
     var themesPopover: NSPopover?
-    var publishTipPopover: NSPopover?
-    var publishTipTask: Task<Void, Never>?
+    var shareAsLinkTipPopover: NSPopover?
+    var shareAsLinkTipTask: Task<Void, Never>?
     var formattingPopover: NSPopover?
     /// Armed only while the themes popover is open.
     let themesPopoverEscapeMonitor = EscapeKeyMonitor()
@@ -227,6 +227,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             self?.present(url: url)
         }
         split.onOpenMarkdownLink = { [weak self] url in
+            // "Previous releases" at the end of a version's notes: the
+            // history has to be downloaded before it can open.
+            if ReleaseNotes.isHistoryFile(url) {
+                appDelegate?.openReleaseNotes()
+                return
+            }
             if SettingsModel.shared.opensMarkdownLinksInNewWindows {
                 self?.openInNewWindow(url)
             } else {
@@ -394,15 +400,15 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
-        startPublishToWebTip()
+        startShareAsLinkTip()
     }
 
     func windowDidResignKey(_ notification: Notification) {
-        stopPublishToWebTip()
+        stopShareAsLinkTip()
     }
 
     func windowWillClose(_ notification: Notification) {
-        stopPublishToWebTip()
+        stopShareAsLinkTip()
         searchOpenRequestID = nil
         fullscreenToolbarTheme.restore()
         fileWatcher?.cancel()
@@ -444,10 +450,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if fileURL == nil {
             stopAutoSaveTimer()
         }
-        documentWindow.title = fileURL?.lastPathComponent
-            ?? NSLocalizedString("Untitled", comment: "Window title when no document is open")
+        documentWindow.title = ReleaseNotes.displayName(for: fileURL)
         updateWindowSubtitle()
-        showOutlineForReceivedShare()
+        showOutlineForReadOnlyDocument()
         if let fileURL {
             LaunchSignposts.interval("renderBeforeShow") {
                 renderCurrentDocument(text: markdown, fileURL: fileURL, renderImmediately: true)
@@ -539,7 +544,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         LaunchSignposts.interval("postShow") {
             updateEditToolbarItem()
             // Folder and untitled windows count too.
-            WhatsNewWindow.presentIfNeeded(over: documentWindow)
+            ReleaseNotes.announceUpdateIfNeeded()
             if let fileURL {
                 NSDocumentController.shared.noteNewRecentDocumentURL(fileURL)
                 offerToBecomeDefaultHandlerIfNeeded()
@@ -592,9 +597,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         lastFindQuery = ""
         pendingEditModeURL = preservingEditMode ? url.standardizedFileURL : nil
         markdownDocument?.replaceFileURL(url)
-        documentWindow.title = url.lastPathComponent
+        documentWindow.title = ReleaseNotes.displayName(for: url)
         resetAutoSaveFeedback()
         updateWindowSubtitle()
+        showOutlineForReadOnlyDocument()
         if isFileSwitch {
             split?.clearContent()
         }
@@ -694,7 +700,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         guard currentFileURL != nil else { return }
         currentFileURL = newURL
         markdownDocument?.replaceFileURL(newURL)
-        documentWindow.title = newURL.lastPathComponent
+        documentWindow.title = ReleaseNotes.displayName(for: newURL)
         updateWindowSubtitle()
         NSDocumentController.shared.noteNewRecentDocumentURL(newURL)
         refreshOpenWithItem()
@@ -710,7 +716,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if isEditing { refreshInspectorAfterRename() }
     }
 
-    /// Also read by `WhatsNewWindow` as a sign of earlier use.
+    /// Also read by `ReleaseNotes` as a sign of earlier use.
     static let didOfferDefaultHandlerKey = "MarkdownPreview.didOfferAsDefaultHandler"
 
     private func offerToBecomeDefaultHandlerIfNeeded() {

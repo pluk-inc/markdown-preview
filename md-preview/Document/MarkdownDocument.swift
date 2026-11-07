@@ -103,6 +103,13 @@ final class MarkdownDocument: NSDocument {
         updateChangeCount(.changeCleared)
     }
 
+    /// Release notes are titled by what they hold, not by their cache file
+    /// name; AppKit uses this when it syncs the window and tab title.
+    override var displayName: String! {
+        get { ReleaseNotes.title(for: fileURL) ?? super.displayName }
+        set { super.displayName = newValue }
+    }
+
     func replaceFileURL(_ fileURL: URL) {
         self.fileURL = fileURL
         updateChangeCount(.changeCleared)

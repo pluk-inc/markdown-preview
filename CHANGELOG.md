@@ -1,25 +1,44 @@
 # Changelog
 
-## [0.0.70] – 2026-10-27
+## [0.0.71] – 2026-11-04 – Quieter updates, dark icon
 
-This release adds **Publish to Web**: an encrypted link to a document that anyone can read in a browser. Settings moves to toolbar tabs with a live Appearance pane, ⌘1 to ⌘9 switch between tabs, and code blocks and diagrams share one set of buttons.
+Markdown Preview 0.0.71 brings a dark app icon, quieter updates, and a clearer name for Share as Link.
 
 ### Added
 
-- **Publish to Web.** *File › Publish to Web…* or the Share popover uploads the document and copies a link that anyone can read in a browser for 7 days. The document and its images are encrypted on your Mac, and the key is only in the link, so the server cannot read them. Publish again to update the same link; *File › Manage Shared Document…* copies the link or stops sharing. The web page has a contents rail, code blocks with Copy and Wrap, diagrams, and resizable table columns. The page's *Open in Markdown Preview* button opens the document in the app, read-only. A tip on the Share button points the feature out once ([#567](https://github.com/pluk-inc/markdown-preview/pull/567), [#570](https://github.com/pluk-inc/markdown-preview/pull/570), [#571](https://github.com/pluk-inc/markdown-preview/pull/571), [#573](https://github.com/pluk-inc/markdown-preview/pull/573), [#576](https://github.com/pluk-inc/markdown-preview/pull/576), [#577](https://github.com/pluk-inc/markdown-preview/pull/577), [#581](https://github.com/pluk-inc/markdown-preview/pull/581), [#582](https://github.com/pluk-inc/markdown-preview/pull/582), [#584](https://github.com/pluk-inc/markdown-preview/pull/584), [#585](https://github.com/pluk-inc/markdown-preview/pull/585), [#586](https://github.com/pluk-inc/markdown-preview/pull/586), [#589](https://github.com/pluk-inc/markdown-preview/pull/589), [#592](https://github.com/pluk-inc/markdown-preview/pull/592), [#599](https://github.com/pluk-inc/markdown-preview/pull/599), [#600](https://github.com/pluk-inc/markdown-preview/pull/600)).
-- **Switch tabs with ⌘1 to ⌘9.** ⌘1 to ⌘8 select that tab in the front window and ⌘9 selects the last tab, as in Safari ([#603](https://github.com/pluk-inc/markdown-preview/pull/603)).
-- **Support links.** General settings has a Buy Me a Coffee row that you can close, and About links to Discord and Buy Me a Coffee ([#601](https://github.com/pluk-inc/markdown-preview/pull/601)).
+- **Dark App Icon.** The app icon has a dark version that macOS shows in dark mode, instead of a bright white tile ([#607](https://github.com/pluk-inc/markdown-preview/pull/607)).
 
 ### Changed
 
-- **Redesigned Settings.** Settings uses toolbar tabs: General, Reading, Appearance, Privacy, a new Advanced, and About. Appearance has a live sample page and Themes, Font, Layout, and Colors controls that change open documents at once. The command line tools and the app link approvals moved to Advanced ([#602](https://github.com/pluk-inc/markdown-preview/pull/602)).
-- **One set of buttons on code blocks and diagrams.** Both use the same pill in the top-right corner, with native Liquid Glass on macOS 26 and later. Diagrams trade Fill width for Copy, which copies the Mermaid source, and the buttons use the text colour ([#593](https://github.com/pluk-inc/markdown-preview/pull/593), [#595](https://github.com/pluk-inc/markdown-preview/pull/595), [#599](https://github.com/pluk-inc/markdown-preview/pull/599)).
-- **Sharper diagrams.** The Mermaid renderer is updated to Pele 1.12.0: fewer crossing lines in subgraph flowcharts, CJK labels that wrap between characters, and labels on `style` and `classDef` fills that stay readable ([#596](https://github.com/pluk-inc/markdown-preview/pull/596)).
+- **Quieter Updates.** A small capsule in the bottom corner of the window shows each update step, from Download to a progress ring to Relaunch Now, so updates no longer open windows over what you’re reading. After the update, its What’s New button opens every release since the one you ran before ([#613](https://github.com/pluk-inc/markdown-preview/pull/613), [#618](https://github.com/pluk-inc/markdown-preview/pull/618)).
+- **Publish to Web Is Now Share as Link.** The File menu and the Share popover now call it Share as Link, with a link icon, because it makes a private, encrypted link that expires in 7 days, not a public web page ([#619](https://github.com/pluk-inc/markdown-preview/pull/619)).
+- **Separate Zoom and Action Pills on Diagrams.** Diagram controls split into one pill for zoom and one for Copy and Open in Window, making each set of buttons easier to find ([#611](https://github.com/pluk-inc/markdown-preview/pull/611)).
+
+### Contributors
+
+- [@OpenSource03](https://github.com/OpenSource03) — drew the dark app icon ([#607](https://github.com/pluk-inc/markdown-preview/pull/607)).
+- [@IanAtSalt](https://github.com/IanAtSalt) — pointed out that “Publish to Web” sounded like public web publishing ([#609](https://github.com/pluk-inc/markdown-preview/issues/609)).
+
+## [0.0.70] – 2026-10-27 – Publish to Web, redesigned Settings
+
+Markdown Preview 0.0.70 brings Publish to Web, a redesigned Settings window, and quicker ways to move between tabs.
+
+### Added
+
+- **Publish to Web.** Turn any document into an encrypted link that anyone can read in a browser for 7 days, from the File menu or the Share popover. It’s encrypted on your Mac and the key lives only in the link, so not even the server can read it ([#567](https://github.com/pluk-inc/markdown-preview/pull/567), [#570](https://github.com/pluk-inc/markdown-preview/pull/570), [#571](https://github.com/pluk-inc/markdown-preview/pull/571), [#573](https://github.com/pluk-inc/markdown-preview/pull/573), [#576](https://github.com/pluk-inc/markdown-preview/pull/576), [#577](https://github.com/pluk-inc/markdown-preview/pull/577), [#581](https://github.com/pluk-inc/markdown-preview/pull/581), [#582](https://github.com/pluk-inc/markdown-preview/pull/582), [#584](https://github.com/pluk-inc/markdown-preview/pull/584), [#585](https://github.com/pluk-inc/markdown-preview/pull/585), [#586](https://github.com/pluk-inc/markdown-preview/pull/586), [#589](https://github.com/pluk-inc/markdown-preview/pull/589), [#592](https://github.com/pluk-inc/markdown-preview/pull/592), [#599](https://github.com/pluk-inc/markdown-preview/pull/599), [#600](https://github.com/pluk-inc/markdown-preview/pull/600)).
+- **Switch Tabs with ⌘1 to ⌘9.** ⌘1 to ⌘8 jump straight to that tab and ⌘9 to the last one, the same shortcuts you already know from Safari ([#603](https://github.com/pluk-inc/markdown-preview/pull/603)).
+- **Support Links.** General settings has a Buy Me a Coffee row you can close, and About now links to Discord and Buy Me a Coffee for anyone who wants to say thanks ([#601](https://github.com/pluk-inc/markdown-preview/pull/601)).
+
+### Changed
+
+- **Redesigned Settings.** Settings now opens with toolbar tabs, including a new Advanced tab, and Appearance previews every theme, font, and color change on a live sample page ([#602](https://github.com/pluk-inc/markdown-preview/pull/602)).
+- **One Set of Buttons on Code and Diagrams.** Code blocks and diagrams share one pill in the top-right corner, with native Liquid Glass on macOS 26 and later, and diagrams gain Copy for their Mermaid source ([#593](https://github.com/pluk-inc/markdown-preview/pull/593), [#595](https://github.com/pluk-inc/markdown-preview/pull/595), [#599](https://github.com/pluk-inc/markdown-preview/pull/599)).
+- **Sharper Diagrams.** Upgrades the Mermaid renderer to Pele 1.12.0, with fewer crossing lines in subgraph flowcharts and CJK labels that wrap between characters ([#596](https://github.com/pluk-inc/markdown-preview/pull/596)).
 
 ### Fixed
 
-- **Search keeps its place.** Clicking in the document or in the search field no longer moves the highlight to the next match ([#604](https://github.com/pluk-inc/markdown-preview/pull/604)).
-- **One sidebar button in Customize Toolbar.** The palette no longer offers two buttons that both show and hide the sidebar ([#605](https://github.com/pluk-inc/markdown-preview/pull/605)).
+- **Search Keeps Its Place.** Clicking in the document or the search field no longer moves the highlight, so you stay on the match you were reading ([#604](https://github.com/pluk-inc/markdown-preview/pull/604)).
+- **One Sidebar Button in Customize Toolbar.** The toolbar palette offers a single sidebar button instead of two that did the same thing ([#605](https://github.com/pluk-inc/markdown-preview/pull/605)).
 
 ### Contributors
 

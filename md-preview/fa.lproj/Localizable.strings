@@ -1,5 +1,5 @@
 /* App menu */
-"Install CLI..." = "نصب CLI...";
+"Install CLI" = "نصب CLI";
 "Settings…" = "تنظیمات…";
 
 /* Settings */
@@ -312,20 +312,15 @@
 "Search for Document" = "جستجوی سند";
 "Search for a file by name" = "جستجوی فایل بر اساس نام";
 
-/* What's New */
-"What’s New in Markdown Preview" = "ویژگی‌های جدید Markdown Preview";
-"What’s New in Markdown Preview %@" = "ویژگی‌های جدید Markdown Preview %@";
+/* Release notes */
 "Release Notes" = "یادداشت‌های انتشار";
-"Continue" = "ادامه";
-"Get an encrypted link to your document that anyone can read in a browser." = "یک پیوند رمزگذاری‌شده به سند خود بسازید که هر کسی می‌تواند در مرورگر بخواند.";
-"Redesigned Settings" = "تنظیمات بازطراحی‌شده";
-"Settings has new tabs, and the Appearance pane shows your changes on a live sample page." = "تنظیمات زبانه‌های تازه دارد و بخش «ظاهر» تغییرات شما را روی یک صفحهٔ نمونهٔ زنده نشان می‌دهد.";
-"Liquid Glass buttons on code and diagrams" = "دکمه‌های Liquid Glass برای کد و نمودار";
-"On macOS 26 and later, code blocks and diagrams share one set of Liquid Glass buttons." = "در macOS 26 و نسخه‌های بعدی، بلوک‌های کد و نمودارها یک مجموعه دکمهٔ Liquid Glass مشترک دارند.";
-"Switch tabs with ⌘1 to ⌘9" = "جابه‌جایی بین زبانه‌ها با ⌘1 تا ⌘9";
-"Press ⌘1 to ⌘8 to go to a tab, or ⌘9 to go to the last one." = "برای رفتن به یک زبانه ⌘1 تا ⌘8 و برای رفتن به آخرین زبانه ⌘9 را فشار دهید.";
-"Search keeps its place" = "جستجو جای خود را حفظ می‌کند";
-"Clicking in the document or the search field no longer moves to the next match." = "کلیک در سند یا در کادر جستجو دیگر به نتیجهٔ بعدی نمی‌رود.";
+"Release notes are read-only" = "یادداشت‌های انتشار فقط‌خواندنی هستند";
+"Updated to %@" = "به نسخهٔ %@ به‌روز شد";
+"What’s New" = "ویژگی‌های جدید";
+"What’s New in Markdown Preview %@" = "ویژگی‌های جدید Markdown Preview %@";
+"Previous releases" = "نسخه‌های قبلی";
+"Shipped by" = "ارائه‌شده توسط";
+"Thanks to %@." = "سپاس از %@.";
 
 /* Reading preferences */
 "Strict line breaks" = "شکست دقیق خطوط";
@@ -466,13 +461,12 @@
 "Allow Markdown Preview to make files in “%@”." = "به Markdown Preview اجازه دهید در «%@» فایل بسازد.";
 
 /* Share links */
-"Publish to Web" = "انتشار در وب";
+"Share as Link" = "اشتراک‌گذاری به‌صورت پیوند";
 "Create a link anyone can use to read this document in a web browser." = "پیوندی بسازید که هر کسی بتواند با آن این سند را در مرورگر وب بخواند.";
-"Publish to Web…" = "انتشار در وب…";
-"Publish" = "انتشار";
+"Share as Link…" = "اشتراک‌گذاری به‌صورت پیوند…";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "هر کسی که پیوند را دارد می‌تواند این سند را بخواند، تا زمانی که اشتراک‌گذاری را متوقف کنید یا پیوند پس از ۷ روز منقضی شود. سند رمزگذاری شده است و فقط با این پیوند باز می‌شود.";
 "Uploading Document…" = "در حال بارگذاری سند…";
-"Could Not Publish Document" = "سند منتشر نشد";
+"Could Not Create Link" = "پیوند ساخته نشد";
 "Manage Shared Document…" = "مدیریت سند اشتراک‌گذاشته‌شده…";
 "Shared" = "اشتراک‌گذاشته‌شده";
 "Shared · Link expires %@" = "اشتراک‌گذاشته‌شده · انقضای پیوند: %@";
@@ -507,17 +501,18 @@
 "This link has expired, or sharing was stopped." = "این پیوند منقضی شده یا اشتراک‌گذاری آن متوقف شده است.";
 "This link is damaged, or it does not match the shared document." = "این پیوند آسیب دیده است یا با سند اشتراک‌گذاشته‌شده مطابقت ندارد.";
 "Shared documents are read-only" = "سندهای اشتراک‌گذاشته‌شده فقط‌خواندنی هستند";
+"Continue" = "ادامه";
 "Read only" = "فقط‌خواندنی";
 
 /* Update capsule */
 "Version %@" = "نسخه %@";
-"Checking for updates…" = "در حال بررسی به‌روزرسانی‌ها…";
+"Checking for updates" = "در حال بررسی به‌روزرسانی‌ها";
 "An update is available" = "به‌روزرسانی در دسترس است";
 "Downloading update" = "در حال دانلود به‌روزرسانی";
 "Preparing update" = "در حال آماده‌سازی به‌روزرسانی";
-"Update ready" = "به‌روزرسانی آماده است";
+"Update installed." = "به‌روزرسانی نصب شد.";
 "Installing update…" = "در حال نصب به‌روزرسانی…";
-"You’re up to date" = "برنامه به‌روز است";
+"Markdown Preview is up to date" = "Markdown Preview به‌روز است";
 "Update failed" = "به‌روزرسانی ناموفق بود";
 "Download" = "دانلود";
 "Relaunch Now" = "راه‌اندازی مجدد";

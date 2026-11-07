@@ -13,7 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-VERSION = sys.argv[1] if len(sys.argv) > 1 else "0.16.45"
+VERSION = sys.argv[1] if len(sys.argv) > 1 else "0.19.1"
 CDN = f"https://cdn.jsdelivr.net/npm/katex@{VERSION}/dist"
 LICENSE_URL = f"https://raw.githubusercontent.com/KaTeX/KaTeX/v{VERSION}/LICENSE"
 DEST = Path("md-preview/Vendor/KaTeX")

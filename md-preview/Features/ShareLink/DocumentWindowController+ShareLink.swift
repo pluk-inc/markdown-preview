@@ -2,9 +2,9 @@
 //  DocumentWindowController+ShareLink.swift
 //  md-preview
 //
-//  The Share popover's share-link row: "Publish to Web" while the file has no
+//  The Share popover's share-link row: "Share as Link" while the file has no
 //  link, "Manage Shared Document…" while it has one. The picker closes on
-//  click; once Publish to Web has created the link, the Manage Shared Document
+//  click; once Share as Link has created the link, the Manage Shared Document
 //  sheet opens, so the user sees it was copied and where to stop sharing.
 //
 
@@ -29,32 +29,32 @@ extension DocumentWindowController {
     }
 
     /// False while the window has no saved file to link.
-    var canPublishToWeb: Bool {
+    var canShareAsLink: Bool {
         currentFileURL != nil && currentMarkdown != nil
-            && !isReceivedShare
+            && !isReadOnlyDocument
     }
 
-    /// File › Publish to Web…: the same as the Share popover row.
-    @objc func publishToWeb(_ sender: Any?) {
-        guard canPublishToWeb else { return }
-        invalidatePublishToWebTip()
+    /// File › Share as Link…: the same as the Share popover row.
+    @objc func shareAsLink(_ sender: Any?) {
+        guard canShareAsLink else { return }
+        invalidateShareAsLinkTip()
         if isSharedByLink { showManageSharedDocument() } else { confirmAndCopyShareLink() }
     }
 
-    /// The Share popover row; none when the window cannot publish.
+    /// The Share popover row; none when the window cannot share.
     func shareLinkServices() -> [NSSharingService] {
-        guard canPublishToWeb else { return [] }
+        guard canShareAsLink else { return [] }
         // The picker is opening, so the user now sees the row the tip points to.
-        invalidatePublishToWebTip()
+        invalidateShareAsLinkTip()
         // Same test as the "Shared" subtitle, so the row and the subtitle agree.
         let shared = isSharedByLink
-        let title = shared ? L("Manage Shared Document…") : L("Publish to Web")
-        let symbol = shared ? "person.crop.circle.badge.checkmark" : "globe"
+        let title = shared ? L("Manage Shared Document…") : L("Share as Link")
+        let symbol = shared ? "person.crop.circle.badge.checkmark" : "link"
         return [NSSharingService(
             title: title,
             image: NSImage(systemSymbolName: symbol, accessibilityDescription: title) ?? NSImage(),
             alternateImage: nil
-        ) { [weak self] in self?.publishToWeb(nil) }]
+        ) { [weak self] in self?.shareAsLink(nil) }]
     }
 
     private func showManageSharedDocument() {
@@ -86,9 +86,9 @@ extension DocumentWindowController {
     private func confirmAndCopyShareLink() {
         guard documentWindow.attachedSheet == nil else { return }
         let alert = NSAlert()
-        alert.messageText = L("Publish to Web")
+        alert.messageText = L("Share as Link")
         alert.informativeText = L("Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it.")
-        alert.addButton(withTitle: L("Publish"))
+        alert.addButton(withTitle: L("Copy Link"))
         // Long enough that the alert stacks its buttons full width, as the
         // system's own Copy Link alert does.
         alert.addButton(withTitle: L("Keep Document Private"))
@@ -124,7 +124,7 @@ extension DocumentWindowController {
             } catch {
                 guard let window = self?.documentWindow else { return }
                 let alert = NSAlert()
-                alert.messageText = L("Could Not Publish Document")
+                alert.messageText = L("Could Not Create Link")
                 alert.informativeText = ShareLinkSession.message(for: error)
                 alert.beginSheetModal(for: window, completionHandler: nil)
             }

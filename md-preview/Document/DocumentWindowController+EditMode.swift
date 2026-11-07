@@ -19,7 +19,17 @@ extension DocumentWindowController {
     }
 
     var canToggleEditMode: Bool {
-        isEditing || (currentMarkdown != nil && !isReceivedShare)
+        isEditing || (currentMarkdown != nil && !isReadOnlyDocument)
+    }
+
+    /// A document the app downloaded and replaces when it is opened again:
+    /// a received share or a release's notes.
+    var isReadOnlyDocument: Bool {
+        isReceivedShare || isReleaseNotes
+    }
+
+    var isReleaseNotes: Bool {
+        ReleaseNotes.isCachedCopy(currentFileURL)
     }
 
     /// A document opened from someone else's share link: read-only, because
@@ -28,10 +38,11 @@ extension DocumentWindowController {
         ShareLinkOpener.isReceivedCopy(currentFileURL)
     }
 
-    /// A received share's folder holds only the document and its images, so
-    /// its window shows the Table of Contents instead of the files.
-    func showOutlineForReceivedShare() {
-        guard isReceivedShare, let split = mainSplit, split.sidebarMode == .files else { return }
+    /// A received share's folder holds only the document and its images, and
+    /// the release notes folder only other versions' notes, so their windows
+    /// show the Table of Contents instead of the files.
+    func showOutlineForReadOnlyDocument() {
+        guard isReadOnlyDocument, let split = mainSplit, split.sidebarMode == .files else { return }
         split.setSidebarMode(.outline, remember: false)
         syncSidebarToolbarState()
     }
@@ -86,6 +97,8 @@ extension DocumentWindowController {
             button.toolTip = NSLocalizedString("Stop editing and return to preview", comment: "Edit toolbar item tooltip while editing")
         } else if isReceivedShare {
             button.toolTip = NSLocalizedString("Shared documents are read-only", comment: "Edit toolbar item tooltip for a received shared document")
+        } else if isReleaseNotes {
+            button.toolTip = NSLocalizedString("Release notes are read-only", comment: "Edit toolbar item tooltip for the release notes document")
         } else {
             button.toolTip = NSLocalizedString("Edit document", comment: "Edit toolbar item tooltip")
         }

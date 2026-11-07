@@ -7,7 +7,7 @@ import Cocoa
 
 final class MainSplitViewController: NSSplitViewController {
 
-    /// Also read by `WhatsNewWindow` as a sign of earlier use.
+    /// Also read by `ReleaseNotes` as a sign of earlier use.
     static let didSeedKey = "MainSplitView.didSeedInitialState"
     /// Keeps the pane picker and sidebar toggle visible beside the window controls.
     private static let minimumSidebarWidth: CGFloat = 230
@@ -150,8 +150,7 @@ final class MainSplitViewController: NSSplitViewController {
         if let outline, isSidebarVisible && sidebarMode == .outline {
             sidebarViewController?.refreshOutline(
                 outline: outline,
-                fileName: fileURL?.lastPathComponent
-                    ?? NSLocalizedString("Untitled", comment: "Untitled document name")
+                fileName: ReleaseNotes.displayName(for: fileURL)
             )
         }
         if let metadata, isInspectorVisible {

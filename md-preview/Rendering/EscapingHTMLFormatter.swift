@@ -1135,20 +1135,23 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         }
     }
 
-    // GitHub-style alerts: `> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`,
-    // `> [!WARNING]`, `> [!CAUTION]`. Tag matching is case-insensitive. Any
-    // text on the tag line after the closing `]` is used as a custom title;
-    // otherwise the alert's default title is used.
+    // GitHub alerts and Obsidian callouts: `> [!NOTE]`, `> [!tip] Title`,
+    // `> [!faq]- Title`. The type is case-insensitive, and every type is a
+    // callout: GitHub's five kinds and Obsidian's kinds and aliases get their
+    // own look, and any other type looks like a note. Text on the tag line
+    // after the closing `]` is the title; without it the title is the type.
+    // A `-` or `+` right after the `]` makes the callout foldable, closed
+    // or open, as in Obsidian.
     private mutating func renderAlertIfPresent(_ blockQuote: BlockQuote) -> Bool {
         let blocks = Array(blockQuote.children)
         guard let firstPara = blocks.first as? Paragraph else { return false }
         let inlines = Array(firstPara.children)
         guard let firstText = inlines.first as? Text,
-              let (kind, prefixLen) = Self.matchAlertTag(firstText.string) else {
+              let tag = AlertTag(firstText.string) else {
             return false
         }
 
-        var firstTextRest = String(firstText.string.dropFirst(prefixLen))
+        var firstTextRest = String(firstText.string.dropFirst(tag.length))
         if firstTextRest.hasPrefix(" ") {
             firstTextRest.removeFirst()
         }
@@ -1171,9 +1174,18 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         let hasCustomTitle = !firstTextRest.trimmingCharacters(in: .whitespaces).isEmpty
             || !titleInlinesAfter.isEmpty
 
-        result += "<div class=\"markdown-alert markdown-alert-\(kind.rawValue)\">\n"
-        result += "<p class=\"markdown-alert-title\">"
-        result += kind.iconSVG
+        // A foldable callout is a <details> whose <summary> is the title.
+        let (wrapper, titleTag) = tag.fold == nil ? ("div", "p") : ("details", "summary")
+        result += "<\(wrapper) class=\"markdown-alert markdown-alert-\(tag.kind.rawValue)\""
+        // The authored marker lets an in-place update tell a marker edit
+        // from the reader opening or closing the callout.
+        switch tag.fold {
+        case nil: result += ">\n"
+        case .open?: result += " data-md-fold=\"open\" open=\"\">\n"
+        case .closed?: result += " data-md-fold=\"closed\">\n"
+        }
+        result += "<\(titleTag) class=\"markdown-alert-title\">"
+        result += tag.kind.iconSVG
         result += " "
         if hasCustomTitle {
             if !firstTextRest.isEmpty {
@@ -1183,9 +1195,9 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
                 visit(inline)
             }
         } else {
-            result += escapeText(kind.defaultTitle)
+            result += escapeText(tag.defaultTitle)
         }
-        result += "</p>\n"
+        result += "</\(titleTag)>\n"
 
         if !firstParaBody.isEmpty {
             result += "<p>"
@@ -1197,58 +1209,117 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         for block in blocks.dropFirst() {
             visit(block)
         }
-        result += "</div>\n"
+        result += "</\(wrapper)>\n"
         return true
     }
 
-    private enum AlertKind: String {
-        case note, tip, important, warning, caution
+    /// The `[!type]` tag that opens an alert, with an optional fold marker.
+    private struct AlertTag {
+        enum Fold { case open, closed }
 
-        // GitHub Octicons (info, light-bulb, report, alert, stop).
-        // Stripped to the path data only — the wrapper is built by `iconSVG`.
+        /// The lowercased type, as written.
+        let type: String
+        let kind: AlertKind
+        let fold: Fold?
+        /// Characters the tag takes up at the start of the text.
+        let length: Int
+
+        init?(_ text: String) {
+            guard text.hasPrefix("[!") else { return nil }
+            let afterBang = text.dropFirst(2)
+            // Smart punctuation has already turned `--` and `---` into
+            // en and em dashes, so they count as the hyphens they were.
+            let name = afterBang.prefix { character in
+                (character.isASCII
+                    && (character.isLetter || character.isNumber || character == "-" || character == "_"))
+                    || character == "\u{2013}" || character == "\u{2014}"
+            }
+            guard name.first?.isASCII == true, name.first?.isLetter == true,
+                  afterBang.dropFirst(name.count).first == "]" else {
+                return nil
+            }
+            type = name.lowercased()
+                .replacingOccurrences(of: "\u{2013}", with: "--")
+                .replacingOccurrences(of: "\u{2014}", with: "---")
+            kind = AlertKind(type: type)
+            switch afterBang.dropFirst(name.count + 1).first {
+            case "-": fold = .closed
+            case "+": fold = .open
+            default: fold = nil
+            }
+            length = 2 + name.count + 1 + (fold == nil ? 0 : 1)
+        }
+
+        /// The type with a capital first letter: `[!faq]` reads "Faq", as
+        /// in Obsidian, and `[!NOTE]` reads "Note", as on GitHub.
+        var defaultTitle: String {
+            type.prefix(1).uppercased() + type.dropFirst()
+        }
+    }
+
+    private enum AlertKind: String {
+        // GitHub's five alert kinds.
+        case note, tip, important, warning, caution
+        // Obsidian's other callout kinds.
+        case abstract, info, todo, success, question, failure, danger, bug, example, quote
+
+        // Obsidian's aliases. `important` and `caution` are aliases in
+        // Obsidian, but GitHub gives them their own look, so they stay kinds.
+        private static let aliases: [String: AlertKind] = [
+            "summary": .abstract, "tldr": .abstract,
+            "hint": .tip,
+            "check": .success, "done": .success,
+            "help": .question, "faq": .question,
+            "attention": .warning,
+            "fail": .failure, "missing": .failure,
+            "error": .danger,
+            "cite": .quote,
+        ]
+
+        /// The kind for a lowercased callout type. A type that is neither a
+        /// kind nor an alias looks like a note, as in Obsidian.
+        init(type: String) {
+            self = AlertKind(rawValue: type) ?? Self.aliases[type] ?? .note
+        }
+
+        // GitHub Octicons, stripped to the path data only — the wrapper is
+        // built by `iconSVG`.
         private var iconPath: String {
             switch self {
-            case .note:
+            case .note, .info: // info
                 return "M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"
-            case .tip:
+            case .tip: // light-bulb
                 return "M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"
-            case .important:
+            case .important: // report
                 return "M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm7 2.25v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 9a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"
-            case .warning:
+            case .warning: // alert
                 return "M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575Zm1.763.707a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368Zm.53 3.996v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"
-            case .caution:
+            case .caution: // stop
                 return "M4.47.22A.749.749 0 0 1 5 0h6c.199 0 .389.079.53.22l4.25 4.25c.141.14.22.331.22.53v6a.749.749 0 0 1-.22.53l-4.25 4.25A.749.749 0 0 1 11 16H5a.749.749 0 0 1-.53-.22L.22 11.53A.749.749 0 0 1 0 11V5c0-.199.079-.389.22-.53Zm.84 1.28L1.5 5.31v5.38l3.81 3.81h5.38l3.81-3.81V5.31L10.69 1.5ZM8 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 4Zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"
+            case .abstract: // checklist
+                return "M2.5 1.75v11.5c0 .138.112.25.25.25h3.17a.75.75 0 0 1 0 1.5H2.75A1.75 1.75 0 0 1 1 13.25V1.75C1 .784 1.784 0 2.75 0h8.5C12.216 0 13 .784 13 1.75v7.736a.75.75 0 0 1-1.5 0V1.75a.25.25 0 0 0-.25-.25h-8.5a.25.25 0 0 0-.25.25Zm13.274 9.537v-.001l-4.557 4.45a.75.75 0 0 1-1.055-.008l-1.943-1.95a.75.75 0 0 1 1.062-1.058l1.419 1.425 4.026-3.932a.75.75 0 1 1 1.048 1.074ZM4.75 4h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM4 7.75A.75.75 0 0 1 4.75 7h2a.75.75 0 0 1 0 1.5h-2A.75.75 0 0 1 4 7.75Z"
+            case .todo: // check-circle
+                return "M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm1.5 0a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm10.28-1.72-4.5 4.5a.75.75 0 0 1-1.06 0l-2-2a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018l1.47 1.47 3.97-3.97a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042Z"
+            case .success: // check
+                return "M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"
+            case .question: // question
+                return "M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.92 6.085h.001a.749.749 0 1 1-1.342-.67c.169-.339.436-.701.849-.977C6.845 4.16 7.369 4 8 4a2.756 2.756 0 0 1 1.637.525c.503.377.863.965.863 1.725 0 .448-.115.83-.329 1.15-.205.307-.47.513-.692.662-.109.072-.22.138-.313.195l-.006.004a6.24 6.24 0 0 0-.26.16.952.952 0 0 0-.276.245.75.75 0 0 1-1.248-.832c.184-.264.42-.489.692-.661.103-.067.207-.132.313-.195l.007-.004c.1-.061.182-.11.258-.161a.969.969 0 0 0 .277-.245C8.96 6.514 9 6.427 9 6.25a.612.612 0 0 0-.262-.525A1.27 1.27 0 0 0 8 5.5c-.369 0-.595.09-.74.187a1.01 1.01 0 0 0-.34.398ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"
+            case .failure: // x
+                return "M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"
+            case .danger: // zap
+                return "M9.504.43a1.516 1.516 0 0 1 2.437 1.713L10.415 5.5h2.123c1.57 0 2.346 1.909 1.22 3.004l-7.34 7.142a1.249 1.249 0 0 1-.871.354h-.302a1.25 1.25 0 0 1-1.157-1.723L5.633 10.5H3.462c-1.57 0-2.346-1.909-1.22-3.004L9.503.429Zm1.047 1.074L3.286 8.571A.25.25 0 0 0 3.462 9H6.75a.75.75 0 0 1 .694 1.034l-1.713 4.188 6.982-6.793A.25.25 0 0 0 12.538 7H9.25a.75.75 0 0 1-.683-1.06l2.008-4.418.003-.006a.036.036 0 0 0-.004-.009l-.006-.006-.008-.001c-.003 0-.006.002-.009.004Z"
+            case .bug: // bug
+                return "M4.72.22a.75.75 0 0 1 1.06 0l1 .999a3.488 3.488 0 0 1 2.441 0l.999-1a.748.748 0 0 1 1.265.332.75.75 0 0 1-.205.729l-.775.776c.616.63.995 1.493.995 2.444v.327c0 .1-.009.197-.025.292.408.14.764.392 1.029.722l1.968-.787a.75.75 0 0 1 .556 1.392L13 7.258V9h2.25a.75.75 0 0 1 0 1.5H13v.5c0 .409-.049.806-.141 1.186l2.17.868a.75.75 0 0 1-.557 1.392l-2.184-.873A4.997 4.997 0 0 1 8 16a4.997 4.997 0 0 1-4.288-2.427l-2.183.873a.75.75 0 0 1-.558-1.392l2.17-.868A5.036 5.036 0 0 1 3 11v-.5H.75a.75.75 0 0 1 0-1.5H3V7.258L.971 6.446a.75.75 0 0 1 .558-1.392l1.967.787c.265-.33.62-.583 1.03-.722a1.677 1.677 0 0 1-.026-.292V4.5c0-.951.38-1.814.995-2.444L4.72 1.28a.75.75 0 0 1 0-1.06Zm.53 6.28a.75.75 0 0 0-.75.75V11a3.5 3.5 0 1 0 7 0V7.25a.75.75 0 0 0-.75-.75ZM6.173 5h3.654A.172.172 0 0 0 10 4.827V4.5a2 2 0 1 0-4 0v.327c0 .096.077.173.173.173Z"
+            case .example: // list-unordered
+                return "M5.75 2.5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5Zm0 5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5Zm0 5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5ZM2 14a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm1-6a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM2 4a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"
+            case .quote: // quote
+                return "M1.75 2.5h10.5a.75.75 0 0 1 0 1.5H1.75a.75.75 0 0 1 0-1.5Zm4 5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5Zm0 5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5ZM2.5 7.75v6a.75.75 0 0 1-1.5 0v-6a.75.75 0 0 1 1.5 0Z"
             }
         }
 
         var iconSVG: String {
             "<svg class=\"markdown-alert-icon\" viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" aria-hidden=\"true\"><path d=\"\(iconPath)\"></path></svg>"
         }
-
-        var defaultTitle: String {
-            switch self {
-            case .note: return "Note"
-            case .tip: return "Tip"
-            case .important: return "Important"
-            case .warning: return "Warning"
-            case .caution: return "Caution"
-            }
-        }
-    }
-
-    private static func matchAlertTag(_ text: String) -> (AlertKind, Int)? {
-        let tags: [(String, AlertKind)] = [
-            ("[!note]", .note),
-            ("[!tip]", .tip),
-            ("[!important]", .important),
-            ("[!warning]", .warning),
-            ("[!caution]", .caution),
-        ]
-        let lower = text.lowercased()
-        for (tag, kind) in tags where lower.hasPrefix(tag) {
-            return (kind, tag.count)
-        }
-        return nil
     }
 
     mutating func visitCodeBlock(_ codeBlock: CodeBlock) {
@@ -1344,7 +1415,12 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
     /// (#522). Lists that stay below 100 keep the default gutter and carry no
     /// attribute. The editor mirrors the same rule from the source markers.
     static func markerDigitsAttribute(for orderedList: OrderedList) -> String {
-        let lastNumber = Int(orderedList.startIndex) + max(orderedList.childCount, 1) - 1
+        markerDigitsAttribute(lastNumber: Int(orderedList.startIndex) + max(orderedList.childCount, 1) - 1)
+    }
+
+    /// The same attribute for any `<ol>` whose last marker is `lastNumber`,
+    /// such as the footnotes list, which the renderer writes by hand.
+    static func markerDigitsAttribute(lastNumber: Int) -> String {
         let digits = min(String(lastNumber).count, maximumMarkerDigits)
         return digits > 2 ? " data-mdp-digits=\"\(digits)\"" : ""
     }

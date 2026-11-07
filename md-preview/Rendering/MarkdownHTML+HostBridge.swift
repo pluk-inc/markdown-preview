@@ -1217,7 +1217,12 @@ nonisolated extension MarkdownHTML {
                     syncSourceAttrs(fromEl, toEl, info);
                     return false;
                 }
-                if (fromEl.tagName === 'DETAILS') toEl.toggleAttribute('open', fromEl.open);
+                // Keep the reader's open/closed choice, unless the source
+                // changed a callout's fold marker (`[!faq]-` to `[!faq]+`).
+                if (fromEl.tagName === 'DETAILS'
+                    && fromEl.getAttribute('data-md-fold') === toEl.getAttribute('data-md-fold')) {
+                    toEl.toggleAttribute('open', fromEl.open);
+                }
                 return true;
             }
         };
