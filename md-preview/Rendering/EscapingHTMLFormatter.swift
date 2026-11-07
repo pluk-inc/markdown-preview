@@ -1177,7 +1177,13 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         // A foldable callout is a <details> whose <summary> is the title.
         let (wrapper, titleTag) = tag.fold == nil ? ("div", "p") : ("details", "summary")
         result += "<\(wrapper) class=\"markdown-alert markdown-alert-\(tag.kind.rawValue)\""
-        result += tag.fold == .open ? " open=\"\">\n" : ">\n"
+        // The authored marker lets an in-place update tell a marker edit
+        // from the reader opening or closing the callout.
+        switch tag.fold {
+        case nil: result += ">\n"
+        case .open?: result += " data-md-fold=\"open\" open=\"\">\n"
+        case .closed?: result += " data-md-fold=\"closed\">\n"
+        }
         result += "<\(titleTag) class=\"markdown-alert-title\">"
         result += tag.kind.iconSVG
         result += " "
@@ -1221,15 +1227,20 @@ nonisolated struct EscapingHTMLFormatter: MarkupWalker {
         init?(_ text: String) {
             guard text.hasPrefix("[!") else { return nil }
             let afterBang = text.dropFirst(2)
+            // Smart punctuation has already turned `--` and `---` into
+            // en and em dashes, so they count as the hyphens they were.
             let name = afterBang.prefix { character in
-                character.isASCII
-                    && (character.isLetter || character.isNumber || character == "-" || character == "_")
+                (character.isASCII
+                    && (character.isLetter || character.isNumber || character == "-" || character == "_"))
+                    || character == "\u{2013}" || character == "\u{2014}"
             }
-            guard name.first?.isLetter == true,
+            guard name.first?.isASCII == true, name.first?.isLetter == true,
                   afterBang.dropFirst(name.count).first == "]" else {
                 return nil
             }
             type = name.lowercased()
+                .replacingOccurrences(of: "\u{2013}", with: "--")
+                .replacingOccurrences(of: "\u{2014}", with: "---")
             kind = AlertKind(type: type)
             switch afterBang.dropFirst(name.count + 1).first {
             case "-": fold = .closed

@@ -339,7 +339,7 @@ final class EscapingHTMLFormatterTests: XCTestCase {
     func testFoldableCalloutRendersAsDetails() {
         let closed = EscapingHTMLFormatter.format("> [!faq]- Why fold?\n> Answer.")
         XCTAssertTrue(
-            closed.contains(#"<details class="markdown-alert markdown-alert-question">"#),
+            closed.contains(#"<details class="markdown-alert markdown-alert-question" data-md-fold="closed">"#),
             "a `-` marker should give a closed details: \(closed)"
         )
         XCTAssertTrue(closed.contains(#"<summary class="markdown-alert-title"><svg"#), closed)
@@ -348,7 +348,7 @@ final class EscapingHTMLFormatterTests: XCTestCase {
 
         let open = EscapingHTMLFormatter.format("> [!note]+\n> Body.")
         XCTAssertTrue(
-            open.contains(#"<details class="markdown-alert markdown-alert-note" open="">"#),
+            open.contains(#"<details class="markdown-alert markdown-alert-note" data-md-fold="open" open="">"#),
             "a `+` marker should give an open details: \(open)"
         )
         XCTAssertTrue(open.contains("Note</summary>"), "fold marker should not reach the title: \(open)")
@@ -358,6 +358,12 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         let html = EscapingHTMLFormatter.format("> [!my_type-2] Title")
         XCTAssertTrue(html.contains(#"<div class="markdown-alert markdown-alert-note">"#), html)
         XCTAssertTrue(html.contains("Title</p>"), html)
+    }
+
+    func testCalloutTypeKeepsDoubleHyphensThatSmartPunctuationJoined() {
+        let html = EscapingHTMLFormatter.format("> [!my--type]\n> Body.")
+        XCTAssertTrue(html.contains(#"<div class="markdown-alert markdown-alert-note">"#), html)
+        XCTAssertTrue(html.contains("My--type</p>"), "the title should keep both hyphens: \(html)")
     }
 
     func testBracketTextThatIsNotACalloutTagStaysABlockquote() {
