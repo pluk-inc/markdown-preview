@@ -194,6 +194,12 @@ final class MarkdownTOCTests: XCTestCase {
             ("- a\n\n  #\n- b", [3]),
             (" #\n #\n\n # \n- #", [1, 2, 4, 5]),
             ("---\ntitle: x\n---\n- #\n# After", [4, 5]),
+            // Link reference definitions leave no block, and their URL can hold `#`.
+            ("[x]: /url#frag\n\n #", [3]),
+            ("Text\n\n[x]: /a#b\n\n #", [5]),
+            // CommonMark also ends lines at a lone CR.
+            ("\r\r #\r\r## B", [3, 5]),
+            ("# A\r\n\r\n #\r\n", [1, 3]),
         ]
         for (markdown, lines) in cases {
             let items = flattened(MarkdownTOC.parse(markdown + "\n"))

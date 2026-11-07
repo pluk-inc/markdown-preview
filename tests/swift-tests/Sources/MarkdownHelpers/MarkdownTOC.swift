@@ -42,7 +42,7 @@ nonisolated enum MarkdownTOC {
         let sourceLineOffset: Int
         var headings: [RawHeading] = []
         // Only split when a heading has no range, which most documents never hit.
-        private lazy var bodyLines = body.utf8.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false)
+        private lazy var bodyLines = Self.lines(of: body)
 
         init(body: String, sourceLineOffset: Int) {
             self.body = body
@@ -62,8 +62,9 @@ nonisolated enum MarkdownTOC {
             if let range = heading.range { return range.lowerBound.line }
             // cmark gives an empty ATX heading after whitespace (`- #`, `> #`, ` #`)
             // an end before its start, and swift-markdown drops that range to nil.
-            // The lines between the previous block and the heading are blank or
-            // hold only container markers, so the heading is the first line with `#`.
+            // Only blank lines, container markers and link reference definitions can
+            // come between the previous block and the heading, so it is the first
+            // line after that block that ends the way these headings do.
             let index = heading.indexInParent
             let previous = index > 0 ? heading.parent?.child(at: index - 1) : nil
             // A previous heading without a range is the last one collected, on one line.
@@ -71,7 +72,39 @@ nonisolated enum MarkdownTOC {
                 ?? (previous is Heading ? headings.last.map { $0.sourceLine - sourceLineOffset } : nil)
             let first = previousEnd.map { $0 + 1 } ?? heading.parent?.range?.lowerBound.line ?? 1
             return stride(from: first, through: bodyLines.count, by: 1)
-                .first { bodyLines[$0 - 1].contains(UInt8(ascii: "#")) } ?? first
+                .first { Self.endsInSpacedHeadingMarker(bodyLines[$0 - 1]) } ?? first
+        }
+
+        /// Whether a line ends in one to six `#` after a space or tab: the shape
+        /// that loses its range. `>#` and `- # ` keep theirs.
+        private static func endsInSpacedHeadingMarker(_ line: Substring.UTF8View) -> Bool {
+            let marks = line.reversed().prefix { $0 == UInt8(ascii: "#") }.count
+            guard (1...6).contains(marks) else { return false }
+            let before = line.dropLast(marks).last
+            return before == UInt8(ascii: " ") || before == UInt8(ascii: "\t")
+        }
+
+        /// Splits at LF, CR and CRLF, as CommonMark counts lines.
+        private static func lines(of text: String) -> [Substring.UTF8View] {
+            let utf8 = text.utf8
+            var lines: [Substring.UTF8View] = []
+            var start = utf8.startIndex
+            var index = start
+            while index != utf8.endIndex {
+                let byte = utf8[index]
+                guard byte == UInt8(ascii: "\n") || byte == UInt8(ascii: "\r") else {
+                    utf8.formIndex(after: &index)
+                    continue
+                }
+                lines.append(utf8[start..<index])
+                utf8.formIndex(after: &index)
+                if byte == UInt8(ascii: "\r"), index != utf8.endIndex, utf8[index] == UInt8(ascii: "\n") {
+                    utf8.formIndex(after: &index)
+                }
+                start = index
+            }
+            lines.append(utf8[start...])
+            return lines
         }
 
         private static func titleText(_ markup: Markup) -> String {
