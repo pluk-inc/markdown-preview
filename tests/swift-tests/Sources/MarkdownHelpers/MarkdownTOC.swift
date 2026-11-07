@@ -32,26 +32,46 @@ nonisolated enum MarkdownTOC {
         // delimiters cannot turn code-block contents into outline entries.
         let split = MarkdownFrontmatter.split(markdown)
         let body = split.body
-        var collector = HeadingCollector(sourceLineOffset: split.bodyLineOffset)
+        var collector = HeadingCollector(body: body, sourceLineOffset: split.bodyLineOffset)
         collector.visit(Document(parsing: body))
         return collector.headings
     }
 
     private struct HeadingCollector: MarkupWalker {
+        let body: String
         let sourceLineOffset: Int
         var headings: [RawHeading] = []
+        // Only split when a heading has no range, which most documents never hit.
+        private lazy var bodyLines = body.utf8.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false)
+
+        init(body: String, sourceLineOffset: Int) {
+            self.body = body
+            self.sourceLineOffset = sourceLineOffset
+        }
 
         mutating func visitHeading(_ heading: Heading) {
-            // Parsed headings are expected to have source locations.
-            guard let range = heading.range else {
-                preconditionFailure("Parsed Markdown heading is missing a source range")
-            }
             // Keep empty headings too: IDs follow rendered heading order.
             headings.append(RawHeading(
                 level: heading.level,
                 title: Self.titleText(heading),
-                sourceLine: range.lowerBound.line + sourceLineOffset
+                sourceLine: startLine(of: heading) + sourceLineOffset
             ))
+        }
+
+        private mutating func startLine(of heading: Heading) -> Int {
+            if let range = heading.range { return range.lowerBound.line }
+            // cmark gives an empty ATX heading after whitespace (`- #`, `> #`, ` #`)
+            // an end before its start, and swift-markdown drops that range to nil.
+            // The lines between the previous block and the heading are blank or
+            // hold only container markers, so the heading is the first line with `#`.
+            let index = heading.indexInParent
+            let previous = index > 0 ? heading.parent?.child(at: index - 1) : nil
+            // A previous heading without a range is the last one collected, on one line.
+            let previousEnd = previous?.range?.upperBound.line
+                ?? (previous is Heading ? headings.last.map { $0.sourceLine - sourceLineOffset } : nil)
+            let first = previousEnd.map { $0 + 1 } ?? heading.parent?.range?.lowerBound.line ?? 1
+            return stride(from: first, through: bodyLines.count, by: 1)
+                .first { bodyLines[$0 - 1].contains(UInt8(ascii: "#")) } ?? first
         }
 
         private static func titleText(_ markup: Markup) -> String {
