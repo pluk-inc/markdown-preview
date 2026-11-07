@@ -119,12 +119,21 @@ nonisolated extension MarkdownHTML {
     /// (`codeBlockScript`). CSS, not inline SVG, because the share viewer's
     /// sanitizer drops SVG from the shared page.
     private static func diagramHUDIcon(_ shapes: String) -> String {
+        cssMaskURL(svg: lineIconSVGOpen(stroke: "black") + shapes + "</svg>")
+    }
+
+    /// An SVG document as a CSS `url()` for a mask.
+    private static func cssMaskURL(svg: String) -> String {
         // Single quotes inside, as the url() is double-quoted.
-        let svg = (lineIconSVGOpen(stroke: "black") + shapes + "</svg>")
-            .replacingOccurrences(of: "\"", with: "'")
-        let encoded = svg.replacingOccurrences(of: "<", with: "%3C").replacingOccurrences(of: ">", with: "%3E")
+        let encoded = svg.replacingOccurrences(of: "\"", with: "'")
+            .replacingOccurrences(of: "<", with: "%3C").replacingOccurrences(of: ">", with: "%3E")
         return #"url("data:image/svg+xml,\#(encoded)")"#
     }
+
+    /// The fold chevron of a foldable callout: the Octicon chevron-right, the
+    /// icon set of the callout kinds. A mask, as the share viewer drops SVG.
+    private static let alertChevronMask = cssMaskURL(
+        svg: #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"/></svg>"#)
 
     /// The hairline of a diagram's frame and of the control pills, so the two
     /// match: the text colour, faint, in light and dark alike.
@@ -441,8 +450,6 @@ nonisolated extension MarkdownHTML {
         --grid: -apple-system-separator;
         --accent: var(--link);
         --link: rgb(0, 104, 218);
-        --aside-bg: #f5f5f7;
-        --aside-border: #696969;
         --code-bg: #f9f9f9;
         --code-border: #f0f0f0;
         /* Shared with the editor; class mappings live in MarkdownHTML+Highlight.swift. */
@@ -456,8 +463,6 @@ nonisolated extension MarkdownHTML {
     :root[data-mdp-color-scheme="dark"] {
         color-scheme: dark;
         --link: rgb(65, 156, 255);
-        --aside-bg: #323232;
-        --aside-border: #9a9a9e;
         --code-bg: #262626;
         --code-border: #323232;
         \(darkCodePaletteCSS)
@@ -469,8 +474,6 @@ nonisolated extension MarkdownHTML {
     @media (prefers-color-scheme: dark) {
         :root:not([data-mdp-color-scheme="light"]) {
             --link: rgb(65, 156, 255);
-            --aside-bg: #323232;
-            --aside-border: #9a9a9e;
             --code-bg: #262626;
             --code-border: #323232;
             \(darkCodePaletteCSS)
@@ -819,12 +822,16 @@ nonisolated extension MarkdownHTML {
         border: 0;
         \(codeBlockTypeCSS)
     }
-    .md-code-wrap {
-        position: relative;
-        margin: \(paragraphSpacing)px 0 0;
+    /* Code blocks and alerts share one card. */
+    .md-code-wrap,
+    .markdown-alert {
         background: var(--code-bg);
         border: 0.5px solid var(--code-border);
         border-radius: 16px;
+    }
+    .md-code-wrap {
+        position: relative;
+        margin: \(paragraphSpacing)px 0 0;
         overflow: hidden;
     }
     .md-code-wrap > pre { margin: 0; border: 0; border-radius: 0; padding-top: 8px; }
@@ -1014,21 +1021,26 @@ nonisolated extension MarkdownHTML {
     }
     blockquote > *:first-child { margin-top: 0; }
 
+    /* Alerts sit on the code block's card (above). Only the icon and title
+       carry the kind's colour, with a brighter value in dark mode. */
     .markdown-alert {
         margin: \(largeBlockSpacing)px 0 0;
         padding: 12px 16px;
-        background: var(--aside-bg);
-        border-left: 4px solid var(--aside-border);
-        border-radius: 6px;
         color: var(--text);
     }
     .markdown-alert > *:first-child { margin-top: 0; }
+    /* The title labels the body, so it sits closer to the body than to the
+       card's top edge, as the code block's language label does. */
+    .markdown-alert > .markdown-alert-title + * { margin-top: 6px; }
     .markdown-alert-title {
         font-weight: 600;
         margin: 0;
         display: flex;
         align-items: center;
         line-height: 1;
+        /* A step below the body, so it reads as a label. */
+        font-size: 0.87em;
+        color: var(--mdp-alert-color);
     }
     .markdown-alert-icon {
         width: 1em;
@@ -1037,16 +1049,45 @@ nonisolated extension MarkdownHTML {
         flex: 0 0 auto;
         fill: currentColor;
     }
-    .markdown-alert-note { border-left-color: #0969da; }
-    .markdown-alert-note .markdown-alert-title { color: #0969da; }
-    .markdown-alert-tip { border-left-color: #1a7f37; }
-    .markdown-alert-tip .markdown-alert-title { color: #1a7f37; }
-    .markdown-alert-important { border-left-color: #8250df; }
-    .markdown-alert-important .markdown-alert-title { color: #8250df; }
-    .markdown-alert-warning { border-left-color: #9a6700; }
-    .markdown-alert-warning .markdown-alert-title { color: #9a6700; }
-    .markdown-alert-caution { border-left-color: #d1242f; }
-    .markdown-alert-caution .markdown-alert-title { color: #d1242f; }
+    /* GitHub's alert colours, light and dark. */
+    .markdown-alert-note,
+    .markdown-alert-info,
+    .markdown-alert-todo { --mdp-alert-color: light-dark(#0969da, #4493f8); }
+    .markdown-alert-tip,
+    .markdown-alert-success { --mdp-alert-color: light-dark(#1a7f37, #3fb950); }
+    .markdown-alert-important,
+    .markdown-alert-example { --mdp-alert-color: light-dark(#8250df, #ab7df8); }
+    .markdown-alert-warning { --mdp-alert-color: light-dark(#9a6700, #d29922); }
+    .markdown-alert-caution,
+    .markdown-alert-failure,
+    .markdown-alert-danger,
+    .markdown-alert-bug { --mdp-alert-color: light-dark(#d1242f, #f85149); }
+    .markdown-alert-abstract { --mdp-alert-color: light-dark(#1b7c83, #39c5cf); }
+    .markdown-alert-question { --mdp-alert-color: light-dark(#bc4c00, #db6d28); }
+    .markdown-alert-quote { --mdp-alert-color: var(--secondary); }
+    /* Foldable callouts (`[!faq]-`, `[!faq]+`): the title is the toggle,
+       with a chevron after it that points down while open. */
+    summary.markdown-alert-title {
+        cursor: default;
+        list-style: none;
+    }
+    summary.markdown-alert-title::-webkit-details-marker { display: none; }
+    summary.markdown-alert-title::after {
+        content: "";
+        flex: 0 0 auto;
+        width: 1em;
+        height: 1em;
+        margin-left: 0.35em;
+        background: currentColor;
+        -webkit-mask: \(alertChevronMask) center / contain no-repeat;
+        transition: transform 0.15s ease;
+    }
+    details.markdown-alert[open] > summary.markdown-alert-title::after {
+        transform: rotate(90deg);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        summary.markdown-alert-title::after { transition: none; }
+    }
 
     ul, ol {
         /* Each list owns its gutter, so a nested list does not inherit the
@@ -1204,8 +1245,6 @@ nonisolated extension MarkdownHTML {
             --text: #1d1d1f;
             --secondary: #6e6e73;
             --link: #0066cc;
-            --aside-bg: #f5f5f7;
-            --aside-border: #696969;
             --quote-border: #d2d2d7;
             --code-bg: #f9f9f9;
             --code-border: #f0f0f0;
