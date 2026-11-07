@@ -1,3 +1,4 @@
+import UniformTypeIdentifiers
 import XCTest
 @testable import MarkdownHelpers
 
@@ -85,6 +86,73 @@ final class MarkdownAssetResolutionTests: XCTestCase {
             MarkdownAssetResolution.fileURL(for: clicked)?.path,
             "/Users/me/notes/sub/images/pic.png"
         )
+    }
+
+    // MARK: - What the page may load
+
+    /// A 1×1 PNG.
+    private let pngBytes = Data(base64Encoded:
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")!
+    private let keyBytes = Data("-----BEGIN OPENSSH PRIVATE KEY-----".utf8)
+
+    /// Writes `files` into a fresh folder and returns a page request for
+    /// each, resolved against the folder's base href as WebKit would.
+    private func requests(for files: [String: Data]) throws -> (folder: URL, urls: [String: URL]) {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        let base = URL(string: MarkdownAssetResolution.baseHref(forFolder: folder))!
+        var urls: [String: URL] = [:]
+        for (name, data) in files {
+            try data.write(to: folder.appendingPathComponent(name))
+            urls[name] = URL(string: name, relativeTo: base)!.absoluteURL
+        }
+        return (folder, urls)
+    }
+
+    func testMediaFilesAreServed() throws {
+        let names = ["pic.png", "photo.HEIC", "diagram.svg", "demo.mp4", "clip.m4a", "doc.pdf"]
+        let (_, urls) = try requests(for: Dictionary(uniqueKeysWithValues: names.map { ($0, Data("x".utf8)) }))
+        for name in names {
+            XCTAssertNotNil(MarkdownAssetResolution.servableFile(for: urls[name]!), name)
+        }
+        XCTAssertEqual(MarkdownAssetResolution.servableFile(for: urls["pic.png"]!)?.type, .png)
+    }
+
+    func testOtherFilesAreRefused() throws {
+        let names = ["id_ed25519", ".env", "other.md", "data.json", "page.html"]
+        let (_, urls) = try requests(for: Dictionary(uniqueKeysWithValues: names.map { ($0, keyBytes) }))
+        for name in names {
+            XCTAssertNil(MarkdownAssetResolution.servableFile(for: urls[name]!), name)
+        }
+    }
+
+    func testImageWithoutAnImageExtensionIsServedAsAnImage() throws {
+        let (_, urls) = try requests(for: ["logo": pngBytes])
+        XCTAssertEqual(MarkdownAssetResolution.servableFile(for: urls["logo"]!)?.type, .png)
+    }
+
+    func testFoldersAndMissingFilesAreRefused() throws {
+        let (folder, _) = try requests(for: [:])
+        let base = URL(string: MarkdownAssetResolution.baseHref(forFolder: folder))!
+        XCTAssertNil(MarkdownAssetResolution.servableFile(for: base))
+        XCTAssertNil(MarkdownAssetResolution.servableFile(for: URL(string: "missing.png", relativeTo: base)!.absoluteURL))
+    }
+
+    /// A link named like an image must be judged by the file it points at,
+    /// or a cloned repository could ship `pic.png -> ~/.ssh/id_ed25519`.
+    func testSymbolicLinkIsJudgedByItsTarget() throws {
+        let (folder, _) = try requests(for: ["id_ed25519": keyBytes, "real.png": pngBytes])
+        let base = URL(string: MarkdownAssetResolution.baseHref(forFolder: folder))!
+        try FileManager.default.createSymbolicLink(at: folder.appendingPathComponent("pic.png"),
+                                                   withDestinationURL: folder.appendingPathComponent("id_ed25519"))
+        try FileManager.default.createSymbolicLink(at: folder.appendingPathComponent("alias.png"),
+                                                   withDestinationURL: folder.appendingPathComponent("real.png"))
+
+        XCTAssertNil(MarkdownAssetResolution.servableFile(for: URL(string: "pic.png", relativeTo: base)!.absoluteURL))
+        let alias = MarkdownAssetResolution.servableFile(for: URL(string: "alias.png", relativeTo: base)!.absoluteURL)
+        XCTAssertEqual(alias?.url.lastPathComponent, "real.png")
     }
 
     // MARK: - Image storage helpers
