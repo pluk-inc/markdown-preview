@@ -295,13 +295,77 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         XCTAssertTrue(html.contains("<path d=\""), "expected path data: \(html)")
     }
 
-    func testUnknownAlertTagFallsBackToBlockquote() {
-        let html = EscapingHTMLFormatter.format("> [!FOO] Nope")
+    func testUnknownCalloutTypeLooksLikeANote() {
+        let html = EscapingHTMLFormatter.format("> [!Recipe]\n> Body.")
         XCTAssertTrue(
-            html.contains(#"<blockquote data-source-line="1" data-source-start="1" data-source-end="1">"#),
-            "unknown tag should be a source-mapped plain blockquote: \(html)"
+            html.contains(#"<div class="markdown-alert markdown-alert-note">"#),
+            "unknown type should use the note look: \(html)"
         )
-        XCTAssertFalse(html.contains("markdown-alert"), "no alert wrapper for unknown tag: \(html)")
+        XCTAssertTrue(html.contains("Recipe</p>"), "type should be the title: \(html)")
+        XCTAssertFalse(html.contains("[!"), "the tag should not show: \(html)")
+        XCTAssertFalse(html.contains("<blockquote"), html)
+    }
+
+    func testObsidianCalloutKindsAndAliases() {
+        let cases: [(String, String)] = [
+            ("abstract", "abstract"), ("summary", "abstract"), ("tldr", "abstract"),
+            ("info", "info"), ("todo", "todo"),
+            ("tip", "tip"), ("hint", "tip"),
+            ("success", "success"), ("check", "success"), ("done", "success"),
+            ("question", "question"), ("help", "question"), ("faq", "question"),
+            ("warning", "warning"), ("attention", "warning"),
+            ("failure", "failure"), ("fail", "failure"), ("missing", "failure"),
+            ("danger", "danger"), ("error", "danger"),
+            ("bug", "bug"), ("example", "example"),
+            ("quote", "quote"), ("cite", "quote"),
+            // GitHub's own kinds win over Obsidian's aliases of the same name.
+            ("important", "important"), ("caution", "caution"),
+        ]
+        for (type, kind) in cases {
+            let html = EscapingHTMLFormatter.format("> [!\(type.uppercased())]\n> Body.")
+            XCTAssertTrue(
+                html.contains(#"class="markdown-alert markdown-alert-\#(kind)""#),
+                "[!\(type)] should be a \(kind) callout: \(html)"
+            )
+        }
+    }
+
+    func testAliasDefaultTitleIsTheTypeAsWritten() {
+        let html = EscapingHTMLFormatter.format("> [!tldr]\n> Short version.")
+        XCTAssertTrue(html.contains("Tldr</p>"), html)
+        XCTAssertTrue(html.contains("<p>Short version.</p>"), html)
+    }
+
+    func testFoldableCalloutRendersAsDetails() {
+        let closed = EscapingHTMLFormatter.format("> [!faq]- Why fold?\n> Answer.")
+        XCTAssertTrue(
+            closed.contains(#"<details class="markdown-alert markdown-alert-question">"#),
+            "a `-` marker should give a closed details: \(closed)"
+        )
+        XCTAssertTrue(closed.contains(#"<summary class="markdown-alert-title"><svg"#), closed)
+        XCTAssertTrue(closed.contains("Why fold?</summary>"), closed)
+        XCTAssertTrue(closed.contains("<p>Answer.</p>\n</details>"), closed)
+
+        let open = EscapingHTMLFormatter.format("> [!note]+\n> Body.")
+        XCTAssertTrue(
+            open.contains(#"<details class="markdown-alert markdown-alert-note" open="">"#),
+            "a `+` marker should give an open details: \(open)"
+        )
+        XCTAssertTrue(open.contains("Note</summary>"), "fold marker should not reach the title: \(open)")
+    }
+
+    func testCalloutTypeAllowsDigitsHyphensAndUnderscores() {
+        let html = EscapingHTMLFormatter.format("> [!my_type-2] Title")
+        XCTAssertTrue(html.contains(#"<div class="markdown-alert markdown-alert-note">"#), html)
+        XCTAssertTrue(html.contains("Title</p>"), html)
+    }
+
+    func testBracketTextThatIsNotACalloutTagStaysABlockquote() {
+        for source in ["> [!] Empty", "> [!1st] Digit first", "> [!no space] Two words", "> [note] No bang"] {
+            let html = EscapingHTMLFormatter.format(source)
+            XCTAssertTrue(html.contains("<blockquote"), "\(source): \(html)")
+            XCTAssertFalse(html.contains("markdown-alert"), "\(source): \(html)")
+        }
     }
 
     func testQuotedBlankLinesRenderAsPlainBlockquote() {

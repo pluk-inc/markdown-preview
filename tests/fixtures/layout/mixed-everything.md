@@ -148,6 +148,12 @@ After equations.
 > [!CAUTION]
 > Caution body.
 
+> [!tldr] Obsidian alias
+> Abstract body.
+
+> [!faq]+ Open fold
+> Question body.
+
 After alerts.
 
 A referenced [reference link][destination] and an autolink <https://example.com/path>.
