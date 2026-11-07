@@ -2586,13 +2586,13 @@ final class MarkdownHTMLRenderTests: XCTestCase {
 
     func testEscapedCitationBracketsRemainLiteral() {
         let rendered = MarkdownHTML.render(
-            markdown: #"- Higher requirements.\[18\]\[19\]\[3, 4\]\[5–7\]"#,
+            markdown: "- Higher requirements.\\[18\\]\\[19\\]\\[3, 4\\]\\[5–7\\]\\[8,\u{00A0}9\\]",
             vendorLoading: .lazy
         )
 
         XCTAssertFalse(rendered.containsMath, rendered.articleHTML)
         XCTAssertTrue(rendered.articleHTML.contains(
-            "Higher requirements.[18][19][3, 4][5–7]"
+            "Higher requirements.[18][19][3, 4][5–7][8,\u{00A0}9]"
         ), rendered.articleHTML)
     }
 

@@ -34,7 +34,7 @@ nonisolated extension MarkdownHTML {
     // display math: leave them for the Markdown parser to unescape.
     private static let bracketedBlockMathRegex: NSRegularExpression = {
         // swiftlint:disable:next force_try
-        try! NSRegularExpression(pattern: #"(?<!\\)\\\[(?![ \t]*\d+(?:[ \t]*[,–-][ \t]*\d+)*[ \t]*\\\])([\s\S]+?)\\\]"#)
+        try! NSRegularExpression(pattern: #"(?<!\\)\\\[(?!\h*\d+(?:\h*[,–-]\h*\d+)*\h*\\\])([\s\S]+?)\\\]"#)
     }()
 
     private static let singleBackslashBracketRegex: NSRegularExpression = {
