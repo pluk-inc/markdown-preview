@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.0.72] – 2026-11-10 – Richer callouts, steadier reloads
+
+Markdown Preview 0.0.72 brings callouts for every `[!type]` tag, steadier live reload, and fixes for math, footnotes, and headings.
+
+### Added
+
+- **Callouts for Every Type.** Any `[!type]` tag now makes a callout, with its own icon and color for kinds such as info, todo, question, bug, and example, and a `+` or `-` after the tag makes it fold open or closed. GitHub alerts share the code block’s card look, with brighter titles in dark mode ([#629](https://github.com/pluk-inc/markdown-preview/pull/629)).
+
+### Changed
+
+- **No File Chooser at Login.** When Markdown Preview opens as a login item, it stays out of your way instead of asking you to choose a file ([#624](https://github.com/pluk-inc/markdown-preview/pull/624)).
+- **Safer Local Media.** The preview loads only images, video, audio, and PDFs from your disk, so a script in a document cannot read your other files ([#627](https://github.com/pluk-inc/markdown-preview/pull/627)).
+- **Updated Libraries.** Upgrades the libraries behind the app, including Sparkle 2.10.1, KaTeX 0.19.1, highlight.js 11.12.0, and Pele 1.13.0 ([#630](https://github.com/pluk-inc/markdown-preview/pull/630)).
+
+### Fixed
+
+- **Live Reload Survives Every Save.** When an editor saves by deleting the file and writing it again, the preview waits for the file to come back and reloads it ([#623](https://github.com/pluk-inc/markdown-preview/pull/623)).
+- **Citations Stay Text.** Escaped citations such as `\[18\]` show as `[18]` instead of turning into centered math blocks ([#633](https://github.com/pluk-inc/markdown-preview/pull/633)).
+- **Footnotes Past 9 Show in Full.** Footnote numbers 10 and up keep every digit, instead of showing 10, 11, and 12 as 0, 1, and 2 ([#622](https://github.com/pluk-inc/markdown-preview/pull/622)).
+- **Empty Headings Open Without a Crash.** Files with an empty heading such as `- #` or `> #` open normally, and the outline still lists their headings ([#628](https://github.com/pluk-inc/markdown-preview/pull/628)).
+
+### Contributors
+
+- [@yusuftunga1](https://github.com/yusuftunga1) — kept the file chooser from opening at login ([#624](https://github.com/pluk-inc/markdown-preview/pull/624)).
+- [@BrighterGit](https://github.com/BrighterGit) — asked for more callout kinds and folding ([#447](https://github.com/pluk-inc/markdown-preview/issues/447)).
+- [@Bo-Feng-1024](https://github.com/Bo-Feng-1024) — reported live reload stopping after a save replaced the file ([#615](https://github.com/pluk-inc/markdown-preview/issues/615)).
+- [@0xdaniil](https://github.com/0xdaniil) — reported escaped brackets rendering as math ([#625](https://github.com/pluk-inc/markdown-preview/issues/625)).
+- [@transon-top](https://github.com/transon-top) — reported footnote numbers breaking after 9 ([#617](https://github.com/pluk-inc/markdown-preview/issues/617)).
+- [@coygeek](https://github.com/coygeek) — reported the crash on empty headings ([#626](https://github.com/pluk-inc/markdown-preview/issues/626)).
+- [@GH-AirGee](https://github.com/GH-AirGee) — raised the local file hardening ([#612](https://github.com/pluk-inc/markdown-preview/issues/612)).
+
 ## [0.0.71] – 2026-11-04 – Quieter updates, dark icon
 
 Markdown Preview 0.0.71 brings a dark app icon, quieter updates, and a clearer name for Share as Link.
