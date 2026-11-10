@@ -38,6 +38,14 @@ nonisolated enum EditorHTML {
             color-scheme: light dark;
             /* Semantic system colors resolve per appearance on their own. */
             \(MarkdownHTML.textColorCSS)
+            /* The body em as a fixed length: a line's own em shrinks on
+               code lines (0.9em), but a list or quote indent on that line
+               must keep the text column, as the preview's list item does
+               around its pre. A plain px value, not a registered <length>
+               property: WebKit applies page zoom to a registered length
+               again when calc() uses it, so at 90% zoom list items sat 10%
+               left of the preview. */
+            --mdp-body-em: \(MarkdownHTML.bodyFontSize)px;
             \(MarkdownHTML.quoteIndentCSS)
             --secondary: -apple-system-secondary-label;
             --quote-border: -apple-system-quaternary-label;
@@ -76,14 +84,6 @@ nonisolated enum EditorHTML {
             -webkit-font-smoothing: antialiased;
             \(MarkdownHTML.bodyTextRenderingCSS)
         }
-        /* The body em as a computed length: a line's own em shrinks on code
-           lines (0.9em), but a list indent on that line must keep the text
-           column, as the preview's list item does around its pre. */
-        @property --mdp-body-em {
-            syntax: "<length>";
-            inherits: true;
-            initial-value: \(MarkdownHTML.bodyFontSize)px;
-        }
         #editor {
             height: 100%;
             box-sizing: border-box;
@@ -119,7 +119,6 @@ nonisolated enum EditorHTML {
             line-height: \(MarkdownHTML.bodyLineHeight);
         }
         #editor .cm-content {
-            --mdp-body-em: 1em;
             width: 100%;
             max-width: \(columnMaxWidth);
             min-height: 100%;
