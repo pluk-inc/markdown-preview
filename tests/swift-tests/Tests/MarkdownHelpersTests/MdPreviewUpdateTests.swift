@@ -461,9 +461,15 @@ final class MdPreviewUpdateTests: XCTestCase {
         > [!NOTE]
         > A note.
 
-        | Name | Value |
-        | ---- | ----- |
-        | Alpha | 1 |
+        | Name | Note | Value |
+        | ---- | ---- | ----- |
+        | Alpha |  | 1 |
+        |  | x |  |
+
+        - Item
+        -
+
+        After the empty item.
 
         ```mermaid
         flowchart LR
@@ -494,8 +500,14 @@ final class MdPreviewUpdateTests: XCTestCase {
             word.setEnd(article.querySelector('p').firstChild, 11);
             selection.removeAllRanges(); selection.addRange(word);
             const partial = window.MdPreview.plainTextForSelection();
+            // A word inside a list item copies without the item's marker.
+            const second = document.createTreeWalker(article.querySelectorAll('li')[1], NodeFilter.SHOW_TEXT).nextNode();
+            word.setStart(second, 1);
+            word.setEnd(second, 4);
+            selection.removeAllRanges(); selection.addRange(word);
+            const inItem = window.MdPreview.plainTextForSelection();
             selection.removeAllRanges();
-            return JSON.stringify({ all, partial, none: window.MdPreview.plainTextForSelection() });
+            return JSON.stringify({ all, partial, inItem, none: window.MdPreview.plainTextForSelection() });
         })()
         """)
         let json = try XCTUnwrap(result as? String)
@@ -523,14 +535,20 @@ final class MdPreviewUpdateTests: XCTestCase {
         Note
         A note.
 
-        Name\tValue
-        Alpha\t1
+        Name\tNote\tValue
+        Alpha\t\t1
+        \tx\t
+
+        • Item
+
+        After the empty item.
 
         1. The note.
         """)
         XCTAssertTrue((all["html"] as? String)?.contains("<strong>bold</strong>") == true)
         let partial = try XCTUnwrap(values["partial"] as? [String: Any])
         XCTAssertEqual(partial["text"] as? String, "paragraph")
+        XCTAssertEqual((values["inItem"] as? [String: Any])?["text"] as? String, "eco")
         XCTAssertTrue(values["none"] is NSNull)
     }
 

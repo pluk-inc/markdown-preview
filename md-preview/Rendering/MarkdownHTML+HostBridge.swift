@@ -806,11 +806,26 @@ nonisolated extension MarkdownHTML {
                     : plain ? plainBlockBreaks(node, display)
                     : node.nodeName === 'P' ? 2 : 1;
                 breaks = Math.max(breaks, blockBreaks);
+                if (plain && display === 'table-row') {
+                    // Cell by cell, so an empty cell keeps its column.
+                    const cells = [...node.children]
+                        .filter(child => range.intersectsNode(child))
+                        .map(child => renderedTextOfRange(range, child, { plain }).replace(/\\s*\\n\\s*/g, ' '));
+                    breaks = Math.max(breaks, 1);
+                    if (cells.some(Boolean)) emit(cells.join('\\t'));
+                    breaks = Math.max(breaks, 1);
+                    return;
+                }
                 const listItem = plain && node.nodeName === 'LI';
-                if (listItem) prefix = listMarker(node);
+                // A selection that starts inside the item's text copies
+                // that text without the item's marker.
+                if (listItem && coversBlockEdge(range, node, 'start')) prefix = listMarker(node);
                 if (listItem) listDepth += 1;
                 walkChildren(node);
-                if (listItem) listDepth -= 1;
+                if (listItem) {
+                    listDepth -= 1;
+                    prefix = '';
+                }
                 breaks = Math.max(breaks, blockBreaks);
                 if (display === 'table-cell') cell = true;
             }
