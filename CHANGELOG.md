@@ -12,7 +12,7 @@ Markdown Preview 0.0.72 brings callouts for every `[!type]` tag, Copy as Plain T
 ### Changed
 
 - **No File Chooser at Login.** When Markdown Preview opens as a login item, it stays out of your way instead of asking you to choose a file ([#624](https://github.com/pluk-inc/markdown-preview/pull/624)).
-- **Safer Local Media.** The preview loads only images, video, audio, and PDFs from your disk, so a script in a document cannot read your other files ([#627](https://github.com/pluk-inc/markdown-preview/pull/627)).
+- **Safer Local Media.** The preview loads only images, video, audio, and PDFs from your disk, so a script in a document can no longer read other kinds of files, such as keys or settings ([#627](https://github.com/pluk-inc/markdown-preview/pull/627)).
 - **Updated Libraries.** Upgrades the libraries behind the app, including Sparkle 2.10.1, KaTeX 0.19.1, highlight.js 11.12.0, and Pele 1.13.0 ([#630](https://github.com/pluk-inc/markdown-preview/pull/630)).
 
 ### Fixed
