@@ -552,6 +552,41 @@ final class MdPreviewUpdateTests: XCTestCase {
         XCTAssertTrue(values["none"] is NSNull)
     }
 
+    @MainActor
+    func testPlainTextCopyKeepsSourceIndentedListLinesAndSkipsHiddenCells() async throws {
+        let webView = try await loadHarness(articleAttributes: "")
+        let markdown = """
+        - Parent
+            - Child
+                    - Deep bullet
+                    1. Deep ordered
+                    - [x] Deep task
+
+        <table><tr><td hidden>Hidden</td><td>Visible</td></tr></table>
+        """
+        let rendered = MarkdownHTML.render(markdown: markdown, vendorLoading: .lazy)
+        _ = try await webView.evaluateJavaScript("""
+        window.MdPreview.update(\(MarkdownHTML.javaScriptStringLiteral(rendered.articleHTML)),
+            { source: \(MarkdownHTML.javaScriptStringLiteral(markdown)) }); true
+        """)
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            window.getSelection().selectAllChildren(document.body);
+            return window.MdPreview.plainTextForSelection().text;
+        })()
+        """)
+        let text = try XCTUnwrap(result as? String)
+        XCTAssertEqual(text, """
+        • Parent
+          • Child
+                • Deep bullet
+                1. Deep ordered
+                ☑ Deep task
+
+        Visible
+        """)
+    }
+
     /// Builds the harness page — bundled DOMPurify + morphdom, the shipped
     /// host bridge, and fake renderers that mimic the real markers: stash
     /// `__mdSrc`, set the done flag, replace the children with a sentinel,

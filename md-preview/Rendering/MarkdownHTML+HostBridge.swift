@@ -629,7 +629,7 @@ nonisolated extension MarkdownHTML {
 
         // Rendered but not text worth pasting: diagrams, footnote back
         // links, and rules. Copy as Plain Text only.
-        const MD_PLAIN_SKIPPED_SELECTOR = '.mermaid-figure, .mermaid, .footnote-backrefs, .footnote-backref, hr';
+        const MD_PLAIN_SKIPPED_SELECTOR = '.mermaid-figure, .mermaid, .footnote-backrefs, .footnote-backref, hr, .md-source-list-marker';
 
         // Text of `range` as the preview shows it. Walks the live article
         // rather than a detached clone so computed styles decide block
@@ -708,6 +708,16 @@ nonisolated extension MarkdownHTML {
                     && item.querySelector(':scope > input[type=checkbox], :scope > p > input[type=checkbox]');
                 if (box) marker = (marker === '•' ? '' : marker + ' ') + (box.checked ? '☑' : '☐');
                 return '  '.repeat(listDepth) + marker + ' ';
+            }
+            function sourceLineMarker(line) {
+                let depth = listDepth;
+                for (let el = line.parentElement; el && el !== root && el.nodeName !== 'LI'; el = el.parentElement) {
+                    if (el.classList.contains('md-source-list-indent-step')) depth += 1;
+                }
+                const marker = line.querySelector(':scope > .md-source-list-marker');
+                const box = marker && marker.querySelector('input[type=checkbox]');
+                const text = box ? (box.checked ? '☑' : '☐') : (marker ? marker.textContent.trim() : '•');
+                return '  '.repeat(depth) + text + ' ';
             }
             // One line break inside lists, tables, and callouts; a blank
             // line between every other pair of blocks.
@@ -793,7 +803,7 @@ nonisolated extension MarkdownHTML {
                     const tex = node.classList.contains('katex')
                         && node.querySelector('annotation[encoding="application/x-tex"]');
                     if (tex) {
-                        if (isBlock(display)) breaks = Math.max(breaks, 2);
+                        if (isBlock(display)) breaks = Math.max(breaks, plainBlockBreaks(node, display));
                         emit(tex.textContent.trim());
                         return;
                     }
@@ -809,17 +819,23 @@ nonisolated extension MarkdownHTML {
                 if (plain && display === 'table-row') {
                     // Cell by cell, so an empty cell keeps its column.
                     const cells = [...node.children]
-                        .filter(child => range.intersectsNode(child))
+                        .filter(child => range.intersectsNode(child)
+                            && (typeof child.checkVisibility !== 'function' || child.checkVisibility()))
                         .map(child => renderedTextOfRange(range, child, { plain }).replace(/\\s*\\n\\s*/g, ' '));
                     breaks = Math.max(breaks, 1);
                     if (cells.some(Boolean)) emit(cells.join('\\t'));
                     breaks = Math.max(breaks, 1);
                     return;
                 }
-                const listItem = plain && node.nodeName === 'LI';
+                // Over-indented source lines render as list-like lines
+                // inside a paragraph (see EscapingHTMLFormatter).
+                const sourceLine = plain && node.classList.contains('md-source-list-line');
+                const listItem = plain && (node.nodeName === 'LI' || sourceLine);
                 // A selection that starts inside the item's text copies
                 // that text without the item's marker.
-                if (listItem && coversBlockEdge(range, node, 'start')) prefix = listMarker(node);
+                if (listItem && coversBlockEdge(range, node, 'start')) {
+                    prefix = sourceLine ? sourceLineMarker(node) : listMarker(node);
+                }
                 if (listItem) listDepth += 1;
                 walkChildren(node);
                 if (listItem) {
