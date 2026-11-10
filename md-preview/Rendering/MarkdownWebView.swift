@@ -194,6 +194,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     /// document happens to lay out at the same height as the old one.
     var contentDidReplace: (() -> Void)?
     var selectedTextDidChange: ((String?) -> Void)?
+    /// Whether the reader has selected article text, for Copy as Plain Text.
+    private var hasSelectedText = false
     var taskCheckboxToggled: ((Int, Bool) -> Void)?
     var zoomDidChange: ((CGFloat) -> Void)?
     var fragmentLinkActivated: ((String) -> Void)?
@@ -686,6 +688,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
 
         // A full page load drops any selection in the old page without a
         // selectionchange, and the new page starts with no selection.
+        hasSelectedText = false
         selectedTextDidChange?(nil)
 
         #if DEBUG
@@ -782,6 +785,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
             pointerDocumentYDidChange?(CGFloat(truncating: value))
         case "selectedText":
             guard dict["value"] is String || dict["value"] is NSNull else { return }
+            hasSelectedText = dict["value"] is String
             selectedTextDidChange?(dict["value"] as? String)
         case "linkContextMenu":
             guard let raw = dict["url"] as? String, let url = URL(string: raw) else { return }
@@ -1841,6 +1845,33 @@ private extension NSView {
     }
 }
 
+extension MarkdownWebView: NSMenuItemValidation {
+    /// Writes the selection as text without Markdown, plus its HTML for
+    /// rich text fields. A normal copy keeps writing the Markdown source.
+    /// The Edit menu reaches it through the responder chain from the
+    /// reader's web view; the editor is not inside this view, so the item
+    /// is off in edit mode.
+    @objc func copyAsPlainText(_ sender: Any?) {
+        webView.evaluateJavaScript("window.MdPreview?.plainTextForSelection?.() ?? null") { result, _ in
+            guard let copy = result as? [String: Any],
+                  let text = copy["text"] as? String, !text.isEmpty else {
+                NSSound.beep()
+                return
+            }
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
+            if let html = copy["html"] as? String, !html.isEmpty {
+                pasteboard.setString(html, forType: .html)
+            }
+        }
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        menuItem.action == #selector(copyAsPlainText(_:)) ? hasSelectedText : true
+    }
+}
+
 private final class PreviewWKWebView: WKWebView {
     var didAddSubviewHandler: (() -> Void)?
 
@@ -1878,6 +1909,15 @@ private final class PreviewWKWebView: WKWebView {
 
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
         menu.removeWebKitReloadItems()
+        if let owner = superview as? MarkdownWebView {
+            let item = NSMenuItem(
+                title: NSLocalizedString("Copy as Plain Text", comment: "Copy the selection without Markdown"),
+                action: #selector(MarkdownWebView.copyAsPlainText(_:)),
+                keyEquivalent: ""
+            )
+            item.target = owner
+            menu.insertAfterWebKitCopy(item)
+        }
         super.willOpenMenu(menu, with: event)
     }
 
@@ -2003,6 +2043,15 @@ private extension NSMenu {
             item.submenu?.removeWebKitReloadItems()
         }
         items.removeAll { $0.action == #selector(WKWebView.reload(_:)) }
+    }
+
+    /// WebKit's Copy is in the menu only when text is selected, so an item
+    /// placed after it shows only then.
+    func insertAfterWebKitCopy(_ item: NSMenuItem) {
+        guard let index = items.firstIndex(where: {
+            $0.identifier?.rawValue == "WKMenuItemIdentifierCopy"
+        }) else { return }
+        insertItem(item, at: index + 1)
     }
 }
 

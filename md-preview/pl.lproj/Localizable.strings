@@ -516,3 +516,6 @@
 "Update failed" = "Uaktualnienie nie powiodło się";
 "Download" = "Pobierz";
 "Relaunch Now" = "Uruchom ponownie";
+
+/* Edit menu and reader context menu */
+"Copy as Plain Text" = "Kopiuj jako zwykły tekst";

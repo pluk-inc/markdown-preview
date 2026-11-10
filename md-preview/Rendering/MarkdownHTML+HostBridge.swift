@@ -627,11 +627,20 @@ nonisolated extension MarkdownHTML {
         // visually hidden MathML twin. Inspector counts only.
         const MD_UNCOUNTED_SELECTOR = MD_CHROME_SELECTOR + ', .mermaid-hud, .katex-mathml';
 
+        // Rendered but not text worth pasting: diagrams, footnote back
+        // links, and rules. Copy as Plain Text only.
+        const MD_PLAIN_SKIPPED_SELECTOR = '.mermaid-figure, .mermaid, .footnote-backrefs, .footnote-backref, hr, .md-source-list-marker';
+
         // Text of `range` as the preview shows it. Walks the live article
         // rather than a detached clone so computed styles decide block
         // breaks, whitespace collapsing, and visibility (closed <details>,
         // display:none) the way the page renders them.
-        function renderedTextOfRange(range, root) {
+        //
+        // `plain` is Copy as Plain Text: the text a reader would type to
+        // reproduce the page without Markdown. Blocks get a blank line
+        // between them, list items their bullet, number, or checkbox,
+        // footnote references their [n], and math its TeX source.
+        function renderedTextOfRange(range, root, { plain = false } = {}) {
             const styles = new Map();
             function styleOf(element) {
                 let style = styles.get(element);
@@ -663,6 +672,10 @@ nonisolated extension MarkdownHTML {
             let breaks = 0;
             let cell = false;
             let space = false;
+            // A list item's marker, written before its first text, and how
+            // many list items the walk is inside.
+            let prefix = '';
+            let listDepth = 0;
             function emit(value) {
                 if (text) {
                     if (breaks) {
@@ -677,7 +690,40 @@ nonisolated extension MarkdownHTML {
                 breaks = 0;
                 cell = false;
                 space = false;
-                text += value;
+                text += prefix + value;
+                prefix = '';
+            }
+            function listMarker(item) {
+                const list = item.parentElement;
+                let marker = '•';
+                if (list && list.nodeName === 'OL') {
+                    let number = parseInt(list.getAttribute('start'), 10);
+                    if (!Number.isFinite(number)) number = 1;
+                    for (let el = item.previousElementSibling; el; el = el.previousElementSibling) {
+                        if (el.nodeName === 'LI') number += 1;
+                    }
+                    marker = number + '.';
+                }
+                const box = item.classList.contains('task-list-item')
+                    && item.querySelector(':scope > input[type=checkbox], :scope > p > input[type=checkbox]');
+                if (box) marker = (marker === '•' ? '' : marker + ' ') + (box.checked ? '☑' : '☐');
+                return '  '.repeat(listDepth) + marker + ' ';
+            }
+            function sourceLineMarker(line) {
+                let depth = listDepth;
+                for (let el = line.parentElement; el && el !== root && el.nodeName !== 'LI'; el = el.parentElement) {
+                    if (el.classList.contains('md-source-list-indent-step')) depth += 1;
+                }
+                const marker = line.querySelector(':scope > .md-source-list-marker');
+                const box = marker && marker.querySelector('input[type=checkbox]');
+                const text = box ? (box.checked ? '☑' : '☐') : (marker ? marker.textContent.trim() : '•');
+                return '  '.repeat(depth) + text + ' ';
+            }
+            // One line break inside lists, tables, and callouts; a blank
+            // line between every other pair of blocks.
+            function plainBlockBreaks(node, display) {
+                if (listDepth || node.nodeName === 'LI' || display.startsWith('table-')) return 1;
+                return node.parentElement?.classList.contains('markdown-alert') ? 1 : 2;
             }
             // Whether the character at `index` takes up space on screen.
             function rendersCharacter(node, index) {
@@ -723,6 +769,7 @@ nonisolated extension MarkdownHTML {
                     if (!range.intersectsNode(node)) return NodeFilter.FILTER_REJECT;
                     if (node.nodeType !== Node.ELEMENT_NODE) return NodeFilter.FILTER_ACCEPT;
                     if (node.matches(MD_UNCOUNTED_SELECTOR)) return NodeFilter.FILTER_REJECT;
+                    if (plain && node.matches(MD_PLAIN_SKIPPED_SELECTOR)) return NodeFilter.FILTER_REJECT;
                     // display:contents has no box of its own, so checkVisibility
                     // reports false even though its children render.
                     if (styleOf(node).display === 'contents') return NodeFilter.FILTER_ACCEPT;
@@ -752,14 +799,82 @@ nonisolated extension MarkdownHTML {
                     return;
                 }
                 const display = styleOf(node).display;
-                const blockBreaks = !isBlock(display) ? 0 : node.nodeName === 'P' ? 2 : 1;
+                if (plain) {
+                    const tex = node.classList.contains('katex')
+                        && node.querySelector('annotation[encoding="application/x-tex"]');
+                    if (tex) {
+                        if (isBlock(display)) breaks = Math.max(breaks, plainBlockBreaks(node, display));
+                        emit(tex.textContent.trim());
+                        return;
+                    }
+                    if (node.matches('sup.footnote-ref')) {
+                        emit('[' + node.textContent.trim() + ']');
+                        return;
+                    }
+                }
+                const blockBreaks = !isBlock(display) ? 0
+                    : plain ? plainBlockBreaks(node, display)
+                    : node.nodeName === 'P' ? 2 : 1;
                 breaks = Math.max(breaks, blockBreaks);
+                if (plain && display === 'table-row') {
+                    // Cell by cell, so an empty cell keeps its column.
+                    const cells = [...node.children]
+                        .filter(child => range.intersectsNode(child)
+                            && (typeof child.checkVisibility !== 'function' || child.checkVisibility()))
+                        .map(child => renderedTextOfRange(range, child, { plain }).replace(/\\s*\\n\\s*/g, ' '));
+                    breaks = Math.max(breaks, 1);
+                    if (cells.some(Boolean)) emit(cells.join('\\t'));
+                    breaks = Math.max(breaks, 1);
+                    return;
+                }
+                // Over-indented source lines render as list-like lines
+                // inside a paragraph (see EscapingHTMLFormatter).
+                const sourceLine = plain && node.classList.contains('md-source-list-line');
+                const listItem = plain && (node.nodeName === 'LI' || sourceLine);
+                // A selection that starts inside the item's text copies
+                // that text without the item's marker.
+                if (listItem && coversBlockEdge(range, node, 'start')) {
+                    prefix = sourceLine ? sourceLineMarker(node) : listMarker(node);
+                }
+                if (listItem) listDepth += 1;
                 walkChildren(node);
+                if (listItem) {
+                    listDepth -= 1;
+                    prefix = '';
+                }
                 breaks = Math.max(breaks, blockBreaks);
                 if (display === 'table-cell') cell = true;
             }
             walkChildren(root);
             return text;
+        }
+
+        // The selection's range clipped to the article, or null.
+        function selectedArticleRange(article) {
+            const selection = window.getSelection();
+            if (!article || !selection || selection.isCollapsed || !selection.rangeCount) return null;
+            const range = selection.getRangeAt(0);
+            if (!range.intersectsNode(article)) return null;
+            const clipped = range.cloneRange();
+            const bounds = document.createRange();
+            bounds.selectNodeContents(article);
+            if (clipped.compareBoundaryPoints(Range.START_TO_START, bounds) < 0)
+                clipped.setStart(bounds.startContainer, bounds.startOffset);
+            if (clipped.compareBoundaryPoints(Range.END_TO_END, bounds) > 0)
+                clipped.setEnd(bounds.endContainer, bounds.endOffset);
+            return clipped;
+        }
+
+        // Copy as Plain Text: the selection as text without Markdown, plus
+        // the same HTML a normal copy writes, for rich text fields.
+        function plainTextForSelection() {
+            const article = document.querySelector('article.markdown-body');
+            const range = selectedArticleRange(article);
+            if (!range) return null;
+            const text = renderedTextOfRange(range, article, { plain: true });
+            if (!text) return null;
+            const { fragment } = selectionFragment(window.getSelection());
+            return { text, html: htmlFromFragment(fragment) };
         }
 
         // Mirror read-only text selections to the native Inspector. Only the
@@ -768,21 +883,8 @@ nonisolated extension MarkdownHTML {
         function pushSelectedText() {
             if (!hasHostBridge) return;
             const article = document.querySelector('article.markdown-body');
-            const selection = window.getSelection();
-            let text = null;
-            if (article && selection && !selection.isCollapsed && selection.rangeCount) {
-                const range = selection.getRangeAt(0);
-                if (range.intersectsNode(article)) {
-                    const clipped = range.cloneRange();
-                    const bounds = document.createRange();
-                    bounds.selectNodeContents(article);
-                    if (clipped.compareBoundaryPoints(Range.START_TO_START, bounds) < 0)
-                        clipped.setStart(bounds.startContainer, bounds.startOffset);
-                    if (clipped.compareBoundaryPoints(Range.END_TO_END, bounds) > 0)
-                        clipped.setEnd(bounds.endContainer, bounds.endOffset);
-                    text = renderedTextOfRange(clipped, article) || null;
-                }
-            }
+            const range = selectedArticleRange(article);
+            const text = range ? renderedTextOfRange(range, article) || null : null;
             if (text === lastSelectedText) return;
             lastSelectedText = text;
             post({ kind: 'selectedText', value: text });
@@ -1232,6 +1334,7 @@ nonisolated extension MarkdownHTML {
         // second update without the flag once the real document arrives,
         // which clears the inline style and reveals the article.
         window.MdPreview.markdownForSelection = markdownForSelection;
+        window.MdPreview.plainTextForSelection = plainTextForSelection;
         window.MdPreview.clearColumnResize = clearColumnResize;
 
         window.MdPreview.update = (articleHTML, opts) => {
