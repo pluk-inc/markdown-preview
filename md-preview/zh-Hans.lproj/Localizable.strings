@@ -516,3 +516,6 @@
 "Update failed" = "更新失败";
 "Download" = "下载";
 "Relaunch Now" = "立即重新启动";
+
+/* Edit menu and reader context menu */
+"Copy as Plain Text" = "拷贝为纯文本";

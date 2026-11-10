@@ -515,3 +515,6 @@
 "Update failed" = "به‌روزرسانی ناموفق بود";
 "Download" = "دانلود";
 "Relaunch Now" = "راه‌اندازی مجدد";
+
+/* Edit menu and reader context menu */
+"Copy as Plain Text" = "کپی به‌صورت متن ساده";

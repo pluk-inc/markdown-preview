@@ -516,3 +516,6 @@
 "Update failed" = "アップデートに失敗しました";
 "Download" = "ダウンロード";
 "Relaunch Now" = "今すぐ再起動";
+
+/* Edit menu and reader context menu */
+"Copy as Plain Text" = "プレーンテキストとしてコピー";

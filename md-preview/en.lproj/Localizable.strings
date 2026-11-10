@@ -516,3 +516,6 @@
 "Update failed" = "Update failed";
 "Download" = "Download";
 "Relaunch Now" = "Relaunch Now";
+
+/* Edit menu and reader context menu */
+"Copy as Plain Text" = "Copy as Plain Text";

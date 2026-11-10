@@ -159,6 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         installContentWidthMenuItems()
         installSidebarViewMenuItems()
         installEditModeMenuItem()
+        installCopyAsPlainTextMenuItem()
         installFormatMenu()
         installNewTabMenuItem()
         installSearchForDocumentMenuItem()
@@ -1050,6 +1051,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             let message = errorInfo[NSAppleScript.errorMessage] as? String
                 ?? errorInfo.description
             throw CommandLineToolInstallError.terminalAutomationFailed(message)
+        }
+    }
+
+    private func installCopyAsPlainTextMenuItem() {
+        let action = #selector(MarkdownWebView.copyAsPlainText(_:))
+        for editMenu in NSApp.mainMenu?.items.compactMap(\.submenu) ?? [] {
+            guard let copyIndex = editMenu.items.firstIndex(where: { $0.action == #selector(NSText.copy(_:)) })
+            else { continue }
+            guard !editMenu.items.contains(where: { $0.action == action }) else { return }
+            // nil target: the reader handles it and enables it only while
+            // article text is selected.
+            let item = NSMenuItem(title: L("Copy as Plain Text"), action: action, keyEquivalent: "c")
+            item.keyEquivalentModifierMask = [.command, .option, .shift]
+            editMenu.insertItem(item, at: copyIndex + 1)
+            return
         }
     }
 
