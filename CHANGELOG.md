@@ -1,12 +1,13 @@
 # Changelog
 
-## [0.0.72] – 2026-11-10 – Richer callouts, steadier reloads
+## [0.0.72] – 2026-11-10 – Richer callouts, plain text copy
 
-Markdown Preview 0.0.72 brings callouts for every `[!type]` tag, steadier live reload, and fixes for math, footnotes, and headings.
+Markdown Preview 0.0.72 brings callouts for every `[!type]` tag, Copy as Plain Text, and steadier live reload.
 
 ### Added
 
 - **Callouts for Every Type.** Any `[!type]` tag now makes a callout, with its own icon and color for kinds such as info, todo, question, bug, and example, and a `+` or `-` after the tag makes it fold open or closed. GitHub alerts share the code block’s card look, with brighter titles in dark mode ([#629](https://github.com/pluk-inc/markdown-preview/pull/629)).
+- **Copy as Plain Text.** Choose Copy as Plain Text from the Edit menu or the context menu, or press ⌥⇧⌘C, to paste a selection into plain text fields without Markdown, keeping list bullets, numbers, checkboxes, and table rows ([#637](https://github.com/pluk-inc/markdown-preview/pull/637)).
 
 ### Changed
 
@@ -17,6 +18,7 @@ Markdown Preview 0.0.72 brings callouts for every `[!type]` tag, steadier live r
 ### Fixed
 
 - **Live Reload Survives Every Save.** When an editor saves by deleting the file and writing it again, the preview waits for the file to come back and reloads it ([#623](https://github.com/pluk-inc/markdown-preview/pull/623)).
+- **Lists Stay Put When Zoomed.** At a zoom other than 100%, bullets, checkboxes, and numbers stay in the same place when you switch between Read and Edit mode ([#638](https://github.com/pluk-inc/markdown-preview/pull/638)).
 - **Citations Stay Text.** Escaped citations such as `\[18\]` show as `[18]` instead of turning into centered math blocks ([#633](https://github.com/pluk-inc/markdown-preview/pull/633)).
 - **Footnotes Past 9 Show in Full.** Footnote numbers 10 and up keep every digit, instead of showing 10, 11, and 12 as 0, 1, and 2 ([#622](https://github.com/pluk-inc/markdown-preview/pull/622)).
 - **Empty Headings Open Without a Crash.** Files with an empty heading such as `- #` or `> #` open normally, and the outline still lists their headings ([#628](https://github.com/pluk-inc/markdown-preview/pull/628)).
@@ -24,6 +26,7 @@ Markdown Preview 0.0.72 brings callouts for every `[!type]` tag, steadier live r
 ### Contributors
 
 - [@yusuftunga1](https://github.com/yusuftunga1) — kept the file chooser from opening at login ([#624](https://github.com/pluk-inc/markdown-preview/pull/624)).
+- [@parterburn](https://github.com/parterburn) — asked for a way to copy the formatted text instead of the Markdown ([#634](https://github.com/pluk-inc/markdown-preview/issues/634)).
 - [@BrighterGit](https://github.com/BrighterGit) — asked for more callout kinds and folding ([#447](https://github.com/pluk-inc/markdown-preview/issues/447)).
 - [@Bo-Feng-1024](https://github.com/Bo-Feng-1024) — reported live reload stopping after a save replaced the file ([#615](https://github.com/pluk-inc/markdown-preview/issues/615)).
 - [@0xdaniil](https://github.com/0xdaniil) — reported escaped brackets rendering as math ([#625](https://github.com/pluk-inc/markdown-preview/issues/625)).
