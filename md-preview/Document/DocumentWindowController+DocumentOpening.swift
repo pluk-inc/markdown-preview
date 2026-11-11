@@ -58,12 +58,9 @@ extension DocumentWindowController {
 
     func openFolder(_ folderURL: URL) {
         let folderURL = folderURL.standardizedFileURL
-        if isDownloadPlaceholder {
-            // The reader took the blank window for a folder; the download
-            // opens elsewhere.
-            isDownloadPlaceholder = false
-            cancelFileLoadIndicator()
-        }
+        // The reader took a blank loading window for a folder; its
+        // download opens elsewhere.
+        releaseDownloadPlaceholder()
         if currentFileURL == nil {
             documentWindow.title = folderURL.lastPathComponent
             updateWindowSubtitle()
@@ -234,6 +231,17 @@ extension DocumentWindowController {
     var isUnusedDownloadPlaceholder: Bool {
         isDownloadPlaceholder && currentFileURL == nil && (currentMarkdown ?? "").isEmpty
             && !isEditing && !hasPendingEditorChanges
+    }
+
+    /// The reader put something of their own in the loading window, or its
+    /// download ended: the window stops being the download's.
+    func releaseDownloadPlaceholder() {
+        guard isDownloadPlaceholder else { return }
+        isDownloadPlaceholder = false
+        // A file the reader opened here owns the feedback now.
+        if currentFileURL == nil {
+            cancelFileLoadIndicator()
+        }
     }
 
     func cancelFileLoadIndicator() {

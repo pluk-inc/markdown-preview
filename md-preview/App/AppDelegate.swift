@@ -430,6 +430,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         guard NSDocumentController.shared.documents.contains(placeholder),
               let controller = placeholder.windowControllers.first as? DocumentWindowController else { return }
         guard controller.isUnusedDownloadPlaceholder else {
+            controller.releaseDownloadPlaceholder()
             if let file { openDocument(at: file) }
             return
         }
