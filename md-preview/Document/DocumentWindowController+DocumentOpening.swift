@@ -58,6 +58,12 @@ extension DocumentWindowController {
 
     func openFolder(_ folderURL: URL) {
         let folderURL = folderURL.standardizedFileURL
+        if isDownloadPlaceholder {
+            // The reader took the blank window for a folder; the download
+            // opens elsewhere.
+            isDownloadPlaceholder = false
+            cancelFileLoadIndicator()
+        }
         if currentFileURL == nil {
             documentWindow.title = folderURL.lastPathComponent
             updateWindowSubtitle()
@@ -214,6 +220,7 @@ extension DocumentWindowController {
     /// (a shared link, the release notes): the same delayed Loading panel
     /// over its blank page. The read of the downloaded file clears it.
     func showDownloadFeedback() {
+        isDownloadPlaceholder = true
         fileLoadIndicatorWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
             self?.mainSplit?.showLoadingPanel()
@@ -223,9 +230,9 @@ extension DocumentWindowController {
     }
 
     /// Still the blank window `showDownloadFeedback` was called on: no
-    /// file, no text, no editing session.
+    /// file, no folder, no text, no editing session.
     var isUnusedDownloadPlaceholder: Bool {
-        currentFileURL == nil && (currentMarkdown ?? "").isEmpty
+        isDownloadPlaceholder && currentFileURL == nil && (currentMarkdown ?? "").isEmpty
             && !isEditing && !hasPendingEditorChanges
     }
 

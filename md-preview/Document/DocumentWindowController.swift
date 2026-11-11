@@ -94,6 +94,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     var fileLoadIndicatorURL: URL?
     var fileLoadIndicatorRequestID: UUID?
     var fileLoadIndicatorWork: DispatchWorkItem?
+    /// True for a blank window opened ahead of a download, until the
+    /// reader puts something else in it. See `showDownloadFeedback()`.
+    var isDownloadPlaceholder = false
     var searchOpenRequestID: UUID?
     var autoSaveTimer: Timer?
     var autoSaveTimerID: UUID?

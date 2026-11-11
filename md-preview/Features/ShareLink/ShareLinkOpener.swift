@@ -68,7 +68,10 @@ enum ShareLinkOpener {
 
     /// The unpacked Markdown file for `link`, or nil after telling the user
     /// why the share cannot be opened (or when they cancelled the password).
-    static func download(_ link: ShareLink) async -> URL? {
+    /// `setWaiting(false)` comes before each prompt or alert and
+    /// `setWaiting(true)` when the work goes on after one, so the caller's
+    /// loading feedback shows only during the waiting.
+    static func download(_ link: ShareLink, setWaiting: (Bool) -> Void = { _ in }) async -> URL? {
         guard let baseURL = ShareLinkFeature.baseURL else { return nil }
         do {
             let envelope = try await ShareLinkClient(baseURL: baseURL).fetch(id: link.id)
@@ -76,15 +79,18 @@ enum ShareLinkOpener {
                 return try await unpack(envelope, link: link, password: nil)
             }
             var retry = false
-            while let password = askForPassword(retry: retry) {
+            while true {
+                setWaiting(false)
+                guard let password = askForPassword(retry: retry) else { return nil }
+                setWaiting(true)
                 do {
                     return try await unpack(envelope, link: link, password: password)
                 } catch ShareLinkCrypto.Failure.authenticationFailed {
                     retry = true
                 }
             }
-            return nil
         } catch {
+            setWaiting(false)
             presentFailure(error)
             return nil
         }

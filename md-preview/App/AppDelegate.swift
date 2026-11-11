@@ -322,7 +322,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         pendingOpenURLCount += 1
         let placeholder = openDownloadPlaceholder(asTab: false)
         Task { @MainActor in
-            let file = await ShareLinkOpener.download(link)
+            let controller = placeholder.windowControllers.first as? DocumentWindowController
+            let file = await ShareLinkOpener.download(link) { waiting in
+                // The Loading panel must not sit behind the password
+                // prompt or a failure alert.
+                guard let controller, controller.isUnusedDownloadPlaceholder else { return }
+                if waiting {
+                    controller.showDownloadFeedback()
+                } else {
+                    controller.cancelFileLoadIndicator()
+                }
+            }
             pendingOpenURLCount -= 1
             pendingShareIDs.remove(link.id)
             fill(placeholder, with: file)
