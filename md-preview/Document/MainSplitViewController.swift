@@ -796,12 +796,15 @@ private final class LayeredContentViewController: NSViewController {
 
     /// The update capsule, at the bottom trailing corner over the preview
     /// and the editor alike. The editor goes in just above the preview, so
-    /// it stays below the capsule.
+    /// it stays below the capsule. The host spans the width, so a step that
+    /// widens the capsule never resizes it: a host that grew while pinned at
+    /// its trailing edge would shift the capsule left for the animation.
     func installUpdatePill(_ model: UpdateModel) {
         guard updatePill == nil else { return }
         let host = UpdatePill.host(model)
         view.addSubview(host)
         NSLayoutConstraint.activate([
+            host.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             host.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             host.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -16),
         ])

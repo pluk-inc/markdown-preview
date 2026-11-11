@@ -31,7 +31,7 @@ final class UpdateController {
 
     func startUpdater() {
         #if DEBUG
-        // `-MarkdownPreview.updatePillDemo available` (or checking,
+        // `-MarkdownPreview.updatePillDemo available` (or checking, flow,
         // upToDate, failed) plays the capsule without a release and keeps
         // the real updater stopped.
         if let demo = UserDefaults.standard.string(forKey: "MarkdownPreview.updatePillDemo") {
@@ -49,6 +49,14 @@ final class UpdateController {
     private func playDemo(_ start: String) {
         switch start {
         case "checking": model.show(.checking)
+        case "flow":
+            // Checking, then an update: the step change a real check plays.
+            model.show(.checking)
+            demoTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(1.5))
+                guard !Task.isCancelled else { return }
+                self?.playDemo("available")
+            }
         case "upToDate": model.show(.upToDate, close: {})
         case "failed": model.show(.failed, close: {})
         default:
