@@ -98,9 +98,12 @@ screenshots. Start the app build (step 3) in the background first: steps 1 and
 
 4. Move the window onto the virtual display, at its origin plus a margin. The
    document window can appear after the process, so wait for it, and stop the
-   check if the window never comes or the move fails:
+   check if the display is gone (the build took longer than its timeout), the
+   window never comes, or the move fails:
 
    ```bash
+   "$OUT/vdisplay" --index "$DISPLAY_ID" >/dev/null || {
+     echo "virtual display is gone (timeout?): stop the check" >&2; kill $PID; exit 1; }
    moved=
    for i in $(seq 1 50); do
      [ "$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to count windows")" -gt 0 ] && {
@@ -149,7 +152,8 @@ screenshots. Start the app build (step 3) in the background first: steps 1 and
      [ "$("$OUT/vdisplay" --index "$DISPLAY_ID")" = "$INDEX" ] && break
      rm -f "$OUT/shot.jpg"
    done
-   [ -f "$OUT/shot.jpg" ] || { echo "capture failed: stop the check" >&2; exit 1; }
+   [ -f "$OUT/shot.jpg" ] || {
+     echo "capture failed: stop the check" >&2; kill $PID $VD_PID; exit 1; }
    ```
 
    `screencapture` takes only a position number, not a display ID. When other
