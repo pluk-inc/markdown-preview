@@ -6,7 +6,7 @@
 // macOS moved onto it) around. Developer tool only: never link this into the app.
 //
 // Build: clang -fobjc-arc -framework Foundation -framework CoreGraphics \
-//          scripts/ui-harness/vdisplay.m -o <out>/vdisplay
+//          .claude/skills/headless-ui-test/vdisplay.m -o <out>/vdisplay
 // Usage: vdisplay [--width 1440] [--height 900] [--timeout 600]
 // Prints one line: pid=<pid> displayID=<id> index=<n> origin=<x>,<y> size=<w>x<h>
 // `index` is the number for `screencapture -D` at that moment. Other sessions

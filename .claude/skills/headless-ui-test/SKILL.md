@@ -9,7 +9,7 @@ The app runs on a virtual display that the user cannot see. You read it with
 `screencapture` and drive it with events sent to the app's PID. The user's
 cursor, keyboard, frontmost app, and Dock do not change.
 
-`scripts/ui-harness/vdisplay.m` creates the display with the private
+`vdisplay.m` (in this skill folder) creates the display with the private
 `CGVirtualDisplay` API. It is a developer tool only. Never link it into the app
 or the Quick Look extension.
 
@@ -40,11 +40,18 @@ screenshots. Start the app build (step 3) in the background first: steps 1 and
 
    ```bash
    clang -fobjc-arc -framework Foundation -framework CoreGraphics \
-     scripts/ui-harness/vdisplay.m -o "$OUT/vdisplay"
+     .claude/skills/headless-ui-test/vdisplay.m -o "$OUT/vdisplay"
    ```
 
-2. Start the display as a long-running process (in Rex, a split beside your
-   block), with its output in a file:
+2. Remove the files of an earlier run in your own shell first, so the wait
+   below cannot read an old line:
+
+   ```bash
+   rm -f "$OUT/vdisplay.txt" "$OUT/vdisplay.pid"
+   ```
+
+   Then start the display as a long-running process (in Rex, a split beside
+   your block), with its output in a file:
 
    ```bash
    sh -c 'echo $$ > "$0/vdisplay.pid"; exec "$0/vdisplay" > "$0/vdisplay.txt" 2>&1' "$OUT"
@@ -55,10 +62,13 @@ screenshots. Start the app build (step 3) in the background first: steps 1 and
    `pid=48709 displayID=11 index=3 origin=2560,0 size=1440x900`.
 
    ```bash
-   for i in $(seq 1 100); do grep -qs '^pid=' "$OUT/vdisplay.txt" && break; sleep 0.1; done
-   VD_PID=$(cat "$OUT/vdisplay.pid")
-   LINE=$(grep '^pid=' "$OUT/vdisplay.txt") || {
-     kill "$VD_PID" 2>/dev/null; cat "$OUT/vdisplay.txt" >&2
+   for i in $(seq 1 100); do
+     VD_PID=$(cat "$OUT/vdisplay.pid" 2>/dev/null || true)
+     [ -n "$VD_PID" ] && grep -qs "^pid=$VD_PID " "$OUT/vdisplay.txt" && break
+     sleep 0.1
+   done
+   LINE=$(grep -s "^pid=$VD_PID " "$OUT/vdisplay.txt") && kill -0 "$VD_PID" || {
+     [ -n "$VD_PID" ] && kill "$VD_PID" 2>/dev/null; cat "$OUT/vdisplay.txt" >&2
      echo "no virtual display: stop the check" >&2; exit 1; }
    DISPLAY_ID=$(sed -E 's/.*displayID=([0-9]+).*/\1/' <<<"$LINE")
    ORIGIN_X=$(sed -E 's/.*origin=(-?[0-9]+),.*/\1/' <<<"$LINE")
@@ -98,8 +108,19 @@ screenshots. Start the app build (step 3) in the background first: steps 1 and
          { moved=1; break; }; }
      sleep 0.1
    done
-   [ -n "$moved" ] || { echo "window not moved after 5 s"; kill $PID; }
+   [ -n "$moved" ] || {
+     echo "window not moved after 5 s: stop the check" >&2; kill $PID $VD_PID; exit 1; }
+   [ "$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to count (windows whose name is \"Open\")")" -eq 0 ] || {
+     echo "the app showed the file chooser and took focus: stop the check" >&2
+     kill $PID $VD_PID; exit 1; }
    ```
+
+   The last check is for a launch race in the app: when the system is busy,
+   the open-file event can arrive after `applicationDidFinishLaunching`, so the
+   app activates and shows the file chooser even though it got a document.
+   With a load average of 25–45 this happened in about 4 of 9 launches; on an
+   idle Mac it did not happen. Tell the user when it happens, because the app
+   took their focus, and try again later.
 
 5. Send keys to the PID. Example: ⌘E (key code 14) toggles Edit mode.
 
@@ -121,13 +142,22 @@ screenshots. Start the app build (step 3) in the background first: steps 1 and
 6. Capture the display, then read the image:
 
    ```bash
-   INDEX=$("$OUT/vdisplay" --index "$DISPLAY_ID") &&
+   rm -f "$OUT/shot.jpg"
+   for try in 1 2 3; do
+     INDEX=$("$OUT/vdisplay" --index "$DISPLAY_ID") || break
      screencapture -x -D "$INDEX" -t jpg "$OUT/shot.jpg"
+     [ "$("$OUT/vdisplay" --index "$DISPLAY_ID")" = "$INDEX" ] && break
+     rm -f "$OUT/shot.jpg"
+   done
+   [ -f "$OUT/shot.jpg" ] || { echo "capture failed: stop the check" >&2; exit 1; }
    ```
 
-   Look up the index before each capture. When other sessions add or remove
-   displays, the number changes, and an old number captures another screen.
-   If `--index` fails, the display is gone (for example, the timeout ended).
+   `screencapture` takes only a position number, not a display ID. When other
+   sessions add or remove displays, the number changes, and an old number
+   captures another screen, possibly the user's. So the block looks up the
+   number before each capture, checks that it did not change during the
+   capture, and deletes the image and tries again if it did. If `--index`
+   fails, the display is gone (for example, the timeout ended).
 
    The window has the inactive look (gray window buttons, no accent color),
    because the app is not frontmost. Do not report this as a bug.
