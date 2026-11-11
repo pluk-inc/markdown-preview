@@ -71,14 +71,21 @@ enum ShareLinkOpener {
     static func download(_ link: ShareLink) async -> URL? {
         guard let baseURL = ShareLinkFeature.baseURL else { return nil }
         do {
-            let envelope = try await ShareLinkClient(baseURL: baseURL).fetch(id: link.id)
+            // The panel shows only around the waiting, never behind the
+            // password prompt or the failure alert.
+            let loading = DocumentFetchIndicator.shared
+            let envelope = try await loading.during {
+                try await ShareLinkClient(baseURL: baseURL).fetch(id: link.id)
+            }
             guard link.hasPassword || ShareLinkCrypto.requiresPassword(envelope) else {
-                return try await unpack(envelope, link: link, password: nil)
+                return try await loading.during { try await unpack(envelope, link: link, password: nil) }
             }
             var retry = false
             while let password = askForPassword(retry: retry) {
                 do {
-                    return try await unpack(envelope, link: link, password: password)
+                    return try await loading.during {
+                        try await unpack(envelope, link: link, password: password)
+                    }
                 } catch ShareLinkCrypto.Failure.authenticationFailed {
                     retry = true
                 }

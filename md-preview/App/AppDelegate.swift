@@ -335,7 +335,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     func openWhatsNew() {
         Task { @MainActor in
             do {
-                openReleaseNotesFile(try await ReleaseNotes.whatsNew())
+                openReleaseNotesFile(try await DocumentFetchIndicator.shared.during {
+                    try await ReleaseNotes.whatsNew()
+                })
             } catch {
                 NSLog("ReleaseNotes: could not download What's New: \(error)")
                 openReleaseNotes()
@@ -359,7 +361,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         Task { @MainActor in
             defer { isDownloadingReleaseNotes = false }
             do {
-                openReleaseNotesFile(try await ReleaseNotes.downloadHistory())
+                openReleaseNotesFile(try await DocumentFetchIndicator.shared.during {
+                    try await ReleaseNotes.downloadHistory()
+                })
             } catch {
                 NSLog("ReleaseNotes: could not download the notes: \(error)")
                 if let document = ReleaseNotes.openDocument(at: ReleaseNotes.historyFile) {
