@@ -47,7 +47,7 @@ screenshots. Start the app build (step 3) in the background first: steps 1 and
    block), with its output in a file:
 
    ```bash
-   "$OUT/vdisplay" > "$OUT/vdisplay.txt" 2>&1
+   sh -c 'echo $$ > "$0/vdisplay.pid"; exec "$0/vdisplay" > "$0/vdisplay.txt" 2>&1' "$OUT"
    ```
 
    The file gets one line, usually within a second but later when the system
@@ -55,16 +55,18 @@ screenshots. Start the app build (step 3) in the background first: steps 1 and
    `pid=48709 displayID=11 index=3 origin=2560,0 size=1440x900`.
 
    ```bash
-   for i in $(seq 1 100); do grep -q '^pid=' "$OUT/vdisplay.txt" && break; sleep 0.1; done
+   for i in $(seq 1 100); do grep -qs '^pid=' "$OUT/vdisplay.txt" && break; sleep 0.1; done
+   VD_PID=$(cat "$OUT/vdisplay.pid")
    LINE=$(grep '^pid=' "$OUT/vdisplay.txt") || {
-     cat "$OUT/vdisplay.txt" >&2; echo "no virtual display: stop the check" >&2; exit 1; }
-   VD_PID=$(sed -E 's/^pid=([0-9]+).*/\1/' <<<"$LINE")
+     kill "$VD_PID" 2>/dev/null; cat "$OUT/vdisplay.txt" >&2
+     echo "no virtual display: stop the check" >&2; exit 1; }
    DISPLAY_ID=$(sed -E 's/.*displayID=([0-9]+).*/\1/' <<<"$LINE")
    ORIGIN_X=$(sed -E 's/.*origin=(-?[0-9]+),.*/\1/' <<<"$LINE")
    ORIGIN_Y=$(sed -E 's/.*origin=-?[0-9]+,(-?[0-9]+).*/\1/' <<<"$LINE")
    ```
 
-   Without the line (a late start or a `vdisplay:` error), the block stops:
+   Without the line (a late start or a `vdisplay:` error), the block stops the
+   tool, so a late display cannot appear afterwards, and stops the check:
    never move the window without a display, or it stays on the user's screen.
    `DISPLAY_ID` finds the `screencapture -D` number (step 6), and the origin
    places windows. Other sessions can run their own display at the same time,
