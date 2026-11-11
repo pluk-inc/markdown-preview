@@ -186,6 +186,11 @@ final class MainSplitViewController: NSSplitViewController {
         contentViewController?.setLoading(fileURL != nil)
     }
 
+    /// The panel alone, for a document that has no file yet.
+    func showLoadingPanel() {
+        contentViewController?.setLoading(true)
+    }
+
     func clearContent() {
         inspectorViewController?.setSelectedText(nil)
         contentViewController?.clearContent()

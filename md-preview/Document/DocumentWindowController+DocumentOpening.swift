@@ -210,6 +210,18 @@ extension DocumentWindowController {
         return requestID
     }
 
+    /// For a window opened ahead of a document that is still downloading
+    /// (a shared link, the release notes): the same delayed Loading panel
+    /// over its blank page. The read of the downloaded file clears it.
+    func showDownloadFeedback() {
+        fileLoadIndicatorWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.mainSplit?.showLoadingPanel()
+        }
+        fileLoadIndicatorWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.fileLoadIndicatorDelay, execute: work)
+    }
+
     func cancelFileLoadIndicator() {
         fileLoadIndicatorWork?.cancel()
         fileLoadIndicatorWork = nil
