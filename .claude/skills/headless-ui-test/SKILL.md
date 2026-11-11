@@ -56,14 +56,16 @@ screenshots. Start the app build (step 3) in the background first: steps 1 and
 
    ```bash
    for i in $(seq 1 100); do grep -q '^pid=' "$OUT/vdisplay.txt" && break; sleep 0.1; done
-   LINE=$(grep '^pid=' "$OUT/vdisplay.txt")
+   LINE=$(grep '^pid=' "$OUT/vdisplay.txt") || {
+     cat "$OUT/vdisplay.txt" >&2; echo "no virtual display: stop the check" >&2; exit 1; }
    VD_PID=$(sed -E 's/^pid=([0-9]+).*/\1/' <<<"$LINE")
    DISPLAY_ID=$(sed -E 's/.*displayID=([0-9]+).*/\1/' <<<"$LINE")
    ORIGIN_X=$(sed -E 's/.*origin=(-?[0-9]+),.*/\1/' <<<"$LINE")
    ORIGIN_Y=$(sed -E 's/.*origin=-?[0-9]+,(-?[0-9]+).*/\1/' <<<"$LINE")
    ```
 
-   If the line never comes, or the file has a `vdisplay:` error, stop the check.
+   Without the line (a late start or a `vdisplay:` error), the block stops:
+   never move the window without a display, or it stays on the user's screen.
    `DISPLAY_ID` finds the `screencapture -D` number (step 6), and the origin
    places windows. Other sessions can run their own display at the same time,
    so always read these values; never assume them. The tool puts the display
