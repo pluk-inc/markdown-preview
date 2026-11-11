@@ -46,6 +46,9 @@ swift test --package-path tests/swift-tests --parallel --filter 'EditorFormattin
 with `grep -rl <changed type or function> tests/swift-tests/Tests`. The full
 suite runs once, before opening the PR.
 
+To check the app on screen without taking over the user's screen, mouse, or
+focus, run it on a hidden virtual display: load the `headless-ui-test` skill.
+
 ## Pull requests
 
 Branch naming, PR titles and descriptions, what to run before opening a PR
