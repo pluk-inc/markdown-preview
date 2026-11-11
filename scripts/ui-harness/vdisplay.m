@@ -9,7 +9,10 @@
 //          scripts/ui-harness/vdisplay.m -o <out>/vdisplay
 // Usage: vdisplay [--width 1440] [--height 900] [--timeout 600]
 // Prints one line: pid=<pid> displayID=<id> index=<n> origin=<x>,<y> size=<w>x<h>
-// `index` is the number for `screencapture -D`.
+// `index` is the number for `screencapture -D` at that moment. Other sessions
+// can add or remove displays, which shifts it, so look it up again before each
+// capture: `vdisplay --index <displayID>` prints the current index, or exits 1
+// when the display is gone.
 #import <Foundation/Foundation.h>
 #import <CoreGraphics/CoreGraphics.h>
 
@@ -55,8 +58,24 @@ static uint32_t activeDisplays(CGDirectDisplayID ids[32]) {
     return count;
 }
 
+// 1-based position in the active display list (the `screencapture -D` number), or 0.
+static int displayIndex(CGDirectDisplayID did) {
+    CGDirectDisplayID list[32];
+    uint32_t count = activeDisplays(list);
+    for (uint32_t i = 0; i < count; i++) if (list[i] == did) return (int)i + 1;
+    return 0;
+}
+
 int main(int argc, const char *argv[]) {
     @autoreleasepool {
+        const char *lookup = argValue(argc, argv, "--index", NULL);
+        if (lookup) {
+            int index = displayIndex((CGDirectDisplayID)strtoul(lookup, NULL, 10));
+            if (!index) { fprintf(stderr, "vdisplay: display %s is gone\n", lookup); return 1; }
+            printf("%d\n", index);
+            return 0;
+        }
+
         unsigned int w = (unsigned int)atoi(argValue(argc, argv, "--width", "1440"));
         unsigned int h = (unsigned int)atoi(argValue(argc, argv, "--height", "900"));
         int timeout = atoi(argValue(argc, argv, "--timeout", "600"));
@@ -97,19 +116,27 @@ int main(int argc, const char *argv[]) {
         int32_t x = [dock isEqualToString:@"right"] ? (int32_t)(CGRectGetMinX(all) - w) : (int32_t)CGRectGetMaxX(all);
         int32_t y = (int32_t)CGDisplayBounds(CGMainDisplayID()).origin.y;
 
+        // If macOS rejects the placement, stop: a display left where macOS put
+        // it can take the Dock.
         CGDisplayConfigRef cfg;
-        CGBeginDisplayConfiguration(&cfg);
-        CGConfigureDisplayOrigin(cfg, did, x, y);
-        CGCompleteDisplayConfiguration(cfg, kCGConfigureForSession);
+        if (CGBeginDisplayConfiguration(&cfg) != kCGErrorSuccess) {
+            fprintf(stderr, "vdisplay: could not configure the display layout\n");
+            return 1;
+        }
+        if (CGConfigureDisplayOrigin(cfg, did, x, y) != kCGErrorSuccess) {
+            CGCancelDisplayConfiguration(cfg);
+            fprintf(stderr, "vdisplay: could not place the display\n");
+            return 1;
+        }
+        if (CGCompleteDisplayConfiguration(cfg, kCGConfigureForSession) != kCGErrorSuccess) {
+            fprintf(stderr, "vdisplay: could not apply the display layout\n");
+            return 1;
+        }
 
         // Report the screencapture -D index after macOS settles the layout.
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            CGDirectDisplayID list[32];
-            uint32_t count = activeDisplays(list);
-            int index = 0;
-            for (uint32_t i = 0; i < count; i++) if (list[i] == did) index = (int)i + 1;
             CGRect b = CGDisplayBounds(did);
-            printf("pid=%d displayID=%u index=%d origin=%d,%d size=%dx%d\n", getpid(), did, index,
+            printf("pid=%d displayID=%u index=%d origin=%d,%d size=%dx%d\n", getpid(), did, displayIndex(did),
                    (int)b.origin.x, (int)b.origin.y, (int)b.size.width, (int)b.size.height);
             fflush(stdout);
         });

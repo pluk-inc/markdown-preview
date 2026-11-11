@@ -50,11 +50,18 @@ screenshots. Start the app build (step 3) in the background first: steps 1 and
    "$OUT/vdisplay" > "$OUT/vdisplay.txt" 2>&1
    ```
 
-   After about one second the file has one line:
+   The file gets one line, usually within a second but later when the system
+   is busy, so wait for it:
    `pid=48709 displayID=11 index=3 origin=2560,0 size=1440x900`.
-   Use `index` for `screencapture -D` and `origin` to place windows. Other
-   sessions can run their own display at the same time, so always read these
-   values; never assume them. The tool puts the display on the side the Dock
+
+   ```bash
+   for i in $(seq 1 100); do grep -q '^pid=' "$OUT/vdisplay.txt" && break; sleep 0.1; done
+   ```
+
+   If the line never comes, or the file has a `vdisplay:` error, stop the check.
+   Use `displayID` to find the `screencapture -D` number (step 6) and `origin`
+   to place windows. Other sessions can run their own display at the same time,
+   so always read these values; never assume them. The tool puts the display on the side the Dock
    does not use, and removes it after 600 s (`--timeout` changes this).
 
 3. Build the app into your own folder, then launch your own instance in the
@@ -70,10 +77,18 @@ screenshots. Start the app build (step 3) in the background first: steps 1 and
    ```
 
 4. Move the window onto the virtual display, at its `origin` plus a margin
-   (here origin 2560,0):
+   (here origin 2560,0). The document window can appear after the process, so
+   wait for it, and stop the check if it never comes:
 
    ```bash
-   osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to set position of every window to {2660, 60}"
+   moved=
+   for i in $(seq 1 50); do
+     [ "$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to count windows")" -gt 0 ] && {
+       osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to set position of every window to {2660, 60}"
+       moved=1; break; }
+     sleep 0.1
+   done
+   [ -n "$moved" ] || { echo "no window after 5 s"; kill $PID; }
    ```
 
 5. Send keys to the PID. Example: ⌘E (key code 14) toggles Edit mode.
@@ -96,8 +111,13 @@ screenshots. Start the app build (step 3) in the background first: steps 1 and
 6. Capture the display, then read the image:
 
    ```bash
-   screencapture -x -D "$INDEX" -t jpg "$OUT/shot.jpg"
+   INDEX=$("$OUT/vdisplay" --index "$DISPLAY_ID") &&
+     screencapture -x -D "$INDEX" -t jpg "$OUT/shot.jpg"
    ```
+
+   Look up the index before each capture. When other sessions add or remove
+   displays, the number changes, and an old number captures another screen.
+   If `--index` fails, the display is gone (for example, the timeout ended).
 
    The window has the inactive look (gray window buttons, no accent color),
    because the app is not frontmost. Do not report this as a bug.
