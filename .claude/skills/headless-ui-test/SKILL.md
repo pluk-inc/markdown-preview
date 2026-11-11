@@ -56,13 +56,19 @@ screenshots. Start the app build (step 3) in the background first: steps 1 and
 
    ```bash
    for i in $(seq 1 100); do grep -q '^pid=' "$OUT/vdisplay.txt" && break; sleep 0.1; done
+   LINE=$(grep '^pid=' "$OUT/vdisplay.txt")
+   VD_PID=$(sed -E 's/^pid=([0-9]+).*/\1/' <<<"$LINE")
+   DISPLAY_ID=$(sed -E 's/.*displayID=([0-9]+).*/\1/' <<<"$LINE")
+   ORIGIN_X=$(sed -E 's/.*origin=(-?[0-9]+),.*/\1/' <<<"$LINE")
+   ORIGIN_Y=$(sed -E 's/.*origin=-?[0-9]+,(-?[0-9]+).*/\1/' <<<"$LINE")
    ```
 
    If the line never comes, or the file has a `vdisplay:` error, stop the check.
-   Use `displayID` to find the `screencapture -D` number (step 6) and `origin`
-   to place windows. Other sessions can run their own display at the same time,
-   so always read these values; never assume them. The tool puts the display on the side the Dock
-   does not use, and removes it after 600 s (`--timeout` changes this).
+   `DISPLAY_ID` finds the `screencapture -D` number (step 6), and the origin
+   places windows. Other sessions can run their own display at the same time,
+   so always read these values; never assume them. The tool puts the display
+   on the side the Dock does not use, and removes it after 600 s (`--timeout`
+   changes this).
 
 3. Build the app into your own folder, then launch your own instance in the
    background with a document. `open` returns before the process exists, so
@@ -76,19 +82,19 @@ screenshots. Start the app build (step 3) in the background first: steps 1 and
    for i in $(seq 1 50); do PID=$(pgrep -nf "$APP/Contents/MacOS/") && break; sleep 0.1; done
    ```
 
-4. Move the window onto the virtual display, at its `origin` plus a margin
-   (here origin 2560,0). The document window can appear after the process, so
-   wait for it, and stop the check if it never comes:
+4. Move the window onto the virtual display, at its origin plus a margin. The
+   document window can appear after the process, so wait for it, and stop the
+   check if the window never comes or the move fails:
 
    ```bash
    moved=
    for i in $(seq 1 50); do
      [ "$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to count windows")" -gt 0 ] && {
-       osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to set position of every window to {2660, 60}"
-       moved=1; break; }
+       osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to set position of every window to {$((ORIGIN_X + 100)), $((ORIGIN_Y + 60))}" &&
+         { moved=1; break; }; }
      sleep 0.1
    done
-   [ -n "$moved" ] || { echo "no window after 5 s"; kill $PID; }
+   [ -n "$moved" ] || { echo "window not moved after 5 s"; kill $PID; }
    ```
 
 5. Send keys to the PID. Example: ⌘E (key code 14) toggles Edit mode.
@@ -122,9 +128,8 @@ screenshots. Start the app build (step 3) in the background first: steps 1 and
    The window has the inactive look (gray window buttons, no accent color),
    because the app is not frontmost. Do not report this as a bug.
 
-7. Clean up: `kill $PID <vdisplay pid>`, with the `pid=` value from
-   `vdisplay.txt`. Never `pkill vdisplay`: other sessions can run one. Close the
-   Rex block.
+7. Clean up: `kill $PID $VD_PID`. Never `pkill vdisplay`: other sessions can
+   run one. Close the Rex block.
 
 ## Limits
 
