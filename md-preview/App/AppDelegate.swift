@@ -413,10 +413,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     /// Shows the downloaded `file` in `placeholder`; nil closes it. A
-    /// placeholder the reader closed during the download stays closed.
+    /// placeholder the reader closed during the download stays closed. One
+    /// they started to use — typed in, or opened a file in — is theirs now:
+    /// it is left alone, and the download opens the usual way.
     private func fill(_ placeholder: MarkdownDocument, with file: URL?) {
         guard NSDocumentController.shared.documents.contains(placeholder),
               let controller = placeholder.windowControllers.first as? DocumentWindowController else { return }
+        guard controller.isUnusedDownloadPlaceholder else {
+            if let file { openDocument(at: file) }
+            return
+        }
         guard let file else {
             placeholder.close()
             return

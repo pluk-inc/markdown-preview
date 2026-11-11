@@ -222,6 +222,13 @@ extension DocumentWindowController {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.fileLoadIndicatorDelay, execute: work)
     }
 
+    /// Still the blank window `showDownloadFeedback` was called on: no
+    /// file, no text, no editing session.
+    var isUnusedDownloadPlaceholder: Bool {
+        currentFileURL == nil && (currentMarkdown ?? "").isEmpty
+            && !isEditing && !hasPendingEditorChanges
+    }
+
     func cancelFileLoadIndicator() {
         fileLoadIndicatorWork?.cancel()
         fileLoadIndicatorWork = nil
