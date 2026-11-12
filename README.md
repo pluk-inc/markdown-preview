@@ -177,17 +177,11 @@ Pull requests are welcome. For larger changes, please open an issue first to dis
 <br />
 
 <p align="center">
-  <a href="https://pluk.sh">
-    <img src="docs/sponsors/pluk-logo.png" height="54" alt="Pluk" />
-  </a>
+  <a href="https://pluk.sh"><img src="docs/sponsors/pluk-logo.png" height="54" alt="Pluk" /></a>
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://amore.computer">
-    <img src="docs/sponsors/amore-logo.png" height="54" alt="Amore" />
-  </a>
+  <a href="https://amore.computer"><img src="docs/sponsors/amore-logo.png" height="54" alt="Amore" /></a>
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://lokalise.com">
-    <img src="docs/sponsors/lokalise-logo.png" height="54" alt="Lokalise" />
-  </a>
+  <a href="https://lokalise.com"><img src="docs/sponsors/lokalise-logo.png" height="54" alt="Lokalise" /></a>
 </p>
 
 ## Support
