@@ -177,13 +177,11 @@ Pull requests are welcome. For larger changes, please open an issue first to dis
 <br />
 
 <p align="center">
-  <a href="https://pluk.sh">
-    <img src="docs/sponsors/pluk-logo.png" height="54" alt="Pluk" />
-  </a>
+  <a href="https://pluk.sh"><img src="docs/sponsors/pluk-logo.png" height="54" alt="Pluk" /></a>
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://amore.computer">
-    <img src="docs/sponsors/amore-logo.png" height="54" alt="Amore" />
-  </a>
+  <a href="https://amore.computer"><img src="docs/sponsors/amore-logo.png" height="54" alt="Amore" /></a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://lokalise.com"><img src="docs/sponsors/lokalise-logo.png" height="54" alt="Lokalise" /></a>
 </p>
 
 ## Support
@@ -192,6 +190,7 @@ Markdown Preview is free and MIT-licensed. If it saved you a browser tab, you ca
 
 ## Acknowledgments
 - [Amore](http://amore.computer/) — MacOS release automation (signing, notarization, DMG, hosting, appcast)
+- [Lokalise](https://lokalise.com) — Translation management for the app's languages
 - [swift-markdown](https://github.com/swiftlang/swift-markdown) — Markdown parser (Apple, cmark-gfm-backed)
 - [Pele](https://pele.run/) — Bundled renderer for Mermaid diagrams in `mermaid` fenced code blocks
 - [KaTeX](https://katex.org/) — Bundled math typesetter for inline `$…$`, display `$$…$$`, and ` ```math ` blocks
