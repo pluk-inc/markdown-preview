@@ -163,6 +163,10 @@ final class ProjectNavigatorView: NSView {
                                                name: NSPopUpButton.willPopUpNotification,
                                                object: folderPopUp)
 
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(favoriteFoldersDidChange),
+                                               name: FavoriteFolders.didChangeNotification,
+                                               object: nil)
         for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
             NotificationCenter.default.addObserver(self,
                                                    selector: #selector(windowKeyStateChanged(_:)),
@@ -250,6 +254,12 @@ final class ProjectNavigatorView: NSView {
         }
         favoritesTipCheck = check
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: check)
+    }
+
+    /// A favorite added from any place, such as the File menu, means the
+    /// reader found the feature.
+    @objc private func favoriteFoldersDidChange() {
+        if !FavoriteFolders.all.isEmpty { favoritesTip.invalidate() }
     }
 
     @objc private func windowKeyStateChanged(_ notification: Notification) {

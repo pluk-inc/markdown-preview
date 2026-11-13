@@ -237,11 +237,9 @@ final class SidebarViewController: NSViewController {
         loadViewIfNeeded()
         let root = folderURL.standardizedFileURL
         pendingFolderURL = root
-        if let selectedFileURL, selectedFileURL.isDescendantOrSame(of: root) {
-            pendingFileURL = selectedFileURL.standardizedFileURL
-        } else {
-            pendingFileURL = nil
-        }
+        // Kept also when it is outside `root`: the tree then selects
+        // nothing, and a switch back to its folder selects it again.
+        pendingFileURL = selectedFileURL?.standardizedFileURL
         if currentMode == .files {
             refreshNavigatorIfNeeded()
         }
@@ -256,8 +254,10 @@ final class SidebarViewController: NSViewController {
     /// already moved the root above that favorite.
     private func setOpenFileURL(_ fileURL: URL?) {
         let parent = fileURL?.deletingLastPathComponent().standardizedFileURL
-        if let fileURL, let favorite = FavoriteFolders.preferredRoot(for: fileURL, current: pendingFolderURL) {
-            pendingFolderURL = favorite
+        if let fileURL, let root = FavoriteFolders.root(for: fileURL, keeping: pendingFolderURL) {
+            // Compared with the pending root, not the loaded one: while the
+            // sidebar shows the headings, the tree has loaded no root yet.
+            pendingFolderURL = root
         } else if let parent, let current = loadedFolderURL, parent.isDescendantOrSame(of: current) {
             pendingFolderURL = current
         } else {
@@ -273,8 +273,9 @@ final class SidebarViewController: NSViewController {
     /// when it contains the open file. A removal leaves the root as it is.
     @objc private func favoriteFoldersDidChange() {
         guard let file = pendingFileURL,
-              let favorite = FavoriteFolders.preferredRoot(for: file, current: pendingFolderURL) else { return }
-        openFolder(favorite, selectedFileURL: file)
+              let root = FavoriteFolders.root(for: file, keeping: pendingFolderURL),
+              root != pendingFolderURL else { return }
+        openFolder(root, selectedFileURL: file)
     }
 
     /// Highlights the matching TOC row. Selecting via the API doesn't

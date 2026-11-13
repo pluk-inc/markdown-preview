@@ -46,11 +46,12 @@ enum FavoriteFolders {
             .min { $0.pathComponents.count < $1.pathComponents.count }
     }
 
-    /// The root to switch to for `fileURL`: its favorite, unless the
-    /// navigator already shows that favorite or a folder above it.
-    static func preferredRoot(for fileURL: URL, current: URL?) -> URL? {
+    /// The root for a file inside a favorite: `current` when the navigator
+    /// already shows that favorite or a folder above it, else the favorite.
+    /// Nil when no favorite contains the file.
+    static func root(for fileURL: URL, keeping current: URL?) -> URL? {
         guard let favorite = root(containing: fileURL) else { return nil }
-        if let current, favorite.isDescendantOrSame(of: current) { return nil }
+        if let current, favorite.isDescendantOrSame(of: current) { return current }
         return favorite
     }
 }
