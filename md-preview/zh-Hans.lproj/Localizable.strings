@@ -249,7 +249,7 @@
 
 /* Project navigator root menu; folder name */
 "Add “%@” to Favorites" = "将“%@”添加到个人收藏";
-"Remove “%@” from Favorites" = "从个人收藏中移除“%@”";
+"Remove “%@” from Favorites" = "将“%@”从个人收藏中移除";
 
 /* Project navigator root menu section */
 "Recent" = "最近使用";
@@ -479,8 +479,8 @@
 
 /* Share links */
 "Share as Link" = "以链接形式共享";
-"Favorite Folders" = "个人收藏文件夹";
-"Add folders you use often, and switch between them here." = "添加常用文件夹，并在此处切换。";
+"Favorite Folders" = "收藏文件夹";
+"Add folders you use often, and switch between them here." = "将常用文件夹添加到收藏，并在此处快速切换。";
 "Share as Link…" = "以链接形式共享…";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "在你停止共享或链接于 7 天后过期之前，任何拥有链接的人都可以阅读此文稿。文稿已加密，只有此链接才能打开。";
 "Uploading Document…" = "正在上传文稿…";
