@@ -402,7 +402,25 @@ final class ProjectNavigatorView: NSView {
         let folderName = newFileFolder()?.lastPathComponent ?? ""
         add(String(format: NSLocalizedString("Add Files to “%@”…", comment: "Project navigator add menu; folder name"), folderName),
             #selector(addFiles), enabled: hasRoot)
+        // The root has no row to select, so it gets its own items when the
+        // items above go into a folder inside it.
+        if let root = rootNode?.url, newFileFolder()?.standardizedFileURL != root.standardizedFileURL {
+            let rootName = FileManager.default.displayName(atPath: root.path)
+            menu.addItem(.separator())
+            add(String(format: NSLocalizedString("New File in “%@”", comment: "Project navigator add menu; root folder name"), rootName),
+                #selector(newEmptyFileInRoot))
+            add(String(format: NSLocalizedString("New Folder in “%@”", comment: "Project navigator add menu; root folder name"), rootName),
+                #selector(newFolderInRoot))
+        }
         return menu
+    }
+
+    @objc private func newEmptyFileInRoot() {
+        createItem(contents: Data(), in: rootNode?.url)
+    }
+
+    @objc private func newFolderInRoot() {
+        createItem(contents: nil, in: rootNode?.url)
     }
 
     @objc private func newEmptyFile() {
@@ -421,8 +439,8 @@ final class ProjectNavigatorView: NSView {
     /// Makes a file with `contents`, or a folder when it is nil, at once
     /// under a default name, shows it in the tree, and puts its name into
     /// editing, as Xcode does. A file opens once the reader confirms the name.
-    private func createItem(contents: Data?) {
-        guard let folder = newFileFolder() else { return }
+    private func createItem(contents: Data?, in target: URL? = nil) {
+        guard let folder = target ?? newFileFolder() else { return }
         let isFolder = contents == nil
         // A new "Untitled" row may not match the filter; show the full tree.
         filterBar.clearFilter()

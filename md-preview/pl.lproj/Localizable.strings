@@ -472,6 +472,8 @@
 "New File from Clipboard" = "Nowy plik ze schowka";
 "New Folder" = "Nowy folder";
 "Add Files to “%@”…" = "Dodaj pliki do „%@”…";
+"New File in “%@”" = "Nowy plik w „%@”";
+"New Folder in “%@”" = "Nowy folder w „%@”";
 "Allow Markdown Preview to make files in “%@”." = "Zezwól aplikacji Markdown Preview na tworzenie plików w „%@”.";
 
 /* Share links */

@@ -472,6 +472,8 @@
 "New File from Clipboard" = "New File from Clipboard";
 "New Folder" = "New Folder";
 "Add Files to “%@”…" = "Add Files to “%@”…";
+"New File in “%@”" = "New File in “%@”";
+"New Folder in “%@”" = "New Folder in “%@”";
 "Allow Markdown Preview to make files in “%@”." = "Allow Markdown Preview to make files in “%@”.";
 
 /* Share links */

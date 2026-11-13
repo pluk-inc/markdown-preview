@@ -472,6 +472,8 @@
 "New File from Clipboard" = "从剪贴板新建文件";
 "New Folder" = "新建文件夹";
 "Add Files to “%@”…" = "将文件添加到“%@”…";
+"New File in “%@”" = "在“%@”中新建文件";
+"New Folder in “%@”" = "在“%@”中新建文件夹";
 "Allow Markdown Preview to make files in “%@”." = "允许 Markdown Preview 在“%@”中创建文件。";
 
 /* Share links */

@@ -272,7 +272,9 @@ final class SidebarViewController: NSViewController {
     /// A favorite added in any window moves this window's root out to it
     /// when it contains the open file. A removal leaves the root as it is.
     @objc private func favoriteFoldersDidChange() {
+        // A reader who switched to a folder without the open file keeps it.
         guard let file = pendingFileURL,
+              pendingFolderURL.map(file.isDescendantOrSame(of:)) ?? true,
               let root = FavoriteFolders.root(for: file, keeping: pendingFolderURL),
               root != pendingFolderURL else { return }
         openFolder(root, selectedFileURL: file)

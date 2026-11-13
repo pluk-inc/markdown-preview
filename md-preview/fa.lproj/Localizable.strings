@@ -471,6 +471,8 @@
 "New File from Clipboard" = "فایل جدید از کلیپ‌بورد";
 "New Folder" = "پوشه جدید";
 "Add Files to “%@”…" = "افزودن فایل‌ها به «%@»…";
+"New File in “%@”" = "فایل جدید در «%@»";
+"New Folder in “%@”" = "پوشهٔ جدید در «%@»";
 "Allow Markdown Preview to make files in “%@”." = "به Markdown Preview اجازه دهید در «%@» فایل بسازد.";
 
 /* Share links */

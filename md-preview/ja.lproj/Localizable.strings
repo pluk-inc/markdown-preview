@@ -472,6 +472,8 @@
 "New File from Clipboard" = "クリップボードから新規ファイル";
 "New Folder" = "新規フォルダ";
 "Add Files to “%@”…" = "“%@”にファイルを追加…";
+"New File in “%@”" = "“%@”に新規ファイル";
+"New Folder in “%@”" = "“%@”に新規フォルダ";
 "Allow Markdown Preview to make files in “%@”." = "Markdown Preview が“%@”にファイルを作成することを許可します。";
 
 /* Share links */
