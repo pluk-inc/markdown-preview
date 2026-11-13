@@ -197,6 +197,7 @@ extension DocumentWindowController {
             self.currentFileURL = url
             self.documentWindow.title = url.lastPathComponent
             self.markdownDocument?.replaceContents(markdown: text, fileURL: url)
+            self.mainSplit?.editorViewController?.updateAssetBaseURL(url.deletingLastPathComponent())
             self.mainSplit?.openFileURLDidChange(url, markdown: text)
             self.resetAutoSaveFeedback()
             self.refreshOpenWithItem()
