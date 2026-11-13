@@ -240,6 +240,20 @@
 "Open in New Window" = "In neuem Fenster öffnen";
 "Copy Path" = "Pfad kopieren";
 
+/* Project navigator context menu */
+"Add to Favorites" = "Zu Favoriten hinzufügen";
+
+/* Project navigator context menu */
+"Remove from Favorites" = "Aus Favoriten entfernen";
+
+/* Project navigator root menu; folder name */
+"Add “%@” to Favorites" = "„%@“ zu Favoriten hinzufügen";
+"Remove “%@” from Favorites" = "„%@“ aus Favoriten entfernen";
+
+/* Project navigator root menu section */
+"Recent" = "Zuletzt benutzt";
+"Favorites" = "Favoriten";
+
 /* Table editing */
 "Table" = "Tabelle";
 "Row" = "Zeile";
@@ -458,11 +472,14 @@
 "New File from Clipboard" = "Neue Datei aus der Zwischenablage";
 "New Folder" = "Neuer Ordner";
 "Add Files to “%@”…" = "Dateien zu „%@“ hinzufügen …";
+"New File in “%@”" = "Neue Datei in „%@“";
+"New Folder in “%@”" = "Neuer Ordner in „%@“";
 "Allow Markdown Preview to make files in “%@”." = "Markdown Preview erlauben, Dateien in „%@“ zu erstellen.";
 
 /* Share links */
 "Share as Link" = "Als Link teilen";
-"Create a link anyone can use to read this document in a web browser." = "Erstelle einen Link, über den jeder dieses Dokument in einem Webbrowser lesen kann.";
+"Favorite Folders" = "Favoritenordner";
+"Add folders you use often, and switch between them here." = "Füge häufig verwendete Ordner hinzu und wechsle hier zwischen ihnen.";
 "Share as Link…" = "Als Link teilen …";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "Jeder mit dem Link kann dieses Dokument lesen, bis du die Freigabe beendest oder der Link in 7 Tagen abläuft. Das Dokument ist verschlüsselt und kann nur über den Link geöffnet werden.";
 "Uploading Document…" = "Dokument wird hochgeladen …";

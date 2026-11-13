@@ -366,6 +366,9 @@ final class MainSplitViewController: NSSplitViewController {
         // match the sidebar's so window resizes stretch the content pane,
         // not the sidebar.
         item.holdingPriority = NSLayoutConstraint.Priority(260)
+        if #available(macOS 26.1, *) {
+            viewController.installNavigatorAccessories(on: item)
+        }
         return item
     }
 
@@ -554,13 +557,21 @@ final class MainSplitViewController: NSSplitViewController {
     private func installNativeChromeAccessory(_ bar: NSView) -> NSViewController? {
         guard #available(macOS 26.1, *),
               let item = splitViewItems.dropFirst().first else { return nil }
+        let accessory = Self.makeSoftEdgeAccessory(for: bar)
+        accessory.isHidden = bar.isHidden
+        item.addTopAlignedAccessoryViewController(accessory)
+        return accessory
+    }
+
+    /// A split view item accessory that holds `bar` at its fitting size;
+    /// content scrolls under it with the system's soft edge.
+    @available(macOS 26.1, *)
+    static func makeSoftEdgeAccessory(for bar: NSView) -> NSSplitViewItemAccessoryViewController {
         let accessory = NSSplitViewItemAccessoryViewController()
         accessory.automaticallyAppliesContentInsets = false
         accessory.preferredScrollEdgeEffectStyle = .soft
         accessory.view = bar
         bar.setFrameSize(bar.fittingSize)
-        accessory.isHidden = bar.isHidden
-        item.addTopAlignedAccessoryViewController(accessory)
         return accessory
     }
 
