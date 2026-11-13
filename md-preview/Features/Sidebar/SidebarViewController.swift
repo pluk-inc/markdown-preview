@@ -81,6 +81,14 @@ final class SidebarViewController: NSViewController {
         projectNavigator.onSelectFile = { [weak self] url in
             self?.onSelectFile?(url)
         }
+        projectNavigator.onRequestRoot = { [weak self] folder in
+            guard let self else { return }
+            self.openFolder(folder, selectedFileURL: self.pendingFileURL)
+        }
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(favoriteFoldersDidChange),
+                                               name: FavoriteFolders.didChangeNotification,
+                                               object: nil)
         contentContainer.addSubview(projectNavigator)
 
         NSLayoutConstraint.activate([
@@ -102,6 +110,14 @@ final class SidebarViewController: NSViewController {
 
         view = container
         applyMode()
+    }
+
+    /// Gives the file tree's bars to the sidebar's split view item, so the
+    /// tree scrolls under them with the system's soft edge.
+    @available(macOS 26.1, *)
+    func installNavigatorAccessories(on item: NSSplitViewItem) {
+        loadViewIfNeeded()
+        projectNavigator.installAccessories(on: item)
     }
 
     /// `remember: false` switches this window only, without changing the
@@ -138,6 +154,7 @@ final class SidebarViewController: NSViewController {
             scrollView.isHidden = true
             projectNavigator.isHidden = false
         }
+        projectNavigator.accessoriesActive = currentMode == .files
     }
 
     func display(markdown: String, fileName: String, fileURL: URL?) {
@@ -234,9 +251,14 @@ final class SidebarViewController: NSViewController {
     /// navigator (saves disk walks on every TOC-mode open). Keeps the
     /// existing root if the new file is a descendant; otherwise resets
     /// so an unrelated File → Open updates the tree.
+    ///
+    /// A favorite folder above the file wins over both, unless the reader
+    /// already moved the root above that favorite.
     private func setOpenFileURL(_ fileURL: URL?) {
         let parent = fileURL?.deletingLastPathComponent().standardizedFileURL
-        if let parent, let current = loadedFolderURL, parent.isDescendantOrSame(of: current) {
+        if let fileURL, let favorite = FavoriteFolders.preferredRoot(for: fileURL, current: pendingFolderURL) {
+            pendingFolderURL = favorite
+        } else if let parent, let current = loadedFolderURL, parent.isDescendantOrSame(of: current) {
             pendingFolderURL = current
         } else {
             pendingFolderURL = parent
@@ -245,6 +267,14 @@ final class SidebarViewController: NSViewController {
         if currentMode == .files {
             refreshNavigatorIfNeeded()
         }
+    }
+
+    /// A favorite added in any window moves this window's root out to it
+    /// when it contains the open file. A removal leaves the root as it is.
+    @objc private func favoriteFoldersDidChange() {
+        guard let file = pendingFileURL,
+              let favorite = FavoriteFolders.preferredRoot(for: file, current: pendingFolderURL) else { return }
+        openFolder(favorite, selectedFileURL: file)
     }
 
     /// Highlights the matching TOC row. Selecting via the API doesn't

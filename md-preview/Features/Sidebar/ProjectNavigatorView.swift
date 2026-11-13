@@ -51,10 +51,28 @@ private final class FileNode {
 final class ProjectNavigatorView: NSView {
 
     var onSelectFile: ((URL) -> Void)?
+    /// Asks the owner to show `folder` as the root, keeping the open file.
+    var onRequestRoot: ((URL) -> Void)?
 
     private let scrollView = NSScrollView()
     private let outlineView = NSOutlineView()
     private let filterBar = ProjectNavigatorFilterBar()
+    /// The root folder above the tree. Its menu switches to a favorite or
+    /// a recent folder.
+    private let folderPopUp = NSPopUpButton(frame: .zero, pullsDown: false)
+    /// The glass capsule around the pop-up, matching the filter bar.
+    /// The bars above and below the tree: the folder capsule and the
+    /// filter bar. On macOS 26.1 they are accessories of the sidebar's
+    /// split view item, so the tree scrolls under them with the system's
+    /// soft edge. Before that they are plain subviews.
+    private let topBar = NSView()
+    private let bottomBar = NSView()
+    private var topAccessory: NSViewController?
+    private var bottomAccessory: NSViewController?
+    /// False while the sidebar shows the headings, which have no bars.
+    var accessoriesActive = false { didSet { updateBarVisibility() } }
+    private lazy var favoritesTip = FavoriteFoldersTipPresenter(anchor: folderPopUp)
+    private var favoritesTipCheck: DispatchWorkItem?
     private var rootNode: FileNode?
     /// Paths of the files that match the filter bar, plus every folder
     /// between them and the root, while a filter is active. The data source
@@ -125,18 +143,133 @@ final class ProjectNavigatorView: NSView {
         filterBar.translatesAutoresizingMaskIntoConstraints = false
         filterBar.makeAddMenu = { [weak self] in self?.makeAddMenu() ?? NSMenu() }
         filterBar.onFilterChange = { [weak self] in self?.applyFilter() }
-        addSubview(filterBar)
+        bottomBar.addSubview(filterBar)
+
+        folderPopUp.isBordered = false
+        folderPopUp.lineBreakMode = .byTruncatingMiddle
+        folderPopUp.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        folderPopUp.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let popUpRow = NSStackView(views: [folderPopUp])
+        popUpRow.edgeInsets = NSEdgeInsets(top: 0, left: 6, bottom: 0, right: 4)
+        // The pop-up fills the capsule, so a click anywhere on it opens the menu.
+        popUpRow.distribution = .fill
+        let folderCapsule = ProjectNavigatorFilterBar.capsule(around: popUpRow)
+        topBar.addSubview(folderCapsule)
+
+        // The full menu is built only when it opens: it reads the disk,
+        // and other windows change the favorites and the recent folders.
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(rebuildFolderMenu),
+                                               name: NSPopUpButton.willPopUpNotification,
+                                               object: folderPopUp)
+
+        for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
+            NotificationCenter.default.addObserver(self,
+                                                   selector: #selector(windowKeyStateChanged(_:)),
+                                                   name: name,
+                                                   object: nil)
+        }
+
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(splitViewDidResize(_:)),
+                                               name: NSSplitView.didResizeSubviewsNotification,
+                                               object: nil)
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: filterBar.topAnchor),
+            folderCapsule.topAnchor.constraint(equalTo: topBar.topAnchor, constant: 4),
+            folderCapsule.leadingAnchor.constraint(equalTo: topBar.leadingAnchor, constant: 10),
+            folderCapsule.trailingAnchor.constraint(equalTo: topBar.trailingAnchor, constant: -10),
+            folderCapsule.bottomAnchor.constraint(equalTo: topBar.bottomAnchor, constant: -6),
 
-            filterBar.leadingAnchor.constraint(equalTo: leadingAnchor),
-            filterBar.trailingAnchor.constraint(equalTo: trailingAnchor),
-            filterBar.bottomAnchor.constraint(equalTo: bottomAnchor)
+            filterBar.topAnchor.constraint(equalTo: bottomBar.topAnchor),
+            filterBar.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor),
+            filterBar.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor),
+            filterBar.bottomAnchor.constraint(equalTo: bottomBar.bottomAnchor),
+
+            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: trailingAnchor)
         ])
+
+        if #available(macOS 26.1, *) {
+            // The bars become accessories in `installAccessories(on:)`.
+            NSLayoutConstraint.activate([
+                scrollView.topAnchor.constraint(equalTo: topAnchor),
+                scrollView.bottomAnchor.constraint(equalTo: bottomAnchor)
+            ])
+            return
+        }
+
+        for bar in [topBar, bottomBar] {
+            bar.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(bar)
+        }
+        NSLayoutConstraint.activate([
+            topBar.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor),
+            topBar.leadingAnchor.constraint(equalTo: leadingAnchor),
+            topBar.trailingAnchor.constraint(equalTo: trailingAnchor),
+
+            scrollView.topAnchor.constraint(equalTo: topBar.bottomAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: bottomBar.topAnchor),
+
+            bottomBar.leadingAnchor.constraint(equalTo: leadingAnchor),
+            bottomBar.trailingAnchor.constraint(equalTo: trailingAnchor),
+            bottomBar.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+    }
+
+    /// Hands the two bars to the sidebar's split view item as top and
+    /// bottom accessories.
+    @available(macOS 26.1, *)
+    func installAccessories(on item: NSSplitViewItem) {
+        guard topAccessory == nil else { return }
+        let top = MainSplitViewController.makeSoftEdgeAccessory(for: topBar)
+        let bottom = MainSplitViewController.makeSoftEdgeAccessory(for: bottomBar)
+        topAccessory = top
+        bottomAccessory = bottom
+        updateBarVisibility()
+        item.addTopAlignedAccessoryViewController(top)
+        item.addBottomAlignedAccessoryViewController(bottom)
+    }
+
+    /// The tip follows the folder button: on screen, in the key window.
+    private var canShowFavoritesTip: Bool {
+        accessoriesActive && rootNode != nil
+            && folderPopUp.window?.isKeyWindow == true
+            && !folderPopUp.isHiddenOrHasHiddenAncestor && !folderPopUp.visibleRect.isEmpty
+    }
+
+    /// Hides the tip at once, but shows it only after the state has been
+    /// still for a moment: a mode switch or a sidebar toggle animates the
+    /// button, and a popover opened on a moving button does not land.
+    private func updateFavoritesTip() {
+        favoritesTipCheck?.cancel()
+        if !canShowFavoritesTip { favoritesTip.update(canShow: false) }
+        let check = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.favoritesTip.update(canShow: self.canShowFavoritesTip)
+        }
+        favoritesTipCheck = check
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: check)
+    }
+
+    @objc private func windowKeyStateChanged(_ notification: Notification) {
+        guard notification.object as? NSWindow === folderPopUp.window else { return }
+        updateFavoritesTip()
+    }
+
+    /// The sidebar opened or closed, or changed its width.
+    @objc private func splitViewDidResize(_ notification: Notification) {
+        guard (notification.object as? NSView)?.window === folderPopUp.window else { return }
+        updateFavoritesTip()
+    }
+
+    private func updateBarVisibility() {
+        defer { updateFavoritesTip() }
+        let hidesFolderBar = rootNode == nil
+        topBar.isHidden = hidesFolderBar
+        guard #available(macOS 26.1, *) else { return }
+        (topAccessory as? NSSplitViewItemAccessoryViewController)?.isHidden = !accessoriesActive || hidesFolderBar
+        (bottomAccessory as? NSSplitViewItemAccessoryViewController)?.isHidden = !accessoriesActive
     }
 
     func setRoot(_ url: URL?) {
@@ -147,10 +280,10 @@ final class ProjectNavigatorView: NSView {
         expandedBeforeFilter = []
         rootNode = url.map { FileNode(url: $0.standardizedFileURL, isDirectory: true) }
         outlineView.reloadData()
-        if let rootNode {
-            outlineView.expandItem(rootNode)
-            syncWatchers()
-        }
+        if rootNode != nil { syncWatchers() }
+        if let url { RecentFolders.record(url) }
+        showRootOnFolderButton()
+        updateBarVisibility()
         if isFiltering { applyFilter() }
     }
 
@@ -213,9 +346,7 @@ final class ProjectNavigatorView: NSView {
         visiblePaths = visible
         visibleChildren.removeAll()
         outlineView.reloadData()
-        if let rootNode {
-            outlineView.expandItem(rootNode, expandChildren: true)
-        }
+        outlineView.expandItem(nil, expandChildren: true)
         setCurrentFile(currentFileURL)
     }
 
@@ -224,10 +355,7 @@ final class ProjectNavigatorView: NSView {
         visiblePaths = nil
         visibleChildren.removeAll()
         outlineView.reloadData()
-        if let rootNode {
-            outlineView.expandItem(rootNode)
-            reExpand(rootNode, expanded: expandedBeforeFilter)
-        }
+        if let rootNode { reExpand(rootNode, expanded: expandedBeforeFilter) }
         syncWatchers()
         setCurrentFile(currentFileURL)
     }
@@ -565,10 +693,7 @@ final class ProjectNavigatorView: NSView {
         if let rootNode { invalidateCaches(rootNode) }
         visibleChildren.removeAll()
         outlineView.reloadData()
-        if let rootNode {
-            outlineView.expandItem(rootNode)
-            reExpand(rootNode, expanded: expandedURLs)
-        }
+        if let rootNode { reExpand(rootNode, expanded: expandedURLs) }
         syncWatchers()
     }
 
@@ -696,6 +821,98 @@ final class ProjectNavigatorView: NSView {
         controller.openInNewWindow(url)
     }
 
+    @objc private func toggleFavorite(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
+        FavoriteFolders.toggle(url)
+    }
+
+    @objc private func showFolderAsRoot(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
+        onRequestRoot?(url)
+    }
+
+    private func folderMenuItem(_ folder: URL) -> NSMenuItem {
+        // A long name must not widen the menu: cut it in the middle.
+        // The tooltip has the full path.
+        var name = FileManager.default.displayName(atPath: folder.path)
+        let limit = 26
+        if name.count > limit {
+            let half = (limit - 1) / 2
+            name = name.prefix(half) + "…" + name.suffix(limit - 1 - half)
+        }
+        let item = NSMenuItem(title: name, action: #selector(showFolderAsRoot(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = folder
+        item.toolTip = (folder.path as NSString).abbreviatingWithTildeInPath
+        let icon = NSWorkspace.shared.icon(forFile: folder.path)
+        icon.size = NSSize(width: 16, height: 16)
+        item.image = icon
+        return item
+    }
+
+    /// Shows the root on the folder button. The button draws its own
+    /// item, not the menu's selection, so a click on a menu item never
+    /// shows on it. The rest of the menu waits for `rebuildFolderMenu`.
+    private func showRootOnFolderButton() {
+        folderPopUp.removeAllItems()
+        guard let root = rootNode?.url, let cell = folderPopUp.cell as? NSPopUpButtonCell else { return }
+        cell.usesItemFromMenu = false
+        cell.menuItem = folderMenuItem(root)
+        // A menu needs an item to open; `rebuildFolderMenu` replaces it.
+        folderPopUp.menu?.addItem(folderMenuItem(root))
+    }
+
+    /// Fills the folder menu: the favorites, the folders shown last, and
+    /// adding the root (shown on the button) to the favorites.
+    @objc private func rebuildFolderMenu() {
+        // Refilled in place: the menu is about to open.
+        guard let menu = folderPopUp.menu, let root = rootNode?.url.standardizedFileURL else { return }
+        // The user opened the menu the tip points to.
+        favoritesTip.invalidate()
+        menu.removeAllItems()
+        // The button shows the root's item, wherever it is in the menu.
+        var rootItem: NSMenuItem?
+        defer { if let rootItem { folderPopUp.select(rootItem) } }
+
+        // Favorites first. A root that is a favorite shows there only.
+        let favorites = FavoriteFolders.all.filter(\.isExistingDirectory)
+        if !favorites.isEmpty {
+            menu.addItem(.sectionHeader(title: NSLocalizedString("Favorites", comment: "Project navigator root menu section")))
+            for favorite in favorites {
+                let item = folderMenuItem(favorite)
+                if favorite == root { rootItem = item }
+                menu.addItem(item)
+            }
+        }
+
+        // Then the folders shown last. A root that is not a favorite is
+        // the newest of them.
+        let recents = RecentFolders.menuFolders(root: root, favorites: favorites)
+        if !recents.isEmpty {
+            if !favorites.isEmpty { menu.addItem(.separator()) }
+            menu.addItem(.sectionHeader(title: NSLocalizedString("Recent", comment: "Project navigator root menu section")))
+            for recent in recents {
+                let item = folderMenuItem(recent)
+                if recent == root { rootItem = item }
+                menu.addItem(item)
+            }
+        }
+
+        menu.addItem(.separator())
+        let name = FileManager.default.displayName(atPath: root.path)
+        let isFavorite = favorites.contains(root)
+        let toggle = NSMenuItem(
+            title: String(format: isFavorite
+                ? NSLocalizedString("Remove “%@” from Favorites", comment: "Project navigator root menu; folder name")
+                : NSLocalizedString("Add “%@” to Favorites", comment: "Project navigator root menu; folder name"),
+                name),
+            action: #selector(toggleFavorite(_:)),
+            keyEquivalent: "")
+        toggle.target = self
+        toggle.representedObject = root
+        menu.addItem(toggle)
+    }
+
     @objc private func copyPath(_ sender: NSMenuItem) {
         guard let url = sender.representedObject as? URL else { return }
         let pasteboard = NSPasteboard.general
@@ -770,6 +987,14 @@ extension ProjectNavigatorView: NSMenuDelegate {
                                       url: url))
         } else {
             menu.addItem(.separator())
+            let isFavorite = FavoriteFolders.contains(url)
+            menu.addItem(makeMenuItem(title: isFavorite
+                                        ? NSLocalizedString("Remove from Favorites", comment: "Project navigator context menu")
+                                        : NSLocalizedString("Add to Favorites", comment: "Project navigator context menu"),
+                                      symbol: isFavorite ? "star.slash" : "star",
+                                      action: #selector(toggleFavorite(_:)),
+                                      url: url))
+            menu.addItem(.separator())
         }
 
         menu.addItem(makeMenuItem(title: NSLocalizedString("Copy Path", comment: "Project navigator context menu"),
@@ -819,12 +1044,12 @@ extension ProjectNavigatorView: NSOutlineViewDataSource {
 
     func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
         if let node = item as? FileNode { return shownChildren(of: node).count }
-        return rootNode == nil ? 0 : 1
+        return rootNode.map { shownChildren(of: $0).count } ?? 0
     }
 
     func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
         if let node = item as? FileNode { return shownChildren(of: node)[index] }
-        return rootNode!
+        return shownChildren(of: rootNode!)[index]
     }
 
     func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
@@ -832,13 +1057,26 @@ extension ProjectNavigatorView: NSOutlineViewDataSource {
         return node.isDirectory && !shownChildren(of: node).isEmpty
     }
 }
-
 extension ProjectNavigatorView: NSOutlineViewDelegate {
 
     func outlineView(_ outlineView: NSOutlineView,
                      viewFor tableColumn: NSTableColumn?,
                      item: Any) -> NSView? {
         guard let node = item as? FileNode else { return nil }
+        let cell = fileCell()
+
+        cell.label.stringValue = node.displayName
+        let icon = NSWorkspace.shared.icon(forFile: node.url.path)
+        icon.size = NSSize(width: 16, height: 16)
+        cell.imageView?.image = icon
+        let row = outlineView.row(forItem: node)
+        cell.label.textColor = SidebarLabelCellView.textColor(
+            selected: row >= 0 && row == outlineView.selectedRow,
+            accent: themeAccent ?? .controlAccentColor)
+        return cell
+    }
+
+    private func fileCell() -> SidebarLabelCellView {
         let identifier = NSUserInterfaceItemIdentifier("FileCell")
         let cell: SidebarLabelCellView
         if let recycled = outlineView.makeView(withIdentifier: identifier, owner: self) as? SidebarLabelCellView {
@@ -863,19 +1101,10 @@ extension ProjectNavigatorView: NSOutlineViewDelegate {
                 imageView.widthAnchor.constraint(equalToConstant: 16),
                 imageView.heightAnchor.constraint(equalToConstant: 16),
                 textField.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: 6),
-                textField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -6),
-                textField.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
+                textField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+                textField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -6)
             ])
         }
-
-        cell.label.stringValue = node.displayName
-        let icon = NSWorkspace.shared.icon(forFile: node.url.path)
-        icon.size = NSSize(width: 16, height: 16)
-        cell.imageView?.image = icon
-        let row = outlineView.row(forItem: node)
-        cell.label.textColor = SidebarLabelCellView.textColor(
-            selected: row >= 0 && row == outlineView.selectedRow,
-            accent: themeAccent ?? .controlAccentColor)
         return cell
     }
 

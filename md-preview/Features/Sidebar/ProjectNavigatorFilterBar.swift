@@ -114,7 +114,7 @@ final class ProjectNavigatorFilterBar: NSView, NSTextFieldDelegate {
 
     /// Wraps `content` in a fixed-height capsule: Liquid Glass on macOS 26,
     /// a quiet filled pill before it.
-    private static func capsule(around content: NSView) -> NSView {
+    static func capsule(around content: NSView) -> NSView {
         let surface: NSView
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView()

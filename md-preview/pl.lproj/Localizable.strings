@@ -240,6 +240,20 @@
 "Open in New Window" = "Otwórz w nowym oknie";
 "Copy Path" = "Kopiuj ścieżkę";
 
+/* Project navigator context menu */
+"Add to Favorites" = "Dodaj do ulubionych";
+
+/* Project navigator context menu */
+"Remove from Favorites" = "Usuń z ulubionych";
+
+/* Project navigator root menu; folder name */
+"Add “%@” to Favorites" = "Dodaj „%@” do ulubionych";
+"Remove “%@” from Favorites" = "Usuń „%@” z ulubionych";
+
+/* Project navigator root menu section */
+"Recent" = "Ostatnie";
+"Favorites" = "Ulubione";
+
 /* Table editing */
 "Table" = "Tabela";
 "Row" = "Wiersz";
@@ -462,7 +476,8 @@
 
 /* Share links */
 "Share as Link" = "Udostępnij jako link";
-"Create a link anyone can use to read this document in a web browser." = "Utwórz link, za pomocą którego każdy może przeczytać ten dokument w przeglądarce.";
+"Favorite Folders" = "Ulubione foldery";
+"Add folders you use often, and switch between them here." = "Dodaj często używane foldery i przełączaj się między nimi tutaj.";
 "Share as Link…" = "Udostępnij jako link…";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "Każdy, kto ma link, może czytać ten dokument, dopóki nie zatrzymasz udostępniania lub link nie wygaśnie po 7 dniach. Dokument jest zaszyfrowany i można go otworzyć tylko za pomocą tego linku.";
 "Uploading Document…" = "Wysyłanie dokumentu…";

@@ -239,6 +239,20 @@
 "Open in New Window" = "باز کردن در پنجرهٔ جدید";
 "Copy Path" = "کپی مسیر";
 
+/* Project navigator context menu */
+"Add to Favorites" = "افزودن به موارد دلخواه";
+
+/* Project navigator context menu */
+"Remove from Favorites" = "حذف از موارد دلخواه";
+
+/* Project navigator root menu; folder name */
+"Add “%@” to Favorites" = "افزودن «%@» به موارد دلخواه";
+"Remove “%@” from Favorites" = "حذف «%@» از موارد دلخواه";
+
+/* Project navigator root menu section */
+"Recent" = "اخیر";
+"Favorites" = "موارد دلخواه";
+
 /* Table editing */
 "Table" = "جدول";
 "Row" = "سطر";
@@ -461,7 +475,8 @@
 
 /* Share links */
 "Share as Link" = "اشتراک‌گذاری به‌صورت پیوند";
-"Create a link anyone can use to read this document in a web browser." = "پیوندی بسازید که هر کسی بتواند با آن این سند را در مرورگر وب بخواند.";
+"Favorite Folders" = "پوشه‌های دلخواه";
+"Add folders you use often, and switch between them here." = "پوشه‌های پرکاربرد را اضافه کنید و از اینجا بین آن‌ها جابه‌جا شوید.";
 "Share as Link…" = "اشتراک‌گذاری به‌صورت پیوند…";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "هر کسی که پیوند را دارد می‌تواند این سند را بخواند، تا زمانی که اشتراک‌گذاری را متوقف کنید یا پیوند پس از ۷ روز منقضی شود. سند رمزگذاری شده است و فقط با این پیوند باز می‌شود.";
 "Uploading Document…" = "در حال بارگذاری سند…";
