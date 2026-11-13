@@ -251,7 +251,7 @@
 "Remove “%@” from Favorites" = "„%@“ aus Favoriten entfernen";
 
 /* Project navigator root menu section */
-"Recent" = "Zuletzt benutzt";
+"Recent" = "Zuletzt verwendet";
 "Favorites" = "Favoriten";
 
 /* Table editing */
@@ -478,7 +478,7 @@
 
 /* Share links */
 "Share as Link" = "Als Link teilen";
-"Favorite Folders" = "Favoritenordner";
+"Favorite Folders" = "Favorisierte Ordner";
 "Add folders you use often, and switch between them here." = "Füge häufig verwendete Ordner hinzu und wechsle hier zwischen ihnen.";
 "Share as Link…" = "Als Link teilen …";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "Jeder mit dem Link kann dieses Dokument lesen, bis du die Freigabe beendest oder der Link in 7 Tagen abläuft. Das Dokument ist verschlüsselt und kann nur über den Link geöffnet werden.";

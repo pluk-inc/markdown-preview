@@ -251,7 +251,7 @@
 "Remove “%@” from Favorites" = "“%@”をよく使う項目から削除";
 
 /* Project navigator root menu section */
-"Recent" = "最近の項目";
+"Recent" = "最近使った項目";
 "Favorites" = "よく使う項目";
 
 /* Table editing */
@@ -479,7 +479,7 @@
 /* Share links */
 "Share as Link" = "リンクとして共有";
 "Favorite Folders" = "よく使うフォルダ";
-"Add folders you use often, and switch between them here." = "よく使うフォルダを追加して、ここから切り替えられます。";
+"Add folders you use often, and switch between them here." = "よく使うフォルダを追加して、ここで切り替えられます。";
 "Share as Link…" = "リンクとして共有…";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "リンクを知っている人は誰でも、共有を停止するか7日後にリンクの有効期限が切れるまで、この書類を読むことができます。書類は暗号化されており、このリンクでのみ開けます。";
 "Uploading Document…" = "書類をアップロード中…";
