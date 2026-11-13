@@ -238,6 +238,7 @@
 "Open in New Tab" = "باز کردن در برگهٔ جدید";
 "Open in New Window" = "باز کردن در پنجرهٔ جدید";
 "Copy Path" = "کپی مسیر";
+"Loading…" = "در حال بارگذاری…";
 
 /* Project navigator context menu */
 "Add to Favorites" = "افزودن به موارد دلخواه";

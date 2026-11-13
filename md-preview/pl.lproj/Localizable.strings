@@ -239,6 +239,7 @@
 "Open in New Tab" = "Otwórz w nowej karcie";
 "Open in New Window" = "Otwórz w nowym oknie";
 "Copy Path" = "Kopiuj ścieżkę";
+"Loading…" = "Ładowanie…";
 
 /* Project navigator context menu */
 "Add to Favorites" = "Dodaj do ulubionych";

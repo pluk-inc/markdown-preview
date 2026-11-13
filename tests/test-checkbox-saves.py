@@ -94,6 +94,7 @@ final class Controller {
     func renameImage(at: URL) {}
     func showEditAccessory() {}
     func updateEditToolbarItem() {}
+    func releaseDownloadPlaceholder() {}
     func exitEditMode(rerender: Bool, preserveUnsavedChanges: Bool,
                       hidesAccessoryAfterSwap: Bool, completion: () -> Void) {
         mainSplit?.isEditingDocument = false

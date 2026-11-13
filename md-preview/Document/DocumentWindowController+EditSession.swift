@@ -16,6 +16,9 @@ extension DocumentWindowController {
             return
         }
 
+        // Typing in a blank loading window makes it the reader's; its
+        // download opens elsewhere.
+        releaseDownloadPlaceholder()
         split.updateInspectorSelection(nil)
 
         // Edit the complete source. Frontmatter is stripped only by the

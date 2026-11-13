@@ -178,6 +178,19 @@ final class MainSplitViewController: NSSplitViewController {
         showSidebar()
     }
 
+    /// Loading feedback for a slow file read: a spinner on the file's
+    /// sidebar row when it has one, and a panel over the blank reader for
+    /// every way of opening a file. nil clears both.
+    func setLoadingFile(_ fileURL: URL?) {
+        sidebarViewController?.setLoadingFile(fileURL)
+        contentViewController?.setLoading(fileURL != nil)
+    }
+
+    /// The panel alone, for a document that has no file yet.
+    func showLoadingPanel() {
+        contentViewController?.setLoading(true)
+    }
+
     func clearContent() {
         inspectorViewController?.setSelectedText(nil)
         contentViewController?.clearContent()
