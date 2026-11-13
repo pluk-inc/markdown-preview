@@ -241,6 +241,20 @@
 "Copy Path" = "Copy Path";
 "Loading…" = "Loading…";
 
+/* Project navigator context menu */
+"Add to Favorites" = "Add to Favorites";
+
+/* Project navigator context menu */
+"Remove from Favorites" = "Remove from Favorites";
+
+/* Project navigator root menu; folder name */
+"Add “%@” to Favorites" = "Add “%@” to Favorites";
+"Remove “%@” from Favorites" = "Remove “%@” from Favorites";
+
+/* Project navigator root menu section */
+"Recent" = "Recent";
+"Favorites" = "Favorites";
+
 /* Table editing */
 "Table" = "Table";
 "Row" = "Row";
@@ -459,11 +473,14 @@
 "New File from Clipboard" = "New File from Clipboard";
 "New Folder" = "New Folder";
 "Add Files to “%@”…" = "Add Files to “%@”…";
+"New File in “%@”" = "New File in “%@”";
+"New Folder in “%@”" = "New Folder in “%@”";
 "Allow Markdown Preview to make files in “%@”." = "Allow Markdown Preview to make files in “%@”.";
 
 /* Share links */
 "Share as Link" = "Share as Link";
-"Create a link anyone can use to read this document in a web browser." = "Create a link anyone can use to read this document in a web browser.";
+"Favorite Folders" = "Favorite Folders";
+"Add folders you use often, and switch between them here." = "Add folders you use often, and switch between them here.";
 "Share as Link…" = "Share as Link…";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it.";
 "Uploading Document…" = "Uploading Document…";

@@ -379,6 +379,9 @@ final class MainSplitViewController: NSSplitViewController {
         // match the sidebar's so window resizes stretch the content pane,
         // not the sidebar.
         item.holdingPriority = NSLayoutConstraint.Priority(260)
+        if #available(macOS 26.1, *) {
+            viewController.installNavigatorAccessories(on: item)
+        }
         return item
     }
 
@@ -567,13 +570,21 @@ final class MainSplitViewController: NSSplitViewController {
     private func installNativeChromeAccessory(_ bar: NSView) -> NSViewController? {
         guard #available(macOS 26.1, *),
               let item = splitViewItems.dropFirst().first else { return nil }
+        let accessory = Self.makeSoftEdgeAccessory(for: bar)
+        accessory.isHidden = bar.isHidden
+        item.addTopAlignedAccessoryViewController(accessory)
+        return accessory
+    }
+
+    /// A split view item accessory that holds `bar` at its fitting size;
+    /// content scrolls under it with the system's soft edge.
+    @available(macOS 26.1, *)
+    static func makeSoftEdgeAccessory(for bar: NSView) -> NSSplitViewItemAccessoryViewController {
         let accessory = NSSplitViewItemAccessoryViewController()
         accessory.automaticallyAppliesContentInsets = false
         accessory.preferredScrollEdgeEffectStyle = .soft
         accessory.view = bar
         bar.setFrameSize(bar.fittingSize)
-        accessory.isHidden = bar.isHidden
-        item.addTopAlignedAccessoryViewController(accessory)
         return accessory
     }
 
@@ -809,12 +820,15 @@ private final class LayeredContentViewController: NSViewController {
 
     /// The update capsule, at the bottom trailing corner over the preview
     /// and the editor alike. The editor goes in just above the preview, so
-    /// it stays below the capsule.
+    /// it stays below the capsule. The host spans the width, so a step that
+    /// widens the capsule never resizes it: a host that grew while pinned at
+    /// its trailing edge would shift the capsule left for the animation.
     func installUpdatePill(_ model: UpdateModel) {
         guard updatePill == nil else { return }
         let host = UpdatePill.host(model)
         view.addSubview(host)
         NSLayoutConstraint.activate([
+            host.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             host.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             host.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -16),
         ])

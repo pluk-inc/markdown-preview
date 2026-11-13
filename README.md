@@ -84,7 +84,7 @@ Single source newlines remain visible by default. Enable **Settings → Reading 
 - **Math equations** — LaTeX inline (`$x_1 + x_2$`), display (`$$\int_0^1 x^2\,dx$$`), and fenced `math` blocks render with bundled KaTeX in reading and edit modes. In edit mode, click a formula to edit its highlighted LaTeX source; move the caret away to render it again. Inline math source uses inline-code styling; spaces immediately inside either `$` delimiter leave the expression literal. Standalone `$$` source uses the code-block card with visible delimiters and no header controls; fenced `math` uses the usual code-block controls with hidden fences. Pressing Enter after a standalone `$$` inserts a matching closing delimiter and places the caret between them; single-line `$$ equation $$` stays on one source line. Unclosed math stays editable as source. Selecting a rendered formula and copying yields the original LaTeX source (via the official `copy-tex` extension).
 - **Document outline** — sidebar TOC that mirrors your headings; click to jump.
 - **Collapsible sidebar** — the outline and file picker hides when the sidebar collapses; the sidebar toggle stays available to reopen it.
-- **File navigator** — browse Markdown files in the sidebar. Click a folder's name, icon, or empty row space to expand or collapse it, or use its disclosure triangle. Click a file to open it in the current reading or editing mode. A file that takes a moment to load, such as one iCloud Drive is still downloading, shows a spinner beside its name until it opens. The bar at the bottom has a **+** menu (New Empty File, New File from Clipboard, New Folder, Add Files to the folder) and a **Filter** field that narrows the tree to matching file names (Escape clears it); the clock button shows only recently opened files. The filter uses the same folder walk as Search for Document, so it skips the same dependency and build folders. New files and folders appear in the tree at once with their name ready to type, as in Xcode: Return keeps the typed name (a file without an extension gets `.md`), Escape keeps the default name, and a new file then opens. They go into the selected folder, or else the open file's folder. If the app has no write access to that folder (for example, when you opened a single file from it), it asks once for access to the project folder and remembers it, so later launches do not ask again.
+- **File navigator** — browse Markdown files in the sidebar. Click a folder's name, icon, or empty row space to expand or collapse it, or use its disclosure triangle. Click a file to open it in the current reading or editing mode. A file that takes a moment to load, such as one iCloud Drive is still downloading, shows a spinner beside its name until it opens. The folder button above the tree shows the folder the tree starts at; its menu lists your **Favorites** and the **Recent** folders, and adds the current folder to Favorites or removes it (also *File → Add to Favorites*, or right-click a folder in the tree). A file inside a favorite folder always opens with that whole folder in the tree, instead of only the file's own folder. The bar at the bottom has a **+** menu (New Empty File, New File from Clipboard, New Folder, Add Files to the folder) and a **Filter** field that narrows the tree to matching file names (Escape clears it); the clock button shows only recently opened files. The filter uses the same folder walk as Search for Document, so it skips the same dependency and build folders. New files and folders appear in the tree at once with their name ready to type, as in Xcode: Return keeps the typed name (a file without an extension gets `.md`), Escape keeps the default name, and a new file then opens. They go into the selected folder, or else the open file's folder. When that is a folder inside the tree's folder, the **+** menu also has New File and New Folder items for the tree's folder itself. If the app has no write access to that folder (for example, when you opened a single file from it), it asks once for access to the project folder and remembers it, so later launches do not ask again.
 - **Loading feedback** — while a file takes a moment to load, a Loading panel with a spinner sits in the middle of the window until the page appears. This includes files opened from a link or with Back and Forward, not just from the sidebar. A document that is still downloading — a shared link, or the release notes — opens its window or tab at once and shows the same panel there until the document arrives.
 - **Inspector panel** — toggleable side panel with file metadata.
 - **In-document search** — toolbar search field plus standard <kbd>⌘F</kbd> / <kbd>⌘G</kbd> / <kbd>⌘⇧G</kbd> for next/previous match.
@@ -178,13 +178,11 @@ Pull requests are welcome. For larger changes, please open an issue first to dis
 <br />
 
 <p align="center">
-  <a href="https://pluk.sh">
-    <img src="docs/sponsors/pluk-logo.png" height="54" alt="Pluk" />
-  </a>
+  <a href="https://pluk.sh"><img src="docs/sponsors/pluk-logo.png" height="54" alt="Pluk" /></a>
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://amore.computer">
-    <img src="docs/sponsors/amore-logo.png" height="54" alt="Amore" />
-  </a>
+  <a href="https://amore.computer"><img src="docs/sponsors/amore-logo.png" height="54" alt="Amore" /></a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://lokalise.com"><img src="docs/sponsors/lokalise-logo.png" height="54" alt="Lokalise" /></a>
 </p>
 
 ## Support
@@ -193,6 +191,7 @@ Markdown Preview is free and MIT-licensed. If it saved you a browser tab, you ca
 
 ## Acknowledgments
 - [Amore](http://amore.computer/) — MacOS release automation (signing, notarization, DMG, hosting, appcast)
+- [Lokalise](https://lokalise.com) — Translation management for the app's languages
 - [swift-markdown](https://github.com/swiftlang/swift-markdown) — Markdown parser (Apple, cmark-gfm-backed)
 - [Pele](https://pele.run/) — Bundled renderer for Mermaid diagrams in `mermaid` fenced code blocks
 - [KaTeX](https://katex.org/) — Bundled math typesetter for inline `$…$`, display `$$…$$`, and ` ```math ` blocks

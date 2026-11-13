@@ -1,0 +1,538 @@
+/* App menu */
+"Install CLI" = "CLI installieren";
+"Settings…" = "Einstellungen …";
+
+/* Settings */
+"General" = "Allgemein";
+"Privacy" = "Datenschutz";
+"About" = "Über";
+"Appearance also applies to Quick Look previews." = "Das Erscheinungsbild gilt auch für Quick-Look-Vorschauen.";
+"Layout" = "Layout";
+"Text size" = "Textgröße";
+"Small" = "Klein";
+"Medium" = "Mittel";
+"Large" = "Groß";
+"Content width" = "Inhaltsbreite";
+"Zooming a document window with ⌘+ and ⌘− changes this same size." = "Beim Zoomen eines Dokumentfensters mit ⌘+ und ⌘− wird dieselbe Größe geändert.";
+"Editing" = "Bearbeiten";
+"Automatic saving" = "Automatisches Sichern";
+"Instant" = "Sofort";
+"30 seconds" = "30 Sekunden";
+"1 minute" = "1 Minute";
+"%d minutes" = "%d Minuten";
+"Hand-off" = "Handoff";
+"Open documents in" = "Dokumente öffnen in";
+"AI apps" = "KI-Apps";
+"Command line tools" = "Befehlszeilentools";
+"Install…" = "Installieren …";
+"Adds mdp, md-preview, and markdown-preview to your PATH. Run it again after updating the app to refresh the commands." = "Fügt mdp, md-preview und markdown-preview zu deinem PATH hinzu. Führe dies nach dem Aktualisieren der App erneut aus, um die Befehle zu aktualisieren.";
+"Markdown Preview" = "Markdown Preview";
+"Check for Updates" = "Nach Updates suchen";
+"Automatically check for updates" = "Automatisch nach Updates suchen";
+"Automatically download updates" = "Updates automatisch laden";
+"Last checked" = "Zuletzt geprüft";
+"Never" = "Nie";
+"Downloaded updates install the next time you quit Markdown Preview." = "Geladene Updates werden installiert, wenn du Markdown Preview das nächste Mal beendest.";
+"Colors" = "Farben";
+"Window background" = "Fensterhintergrund";
+"Editor background" = "Editorhintergrund";
+"Code block background" = "Hintergrund für Codeblöcke";
+"Text" = "Text";
+"Link" = "Link";
+"Presets" = "Voreinstellungen";
+"Colors apply to the current appearance. Choose the Automatic appearance to set Light and Dark separately." = "Farben gelten für das aktuelle Erscheinungsbild. Wähle das automatische Erscheinungsbild, um Hell und Dunkel separat festzulegen.";
+"A preset fills every color and switches the app to its light or dark look. Adjust individual colors below afterwards." = "Eine Voreinstellung legt jede Farbe fest und schaltet die App auf ihr helles oder dunkles Erscheinungsbild um. Passe danach unten einzelne Farben an.";
+"Red Graphite" = "Red Graphite";
+"Dark Graphite" = "Dark Graphite";
+"Normal" = "Normal";
+"Charcoal" = "Charcoal";
+"Solarized Light" = "Solarized Light";
+"Solarized Dark" = "Solarized Dark";
+"Dracula" = "Dracula";
+"Each color has a separate value for the Light and Dark appearance. Picking the default color removes the override." = "Jede Farbe hat einen separaten Wert für das helle und dunkle Erscheinungsbild. Durch Auswählen der Standardfarbe wird die Überschreibung entfernt.";
+"Reset Colors" = "Farben zurücksetzen";
+"Restores the default Normal theme." = "Stellt das Standard-Theme „Normal“ wieder her.";
+"Send anonymous crash reports" = "Anonyme Absturzberichte senden";
+"Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "Absturzberichte enthalten Diagnosedetails wie Stacktraces sowie Betriebssystem- und App-Versionen. Sie können technische Dateipfade enthalten; Markdown Preview hängt jedoch nicht absichtlich Dokumentinhalte oder personenbezogene Daten an.";
+"Share anonymous usage analytics" = "Anonyme Nutzungsanalysen teilen";
+"When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS major version, processor architecture, and locale country or region. This is used only to count daily and monthly active installations and understand basic platform compatibility. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers." = "Wenn diese Option aktiviert ist, sendet Markdown Preview höchstens ein Ereignis pro Tag, wenn die App aktiv wird, verknüpft mit einer zufälligen Installationskennung. Außerdem werden die App-Version, die Hauptversion von macOS, die Prozessorarchitektur sowie das Land oder die Region der Regionseinstellungen gesendet. Dies wird ausschließlich verwendet, um täglich und monatlich aktive Installationen zu zählen und die grundlegende Plattformkompatibilität besser zu verstehen. Es werden keine Dokumentinhalte, Dateinamen oder -pfade, Aktionen, Bildschirme, genaue Standortdaten, personenbezogene Daten oder Werbe-IDs gesendet.";
+
+/* View menu */
+"Appearance" = "Erscheinungsbild";
+"Automatic" = "Automatisch";
+"Light" = "Hell";
+"Dark" = "Dunkel";
+"Content Width" = "Inhaltsbreite";
+"Normal" = "Normal";
+"Full Width" = "Volle Breite";
+"Toggle Sidebar" = "Seitenleiste ein-/ausblenden";
+"Hide Sidebar" = "Seitenleiste ausblenden";
+"Table of Contents" = "Inhaltsverzeichnis";
+"Project Navigator" = "Projektnavigator";
+"Toggle Edit Mode" = "Bearbeitungsmodus umschalten";
+
+/* File menu */
+"New Tab" = "Neuer Tab";
+"Choose a name and location for the new Markdown file." = "Wähle einen Namen und einen Speicherort für die neue Markdown-Datei.";
+
+/* Print panel */
+"Font Size:" = "Schriftgröße:";
+"Font Size" = "Schriftgröße";
+"%d pt" = "%d pt";
+"pt" = "pt";
+
+/* Export panel */
+"Export" = "Exportieren";
+"Format:" = "Format:";
+"PDF Document" = "PDF-Dokument";
+"HTML Document" = "HTML-Dokument";
+"EPUB Book" = "EPUB-Buch";
+"The document could not be prepared for export." = "Das Dokument konnte nicht für den Export vorbereitet werden.";
+"The selected paper has no printable area." = "Das ausgewählte Papier hat keinen bedruckbaren Bereich.";
+
+/* Go menu */
+"Go" = "Gehe zu";
+"Up" = "Nach oben";
+"Down" = "Nach unten";
+"Page Up" = "Seite nach oben";
+"Page Down" = "Seite nach unten";
+"Previous Item" = "Vorheriges Objekt";
+"Next Item" = "Nächstes Objekt";
+"Top of Document" = "Anfang des Dokuments";
+"Bottom of Document" = "Ende des Dokuments";
+
+/* Format menu */
+"Format" = "Format";
+"Body" = "Textkörper";
+"Heading 1" = "Überschrift 1";
+"Heading 2" = "Überschrift 2";
+"Heading 3" = "Überschrift 3";
+"Bold" = "Fett";
+"Italic" = "Kursiv";
+"Strikethrough" = "Durchgestrichen";
+"Inline Code" = "Inline-Code";
+"Link" = "Link";
+"Bulleted List" = "Aufzählungsliste";
+"Numbered List" = "Nummerierte Liste";
+"Checklist" = "Checkliste";
+"Block Quote" = "Blockzitat";
+
+/* Open panel */
+"Choose a Markdown file or folder" = "Wähle eine Markdown-Datei oder einen Ordner aus";
+
+/* Search toolbar */
+"Search" = "Suchen";
+"Search in Document" = "Im Dokument suchen";
+
+/* Main toolbar */
+"Navigation" = "Navigation";
+"Back and Forward" = "Zurück und Vorwärts";
+"Back" = "Zurück";
+"Forward" = "Vorwärts";
+"Sidebar" = "Seitenleiste";
+"Sidebar options" = "Optionen für die Seitenleiste";
+"Inspector" = "Informationen";
+"Get Info" = "Informationen";
+"Always on Top" = "Immer im Vordergrund";
+"Keep Markdown Preview windows in front of other apps" = "Markdown Preview-Fenster vor anderen Apps im Vordergrund halten";
+"Show the inspector" = "Informationen einblenden";
+"Share" = "Teilen";
+"Share document" = "Dokument teilen";
+"Print" = "Drucken";
+"Print document" = "Dokument drucken";
+"Copy" = "Kopieren";
+"Copy Markdown source to clipboard" = "Markdown-Quelltext in die Zwischenablage kopieren";
+"Copied" = "Kopiert";
+"Edit" = "Bearbeiten";
+"Edit document" = "Dokument bearbeiten";
+"Stop editing and return to preview" = "Bearbeitung beenden und zur Vorschau zurückkehren";
+"Open" = "Öffnen";
+"Open document in another app" = "Dokument in einer anderen App öffnen";
+"Open in %@" = "Öffnen in %@";
+"Open in LLM" = "In LLM öffnen";
+"Open document in an LLM app" = "Dokument in einer LLM-App öffnen";
+"Zoom" = "Zoomen";
+"Zoom Out" = "Verkleinern";
+"Zoom In" = "Vergrößern";
+"Open With" = "Öffnen mit";
+"Open in another editor" = "In einem anderen Editor öffnen";
+
+/* Formatting toolbar */
+"Task List" = "Aufgabenliste";
+"Normal Text" = "Normaler Text";
+"Heading %d" = "Überschrift %d";
+
+/* Find bar */
+"Match:" = "Treffer:";
+"Contains" = "Enthält";
+"Begins With" = "Beginnt mit";
+"Done" = "Fertig";
+"Not found" = "Nicht gefunden";
+"%d of %d" = "%d von %d";
+"Previous match" = "Vorheriger Treffer";
+"Next match" = "Nächster Treffer";
+
+/* Open With context menu */
+"Open with External Editor" = "Mit externem Editor öffnen";
+"Open As" = "Öffnen als";
+"No editors available" = "Keine Editoren verfügbar";
+
+/* Inspector */
+"Inspector tab" = "Informations-Tab";
+"Document" = "Dokument";
+"Properties" = "Eigenschaften";
+"File Name" = "Dateiname";
+"Full Path" = "Vollständiger Pfad";
+"Document Type" = "Dokumenttyp";
+"Markdown Document" = "Markdown-Dokument";
+"File Size" = "Dateigröße";
+"Words" = "Wörter";
+"Characters" = "Zeichen";
+"Selected" = "Ausgewählt";
+"Lines" = "Zeilen";
+"Headings" = "Überschriften";
+"Links" = "Links";
+"Images" = "Bilder";
+"Modified" = "Geändert";
+"No frontmatter" = "Keine Frontmatter";
+"Untitled" = "Ohne Titel";
+
+/* Document state and save dialogs */
+"Edited" = "Bearbeitet";
+"Auto-save failed" = "Automatisches Sichern fehlgeschlagen";
+"Do you want to save your changes?" = "Möchtest du deine Änderungen sichern?";
+"this document" = "dieses Dokument";
+"Your changes to %@ will be lost if you don’t save them." = "Deine Änderungen an %@ gehen verloren, wenn du sie nicht sicherst.";
+"Save" = "Sichern";
+"Cancel" = "Abbrechen";
+"Don’t Save" = "Nicht sichern";
+"The file was removed while it was open." = "Die Datei wurde entfernt, während sie geöffnet war.";
+"Recreate File" = "Datei erneut erstellen";
+"The file could not be read to verify that it is unchanged." = "Die Datei konnte nicht gelesen werden, um zu überprüfen, ob sie unverändert ist.";
+"Save Anyway" = "Trotzdem sichern";
+"This document changed on disk" = "Dieses Dokument wurde auf dem Datenträger geändert";
+"Another app changed %@. Cancel keeps your changes unsaved. Choose which version to keep." = "Eine andere App hat %@ geändert. Abbrechen lässt deine Änderungen ungesichert. Wähle, welche Version beibehalten werden soll.";
+"Keep My Changes" = "Meine Änderungen behalten";
+"Reload from Disk" = "Vom Datenträger neu laden";
+"Unable to verify the document on disk" = "Dokument auf dem Datenträger kann nicht überprüft werden";
+"%@ Cancel keeps your changes unsaved." = "%@ Abbrechen lässt deine Änderungen ungesichert.";
+"Markdown Preview needs your permission to save this file." = "Markdown Preview benötigt deine Erlaubnis, diese Datei zu sichern.";
+"The clipboard does not contain an image." = "Die Zwischenablage enthält kein Bild.";
+"The pasted image could not be placed next to the Markdown file." = "Das eingefügte Bild konnte nicht neben der Markdown-Datei abgelegt werden.";
+"Choose the folder containing this Markdown file to save the pasted image." = "Wähle den Ordner mit dieser Markdown-Datei aus, um das eingefügte Bild zu sichern.";
+"Choose the folder containing this Markdown file." = "Wähle den Ordner mit dieser Markdown-Datei aus.";
+"Rename Image" = "Bild umbenennen";
+"Choose a new name for this image." = "Wähle einen neuen Namen für dieses Bild.";
+"Rename" = "Umbenennen";
+
+/* Open menus */
+"No document open" = "Kein Dokument geöffnet";
+"No apps available" = "Keine Apps verfügbar";
+"Editors" = "Editoren";
+"AI Apps" = "KI-Apps";
+"No LLM apps available" = "Keine LLM-Apps verfügbar";
+"Open in LLM…" = "In LLM öffnen …";
+"Open with…" = "Öffnen mit …";
+
+/* Project navigator context menu */
+"Show in Finder" = "Im Finder anzeigen";
+"Open in New Tab" = "In neuem Tab öffnen";
+"Open in New Window" = "In neuem Fenster öffnen";
+"Copy Path" = "Pfad kopieren";
+
+/* Project navigator context menu */
+"Add to Favorites" = "Zu Favoriten hinzufügen";
+
+/* Project navigator context menu */
+"Remove from Favorites" = "Aus Favoriten entfernen";
+
+/* Project navigator root menu; folder name */
+"Add “%@” to Favorites" = "„%@“ zu Favoriten hinzufügen";
+"Remove “%@” from Favorites" = "„%@“ aus Favoriten entfernen";
+
+/* Project navigator root menu section */
+"Recent" = "Zuletzt benutzt";
+"Favorites" = "Favoriten";
+
+/* Table editing */
+"Table" = "Tabelle";
+"Row" = "Zeile";
+"Column" = "Spalte";
+"Select Row" = "Zeile auswählen";
+"Add Row Above" = "Zeile darüber hinzufügen";
+"Add Row Below" = "Zeile darunter hinzufügen";
+"Duplicate Row" = "Zeile duplizieren";
+"Delete Row" = "Zeile löschen";
+"Select Column" = "Spalte auswählen";
+"Add Column Left" = "Spalte links hinzufügen";
+"Add Column Right" = "Spalte rechts hinzufügen";
+"Delete Column" = "Spalte löschen";
+"Edit Table Cell" = "Tabellenzelle bearbeiten";
+"Add Row" = "Zeile hinzufügen";
+"Add Column" = "Spalte hinzufügen";
+"Edit Table" = "Tabelle bearbeiten";
+
+/* Rendered preview controls */
+"Heading" = "Überschrift";
+"Copy code" = "Code kopieren";
+"Code copied" = "Code kopiert";
+"Mermaid diagram" = "Mermaid-Diagramm";
+"%@ — Mermaid diagram" = "%@ — Mermaid-Diagramm";
+"Reset zoom" = "Zoom zurücksetzen";
+"Open in Window" = "In Fenster öffnen";
+"Mermaid renderer is unavailable.\n\n" = "Mermaid-Renderer ist nicht verfügbar.\n\n";
+"This diagram type is not supported." = "Dieser Diagrammtyp wird nicht unterstützt.";
+"The diagram has a syntax error." = "Das Diagramm enthält einen Syntaxfehler.";
+"The diagram is not valid." = "Das Diagramm ist ungültig.";
+"The diagram is too large to draw." = "Das Diagramm ist zu groß zum Zeichnen.";
+"The diagram could not be drawn." = "Das Diagramm konnte nicht gezeichnet werden.";
+"This diagram is empty." = "Dieses Diagramm ist leer.";
+"Line %d, column %d" = "Zeile %d, Spalte %d";
+"Empty diagram. Click to add Mermaid source." = "Leeres Diagramm. Klicken, um Mermaid-Quelltext hinzuzufügen.";
+"Footnote %d" = "Fußnote %d";
+"Back to reference %d" = "Zurück zur Referenz %d";
+"KaTeX renderer is unavailable.\n\n" = "KaTeX-Renderer ist nicht verfügbar.\n\n";
+
+/* URL scheme errors */
+"Cannot open link" = "Link kann nicht geöffnet werden";
+"“%@” is not a link Markdown Preview understands. Use md-preview://file/ followed by the absolute path of the file, for example md-preview://file/Users/me/notes/README.md." = "„%@“ ist kein Link, den Markdown Preview versteht. Verwende md-preview://file/ gefolgt vom absoluten Pfad der Datei, zum Beispiel md-preview://file/Users/me/notes/README.md.";
+
+/* CLI installer errors */
+"Terminal automation failed: %@" = "Terminalautomatisierung fehlgeschlagen: %@";
+"Terminal automation failed." = "Terminalautomatisierung fehlgeschlagen.";
+"Failed to write CLI installer script: %@" = "Fehler beim Schreiben des CLI-Installationsskripts: %@";
+"The bundled Markdown Preview CLI could not be found." = "Die mitgelieferte Markdown Preview-CLI wurde nicht gefunden.";
+
+/* Settings — Reading */
+"Reading" = "Lesen";
+"Font" = "Schrift";
+"System" = "System";
+"Serif" = "Serifenschrift";
+"Rounded" = "Abgerundet";
+"Monospace" = "Monospace";
+"The font also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes the text size." = "Die Schriftart wird auch für Quick-Look-Vorschauen verwendet. Durch Zoomen eines Dokumentfensters mit ⌘+ und ⌘− wird die Textgröße geändert.";
+
+/* Settings — Windows */
+"Windows" = "Fenster";
+"Open documents in tabs" = "Dokumente in Tabs öffnen";
+
+/* Search for Document */
+"Search for Document…" = "Nach Dokument suchen …";
+"Search files by name" = "Dateien nach Namen suchen";
+"No matching files" = "Keine passenden Dateien";
+"Open a folder to search its files" = "Öffne einen Ordner, um dessen Dateien zu durchsuchen";
+"Open Folder…" = "Ordner öffnen …";
+"Showing the first %d files in this project" = "Die ersten %d Dateien in diesem Projekt werden angezeigt";
+"↑↓ browse · ↩ open · ⌘↩ new tab · ⌥↩ new window" = "↑↓ navigieren · ↩ öffnen · ⌘↩ neuer Tab · ⌥↩ neues Fenster";
+"Search for Document" = "Nach Dokument suchen";
+"Search for a file by name" = "Nach einer Datei nach Namen suchen";
+
+/* Release notes */
+"Release Notes" = "Versionshinweise";
+"Release notes are read-only" = "Versionshinweise sind schreibgeschützt";
+"Updated to %@" = "Aktualisiert auf %@";
+"What’s New" = "Neuigkeiten";
+"What’s New in Markdown Preview %@" = "Neuigkeiten in Markdown Preview %@";
+"Previous releases" = "Frühere Versionen";
+"Shipped by" = "Bereitgestellt von";
+"Thanks to %@." = "Danke an %@.";
+
+/* Reading preferences */
+"Strict line breaks" = "Strikte Zeilenumbrüche";
+
+/* App link approvals */
+"Reset App Link Approvals" = "Freigaben für App-Links zurücksetzen";
+"App links" = "App-Links";
+"Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look." = "Vor dem Öffnen benutzerdefinierter App-Links erneut fragen. Freigaben werden pro URL-Schema gespeichert und mit Quick Look geteilt.";
+"No application can open this link" = "Keine App kann diesen Link öffnen";
+"OK" = "OK";
+"Allow this document to open “%@”?" = "Diesem Dokument erlauben, „%@“ zu öffnen?";
+"Allow" = "Erlauben";
+"Always Allow" = "Immer erlauben";
+"Allow all %@: links in documents and Quick Look." = "Alle %@:-Links in Dokumenten und Quick Look erlauben.";
+
+/* App language */
+"Language" = "Sprache";
+"System Default" = "Systemstandard";
+"Restart Markdown Preview to change the language?" = "Markdown Preview neu starten, um die Sprache zu ändern?";
+"The new language applies to menus, settings, and document controls after the app restarts. Quick Look previews keep their system language." = "Die neue Sprache wird nach dem Neustart der App auf Menüs, Einstellungen und Dokumentsteuerungen angewendet. Quick-Look-Vorschauen behalten ihre Systemsprache bei.";
+"Restart Now" = "Jetzt neu starten";
+"Later" = "Später";
+
+/* Settings organization */
+"Markdown" = "Markdown";
+"Outline" = "Gliederung";
+"Highlight outline section under the pointer" = "Gliederungsabschnitt unter dem Zeiger hervorheben";
+"Open Markdown links in new windows" = "Markdown-Links in neuen Fenstern öffnen";
+"Text size also applies to Quick Look previews. Zooming a document window with ⌘+ and ⌘− changes it too. Fonts and reading layout live in Appearance settings." = "Die Textgröße gilt auch für Quick-Look-Vorschauen. Durch Zoomen eines Dokumentfensters mit ⌘+ und ⌘− wird sie ebenfalls geändert. Schriftarten und Leselayout befinden sich in den Einstellungen für Erscheinungsbild.";
+"Themes" = "Themes";
+"This theme uses a fixed appearance. Choose Original to change it." = "Dieses Theme verwendet ein festes Erscheinungsbild. Wähle „Original“, um es zu ändern.";
+
+/* Reading text alignment */
+"Text alignment" = "Textausrichtung";
+"Left" = "Links";
+"Center" = "Zentriert";
+"Right" = "Rechts";
+"Justified" = "Blocksatz";
+
+/* Paper print scale, applied before pagination. */
+"Scale:" = "Skalierung:";
+"Scale" = "Skalierung";
+
+/* Table fullscreen control. */
+"Expand Table" = "Tabelle erweitern";
+"Math formula. Click to edit source." = "Mathematische Formel. Klicken, um den Quelltext zu bearbeiten.";
+
+/* Additional settings, navigation, formatting, and export strings. */
+"GitHub Project" = "GitHub-Projekt";
+"Version" = "Version";
+"Spacing" = "Abstände";
+"Updates" = "Updates";
+"%@:" = "%@:";
+"Advanced" = "Erweitert";
+"Opening files" = "Dateien öffnen";
+"Takes effect after you reopen Markdown Preview." = "Wird wirksam, nachdem du Markdown Preview erneut geöffnet hast.";
+"Turn this off to keep every line break as written." = "Deaktiviere dies, um jeden Zeilenumbruch wie geschrieben beizubehalten.";
+"Crash reports" = "Absturzberichte";
+"Analytics" = "Analysen";
+"Contains technical details, not document contents." = "Enthält technische Details, keine Dokumentinhalte.";
+"At most one event a day, to count active installations." = "Höchstens ein Ereignis pro Tag, um aktive Installationen zu zählen.";
+"Details" = "Details";
+"Discord Community" = "Discord-Community";
+"Buy Me a Coffee" = "Buy Me a Coffee";
+"Close" = "Schließen";
+"Support Markdown Preview" = "Markdown Preview unterstützen";
+"Markdown Preview is free and open source. A coffee helps keep it that way." = "Markdown Preview ist kostenlos und Open Source. Ein Kaffee hilft dabei, dass es so bleibt.";
+"Bold Text" = "Fetter Text";
+"Accessibility & Layout Options" = "Optionen für Bedienungshilfen und Layout";
+"Customize" = "Anpassen";
+"Line Spacing" = "Zeilenabstand";
+"Character Spacing" = "Zeichenabstand";
+"Word Spacing" = "Wortabstand";
+"Margins" = "Ränder";
+"Colors apply to the current appearance. Start with Original and choose Automatic to set Light and Dark separately." = "Farben gelten für das aktuelle Erscheinungsbild. Beginne mit „Original“ und wähle „Automatisch“, um Hell und Dunkel getrennt festzulegen.";
+"Reset Theme" = "Theme zurücksetzen";
+"Customize Theme" = "Theme anpassen";
+"Themes & Settings" = "Themes & Einstellungen";
+"Appearance: %@" = "Erscheinungsbild: %@";
+"No recent files" = "Keine zuletzt verwendeten Dateien";
+"Recent Files" = "Zuletzt verwendete Dateien";
+"File Results" = "Dateiergebnisse";
+"The pasted image could not be inserted into the document." = "Das eingefügte Bild konnte nicht in das Dokument eingefügt werden.";
+"Export PDF" = "PDF exportieren";
+"Export document as PDF" = "Dokument als PDF exportieren";
+"Export document" = "Dokument exportieren";
+"Text size, appearance, and themes" = "Textgröße, Erscheinungsbild und Themes";
+"Sidebar Mode" = "Seitenleistenmodus";
+"Show or hide the sidebar" = "Seitenleiste ein- oder ausblenden";
+"Text Style" = "Textstil";
+"Lists" = "Listen";
+"More Formatting" = "Weitere Formatierung";
+"None" = "Keine";
+"PNG Image" = "PNG-Bild";
+"Wrap code" = "Code umbrechen";
+"Unwrap code" = "Codeumbruch entfernen";
+"Open Link" = "Link öffnen";
+"Open Link in New Window" = "Link in neuem Fenster öffnen";
+"Copy Link" = "Link kopieren";
+"The document could not be rendered as an image." = "Das Dokument konnte nicht als Bild gerendert werden.";
+"The image could not be allocated." = "Der Speicher für das Bild konnte nicht reserviert werden.";
+"The image could not be encoded." = "Das Bild konnte nicht codiert werden.";
+"theme_Original" = "Original";
+"theme_Quiet" = "Quiet";
+"theme_Paper" = "Paper";
+"theme_Bold" = "Bold";
+"theme_Calm" = "Calm";
+"theme_Focus" = "Focus";
+"theme_Graphite" = "Graphite";
+"theme_Dusk" = "Dusk";
+"theme_Midnight" = "Midnight";
+"Original" = "Original";
+"Athelas" = "Athelas";
+"Charter" = "Charter";
+"Georgia" = "Georgia";
+"Iowan" = "Iowan";
+"Palatino" = "Palatino";
+"Seravek" = "Seravek";
+"Avenir Next" = "Avenir Next";
+"New York" = "New York";
+"SF Rounded" = "SF Rounded";
+"Times New Roman" = "Times New Roman";
+"The team looking after our recommendation system has been spiking out some new algorithms, and the results are promising enough that we are planning to put them in front of readers next month. Long paragraphs are what make a reading face show its character: the rhythm of the lines, how the spacing settles, where the eye lands when it returns from the end of one line to the start of the next." = "Das Team, das sich um unser Empfehlungssystem kümmert, hat einige neue Algorithmen erprobt, und die Ergebnisse sind vielversprechend genug, dass wir planen, sie im nächsten Monat den Lesern vorzustellen. Lange Absätze zeigen den Charakter einer Leseschrift: den Rhythmus der Zeilen, wie sich die Abstände einfügen und wo das Auge landet, wenn es vom Ende einer Zeile zum Anfang der nächsten zurückkehrt.";
+"Nothing you change here reaches your open documents until you tap the check mark, so try a few faces and spacings, then close with the cross to leave everything exactly as you found it. The sample keeps going past the bottom of this panel, the way a page would, so the measure and the margins have somewhere to show themselves before you commit to them." = "Keine der Änderungen hier wirkt sich auf deine geöffneten Dokumente aus, bis du auf das Häkchen tippst. Probiere also einige Schriften und Abstände aus und schließe mit dem Kreuz, damit alles genau so bleibt, wie du es vorgefunden hast. Der Beispieltext reicht über den unteren Rand dieses Bereichs hinaus, wie eine Seite, damit Zeilenlänge und Ränder sich zeigen können, bevor du dich dafür entscheidest.";
+
+/* Share popover word count */
+"%ld words" = "%ld Wörter";
+
+/* Project navigator filter bar */
+"Filter" = "Filtern";
+"Show Only Recent Files" = "Nur zuletzt verwendete Dateien anzeigen";
+"Add" = "Hinzufügen";
+"New Empty File" = "Neue leere Datei";
+"New File from Clipboard" = "Neue Datei aus der Zwischenablage";
+"New Folder" = "Neuer Ordner";
+"Add Files to “%@”…" = "Dateien zu „%@“ hinzufügen …";
+"New File in “%@”" = "Neue Datei in „%@“";
+"New Folder in “%@”" = "Neuer Ordner in „%@“";
+"Allow Markdown Preview to make files in “%@”." = "Markdown Preview erlauben, Dateien in „%@“ zu erstellen.";
+
+/* Share links */
+"Share as Link" = "Als Link teilen";
+"Favorite Folders" = "Favoritenordner";
+"Add folders you use often, and switch between them here." = "Füge häufig verwendete Ordner hinzu und wechsle hier zwischen ihnen.";
+"Share as Link…" = "Als Link teilen …";
+"Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "Jeder mit dem Link kann dieses Dokument lesen, bis du die Freigabe beendest oder der Link in 7 Tagen abläuft. Das Dokument ist verschlüsselt und kann nur über den Link geöffnet werden.";
+"Uploading Document…" = "Dokument wird hochgeladen …";
+"Could Not Create Link" = "Link konnte nicht erstellt werden";
+"Manage Shared Document…" = "Freigegebenes Dokument verwalten …";
+"Shared" = "Geteilt";
+"Shared · Link expires %@" = "Geteilt · Link läuft %@ ab";
+"Permissions" = "Berechtigungen";
+"Anyone with the link" = "Jeder mit dem Link";
+"People you choose" = "Von dir ausgewählte Personen";
+"can view only" = "kann nur anzeigen";
+"can edit" = "kann bearbeiten";
+"Stop Sharing" = "Freigabe beenden";
+"Stop sharing this document?" = "Freigabe dieses Dokuments beenden?";
+"If you stop sharing, people with the link can no longer open this document, and its copy is deleted from the server." = "Wenn du die Freigabe beendest, können Personen mit dem Link dieses Dokument nicht mehr öffnen, und seine Kopie wird vom Server gelöscht.";
+"This document is too large to share as a link." = "Dieses Dokument ist zu groß, um es als Link freizugeben.";
+"Too many links in a short time. Wait a minute, then try again." = "Zu viele Links in kurzer Zeit. Warte eine Minute und versuche es dann erneut.";
+"Sharing reached its daily limit. Try again after %@." = "Die Freigabe hat ihr tägliches Limit erreicht. Versuche es nach %@ erneut.";
+"You are offline. Connect to the internet, then try again." = "Du bist offline. Stelle eine Verbindung zum Internet her und versuche es dann erneut.";
+"Markdown Preview could not reach the sharing server. Try again later." = "Markdown Preview konnte den Freigabeserver nicht erreichen. Versuche es später erneut.";
+"Markdown Preview could not use the Keychain. Try again." = "Markdown Preview konnte nicht auf den Schlüsselbund zugreifen. Versuche es erneut.";
+
+/* Share links */
+"Keep Document Private" = "Dokument privat halten";
+
+/* Share links */
+"Markdown Preview lost the key for this link, so it cannot change or stop it. The link works until %@. Copy Link makes a new link." = "Markdown Preview hat den Schlüssel für diesen Link verloren und kann ihn daher nicht ändern oder beenden. Der Link funktioniert bis %@. „Link kopieren“ erstellt einen neuen Link.";
+"Markdown Preview lost the key for this link, so it cannot delete the copy on the server. People with the link can open this document until %@." = "Markdown Preview hat den Schlüssel für diesen Link verloren und kann daher die Kopie auf dem Server nicht löschen. Personen mit dem Link können dieses Dokument bis %@ öffnen.";
+
+/* Opening share links */
+"Enter Password" = "Passwort eingeben";
+"Incorrect Password" = "Falsches Passwort";
+"The sender protected this shared document with a password." = "Der Absender hat dieses freigegebene Dokument mit einem Passwort geschützt.";
+"Shared Document" = "Freigegebenes Dokument";
+"The shared document can’t be opened." = "Das freigegebene Dokument kann nicht geöffnet werden.";
+"This link has expired, or sharing was stopped." = "Dieser Link ist abgelaufen oder die Freigabe wurde beendet.";
+"This link is damaged, or it does not match the shared document." = "Dieser Link ist beschädigt oder stimmt nicht mit dem freigegebenen Dokument überein.";
+"Shared documents are read-only" = "Freigegebene Dokumente sind schreibgeschützt";
+"Continue" = "Fortfahren";
+"Read only" = "Schreibgeschützt";
+
+/* Update capsule */
+"Version %@" = "Version %@";
+"Checking for updates" = "Nach Updates wird gesucht";
+"An update is available" = "Ein Update ist verfügbar";
+"Downloading update" = "Update wird geladen";
+"Preparing update" = "Update wird vorbereitet";
+"Update installed." = "Update installiert.";
+"Installing update…" = "Update wird installiert …";
+"Markdown Preview is up to date" = "Markdown Preview ist auf dem neuesten Stand";
+"Update failed" = "Update fehlgeschlagen";
+"Download" = "Laden";
+"Relaunch Now" = "Jetzt neu starten";
+
+/* Edit menu and reader context menu */
+"Copy as Plain Text" = "Als reinen Text kopieren";

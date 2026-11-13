@@ -32,8 +32,20 @@ final class UpdateModel {
     private(set) var phase: Phase = .idle {
         didSet {
             if oldValue == .idle, phase != .idle { didAppear?(self) }
+            if phase != .idle { lastShown.phase = phase }
         }
     }
+
+    /// The last step that showed, with its buttons, kept after `hide()` so
+    /// the capsule fades out with its line instead of going empty first.
+    /// Not observed: the capsule reads it only once `phase` turns idle.
+    struct Shown {
+        var phase: Phase = .idle
+        var hasPrimary = false
+        var hasClose = false
+    }
+
+    @ObservationIgnored private(set) var lastShown = Shown()
     /// The version on offer, or the error Sparkle gave; the capsule's tooltip.
     private(set) var detail: String?
     /// Download, or Relaunch Now.
@@ -55,6 +67,10 @@ final class UpdateModel {
         self.detail = detail
         primaryAction = primary
         closeAction = close
+        if phase != .idle {
+            lastShown.hasPrimary = primary != nil
+            lastShown.hasClose = close != nil
+        }
         if phase == .upToDate {
             // Nothing to act on: it goes away by itself.
             autoHide = Task { [weak self] in
