@@ -250,7 +250,7 @@
 "Remove “%@” from Favorites" = "حذف «%@» از موارد دلخواه";
 
 /* Project navigator root menu section */
-"Recent" = "اخیر";
+"Recent" = "اخیراً استفاده‌شده";
 "Favorites" = "موارد دلخواه";
 
 /* Table editing */
@@ -478,7 +478,7 @@
 /* Share links */
 "Share as Link" = "اشتراک‌گذاری به‌صورت پیوند";
 "Favorite Folders" = "پوشه‌های دلخواه";
-"Add folders you use often, and switch between them here." = "پوشه‌های پرکاربرد را اضافه کنید و از اینجا بین آن‌ها جابه‌جا شوید.";
+"Add folders you use often, and switch between them here." = "پوشه‌های پرکاربردتان را اضافه کنید و از اینجا بین آن‌ها جابه‌جا شوید.";
 "Share as Link…" = "اشتراک‌گذاری به‌صورت پیوند…";
 "Anyone with the link can read this document, until you stop sharing or the link expires in 7 days. The document is encrypted, and only the link can open it." = "هر کسی که پیوند را دارد می‌تواند این سند را بخواند، تا زمانی که اشتراک‌گذاری را متوقف کنید یا پیوند پس از ۷ روز منقضی شود. سند رمزگذاری شده است و فقط با این پیوند باز می‌شود.";
 "Uploading Document…" = "در حال بارگذاری سند…";
