@@ -1674,22 +1674,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         topLevelMenuItem(matching: titles)?.submenu
     }
 
-    // Menus and items are found by title. Each set also holds the title in
-    // the running language, read from the same tables that name the menu,
-    // so a new translation needs no entry here.
-    private static let fileMenuTitles: Set<String> = ["File", "文件", "پرونده", "ファイル", "Plik", xibTitle("dMs-cI-mzQ", "File")]
-    private static let viewMenuTitles: Set<String> = ["View", "显示", "نمایش", "表示", "Widok", xibTitle("H8h-7b-M4v", "View")]
-    private static let windowMenuTitles: Set<String> = ["Window", "窗口", "پنجره", "ウインドウ", "Okno", xibTitle("aUF-d1-5bR", "Window")]
-    private static let formatMenuTitles: Set<String> = ["Format", "格式", NSLocalizedString("Format", comment: "")]
-    private static let goMenuTitles: Set<String> = ["Go", "前往", NSLocalizedString("Go", comment: "")]
-    private static let appearanceMenuTitles: Set<String> = ["Appearance", "外观", NSLocalizedString("Appearance", comment: "")]
-    private static let contentWidthMenuTitles: Set<String> = ["Content Width", "内容宽度", NSLocalizedString("Content Width", comment: "")]
-    private static let showSidebarMenuTitles: Set<String> = ["Show Sidebar", "显示边栏", xibTitle("kIP-vf-haE", "Show Sidebar")]
-    private static let actualSizeMenuTitles: Set<String> = ["Actual Size", "实际大小", xibTitle("mdp-zr-itm", "Actual Size")]
+    // Menus and items are found by title: the English one, and the one in
+    // the running language, read from the tables that name the menu, so a
+    // new translation needs no entry here.
+    private static let fileMenuTitles = xibTitles("dMs-cI-mzQ", "File")
+    private static let viewMenuTitles = xibTitles("H8h-7b-M4v", "View")
+    private static let windowMenuTitles = xibTitles("aUF-d1-5bR", "Window")
+    private static let showSidebarMenuTitles = xibTitles("kIP-vf-haE", "Show Sidebar")
+    private static let actualSizeMenuTitles = xibTitles("mdp-zr-itm", "Actual Size")
+    private static let formatMenuTitles = codeTitles("Format")
+    private static let goMenuTitles = codeTitles("Go")
+    private static let appearanceMenuTitles = codeTitles("Appearance")
+    private static let contentWidthMenuTitles = codeTitles("Content Width")
 
-    /// The title a `MainMenu.xib` item has in the running language.
-    private static func xibTitle(_ id: String, _ english: String) -> String {
-        Bundle.main.localizedString(forKey: "\(id).title", value: english, table: "MainMenu")
+    /// Titles of an item this file builds with `L(_:)`.
+    private static func codeTitles(_ english: String) -> Set<String> {
+        [english, NSLocalizedString(english, comment: "")]
+    }
+
+    /// Titles of a `MainMenu.xib` item, by its object id.
+    private static func xibTitles(_ id: String, _ english: String) -> Set<String> {
+        [english, Bundle.main.localizedString(forKey: "\(id).title", value: english, table: "MainMenu")]
     }
 }
 
