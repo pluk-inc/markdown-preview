@@ -111,7 +111,7 @@ final class BundleIdentifierMigrationTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: BundleIdentifierMigration.doneKey))
     }
 
-    func testAFileThatDoesNotCopyIsTriedAgainBeforeTheSettingsMove() throws {
+    func testAFileThatDoesNotCopyIsTriedAgainAndTheSettingsMoveOnce() throws {
         try writeOldSettings(["MarkdownPreview.appearance": "dark"])
         let source = oldSupport.appendingPathComponent("SharedLinks/links.json")
         try write("[]", to: source)
@@ -121,19 +121,22 @@ final class BundleIdentifierMigrationTests: XCTestCase {
 
         migrate()
         XCTAssertFalse(defaults.bool(forKey: BundleIdentifierMigration.doneKey))
-        XCTAssertNil(defaults.string(forKey: "MarkdownPreview.appearance"))
+        // The settings do not wait for the files: privacy choices are among them.
+        XCTAssertEqual(defaults.string(forKey: "MarkdownPreview.appearance"), "dark")
         XCTAssertFalse(FileManager.default.fileExists(atPath: newSupport.appendingPathComponent("SharedLinks").path))
 
-        // Readable at the next launch: the whole folder arrives.
+        // Readable at the next launch: the whole folder arrives, and a
+        // setting the reader removed in between stays removed.
+        defaults.removeObject(forKey: "MarkdownPreview.appearance")
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: source.path)
         migrate()
         XCTAssertTrue(defaults.bool(forKey: BundleIdentifierMigration.doneKey))
-        XCTAssertEqual(defaults.string(forKey: "MarkdownPreview.appearance"), "dark")
+        XCTAssertNil(defaults.string(forKey: "MarkdownPreview.appearance"))
         XCTAssertEqual(try String(contentsOf: newSupport.appendingPathComponent("SharedLinks/links.json"),
                                   encoding: .utf8), "[]")
     }
 
-    func testTheSettingsMoveAfterTheLastAttempt() throws {
+    func testTheMoveEndsAfterTheLastAttempt() throws {
         try writeOldSettings(["MarkdownPreview.appearance": "dark"])
         let source = oldSupport.appendingPathComponent("SharedLinks/links.json")
         try write("[]", to: source)

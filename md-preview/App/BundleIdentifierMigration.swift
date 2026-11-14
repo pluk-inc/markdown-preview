@@ -69,9 +69,9 @@ nonisolated enum BundleIdentifierMigration {
                 "Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist"))
     }
 
-    /// Never replaces a setting or a file the new id already has. Files go
-    /// first and the done mark last, so a run cut short starts again at the
-    /// next launch and copies what is missing.
+    /// Never replaces a setting or a file the new id already has. The done
+    /// mark comes last, so a run cut short starts again at the next launch
+    /// and copies the files that are missing.
     static func run(oldIdentifier: String,
                     oldLibrary: URL,
                     defaults: UserDefaults,
@@ -92,32 +92,33 @@ nonisolated enum BundleIdentifierMigration {
             oldSettings = stored
         }
 
-        // A file that did not copy gets the next launches to try again,
-        // with the settings still unread so a later run changes nothing the
-        // reader set since. After the last attempt the settings move anyway.
+        // The settings move at the first attempt only: they hold the
+        // reader's privacy choices, so they cannot wait for the files, and
+        // a later attempt must not bring back a value removed since.
         let attempt = defaults.integer(forKey: attemptsKey) + 1
+        if attempt == 1 {
+            var skipped = skippedKeys
+            if isDefaultHandler(oldIdentifier, in: launchServicesPreferences) {
+                // The reader's choice of default app names the old id, so
+                // the offer to open Markdown files runs once more.
+                skipped.insert(defaultHandlerOfferKey)
+            }
+            let present = defaults.persistentDomain(forName: domainName) ?? [:]
+            for (key, value) in oldSettings where present[key] == nil && !skipped.contains(key) {
+                defaults.set(value, forKey: key)
+            }
+            if oldIdentifier == oldPrefix {
+                defaults.set(true, forKey: commandLineToolCheckKey)
+            }
+        }
+        defaults.set(attempt, forKey: attemptsKey)
+
+        // A file that did not copy gets the next launches to try again.
         let copied = copySupportItems(
             from: oldLibrary.appendingPathComponent("Application Support", isDirectory: true),
             to: applicationSupport)
-        if !copied && attempt < maximumAttempts {
-            defaults.set(attempt, forKey: attemptsKey)
-            return
-        }
+        guard copied || attempt >= maximumAttempts else { return }
         defaults.removeObject(forKey: attemptsKey)
-
-        var skipped = skippedKeys
-        if isDefaultHandler(oldIdentifier, in: launchServicesPreferences) {
-            // The reader's choice of default app names the old id, so the
-            // offer to open Markdown files runs once more.
-            skipped.insert(defaultHandlerOfferKey)
-        }
-        let present = defaults.persistentDomain(forName: domainName) ?? [:]
-        for (key, value) in oldSettings where present[key] == nil && !skipped.contains(key) {
-            defaults.set(value, forKey: key)
-        }
-        if oldIdentifier == oldPrefix {
-            defaults.set(true, forKey: commandLineToolCheckKey)
-        }
         defaults.set(true, forKey: doneKey)
     }
 
