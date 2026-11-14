@@ -278,14 +278,7 @@ struct InspectorView: View {
 }
 
 extension InspectorView {
-    // The sandbox remaps NSHomeDirectory() to the app container, so resolve the
-    // user's real home for tilde abbreviation.
-    private static let realHomePath: String = {
-        if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
-            return String(cString: dir)
-        }
-        return NSHomeDirectory()
-    }()
+    private static let realHomePath = URL.realHomeDirectory.path
 
     static func displayPath(for url: URL) -> String {
         let path = url.standardizedFileURL.path

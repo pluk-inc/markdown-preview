@@ -555,7 +555,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-preview.dev";
+				PRODUCT_BUNDLE_IDENTIFIER = "sh.pluk.md-preview.dev";
 				PRODUCT_NAME = "Markdown Preview";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
@@ -594,7 +594,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-preview";
+				PRODUCT_BUNDLE_IDENTIFIER = "sh.pluk.md-preview";
 				PRODUCT_NAME = "Markdown Preview";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
@@ -626,7 +626,7 @@
 					"@executable_path/../Frameworks",
 					"@executable_path/../../../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-preview.dev.quick-look";
+				PRODUCT_BUNDLE_IDENTIFIER = "sh.pluk.md-preview.dev.quick-look";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -657,7 +657,7 @@
 					"@executable_path/../Frameworks",
 					"@executable_path/../../../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-preview.quick-look";
+				PRODUCT_BUNDLE_IDENTIFIER = "sh.pluk.md-preview.quick-look";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;

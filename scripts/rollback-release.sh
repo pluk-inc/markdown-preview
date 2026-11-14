@@ -13,11 +13,11 @@
 #   scripts/rollback-release.sh --latest --yes       Skip confirmation prompt
 #
 # To re-publish after a non-destructive rollback:
-#   amore releases update <version> -b doc.md-preview --published true
+#   amore releases update <version> -b sh.pluk.md-preview --published true
 
 set -euo pipefail
 
-BUNDLE_ID="doc.md-preview"
+BUNDLE_ID="sh.pluk.md-preview"
 
 VERSION=""
 USE_LATEST=false
