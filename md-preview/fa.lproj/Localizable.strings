@@ -86,6 +86,7 @@
 "Format:" = "قالب:";
 "PDF Document" = "سند PDF";
 "HTML Document" = "سند HTML";
+"EPUB Book" = "کتاب EPUB";
 "The document could not be prepared for export." = "آماده‌سازی سند برای خروجی گرفتن امکان‌پذیر نبود.";
 "The selected paper has no printable area." = "کاغذ انتخاب‌شده ناحیهٔ قابل چاپی ندارد.";
 
