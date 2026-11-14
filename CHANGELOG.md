@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.0.73] – 2026-11-14 – Favorite folders, German translation
+
+Markdown Preview 0.0.73 brings favorite folders, a German translation, and a Loading panel for slow files.
+
+### Added
+
+- **Favorite Folders.** A folder button above the file navigator shows the tree’s root, and its menu switches between your Favorites and Recent folders, so a file deep inside a favorite opens with the whole folder in view ([#646](https://github.com/pluk-inc/markdown-preview/pull/646)).
+- **German Translation.** Menus, settings, and dialogs now come in German, which follows a German system language or your choice in Settings → General → Language ([#644](https://github.com/pluk-inc/markdown-preview/pull/644), [#649](https://github.com/pluk-inc/markdown-preview/pull/649)).
+- **Loading Panel for Slow Files.** When a file takes a moment to open, such as one iCloud Drive still has to download, a spinner shows on its sidebar row and a Loading panel covers the blank page, so you know the app is working ([#641](https://github.com/pluk-inc/markdown-preview/pull/641)).
+
+### Changed
+
+- **Smoother Update Banner.** Each update step blurs in while the banner resizes, and closing fades it out in place instead of sliding it down ([#642](https://github.com/pluk-inc/markdown-preview/pull/642)).
+
+### Fixed
+
+- **View Menu Icons in Every Language.** Actual Size, Zoom In, Zoom Out, and Always on Top show their icons in Japanese, Polish, and Persian too, and the EPUB Book export format has a Persian name ([#649](https://github.com/pluk-inc/markdown-preview/pull/649)).
+
+### Contributors
+
+- [@AlexStiles7869](https://github.com/AlexStiles7869) — built the Loading panel for slow files ([#544](https://github.com/pluk-inc/markdown-preview/pull/544)).
+
 ## [0.0.72] – 2026-11-10 – Richer callouts, plain text copy
 
 Markdown Preview 0.0.72 brings callouts for every `[!type]` tag, Copy as Plain Text, and steadier live reload.
