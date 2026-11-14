@@ -61,7 +61,7 @@ sleep 1
 
 # Capture appex provide timings (Debug builds only) — start before qlmanage.
 log stream --level debug --style compact \
-    --predicate 'subsystem BEGINSWITH "doc.md-preview"' \
+    --predicate 'subsystem BEGINSWITH "sh.pluk.md-preview"' \
     > "$LOGFILE" 2>/dev/null &
 LOG_PID=$!
 sleep 1
@@ -122,7 +122,7 @@ awk -v L="$LABEL" -v S="$NAME" '
 if ! grep -q 'mdp-perf-ql' "$LOGFILE"; then
     echo "note: no [mdp-perf-ql] lines captured — is the Debug appex elected?" >&2
     echo "      pluginkit -m -p com.apple.quicklook.preview | grep md-preview" >&2
-    echo "      pluginkit -e use -i doc.md-preview.dev.quick-look" >&2
+    echo "      pluginkit -e use -i sh.pluk.md-preview.dev.quick-look" >&2
 fi
 
 echo "==> Done. CSV: $CSV"

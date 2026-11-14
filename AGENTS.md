@@ -6,7 +6,7 @@ A macOS app for previewing Markdown files. AppKit, sandboxed, ships with a Quick
 
 | Thing             | Value                                                       |
 | ----------------- | ----------------------------------------------------------- |
-| Bundle id         | `doc.md-preview`                                            |
+| Bundle id         | `sh.pluk.md-preview`                                        |
 | Product name      | `Markdown Preview`                                          |
 | Scheme            | `md-preview`                                                |
 | Quick Look target | `quick-look` (embedded extension)                           |
@@ -142,7 +142,8 @@ See the `release-process` skill for branch/PR naming, exactly what `scripts/rele
 
 ## Release references
 
-- `Info.plist` currently sets `SUFeedURL` to `https://release.md-preview.app/v1/apps/doc.md-preview/appcast.xml`. Check the current plist and Amore configuration before releasing; do not assume an old hostname or mismatch still applies.
+- `Info.plist` currently sets `SUFeedURL` to `https://release.md-preview.app/v1/apps/sh.pluk.md-preview/appcast.xml`. Check the current plist and Amore configuration before releasing; do not assume an old hostname or mismatch still applies.
+- The bundle id was `doc.md-preview` up to 0.0.73. Copies from before the move read the old feed path, `/v1/apps/doc.md-preview/appcast.xml`, and a redirect on `release.md-preview.app` sends it to the path above: without the redirect those copies never update. The first launch under the new id copies the old container's settings and files (`BundleIdentifierMigration`). The app group, the exported type ids (`doc.md-preview.mdown` …), and the share-link Keychain service keep the old name on purpose; do not rename them.
 - The canonical GitHub repository is `pluk-inc/markdown-preview`. Older remotes may redirect from `pluk-inc/md-preview.app`; check `git remote -v` and `gh repo view` before publishing.
 
 ## Common Xcode tasks

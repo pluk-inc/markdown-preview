@@ -108,7 +108,7 @@ final class TableContextMenuPresenter: NSObject {
 }
 
 extension Logger {
-    private nonisolated static let subsystem = Bundle.main.bundleIdentifier ?? "doc.md-preview"
+    private nonisolated static let subsystem = Bundle.main.bundleIdentifier ?? "sh.pluk.md-preview"
     nonisolated static let perf = Logger(subsystem: subsystem, category: "perf")
 }
 
@@ -593,7 +593,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
 
     /// Logs Swift-side render duration alongside the JS-side `MdPreviewPerf`
     /// entries, so a single `log stream --predicate 'subsystem ==
-    /// "doc.md-preview"'` shows render → load → first-paint end to end.
+    /// "sh.pluk.md-preview"'` shows render → load → first-paint end to end.
     private nonisolated static func timedRender(label: String,
                                                 markdown: String,
                                                 assetBaseHref: String,
@@ -798,7 +798,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         case "log":
             // MdPreviewPerf.log() — debug-only; release builds never post.
             // Routed through os.Logger so `log stream --level=debug
-            // --predicate 'subsystem == "doc.md-preview"'` surfaces them.
+            // --predicate 'subsystem == "sh.pluk.md-preview"'` surfaces them.
             guard let message = dict["message"] as? String else { return }
             Logger.perf.debug("\(message, privacy: .public)")
         case "mermaidHover":
