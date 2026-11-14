@@ -1334,10 +1334,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private func installViewMenuItemIcons() {
         guard let viewMenu = topLevelSubmenu(matching: Self.viewMenuTitles) else { return }
         let icons: [(titles: Set<String>, symbol: String)] = [
-            (["Actual Size", "实际大小"], "magnifyingglass"),
-            (["Zoom In", "放大"], "plus.magnifyingglass"),
-            (["Zoom Out", "缩小"], "minus.magnifyingglass"),
-            (["Always on Top", "始终置顶"], "pin")
+            (Self.actualSizeMenuTitles, "magnifyingglass"),
+            (Self.xibTitles("mdp-zi-itm", "Zoom In"), "plus.magnifyingglass"),
+            (Self.xibTitles("mdp-zo-itm", "Zoom Out"), "minus.magnifyingglass"),
+            (Self.xibTitles("mdp-aot-itm", "Always on Top"), "pin")
         ]
         for (titles, symbol) in icons {
             guard let item = viewMenu.items.first(where: { titles.contains($0.title) }),
