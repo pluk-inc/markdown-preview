@@ -38,6 +38,9 @@ nonisolated enum BundleIdentifierMigration {
     /// never resolve here, and an entry that does not resolve is kept.
     private static let skippedKeys: Set<String> = ["ProjectNavigator.WriteAccessBookmarks"]
     private static let skippedSupportItems: Set<String> = ["CrashReporter"]
+    static let attemptsKey = "MarkdownPreview.bundleIdentifierMigrationAttempts"
+    static let maximumAttempts = 3
+    private static let partialSuffix = ".migrating"
 
     /// The id this copy had before the move: `sh.pluk.md-preview.dev` was
     /// `doc.md-preview.dev`. Nil for an id that is not ours.
@@ -89,8 +92,18 @@ nonisolated enum BundleIdentifierMigration {
             oldSettings = stored
         }
 
-        copySupportItems(from: oldLibrary.appendingPathComponent("Application Support", isDirectory: true),
-                         to: applicationSupport)
+        // A file that did not copy gets the next launches to try again,
+        // with the settings still unread so a later run changes nothing the
+        // reader set since. After the last attempt the settings move anyway.
+        let attempt = defaults.integer(forKey: attemptsKey) + 1
+        let copied = copySupportItems(
+            from: oldLibrary.appendingPathComponent("Application Support", isDirectory: true),
+            to: applicationSupport)
+        if !copied && attempt < maximumAttempts {
+            defaults.set(attempt, forKey: attemptsKey)
+            return
+        }
+        defaults.removeObject(forKey: attemptsKey)
 
         var skipped = skippedKeys
         if isDefaultHandler(oldIdentifier, in: launchServicesPreferences) {
@@ -108,18 +121,33 @@ nonisolated enum BundleIdentifierMigration {
         defaults.set(true, forKey: doneKey)
     }
 
-    private static func copySupportItems(from source: URL, to destination: URL) {
+    /// False when an item is missing at the destination afterwards. Each
+    /// item is copied beside its place and renamed into it, so a copy cut
+    /// short never leaves half a folder that the next run takes for whole.
+    private static func copySupportItems(from source: URL, to destination: URL) -> Bool {
         let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: source.path) else { return true }
         guard let items = try? fileManager.contentsOfDirectory(
-            at: source, includingPropertiesForKeys: [.isSymbolicLinkKey]) else { return }
+            at: source, includingPropertiesForKeys: [.isSymbolicLinkKey]) else { return false }
         try? fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
+        var copiedAll = true
         for item in items where !skippedSupportItems.contains(item.lastPathComponent) {
             // The container links some folders to the reader's Library.
             let isLink = (try? item.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink ?? false
             let target = destination.appendingPathComponent(item.lastPathComponent)
             guard !isLink, !fileManager.fileExists(atPath: target.path) else { continue }
-            try? fileManager.copyItem(at: item, to: target)
+            let partial = destination.appendingPathComponent(item.lastPathComponent + partialSuffix)
+            try? fileManager.removeItem(at: partial)
+            do {
+                try fileManager.copyItem(at: item, to: partial)
+                try fileManager.moveItem(at: partial, to: target)
+            } catch {
+                NSLog("BundleIdentifierMigration: could not copy \(item.lastPathComponent): \(error)")
+                try? fileManager.removeItem(at: partial)
+                copiedAll = false
+            }
         }
+        return copiedAll
     }
 
     /// True when the reader chose `identifier` to open a file type.

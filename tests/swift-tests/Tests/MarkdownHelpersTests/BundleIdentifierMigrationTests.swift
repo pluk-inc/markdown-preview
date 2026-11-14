@@ -111,6 +111,42 @@ final class BundleIdentifierMigrationTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: BundleIdentifierMigration.doneKey))
     }
 
+    func testAFileThatDoesNotCopyIsTriedAgainBeforeTheSettingsMove() throws {
+        try writeOldSettings(["MarkdownPreview.appearance": "dark"])
+        let source = oldSupport.appendingPathComponent("SharedLinks/links.json")
+        try write("[]", to: source)
+        // Unreadable: the copy of the folder fails.
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: source.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: source.path) }
+
+        migrate()
+        XCTAssertFalse(defaults.bool(forKey: BundleIdentifierMigration.doneKey))
+        XCTAssertNil(defaults.string(forKey: "MarkdownPreview.appearance"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: newSupport.appendingPathComponent("SharedLinks").path))
+
+        // Readable at the next launch: the whole folder arrives.
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: source.path)
+        migrate()
+        XCTAssertTrue(defaults.bool(forKey: BundleIdentifierMigration.doneKey))
+        XCTAssertEqual(defaults.string(forKey: "MarkdownPreview.appearance"), "dark")
+        XCTAssertEqual(try String(contentsOf: newSupport.appendingPathComponent("SharedLinks/links.json"),
+                                  encoding: .utf8), "[]")
+    }
+
+    func testTheSettingsMoveAfterTheLastAttempt() throws {
+        try writeOldSettings(["MarkdownPreview.appearance": "dark"])
+        let source = oldSupport.appendingPathComponent("SharedLinks/links.json")
+        try write("[]", to: source)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: source.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: source.path) }
+
+        for _ in 0..<BundleIdentifierMigration.maximumAttempts { migrate() }
+
+        XCTAssertTrue(defaults.bool(forKey: BundleIdentifierMigration.doneKey))
+        XCTAssertEqual(defaults.string(forKey: "MarkdownPreview.appearance"), "dark")
+        XCTAssertNil(defaults.object(forKey: BundleIdentifierMigration.attemptsKey))
+    }
+
     func testFindsACommandThatStartsTheOldIdentifier() throws {
         let bin = root.appendingPathComponent("bin", isDirectory: true)
         try write("#!/bin/sh\nexec open -b \"sh.pluk.md-preview\" \"$@\"\n", to: bin.appendingPathComponent("md-preview"))
