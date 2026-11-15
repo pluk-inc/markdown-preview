@@ -2584,6 +2584,45 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(rendered.articleHTML.contains("class=\"math"))
     }
 
+    func testEscapedCitationBracketsRemainLiteral() {
+        let rendered = MarkdownHTML.render(
+            markdown: "- Higher requirements.\\[18\\]\\[19\\]\\[3, 4\\]\\[5–7\\]\\[8,\u{00A0}9\\]",
+            vendorLoading: .lazy
+        )
+
+        XCTAssertFalse(rendered.containsMath, rendered.articleHTML)
+        XCTAssertTrue(rendered.articleHTML.contains(
+            "Higher requirements.[18][19][3, 4][5–7][8,\u{00A0}9]"
+        ), rendered.articleHTML)
+    }
+
+    func testEscapedCitationNextToDisplayMathStaysLiteral() {
+        let rendered = MarkdownHTML.render(
+            markdown: #"""
+            Requirements.\[18\] Area is \[x^2\] here.
+
+            \[
+            5-3
+            \]
+            """#,
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(rendered.articleHTML.contains("Requirements.[18] Area is"), rendered.articleHTML)
+        XCTAssertTrue(rendered.articleHTML.contains(#"class="math math-display">x^2</div>"#), rendered.articleHTML)
+        XCTAssertTrue(rendered.articleHTML.contains("class=\"math math-display\">\n5-3\n</div>"), rendered.articleHTML)
+    }
+
+    func testLiteralMathTokenTextDoesNotIndexPastExtractedMath() {
+        let rendered = MarkdownHTML.render(
+            markdown: #"\[x\] MdPreviewMathBlock7Token MdPreviewMathInline3Token"#,
+            vendorLoading: .lazy
+        )
+
+        XCTAssertTrue(rendered.containsMath)
+        XCTAssertTrue(rendered.articleHTML.contains("MdPreviewMathBlock7Token MdPreviewMathInline3Token"), rendered.articleHTML)
+    }
+
     func testEscapedLinkBracketsDoNotHideAdjacentDisplayMath() {
         let rendered = MarkdownHTML.render(
             markdown: #"""

@@ -60,6 +60,11 @@ extension DocumentWindowController {
             menuItem.title = isSharedByLink ? L("Manage Shared Document…") : L("Share as Link…")
             return canShareAsLink
         }
+        if menuItem.action == #selector(toggleFolderInFavorites(_:)) {
+            let isFavorite = projectRootURL.map(FavoriteFolders.contains) ?? false
+            menuItem.title = isFavorite ? L("Remove from Favorites") : L("Add to Favorites")
+            return projectRootURL != nil
+        }
         if menuItem.action == #selector(toggleAlwaysOnTop(_:)) {
             menuItem.state = isAlwaysOnTop ? .on : .off
             menuItem.image = Self.alwaysOnTopMenuImage(isPinned: isAlwaysOnTop)

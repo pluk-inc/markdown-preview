@@ -229,6 +229,9 @@
 /* Class = "NSMenuItem"; title = "Data Detectors"; ObjectID = "tRr-pd-1PS"; */
 "tRr-pd-1PS.title" = "数据检测器";
 
+/* Class = "NSMenuItem"; title = "Add to Favorites"; ObjectID = "mdp-sbr-add"; */
+"mdp-sbr-add.title" = "添加到个人收藏";
+
 /* Class = "NSMenuItem"; title = "Open Recent"; ObjectID = "tXI-mr-wws"; */
 "tXI-mr-wws.title" = "打开最近使用";
 

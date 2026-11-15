@@ -16,6 +16,13 @@ extension DocumentWindowController {
         (documentWindow.contentViewController as? MainSplitViewController)?.projectRootURL
     }
 
+    /// File → Add to Favorites: adds the file sidebar's folder to the
+    /// favorites, or removes it.
+    @objc func toggleFolderInFavorites(_ sender: Any?) {
+        guard let folder = projectRootURL else { return }
+        FavoriteFolders.toggle(folder)
+    }
+
     @objc func searchForDocument(_ sender: Any?) {
         guard let split = documentWindow.contentViewController as? MainSplitViewController else { return }
         // Keep modal document operations in control of keyboard focus.

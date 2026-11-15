@@ -440,6 +440,153 @@ final class MdPreviewUpdateTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testPlainTextCopyKeepsListMarkersTablesAndFootnotesWithoutMarkdown() async throws {
+        let webView = try await loadHarness(articleAttributes: "")
+        let markdown = """
+        # Title
+
+        A paragraph with **bold** and a [link](https://example.com).[^n]
+
+        - First
+        - Second
+          - Nested
+
+        3. Three
+        4. Four
+
+        - [x] Done
+        - [ ] Open
+
+        > [!NOTE]
+        > A note.
+
+        | Name | Note | Value |
+        | ---- | ---- | ----- |
+        | Alpha |  | 1 |
+        |  | x |  |
+
+        - Item
+        -
+
+        After the empty item.
+
+        ```mermaid
+        flowchart LR
+            A --> B
+        ```
+
+        [^n]: The note.
+        """
+        let rendered = MarkdownHTML.render(markdown: markdown, vendorLoading: .lazy)
+        _ = try await webView.evaluateJavaScript("""
+        window.MdPreview.update(\(MarkdownHTML.javaScriptStringLiteral(rendered.articleHTML)),
+            { source: \(MarkdownHTML.javaScriptStringLiteral(markdown)) }); true
+        """)
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const article = document.querySelector('.markdown-body');
+            // KaTeX output with its TeX annotation, as the real renderer leaves it.
+            const math = document.createElement('p');
+            math.innerHTML = 'Math <span class="katex"><span class="katex-mathml"><math><semantics>'
+                + '<annotation encoding="application/x-tex">a^2</annotation></semantics></math></span>'
+                + '<span class="katex-html" aria-hidden="true">a2</span></span> here.';
+            article.querySelector('ul').before(math);
+            const selection = window.getSelection();
+            selection.selectAllChildren(document.body);
+            const all = window.MdPreview.plainTextForSelection();
+            const word = document.createRange();
+            word.setStart(article.querySelector('p').firstChild, 2);
+            word.setEnd(article.querySelector('p').firstChild, 11);
+            selection.removeAllRanges(); selection.addRange(word);
+            const partial = window.MdPreview.plainTextForSelection();
+            // A word inside a list item copies without the item's marker.
+            const second = document.createTreeWalker(article.querySelectorAll('li')[1], NodeFilter.SHOW_TEXT).nextNode();
+            word.setStart(second, 1);
+            word.setEnd(second, 4);
+            selection.removeAllRanges(); selection.addRange(word);
+            const inItem = window.MdPreview.plainTextForSelection();
+            selection.removeAllRanges();
+            return JSON.stringify({ all, partial, inItem, none: window.MdPreview.plainTextForSelection() });
+        })()
+        """)
+        let json = try XCTUnwrap(result as? String)
+        let values = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any]
+        )
+        let all = try XCTUnwrap(values["all"] as? [String: Any])
+        XCTAssertEqual(all["text"] as? String, """
+        Title
+
+        A paragraph with bold and a link.[1]
+
+        Math a^2 here.
+
+        • First
+        • Second
+          • Nested
+
+        3. Three
+        4. Four
+
+        ☑ Done
+        ☐ Open
+
+        Note
+        A note.
+
+        Name\tNote\tValue
+        Alpha\t\t1
+        \tx\t
+
+        • Item
+
+        After the empty item.
+
+        1. The note.
+        """)
+        XCTAssertTrue((all["html"] as? String)?.contains("<strong>bold</strong>") == true)
+        let partial = try XCTUnwrap(values["partial"] as? [String: Any])
+        XCTAssertEqual(partial["text"] as? String, "paragraph")
+        XCTAssertEqual((values["inItem"] as? [String: Any])?["text"] as? String, "eco")
+        XCTAssertTrue(values["none"] is NSNull)
+    }
+
+    @MainActor
+    func testPlainTextCopyKeepsSourceIndentedListLinesAndSkipsHiddenCells() async throws {
+        let webView = try await loadHarness(articleAttributes: "")
+        let markdown = """
+        - Parent
+            - Child
+                    - Deep bullet
+                    1. Deep ordered
+                    - [x] Deep task
+
+        <table><tr><td hidden>Hidden</td><td>Visible</td></tr></table>
+        """
+        let rendered = MarkdownHTML.render(markdown: markdown, vendorLoading: .lazy)
+        _ = try await webView.evaluateJavaScript("""
+        window.MdPreview.update(\(MarkdownHTML.javaScriptStringLiteral(rendered.articleHTML)),
+            { source: \(MarkdownHTML.javaScriptStringLiteral(markdown)) }); true
+        """)
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            window.getSelection().selectAllChildren(document.body);
+            return window.MdPreview.plainTextForSelection().text;
+        })()
+        """)
+        let text = try XCTUnwrap(result as? String)
+        XCTAssertEqual(text, """
+        • Parent
+          • Child
+                • Deep bullet
+                1. Deep ordered
+                ☑ Deep task
+
+        Visible
+        """)
+    }
+
     /// Builds the harness page — bundled DOMPurify + morphdom, the shipped
     /// host bridge, and fake renderers that mimic the real markers: stash
     /// `__mdSrc`, set the done flag, replace the children with a sentinel,

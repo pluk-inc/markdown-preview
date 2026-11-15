@@ -133,6 +133,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     /// first is writing or opening.
     private var pendingShareIDs: Set<String> = []
     private var isDownloadingReleaseNotes = false
+    private var isDownloadingWhatsNew = false
     private var isTerminationSaveInProgress = false
     private var pendingTerminationSaveCount = 0
     private var terminationSaveFailed = false
@@ -144,6 +145,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Read this synchronously: currentAppleEvent is only meaningful while
+        // AppKit is dispatching the launch event, not in the deferred prompt.
+        let launchedAsLoginItem = LaunchReason.isLoginItemLaunch(NSAppleEventManager.shared().currentAppleEvent)
         let signpost = LaunchSignposts.begin("didFinishLaunching")
         defer { LaunchSignposts.end(signpost) }
         let storedAppearance = AppearanceMode.migrateLegacyValue()
@@ -156,6 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         installContentWidthMenuItems()
         installSidebarViewMenuItems()
         installEditModeMenuItem()
+        installCopyAsPlainTextMenuItem()
         installFormatMenu()
         installNewTabMenuItem()
         installSearchForDocumentMenuItem()
@@ -168,7 +173,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         installReleaseNotesMenuItem()
         installViewMenuItemIcons()
         hasFinishedLaunching = true
-        if !didReceiveOpenURLsDuringLaunch {
+        if !didReceiveOpenURLsDuringLaunch && !launchedAsLoginItem {
             scheduleDocumentPrompt(requiresNoDocuments: true)
         }
         // Nothing below is visible in the first frame. A document opened
@@ -302,8 +307,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
     }
 
-    /// Unpacks a received share and opens it read-only. A window already
-    /// showing that share comes forward instead of being replaced.
+    /// Unpacks a received share and opens it read-only. Its window opens at
+    /// once, with the Loading panel, and takes the document when the
+    /// download ends. A window already showing that share comes forward
+    /// instead of being replaced.
     private func openSharedLink(_ link: ShareLink) {
         if let document = NSDocumentController.shared.documents.first(where: {
             ShareLinkOpener.isReceivedCopy($0.fileURL, id: link.id)
@@ -313,73 +320,125 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
         guard pendingShareIDs.insert(link.id).inserted else { return }
         pendingOpenURLCount += 1
+        let placeholder = openDownloadPlaceholder(asTab: false)
         Task { @MainActor in
-            let file = await ShareLinkOpener.download(link)
+            let controller = placeholder.windowControllers.first as? DocumentWindowController
+            let file = await ShareLinkOpener.download(link) { waiting in
+                // The Loading panel must not sit behind the password
+                // prompt or a failure alert.
+                guard let controller, controller.isUnusedDownloadPlaceholder else { return }
+                if waiting {
+                    controller.showDownloadFeedback()
+                } else {
+                    controller.cancelFileLoadIndicator()
+                }
+            }
             pendingOpenURLCount -= 1
-            if let file {
-                openDocument(at: file) { [weak self] in self?.pendingShareIDs.remove(link.id) }
-            } else {
-                pendingShareIDs.remove(link.id)
+            pendingShareIDs.remove(link.id)
+            fill(placeholder, with: file)
+            if file == nil {
                 scheduleDocumentPromptIfIdle()
             }
         }
     }
 
     /// What's New in the update capsule: the notes downloaded while it
-    /// showed, waiting for them if the click came first. When they cannot
-    /// be had, every release opens instead.
+    /// showed, waiting for them in a loading tab if the click came first.
+    /// When they cannot be had, every release opens instead.
     func openWhatsNew() {
+        if let document = ReleaseNotes.openDocument(at: ReleaseNotes.whatsNewFile) {
+            bringForward(document)
+            return
+        }
+        guard !isDownloadingWhatsNew else { return }
+        isDownloadingWhatsNew = true
+        let placeholder = openDownloadPlaceholder(asTab: true,
+                                                  title: ReleaseNotes.title(for: ReleaseNotes.whatsNewFile))
         Task { @MainActor in
+            defer { isDownloadingWhatsNew = false }
             do {
-                openReleaseNotesFile(try await ReleaseNotes.whatsNew())
+                fill(placeholder, with: try await ReleaseNotes.whatsNew())
             } catch {
                 NSLog("ReleaseNotes: could not download What's New: \(error)")
-                openReleaseNotes()
+                openReleaseNotes(reusing: placeholder)
             }
         }
     }
 
     /// Every release, from Help › Release Notes and the "Previous releases"
-    /// link, downloaded from GitHub once a launch. A window already showing
-    /// them comes forward — after that download, when it was restored from
-    /// before an update; a failed download opens the releases page in the
-    /// browser.
-    func openReleaseNotes() {
-        if ReleaseNotes.hasDownloadedHistory,
-           let document = ReleaseNotes.openDocument(at: ReleaseNotes.historyFile) {
-            bringForward(document)
+    /// link, downloaded from GitHub once a launch into a tab that opens at
+    /// once with the Loading panel (`placeholder`, when a caller already
+    /// opened one). A window already showing them comes forward instead,
+    /// and reloads when the download rewrites the file; a failed download
+    /// opens the releases page in the browser.
+    func openReleaseNotes(reusing placeholder: MarkdownDocument? = nil) {
+        let existing = ReleaseNotes.openDocument(at: ReleaseNotes.historyFile)
+        if let existing {
+            if let placeholder { fill(placeholder, with: nil) }
+            bringForward(existing)
+            if ReleaseNotes.hasDownloadedHistory { return }
+        }
+        guard !isDownloadingReleaseNotes else {
+            if let placeholder { fill(placeholder, with: nil) }
             return
         }
-        guard !isDownloadingReleaseNotes else { return }
         isDownloadingReleaseNotes = true
+        let tab = existing == nil
+            ? placeholder ?? openDownloadPlaceholder(asTab: true,
+                                                     title: ReleaseNotes.title(for: ReleaseNotes.historyFile))
+            : nil
         Task { @MainActor in
             defer { isDownloadingReleaseNotes = false }
             do {
-                openReleaseNotesFile(try await ReleaseNotes.downloadHistory())
+                let file = try await ReleaseNotes.downloadHistory()
+                if let tab { fill(tab, with: file) }
             } catch {
                 NSLog("ReleaseNotes: could not download the notes: \(error)")
-                if let document = ReleaseNotes.openDocument(at: ReleaseNotes.historyFile) {
-                    bringForward(document)
-                } else {
-                    NSWorkspace.shared.open(ReleaseNotes.webURL)
-                }
+                guard let tab else { return }
+                fill(tab, with: nil)
+                NSWorkspace.shared.open(ReleaseNotes.webURL)
             }
         }
     }
 
-    /// A window already showing `file` — restored from before an update,
-    /// say — comes forward and reloads the rewritten file; otherwise it
-    /// opens as a tab of the front window.
-    private func openReleaseNotesFile(_ file: URL) {
-        if let document = ReleaseNotes.openDocument(at: file) {
-            bringForward(document)
+    /// A blank window, or tab of the front window, for a document that is
+    /// still downloading: the click shows at once where the document will
+    /// open, and the Loading panel appears there if the download is slow.
+    private func openDownloadPlaceholder(asTab: Bool, title: String? = nil) -> MarkdownDocument {
+        let document = MarkdownDocument()
+        NSDocumentController.shared.addDocument(document)
+        if asTab {
+            DocumentWindowController.markNextWindowAsTab()
+        }
+        document.makeWindowControllers()
+        document.showWindows()
+        // Not consumed when no window was created.
+        DocumentWindowController.nextWindowRequestsTab = false
+        if let controller = document.windowControllers.first as? DocumentWindowController {
+            controller.documentWindow.title = title
+                ?? NSLocalizedString("Loading…", comment: "Title of a window whose document is still downloading")
+            controller.showDownloadFeedback()
+        }
+        return document
+    }
+
+    /// Shows the downloaded `file` in `placeholder`; nil closes it. A
+    /// placeholder the reader closed during the download stays closed. One
+    /// they started to use — typed in, or opened a file in — is theirs now:
+    /// it is left alone, and the download opens the usual way.
+    private func fill(_ placeholder: MarkdownDocument, with file: URL?) {
+        guard NSDocumentController.shared.documents.contains(placeholder),
+              let controller = placeholder.windowControllers.first as? DocumentWindowController else { return }
+        guard controller.isUnusedDownloadPlaceholder else {
+            controller.releaseDownloadPlaceholder()
+            if let file { openDocument(at: file) }
             return
         }
-        DocumentWindowController.markNextWindowAsTab()
-        openDocument(at: file) {
-            // Not consumed when no window was created.
-            DocumentWindowController.nextWindowRequestsTab = false
+        guard let file else {
+            placeholder.close()
+            return
         }
+        controller.present(url: file)
     }
 
     private func bringForward(_ document: NSDocument) {
@@ -1050,6 +1109,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
     }
 
+    private func installCopyAsPlainTextMenuItem() {
+        let action = #selector(MarkdownWebView.copyAsPlainText(_:))
+        for editMenu in NSApp.mainMenu?.items.compactMap(\.submenu) ?? [] {
+            guard let copyIndex = editMenu.items.firstIndex(where: { $0.action == #selector(NSText.copy(_:)) })
+            else { continue }
+            guard !editMenu.items.contains(where: { $0.action == action }) else { return }
+            // nil target: the reader handles it and enables it only while
+            // article text is selected.
+            let item = NSMenuItem(title: L("Copy as Plain Text"), action: action, keyEquivalent: "c")
+            item.keyEquivalentModifierMask = [.command, .option, .shift]
+            editMenu.insertItem(item, at: copyIndex + 1)
+            return
+        }
+    }
+
     private func installNewTabMenuItem() {
         guard let fileMenu = topLevelSubmenu(matching: Self.fileMenuTitles),
               fileMenu.items.first(where: {
@@ -1260,10 +1334,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private func installViewMenuItemIcons() {
         guard let viewMenu = topLevelSubmenu(matching: Self.viewMenuTitles) else { return }
         let icons: [(titles: Set<String>, symbol: String)] = [
-            (["Actual Size", "实际大小"], "magnifyingglass"),
-            (["Zoom In", "放大"], "plus.magnifyingglass"),
-            (["Zoom Out", "缩小"], "minus.magnifyingglass"),
-            (["Always on Top", "始终置顶"], "pin")
+            (Self.actualSizeMenuTitles, "magnifyingglass"),
+            (Self.xibTitles("mdp-zi-itm", "Zoom In"), "plus.magnifyingglass"),
+            (Self.xibTitles("mdp-zo-itm", "Zoom Out"), "minus.magnifyingglass"),
+            (Self.xibTitles("mdp-aot-itm", "Always on Top"), "pin")
         ]
         for (titles, symbol) in icons {
             guard let item = viewMenu.items.first(where: { titles.contains($0.title) }),
@@ -1600,15 +1674,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         topLevelMenuItem(matching: titles)?.submenu
     }
 
-    private static let fileMenuTitles: Set<String> = ["File", "文件", "پرونده", "ファイル", "Plik"]
-    private static let viewMenuTitles: Set<String> = ["View", "显示", "نمایش", "表示", "Widok"]
-    private static let windowMenuTitles: Set<String> = ["Window", "窗口", "پنجره", "ウインドウ", "Okno"]
-    private static let formatMenuTitles: Set<String> = ["Format", "格式"]
-    private static let goMenuTitles: Set<String> = ["Go", "前往"]
-    private static let appearanceMenuTitles: Set<String> = ["Appearance", "外观"]
-    private static let contentWidthMenuTitles: Set<String> = ["Content Width", "内容宽度"]
-    private static let showSidebarMenuTitles: Set<String> = ["Show Sidebar", "显示边栏"]
-    private static let actualSizeMenuTitles: Set<String> = ["Actual Size", "实际大小"]
+    // Menus and items are found by title: the English one, and the one in
+    // the running language, read from the tables that name the menu, so a
+    // new translation needs no entry here.
+    private static let fileMenuTitles = xibTitles("dMs-cI-mzQ", "File")
+    private static let viewMenuTitles = xibTitles("H8h-7b-M4v", "View")
+    private static let windowMenuTitles = xibTitles("aUF-d1-5bR", "Window")
+    private static let showSidebarMenuTitles = xibTitles("kIP-vf-haE", "Show Sidebar")
+    private static let actualSizeMenuTitles = xibTitles("mdp-zr-itm", "Actual Size")
+    private static let formatMenuTitles = codeTitles("Format")
+    private static let goMenuTitles = codeTitles("Go")
+    private static let appearanceMenuTitles = codeTitles("Appearance")
+    private static let contentWidthMenuTitles = codeTitles("Content Width")
+
+    /// Titles of an item this file builds with `L(_:)`.
+    private static func codeTitles(_ english: String) -> Set<String> {
+        [english, NSLocalizedString(english, comment: "")]
+    }
+
+    /// Titles of a `MainMenu.xib` item, by its object id.
+    private static func xibTitles(_ id: String, _ english: String) -> Set<String> {
+        [english, Bundle.main.localizedString(forKey: "\(id).title", value: english, table: "MainMenu")]
+    }
 }
 
 

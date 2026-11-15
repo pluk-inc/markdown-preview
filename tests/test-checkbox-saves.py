@@ -194,6 +194,7 @@ final class Controller {
     func renameImage(at: URL) {}
     func showEditAccessory() {}
     func updateEditToolbarItem() {}
+    func releaseDownloadPlaceholder() {}
     func exitEditMode(rerender: Bool, preserveUnsavedChanges: Bool = false,
                       hidesAccessoryAfterSwap: Bool = false, completion: () -> Void) {
         mainSplit?.isEditingDocument = false
@@ -214,6 +215,7 @@ final class Controller {
     func refreshOpenActionsItem() {}
     func updateWindowSubtitle() {}
     func loadFile(at url: URL, silentOnFailure: Bool) {}
+    func cancelFileLoadIndicator() {}
     func refreshInspectorAfterRename() { invalidateInspectorRefresh() }
     func startWatching(_ url: URL) {}
     func computeVisibleSidebars(markdown: String, fileURL: URL?, revision: Int, sessionID: UUID) {}

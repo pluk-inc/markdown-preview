@@ -20,36 +20,130 @@ extension DocumentWindowController {
 
 struct UpdatePill: View {
     let model: UpdateModel
+    /// Tells the host where the capsule is, so it takes clicks only there.
+    var onCapsuleFrame: (CGRect) -> Void = { _ in }
+    /// The width of the current step's row, which the glass follows; nil
+    /// until the first step has laid out.
+    @State private var rowWidth: CGFloat?
 
-    /// The hosting view, sized to the capsule, for Auto Layout.
+    private static let space = "UpdatePill"
+    /// 40 points as drawn. The glass adds a 1-point rim outside its shape;
+    /// the material capsule before macOS 26 draws inside it.
+    private static var height: CGFloat {
+        if #available(macOS 26.0, *) { 38 } else { 40 }
+    }
+
+    /// The hosting view, at the height of the capsule, for Auto Layout. The
+    /// window sets its width, not the capsule: see `installUpdatePill`.
     static func host(_ model: UpdateModel) -> NSView {
-        let host = NSHostingView(rootView: UpdatePill(model: model))
+        let host = PillHostingView(rootView: UpdatePill(model: model))
+        // Built again once `host` exists, for the callback to capture.
+        host.rootView = UpdatePill(model: model, onCapsuleFrame: { [weak host] in
+            host?.capsuleFrame = $0
+        })
         host.sizingOptions = [.intrinsicContentSize]
         host.translatesAutoresizingMaskIntoConstraints = false
         return host
     }
 
     var body: some View {
-        // Sized to the capsule, so the host is empty, and takes no clicks,
-        // while nothing shows.
-        ZStack {
+        // Trailing, like the window pins it: a longer step grows the
+        // capsule to the left.
+        ZStack(alignment: .bottomTrailing) {
             if model.phase != .idle {
                 capsule
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) }
+                        action: { onCapsuleFrame($0) }
+                    .onDisappear {
+                        onCapsuleFrame(.zero)
+                        rowWidth = nil
+                    }
+                    // In from below; out in place, a quick blur and shrink.
+                    .transition(AnyTransition.asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        removal: .modifier(active: CloseEffect(closed: true),
+                                           identity: CloseEffect(closed: false))))
             }
         }
-        .animation(.spring(duration: 0.35, bounce: 0.15), value: model.phase == .idle)
+        // Always the capsule's height too: a host that lost its height while
+        // the capsule fades out would move the capsule down.
+        .frame(maxWidth: .infinity, minHeight: Self.height, alignment: .bottomTrailing)
+        .coordinateSpace(.named(Self.space))
+        .animation(model.phase == .idle ? .easeOut(duration: 0.12) : .spring(duration: 0.35, bounce: 0.15),
+                   value: model.phase == .idle)
+        // A new step blurs its icon, line and buttons in over the old ones;
+        // download progress inside a step does not.
+        .animation(Self.stepAnimation, value: step)
+    }
+
+    /// What the capsule shows: the model's step, or, while it fades out,
+    /// the last one.
+    private var shown: UpdateModel.Shown {
+        model.phase == .idle ? model.lastShown
+            : .init(phase: model.phase, hasPrimary: model.primaryAction != nil,
+                    hasClose: model.closeAction != nil)
+    }
+
+    private var phase: UpdateModel.Phase { shown.phase }
+
+    /// One curve for the swap and the width, so they end together.
+    private static let stepAnimation = Animation.smooth(duration: 0.32)
+
+    /// The phase without its progress, so only a change of step animates.
+    private var step: Int {
+        switch phase {
+        case .idle: 0
+        case .checking: 1
+        case .available: 2
+        case .downloading: 3
+        case .preparing: 4
+        case .ready: 5
+        case .installing: 6
+        case .upToDate: 7
+        case .failed: 8
+        case .updated: 9
+        }
     }
 
     private var capsule: some View {
+        // Sized to the current step's row, not to the old row while it blurs
+        // out. The rows ride the leading edge and the capsule clips them, so
+        // the new line moves in with the edge instead of waiting outside.
+        ZStack(alignment: .leading) {
+            row
+                .id(step)
+                .transition(.blurReplace)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+                    // The first step takes its width at once; the capsule
+                    // only moves in from below. Later widths animate in the
+                    // whole layout, so the capsule's position moves with its
+                    // width and its trailing edge stays put.
+                    if rowWidth == nil {
+                        rowWidth = width
+                    } else {
+                        withAnimation(Self.stepAnimation) { rowWidth = width }
+                    }
+                }
+        }
+        .frame(width: rowWidth, height: Self.height, alignment: .leading)
+        .clipShape(Capsule())
+        .pillBackground(tint: tint)
+        .help(model.detail ?? "")
+        .accessibilityElement(children: .contain)
+    }
+
+    private var row: some View {
         HStack(spacing: 10) {
-            icon
-                .font(.system(size: 16))
-                .frame(width: 18, height: 18)
-            Text(title)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(tint ?? .primary)
-                .lineLimit(1)
+            // The icon sits closer to its line than the line to the buttons.
+            HStack(spacing: 7) {
+                icon
+                    .font(.system(size: 16))
+                    .frame(width: 18, height: 18)
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(tint ?? .primary)
+                    .lineLimit(1)
+            }
             if let fraction {
                 Text(fraction.formatted(.percent.precision(.fractionLength(0))))
                     .font(.system(size: 13, weight: .medium).monospacedDigit())
@@ -67,7 +161,7 @@ struct UpdatePill: View {
                         Button(actionTitle) { model.performPrimary() }
                             .buttonStyle(PillActionStyle(tint: tint ?? Self.accent))
                     }
-                    if model.closeAction != nil {
+                    if shown.hasClose {
                         Button { model.performClose() } label: {
                             Image(systemName: "xmark")
                                 .font(.system(size: 10, weight: .semibold))
@@ -83,24 +177,21 @@ struct UpdatePill: View {
         // installed.") must not squeeze the button into "Relaunc…".
         .fixedSize(horizontal: true, vertical: false)
         .padding(.leading, 13)
-        // 24-point buttons in a 40-point capsule: 8 points all around them.
-        .padding(.trailing, hasButtons ? 8 : 14)
-        .frame(height: 40)
-        .pillBackground(tint: tint)
-        .help(model.detail ?? "")
-        .accessibilityElement(children: .contain)
+        // 24-point buttons in the capsule: 7 points all around them.
+        .padding(.trailing, hasButtons ? 7 : 14)
+        .frame(height: Self.height)
     }
 
     private var showsAction: Bool {
-        actionTitle != nil && model.primaryAction != nil
+        actionTitle != nil && shown.hasPrimary
     }
 
     private var hasButtons: Bool {
-        showsAction || model.closeAction != nil
+        showsAction || shown.hasClose
     }
 
     @ViewBuilder private var icon: some View {
-        switch model.phase {
+        switch phase {
         // Filled symbols in one color: the arrow or check is a hole in the
         // shape, so the glass shows through it.
         case .available:
@@ -129,7 +220,7 @@ struct UpdatePill: View {
     }
 
     private var title: String {
-        switch model.phase {
+        switch phase {
         case .idle: ""
         case .checking: L("Checking for updates")
         case .available: L("An update is available")
@@ -144,14 +235,14 @@ struct UpdatePill: View {
     }
 
     private var fraction: Double? {
-        switch model.phase {
+        switch phase {
         case .downloading(let fraction?), .preparing(let fraction): fraction
         default: nil
         }
     }
 
     private var actionTitle: String? {
-        switch model.phase {
+        switch phase {
         case .available: L("Download")
         case .ready: L("Relaunch Now")
         case .updated: L("What’s New")
@@ -167,12 +258,36 @@ struct UpdatePill: View {
     /// update on offer takes the reader's accent; ready and failed keep the
     /// colors that carry their meaning.
     private var tint: Color? {
-        switch model.phase {
+        switch phase {
         case .available: Self.accent
         case .ready, .updated: .green
         case .failed: .orange
         default: nil
         }
+    }
+}
+
+/// The capsule closing: it blurs, shrinks a little and fades where it is.
+private struct CloseEffect: ViewModifier {
+    let closed: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(closed ? 0.94 : 1)
+            .blur(radius: closed ? 4 : 0)
+            .opacity(closed ? 0 : 1)
+    }
+}
+
+/// The host spans the window's width; outside the capsule it lets clicks
+/// through to the document below. (A hosting view is flipped, like the
+/// SwiftUI frame it compares with.)
+private final class PillHostingView: NSHostingView<UpdatePill> {
+    var capsuleFrame: CGRect = .zero
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard capsuleFrame.contains(convert(point, from: superview)) else { return nil }
+        return super.hitTest(point)
     }
 }
 

@@ -41,6 +41,43 @@ final class EditorScrollAnchorTests: XCTestCase {
         }
     }
 
+    /// Page zoom used to scale the editor's list and quote indents a second
+    /// time, so at 90% list items sat left of where Read mode puts them.
+    func testListAndQuoteIndentsMatchReadModeUnderPageZoom() async throws {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        let source = "Paragraph before.\n\n- First bullet\n  - Nested bullet\n\n- [x] Done task\n\n1. Step one\n\n> Quoted line"
+        let labels = ["First bullet", "Nested bullet", "Done task", "Step one", "Quoted line"]
+        for zoom in [0.9, 1.1] {
+            var offsets: [[Double]] = []
+            for isEditor in [false, true] {
+                let html = isEditor ? EditorHTML.render(markdown: source, editorJavaScript: script)
+                    : MarkdownHTML.render(markdown: source, allowsScroll: true).html
+                let harness = WebViewLayoutHarness(html: html, width: 650, isEditor: isEditor, zoom: zoom, height: 500)
+                defer { harness.close() }
+                _ = try await harness.layout(texts: [], imageCount: 0)
+                let result = try await harness.webView.callAsyncJavaScript("""
+                    const left = label => {
+                        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                        while (walker.nextNode()) {
+                            const offset = walker.currentNode.textContent.indexOf(label);
+                            if (offset < 0 || walker.currentNode.parentElement.closest('script, style')) continue;
+                            const range = document.createRange();
+                            range.setStart(walker.currentNode, offset); range.setEnd(walker.currentNode, offset + 1);
+                            return range.getBoundingClientRect().left;
+                        }
+                        throw new Error('Missing label ' + label);
+                    };
+                    const origin = left('Paragraph before');
+                    return labels.map(label => left(label) - origin);
+                    """, arguments: ["labels": labels], in: nil, contentWorld: .page)
+                offsets.append(try XCTUnwrap(result as? [Double]))
+            }
+            for (index, label) in labels.enumerated() {
+                XCTAssertEqual(offsets[1][index], offsets[0][index], accuracy: 1, "\(label) at zoom \(zoom)")
+            }
+        }
+    }
+
     func testDocumentControlsFollowThemeAccentInReaderAndEditor() async throws {
         let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
         let source = "Introduction\n\n- Bullet\n\n1. Number\n\n[Link](https://example.com)"

@@ -37,15 +37,12 @@ extension DocumentWindowController {
     /// File › Share as Link…: the same as the Share popover row.
     @objc func shareAsLink(_ sender: Any?) {
         guard canShareAsLink else { return }
-        invalidateShareAsLinkTip()
         if isSharedByLink { showManageSharedDocument() } else { confirmAndCopyShareLink() }
     }
 
     /// The Share popover row; none when the window cannot share.
     func shareLinkServices() -> [NSSharingService] {
         guard canShareAsLink else { return [] }
-        // The picker is opening, so the user now sees the row the tip points to.
-        invalidateShareAsLinkTip()
         // Same test as the "Shared" subtitle, so the row and the subtitle agree.
         let shared = isSharedByLink
         let title = shared ? L("Manage Shared Document…") : L("Share as Link")

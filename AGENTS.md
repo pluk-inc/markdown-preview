@@ -46,6 +46,9 @@ swift test --package-path tests/swift-tests --parallel --filter 'EditorFormattin
 with `grep -rl <changed type or function> tests/swift-tests/Tests`. The full
 suite runs once, before opening the PR.
 
+To check the app on screen without taking over the user's screen, mouse, or
+focus, run it on a hidden virtual display: load the `headless-ui-test` skill.
+
 ## Pull requests
 
 Branch naming, PR titles and descriptions, what to run before opening a PR
@@ -79,6 +82,24 @@ So when you change what the reader sees, grep for what says otherwise:
 ```bash
 grep -rn "<the behaviour you changed>" README.md samples/ tests/fixtures/ docs/
 ```
+
+## Translations go through Lokalise
+
+The app's languages (`md-preview/*.lproj`) are managed in the Lokalise project
+`Markdown Preview`. When a change adds or rewords a user-facing string, use the
+Lokalise MCP server (`lokalise_sd`, or `lokalise_pm`) rather than writing the
+translations yourself:
+
+1. Add the string to `en.lproj` and add the key to Lokalise. A key is named
+   after its English text (or the object id, such as `tXI-mr-wws.title`, for
+   `MainMenu.strings`), with platform `ios`, the `.strings` file as its `ios`
+   filename, and a description that says where the string shows.
+2. Start an AI translation task for the other languages and wait for it.
+3. Copy the results into the other `.lproj` files.
+
+If the session has no Lokalise MCP server, or it cannot sign in, skip this:
+write the translations by hand, and say in the PR description that the new
+strings are not in Lokalise yet.
 
 ## Signing & secrets — do not touch without asking
 
