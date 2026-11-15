@@ -420,6 +420,7 @@
 "Recent Files" = "Zuletzt verwendete Dateien";
 "File Results" = "Dateiergebnisse";
 "The pasted image could not be inserted into the document." = "Das eingefügte Bild konnte nicht in das Dokument eingefügt werden.";
+"Queued image paste failed (%ld remaining). Please paste again." = "Das Einfügen der Bilder ist fehlgeschlagen (%ld verbleibend). Bitte erneut einfügen.";
 "Export PDF" = "PDF exportieren";
 "Export document as PDF" = "Dokument als PDF exportieren";
 "Export document" = "Dokument exportieren";

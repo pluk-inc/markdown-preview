@@ -7,9 +7,7 @@ import AppKit
 
 extension DocumentWindowController {
     func pasteImage(at from: Int, replacing to: Int) {
-        guard isEditing,
-              let markdownURL = currentFileURL,
-              let editor = mainSplit?.editorViewController else { return }
+        guard isEditing else { return }
         guard let data = clipboardPNGData() else {
             presentImageError(
                 NSError(domain: "MarkdownPreview.ImagePaste", code: 1, userInfo: [
@@ -21,27 +19,131 @@ extension DocumentWindowController {
             )
             return
         }
+        pasteImage(data, at: from, replacing: to)
+    }
+
+    private func pasteImage(_ data: Data, at from: Int, replacing to: Int,
+                            expectedMarkdown: String? = nil,
+                            completion: ((Result<String, Error>?) -> Void)? = nil) {
+        guard isEditing, let editor = mainSplit?.editorViewController else {
+            completion?(nil)
+            return
+        }
+        guard let markdownURL = currentFileURL else {
+            pendingUntitledImagePastes.append((data, from, to))
+            guard pendingUntitledImagePastes.count == 1 else { return }
+            let revision = editorChangeRevision
+            let sessionID = inspectorRefreshSessionID
+            commitEdits(exitAfter: false) { [weak self, weak editor] saved in
+                guard let self else { return }
+                let pastes = self.pendingUntitledImagePastes
+                self.pendingUntitledImagePastes.removeAll()
+                guard saved, let editor,
+                      self.mainSplit?.editorViewController === editor else { return }
+                guard revision == self.editorChangeRevision,
+                      sessionID == self.inspectorRefreshSessionID,
+                      let markdown = self.currentMarkdown else {
+                    self.presentQueuedImageError(count: pastes.count)
+                    return
+                }
+                self.pasteUntitledImages(pastes, editor: editor, markdown: markdown)
+            }
+            return
+        }
 
         do {
             try insertPastedImage(data,
                                   forMarkdownFile: markdownURL,
                                   editor: editor,
                                   from: from,
-                                  to: to)
+                                  to: to,
+                                  expectedMarkdown: expectedMarkdown,
+                                  completion: completion)
         } catch {
             presentImagePermissionPanel(data,
                                         markdownURL: markdownURL,
                                         editor: editor,
                                         from: from,
-                                        to: to)
+                                        to: to,
+                                        expectedMarkdown: expectedMarkdown,
+                                        completion: completion)
         }
+    }
+
+    private func pasteUntitledImages(_ pastes: [(data: Data, from: Int, to: Int)],
+                                     editor: EditorViewController,
+                                     markdown: String) {
+        guard let paste = pastes.first,
+              mainSplit?.editorViewController === editor,
+              let markdownURL = currentFileURL else { return }
+        guard paste.from >= 0, paste.to >= paste.from,
+              paste.to <= markdown.utf16.count else {
+            presentQueuedImageError(count: pastes.count)
+            return
+        }
+        guard !pastes.dropFirst().contains(where: { next in
+            next.from < paste.from && next.to > paste.from
+        }) else {
+            presentQueuedImageError(count: pastes.count)
+            return
+        }
+        pasteImage(paste.data, at: paste.from, replacing: paste.to,
+                   expectedMarkdown: markdown) { [weak self, weak editor] result in
+            guard let result, let self, let editor,
+                  self.mainSplit?.editorViewController === editor,
+                  self.currentFileURL == markdownURL else { return }
+            guard case let .success(insertedMarkdown) = result else {
+                if case let .failure(error) = result {
+                    let error = error as NSError
+                    if error.domain == "MarkdownPreview.ImagePaste", error.code == 5 {
+                        if pastes.count > 1 { self.presentQueuedImageError(count: pastes.count - 1) }
+                    } else {
+                        self.presentQueuedImageError(count: pastes.count, reason: error.localizedDescription)
+                    }
+                }
+                return
+            }
+            let updated = (markdown as NSString).replacingCharacters(
+                in: NSRange(location: paste.from, length: paste.to - paste.from), with: insertedMarkdown
+            )
+            // Live edits invalidate the captured ranges even when the save succeeds.
+            guard self.currentMarkdown == updated else {
+                if pastes.count > 1 { self.presentQueuedImageError(count: pastes.count - 1) }
+                return
+            }
+            let length = insertedMarkdown.utf16.count
+            let end = paste.from + length
+            let delta = length - (paste.to - paste.from)
+            // Pending ranges refer to the document before the preceding insertion.
+            let remaining = pastes.dropFirst().map { next in
+                guard next.to > paste.from || next.from >= paste.from else { return next }
+                let from = next.from < paste.from ? next.from
+                    : next.from >= paste.to ? next.from + delta : end
+                let to = next.to < paste.from ? next.to
+                    : next.to >= paste.to ? next.to + delta : end
+                return (data: next.data, from: from, to: to)
+            }
+            self.pasteUntitledImages(remaining, editor: editor, markdown: updated)
+        }
+    }
+
+    private func presentQueuedImageError(count: Int, reason: String? = nil) {
+        let message = String(format: NSLocalizedString(
+            "Queued image paste failed (%ld remaining). Please paste again.",
+            comment: "Queued image paste stopped after an editor change or insertion failure"
+        ), count)
+        presentImageError(NSError(domain: "MarkdownPreview.ImagePaste", code: 4, userInfo: [
+            NSLocalizedDescriptionKey: message + (reason.map { "\n\n" + $0 } ?? "")
+        ]))
     }
 
     private func insertPastedImage(_ data: Data,
                                    forMarkdownFile markdownURL: URL,
                                    editor: EditorViewController,
                                    from: Int,
-                                   to: Int) throws {
+                                   to: Int,
+                                   expectedMarkdown: String? = nil,
+                                   completion: ((Result<String, Error>?) -> Void)? = nil) throws {
         let imageURL = try MarkdownAssetResolution.savePastedImage(
             data,
             forMarkdownFile: markdownURL
@@ -59,26 +161,48 @@ extension DocumentWindowController {
                           )])
         }
         let label = imageURL.deletingPathExtension().lastPathComponent
+        let markdown = "![\(label)](\(relativePath))"
         editor.insertMarkdown(
-            "![\(label)](\(relativePath))",
+            markdown,
             from: from,
-            to: to
-        ) { [weak self] inserted in
+            to: to,
+            expectedMarkdown: expectedMarkdown
+        ) { [weak self, weak editor] inserted in
             guard inserted else {
                 try? FileManager.default.removeItem(at: imageURL)
-                self?.presentImageError(
-                    NSError(domain: "MarkdownPreview.ImagePaste",
+                let error = NSError(domain: "MarkdownPreview.ImagePaste",
                             code: 4,
                             userInfo: [NSLocalizedDescriptionKey: NSLocalizedString(
                                 "The pasted image could not be inserted into the document.",
                                 comment: "Image paste insertion error"
                             )])
-                )
+                if let completion {
+                    completion(.failure(error))
+                } else {
+                    self?.presentImageError(error)
+                }
                 return
             }
-            guard let self else { return }
+            guard let self, let editor else { return }
             self.hasUnsavedEditorChanges = true
-            self.commitEdits(exitAfter: false)
+            let sessionID = self.inspectorRefreshSessionID
+            self.commitEdits(exitAfter: false) { [weak self, weak editor] saved in
+                guard let self, let editor,
+                      self.mainSplit?.editorViewController === editor,
+                      self.currentFileURL == markdownURL else {
+                    completion?(nil)
+                    return
+                }
+                guard sessionID == self.inspectorRefreshSessionID else {
+                    if self.currentMarkdown?.contains(relativePath) != true {
+                        try? FileManager.default.removeItem(at: imageURL)
+                    }
+                    completion?(nil)
+                    return
+                }
+                completion?(saved ? .success(markdown)
+                    : .failure(NSError(domain: "MarkdownPreview.ImagePaste", code: 5)))
+            }
         }
     }
 
@@ -86,7 +210,9 @@ extension DocumentWindowController {
                                              markdownURL: URL,
                                              editor: EditorViewController,
                                              from: Int,
-                                             to: Int) {
+                                             to: Int,
+                                             expectedMarkdown: String? = nil,
+                                             completion: ((Result<String, Error>?) -> Void)? = nil) {
         let parentDirectory = markdownURL.deletingLastPathComponent().standardizedFileURL
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
@@ -98,16 +224,27 @@ extension DocumentWindowController {
             comment: "Image paste permission message"
         )
         panel.beginSheetModal(for: documentWindow) { [weak self] response in
-            guard let self, response == .OK, let chosen = panel.url else { return }
+            guard let self, response == .OK, let chosen = panel.url else {
+                completion?(nil)
+                return
+            }
+            guard self.isEditing, self.currentFileURL == markdownURL,
+                  self.mainSplit?.editorViewController === editor else {
+                completion?(nil)
+                return
+            }
             guard chosen.standardizedFileURL == parentDirectory else {
-                self.presentImageError(
-                    NSError(domain: "MarkdownPreview.ImagePaste",
+                let error = NSError(domain: "MarkdownPreview.ImagePaste",
                             code: 3,
                             userInfo: [NSLocalizedDescriptionKey: NSLocalizedString(
                                 "Choose the folder containing this Markdown file.",
                                 comment: "Image paste folder validation error"
                             )])
-                )
+                if let completion {
+                    completion(.failure(error))
+                } else {
+                    self.presentImageError(error)
+                }
                 return
             }
             do {
@@ -115,16 +252,23 @@ extension DocumentWindowController {
                                            forMarkdownFile: markdownURL,
                                            editor: editor,
                                            from: from,
-                                           to: to)
+                                           to: to,
+                                           expectedMarkdown: expectedMarkdown,
+                                           completion: completion)
             } catch {
-                self.presentImageError(error)
+                if let completion {
+                    completion(.failure(error))
+                } else {
+                    self.presentImageError(error)
+                }
             }
         }
     }
 
     private func clipboardPNGData() -> Data? {
         let pasteboard = NSPasteboard.general
-        if let data = pasteboard.data(forType: .png) {
+        if let data = pasteboard.data(forType: .png),
+           NSBitmapImageRep(data: data) != nil {
             return data
         }
         if let tiff = pasteboard.data(forType: .tiff),
