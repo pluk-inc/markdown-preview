@@ -310,6 +310,8 @@ extension DocumentWindowController {
         // The state tints only the glyph. Keeping the native button off
         // avoids its filled selected bezel.
         button.state = .off
+        // The native state stays off, so say the real one to assistive apps.
+        button.setAccessibilityValue(NSNumber(value: active))
         button.contentTintColor = active ? .systemBlue : .textColor
         let configuration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
             .applying(NSImage.SymbolConfiguration(paletteColors: [active ? .systemBlue : .textColor]))

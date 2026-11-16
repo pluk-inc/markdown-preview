@@ -3797,12 +3797,15 @@ window.MDEditor = {
         // A selection inside a table cell lives outside the editor's own
         // selection: commit the cell's pending typing and carry the
         // selection into the source before the table widgets go.
+        const fromTableCell = tableFormattingTargets.has(view)
         prepareTableFormatting(view)
         tableFormattingTargets.delete(view)
         view.dispatch({ effects: [
           editingStyle.reconfigure(on ? sourceStyle : formattedStyle),
           setPointerPreview.of(null),
         ] })
+        // The cell had the focus and is gone.
+        if (fromTableCell) view.focus()
         if (!on) {
           // The formatted style's state starts over: its table plugin
           // dropped the host callback when it left, and the math field
@@ -3899,7 +3902,8 @@ window.MDEditor = {
       replaceMarkdown: (markdown) => {
         const text = String(markdown || "")
         lineBreak = fileLineBreak(text)
-        const length = text.length
+        // In document positions: a line break is one, whatever its bytes.
+        const length = text.replace(/\r\n?/g, "\n").length
         const selection = view.state.selection.main
         const anchor = Math.min(selection.anchor, length)
         const head = Math.min(selection.head, length)

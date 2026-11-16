@@ -449,6 +449,8 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
                 // page, clobbering the themed value.
                 updateUnderPageBackgroundColor()
                 updateObscuredContentInsets()
+                // The setting can change while the page loads.
+                applySourceMode()
                 editorDidBecomeReady?()
             case "cancel":
                 cancelRequested?()

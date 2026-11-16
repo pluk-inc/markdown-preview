@@ -1674,6 +1674,11 @@ singleMathHost.remove()
     breakEditor.insertTextAt('zero\n', 9, 9)
     check(`an edited ${name} file keeps its line breaks`,
       breakEditor.getMarkdown() === ['# Title', '', 'zero', 'one', 'two', ''].join(lineBreak))
+    // A caret past the end of the new text, counted in document positions.
+    breakEditor.select(file.length, file.length)
+    const shorter = ['# T', ''].join(lineBreak)
+    breakEditor.replaceMarkdown(shorter)
+    check(`replacing ${name} text keeps the caret inside it`, breakEditor.getMarkdown() === shorter)
     breakEditor.replaceMarkdown('a\nb\n')
     check(`replaced text sets the line break (${name})`, breakEditor.getMarkdown() === 'a\nb\n')
     breakEditor.destroy()
