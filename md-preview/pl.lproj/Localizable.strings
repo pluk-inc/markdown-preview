@@ -70,6 +70,9 @@
 "Table of Contents" = "Spis treści";
 "Project Navigator" = "Nawigator projektu";
 "Toggle Edit Mode" = "Włącz lub wyłącz tryb edycji";
+"Show Markdown Source" = "Pokaż źródło Markdown";
+"Show Source" = "Pokaż źródło";
+"Show Markdown" = "Pokaż Markdown";
 
 /* File menu */
 "New Tab" = "Nowa karta";

@@ -12,6 +12,8 @@ nonisolated enum EditorHTML {
         var themeOverrideCSS = ""
         var usesPageScrolling = false
         var bridgeName = "mdEditorHost"
+        /// Open in plain source mode instead of the formatted live preview.
+        var sourceMode = false
     }
 
     static func render(markdown: String,
@@ -48,6 +50,7 @@ nonisolated enum EditorHTML {
             --mdp-body-em: \(MarkdownHTML.bodyFontSize)px;
             \(MarkdownHTML.quoteIndentCSS)
             --secondary: -apple-system-secondary-label;
+            --tertiary: -apple-system-tertiary-label;
             --quote-border: -apple-system-quaternary-label;
             --grid: -apple-system-separator;
             --accent: var(--link);
@@ -678,6 +681,78 @@ nonisolated enum EditorHTML {
         html[data-page-scrolling="true"] #editor,
         html[data-page-scrolling="true"] .cm-editor { height: auto; }
         html[data-page-scrolling="true"] #editor .cm-scroller { overflow: visible; }
+        /* Plain source mode: the file as text, in the code font, with
+           every Markdown marker visible. Lines carry no preview classes
+           here, so only the token colors below apply. */
+        #editor .cm-md-source .cm-scroller {
+            font-family: \(MarkdownHTML.codeFontFamily) !important;
+            font-size: 0.923em;
+            /* Code spacing, tighter than the reading line height. */
+            line-height: 1.4;
+            tab-size: 4;
+            /* No page gutters: the number column sits on the pane's edge,
+               and the first line starts at the top of the pane. */
+            padding-inline: 0;
+            padding-top: 8px;
+        }
+        /* Source reads like code: numbers on the left edge and text that
+           starts beside them and uses the full width, not a centered column. */
+        #editor .cm-md-source .cm-gutters {
+            background: transparent;
+            border: none;
+            color: var(--tertiary);
+            font-variant-numeric: tabular-nums;
+            user-select: none;
+            -webkit-user-select: none;
+            /* Room for the rounded end of the current-line band. */
+            margin-left: 6px;
+        }
+        #editor .cm-md-source .cm-content {
+            margin: 0;
+            max-width: none;
+            padding-right: 8px;
+            /* Room to scroll past the end, until the last line is in the
+               middle of the pane, so the end of the file is not read or
+               typed at the bottom edge of the window. */
+            padding-bottom: calc((100vh - var(--mdp-top-inset, 0px) / var(--mdp-chrome-zoom, 1)) / 2);
+        }
+        /* The text gap is line padding, not content padding, so the
+           current-line band joins the number column without a break. */
+        #editor .cm-md-source .cm-line { padding: 0 8px 0 var(--src-line-start); }
+        /* Smaller numbers on the text baseline: the gutter keeps the text
+           line height, so a number's line box must not shrink with its font. */
+        #editor .cm-md-source .cm-lineNumbers .cm-gutterElement {
+            padding: 0 10px 0 8px;
+            min-width: 3ch;
+            font-size: 0.917em;
+            line-height: calc(1.4 / 0.917);
+        }
+        /* One band across the number and the text of the line with the caret. */
+        #editor .cm-md-source .cm-activeLineGutter {
+            background: var(--src-active-line);
+            border-radius: 5px 0 0 5px;
+            color: var(--text);
+        }
+        #editor .cm-md-source .cm-activeLine {
+            background: var(--src-active-line);
+            border-radius: 0 5px 5px 0;
+        }
+        #editor .cm-md-source {
+            --src-active-line: color-mix(in srgb, var(--text) 7%, transparent);
+            /* Also the base of the hanging indent the bundle sets on a line. */
+            --src-line-start: 4px;
+        }
+        .cm-src-heading { font-weight: 600; }
+        .cm-src-strong { font-weight: 600; }
+        .cm-src-emphasis { font-style: italic; }
+        .cm-src-strikethrough { text-decoration: line-through; }
+        .cm-src-link { color: var(--link); }
+        .cm-src-title { color: var(--hl-string); }
+        .cm-src-label { color: var(--hl-type); }
+        .cm-src-quote { color: var(--secondary); }
+        .cm-src-comment { color: var(--hl-comment); }
+        .cm-src-escape { color: var(--hl-number); }
+        .cm-src-mark { color: var(--secondary); font-weight: 400; font-style: normal; }
         .hl-keyword { color: var(--hl-keyword); }
         .hl-string { color: var(--hl-string); }
         .hl-comment { color: var(--hl-comment); }
@@ -745,6 +820,12 @@ nonisolated enum EditorHTML {
             };
             window.onerror = function (message) { post("error: " + message); };
             let editor = null;
+            // Survives a reload of the document into this page.
+            window.__mdSourceMode = \(configuration.sourceMode);
+            window.__mdSetSourceMode = function (on) {
+                window.__mdSourceMode = !!on;
+                if (editor) editor.setSourceMode(window.__mdSourceMode);
+            };
             window.__mdLoadEditor = function (markdown, baseHref) {
                 let base = document.querySelector("head > base");
                 if (baseHref) {
@@ -762,6 +843,7 @@ nonisolated enum EditorHTML {
                     markdown,
                     {
                         pageScrolling: \(usesPageScrolling),
+                        sourceMode: window.__mdSourceMode,
                         onDirty: function () { post("dirty"); },
                         onCopyCode: function (text) { post({ kind: "copyCode", value: text }); },
                         onFormattingChange: function (state) {

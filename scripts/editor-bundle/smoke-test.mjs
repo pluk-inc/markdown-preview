@@ -1600,6 +1600,88 @@ check('typing a complete single-line formula preserves its layout', singleMath.g
 singleMath.destroy()
 singleMathHost.remove()
 
+// Plain source mode: the same buffer with the live preview switched off.
+{
+  // The bundle runs against Node's globals here; the switch restores the
+  // scroll position and notifies with a scroll event, which jsdom only
+  // accepts from its own Event class.
+  const nodeEvent = globalThis.Event
+  globalThis.Event = dom.window.Event
+  const host = document.createElement('div')
+  document.body.append(host)
+  const source = '---\ntitle: T\n---\n\n# Heading\n\nSome **bold**, *em*, ~~gone~~, `code`, ==mark== and a [link](https://example.com "Title").\n\n'
+    + '> quote\n\n- [ ] task\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n$$\nx^2\n$$\n\n```js\nconst a = 1\n```\n\n\\*escaped\\* &amp; <b>html</b>\n'
+  const editor = window.MDEditor.create(host, source, {})
+  const content = () => host.querySelector('.cm-content')?.textContent ?? ''
+  check('formatted style hides Markdown markers', !content().includes('**bold**') && !editor.isSourceMode())
+  editor.insert('x')
+  const edited = editor.getMarkdown()
+  await editor.setSourceMode(true)
+  check('source mode reports itself', editor.isSourceMode() && host.querySelector('.cm-editor.cm-md-source') != null)
+  check('source mode keeps the buffer byte for byte', editor.getMarkdown() === edited)
+  check('source mode shows every line of the file as text',
+    content() === edited.replace(/\n/g, ''))
+  check('source mode draws no live preview',
+    host.querySelector('[class*="cm-md-"]:not(.cm-md-source), table, .katex, .math-display, input') == null)
+  check('source mode numbers the lines',
+    host.querySelectorAll('.cm-lineNumbers .cm-gutterElement').length > 1)
+  check('source mode colors Markdown',
+    ['heading', 'strong', 'emphasis', 'strikethrough', 'link', 'mark', 'quote']
+      .every(name => host.querySelector('.cm-src-' + name) != null))
+  check('source mode keeps code fence colors', host.querySelector('.hl-keyword') != null)
+  editor.exec('bold')
+  check('formatting commands still edit the source', editor.getMarkdown() !== edited)
+  host.querySelector('.cm-content').dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+    key: 'z', code: 'KeyZ', ctrlKey: true, bubbles: true, cancelable: true,
+  }))
+  host.querySelector('.cm-content').dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+    key: 'z', code: 'KeyZ', ctrlKey: true, bubbles: true, cancelable: true,
+  }))
+  check('undo history survives the switch', editor.getMarkdown() === source)
+  check('find works in source mode', editor.find('bold').total === 1)
+  const hanging = (text) => Array.from(host.querySelectorAll('.cm-line'))
+    .find(line => line.textContent === text)?.getAttribute('style')?.replace(/\s/g, '') ?? ''
+  check('a wrapped task item continues under its text',
+    hanging('- [ ] task').includes('text-indent:-6ch'))
+  check('a wrapped quotation continues under its text', hanging('> quote').includes('text-indent:-2ch'))
+  check('a plain line has no hanging indent', !hanging('# Heading').includes('text-indent'))
+  // The current find match reveals its markers in the formatted style.
+  editor.find('')
+  await editor.setSourceMode(false)
+  check('switching back restores the live preview',
+    !editor.isSourceMode() && host.querySelector('.cm-md-source') == null
+      && host.querySelector('.cm-md-strong') != null && !content().includes('**bold**')
+      && host.querySelector('.cm-gutters') == null)
+  check('the round trip leaves the buffer unchanged', editor.getMarkdown() === source)
+  editor.destroy()
+  host.remove()
+
+  const startHost = document.createElement('div')
+  document.body.append(startHost)
+  const started = window.MDEditor.create(startHost, source, { sourceMode: true })
+  check('an editor can open in source mode',
+    started.isSourceMode() && (startHost.querySelector('.cm-content')?.textContent ?? '') === source.replace(/\n/g, ''))
+  started.destroy()
+  startHost.remove()
+
+  // A file keeps its own line breaks through an edit.
+  for (const [name, lineBreak] of [['CRLF', '\r\n'], ['CR', '\r'], ['LF', '\n']]) {
+    const file = ['# Title', '', 'one', 'two', ''].join(lineBreak)
+    const breakHost = document.createElement('div')
+    document.body.append(breakHost)
+    const breakEditor = window.MDEditor.create(breakHost, file, {})
+    check(`a ${name} file comes back byte for byte`, breakEditor.getMarkdown() === file)
+    breakEditor.insertTextAt('zero\n', 9, 9)
+    check(`an edited ${name} file keeps its line breaks`,
+      breakEditor.getMarkdown() === ['# Title', '', 'zero', 'one', 'two', ''].join(lineBreak))
+    breakEditor.replaceMarkdown('a\nb\n')
+    check(`replaced text sets the line break (${name})`, breakEditor.getMarkdown() === 'a\nb\n')
+    breakEditor.destroy()
+    breakHost.remove()
+  }
+  globalThis.Event = nodeEvent
+}
+
 // Exercise the production loader without requiring a network or duplicating it.
 const editorSwift = readFileSync(new URL('../../md-preview/Features/Editor/EditorHTML.swift', import.meta.url), 'utf8')
 const mathLoaderMatch = editorSwift.match(/window\.__mdLoadMath = function \(\) \{[\s\S]*?\n\s*\};/)

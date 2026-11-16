@@ -109,6 +109,11 @@ extension DocumentWindowController {
         toggleEditMode()
     }
 
+    func applyEditorSourceModeSetting() {
+        mainSplit?.editorViewController?.applySourceMode()
+        updateSourceModeButton()
+    }
+
     func toggleEditMode() {
         if isEditing {
             previewPendingEdits()

@@ -70,6 +70,9 @@
 "Table of Contents" = "Table of Contents";
 "Project Navigator" = "Project Navigator";
 "Toggle Edit Mode" = "Toggle Edit Mode";
+"Show Markdown Source" = "Show Markdown Source";
+"Show Source" = "Show Source";
+"Show Markdown" = "Show Markdown";
 
 /* File menu */
 "New Tab" = "New Tab";
