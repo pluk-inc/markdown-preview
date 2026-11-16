@@ -11,6 +11,13 @@ export const FEED_HOST = "release.md-preview.app";
 export const OLD_FEED_PATH = "/v1/apps/doc.md-preview/appcast.xml";
 export const NEW_FEED_PATH = "/v1/apps/sh.pluk.md-preview/appcast.xml";
 
+/// A feed with nothing to download, or one cut short, would tell an old
+/// copy that there is no version at all: only a whole feed with a download
+/// link takes the old feed's place.
+function hasDownload(feed: string): boolean {
+  return /<enclosure\b[^>]*\burl="https:\/\/[^"]+"/.test(feed) && /<\/rss>\s*$/.test(feed);
+}
+
 type Fetcher = (input: Request | URL | string, init?: RequestInit) => Promise<Response>;
 
 export async function updateFeed(request: Request, url: URL, origin: Fetcher = fetch): Promise<Response> {
@@ -21,9 +28,7 @@ export async function updateFeed(request: Request, url: URL, origin: Fetcher = f
     const moved = await origin(new URL(NEW_FEED_PATH, url), { headers: { Accept: "application/xml" } });
     if (moved.ok) {
       const feed = await moved.text();
-      // A feed with nothing to download would tell an old copy that there
-      // is no version at all.
-      if (feed.includes("<enclosure")) {
+      if (hasDownload(feed)) {
         return new Response(request.method === "HEAD" ? null : feed, {
           headers: {
             "Content-Type": moved.headers.get("Content-Type") ?? "application/xml; charset=utf-8",

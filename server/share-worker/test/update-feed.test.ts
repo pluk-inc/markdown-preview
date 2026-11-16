@@ -35,7 +35,14 @@ describe("the update feed of the earlier bundle id", () => {
   });
 
   it("keeps the old feed while the new one has no release", async () => {
-    for (const empty of [new Response("<rss><channel></channel></rss>"), new Response("no", { status: 404 })]) {
+    const unusable = [
+      new Response("<rss><channel></channel></rss>"),
+      new Response("no", { status: 404 }),
+      // An enclosure with no link, and a feed cut short.
+      new Response("<rss><channel><item><enclosure/></item></channel></rss>"),
+      new Response(NEW_FEED.slice(0, NEW_FEED.indexOf("</item>"))),
+    ];
+    for (const empty of unusable) {
       const { fetcher } = origin(empty);
       expect(await (await ask(OLD_FEED_PATH, fetcher)).text()).toBe(OLD_FEED);
     }
