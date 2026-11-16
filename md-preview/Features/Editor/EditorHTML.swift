@@ -826,7 +826,11 @@ nonisolated enum EditorHTML {
                 window.__mdSourceMode = !!on;
                 if (editor) editor.setSourceMode(window.__mdSourceMode);
             };
-            window.__mdLoadEditor = function (markdown, baseHref) {
+            // `sourceMode` comes with a load into a page kept from an
+            // earlier edit session: the setting can change while that page
+            // has no editor on screen to tell.
+            window.__mdLoadEditor = function (markdown, baseHref, sourceMode) {
+                if (sourceMode !== undefined) window.__mdSourceMode = !!sourceMode;
                 let base = document.querySelector("head > base");
                 if (baseHref) {
                     if (!base) {

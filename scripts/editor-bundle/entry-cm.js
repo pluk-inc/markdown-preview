@@ -3794,11 +3794,22 @@ window.MDEditor = {
         if (on === sourceModeOn) return Promise.resolve(false)
         const anchor = editor.getScrollAnchor()
         sourceModeOn = on
+        // A selection inside a table cell lives outside the editor's own
+        // selection: commit the cell's pending typing and carry the
+        // selection into the source before the table widgets go.
+        prepareTableFormatting(view)
         tableFormattingTargets.delete(view)
         view.dispatch({ effects: [
           editingStyle.reconfigure(on ? sourceStyle : formattedStyle),
           setPointerPreview.of(null),
         ] })
+        if (!on) {
+          // The formatted style's state starts over: its table plugin
+          // dropped the host callback when it left, and the math field
+          // learns of focus only when focus changes.
+          if (callbacks?.onFormattingChange) tableFormattingCallbacks.set(view, callbacks.onFormattingChange)
+          view.dispatch({ effects: setMathFocus.of(view.hasFocus) })
+        }
         callbacks?.onFormattingChange?.(selectionContext(view.state))
         return editor.setScrollPosition(0, anchor.position, anchor.gap)
       },

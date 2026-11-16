@@ -78,7 +78,7 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         let needsMermaid = Self.containsMermaidFence(in: markdown)
         if hasLoadedEditorPage, pageSupportsMermaid || !needsMermaid {
             let baseHref = currentAssetBaseURL.map(MarkdownAssetResolution.baseHref(forFolder:)) ?? ""
-            let script = "window.__mdLoadEditor && window.__mdLoadEditor(\(EditorHTML.jsStringLiteral(markdown)), \(EditorHTML.jsStringLiteral(baseHref)))"
+            let script = "window.__mdLoadEditor && window.__mdLoadEditor(\(EditorHTML.jsStringLiteral(markdown)), \(EditorHTML.jsStringLiteral(baseHref)), \(EditorSourceModeSetting.current))"
             webView.evaluateJavaScript(script) { [weak self] _, error in
                 guard let self, error != nil else { return }
                 self.loadEditorPage(markdown: markdown,
