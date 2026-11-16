@@ -537,3 +537,8 @@
 
 /* Edit menu and reader context menu */
 "Copy as Plain Text" = "Als reinen Text kopieren";
+
+/* Alert after the move to a new bundle identifier */
+"Update the md-preview command?" = "Den Befehl „md-preview“ aktualisieren?";
+"After this update, the md-preview command in Terminal can no longer open Markdown Preview. Terminal opens to install the command again." = "Nach diesem Update kann der Befehl „md-preview“ in Terminal Markdown Preview nicht mehr öffnen. Terminal wird geöffnet, um den Befehl erneut zu installieren.";
+"Update" = "Aktualisieren";

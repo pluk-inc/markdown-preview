@@ -537,3 +537,8 @@
 
 /* Edit menu and reader context menu */
 "Copy as Plain Text" = "拷贝为纯文本";
+
+/* Alert after the move to a new bundle identifier */
+"Update the md-preview command?" = "更新 md-preview 命令？";
+"After this update, the md-preview command in Terminal can no longer open Markdown Preview. Terminal opens to install the command again." = "此次更新后，终端中的 md-preview 命令将无法再打开 Markdown Preview。终端将打开以重新安装该命令。";
+"Update" = "更新";

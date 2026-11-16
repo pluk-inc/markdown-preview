@@ -74,6 +74,13 @@ private extension AppearanceMode {
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemValidation {
 
+    /// Replaces the synthesized entry point: the settings of the earlier
+    /// bundle id have to be in place before the first read of a setting.
+    static func main() {
+        BundleIdentifierMigration.runIfNeeded()
+        _ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv)
+    }
+
     @IBOutlet private weak var checkForUpdatesMenuItem: NSMenuItem?
 
     /// Started from `startDeferredLaunchServices()`, after the first
@@ -211,6 +218,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                 applyAppearanceMode(ThemePreset.applied().requiredAppearance ?? AppearanceMode.current,
                                     reloadPreviews: true)
             }
+        }
+        offerCommandLineToolUpdateIfNeeded()
+    }
+
+    /// Once, after the move to the new bundle id: the installed `md-preview`
+    /// command starts the app by the old id and now finds nothing.
+    private func offerCommandLineToolUpdateIfNeeded() {
+        let key = BundleIdentifierMigration.commandLineToolCheckKey
+        guard UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.removeObject(forKey: key)
+        // The folders `choose_install_dir` in the installer script picks
+        // from. This app's PATH is not the shell's, so it adds little.
+        let home = URL.realHomeDirectory
+        let folders = [home.appendingPathComponent(".local/bin"), home.appendingPathComponent("bin")]
+            + (["/usr/local/bin", "/opt/homebrew/bin"]
+                + (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: ":").map(String.init))
+            .map { URL(fileURLWithPath: $0, isDirectory: true) }
+        guard BundleIdentifierMigration.hasOutdatedCommandLineTool(in: folders) else { return }
+        let alert = NSAlert()
+        alert.messageText = L("Update the md-preview command?")
+        alert.informativeText = L("After this update, the md-preview command in Terminal can no longer open Markdown Preview. Terminal opens to install the command again.")
+        alert.addButton(withTitle: L("Update"))
+        alert.addButton(withTitle: L("Later"))
+        if alert.runModal() == .alertFirstButtonReturn {
+            installCommandLineTools(nil)
         }
     }
 
@@ -982,7 +1014,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
           if grep -q '^# Managed by Markdown Preview CLI$' "$path"; then
             return 0
           fi
-          grep -q 'exec open -b "doc.md-preview"' "$path"
+          grep -q '\(BundleIdentifierMigration.outdatedLauncherMarker)' "$path"
         }
 
         can_replace_primary() {
