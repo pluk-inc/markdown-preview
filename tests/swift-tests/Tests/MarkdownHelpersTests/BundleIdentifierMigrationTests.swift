@@ -105,6 +105,21 @@ final class BundleIdentifierMigrationTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: newSupport.path))
     }
 
+    func testAContainerThatCannotBeReadIsNotTakenForANewInstall() throws {
+        try writeOldSettings(["MarkdownPreview.appearance": "dark"])
+        let parent = oldLibrary.deletingLastPathComponent()
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: parent.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: parent.path) }
+
+        migrate()
+        XCTAssertFalse(defaults.bool(forKey: BundleIdentifierMigration.doneKey))
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: parent.path)
+        migrate()
+        XCTAssertTrue(defaults.bool(forKey: BundleIdentifierMigration.doneKey))
+        XCTAssertEqual(defaults.string(forKey: "MarkdownPreview.appearance"), "dark")
+    }
+
     func testUnreadableSettingsLeaveTheRunForTheNextLaunch() throws {
         try write("not a property list", to: oldLibrary.appendingPathComponent("Preferences/\(oldID).plist"))
         migrate()

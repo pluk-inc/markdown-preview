@@ -79,9 +79,13 @@ nonisolated enum BundleIdentifierMigration {
                     applicationSupport: URL,
                     launchServicesPreferences: URL) {
         let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: oldLibrary.path) else {
-            // A new install: nothing to bring, and nothing to look for again.
-            defaults.set(true, forKey: doneKey)
+        var status = stat()
+        guard lstat(oldLibrary.path, &status) == 0 else {
+            // Only a container that is not there is a new install, with
+            // nothing to bring and nothing to look for again. One that macOS
+            // keeps this app out of looks the same to `fileExists`, and
+            // marking that done would leave the reader's settings behind.
+            if errno == ENOENT { defaults.set(true, forKey: doneKey) }
             return
         }
         let preferencesURL = oldLibrary.appendingPathComponent("Preferences/\(oldIdentifier).plist")
