@@ -1032,7 +1032,9 @@ extension MarkdownWebView {
                 panel.addAccessoryController(accessory)
                 panel.options.insert(.showsPreview)
                 operation.printPanel = panel
-                completion?(await export.runPrintOperation(operation, from: window))
+                // Outside `completion?(…)`: a nil completion skips its arguments.
+                let didPrint = await export.runPrintOperation(operation, from: window)
+                completion?(didPrint)
             } catch {
                 session?.close()
                 window.presentError(error)
