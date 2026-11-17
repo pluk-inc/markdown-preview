@@ -541,6 +541,17 @@
 /* Edit menu and reader context menu */
 "Copy as Plain Text" = "Kopiuj jako zwykły tekst";
 
+/* Editor context menu in Markdown source: submenu with the places that show the open file */
+"Navigate" = "Nawiguj";
+/* Editor context menu, Navigate submenu: show the open file in the sidebar's file tree */
+"Reveal in Project Navigator" = "Pokaż w nawigatorze projektu";
+/* Editor context menu: make the paragraph a code block without a language */
+"Plain Text Block" = "Blok zwykłego tekstu";
+/* Editor context menu: submenu with the languages for a fenced code block */
+"Code Block" = "Blok kodu";
+/* Editor context menu: insert a Markdown table */
+"Insert Table" = "Wstaw tabelę";
+
 /* Quick Look Setup helper and its Settings row */
 "Quick Look" = "Quick Look";
 "Use for Markdown Files…" = "Użyj dla plików Markdown…";

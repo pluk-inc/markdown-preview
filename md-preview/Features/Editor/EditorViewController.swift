@@ -65,6 +65,9 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
             ])
             view = background
         }
+        webView.blockStyleRequested = { [weak self] style, language in
+            self?.setBlockStyle(style, language: language)
+        }
         webView.appearanceDidChange = { [weak self] in
             self?.updateUnderPageBackgroundColor()
         }
@@ -394,8 +397,10 @@ final class EditorViewController: NSViewController, WKNavigationDelegate {
         let to: Int
     }
 
-    func fetchLinkSelection(_ completion: @escaping (LinkSelection?) -> Void) {
-        webView.evaluateJavaScript("window.__mdEditor && window.__mdEditor.getLinkSelection(true)") { result, _ in
+    /// The selection, widened to the whole link it is in unless
+    /// `expandingLink` is false.
+    func fetchLinkSelection(expandingLink: Bool = true, _ completion: @escaping (LinkSelection?) -> Void) {
+        webView.evaluateJavaScript("window.__mdEditor && window.__mdEditor.getLinkSelection(\(expandingLink))") { result, _ in
             guard let value = result as? [String: Any], let text = value["text"] as? String,
                   let from = value["from"] as? Int, let to = value["to"] as? Int else {
                 completion(nil)
@@ -620,6 +625,8 @@ private final class LegacyEditorBackgroundView: NSView {
 
 private final class EditorWKWebView: WKWebView {
     var appearanceDidChange: (() -> Void)?
+    /// A block style and its code language, chosen in the context menu.
+    var blockStyleRequested: ((String, String) -> Void)?
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
@@ -633,22 +640,188 @@ private final class EditorWKWebView: WKWebView {
         return super.hitTest(point)
     }
 
-    /// The switch between the formatted style and the Markdown source leads
-    /// the context menu, named for the style it goes to.
+    /// Shortens WebKit's menu to the editing commands and adds the app's
+    /// own. The switch between the formatted style and the Markdown source
+    /// leads, named for the style it goes to. Then the Markdown source gets
+    /// the commands of a code editor (Find, Navigate), the formatted style
+    /// the formatting commands.
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
-        let title = EditorSourceModeSetting.current
+        let sourceMode = EditorSourceModeSetting.current
+        let appDelegate = NSApp.delegate as? AppDelegate
+        menu.keepOnlyEditingCommands()
+
+        let title = sourceMode
             ? NSLocalizedString("Show Markdown", comment: "Editor context menu: leave the Markdown source for the formatted style")
             : NSLocalizedString("Show Source", comment: "Editor context menu: show the Markdown source of the file")
+        let toggle = NSMenuItem(title: title,
+                                action: #selector(toggleSourceModeFromContextMenu(_:)),
+                                keyEquivalent: "")
+        toggle.target = self
+        let submenus = (sourceMode
+            ? [appDelegate?.makeFindContextMenuItem(), makeNavigateMenuItem()]
+            : [appDelegate?.makeFormatContextMenuItem()]).compactMap { $0 }
+        let leading = [toggle, .separator()] + submenus + (submenus.isEmpty ? [] : [.separator()])
+        for (index, item) in leading.enumerated() {
+            menu.insertItem(item, at: index)
+        }
+
+        if !sourceMode {
+            // Below WebKit's Cut, Copy, and Paste: the commands used most,
+            // without a submenu.
+            let groups = [
+                appDelegate?.makeFormatContextMenuItems(commands: ["bold", "italic", "strikethrough", "code"]) ?? [],
+                makeCodeBlockItems(),
+                [makeBlockStyleItem(NSLocalizedString("Insert Table", comment: "Editor context menu: insert a Markdown table"),
+                                    style: "table")],
+            ]
+            for group in groups where !group.isEmpty {
+                menu.addItem(.separator())
+                group.forEach(menu.addItem)
+            }
+        }
+        super.willOpenMenu(menu, with: event)
+    }
+
+    private var documentWindowController: DocumentWindowController? {
+        window?.windowController as? DocumentWindowController
+    }
+
+    /// The file of the document; nil for a document that has none.
+    private var documentFileURL: URL? {
+        documentWindowController?.currentFileURL
+    }
+
+    /// AppKit asks about every type of every Service, and
+    /// `NSImage.imageTypes` builds its list on each call.
+    private static let imageReturnTypes = Set(NSImage.imageTypes)
+
+    /// Tells AppKit that this view takes an image, so it appends the
+    /// commands of a nearby iPhone or iPad (Take Photo, Scan Documents, Add
+    /// Sketch) to the context menu. An image goes into a folder beside the
+    /// Markdown file, so a document without a file cannot take one.
+    override func validRequestor(forSendType sendType: NSPasteboard.PasteboardType?,
+                                 returnType: NSPasteboard.PasteboardType?) -> Any? {
+        if sendType == nil, let returnType, documentFileURL != nil,
+           Self.imageReturnTypes.contains(returnType.rawValue) {
+            return self
+        }
+        return super.validRequestor(forSendType: sendType, returnType: returnType)
+    }
+
+    /// Plain Text Block, and Code Block with its languages.
+    private func makeCodeBlockItems() -> [NSMenuItem] {
+        let codeBlock = NSMenuItem(title: NSLocalizedString("Code Block", comment: "Editor context menu: submenu with the languages for a fenced code block"),
+                                   action: nil,
+                                   keyEquivalent: "")
+        let languages = NSMenu()
+        for language in CodeLanguageCatalog.all {
+            languages.addItem(makeBlockStyleItem(language.name, style: "fenced", language: language.id))
+        }
+        codeBlock.submenu = languages
+        return [
+            makeBlockStyleItem(NSLocalizedString("Plain Text Block", comment: "Editor context menu: make the paragraph a code block without a language"),
+                               style: "plain"),
+            codeBlock,
+        ]
+    }
+
+    private struct BlockStyle {
+        let style: String
+        let language: String
+    }
+
+    private func makeBlockStyleItem(_ title: String, style: String, language: String = "") -> NSMenuItem {
         let item = NSMenuItem(title: title,
-                              action: #selector(toggleSourceModeFromContextMenu(_:)),
+                              action: #selector(setBlockStyleFromContextMenu(_:)),
                               keyEquivalent: "")
         item.target = self
-        menu.insertItem(item, at: 0)
-        menu.insertItem(.separator(), at: 1)
-        super.willOpenMenu(menu, with: event)
+        item.representedObject = BlockStyle(style: style, language: language)
+        return item
+    }
+
+    @objc private func setBlockStyleFromContextMenu(_ sender: NSMenuItem) {
+        guard let block = sender.representedObject as? BlockStyle else { return }
+        if !block.language.isEmpty { CodeLanguageCatalog.remember(block.language) }
+        blockStyleRequested?(block.style, block.language)
+    }
+
+    /// Where the open file is: in the sidebar's file tree and in Finder.
+    /// Nil for a document that has no file.
+    private func makeNavigateMenuItem() -> NSMenuItem? {
+        guard documentFileURL != nil else { return nil }
+        let submenu = NSMenu()
+        for (title, action) in [
+            (NSLocalizedString("Reveal in Project Navigator", comment: "Editor context menu, Navigate submenu: show the open file in the sidebar's file tree"),
+             #selector(revealInNavigatorFromContextMenu(_:))),
+            (NSLocalizedString("Show in Finder", comment: "Project navigator context menu"),
+             #selector(showInFinderFromContextMenu(_:))),
+        ] {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = self
+            submenu.addItem(item)
+        }
+        let item = NSMenuItem(title: NSLocalizedString("Navigate", comment: "Editor context menu: submenu with the places that show the open file"),
+                              action: nil,
+                              keyEquivalent: "")
+        item.submenu = submenu
+        return item
+    }
+
+    @objc private func revealInNavigatorFromContextMenu(_ sender: Any?) {
+        documentWindowController?.revealOpenFileInNavigator()
+    }
+
+    @objc private func showInFinderFromContextMenu(_ sender: Any?) {
+        guard let url = documentFileURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
     @objc private func toggleSourceModeFromContextMenu(_ sender: Any?) {
         (NSApp.delegate as? AppDelegate)?.toggleEditorSourceMode()
+    }
+}
+
+// WKWebView has its own, undeclared `readSelection(from:)` for Services
+// that return text. This one takes the image of a nearby device and hands
+// everything else to WebKit's.
+extension EditorWKWebView: NSServicesMenuRequestor {
+    func readSelection(from pboard: NSPasteboard) -> Bool {
+        if documentWindowController?.insertImage(from: pboard) == true {
+            return true
+        }
+        let selector = #selector(NSServicesMenuRequestor.readSelection(from:))
+        guard let method = class_getInstanceMethod(WKWebView.self, selector) else { return false }
+        typealias ReadSelection = @convention(c) (AnyObject, Selector, NSPasteboard) -> Bool
+        let webKitReadSelection = unsafeBitCast(method_getImplementation(method), to: ReadSelection.self)
+        return webKitReadSelection(self, selector, pboard)
+    }
+}
+
+private extension NSMenu {
+    /// WebKit's items that take the selected text somewhere else.
+    private static let lookupItemIdentifiers: Set<String> = [
+        "WKMenuItemIdentifierLookUp",
+        "WKMenuItemIdentifierTranslate",
+        "WKMenuItemIdentifierSearchWeb",
+        "WKMenuItemIdentifierShareMenu",
+    ]
+
+    /// Shortens WebKit's menu for editable text to the editing commands
+    /// (Cut, Copy, Paste). The lookups and Share go. The text-style items
+    /// (Spelling, Substitutions, Font, Speech, the writing directions) are
+    /// submenus, and not all of them have an identifier, so every submenu
+    /// goes; so do the items macOS appends (Services).
+    func keepOnlyEditingCommands() {
+        allowsContextMenuPlugIns = false
+        items.removeAll { item in
+            item.hasSubmenu || Self.lookupItemIdentifiers.contains(item.identifier?.rawValue ?? "")
+        }
+        // Removing a whole group leaves its separator behind.
+        var kept: [NSMenuItem] = []
+        for item in items where !(item.isSeparatorItem && (kept.last?.isSeparatorItem ?? true)) {
+            kept.append(item)
+        }
+        if kept.last?.isSeparatorItem == true { kept.removeLast() }
+        items = kept
     }
 }
