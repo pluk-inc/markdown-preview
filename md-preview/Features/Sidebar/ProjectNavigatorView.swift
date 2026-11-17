@@ -134,6 +134,8 @@ final class ProjectNavigatorView: NSView {
 
         let contextMenu = NSMenu()
         contextMenu.delegate = self
+        // Keep the items the system appends to a context menu out of it.
+        contextMenu.allowsContextMenuPlugIns = false
         outlineView.menu = contextMenu
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("file"))
