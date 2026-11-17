@@ -93,6 +93,38 @@ final class MarkdownDocument: NSDocument {
         }
     }
 
+    /// Finder ▸ Print, `open -p`, and a scripted print reach the document
+    /// here, not through the Print menu item. AppKit's version asks for a
+    /// synchronous print operation, which a web view cannot give (its
+    /// pagination is asynchronous), and throws without one. The print panel
+    /// shows even when the sender asked for none: a job should not go to a
+    /// printer with a font size and paper the user never saw. For the same
+    /// reason the sender's print settings are not applied.
+    override func print(
+        withSettings printSettings: [NSPrintInfo.AttributeKey: Any],
+        showPrintPanel: Bool,
+        delegate: Any?,
+        didPrint didPrintSelector: Selector?,
+        contextInfo: UnsafeMutableRawPointer?
+    ) {
+        let finish: (Bool) -> Void = { didPrint in
+            guard let delegate = delegate as? NSObject, let didPrintSelector,
+                  let implementation = delegate.method(for: didPrintSelector) else { return }
+            typealias DidPrint = @convention(c) (NSObject, Selector, NSDocument, Bool, UnsafeMutableRawPointer?) -> Void
+            unsafeBitCast(implementation, to: DidPrint.self)(delegate, didPrintSelector, self, didPrint, contextInfo)
+        }
+        // A file opened only to print has no window yet.
+        if windowControllers.isEmpty {
+            makeWindowControllers()
+            showWindows()
+        }
+        guard let split = (windowControllers.first as? DocumentWindowController)?.mainSplit else {
+            finish(false)
+            return
+        }
+        split.printDocumentWhenPainted(completion: finish)
+    }
+
     func replaceContents(markdown: String, fileURL: URL) {
         markdownStorage.withLock { $0 = markdown }
         replaceFileURL(fileURL)
