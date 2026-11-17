@@ -72,6 +72,7 @@ extension DocumentWindowController {
         headings.translatesAutoresizingMaskIntoConstraints = false
         headings.widthAnchor.constraint(equalToConstant: 44).isActive = true
 
+        let sourceModeTitle = NSLocalizedString("Show Markdown Source", comment: "Formatting toolbar tooltip")
         let views: [NSView] = [
             headings,
             separatorView(),
@@ -86,6 +87,8 @@ extension DocumentWindowController {
             separatorView(),
             formatButton("chevron.left.forwardslash.chevron.right", "code", NSLocalizedString("Inline Code", comment: "Formatting toolbar tooltip")),
             formatButton("link", "link", NSLocalizedString("Link", comment: "Formatting toolbar tooltip")),
+            separatorView(),
+            sourceModeButton(formatButton(Self.sourceModeSymbol, Self.sourceModeButtonID, sourceModeTitle)),
         ]
         let stack = NSStackView(views: views)
         stack.orientation = .horizontal
@@ -121,6 +124,7 @@ extension DocumentWindowController {
 
         mainSplit?.installFormattingBar(container)
         editBar = container
+        updateSourceModeButton()
     }
 
     /// Xcode's Markdown canvas uses compact, independently shaped glass
@@ -206,12 +210,17 @@ extension DocumentWindowController {
                              action: #selector(showMoreFormattingMenu(_:)),
                              width: 52)
 
+        let source = sourceModeButton(iconButton(
+            Self.sourceModeSymbol, command: Self.sourceModeButtonID,
+            tip: NSLocalizedString("Show Markdown Source", comment: "Formatting toolbar tooltip")))
+
         let groupStack = NSStackView(views: [
             glassButtonGroup([headings]),
             emphasis,
             link,
             glassButtonGroup([lists]),
             glassButtonGroup([add]),
+            glassButtonGroup([source]),
         ])
         groupStack.orientation = .horizontal
         groupStack.alignment = .centerY
@@ -261,6 +270,55 @@ extension DocumentWindowController {
 
         mainSplit?.installFormattingBar(container)
         editBar = container
+        updateSourceModeButton()
+    }
+
+    /// Turns a bar button into the switch between the formatted style and
+    /// the Markdown source. It shows the app-wide setting, so every window's
+    /// button follows a change.
+    private func sourceModeButton(_ button: NSButton) -> NSButton {
+        button.action = #selector(toggleSourceModeFromBar(_:))
+        button.setButtonType(.pushOnPushOff)
+        return button
+    }
+
+    private static let sourceModeButtonID = "sourceMode"
+    private static let sourceModeSymbol = "doc.plaintext"
+
+    @objc private func toggleSourceModeFromBar(_ sender: NSButton) {
+        (NSApp.delegate as? AppDelegate)?.toggleEditorSourceMode()
+    }
+
+    func updateSourceModeButton() {
+        guard let editBar else { return }
+        func update(_ view: NSView) {
+            if let button = view as? NSButton, button.identifier?.rawValue == Self.sourceModeButtonID {
+                showActive(EditorSourceModeSetting.current, on: button, symbol: Self.sourceModeSymbol)
+                return
+            }
+            view.subviews.forEach(update)
+        }
+        update(editBar)
+    }
+
+    /// The bar's "on" look for a symbol button.
+    private func showActive(_ active: Bool, on button: NSButton, symbol: String) {
+        guard #available(macOS 26.0, *) else {
+            button.state = active ? .on : .off
+            return
+        }
+        // The state tints only the glyph. Keeping the native button off
+        // avoids its filled selected bezel.
+        button.state = .off
+        // The native state stays off, so say the real one to assistive apps.
+        button.setAccessibilityValue(NSNumber(value: active))
+        button.contentTintColor = active ? .systemBlue : .textColor
+        let configuration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [active ? .systemBlue : .textColor]))
+        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: button.toolTip)?
+            .withSymbolConfiguration(configuration)
+        image?.isTemplate = false
+        button.image = image
     }
 
     @available(macOS 26.0, *)
@@ -499,19 +557,10 @@ extension DocumentWindowController {
                     updateHeadingButton(button, level: heading)
                 } else if ["bold", "italic", "strikethrough", "link"].contains(id) {
                     let active = commands.contains(id)
-                    if #available(macOS 26.0, *), id != "link" {
-                        // Selection tints only the glyph. Keeping the native
-                        // button off avoids its filled selected bezel.
-                        button.state = .off
-                        button.contentTintColor = active ? .systemBlue : .textColor
-                        let configuration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
-                            .applying(NSImage.SymbolConfiguration(paletteColors: [active ? .systemBlue : .textColor]))
-                        let image = NSImage(systemSymbolName: id, accessibilityDescription: button.toolTip)?
-                            .withSymbolConfiguration(configuration)
-                        image?.isTemplate = false
-                        button.image = image
-                    } else {
+                    if id == "link" {
                         button.state = active ? .on : .off
+                    } else {
+                        showActive(active, on: button, symbol: id)
                     }
                 }
             }

@@ -70,6 +70,9 @@
 "Table of Contents" = "目次";
 "Project Navigator" = "プロジェクトナビゲータ";
 "Toggle Edit Mode" = "編集モードを切り替え";
+"Show Markdown Source" = "Markdownソースを表示";
+"Show Source" = "ソースを表示";
+"Show Markdown" = "Markdownを表示";
 
 /* File menu */
 "New Tab" = "新規タブ";

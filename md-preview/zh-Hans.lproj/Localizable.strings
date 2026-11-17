@@ -70,6 +70,9 @@
 "Table of Contents" = "目录";
 "Project Navigator" = "项目导航器";
 "Toggle Edit Mode" = "切换编辑模式";
+"Show Markdown Source" = "显示 Markdown 源码";
+"Show Source" = "显示源代码";
+"Show Markdown" = "显示 Markdown";
 
 /* File menu */
 "New Tab" = "新建标签页";

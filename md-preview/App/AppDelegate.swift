@@ -823,6 +823,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             return true
         case #selector(toggleEditModeFromMenu(_:)):
             return activeDocumentWindowController?.canToggleEditMode ?? false
+        case #selector(toggleEditorSourceModeFromMenu(_:)):
+            menuItem.state = EditorSourceModeSetting.current ? .on : .off
+            return activeDocumentWindowController?.isEditing ?? false
         case #selector(formatMarkdownFromMenu(_:)):
             return activeDocumentWindowController?.canFormatMarkdown ?? false
         case #selector(selectTabFromMenu(_:)):
@@ -1588,11 +1591,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             Self.actualSizeMenuTitles.contains($0.title)
         }) ?? viewMenu.numberOfItems
         viewMenu.insertItem(item, at: insertIndex)
-        viewMenu.insertItem(.separator(), at: insertIndex + 1)
+
+        let source = NSMenuItem(title: L("Show Markdown Source"),
+                                action: #selector(toggleEditorSourceModeFromMenu(_:)),
+                                keyEquivalent: "e")
+        source.keyEquivalentModifierMask = [.command, .shift]
+        source.target = self
+        viewMenu.insertItem(source, at: insertIndex + 1)
+        viewMenu.insertItem(.separator(), at: insertIndex + 2)
     }
 
     @objc private func toggleEditModeFromMenu(_ sender: Any?) {
         activeDocumentWindowController?.toggleEditMode()
+    }
+
+    /// One app-wide choice: every open editor switches, and edit mode opens
+    /// in the same style next time.
+    @objc private func toggleEditorSourceModeFromMenu(_ sender: Any?) {
+        toggleEditorSourceMode()
+    }
+
+    func toggleEditorSourceMode() {
+        EditorSourceModeSetting.current.toggle()
+        documentWindowControllers.forEach { $0.applyEditorSourceModeSetting() }
     }
 
     private func installFormatMenu() {
