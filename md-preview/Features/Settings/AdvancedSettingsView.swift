@@ -24,7 +24,7 @@ struct AdvancedSettingsView: View {
             LabeledContent(columnLabel("Quick Look")) {
                 VStack(alignment: .leading, spacing: 6) {
                     Button(L("Use for Markdown Files…")) {
-                        QuickLookSetupLauncher.open()
+                        Task { await QuickLookSetupLauncher.open() }
                     }
                     SettingsCaption(L("Turns off other Quick Look extensions that preview Markdown files, so Finder shows the Markdown Preview preview. Open it again to turn them back on."))
                 }

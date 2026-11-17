@@ -10,11 +10,29 @@ import SwiftUI
 struct GeneralSettingsView: View {
     @Bindable private var model = SettingsModel.shared
     @AppStorage("MarkdownPreview.coffeeRowClosed") private var coffeeRowClosed = false
+    /// Nil until the helper answers, and when it cannot answer.
+    @State private var quickLookStatus: QuickLookDefaultStatus?
 
     var body: some View {
         VStack(spacing: 18) {
             if !coffeeRowClosed {
                 BuyMeACoffeeCard { coffeeRowClosed = true }
+            }
+
+            // Shown only while another app's extension competes for Markdown
+            // files, like the default browser row in Safari. It sits above
+            // the form because the sentence is wider than the form's
+            // trailing column.
+            if quickLookStatus?.competitors.isEmpty == false {
+                HStack {
+                    Text(L("Markdown Preview is not your default Quick Look preview for Markdown files."))
+                    Button(L("Set Default…")) {
+                        Task {
+                            await QuickLookSetupLauncher.open()
+                            quickLookStatus = await QuickLookSetupLauncher.status()
+                        }
+                    }
+                }
             }
 
             Form {
@@ -77,6 +95,9 @@ struct GeneralSettingsView: View {
         .onAppear {
             model.refreshFromExternalSources()
             model.reloadOpenTargets()
+        }
+        .task {
+            quickLookStatus = await QuickLookSetupLauncher.status()
         }
     }
 

@@ -143,6 +143,13 @@
 			);
 			target = 9A02092C2FA10D4C00092060 /* quick-look */;
 		};
+		9AE10001000000000000000E /* Exceptions for "quick-look-setup" folder in "quick-look-setup" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 9AE100010000000000000005 /* quick-look-setup */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -164,6 +171,9 @@
 		};
 		9AE100010000000000000006 /* quick-look-setup */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				9AE10001000000000000000E /* Exceptions for "quick-look-setup" folder in "quick-look-setup" target */,
+			);
 			path = "quick-look-setup";
 			sourceTree = "<group>";
 		};
@@ -759,6 +769,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "quick-look-setup/Info.plist";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -784,6 +795,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "quick-look-setup/Info.plist";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
