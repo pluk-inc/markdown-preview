@@ -12,7 +12,7 @@ Markdown Preview 0.0.74 brings a Markdown source view in Edit Mode, files that k
 
 - **Files Keep Their Line Breaks.** A file with Windows or classic Mac line breaks saves with the same ones after an edit, so other tools show only the lines you changed ([#651](https://github.com/pluk-inc/markdown-preview/pull/651)).
 - **Faster Typing in Large Files.** Edit Mode does less work on each keystroke in very large files, so typing stays responsive in a document of several megabytes ([#651](https://github.com/pluk-inc/markdown-preview/pull/651)).
-- **System Language in Usage Analytics.** The anonymous daily event now includes your Mac’s language, without its region, so new translations go to the languages readers use. Settings → Privacy lists everything it sends ([#655](https://github.com/pluk-inc/markdown-preview/pull/655)).
+- **System Language in Usage Analytics.** The anonymous daily event now includes your Mac’s language, so new translations go to the languages readers use. Settings → Privacy lists everything it sends ([#655](https://github.com/pluk-inc/markdown-preview/pull/655)).
 
 ### Fixed
 
