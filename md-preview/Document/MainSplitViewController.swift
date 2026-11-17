@@ -366,6 +366,10 @@ final class MainSplitViewController: NSSplitViewController {
         sidebarViewController?.setMode(mode, remember: remember)
     }
 
+    func revealOpenFileInNavigator() {
+        sidebarViewController?.revealOpenFile()
+    }
+
     func applyReaderLayout() {
         contentViewController?.applyReaderLayout()
     }

@@ -137,6 +137,14 @@ final class SidebarViewController: NSViewController {
         onModeChanged?(newMode)
     }
 
+    /// Expands the file tree down to the open file and scrolls to its row.
+    /// A mode change does this itself; this is for a tree that already
+    /// shows, where the user collapsed the folder or scrolled away.
+    func revealOpenFile() {
+        guard isViewLoaded, currentMode == .files else { return }
+        refreshNavigatorIfNeeded()
+    }
+
     private func refreshNavigatorIfNeeded() {
         if pendingFolderURL != loadedFolderURL {
             loadedFolderURL = pendingFolderURL
