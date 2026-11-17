@@ -16,8 +16,15 @@ enum QuickLookSetupLauncher {
         let helper = Bundle.main.bundleURL
             .appendingPathComponent("Contents/Helpers/Quick Look Setup.app")
         NSWorkspace.shared.openApplication(at: helper, configuration: .init()) { _, error in
-            if let error {
-                NSLog("Quick Look Setup failed to open: %@", error.localizedDescription)
+            guard let error else { return }
+            // The helper shows every other failure itself. This is the one
+            // it cannot show: it never started.
+            let reason = error.localizedDescription
+            Task { @MainActor in
+                let alert = NSAlert()
+                alert.messageText = L("The Quick Look extensions could not be changed.")
+                alert.informativeText = reason
+                alert.runModal()
             }
         }
     }

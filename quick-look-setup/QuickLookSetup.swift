@@ -7,6 +7,7 @@
 //
 
 import AppKit
+import UniformTypeIdentifiers
 
 struct QuickLookSetup {
     /// The Markdown Preview app this helper is embedded in:
@@ -45,11 +46,16 @@ struct QuickLookSetup {
             in: extensions,
             ownIdentifier: ownIdentifier,
             ownContentTypes: ownContentTypes,
-            contentTypes: { QuickLookExtensionScan.supportedContentTypes(ofExtensionAt: $0.path) }
+            contentTypes: { QuickLookExtensionScan.supportedContentTypes(ofExtensionAt: $0.path) },
+            conforms: { type, ownType in
+                guard let type = UTType(type), let ownType = UTType(ownType) else { return false }
+                return type.conforms(to: ownType)
+            }
         )
+        let earlier = turnedOff.entries
 
         if !competitors.isEmpty {
-            try offerToTurnOff(competitors, ownIdentifier: ownIdentifier)
+            try offerToTurnOff(competitors, ownIdentifier: ownIdentifier, earlier: earlier)
             return
         }
 
@@ -60,19 +66,23 @@ struct QuickLookSetup {
         }
 
         let onlyOne = L("Markdown Preview is the only Quick Look extension turned on for Markdown files.")
-        let earlier = turnedOff.entries
         guard !earlier.isEmpty else {
             show(onlyOne)
             return
         }
-        let alert = makeAlert(
-            onlyOne,
-            String(format: L("These extensions were turned off for it:\n\n%@"), bulletList(earlier.map(\.name)))
-        )
+        let alert = makeAlert(onlyOne, turnedOffList(earlier))
         alert.addButton(withTitle: L("OK"))
         alert.addButton(withTitle: L("Turn Back On"))
-        guard alert.runModal() == .alertSecondButtonReturn else { return }
+        if alert.runModal() == .alertSecondButtonReturn {
+            try turnBackOn(earlier)
+        }
+    }
 
+    private func turnedOffList(_ earlier: [TurnedOffExtensions.Entry]) -> String {
+        String(format: L("These extensions were turned off for it:\n\n%@"), bulletList(earlier.map(\.name)))
+    }
+
+    private func turnBackOn(_ earlier: [TurnedOffExtensions.Entry]) throws {
         for entry in earlier {
             try PlugInKit.setElection(entry.election, forIdentifier: entry.identifier)
             turnedOff.remove(entry.identifier)
@@ -81,17 +91,30 @@ struct QuickLookSetup {
         show(L("The other Quick Look extensions are on again."))
     }
 
-    private func offerToTurnOff(_ competitors: [QuickLookExtension], ownIdentifier: String) throws {
-        let alert = makeAlert(
-            L("Use Markdown Preview for Quick Look previews of Markdown files?"),
-            String(
-                format: L("macOS shows the preview from only one Quick Look extension for each file type, and has no setting to choose which one. To let Markdown Preview show the preview, these extensions must be turned off:\n\n%@\n\nThis turns off their previews for all file types. You can turn them on again from Settings → Advanced in Markdown Preview."),
-                bulletList(competitors.map(\.displayName))
-            )
+    /// `earlier` is not empty when a new competitor arrived after an earlier
+    /// visit, or a change failed part of the way through. The way back must
+    /// stay open then, so the same alert offers it.
+    private func offerToTurnOff(
+        _ competitors: [QuickLookExtension], ownIdentifier: String, earlier: [TurnedOffExtensions.Entry]
+    ) throws {
+        var information = String(
+            format: L("macOS shows the preview from only one Quick Look extension for each file type, and has no setting to choose which one. To let Markdown Preview show the preview, these extensions must be turned off:\n\n%@\n\nThis turns off their previews for all file types. You can turn them on again from Settings → Advanced in Markdown Preview."),
+            bulletList(competitors.map(\.displayName))
         )
+        if !earlier.isEmpty {
+            information += "\n\n" + turnedOffList(earlier)
+        }
+        let alert = makeAlert(L("Use Markdown Preview for Quick Look previews of Markdown files?"), information)
         alert.addButton(withTitle: L("Turn Off"))
         alert.addButton(withTitle: L("Cancel"))
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        if !earlier.isEmpty {
+            alert.addButton(withTitle: L("Turn Back On"))
+        }
+        switch alert.runModal() {
+        case .alertFirstButtonReturn: break
+        case .alertThirdButtonReturn: return try turnBackOn(earlier)
+        default: return
+        }
 
         for competitor in competitors {
             // Recorded before the change, so a failure part of the way

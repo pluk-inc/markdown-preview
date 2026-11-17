@@ -69,21 +69,25 @@ nonisolated enum QuickLookExtensionScan {
         }
     }
 
-    /// The extensions that are on and claim at least one of the content
-    /// types ours claims. An extension that claims only a parent type, such
-    /// as plain text, is not a competitor: Quick Look prefers the claim on
-    /// the more specific type.
+    /// The extensions that are on and claim one of the content types ours
+    /// claims, or a subtype of one (`conforms(type, ownType)`): Quick Look
+    /// prefers the claim on the more specific type, so a subtype claim wins
+    /// over ours. For the same reason an extension that claims only a parent
+    /// type, such as plain text, is not a competitor.
     static func competitors(
         in extensions: [QuickLookExtension],
         ownIdentifier: String,
         ownContentTypes: Set<String>,
-        contentTypes: (QuickLookExtension) -> [String]
+        contentTypes: (QuickLookExtension) -> [String],
+        conforms: (String, String) -> Bool = { $0 == $1 }
     ) -> [QuickLookExtension] {
         var seen = Set<String>()
         return extensions.filter { candidate in
             candidate.identifier != ownIdentifier
                 && candidate.election != .ignore
-                && !ownContentTypes.isDisjoint(with: contentTypes(candidate))
+                && contentTypes(candidate).contains { type in
+                    ownContentTypes.contains(type) || ownContentTypes.contains { conforms(type, $0) }
+                }
                 && seen.insert(candidate.identifier).inserted
         }
     }

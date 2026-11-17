@@ -58,6 +58,25 @@ final class QuickLookExtensionScanTests: XCTestCase {
         XCTAssertEqual(competitors.map(\.identifier), ["com.example.editor.QuickLook"])
     }
 
+    // A claim on a subtype of one of our types is more specific than ours,
+    // so Quick Look prefers it.
+    func testCompetitorsIncludeClaimantsOfASubtypeOfOurTypes() {
+        let types = [
+            "com.example.editor.QuickLook": ["com.example.editor.markdown"],
+            "com.example.framework.Preview": ["public.plain-text"],
+        ]
+        let competitors = QuickLookExtensionScan.competitors(
+            in: extensions,
+            ownIdentifier: "doc.md-preview.quick-look",
+            ownContentTypes: ["net.daringfireball.markdown"],
+            contentTypes: { types[$0.identifier] ?? [] },
+            conforms: { type, ownType in
+                type == "com.example.editor.markdown" && ownType == "net.daringfireball.markdown"
+            }
+        )
+        XCTAssertEqual(competitors.map(\.identifier), ["com.example.editor.QuickLook"])
+    }
+
     func testCompetitorsListEachIdentifierOnce() {
         let twice = extensions + extensions
         let competitors = QuickLookExtensionScan.competitors(
