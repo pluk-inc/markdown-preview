@@ -43,10 +43,16 @@ final class QuickLookDefault {
     /// when that dialog closes.
     func refresh() async {
         guard setup == nil else { return }
-        if statusRequest == nil {
-            statusRequest = Task { await Self.requestStatus() }
+        // A second caller only waits. The caller that started the request
+        // is the one that clears it, so a slot is never cleared by a caller
+        // that does not own what is in it.
+        if let statusRequest {
+            _ = await statusRequest.value
+            return
         }
-        let answer = await statusRequest?.value
+        let request = Task { await Self.requestStatus() }
+        statusRequest = request
+        let answer = await request.value
         statusRequest = nil
         status = answer
     }
@@ -54,13 +60,16 @@ final class QuickLookDefault {
     /// Shows the helper's dialog, waits until the helper has quit, and reads
     /// the state again.
     func openSetup() async {
-        if setup == nil {
-            setup = Task {
-                _ = await statusRequest?.value
-                await Self.runSetup()
-            }
+        if let setup {
+            await setup.value
+            return
         }
-        await setup?.value
+        let dialog = Task {
+            _ = await statusRequest?.value
+            await Self.runSetup()
+        }
+        setup = dialog
+        await dialog.value
         setup = nil
         await refresh()
     }
@@ -68,7 +77,9 @@ final class QuickLookDefault {
     private static func runSetup() async {
         do {
             let app = try await NSWorkspace.shared.openApplication(at: helper, configuration: .init())
-            await waitForExit(of: app, seconds: 600)
+            // No time limit: the dialog stays open as long as the user
+            // leaves it, and the state is read only after it closes.
+            await waitForExit(of: app, seconds: .infinity)
         } catch {
             // The helper shows every other failure itself. This is the one
             // it cannot show: it never started.
