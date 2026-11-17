@@ -1662,6 +1662,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         mainMenu.insertItem(rootItem, at: insertIndex)
     }
 
+    /// A copy of a menu bar item for a context menu. The title, command,
+    /// and target stay those of the menu bar, so the copy runs and
+    /// validates as the original does. The shortcuts go: a context menu
+    /// shows none.
+    private func contextMenuCopy(of item: NSMenuItem?) -> NSMenuItem? {
+        guard let copy = item?.copy() as? NSMenuItem else { return nil }
+        copy.keyEquivalent = ""
+        copy.submenu?.items.forEach { $0.keyEquivalent = "" }
+        return copy
+    }
+
+    /// The Format menu, as a submenu.
+    func makeFormatContextMenuItem() -> NSMenuItem? {
+        contextMenuCopy(of: topLevelMenuItem(matching: Self.formatMenuTitles))
+    }
+
+    /// The named Format commands, each as its own item.
+    func makeFormatContextMenuItems(commands: [String]) -> [NSMenuItem] {
+        let items = topLevelSubmenu(matching: Self.formatMenuTitles)?.items ?? []
+        return commands.compactMap { command in
+            contextMenuCopy(of: items.first { $0.representedObject as? String == command })
+        }
+    }
+
+    /// Find… of Edit > Find, without an icon.
+    func makeFindContextMenuItem() -> NSMenuItem? {
+        let find = NSApp.mainMenu?.firstItem {
+            $0.action == #selector(performFindPanelAction(_:))
+                && $0.tag == NSTextFinder.Action.showFindInterface.rawValue
+        }
+        guard let item = contextMenuCopy(of: find) else { return nil }
+        item.image = nil
+        if #available(macOS 27.0, *) {
+            item.preferredImageVisibility = .hidden
+        }
+        return item
+    }
+
     @objc private func formatMarkdownFromMenu(_ sender: NSMenuItem) {
         guard let command = sender.representedObject as? String else { return }
         activeDocumentWindowController?.formatMarkdown(command)
@@ -1760,5 +1798,16 @@ extension AppDelegate {
             }
             item.title = "\(url.lastPathComponent) (\(parents.suffix(count).joined(separator: "/")))"
         }
+    }
+}
+
+private extension NSMenu {
+    /// The first item that matches, in this menu or in a submenu.
+    func firstItem(where matches: (NSMenuItem) -> Bool) -> NSMenuItem? {
+        for item in items {
+            if matches(item) { return item }
+            if let found = item.submenu?.firstItem(where: matches) { return found }
+        }
+        return nil
     }
 }
