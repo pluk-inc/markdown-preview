@@ -472,6 +472,37 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(values[1], Double(MarkdownHTML.pagePaddingHorizontal), accuracy: 0.01)
     }
 
+    /// PDF export makes the body the column, without padding, and fits wide
+    /// tables to the article before printing. The inline overflow slack must
+    /// not take width from that fit.
+    @MainActor
+    func testPDFExportPageKeepsTheFullColumnWidth() async throws {
+        let rendered = MarkdownHTML.render(markdown: "Body text.", allowsScroll: true, vendorLoading: .lazy)
+        let stylesheet = rendered.html
+            .components(separatedBy: "<style>")
+            .dropFirst()
+            .compactMap { $0.components(separatedBy: "</style>").first }
+            .joined(separator: "\n")
+        let html = """
+        <!DOCTYPE html>
+        <html class="\(MarkdownHTML.previewPrintClass)">
+        <head><style>\(stylesheet)</style><style>\(MarkdownHTML.previewPrintOverrideCSS)</style></head>
+        <body><article class="markdown-body">\(rendered.articleHTML)</article></body>
+        </html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1200, height: 600))
+
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let width = try await webView.evaluateJavaScript(
+            "document.querySelector('article.markdown-body p').getBoundingClientRect().width"
+        )
+        XCTAssertEqual(try XCTUnwrap(width as? Double), Double(MarkdownHTML.contentColumnWidth), accuracy: 0.01)
+    }
+
     func testReadModeLeavesSelectionPaintingToWebKit() {
         let rendered = MarkdownHTML.render(
             markdown: "Select this text.",

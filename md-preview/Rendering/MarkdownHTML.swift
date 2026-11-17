@@ -213,6 +213,9 @@ nonisolated enum MarkdownHTML {
     /// PDF export keeps the preview's column width and colors, with margins
     /// on every page. Oversized tables are fitted before printing.
     static let previewPrintOverrideCSS = """
+    /* The body is the column here and has no padding to lend, so the article
+       keeps the full width for the table fit that runs before printing. */
+    html.\(previewPrintClass) { --mdp-inline-slack: 0px; }
     html.\(previewPrintClass) body {
         box-sizing: border-box;
         width: \(contentColumnWidth)px;
