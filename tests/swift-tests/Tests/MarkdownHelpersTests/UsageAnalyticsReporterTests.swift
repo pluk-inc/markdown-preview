@@ -58,6 +58,7 @@ final class UsageAnalyticsReporterTests: XCTestCase {
             installationID: installationID,
             appVersion: "0.0.49",
             macOSMajorVersion: 26,
+            macOSVersion: "26.1",
             architecture: "arm64",
             localeRegion: "MY",
             systemLanguage: "ms"
@@ -82,6 +83,7 @@ final class UsageAnalyticsReporterTests: XCTestCase {
             "$process_person_profile",
             "app_version",
             "macos_major_version",
+            "macos_version",
             "architecture",
             "locale_region",
             "system_language"
@@ -90,6 +92,7 @@ final class UsageAnalyticsReporterTests: XCTestCase {
         XCTAssertEqual(properties["$process_person_profile"] as? Bool, false)
         XCTAssertEqual(properties["app_version"] as? String, "0.0.49")
         XCTAssertEqual(properties["macos_major_version"] as? Int, 26)
+        XCTAssertEqual(properties["macos_version"] as? String, "26.1")
         XCTAssertEqual(properties["architecture"] as? String, "arm64")
         XCTAssertEqual(properties["locale_region"] as? String, "MY")
         XCTAssertEqual(properties["system_language"] as? String, "ms")
@@ -102,6 +105,7 @@ final class UsageAnalyticsReporterTests: XCTestCase {
             installationID: validID,
             appVersion: "0.0.49",
             macOSMajorVersion: 26,
+            macOSVersion: "26.1",
             architecture: "arm64",
             localeRegion: "MY",
             systemLanguage: "ms"
@@ -111,6 +115,7 @@ final class UsageAnalyticsReporterTests: XCTestCase {
             installationID: validID,
             appVersion: "0.0.49",
             macOSMajorVersion: 26,
+            macOSVersion: "26.1",
             architecture: "arm64",
             localeRegion: "MY",
             systemLanguage: "ms"
@@ -120,10 +125,20 @@ final class UsageAnalyticsReporterTests: XCTestCase {
             installationID: "not-a-uuid",
             appVersion: "0.0.49",
             macOSMajorVersion: 26,
+            macOSVersion: "26.1",
             architecture: "arm64",
             localeRegion: "MY",
             systemLanguage: "ms"
         ))
+    }
+
+    func testVersionStringOmitsAZeroPatch() {
+        XCTAssertEqual(UsageAnalyticsReporter.versionString(
+            OperatingSystemVersion(majorVersion: 27, minorVersion: 2, patchVersion: 0)), "27.2")
+        XCTAssertEqual(UsageAnalyticsReporter.versionString(
+            OperatingSystemVersion(majorVersion: 27, minorVersion: 2, patchVersion: 1)), "27.2.1")
+        XCTAssertEqual(UsageAnalyticsReporter.versionString(
+            OperatingSystemVersion(majorVersion: 27, minorVersion: 0, patchVersion: 0)), "27.0")
     }
 
     func testSystemLanguageDropsTheRegionAndKeepsTheScript() {

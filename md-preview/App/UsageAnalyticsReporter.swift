@@ -25,6 +25,12 @@ enum UsageAnalyticsReporter {
                               ?? Locale.preferredLanguages.first)
     }
 
+    /// The version as About This Mac shows it: "27.2", or "27.2.1" for a patch.
+    static func versionString(_ version: OperatingSystemVersion) -> String {
+        let base = "\(version.majorVersion).\(version.minorVersion)"
+        return version.patchVersion == 0 ? base : "\(base).\(version.patchVersion)"
+    }
+
     /// Keeps the language and a script the identifier names ("zh-Hans-CN" →
     /// "zh-Hans") and drops the region, which `locale_region` already covers.
     static func languageWithoutRegion(_ identifier: String?) -> String {
@@ -94,6 +100,7 @@ enum UsageAnalyticsReporter {
         installationID: String,
         appVersion: String,
         macOSMajorVersion: Int,
+        macOSVersion: String,
         architecture: String,
         localeRegion: String,
         systemLanguage: String
@@ -112,6 +119,7 @@ enum UsageAnalyticsReporter {
                 "$process_person_profile": false,
                 "app_version": appVersion,
                 "macos_major_version": macOSMajorVersion,
+                "macos_version": macOSVersion,
                 "architecture": architecture,
                 "locale_region": localeRegion,
                 "system_language": systemLanguage
@@ -146,6 +154,7 @@ enum UsageAnalyticsReporter {
                       forInfoDictionaryKey: "CFBundleShortVersionString"
                   ) as? String ?? "unknown",
                   macOSMajorVersion: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
+                  macOSVersion: versionString(ProcessInfo.processInfo.operatingSystemVersion),
                   architecture: currentArchitecture,
                   localeRegion: Locale.current.region?.identifier ?? "unknown",
                   systemLanguage: systemLanguage
