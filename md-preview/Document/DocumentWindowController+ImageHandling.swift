@@ -33,7 +33,20 @@ extension DocumentWindowController {
               let editor = mainSplit?.editorViewController,
               let data = pngData(from: pasteboard) else { return false }
         editor.fetchLinkSelection(expandingLink: false) { [weak self] selection in
-            guard let self, let selection else { return }
+            // The selection arrives later: another file can be open by then.
+            guard let self, self.isEditing,
+                  self.currentFileURL?.standardizedFileURL == markdownURL.standardizedFileURL else { return }
+            guard let selection else {
+                self.presentImageError(
+                    NSError(domain: "MarkdownPreview.ImagePaste",
+                            code: 4,
+                            userInfo: [NSLocalizedDescriptionKey: NSLocalizedString(
+                                "The pasted image could not be inserted into the document.",
+                                comment: "Image paste insertion error"
+                            )])
+                )
+                return
+            }
             self.insertImage(data,
                              forMarkdownFile: markdownURL,
                              editor: editor,
