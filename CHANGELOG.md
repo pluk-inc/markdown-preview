@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.0.74] – 2026-11-17 – Edit the Markdown source
+
+Markdown Preview 0.0.74 brings a Markdown source view in Edit Mode, files that keep their line breaks, and printing from Finder.
+
+### Added
+
+- **Markdown Source in Edit Mode.** Choose Show Markdown Source from the View menu, the formatting bar, or the context menu, or press ⇧⌘E, to edit the file exactly as written, with every marker visible, line numbers, and light syntax colors. Your selection, unsaved changes, and undo history carry over when you switch ([#651](https://github.com/pluk-inc/markdown-preview/pull/651)).
+
+### Changed
+
+- **Files Keep Their Line Breaks.** A file with Windows or classic Mac line breaks saves with the same ones after an edit, so other tools show only the lines you changed ([#651](https://github.com/pluk-inc/markdown-preview/pull/651)).
+- **Faster Typing in Large Files.** Edit Mode does less work on each keystroke in very large files, so typing stays responsive in a document of several megabytes ([#651](https://github.com/pluk-inc/markdown-preview/pull/651)).
+
+### Fixed
+
+- **Print from Finder Works.** Printing a Markdown file from Finder or a script opens the print panel instead of quitting the app ([#653](https://github.com/pluk-inc/markdown-preview/pull/653)).
+
+### Contributors
+
+- [@bevanjkay](https://github.com/bevanjkay) — asked for a plain source mode in Edit Mode ([#643](https://github.com/pluk-inc/markdown-preview/issues/643)).
+
 ## [0.0.73] – 2026-11-14 – Favorite folders, German translation
 
 Markdown Preview 0.0.73 brings favorite folders, a German translation, and a Loading panel for slow files.
