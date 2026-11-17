@@ -540,3 +540,18 @@
 
 /* Edit menu and reader context menu */
 "Copy as Plain Text" = "Kopiuj jako zwykły tekst";
+
+/* Quick Look Setup helper and its Settings row */
+"Quick Look" = "Quick Look";
+"Use for Markdown Files…" = "Użyj dla plików Markdown…";
+"Turns off other Quick Look extensions that preview Markdown files, so Finder shows the Markdown Preview preview. Open it again to turn them back on." = "Wyłącza inne rozszerzenia Quick Look podglądające pliki Markdown, dzięki czemu Finder wyświetla podgląd z Markdown Preview. Otwórz ponownie, aby je włączyć.";
+"Use Markdown Preview for Quick Look previews of Markdown files?" = "Używać Markdown Preview do podglądów Quick Look plików Markdown?";
+"macOS shows the preview from only one Quick Look extension for each file type, and has no setting to choose which one. To let Markdown Preview show the preview, these extensions must be turned off:\n\n%@\n\nThis turns off their previews for all file types. You can turn them on again from Settings → Advanced in Markdown Preview." = "macOS wyświetla podgląd tylko z jednego rozszerzenia Quick Look dla każdego typu pliku i nie ma ustawienia pozwalającego wybrać, które to będzie. Aby Markdown Preview mógł wyświetlać podgląd, te rozszerzenia muszą zostać wyłączone:\n\n%@\n\nSpowoduje to wyłączenie ich podglądów dla wszystkich typów plików. Możesz je ponownie włączyć w Ustawieniach → Zaawansowane w Markdown Preview.";
+"Turn Off" = "Wyłącz";
+"Markdown Preview now shows the Quick Look preview for Markdown files." = "Markdown Preview wyświetla teraz podgląd Quick Look dla plików Markdown.";
+"Finder shows the new preview the next time you press Space on a Markdown file." = "Finder pokaże nowy podgląd następnym razem, gdy naciśniesz Spację na pliku Markdown.";
+"Markdown Preview is the only Quick Look extension turned on for Markdown files." = "Markdown Preview jest jedynym włączonym rozszerzeniem Quick Look dla plików Markdown.";
+"These extensions were turned off for it:\n\n%@" = "Te rozszerzenia zostały przez nie wyłączone:\n\n%@";
+"Turn Back On" = "Włącz ponownie";
+"The other Quick Look extensions are on again." = "Pozostałe rozszerzenia Quick Look są ponownie włączone.";
+"The Quick Look extensions could not be changed." = "Nie udało się zmienić rozszerzeń Quick Look.";

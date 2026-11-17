@@ -25,6 +25,7 @@
 		9AF00000000000000000000B /* Highlight-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF000000000000000000109 /* Highlight-LICENSE.txt */; };
 		9AF00000000000000000000C /* purify.min.js in Resources */ = {isa = PBXBuildFile; fileRef = 9AF00000000000000000010A /* purify.min.js */; };
 		9AF00000000000000000000D /* DOMPurify-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 9AF00000000000000000010B /* DOMPurify-LICENSE.txt */; };
+		9AE100010000000000000001 /* Quick Look Setup.app in Embed Helpers */ = {isa = PBXBuildFile; fileRef = 9AE100010000000000000002 /* Quick Look Setup.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -34,6 +35,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 9A02092C2FA10D4C00092060;
 			remoteInfo = "quick-look";
+		};
+		9AE100010000000000000003 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9A0207B92FA0ED7C00092060 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9AE100010000000000000005;
+			remoteInfo = "quick-look-setup";
 		};
 /* End PBXContainerItemProxy section */
 
@@ -60,6 +68,17 @@
 			name = "Copy CLI Tool";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		9AE100010000000000000004 /* Embed Helpers */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Helpers;
+			dstSubfolderSpec = 1;
+			files = (
+				9AE100010000000000000001 /* Quick Look Setup.app in Embed Helpers */,
+			);
+			name = "Embed Helpers";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -80,6 +99,7 @@
 		9AF000000000000000000109 /* Highlight-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "Highlight-LICENSE.txt"; path = "md-preview/Vendor/Highlight/Highlight-LICENSE.txt"; sourceTree = "<group>"; };
 		9AF00000000000000000010A /* purify.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = purify.min.js; path = "md-preview/Vendor/DOMPurify/purify.min.js"; sourceTree = "<group>"; };
 		9AF00000000000000000010B /* DOMPurify-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "DOMPurify-LICENSE.txt"; path = "md-preview/Vendor/DOMPurify/DOMPurify-LICENSE.txt"; sourceTree = "<group>"; };
+		9AE100010000000000000002 /* Quick Look Setup.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Quick Look Setup.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -142,6 +162,11 @@
 			path = "quick-look";
 			sourceTree = "<group>";
 		};
+		9AE100010000000000000006 /* quick-look-setup */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "quick-look-setup";
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -161,6 +186,13 @@
 			files = (
 				9A0209302FA10D4C00092060 /* Quartz.framework in Frameworks */,
 				9A33940C2FA5AF500015D9A4 /* Markdown in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9AE100010000000000000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -185,6 +217,7 @@
 				9AF00000000000000000010B /* DOMPurify-LICENSE.txt */,
 				9A0207C32FA0ED7C00092060 /* md-preview */,
 				9A0209312FA10D4C00092060 /* quick-look */,
+				9AE100010000000000000006 /* quick-look-setup */,
 				9A02092E2FA10D4C00092060 /* Frameworks */,
 				9A0207C22FA0ED7C00092060 /* Products */,
 			);
@@ -195,6 +228,7 @@
 			children = (
 				9A0207C12FA0ED7C00092060 /* Markdown Preview.app */,
 				9A02092D2FA10D4C00092060 /* quick-look.appex */,
+				9AE100010000000000000002 /* Quick Look Setup.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -227,12 +261,14 @@
 				9A0207BF2FA0ED7C00092060 /* Resources */,
 				9AC100010000000000000003 /* Copy CLI Tool */,
 				9A02093D2FA10D4C00092060 /* Embed Foundation Extensions */,
+				9AE100010000000000000004 /* Embed Helpers */,
 				9A7B10042FB0000100010001 /* Upload dSYMs to Sentry */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				9A02093B2FA10D4C00092060 /* PBXTargetDependency */,
+				9AE10001000000000000000A /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				9A0207C32FA0ED7C00092060 /* md-preview */,
@@ -270,6 +306,28 @@
 			productReference = 9A02092D2FA10D4C00092060 /* quick-look.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		9AE100010000000000000005 /* quick-look-setup */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9AE10001000000000000000D /* Build configuration list for PBXNativeTarget "quick-look-setup" */;
+			buildPhases = (
+				9AE100010000000000000008 /* Sources */,
+				9AE100010000000000000007 /* Frameworks */,
+				9AE100010000000000000009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				9AE100010000000000000006 /* quick-look-setup */,
+			);
+			name = "quick-look-setup";
+			packageProductDependencies = (
+			);
+			productName = "quick-look-setup";
+			productReference = 9AE100010000000000000002 /* Quick Look Setup.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -284,6 +342,9 @@
 						CreatedOnToolsVersion = 26.4.1;
 					};
 					9A02092C2FA10D4C00092060 = {
+						CreatedOnToolsVersion = 26.4.1;
+					};
+					9AE100010000000000000005 = {
 						CreatedOnToolsVersion = 26.4.1;
 					};
 				};
@@ -310,6 +371,7 @@
 			targets = (
 				9A0207C02FA0ED7C00092060 /* md-preview */,
 				9A02092C2FA10D4C00092060 /* quick-look */,
+				9AE100010000000000000005 /* quick-look-setup */,
 			);
 		};
 /* End PBXProject section */
@@ -337,6 +399,13 @@
 				9AF00000000000000000000B /* Highlight-LICENSE.txt in Resources */,
 				9AF00000000000000000000C /* purify.min.js in Resources */,
 				9AF00000000000000000000D /* DOMPurify-LICENSE.txt in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9AE100010000000000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -380,6 +449,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		9AE100010000000000000008 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -387,6 +463,11 @@
 			isa = PBXTargetDependency;
 			target = 9A02092C2FA10D4C00092060 /* quick-look */;
 			targetProxy = 9A02093A2FA10D4C00092060 /* PBXContainerItemProxy */;
+		};
+		9AE10001000000000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9AE100010000000000000005 /* quick-look-setup */;
+			targetProxy = 9AE100010000000000000003 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -669,6 +750,56 @@
 			};
 			name = Release;
 		};
+		9AE10001000000000000000B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-preview.dev.quick-look-setup";
+				PRODUCT_NAME = "Quick Look Setup";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		9AE10001000000000000000C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 5P3TSMNV42;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-preview.quick-look-setup";
+				PRODUCT_NAME = "Quick Look Setup";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -695,6 +826,15 @@
 			buildConfigurations = (
 				9A02093E2FA10D4C00092060 /* Debug */,
 				9A02093F2FA10D4C00092060 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		9AE10001000000000000000D /* Build configuration list for PBXNativeTarget "quick-look-setup" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9AE10001000000000000000B /* Debug */,
+				9AE10001000000000000000C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
