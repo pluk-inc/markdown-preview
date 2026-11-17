@@ -564,6 +564,5 @@
 "Set Default…" = "设为默认…";
 "Do you want to use %1$@ for Quick Look previews of Markdown files, or keep using %2$@?" = "您想将 %1$@ 用于 Markdown 文件的 Quick Look 预览，还是继续使用 %2$@？";
 "%@ will no longer show Quick Look previews for any file type. You can turn this back on in Settings → Advanced in Markdown Preview." = "%@ 将不再为任何文件类型显示 Quick Look 预览。您可以在 Markdown Preview 的“设置”→“高级”中重新开启此功能。";
-"Use %@" = "使用 %@";
-"Keep %@" = "保留 %@";
 "Keep Current" = "保留当前设置";
+"Set Default" = "设为默认";

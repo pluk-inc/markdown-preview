@@ -564,6 +564,5 @@
 "Set Default…" = "Als Standard festlegen …";
 "Do you want to use %1$@ for Quick Look previews of Markdown files, or keep using %2$@?" = "Möchten Sie %1$@ für Quick-Look-Vorschauen von Markdown-Dateien verwenden oder weiterhin %2$@ verwenden?";
 "%@ will no longer show Quick Look previews for any file type. You can turn this back on in Settings → Advanced in Markdown Preview." = "Quick-Look-Vorschauen von %@ werden für alle Dateitypen deaktiviert. Sie können dies in Markdown Preview unter Einstellungen → Erweitert wieder aktivieren.";
-"Use %@" = "%@ verwenden";
-"Keep %@" = "%@ beibehalten";
 "Keep Current" = "Aktuelle beibehalten";
+"Set Default" = "Als Standard festlegen";

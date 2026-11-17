@@ -155,8 +155,12 @@ struct QuickLookSetup {
                    quoted(Self.hostName), others),
             information
         )
-        alert.addButton(withTitle: String(format: L("Use %@"), quoted(Self.hostName)))
-        alert.addButton(withTitle: names.count == 1 ? String(format: L("Keep %@"), names[0]) : L("Keep Current"))
+        // Short on purpose. The alert keeps two buttons on one row, as the
+        // system's default browser question has them, only while each title
+        // fits in half of its width: about 12 characters. A title with an
+        // app name in it ("Keep “Saturn”") is already too long.
+        alert.addButton(withTitle: L("Set Default"))
+        alert.addButton(withTitle: L("Keep Current"))
         if !earlier.isEmpty {
             alert.addButton(withTitle: L("Turn Back On"))
         }

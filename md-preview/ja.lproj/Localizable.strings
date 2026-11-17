@@ -564,6 +564,5 @@
 "Set Default…" = "デフォルトに設定…";
 "Do you want to use %1$@ for Quick Look previews of Markdown files, or keep using %2$@?" = "Markdownファイルのクイックルックプレビューに%1$@を使用しますか？それとも%2$@を使い続けますか？";
 "%@ will no longer show Quick Look previews for any file type. You can turn this back on in Settings → Advanced in Markdown Preview." = "%@は、すべてのファイルタイプでクイックルックプレビューを表示しなくなります。Markdown Previewの「設定」→「詳細設定」で再びオンにできます。";
-"Use %@" = "%@を使用";
-"Keep %@" = "%@を使い続ける";
 "Keep Current" = "現在の設定を維持";
+"Set Default" = "デフォルトに設定";
