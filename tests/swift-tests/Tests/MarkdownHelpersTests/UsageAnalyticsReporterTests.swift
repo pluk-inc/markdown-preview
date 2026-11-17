@@ -59,7 +59,8 @@ final class UsageAnalyticsReporterTests: XCTestCase {
             appVersion: "0.0.49",
             macOSMajorVersion: 26,
             architecture: "arm64",
-            localeRegion: "MY"
+            localeRegion: "MY",
+            systemLanguage: "ms"
         ))
 
         XCTAssertEqual(request.url?.absoluteString, "https://us.i.posthog.com/i/v0/e/")
@@ -82,7 +83,8 @@ final class UsageAnalyticsReporterTests: XCTestCase {
             "app_version",
             "macos_major_version",
             "architecture",
-            "locale_region"
+            "locale_region",
+            "system_language"
         ])
         XCTAssertEqual(properties["$geoip_disable"] as? Bool, true)
         XCTAssertEqual(properties["$process_person_profile"] as? Bool, false)
@@ -90,6 +92,7 @@ final class UsageAnalyticsReporterTests: XCTestCase {
         XCTAssertEqual(properties["macos_major_version"] as? Int, 26)
         XCTAssertEqual(properties["architecture"] as? String, "arm64")
         XCTAssertEqual(properties["locale_region"] as? String, "MY")
+        XCTAssertEqual(properties["system_language"] as? String, "ms")
     }
 
     func testRequestRejectsMissingTokenPlaceholderAndInvalidID() {
@@ -100,7 +103,8 @@ final class UsageAnalyticsReporterTests: XCTestCase {
             appVersion: "0.0.49",
             macOSMajorVersion: 26,
             architecture: "arm64",
-            localeRegion: "MY"
+            localeRegion: "MY",
+            systemLanguage: "ms"
         ))
         XCTAssertNil(UsageAnalyticsReporter.makeRequest(
             projectToken: "$(POSTHOG_PROJECT_TOKEN)",
@@ -108,7 +112,8 @@ final class UsageAnalyticsReporterTests: XCTestCase {
             appVersion: "0.0.49",
             macOSMajorVersion: 26,
             architecture: "arm64",
-            localeRegion: "MY"
+            localeRegion: "MY",
+            systemLanguage: "ms"
         ))
         XCTAssertNil(UsageAnalyticsReporter.makeRequest(
             projectToken: "phc_test-token",
@@ -116,8 +121,18 @@ final class UsageAnalyticsReporterTests: XCTestCase {
             appVersion: "0.0.49",
             macOSMajorVersion: 26,
             architecture: "arm64",
-            localeRegion: "MY"
+            localeRegion: "MY",
+            systemLanguage: "ms"
         ))
+    }
+
+    func testSystemLanguageDropsTheRegionAndKeepsTheScript() {
+        XCTAssertEqual(UsageAnalyticsReporter.languageWithoutRegion("de-DE"), "de")
+        XCTAssertEqual(UsageAnalyticsReporter.languageWithoutRegion("en"), "en")
+        XCTAssertEqual(UsageAnalyticsReporter.languageWithoutRegion("zh-Hans-CN"), "zh-Hans")
+        XCTAssertEqual(UsageAnalyticsReporter.languageWithoutRegion("zh-Hant-TW"), "zh-Hant")
+        XCTAssertEqual(UsageAnalyticsReporter.languageWithoutRegion(nil), "unknown")
+        XCTAssertEqual(UsageAnalyticsReporter.languageWithoutRegion(""), "unknown")
     }
 
     func testArchitectureIsCoarsenedToASupportedValue() {
