@@ -767,10 +767,8 @@ private final class EditorWKWebView: WKWebView {
         return item
     }
 
-    /// The file tree keeps the open file selected, so showing the tree
-    /// reveals it.
     @objc private func revealInNavigatorFromContextMenu(_ sender: Any?) {
-        documentWindowController?.selectFilesMode(sender)
+        documentWindowController?.revealOpenFileInNavigator()
     }
 
     @objc private func showInFinderFromContextMenu(_ sender: Any?) {

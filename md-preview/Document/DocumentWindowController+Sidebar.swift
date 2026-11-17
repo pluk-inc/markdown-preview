@@ -256,4 +256,10 @@ extension DocumentWindowController {
         split.showSidebar()
         syncSidebarToolbarState()
     }
+
+    /// Shows the file tree with the open file's row expanded to and in view.
+    func revealOpenFileInNavigator() {
+        selectFilesMode(nil)
+        (documentWindow.contentViewController as? MainSplitViewController)?.revealOpenFileInNavigator()
+    }
 }
