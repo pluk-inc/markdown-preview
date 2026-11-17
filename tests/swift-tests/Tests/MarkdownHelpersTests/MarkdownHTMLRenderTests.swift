@@ -250,8 +250,13 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             }
             let result = try await webView.evaluateJavaScript("""
             (() => {
-                const r = document.querySelector('article').getBoundingClientRect();
-                return JSON.stringify({ x: r.x, width: r.width });
+                // The text column: the article's content box. Its padding
+                // holds the inline overflow slack, taken from the body gutter.
+                const article = document.querySelector('article');
+                const r = article.getBoundingClientRect();
+                const style = getComputedStyle(article);
+                const left = parseFloat(style.paddingLeft), right = parseFloat(style.paddingRight);
+                return JSON.stringify({ x: r.x + left, width: r.width - left - right });
             })()
             """)
             let json = try XCTUnwrap(result as? String)
@@ -409,6 +414,93 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         )
         XCTAssertLessThanOrEqual(metrics.codeRight, metrics.viewportRight + fragmentPaddingTolerance)
         XCTAssertEqual(metrics.boxDecorationBreak, "clone")
+    }
+
+    /// WebKit lets the first fragment of a wrapped inline code span end past
+    /// its line by up to the span's end padding. The article is the sideways
+    /// scroller, so that must not become scrollable overflow.
+    @MainActor
+    func testWrappedInlineCodeDoesNotMakeTheArticleScrollSideways() async throws {
+        let sentence = "Update checks use `amore release` and `md-asset://` paths, then `> #` and `swift build` run. "
+        let rendered = MarkdownHTML.render(
+            markdown: "# Title with `inline code` that wraps `in a heading` too\n\n"
+                + String(repeating: sentence, count: 12),
+            allowsScroll: true,
+            vendorLoading: .lazy
+        )
+        let stylesheet = rendered.html
+            .components(separatedBy: "<style>")
+            .dropFirst()
+            .compactMap { $0.components(separatedBy: "</style>").first }
+            .joined(separator: "\n")
+        let html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>\(stylesheet)</style>
+        </head>
+        <body><article class="markdown-body">\(rendered.articleHTML)</article></body>
+        </html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        // Sweep the column width: the overshoot depends on where a line ends.
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const article = document.querySelector('article.markdown-body');
+            const text = article.querySelector('p');
+            let worst = 0, textInset = null;
+            for (let width = 360; width <= 760; width += 3) {
+                document.body.style.width = width + 'px';
+                worst = Math.max(worst, article.scrollWidth - article.clientWidth);
+                const inset = text.getBoundingClientRect().left - document.body.getBoundingClientRect().left;
+                textInset = textInset === null ? inset : Math.max(textInset, inset);
+            }
+            return JSON.stringify([worst, textInset]);
+        })()
+        """)
+        let values = try JSONDecoder().decode([Double].self, from: Data(try XCTUnwrap(result as? String).utf8))
+
+        XCTAssertEqual(values[0], 0, "the article scrolls sideways by \(values[0]) px")
+        // The slack comes out of the page padding, so the text column stays put.
+        XCTAssertEqual(values[1], Double(MarkdownHTML.pagePaddingHorizontal), accuracy: 0.01)
+    }
+
+    /// PDF export makes the body the column, without padding, and fits wide
+    /// tables to the article before printing. The inline overflow slack must
+    /// not take width from that fit.
+    @MainActor
+    func testPDFExportPageKeepsTheFullColumnWidth() async throws {
+        let rendered = MarkdownHTML.render(markdown: "Body text.", allowsScroll: true, vendorLoading: .lazy)
+        let stylesheet = rendered.html
+            .components(separatedBy: "<style>")
+            .dropFirst()
+            .compactMap { $0.components(separatedBy: "</style>").first }
+            .joined(separator: "\n")
+        let html = """
+        <!DOCTYPE html>
+        <html class="\(MarkdownHTML.previewPrintClass)">
+        <head><style>\(stylesheet)</style><style>\(MarkdownHTML.previewPrintOverrideCSS)</style></head>
+        <body><article class="markdown-body">\(rendered.articleHTML)</article></body>
+        </html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1200, height: 600))
+
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let width = try await webView.evaluateJavaScript(
+            "document.querySelector('article.markdown-body p').getBoundingClientRect().width"
+        )
+        XCTAssertEqual(try XCTUnwrap(width as? Double), Double(MarkdownHTML.contentColumnWidth), accuracy: 0.01)
     }
 
     func testReadModeLeavesSelectionPaintingToWebKit() {
