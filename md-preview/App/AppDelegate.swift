@@ -871,6 +871,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         isDocumentPromptScheduled = false
     }
 
+    /// AppKit opens a file for a print request itself, not through
+    /// `application(_:open:)`, so the launch would show the file chooser
+    /// on top of the document that is about to print.
+    func documentOpenDidStart() {
+        if !hasFinishedLaunching {
+            didReceiveOpenURLsDuringLaunch = true
+        } else if isDocumentPromptScheduled {
+            documentPromptScheduleGeneration += 1
+            isDocumentPromptScheduled = false
+        }
+    }
+
     func openFolder(_ url: URL) {
         if let controller = activeDocumentWindowController {
             controller.openFolder(url)

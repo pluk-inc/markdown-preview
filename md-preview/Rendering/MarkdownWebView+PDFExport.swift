@@ -1007,7 +1007,8 @@ extension MarkdownWebView {
     /// File ▸ Print… — the system print panel, with the font size in a
     /// "Markdown Preview" accessory pane so the panel's own live page
     /// thumbnails preview the choice.
-    func printDocument(assetBaseURL: URL?, from window: NSWindow) {
+    /// `completion` gets false when the print is cancelled or fails.
+    func printDocument(assetBaseURL: URL?, from window: NSWindow, completion: ((Bool) -> Void)? = nil) {
         Task {
             var session: DocumentExportSession?
             do {
@@ -1031,10 +1032,11 @@ extension MarkdownWebView {
                 panel.addAccessoryController(accessory)
                 panel.options.insert(.showsPreview)
                 operation.printPanel = panel
-                _ = await export.runPrintOperation(operation, from: window)
+                completion?(await export.runPrintOperation(operation, from: window))
             } catch {
                 session?.close()
                 window.presentError(error)
+                completion?(false)
             }
         }
     }

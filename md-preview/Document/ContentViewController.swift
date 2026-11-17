@@ -366,9 +366,12 @@ final class ContentViewController: NSViewController {
         return top >= visibleTop && bottom <= visibleBottom
     }
 
-    func printDocument() {
-        guard let window = view.window, let source = exportSource else { return }
-        webView.printDocument(assetBaseURL: source.assetBaseURL, from: window)
+    func printDocument(completion: ((Bool) -> Void)? = nil) {
+        guard let window = view.window, let source = exportSource else {
+            completion?(false)
+            return
+        }
+        webView.printDocument(assetBaseURL: source.assetBaseURL, from: window, completion: completion)
     }
 
     var hasExportableDocument: Bool {

@@ -37,12 +37,13 @@ final class MarkdownDocumentController: NSDocumentController {
         display displayDocument: Bool,
         completionHandler: @escaping (NSDocument?, Bool, Error?) -> Void
     ) {
-        if url.isExistingDirectory,
-           let appDelegate = NSApp.delegate as? AppDelegate {
+        let appDelegate = NSApp.delegate as? AppDelegate
+        if url.isExistingDirectory, let appDelegate {
             appDelegate.openFolder(url)
             completionHandler(nil, false, nil)
             return
         }
+        appDelegate?.documentOpenDidStart()
 
         super.openDocument(
             withContentsOf: url,
