@@ -66,4 +66,56 @@ final class EditorSourceModeTests: XCTestCase {
             XCTAssertEqual(switched["lineTop"], switched["scrollerTop"].map { $0 + 8 })
         }
     }
+
+    /// Runs one formatting bar command on the word "two" and returns the
+    /// value the command gave back together with the Markdown it left.
+    private func barResults(sourceMode: Bool, calls: [String]) async throws -> [String] {
+        let script = try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js")
+        var configuration = EditorHTML.Configuration()
+        configuration.sourceMode = sourceMode
+        let html = EditorHTML.render(markdown: "", editorJavaScript: script, configuration: configuration)
+        let harness = WebViewLayoutHarness(html: html, width: 800, isEditor: true, height: 500)
+        defer { harness.close() }
+        _ = try await harness.layout(texts: [], imageCount: 0)
+        var results: [String] = []
+        for call in calls {
+            let result = try await harness.webView.evaluateJavaScript("""
+                (() => {
+                    const e = window.__mdEditor;
+                    e.replaceMarkdown("first line\\n\\none two three\\n\\nlast line\\n");
+                    e.select(16, 19);
+                    const returned = \(call);
+                    return JSON.stringify([returned ?? null, e.getMarkdown()]);
+                })()
+                """)
+            results.append(try XCTUnwrap(result as? String, call))
+        }
+        let numbers = try await harness.webView.evaluateJavaScript("document.querySelectorAll('.cm-lineNumbers').length")
+        XCTAssertEqual(numbers as? Int, sourceMode ? 1 : 0)
+        return results
+    }
+
+    func testFormattingBarCommandsWriteTheSameMarkdownInSourceMode() async throws {
+        var calls = ["bold", "italic", "strikethrough", "highlight", "code", "h0", "h1", "h2", "h3", "h4", "h5", "h6",
+                     "quote", "bulletList", "orderedList", "taskList", "link"].map { "e.exec('\($0)')" }
+        calls += ["none", "quote", "code", "plain", "fenced", "table"].map { "e.setBlockStyle('\($0)', 'swift')" }
+        calls += ["none", "bullet", "ordered", "task"].map { "e.setListStyle('\($0)')" }
+        calls += ["e.insertLinkFromPopover('two', 'https://example.com', 16, 19)",
+                  "(e.exec('bold'), e.exec('bold'))",
+                  "(e.exec('h2'), e.getHeadingLevel())",
+                  "(e.setListStyle('task'), e.getListStyle())",
+                  "(e.setBlockStyle('quote', ''), e.getBlockStyle())"]
+        let formatted = try await barResults(sourceMode: false, calls: calls)
+        let source = try await barResults(sourceMode: true, calls: calls)
+        for (index, call) in calls.enumerated() {
+            XCTAssertEqual(source[index], formatted[index], call)
+        }
+        // Anchor the comparison, so a break in both styles cannot pass.
+        let written = Dictionary(uniqueKeysWithValues: zip(calls, source))
+        XCTAssertEqual(written["e.exec('bold')"], #"[null,"first line\n\none **two** three\n\nlast line\n"]"#)
+        XCTAssertEqual(written["e.exec('taskList')"], #"[null,"first line\n\n- [ ] one two three\n\nlast line\n"]"#)
+        XCTAssertEqual(written["e.setBlockStyle('fenced', 'swift')"],
+                       #"[true,"first line\n\n```swift\none two three\n```\n\nlast line\n"]"#)
+        XCTAssertEqual(written["(e.exec('h2'), e.getHeadingLevel())"], #"[2,"first line\n\n## one two three\n\nlast line\n"]"#)
+    }
 }
