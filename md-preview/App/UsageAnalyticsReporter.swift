@@ -18,6 +18,24 @@ enum UsageAnalyticsReporter {
 #endif
     }
 
+    /// The first language in System Settings, without its region: "de",
+    /// "zh-Hans". Not the language the reader chose for this app.
+    static var systemLanguage: String {
+        languageWithoutRegion(AppLanguageSetting.systemLanguagePreferences().first
+                              ?? Locale.preferredLanguages.first)
+    }
+
+    /// Keeps the language and a script the identifier names ("zh-Hans-CN" →
+    /// "zh-Hans") and drops the region, which `locale_region` already covers.
+    static func languageWithoutRegion(_ identifier: String?) -> String {
+        guard let identifier else { return "unknown" }
+        let components = Locale.Language.Components(identifier: identifier)
+        guard let language = components.languageCode?.identifier, !language.isEmpty else {
+            return "unknown"
+        }
+        return [language, components.script?.identifier].compactMap { $0 }.joined(separator: "-")
+    }
+
     private static let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpCookieStorage = nil
@@ -77,7 +95,8 @@ enum UsageAnalyticsReporter {
         appVersion: String,
         macOSMajorVersion: Int,
         architecture: String,
-        localeRegion: String
+        localeRegion: String,
+        systemLanguage: String
     ) -> URLRequest? {
         let token = projectToken.trimmingCharacters(in: .whitespacesAndNewlines)
         guard token.hasPrefix("phc_"), UUID(uuidString: installationID) != nil else {
@@ -94,7 +113,8 @@ enum UsageAnalyticsReporter {
                 "app_version": appVersion,
                 "macos_major_version": macOSMajorVersion,
                 "architecture": architecture,
-                "locale_region": localeRegion
+                "locale_region": localeRegion,
+                "system_language": systemLanguage
             ]
         ]
         guard let body = try? JSONSerialization.data(withJSONObject: payload) else {
@@ -127,7 +147,8 @@ enum UsageAnalyticsReporter {
                   ) as? String ?? "unknown",
                   macOSMajorVersion: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
                   architecture: currentArchitecture,
-                  localeRegion: Locale.current.region?.identifier ?? "unknown"
+                  localeRegion: Locale.current.region?.identifier ?? "unknown",
+                  systemLanguage: systemLanguage
               ) else {
             return
         }
