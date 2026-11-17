@@ -1,5 +1,5 @@
 //
-//  QuickLookSetupLauncher.swift
+//  QuickLookDefault.swift
 //  md-preview
 //
 //  Starts the embedded Quick Look Setup helper, which makes the Markdown
@@ -20,12 +20,52 @@ struct QuickLookDefaultStatus: Equatable {
     let turnedOff: [String]
 }
 
-enum QuickLookSetupLauncher {
+/// The Quick Look state for the Settings panes, and the two ways to start
+/// the helper. One shared object, so a change made from one pane shows in
+/// the other, and so the two kinds of launch never overlap: Launch Services
+/// hands a second launch to the helper that is already running, which would
+/// answer in the mode it was started in.
+@Observable
+final class QuickLookDefault {
+    static let shared = QuickLookDefault()
+
+    /// Nil until the helper answers, and when it cannot answer.
+    private(set) var status: QuickLookDefaultStatus?
+
+    private var statusRequest: Task<QuickLookDefaultStatus?, Never>?
+    private var setup: Task<Void, Never>?
+
     private static let helper = Bundle.main.bundleURL
         .appendingPathComponent("Contents/Helpers/Quick Look Setup.app")
 
-    /// Shows the helper's dialog and returns when the helper has quit.
-    static func open() async {
+    /// Asks the helper for the current state, with nothing on screen. While
+    /// the helper's dialog is open it cannot answer; the state is read again
+    /// when that dialog closes.
+    func refresh() async {
+        guard setup == nil else { return }
+        if statusRequest == nil {
+            statusRequest = Task { await Self.requestStatus() }
+        }
+        let answer = await statusRequest?.value
+        statusRequest = nil
+        status = answer
+    }
+
+    /// Shows the helper's dialog, waits until the helper has quit, and reads
+    /// the state again.
+    func openSetup() async {
+        if setup == nil {
+            setup = Task {
+                _ = await statusRequest?.value
+                await Self.runSetup()
+            }
+        }
+        await setup?.value
+        setup = nil
+        await refresh()
+    }
+
+    private static func runSetup() async {
         do {
             let app = try await NSWorkspace.shared.openApplication(at: helper, configuration: .init())
             await waitForExit(of: app, seconds: 600)
@@ -39,9 +79,7 @@ enum QuickLookSetupLauncher {
         }
     }
 
-    /// Asks the helper for the current state, with nothing on screen.
-    /// Returns nil when the helper could not answer.
-    static func status() async -> QuickLookDefaultStatus? {
+    private static func requestStatus() async -> QuickLookDefaultStatus? {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
         configuration.addsToRecentItems = false
@@ -76,7 +114,9 @@ enum QuickLookSetupLauncher {
     private static func waitForExit(of app: NSRunningApplication, seconds: Double) async {
         let deadline = Date().addingTimeInterval(seconds)
         while !app.isTerminated, Date() < deadline {
-            try? await Task.sleep(for: .milliseconds(100))
+            // A cancelled sleep returns at once; without this exit the loop
+            // would spin on the main actor until the deadline.
+            guard (try? await Task.sleep(for: .milliseconds(100))) != nil else { return }
         }
     }
 }
