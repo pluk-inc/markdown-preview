@@ -132,6 +132,7 @@ final class EditorPreviewLayoutTests: XCTestCase {
                     rows: card?.querySelectorAll('.cm-line').length,
                     delimiters: delimiters.map(node => node.textContent).join(''),
                     cardText: card?.textContent || '',
+                    markerHeight: (document.querySelector('.cm-md-list-item')?.getBoundingClientRect().height || 0) > 0,
                     scrolls: card && card.scrollWidth > card.clientWidth,
                     widths: card && [card.scrollWidth, card.clientWidth],
                     radius: card && getComputedStyle(card).borderRadius,
@@ -146,7 +147,13 @@ final class EditorPreviewLayoutTests: XCTestCase {
             // The card holds the TeX only: the delimiter lines of a multiline
             // block collapse, and same-line delimiters are hidden.
             let lineCount = formula.components(separatedBy: "\n").count
-            XCTAssertEqual(values["rows"] as? Int, fenced || lineCount == 1 ? 1 : lineCount - 2, formula)
+            // A list marker keeps the opening line; only its `$$` is hidden.
+            let keptOpening = formula.hasPrefix("- ") ? 1 : 0
+            XCTAssertEqual(values["rows"] as? Int,
+                           fenced || lineCount == 1 ? 1 : lineCount - 2 + keptOpening, formula)
+            if keptOpening == 1 {
+                XCTAssertEqual(values["markerHeight"] as? Bool, true, formula)
+            }
             if !fenced {
                 XCTAssertEqual(values["delimiters"] as? String, "", formula)
                 let cardText = values["cardText"] as? String ?? ""

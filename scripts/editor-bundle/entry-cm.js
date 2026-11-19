@@ -2447,7 +2447,11 @@ function buildDecorations(view, detectedCodeCache) {
             // block collapse unless the caret is on them; an empty block
             // keeps them, or it would have no line left to show.
             const ownLines = name === "MathBlock" && last.number - first.number >= 2
-            const hidesOpening = ownLines && !touchesLineOf(first.from)
+            // A list marker before the opening delimiter keeps its line, or
+            // the bullet would vanish with it: only the `$$` is hidden there.
+            const awayFromOpening = ownLines && !touchesLineOf(first.from)
+            const markerOnOpening = !/^[\s>]*$/.test(first.text.slice(0, node.from - first.from))
+            const hidesOpening = awayFromOpening && !markerOnOpening
             const hidesClosing = ownLines && !touchesLineOf(last.from)
             const cardFirst = hidesOpening ? first.number + 1 : first.number
             const cardLast = hidesClosing ? last.number - 1 : last.number
@@ -2472,7 +2476,8 @@ function buildDecorations(view, detectedCodeCache) {
               ranges.push(hide.range(node.from, node.from + 2))
               ranges.push(hide.range(closing, closing + 2))
             } else {
-              if (!hidesOpening) ranges.push(fenceMark.range(node.from, node.from + 2))
+              if (awayFromOpening && markerOnOpening) ranges.push(hide.range(node.from, node.from + 2))
+              else if (!hidesOpening) ranges.push(fenceMark.range(node.from, node.from + 2))
               if (!hidesClosing) ranges.push(fenceMark.range(closing, closing + 2))
             }
           }
