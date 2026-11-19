@@ -414,6 +414,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         stopAutoSaveTimer()
         autoSaveFeedbackResetWork?.cancel()
         autoSaveFeedbackResetWork = nil
+        // The reader of this window is gone, and a spare one may have gone
+        // into it, so the next window, or a reopen from the Dock, would
+        // wait for WebKit to start.
+        DispatchQueue.main.async {
+            SpareReaderPool.shared.prepareSpareIfNeeded()
+        }
     }
 
     func windowWillEnterFullScreen(_ notification: Notification) {

@@ -860,8 +860,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             guard self.documentPromptScheduleGeneration == scheduleGeneration else { return }
             self.isDocumentPromptScheduled = false
             guard !requiresNoDocuments || NSDocumentController.shared.documents.isEmpty else { return }
+            // A reader with a favorite folder gets that folder back, with the
+            // file they read last in it, not a file chooser, when the app
+            // has no window to show.
+            if requiresNoDocuments, let folder = FavoriteFolders.folderForEmptyApp {
+                self.reopen(folder)
+                return
+            }
             NSApp.activate(ignoringOtherApps: true)
             NSDocumentController.shared.openDocument(nil)
+        }
+    }
+
+    /// Shows `folder` with the last file the reader opened in it. A file
+    /// that does not open leaves the folder alone in the window, with no
+    /// alert: the reader did not ask for that file.
+    private func reopen(_ folder: URL) {
+        guard let file = FavoriteFolders.lastOpenedFile(in: folder) else {
+            return openFolder(folder)
+        }
+        NSDocumentController.shared.openDocument(withContentsOf: file,
+                                                 display: true) { [weak self] document, _, _ in
+            guard let self else { return }
+            guard let document else { return self.openFolder(folder) }
+            self.showWindowIfNeeded(for: document)
         }
     }
 

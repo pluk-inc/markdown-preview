@@ -36,6 +36,21 @@ enum FavoriteFolders {
         NotificationCenter.default.post(name: didChangeNotification, object: nil)
     }
 
+    /// The favorite to show when the app has no window: the one the
+    /// navigator showed last, else the first. Nil without a favorite.
+    static var folderForEmptyApp: URL? {
+        let favorites = all.filter(\.isExistingDirectory)
+        return RecentFolders.recorded.first(where: favorites.contains) ?? favorites.first
+    }
+
+    /// The newest file of File > Open Recent that is inside `folder`.
+    static func lastOpenedFile(in folder: URL) -> URL? {
+        NSDocumentController.shared.recentDocumentURLs.first {
+            $0.standardizedFileURL.isDescendantOrSame(of: folder)
+                && FileManager.default.fileExists(atPath: $0.path)
+        }
+    }
+
     /// The outermost favorite that contains `fileURL`. The outer one wins:
     /// a reader who adds a folder above an earlier favorite wants the
     /// larger view.
@@ -64,9 +79,12 @@ enum RecentFolders {
     private static let storedLimit = 8
     private static let menuLimit = 5
 
+    /// The folders the navigator showed, newest first.
+    static var recorded: [URL] { storedFolders(forKey: defaultsKey) }
+
     static func record(_ folder: URL) {
         let folder = folder.standardizedFileURL
-        let folders = [folder] + storedFolders(forKey: defaultsKey).filter { $0 != folder }
+        let folders = [folder] + recorded.filter { $0 != folder }
         UserDefaults.standard.set(folders.prefix(storedLimit).map(\.path), forKey: defaultsKey)
     }
 
@@ -79,7 +97,7 @@ enum RecentFolders {
                 ?? $0.deletingLastPathComponent().standardizedFileURL
         }
         var seen = Set(favorites)
-        return Array(([root] + storedFolders(forKey: defaultsKey) + documentFolders)
+        return Array(([root] + recorded + documentFolders)
             .filter { seen.insert($0).inserted && $0.isExistingDirectory }
             .prefix(menuLimit))
     }

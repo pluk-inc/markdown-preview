@@ -252,7 +252,20 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     private weak var webScrollView: NSScrollView?
     nonisolated(unsafe) private var scrollBoundsObserver: NSObjectProtocol?
 
-    override init(frame frameRect: NSRect) {
+    /// A spare's empty page also loads the math and code renderers, so it
+    /// can take most documents without a full page load.
+    private let isSpare: Bool
+
+    convenience init(spare: Bool) {
+        self.init(frame: .zero, spare: spare)
+    }
+
+    override convenience init(frame frameRect: NSRect) {
+        self.init(frame: frameRect, spare: false)
+    }
+
+    private init(frame frameRect: NSRect, spare: Bool) {
+        isSpare = spare
         let config = WKWebViewConfiguration()
         config.setURLSchemeHandler(assetScheme, forURLScheme: MarkdownAssetScheme.scheme)
         config.userContentController.addUserScript(Self.disableContextMenuScript)
@@ -399,6 +412,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     /// ready page immediately, while rich documents deliberately take a fresh
     /// lazy-vendor load so their text paints before KaTeX, Mermaid, or
     /// highlight.js work and the idle page does not retain those runtimes.
+    /// A spare reader is the exception: its page preloads the math and code
+    /// renderers, so those documents can use it too.
     private static let warmupMarkdown = ""
 
     private func warmupVendors() {
@@ -413,6 +428,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         let contentWidth = ContentWidthSetting.current.renderWidth
         let themeOverrides = Self.currentThemeOverrides()
         let chromeZoom = chromeZoom
+        let preloadsMathAndCode = isSpare
         Task { @concurrent [weak self] in
             let rendered = Self.timedRender(label: "warmup",
                                             markdown: markdown,
@@ -420,7 +436,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                             contentWidth: contentWidth,
                                             themeOverrides: themeOverrides,
                                             chromeZoom: chromeZoom,
-                                            warmup: true)
+                                            warmup: true,
+                                            preloadsMathAndCode: preloadsMathAndCode)
             await self?.applyWarmup(rendered)
         }
     }
@@ -491,6 +508,12 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                 setter(preferences, setSelector, false, feature)
             }
         }
+    }
+
+    /// True once the empty launch page has loaded and no document has been
+    /// shown yet, so a new window can adopt this reader as is.
+    var isReadyAsSpare: Bool {
+        renderGeneration == 0 && isPageReady && superview == nil
     }
 
     /// True once any `display()` has been requested.
@@ -600,7 +623,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                                 contentWidth: MarkdownHTML.ContentWidth,
                                                 themeOverrides: MarkdownHTML.ThemeOverrides? = nil,
                                                 chromeZoom: CGFloat,
-                                                warmup: Bool = false) -> MarkdownHTML.RenderedHTML {
+                                                warmup: Bool = false,
+                                                preloadsMathAndCode: Bool = false) -> MarkdownHTML.RenderedHTML {
         let t0 = DispatchTime.now()
         let rendered = MarkdownHTML.render(markdown: markdown,
                                            allowsScroll: true,
@@ -609,6 +633,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
                                            contentWidth: contentWidth,
                                            themeOverrides: themeOverrides,
                                            warmup: warmup,
+                                           preloadsMathAndCode: preloadsMathAndCode,
                                            pageTopClearance: MarkdownHTML.appPageTopClearance,
                                            chromeZoom: chromeZoom)
         let elapsedMs = Int(
