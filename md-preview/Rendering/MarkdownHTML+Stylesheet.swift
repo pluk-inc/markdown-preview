@@ -12,6 +12,8 @@ import Foundation
 nonisolated extension MarkdownHTML {
     static let mathStylesheet = """
     .math-display {
+        /* A formula inside a paragraph is a <span>. */
+        display: block;
         margin: 1.2em 0 0;
         overflow-x: auto;
         overflow-y: hidden;
@@ -690,6 +692,15 @@ nonisolated extension MarkdownHTML {
 
     p {
         margin: \(paragraphSpacing)px 0 0;
+    }
+    /* A display formula with no blank line around it is part of the
+       paragraph: its lines follow each other without a block gap, as they do
+       in Edit mode. The soft break after the formula would add an empty line. */
+    p .math-display {
+        margin-top: 0;
+    }
+    .math-display + br {
+        display: none;
     }
     /* The final blank of a run shrinks to a small gap so a single authored
        blank plus the next block's margin matches other renderers' paragraph

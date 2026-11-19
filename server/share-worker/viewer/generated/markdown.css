@@ -293,6 +293,15 @@ article.markdown-body > *:first-child { margin-top: 0 !important; }
 p {
     margin: 12.0px 0 0;
 }
+/* A display formula with no blank line around it is part of the
+   paragraph: its lines follow each other without a block gap, as they do
+   in Edit mode. The soft break after the formula would add an empty line. */
+p .math-display {
+    margin-top: 0;
+}
+.math-display + br {
+    display: none;
+}
 /* The final blank of a run shrinks to a small gap so a single authored
    blank plus the next block's margin matches other renderers' paragraph
    rhythm. Earlier blanks in the run keep their natural line height, so
@@ -654,6 +663,8 @@ font-size: 0.88em;
 /* An empty block is a placeholder, not content. */
 .mermaid-figure.mermaid-empty .mermaid { color: var(--secondary); }
 .math-display {
+    /* A formula inside a paragraph is a <span>. */
+    display: block;
     margin: 1.2em 0 0;
     overflow-x: auto;
     overflow-y: hidden;

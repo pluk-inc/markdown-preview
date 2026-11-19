@@ -2431,12 +2431,30 @@ function buildDecorations(view, detectedCodeCache) {
         }
 
         if (MATH_NODES.has(name)) {
+          // A $$…$$ that shares its paragraph with text still gets the card
+          // while it is open, as long as it fills its own lines.
           const standalone = name === "MathBlock" || isStandaloneDisplayMath(node.node.parent)
+            || (name === "DisplayMath" && state.doc.lineAt(node.from).from === node.from
+              && state.doc.lineAt(node.to).to === node.to)
           const open = state.field(mathPreviews).active
           const editing = open != null && open.from === node.from && open.to === node.to
           if (standalone && (editing || currentFindTouches(state, node.from, node.to))) {
             const first = state.doc.lineAt(node.from)
             const last = state.doc.lineAt(node.to)
+            const closing = last.from + last.text.lastIndexOf('$$')
+            // The card already says "formula", so the delimiters are hidden
+            // like a code block's fences. Delimiter lines of a multiline
+            // block collapse unless the caret is on them; an empty block
+            // keeps them, or it would have no line left to show.
+            const ownLines = name === "MathBlock" && last.number - first.number >= 2
+            // A list marker before the opening delimiter keeps its line, or
+            // the bullet would vanish with it: only the `$$` is hidden there.
+            const awayFromOpening = ownLines && !touchesLineOf(first.from)
+            const markerOnOpening = !/^[\s>]*$/.test(first.text.slice(0, node.from - first.from))
+            const hidesOpening = awayFromOpening && !markerOnOpening
+            const hidesClosing = ownLines && !touchesLineOf(last.from)
+            const cardFirst = hidesOpening ? first.number + 1 : first.number
+            const cardLast = hidesClosing ? last.number - 1 : last.number
             const group = Decoration.line({ attributes: {
               'data-code-scroll-group': String(first.from),
               // Include quote/list indentation in the card's measured width.
@@ -2444,16 +2462,24 @@ function buildDecorations(view, detectedCodeCache) {
             } })
             for (let number = first.number; number <= last.number; number++) {
               const line = state.doc.line(number)
-              if (number === first.number) lineOnce(line.from, codeLineFirst)
-              if (number === last.number) lineOnce(line.from, codeLineLast)
-              if (number !== first.number && number !== last.number) lineOnce(line.from, codeLine)
+              if (number < cardFirst || number > cardLast) {
+                lineOnce(line.from, collapsedLine)
+                continue
+              }
+              if (number === cardFirst) lineOnce(line.from, codeLineFirst)
+              if (number === cardLast) lineOnce(line.from, codeLineLast)
+              if (number !== cardFirst && number !== cardLast) lineOnce(line.from, codeLine)
               ranges.push(group.range(line.from))
               if (line.length) ranges.push(codeScrollText.range(line.from, line.to))
             }
-            // The real delimiters identify dollar math without a language picker.
-            ranges.push(fenceMark.range(node.from, node.from + 2))
-            const closing = last.from + last.text.lastIndexOf('$$')
-            ranges.push(fenceMark.range(closing, closing + 2))
+            if (name === "DisplayMath") {
+              ranges.push(hide.range(node.from, node.from + 2))
+              ranges.push(hide.range(closing, closing + 2))
+            } else {
+              if (awayFromOpening && markerOnOpening) ranges.push(hide.range(node.from, node.from + 2))
+              else if (!hidesOpening) ranges.push(fenceMark.range(node.from, node.from + 2))
+              if (!hidesClosing) ranges.push(fenceMark.range(closing, closing + 2))
+            }
           }
           // The subtree is declined below, so a $$ block's quote markers on
           // its later lines are hidden here.
