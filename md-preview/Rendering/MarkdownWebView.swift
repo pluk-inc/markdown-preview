@@ -255,6 +255,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     /// A spare's empty page also loads the math and code renderers, so it
     /// can take most documents without a full page load.
     private let isSpare: Bool
+    private var discardsPendingWarmup = false
 
     convenience init(spare: Bool) {
         self.init(frame: .zero, spare: spare)
@@ -447,6 +448,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         // taken priority over the speculative shell.
         guard renderGeneration == 0,
               !isPageReady,
+              !discardsPendingWarmup,
               loadedFingerprint == nil else { return }
         loadedFingerprint = RendererFingerprint(
             math: rendered.containsMath,
@@ -752,6 +754,8 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     func discardLoadedPage() {
         loadedFingerprint = nil
         isPageReady = false
+        // A warmup still rendering has the settings this call rejects.
+        discardsPendingWarmup = true
     }
 
     /// User theme colors read at render time. The Quick Look extension

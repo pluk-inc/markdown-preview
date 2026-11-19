@@ -874,7 +874,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     /// Shows `folder` with the last file the reader opened in it. A file
     /// that does not open leaves the folder alone in the window, with no
-    /// alert: the reader did not ask for that file.
+    /// alert: the reader did not ask for that file. A document the reader
+    /// opened in the meantime keeps its own folder.
     private func reopen(_ folder: URL) {
         guard let file = FavoriteFolders.lastOpenedFile(in: folder) else {
             return openFolder(folder)
@@ -882,7 +883,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         NSDocumentController.shared.openDocument(withContentsOf: file,
                                                  display: true) { [weak self] document, _, _ in
             guard let self else { return }
-            guard let document else { return self.openFolder(folder) }
+            guard let document else {
+                if NSDocumentController.shared.documents.isEmpty { self.openFolder(folder) }
+                return
+            }
             self.showWindowIfNeeded(for: document)
         }
     }
