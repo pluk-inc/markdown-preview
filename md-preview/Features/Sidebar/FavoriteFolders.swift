@@ -37,10 +37,15 @@ enum FavoriteFolders {
     }
 
     /// The favorite to show when the app has no window: the one the
-    /// navigator showed last, else the first. Nil without a favorite.
+    /// navigator showed last, else the first. Nil without a favorite. For
+    /// a favorite inside another, the outer one, the same root a file in it
+    /// opens with, so the window shows one tree with or without a file.
     static var folderForEmptyApp: URL? {
         let favorites = all.filter(\.isExistingDirectory)
-        return RecentFolders.recorded.first(where: favorites.contains) ?? favorites.first
+        guard let shown = RecentFolders.recorded.first(where: favorites.contains) ?? favorites.first else {
+            return nil
+        }
+        return root(containing: shown, among: favorites)
     }
 
     /// The newest file of File > Open Recent that is inside `folder`.
