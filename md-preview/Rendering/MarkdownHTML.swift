@@ -348,6 +348,7 @@ nonisolated enum MarkdownHTML {
                        strictLineBreaks: Bool = StrictLineBreaksSetting.current,
                        textAlignment: TextAlignmentSetting = .current,
                        warmup: Bool = false,
+                       preloadsMathAndCode: Bool = false,
                        pageTopClearance: CGFloat = 0,
                        chromeZoom: CGFloat = 1,
                        highlightsCode: Bool = true) -> RenderedHTML {
@@ -396,9 +397,12 @@ nonisolated enum MarkdownHTML {
             frontmatterHTML = ""
         }
         let bodyHTML = frontmatterHTML + renderedBodyHTML
-        let containsMath = mathResult.containsMath || footnoteDefinitions.containsMath
+        // A preloading page carries the math and code renderers before it
+        // has content, so later documents that need them can reuse it.
+        let containsMath = preloadsMathAndCode
+            || mathResult.containsMath || footnoteDefinitions.containsMath
         let containsMermaid = mermaidResult.containsMermaid || footnoteDefinitions.containsMermaid
-        let containsCode = detectHighlightableCode(in: bodyHTML)
+        let containsCode = preloadsMathAndCode || detectHighlightableCode(in: bodyHTML)
         let scrollOverride = allowsScroll ? "<style>\n\(scrollOverrideCSS)\n\(inlineOverflowSlackCSS)\n</style>" : ""
         let contentWidthOverride: String
         switch contentWidth {
