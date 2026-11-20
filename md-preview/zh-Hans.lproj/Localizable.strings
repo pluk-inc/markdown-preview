@@ -551,3 +551,18 @@
 "Code Block" = "代码块";
 /* Editor context menu: insert a Markdown table */
 "Insert Table" = "插入表格";
+
+/* Quick Look Setup helper and its Settings row */
+"Quick Look" = "Quick Look";
+"Use for Markdown Files…" = "用于 Markdown 文件…";
+"Turns off other Quick Look extensions that preview Markdown files, so Finder shows the Markdown Preview preview. Open it again to turn them back on." = "关闭其他预览 Markdown 文件的 Quick Look 扩展，使访达显示 Markdown Preview 的预览。再次打开可重新启用这些扩展。";
+"Markdown Preview is the only Quick Look extension turned on for Markdown files." = "Markdown Preview 是唯一一个已为 Markdown 文件启用的 Quick Look 扩展。";
+"These extensions were turned off for it:\n\n%@" = "以下扩展已被其关闭：\n\n%@";
+"Turn Back On" = "重新启用";
+"The Quick Look extensions could not be changed." = "无法更改 Quick Look 扩展。";
+"Markdown Preview is not your default Quick Look preview for Markdown files." = "Markdown Preview 不是 Markdown 文件的默认 Quick Look 预览。";
+"Set Default…" = "设为默认…";
+"Do you want to use %1$@ for Quick Look previews of Markdown files, or keep using %2$@?" = "您想将 %1$@ 用于 Markdown 文件的 Quick Look 预览，还是继续使用 %2$@？";
+"%@ will no longer show Quick Look previews for any file type. You can turn this back on in Settings → Advanced in Markdown Preview." = "%@ 将不再为任何文件类型显示 Quick Look 预览。您可以在 Markdown Preview 的“设置”→“高级”中重新开启此功能。";
+"Keep Current" = "保留当前设置";
+"Set Default" = "设为默认";

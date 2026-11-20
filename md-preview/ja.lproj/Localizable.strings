@@ -551,3 +551,18 @@
 "Code Block" = "コードブロック";
 /* Editor context menu: insert a Markdown table */
 "Insert Table" = "表を挿入";
+
+/* Quick Look Setup helper and its Settings row */
+"Quick Look" = "クイックルック";
+"Use for Markdown Files…" = "Markdownファイルに使用…";
+"Turns off other Quick Look extensions that preview Markdown files, so Finder shows the Markdown Preview preview. Open it again to turn them back on." = "Markdownファイルをプレビューする他のクイックルック拡張機能をオフにして、FinderにMarkdown Previewのプレビューを表示します。もう一度開くと、それらを再びオンにできます。";
+"Markdown Preview is the only Quick Look extension turned on for Markdown files." = "Markdown Previewは、Markdownファイル用にオンになっている唯一のクイックルック拡張機能です。";
+"These extensions were turned off for it:\n\n%@" = "次の拡張機能がこれのためにオフになりました：\n\n%@";
+"Turn Back On" = "再びオンにする";
+"The Quick Look extensions could not be changed." = "クイックルック拡張機能を変更できませんでした。";
+"Markdown Preview is not your default Quick Look preview for Markdown files." = "Markdown PreviewはMarkdownファイルのデフォルトのクイックルックプレビューではありません。";
+"Set Default…" = "デフォルトに設定…";
+"Do you want to use %1$@ for Quick Look previews of Markdown files, or keep using %2$@?" = "Markdownファイルのクイックルックプレビューに%1$@を使用しますか？それとも%2$@を使い続けますか？";
+"%@ will no longer show Quick Look previews for any file type. You can turn this back on in Settings → Advanced in Markdown Preview." = "%@は、すべてのファイルタイプでクイックルックプレビューを表示しなくなります。Markdown Previewの「設定」→「詳細設定」で再びオンにできます。";
+"Keep Current" = "現在の設定を維持";
+"Set Default" = "デフォルトに設定";
