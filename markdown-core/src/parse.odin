@@ -289,6 +289,15 @@ split_cells :: proc(line: string, out: ^[dynamic]string) {
 	append(out, strings.trim_space(s[start:]))
 }
 
+// A short file can ask for rows x columns cells without the text for them.
+MAX_TABLE_CELLS :: 50_000
+
+cell_count :: proc(line: string) -> int {
+	cells := make([dynamic]string, context.temp_allocator)
+	split_cells(line, &cells)
+	return len(cells)
+}
+
 parse_table :: proc(ctx: ^Ctx, lines: []string) {
 	b := Block {
 		kind         = .Table,
@@ -306,6 +315,9 @@ parse_table :: proc(ctx: ^Ctx, lines: []string) {
 	for line, row in lines {
 		if row == 1 {
 			continue
+		}
+		if len(b.cells) + b.ncols > MAX_TABLE_CELLS {
+			break
 		}
 		clear(&cells)
 		split_cells(line, &cells)
@@ -377,7 +389,7 @@ parse_document :: proc(ctx: ^Ctx, src: string) {
 			in_fence = !in_fence
 			continue
 		}
-		if in_fence || i + 1 >= len(lines) || !strings.contains_rune(lines[i], '|') || !is_delimiter_row(lines[i + 1]) {
+		if in_fence || i + 1 >= len(lines) || !strings.contains_rune(lines[i], '|') || !is_delimiter_row(lines[i + 1]) || cell_count(lines[i]) != cell_count(lines[i + 1]) {
 			continue
 		}
 		end := i + 2

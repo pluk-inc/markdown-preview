@@ -346,6 +346,8 @@ final class ContentViewController: NSViewController {
         exportSource = nil
         resetScrollspy()
         webView.clearContent()
+        deferredNativeMarkdown = nil
+        nativeRenderer?.open("")
     }
 
     private var loadingOverlay: DocumentLoadingOverlayView?

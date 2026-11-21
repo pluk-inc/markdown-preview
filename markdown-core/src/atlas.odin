@@ -12,6 +12,7 @@ GRAY_W :: 1024
 GRAY_H :: 2048
 COLR_W :: 512
 COLR_H :: 512
+ATLAS_MAX_H :: 16384 // the largest Metal texture
 
 Glyph_Key :: struct {
 	font:  u16,
@@ -34,6 +35,8 @@ Atlas :: struct {
 	// Rows written since the last upload; empty when y1 <= y0.
 	dirty_y0:     int,
 	dirty_y1:     int,
+	// The height changed, so the texture must be made again.
+	grew:         bool,
 }
 
 atlas_alloc :: proc(a: ^Atlas, w, h: int) -> (x, y: int, ok: bool) {
@@ -42,8 +45,22 @@ atlas_alloc :: proc(a: ^Atlas, w, h: int) -> (x, y: int, ok: bool) {
 		a.pen_y += a.row_h
 		a.row_h = 0
 	}
-	if a.pen_y + h > a.h || w > a.w {
+	if w > a.w {
 		return 0, 0, false
+	}
+	// Full: double the height. Quads keep their place, because they hold
+	// atlas pixels, not fractions of the atlas.
+	for a.pen_y + h > a.h {
+		if a.h * 2 > ATLAS_MAX_H {
+			return 0, 0, false
+		}
+		grown := make([]u8, a.w * a.h * 2 * a.bpp)
+		copy(grown, a.pixels[:min(len(a.pixels), a.w * a.h * a.bpp)])
+		delete(a.pixels)
+		a.pixels = grown
+		a.h *= 2
+		a.grew = true
+		a.dirty_y0, a.dirty_y1 = 0, a.pen_y + a.row_h
 	}
 	x, y = a.pen_x, a.pen_y
 	a.pen_x += w
@@ -82,8 +99,8 @@ atlas_prepare :: proc(ctx: ^Ctx) {
 
 	// Empty atlases; `rasterize` allocates the pixels of one on first use.
 	clear(&ctx.cache)
-	ctx.gray = Atlas{w = GRAY_W, h = GRAY_H, bpp = 1, pixels = ctx.gray.pixels, dirty_y0 = GRAY_H}
-	ctx.colr = Atlas{w = COLR_W, h = COLR_H, bpp = 4, pixels = ctx.colr.pixels, dirty_y0 = COLR_H}
+	ctx.gray = Atlas{w = GRAY_W, h = GRAY_H, bpp = 1, pixels = ctx.gray.pixels, dirty_y0 = GRAY_H, grew = true}
+	ctx.colr = Atlas{w = COLR_W, h = COLR_H, bpp = 4, pixels = ctx.colr.pixels, dirty_y0 = COLR_H, grew = true}
 }
 
 atlas_destroy :: proc(ctx: ^Ctx) {
@@ -138,7 +155,8 @@ rasterize :: proc(ctx: ^Ctx, fid: u16, glyph: CG.Glyph, bin: u8) -> Glyph_Entry 
 	h := min(int(y1 - y0), SCRATCH)
 
 	atlas := rf.is_color ? &ctx.colr : &ctx.gray
-	if atlas.pixels == nil {
+	if len(atlas.pixels) < atlas.w * atlas.h * atlas.bpp {
+		delete(atlas.pixels)
 		atlas.pixels = make([]u8, atlas.w * atlas.h * atlas.bpp)
 	}
 	ax, ay, ok := atlas_alloc(atlas, w, h)

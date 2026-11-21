@@ -5,7 +5,7 @@ using namespace metal;
 struct Instance {
     packed_float2 pos;
     packed_float2 size;
-    packed_float2 uv;      // glyphs: atlas origin (0..1). rects: x = corner radius in px
+    packed_float2 uv;      // glyphs: atlas origin in px. rects: x = corner radius in px
     packed_float2 uvsize;
     uint color;            // r,g,b,a bytes
     uint kind;             // 0 solid rect, 1 gray glyph, 2 color glyph
@@ -48,13 +48,12 @@ vertex VOut vs_main(uint vid [[vertex_id]], uint iid [[instance_id]],
 fragment float4 fs_main(VOut in [[stage_in]],
                         texture2d<float> gray [[texture(0)]],
                         texture2d<float> color [[texture(1)]]) {
-    constexpr sampler s(filter::nearest, address::clamp_to_edge);
     if (in.kind == 1) {
-        float a = gray.sample(s, in.uv).r * in.color.a;
+        float a = gray.read(uint2(in.uv)).r * in.color.a;
         return float4(in.color.rgb * a, a);
     }
     if (in.kind == 2) {
-        return color.sample(s, in.uv);
+        return color.read(uint2(in.uv));
     }
     float a = in.color.a;
     if (in.radius > 0.0) {

@@ -68,8 +68,8 @@ emit_line :: proc(ctx: ^Ctx, t: ^Text, line: CT.LineRef, lx, top, baseline: f32)
 				Instance {
 					pos = {fx + f32(e.bx), py - f32(e.top)},
 					size = {f32(e.w), f32(e.h)},
-					uv = {f32(e.x) / f32(atlas.w), f32(e.y) / f32(atlas.h)},
-					uvsize = {f32(e.w) / f32(atlas.w), f32(e.h) / f32(atlas.h)},
+					uv = {f32(e.x), f32(e.y)},
+					uvsize = {f32(e.w), f32(e.h)},
 					color = span_at(t, int(ctx.tmp_idx[k])).color,
 					kind = e.is_color ? 2 : 1,
 				},
@@ -188,6 +188,7 @@ layout_table :: proc(ctx: ^Ctx, b: ^Block, x, y, width: f32) -> f32 {
 layout_begin :: proc(ctx: ^Ctx) {
 	clear(&ctx.rects)
 	clear(&ctx.glyphs)
+	gpu_reset_quads(ctx)
 	free_lines(ctx)
 	ctx.text_order = 0
 	atlas_prepare(ctx)

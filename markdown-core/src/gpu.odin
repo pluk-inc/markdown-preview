@@ -78,9 +78,6 @@ Gpu_Quads :: struct {
 
 @(private = "file")
 quads_sync :: proc(q: ^Gpu_Quads, src: []Instance) {
-	if len(src) < q.count {
-		q.count = 0 // a new layout started
-	}
 	if len(src) > q.capacity {
 		if q.buffer != nil {
 			objc_release(q.buffer)
@@ -135,6 +132,11 @@ upload_atlas :: proc(atlas: ^Atlas, tex: ^^MTL.Texture, format: MTL.PixelFormat)
 	if atlas.dirty_y1 <= atlas.dirty_y0 || atlas.pixels == nil {
 		return
 	}
+	if atlas.grew && tex^ != nil {
+		objc_release(tex^)
+		tex^ = nil
+	}
+	atlas.grew = false
 	if tex^ == nil {
 		desc := MTL.TextureDescriptor.texture2DDescriptorWithPixelFormat(format, NS.UInteger(atlas.w), NS.UInteger(atlas.h), false)
 		tex^ = shared.device->newTextureWithDescriptor(desc)
@@ -143,6 +145,13 @@ upload_atlas :: proc(atlas: ^Atlas, tex: ^^MTL.Texture, format: MTL.PixelFormat)
 	region := MTL.Region{{0, NS.UInteger(y0), 0}, {NS.UInteger(atlas.w), NS.UInteger(rows), 1}}
 	tex^->replaceRegion(region, 0, &atlas.pixels[y0 * atlas.w * atlas.bpp], NS.UInteger(atlas.w * atlas.bpp))
 	atlas.dirty_y0, atlas.dirty_y1 = atlas.h, 0
+}
+
+// A new layout started: nothing on the GPU is from it, also when it makes
+// as many quads as the last one.
+gpu_reset_quads :: proc(ctx: ^Ctx) {
+	ctx.rect_quads.count = 0
+	ctx.glyph_quads.count = 0
 }
 
 // Sends what the layout added: new atlas rows and new quads.
