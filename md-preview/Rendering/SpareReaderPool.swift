@@ -19,8 +19,10 @@ final class SpareReaderPool {
     private var spare: MarkdownWebView?
     private var spareSettings: ReaderRenderSettings?
 
+    /// Off for A/B timing, and while the native renderer draws documents:
+    /// a spare would start WebKit for a page nobody shows.
     private var isEnabled: Bool {
-        !UserDefaults.standard.bool(forKey: Self.disabledDefaultsKey)
+        !UserDefaults.standard.bool(forKey: Self.disabledDefaultsKey) && RendererSetting.current == .web
     }
 
     /// Hands over the spare, or a fresh reader when there is none. A spare

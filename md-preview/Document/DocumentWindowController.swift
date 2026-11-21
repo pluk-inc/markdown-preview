@@ -477,6 +477,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         LaunchSignposts.interval("commitFirstFrame") {
             CATransaction.flush()
         }
+        // The native renderer draws now, in the turn that showed the window,
+        // and its frame is committed at once: the window does not wait for
+        // the document, and the document does not wait for the launch turn.
+        if (documentWindow.contentViewController as? MainSplitViewController)?.showDeferredNativeRenderer() == true {
+            CATransaction.flush()
+        }
         #if DEBUG
         Logger.perf.debug(
             "[mdp-perf-open] window-shown t=\(DispatchTime.now().uptimeNanoseconds, privacy: .public)"

@@ -347,6 +347,9 @@
 /* App link approvals */
 "Reset App Link Approvals" = "Freigaben für App-Links zurücksetzen";
 "App links" = "App-Links";
+"Renderer" = "Renderer";
+"Use the experimental native renderer" = "Experimentellen nativen Renderer verwenden";
+"Opens documents faster and uses less memory. It does not have images, math, diagrams, code colors, Find, Edit Mode, zoom, themes, or export yet." = "Öffnet Dokumente schneller und benötigt weniger Speicher. Bilder, Formeln, Diagramme, Code-Farben, Suchen, Bearbeitungsmodus, Zoomen, Themes und Exportieren fehlen noch.";
 "Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look." = "Vor dem Öffnen benutzerdefinierter App-Links erneut fragen. Freigaben werden pro URL-Schema gespeichert und mit Quick Look geteilt.";
 "No application can open this link" = "Keine App kann diesen Link öffnen";
 "OK" = "OK";

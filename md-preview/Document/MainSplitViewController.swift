@@ -123,6 +123,12 @@ final class MainSplitViewController: NSSplitViewController {
         contentViewController?.hasPaintedFirstDocument ?? true
     }
 
+    /// Draws a native-renderer document that waited for the window's first
+    /// frame. Returns false when nothing waited.
+    func showDeferredNativeRenderer() -> Bool {
+        contentViewController?.showDeferredNativeRenderer() ?? false
+    }
+
     func showSnapshot(_ prefetch: DocumentSnapshotCache.Prefetch) {
         contentViewController?.showSnapshot(prefetch)
     }

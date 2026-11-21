@@ -116,10 +116,13 @@ UTI: `net.daringfireball.markdown`
 ## Building from source
 
 ```sh
+brew install odin
 git clone git@github.com:pluk-inc/markdown-preview.git
 cd markdown-preview
 open markdown-preview.xcodeproj
 ```
+
+The build needs the [Odin](https://odin-lang.org) compiler for the experimental native renderer in [`markdown-core/`](markdown-core/README.md). Turn that renderer on in Settings → Advanced; the web view is the default.
 
 Build and run the `markdown-preview` scheme. Swift Package Manager will resolve [Sparkle](https://github.com/sparkle-project/Sparkle), [Sentry](https://github.com/getsentry/sentry-cocoa), and [swift-markdown](https://github.com/swiftlang/swift-markdown) on first build.
 

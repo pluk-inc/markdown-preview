@@ -347,6 +347,9 @@
 /* App link approvals */
 "Reset App Link Approvals" = "Reset App Link Approvals";
 "App links" = "App links";
+"Renderer" = "Renderer";
+"Use the experimental native renderer" = "Use the experimental native renderer";
+"Opens documents faster and uses less memory. It does not have images, math, diagrams, code colors, Find, Edit Mode, zoom, themes, or export yet." = "Opens documents faster and uses less memory. It does not have images, math, diagrams, code colors, Find, Edit Mode, zoom, themes, or export yet.";
 "Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look." = "Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look.";
 "No application can open this link" = "No application can open this link";
 "OK" = "OK";

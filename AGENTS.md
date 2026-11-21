@@ -150,5 +150,8 @@ See the `release-process` skill for branch/PR naming, exactly what `scripts/rele
 xcodebuild -project md-preview.xcodeproj -scheme md-preview -configuration Debug build
 xcodebuild -resolvePackageDependencies -project md-preview.xcodeproj
 ```
+The app build compiles `markdown-core/` (the experimental native renderer,
+written in Odin) in its "Build Markdown Core" phase, so it needs the Odin
+compiler: `brew install odin`. See `markdown-core/README.md`.
 Sparkle helper tools (sign_update / generate_keys / generate_appcast) live at:
 `~/Library/Developer/Xcode/DerivedData/md-preview-*/SourcePackages/artifacts/sparkle/Sparkle/bin/`

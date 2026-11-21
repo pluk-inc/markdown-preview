@@ -347,6 +347,9 @@
 /* App link approvals */
 "Reset App Link Approvals" = "重置应用链接授权";
 "App links" = "应用链接";
+"Renderer" = "渲染器";
+"Use the experimental native renderer" = "使用实验性原生渲染器";
+"Opens documents faster and uses less memory. It does not have images, math, diagrams, code colors, Find, Edit Mode, zoom, themes, or export yet." = "打开文稿更快，占用内存更少。目前尚不支持图像、数学公式、图表、代码着色、查找、编辑模式、缩放、主题和导出。";
 "Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look." = "打开自定义应用链接前重新询问。授权按 URL 协议保存，并与快速查看共享。";
 "No application can open this link" = "没有可打开此链接的应用";
 "OK" = "好";

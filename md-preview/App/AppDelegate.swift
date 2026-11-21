@@ -630,6 +630,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         reloadDocumentPreviewsForSettingChange()
     }
 
+    /// Open documents show again with the chosen renderer.
+    func applyRendererSetting(_ setting: RendererSetting) {
+        guard setting != RendererSetting.current else { return }
+        RendererSetting.current = setting
+        reloadDocumentPreviewsForSettingChange()
+    }
+
     func applyContentWidthSetting(_ setting: ContentWidthSetting) {
         guard setting != ContentWidthSetting.current else { return }
         ContentWidthSetting.current = setting

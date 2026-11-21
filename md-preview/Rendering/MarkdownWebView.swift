@@ -257,6 +257,20 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     private let isSpare: Bool
     private var discardsPendingWarmup = false
 
+    /// True while another renderer shows the document. Nothing then loads
+    /// or wakes the page: no warmup shell, no `display()`, and scripts fail
+    /// at once, because a script sent to a web view without a page starts
+    /// WebKit's helper processes just to run on an empty document. A page
+    /// that was loaded before stays in memory until the window closes, and
+    /// the next `display()` loads a fresh one.
+    var suppressesPageLoads = false {
+        didSet {
+            guard suppressesPageLoads != oldValue else { return }
+            (webView as? PreviewWKWebView)?.rejectsScripts = suppressesPageLoads
+            if suppressesPageLoads { discardLoadedPage() }
+        }
+    }
+
     convenience init(spare: Bool) {
         self.init(frame: .zero, spare: spare)
     }
@@ -423,6 +437,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         // Markdown render on cold open.
         guard renderGeneration == 0,
               !isPageReady,
+              !suppressesPageLoads,
               loadedFingerprint == nil else { return }
         let baseHref = MarkdownAssetResolution.rootBaseHref
         let markdown = Self.warmupMarkdown
@@ -447,6 +462,7 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         // Another display() may have arrived during the off-main render and
         // taken priority over the speculative shell.
         guard renderGeneration == 0,
+              !suppressesPageLoads,
               !isPageReady,
               !discardsPendingWarmup,
               loadedFingerprint == nil else { return }
@@ -574,6 +590,9 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
         pendingContentProcessReload?.cancel()
         pendingContentProcessReload = nil
         currentMarkdown = markdown
+        // Also covers the reloads that end here: a setting change, and a
+        // WebContent process that went away.
+        guard !suppressesPageLoads else { return }
         isPointerOverMermaidFigure = false
         #if !QUICK_LOOK_EXTENSION
         if #available(macOS 26.0, *) { (blockHUD as? BlockGlassHUD)?.hide() }
@@ -1903,6 +1922,20 @@ extension MarkdownWebView: NSMenuItemValidation {
 
 private final class PreviewWKWebView: WKWebView {
     var didAddSubviewHandler: (() -> Void)?
+    /// See `MarkdownWebView.suppressesPageLoads`.
+    var rejectsScripts = false
+
+    override func evaluateJavaScript(
+        _ javaScriptString: String,
+        completionHandler: (@MainActor @Sendable (Any?, (any Error)?) -> Void)? = nil
+    ) {
+        guard !rejectsScripts else {
+            // Callers that wait for a result get an answer.
+            completionHandler?(nil, CocoaError(.featureUnsupported))
+            return
+        }
+        super.evaluateJavaScript(javaScriptString, completionHandler: completionHandler)
+    }
 
     override func didAddSubview(_ subview: NSView) {
         super.didAddSubview(subview)
