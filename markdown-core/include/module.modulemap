@@ -1,0 +1,5 @@
+// Lets Swift import the C API of the Markdown core: `import MDCore`.
+module MDCore {
+    header "mdcore.h"
+    export *
+}

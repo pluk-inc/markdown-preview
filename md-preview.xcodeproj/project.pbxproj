@@ -222,6 +222,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 9A0207D02FA0ED7D00092060 /* Build configuration list for PBXNativeTarget "md-preview" */;
 			buildPhases = (
+				9AC0DE012FC0000100010001 /* Build Markdown Core */,
 				9A0207BD2FA0ED7C00092060 /* Sources */,
 				9A0207BE2FA0ED7C00092060 /* Frameworks */,
 				9A0207BF2FA0ED7C00092060 /* Resources */,
@@ -343,6 +344,27 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		9AC0DE012FC0000100010001 /* Build Markdown Core */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build Markdown Core";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/libmdcore.a",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# The script skips the build when the Odin source did not change.\n\"$SRCROOT/markdown-core/build.sh\" \"$DERIVED_FILE_DIR\"\n";
+			showEnvVarsInLog = 0;
+		};
 		9A7B10042FB0000100010001 /* Upload dSYMs to Sentry */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -542,6 +564,7 @@
 				DEVELOPMENT_TEAM = 5P3TSMNV42;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
@@ -555,6 +578,12 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"$(DERIVED_FILE_DIR)/libmdcore.a",
+					"-framework",
+					Metal,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-preview.dev";
 				PRODUCT_NAME = "Markdown Preview";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -563,6 +592,7 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/markdown-core/include";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 			};
@@ -581,6 +611,7 @@
 				DEVELOPMENT_TEAM = 5P3TSMNV42;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
@@ -594,6 +625,12 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"$(DERIVED_FILE_DIR)/libmdcore.a",
+					"-framework",
+					Metal,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "doc.md-preview";
 				PRODUCT_NAME = "Markdown Preview";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -602,6 +639,7 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/markdown-core/include";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 			};

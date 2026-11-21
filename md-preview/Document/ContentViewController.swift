@@ -89,6 +89,7 @@ final class ContentViewController: NSViewController {
 
         webView = SpareReaderPool.shared.takeReader()
         webView.translatesAutoresizingMaskIntoConstraints = false
+        webView.suppressesPageLoads = RendererSetting.current == .native
         webView.heightDidChange = { [weak self] _ in
             guard let self else { return }
             // Image load / font reflow shifted layout — re-measure offsets.
@@ -252,9 +253,86 @@ final class ContentViewController: NSViewController {
             scheduleNavigationTargetAttempt()
         }
         resetScrollspy()
+        if RendererSetting.current == .native {
+            // The saved picture of the web page is not this renderer's page.
+            removeSnapshotOverlay()
+            showNativeRenderer(markdown: markdown)
+            // Nothing waits for the web page: the launch pump can stop.
+            hasPaintedFirstDocument = true
+            return
+        }
+        removeNativeRenderer()
         webView.display(markdown: markdown, assetBaseURL: assetBaseURL,
                         renderImmediately: renderImmediately)
         scheduleHeadingOffsetsRefresh()
+    }
+
+    // MARK: - Experimental native renderer
+
+    private var nativeRenderer: NativeRendererView?
+    /// The document the native renderer draws right after the window's
+    /// first frame. Its parse, layout and Metal setup would otherwise hold
+    /// that frame back.
+    private var deferredNativeMarkdown: String?
+
+    private func showNativeRenderer(markdown: String) {
+        webView.suppressesPageLoads = true
+        // A visible WKWebView keeps WebKit's GPU process busy for nothing.
+        webView.isHidden = true
+        guard view.window?.isVisible == true else {
+            deferredNativeMarkdown = markdown
+            // The window controller draws it right after its first frame.
+            // This is for a window that comes on screen another way.
+            DispatchQueue.main.async { [weak self] in self?.showDeferredNativeRenderer() }
+            return
+        }
+        drawNativeRenderer(markdown: markdown)
+    }
+
+    /// Draws the document that waited for the window's first frame.
+    /// Returns false when nothing waited.
+    @discardableResult
+    func showDeferredNativeRenderer() -> Bool {
+        guard let markdown = deferredNativeMarkdown else { return false }
+        deferredNativeMarkdown = nil
+        drawNativeRenderer(markdown: markdown)
+        return true
+    }
+
+    private func drawNativeRenderer(markdown: String) {
+        if nativeRenderer == nil {
+            let renderer = NativeRendererView(frame: view.bounds)
+            renderer.translatesAutoresizingMaskIntoConstraints = false
+            view.addSubview(renderer)
+            NSLayoutConstraint.activate([
+                renderer.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+                renderer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                renderer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                renderer.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            ])
+            nativeRenderer = renderer
+            // The scroll keys must work without a click first, as they do
+            // in the web view. Leave a sidebar or field selection alone.
+            if let window = view.window,
+               window.firstResponder === window
+                || (window.firstResponder as? NSView)?.isDescendant(of: webView) == true {
+                window.makeFirstResponder(renderer)
+            }
+        }
+        nativeRenderer?.open(markdown)
+    }
+
+    private func removeNativeRenderer() {
+        deferredNativeMarkdown = nil
+        webView.suppressesPageLoads = false
+        webView.isHidden = false
+        nativeRenderer?.removeFromSuperview()
+        nativeRenderer = nil
+    }
+
+    /// True while the native renderer shows, or is about to show, the document.
+    private var isShowingNativeRenderer: Bool {
+        nativeRenderer != nil || deferredNativeMarkdown != nil
     }
 
     /// True once the first document's frame has been presented (two
@@ -375,8 +453,10 @@ final class ContentViewController: NSViewController {
         webView.printDocument(assetBaseURL: source.assetBaseURL, from: window, completion: completion)
     }
 
+    /// Print and export read the web page, which the native renderer
+    /// does not load.
     var hasExportableDocument: Bool {
-        exportSource != nil
+        exportSource != nil && !isShowingNativeRenderer
     }
 
     func exportDocument() {
@@ -464,7 +544,8 @@ final class ContentViewController: NSViewController {
     /// Covers the reader with the saved image of this document, if it
     /// matches what the page will look like. Call before the window shows.
     func showSnapshot(_ prefetch: DocumentSnapshotCache.Prefetch) {
-        guard snapshotOverlay == nil,
+        guard RendererSetting.current == .web,
+              snapshotOverlay == nil,
               let expected = snapshotMetadata(contentHash: prefetch.contentHash),
               let image = DocumentSnapshotCache.shared.image(for: prefetch, expected: expected),
               let container = webView.superview else { return }
@@ -565,6 +646,11 @@ final class ContentViewController: NSViewController {
 
     func reloadPreviewForSettingChange() {
         applyContentWidthMode()
+        // The renderer itself changed: show the document again with it.
+        if (RendererSetting.current == .native) != isShowingNativeRenderer, let source = exportSource {
+            display(markdown: source.markdown, sourceURL: source.sourceURL, assetBaseURL: source.assetBaseURL)
+            return
+        }
         webView.reloadPreviewForSettingChange()
     }
 
