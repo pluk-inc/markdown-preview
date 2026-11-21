@@ -10,37 +10,6 @@ import cm "vendor:commonmark"
 @(rodata)
 HEADING_SCALE := [7]f32{1, 2, 1.692, 1.308, 1.154, 1, 0.846}
 
-style_font :: proc(ctx: ^Ctx, kind: Font_Kind, size: f32) -> CT.FontRef {
-	for f in ctx.style_fonts {
-		if f.kind == kind && f.size == size {
-			return f.font
-		}
-	}
-	font: CT.FontRef
-	switch kind {
-	case .Regular:
-		font = CT.FontCreateUIFontForLanguage(.System, f64(size), nil)
-	case .Semibold:
-		name := CF.StringCreateWithCString(nil, ".AppleSystemUIFontDemi", UTF8)
-		font = CT.FontCreateWithName(name, f64(size), nil)
-		CF.Release(CF.TypeRef(name))
-	case .Bold:
-		font = CT.FontCreateUIFontForLanguage(.EmphasizedSystem, f64(size), nil)
-	case .Italic, .Bold_Italic:
-		base := style_font(ctx, kind == .Italic ? .Regular : .Bold, size)
-		font = CT.FontCreateCopyWithSymbolicTraits(base, f64(size), nil, {.Italic}, {.Italic})
-		if font == nil {
-			font = CT.FontRef(CF.Retain(CF.TypeRef(base)))
-		}
-	case .Mono:
-		name := CF.StringCreateWithCString(nil, ".AppleSystemUIFontMonospaced-Regular", UTF8)
-		font = CT.FontCreateWithName(name, f64(size), nil)
-		CF.Release(CF.TypeRef(name))
-	}
-	append(&ctx.style_fonts, Style_Font{kind, size, font})
-	return font
-}
-
 UTF8 :: CF.StringEncoding(CF.StringBuiltInEncodings.UTF8)
 
 text_init :: proc(t: ^Text, size: f32, line_height: f32) {
@@ -101,12 +70,12 @@ inline_font :: proc(p: ^Parser) -> CT.FontRef {
 
 inline_color :: proc(p: ^Parser) -> Color {
 	if p.link > 0 {
-		return LINK_COLOR
+		return p.ctx.style.link
 	}
 	if p.quote > 0 || p.image > 0 {
-		return SECONDARY_COLOR
+		return p.ctx.style.secondary
 	}
-	return TEXT_COLOR
+	return p.ctx.style.text
 }
 
 begin_text_block :: proc(p: ^Parser, heading: int) {
@@ -116,25 +85,25 @@ begin_text_block :: proc(p: ^Parser, heading: int) {
 	p.block = Block {
 		kind        = .Text,
 		quote_depth = p.quote,
-		indent      = f32(len(p.lists)) * LIST_INDENT,
+		indent      = f32(len(p.lists)) * p.ctx.m.list_indent,
 	}
-	p.size = BODY_SIZE * HEADING_SCALE[heading]
+	p.size = p.ctx.m.body * HEADING_SCALE[heading]
 	p.base_bold = heading > 0
 	if heading > 0 {
 		text_init(&p.block.text, p.size, p.size * HEADING_LINE_HEIGHT)
-		p.block.space_before = 0.6 * BODY_SIZE + 0.5 * p.size
+		p.block.space_before = 0.6 * p.ctx.m.body + 0.5 * p.size
 	} else {
-		text_init(&p.block.text, p.size, p.size * BODY_LINE_HEIGHT)
+		text_init(&p.block.text, p.size, math.round(p.size * p.ctx.m.line_height))
 		// A later paragraph of a list item sits closer than a new paragraph.
-		p.block.space_before = len(p.lists) > 0 ? LIST_ITEM_SPACING * 2 : PARAGRAPH_SPACING
+		p.block.space_before = len(p.lists) > 0 ? p.ctx.m.list_item * 2 : p.ctx.m.paragraph
 	}
 	if p.item_start && len(p.lists) > 0 {
 		list := p.lists[len(p.lists) - 1]
-		p.block.space_before = p.list_start ? PARAGRAPH_SPACING : LIST_ITEM_SPACING
+		p.block.space_before = p.list_start ? p.ctx.m.paragraph : p.ctx.m.list_item
 		p.list_start = false
-		text_init(&p.block.marker, BODY_SIZE, BODY_SIZE * BODY_LINE_HEIGHT)
+		text_init(&p.block.marker, p.ctx.m.body, math.round(p.ctx.m.body * p.ctx.m.line_height))
 		label := list.ordered ? fmt.tprintf("%d.", list.n) : "•"
-		text_append(&p.block.marker, label, style_font(p.ctx, .Regular, BODY_SIZE), SECONDARY_COLOR)
+		text_append(&p.block.marker, label, style_font(p.ctx, .Regular, p.ctx.m.body), p.ctx.style.secondary)
 	}
 	p.item_start = false
 	p.cur = &p.block.text
@@ -149,7 +118,7 @@ end_text_block :: proc(p: ^Parser) {
 		p.block = {}
 		p.cur = nil
 		p.base_bold = false
-		p.size = BODY_SIZE
+		p.size = p.ctx.m.body
 	}
 }
 
@@ -222,16 +191,16 @@ walk :: proc(p: ^Parser, src: string) {
 			b := Block {
 				kind         = .Code,
 				quote_depth  = p.quote,
-				indent       = f32(len(p.lists)) * LIST_INDENT,
-				space_before = PARAGRAPH_SPACING,
+				indent       = f32(len(p.lists)) * p.ctx.m.list_indent,
+				space_before = p.ctx.m.paragraph,
 			}
-			text_init(&b.text, CODE_SIZE, math.round(f32(CODE_SIZE * 1.3)))
+			text_init(&b.text, p.ctx.m.code_size, math.round(p.ctx.m.code_size * 1.3))
 			code := strings.trim_right(string(cm.node_get_literal(node)), "\n")
-			text_append(&b.text, code, style_font(p.ctx, .Mono, CODE_SIZE), TEXT_COLOR)
+			text_append(&b.text, code, style_font(p.ctx, .Mono, p.ctx.m.code_size), p.ctx.style.text)
 			append(&p.ctx.blocks, b)
 		case .Thematic_Break:
 			if !p.inline_only {
-				append(&p.ctx.blocks, Block{kind = .Rule, quote_depth = p.quote, space_before = PARAGRAPH_SPACING})
+				append(&p.ctx.blocks, Block{kind = .Rule, quote_depth = p.quote, space_before = p.ctx.m.paragraph})
 			}
 		case .Text, .Soft_Break, .Line_Break:
 			if p.cur != nil {
@@ -304,7 +273,7 @@ cell_count :: proc(line: string) -> int {
 parse_table :: proc(ctx: ^Ctx, lines: []string) {
 	b := Block {
 		kind         = .Table,
-		space_before = BODY_SIZE * 1.6,
+		space_before = ctx.m.large_block,
 	}
 	cells: [dynamic]string
 	defer delete(cells)
@@ -330,12 +299,12 @@ parse_table :: proc(ctx: ^Ctx, lines: []string) {
 		split_cells(line, &cells)
 		for col in 0 ..< b.ncols {
 			cell: Text
-			text_init(&cell, BODY_SIZE, BODY_SIZE * BODY_LINE_HEIGHT)
+			text_init(&cell, ctx.m.body, math.round(ctx.m.body * ctx.m.line_height))
 			if col < len(cells) {
 				p := Parser {
 					ctx         = ctx,
 					inline_only = true,
-					size        = BODY_SIZE,
+					size        = ctx.m.body,
 					base_bold   = row == 0,
 				}
 				p.cur = &cell
@@ -382,7 +351,7 @@ parse_document :: proc(ctx: ^Ctx, src: string) {
 	flush :: proc(ctx: ^Ctx, src: string, refs: string) {
 		p := Parser {
 			ctx  = ctx,
-			size = BODY_SIZE,
+			size = ctx.m.body,
 		}
 		walk(&p, refs == "" ? src : strings.concatenate({src, refs}, context.temp_allocator))
 		delete(p.lists)

@@ -32,3 +32,33 @@ extension DocumentFontSetting {
         }
     }
 }
+
+extension DocumentFontSetting {
+    /// The AppKit face for the native renderer, which draws with CoreText
+    /// and so cannot use the CSS stack.
+    func nsFont(size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
+        let system = NSFont.systemFont(ofSize: size, weight: weight)
+        func designed(_ design: NSFontDescriptor.SystemDesign) -> NSFont {
+            system.fontDescriptor.withDesign(design).flatMap { NSFont(descriptor: $0, size: size) } ?? system
+        }
+        func family(_ name: String) -> NSFont {
+            // NSFontManager weights: 5 is regular, 9 is bold.
+            let managerWeight = weight.rawValue >= NSFont.Weight.semibold.rawValue ? 9 : 5
+            return NSFontManager.shared.font(withFamily: name, traits: [], weight: managerWeight, size: size) ?? system
+        }
+        switch self {
+        case .system: return system
+        case .athelas: return family("Athelas")
+        case .avenirNext: return family("Avenir Next")
+        case .charter: return family("Charter")
+        case .georgia: return family("Georgia")
+        case .iowan: return family("Iowan Old Style")
+        case .newYork: return designed(.serif)
+        case .palatino: return family("Palatino")
+        case .rounded: return designed(.rounded)
+        case .seravek: return family("Seravek")
+        case .timesNewRoman: return family("Times New Roman")
+        case .monospace: return designed(.monospaced)
+        }
+    }
+}

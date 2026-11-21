@@ -8,12 +8,46 @@
 #define MDCORE_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 // Creates a renderer that draws into the given CAMetalLayer.
 void *mdcore_create(void *metal_layer);
 
 // Frees the renderer. The layer stays with the host.
 void mdcore_destroy(void *ctx);
+
+// A color: red, green, blue, alpha, not premultiplied.
+typedef struct {
+    uint8_t r, g, b, a;
+} mdcore_color;
+
+// The reader style. The fonts are CTFont objects at any size; the core makes
+// the sizes it needs and keeps its own reference. A null bold or heading font
+// falls back on the body font, and a null body or code font on the system's.
+typedef struct {
+    const void *body_font;
+    const void *bold_font;
+    const void *heading_font;
+    const void *code_font;
+    double body_size;     // points
+    double line_height;   // multiple of the body size
+    double column_width;  // points; 0 = the full width of the view
+    double page_padding;  // points, left and right
+    mdcore_color text;
+    mdcore_color secondary;
+    mdcore_color link;
+    mdcore_color code_background;
+    mdcore_color code_border;
+    mdcore_color rule;
+    mdcore_color quote_bar;
+    mdcore_color selection;
+} mdcore_style;
+
+// Sets the reader style and parses the document again with it. Call
+// mdcore_resize after it to lay it out. A renderer without a style uses the
+// system fonts and the app's light palette. The page background is not part
+// of the style: the core draws on a transparent layer.
+void mdcore_set_style(void *ctx, const mdcore_style *style);
 
 // Replaces the document. Call mdcore_resize after it to lay it out.
 void mdcore_set_markdown(void *ctx, const char *utf8, long length);

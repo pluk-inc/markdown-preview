@@ -199,7 +199,8 @@ gpu_draw :: proc(ctx: ^Ctx) {
 	att->setTexture(drawable->texture())
 	att->setLoadAction(.Clear)
 	att->setStoreAction(.Store)
-	att->setClearColor(MTL.ClearColor{1, 1, 1, 1})
+	// Transparent: the host view behind the layer paints the page color.
+	att->setClearColor(MTL.ClearColor{0, 0, 0, 0})
 
 	cb := shared.queue->commandBuffer()
 	enc := cb->renderCommandEncoderWithDescriptor(pass)

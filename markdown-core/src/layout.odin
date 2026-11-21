@@ -93,8 +93,8 @@ emit_line :: proc(ctx: ^Ctx, t: ^Text, line: CT.LineRef, lx, top, baseline: f32)
 		x2 := f32(CT.LineGetOffsetForStringIndex(line, CF.Index(min(sp.end, line_end)), nil))
 		h := t.size * 1.3
 		y := top + (t.line_height - h) / 2
-		push_rect(ctx, lx + x1 - 3.5, y - 0.5, x2 - x1 + 7, h + 1, CODE_BORDER, 5)
-		push_rect(ctx, lx + x1 - 3, y, x2 - x1 + 6, h, CODE_BG, 4.5)
+		push_rect(ctx, lx + x1 - 3.5, y - 0.5, x2 - x1 + 7, h + 1, ctx.style.code_border, 5)
+		push_rect(ctx, lx + x1 - 3, y, x2 - x1 + 6, h, ctx.style.code_background, 4.5)
 	}
 }
 
@@ -172,15 +172,15 @@ layout_table :: proc(ctx: ^Ctx, b: ^Block, x, y, width: f32) -> f32 {
 			cx += widths[col] + 2 * PAD_X
 		}
 		if row == 0 {
-			push_rect(ctx, x, y, total, row_bottom - y, CODE_BG)
+			push_rect(ctx, x, y, total, row_bottom - y, ctx.style.code_background)
 		}
 		y = row_bottom
-		push_rect(ctx, x, y - 1, total, 1, RULE_COLOR)
+		push_rect(ctx, x, y - 1, total, 1, ctx.style.rule)
 	}
-	push_rect(ctx, x, top, total, 1, RULE_COLOR)
+	push_rect(ctx, x, top, total, 1, ctx.style.rule)
 	cx := x
 	for col in 0 ..= b.ncols {
-		push_rect(ctx, min(cx, x + total - 1), top, 1, y - top, RULE_COLOR)
+		push_rect(ctx, min(cx, x + total - 1), top, 1, y - top, ctx.style.rule)
 		if col < b.ncols {
 			cx += widths[col] + 2 * PAD_X
 		}
@@ -199,7 +199,7 @@ layout_begin :: proc(ctx: ^Ctx) {
 	ctx.text_order = 0
 	atlas_prepare(ctx)
 	ctx.lay_next = 0
-	ctx.lay_y = PAGE_PAD * 0.6
+	ctx.lay_y = ctx.m.page_pad * 0.6
 	ctx.content_height = ctx.lay_y
 }
 
@@ -209,7 +209,10 @@ layout_done :: proc(ctx: ^Ctx) -> bool {
 
 layout_some :: proc(ctx: ^Ctx, until_y: f32, budget_ms: f64 = 0) {
 	started := time.tick_now()
-	column := min(COLUMN_WIDTH, ctx.width - 2 * PAGE_PAD)
+	column := ctx.width - 2 * ctx.m.page_pad
+	if ctx.m.column > 0 {
+		column = min(column, ctx.m.column)
+	}
 	x0 := math.floor((ctx.width - column) / 2)
 	y := ctx.lay_y
 	for ctx.lay_next < len(ctx.blocks) && y < until_y {
@@ -222,32 +225,32 @@ layout_some :: proc(ctx: ^Ctx, until_y: f32, budget_ms: f64 = 0) {
 		if i > 0 {
 			y += b.space_before
 		}
-		x := x0 + b.indent + f32(b.quote_depth) * QUOTE_INDENT
+		x := x0 + b.indent + f32(b.quote_depth) * ctx.m.quote_indent
 		width := column - (x - x0)
 		top := y
 		switch b.kind {
 		case .Text:
 			if b.marker.len > 0 {
-				layout_text(ctx, &b.marker, x - LIST_INDENT, y, LIST_INDENT - 8, .Right)
+				layout_text(ctx, &b.marker, x - ctx.m.list_indent, y, ctx.m.list_indent - 8, .Right)
 			}
 			y = layout_text(ctx, &b.text, x, y, width)
 		case .Code:
 			// Backgrounds are drawn before all glyphs, so the card can be
 			// added after the text gave its height.
 			bottom := layout_text(ctx, &b.text, x + CODE_PAD, y + CODE_PAD, width - 2 * CODE_PAD) + CODE_PAD
-			push_rect(ctx, x - 0.5, y - 0.5, width + 1, bottom - y + 1, CODE_BORDER, 8.5)
-			push_rect(ctx, x, y, width, bottom - y, CODE_BG, 8)
+			push_rect(ctx, x - 0.5, y - 0.5, width + 1, bottom - y + 1, ctx.style.code_border, 8.5)
+			push_rect(ctx, x, y, width, bottom - y, ctx.style.code_background, 8)
 			y = bottom
 		case .Rule:
-			push_rect(ctx, x, y, width, 1, RULE_COLOR)
+			push_rect(ctx, x, y, width, 1, ctx.style.rule)
 			y += 1
 		case .Table:
 			y = layout_table(ctx, b, x, y, width)
 		}
 		for depth in 0 ..< b.quote_depth {
-			push_rect(ctx, x0 + b.indent + f32(depth) * QUOTE_INDENT, top, 3, y - top, RULE_COLOR, 1.5)
+			push_rect(ctx, x0 + b.indent + f32(depth) * ctx.m.quote_indent, top, 3, y - top, ctx.style.quote_bar, 1.5)
 		}
 	}
 	ctx.lay_y = y
-	ctx.content_height = y + PAGE_PAD
+	ctx.content_height = y + ctx.m.page_pad
 }

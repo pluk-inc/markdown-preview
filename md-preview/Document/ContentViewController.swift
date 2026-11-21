@@ -481,9 +481,11 @@ final class ContentViewController: NSViewController {
         )
     }
 
-    func zoomIn() { webView.zoomIn() }
-    func zoomOut() { webView.zoomOut() }
-    func resetZoom() { webView.resetZoom() }
+    // The web view keeps and stores the zoom also while the native renderer
+    // shows the document, which reads the stored value as its text size.
+    func zoomIn() { webView.zoomIn(); nativeRenderer?.applyStyle() }
+    func zoomOut() { webView.zoomOut(); nativeRenderer?.applyStyle() }
+    func resetZoom() { webView.resetZoom(); nativeRenderer?.applyStyle() }
     var pageZoom: CGFloat { webView.pageZoom }
 
     /// Normalized top-of-viewport position used when handing the document to
@@ -653,6 +655,7 @@ final class ContentViewController: NSViewController {
             display(markdown: source.markdown, sourceURL: source.sourceURL, assetBaseURL: source.assetBaseURL)
             return
         }
+        nativeRenderer?.applyStyle()
         webView.reloadPreviewForSettingChange()
     }
 
@@ -660,6 +663,7 @@ final class ContentViewController: NSViewController {
     /// page after a theme color change in Settings.
 
     func applyReaderLayout() {
+        nativeRenderer?.applyStyle()
         webView.applyReaderLayout()
     }
 
@@ -667,6 +671,7 @@ final class ContentViewController: NSViewController {
         view.needsDisplay = true
         updateUnderPageBackgroundColor()
         updateObscuredContentInsets()
+        nativeRenderer?.applyStyle()
         webView.applyThemeColors()
     }
 
@@ -815,6 +820,7 @@ final class ContentViewController: NSViewController {
     }
 
     func applyTextSizeSetting() {
+        nativeRenderer?.applyStyle()
         webView.applyPersistedZoom()
     }
 

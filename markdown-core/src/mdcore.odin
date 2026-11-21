@@ -12,27 +12,6 @@ import CT "core:sys/darwin/CoreText"
 import MTL "vendor:darwin/Metal"
 import CA "vendor:darwin/QuartzCore"
 
-// Values copied from the app's reader style sheet (MarkdownHTML.swift).
-BODY_SIZE :: 15.0
-BODY_LINE_HEIGHT :: 1.6
-HEADING_LINE_HEIGHT :: 1.25
-COLUMN_WIDTH :: 820.0
-PAGE_PAD :: 40.0
-PARAGRAPH_SPACING :: 12.0
-LIST_ITEM_SPACING :: 3.0
-LIST_INDENT :: BODY_SIZE * 2.1
-QUOTE_INDENT :: BODY_SIZE * 1.5
-CODE_SIZE :: BODY_SIZE * 0.9
-CODE_PAD :: 16.0
-
-Color :: [4]u8
-TEXT_COLOR :: Color{0, 0, 0, 0xff}
-SECONDARY_COLOR :: Color{0x6e, 0x6e, 0x73, 0xff}
-LINK_COLOR :: Color{0, 104, 218, 255}
-CODE_BG :: Color{0xf9, 0xf9, 0xf9, 0xff}
-CODE_BORDER :: Color{0xf0, 0xf0, 0xf0, 0xff}
-RULE_COLOR :: Color{0xdd, 0xdd, 0xe0, 0xff}
-
 Instance :: struct #packed {
 	pos:    [2]f32,
 	size:   [2]f32,
@@ -85,21 +64,6 @@ Block :: struct {
 	aligns:       [dynamic]Align,
 }
 
-Font_Kind :: enum {
-	Regular,
-	Bold,
-	Italic,
-	Bold_Italic,
-	Semibold,
-	Mono,
-}
-
-Style_Font :: struct {
-	kind: Font_Kind,
-	size: f32,
-	font: CT.FontRef,
-}
-
 Run_Font :: struct {
 	font:     CT.FontRef,
 	is_color: bool,
@@ -107,7 +71,11 @@ Run_Font :: struct {
 
 Ctx :: struct {
 	// document
+	source:         []u8, // kept to parse again after a style change
 	blocks:         [dynamic]Block,
+	// style
+	style:          Style,
+	m:              Metrics,
 	style_fonts:    [dynamic]Style_Font,
 	// layout output
 	rects:          [dynamic]Instance,
@@ -162,6 +130,8 @@ mdcore_create :: proc "c" (metal_layer: rawptr) -> rawptr {
 	}
 	ctx := new(Ctx)
 	ctx.scale = 2
+	ctx.style = style_default()
+	metrics_update(ctx)
 	gpu_init(ctx, cast(^CA.MetalLayer)metal_layer)
 	return ctx
 }
@@ -170,11 +140,9 @@ mdcore_create :: proc "c" (metal_layer: rawptr) -> rawptr {
 mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
-	free_lines(ctx)
 	ctx.has_sel = false
-	free_blocks(ctx)
-	parse_document(ctx, string(utf8[:length]))
-	ctx.laid_out_width = 0
+	source_set(ctx, string(utf8[:length]))
+	reparse(ctx)
 }
 
 // Sets the view size in points and the backing scale. Lays the document out
@@ -232,11 +200,9 @@ mdcore_destroy :: proc "c" (handle: rawptr) {
 	free_blocks(ctx)
 	atlas_destroy(ctx)
 	gpu_destroy(ctx)
-	for f in ctx.style_fonts {
-		CF.Release(CF.TypeRef(f.font))
-	}
+	style_destroy(ctx)
+	delete(ctx.source)
 	delete(ctx.blocks)
-	delete(ctx.style_fonts)
 	delete(ctx.rects)
 	delete(ctx.glyphs)
 	delete(ctx.lines)

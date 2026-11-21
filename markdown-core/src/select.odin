@@ -6,8 +6,6 @@ import CF "core:sys/darwin/CoreFoundation"
 import CG "core:sys/darwin/CoreGraphics"
 import CT "core:sys/darwin/CoreText"
 
-SELECTION_COLOR :: Color{0, 122, 255, 64}
-
 // One laid-out line, kept so the pointer can be mapped to a character.
 Line_Rec :: struct {
 	text:       ^Text,
@@ -94,7 +92,7 @@ build_selection_rects :: proc(ctx: ^Ctx) {
 			Instance {
 				pos = {(l.x + x1) * scale, l.top * scale},
 				size = {max(x2 - x1, 2) * scale, l.text.line_height * scale},
-				color = SELECTION_COLOR,
+				color = ctx.style.selection,
 				kind = 0,
 			},
 		)

@@ -32,7 +32,9 @@ final class NativeRendererView: NSView {
     override func makeBackingLayer() -> CALayer {
         let layer = CAMetalLayer()
         layer.maximumDrawableCount = 2
-        layer.isOpaque = true
+        // Transparent: the document background view behind it paints the
+        // page color, with the theme and the appearance it already follows.
+        layer.isOpaque = false
         return layer
     }
 
@@ -41,6 +43,19 @@ final class NativeRendererView: NSView {
         wantsLayer = true
         layerContentsRedrawPolicy = .duringViewResize
         ctx = mdcore_create(Unmanaged.passUnretained(layer!).toOpaque())
+        applyStyle()
+    }
+
+    /// Reads the reader settings and the theme again and shows the document
+    /// with them. For a change of a setting, the theme, or the appearance.
+    func applyStyle() {
+        NativeRendererStyle(appearance: effectiveAppearance).apply(to: ctx)
+        relayout(force: true)
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyStyle()
     }
 
     @available(*, unavailable)
