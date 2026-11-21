@@ -79,12 +79,16 @@ Gpu_Quads :: struct {
 @(private = "file")
 quads_sync :: proc(q: ^Gpu_Quads, src: []Instance) {
 	if len(src) > q.capacity {
+		capacity := max(len(src) * 2, 1024)
+		buffer := shared.device->newBufferWithLength(NS.UInteger(capacity * size_of(Instance)), {})
+		if buffer == nil {
+			q.count = min(q.count, q.capacity)
+			return // out of memory: keep what the GPU has
+		}
 		if q.buffer != nil {
 			objc_release(q.buffer)
 		}
-		q.capacity = max(len(src) * 2, 1024)
-		q.buffer = shared.device->newBufferWithLength(NS.UInteger(q.capacity * size_of(Instance)), {})
-		q.count = 0
+		q.buffer, q.capacity, q.count = buffer, capacity, 0
 	}
 	if len(src) > q.count {
 		dst := cast([^]Instance)q.buffer->contents()
@@ -128,8 +132,9 @@ gpu_resize :: proc(ctx: ^Ctx) {
 
 // Sends the atlas rows that changed since the last call.
 @(private = "file")
-upload_atlas :: proc(atlas: ^Atlas, tex: ^^MTL.Texture, format: MTL.PixelFormat) {
-	if atlas.dirty_y1 <= atlas.dirty_y0 || atlas.pixels == nil {
+upload_atlas :: proc(atlas: ^Atlas, tex: ^^MTL.Texture, format: MTL.PixelFormat, always := false) {
+	dirty := atlas.dirty_y1 > atlas.dirty_y0 && atlas.pixels != nil
+	if !dirty && !(always && tex^ == nil) {
 		return
 	}
 	if atlas.grew && tex^ != nil {
@@ -140,6 +145,9 @@ upload_atlas :: proc(atlas: ^Atlas, tex: ^^MTL.Texture, format: MTL.PixelFormat)
 	if tex^ == nil {
 		desc := MTL.TextureDescriptor.texture2DDescriptorWithPixelFormat(format, NS.UInteger(atlas.w), NS.UInteger(atlas.h), false)
 		tex^ = shared.device->newTextureWithDescriptor(desc)
+	}
+	if tex^ == nil || !dirty {
+		return // no texture: the rows stay dirty for the next call
 	}
 	y0, rows := atlas.dirty_y0, atlas.dirty_y1 - atlas.dirty_y0
 	region := MTL.Region{{0, NS.UInteger(y0), 0}, {NS.UInteger(atlas.w), NS.UInteger(rows), 1}}
@@ -156,7 +164,9 @@ gpu_reset_quads :: proc(ctx: ^Ctx) {
 
 // Sends what the layout added: new atlas rows and new quads.
 gpu_upload :: proc(ctx: ^Ctx) {
-	upload_atlas(&ctx.gray, &ctx.gray_tex, .R8Unorm)
+	// The gray texture always exists, so a document with no text (a rule,
+	// only emoji) still draws.
+	upload_atlas(&ctx.gray, &ctx.gray_tex, .R8Unorm, true)
 	upload_atlas(&ctx.colr, &ctx.colr_tex, .BGRA8Unorm)
 	quads_sync(&ctx.rect_quads, ctx.rects[:])
 	quads_sync(&ctx.glyph_quads, ctx.glyphs[:])

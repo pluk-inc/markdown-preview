@@ -289,8 +289,11 @@ split_cells :: proc(line: string, out: ^[dynamic]string) {
 	append(out, strings.trim_space(s[start:]))
 }
 
-// A short file can ask for rows x columns cells without the text for them.
-MAX_TABLE_CELLS :: 50_000
+// A short file can ask for rows x columns cells without the text for them:
+// rows that have fewer cells than the header get empty ones. A table with
+// all its cells written has at most one cell for each byte, so the limit is
+// its size, and only a table of mostly missing cells can lose rows.
+MIN_TABLE_CELLS :: 50_000
 
 cell_count :: proc(line: string) -> int {
 	cells := make([dynamic]string, context.temp_allocator)
@@ -312,11 +315,15 @@ parse_table :: proc(ctx: ^Ctx, lines: []string) {
 		right := strings.has_suffix(spec, ":")
 		append(&b.aligns, right ? (left ? Align.Center : Align.Right) : Align.Left)
 	}
+	max_cells := MIN_TABLE_CELLS
+	for line in lines {
+		max_cells += len(line)
+	}
 	for line, row in lines {
 		if row == 1 {
 			continue
 		}
-		if len(b.cells) + b.ncols > MAX_TABLE_CELLS {
+		if len(b.cells) + b.ncols > max_cells {
 			break
 		}
 		clear(&cells)
@@ -382,14 +389,27 @@ parse_document :: proc(ctx: ^Ctx, src: string) {
 	}
 	ref_text := strings.to_string(refs)
 	seg_start := 0
-	in_fence := false
+	// The open code fence: its character and length. Only a line of that
+	// character, at least as long and with nothing after it, closes it.
+	fence_char: u8
+	fence_len := 0
 	for i := 0; i < len(lines); i += 1 {
 		t := strings.trim_left_space(lines[i])
-		if strings.has_prefix(t, "```") || strings.has_prefix(t, "~~~") {
-			in_fence = !in_fence
-			continue
+		if len(t) >= 3 && (t[0] == '`' || t[0] == '~') {
+			run := 1
+			for run < len(t) && t[run] == t[0] {
+				run += 1
+			}
+			if fence_len == 0 && run >= 3 {
+				fence_char, fence_len = t[0], run
+				continue
+			}
+			if fence_len > 0 && t[0] == fence_char && run >= fence_len && strings.trim_space(t[run:]) == "" {
+				fence_len = 0
+				continue
+			}
 		}
-		if in_fence || i + 1 >= len(lines) || !strings.contains_rune(lines[i], '|') || !is_delimiter_row(lines[i + 1]) || cell_count(lines[i]) != cell_count(lines[i + 1]) {
+		if fence_len > 0 || i + 1 >= len(lines) || !strings.contains_rune(lines[i], '|') || !is_delimiter_row(lines[i + 1]) || cell_count(lines[i]) != cell_count(lines[i + 1]) {
 			continue
 		}
 		end := i + 2

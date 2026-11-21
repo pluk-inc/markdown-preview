@@ -39,7 +39,7 @@ cp "$SRC"/src/*.odin "$WORK/src/"
 xcrun -sdk macosx metal -O2 -mmacosx-version-min="$MIN_OS" \
     "$SRC/src/shaders.metal" -o "$WORK/src/shaders.metallib"
 
-SLICES=""
+set --
 for arch in $ARCHS; do
     case "$arch" in
         arm64) target=darwin_arm64 ;;
@@ -48,8 +48,7 @@ for arch in $ARCHS; do
     esac
     odin build "$WORK/src" -build-mode:static -no-entry-point -o:speed \
         -target:"$target" -minimum-os-version:"$MIN_OS" -out:"$WORK/libmdcore-$arch.a"
-    SLICES="$SLICES $WORK/libmdcore-$arch.a"
+    set -- "$@" "$WORK/libmdcore-$arch.a"
 done
-# shellcheck disable=SC2086
-lipo -create $SLICES -output "$LIB"
+lipo -create "$@" -output "$LIB"
 echo "$STATE" > "$STAMP"

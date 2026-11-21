@@ -1,6 +1,7 @@
 package mdcore
 
 import "core:math"
+import "core:mem"
 import "core:time"
 import CF "core:sys/darwin/CoreFoundation"
 import CG "core:sys/darwin/CoreGraphics"
@@ -79,8 +80,13 @@ emit_line :: proc(ctx: ^Ctx, t: ^Text, line: CT.LineRef, lx, top, baseline: f32)
 	// Backgrounds of inline code.
 	range := CT.LineGetStringRange(line)
 	line_start, line_end := int(range.location), int(range.location + range.length)
-	for sp in t.spans {
-		if .Code_Bg not_in sp.flags || sp.end <= line_start || sp.start >= line_end {
+	// Spans are in text order: start at the first one that reaches the line.
+	first := len(t.spans) > 0 ? mem.ptr_sub(span_at(t, line_start), &t.spans[0]) : 0
+	for sp in t.spans[first:] {
+		if sp.start >= line_end {
+			break
+		}
+		if .Code_Bg not_in sp.flags || sp.end <= line_start {
 			continue
 		}
 		x1 := f32(CT.LineGetOffsetForStringIndex(line, CF.Index(max(sp.start, line_start)), nil))
