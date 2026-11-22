@@ -196,6 +196,7 @@ Markdown Preview is free and MIT-licensed. If it saved you a browser tab, you ca
 - [Amore](http://amore.computer/) — MacOS release automation (signing, notarization, DMG, hosting, appcast)
 - [Lokalise](https://lokalise.com) — Translation management for the app's languages
 - [swift-markdown](https://github.com/swiftlang/swift-markdown) — Markdown parser (Apple, cmark-gfm-backed)
+- [md4c](https://github.com/mity/md4c) — Markdown parser of the experimental native renderer
 - [Pele](https://pele.run/) — Bundled renderer for Mermaid diagrams in `mermaid` fenced code blocks
 - [KaTeX](https://katex.org/) — Bundled math typesetter for inline `$…$`, display `$$…$$`, and ` ```math ` blocks
 - [Sparkle](https://sparkle-project.org) — Auto-update framework

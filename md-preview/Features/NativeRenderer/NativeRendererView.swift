@@ -3,7 +3,7 @@
 //  md-preview
 //
 //  The experimental native renderer's view (`RendererSetting.native`). The
-//  Markdown core in `markdown-core/` (Odin) does the work: cmark-gfm parses,
+//  Markdown core in `markdown-core/` (Odin) does the work: md4c parses,
 //  CoreText shapes the text and breaks the lines, and Metal draws one quad
 //  per glyph into this view's layer. This view owns the layer, the scroll
 //  position, and the input.
