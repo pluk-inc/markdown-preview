@@ -349,7 +349,7 @@
 "App links" = "外部アプリへのリンク";
 "Renderer" = "レンダラ";
 "Use the experimental native renderer" = "実験的なネイティブレンダラを使用";
-"Opens documents faster and uses less memory. It does not have images, math, diagrams, code colors, Find, Edit Mode, zoom, themes, or export yet." = "書類をより速く開き、メモリ使用量も少なくなります。画像、数式、図、コードの色分け、検索、編集モード、拡大/縮小、テーマ、書き出しにはまだ対応していません。";
+"Opens documents faster and uses less memory. It does not have images, math, diagrams, code colors, Find, Edit Mode, or export yet." = "書類をより速く開き、メモリ使用量も少なくなります。画像、数式、図、コードの色分け、検索、編集モード、書き出しにはまだ対応していません。";
 "Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look." = "リンクから外部アプリを開く前に、確認ダイアログが表示されます。許可は URL スキームごとに保存され、Quick Look でも適用されます。";
 "No application can open this link" = "このリンクを開けるアプリがありません";
 "OK" = "OK";
