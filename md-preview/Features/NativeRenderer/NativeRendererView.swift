@@ -55,6 +55,9 @@ final class NativeRendererView: NSView {
     /// with them. For a change of a setting, the theme, or the appearance.
     func applyStyle() {
         NativeRendererStyle(appearance: effectiveAppearance, zoom: textZoom).apply(to: ctx)
+        // The core needs a new layout, also when the view has no size now and
+        // gets its old size back later.
+        laidOutSize = .zero
         relayout(force: true)
     }
 

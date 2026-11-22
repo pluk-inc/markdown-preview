@@ -162,6 +162,11 @@ cache_get :: proc(c: ^Glyph_Cache, font: base.Font, glyph: u16, bin: u8) -> Glyp
 				top      = i16(bitmap.top),
 				is_color = cached.is_color,
 			}
+		} else {
+			// The atlas is at its largest size. The glyph is not drawn now,
+			// and not remembered as empty, so it comes back after the cache
+			// is emptied.
+			return entry
 		}
 	}
 	c.entries[key] = entry

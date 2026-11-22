@@ -37,6 +37,9 @@ fi
 WORK="$OUT/mdcore-build"
 rm -rf "$WORK"
 mkdir -p "$WORK"
+# A file that is saved while the build runs must count as newer than the
+# library, so the library gets the time of this moment.
+touch "$WORK/started"
 cp -R "$SRC/src" "$WORK/src"
 xcrun -sdk macosx metal -O2 -mmacosx-version-min="$MIN_OS" \
     "$SRC/src/renderer/shaders/quad.metal" -o "$WORK/src/renderer/quad.metallib"
@@ -62,4 +65,5 @@ for arch in $ARCHS; do
     set -- "$@" "$WORK/libmdcore-$arch.a"
 done
 lipo -create "$@" -output "$LIB"
+touch -r "$WORK/started" "$LIB"
 echo "$STATE" > "$STAMP"

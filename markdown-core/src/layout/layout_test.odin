@@ -116,6 +116,31 @@ test_hit_test_finds_the_line :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_hit_test_looks_past_blocks_without_text :: proc(t: ^testing.T) {
+	f: Fixture
+	setup(&f, "***\n\n***\n\ntext\n", 600)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	_, ok := hit_test(&f.page, 100, f.page.boxes[0].top)
+	testing.expect(t, ok)
+}
+
+@(test)
+test_marker_of_an_item_that_starts_with_code :: proc(t: ^testing.T) {
+	f: Fixture
+	setup(&f, "1. ```\n   code\n   ```\n", 600)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	markers := 0
+	for para in f.page.paras {
+		if para.src == nil {
+			markers += 1
+		}
+	}
+	testing.expect_value(t, markers, 1)
+}
+
+@(test)
 test_display_makes_quads_only_for_the_range :: proc(t: ^testing.T) {
 	f: Fixture
 	setup(&f, SOURCE, 600)

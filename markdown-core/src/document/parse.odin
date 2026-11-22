@@ -249,6 +249,11 @@ leave_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 		pop(&p.lists)
 	case .Li:
 		close_text(p)
+		if p.item_blocks == 0 {
+			// An item with nothing in it still shows its marker.
+			open_text(p, .Paragraph)
+			close_text(p)
+		}
 		p.lists[len(p.lists) - 1].next += 1
 		// A later block of the parent item is a continuation of it.
 		p.item_blocks = 1

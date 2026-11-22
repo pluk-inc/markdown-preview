@@ -72,6 +72,25 @@ test_loose_item_continuation :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_empty_item_keeps_its_marker :: proc(t: ^testing.T) {
+	doc := parse("1.\n2. next\n")
+	defer destroy(&doc)
+	testing.expect_value(t, len(doc.blocks), 2)
+	testing.expect_value(t, doc.blocks[0].marker, Marker.Number)
+	testing.expect_value(t, doc.blocks[0].number, 1)
+	testing.expect_value(t, content(&doc.blocks[0].text), "")
+	testing.expect_value(t, doc.blocks[1].number, 2)
+}
+
+@(test)
+test_item_that_starts_with_code_has_the_marker :: proc(t: ^testing.T) {
+	doc := parse("1. ```\n   code\n   ```\n")
+	defer destroy(&doc)
+	testing.expect_value(t, doc.blocks[0].kind, Block_Kind.Code)
+	testing.expect_value(t, doc.blocks[0].marker, Marker.Number)
+}
+
+@(test)
 test_code_block :: proc(t: ^testing.T) {
 	doc := parse("````odin\na | b\n```\n--- | ---\n\nlast\n````\n\n> quoted\n")
 	defer destroy(&doc)

@@ -42,7 +42,7 @@ hit_test :: proc(l: ^Layout, x, y: f32) -> (pos: Position, ok: bool) {
 	center := min(first_box_below(l, y), len(l.boxes) - 1)
 	best := -1
 	best_score: f32 = 1e30
-	for reach := 1; best < 0 && reach <= len(l.boxes); reach *= 4 {
+	for reach := 1; best < 0; reach *= 4 {
 		first := max(center - reach, 0)
 		last := min(center + reach, len(l.boxes) - 1)
 		for i in l.boxes[first].line_first ..< l.boxes[last].line_end {
@@ -97,6 +97,9 @@ selection_quads :: proc(l: ^Layout, s: Selection, y0, y1: f32, scale, origin_y: 
 		}
 		for line in l.lines[box.line_first:box.line_end] {
 			para := &l.paras[line.para]
+			if line.top + para.line_height < y0 || line.top > y1 {
+				continue // a long block: only its lines in the range
+			}
 			start, end := selected_part(para, line, from, to) or_continue
 			x1 := text.line_x_for_index(line.line, start - para.base)
 			x2 := text.line_x_for_index(line.line, end - para.base)

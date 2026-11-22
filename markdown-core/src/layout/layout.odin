@@ -409,6 +409,21 @@ step :: proc(l: ^Layout, until_y: f32, budget_ms: f64 = 0) -> bool {
 			append(&l.boxes, Box{top = l.y, bottom = l.y, line_first = len(l.lines), decor_first = len(l.decor)})
 			l.in_block = true
 			l.code_offset = 0
+			// The marker of a list item stands at the first line of its
+			// first block, whatever the kind of the block.
+			body_line := math.round(l.m.body * l.m.line_height)
+			switch b.kind {
+			case .Paragraph:
+				place_marker(l, b, x, l.y, body_line)
+			case .Heading:
+				place_marker(l, b, x, l.y, heading_size * HEADING_LINE_HEIGHT)
+			case .Code:
+				place_marker(l, b, x, l.y + CODE_PAD, math.round(l.m.code_size * CODE_LINE_HEIGHT))
+			case .Table:
+				place_marker(l, b, x, l.y + CELL_PAD_Y, body_line)
+			case .Rule:
+				place_marker(l, b, x, l.y - body_line / 2, body_line)
+			}
 		}
 		box := &l.boxes[len(l.boxes) - 1]
 		finished := true
@@ -421,7 +436,6 @@ step :: proc(l: ^Layout, until_y: f32, budget_ms: f64 = 0) -> bool {
 				heading     = b.kind == .Heading,
 				quote       = b.quote_depth > 0,
 			}
-			place_marker(l, b, x, l.y, look.line_height)
 			para := make_para(l, &b.text, 0, len(b.text.bytes), look)
 			l.y = place_para(l, para, x, l.y, width)
 		case .Code:
