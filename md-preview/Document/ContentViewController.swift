@@ -143,6 +143,9 @@ final class ContentViewController: NSViewController {
                 webViewCenteredLeadingConstraint?.constant =
                     -MarkdownHTML.preferredPageWidth * webView.pageZoom / 2
             }
+            // The web view keeps the zoom also while the native renderer
+            // shows the document, which takes it as its text size.
+            self?.nativeRenderer?.textZoom = zoom
             self?.zoomDidChange?(zoom)
         }
         webView.scrollDidChange = { [weak self] in
@@ -302,6 +305,7 @@ final class ContentViewController: NSViewController {
     private func drawNativeRenderer(markdown: String) {
         if nativeRenderer == nil {
             let renderer = NativeRendererView(frame: view.bounds)
+            renderer.textZoom = webView.pageZoom
             renderer.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(renderer)
             NSLayoutConstraint.activate([
@@ -481,11 +485,9 @@ final class ContentViewController: NSViewController {
         )
     }
 
-    // The web view keeps and stores the zoom also while the native renderer
-    // shows the document, which reads the stored value as its text size.
-    func zoomIn() { webView.zoomIn(); nativeRenderer?.applyStyle() }
-    func zoomOut() { webView.zoomOut(); nativeRenderer?.applyStyle() }
-    func resetZoom() { webView.resetZoom(); nativeRenderer?.applyStyle() }
+    func zoomIn() { webView.zoomIn() }
+    func zoomOut() { webView.zoomOut() }
+    func resetZoom() { webView.resetZoom() }
     var pageZoom: CGFloat { webView.pageZoom }
 
     /// Normalized top-of-viewport position used when handing the document to
@@ -820,7 +822,6 @@ final class ContentViewController: NSViewController {
     }
 
     func applyTextSizeSetting() {
-        nativeRenderer?.applyStyle()
         webView.applyPersistedZoom()
     }
 

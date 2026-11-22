@@ -20,13 +20,13 @@ struct NativeRendererStyle {
     private var style = mdcore_style()
 
     /// The current reader settings, for a view with the given appearance.
-    init(appearance: NSAppearance) {
+    init(appearance: NSAppearance, zoom: CGFloat) {
         let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         let scheme: ThemeColorScheme = isDark ? .dark : .light
         let theme = ThemeColorsSetting.current
         let layout = ReaderLayoutSetting.current.effective
         let face = DocumentFontSetting.current
-        let size = MarkdownHTML.bodyFontSize * TextSizeSetting.currentZoom
+        let size = MarkdownHTML.bodyFontSize * zoom
 
         // "Bold text" in Customize Theme draws the body at weight 600.
         body = face.nsFont(size: size, weight: layout.boldText ? .semibold : .regular)

@@ -46,10 +46,15 @@ final class NativeRendererView: NSView {
         applyStyle()
     }
 
+    /// The zoom of the document: the text size is the body size times this.
+    var textZoom = TextSizeSetting.currentZoom {
+        didSet { if textZoom != oldValue { applyStyle() } }
+    }
+
     /// Reads the reader settings and the theme again and shows the document
     /// with them. For a change of a setting, the theme, or the appearance.
     func applyStyle() {
-        NativeRendererStyle(appearance: effectiveAppearance).apply(to: ctx)
+        NativeRendererStyle(appearance: effectiveAppearance, zoom: textZoom).apply(to: ctx)
         relayout(force: true)
     }
 

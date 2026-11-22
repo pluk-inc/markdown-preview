@@ -70,8 +70,10 @@ struct Deadline { static func now() -> Self { Self() }; static func +(lhs: Self,
 }
 enum MarkdownHTML { static let preferredPageWidth: Double = 820 }
 final class Constraint { var constant: Double = 0 }
+final class NativeRenderer { var textZoom: Double = 1 }
 @MainActor final class Preview {
     let view = View()
+    var nativeRenderer: NativeRenderer?
     var pendingAnchorRestored: (() -> Void)?
     var restoreCompletion: (() -> Void)?
     let webView = ZoomWebView()
