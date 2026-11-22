@@ -8,6 +8,11 @@
 //  per glyph into this view's layer. This view owns the layer, the scroll
 //  position, and the input.
 //
+//  Scrolling is AppKit's: a transparent `NSScrollView` lies over the Metal
+//  layer, with an empty document view as tall as the page. It gives the
+//  scroll bar, momentum, and the elastic ends; this view reads its offset
+//  and draws the page there.
+//
 //  The core is a static archive that the "Build Markdown Core" phase makes
 //  and the app target links. `MDCore` is its C header, as a module.
 //
@@ -20,7 +25,8 @@ final class NativeRendererView: NSView {
     /// The core's renderer. Read in `deinit`, which is why it is unsafe.
     nonisolated(unsafe) private var ctx: UnsafeMutableRawPointer?
     private var hasDocument = false
-    private var scrollY: CGFloat = 0
+    private let scrollView = NSScrollView()
+    private let page = PageArea()
     private var layoutScheduled = false
     private var laidOutSize = NSSize.zero
     private var laidOutScale = 0.0
@@ -44,6 +50,46 @@ final class NativeRendererView: NSView {
         layerContentsRedrawPolicy = .duringViewResize
         ctx = mdcore_create(Unmanaged.passUnretained(layer!).toOpaque())
         applyStyle()
+
+        page.owner = self
+        scrollView.frame = bounds
+        scrollView.autoresizingMask = [.width, .height]
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        // The view already starts below the toolbar.
+        scrollView.automaticallyAdjustsContentInsets = false
+        scrollView.documentView = page
+        addSubview(scrollView)
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(pageDidScroll),
+            name: NSView.boundsDidChangeNotification, object: scrollView.contentView
+        )
+    }
+
+    /// The offset of the page in the view, in points. Below zero and past
+    /// the end while the scroll view stretches at an end.
+    private var scrollY: CGFloat { scrollView.contentView.bounds.origin.y }
+
+    @objc private func pageDidScroll() {
+        draw()
+    }
+
+    /// Scrolls to an offset, kept inside the page.
+    private func scroll(toY y: CGFloat) {
+        let limit = max(0, page.frame.height - scrollView.contentView.bounds.height)
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: min(max(0, y), limit)))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+    }
+
+    /// Makes the scroll view's page as tall as what the core laid out.
+    private func updatePageHeight() {
+        let height = max(mdcore_content_height(ctx), 1)
+        if page.frame.size != NSSize(width: bounds.width, height: height) {
+            page.setFrameSize(NSSize(width: bounds.width, height: height))
+        }
     }
 
     /// The zoom of the document: the text size is the body size times this.
@@ -79,8 +125,8 @@ final class NativeRendererView: NSView {
             utf8.withMemoryRebound(to: CChar.self) { mdcore_set_markdown(ctx, $0.baseAddress, $0.count) }
         }
         hasDocument = true
-        scrollY = 0
         relayout(force: true)
+        scroll(toY: 0)
     }
 
     /// Gives the core the view's size and draws. Skips a call that changes
@@ -92,15 +138,17 @@ final class NativeRendererView: NSView {
         laidOutSize = bounds.size
         laidOutScale = scale
         mdcore_resize(ctx, bounds.width, bounds.height, scale)
+        updatePageHeight()
         draw()
         continueLayout()
     }
 
     private func draw() {
         guard hasDocument, bounds.width > 0, bounds.height > 0 else { return }
-        let maxScroll = max(0, mdcore_content_height(ctx) - bounds.height)
-        scrollY = min(max(0, scrollY), maxScroll)
         autoreleasepool { mdcore_draw(ctx, scrollY) }
+        // A draw can lay out more of the page, when the view came to the
+        // end of what the steps reached.
+        updatePageHeight()
     }
 
     /// Lays out the rest of a long document in steps shorter than a frame,
@@ -111,7 +159,9 @@ final class NativeRendererView: NSView {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.layoutScheduled = false
-            if mdcore_layout_more(self.ctx, 8) { self.continueLayout() }
+            let more = mdcore_layout_more(self.ctx, 8)
+            self.updatePageHeight()
+            if more { self.continueLayout() }
         }
     }
 
@@ -136,23 +186,11 @@ final class NativeRendererView: NSView {
 
     // MARK: Input
 
-    override func scrollWheel(with event: NSEvent) {
-        scrollY -= event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : event.scrollingDeltaY * 16
-        draw()
-    }
-
-    override func resetCursorRects() { addCursorRect(bounds, cursor: .iBeam) }
-
-    override func mouseDown(with event: NSEvent) {
-        window?.makeFirstResponder(self)
-        mouse(event, phase: 0)
-    }
-
-    override func mouseDragged(with event: NSEvent) { mouse(event, phase: 1) }
-
-    private func mouse(_ event: NSEvent, phase: Int32) {
-        let point = convert(event.locationInWindow, from: nil)
-        mdcore_mouse(ctx, point.x, point.y + scrollY, phase)
+    /// A pointer event on the page. `point` is in page coordinates, which
+    /// are the core's document space. phase: 0 = down, 1 = drag.
+    fileprivate func pointer(at point: NSPoint, phase: Int32) {
+        if phase == 0 { window?.makeFirstResponder(self) }
+        mdcore_mouse(ctx, point.x, point.y, phase)
         draw()
     }
 
@@ -166,6 +204,7 @@ final class NativeRendererView: NSView {
 
     override func selectAll(_ sender: Any?) {
         mdcore_select_all(ctx)
+        updatePageHeight()
         draw()
     }
 
@@ -180,16 +219,38 @@ final class NativeRendererView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
-        let page = bounds.height - 60
+        let step = bounds.height - 60
         switch event.keyCode {
-        case Key.pageDown, Key.space: scrollY += page
-        case Key.pageUp: scrollY -= page
-        case Key.downArrow: scrollY += 48
-        case Key.upArrow: scrollY -= 48
-        case Key.home: scrollY = 0
-        case Key.end: scrollY = .greatestFiniteMagnitude
-        default: super.keyDown(with: event); return
+        case Key.pageDown, Key.space: scroll(toY: scrollY + step)
+        case Key.pageUp: scroll(toY: scrollY - step)
+        case Key.downArrow: scroll(toY: scrollY + 48)
+        case Key.upArrow: scroll(toY: scrollY - 48)
+        case Key.home: scroll(toY: 0)
+        case Key.end:
+            // The end of the document, not of the part laid out so far.
+            _ = mdcore_layout_more(ctx, 0)
+            updatePageHeight()
+            scroll(toY: .greatestFiniteMagnitude)
+        default: super.keyDown(with: event)
         }
-        draw()
+    }
+}
+
+/// The scroll view's document view: an empty area as tall as the page. It
+/// draws nothing; it gives the scroll view a size to scroll and takes the
+/// pointer events of the page.
+private final class PageArea: NSView {
+    weak var owner: NativeRendererView?
+
+    override var isFlipped: Bool { true }
+
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .iBeam) }
+
+    override func mouseDown(with event: NSEvent) {
+        owner?.pointer(at: convert(event.locationInWindow, from: nil), phase: 0)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        owner?.pointer(at: convert(event.locationInWindow, from: nil), phase: 1)
     }
 }

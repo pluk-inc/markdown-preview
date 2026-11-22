@@ -58,8 +58,9 @@ void mdcore_set_markdown(void *ctx, const char *utf8, long length);
 // when the width or the scale changed.
 void mdcore_resize(void *ctx, double width, double height, double scale);
 
-// Continues the layout of a long document for about budget_ms. Returns true
-// while more is left; call it again from the run loop.
+// Continues the layout of a long document for about budget_ms; 0 lays out
+// all that is left. Returns true while more is left; call it again from the
+// run loop.
 bool mdcore_layout_more(void *ctx, double budget_ms);
 
 // Height of the part that is laid out so far.
