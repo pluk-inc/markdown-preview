@@ -113,6 +113,10 @@ begin :: proc(l: ^Layout, doc: ^document.Document, style: base.Style, width: f32
 		l.column = min(l.column, l.m.column)
 	}
 	l.column_x = math.floor((width - l.column) / 2)
+	// The inset makes the text narrower and leaves the column where it is.
+	inset := min(l.m.inset, max((l.column - 100) / 2, 0))
+	l.column_x += inset
+	l.column -= 2 * inset
 	l.y = l.m.page_pad * 0.6
 	l.content_height = l.y
 }

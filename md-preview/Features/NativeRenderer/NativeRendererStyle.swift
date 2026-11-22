@@ -37,7 +37,11 @@ struct NativeRendererStyle {
         style.body_size = size
         style.line_height = layout.lineSpacing
         style.column_width = ContentWidthSetting.current == .normal ? Double(MarkdownHTML.contentColumnWidth) : 0
-        style.page_padding = MarkdownHTML.pagePaddingHorizontal + CGFloat(layout.pageInset)
+        // The Margins slider, as `ReaderLayoutSetting.cssVariables` gives it to
+        // the page: above zero it narrows the text inside the column, below
+        // zero it takes away from the padding around the column.
+        style.page_padding = MarkdownHTML.pagePaddingHorizontal * (1 + min(0, layout.marginsPercent) / 100)
+        style.column_inset = CGFloat(layout.pageInset)
 
         func resolved(_ color: NSColor) -> mdcore_color {
             var result = mdcore_color(r: 0, g: 0, b: 0, a: 255)

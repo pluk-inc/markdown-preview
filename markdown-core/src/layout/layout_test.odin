@@ -6,7 +6,7 @@ import "../text"
 import "core:testing"
 
 @(private = "file")
-SOURCE :: "# Title\n\nFirst paragraph with `code` and some more words to wrap over lines.\n\n- one\n- two\n\n```\nline 1\n\nline 3\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\nLast é 😀 paragraph.\n"
+SOURCE :: "# Title\n\nFirst paragraph with `code` and some more words to wrap over lines.\n\n- one\n- two\n\n```\nline 1\n\n\n\n\nline 6\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\nLast é 😀 paragraph.\n"
 
 @(private = "file")
 Fixture :: struct {
@@ -92,7 +92,7 @@ test_select_all_copies_the_text :: proc(t: ^testing.T) {
 	out: [dynamic]u8
 	defer delete(out)
 	selection_text(&f.page, select_all(&f.page), &out)
-	expected := "Title\nFirst paragraph with code and some more words to wrap over lines.\none\ntwo\nline 1\n\nline 3\na\nb\n1\n2\nLast é 😀 paragraph."
+	expected := "Title\nFirst paragraph with code and some more words to wrap over lines.\none\ntwo\nline 1\n\n\n\n\nline 6\na\nb\n1\n2\nLast é 😀 paragraph."
 	testing.expect_value(t, string(out[:]), expected)
 }
 

@@ -33,7 +33,8 @@ typedef struct {
     double body_size;     // points
     double line_height;   // multiple of the body size
     double column_width;  // points; 0 = the full width of the view
-    double page_padding;  // points, left and right
+    double page_padding;  // points, left and right of the column
+    double column_inset;  // points, left and right inside the column
     mdcore_color text;
     mdcore_color secondary;
     mdcore_color link;

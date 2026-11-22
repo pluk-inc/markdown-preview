@@ -42,7 +42,8 @@ Style :: struct {
 	body_size:       f64, // points
 	line_height:     f64, // multiple of the body size
 	column_width:    f64, // points; 0 = the full width of the view
-	page_padding:    f64, // points, left and right
+	page_padding:    f64, // points, left and right of the column
+	column_inset:    f64, // points, left and right inside the column
 	text:            Color,
 	secondary:       Color,
 	link:            Color,
@@ -59,6 +60,7 @@ Metrics :: struct {
 	line_height:  f32, // multiple
 	column:       f32, // 0 = full width
 	page_pad:     f32,
+	inset:        f32, // inside the column
 	paragraph:    f32, // space above a paragraph
 	list_item:    f32, // space above a list item
 	list_indent:  f32,
@@ -74,6 +76,7 @@ metrics :: proc(style: Style) -> Metrics {
 		line_height = f32(style.line_height),
 		column = f32(style.column_width),
 		page_pad = f32(style.page_padding),
+		inset = max(f32(style.column_inset), 0),
 		paragraph = body * 0.8,
 		list_item = body * 0.2,
 		list_indent = body * 2.1,

@@ -135,7 +135,7 @@ selection_text :: proc(l: ^Layout, s: Selection, out: ^[dynamic]u8) {
 		para := &l.paras[line.para]
 		start, end := selected_part(para, line, from, to) or_continue
 		if last_order >= 0 {
-			for _ in 0 ..< min(para.order - last_order, 3) {
+			for _ in 0 ..< para.order - last_order {
 				append(out, '\n')
 			}
 		}

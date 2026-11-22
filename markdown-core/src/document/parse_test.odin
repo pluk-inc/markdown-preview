@@ -102,7 +102,37 @@ test_table :: proc(t: ^testing.T) {
 
 @(test)
 test_table_cell_limit :: proc(t: ^testing.T) {
-	// 100 columns and 2,000 rows of one cell: 200,000 cells from 6 KB.
+	// 30 columns and 3,000 rows of one cell ask for 90,000 cells from 6 KB.
+	// The parser itself refuses such a table only above 32 columns.
+	COLUMNS :: 30
+	b := strings.builder_make()
+	defer strings.builder_destroy(&b)
+	strings.write_string(&b, "|")
+	for _ in 0 ..< COLUMNS {strings.write_string(&b, "a|")}
+	strings.write_string(&b, "\n|")
+	for _ in 0 ..< COLUMNS {strings.write_string(&b, "-|")}
+	strings.write_string(&b, "\n")
+	for _ in 0 ..< 3000 {strings.write_string(&b, "a|\n")}
+	strings.write_string(&b, "\nafter\n")
+	source := strings.to_string(b)
+	doc := parse(source)
+	defer destroy(&doc)
+	testing.expect_value(t, len(doc.blocks), 2)
+	table := &doc.blocks[0]
+	testing.expect_value(t, table.kind, Block_Kind.Table)
+	testing.expect_value(t, table.columns, COLUMNS)
+	limit := MIN_TABLE_CELLS + len(source)
+	testing.expect(t, len(table.cells) > MIN_TABLE_CELLS)
+	testing.expect(t, len(table.cells) <= limit)
+	testing.expect(t, len(table.cells) > limit - COLUMNS) // cut at the limit, not before
+	testing.expect_value(t, len(table.cells) % COLUMNS, 0)
+	testing.expect_value(t, content(&doc.blocks[1].text), "after")
+}
+
+@(test)
+test_sparse_wide_table_is_text :: proc(t: ^testing.T) {
+	// Above 32 columns the parser reads a table of mostly missing cells as
+	// a paragraph.
 	b := strings.builder_make()
 	defer strings.builder_destroy(&b)
 	strings.write_string(&b, "|")
@@ -111,14 +141,11 @@ test_table_cell_limit :: proc(t: ^testing.T) {
 	for _ in 0 ..< 100 {strings.write_string(&b, "-|")}
 	strings.write_string(&b, "\n")
 	for _ in 0 ..< 2000 {strings.write_string(&b, "a|\n")}
-	strings.write_string(&b, "\nafter\n")
-	source := strings.to_string(b)
-	doc := parse(source)
+	doc := parse(strings.to_string(b))
 	defer destroy(&doc)
-	testing.expect_value(t, len(doc.blocks), 2)
-	testing.expect(t, len(doc.blocks[0].cells) <= MIN_TABLE_CELLS + len(source))
-	testing.expect_value(t, len(doc.blocks[0].cells) % 100, 0)
-	testing.expect_value(t, content(&doc.blocks[1].text), "after")
+	for block in doc.blocks {
+		testing.expect(t, block.kind != .Table)
+	}
 }
 
 @(test)
