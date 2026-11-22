@@ -250,9 +250,37 @@ private final class PageArea: NSView {
         owner?.pointer(at: convert(event.locationInWindow, from: nil), phase: 0)
     }
 
+    /// The last drag event, repeated by a timer while the button is down:
+    /// AppKit sends no drag events for a pointer that does not move, and a
+    /// pointer held past the top or the bottom must keep the page scrolling.
+    private var lastDrag: NSEvent?
+    private var dragTimer: Timer?
+
     override func mouseDragged(with event: NSEvent) {
-        // A drag past the top or the bottom scrolls the page, so a
-        // selection can go on over more than one screen.
+        lastDrag = event
+        extendSelection()
+        guard dragTimer == nil else { return }
+        let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] timer in
+            MainActor.assumeIsolated {
+                // A view that went away in the middle of a drag.
+                guard let self else { return timer.invalidate() }
+                self.extendSelection()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        dragTimer = timer
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        dragTimer?.invalidate()
+        dragTimer = nil
+        lastDrag = nil
+    }
+
+    /// Scrolls when the drag is outside the visible part, then moves the
+    /// end of the selection to the pointer.
+    private func extendSelection() {
+        guard let event = lastDrag else { return }
         autoscroll(with: event)
         owner?.pointer(at: convert(event.locationInWindow, from: nil), phase: 1)
     }
