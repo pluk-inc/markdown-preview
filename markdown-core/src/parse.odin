@@ -400,7 +400,8 @@ parse_document :: proc(ctx: ^Ctx, src: string) {
 			for run < len(t) && t[run] == t[0] {
 				run += 1
 			}
-			if fence_len == 0 && run >= 3 {
+			// A backtick fence cannot have a backtick after it: that line is inline code.
+			if fence_len == 0 && run >= 3 && !(t[0] == '`' && strings.contains_rune(t[run:], '`')) {
 				fence_char, fence_len = t[0], run
 				continue
 			}
