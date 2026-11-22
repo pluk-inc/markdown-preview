@@ -260,18 +260,24 @@ private final class PageArea: NSView {
         lastDrag = event
         extendSelection()
         guard dragTimer == nil else { return }
-        let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] timer in
-            MainActor.assumeIsolated {
-                // A view that went away in the middle of a drag.
-                guard let self else { return timer.invalidate() }
-                self.extendSelection()
-            }
+        let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.extendSelection() }
         }
         RunLoop.main.add(timer, forMode: .common)
         dragTimer = timer
     }
 
     override func mouseUp(with event: NSEvent) {
+        endDrag()
+    }
+
+    /// A view that leaves its window in the middle of a drag gets no mouse up.
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        if newWindow == nil { endDrag() }
+    }
+
+    private func endDrag() {
         dragTimer?.invalidate()
         dragTimer = nil
         lastDrag = nil
