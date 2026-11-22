@@ -1,128 +1,121 @@
-// The Markdown core: it parses a document, lays it out, and draws it.
-// cmark-gfm parses, CoreText shapes the text and breaks the lines, glyphs go
-// into a texture atlas, and Metal draws one quad per glyph. The host app
-// owns the view and its CAMetalLayer and calls the C API in include/mdcore.h.
+// The Markdown core: it parses a document, lays it out, and draws it. This
+// file is the C API in include/mdcore.h and nothing else: it holds the state
+// of one view and passes the work to the packages.
+//
+//   document/   the parser and the document model
+//   text/       fonts, line breaking, and glyph bitmaps (CoreText)
+//   layout/     the place of every block, line, and decoration; the display
+//               list and the selection for the visible part
+//   renderer/   draws the display list on the GPU (Metal)
+//   base/       the types they share
+//
+// The host app owns the view, the scroll position, and the input events.
 package mdcore
 
+import "base"
 import "base:runtime"
 import "core:c"
-import CF "core:sys/darwin/CoreFoundation"
-import CG "core:sys/darwin/CoreGraphics"
-import CT "core:sys/darwin/CoreText"
-import MTL "vendor:darwin/Metal"
-import CA "vendor:darwin/QuartzCore"
+import "document"
+import "layout"
+import "renderer"
+import "text"
 
-Instance :: struct #packed {
-	pos:    [2]f32,
-	size:   [2]f32,
-	uv:     [2]f32,
-	uvsize: [2]f32,
-	color:  Color,
-	kind:   u32,
-}
-
-Span_Flag :: enum {
-	Code_Bg,
-}
-
-Span :: struct {
-	start, end: int, // UTF-16 offsets in the attributed string
-	color:      Color,
-	flags:      bit_set[Span_Flag],
-}
-
-Text :: struct {
-	astr:        CF.MutableAttributedStringRef,
-	len:         int,
-	spans:       [dynamic]Span,
-	size:        f32,
-	line_height: f32,
-}
-
-Block_Kind :: enum {
-	Text,
-	Code,
-	Rule,
-	Table,
-}
-
-Align :: enum {
-	Left,
-	Center,
-	Right,
-}
-
-Block :: struct {
-	kind:         Block_Kind,
-	text:         Text,
-	marker:       Text, // list bullet or number; empty for other blocks
-	indent:       f32,
-	quote_depth:  int,
-	space_before: f32,
-	cells:        [dynamic]Text, // table: row-major
-	ncols:        int,
-	aligns:       [dynamic]Align,
-}
-
-Run_Font :: struct {
-	font:     CT.FontRef,
-	is_color: bool,
-}
+// How much of the page has quads on the GPU, in view heights around the
+// scroll position, and how near to its edge the view may come before the
+// list is made again.
+SHOWN_ABOVE :: 2
+SHOWN_BELOW :: 3
+SHOWN_MARGIN :: 0.5
 
 Ctx :: struct {
-	// document
-	source:         []u8, // kept to parse again after a style change
-	blocks:         [dynamic]Block,
-	// style
-	style:          Style,
-	m:              Metrics,
-	style_fonts:    [dynamic]Style_Font,
-	// layout output
-	rects:          [dynamic]Instance,
-	glyphs:         [dynamic]Instance,
-	content_height: f32,
-	width, height:  f32, // points
-	scale:          f32,
-	laid_out_width: f32,
-	laid_out_scale: f32,
-	// glyph cache
-	run_fonts:      [dynamic]Run_Font,
-	cache:          map[Glyph_Key]Glyph_Entry,
-	gray:           Atlas,
-	colr:           Atlas,
-	scratch_gray:   CG.ContextRef,
-	scratch_colr:   CG.ContextRef,
-	scratch_scale:  f32,
-	// gpu
-	layer:          ^CA.MetalLayer,
-	gray_tex:       ^MTL.Texture,
-	colr_tex:       ^MTL.Texture,
-	rect_quads:     Gpu_Quads,
-	glyph_quads:    Gpu_Quads,
-	selection_quads: Gpu_Quads,
-	// layout progress
-	lay_next:       int,
-	lay_y:          f32,
-	scroll:         f32,
-	// selection
-	lines:          [dynamic]Line_Rec,
-	text_order:     int,
-	has_sel:        bool,
-	sel_anchor:     Sel_Pos,
-	sel_focus:      Sel_Pos,
-	sel_rects:      [dynamic]Instance,
-	clip:           [dynamic]u8,
-	// scratch arrays for runs
-	tmp_glyphs:     [dynamic]CG.Glyph,
-	tmp_pos:        [dynamic]CG.Point,
-	tmp_idx:        [dynamic]CF.Index,
+	doc:             document.Document,
+	style:           base.Style,
+	page:            layout.Layout,
+	cache:           text.Glyph_Cache,
+	gpu:             renderer.Renderer,
+	selection:       layout.Selection,
+	// The view.
+	width, height:   f32, // points
+	scale:           f32,
+	scroll:          f32, // points
+	layout_valid:    bool,
+	// The display list: the quads of the page between shown_y0 and shown_y1.
+	display_valid:   bool,
+	shown_y0:        f32, // points
+	shown_y1:        f32,
+	origin_px:       f32, // device pixels; the y that the quads count from
+	rects:           [dynamic]base.Quad,
+	glyphs:          [dynamic]base.Quad,
+	selection_quads: [dynamic]base.Quad,
+	glyph_buffer:    text.Glyph_Buffer,
+	clipboard:       [dynamic]u8,
 }
 
 @(private)
 runtime_started: bool
 
+// The style of a view whose host did not set one: the system fonts and the
+// light palette of the app.
+@(private)
+default_style :: proc() -> base.Style {
+	return base.Style {
+		body_font = text.font_system(.Regular, 15),
+		bold_font = text.font_system(.Bold, 15),
+		heading_font = text.font_system(.Semibold, 15),
+		code_font = text.font_system(.Mono, 15),
+		body_size = 15,
+		line_height = 1.6,
+		column_width = 820,
+		page_padding = 40,
+		text = {0, 0, 0, 255},
+		secondary = {0x6e, 0x6e, 0x73, 255},
+		link = {0, 104, 218, 255},
+		code_background = {0xf9, 0xf9, 0xf9, 255},
+		code_border = {0xf0, 0xf0, 0xf0, 255},
+		rule = {0xdd, 0xdd, 0xe0, 255},
+		quote_bar = {0xdd, 0xdd, 0xe0, 255},
+		selection = {0xb3, 0xd7, 0xff, 255},
+	}
+}
+
+@(private)
+style_release :: proc(style: ^base.Style) {
+	for font in ([4]base.Font{style.body_font, style.bold_font, style.heading_font, style.code_font}) {
+		text.font_release(font)
+	}
+}
+
+// Makes the quads of the part of the page around the scroll position and
+// gives them to the renderer.
+@(private)
+show :: proc(ctx: ^Ctx) {
+	ctx.shown_y0 = max(ctx.scroll - SHOWN_ABOVE * ctx.height, 0)
+	ctx.shown_y1 = ctx.scroll + SHOWN_BELOW * ctx.height
+	ctx.origin_px = f32(int(ctx.shown_y0 * ctx.scale))
+	clear(&ctx.rects)
+	clear(&ctx.glyphs)
+	layout.display(&ctx.page, &ctx.cache, ctx.shown_y0, ctx.shown_y1, ctx.origin_px, &ctx.rects, &ctx.glyphs, &ctx.glyph_buffer)
+	renderer.set_display(&ctx.gpu, ctx.rects[:], ctx.glyphs[:])
+	show_selection(ctx)
+	ctx.display_valid = true
+}
+
+@(private)
+show_selection :: proc(ctx: ^Ctx) {
+	clear(&ctx.selection_quads)
+	layout.selection_quads(&ctx.page, ctx.selection, ctx.shown_y0, ctx.shown_y1, ctx.scale, ctx.origin_px, &ctx.selection_quads)
+	renderer.set_selection(&ctx.gpu, ctx.selection_quads[:])
+}
+
+// True when the view came near the edge of the part that has quads.
+@(private)
+left_shown_part :: proc(ctx: ^Ctx) -> bool {
+	margin := SHOWN_MARGIN * ctx.height
+	return (ctx.shown_y0 > 0 && ctx.scroll - margin < ctx.shown_y0) || ctx.scroll + ctx.height + margin > ctx.shown_y1
+}
+
 @(export)
-mdcore_create :: proc "c" (metal_layer: rawptr) -> rawptr {
+mdcore_create :: proc "c" (surface: rawptr) -> rawptr {
 	context = runtime.default_context()
 	if !runtime_started {
 		runtime._startup_runtime()
@@ -130,36 +123,93 @@ mdcore_create :: proc "c" (metal_layer: rawptr) -> rawptr {
 	}
 	ctx := new(Ctx)
 	ctx.scale = 2
-	ctx.style = style_default()
-	metrics_update(ctx)
-	gpu_init(ctx, cast(^CA.MetalLayer)metal_layer)
+	ctx.style = default_style()
+	renderer.init(&ctx.gpu, surface)
 	return ctx
 }
 
+// Frees the view's state. The surface stays with the host.
+@(export)
+mdcore_destroy :: proc "c" (handle: rawptr) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	if ctx == nil {
+		return
+	}
+	layout.destroy(&ctx.page)
+	document.destroy(&ctx.doc)
+	text.cache_destroy(&ctx.cache)
+	renderer.destroy(&ctx.gpu)
+	style_release(&ctx.style)
+	delete(ctx.rects)
+	delete(ctx.glyphs)
+	delete(ctx.selection_quads)
+	text.glyph_buffer_destroy(&ctx.glyph_buffer)
+	delete(ctx.clipboard)
+	free(ctx)
+}
+
+// Takes a new style. The host calls mdcore_resize after it.
+@(export)
+mdcore_set_style :: proc "c" (handle: rawptr, style: ^base.Style) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	fresh := style^
+	// A font the host left out falls back on another one.
+	if fresh.body_font == nil {
+		fresh.body_font = text.font_system(.Regular, 15)
+	} else {
+		text.font_retain(fresh.body_font)
+	}
+	if fresh.code_font == nil {
+		fresh.code_font = text.font_system(.Mono, 15)
+	} else {
+		text.font_retain(fresh.code_font)
+	}
+	fresh.bold_font = text.font_retain(fresh.bold_font != nil ? fresh.bold_font : fresh.body_font)
+	fresh.heading_font = text.font_retain(fresh.heading_font != nil ? fresh.heading_font : fresh.bold_font)
+	// The layout holds fonts of the old style.
+	layout.begin(&ctx.page, nil, fresh, 0)
+	style_release(&ctx.style)
+	ctx.style = fresh
+	ctx.layout_valid = false
+}
+
+// Replaces the document. The host calls mdcore_resize after it.
 @(export)
 mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
-	ctx.has_sel = false
-	source_set(ctx, string(utf8[:length]))
-	reparse(ctx)
+	// The layout points into the old document.
+	layout.begin(&ctx.page, nil, ctx.style, 0)
+	document.destroy(&ctx.doc)
+	ctx.doc = document.parse(length > 0 ? string(utf8[:length]) : "")
+	ctx.selection = {}
+	ctx.layout_valid = false
 }
 
-// Sets the view size in points and the backing scale. Lays the document out
-// again when the width or the scale changed.
+// Sets the view size in points and the backing scale. Lays out what the
+// view shows now when the document, the style, or the width changed.
 @(export)
 mdcore_resize :: proc "c" (handle: rawptr, width, height, scale: f64) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
-	ctx.width, ctx.height, ctx.scale = f32(width), f32(height), f32(scale)
-	gpu_resize(ctx)
-	if ctx.laid_out_width != ctx.width || ctx.laid_out_scale != ctx.scale {
-		// Only what the view shows now; mdcore_layout_more does the rest.
-		layout_begin(ctx)
-		layout_some(ctx, ctx.scroll + ctx.height * 2)
-		gpu_upload(ctx)
-		update_selection(ctx)
-		ctx.laid_out_width, ctx.laid_out_scale = ctx.width, ctx.scale
+	if f32(scale) != ctx.cache.scale {
+		// Every glyph bitmap has the old size.
+		text.cache_set_scale(&ctx.cache, f32(scale))
+		ctx.display_valid = false
+	}
+	if !ctx.layout_valid || f32(width) != ctx.width {
+		ctx.width = f32(width)
+		layout.begin(&ctx.page, &ctx.doc, ctx.style, ctx.width)
+		ctx.layout_valid = true
+		ctx.display_valid = false
+	}
+	ctx.height, ctx.scale = f32(height), f32(scale)
+	renderer.resize(&ctx.gpu, ctx.width, ctx.height, ctx.scale)
+	// Only what the view shows now; mdcore_layout_more does the rest.
+	if layout.step(&ctx.page, ctx.scroll + 2 * ctx.height) {
+		ctx.display_valid = false
 	}
 }
 
@@ -169,68 +219,75 @@ mdcore_resize :: proc "c" (handle: rawptr, width, height, scale: f64) {
 mdcore_layout_more :: proc "c" (handle: rawptr, budget_ms: f64) -> bool {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
-	if layout_done(ctx) {
+	if !ctx.layout_valid || layout.done(&ctx.page) {
 		return false
 	}
-	layout_some(ctx, 1e30, budget_ms)
-	gpu_upload(ctx)
-	update_selection(ctx)
-	return !layout_done(ctx)
+	reached := ctx.page.y
+	layout.step(&ctx.page, 1e30, budget_ms)
+	if reached < ctx.shown_y1 {
+		ctx.display_valid = false // the new blocks are in the shown part
+	}
+	return !layout.done(&ctx.page)
 }
 
 @(export)
 mdcore_content_height :: proc "c" (handle: rawptr) -> f64 {
-	return f64((cast(^Ctx)handle).content_height)
+	return f64((cast(^Ctx)handle).page.content_height)
 }
 
 @(export)
 mdcore_draw :: proc "c" (handle: rawptr, scroll_y: f64) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
+	if !ctx.layout_valid {
+		return
+	}
 	ctx.scroll = f32(scroll_y)
-	gpu_draw(ctx)
+	// The view can scroll past what the steps laid out so far.
+	if layout.step(&ctx.page, ctx.scroll + 2 * ctx.height) {
+		ctx.display_valid = false
+	}
+	if !ctx.display_valid || left_shown_part(ctx) {
+		show(ctx)
+	}
+	renderer.sync_atlases(&ctx.gpu, &ctx.cache)
+	renderer.draw(&ctx.gpu, f32(int(ctx.scroll * ctx.scale)) - ctx.origin_px)
 }
 
-// Frees the renderer and all it owns. The layer stays with the host.
+// phase 0 = mouse down, 1 = drag. x and y are points in document space.
 @(export)
-mdcore_destroy :: proc "c" (handle: rawptr) {
+mdcore_mouse :: proc "c" (handle: rawptr, x, y: f64, phase: c.int) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
-	free_lines(ctx)
-	free_blocks(ctx)
-	atlas_destroy(ctx)
-	gpu_destroy(ctx)
-	style_destroy(ctx)
-	delete(ctx.source)
-	delete(ctx.blocks)
-	delete(ctx.rects)
-	delete(ctx.glyphs)
-	delete(ctx.lines)
-	delete(ctx.sel_rects)
-	delete(ctx.clip)
-	delete(ctx.tmp_glyphs)
-	delete(ctx.tmp_pos)
-	delete(ctx.tmp_idx)
-	free(ctx)
+	pos, ok := layout.hit_test(&ctx.page, f32(x), f32(y))
+	if !ok {
+		return
+	}
+	if phase == 0 {
+		ctx.selection.anchor = pos
+	}
+	ctx.selection.focus = pos
+	ctx.selection.active = true
+	show_selection(ctx)
 }
 
-free_text :: proc(t: ^Text) {
-	if t.astr != nil {
-		CF.Release(CF.TypeRef(t.astr))
-	}
-	delete(t.spans)
-	t^ = {}
+@(export)
+mdcore_select_all :: proc "c" (handle: rawptr) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	// All of the document, not only the part that is laid out so far.
+	layout.step(&ctx.page, 1e30)
+	ctx.selection = layout.select_all(&ctx.page)
+	ctx.display_valid = false
 }
 
-free_blocks :: proc(ctx: ^Ctx) {
-	for &b in ctx.blocks {
-		free_text(&b.text)
-		free_text(&b.marker)
-		for &cell in b.cells {
-			free_text(&cell)
-		}
-		delete(b.cells)
-		delete(b.aligns)
-	}
-	clear(&ctx.blocks)
+// The selected text as UTF-8. The pointer is valid until the next call.
+@(export)
+mdcore_selection_text :: proc "c" (handle: rawptr, length: ^c.long) -> [^]u8 {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	clear(&ctx.clipboard)
+	layout.selection_text(&ctx.page, ctx.selection, &ctx.clipboard)
+	length^ = c.long(len(ctx.clipboard))
+	return raw_data(ctx.clipboard)
 }

@@ -21,7 +21,8 @@ typedef struct {
     uint8_t r, g, b, a;
 } mdcore_color;
 
-// The reader style. The fonts are CTFont objects at any size; the core makes
+// The reader style. The fonts are font objects of the platform's text system
+// (CTFont on Apple systems) at any size; the core makes
 // the sizes it needs and keeps its own reference. A null bold or heading font
 // falls back on the body font, and a null body or code font on the system's.
 typedef struct {
@@ -43,10 +44,10 @@ typedef struct {
     mdcore_color selection;
 } mdcore_style;
 
-// Sets the reader style and parses the document again with it. Call
-// mdcore_resize after it to lay it out. A renderer without a style uses the
-// system fonts and the app's light palette. The page background is not part
-// of the style: the core draws on a transparent layer.
+// Sets the reader style. Call mdcore_resize after it to lay the document
+// out with it. A renderer without a style uses the system fonts and the
+// app's light palette. The page background is not part of the style: the
+// core draws on a transparent surface.
 void mdcore_set_style(void *ctx, const mdcore_style *style);
 
 // Replaces the document. Call mdcore_resize after it to lay it out.

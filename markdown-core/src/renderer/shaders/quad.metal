@@ -1,7 +1,8 @@
 #include <metal_stdlib>
 using namespace metal;
 
-// One instance = one quad. All positions are device pixels in document space.
+// One instance = one quad: `base.Quad` in src/base. All positions are device
+// pixels, relative to the origin of the display list.
 struct Instance {
     packed_float2 pos;
     packed_float2 size;
@@ -13,7 +14,7 @@ struct Instance {
 
 struct Uniforms {
     float2 viewport;       // px
-    float2 scroll;         // px
+    float2 scroll;         // px, from the origin of the display list
 };
 
 struct VOut {
