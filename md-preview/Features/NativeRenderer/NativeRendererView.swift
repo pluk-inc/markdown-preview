@@ -251,6 +251,9 @@ private final class PageArea: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        // A drag past the top or the bottom scrolls the page, so a
+        // selection can go on over more than one screen.
+        autoscroll(with: event)
         owner?.pointer(at: convert(event.locationInWindow, from: nil), phase: 1)
     }
 }
