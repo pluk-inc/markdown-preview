@@ -142,20 +142,30 @@ final class MainSplitViewController: NSSplitViewController {
             renderImmediately: renderImmediately
         )
         inspectorViewController?.setSelectedText(nil)
+        showOutlineAndMetadata(markdown: markdown, fileName: fileName, url: url)
+    }
+
+    /// Sets the sidebar's outline and the inspector's numbers for a
+    /// document: at once for a small one, off the main thread for a large
+    /// one.
+    private func showOutlineAndMetadata(markdown: String, fileName: String, url: URL?) {
         sidebarRequest += 1
         guard markdown.utf8.count > Self.syncSidebarLimit else {
+            pendingSidebarRequest = nil
             sidebarViewController?.display(markdown: markdown, fileName: fileName, fileURL: url)
             inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))
             return
         }
         sidebarViewController?.prepare(for: url)
         let request = sidebarRequest
+        pendingSidebarRequest = request
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let outline = MarkdownTOC.parse(markdown)
             let metadata = DocumentMetadata.make(url: url, markdown: markdown)
             DispatchQueue.main.async {
                 // Not for a document that was replaced or edited meanwhile.
                 guard let self, self.sidebarRequest == request else { return }
+                self.pendingSidebarRequest = nil
                 self.sidebarViewController?.refreshOutline(outline: outline, fileName: fileName)
                 self.inspectorViewController?.display(metadata: metadata)
             }
@@ -171,6 +181,8 @@ final class MainSplitViewController: NSSplitViewController {
     /// Goes up when the outline and the numbers are set, so a late result
     /// for an earlier document or text is dropped.
     private var sidebarRequest = 0
+    /// The request that is on its way off the main thread, if one is.
+    private var pendingSidebarRequest: Int?
 
     /// Update selected-range statistics without refreshing the preview or TOC.
     func updateInspectorSelection(_ text: String?) {
@@ -196,6 +208,13 @@ final class MainSplitViewController: NSSplitViewController {
     /// put.
     func openFileURLDidChange(_ newURL: URL, markdown: String) {
         contentViewController?.sourceFileURLDidChange(newURL)
+        if pendingSidebarRequest == sidebarRequest {
+            // The outline and the numbers of this text are still on their
+            // way, with the old name. Make them again for the new one, or
+            // the outline never comes.
+            showOutlineAndMetadata(markdown: markdown, fileName: ReleaseNotes.displayName(for: newURL), url: newURL)
+            return
+        }
         sidebarRequest += 1
         sidebarViewController?.openFileURLDidChange(newURL)
         if isEditingDocument {

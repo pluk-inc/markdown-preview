@@ -181,6 +181,7 @@ final class SidebarViewController: NSViewController {
         }
         setOpenFileURL(fileURL)
         activeHeadingID = nil
+        awaitsFirstOutline = true
     }
 
     /// Full document display may parse synchronously; live edits supply a
@@ -200,6 +201,8 @@ final class SidebarViewController: NSViewController {
 
     private func displayOutline(_ outline: [TOCItem], fileName: String) {
         loadViewIfNeeded()
+        let isFirstOutline = awaitsFirstOutline
+        awaitsFirstOutline = false
         guard resetOutlineState || outline != lastRenderedOutline || fileName != lastRenderedFileName else { return }
 
         // Source lines can change without altering the visible heading tree.
@@ -221,8 +224,10 @@ final class SidebarViewController: NSViewController {
             outlineView.expandItem(root, expandChildren: true)
         }
         outlineView.deselectAll(nil)
-        // The page can report its heading before a late outline is here.
-        if let activeHeadingID { setActiveHeading(activeHeadingID) }
+        // The page can report its heading before a late first outline is
+        // here. Not for a later outline: an edit can move the headings,
+        // and their numbers are positions.
+        if isFirstOutline, let activeHeadingID { setActiveHeading(activeHeadingID) }
     }
 
     /// Reuse the existing outline rows when only source locations changed.
@@ -308,6 +313,8 @@ final class SidebarViewController: NSViewController {
     /// The heading that the page reported last, for an outline that comes
     /// after it.
     private var activeHeadingID: Int?
+    /// True from a new document's `prepare` until its first outline is set.
+    private var awaitsFirstOutline = false
 
     /// Highlights the matching TOC row. Selecting via the API doesn't
     /// dispatch the outline's action, so this won't loop back into

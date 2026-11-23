@@ -219,8 +219,6 @@ Known limits, found in review and left on purpose:
   in steps), because the page height comes from it. A layout that starts
   with estimated heights would remove that; it makes the scroll bar less
   exact, so it needs the maintainer's word first.
-- The toolbar still takes about 100 ms to attach for a 1 MB document and
-  about 45 ms for a short one. Not looked at yet.
 - The End key and Select All still lay out the rest of the document on
   the main thread, in one call.
 - The core has no way to call the host yet (open a link, load an image).
