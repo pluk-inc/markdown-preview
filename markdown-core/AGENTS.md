@@ -325,6 +325,10 @@ Task check boxes, left on purpose:
   lays out everything above the reader on the main thread. A change of the
   one block's state in place, and a scroll anchor in the document in place
   of an offset, would remove both.
+- A scroll through a document that is all tasks costs 13 to 27 ms of
+  main-thread time more for each Page Down (`BENCHMARKS.md`). The cost is
+  in the system's check box. A lighter control, or boxes that are placed
+  some at a time between frames, would lower it.
 - The check box has no accessibility label (a new string that must go
   through translation), and the keyboard cannot reach it.
 - The system moves the check boxes with the scroll view; the text is drawn
