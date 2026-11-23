@@ -324,7 +324,9 @@ final class ContentViewController: NSViewController {
             }
         }
         nativeRenderer?.open(markdown)
-        // The frame is committed; `markdown-core/bench/app.py` reads this.
+        // The frame is drawn, and goes to the screen with the other changes
+        // of this turn of the run loop; `markdown-core/bench/app.py` reads
+        // this.
         LaunchSignposts.event("nativePaint")
     }
 

@@ -334,7 +334,8 @@ draw :: proc(handle: rawptr, scroll_y: f64, with_window: bool) {
 		renderer.sync_atlases(&ctx.gpu, &ctx.cache)
 		frame = renderer.frame_begin(&ctx.gpu, f32(int(ctx.scroll * ctx.scale)) - ctx.origin_px)
 	}
-	// The frame can wait for the display. Other calls go on meanwhile.
+	// The frame can wait for the display. Other calls go on meanwhile, but
+	// no other frame: the draw lock is held to its end.
 	renderer.frame_draw(&frame, with_window)
 }
 
