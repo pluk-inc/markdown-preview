@@ -250,3 +250,14 @@ test_task_items_know_their_line_and_state :: proc(t: ^testing.T) {
 	testing.expect_value(t, plain.task_line, 0)
 	testing.expect_value(t, after.done, false)
 }
+
+@(test)
+test_task_lines_count_each_kind_of_line_ending :: proc(t: ^testing.T) {
+	// CR alone, then CR LF, then LF: each ends one line.
+	doc := parse("- [ ] one\r- [ ] two\r\n- [x] three\n- [ ] four\n")
+	defer destroy(&doc)
+	testing.expect_value(t, len(doc.blocks), 4)
+	for b, i in doc.blocks {
+		testing.expect_value(t, b.task_line, i + 1)
+	}
+}

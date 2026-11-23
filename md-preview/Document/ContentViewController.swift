@@ -284,14 +284,14 @@ final class ContentViewController: NSViewController {
     /// The document the native renderer draws right after the window's
     /// first frame. Its parse, layout and Metal setup would otherwise hold
     /// that frame back.
-    private var deferredNativeMarkdown: String?
+    private var deferredNativeMarkdown: (markdown: String, keepsScroll: Bool)?
 
     private func showNativeRenderer(markdown: String, keepsScroll: Bool) {
         webView.suppressesPageLoads = true
         // A visible WKWebView keeps WebKit's GPU process busy for nothing.
         webView.isHidden = true
         guard view.window?.isVisible == true else {
-            deferredNativeMarkdown = markdown
+            deferredNativeMarkdown = (markdown, keepsScroll)
             // The window controller draws it right after its first frame.
             // This is for a window that comes on screen another way.
             DispatchQueue.main.async { [weak self] in self?.showDeferredNativeRenderer() }
@@ -304,9 +304,9 @@ final class ContentViewController: NSViewController {
     /// Returns false when nothing waited.
     @discardableResult
     func showDeferredNativeRenderer() -> Bool {
-        guard let markdown = deferredNativeMarkdown else { return false }
+        guard let deferred = deferredNativeMarkdown else { return false }
         deferredNativeMarkdown = nil
-        drawNativeRenderer(markdown: markdown, keepsScroll: false)
+        drawNativeRenderer(markdown: deferred.markdown, keepsScroll: deferred.keepsScroll)
         return true
     }
 

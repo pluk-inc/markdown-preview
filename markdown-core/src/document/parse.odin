@@ -183,11 +183,13 @@ close_text :: proc(p: ^Parser) {
 }
 
 // The line of a byte of the source, from 1. Offsets come in source order.
+// A line ends with LF, CR LF, or CR alone, as the parser reads it.
 @(private)
 line_of :: proc(p: ^Parser, offset: int) -> int {
 	offset := min(offset, len(p.source))
 	for i in p.counted_to ..< offset {
-		if p.source[i] == '\n' {
+		c := p.source[i]
+		if c == '\n' || (c == '\r' && (i + 1 >= len(p.source) || p.source[i + 1] != '\n')) {
 			p.counted_line += 1
 		}
 	}
