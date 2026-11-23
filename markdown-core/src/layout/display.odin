@@ -60,7 +60,14 @@ display :: proc(
 			// only when the span changes.
 			span: ^document.Span
 			color := l.style.secondary
+			// The same for the font: a line has a few runs of one font each.
+			run_font: base.Font
+			run_font_id: u16
 			for g in buffer.glyphs {
+				if g.font != run_font {
+					run_font = g.font
+					run_font_id = text.font_id(cache, g.font)
+				}
 				if para.src != nil {
 					index := para.base + g.index
 					if span == nil || index < span.start || index >= span.end {
@@ -72,7 +79,7 @@ display :: proc(
 				py := math.round((baseline - g.y) * scale)
 				fx := math.floor(px)
 				bin := u8(clamp((px - fx) * text.SUBPIXEL_BINS, 0, text.SUBPIXEL_BINS - 1))
-				e := text.cache_get(cache, g.font, g.id, bin)
+				e := text.cache_get(cache, run_font_id, g.id, bin)
 				if e.w == 0 {
 					continue
 				}

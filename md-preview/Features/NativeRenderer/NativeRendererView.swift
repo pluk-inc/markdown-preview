@@ -13,6 +13,11 @@
 //  scroll bar, momentum, and the elastic ends; this view reads its offset
 //  and draws the page there.
 //
+//  Drawing follows the display, not the events: a scroll or a selection
+//  change only marks the view, and a display link draws one frame for the
+//  next refresh. A draw waits for a drawable, so one draw for each event
+//  would hold the main thread and make the scroll fall behind the fingers.
+//
 //  The core is a static archive that the "Build Markdown Core" phase makes
 //  and the app target links. `MDCore` is its C header, as a module.
 //
@@ -67,6 +72,11 @@ final class NativeRendererView: NSView {
             self, selector: #selector(pageDidScroll),
             name: NSView.boundsDidChangeNotification, object: scrollView.contentView
         )
+        // A scroll by hand takes over from a scroll that the keyboard started.
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(userWillScroll),
+            name: NSScrollView.willStartLiveScrollNotification, object: scrollView
+        )
     }
 
     /// The offset of the page in the view, in points. Below zero and past
@@ -74,7 +84,58 @@ final class NativeRendererView: NSView {
     private var scrollY: CGFloat { scrollView.contentView.bounds.origin.y }
 
     @objc private func pageDidScroll() {
-        draw()
+        setNeedsDraw()
+    }
+
+    // MARK: Frames
+
+    /// Fires one time for each refresh of the view's display, while a
+    /// frame is wanted. Paused the rest of the time.
+    private var displayLink: CADisplayLink?
+    private var needsDraw = false
+    /// A scroll in progress that this view animates (Page Down, arrows).
+    private var scrollAnimation: (from: CGFloat, to: CGFloat, start: CFTimeInterval)?
+    private static let scrollAnimationDuration: CFTimeInterval = 0.2
+
+    /// Asks for a frame at the next refresh.
+    private func setNeedsDraw() {
+        guard let displayLink else { return draw() }
+        needsDraw = true
+        displayLink.isPaused = false
+    }
+
+    @objc private func displayLinkDidFire(_ link: CADisplayLink) {
+        if let animation = scrollAnimation {
+            let progress = min((link.targetTimestamp - animation.start) / Self.scrollAnimationDuration, 1)
+            // Ease out: fast at the start, slow into the end.
+            let eased = 1 - pow(1 - progress, 3)
+            scroll(toY: animation.from + (animation.to - animation.from) * eased)
+            needsDraw = true
+            if progress >= 1 { scrollAnimation = nil }
+        }
+        if needsDraw {
+            needsDraw = false
+            draw()
+        } else {
+            link.isPaused = true
+        }
+    }
+
+    /// Scrolls to an offset over a short time, as the system's views do
+    /// for the keyboard.
+    private func animateScroll(toY y: CGFloat) {
+        let limit = max(0, page.frame.height - scrollView.contentView.bounds.height)
+        let target = min(max(0, y), limit)
+        guard let displayLink, abs(target - scrollY) > 1 else { return scroll(toY: target) }
+        scrollAnimation = (scrollY, target, CACurrentMediaTime())
+        displayLink.isPaused = false
+    }
+
+    /// The offset that the view scrolls to, when it is on its way there.
+    private var scrollTarget: CGFloat { scrollAnimation?.to ?? scrollY }
+
+    @objc private func userWillScroll() {
+        scrollAnimation = nil
     }
 
     /// Scrolls to an offset, kept inside the page.
@@ -125,6 +186,7 @@ final class NativeRendererView: NSView {
             utf8.withMemoryRebound(to: CChar.self) { mdcore_set_markdown(ctx, $0.baseAddress, $0.count) }
         }
         hasDocument = true
+        scrollAnimation = nil
         relayout(force: true)
         scroll(toY: 0)
     }
@@ -181,6 +243,17 @@ final class NativeRendererView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        // The link follows the display that the view is on. It keeps the
+        // view alive, so it must end when the view leaves its window.
+        displayLink?.invalidate()
+        displayLink = nil
+        scrollAnimation = nil
+        if window != nil {
+            let link = displayLink(target: self, selector: #selector(displayLinkDidFire))
+            link.isPaused = true
+            link.add(to: .main, forMode: .common)
+            displayLink = link
+        }
         relayout()
     }
 
@@ -191,7 +264,7 @@ final class NativeRendererView: NSView {
     fileprivate func pointer(at point: NSPoint, phase: Int32) {
         if phase == 0 { window?.makeFirstResponder(self) }
         mdcore_mouse(ctx, point.x, point.y, phase)
-        draw()
+        setNeedsDraw()
     }
 
     @objc func copy(_ sender: Any?) {
@@ -205,7 +278,7 @@ final class NativeRendererView: NSView {
     override func selectAll(_ sender: Any?) {
         mdcore_select_all(ctx)
         updatePageHeight()
-        draw()
+        setNeedsDraw()
     }
 
     private enum Key {
@@ -221,16 +294,17 @@ final class NativeRendererView: NSView {
     override func keyDown(with event: NSEvent) {
         let step = bounds.height - 60
         switch event.keyCode {
-        case Key.pageDown, Key.space: scroll(toY: scrollY + step)
-        case Key.pageUp: scroll(toY: scrollY - step)
-        case Key.downArrow: scroll(toY: scrollY + 48)
-        case Key.upArrow: scroll(toY: scrollY - 48)
-        case Key.home: scroll(toY: 0)
+        // From the place a scroll in progress goes to, so fast key presses add up.
+        case Key.pageDown, Key.space: animateScroll(toY: scrollTarget + step)
+        case Key.pageUp: animateScroll(toY: scrollTarget - step)
+        case Key.downArrow: animateScroll(toY: scrollTarget + 48)
+        case Key.upArrow: animateScroll(toY: scrollTarget - 48)
+        case Key.home: animateScroll(toY: 0)
         case Key.end:
             // The end of the document, not of the part laid out so far.
             _ = mdcore_layout_more(ctx, 0)
             updatePageHeight()
-            scroll(toY: .greatestFiniteMagnitude)
+            animateScroll(toY: .greatestFiniteMagnitude)
         default: super.keyDown(with: event)
         }
     }

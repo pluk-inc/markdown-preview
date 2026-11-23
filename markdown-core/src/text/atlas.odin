@@ -124,7 +124,8 @@ cache_destroy :: proc(c: ^Glyph_Cache) {
 	c^ = {}
 }
 
-@(private)
+// The number of a font in the cache. A caller that draws a run of glyphs of
+// one font asks one time and uses `cache_get` with the number.
 font_id :: proc(c: ^Glyph_Cache, font: base.Font) -> u16 {
 	for f, i in c.fonts {
 		if f.font == font || font_equal(f.font, font) {
@@ -138,8 +139,7 @@ font_id :: proc(c: ^Glyph_Cache, font: base.Font) -> u16 {
 // The place of a glyph in its atlas. The glyph is drawn the first time.
 // `bin` is the part of a pixel that the pen stands right of a pixel edge,
 // in 1/SUBPIXEL_BINS.
-cache_get :: proc(c: ^Glyph_Cache, font: base.Font, glyph: u16, bin: u8) -> Glyph_Entry {
-	fid := font_id(c, font)
+cache_get :: proc(c: ^Glyph_Cache, fid: u16, glyph: u16, bin: u8) -> Glyph_Entry {
 	key := Glyph_Key{fid, glyph, bin}
 	if entry, ok := c.entries[key]; ok {
 		return entry

@@ -72,6 +72,12 @@ These came from the maintainer. Do not undo one without asking.
 - The Swift host owns the view, the scroll position, and the events. The
   scroll bar is AppKit's: a transparent `NSScrollView` over the Metal
   layer.
+- The host draws one frame for each display refresh, from a display link
+  (`NSView.displayLink`), never one for each event. A draw waits for a
+  drawable, so a draw in an event handler holds the main thread: a scroll
+  measured at twice its time that way (see Numbers). An event calls
+  `setNeedsDraw()`. Only a new layout (first frame, resize, style) draws
+  at once.
 
 ## How to check a change
 
@@ -113,6 +119,19 @@ first version of the core. Not measured again after the rewrite.
 | Text on screen, 152 KB file | 771–836 ms | 427–470 ms |
 | Memory, small file, all processes | 139 MB | 89 MB |
 
+Scroll, 2026-11-23, Debug build, 60 Hz display, 600 scroll steps sent
+8 ms apart (4.8 s of input) over a document of 18,000 points:
+
+| | Draw in the event | Draw from the display link |
+| --- | --- | --- |
+| Time to finish the scroll | 10.0 s | 5.7–6.3 s |
+| Main thread held by draws | 4.1 s | 0.2–1.5 s |
+| Median draw | 6.8 ms | 0.3–3.8 ms |
+
+The slow frames that stay (10 to 50 ms, a few in the first screens of a
+document) are glyphs drawn for the first time and the first growth of the
+glyph atlas. Later passes over the same text have none.
+
 ## Open work
 
 Known limits, found in review and left on purpose:
@@ -121,6 +140,9 @@ Known limits, found in review and left on purpose:
   blocks stop between lines.
 - A glyph atlas that reaches 1024 × 16384 px drops new glyphs until the
   cache is emptied. More atlas pages would fix it.
+- The first growth of the glyph atlas costs one frame of 40 to 50 ms,
+  because the whole texture is made again. A larger first size or atlas
+  pages would remove it.
 - The parser reads a heading right after a table as a table row, and
   accepts a header row with more cells than the delimiter row. Both are
   upstream behavior.
@@ -157,3 +179,7 @@ scroll position, footnotes and alerts, VoiceOver, print and export.
 - **2026-11-22** — More review fixes: the Margins slider (`column_inset`
   in the style), blank lines in copied code, markers of empty items and of
   items that start with code. System scroll bar added. This guide added.
+- **2026-11-23** — The maintainer found the scroll slower and less smooth
+  than the web view's. Measured: each draw in a scroll event held the main
+  thread about 7 ms. Drawing moved to a display link, the keyboard scroll
+  is animated, and the display list looks up a font one time for each run.
