@@ -90,12 +90,12 @@ Source of truth: `Version.xcconfig` for the version numbers, `CHANGELOG.md` for 
 ./scripts/rollback-release.sh 0.0.2 --keep-github  # leave GitHub release in place
 ./scripts/rollback-release.sh --latest --yes       # skip the confirmation prompt
 ```
-Default is **unpublish** (reversible — flips `published=false` on Amore so it disappears from the appcast). Use `--delete` only when you're sure; it permanently removes the release. To re-publish after a non-destructive rollback: `amore releases update <version> -b doc.md-preview --published true`.
+Default is **unpublish** (reversible — flips `published=false` on Amore so it disappears from the appcast). Use `--delete` only when you're sure; it permanently removes the release. To re-publish after a non-destructive rollback: `amore releases update <version> -b sh.pluk.md-preview --published true`.
 
 ## Amore configuration (already wired)
-- **Hosting**: Amore-managed; `Info.plist` currently uses `https://release.md-preview.app/v1/apps/doc.md-preview/appcast.xml`. Verify the current Amore hosting configuration before releasing.
+- **Hosting**: Amore-managed; `Info.plist` currently uses `https://release.md-preview.app/v1/apps/sh.pluk.md-preview/appcast.xml`. Verify the current Amore hosting configuration before releasing.
 - **Codesign identity**: `Developer ID Application: Mohamed Fauzaan (5P3TSMNV42)`
 - **Notary keychain profile**: `md-preview-notary`
 - **EdDSA public key** (in Info.plist `SUPublicEDKey`): `gIQjgqfjkIR+egQ4S1oBLxE/NCDxpXXGdZXSpn04VAY=` — private key in login Keychain
 
-To inspect or change: `amore config show --bundle-id doc.md-preview` / `amore config set ...`. CLI lives at `/usr/local/bin/amore`.
+To inspect or change: `amore config show --bundle-id sh.pluk.md-preview` / `amore config set ...`. CLI lives at `/usr/local/bin/amore`.

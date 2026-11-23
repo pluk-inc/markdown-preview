@@ -16,7 +16,7 @@ class PreviewProvider: QLPreviewProvider, QLPreviewingController {
         #if DEBUG
         // Debug-only perf instrumentation on the shared `Logger.perf` (its
         // subsystem is the appex bundle id, so the bench scripts' `subsystem
-        // BEGINSWITH "doc.md-preview"` predicate picks it up alongside the
+        // BEGINSWITH "sh.pluk.md-preview"` predicate picks it up alongside the
         // app's `[mdp-perf]` entries). Default log level (not .debug): Quick
         // Look appex processes are short-lived, and their debug-level
         // messages don't reliably reach a running `log stream` —

@@ -60,18 +60,18 @@ pluginkit -m -p com.apple.quicklook.preview | grep md-preview   # verify
 (`qlmanage -m plugins` only lists legacy generators — appex-based extensions
 show up in `pluginkit`.) A `+` marks the elected extension. If an installed
 Release copy is elected instead of the Debug build (bundle id
-`doc.md-preview.dev.quick-look`), elect the Debug appex for the run:
+`sh.pluk.md-preview.dev.quick-look`), elect the Debug appex for the run:
 
 ```bash
-pluginkit -e use -i doc.md-preview.dev.quick-look
+pluginkit -e use -i sh.pluk.md-preview.dev.quick-look
 # …and restore afterwards:
-pluginkit -e default -i doc.md-preview.dev.quick-look
+pluginkit -e default -i sh.pluk.md-preview.dev.quick-look
 ```
 
 If no `[mdp-perf-ql]` lines are captured, the elected appex is either a
 Release build (instrumentation compiled out) or a different copy than the
 one you just built. Beware: every Debug build of this project registers an
-appex with the same bundle id (`doc.md-preview.dev.quick-look`), so multiple
+appex with the same bundle id (`sh.pluk.md-preview.dev.quick-look`), so multiple
 worktrees/DerivedData folders compete and LaunchServices picks one
 arbitrarily. Verify which binary actually served the preview with
 `ps -axo pid,comm | grep quick-look.appex` while the panel is open, and
@@ -106,7 +106,7 @@ Measures the innerHTML-swap (or morphdom) update path under repeated edits:
   state (in its sandbox container) before each run so macOS window restoration
   doesn't reopen previous samples and pollute RSS/CPU and update timings.
 - App log capture matches the built app's exact bundle id. Prefix matching
-  (`subsystem BEGINSWITH "doc.md-preview"`) can accidentally ingest Quick
+  (`subsystem BEGINSWITH "sh.pluk.md-preview"`) can accidentally ingest Quick
   Actions or extensions and assign their timings to the document under test.
 - `footprint` snapshots usually need sudo; the script degrades to ps-only
   RSS when unavailable.
