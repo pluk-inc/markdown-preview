@@ -23,6 +23,8 @@ markdown-core/
   pkg/md4c/        the Markdown parser (C), built into the library
   build.sh         builds libmdcore.a
   test.sh          runs the unit tests
+  bench/           the benchmark programs: the core alone, and the app
+  BENCHMARKS.md    the main numbers over time, and how to measure them
   AGENTS.md        state, decisions, open work, and timeline of the project
 ```
 

@@ -324,6 +324,8 @@ final class ContentViewController: NSViewController {
             }
         }
         nativeRenderer?.open(markdown)
+        // The frame is committed; `markdown-core/bench/app.py` reads this.
+        LaunchSignposts.event("nativePaint")
     }
 
     private func removeNativeRenderer() {

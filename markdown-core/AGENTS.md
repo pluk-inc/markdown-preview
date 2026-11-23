@@ -110,8 +110,14 @@ Things that cost time before:
 
 ## Numbers
 
-Release build, new document, measured on screen, 2026-11-21, with the
-first version of the core. Not measured again after the rewrite.
+The main numbers are recorded in `BENCHMARKS.md`, with the two programs
+that measure them (`bench/core.py`, `bench/app.py`). Before a pull request
+that changes the core or the host view, run both on the base and on the
+change, and add a row.
+
+The first version of the core, measured on screen on 2026-11-21 with a
+Release build and a new document (another method, so do not compare it
+with `BENCHMARKS.md`):
 
 | | Web view | Native |
 | --- | --- | --- |
@@ -149,6 +155,9 @@ Known limits, found in review and left on purpose:
 - A `WKWebView` object still exists in a native window, which starts
   WebKit's GPU process (about 5 MB). Making the web view on demand would
   remove it.
+- A 1 MB document takes about 130 MB of heap after the full layout, and
+  the app shows it about 280 ms later than a short one, which the core's
+  first frame does not account for (`BENCHMARKS.md`).
 - The core has no way to call the host yet (open a link, load an image).
   It needs a callback struct given at creation.
 
@@ -183,3 +192,7 @@ scroll position, footnotes and alerts, VoiceOver, print and export.
   than the web view's. Measured: each draw in a scroll event held the main
   thread about 7 ms. Drawing moved to a display link, the keyboard scroll
   is animated, and the display list looks up a font one time for each run.
+- **2026-11-23** — The maintainer asked for main numbers that are kept
+  over time. `bench/core.py` (the core, no window) and `bench/app.py` (the
+  app, cold launch, from a new `nativePaint` signpost) added, with the
+  first record in `BENCHMARKS.md`.
