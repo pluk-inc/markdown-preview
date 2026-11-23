@@ -92,7 +92,7 @@ def run_once(app: Path, executable: Path, document: Path, renderer: str) -> dict
                 if entry.get("signpostName") == event and entry.get("processID") == pid:
                     painted = datetime.strptime(entry["timestamp"], "%Y-%m-%d %H:%M:%S.%f%z").timestamp()
         except queue.Empty:
-            pass
+            pass  # the deadline passed: no frame, reported below
         if painted is None:
             raise RuntimeError(f"no {event} signpost from {app} in {PAINT_TIMEOUT:g} s")
         time.sleep(SETTLE)
