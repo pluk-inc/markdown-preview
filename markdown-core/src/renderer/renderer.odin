@@ -14,10 +14,8 @@
 //                                          own references; scroll from the
 //                                          origin of the display list, in
 //                                          pixels
-//   frame_draw(frame, target)              draws it into `target`, the host's
-//                                          surface for this frame; with nil it
-//                                          takes one from the surface it got
-//                                          at init, and waits for it if it must
+//   frame_draw(frame)                      draws it and waits for the display
+//                                          if it must
 //
 // A frame draws the rectangles, then the selection, then the glyphs. The
 // two steps are apart so that the caller can let other threads use the

@@ -2,88 +2,90 @@
 //  NativeRenderLoop.swift
 //  md-preview
 //
-//  The thread that draws the frames of one native renderer view.
+//  Draws the frames of one native renderer view, one for each refresh of
+//  its display, off the main thread.
 //
-//  A `CAMetalDisplayLink` on the thread's run loop calls it one time for
-//  each refresh of the view's display, with the drawable for that frame.
-//  That is the full rate of the display: on a 120 Hz display the links that
-//  AppKit gives a view, a window, or a screen fire only 60 times a second,
-//  whatever rate they are asked for. While such a link is on the layer, it is
-//  the only source of drawables, so every frame is drawn in its callback.
+//  The clock is a `CVDisplayLink`. It is deprecated since macOS 15 in favor
+//  of the display links that AppKit gives a view, a window, or a screen, but
+//  on a 120 Hz display those fire only 60 times a second, whatever rate they
+//  are asked for (measured: 64 against 130 a second). `CAMetalDisplayLink`
+//  has the full rate too, but most of its frames did not reach the screen
+//  for a window that is not in front, and with a transparent layer its
+//  callbacks stopped.
 //
 //  The main thread only says what it wants: a frame at a scroll offset, or a
-//  scroll to an offset over a short time. The thread draws the newest
-//  request, so a busy main thread does not hold a frame, and the link is
-//  paused while nothing is wanted.
+//  scroll to an offset over a short time. The link's thread draws the newest
+//  request, so a busy main thread does not hold a frame. The link runs only
+//  while something is wanted.
 //
 
 import AppKit
+import CoreVideo
 import MDCore
-import QuartzCore
 
-nonisolated final class NativeRenderLoop: NSObject, CAMetalDisplayLinkDelegate, @unchecked Sendable {
+nonisolated final class NativeRenderLoop: @unchecked Sendable {
     /// Called on the main thread after each frame. `animatedY` is where a
     /// scroll that this loop animates is now; `animationEnded` is true for
     /// the frame that reached its end.
     nonisolated(unsafe) var didDraw: (@MainActor (_ animatedY: Double?, _ animationEnded: Bool) -> Void)?
 
     private static let scrollAnimationDuration: CFTimeInterval = 0.2
+    /// Refreshes with nothing to draw before the link stops. A stop and a
+    /// start cost more than a few empty calls, and a scroll asks for frames
+    /// in a row.
+    private static let idleTicksBeforeStop = 30
 
     nonisolated(unsafe) private let ctx: UnsafeMutableRawPointer?
-    nonisolated(unsafe) private var runLoop: CFRunLoop!
-    /// Used on the render thread only.
-    nonisolated(unsafe) private var link: CAMetalDisplayLink!
-    private let ended = DispatchSemaphore(value: 0)
+    nonisolated(unsafe) private var link: CVDisplayLink?
+    /// Layout steps, and frames that the main thread waits for. The core
+    /// lets one draw at a time run, so these and the link's frames do not
+    /// overlap.
+    private let queue = DispatchQueue(label: "md-preview.native-renderer", qos: .userInteractive)
 
     private let lock = NSLock()
     // Under the lock.
     nonisolated(unsafe) private var scrollY = 0.0
     nonisolated(unsafe) private var wantsFrame = false
-    nonisolated(unsafe) private var isPaused = true
+    nonisolated(unsafe) private var isRunning = false
+    nonisolated(unsafe) private var idleTicks = 0
     nonisolated(unsafe) private var animation: (from: Double, to: Double, start: CFTimeInterval)?
-    nonisolated(unsafe) private var waiters: [DispatchSemaphore] = []
 
-    /// Starts the thread. `ctx` is the core's renderer for `layer`; it must
-    /// live until `stop()` returned.
-    init(layer: CAMetalLayer, ctx: UnsafeMutableRawPointer?) {
+    /// `ctx` is the core's renderer; it must live until `stop()` returned.
+    init(ctx: UnsafeMutableRawPointer?) {
         self.ctx = ctx
-        super.init()
-        let started = DispatchSemaphore(value: 0)
-        let thread = Thread { [self] in
-            let link = CAMetalDisplayLink(metalLayer: layer)
-            link.delegate = self
-            link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
-            link.isPaused = true
-            link.add(to: .current, forMode: .default)
-            self.link = link
-            runLoop = CFRunLoopGetCurrent()
-            started.signal()
-            CFRunLoopRun()
-            link.invalidate()
-            ended.signal()
+        var link: CVDisplayLink?
+        CVDisplayLinkCreateWithActiveCGDisplays(&link)
+        self.link = link
+        if let link {
+            CVDisplayLinkSetOutputHandler(link) { [weak self] _, _, _, _, _ in
+                self?.tick()
+                return kCVReturnSuccess
+            }
         }
-        thread.name = "md-preview.native-renderer"
-        thread.qualityOfService = .userInteractive
-        thread.start()
-        started.wait()
     }
 
-    /// Ends the thread and waits for it. No frame and no block runs after
-    /// this returned. Any thread but the render thread.
+    /// The display that the view is on now. The link follows its refresh.
+    func setDisplay(_ display: CGDirectDisplayID) {
+        if let link { CVDisplayLinkSetCurrentCGDisplay(link, display) }
+    }
+
+    /// Ends the frames and waits for the one in progress and for the work
+    /// in the queue. Nothing of this loop touches the core after it
+    /// returned. Not from the link's own thread.
     func stop() {
-        perform { CFRunLoopStop(CFRunLoopGetCurrent()) }
-        ended.wait()
         lock.lock()
-        let waiting = waiters
-        waiters.removeAll()
+        isRunning = false
+        wantsFrame = false
+        animation = nil
         lock.unlock()
-        waiting.forEach { $0.signal() }
+        // Returns when no callback runs any more.
+        if let link { CVDisplayLinkStop(link) }
+        queue.sync {}
     }
 
-    /// Runs `work` on the render thread, between frames.
+    /// Runs `work` off the main thread, between frames.
     func perform(_ work: @escaping @Sendable () -> Void) {
-        CFRunLoopPerformBlock(runLoop, CFRunLoopMode.defaultMode.rawValue, work)
-        CFRunLoopWakeUp(runLoop)
+        queue.async(execute: work)
     }
 
     /// Asks for a frame at this scroll offset at the next refresh. A newer
@@ -92,31 +94,22 @@ nonisolated final class NativeRenderLoop: NSObject, CAMetalDisplayLinkDelegate, 
         lock.lock()
         scrollY = y
         wantsFrame = true
-        let wake = isPaused
-        isPaused = false
         lock.unlock()
-        if wake { resume() }
+        start()
     }
 
-    /// Runs `before` on the render thread, then draws a frame at this
-    /// offset in the next refresh, and waits for it. For a frame that must
-    /// be there with the window's: the first one, and one for a new size.
-    /// Returns false when no frame came in `timeout`, which is so for a
-    /// window that is not on screen.
-    @discardableResult
-    func frameNow(at y: Double, timeout: TimeInterval = 0.1, before: (@Sendable () -> Void)? = nil) -> Bool {
-        let done = DispatchSemaphore(value: 0)
-        perform { [self] in
+    /// Runs `before`, then draws a frame at this offset, and waits for it.
+    /// For a frame that must be there with the window's: the first one, and
+    /// one for a new size.
+    func frameNow(at y: Double, before: (@Sendable () -> Void)? = nil) {
+        lock.lock()
+        scrollY = y
+        wantsFrame = false
+        lock.unlock()
+        queue.sync { [ctx] in
             before?()
-            lock.lock()
-            scrollY = y
-            wantsFrame = true
-            isPaused = false
-            waiters.append(done)
-            lock.unlock()
-            link.isPaused = false
+            autoreleasepool { mdcore_draw(ctx, y) }
         }
-        return done.wait(timeout: .now() + timeout) == .success
     }
 
     /// Scrolls from one offset to another over a short time, as the
@@ -125,10 +118,8 @@ nonisolated final class NativeRenderLoop: NSObject, CAMetalDisplayLinkDelegate, 
     func animateScroll(from: Double, to: Double) {
         lock.lock()
         animation = (from, to, CACurrentMediaTime())
-        let wake = isPaused
-        isPaused = false
         lock.unlock()
-        if wake { resume() }
+        start()
     }
 
     func cancelScrollAnimation() {
@@ -137,16 +128,22 @@ nonisolated final class NativeRenderLoop: NSObject, CAMetalDisplayLinkDelegate, 
         lock.unlock()
     }
 
-    private func resume() {
-        perform { [self] in link.isPaused = false }
+    private func start() {
+        lock.lock()
+        let wasRunning = isRunning
+        isRunning = true
+        idleTicks = 0
+        lock.unlock()
+        if !wasRunning, let link { CVDisplayLinkStart(link) }
     }
 
-    func metalDisplayLink(_ link: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
+    /// One refresh of the display, on the link's thread.
+    private func tick() {
         lock.lock()
         var animatedY: Double?
         var animationEnded = false
         if let animation {
-            let progress = min(max((update.targetTimestamp - animation.start) / Self.scrollAnimationDuration, 0), 1)
+            let progress = min(max((CACurrentMediaTime() - animation.start) / Self.scrollAnimationDuration, 0), 1)
             // Ease out: fast at the start, slow into the end.
             let eased = 1 - pow(1 - progress, 3)
             scrollY = animation.from + (animation.to - animation.from) * eased
@@ -157,25 +154,39 @@ nonisolated final class NativeRenderLoop: NSObject, CAMetalDisplayLinkDelegate, 
                 animationEnded = true
             }
         }
-        guard wantsFrame else {
-            // Nothing to draw: no more calls until a request comes.
-            isPaused = true
-            link.isPaused = true
+        guard wantsFrame, isRunning else {
+            idleTicks += 1
+            let stops = isRunning && idleTicks >= Self.idleTicksBeforeStop
+            if stops { isRunning = false }
             lock.unlock()
+            // A stop waits for this callback, so it cannot be made in it.
+            if stops { queue.async { [self] in stopIfIdle() } }
             return
         }
         wantsFrame = false
+        idleTicks = 0
         let y = scrollY
-        let waiting = waiters
-        waiters.removeAll()
         lock.unlock()
 
-        autoreleasepool {
-            mdcore_draw(ctx, y, Unmanaged.passUnretained(update.drawable).toOpaque())
-        }
-        waiting.forEach { $0.signal() }
+        autoreleasepool { mdcore_draw(ctx, y) }
         DispatchQueue.main.async { [weak self] in
             self?.didDraw?(animatedY, animationEnded)
         }
+    }
+
+    private func stopIfIdle() {
+        lock.lock()
+        let idle = !isRunning
+        lock.unlock()
+        guard idle, let link else { return }
+        CVDisplayLinkStop(link)
+        // A request can have come in between: it found the link "running"
+        // just before the stop, or started it just before. Start it again
+        // for that request.
+        lock.lock()
+        let wanted = isRunning || wantsFrame || animation != nil
+        if wanted { isRunning = true; idleTicks = 0 }
+        lock.unlock()
+        if wanted { CVDisplayLinkStart(link) }
     }
 }

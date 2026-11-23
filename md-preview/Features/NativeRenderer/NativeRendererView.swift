@@ -15,9 +15,10 @@
 //
 //  Drawing follows the display, not the events: a scroll or a selection
 //  change only asks the render loop for a frame, and the loop draws one
-//  frame for each refresh of the display, on its own thread
-//  (`NativeRenderLoop`). A draw can make glyph bitmaps, and on the main
-//  thread that made the scroll fall behind the fingers.
+//  frame for each refresh of the display, off the main thread
+//  (`NativeRenderLoop`). A draw can wait for a drawable and can make glyph
+//  bitmaps, and on the main thread that made the scroll fall behind the
+//  fingers.
 //
 //  The core is a static archive that the "Build Markdown Core" phase makes
 //  and the app target links. `MDCore` is its C header, as a module.
@@ -36,8 +37,8 @@ final class NativeRendererView: NSView {
     private var layoutScheduled = false
     /// Goes up with each new layout (a document, a size, a style).
     private var layoutCount = 0
-    /// The thread that draws the frames and runs the layout steps, so work
-    /// that makes glyphs or breaks lines does not hold the main thread.
+    /// Draws the frames and runs the layout steps off the main thread, so
+    /// work that makes glyphs or breaks lines does not hold it.
     /// Read in `deinit`, which is why it is unsafe.
     nonisolated(unsafe) private var renderLoop: NativeRenderLoop!
     /// True while the scroll view takes the offset of a scroll that the
@@ -64,7 +65,7 @@ final class NativeRendererView: NSView {
         wantsLayer = true
         layerContentsRedrawPolicy = .duringViewResize
         ctx = mdcore_create(Unmanaged.passUnretained(layer!).toOpaque())
-        renderLoop = NativeRenderLoop(layer: layer as! CAMetalLayer, ctx: ctx)
+        renderLoop = NativeRenderLoop(ctx: ctx)
         renderLoop.didDraw = { [weak self] animatedY, animationEnded in
             self?.frameDidDraw(animatedY: animatedY, animationEnded: animationEnded)
         }
@@ -219,29 +220,22 @@ final class NativeRendererView: NSView {
         laidOutScale = scale
         let size = bounds.size
         layoutCount += 1
-        // The new size, then its frame, in this order on the render thread.
+        // The new size, then its frame, in this order off the main thread.
         drawNow { [ctx] in mdcore_resize(ctx, size.width, size.height, scale) }
         continueLayout()
     }
 
-    /// Draws a frame at the next refresh and waits for it: the first frame
-    /// of a document, and a frame for a new size, which must be there with
-    /// the window's. `before` runs on the render thread ahead of the frame.
+    /// Draws a frame now and waits for it: the first frame of a document,
+    /// and a frame for a new size, which must be there with the window's.
+    /// `before` runs off the main thread ahead of the frame.
     private func drawNow(before: (@Sendable () -> Void)? = nil) {
         guard hasDocument, bounds.width > 0, bounds.height > 0 else { return }
-        if window?.isVisible == true {
-            renderLoop.frameNow(at: scrollY, before: before)
-        } else {
-            // No refresh comes for a window that is not on screen, so there
-            // is nothing to wait for. The frame is drawn when one does.
-            if let before { renderLoop.perform(before) }
-            renderLoop.requestFrame(at: scrollY)
-        }
+        renderLoop.frameNow(at: scrollY, before: before)
         updatePageHeight()
     }
 
     /// Lays out the rest of a long document in steps shorter than a frame,
-    /// on the render thread, so frames go between them.
+    /// off the main thread, so frames go between them.
     private func continueLayout() {
         guard !layoutScheduled else { return }
         layoutScheduled = true
@@ -277,7 +271,21 @@ final class NativeRendererView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window == nil { endScrollAnimation() }
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didChangeScreenNotification, object: nil)
+        if let window {
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(followDisplay),
+                name: NSWindow.didChangeScreenNotification, object: window
+            )
+        }
+        followDisplay()
         relayout()
+    }
+
+    /// The render loop's clock runs at the refresh rate of one display.
+    @objc private func followDisplay() {
+        guard let number = window?.screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return }
+        renderLoop.setDisplay(CGDirectDisplayID(number.uint32Value))
     }
 
     // MARK: Input

@@ -227,17 +227,13 @@ frame_begin :: proc(r: ^Renderer, scroll_px: f32) -> Frame {
 	return Frame{state = r^, scroll_px = scroll_px}
 }
 
-// Draws the frame and gives its references back. `target` is the drawable
-// to draw into; with nil the layer gives the next one, which can wait.
-frame_draw :: proc(f: ^Frame, target: rawptr) {
+// Draws the frame and gives its references back.
+frame_draw :: proc(f: ^Frame) {
 	defer release_objects(&f.state)
 	if shared.pipeline == nil || f.width <= 0 || f.height <= 0 {
 		return
 	}
-	drawable := cast(^CA.MetalDrawable)target
-	if drawable == nil {
-		drawable = f.layer->nextDrawable()
-	}
+	drawable := f.layer->nextDrawable()
 	if drawable == nil {
 		return
 	}
