@@ -13,7 +13,7 @@ Markdown Preview 0.0.75 brings a shorter editor context menu, a favorite folder 
 
 - **Your Favorite Folder Reopens.** Opening the app without a file, or clicking its Dock icon with no window open, brings back your last favorite folder and its last file instead of the file chooser ([#664](https://github.com/pluk-inc/markdown-preview/pull/664)).
 - **Tidier File Context Menu.** Right-clicking a file in the navigator lists Open in New Tab and the other open actions first, with Show in Finder below them and no items added by macOS ([#658](https://github.com/pluk-inc/markdown-preview/pull/658), [#659](https://github.com/pluk-inc/markdown-preview/pull/659)).
-- **New App Identity, Same Settings.** Markdown Preview now runs under a new app identifier and brings your settings, shared links, and tips along at its first launch. Open Recent starts empty, folders you gave write access to ask once more, and the app offers to update the md-preview command ([#650](https://github.com/pluk-inc/markdown-preview/pull/650)).
+- **New App Identity, Same Settings.** Markdown Preview now runs under a new app identifier and brings your settings and shared links along, though Open Recent starts empty and folders you gave write access to ask once more ([#650](https://github.com/pluk-inc/markdown-preview/pull/650)).
 
 ### Fixed
 
