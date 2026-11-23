@@ -48,10 +48,20 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-23 | a29a58e9 | 684 / 960 | 64 / 235 | 510 / 1460 | 69 / 46 | 3.3 / 299 | 0.36 / 0.33 | 10.8 / 133 |
 | 2026-11-23 | shaped text only near the view | 647 / 918 | 65 / 111 | 505 / 1245 | 59 / 65 | 3.0 / 311 | 0.34 / 0.32 | 10.6 / 28.1 |
 | 2026-11-23 | outline and inspector numbers off the main thread | 648 / 653 | 69 / 103 | 600 / 1090 | – | – | – | – |
+| 2026-11-23 | frames from a CVDisplayLink, at the rate of the display | 704 / 717 | 66 / 111 | 575 / 1235 | – | – | – | – |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
 long one.
+
+## Frame rate (2026-11-23)
+
+`app.py` does not scroll, so it cannot show this change; its row above
+says only that launch, CPU, and memory stayed the same (the base in that
+sitting: 674 / 646 ms, 65 / 111 MB, 565 / 1190 ms). The rate was measured
+with a recording build on the built-in 120 Hz display, in a keyboard
+scroll of 14 pages: all 172 frame gaps were 16.7 ms before, and 314 of 322
+are 8.3 ms now. `bench/core.py` was not run: the core did not change.
 
 ## Shaped text only near the view (2026-11-23)
 

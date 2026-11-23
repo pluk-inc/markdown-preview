@@ -112,12 +112,18 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
     func frameNow(at y: Double, before: (@Sendable () -> Void)? = nil) {
         lock.lock()
         scrollY = y
-        wantsFrame = false
         lock.unlock()
         queue.sync { [ctx] in
             before?()
             autoreleasepool { mdcore_draw(ctx, y) }
         }
+        // A frame of the link that took an older offset just before can be
+        // drawn after this one. One more frame makes the newest offset the
+        // last one on screen.
+        lock.lock()
+        wantsFrame = true
+        lock.unlock()
+        start()
     }
 
     /// Scrolls from one offset to another over a short time, as the
@@ -146,7 +152,13 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
         isRunning = true
         idleTicks = 0
         lock.unlock()
-        if !wasRunning, let link { CVDisplayLinkStart(link) }
+        guard let link else {
+            // No display link (it could not be made): draw what is wanted
+            // one time, without a clock.
+            queue.async { [self] in tick() }
+            return
+        }
+        if !wasRunning { CVDisplayLinkStart(link) }
     }
 
     /// One refresh of the display, on the link's thread.
@@ -154,7 +166,9 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
         lock.lock()
         var step: ScrollStep?
         if let animation {
-            let progress = min(max((CACurrentMediaTime() - animation.start) / Self.scrollAnimationDuration, 0), 1)
+            // Without a clock there are no steps: the scroll goes to its end.
+            let progress = link == nil
+                ? 1 : min(max((CACurrentMediaTime() - animation.start) / Self.scrollAnimationDuration, 0), 1)
             // Ease out: fast at the start, slow into the end.
             let eased = 1 - pow(1 - progress, 3)
             scrollY = animation.from + (animation.to - animation.from) * eased

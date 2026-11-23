@@ -123,14 +123,16 @@ final class NativeRendererView: NSView {
             followsRenderLoop = true
             scroll(toY: step.y)
             followsRenderLoop = false
-            if step.isLast { scrollAnimation = nil }
+            if step.isLast {
+                scrollAnimation = nil
+                // A frame that the main thread drew meanwhile (a new size)
+                // had the offset before this step. Draw the end again.
+                setNeedsDraw()
+            }
             // The page can have become shorter under the scroll (a new
             // size, a zoom), so the frame is past the end. Draw it where
             // the scroll view could go.
-            if abs(scrollY - step.y) > 0.5 {
-                endScrollAnimation()
-                setNeedsDraw()
-            }
+            if abs(scrollY - step.y) > 0.5 { endScrollAnimation() }
         }
         // A draw can lay out more of the page, when the view came to the
         // end of what the steps reached. The main thread reads the height
@@ -152,8 +154,12 @@ final class NativeRendererView: NSView {
     }
 
     private func endScrollAnimation() {
+        guard scrollAnimation != nil else { return }
         scrollAnimation = nil
         renderLoop.cancelScrollAnimation()
+        // The loop can have drawn a step that the scroll view never took.
+        // The page must show the offset of the scroll view.
+        setNeedsDraw()
     }
 
     /// The offset that the view scrolls to, when it is on its way there.
@@ -229,7 +235,8 @@ final class NativeRendererView: NSView {
         let size = bounds.size
         layoutCount += 1
         // The new size, then its frame, in this order off the main thread.
-        drawNow { [ctx] in mdcore_resize(ctx, size.width, size.height, scale) }
+        nonisolated(unsafe) let ctx = ctx
+        drawNow { mdcore_resize(ctx, size.width, size.height, scale) }
         continueLayout()
     }
 
