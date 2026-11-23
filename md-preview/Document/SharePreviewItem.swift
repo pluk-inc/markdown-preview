@@ -55,33 +55,6 @@ enum SharePreviewItem {
     /// unless there are unsaved edits. Also the manage-sharing sheet's
     /// subtitle, so both read the same.
     static func subtitle(for markdown: String) -> String {
-        if let cached = cachedSubtitle, hasSameBytes(cached.markdown, markdown) { return cached.text }
-        let text = makeSubtitle(for: markdown)
-        cachedSubtitle = (markdown, text)
-        return text
-    }
-
-    /// The toolbar validates its share item again and again while events
-    /// come in (about four times a second during a scroll), and each time it
-    /// asks for the items. Counting the words of a 1 MB document takes tens
-    /// of milliseconds, so the last subtitle is kept.
-    private static var cachedSubtitle: (markdown: String, text: String)?
-
-    /// True for the same UTF-8 bytes. `==` is not enough: it takes a
-    /// composed and a decomposed "é" as equal, and the subtitle shows the
-    /// size in bytes. A compare of 1 MB of bytes takes microseconds.
-    private static func hasSameBytes(_ a: String, _ b: String) -> Bool {
-        guard a.utf8.count == b.utf8.count else { return false }
-        let same = a.utf8.withContiguousStorageIfAvailable { left in
-            b.utf8.withContiguousStorageIfAvailable { right in
-                memcmp(left.baseAddress, right.baseAddress, left.count) == 0
-            }
-        }
-        // A string without contiguous storage (bridged from Objective-C).
-        return (same ?? nil) ?? a.utf8.elementsEqual(b.utf8)
-    }
-
-    private static func makeSubtitle(for markdown: String) -> String {
         // English singular/plural forms live in Localizable.stringsdict.
         let words = String.localizedStringWithFormat(
             NSLocalizedString("%ld words", comment: "Share popover word count"),

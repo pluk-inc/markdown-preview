@@ -333,7 +333,8 @@ extension DocumentWindowController {
     }
 
     private func makeShareItem() -> NSToolbarItem {
-        let item = NSSharingServicePickerToolbarItem(itemIdentifier: .share)
+        let item = ShareToolbarItem(itemIdentifier: .share)
+        item.hasItems = { [weak self] in self?.currentMarkdown != nil }
         item.label = NSLocalizedString("Share", comment: "Share toolbar item label")
         item.paletteLabel = NSLocalizedString("Share", comment: "Share toolbar palette label")
         item.toolTip = NSLocalizedString("Share document", comment: "Share toolbar item tooltip")
@@ -609,6 +610,21 @@ extension DocumentWindowController {
         // The share-link row ends the section, right above the system's Copy,
         // which sits in its own section that apps cannot add rows to.
         return services + shareLinkServices() + proposedServices
+    }
+}
+
+/// The system's share item validates itself by asking its delegate for the
+/// items to share, and the toolbar validates its items again and again
+/// while events come in (about four times a second during a scroll). Making
+/// the items counts the words of the document for the popover's header, so
+/// on a 1 MB document that held the main thread half of the time. This item
+/// only asks if there is something to share; the items are made when the
+/// reader opens the popover.
+private final class ShareToolbarItem: NSSharingServicePickerToolbarItem {
+    var hasItems: () -> Bool = { false }
+
+    override func validate() {
+        isEnabled = hasItems()
     }
 }
 
