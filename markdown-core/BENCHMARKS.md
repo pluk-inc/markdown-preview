@@ -55,6 +55,53 @@ The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
 long one.
 
+## Native renderer against the web view (2026-11-23)
+
+One Release build (the top of the stack at that time), the renderer chosen
+with the launch argument, three runs each, median. "All processes" is the
+app and each helper process that it is responsible for; the web view does
+most of its work in WebKit's helpers. Not from `app.py`: a script that is
+not in the repository yet did the launches, found the helpers, and sent
+the key presses.
+
+| 9 KB document | Web view | Native |
+| --- | --- | --- |
+| Launch to first document frame | 939 ms | 630 ms |
+| Processes | 12 | 7 |
+| Memory at rest, app process | 75 MB | 65 MB |
+| Memory at rest, all processes | 205 MB | 107 MB |
+| CPU until 4 s after the first frame, all processes | 2.26 s | 1.73 s |
+| CPU for 30 Page Down presses, all processes | 0.74 s | 0.42 s |
+
+| 1.1 MB document | Web view | Native |
+| --- | --- | --- |
+| Launch to first document frame | 13,881 ms | 611 ms |
+| Processes | 12 | 7 |
+| Memory at rest, app process | 165 MB | 105 MB |
+| Memory at rest, all processes | 653 MB | 147 MB |
+| CPU until 4 s after the first frame, all processes | 16.87 s | 2.28 s |
+| CPU for 30 Page Down presses, all processes | 7.44 s | 1.18 s |
+
+At rest both use almost no CPU (0 to 4 ms a second). The native window
+still has a `WKWebView` object, so WebKit's GPU process is among its
+helpers.
+
+Frame rate on the built-in 120 Hz display, in a keyboard scroll of 18
+pages, one run each. A capture of the window at 120 samples a second
+(ScreenCaptureKit) gave the times at which the window changed; the share
+is of the gaps inside the scroll animations.
+
+| | Web view | Native |
+| --- | --- | --- |
+| 9 KB document: gaps of one refresh (8.3 ms) | 373 of 435 | 361 of 406 |
+| 1.1 MB document: gaps of one refresh (8.3 ms) | 9 of 321 | 583 of 606 |
+| 1.1 MB document: updates a second while it moves | 44 | 101 |
+
+So for a short document both run at the rate of the display, and for the
+long one the web view falls to two or three refreshes for each frame. The
+test windows were not the front window, and the scroll came from the
+keyboard; a trackpad scroll in the front window was not measured.
+
 ## Cleanup of the core (2026-11-23)
 
 Only `core.py`, base and change in turns, two times each. Heap of the
