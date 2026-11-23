@@ -200,3 +200,28 @@ test_empty_and_rule :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(rule.blocks), 1)
 	testing.expect_value(t, rule.blocks[0].kind, Block_Kind.Rule)
 }
+
+@(test)
+test_a_finished_text_keeps_no_spare_room :: proc(t: ^testing.T) {
+	doc := parse("# Title\n\nPlain words and *some* in `code`.\n\n```\nline\n```\n\n| a | b |\n|---|---|\n| 1 |   |\n")
+	defer destroy(&doc)
+	check :: proc(t: ^testing.T, text: ^Text) {
+		testing.expect_value(t, cap(text.bytes), len(text.bytes))
+		testing.expect_value(t, cap(text.spans), len(text.spans))
+	}
+	texts := 0
+	for &block in doc.blocks {
+		check(t, &block.text)
+		texts += 1
+		for &cell in block.cells {
+			check(t, &cell)
+			texts += 1
+		}
+	}
+	// The heading, the paragraph, the code block, the table's own (empty)
+	// text, and its four cells, one of them empty.
+	testing.expect_value(t, texts, 8)
+	// The text itself is all there.
+	testing.expect_value(t, string(doc.blocks[1].text.bytes[:]), "Plain words and some in code.")
+	testing.expect_value(t, len(doc.blocks[1].text.spans), 5)
+}
