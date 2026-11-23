@@ -53,7 +53,9 @@ These came from the maintainer. Do not undo one without asking.
   into packages for that reason. Keep the package borders and the two
   platform seams (see below) when you add to it.
 - **One pull request for one line of work.** Do not stack branches for
-  parts of the same change.
+  parts of the same change. Since 2026-11-23 the first pull request (#665)
+  is the base, and each later line of work is a pull request stacked on
+  the one before it.
 
 ## Rules for the code
 
@@ -69,6 +71,13 @@ These came from the maintainer. Do not undo one without asking.
 - `pkg/md4c` is an unchanged copy of upstream. Do not patch it here.
 - A change to the parser or the layout comes with a unit test
   (`*_test.odin`), and `markdown-core/test.sh` must pass.
+- Every block keeps its small records (place, line ranges and widths,
+  decorations) for the full document. Only the lines near the view keep
+  their shaped text, the text system's paragraph and line objects
+  (`layout/window.odin`). Code that reads glyphs or a caret's x takes its
+  line from `shaped_line`, which shapes it again when needed. Code that
+  works on the full document (the copied text, Select All, the page
+  height) must use the records only, or it shapes all of the document.
 - The Swift host owns the view, the scroll position, and the events. The
   scroll bar is AppKit's: a transparent `NSScrollView` over the Metal
   layer.
@@ -155,9 +164,16 @@ Known limits, found in review and left on purpose:
 - A `WKWebView` object still exists in a native window, which starts
   WebKit's GPU process (about 5 MB). Making the web view on demand would
   remove it.
-- A 1 MB document takes about 130 MB of heap after the full layout, and
-  the app shows it about 280 ms later than a short one, which the core's
-  first frame does not account for (`BENCHMARKS.md`).
+- The app shows a 1 MB document about 250 ms later than a short one, which
+  the core's first frame does not account for (`BENCHMARKS.md`). Not found
+  yet.
+- The document model of a 1 MB source takes about 20 MB of heap, and the
+  app process holds about 45 MB more for the long document than for the
+  short one outside the core. Neither was looked at yet.
+- The full layout still runs for every block (about 0.3 s of CPU for 1 MB,
+  in steps), because the page height comes from it. A layout that starts
+  with estimated heights would remove that; it makes the scroll bar less
+  exact, so it needs the maintainer's word first.
 - The core has no way to call the host yet (open a link, load an image).
   It needs a callback struct given at creation.
 
@@ -196,3 +212,9 @@ scroll position, footnotes and alerts, VoiceOver, print and export.
   over time. `bench/core.py` (the core, no window) and `bench/app.py` (the
   app, cold launch, from a new `nativePaint` signpost) added, with the
   first record in `BENCHMARKS.md`.
+- **2026-11-23** — The first record showed 133 MB of heap for a 1 MB
+  document. The cause: every paragraph and line of the document kept its
+  text system objects. A terminal's scrollback gave the model: all
+  content stays in a compact form, and the costly work (shaping, GPU
+  cells) is done only for the rows in view. The same split here: records for all blocks, shaped text
+  only near the view. Heap 133 MB to 28 MB. First stacked pull request.

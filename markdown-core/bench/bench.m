@@ -106,6 +106,13 @@ int main(int argc, const char *argv[]) {
     if (end > SCROLL_LIMIT) end = SCROLL_LIMIT;
     // The first pass makes the glyph bitmaps; the second has them all.
     scroll_pass(ctx, "first_scroll", end);
+    // Back to the top in one frame, as the Home key does: the text there
+    // is shaped again.
+    double jump_start = thread_cpu_ms();
+    @autoreleasepool {
+        mdcore_draw(ctx, 0);
+    }
+    printf("jump_frame_cpu_ms %.2f\n", thread_cpu_ms() - jump_start);
     scroll_pass(ctx, "second_scroll", end);
 
     printf("heap_mb %.1f\n", heap_mb());

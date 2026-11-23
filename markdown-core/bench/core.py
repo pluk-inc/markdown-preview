@@ -26,6 +26,7 @@ METRICS = [
     ("full_layout_ms", "Layout of the rest (ms)"),
     ("first_scroll_frame_cpu_ms", "Scroll frame, new glyphs (CPU ms)"),
     ("first_scroll_longest_frame_cpu_ms", "Longest such frame (CPU ms)"),
+    ("jump_frame_cpu_ms", "Frame after a jump to the top (CPU ms)"),
     ("second_scroll_frame_cpu_ms", "Scroll frame, glyphs ready (CPU ms)"),
     ("second_scroll_longest_frame_cpu_ms", "Longest such frame (CPU ms)"),
     ("total_cpu_ms", "CPU for the full run (ms)"),

@@ -67,7 +67,7 @@ hit_test :: proc(l: ^Layout, x, y: f32) -> (pos: Position, ok: bool) {
 	if best < 0 {
 		return
 	}
-	line := l.lines[best]
+	line := shaped_line(l, best)
 	para := &l.paras[line.para]
 	return Position{para.order, para.base + text.line_index_for_x(line.line, x - line.x)}, true
 }
@@ -95,12 +95,14 @@ selection_quads :: proc(l: ^Layout, s: Selection, y0, y1: f32, scale, origin_y: 
 		if box.top >= y1 {
 			break
 		}
-		for line in l.lines[box.line_first:box.line_end] {
+		for i in box.line_first ..< box.line_end {
+			line := l.lines[i]
 			para := &l.paras[line.para]
 			if line.top + para.line_height < y0 || line.top > y1 {
 				continue // a long block: only its lines in the range
 			}
 			start, end := selected_part(para, line, from, to) or_continue
+			line = shaped_line(l, i)^
 			x1 := text.line_x_for_index(line.line, start - para.base)
 			x2 := text.line_x_for_index(line.line, end - para.base)
 			if x2 < x1 {
@@ -121,7 +123,7 @@ select_all :: proc(l: ^Layout) -> (s: Selection) {
 			s.anchor = Position{para.order, para.base}
 			s.active = true
 		}
-		s.focus = Position{para.order, para.base + para.handle.len}
+		s.focus = Position{para.order, para.base + para.len}
 	}
 	return
 }
