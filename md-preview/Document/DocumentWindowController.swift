@@ -127,8 +127,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// toolbar when no tabs are shown), and the tab bar never moves.
     weak var editBar: NSView?
     weak var copyItem: NSToolbarItem?
-    /// True while the share item gets its delegate (`makeShareItem`).
-    var isAttachingShareItem = false
     var copyFeedbackWork: DispatchWorkItem?
     /// The Themes & Settings popover while it is on screen.
     var themesPopover: NSPopover?

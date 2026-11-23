@@ -338,12 +338,7 @@ extension DocumentWindowController {
         item.label = NSLocalizedString("Share", comment: "Share toolbar item label")
         item.paletteLabel = NSLocalizedString("Share", comment: "Share toolbar palette label")
         item.toolTip = NSLocalizedString("Share document", comment: "Share toolbar item tooltip")
-        // The item asks its new delegate for the items at once, to set
-        // itself up. It gets the plain text; the header, with its word
-        // count, is made when the reader opens the popover.
-        isAttachingShareItem = true
-        item.delegate = self
-        isAttachingShareItem = false
+        item.attach(self)
         return item
     }
 
@@ -596,7 +591,9 @@ extension DocumentWindowController {
 
     func items(for pickerToolbarItem: NSSharingServicePickerToolbarItem) -> [Any] {
         guard let currentMarkdown else { return [] }
-        guard !isAttachingShareItem else { return [currentMarkdown] }
+        // The item sets itself up: the plain text is enough for that. The
+        // header, with its word count, is for the popover.
+        guard (pickerToolbarItem as? ShareToolbarItem)?.isAttaching != true else { return [currentMarkdown] }
         let title = currentFileURL?.lastPathComponent ?? documentWindow.title
         return [SharePreviewItem.make(markdown: currentMarkdown, title: title, fileURL: currentFileURL)]
     }
@@ -628,6 +625,15 @@ extension DocumentWindowController {
 /// reader opens the popover.
 private final class ShareToolbarItem: NSSharingServicePickerToolbarItem {
     var hasItems: () -> Bool = { false }
+    /// True while the item gets its delegate. It asks the new delegate for
+    /// the items at once, while the toolbar is built.
+    private(set) var isAttaching = false
+
+    func attach(_ delegate: NSSharingServicePickerToolbarItemDelegate) {
+        isAttaching = true
+        self.delegate = delegate
+        isAttaching = false
+    }
 
     override func validate() {
         isEnabled = hasItems()
