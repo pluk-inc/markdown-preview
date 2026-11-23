@@ -168,31 +168,29 @@ final class SidebarViewController: NSViewController {
     func display(markdown: String, fileName: String, fileURL: URL?) {
         prepare(for: fileURL)
         refreshOutline(markdown: markdown, fileName: fileName)
+        // Also when the text and the name are the ones shown already, and
+        // the outline was not set again.
+        awaitsFirstOutline = false
     }
 
     /// The part of a new document's display that needs no outline. A caller
-    /// that parses the outline off the main thread calls this at once, with
-    /// `outlineComesLater`, and `refreshOutline(outline:fileName:)` when the
-    /// outline is ready. `isRename`: the same document under a new URL.
-    func prepare(for fileURL: URL?, outlineComesLater: Bool = false, isRename: Bool = false) {
+    /// that parses the outline off the main thread calls this at once, and
+    /// `refreshOutline(outline:fileName:)` when the outline is ready.
+    func prepare(for fileURL: URL?) {
         loadViewIfNeeded()
-        let isOtherFile = !isRename && pendingFileURL != fileURL?.standardizedFileURL
-        // A newly opened document must not inherit another file's outline choices.
-        if isOtherFile {
-            resetOutlineState = true
-        }
+        let isOtherFile = pendingFileURL != fileURL?.standardizedFileURL
         setOpenFileURL(fileURL)
-        awaitsFirstOutline = true
-        guard !isRename else { return }
         activeHeadingID = nil
-        if outlineComesLater, isOtherFile {
-            // The rows of the document before would stay until the outline
-            // comes, and a click on one would scroll this page to a
-            // heading number of the other document.
-            titleItem = nil
-            roots = []
-            outlineView.reloadData()
-        }
+        awaitsFirstOutline = true
+        guard isOtherFile else { return }
+        // A newly opened document must not inherit another file's outline
+        // choices, or its rows: until the new outline is here, a click on a
+        // row of the document before would scroll this page to a heading
+        // number of the other one.
+        resetOutlineState = true
+        titleItem = nil
+        roots = []
+        outlineView.reloadData()
     }
 
     /// Full document display may parse synchronously; live edits supply a
