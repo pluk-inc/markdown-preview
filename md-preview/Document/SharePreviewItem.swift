@@ -55,6 +55,20 @@ enum SharePreviewItem {
     /// unless there are unsaved edits. Also the manage-sharing sheet's
     /// subtitle, so both read the same.
     static func subtitle(for markdown: String) -> String {
+        if let cached = cachedSubtitle, cached.markdown == markdown { return cached.text }
+        let text = makeSubtitle(for: markdown)
+        cachedSubtitle = (markdown, text)
+        return text
+    }
+
+    /// The toolbar validates its share item again and again while events
+    /// come in (about four times a second during a scroll), and each time it
+    /// asks for the items. Counting the words of a 1 MB document takes tens
+    /// of milliseconds, so the last subtitle is kept. The compare is cheap:
+    /// the same text is the same string storage almost every time.
+    private static var cachedSubtitle: (markdown: String, text: String)?
+
+    private static func makeSubtitle(for markdown: String) -> String {
         // English singular/plural forms live in Localizable.stringsdict.
         let words = String.localizedStringWithFormat(
             NSLocalizedString("%ld words", comment: "Share popover word count"),
