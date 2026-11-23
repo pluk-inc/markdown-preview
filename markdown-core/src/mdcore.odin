@@ -22,8 +22,7 @@ import "renderer"
 import "text"
 
 // How much of the page has quads on the GPU, in view heights around the
-// scroll position, and how near to its edge the view may come before the
-// list is made again.
+// scroll position.
 SHOWN_ABOVE :: 2
 SHOWN_BELOW :: 3
 // Shaped text is kept for this many view heights around the scroll
@@ -31,6 +30,8 @@ SHOWN_BELOW :: 3
 // quads are made again.
 KEPT_ABOVE :: SHOWN_ABOVE + 2
 KEPT_BELOW :: SHOWN_BELOW + 2
+// How near to the edge of the shown part the view may come, in view
+// heights, before the quads are made again.
 SHOWN_MARGIN :: 0.5
 
 Ctx :: struct {

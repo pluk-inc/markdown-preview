@@ -244,6 +244,75 @@ Known limits, found in review and left on purpose:
 - The core has no way to call the host yet (open a link, load an image).
   It needs a callback struct given at creation.
 
+Found by a quality review of the full core on 2026-11-23 and not done
+yet. The first group changes the design, so each needs the maintainer's
+word; the second group is speed and memory with a measured or estimated
+gain.
+
+Design, before the features that need it:
+
+- **Containers are two counters.** A block knows only `list_depth` and
+  `quote_depth`, so a list in a quote and a quote in a list are the same
+  block, the quote bar of a list in a quote is one level too far right,
+  and a quote with two paragraphs has a gap in its bar. Alerts (a quote
+  with a kind and a title) and footnotes (a numbered container) do not fit
+  two integers. Form: a list of containers in the document, and a
+  container number in each block. Before alerts and footnotes.
+- **A selection position is a layout address** (`Position{order, index}`).
+  Copy and Select All need the full layout for it, empty code lines use up
+  a number with no paragraph, and links, Find, footnote jumps, and
+  accessibility all need document addresses. Form: `{block, cell, byte}`
+  in the `document` package. Before links.
+- **Layout records hold resolved colors**, and `mdcore_style` is mirrored
+  field by field in three places. A change of colors alone (light, dark, a
+  theme) throws the layout away. Form: color roles in the records,
+  resolved in `display`; the style compares its geometry and clears only
+  the display list for a color change. Before code colors.
+- **The host must call `mdcore_resize` after a new style or document**, or
+  the next draw shows nothing. Form: one private `ensure_layout` in the
+  core that every entry calls.
+- **`mdcore.odin` holds the view's state** (the shown and kept window and
+  its rules), which can be tested only through a real Metal layer, and a
+  view cannot exist without a surface. Print, export, and accessibility
+  need one. Form: a `view` package, and a create call that takes the host
+  struct with an optional surface.
+- **The host pairs the native view with the web view in about ten
+  places**, and the zoom lives in the web view. Form: one reader protocol
+  for both, with the first feature that needs a second branch.
+- **Images and links**: the parser counts an image but drops its source,
+  and a link's target is cloned but not used. md4c has no footnotes or
+  alerts, so both need a pass in `parse.odin` over its output.
+- The marker of a list item has its place from a switch on the block kind
+  with each kind's padding repeated, and the first-line height of a block
+  is written in two or three places for each kind.
+- `layout.Font_Kind` is a middle step between a span's style and a font;
+  `text.Font_Kind` is another enum with the same name.
+- The page padding formula is copied from `ReaderLayoutSetting` (the web
+  path cuts it to an integer, the native one does not), and the fall-back
+  colors of `NativeRendererStyle` repeat the stylesheet's.
+
+Speed and memory (the 1.1 MB document):
+
+- `decorate_line` asks CoreText for the x of each inline code and strike
+  span at layout time, for all lines. The first such call on a line costs
+  more than shaping the line: 24 % of the layout's CPU (measured). Take
+  the x from the glyph runs, or make these decorations in `display`.
+- The document model is about 9.6 MB (measured, before the cut of the
+  growth slack in this change). A block is 240 bytes and carries the
+  table fields; a text is two heap blocks. One byte buffer and one span
+  array for the document, and small integers, would bring it to about
+  2 MB (estimated).
+- The frame that makes new quads shapes the lines that came into view:
+  2 ms before the window, 4 to 6 ms with it. Shape one view ahead in the
+  time-boxed step between frames.
+- All quads of five view heights are made again when the view moves one
+  and a half, with a new GPU buffer each time. Strips of one view height
+  would keep 70 % of them.
+- A table cell is shaped two times (natural width, then lines), and each
+  bullet and each code line makes a paragraph object that is released at
+  once outside the window: 6 to 7 % of the layout.
+- Layout records are 64 bytes for a paragraph and for a line; 40 would do.
+
 Next features, in the order that seems best (not agreed with the
 maintainer): links that open, images, code colors, Find, the outline's
 scroll position, footnotes and alerts, VoiceOver, print and export.
@@ -301,3 +370,8 @@ scroll position, footnotes and alerts, VoiceOver, print and export.
   screen recording showed the page at 60 frames a second on a 120 Hz
   display. The cause was the clock: AppKit's display links fire at 60
   there. The frames now come from a `CVDisplayLink`, on its thread.
+- **2026-11-23** — The maintainer asked for the quality review on every
+  pull request of the stack. The one on the first pull request read the
+  full core as it stands. Its safe cleanups went into one pull request on
+  top of the stack (the later ones had changed the same files); its design
+  and speed findings are in Open work.

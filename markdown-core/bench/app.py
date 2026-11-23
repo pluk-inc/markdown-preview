@@ -30,8 +30,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-CORE = Path(__file__).resolve().parents[1]
-LONG_COPIES = 128
+from fixture import SHORT, write_long
+
 PAINT_EVENT = {"native": "nativePaint", "web": "webPaint"}
 PAINT_TIMEOUT = 30.0  # seconds; the first launch of a new build is slow
 SETTLE = 3.0  # seconds after the first frame, before memory and CPU are read
@@ -123,12 +123,9 @@ def main() -> None:
     executable = app / "Contents" / "MacOS" / name
     signal.signal(signal.SIGINT, signal.default_int_handler)
 
-    short = CORE / "bench" / "short.md"
     with tempfile.TemporaryDirectory() as folder:
-        long = Path(folder) / "long.md"
-        long.write_text("\n\n".join([short.read_text()] * LONG_COPIES))
         results = []
-        for document in (short, long):
+        for document in (SHORT, write_long(Path(folder) / "long.md")):
             run_once(app, executable, document, args.renderer)  # not counted: fills the caches
             samples = [run_once(app, executable, document, args.renderer) for _ in range(args.runs)]
             results.append({key: statistics.median(sample[key] for sample in samples) for key in samples[0]})

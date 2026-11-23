@@ -50,11 +50,7 @@ Para :: struct {
 	base:        int, // byte offset of the paragraph in src
 	len:         int, // bytes
 	order:       int, // its number in reading order; the same after a new layout
-	size:        f32,
-	line_height: f32,
-	quote:       bool,
-	heading:     bool, // the base weight is semibold
-	mono:        bool, // a line of a code block
+	using look:  Text_Look,
 }
 
 Line :: struct {
@@ -82,7 +78,6 @@ Layout :: struct {
 	doc:            ^document.Document,
 	style:          base.Style,
 	m:              base.Metrics,
-	width:          f32, // points
 	// Records, in document order. Boxes do not overlap and go down the page.
 	paras:          [dynamic]Para,
 	lines:          [dynamic]Line,
@@ -103,7 +98,6 @@ Layout :: struct {
 	column_x:       f32,
 	column:         f32,
 	fonts:          [dynamic]Sized_Font,
-	marker_label:   [dynamic]u8,
 }
 
 // Starts a new layout of `doc` for a view of `width` points. The records of
@@ -117,7 +111,6 @@ begin :: proc(l: ^Layout, doc: ^document.Document, style: base.Style, width: f32
 	l.doc = doc
 	l.style = style
 	l.m = base.metrics(style)
-	l.width = width
 	l.column = width - 2 * l.m.page_pad
 	if l.m.column > 0 {
 		l.column = min(l.column, l.m.column)
@@ -162,7 +155,6 @@ destroy :: proc(l: ^Layout) {
 	delete(l.paras)
 	delete(l.decor)
 	delete(l.boxes)
-	delete(l.marker_label)
 	l^ = {}
 }
 
@@ -250,11 +242,7 @@ make_para :: proc(l: ^Layout, src: ^document.Text, from, to: int, look: Text_Loo
 			base = from,
 			len = to - from,
 			order = l.order,
-			size = look.size,
-			line_height = look.line_height,
-			quote = look.quote,
-			heading = look.heading,
-			mono = look.mono,
+			look = look,
 		},
 	)
 	shape_para(l, &l.paras[len(l.paras) - 1])
@@ -268,7 +256,7 @@ shape_para :: proc(l: ^Layout, para: ^Para) {
 		return
 	}
 	if para.src == nil {
-		shape_marker(l, para, marker_text(l, &l.doc.blocks[para.block]))
+		shape_marker(l, para, marker_text(&l.doc.blocks[para.block]))
 		return
 	}
 	from, to := para.base, para.base + para.len
@@ -334,20 +322,7 @@ decorate_line :: proc(l: ^Layout, para: ^Para, line: text.Line, x, top: f32) {
 	}
 	line_start, line_end := para.base + line.start, para.base + line.end
 	// Spans are in text order: start at the first one that reaches the line.
-	first := 0
-	{
-		lo, hi := 0, len(src.spans) - 1
-		for lo < hi {
-			mid := (lo + hi) / 2
-			if src.spans[mid].end <= line_start {
-				lo = mid + 1
-			} else {
-				hi = mid
-			}
-		}
-		first = lo
-	}
-	for span in src.spans[first:] {
+	for span in src.spans[document.span_index(src, line_start):] {
 		if span.start >= line_end {
 			break
 		}
@@ -371,7 +346,7 @@ decorate_line :: proc(l: ^Layout, para: ^Para, line: text.Line, x, top: f32) {
 }
 
 @(private)
-marker_text :: proc(l: ^Layout, b: ^document.Block) -> string {
+marker_text :: proc(b: ^document.Block) -> string {
 	#partial switch b.marker {
 	case .Bullet:
 		return "•"
@@ -388,7 +363,7 @@ marker_text :: proc(l: ^Layout, b: ^document.Block) -> string {
 // The bullet, number, or box of a list item, right-aligned left of x.
 @(private)
 place_marker :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32) {
-	label := marker_text(l, b)
+	label := marker_text(b)
 	if label == "" {
 		return
 	}

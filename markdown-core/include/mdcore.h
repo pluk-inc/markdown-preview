@@ -31,8 +31,9 @@ typedef struct {
 
 // The reader style. The fonts are font objects of the platform's text system
 // (CTFont on Apple systems) at any size; the core makes
-// the sizes it needs and keeps its own reference. A null bold or heading font
-// falls back on the body font, and a null body or code font on the system's.
+// the sizes it needs and keeps its own reference. A null bold font falls back
+// on the body font, a null heading font on the bold font, and a null body or
+// code font on the system's.
 typedef struct {
     const void *body_font;
     const void *bold_font;
@@ -63,7 +64,8 @@ void mdcore_set_style(void *ctx, const mdcore_style *style);
 void mdcore_set_markdown(void *ctx, const char *utf8, long length);
 
 // Sets the view size and backing scale. Lays out what the view shows now
-// when the width or the scale changed.
+// when the document, the style, or the width changed. A new scale only
+// makes the glyph bitmaps again.
 void mdcore_resize(void *ctx, double width, double height, double scale);
 
 // Continues the layout of a long document for about budget_ms; 0 lays out

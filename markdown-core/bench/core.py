@@ -15,9 +15,9 @@ import statistics
 import subprocess
 from pathlib import Path
 
-CORE = Path(__file__).resolve().parents[1]
+from fixture import CORE, SHORT, write_long
+
 OUT = CORE / "build" / "bench"
-LONG_COPIES = 128
 
 # The numbers in the order of the table, with the name a reader sees.
 METRICS = [
@@ -65,11 +65,7 @@ def main() -> None:
     args = parser.parse_args()
 
     program = build()
-    short = CORE / "bench" / "short.md"
-    long = OUT / "long.md"
-    long.write_text("\n\n".join([short.read_text()] * LONG_COPIES))
-
-    results = [measure(program, document, args.runs) for document in (short, long)]
+    results = [measure(program, document, args.runs) for document in (SHORT, write_long(OUT / "long.md"))]
     print("| | Short | Long |")
     print("| --- | --- | --- |")
     for name, title in METRICS:

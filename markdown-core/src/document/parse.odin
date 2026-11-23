@@ -112,14 +112,39 @@ append_rune :: proc(p: ^Parser, r: rune) {
 @(private)
 open_text :: proc(p: ^Parser, kind: Block_Kind, level := 0) {
 	close_text(p)
-	p.block = Block {
+	p.block = start_block(p, kind)
+	p.block.level = level
+	p.cur = &p.block.text
+}
+
+// A new block in the containers that are open now. It takes the marker of
+// a list item that has no block yet.
+@(private)
+start_block :: proc(p: ^Parser, kind: Block_Kind) -> Block {
+	b := Block {
 		kind        = kind,
-		level       = level,
 		list_depth  = len(p.lists),
 		quote_depth = p.quote,
 	}
-	take_item_position(p, &p.block)
-	p.cur = &p.block.text
+	take_item_position(p, &b)
+	return b
+}
+
+// Ends the block with text that is in progress: it goes into the document.
+@(private)
+push_block :: proc(p: ^Parser) {
+	text_fit(&p.block.text)
+	append(&p.doc.blocks, p.block)
+	p.block = {}
+	p.cur = nil
+}
+
+// Gives back the room that the arrays of a finished text grew ahead. Most
+// texts have one span, and the first one reserves room for eight.
+@(private)
+text_fit :: proc(t: ^Text) {
+	shrink(&t.bytes)
+	shrink(&t.spans)
 }
 
 // Gives a block its marker and its place in the open list item.
@@ -144,9 +169,7 @@ close_text :: proc(p: ^Parser) {
 	if p.cur == nil || p.in_table || p.in_code {
 		return
 	}
-	append(&p.doc.blocks, p.block)
-	p.block = {}
-	p.cur = nil
+	push_block(p)
 }
 
 @(private)
@@ -184,37 +207,21 @@ enter_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 			p.item_marker = list.ordered ? .Number : .Bullet
 		}
 	case .Hr:
-		b := Block {
-			kind        = .Rule,
-			list_depth  = len(p.lists),
-			quote_depth = p.quote,
-		}
-		take_item_position(p, &b)
-		append(&p.doc.blocks, b)
+		append(&p.doc.blocks, start_block(p, .Rule))
 	case .H:
 		open_text(p, .Heading, clamp(int((cast(^Md_H_Detail)detail).level), 1, 6))
 	case .P:
 		open_text(p, .Paragraph)
 	case .Code:
-		p.block = Block {
-			kind        = .Code,
-			list_depth  = len(p.lists),
-			quote_depth = p.quote,
-			language    = strings.clone(attribute((cast(^Md_Code_Detail)detail).lang)),
-		}
-		take_item_position(p, &p.block)
+		p.block = start_block(p, .Code)
+		p.block.language = strings.clone(attribute((cast(^Md_Code_Detail)detail).lang))
 		p.cur = &p.block.text
 		p.in_code = true
 	case .Html:
 		p.in_html = true
 	case .Table:
-		p.table = Block {
-			kind        = .Table,
-			list_depth  = len(p.lists),
-			quote_depth = p.quote,
-			columns     = int((cast(^Md_Table_Detail)detail).col_count),
-		}
-		take_item_position(p, &p.table)
+		p.table = start_block(p, .Table)
+		p.table.columns = int((cast(^Md_Table_Detail)detail).col_count)
 		p.in_table = true
 	case .Tr:
 		p.row_cells = 0
@@ -268,9 +275,7 @@ leave_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 			}
 		}
 		p.in_code = false
-		append(&p.doc.blocks, p.block)
-		p.block = {}
-		p.cur = nil
+		push_block(p)
 	case .Html:
 		p.in_html = false
 	case .Th, .Td:
@@ -278,6 +283,7 @@ leave_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 		if p.skip_row || p.row_cells >= p.table.columns {
 			text_destroy(&p.cell)
 		} else {
+			text_fit(&p.cell)
 			append(&p.table.cells, p.cell)
 			p.row_cells += 1
 		}

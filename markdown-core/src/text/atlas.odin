@@ -34,7 +34,6 @@ Glyph_Entry :: struct {
 	x, y, w, h: u16, // atlas px; w == 0: the glyph has no pixels
 	left, top:  i16,
 	is_color:   bool,
-	no_room:    bool, // the atlas was full; stays so until the cache is emptied
 }
 
 @(private)
@@ -163,11 +162,10 @@ cache_get :: proc(c: ^Glyph_Cache, fid: u16, glyph: u16, bin: u8) -> Glyph_Entry
 				top      = i16(bitmap.top),
 				is_color = cached.is_color,
 			}
-		} else {
-			// The atlas is at its largest size. The entry says so, and the
-			// glyph is tried again only after the cache is emptied.
-			entry.no_room = true
 		}
+		// Else the atlas is at its largest size: the entry stays without
+		// pixels (w == 0), and the glyph is tried again only after the cache
+		// is emptied.
 	}
 	c.entries[key] = entry
 	return entry
