@@ -150,7 +150,7 @@ final class MainSplitViewController: NSSplitViewController {
         }
         sidebarViewController?.prepare(for: url)
         let request = sidebarRequest
-        Self.sidebarQueue.async { [weak self] in
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let outline = MarkdownTOC.parse(markdown)
             let metadata = DocumentMetadata.make(url: url, markdown: markdown)
             DispatchQueue.main.async {
@@ -168,7 +168,6 @@ final class MainSplitViewController: NSSplitViewController {
     /// 190 ms for 1 MB), so they are made off the main thread and come a
     /// moment after the page.
     private static let syncSidebarLimit = 64 * 1024
-    private static let sidebarQueue = DispatchQueue(label: "md-preview.document-sidebars", qos: .userInitiated)
     /// Goes up when the outline and the numbers are set, so a late result
     /// for an earlier document or text is dropped.
     private var sidebarRequest = 0
@@ -227,6 +226,7 @@ final class MainSplitViewController: NSSplitViewController {
     }
 
     func clearContent() {
+        sidebarRequest += 1
         inspectorViewController?.setSelectedText(nil)
         contentViewController?.clearContent()
     }
