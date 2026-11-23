@@ -56,7 +56,7 @@ static void scroll_pass(void *ctx, const char *name, double end) {
     for (double y = 0; y <= end; y += SCROLL_STEP) {
         double start = thread_cpu_ms();
         @autoreleasepool {
-            mdcore_draw(ctx, y);
+            mdcore_draw(ctx, y, NULL);
         }
         double took = thread_cpu_ms() - start;
         total += took;
@@ -89,7 +89,7 @@ int main(int argc, const char *argv[]) {
     mdcore_set_markdown(ctx, source.bytes, (long)source.length);
     mdcore_resize(ctx, VIEW_WIDTH, VIEW_HEIGHT, VIEW_SCALE);
     @autoreleasepool {
-        mdcore_draw(ctx, 0);
+        mdcore_draw(ctx, 0, NULL);
     }
     printf("first_frame_ms %.2f\n", now_ms() - start);
     printf("first_frame_heap_mb %.1f\n", heap_mb());
@@ -110,7 +110,7 @@ int main(int argc, const char *argv[]) {
     // is shaped again.
     double jump_start = thread_cpu_ms();
     @autoreleasepool {
-        mdcore_draw(ctx, 0);
+        mdcore_draw(ctx, 0, NULL);
     }
     printf("jump_frame_cpu_ms %.2f\n", thread_cpu_ms() - jump_start);
     scroll_pass(ctx, "second_scroll", end);

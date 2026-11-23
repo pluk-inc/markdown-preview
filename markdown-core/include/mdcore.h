@@ -76,7 +76,12 @@ double mdcore_content_height(void *ctx);
 
 // Draws one frame at the given scroll offset. Can wait for the display;
 // see "Threads" above.
-void mdcore_draw(void *ctx, double scroll_y);
+//
+// `target` is the surface for this frame when the host has it already (a
+// CAMetalDrawable from a CAMetalDisplayLink on Apple systems, which is the
+// only source of drawables while such a link is on the layer). With NULL
+// the core takes the next one from the layer.
+void mdcore_draw(void *ctx, double scroll_y, void *target);
 
 // Selection. phase: 0 = mouse down, 1 = drag. x, y are in document space.
 void mdcore_mouse(void *ctx, double x, double y, int phase);
