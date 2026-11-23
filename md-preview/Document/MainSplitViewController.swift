@@ -148,7 +148,7 @@ final class MainSplitViewController: NSSplitViewController {
     /// Sets the sidebar's outline and the inspector's numbers for a
     /// document: at once for a small one, off the main thread for a large
     /// one.
-    private func showOutlineAndMetadata(markdown: String, fileName: String, url: URL?) {
+    private func showOutlineAndMetadata(markdown: String, fileName: String, url: URL?, isRename: Bool = false) {
         sidebarRequest += 1
         guard markdown.utf8.count > Self.syncSidebarLimit else {
             pendingSidebarRequest = nil
@@ -156,7 +156,7 @@ final class MainSplitViewController: NSSplitViewController {
             inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))
             return
         }
-        sidebarViewController?.prepare(for: url)
+        sidebarViewController?.prepare(for: url, outlineComesLater: true, isRename: isRename)
         let request = sidebarRequest
         pendingSidebarRequest = request
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -212,7 +212,8 @@ final class MainSplitViewController: NSSplitViewController {
             // The outline and the numbers of this text are still on their
             // way, with the old name. Make them again for the new one, or
             // the outline never comes.
-            showOutlineAndMetadata(markdown: markdown, fileName: ReleaseNotes.displayName(for: newURL), url: newURL)
+            showOutlineAndMetadata(markdown: markdown, fileName: ReleaseNotes.displayName(for: newURL),
+                                   url: newURL, isRename: true)
             return
         }
         sidebarRequest += 1
