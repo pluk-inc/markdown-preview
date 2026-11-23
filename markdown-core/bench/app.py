@@ -19,11 +19,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import queue
 import re
 import signal
 import statistics
 import subprocess
 import tempfile
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -74,8 +76,15 @@ def run_once(app: Path, executable: Path, document: Path, renderer: str) -> dict
             check=True,
         )
         painted = None
-        while painted is None and time.time() - started < PAINT_TIMEOUT:
-            line = stream.stdout.readline()
+        # A thread reads the log, so a quiet log cannot hold the run past
+        # the deadline.
+        lines: queue.Queue[str] = queue.Queue()
+        threading.Thread(target=lambda: [lines.put(line) for line in stream.stdout], daemon=True).start()
+        while painted is None and (left := started + PAINT_TIMEOUT - time.time()) > 0:
+            try:
+                line = lines.get(timeout=left)
+            except queue.Empty:
+                break
             if not line.startswith("{"):
                 continue
             entry = json.loads(line)
