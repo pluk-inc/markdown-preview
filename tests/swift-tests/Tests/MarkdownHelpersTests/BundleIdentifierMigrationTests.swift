@@ -126,6 +126,23 @@ final class BundleIdentifierMigrationTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: BundleIdentifierMigration.doneKey))
     }
 
+    func testAPreferencesFolderThatCannotBeReadIsNotTakenForNoSettings() throws {
+        try writeOldSettings(["MarkdownPreview.appearance": "dark"])
+        try write("[]", to: oldSupport.appendingPathComponent("SharedLinks/links.json"))
+        let preferences = oldLibrary.appendingPathComponent("Preferences", isDirectory: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: preferences.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: preferences.path) }
+
+        migrate()
+        XCTAssertFalse(defaults.bool(forKey: BundleIdentifierMigration.doneKey))
+        XCTAssertNil(defaults.object(forKey: BundleIdentifierMigration.attemptsKey))
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: preferences.path)
+        migrate()
+        XCTAssertTrue(defaults.bool(forKey: BundleIdentifierMigration.doneKey))
+        XCTAssertEqual(defaults.string(forKey: "MarkdownPreview.appearance"), "dark")
+    }
+
     func testAFileThatDoesNotCopyIsTriedAgainAndTheSettingsMoveOnce() throws {
         try writeOldSettings(["MarkdownPreview.appearance": "dark"])
         let source = oldSupport.appendingPathComponent("SharedLinks/links.json")

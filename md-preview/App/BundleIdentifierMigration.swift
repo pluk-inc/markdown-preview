@@ -78,7 +78,6 @@ nonisolated enum BundleIdentifierMigration {
                     domainName: String,
                     applicationSupport: URL,
                     launchServicesPreferences: URL) {
-        let fileManager = FileManager.default
         var status = stat()
         guard lstat(oldLibrary.path, &status) == 0 else {
             // Only a container that is not there is a new install, with
@@ -90,10 +89,15 @@ nonisolated enum BundleIdentifierMigration {
         }
         let preferencesURL = oldLibrary.appendingPathComponent("Preferences/\(oldIdentifier).plist")
         var oldSettings: [String: Any] = [:]
-        if fileManager.fileExists(atPath: preferencesURL.path) {
+        if lstat(preferencesURL.path, &status) == 0 {
             // Unreadable now may be readable later: leave the mark unset.
             guard let stored = NSDictionary(contentsOf: preferencesURL) as? [String: Any] else { return }
             oldSettings = stored
+        } else if errno != ENOENT {
+            // A Preferences folder macOS keeps this app out of looks like
+            // no settings to `fileExists`; the move would then end without
+            // them. Leave the mark unset and look again at the next launch.
+            return
         }
 
         // The settings move at the first attempt only: they hold the
