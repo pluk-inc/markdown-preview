@@ -338,7 +338,12 @@ extension DocumentWindowController {
         item.label = NSLocalizedString("Share", comment: "Share toolbar item label")
         item.paletteLabel = NSLocalizedString("Share", comment: "Share toolbar palette label")
         item.toolTip = NSLocalizedString("Share document", comment: "Share toolbar item tooltip")
+        // The item asks its new delegate for the items at once, to set
+        // itself up. It gets the plain text; the header, with its word
+        // count, is made when the reader opens the popover.
+        isAttachingShareItem = true
         item.delegate = self
+        isAttachingShareItem = false
         return item
     }
 
@@ -591,6 +596,7 @@ extension DocumentWindowController {
 
     func items(for pickerToolbarItem: NSSharingServicePickerToolbarItem) -> [Any] {
         guard let currentMarkdown else { return [] }
+        guard !isAttachingShareItem else { return [currentMarkdown] }
         let title = currentFileURL?.lastPathComponent ?? documentWindow.title
         return [SharePreviewItem.make(markdown: currentMarkdown, title: title, fileURL: currentFileURL)]
     }
