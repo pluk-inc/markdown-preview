@@ -34,6 +34,8 @@ final class NativeRendererView: NSView {
     private let scrollView = NSScrollView()
     private let page = PageArea()
     private var layoutScheduled = false
+    /// Goes up with each new layout (a document, a size, a style).
+    private var layoutCount = 0
     /// The frames and the layout steps run here, one after the other, so
     /// work that makes glyphs, breaks lines, or waits for the display does
     /// not hold the main thread. The core takes calls from any thread. A
@@ -212,6 +214,7 @@ final class NativeRendererView: NSView {
         laidOutSize = bounds.size
         laidOutScale = scale
         let size = bounds.size
+        layoutCount += 1
         // The new size, then its frame, in one visit to the queue.
         draw(wait: true) { [ctx] in mdcore_resize(ctx, size.width, size.height, scale) }
         continueLayout()
@@ -240,9 +243,9 @@ final class NativeRendererView: NSView {
             updatePageHeight()
         } else {
             frameInFlight = true
-            renderQueue.async {
+            renderQueue.async { [weak self] in
                 frame()
-                DispatchQueue.main.async { [weak self] in
+                DispatchQueue.main.async {
                     self?.frameInFlight = false
                     self?.updatePageHeight()
                 }
@@ -256,13 +259,16 @@ final class NativeRendererView: NSView {
         guard !layoutScheduled else { return }
         layoutScheduled = true
         nonisolated(unsafe) let ctx = ctx
-        renderQueue.async {
+        let layout = layoutCount
+        renderQueue.async { [weak self] in
             let more = mdcore_layout_more(ctx, 4)
-            DispatchQueue.main.async { [weak self] in
+            DispatchQueue.main.async {
                 guard let self else { return }
                 self.layoutScheduled = false
                 self.updatePageHeight()
-                if more { self.continueLayout() }
+                // A step that ran for a layout before the present one
+                // says nothing about what is left of this one.
+                if more || layout != self.layoutCount { self.continueLayout() }
             }
         }
     }
