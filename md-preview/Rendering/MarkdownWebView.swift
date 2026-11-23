@@ -686,8 +686,10 @@ final class MarkdownWebView: NSView, WKNavigationDelegate {
     private func applyDisplay(_ rendered: MarkdownHTML.RenderedHTML,
                               generation: UInt64) {
         // A newer display() bumped the generation while this render was
-        // off-main — drop the stale result so the latest article wins.
-        guard generation == renderGeneration else { return }
+        // off-main — drop the stale result so the latest article wins. The
+        // same for a render that was on its way when page loads were
+        // turned off: the hidden web view must not load it.
+        guard generation == renderGeneration, !suppressesPageLoads else { return }
         let fingerprint = RendererFingerprint(
             math: rendered.containsMath,
             mermaid: rendered.containsMermaid,

@@ -454,7 +454,8 @@ final class ContentViewController: NSViewController {
     }
 
     func printDocument(completion: ((Bool) -> Void)? = nil) {
-        guard let window = view.window, let source = exportSource else {
+        // Finder's Print and `open -p` come here without the menu's check.
+        guard !isShowingNativeRenderer, let window = view.window, let source = exportSource else {
             completion?(false)
             return
         }

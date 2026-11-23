@@ -189,8 +189,10 @@ final class NativeRendererView: NSView {
         }
         hasDocument = true
         scrollAnimation = nil
-        relayout(force: true)
+        // Before the layout: it lays out what the view shows, and that must
+        // be the top of the new document, not the place the old one was at.
         scroll(toY: 0)
+        relayout(force: true)
     }
 
     /// Gives the core the view's size and draws. Skips a call that changes

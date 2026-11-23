@@ -185,6 +185,9 @@ mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	document.destroy(&ctx.doc)
 	ctx.doc = document.parse(length > 0 ? string(utf8[:length]) : "")
 	ctx.selection = {}
+	// A new document starts at its top, so the first layout does not go
+	// down to the place the old one was scrolled to.
+	ctx.scroll = 0
 	ctx.layout_valid = false
 }
 
