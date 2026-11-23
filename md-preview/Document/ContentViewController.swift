@@ -87,7 +87,7 @@ final class ContentViewController: NSViewController {
         container.translatesAutoresizingMaskIntoConstraints = false
         view = container
 
-        webView = MarkdownWebView()
+        webView = SpareReaderPool.shared.takeReader()
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.heightDidChange = { [weak self] _ in
             guard let self else { return }
@@ -108,6 +108,7 @@ final class ContentViewController: NSViewController {
             guard let self, self.webView.hasRequestedDocument else { return }
             LaunchSignposts.event("domReady")
             self.handleFirstDocumentPaint()
+            SpareReaderPool.shared.documentDidPaint()
         }
         NotificationCenter.default.addObserver(self, selector: #selector(updatePointerTracking),
                                                name: UserDefaults.didChangeNotification, object: nil)
@@ -366,9 +367,12 @@ final class ContentViewController: NSViewController {
         return top >= visibleTop && bottom <= visibleBottom
     }
 
-    func printDocument() {
-        guard let window = view.window, let source = exportSource else { return }
-        webView.printDocument(assetBaseURL: source.assetBaseURL, from: window)
+    func printDocument(completion: ((Bool) -> Void)? = nil) {
+        guard let window = view.window, let source = exportSource else {
+            completion?(false)
+            return
+        }
+        webView.printDocument(assetBaseURL: source.assetBaseURL, from: window, completion: completion)
     }
 
     var hasExportableDocument: Bool {

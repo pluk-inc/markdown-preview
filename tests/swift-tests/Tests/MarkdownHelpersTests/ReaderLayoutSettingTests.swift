@@ -162,6 +162,6 @@ final class ReaderLayoutSettingTests: XCTestCase {
         // defaults still has a weight, leading and column width.
         XCTAssertTrue(html.contains("font-weight: var(--mdp-body-weight, 400);"))
         XCTAssertTrue(html.contains("line-height: var(--mdp-line-height,"))
-        XCTAssertTrue(html.contains("padding-left: var(--mdp-page-inset,"))
+        XCTAssertTrue(html.contains("padding-left: calc(var(--mdp-page-inset,"))
     }
 }

@@ -321,9 +321,19 @@ nonisolated extension MarkdownHTML {
                     lineCount: math.blockLineCounts[index]
                 )
             }
-            rebuilt += isBlock
-                ? "<div\(sourceAttributes) class=\"math math-display\">\(escaped)</div>"
-                : "<span class=\"math math-inline\">\(escaped)</span>"
+            if !isBlock {
+                rebuilt += "<span class=\"math math-inline\">\(escaped)</span>"
+            } else if wrapped {
+                rebuilt += "<div\(sourceAttributes) class=\"math math-display\">\(escaped)</div>"
+            } else {
+                // The formula shares its paragraph (or heading, or cell) with
+                // other text: no blank line separates them in the source. A
+                // <div> there makes the HTML parser close the paragraph at the
+                // formula and leave the rest as loose children of the
+                // flex-column article, one row per inline formula. A <span>
+                // stays inside; `.math-display` makes it a block.
+                rebuilt += "<span class=\"math math-display\">\(escaped)</span>"
+            }
             cursor = match.range.location + match.range.length
         }
         rebuilt += nsHtml.substring(from: cursor)

@@ -10,7 +10,7 @@ extension DocumentWindowController {
         guard isEditing,
               let markdownURL = currentFileURL,
               let editor = mainSplit?.editorViewController else { return }
-        guard let data = clipboardPNGData() else {
+        guard let data = pngData(from: .general) else {
             presentImageError(
                 NSError(domain: "MarkdownPreview.ImagePaste", code: 1, userInfo: [
                     NSLocalizedDescriptionKey: NSLocalizedString(
@@ -22,6 +22,47 @@ extension DocumentWindowController {
             return
         }
 
+        insertImage(data, forMarkdownFile: markdownURL, editor: editor, from: from, to: to)
+    }
+
+    /// Inserts the image on `pasteboard` at the selection, as a paste does.
+    /// False when the pasteboard has no image or no document can take it.
+    func insertImage(from pasteboard: NSPasteboard) -> Bool {
+        guard isEditing,
+              let markdownURL = currentFileURL,
+              let editor = mainSplit?.editorViewController,
+              let data = pngData(from: pasteboard) else { return false }
+        editor.fetchLinkSelection(expandingLink: false) { [weak self] selection in
+            // The selection arrives later: another file can be open by then.
+            guard let self, self.isEditing,
+                  self.currentFileURL?.standardizedFileURL == markdownURL.standardizedFileURL else { return }
+            guard let selection else {
+                self.presentImageError(
+                    NSError(domain: "MarkdownPreview.ImagePaste",
+                            code: 4,
+                            userInfo: [NSLocalizedDescriptionKey: NSLocalizedString(
+                                "The pasted image could not be inserted into the document.",
+                                comment: "Image paste insertion error"
+                            )])
+                )
+                return
+            }
+            self.insertImage(data,
+                             forMarkdownFile: markdownURL,
+                             editor: editor,
+                             from: selection.from,
+                             to: selection.to)
+        }
+        return true
+    }
+
+    /// Saves the image beside the Markdown file and inserts its link; asks
+    /// for access to the folder when the sandbox refuses the save.
+    private func insertImage(_ data: Data,
+                             forMarkdownFile markdownURL: URL,
+                             editor: EditorViewController,
+                             from: Int,
+                             to: Int) {
         do {
             try insertPastedImage(data,
                                   forMarkdownFile: markdownURL,
@@ -122,8 +163,7 @@ extension DocumentWindowController {
         }
     }
 
-    private func clipboardPNGData() -> Data? {
-        let pasteboard = NSPasteboard.general
+    private func pngData(from pasteboard: NSPasteboard) -> Data? {
         if let data = pasteboard.data(forType: .png) {
             return data
         }

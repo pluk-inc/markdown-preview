@@ -55,7 +55,7 @@
 "Send anonymous crash reports" = "Send anonymous crash reports";
 "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information.";
 "Share anonymous usage analytics" = "Share anonymous usage analytics";
-"When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS major version, processor architecture, and locale country or region. This is used only to count daily and monthly active installations and understand basic platform compatibility. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers." = "When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS major version, processor architecture, and locale country or region. This is used only to count daily and monthly active installations and understand basic platform compatibility. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers.";
+"When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS version, processor architecture, locale country or region, and system language. This is used only to count daily and monthly active installations, understand basic platform compatibility, and choose which languages to translate the app into. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers." = "When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS version, processor architecture, locale country or region, and system language. This is used only to count daily and monthly active installations, understand basic platform compatibility, and choose which languages to translate the app into. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers.";
 
 /* View menu */
 "Appearance" = "Appearance";
@@ -70,6 +70,9 @@
 "Table of Contents" = "Table of Contents";
 "Project Navigator" = "Project Navigator";
 "Toggle Edit Mode" = "Toggle Edit Mode";
+"Show Markdown Source" = "Show Markdown Source";
+"Show Source" = "Show Source";
+"Show Markdown" = "Show Markdown";
 
 /* File menu */
 "New Tab" = "New Tab";
@@ -542,3 +545,14 @@
 "Update the md-preview command?" = "Update the md-preview command?";
 "After this update, the md-preview command in Terminal can no longer open Markdown Preview. Terminal opens to install the command again." = "After this update, the md-preview command in Terminal can no longer open Markdown Preview. Terminal opens to install the command again.";
 "Update" = "Update";
+
+/* Editor context menu in Markdown source: submenu with the places that show the open file */
+"Navigate" = "Navigate";
+/* Editor context menu, Navigate submenu: show the open file in the sidebar's file tree */
+"Reveal in Project Navigator" = "Reveal in Project Navigator";
+/* Editor context menu: make the paragraph a code block without a language */
+"Plain Text Block" = "Plain Text Block";
+/* Editor context menu: submenu with the languages for a fenced code block */
+"Code Block" = "Code Block";
+/* Editor context menu: insert a Markdown table */
+"Insert Table" = "Insert Table";

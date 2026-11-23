@@ -134,6 +134,8 @@ final class ProjectNavigatorView: NSView {
 
         let contextMenu = NSMenu()
         contextMenu.delegate = self
+        // Keep the items the system appends to a context menu out of it.
+        contextMenu.allowsContextMenuPlugIns = false
         outlineView.menu = contextMenu
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("file"))
@@ -1009,13 +1011,15 @@ extension ProjectNavigatorView: NSMenuDelegate {
         guard row >= 0, let node = outlineView.item(atRow: row) as? FileNode else { return }
         let url = node.url
 
-        menu.addItem(makeMenuItem(title: NSLocalizedString("Show in Finder", comment: "Project navigator context menu"),
-                                  symbol: "folder",
-                                  action: #selector(showInFinder(_:)),
-                                  url: url))
+        let showInFinder = makeMenuItem(title: NSLocalizedString("Show in Finder", comment: "Project navigator context menu"),
+                                        symbol: "folder",
+                                        action: #selector(showInFinder(_:)),
+                                        url: url)
 
         if !node.isDirectory {
-            menu.addItem(.separator())
+            // The open actions lead for a file: they are what a right-click
+            // on a file is most often for. A folder has none, so Show in
+            // Finder leads there.
             menu.addItem(makeMenuItem(title: NSLocalizedString("Open in New Tab", comment: "Project navigator context menu"),
                                       symbol: "macwindow",
                                       action: #selector(openInNewTab(_:)),
@@ -1030,11 +1034,14 @@ extension ProjectNavigatorView: NSMenuDelegate {
                 }
             }
             menu.addItem(.separator())
+            menu.addItem(showInFinder)
+            menu.addItem(.separator())
             menu.addItem(makeMenuItem(title: NSLocalizedString("Copy", comment: "Project navigator context menu"),
                                       symbol: "document.on.clipboard",
                                       action: #selector(copyContents(_:)),
                                       url: url))
         } else {
+            menu.addItem(showInFinder)
             menu.addItem(.separator())
             let isFavorite = FavoriteFolders.contains(url)
             menu.addItem(makeMenuItem(title: isFavorite

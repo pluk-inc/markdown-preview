@@ -155,7 +155,7 @@ body {
     word-spacing: var(--mdp-word-spacing, normal);
     color: var(--text);
     background: transparent;
-    padding: calc((32.0px + var(--mdp-page-top-clearance, 0px)) / var(--mdp-chrome-zoom, 1)) var(--mdp-page-padding, 40.0px) 48.0px;
+    padding: calc((32.0px + var(--mdp-page-top-clearance, 0px)) / var(--mdp-chrome-zoom, 1)) calc(var(--mdp-page-padding, 40.0px) - var(--mdp-inline-slack, 0px)) 48.0px;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility; text-wrap: pretty;
 }
@@ -165,14 +165,17 @@ pre, code {
     word-spacing: normal;
 }
 
+/* --mdp-inline-slack (0 unless the page sets it) moves a strip of the
+   page padding into the article's own padding. The text column stays
+   where it is; see inlineOverflowSlackCSS for why the article needs it. */
 article.markdown-body {
-    max-width: 820px;
+    max-width: calc(820px + 2 * var(--mdp-inline-slack, 0px));
     margin-left: auto;
     margin-right: auto;
     /* Reader margins: symmetric padding inside the column, so they hold
        in every content-width mode instead of fighting max-width. */
-    padding-left: var(--mdp-page-inset, 0);
-    padding-right: var(--mdp-page-inset, 0);
+    padding-left: calc(var(--mdp-page-inset, 0px) + var(--mdp-inline-slack, 0px));
+    padding-right: calc(var(--mdp-page-inset, 0px) + var(--mdp-inline-slack, 0px));
 }
 article.markdown-body > *:first-child { margin-top: 0 !important; }
 /* A flex column keeps WebKit from painting the selection across the gaps
@@ -289,6 +292,15 @@ article.markdown-body > *:first-child { margin-top: 0 !important; }
 
 p {
     margin: 12.0px 0 0;
+}
+/* A display formula with no blank line around it is part of the
+   paragraph: its lines follow each other without a block gap, as they do
+   in Edit mode. The soft break after the formula would add an empty line. */
+p .math-display {
+    margin-top: 0;
+}
+.math-display + br {
+    display: none;
 }
 /* The final blank of a run shrinks to a small gap so a single authored
    blank plus the next block's margin matches other renderers' paragraph
@@ -651,6 +663,8 @@ font-size: 0.88em;
 /* An empty block is a placeholder, not content. */
 .mermaid-figure.mermaid-empty .mermaid { color: var(--secondary); }
 .math-display {
+    /* A formula inside a paragraph is a <span>. */
+    display: block;
     margin: 1.2em 0 0;
     overflow-x: auto;
     overflow-y: hidden;

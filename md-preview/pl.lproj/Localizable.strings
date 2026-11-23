@@ -55,7 +55,7 @@
 "Send anonymous crash reports" = "Wysyłaj anonimowe raporty o awariach";
 "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "Raporty o awariach zawierają dane diagnostyczne, takie jak ślady stosu oraz wersje systemu i aplikacji. Mogą zawierać techniczne ścieżki do plików; Markdown Preview nie dołącza celowo treści dokumentów ani danych osobowych.";
 "Share anonymous usage analytics" = "Udostępniaj anonimowe dane o użyciu";
-"When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS major version, processor architecture, and locale country or region. This is used only to count daily and monthly active installations and understand basic platform compatibility. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers." = "Po włączeniu tej opcji Markdown Preview wysyła najwyżej jedno zdarzenie dziennie, gdy aplikacja staje się aktywna, powiązane z losowym identyfikatorem instalacji. Wysyłane są także wersja aplikacji, główna wersja macOS, architektura procesora oraz kraj lub region z ustawień regionalnych. Dane te służą wyłącznie do zliczania aktywnych instalacji w skali dnia i miesiąca oraz oceny podstawowej zgodności z platformą. Nie są wysyłane treści dokumentów, nazwy ani ścieżki plików, informacje o wykonywanych czynnościach, zawartość ekranów, dokładne położenie, dane osobowe ani identyfikatory reklamowe.";
+"When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS version, processor architecture, locale country or region, and system language. This is used only to count daily and monthly active installations, understand basic platform compatibility, and choose which languages to translate the app into. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers." = "Po włączeniu Markdown Preview wysyła co najwyżej jedno zdarzenie dziennie, gdy aplikacja staje się aktywna, powiązane z losowym identyfikatorem instalacji. Wysyła również wersję aplikacji, wersję systemu macOS, architekturę procesora, kraj lub region ustawień regionalnych oraz język systemowy. Służy to wyłącznie do zliczania dziennych i miesięcznych aktywnych instalacji, poznania podstawowej zgodności z platformami oraz wyboru języków, na które aplikacja ma być tłumaczona. Nie są wysyłane zawartość dokumentów, nazwy ani ścieżki plików, działania, ekrany, dokładna lokalizacja, dane osobowe ani identyfikatory reklamowe.";
 
 /* View menu */
 "Appearance" = "Wygląd";
@@ -70,6 +70,9 @@
 "Table of Contents" = "Spis treści";
 "Project Navigator" = "Nawigator projektu";
 "Toggle Edit Mode" = "Włącz lub wyłącz tryb edycji";
+"Show Markdown Source" = "Pokaż źródło Markdown";
+"Show Source" = "Pokaż źródło";
+"Show Markdown" = "Pokaż Markdown";
 
 /* File menu */
 "New Tab" = "Nowa karta";
@@ -542,3 +545,14 @@
 "Update the md-preview command?" = "Zaktualizować polecenie md-preview?";
 "After this update, the md-preview command in Terminal can no longer open Markdown Preview. Terminal opens to install the command again." = "Po tej aktualizacji polecenie md-preview w Terminalu nie będzie już mogło otwierać Markdown Preview. Terminal otworzy się, aby ponownie zainstalować to polecenie.";
 "Update" = "Aktualizuj";
+
+/* Editor context menu in Markdown source: submenu with the places that show the open file */
+"Navigate" = "Nawiguj";
+/* Editor context menu, Navigate submenu: show the open file in the sidebar's file tree */
+"Reveal in Project Navigator" = "Pokaż w nawigatorze projektu";
+/* Editor context menu: make the paragraph a code block without a language */
+"Plain Text Block" = "Blok zwykłego tekstu";
+/* Editor context menu: submenu with the languages for a fenced code block */
+"Code Block" = "Blok kodu";
+/* Editor context menu: insert a Markdown table */
+"Insert Table" = "Wstaw tabelę";

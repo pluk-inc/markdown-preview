@@ -55,7 +55,7 @@
 "Send anonymous crash reports" = "ارسال گزارش‌های ناشناس خرابی";
 "Crash reports contain diagnostic details such as stack traces and OS and app versions. They may include technical file paths; Markdown Preview does not deliberately attach document contents or personal information." = "گزارش‌های خرابی شامل جزئیات تشخیصی مانند رد پشته و نسخه‌های سیستم‌عامل و برنامه هستند. آن‌ها ممکن است شامل مسیرهای فنی فایل باشند؛ Markdown Preview عمداً محتوای سند یا اطلاعات شخصی را پیوست نمی‌کند.";
 "Share anonymous usage analytics" = "اشتراک‌گذاری آمار ناشناس استفاده";
-"When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS major version, processor architecture, and locale country or region. This is used only to count daily and monthly active installations and understand basic platform compatibility. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers." = "در صورت فعال بودن، Markdown Preview هنگام فعال شدن برنامه حداکثر یک رویداد در روز ارسال می‌کند که به یک شناسهٔ نصب تصادفی مرتبط است. همچنین نسخهٔ برنامه، نسخهٔ اصلی macOS، معماری پردازنده و کشور یا منطقهٔ محلی را ارسال می‌کند. این اطلاعات فقط برای شمارش نصب‌های فعال روزانه و ماهانه و درک سازگاری اولیه با پلتفرم استفاده می‌شود. این ویژگی محتوای سند، نام‌ها یا مسیرهای فایل، اقدامات، صفحه‌ها، موقعیت مکانی دقیق، اطلاعات شخصی یا شناسه‌های تبلیغاتی را ارسال نمی‌کند.";
+"When enabled, Markdown Preview sends at most one event per day when the app becomes active, linked to a random installation identifier. It also sends the app version, macOS version, processor architecture, locale country or region, and system language. This is used only to count daily and monthly active installations, understand basic platform compatibility, and choose which languages to translate the app into. It does not send document contents, file names or paths, actions, screens, precise location, personal information, or advertising identifiers." = "وقتی فعال باشد، Markdown Preview حداکثر روزی یک رویداد هنگام فعال شدن برنامه ارسال می‌کند که به یک شناسهٔ نصب تصادفی مرتبط است. همچنین نسخهٔ برنامه، نسخهٔ macOS، معماری پردازنده، کشور یا منطقهٔ تنظیمات محلی و زبان سیستم را ارسال می‌کند. این اطلاعات فقط برای شمارش نصب‌های فعال روزانه و ماهانه، درک سازگاری پایهٔ پلتفرم و انتخاب زبان‌هایی که برنامه باید به آن‌ها ترجمه شود استفاده می‌شود. محتوای سندها، نام یا مسیر فایل‌ها، اقدامات، صفحه‌ها، موقعیت مکانی دقیق، اطلاعات شخصی یا شناسه‌های تبلیغاتی ارسال نمی‌شوند.";
 
 /* View menu */
 "Appearance" = "ظاهر";
@@ -70,6 +70,9 @@
 "Table of Contents" = "فهرست مطالب";
 "Project Navigator" = "پیمایشگر پروژه";
 "Toggle Edit Mode" = "تغییر وضعیت حالت ویرایش";
+"Show Markdown Source" = "نمایش کد منبع مارک‌داون";
+"Show Source" = "نمایش منبع";
+"Show Markdown" = "نمایش Markdown";
 
 /* File menu */
 "New Tab" = "زبانهٔ جدید";
@@ -542,3 +545,14 @@
 "Update the md-preview command?" = "فرمان md-preview به‌روزرسانی شود؟";
 "After this update, the md-preview command in Terminal can no longer open Markdown Preview. Terminal opens to install the command again." = "پس از این به‌روزرسانی، فرمان md-preview در Terminal دیگر نمی‌تواند Markdown Preview را باز کند. Terminal باز می‌شود تا فرمان دوباره نصب شود.";
 "Update" = "به‌روزرسانی";
+
+/* Editor context menu in Markdown source: submenu with the places that show the open file */
+"Navigate" = "پیمایش";
+/* Editor context menu, Navigate submenu: show the open file in the sidebar's file tree */
+"Reveal in Project Navigator" = "نمایش در پیمایشگر پروژه";
+/* Editor context menu: make the paragraph a code block without a language */
+"Plain Text Block" = "بلوک متن ساده";
+/* Editor context menu: submenu with the languages for a fenced code block */
+"Code Block" = "بلوک کد";
+/* Editor context menu: insert a Markdown table */
+"Insert Table" = "درج جدول";

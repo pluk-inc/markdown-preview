@@ -307,7 +307,7 @@ nonisolated struct EPUBPackage: Sendable {
         border-inline-start: 0.25em solid #696969;
     }
     .markdown-alert-title { font-weight: bold; }
-    .math-display { margin: 1em 0; text-align: center; }
+    .math-display { display: block; margin: 1em 0; text-align: center; }
     .footnotes { font-size: 0.9em; }
     .footnote-backref { text-decoration: none; }
     summary { font-weight: bold; }

@@ -22,6 +22,7 @@ extension URL {
     nonisolated func isDescendantOrSame(of other: URL) -> Bool {
         let mine = standardizedFileURL.path
         let root = other.standardizedFileURL.path
-        return mine == root || mine.hasPrefix(root + "/")
+        // "/" already ends in the separator the prefix needs.
+        return mine == root || mine.hasPrefix(root.hasSuffix("/") ? root : root + "/")
     }
 }

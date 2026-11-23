@@ -855,6 +855,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             return true
         case #selector(toggleEditModeFromMenu(_:)):
             return activeDocumentWindowController?.canToggleEditMode ?? false
+        case #selector(toggleEditorSourceModeFromMenu(_:)):
+            menuItem.state = EditorSourceModeSetting.current ? .on : .off
+            return activeDocumentWindowController?.isEditing ?? false
         case #selector(formatMarkdownFromMenu(_:)):
             return activeDocumentWindowController?.canFormatMarkdown ?? false
         case #selector(selectTabFromMenu(_:)):
@@ -889,8 +892,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             guard self.documentPromptScheduleGeneration == scheduleGeneration else { return }
             self.isDocumentPromptScheduled = false
             guard !requiresNoDocuments || NSDocumentController.shared.documents.isEmpty else { return }
+            // A reader with a favorite folder gets that folder back, with the
+            // file they read last in it, not a file chooser, when the app
+            // has no window to show.
+            if requiresNoDocuments, let folder = FavoriteFolders.folderForEmptyApp {
+                self.reopen(folder)
+                return
+            }
             NSApp.activate(ignoringOtherApps: true)
             NSDocumentController.shared.openDocument(nil)
+        }
+    }
+
+    /// Shows `folder` with the last file the reader opened in it. A file
+    /// that does not open leaves the folder alone in the window, with no
+    /// alert: the reader did not ask for that file. A document the reader
+    /// opened in the meantime keeps its own folder.
+    private func reopen(_ folder: URL) {
+        guard let file = FavoriteFolders.lastOpenedFile(in: folder) else {
+            return openFolder(folder)
+        }
+        NSDocumentController.shared.openDocument(withContentsOf: file,
+                                                 display: true) { [weak self] document, _, _ in
+            guard let self else { return }
+            guard let document else {
+                if NSDocumentController.shared.documents.isEmpty { self.openFolder(folder) }
+                return
+            }
+            self.showWindowIfNeeded(for: document)
         }
     }
 
@@ -901,6 +930,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         guard isDocumentPromptScheduled else { return }
         documentPromptScheduleGeneration += 1
         isDocumentPromptScheduled = false
+    }
+
+    /// AppKit opens a file for a print request itself, not through
+    /// `application(_:open:)`, so the launch would show the file chooser
+    /// on top of the document that is about to print.
+    func documentOpenDidStart() {
+        if !hasFinishedLaunching {
+            didReceiveOpenURLsDuringLaunch = true
+        } else if isDocumentPromptScheduled {
+            documentPromptScheduleGeneration += 1
+            isDocumentPromptScheduled = false
+        }
     }
 
     func openFolder(_ url: URL) {
@@ -1608,11 +1649,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             Self.actualSizeMenuTitles.contains($0.title)
         }) ?? viewMenu.numberOfItems
         viewMenu.insertItem(item, at: insertIndex)
-        viewMenu.insertItem(.separator(), at: insertIndex + 1)
+
+        let source = NSMenuItem(title: L("Show Markdown Source"),
+                                action: #selector(toggleEditorSourceModeFromMenu(_:)),
+                                keyEquivalent: "e")
+        source.keyEquivalentModifierMask = [.command, .shift]
+        source.target = self
+        viewMenu.insertItem(source, at: insertIndex + 1)
+        viewMenu.insertItem(.separator(), at: insertIndex + 2)
     }
 
     @objc private func toggleEditModeFromMenu(_ sender: Any?) {
         activeDocumentWindowController?.toggleEditMode()
+    }
+
+    /// One app-wide choice: every open editor switches, and edit mode opens
+    /// in the same style next time.
+    @objc private func toggleEditorSourceModeFromMenu(_ sender: Any?) {
+        toggleEditorSourceMode()
+    }
+
+    func toggleEditorSourceMode() {
+        EditorSourceModeSetting.current.toggle()
+        documentWindowControllers.forEach { $0.applyEditorSourceModeSetting() }
     }
 
     private func installFormatMenu() {
@@ -1659,6 +1718,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             Self.viewMenuTitles.contains($0.title)
         }) ?? mainMenu.items.count
         mainMenu.insertItem(rootItem, at: insertIndex)
+    }
+
+    /// A copy of a menu bar item for a context menu. The title, command,
+    /// and target stay those of the menu bar, so the copy runs and
+    /// validates as the original does. The shortcuts go: a context menu
+    /// shows none.
+    private func contextMenuCopy(of item: NSMenuItem?) -> NSMenuItem? {
+        guard let copy = item?.copy() as? NSMenuItem else { return nil }
+        copy.keyEquivalent = ""
+        copy.submenu?.items.forEach { $0.keyEquivalent = "" }
+        return copy
+    }
+
+    /// The Format menu, as a submenu.
+    func makeFormatContextMenuItem() -> NSMenuItem? {
+        contextMenuCopy(of: topLevelMenuItem(matching: Self.formatMenuTitles))
+    }
+
+    /// The named Format commands, each as its own item.
+    func makeFormatContextMenuItems(commands: [String]) -> [NSMenuItem] {
+        let items = topLevelSubmenu(matching: Self.formatMenuTitles)?.items ?? []
+        return commands.compactMap { command in
+            contextMenuCopy(of: items.first { $0.representedObject as? String == command })
+        }
+    }
+
+    /// Find… of Edit > Find, without an icon.
+    func makeFindContextMenuItem() -> NSMenuItem? {
+        let find = NSApp.mainMenu?.firstItem {
+            $0.action == #selector(performFindPanelAction(_:))
+                && $0.tag == NSTextFinder.Action.showFindInterface.rawValue
+        }
+        guard let item = contextMenuCopy(of: find) else { return nil }
+        item.image = nil
+        if #available(macOS 27.0, *) {
+            item.preferredImageVisibility = .hidden
+        }
+        return item
     }
 
     @objc private func formatMarkdownFromMenu(_ sender: NSMenuItem) {
@@ -1759,5 +1856,16 @@ extension AppDelegate {
             }
             item.title = "\(url.lastPathComponent) (\(parents.suffix(count).joined(separator: "/")))"
         }
+    }
+}
+
+private extension NSMenu {
+    /// The first item that matches, in this menu or in a submenu.
+    func firstItem(where matches: (NSMenuItem) -> Bool) -> NSMenuItem? {
+        for item in items {
+            if matches(item) { return item }
+            if let found = item.submenu?.firstItem(where: matches) { return found }
+        }
+        return nil
     }
 }

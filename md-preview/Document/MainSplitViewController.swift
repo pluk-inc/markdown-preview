@@ -254,6 +254,24 @@ final class MainSplitViewController: NSSplitViewController {
         contentViewController?.printDocument()
     }
 
+    /// Prints a document that may have opened a moment ago. The print copies
+    /// the rendered page, so this waits for the first paint. A page that
+    /// never paints still gets its attempt after the deadline.
+    func printDocumentWhenPainted(completion: @escaping (Bool) -> Void) {
+        Task { [weak self] in
+            let deadline = ContinuousClock.now + .seconds(10)
+            // A window closed during the wait ends it: `self` is gone.
+            while self?.hasPaintedFirstDocument == false, ContinuousClock.now < deadline {
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+            guard let contentViewController = self?.contentViewController else {
+                completion(false)
+                return
+            }
+            contentViewController.printDocument(completion: completion)
+        }
+    }
+
     @IBAction func exportMarkdownDocument(_ sender: Any?) {
         contentViewController?.exportDocument()
     }
@@ -346,6 +364,10 @@ final class MainSplitViewController: NSSplitViewController {
 
     func setSidebarMode(_ mode: SidebarViewController.Mode, remember: Bool = true) {
         sidebarViewController?.setMode(mode, remember: remember)
+    }
+
+    func revealOpenFileInNavigator() {
+        sidebarViewController?.revealOpenFile()
     }
 
     func applyReaderLayout() {

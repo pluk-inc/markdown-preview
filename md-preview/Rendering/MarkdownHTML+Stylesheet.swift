@@ -12,6 +12,8 @@ import Foundation
 nonisolated extension MarkdownHTML {
     static let mathStylesheet = """
     .math-display {
+        /* A formula inside a paragraph is a <span>. */
+        display: block;
         margin: 1.2em 0 0;
         overflow-x: auto;
         overflow-y: hidden;
@@ -553,7 +555,7 @@ nonisolated extension MarkdownHTML {
         word-spacing: var(--mdp-word-spacing, normal);
         color: var(--text);
         background: transparent;
-        padding: calc((\(pagePaddingTop)px + var(--mdp-page-top-clearance, 0px)) / var(--mdp-chrome-zoom, 1)) var(--mdp-page-padding, \(pagePaddingHorizontal)px) \(pagePaddingBottom)px;
+        padding: calc((\(pagePaddingTop)px + var(--mdp-page-top-clearance, 0px)) / var(--mdp-chrome-zoom, 1)) calc(var(--mdp-page-padding, \(pagePaddingHorizontal)px) - var(--mdp-inline-slack, 0px)) \(pagePaddingBottom)px;
         -webkit-font-smoothing: antialiased;
         \(bodyTextRenderingCSS)
     }
@@ -563,14 +565,17 @@ nonisolated extension MarkdownHTML {
         word-spacing: normal;
     }
 
+    /* --mdp-inline-slack (0 unless the page sets it) moves a strip of the
+       page padding into the article's own padding. The text column stays
+       where it is; see inlineOverflowSlackCSS for why the article needs it. */
     article.markdown-body {
-        max-width: \(contentColumnWidth)px;
+        max-width: calc(\(contentColumnWidth)px + 2 * var(--mdp-inline-slack, 0px));
         margin-left: auto;
         margin-right: auto;
         /* Reader margins: symmetric padding inside the column, so they hold
            in every content-width mode instead of fighting max-width. */
-        padding-left: var(--mdp-page-inset, 0);
-        padding-right: var(--mdp-page-inset, 0);
+        padding-left: calc(var(--mdp-page-inset, 0px) + var(--mdp-inline-slack, 0px));
+        padding-right: calc(var(--mdp-page-inset, 0px) + var(--mdp-inline-slack, 0px));
     }
     article.markdown-body > *:first-child { margin-top: 0 !important; }
     /* A flex column keeps WebKit from painting the selection across the gaps
@@ -687,6 +692,15 @@ nonisolated extension MarkdownHTML {
 
     p {
         margin: \(paragraphSpacing)px 0 0;
+    }
+    /* A display formula with no blank line around it is part of the
+       paragraph: its lines follow each other without a block gap, as they do
+       in Edit mode. The soft break after the formula would add an empty line. */
+    p .math-display {
+        margin-top: 0;
+    }
+    .math-display + br {
+        display: none;
     }
     /* The final blank of a run shrinks to a small gap so a single authored
        blank plus the next block's margin matches other renderers' paragraph

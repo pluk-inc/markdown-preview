@@ -6,8 +6,9 @@
 
 import {
   EditorView, keymap, ViewPlugin, Decoration, BlockWrapper, WidgetType, dropCursor,
+  lineNumbers, highlightActiveLineGutter, highlightActiveLine,
 } from "@codemirror/view"
-import { Annotation, EditorState, EditorSelection, MapMode, Prec, StateEffect, StateField, Transaction } from "@codemirror/state"
+import { Annotation, Compartment, EditorState, EditorSelection, MapMode, Prec, StateEffect, StateField, Transaction } from "@codemirror/state"
 import {
   defaultKeymap, history, historyKeymap, indentLess, insertTab,
 } from "@codemirror/commands"
@@ -1760,21 +1761,32 @@ const frontmatterDelim = Decoration.mark({ class: "cm-md-frontmatter-delim" })
 
 const autoDirectionLine = Decoration.line({ attributes: { dir: "auto" } })
 
-function buildDirectionLines(state) {
-  const ranges = []
-  for (let lineNumber = 1; lineNumber <= state.doc.lines; lineNumber++) {
-    ranges.push(autoDirectionLine.range(state.doc.line(lineNumber).from))
+// Line decorations for the lines in view only, from `lineDecoration(line,
+// state)`, which returns a decoration or null. A decoration for every line
+// of the document, built again on each change, made typing slow in a large
+// file.
+const visibleLineDecorations = (lineDecoration) => {
+  const build = (view) => {
+    const ranges = []
+    for (const { from, to } of view.visibleRanges) {
+      for (let pos = from; pos <= to;) {
+        const line = view.state.doc.lineAt(pos)
+        const decoration = lineDecoration(line, view.state)
+        if (decoration) ranges.push(decoration.range(line.from))
+        pos = line.to + 1
+      }
+    }
+    return Decoration.set(ranges)
   }
-  return Decoration.set(ranges)
+  return ViewPlugin.fromClass(class {
+    constructor(view) { this.decorations = build(view) }
+    update(update) {
+      if (update.docChanged || update.viewportChanged) this.decorations = build(update.view)
+    }
+  }, { decorations: (plugin) => plugin.decorations })
 }
 
-const directionLines = StateField.define({
-  create: buildDirectionLines,
-  update(value, transaction) {
-    return transaction.docChanged ? buildDirectionLines(transaction.state) : value
-  },
-  provide: (field) => EditorView.decorations.from(field),
-})
+const directionLines = visibleLineDecorations(() => autoDirectionLine)
 
 function fencedCodeDetails(state, node) {
   let info = ""
@@ -2419,12 +2431,30 @@ function buildDecorations(view, detectedCodeCache) {
         }
 
         if (MATH_NODES.has(name)) {
+          // A $$…$$ that shares its paragraph with text still gets the card
+          // while it is open, as long as it fills its own lines.
           const standalone = name === "MathBlock" || isStandaloneDisplayMath(node.node.parent)
+            || (name === "DisplayMath" && state.doc.lineAt(node.from).from === node.from
+              && state.doc.lineAt(node.to).to === node.to)
           const open = state.field(mathPreviews).active
           const editing = open != null && open.from === node.from && open.to === node.to
           if (standalone && (editing || currentFindTouches(state, node.from, node.to))) {
             const first = state.doc.lineAt(node.from)
             const last = state.doc.lineAt(node.to)
+            const closing = last.from + last.text.lastIndexOf('$$')
+            // The card already says "formula", so the delimiters are hidden
+            // like a code block's fences. Delimiter lines of a multiline
+            // block collapse unless the caret is on them; an empty block
+            // keeps them, or it would have no line left to show.
+            const ownLines = name === "MathBlock" && last.number - first.number >= 2
+            // A list marker before the opening delimiter keeps its line, or
+            // the bullet would vanish with it: only the `$$` is hidden there.
+            const awayFromOpening = ownLines && !touchesLineOf(first.from)
+            const markerOnOpening = !/^[\s>]*$/.test(first.text.slice(0, node.from - first.from))
+            const hidesOpening = awayFromOpening && !markerOnOpening
+            const hidesClosing = ownLines && !touchesLineOf(last.from)
+            const cardFirst = hidesOpening ? first.number + 1 : first.number
+            const cardLast = hidesClosing ? last.number - 1 : last.number
             const group = Decoration.line({ attributes: {
               'data-code-scroll-group': String(first.from),
               // Include quote/list indentation in the card's measured width.
@@ -2432,16 +2462,24 @@ function buildDecorations(view, detectedCodeCache) {
             } })
             for (let number = first.number; number <= last.number; number++) {
               const line = state.doc.line(number)
-              if (number === first.number) lineOnce(line.from, codeLineFirst)
-              if (number === last.number) lineOnce(line.from, codeLineLast)
-              if (number !== first.number && number !== last.number) lineOnce(line.from, codeLine)
+              if (number < cardFirst || number > cardLast) {
+                lineOnce(line.from, collapsedLine)
+                continue
+              }
+              if (number === cardFirst) lineOnce(line.from, codeLineFirst)
+              if (number === cardLast) lineOnce(line.from, codeLineLast)
+              if (number !== cardFirst && number !== cardLast) lineOnce(line.from, codeLine)
               ranges.push(group.range(line.from))
               if (line.length) ranges.push(codeScrollText.range(line.from, line.to))
             }
-            // The real delimiters identify dollar math without a language picker.
-            ranges.push(fenceMark.range(node.from, node.from + 2))
-            const closing = last.from + last.text.lastIndexOf('$$')
-            ranges.push(fenceMark.range(closing, closing + 2))
+            if (name === "DisplayMath") {
+              ranges.push(hide.range(node.from, node.from + 2))
+              ranges.push(hide.range(closing, closing + 2))
+            } else {
+              if (awayFromOpening && markerOnOpening) ranges.push(hide.range(node.from, node.from + 2))
+              else if (!hidesOpening) ranges.push(fenceMark.range(node.from, node.from + 2))
+              if (!hidesClosing) ranges.push(fenceMark.range(closing, closing + 2))
+            }
           }
           // The subtree is declined below, so a $$ block's quote markers on
           // its later lines are hidden here.
@@ -3135,6 +3173,70 @@ const codeHighlight = HighlightStyle.define([
 ])
 
 // ---------------------------------------------------------------------------
+// Plain source mode: the same buffer with no live preview, every marker
+// visible, and Markdown itself colored (colors come from page CSS).
+// ---------------------------------------------------------------------------
+
+const sourceHighlight = HighlightStyle.define([
+  { tag: t.heading, class: "cm-src-heading" },
+  { tag: t.strong, class: "cm-src-strong" },
+  { tag: t.emphasis, class: "cm-src-emphasis" },
+  { tag: t.strikethrough, class: "cm-src-strikethrough" },
+  { tag: [t.link, t.url], class: "cm-src-link" },
+  { tag: t.string, class: "cm-src-title" },
+  { tag: t.labelName, class: "cm-src-label" },
+  { tag: t.quote, class: "cm-src-quote" },
+  { tag: [t.comment, t.blockComment], class: "cm-src-comment" },
+  { tag: [t.escape, t.character, t.atom], class: "cm-src-escape" },
+  { tag: [t.processingInstruction, t.contentSeparator, t.meta], class: "cm-src-mark" },
+])
+const isMarkdownNode = (type) => type.prop(languageDataProp) === markdownLanguage.data
+
+// Source mode wraps a long line under its own text: the rows after the first
+// start below the first character after the indent, list marker or quotation
+// mark, not at the pane's edge. The source font has one width for every
+// character, so the prefix is counted in columns and no text is measured.
+const hangingPrefix = /^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+(?:\[[ xX]\][ \t]+)?|>[ \t]?)*/
+const hangingColumns = (text, tabSize) => {
+  const prefix = hangingPrefix.exec(text)[0]
+  if (prefix.length === text.length) return 0
+  let columns = 0
+  for (const ch of prefix) columns += ch === "\t" ? tabSize - (columns % tabSize) : 1
+  return columns
+}
+const hangingLines = new Map()
+const hangingLine = (columns) => {
+  let deco = hangingLines.get(columns)
+  if (!deco) {
+    deco = Decoration.line({
+      attributes: { style: `text-indent:-${columns}ch;padding-inline-start:calc(var(--src-line-start) + ${columns}ch)` },
+    })
+    hangingLines.set(columns, deco)
+  }
+  return deco
+}
+const hangingIndents = visibleLineDecorations((line, state) => {
+  const columns = hangingColumns(line.text, state.tabSize)
+  return columns > 0 ? hangingLine(columns) : null
+})
+
+// The line break a file uses most. The buffer holds every break as one
+// position, whatever its bytes, so the file's own break has to go back in
+// when the text leaves the editor: without this a CRLF file saves as LF and
+// every line of it shows as changed. A file that mixes breaks saves with
+// the one it uses most.
+const fileLineBreak = (text) => {
+  if (!text.includes("\r")) return "\n"
+  let lf = 0, crlf = 0, cr = 0
+  for (const match of text.matchAll(/\r\n|\r|\n/g)) {
+    if (match[0] === "\n") lf++
+    else if (match[0] === "\r\n") crlf++
+    else cr++
+  }
+  return crlf > lf && crlf >= cr ? "\r\n" : cr > lf ? "\r" : "\n"
+}
+
+// ---------------------------------------------------------------------------
 // Bold / italic toggles
 // ---------------------------------------------------------------------------
 
@@ -3529,10 +3631,41 @@ function indentMarkdownListItems(view) {
 window.MDEditor = {
   create(parent, doc, callbacks) {
     const onDirty = callbacks && callbacks.onDirty
+    let lineBreak = fileLineBreak(String(doc || ""))
     const onPasteImage = callbacks && callbacks.onPasteImage
     // Live preview spacing tokens from the host stylesheet (MarkdownHTML
     // constants) — see METRICS for the headless defaults.
     Object.assign(METRICS, (callbacks && callbacks.spacing) || {})
+    // Everything that renders Markdown lives in one compartment, so plain
+    // source mode swaps it out and keeps the buffer, selection, and undo
+    // history. The formatted style's whole-document state fields (tables,
+    // math, diagrams) go with it: source mode costs nothing per document.
+    const editingStyle = new Compartment()
+    const formattedStyle = [
+      stablePointerPreview,
+      anchoredPointerSelection,
+      mermaidPreviews,
+      mathPreviews,
+      EditorView.focusChangeEffect.of((_state, focused) => setMathFocus.of(focused)),
+      tableEditors,
+      tableFormattingSelection,
+      Prec.lowest(livePreview),
+      alignInactiveHeadings,
+      keymap.of([
+        { key: "ArrowUp", run: view => moveIntoMath(view, false) },
+        { key: "ArrowDown", run: view => moveIntoMath(view, true) },
+      ]),
+    ]
+    const sourceStyle = [
+      EditorView.editorAttributes.of({ class: "cm-md-source" }),
+      lineNumbers(),
+      highlightActiveLineGutter(),
+      highlightActiveLine(),
+      hangingIndents,
+      EditorState.tabSize.of(4),
+      syntaxHighlighting({ style: sourceHighlight.style, scope: isMarkdownNode }),
+    ]
+    let sourceModeOn = !!(callbacks && callbacks.sourceMode)
     const view = new EditorView({
       parent,
       state: EditorState.create({
@@ -3560,24 +3693,17 @@ window.MDEditor = {
               extensions: [obsidianHighlight, mathSyntax],
             }),
           }),
+          // Selection bookkeeping that commands read in both editing styles.
           activeCodeBlock,
           wrappedCodeBlocks,
           pointerPreview,
-          stablePointerPreview,
-          anchoredPointerSelection,
-          mermaidPreviews,
-          mathPreviews,
-          EditorView.focusChangeEffect.of((_state, focused) => setMathFocus.of(focused)),
-          tableEditors,
-          tableFormattingSelection,
           // Markdown punctuation also carries processingInstruction tags.
           // Keep code colors inside embedded languages, not Markdown markers.
           syntaxHighlighting({
             style: codeHighlight.style,
-            scope: (type) => type.prop(languageDataProp) !== markdownLanguage.data,
+            scope: (type) => !isMarkdownNode(type),
           }),
-          Prec.lowest(livePreview),
-          alignInactiveHeadings,
+          editingStyle.of(sourceModeOn ? sourceStyle : formattedStyle),
           autoCloseFence,
           closeBrackets(),
           // paragraphReflow deliberately omitted: the preview renders
@@ -3585,8 +3711,6 @@ window.MDEditor = {
           // editor keeps them visible instead of joining lines.
           Prec.highest(keymap.of([{ key: "Enter", run: continueTaskList }])),
           keymap.of([
-            { key: "ArrowUp", run: view => moveIntoMath(view, false) },
-            { key: "ArrowDown", run: view => moveIntoMath(view, true) },
             { key: "Mod-b", run: toggleInlineMark("**") },
             { key: "Mod-i", run: toggleInlineMark("*") },
             { key: "Tab", run: indentMarkdownListItems, shift: indentLess },
@@ -3686,8 +3810,38 @@ window.MDEditor = {
     if (callbacks?.onCopyCode) codeCopyHandlers.set(view, callbacks.onCopyCode)
     if (callbacks?.onFormattingChange) tableFormattingCallbacks.set(view, callbacks.onFormattingChange)
     callbacks?.onFormattingChange?.(selectionContext(view.state))
-    return {
-      getMarkdown: () => view.state.doc.toString(),
+    const editor = {
+      getMarkdown: () => view.state.doc.sliceString(0, undefined, lineBreak),
+      isSourceMode: () => sourceModeOn,
+      // Swap the editing style in place. Line heights differ between the two,
+      // so carry the top source line across like a read/edit hand-off.
+      setSourceMode: (on) => {
+        on = !!on
+        if (on === sourceModeOn) return Promise.resolve(false)
+        const anchor = editor.getScrollAnchor()
+        sourceModeOn = on
+        // A selection inside a table cell lives outside the editor's own
+        // selection: commit the cell's pending typing and carry the
+        // selection into the source before the table widgets go.
+        const fromTableCell = tableFormattingTargets.has(view)
+        prepareTableFormatting(view)
+        tableFormattingTargets.delete(view)
+        view.dispatch({ effects: [
+          editingStyle.reconfigure(on ? sourceStyle : formattedStyle),
+          setPointerPreview.of(null),
+        ] })
+        // The cell had the focus and is gone.
+        if (fromTableCell) view.focus()
+        if (!on) {
+          // The formatted style's state starts over: its table plugin
+          // dropped the host callback when it left, and the math field
+          // learns of focus only when focus changes.
+          if (callbacks?.onFormattingChange) tableFormattingCallbacks.set(view, callbacks.onFormattingChange)
+          view.dispatch({ effects: setMathFocus.of(view.hasFocus) })
+        }
+        callbacks?.onFormattingChange?.(selectionContext(view.state))
+        return editor.setScrollPosition(0, anchor.position, anchor.gap)
+      },
       getBlockStyle: () => tableFormattingTargets.has(view) ? 'table' : stylingContext(view.state).style,
       setBlockStyle: (style, language) => {
         if (tableFormattingTargets.has(view)) {
@@ -3773,7 +3927,9 @@ window.MDEditor = {
       isSyntaxReady: () => syntaxTreeAvailable(view.state, view.state.doc.length),
       replaceMarkdown: (markdown) => {
         const text = String(markdown || "")
-        const length = text.length
+        lineBreak = fileLineBreak(text)
+        // In document positions: a line break is one, whatever its bytes.
+        const length = text.replace(/\r\n?/g, "\n").length
         const selection = view.state.selection.main
         const anchor = Math.min(selection.anchor, length)
         const head = Math.min(selection.head, length)
@@ -3912,5 +4068,6 @@ window.MDEditor = {
         view.destroy()
       },
     }
+    return editor
   },
 }

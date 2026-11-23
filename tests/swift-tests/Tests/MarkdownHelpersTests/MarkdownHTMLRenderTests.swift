@@ -250,8 +250,13 @@ final class MarkdownHTMLRenderTests: XCTestCase {
             }
             let result = try await webView.evaluateJavaScript("""
             (() => {
-                const r = document.querySelector('article').getBoundingClientRect();
-                return JSON.stringify({ x: r.x, width: r.width });
+                // The text column: the article's content box. Its padding
+                // holds the inline overflow slack, taken from the body gutter.
+                const article = document.querySelector('article');
+                const r = article.getBoundingClientRect();
+                const style = getComputedStyle(article);
+                const left = parseFloat(style.paddingLeft), right = parseFloat(style.paddingRight);
+                return JSON.stringify({ x: r.x + left, width: r.width - left - right });
             })()
             """)
             let json = try XCTUnwrap(result as? String)
@@ -409,6 +414,93 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         )
         XCTAssertLessThanOrEqual(metrics.codeRight, metrics.viewportRight + fragmentPaddingTolerance)
         XCTAssertEqual(metrics.boxDecorationBreak, "clone")
+    }
+
+    /// WebKit lets the first fragment of a wrapped inline code span end past
+    /// its line by up to the span's end padding. The article is the sideways
+    /// scroller, so that must not become scrollable overflow.
+    @MainActor
+    func testWrappedInlineCodeDoesNotMakeTheArticleScrollSideways() async throws {
+        let sentence = "Update checks use `amore release` and `md-asset://` paths, then `> #` and `swift build` run. "
+        let rendered = MarkdownHTML.render(
+            markdown: "# Title with `inline code` that wraps `in a heading` too\n\n"
+                + String(repeating: sentence, count: 12),
+            allowsScroll: true,
+            vendorLoading: .lazy
+        )
+        let stylesheet = rendered.html
+            .components(separatedBy: "<style>")
+            .dropFirst()
+            .compactMap { $0.components(separatedBy: "</style>").first }
+            .joined(separator: "\n")
+        let html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>\(stylesheet)</style>
+        </head>
+        <body><article class="markdown-body">\(rendered.articleHTML)</article></body>
+        </html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        // Sweep the column width: the overshoot depends on where a line ends.
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const article = document.querySelector('article.markdown-body');
+            const text = article.querySelector('p');
+            let worst = 0, textInset = null;
+            for (let width = 360; width <= 760; width += 3) {
+                document.body.style.width = width + 'px';
+                worst = Math.max(worst, article.scrollWidth - article.clientWidth);
+                const inset = text.getBoundingClientRect().left - document.body.getBoundingClientRect().left;
+                textInset = textInset === null ? inset : Math.max(textInset, inset);
+            }
+            return JSON.stringify([worst, textInset]);
+        })()
+        """)
+        let values = try JSONDecoder().decode([Double].self, from: Data(try XCTUnwrap(result as? String).utf8))
+
+        XCTAssertEqual(values[0], 0, "the article scrolls sideways by \(values[0]) px")
+        // The slack comes out of the page padding, so the text column stays put.
+        XCTAssertEqual(values[1], Double(MarkdownHTML.pagePaddingHorizontal), accuracy: 0.01)
+    }
+
+    /// PDF export makes the body the column, without padding, and fits wide
+    /// tables to the article before printing. The inline overflow slack must
+    /// not take width from that fit.
+    @MainActor
+    func testPDFExportPageKeepsTheFullColumnWidth() async throws {
+        let rendered = MarkdownHTML.render(markdown: "Body text.", allowsScroll: true, vendorLoading: .lazy)
+        let stylesheet = rendered.html
+            .components(separatedBy: "<style>")
+            .dropFirst()
+            .compactMap { $0.components(separatedBy: "</style>").first }
+            .joined(separator: "\n")
+        let html = """
+        <!DOCTYPE html>
+        <html class="\(MarkdownHTML.previewPrintClass)">
+        <head><style>\(stylesheet)</style><style>\(MarkdownHTML.previewPrintOverrideCSS)</style></head>
+        <body><article class="markdown-body">\(rendered.articleHTML)</article></body>
+        </html>
+        """
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1200, height: 600))
+
+        webView.loadHTMLString(html, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        let width = try await webView.evaluateJavaScript(
+            "document.querySelector('article.markdown-body p').getBoundingClientRect().width"
+        )
+        XCTAssertEqual(try XCTUnwrap(width as? Double), Double(MarkdownHTML.contentColumnWidth), accuracy: 0.01)
     }
 
     func testReadModeLeavesSelectionPaintingToWebKit() {
@@ -2474,6 +2566,68 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertFalse(rendered.articleHTML.contains("<p data-source-line=\"1\" data-source-start=\"1\" data-source-end=\"3\"><div"))
     }
 
+    // #662: with no blank line between them, a display formula and the text
+    // around it are one paragraph. A <div> there ends the paragraph early and
+    // every inline formula after it lands on a line of its own.
+    @MainActor
+    func testDisplayMathInsideAParagraphKeepsTheParagraphWhole() async throws {
+        let rendered = MarkdownHTML.render(
+            markdown: """
+            $$a^2$$
+            As $b$, since $c$, and *so $$d^2$$ on* $e$.
+
+            $$f^2$$
+            """,
+            vendorLoading: .lazy
+        )
+        let article = rendered.articleHTML
+        XCTAssertTrue(article.contains(#"<span class="math math-display">a^2</span>"#), article)
+        XCTAssertTrue(article.contains(#"<em>so <span class="math math-display">d^2</span> on</em>"#), article)
+        // A formula on its own stays a block element with its source lines.
+        XCTAssertTrue(article.contains(#"data-source-end="4" class="math math-display">f^2</div>"#), article)
+
+        let stylesheet = rendered.html
+            .components(separatedBy: "<style>")
+            .dropFirst()
+            .compactMap { $0.components(separatedBy: "</style>").first }
+            .joined(separator: "\n")
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 600))
+        webView.loadHTMLString("""
+            <!DOCTYPE html>
+            <html>
+            <head><style>\(stylesheet)</style></head>
+            <body><article class="markdown-body">\(article)</article></body>
+            </html>
+            """, baseURL: nil)
+        while webView.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let result = try await webView.evaluateJavaScript("""
+        (() => {
+            const article = document.querySelector('article.markdown-body');
+            const paragraph = article.querySelector('p');
+            const top = element => Math.round(element.getBoundingClientRect().top);
+            const inline = [...paragraph.querySelectorAll('.math-inline')];
+            const blocks = [...paragraph.querySelectorAll('.math-display')];
+            return JSON.stringify({
+                children: article.children.length,
+                inParagraph: paragraph.querySelectorAll('.math').length,
+                sameLine: top(inline[0]) === top(inline[1]) ? 1 : 0,
+                ownLines: blocks.every(block => getComputedStyle(block).display === 'block'
+                    && block.getBoundingClientRect().width === paragraph.getBoundingClientRect().width) ? 1 : 0,
+                gapAbove: top(blocks[0]) - top(paragraph),
+            });
+        })()
+        """)
+        let values = try JSONDecoder().decode([String: Double].self, from: Data(try XCTUnwrap(result as? String).utf8))
+        // Paragraph, blank-line spacer, standalone formula: nothing leaked out.
+        XCTAssertEqual(values["children"], 3, "\(values)")
+        XCTAssertEqual(values["inParagraph"], 5, "\(values)")
+        XCTAssertEqual(values["sameLine"], 1, "\(values)")
+        XCTAssertEqual(values["ownLines"], 1, "\(values)")
+        XCTAssertEqual(values["gapAbove"], 0, "\(values)")
+    }
+
     func testQuotedDisplayMathDropsQuoteMarkers() {
         let rendered = MarkdownHTML.render(
             markdown: """
@@ -2609,7 +2763,8 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         )
 
         XCTAssertTrue(rendered.articleHTML.contains("Requirements.[18] Area is"), rendered.articleHTML)
-        XCTAssertTrue(rendered.articleHTML.contains(#"class="math math-display">x^2</div>"#), rendered.articleHTML)
+        // Inside the sentence the formula is a <span>, so the paragraph stays whole.
+        XCTAssertTrue(rendered.articleHTML.contains(#"class="math math-display">x^2</span>"#), rendered.articleHTML)
         XCTAssertTrue(rendered.articleHTML.contains("class=\"math math-display\">\n5-3\n</div>"), rendered.articleHTML)
     }
 

@@ -131,7 +131,8 @@ final class EditorPreviewLayoutTests: XCTestCase {
                     actions: card?.querySelectorAll('.cm-md-code-action').length,
                     rows: card?.querySelectorAll('.cm-line').length,
                     delimiters: delimiters.map(node => node.textContent).join(''),
-                    visible: delimiters.every(node => getComputedStyle(node).visibility === 'visible'),
+                    cardText: card?.textContent || '',
+                    markerHeight: (document.querySelector('.cm-md-list-item')?.getBoundingClientRect().height || 0) > 0,
                     scrolls: card && card.scrollWidth > card.clientWidth,
                     widths: card && [card.scrollWidth, card.clientWidth],
                     radius: card && getComputedStyle(card).borderRadius,
@@ -143,10 +144,20 @@ final class EditorPreviewLayoutTests: XCTestCase {
             XCTAssertEqual(values["cards"] as? Int, 1, formula)
             XCTAssertEqual(values["language"] as? String, fenced ? "math" : "", formula)
             XCTAssertEqual(values["actions"] as? Int, fenced ? 2 : 0, formula)
-            XCTAssertEqual(values["rows"] as? Int, fenced ? 1 : formula.components(separatedBy: "\n").count, formula)
+            // The card holds the TeX only: the delimiter lines of a multiline
+            // block collapse, and same-line delimiters are hidden.
+            let lineCount = formula.components(separatedBy: "\n").count
+            // A list marker keeps the opening line; only its `$$` is hidden.
+            let keptOpening = formula.hasPrefix("- ") ? 1 : 0
+            XCTAssertEqual(values["rows"] as? Int,
+                           fenced || lineCount == 1 ? 1 : lineCount - 2 + keptOpening, formula)
+            if keptOpening == 1 {
+                XCTAssertEqual(values["markerHeight"] as? Bool, true, formula)
+            }
             if !fenced {
-                XCTAssertEqual(values["delimiters"] as? String, "$$$$", formula)
-                XCTAssertEqual(values["visible"] as? Bool, true, formula)
+                XCTAssertEqual(values["delimiters"] as? String, "", formula)
+                let cardText = values["cardText"] as? String ?? ""
+                XCTAssertTrue(cardText.contains("\\frac") && !cardText.contains("$"), "\(formula): \(cardText)")
             }
             XCTAssertEqual(values["scrolls"] as? Bool, scrolls, "\(formula) widths: \(values["widths"] ?? "missing")")
             XCTAssertEqual(values["radius"] as? String, "16px", formula)
@@ -279,6 +290,44 @@ final class EditorPreviewLayoutTests: XCTestCase {
         XCTAssertEqual(values["language"] as? String, "math")
         XCTAssertEqual(values["caret"] as? Int, source.range(of: "\\frac")!.lowerBound.utf16Offset(in: source))
         XCTAssertEqual(values["markdown"] as? String, source)
+    }
+
+    // A $$…$$ on its own line inside a paragraph opens in the same card as a
+    // code block and a standalone formula.
+    func testOpenDisplayMathInsideAParagraphUsesTheCodeCard() async throws {
+        let source = "Text before\n$$x^2$$\nand text after.\n\n```swift\nlet a = 1\n```\n\nEnd"
+        let html = EditorHTML.render(markdown: source,
+            editorJavaScript: try TestVendor.script("md-preview/Vendor/CodeMirror/mdedit.min.js"))
+        let editor = WebViewLayoutHarness(html: html, width: 500, isEditor: true,
+            schemeHandlers: ["md-asset": EditorMathAssets()])
+        let window = NSWindow(contentRect: editor.webView.frame, styleMask: .borderless,
+                              backing: .buffered, defer: false)
+        window.contentView = editor.webView
+        defer { editor.close(); window.contentView = nil }
+        _ = try await editor.layout(texts: [], imageCount: 0, selectors: [".katex": 1])
+        let result = try await editor.webView.callAsyncJavaScript("""
+            document.hasFocus = () => true;
+            document.querySelector('.math-display').dispatchEvent(new MouseEvent('mousedown', {
+                bubbles: true, cancelable: true
+            }));
+            document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+            for (let i = 0; i < 4; i++) {
+                window.__layoutTestFrame();
+                await new Promise(resolve => setTimeout(resolve, 10));
+            }
+            return [...document.querySelectorAll('.cm-md-code-card')].map(card => {
+                const style = getComputedStyle(card);
+                const line = getComputedStyle(card.querySelector('.cm-line'));
+                return [card.textContent.trim(), style.backgroundColor, style.borderTopColor,
+                        style.borderTopLeftRadius, line.backgroundColor, line.fontFamily, line.fontSize].join(' | ');
+            });
+            """, arguments: [:], in: nil, contentWorld: .page)
+        let cards = try XCTUnwrap(result as? [String])
+        XCTAssertEqual(cards.count, 2, "\(cards)")
+        let look = cards.map { $0.split(separator: "|").dropFirst().joined(separator: "|") }
+        // The card shows the TeX without its dollar delimiters.
+        XCTAssertTrue(cards.first?.hasPrefix("x^2 |") == true, "\(cards)")
+        XCTAssertEqual(look.first, look.last, "\(cards)")
     }
 
     func testKeyboardEntryRevealsFencedMathSource() async throws {
