@@ -10,8 +10,14 @@
 //   set_display(r, rects, glyphs)          replaces the display list
 //   set_selection(r, quads)                replaces the selection highlight
 //   sync_atlases(r, cache)                 uploads the glyph pixels that changed
-//   draw(r, scroll_px)                     one frame; scroll from the origin
-//                                          of the display list, in pixels
+//   frame_begin(r, scroll_px) -> Frame     all that one frame draws, with its
+//                                          own references; scroll from the
+//                                          origin of the display list, in
+//                                          pixels
+//   frame_draw(frame)                      draws it and waits for the display
+//                                          if it must
 //
-// A frame draws the rectangles, then the selection, then the glyphs.
+// A frame draws the rectangles, then the selection, then the glyphs. The
+// two steps are apart so that the caller can let other threads use the
+// view's state while the frame waits for the display.
 package renderer

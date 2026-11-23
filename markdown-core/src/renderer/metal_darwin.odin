@@ -17,6 +17,7 @@ SHADERS := #load("quad.metallib")
 foreign import libobjc "system:objc"
 foreign libobjc {
 	objc_release :: proc "c" (object: rawptr) ---
+	objc_retain :: proc "c" (object: rawptr) -> rawptr ---
 }
 
 @(private)
@@ -106,16 +107,7 @@ init :: proc(r: ^Renderer, surface: rawptr) {
 }
 
 destroy :: proc(r: ^Renderer) {
-	for buffer in ([3]^MTL.Buffer{r.rects.buffer, r.selection.buffer, r.glyphs.buffer}) {
-		if buffer != nil {
-			objc_release(buffer)
-		}
-	}
-	for texture in ([2]^MTL.Texture{r.gray.texture, r.color.texture}) {
-		if texture != nil {
-			objc_release(texture)
-		}
-	}
+	release_objects(r)
 	r^ = {}
 }
 
@@ -202,11 +194,46 @@ draw_quads :: proc(enc: ^MTL.RenderCommandEncoder, q: ^Quad_Buffer) {
 	enc->drawPrimitives(.TriangleStrip, 0, 4, NS.UInteger(q.count))
 }
 
-draw :: proc(r: ^Renderer, scroll_px: f32) {
-	if shared.pipeline == nil || r.width <= 0 || r.height <= 0 {
+// All that one frame draws: a copy of the renderer's state with its own
+// references to the buffers and the textures. It is taken while the caller
+// holds the view's state and drawn after, so the wait for a drawable holds
+// no other call.
+Frame :: struct {
+	using state: Renderer,
+	scroll_px:   f32,
+}
+
+// The GPU objects that a renderer, or a frame, has a reference to.
+@(private)
+objects :: proc(r: ^Renderer) -> [5]rawptr {
+	return {r.rects.buffer, r.selection.buffer, r.glyphs.buffer, r.gray.texture, r.color.texture}
+}
+
+@(private)
+release_objects :: proc(r: ^Renderer) {
+	for object in objects(r) {
+		if object != nil {
+			objc_release(object)
+		}
+	}
+}
+
+frame_begin :: proc(r: ^Renderer, scroll_px: f32) -> Frame {
+	for object in objects(r) {
+		if object != nil {
+			objc_retain(object)
+		}
+	}
+	return Frame{state = r^, scroll_px = scroll_px}
+}
+
+// Draws the frame and gives its references back.
+frame_draw :: proc(f: ^Frame) {
+	defer release_objects(&f.state)
+	if shared.pipeline == nil || f.width <= 0 || f.height <= 0 {
 		return
 	}
-	drawable := r.layer->nextDrawable()
+	drawable := f.layer->nextDrawable()
 	if drawable == nil {
 		return
 	}
@@ -220,18 +247,18 @@ draw :: proc(r: ^Renderer, scroll_px: f32) {
 
 	cb := shared.queue->commandBuffer()
 	enc := cb->renderCommandEncoderWithDescriptor(pass)
-	if r.gray.texture != nil {
+	if f.gray.texture != nil {
 		uniforms := Uniforms {
-			viewport = {r.width * r.scale, r.height * r.scale},
-			scroll   = {0, scroll_px},
+			viewport = {f.width * f.scale, f.height * f.scale},
+			scroll   = {0, f.scroll_px},
 		}
 		enc->setRenderPipelineState(shared.pipeline)
 		enc->setVertexBytes(&uniforms, size_of(Uniforms), 1)
-		enc->setFragmentTexture(r.gray.texture, 0)
-		enc->setFragmentTexture(r.color.texture != nil ? r.color.texture : r.gray.texture, 1)
-		draw_quads(enc, &r.rects)
-		draw_quads(enc, &r.selection)
-		draw_quads(enc, &r.glyphs)
+		enc->setFragmentTexture(f.gray.texture, 0)
+		enc->setFragmentTexture(f.color.texture != nil ? f.color.texture : f.gray.texture, 1)
+		draw_quads(enc, &f.rects)
+		draw_quads(enc, &f.selection)
+		draw_quads(enc, &f.glyphs)
 	}
 	enc->endEncoding()
 	cb->presentDrawable(drawable)

@@ -81,12 +81,30 @@ These came from the maintainer. Do not undo one without asking.
 - The Swift host owns the view, the scroll position, and the events. The
   scroll bar is AppKit's: a transparent `NSScrollView` over the Metal
   layer.
-- The host draws one frame for each display refresh, from a display link
-  (`NSView.displayLink`), never one for each event. A draw waits for a
-  drawable, so a draw in an event handler holds the main thread: a scroll
-  measured at twice its time that way (see Numbers). An event calls
-  `setNeedsDraw()`. Only a new layout (first frame, resize, style) draws
-  at once.
+- The host asks for one frame for each display refresh, from a display
+  link (`NSView.displayLink`), never one for each event. An event calls
+  `setNeedsDraw()`.
+- Frames and layout steps run on the view's render queue, not on the main
+  thread. A draw can wait for a drawable and can make glyph bitmaps, and
+  on the main thread that held scroll events: a scroll took up to twice
+  its time (see Numbers). Only a frame that must be there with the
+  window's (the first frame, a new size, a new style) is drawn while the
+  main thread waits, and it goes through the same queue so the frames stay
+  in order.
+- The main thread reads the page height from the core itself, after the
+  queue's work. Do not send a height from the queue to the main thread: it
+  can come after a newer one and make the page shorter for a moment, and
+  then the End key stops at the wrong place.
+- A block for the render queue must not keep the view alive. The view's
+  `deinit` waits for the queue.
+- The core lets one call at a time work on a view's state, from any
+  thread (`hold` in `mdcore.odin`), and `mdcore_draw` gives the state free
+  before it waits for the display (`renderer.frame_begin` under the lock,
+  `frame_draw` after it). A new export calls `hold`. Code after the block
+  that holds the state in `mdcore_draw` must use only the frame.
+- The working memory of a call is the view's own (`ctx.temp`), not the
+  thread's: a queue's threads come and go, and each would leave its own
+  behind. An export sets `context.temp_allocator` from it.
 
 ## How to check a change
 
@@ -143,6 +161,21 @@ Scroll, 2026-11-23, Debug build, 60 Hz display, 600 scroll steps sent
 | Main thread held by draws | 4.1 s | 0.2–1.5 s |
 | Median draw | 6.8 ms | 0.3–3.8 ms |
 
+Render queue, 2026-11-23, Release build on the built-in display, the
+same 600 scroll steps (4.8 s of input) over the 1.1 MB document, ten runs
+each in two sittings:
+
+| | Frames on the main thread | Frames on the render queue |
+| --- | --- | --- |
+| Time to finish the scroll | 5.7–10.0 s | 5.5–5.6 s |
+| Main thread in the display link callback, total | 0.8–4.5 s | 10–14 ms |
+| Longest such call | 7–41 ms | 0.1–0.2 ms |
+| Longest gap between two frames | 18–51 ms | 18–30 ms |
+| CPU time of the process | 2.5–3.5 s | 2.4–2.9 s |
+| Memory after the scroll | 200–212 MB | 202–210 MB |
+
+Launch time and memory at rest (`bench/app.py`) did not change.
+
 The slow frames that stay (10 to 50 ms, a few in the first screens of a
 document) are glyphs drawn for the first time and the first growth of the
 glyph atlas. Later passes over the same text have none.
@@ -174,6 +207,13 @@ Known limits, found in review and left on purpose:
   in steps), because the page height comes from it. A layout that starts
   with estimated heights would remove that; it makes the scroll bar less
   exact, so it needs the maintainer's word first.
+- After a scroll the app holds about 89 MB of GPU memory that it did not
+  hold before (the footprint tool shows it as owned graphics memory, in
+  about 33 parts). It is there with and without the render queue and the
+  kept window. The first thing to check: every new display list gets a
+  new buffer, and the old ones may stay in the driver's pool.
+- The End key and Select All still lay out the rest of the document on
+  the main thread, in one call.
 - The core has no way to call the host yet (open a link, load an image).
   It needs a callback struct given at creation.
 
@@ -218,3 +258,7 @@ scroll position, footnotes and alerts, VoiceOver, print and export.
   content stays in a compact form, and the costly work (shaping, GPU
   cells) is done only for the rows in view. The same split here: records for all blocks, shaped text
   only near the view. Heap 133 MB to 28 MB. First stacked pull request.
+- **2026-11-23** — Frames moved to a render queue, after a test that the
+  maintainer asked for before the change ("we need to test with memory,
+  CPU and everything else"): the main thread is free during a scroll, and
+  CPU and memory do not change. Second stacked pull request.
