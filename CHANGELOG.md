@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.0.75] – 2026-11-23 – Leaner menus, a new app identity
+
+Markdown Preview 0.0.75 brings a shorter editor context menu, a favorite folder that reopens on launch, and a new app identity that keeps your settings.
+
+### Added
+
+- **A Shorter Editor Context Menu.** Right-clicking in Edit Mode shows Cut, Copy, Paste, the Format commands, Code Block, and Insert Table in place of the long system menu, and Markdown Source adds Find… and Navigate ([#660](https://github.com/pluk-inc/markdown-preview/pull/660)).
+- **Photos from Your iPhone.** Choose Take Photo, Scan Documents, or Add Sketch from the editor’s context menu to put an image from a nearby iPhone or iPad into your file the same way as a pasted one ([#660](https://github.com/pluk-inc/markdown-preview/pull/660)).
+
+### Changed
+
+- **Your Favorite Folder Reopens.** Opening the app without a file, or clicking its Dock icon with no window open, brings back your last favorite folder and its last file instead of the file chooser ([#664](https://github.com/pluk-inc/markdown-preview/pull/664)).
+- **Tidier File Context Menu.** Right-clicking a file in the navigator lists Open in New Tab and the other open actions first, with Show in Finder below them and no items added by macOS ([#658](https://github.com/pluk-inc/markdown-preview/pull/658), [#659](https://github.com/pluk-inc/markdown-preview/pull/659)).
+- **New App Identity, Same Settings.** Markdown Preview now runs under a new app identifier and brings your settings and shared links along, though Open Recent starts empty and folders you gave write access to ask once more ([#650](https://github.com/pluk-inc/markdown-preview/pull/650)).
+
+### Fixed
+
+- **Sentences Stay Whole After Formulas.** A sentence that follows a $$ display formula with no blank line between them stays on one line instead of breaking at each inline formula and comma ([#663](https://github.com/pluk-inc/markdown-preview/pull/663)).
+- **No Sideways Scroll from Inline Code.** A document full of inline code no longer shifts a few pixels left and right at some window widths ([#657](https://github.com/pluk-inc/markdown-preview/pull/657)).
+
+### Contributors
+
+- [@androidfan-byte](https://github.com/androidfan-byte) — reported the line breaks after a display formula ([#662](https://github.com/pluk-inc/markdown-preview/issues/662)).
+
 ## [0.0.74] – 2026-11-17 – Edit the Markdown source
 
 Markdown Preview 0.0.74 brings a Markdown source view in Edit Mode, files that keep their line breaks, and printing from Finder.
