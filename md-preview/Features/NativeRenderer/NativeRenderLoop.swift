@@ -24,10 +24,17 @@ import CoreVideo
 import MDCore
 
 nonisolated final class NativeRenderLoop: @unchecked Sendable {
-    /// Called on the main thread after each frame. `animatedY` is where a
-    /// scroll that this loop animates is now; `animationEnded` is true for
-    /// the frame that reached its end.
-    nonisolated(unsafe) var didDraw: (@MainActor (_ animatedY: Double?, _ animationEnded: Bool) -> Void)?
+    /// A frame of a scroll that this loop animates: which scroll (the
+    /// number from `animateScroll`), where it is now, and if this frame
+    /// reached its end.
+    struct ScrollStep: Sendable {
+        let scroll: Int
+        let y: Double
+        let isLast: Bool
+    }
+
+    /// Called on the main thread after each frame.
+    nonisolated(unsafe) var didDraw: (@MainActor (ScrollStep?) -> Void)?
 
     private static let scrollAnimationDuration: CFTimeInterval = 0.2
     /// Refreshes with nothing to draw before the link stops. A stop and a
@@ -48,7 +55,8 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
     nonisolated(unsafe) private var wantsFrame = false
     nonisolated(unsafe) private var isRunning = false
     nonisolated(unsafe) private var idleTicks = 0
-    nonisolated(unsafe) private var animation: (from: Double, to: Double, start: CFTimeInterval)?
+    nonisolated(unsafe) private var animation: (scroll: Int, from: Double, to: Double, start: CFTimeInterval)?
+    nonisolated(unsafe) private var scrollCount = 0
 
     /// `ctx` is the core's renderer; it must live until `stop()` returned.
     init(ctx: UnsafeMutableRawPointer?) {
@@ -114,12 +122,16 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
 
     /// Scrolls from one offset to another over a short time, as the
     /// system's views do for the keyboard. Each frame of it is reported
-    /// through `didDraw`.
-    func animateScroll(from: Double, to: Double) {
+    /// through `didDraw`, with the number that this returns: a frame of a
+    /// scroll that another one replaced can come after it.
+    func animateScroll(from: Double, to: Double) -> Int {
         lock.lock()
-        animation = (from, to, CACurrentMediaTime())
+        scrollCount += 1
+        let scroll = scrollCount
+        animation = (scroll, from, to, CACurrentMediaTime())
         lock.unlock()
         start()
+        return scroll
     }
 
     func cancelScrollAnimation() {
@@ -140,19 +152,15 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
     /// One refresh of the display, on the link's thread.
     private func tick() {
         lock.lock()
-        var animatedY: Double?
-        var animationEnded = false
+        var step: ScrollStep?
         if let animation {
             let progress = min(max((CACurrentMediaTime() - animation.start) / Self.scrollAnimationDuration, 0), 1)
             // Ease out: fast at the start, slow into the end.
             let eased = 1 - pow(1 - progress, 3)
             scrollY = animation.from + (animation.to - animation.from) * eased
-            animatedY = scrollY
+            step = ScrollStep(scroll: animation.scroll, y: scrollY, isLast: progress >= 1)
             wantsFrame = true
-            if progress >= 1 {
-                self.animation = nil
-                animationEnded = true
-            }
+            if progress >= 1 { self.animation = nil }
         }
         guard wantsFrame, isRunning else {
             idleTicks += 1
@@ -170,7 +178,7 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
 
         autoreleasepool { mdcore_draw(ctx, y) }
         DispatchQueue.main.async { [weak self] in
-            self?.didDraw?(animatedY, animationEnded)
+            self?.didDraw?(step)
         }
     }
 

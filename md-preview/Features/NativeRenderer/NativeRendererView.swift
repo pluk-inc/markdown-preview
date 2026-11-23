@@ -66,8 +66,8 @@ final class NativeRendererView: NSView {
         layerContentsRedrawPolicy = .duringViewResize
         ctx = mdcore_create(Unmanaged.passUnretained(layer!).toOpaque())
         renderLoop = NativeRenderLoop(ctx: ctx)
-        renderLoop.didDraw = { [weak self] animatedY, animationEnded in
-            self?.frameDidDraw(animatedY: animatedY, animationEnded: animationEnded)
+        renderLoop.didDraw = { [weak self] step in
+            self?.frameDidDraw(step)
         }
         applyStyle()
 
@@ -105,8 +105,9 @@ final class NativeRendererView: NSView {
 
     // MARK: Frames
 
-    /// The offset that a keyboard scroll in progress goes to.
-    private var scrollAnimationTarget: CGFloat?
+    /// The keyboard scroll in progress: its number in the render loop and
+    /// the offset that it goes to.
+    private var scrollAnimation: (scroll: Int, target: CGFloat)?
 
     /// Asks for a frame at the next refresh of the display.
     private func setNeedsDraw() {
@@ -115,13 +116,21 @@ final class NativeRendererView: NSView {
     }
 
     /// After each frame, on the main thread.
-    private func frameDidDraw(animatedY: Double?, animationEnded: Bool) {
-        // Not for a scroll that the reader took over meanwhile.
-        if let animatedY, scrollAnimationTarget != nil {
+    private func frameDidDraw(_ step: NativeRenderLoop.ScrollStep?) {
+        // Not for a scroll that the reader took over or that another key
+        // press replaced meanwhile: its last frames can come late.
+        if let step, step.scroll == scrollAnimation?.scroll {
             followsRenderLoop = true
-            scroll(toY: animatedY)
+            scroll(toY: step.y)
             followsRenderLoop = false
-            if animationEnded { scrollAnimationTarget = nil }
+            if step.isLast { scrollAnimation = nil }
+            // The page can have become shorter under the scroll (a new
+            // size, a zoom), so the frame is past the end. Draw it where
+            // the scroll view could go.
+            if abs(scrollY - step.y) > 0.5 {
+                endScrollAnimation()
+                setNeedsDraw()
+            }
         }
         // A draw can lay out more of the page, when the view came to the
         // end of what the steps reached. The main thread reads the height
@@ -139,17 +148,16 @@ final class NativeRendererView: NSView {
         // The new place replaces the one a scroll in progress went to.
         endScrollAnimation()
         guard abs(target - scrollY) > 1 else { return scroll(toY: target) }
-        scrollAnimationTarget = target
-        renderLoop.animateScroll(from: scrollY, to: target)
+        scrollAnimation = (renderLoop.animateScroll(from: scrollY, to: target), target)
     }
 
     private func endScrollAnimation() {
-        scrollAnimationTarget = nil
+        scrollAnimation = nil
         renderLoop.cancelScrollAnimation()
     }
 
     /// The offset that the view scrolls to, when it is on its way there.
-    private var scrollTarget: CGFloat { scrollAnimationTarget ?? scrollY }
+    private var scrollTarget: CGFloat { scrollAnimation?.target ?? scrollY }
 
     @objc private func userWillScroll() {
         endScrollAnimation()
