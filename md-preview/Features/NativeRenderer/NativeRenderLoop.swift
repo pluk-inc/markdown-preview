@@ -16,7 +16,7 @@
 //  The main thread only says what it wants: a frame at a scroll offset, or a
 //  scroll to an offset over a short time. The link's thread draws the newest
 //  request, so a busy main thread does not hold a frame. The link runs only
-//  while something is wanted.
+//  while something is wanted. All requests come from the main thread.
 //
 
 import AppKit
@@ -33,7 +33,8 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
         let isLast: Bool
     }
 
-    /// Called on the main thread after each frame.
+    /// Called on the main thread after a frame that was a step of a scroll
+    /// or that made the page taller.
     nonisolated(unsafe) var didDraw: (@MainActor (ScrollStep?) -> Void)?
 
     private static let scrollAnimationDuration: CFTimeInterval = 0.2
@@ -57,6 +58,10 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
     nonisolated(unsafe) private var idleTicks = 0
     nonisolated(unsafe) private var animation: (scroll: Int, from: Double, to: Double, start: CFTimeInterval)?
     nonisolated(unsafe) private var scrollCount = 0
+    /// True from the point a frame of the link took its offset until it is
+    /// drawn.
+    nonisolated(unsafe) private var tickInFlight = false
+    nonisolated(unsafe) private var lastHeight = 0.0
 
     /// `ctx` is the core's renderer; it must live until `stop()` returned.
     init(ctx: UnsafeMutableRawPointer?) {
@@ -112,18 +117,16 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
     func frameNow(at y: Double, before: (@Sendable () -> Void)? = nil) {
         lock.lock()
         scrollY = y
+        let olderFrameInFlight = tickInFlight
         lock.unlock()
         queue.sync { [ctx] in
             before?()
             autoreleasepool { mdcore_draw(ctx, y) }
         }
-        // A frame of the link that took an older offset just before can be
-        // drawn after this one. One more frame makes the newest offset the
-        // last one on screen.
-        lock.lock()
-        wantsFrame = true
-        lock.unlock()
-        start()
+        // A frame of the link that took an older offset can be drawn after
+        // this one. One more frame then makes the newest offset the last
+        // one on screen.
+        if olderFrameInFlight { requestFrame(at: y) }
     }
 
     /// Scrolls from one offset to another over a short time, as the
@@ -178,37 +181,43 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
         }
         guard wantsFrame, isRunning else {
             idleTicks += 1
-            let stops = isRunning && idleTicks >= Self.idleTicksBeforeStop
-            if stops { isRunning = false }
+            let stops = isRunning && idleTicks == Self.idleTicksBeforeStop
             lock.unlock()
             // A stop waits for this callback, so it cannot be made in it.
-            if stops { queue.async { [self] in stopIfIdle() } }
+            // It is made on the main thread, where the requests come from:
+            // none can come between its check and the stop.
+            if stops { DispatchQueue.main.async { [weak self] in self?.stopIfIdle() } }
             return
         }
         wantsFrame = false
         idleTicks = 0
         let y = scrollY
+        tickInFlight = true
         lock.unlock()
 
         autoreleasepool { mdcore_draw(ctx, y) }
+        // A draw can lay out more of the page. Read here, where a wait for
+        // the core holds nothing.
+        let height = mdcore_content_height(ctx)
+        lock.lock()
+        tickInFlight = false
+        let heightChanged = height != lastHeight
+        lastHeight = height
+        lock.unlock()
+        // The main thread has work after a frame only for a step of a
+        // scroll or a page that grew: no hop for the other frames.
+        guard step != nil || heightChanged else { return }
         DispatchQueue.main.async { [weak self] in
             self?.didDraw?(step)
         }
     }
 
+    /// On the main thread.
     private func stopIfIdle() {
         lock.lock()
-        let idle = !isRunning
+        let idle = isRunning && !wantsFrame && animation == nil
+        if idle { isRunning = false } else { idleTicks = 0 }
         lock.unlock()
-        guard idle, let link else { return }
-        CVDisplayLinkStop(link)
-        // A request can have come in between: it found the link "running"
-        // just before the stop, or started it just before. Start it again
-        // for that request.
-        lock.lock()
-        let wanted = isRunning || wantsFrame || animation != nil
-        if wanted { isRunning = true; idleTicks = 0 }
-        lock.unlock()
-        if wanted { CVDisplayLinkStart(link) }
+        if idle, let link { CVDisplayLinkStop(link) }
     }
 }

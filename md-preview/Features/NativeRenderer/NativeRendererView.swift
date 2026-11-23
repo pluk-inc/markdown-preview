@@ -109,13 +109,17 @@ final class NativeRendererView: NSView {
     /// the offset that it goes to.
     private var scrollAnimation: (scroll: Int, target: CGFloat)?
 
+    /// False without a document or a size: there is nothing to draw then.
+    private var hasPageToDraw: Bool { hasDocument && bounds.width > 0 && bounds.height > 0 }
+
     /// Asks for a frame at the next refresh of the display.
     private func setNeedsDraw() {
-        guard hasDocument, bounds.width > 0, bounds.height > 0 else { return }
+        guard hasPageToDraw else { return }
         renderLoop.requestFrame(at: scrollY)
     }
 
-    /// After each frame, on the main thread.
+    /// After a frame that was a step of a key scroll or that made the page
+    /// taller, on the main thread.
     private func frameDidDraw(_ step: NativeRenderLoop.ScrollStep?) {
         // Not for a scroll that the reader took over or that another key
         // press replaced meanwhile: its last frames can come late.
@@ -227,7 +231,7 @@ final class NativeRendererView: NSView {
     /// Gives the core the view's size and draws. Skips a call that changes
     /// nothing, because one turn can report the same size more than once.
     private func relayout(force: Bool = false) {
-        guard hasDocument, bounds.width > 0, bounds.height > 0 else { return }
+        guard hasPageToDraw else { return }
         let scale = Double(window?.backingScaleFactor ?? 2)
         guard force || bounds.size != laidOutSize || scale != laidOutScale else { return }
         laidOutSize = bounds.size
@@ -244,7 +248,7 @@ final class NativeRendererView: NSView {
     /// and a frame for a new size, which must be there with the window's.
     /// `before` runs off the main thread ahead of the frame.
     private func drawNow(before: (@Sendable () -> Void)? = nil) {
-        guard hasDocument, bounds.width > 0, bounds.height > 0 else { return }
+        guard hasPageToDraw else { return }
         renderLoop.frameNow(at: scrollY, before: before)
         updatePageHeight()
     }
