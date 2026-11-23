@@ -37,9 +37,9 @@ PAINT_TIMEOUT = 30.0  # seconds; the first launch of a new build is slow
 SETTLE = 3.0  # seconds after the first frame, before memory and CPU are read
 
 
-def app_pid(executable: Path) -> int | None:
-    found = subprocess.run(["pgrep", "-n", "-f", re.escape(str(executable))], capture_output=True, text=True)
-    return int(found.stdout.split()[0]) if found.stdout.strip() else None
+def app_pids(executable: Path) -> set[int]:
+    found = subprocess.run(["pgrep", "-f", re.escape(str(executable))], capture_output=True, text=True)
+    return {int(pid) for pid in found.stdout.split()}
 
 
 def cpu_seconds(pid: int) -> float:
@@ -66,31 +66,33 @@ def run_once(app: Path, executable: Path, document: Path, renderer: str) -> dict
          "--predicate", 'subsystem == "doc.md-preview.launch"'],
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
     )
+    # A thread reads the log, so a quiet log cannot hold a wait past its
+    # deadline.
+    lines: queue.Queue[str] = queue.Queue()
+    threading.Thread(target=lambda: [lines.put(line) for line in stream.stdout], daemon=True).start()
+    # A copy of the app that runs already is not this run's to read or stop.
+    others = app_pids(executable)
     pid = None
+    painted = None
     try:
-        stream.stdout.readline()  # the header line: the stream is ready
-        started = time.time()
-        subprocess.run(
-            ["open", "-g", "-n", "-F", "-a", app, document, "--args",
-             "-ApplePersistenceIgnoreState", "YES", "-MarkdownPreview.renderer", renderer],
-            check=True,
-        )
-        painted = None
-        # A thread reads the log, so a quiet log cannot hold the run past
-        # the deadline.
-        lines: queue.Queue[str] = queue.Queue()
-        threading.Thread(target=lambda: [lines.put(line) for line in stream.stdout], daemon=True).start()
-        while painted is None and (left := started + PAINT_TIMEOUT - time.time()) > 0:
-            try:
+        try:
+            lines.get(timeout=PAINT_TIMEOUT)  # the header line: the stream is ready
+            started = time.time()
+            subprocess.run(
+                ["open", "-g", "-n", "-F", "-a", app, document, "--args",
+                 "-ApplePersistenceIgnoreState", "YES", "-MarkdownPreview.renderer", renderer],
+                check=True,
+            )
+            while painted is None and (left := started + PAINT_TIMEOUT - time.time()) > 0:
                 line = lines.get(timeout=left)
-            except queue.Empty:
-                break
-            if not line.startswith("{"):
-                continue
-            entry = json.loads(line)
-            pid = pid or app_pid(executable)
-            if entry.get("signpostName") == event and entry.get("processID") == pid:
-                painted = datetime.strptime(entry["timestamp"], "%Y-%m-%d %H:%M:%S.%f%z").timestamp()
+                if not line.startswith("{"):
+                    continue
+                entry = json.loads(line)
+                pid = pid or next(iter(app_pids(executable) - others), None)
+                if entry.get("signpostName") == event and entry.get("processID") == pid:
+                    painted = datetime.strptime(entry["timestamp"], "%Y-%m-%d %H:%M:%S.%f%z").timestamp()
+        except queue.Empty:
+            pass
         if painted is None:
             raise RuntimeError(f"no {event} signpost from {app} in {PAINT_TIMEOUT:g} s")
         time.sleep(SETTLE)
@@ -101,10 +103,9 @@ def run_once(app: Path, executable: Path, document: Path, renderer: str) -> dict
         }
     finally:
         stream.kill()
-        pid = pid or app_pid(executable)
-        if pid:
-            subprocess.run(["kill", str(pid)])
-            time.sleep(0.5)
+        for started_pid in app_pids(executable) - others:
+            subprocess.run(["kill", str(started_pid)])
+        time.sleep(0.5)
 
 
 def main() -> None:

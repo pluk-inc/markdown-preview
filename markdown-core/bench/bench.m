@@ -13,6 +13,7 @@
 #import <Foundation/Foundation.h>
 #import <QuartzCore/QuartzCore.h>
 #include <malloc/malloc.h>
+#include <pthread/qos.h>
 #include <sys/resource.h>
 #include <time.h>
 #include "mdcore.h"
@@ -71,6 +72,10 @@ int main(int argc, const char *argv[]) {
         fprintf(stderr, "usage: mdcore-bench <file.md>\n");
         return 2;
     }
+    // The class of an app's main thread. Without it the system can run the
+    // program on an efficiency core, where the same work takes three times
+    // the CPU time.
+    pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
     NSData *source = [NSData dataWithContentsOfFile:@(argv[1])];
     if (source == nil) {
         fprintf(stderr, "cannot read %s\n", argv[1]);
