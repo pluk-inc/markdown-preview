@@ -316,8 +316,16 @@ final class ContentViewController: NSViewController {
             renderer.textZoom = webView.pageZoom
             renderer.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(renderer)
+            // Under the toolbar on macOS 26, where the page shows through
+            // it; below it before that (see the view's scroll view).
+            let top: NSLayoutYAxisAnchor
+            if #available(macOS 26.0, *) {
+                top = view.topAnchor
+            } else {
+                top = view.safeAreaLayoutGuide.topAnchor
+            }
             NSLayoutConstraint.activate([
-                renderer.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+                renderer.topAnchor.constraint(equalTo: top),
                 renderer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
                 renderer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
                 renderer.bottomAnchor.constraint(equalTo: view.bottomAnchor)

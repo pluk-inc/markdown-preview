@@ -84,8 +84,16 @@ final class NativeRendererView: NSView {
         scrollView.borderType = .noBorder
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
-        // The view already starts below the toolbar.
-        scrollView.automaticallyAdjustsContentInsets = false
+        // On macOS 26 the view goes up to the top of the window, under the
+        // toolbar, and the scroll view keeps the page clear of it with its
+        // content insets: the page then shows through the toolbar, softly,
+        // as in each app of the system. Before that the toolbar is opaque,
+        // and the owner puts the view below it.
+        if #available(macOS 26.0, *) {
+            scrollView.automaticallyAdjustsContentInsets = true
+        } else {
+            scrollView.automaticallyAdjustsContentInsets = false
+        }
         scrollView.documentView = page
         addSubview(scrollView)
         scrollView.contentView.postsBoundsChangedNotifications = true
@@ -103,6 +111,10 @@ final class NativeRendererView: NSView {
     /// The offset of the page in the view, in points. Below zero and past
     /// the end while the scroll view stretches at an end.
     private var scrollY: CGFloat { scrollView.contentView.bounds.origin.y }
+
+    /// The offset at the top of the page: below zero by the height of the
+    /// toolbar when the view goes under it.
+    private var topScrollY: CGFloat { -scrollView.contentInsets.top }
 
     @objc private func pageDidScroll() {
         updateTaskCheckBoxes()
@@ -156,8 +168,8 @@ final class NativeRendererView: NSView {
     /// for the keyboard. The render loop moves the page, one step for each
     /// frame, and the scroll view follows.
     private func animateScroll(toY y: CGFloat) {
-        let limit = max(0, page.frame.height - scrollView.contentView.bounds.height)
-        let target = min(max(0, y), limit)
+        let limit = max(topScrollY, page.frame.height - scrollView.contentView.bounds.height)
+        let target = min(max(topScrollY, y), limit)
         // The new place replaces the one a scroll in progress went to.
         endScrollAnimation()
         guard abs(target - scrollY) > 1 else { return scroll(toY: target) }
@@ -182,8 +194,8 @@ final class NativeRendererView: NSView {
 
     /// Scrolls to an offset, kept inside the page.
     private func scroll(toY y: CGFloat) {
-        let limit = max(0, page.frame.height - scrollView.contentView.bounds.height)
-        scrollView.contentView.scroll(to: NSPoint(x: 0, y: min(max(0, y), limit)))
+        let limit = max(topScrollY, page.frame.height - scrollView.contentView.bounds.height)
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: min(max(topScrollY, y), limit)))
         scrollView.reflectScrolledClipView(scrollView.contentView)
     }
 
@@ -360,7 +372,7 @@ final class NativeRendererView: NSView {
         heldPageHeight = keepsScroll ? page.frame.height : nil
         // Before the layout: it lays out what the view shows, and that must
         // be the top of a new document, not the place the old one was at.
-        if !keepsScroll { scroll(toY: 0) }
+        if !keepsScroll { scroll(toY: topScrollY) }
         relayout(force: true)
     }
 
@@ -483,14 +495,15 @@ final class NativeRendererView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
-        let step = bounds.height - 60
+        // A page is the part that the toolbar does not cover.
+        let step = bounds.height + topScrollY - 60
         switch event.keyCode {
         // From the place a scroll in progress goes to, so fast key presses add up.
         case Key.pageDown, Key.space: animateScroll(toY: scrollTarget + step)
         case Key.pageUp: animateScroll(toY: scrollTarget - step)
         case Key.downArrow: animateScroll(toY: scrollTarget + 48)
         case Key.upArrow: animateScroll(toY: scrollTarget - 48)
-        case Key.home: animateScroll(toY: 0)
+        case Key.home: animateScroll(toY: topScrollY)
         case Key.end:
             // The end of the document, not of the part laid out so far.
             _ = mdcore_layout_more(ctx, 0)
