@@ -158,6 +158,8 @@ final class MainSplitViewController: NSSplitViewController {
         }
         sidebarViewController?.prepare(for: url, outlineComesLater: true, isRename: isRename)
         let request = sidebarRequest
+        metadataRequest += 1
+        let numbers = metadataRequest
         pendingSidebarRequest = request
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let outline = MarkdownTOC.parse(markdown)
@@ -167,7 +169,10 @@ final class MainSplitViewController: NSSplitViewController {
                 guard let self, self.sidebarRequest == request else { return }
                 self.pendingSidebarRequest = nil
                 self.sidebarViewController?.refreshOutline(outline: outline, fileName: fileName)
-                self.inspectorViewController?.display(metadata: metadata)
+                // Live numbers of an edit can be there already.
+                if self.metadataRequest == numbers {
+                    self.inspectorViewController?.display(metadata: metadata)
+                }
             }
         }
     }
@@ -183,6 +188,8 @@ final class MainSplitViewController: NSSplitViewController {
     private var sidebarRequest = 0
     /// The request that is on its way off the main thread, if one is.
     private var pendingSidebarRequest: Int?
+    /// Goes up when the inspector's numbers are set by another path.
+    private var metadataRequest = 0
 
     /// Update selected-range statistics without refreshing the preview or TOC.
     func updateInspectorSelection(_ text: String?) {
@@ -191,7 +198,11 @@ final class MainSplitViewController: NSSplitViewController {
   
     /// Apply already-computed live results; AppKit and SwiftUI remain on main.
     func applyLiveSidebarUpdates(outline: [TOCItem]?, metadata: DocumentMetadata?, fileURL: URL?) {
-        sidebarRequest += 1
+        // Each part replaces only its own late result: an update of the
+        // numbers alone (the sidebar is closed) must not drop an outline
+        // that is still on its way.
+        if outline != nil { sidebarRequest += 1 }
+        if metadata != nil { metadataRequest += 1 }
         if let outline, isSidebarVisible && sidebarMode == .outline {
             sidebarViewController?.refreshOutline(
                 outline: outline,
