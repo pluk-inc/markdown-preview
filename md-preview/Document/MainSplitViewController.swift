@@ -141,10 +141,37 @@ final class MainSplitViewController: NSSplitViewController {
             assetBaseURL: assetBaseURL,
             renderImmediately: renderImmediately
         )
-        sidebarViewController?.display(markdown: markdown, fileName: fileName, fileURL: url)
         inspectorViewController?.setSelectedText(nil)
-        inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))
+        sidebarRequest += 1
+        guard markdown.utf8.count > Self.syncSidebarLimit else {
+            sidebarViewController?.display(markdown: markdown, fileName: fileName, fileURL: url)
+            inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))
+            return
+        }
+        sidebarViewController?.prepare(for: url)
+        let request = sidebarRequest
+        Self.sidebarQueue.async { [weak self] in
+            let outline = MarkdownTOC.parse(markdown)
+            let metadata = DocumentMetadata.make(url: url, markdown: markdown)
+            DispatchQueue.main.async {
+                // Not for a document that was replaced or edited meanwhile.
+                guard let self, self.sidebarRequest == request else { return }
+                self.sidebarViewController?.refreshOutline(outline: outline, fileName: fileName)
+                self.inspectorViewController?.display(metadata: metadata)
+            }
+        }
     }
+
+    /// A document up to this size (bytes) has its outline and its inspector
+    /// numbers made in `display`, so they are there with the page. For a
+    /// larger one they cost a visible wait before the window shows (about
+    /// 190 ms for 1 MB), so they are made off the main thread and come a
+    /// moment after the page.
+    private static let syncSidebarLimit = 64 * 1024
+    private static let sidebarQueue = DispatchQueue(label: "md-preview.document-sidebars", qos: .userInitiated)
+    /// Goes up when the outline and the numbers are set, so a late result
+    /// for an earlier document or text is dropped.
+    private var sidebarRequest = 0
 
     /// Update selected-range statistics without refreshing the preview or TOC.
     func updateInspectorSelection(_ text: String?) {
@@ -153,6 +180,7 @@ final class MainSplitViewController: NSSplitViewController {
   
     /// Apply already-computed live results; AppKit and SwiftUI remain on main.
     func applyLiveSidebarUpdates(outline: [TOCItem]?, metadata: DocumentMetadata?, fileURL: URL?) {
+        sidebarRequest += 1
         if let outline, isSidebarVisible && sidebarMode == .outline {
             sidebarViewController?.refreshOutline(
                 outline: outline,
@@ -169,6 +197,7 @@ final class MainSplitViewController: NSSplitViewController {
     /// put.
     func openFileURLDidChange(_ newURL: URL, markdown: String) {
         contentViewController?.sourceFileURLDidChange(newURL)
+        sidebarRequest += 1
         sidebarViewController?.openFileURLDidChange(newURL)
         if isEditingDocument {
             // Preserve live counts until the editor snapshot is fetched for the new URL.
