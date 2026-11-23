@@ -10,7 +10,10 @@
   "routes": [
     { "pattern": "md-preview.app/s/*", "zone_name": "md-preview.app" },
     { "pattern": "md-preview.app/shares*", "zone_name": "md-preview.app" },
-    { "pattern": "md-preview.app/.well-known/apple-app-site-association", "zone_name": "md-preview.app" }
+    { "pattern": "md-preview.app/.well-known/apple-app-site-association", "zone_name": "md-preview.app" },
+    // The update feed of the app's earlier bundle id (src/update-feed.ts).
+    // The `*` takes the query Sparkle may add.
+    { "pattern": "release.md-preview.app/v1/apps/doc.md-preview/appcast.xml*", "zone_name": "md-preview.app" }
   ],
   "workers_dev": false,
   // The web viewer (viewer/, built into public/ by `npm run build:viewer`).

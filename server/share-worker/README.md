@@ -80,6 +80,15 @@ redirect to the website at `markdownpreview.app`:
 | `/shares`, `/shares/<id>` | the API the app calls |
 | `/.well-known/apple-app-site-association` | Universal Links |
 
+A fourth route is on `release.md-preview.app`, the host of the app's update
+feed at Amore: `/v1/apps/doc.md-preview/appcast.xml`, the feed of the app's
+earlier bundle id. Copies from before the move still ask for it, and
+`src/update-feed.ts` answers them with the feed of `sh.pluk.md-preview`, so
+they find their update. While that feed has no release, or cannot be read,
+the request goes on to Amore and the old feed answers. Do not remove the
+route: without it, copies with the old id never update. It needs
+`release.md-preview.app` to be a proxied record of the `md-preview.app` zone.
+
 `wrangler.jsonc` declares these as Workers Routes. The `share-worker.yml`
 workflow deploys `main` after the tests pass, once the secrets below exist;
 without them it skips with a notice. The deploy job runs in the
