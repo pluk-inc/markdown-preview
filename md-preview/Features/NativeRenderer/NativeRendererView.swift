@@ -126,6 +126,8 @@ final class NativeRendererView: NSView {
     private func animateScroll(toY y: CGFloat) {
         let limit = max(0, page.frame.height - scrollView.contentView.bounds.height)
         let target = min(max(0, y), limit)
+        // The new place replaces the one a scroll in progress went to.
+        scrollAnimation = nil
         guard let displayLink, abs(target - scrollY) > 1 else { return scroll(toY: target) }
         scrollAnimation = (scrollY, target, CACurrentMediaTime())
         displayLink.isPaused = false
