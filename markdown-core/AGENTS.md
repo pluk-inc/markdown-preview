@@ -98,7 +98,11 @@ These came from the maintainer. Do not undo one without asking.
   drawable and can make glyph bitmaps, and on the main thread that held
   scroll events: a scroll took up to twice its time (see Numbers). Only a
   frame that must be there with the window's (the first frame, a new
-  size, a new style) is drawn while the main thread waits.
+  size, a new style) is drawn on the main thread itself, and goes to the
+  screen with that thread's Core Animation transaction
+  (`mdcore_draw_with_window`). A frame that is presented at once shows one
+  step before the window's new size and before the views that AppKit
+  moves; keep this frame in the transaction.
 - A keyboard scroll is animated by the render loop, one step for each
   frame, and the scroll view follows on the main thread
   (`frameDidDraw`). The scroll view is not the clock for it.
@@ -375,3 +379,7 @@ scroll position, footnotes and alerts, VoiceOver, print and export.
   full core as it stands. Its safe cleanups went into one pull request on
   top of the stack (the later ones had changed the same files); its design
   and speed findings are in Open work.
+- **2026-11-23** — The maintainer saw the text run ahead of the window
+  edge in a live resize. The frame for a new size went to the screen at
+  once, one step before the window's own change. It is now drawn on the
+  main thread and presented with its transaction.
