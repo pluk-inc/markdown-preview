@@ -544,6 +544,11 @@
 /* Edit menu and reader context menu */
 "Copy as Plain Text" = "Copy as Plain Text";
 
+/* Alert after the move to a new bundle identifier */
+"Update the md-preview command?" = "Update the md-preview command?";
+"After this update, the md-preview command in Terminal can no longer open Markdown Preview. Terminal opens to install the command again." = "After this update, the md-preview command in Terminal can no longer open Markdown Preview. Terminal opens to install the command again.";
+"Update" = "Update";
+
 /* Editor context menu in Markdown source: submenu with the places that show the open file */
 "Navigate" = "Navigate";
 /* Editor context menu, Navigate submenu: show the open file in the sidebar's file tree */

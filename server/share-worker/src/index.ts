@@ -4,6 +4,7 @@
 
 import { HEADER_BYTES, MAGIC, TAG_BYTES, base64Encode, base64urlEncode as base64url, concat } from "../viewer/share-crypto.js";
 import { ENVELOPE_TYPE } from "./envelope-type.ts";
+import { FEED_HOST, updateFeed } from "./update-feed.ts";
 import { VIEWER_CSP } from "./viewer-csp.ts";
 import { ENVELOPE_MARKER } from "./viewer-page.ts";
 import type { UploadQuota } from "./upload-quota.ts";
@@ -45,6 +46,8 @@ export default {
   async fetch(request, env, ctx): Promise<Response> {
     const url = new URL(request.url);
     const { pathname } = url;
+
+    if (url.hostname === FEED_HOST) return updateFeed(request, url);
 
     if (pathname === "/.well-known/apple-app-site-association") {
       return request.method === "GET" || request.method === "HEAD"
