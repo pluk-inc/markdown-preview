@@ -556,3 +556,18 @@
 "Code Block" = "Code Block";
 /* Editor context menu: insert a Markdown table */
 "Insert Table" = "Insert Table";
+
+/* Quick Look Setup helper and its Settings row */
+"Quick Look" = "Quick Look";
+"Use for Markdown Files…" = "Use for Markdown Files…";
+"Turns off other Quick Look extensions that preview Markdown files, so Finder shows the Markdown Preview preview. Open it again to turn them back on." = "Turns off other Quick Look extensions that preview Markdown files, so Finder shows the Markdown Preview preview. Open it again to turn them back on.";
+"Markdown Preview is the only Quick Look extension turned on for Markdown files." = "Markdown Preview is the only Quick Look extension turned on for Markdown files.";
+"These extensions were turned off for it:\n\n%@" = "These extensions were turned off for it:\n\n%@";
+"Turn Back On" = "Turn Back On";
+"The Quick Look extensions could not be changed." = "The Quick Look extensions could not be changed.";
+"Markdown Preview is not your default Quick Look preview for Markdown files." = "Markdown Preview is not your default Quick Look preview for Markdown files.";
+"Set Default…" = "Set Default…";
+"Do you want to use %1$@ for Quick Look previews of Markdown files, or keep using %2$@?" = "Do you want to use %1$@ for Quick Look previews of Markdown files, or keep using %2$@?";
+"%@ will no longer show Quick Look previews for any file type. You can turn this back on in Settings → Advanced in Markdown Preview." = "%@ will no longer show Quick Look previews for any file type. You can turn this back on in Settings → Advanced in Markdown Preview.";
+"Keep Current" = "Keep Current";
+"Set Default" = "Set Default";

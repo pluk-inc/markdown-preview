@@ -556,3 +556,18 @@
 "Code Block" = "Blok kodu";
 /* Editor context menu: insert a Markdown table */
 "Insert Table" = "Wstaw tabelę";
+
+/* Quick Look Setup helper and its Settings row */
+"Quick Look" = "Quick Look";
+"Use for Markdown Files…" = "Użyj dla plików Markdown…";
+"Turns off other Quick Look extensions that preview Markdown files, so Finder shows the Markdown Preview preview. Open it again to turn them back on." = "Wyłącza inne rozszerzenia Quick Look podglądające pliki Markdown, dzięki czemu Finder wyświetla podgląd z Markdown Preview. Otwórz ponownie, aby je włączyć.";
+"Markdown Preview is the only Quick Look extension turned on for Markdown files." = "Markdown Preview jest jedynym włączonym rozszerzeniem Quick Look dla plików Markdown.";
+"These extensions were turned off for it:\n\n%@" = "Te rozszerzenia zostały przez nie wyłączone:\n\n%@";
+"Turn Back On" = "Włącz ponownie";
+"The Quick Look extensions could not be changed." = "Nie udało się zmienić rozszerzeń Quick Look.";
+"Markdown Preview is not your default Quick Look preview for Markdown files." = "Markdown Preview nie jest domyślnym podglądem Quick Look dla plików Markdown.";
+"Set Default…" = "Ustaw domyślny…";
+"Do you want to use %1$@ for Quick Look previews of Markdown files, or keep using %2$@?" = "Czy chcesz używać %1$@ do podglądów Quick Look plików Markdown, czy nadal używać %2$@?";
+"%@ will no longer show Quick Look previews for any file type. You can turn this back on in Settings → Advanced in Markdown Preview." = "%@ nie będzie już wyświetlać podglądów Quick Look dla żadnego typu pliku. Możesz to ponownie włączyć w Ustawieniach → Zaawansowane w Markdown Preview.";
+"Keep Current" = "Zachowaj bieżące";
+"Set Default" = "Ustaw domyślny";

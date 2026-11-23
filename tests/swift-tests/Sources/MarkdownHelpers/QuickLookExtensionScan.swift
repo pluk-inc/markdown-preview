@@ -1,0 +1,1 @@
+../../../../quick-look-setup/QuickLookExtensionScan.swift
