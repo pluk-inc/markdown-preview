@@ -225,3 +225,28 @@ test_a_finished_text_keeps_no_spare_room :: proc(t: ^testing.T) {
 	testing.expect_value(t, string(doc.blocks[1].text.bytes[:]), "Plain words and some in code.")
 	testing.expect_value(t, len(doc.blocks[1].text.spans), 5)
 }
+
+@(test)
+test_task_items_know_their_line_and_state :: proc(t: ^testing.T) {
+	doc := parse("# List\n\n- [ ] open\n- [x] done\n\n  more of done\n  - [ ] inside\n- plain\n\nafter\n")
+	defer destroy(&doc)
+	// heading, open, done, more of done, inside, plain, after
+	testing.expect_value(t, len(doc.blocks), 7)
+	open, done, more, inside, plain, after := doc.blocks[1], doc.blocks[2], doc.blocks[3], doc.blocks[4], doc.blocks[5], doc.blocks[6]
+	testing.expect_value(t, open.marker, Marker.Task_Open)
+	testing.expect_value(t, open.task_line, 3)
+	testing.expect_value(t, open.done, false)
+	testing.expect_value(t, done.marker, Marker.Task_Done)
+	testing.expect_value(t, done.task_line, 4)
+	testing.expect_value(t, done.done, true)
+	// A later block of the checked item is done too; an item inside it has
+	// its own state.
+	testing.expect_value(t, more.done, true)
+	testing.expect_value(t, more.marker, Marker.None)
+	testing.expect_value(t, inside.marker, Marker.Task_Open)
+	testing.expect_value(t, inside.task_line, 7)
+	testing.expect_value(t, inside.done, false)
+	testing.expect_value(t, plain.done, false)
+	testing.expect_value(t, plain.task_line, 0)
+	testing.expect_value(t, after.done, false)
+}

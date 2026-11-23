@@ -99,6 +99,7 @@ final class NativeRendererView: NSView {
     private var scrollY: CGFloat { scrollView.contentView.bounds.origin.y }
 
     @objc private func pageDidScroll() {
+        updateTaskCheckBoxes()
         guard !followsRenderLoop else { return }
         setNeedsDraw()
     }
@@ -181,9 +182,12 @@ final class NativeRendererView: NSView {
     }
 
     /// Makes the scroll view's page as tall as what the core laid out.
-    private func updatePageHeight() {
+    /// `layoutChanged`: the page was laid out again from its top (a new
+    /// document, size, or style), so each place on it can be another one.
+    private func updatePageHeight(layoutChanged: Bool = false) {
         let size = NSSize(width: bounds.width, height: max(mdcore_content_height(ctx), 1))
         if page.frame.size != size { page.setFrameSize(size) }
+        updateTaskCheckBoxes(layoutChanged: layoutChanged)
     }
 
     /// The zoom of the document: the text size is the body size times this.
@@ -215,7 +219,126 @@ final class NativeRendererView: NSView {
         mdcore_destroy(ctx)
     }
 
-    func open(_ markdown: String) {
+    /// A click on the check box of a task item: the source line of its
+    /// "[ ]" (from 1) and the state it must get. The owner changes the
+    /// source and opens it again; this view only shows it.
+    var taskCheckboxToggled: ((_ line: Int, _ checked: Bool) -> Void)?
+
+    /// The check boxes of the tasks in view: the system's own buttons, as
+    /// subviews of the page, so they scroll with it. The core leaves their
+    /// places empty and says where they are. Only the tasks near the view
+    /// have a button, by the source line of the task: a task keeps its
+    /// button while it is near the view, so the button does not change
+    /// its state (which the system animates) when the page moves.
+    private var taskCheckBoxes: [Int: TaskCheckBox] = [:]
+    /// Buttons of tasks that left the view, hidden, to use again.
+    private var spareTaskCheckBoxes: [TaskCheckBox] = []
+    /// The size that the system gives a check box, and the box in it. The
+    /// same for each one, and slow to ask for: the system's check box
+    /// answers through its own view tree.
+    private var taskCheckBoxShape: (size: NSSize, box: NSRect)?
+    private var shownTasks: [mdcore_task] = []
+    private var shownTaskBoxSize = 0.0
+    /// The part of the page that has its check boxes, and how far down the
+    /// page was laid out when the core was asked for them.
+    private var taskBoxRange: (top: CGFloat, bottom: CGFloat, laidOutTo: CGFloat)?
+    private var taskBuffer = [mdcore_task](repeating: mdcore_task(), count: 256)
+
+    /// Puts a check box on each task near the visible part of the page.
+    /// A scroll step that stays in the part that has its boxes does
+    /// nothing: the boxes move with the page.
+    private func updateTaskCheckBoxes(layoutChanged: Bool = false) {
+        let viewHeight = scrollView.contentView.bounds.height
+        if !layoutChanged, let range = taskBoxRange {
+            // Room for a quarter of a view more in each direction.
+            let covers = scrollY - viewHeight / 4 >= range.top && scrollY + viewHeight * 1.25 <= range.bottom
+            // The layout had reached the end of the part, or it did not
+            // go on since then.
+            let complete = range.laidOutTo >= range.bottom || page.frame.height == range.laidOutTo
+            if covers && complete { return }
+        }
+        var count = 0
+        var boxSize = 0.0
+        if hasDocument {
+            // A view of room above and below, so a box is there before a
+            // scroll shows its place.
+            let top = scrollY - viewHeight
+            let bottom = scrollY + 2 * viewHeight
+            count = mdcore_tasks(ctx, top, bottom, &taskBuffer, taskBuffer.count)
+            boxSize = mdcore_task_box_size(ctx)
+            taskBoxRange = (top, bottom, page.frame.height)
+        } else {
+            taskBoxRange = nil
+        }
+        let tasks = Array(taskBuffer[..<count])
+        let same = boxSize == shownTaskBoxSize && tasks.elementsEqual(shownTasks) {
+            $0.line == $1.line && $0.checked == $1.checked && $0.x == $1.x && $0.y == $1.y
+        }
+        guard !same else { return }
+        shownTasks = tasks
+        shownTaskBoxSize = boxSize
+
+        // No animation of a move or of a state that this sets: the box
+        // goes with the text, which has none.
+        NSAnimationContext.beginGrouping()
+        NSAnimationContext.current.duration = 0
+        NSAnimationContext.current.allowsImplicitAnimation = false
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer {
+            CATransaction.commit()
+            NSAnimationContext.endGrouping()
+        }
+
+        let lines = Set(tasks.map(\.line))
+        for (line, button) in taskCheckBoxes where !lines.contains(line) {
+            button.isHidden = true
+            spareTaskCheckBoxes.append(button)
+            taskCheckBoxes[line] = nil
+        }
+        for task in tasks {
+            let button = taskCheckBoxes[task.line] ?? spareTaskCheckBoxes.popLast() ?? {
+                let button = TaskCheckBox(checkboxWithTitle: "", target: self, action: #selector(taskCheckBoxClicked))
+                if let shape = taskCheckBoxShape {
+                    button.setFrameSize(shape.size)
+                } else {
+                    button.sizeToFit()
+                    let size = button.bounds.size
+                    taskCheckBoxShape = (size, button.cell?.imageRect(forBounds: NSRect(origin: .zero, size: size)) ?? .zero)
+                }
+                page.addSubview(button)
+                return button
+            }()
+            taskCheckBoxes[task.line] = button
+            guard let shape = taskCheckBoxShape else { continue }
+            // The button keeps its own size as its bounds and gets a frame
+            // that makes its box as large as the text asks for: AppKit
+            // scales the drawing and the pointer with it.
+            let natural = shape.size
+            let zoom = shape.box.width > 0 ? boxSize / shape.box.width : 1
+            let frame = NSRect(
+                x: task.x - shape.box.minX * zoom, y: task.y - shape.box.minY * zoom,
+                width: natural.width * zoom, height: natural.height * zoom
+            )
+            if button.frame != frame {
+                button.frame = frame
+                button.bounds = NSRect(origin: .zero, size: natural)
+            }
+            let state: NSControl.StateValue = task.checked ? .on : .off
+            if button.state != state { button.state = state }
+            button.tag = task.line
+            button.isHidden = false
+        }
+    }
+
+    @objc private func taskCheckBoxClicked(_ sender: NSButton) {
+        taskCheckboxToggled?(sender.tag, sender.state == .on)
+    }
+
+    /// Shows a document. `keepsScroll` is for the same document with a
+    /// change in it (a task that was checked, a file saved by another
+    /// app): the reader stays where they are.
+    func open(_ markdown: String, keepsScroll: Bool) {
         var text = markdown
         text.withUTF8 { utf8 in
             utf8.withMemoryRebound(to: CChar.self) { mdcore_set_markdown(ctx, $0.baseAddress, $0.count) }
@@ -223,8 +346,8 @@ final class NativeRendererView: NSView {
         hasDocument = true
         endScrollAnimation()
         // Before the layout: it lays out what the view shows, and that must
-        // be the top of the new document, not the place the old one was at.
-        scroll(toY: 0)
+        // be the top of a new document, not the place the old one was at.
+        if !keepsScroll { scroll(toY: 0) }
         relayout(force: true)
     }
 
@@ -234,6 +357,7 @@ final class NativeRendererView: NSView {
         guard hasPageToDraw else { return }
         let scale = Double(window?.backingScaleFactor ?? 2)
         guard force || bounds.size != laidOutSize || scale != laidOutScale else { return }
+        // The pictures of the check boxes are for one scale.
         laidOutSize = bounds.size
         laidOutScale = scale
         let size = bounds.size
@@ -249,7 +373,7 @@ final class NativeRendererView: NSView {
     private func drawNow(before: (() -> Void)? = nil) {
         guard hasPageToDraw else { return }
         renderLoop.frameNow(at: scrollY, before: before)
-        updatePageHeight()
+        updatePageHeight(layoutChanged: true)
     }
 
     /// Lays out the rest of a long document in steps shorter than a frame,
@@ -357,6 +481,12 @@ final class NativeRendererView: NSView {
         default: super.keyDown(with: event)
         }
     }
+}
+
+/// The system's check box, on a task of the page. Only the cursor is its
+/// own: the arrow, where the page around it has the text cursor.
+private final class TaskCheckBox: NSButton {
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .arrow) }
 }
 
 /// The scroll view's document view: an empty area as tall as the page. It

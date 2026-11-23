@@ -148,3 +148,29 @@ selection_text :: proc(l: ^Layout, s: Selection, out: ^[dynamic]u8) {
 		append(out, ..para.src.bytes[start:end])
 	}
 }
+
+// The first task whose box ends below y, or len(tasks).
+@(private)
+first_task_below :: proc(l: ^Layout, y: f32) -> int {
+	lo, hi := 0, len(l.tasks)
+	for lo < hi {
+		mid := (lo + hi) / 2
+		if l.tasks[mid].y + task_box_size(l.m) <= y {
+			lo = mid + 1
+		} else {
+			hi = mid
+		}
+	}
+	return lo
+}
+
+// The tasks whose boxes are between two heights of the page, for a host
+// that puts its own control on each one.
+tasks_between :: proc(l: ^Layout, top, bottom: f32) -> []Task {
+	first := first_task_below(l, top)
+	last := first
+	for last < len(l.tasks) && l.tasks[last].y < bottom {
+		last += 1
+	}
+	return l.tasks[first:last]
+}

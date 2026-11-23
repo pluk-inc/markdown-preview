@@ -59,6 +59,8 @@ Block :: struct {
 	language:    string, // code: the info string's first word
 	marker:      Marker,
 	number:      int, // marker == .Number
+	task_line:   int, // a task marker: the source line of its "[ ]", from 1
+	done:        bool, // the block stands directly in a checked task item
 	spacing:     Spacing,
 	list_depth:  int,
 	quote_depth: int,

@@ -27,8 +27,9 @@ over one at a time.
 | First pull request | #665 |
 
 What works: headings, paragraphs, bold, italic, strikethrough, inline code,
-links (shown, not opened), lists with nesting, task lists, quotes, code
-blocks, tables, rules, emoji, text of any script that CoreText can shape.
+links (shown, not opened), lists with nesting, task lists with check boxes
+that a click checks and saves, quotes, code blocks, tables, rules, emoji,
+text of any script that CoreText can shape.
 Scrolling with the system scroll bar, selection by drag, Select All, Copy.
 The reader style from the app: font, text size and zoom, line spacing,
 bold text, margins, content width, theme colors, light and dark.
@@ -317,6 +318,23 @@ Speed and memory (the 1.1 MB document):
   once outside the window: 6 to 7 % of the layout.
 - Layout records are 64 bytes for a paragraph and for a line; 40 would do.
 
+Task check boxes, left on purpose:
+
+- A checked task sets the whole document again, and the view keeps its
+  scroll offset in points. Far down a long document the first draw then
+  lays out everything above the reader on the main thread. A change of the
+  one block's state in place, and a scroll anchor in the document in place
+  of an offset, would remove both.
+- The check box has no accessibility label (a new string that must go
+  through translation), and the keyboard cannot reach it.
+- The system moves the check boxes with the scroll view; the text is drawn
+  by the render thread. A box can be one frame ahead of its text. Not
+  measured.
+- `Block.done` and `Block.task_line` are on each block of an item; they
+  belong to the item when the model gets containers.
+- The core draws no box of its own. A host without a control (the
+  benchmark program, another platform) shows a task with no box.
+
 Next features, in the order that seems best (not agreed with the
 maintainer): links that open, images, code colors, Find, the outline's
 scroll position, footnotes and alerts, VoiceOver, print and export.
@@ -383,3 +401,10 @@ scroll position, footnotes and alerts, VoiceOver, print and export.
   edge in a live resize. The frame for a new size went to the screen at
   once, one step before the window's own change. It is now drawn on the
   main thread and presented with its transaction.
+- **2026-11-23** — Task check boxes. A first version drew the box in the
+  core, a second one placed a picture of the system's box. The maintainer
+  wanted the real control: the core now leaves the place empty and gives
+  the host the tasks near the view (`mdcore_tasks`), and the view puts an
+  `NSButton` on each. A copy of the web view's box drawing was tried and
+  dropped the same day: the system's own look stays. The core's own box
+  drawing went away with it.

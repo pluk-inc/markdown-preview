@@ -15,6 +15,7 @@ MIN_TABLE_CELLS :: 50_000
 List :: struct {
 	ordered: bool,
 	next:    int,
+	done:    bool, // the open item is a checked task
 }
 
 @(private)
@@ -39,7 +40,13 @@ Parser :: struct {
 	lists:        [dynamic]List,
 	item_marker:  Marker, // marker of the list item that has no block yet
 	item_number:  int,
+	item_line:    int, // a task: the source line of its mark, from 1
 	item_blocks:  int, // blocks of the open item so far
+	// The source, and how far its lines are counted: task marks come in
+	// source order, so each count starts where the one before ended.
+	source:       string,
+	counted_to:   int,
+	counted_line: int,
 	list_start:   bool, // the next item is the first of a top-level list
 	// Table.
 	table:        Block,
@@ -56,6 +63,7 @@ parse :: proc(source: string) -> Document {
 		ctx       = context,
 		doc       = &doc,
 		max_cells = MIN_TABLE_CELLS + len(source),
+		source    = source,
 	}
 	md := Md_Parser {
 		flags       = MD_FLAG_TABLES | MD_FLAG_STRIKETHROUGH | MD_FLAG_TASKLISTS | MD_FLAG_PERMISSIVEAUTOLINKS,
@@ -125,6 +133,7 @@ start_block :: proc(p: ^Parser, kind: Block_Kind) -> Block {
 		kind        = kind,
 		list_depth  = len(p.lists),
 		quote_depth = p.quote,
+		done        = len(p.lists) > 0 && p.lists[len(p.lists) - 1].done,
 	}
 	take_item_position(p, &b)
 	return b
@@ -156,6 +165,7 @@ take_item_position :: proc(p: ^Parser, b: ^Block) {
 	if p.item_blocks == 0 {
 		b.marker = p.item_marker
 		b.number = p.item_number
+		b.task_line = p.item_line
 		b.spacing = p.list_start ? .List_Start : .Item
 		p.list_start = false
 	} else {
@@ -170,6 +180,19 @@ close_text :: proc(p: ^Parser) {
 		return
 	}
 	push_block(p)
+}
+
+// The line of a byte of the source, from 1. Offsets come in source order.
+@(private)
+line_of :: proc(p: ^Parser, offset: int) -> int {
+	offset := min(offset, len(p.source))
+	for i in p.counted_to ..< offset {
+		if p.source[i] == '\n' {
+			p.counted_line += 1
+		}
+	}
+	p.counted_to = offset
+	return p.counted_line + 1
 }
 
 @(private)
@@ -201,11 +224,16 @@ enter_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 		li := cast(^Md_Li_Detail)detail
 		p.item_blocks = 0
 		p.item_number = list.next
+		p.item_line = 0
+		is_done := false
 		if li.is_task != 0 {
-			p.item_marker = li.task_mark == ' ' ? .Task_Open : .Task_Done
+			is_done = li.task_mark != ' '
+			p.item_marker = is_done ? .Task_Done : .Task_Open
+			p.item_line = line_of(p, int(li.task_mark_offset))
 		} else {
 			p.item_marker = list.ordered ? .Number : .Bullet
 		}
+		p.lists[len(p.lists) - 1].done = is_done
 	case .Hr:
 		append(&p.doc.blocks, start_block(p, .Rule))
 	case .H:
