@@ -301,6 +301,17 @@ mdcore_content_height :: proc "c" (handle: rawptr) -> f64 {
 @(export)
 mdcore_draw :: proc "c" (handle: rawptr, scroll_y: f64) {
 	context = runtime.default_context()
+	draw(handle, scroll_y, false)
+}
+
+@(export)
+mdcore_draw_with_window :: proc "c" (handle: rawptr, scroll_y: f64) {
+	context = runtime.default_context()
+	draw(handle, scroll_y, true)
+}
+
+@(private)
+draw :: proc(handle: rawptr, scroll_y: f64, with_window: bool) {
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
 	sync.lock(&ctx.draw_lock)
@@ -324,7 +335,7 @@ mdcore_draw :: proc "c" (handle: rawptr, scroll_y: f64) {
 		frame = renderer.frame_begin(&ctx.gpu, f32(int(ctx.scroll * ctx.scale)) - ctx.origin_px)
 	}
 	// The frame can wait for the display. Other calls go on meanwhile.
-	renderer.frame_draw(&frame)
+	renderer.frame_draw(&frame, with_window)
 }
 
 // phase 0 = mouse down, 1 = drag. x and y are points in document space.

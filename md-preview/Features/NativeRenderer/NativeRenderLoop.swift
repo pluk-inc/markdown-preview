@@ -121,7 +121,11 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
         lock.unlock()
         queue.sync { [ctx] in
             before?()
-            autoreleasepool { mdcore_draw(ctx, y) }
+            // On this thread (the queue runs a waited-for block on the
+            // thread that waits), with its transaction: the frame shows
+            // with the window's new size and with the views that the
+            // caller moves after it, not one step before them.
+            autoreleasepool { mdcore_draw_with_window(ctx, y) }
         }
         // A frame of the link that took an older offset can be drawn after
         // this one. One more frame then makes the newest offset the last
