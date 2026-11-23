@@ -336,6 +336,22 @@ Task check boxes, left on purpose:
   measured.
 - `Block.done` and `Block.task_line` are on each block of an item; they
   belong to the item when the model gets containers.
+- The view finds out that the layout moved from the page height and
+  from a range that it clears by hand after a new layout. A revision
+  number of the layout from the core would replace both, also for later
+  features that move blocks (images that load).
+- `ContentViewController` keeps the scroll place when the same file opens
+  again (`isSameFile`). That is a guess of the caller's intent, and a third
+  scroll channel beside the two that the web view has. One scroll intent
+  on `display` (top, keep, anchor, target) for the two renderers would
+  replace it.
+- The task is known by its source line, which the parser counts from
+  md4c's byte offset, because the app's toggle takes a line. A byte offset
+  in the model and in the C API would follow the rule for text offsets.
+- The buttons of one view above and below are made before the first frame
+  shows. Not measurable at launch so far (`BENCHMARKS.md`).
+- `first_task_below` is the same search as `first_box_below`; one helper
+  for the two is not made yet.
 - The core draws no box of its own. A host without a control (the
   benchmark program, another platform) shows a task with no box.
 

@@ -341,19 +341,10 @@ draw :: proc(handle: rawptr, scroll_y: f64, with_window: bool) {
 	renderer.frame_draw(&frame, with_window)
 }
 
-@(export)
-mdcore_task_box_size :: proc "c" (handle: rawptr) -> f64 {
-	context = runtime.default_context()
-	ctx := cast(^Ctx)handle
-	context.temp_allocator = ctx.temp
-	hold(ctx)
-	return f64(layout.task_box_size(base.metrics(ctx.style)))
-}
-
 Host_Task :: struct {
-	x, y:    f64,
-	line:    c.long,
-	checked: bool,
+	x, y, size: f64,
+	line:       c.long,
+	checked:    bool,
 }
 
 @(export)
@@ -363,11 +354,11 @@ mdcore_tasks :: proc "c" (handle: rawptr, top, bottom: f64, out: [^]Host_Task, c
 	context.temp_allocator = ctx.temp
 	hold(ctx)
 	tasks := layout.tasks_between(&ctx.page, f32(top), f32(bottom))
-	count := min(len(tasks), int(capacity))
-	for t, i in tasks[:count] {
-		out[i] = {f64(t.x), f64(t.y), c.long(t.line), t.done}
+	size := f64(layout.task_box_size(ctx.page.m))
+	for t, i in tasks[:min(len(tasks), int(capacity))] {
+		out[i] = {f64(t.x), f64(t.y), size, c.long(t.line), t.done}
 	}
-	return c.long(count)
+	return c.long(len(tasks))
 }
 
 // phase 0 = mouse down, 1 = drag. x and y are points in document space.

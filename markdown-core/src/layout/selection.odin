@@ -152,10 +152,11 @@ selection_text :: proc(l: ^Layout, s: Selection, out: ^[dynamic]u8) {
 // The first task whose box ends below y, or len(tasks).
 @(private)
 first_task_below :: proc(l: ^Layout, y: f32) -> int {
+	size := task_box_size(l.m)
 	lo, hi := 0, len(l.tasks)
 	for lo < hi {
 		mid := (lo + hi) / 2
-		if l.tasks[mid].y + task_box_size(l.m) <= y {
+		if l.tasks[mid].y + size <= y {
 			lo = mid + 1
 		} else {
 			hi = mid
