@@ -86,6 +86,13 @@ final class SettingsModel {
         }
     }
 
+    var usesNativeRenderer: Bool {
+        didSet {
+            guard !isRestoringExternalValues, usesNativeRenderer != oldValue else { return }
+            appDelegate?.applyRendererSetting(usesNativeRenderer ? .native : .web)
+        }
+    }
+
     var autoSaveIntervalMinutes: Int {
         didSet {
             let normalized = AutoSaveSetting.clampedMinutes(autoSaveIntervalMinutes)
@@ -303,6 +310,7 @@ final class SettingsModel {
         appearance = AppearanceMode.current
         contentWidth = ContentWidthSetting.current
         autoSaveIntervalMinutes = AutoSaveSetting.currentMinutes
+        usesNativeRenderer = RendererSetting.current == .native
         textSize = TextSizeSetting.current
         documentFont = DocumentFontSetting.current
         readerLayout = ReaderLayoutSetting.current
@@ -365,6 +373,7 @@ final class SettingsModel {
         appearance = AppearanceMode.current
         contentWidth = ContentWidthSetting.current
         autoSaveIntervalMinutes = AutoSaveSetting.currentMinutes
+        usesNativeRenderer = RendererSetting.current == .native
         textSize = TextSizeSetting.current
         documentFont = DocumentFontSetting.current
         readerLayout = ReaderLayoutSetting.current

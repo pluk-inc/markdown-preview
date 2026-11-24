@@ -116,10 +116,13 @@ UTI: `net.daringfireball.markdown`
 ## Building from source
 
 ```sh
+brew install odin
 git clone git@github.com:pluk-inc/markdown-preview.git
 cd markdown-preview
 open markdown-preview.xcodeproj
 ```
+
+The build needs the [Odin](https://odin-lang.org) compiler for the experimental native renderer in [`markdown-core/`](markdown-core/README.md). Turn that renderer on in Settings → Advanced; the web view is the default.
 
 Build and run the `markdown-preview` scheme. Swift Package Manager will resolve [Sparkle](https://github.com/sparkle-project/Sparkle), [Sentry](https://github.com/getsentry/sentry-cocoa), and [swift-markdown](https://github.com/swiftlang/swift-markdown) on first build.
 
@@ -193,6 +196,7 @@ Markdown Preview is free and MIT-licensed. If it saved you a browser tab, you ca
 - [Amore](http://amore.computer/) — MacOS release automation (signing, notarization, DMG, hosting, appcast)
 - [Lokalise](https://lokalise.com) — Translation management for the app's languages
 - [swift-markdown](https://github.com/swiftlang/swift-markdown) — Markdown parser (Apple, cmark-gfm-backed)
+- [md4c](https://github.com/mity/md4c) — Markdown parser of the experimental native renderer
 - [Pele](https://pele.run/) — Bundled renderer for Mermaid diagrams in `mermaid` fenced code blocks
 - [KaTeX](https://katex.org/) — Bundled math typesetter for inline `$…$`, display `$$…$$`, and ` ```math ` blocks
 - [Sparkle](https://sparkle-project.org) — Auto-update framework

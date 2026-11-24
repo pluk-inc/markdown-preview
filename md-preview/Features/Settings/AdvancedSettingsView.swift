@@ -2,15 +2,25 @@
 //  AdvancedSettingsView.swift
 //  md-preview
 //
-//  Tools most people set once or never: the command line tools and the
-//  app link approvals.
+//  Tools most people set once or never: the experimental renderer, the
+//  command line tools and the app link approvals.
 //
 
 import SwiftUI
 
 struct AdvancedSettingsView: View {
+    @Bindable private var model = SettingsModel.shared
+
     var body: some View {
         Form {
+            LabeledContent(columnLabel("Renderer")) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle(L("Use the experimental native renderer"), isOn: $model.usesNativeRenderer)
+                    SettingsCaption(L("Opens documents faster and uses less memory. It does not have images, math, diagrams, code colors, Find, Edit Mode, or export yet."))
+                }
+            }
+            .settingsGroupGap()
+
             LabeledContent(columnLabel("Command line tools")) {
                 VStack(alignment: .leading, spacing: 6) {
                     Button(L("Install…")) {
