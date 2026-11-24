@@ -238,16 +238,15 @@ final class NativeRendererView: NSView {
         laidOutScale = scale
         let size = bounds.size
         layoutCount += 1
-        // The new size, then its frame, in this order off the main thread.
-        nonisolated(unsafe) let ctx = ctx
-        drawNow { mdcore_resize(ctx, size.width, size.height, scale) }
+        // The new size, then its frame.
+        drawNow { [ctx] in mdcore_resize(ctx, size.width, size.height, scale) }
         continueLayout()
     }
 
     /// Draws a frame now and waits for it: the first frame of a document,
     /// and a frame for a new size, which must be there with the window's.
-    /// `before` runs off the main thread ahead of the frame.
-    private func drawNow(before: (@Sendable () -> Void)? = nil) {
+    /// `before` runs ahead of the frame.
+    private func drawNow(before: (() -> Void)? = nil) {
         guard hasPageToDraw else { return }
         renderLoop.frameNow(at: scrollY, before: before)
         updatePageHeight()

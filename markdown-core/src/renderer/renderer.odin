@@ -14,7 +14,7 @@
 //                                          own references; scroll from the
 //                                          origin of the display list, in
 //                                          pixels
-//   frame_draw(frame)                      draws it and waits for the display
+//   frame_draw(frame, with_window)         draws it and waits for the display
 //                                          if it must
 //
 // A frame draws the rectangles, then the selection, then the glyphs. The

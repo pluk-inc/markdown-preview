@@ -227,12 +227,17 @@ frame_begin :: proc(r: ^Renderer, scroll_px: f32) -> Frame {
 	return Frame{state = r^, scroll_px = scroll_px}
 }
 
-// Draws the frame and gives its references back.
-frame_draw :: proc(f: ^Frame) {
+// Draws the frame and gives its references back. `with_window`: the frame
+// goes to the screen in the caller's Core Animation transaction, together
+// with the changes of the window and of the views in it (a new size), and
+// not at once. This is state of the layer, set for each frame: the caller
+// lets one frame at a time run for a layer.
+frame_draw :: proc(f: ^Frame, with_window: bool) {
 	defer release_objects(&f.state)
 	if shared.pipeline == nil || f.width <= 0 || f.height <= 0 {
 		return
 	}
+	f.layer->setPresentsWithTransaction(with_window)
 	drawable := f.layer->nextDrawable()
 	if drawable == nil {
 		return
@@ -261,6 +266,12 @@ frame_draw :: proc(f: ^Frame) {
 		draw_quads(enc, &f.glyphs)
 	}
 	enc->endEncoding()
+	if with_window {
+		cb->commit()
+		cb->waitUntilScheduled()
+		drawable->present()
+		return
+	}
 	cb->presentDrawable(drawable)
 	cb->commit()
 }

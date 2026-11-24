@@ -80,6 +80,13 @@ double mdcore_content_height(void *ctx);
 // see "Threads" above.
 void mdcore_draw(void *ctx, double scroll_y);
 
+// The same, for a frame that must show together with a change of the
+// window or of the host's views (a new size, a control that the host
+// moved): the frame goes to the screen with the Core Animation
+// transaction of the calling thread. Call it on the thread that changes
+// the views.
+void mdcore_draw_with_window(void *ctx, double scroll_y);
+
 // Selection. phase: 0 = mouse down, 1 = drag. x, y are in document space.
 void mdcore_mouse(void *ctx, double x, double y, int phase);
 void mdcore_select_all(void *ctx);
