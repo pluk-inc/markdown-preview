@@ -57,6 +57,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-24 | the text cursor only over text; the core gives the shape of the pointer | 583 / 607 | 55 / 96 | 480 / 1020 | – | – | – | 6.6 / 20.7 |
 | 2026-11-24 | the system backing of the covered top edge covers the find bar too | 621 / 633 | 54 / 96 | 510 / 1090 | – | – | – | – |
 | 2026-11-24 | the reader keeps their place when the text is laid out again | 683 / 665 | 56 / 99 | 620 / 1260 | – | – | 0.44 / 0.35 | 6.6 / 20.7 |
+| 2026-11-24 | blocks and layout records in parts of the document | 623 / 611 | 54 / 96 | 500 / 1040 | 64 / 75 | 2.9 / 301 | 0.42 / 0.40 | 6.7 / 20.0 |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -296,3 +297,41 @@ The place costs nothing that this shows. The cost that was there before
 is large: 0.37 s for each width change at the end of a long document,
 because each new layout goes from the top down to the reader, on the
 main thread. See Open work.
+
+## Blocks and records in parts (2026-11-24)
+
+The change puts the blocks of the document and the records of the layout
+in parts, and shows the same page. So the question for the two programs
+is only if something got slower or larger. The base (the reader's place)
+and the change one after the other, short / long.
+
+| | Base | In parts |
+| --- | --- | --- |
+| `core.py`: first frame (ms) | 71 / 75 | 64 / 75 |
+| `core.py`: layout of the rest (ms) | 3.0 / 303 | 2.9 / 301 |
+| `core.py`: heap at the first frame (MB) | 5.2 / 13.7 | 5.1 / 13.6 |
+| `core.py`: heap at the end (MB) | 6.6 / 20.7 | 6.7 / 20.0 |
+| Scroll frame, new glyphs / ready (CPU ms, long), 7 runs in turn | 0.400 / 0.379 | 0.407 / 0.368 |
+| `app.py`: launch to the first frame (ms), two times | 625 / 624, 587 / 591 | 623 / 611, 587 / 616 |
+| `app.py`: CPU to 3 s after (ms) | 500 / 1040, 490 / 1030 | 500 / 1040, 470 / 1040 |
+| `app.py`: memory (MB) | 53 / 92, 53 / 96 | 54 / 96, 53 / 97 |
+
+No difference in time. The heap of the long document is 0.7 MB smaller.
+
+The first form of the change was 2 MB larger (22.7 MB), from two things
+that only a measurement showed:
+
+- The system's allocator has few sizes above 1 KB (16 KB, then 20 KB). A
+  part of 64 blocks is 16.9 KB and took 20 KB. A part is now as many
+  blocks as go in 16 KB with the header of the core's allocator (61).
+- An array that is made smaller in place keeps its memory. The five
+  record arrays of each part had 6.6 MB for 4.4 MB of records. The layout
+  now builds a part in arrays that it uses again for each part, and
+  copies the finished records into one piece of memory of their size:
+  4.9 MB.
+
+The layout was also compared record by record with the base, for a
+document of 1,841 blocks at two widths: the same lines, boxes,
+decorations, and tasks, at heights that differ by 0.11 points at most
+(85,566 points down). That difference is the error that the base adds up
+in a 32-bit height; a part now counts from its own top.

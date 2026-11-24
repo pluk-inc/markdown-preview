@@ -95,7 +95,7 @@ These came from the maintainer. Do not undo one without asking.
   a 64-bit number. Do not put a height of the page in a record: then a
   block that gets another height is a change to each record below it.
   What must stand on a whole point or a whole pixel is put there on the
-  page (`rect_quad`, `tasks_between`), not in the part, or it moves by a
+  page (`page_pixel`, `tasks_between`), not in the part, or it moves by a
   fraction when the part does.
 - The layout changes its sums and ranges in place. `layout.check` looks
   at all of them and says what is wrong; a new test of the layout calls it
@@ -417,8 +417,6 @@ Task check boxes, left on purpose:
   in the model and in the C API would follow the rule for text offsets.
 - The buttons of one view above and below are made before the first frame
   shows. Not measurable at launch so far (`BENCHMARKS.md`).
-- `first_task_below` is the same search as `first_box_below`; one helper
-  for the two is not made yet.
 - The core draws no box of its own. A host without a control (the
   benchmark program, another platform) shows a task with no box.
 
@@ -451,8 +449,11 @@ Left on purpose in the first step:
 
 - `document.locate` and `first_part_below` search all parts (a binary
   search). Fine for the 250 parts of 1 MB.
-- The arrays that the layout builds a part in keep the size of the
-  largest part so far.
+- `hit_test` counts the blocks around a point by their numbers, which
+  holds only while the layout goes from the first block down.
+- The search for a place in an ordered list is written out in six
+  procedures (parts, boxes, lines, spans, blocks). One helper for all is
+  not made.
 - `Para.order` is still a number in reading order over the full
   document, so the selection is the last record that needs the layout
   from the top.

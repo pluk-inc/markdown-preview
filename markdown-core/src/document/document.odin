@@ -163,14 +163,17 @@ set_task_done :: proc(doc: ^Document, line: int, done: bool) -> bool {
 			b.done = done
 			// The later blocks of the same item, which can come after
 			// lists inside it. The item is over where its list is.
-			for i in doc.starts[p] + slot + 1 ..< doc.count {
-				next := block_at(doc, i)
-				if next.list_depth < b.list_depth {
-					break
+			from := slot + 1
+			for later in doc.parts[p:] {
+				for &next in part_blocks(later)[from:] {
+					if next.list_depth < b.list_depth {
+						return true
+					}
+					if next.item == b.item {
+						next.done = done
+					}
 				}
-				if next.item == b.item {
-					next.done = done
-				}
+				from = 0
 			}
 			return true
 		}

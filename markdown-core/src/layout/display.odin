@@ -36,14 +36,21 @@ first_box_below :: proc(part: ^Part, y: f32) -> int {
 	return lo
 }
 
+// The whole pixel of the page for a height of a part. `top` is the top of
+// the part on the page. Each edge that must be sharp goes through this:
+// on a whole pixel of the page, not of the part, so it is the same pixel
+// wherever the part is.
+@(private)
+page_pixel :: proc(top: f64, y, scale: f32) -> f64 {
+	return math.round((top + f64(y)) * f64(scale))
+}
+
 // The quad of a rectangle of a part. `top` is the top of the part on the
-// page; the edges are put on whole pixels of the page, not of the part,
-// so they are the same pixels wherever the part is.
+// page.
 @(private)
 rect_quad :: proc(x, y, w, h: f32, color: base.Color, radius, scale: f32, top, origin_y: f64) -> base.Quad {
 	x0, x1 := math.round(x * scale), math.round((x + w) * scale)
-	y0 := math.round((top + f64(y)) * f64(scale))
-	y1 := math.round((top + f64(y + h)) * f64(scale))
+	y0, y1 := page_pixel(top, y, scale), page_pixel(top, y + h, scale)
 	return base.Quad{pos = {x0, f32(y0 - origin_y)}, size = {max(x1 - x0, 1), f32(max(y1 - y0, 1))}, uv = {radius * scale, 0}, color = color, kind = .Rect}
 }
 
@@ -58,76 +65,89 @@ display :: proc(
 	rects, glyphs: ^[dynamic]base.Quad,
 	buffer: ^text.Glyph_Buffer,
 ) {
-	scale := cache.scale
 	for p in first_part_below(l, y0) ..< len(l.parts) {
 		part := &l.parts[p]
 		if part.top >= y1 {
 			break
 		}
-		// The range from the top of the part.
-		from, to := f32(y0 - part.top), f32(y1 - part.top)
-		first := first_box_below(part, from)
-		for box, i in part.boxes[first:] {
-			if box.top >= to {
-				break
+		display_part(l, cache, p, f32(y0 - part.top), f32(y1 - part.top), origin_y, rects, glyphs, buffer)
+	}
+}
+
+// The quads of one part. `from` and `to` are the range from the top of
+// the part.
+@(private)
+display_part :: proc(
+	l: ^Layout,
+	cache: ^text.Glyph_Cache,
+	p: int,
+	from, to: f32,
+	origin_y: f64,
+	rects, glyphs: ^[dynamic]base.Quad,
+	buffer: ^text.Glyph_Buffer,
+) {
+	scale := cache.scale
+	part := &l.parts[p]
+	first := first_box_below(part, from)
+	for box, i in part.boxes[first:] {
+		if box.top >= to {
+			break
+		}
+		done := l.doc.parts[p].blocks[first + i].done
+		for d in part.decor[box.decor_first:box.decor_end] {
+			if d.y + d.h < from || d.y > to {
+				continue
 			}
-			done := l.doc.parts[p].blocks[first + i].done
-			for d in part.decor[box.decor_first:box.decor_end] {
-				if d.y + d.h < from || d.y > to {
+			color := d.soft_done && done ? done_color(l) : d.color
+			append(d.above ? glyphs : rects, rect_quad(d.x, d.y, d.w, d.h, color, d.radius, scale, part.top, origin_y))
+		}
+		for i in box.line_first ..< box.line_end {
+			line := part.lines[i]
+			para := &part.paras[line.para]
+			if line.top + para.line_height < from || line.top > to {
+				continue
+			}
+			line = shaped_line(l, p, i)^
+			baseline := line.top + (para.line_height - (line.line.ascent + line.line.descent)) / 2 + line.line.ascent
+			text.line_glyphs(line.line, buffer)
+			// Glyphs come in runs of one span, so the color is looked up
+			// only when the span changes.
+			span: ^document.Span
+			color := l.style.secondary
+			// The same for the font: a line has a few runs of one font each.
+			run_font: base.Font
+			run_font_id: u16
+			for g in buffer.glyphs {
+				if g.font != run_font {
+					run_font = g.font
+					run_font_id = text.font_id(cache, g.font)
+				}
+				if para.src != nil {
+					index := para.base + g.index
+					if span == nil || index < span.start || index >= span.end {
+						span = document.span_at(para.src, index)
+						color = span_color(l, para, span.style, done)
+					}
+				}
+				px := (line.x + g.x) * scale
+				py := f32(page_pixel(part.top, baseline - g.y, scale) - origin_y)
+				fx := math.floor(px)
+				bin := u8(clamp((px - fx) * text.SUBPIXEL_BINS, 0, text.SUBPIXEL_BINS - 1))
+				e := text.cache_get(cache, run_font_id, g.id, bin)
+				if e.w == 0 {
 					continue
 				}
-				color := d.soft_done && done ? done_color(l) : d.color
-				append(d.above ? glyphs : rects, rect_quad(d.x, d.y, d.w, d.h, color, d.radius, scale, part.top, origin_y))
-			}
-			for i in box.line_first ..< box.line_end {
-				line := part.lines[i]
-				para := &part.paras[line.para]
-				if line.top + para.line_height < from || line.top > to {
-					continue
-				}
-				line = shaped_line(l, p, i)^
-				baseline := line.top + (para.line_height - (line.line.ascent + line.line.descent)) / 2 + line.line.ascent
-				text.line_glyphs(line.line, buffer)
-				// Glyphs come in runs of one span, so the color is looked up
-				// only when the span changes.
-				span: ^document.Span
-				color := l.style.secondary
-				// The same for the font: a line has a few runs of one font each.
-				run_font: base.Font
-				run_font_id: u16
-				for g in buffer.glyphs {
-					if g.font != run_font {
-						run_font = g.font
-						run_font_id = text.font_id(cache, g.font)
-					}
-					if para.src != nil {
-						index := para.base + g.index
-						if span == nil || index < span.start || index >= span.end {
-							span = document.span_at(para.src, index)
-							color = span_color(l, para, span.style, done)
-						}
-					}
-					px := (line.x + g.x) * scale
-					// On a whole pixel of the page, as the rectangles are.
-					py := f32(math.round((part.top + f64(baseline - g.y)) * f64(scale)) - origin_y)
-					fx := math.floor(px)
-					bin := u8(clamp((px - fx) * text.SUBPIXEL_BINS, 0, text.SUBPIXEL_BINS - 1))
-					e := text.cache_get(cache, run_font_id, g.id, bin)
-					if e.w == 0 {
-						continue
-					}
-					append(
-						glyphs,
-						base.Quad {
-							pos = {fx + f32(e.left), py - f32(e.top)},
-							size = {f32(e.w), f32(e.h)},
-							uv = {f32(e.x), f32(e.y)},
-							uvsize = {f32(e.w), f32(e.h)},
-							color = color,
-							kind = e.is_color ? .Color_Glyph : .Gray_Glyph,
-						},
-					)
-				}
+				append(
+					glyphs,
+					base.Quad {
+						pos = {fx + f32(e.left), py - f32(e.top)},
+						size = {f32(e.w), f32(e.h)},
+						uv = {f32(e.x), f32(e.y)},
+						uvsize = {f32(e.w), f32(e.h)},
+						color = color,
+						kind = e.is_color ? .Color_Glyph : .Gray_Glyph,
+					},
+				)
 			}
 		}
 	}

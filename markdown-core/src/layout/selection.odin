@@ -58,7 +58,11 @@ place_text :: proc(l: ^Layout, block, cell: int) -> ^document.Text {
 	if block < 0 || block >= l.doc.count {
 		return nil
 	}
-	b := document.block_at(l.doc, block)
+	return block_text(document.block_at(l.doc, block), cell)
+}
+
+@(private)
+block_text :: proc(b: ^document.Block, cell: int) -> ^document.Text {
 	if b.kind != .Table {
 		return &b.text
 	}
@@ -70,7 +74,7 @@ place_text :: proc(l: ^Layout, block, cell: int) -> ^document.Text {
 place_at :: proc(l: ^Layout, y: f64) -> (place: Place, ok: bool) {
 	for p in first_part_below(l, y) ..< len(l.parts) {
 		part := &l.parts[p]
-		y := f32(y - part.top)
+		y := f32(y - part.top) // from the top of the part
 		for i in first_box_below(part, y) ..< len(part.boxes) {
 			box := part.boxes[i]
 			b := &l.doc.parts[p].blocks[i]
@@ -143,11 +147,12 @@ place_y :: proc(l: ^Layout, place: Place) -> (y: f64, ok: bool) {
 	p, slot := document.locate(l.doc, place.block)
 	part := &l.parts[p]
 	box := part.boxes[slot]
-	src := place_text(l, place.block, place.cell)
+	b := &l.doc.parts[p].blocks[slot]
+	src := block_text(b, place.cell)
 	// The line that has the byte of the place: the last line of its text
 	// that starts at or before it.
 	found := -1
-	if src != nil && l.doc.parts[p].blocks[slot].kind != .Table {
+	if src != nil && b.kind != .Table {
 		// The lines of the text are in the order of its bytes.
 		lo, hi := text_first(part, box), box.line_end
 		for lo < hi {
@@ -217,13 +222,6 @@ text_at :: proc(l: ^Layout, x: f32, y: f64) -> bool {
 	return at >= text_first(part, box) && on_line(l, part, part.lines[at], x, y)
 }
 
-// How many blocks have a box: the ones that are laid out, and the one in
-// progress.
-@(private)
-box_count :: proc(l: ^Layout) -> int {
-	return l.next_block + (l.in_block ? 1 : 0)
-}
-
 // The caret position nearest to a point of the page.
 hit_test :: proc(l: ^Layout, x: f32, y: f64) -> (pos: Position, ok: bool) {
 	count := box_count(l)
@@ -244,7 +242,7 @@ hit_test :: proc(l: ^Layout, x: f32, y: f64) -> (pos: Position, ok: bool) {
 		last := min(center + reach, count - 1)
 		p, slot := document.locate(l.doc, first)
 		for _ in first ..= last {
-			for slot >= len(l.parts[p].boxes) {
+			if slot == len(l.parts[p].boxes) {
 				p, slot = p + 1, 0
 			}
 			part := &l.parts[p]
@@ -376,42 +374,25 @@ Task_Place :: struct {
 	block: ^document.Block, // has the line of the task and its state
 }
 
-// The first task of a part whose box ends below y (from the top of the
-// part), or len(tasks).
-@(private)
-first_task_below :: proc(part: ^Part, y, size: f32) -> int {
-	lo, hi := 0, len(part.tasks)
-	for lo < hi {
-		mid := (lo + hi) / 2
-		if part.tasks[mid].y + size <= y {
-			lo = mid + 1
-		} else {
-			hi = mid
-		}
-	}
-	return lo
-}
-
 // Writes the tasks whose boxes are between two heights of the page to
 // `out`, down the page. Returns how many there are, which can be more
 // than `out` has room for.
 tasks_between :: proc(l: ^Layout, top, bottom: f64, out: []Task_Place) -> (count: int) {
-	size := task_box_size(l.m)
-	// The box of a task can start a little above its block, so above the
-	// top of the first block of a part: by less than a line.
-	reach := f64(l.m.body * l.m.line_height)
+	size := f64(task_box_size(l.m))
 	for p in first_part_below(l, top) ..< len(l.parts) {
 		part := &l.parts[p]
-		if part.top - reach >= bottom {
+		if part.top - OVERHANG >= bottom {
 			break
 		}
-		// One point before `top`: a box goes to a whole point of the page.
-		for task in part.tasks[first_task_below(part, f32(top - part.top) - 1, size):] {
+		// A part has one task for each block at most, so this looks at
+		// each one.
+		for task in part.tasks {
+			// A box stands on a whole point of the page.
 			y := math.round(part.top + f64(task.y))
 			if y >= bottom {
 				break
 			}
-			if y + f64(size) <= top {
+			if y + size <= top {
 				continue
 			}
 			if count < len(out) {

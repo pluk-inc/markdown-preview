@@ -94,6 +94,10 @@ Box :: struct {
 // in one piece of memory of their exact size. The records of the last
 // part, while the layout works on it, are in arrays of the layout that
 // grow (`Layout.work`), and the part shows what they have now.
+//
+// The marker of a list item that starts with a rule stands a little above
+// its block. So a record of the first block of a part can start above the
+// top of the part, by less than `OVERHANG`.
 Part :: struct {
 	top:        f64, // of the part on the page, points
 	height:     f32, // down to the bottom of its last block that is laid out
@@ -102,11 +106,13 @@ Part :: struct {
 	decor:      []Decor,
 	boxes:      []Box, // do not overlap and go down the page
 	tasks:      []Task, // down the page
-	closed:     bool,
-	memory:     rawptr, // of the records of a closed part
+	memory:     rawptr, // of the records of a closed part; nil while the layout works on the part
 	live_first: int, // all lines with shaped text are in [live_first, live_end)
 	live_end:   int,
 }
+
+// How far above the top of its part a record can start at most, in points.
+OVERHANG :: 64.0
 
 // The records of the part that the layout works on. They are used again
 // for each part, so a part costs one allocation, not the steps of five
@@ -172,7 +178,14 @@ reached :: proc(l: ^Layout) -> f64 {
 	if len(l.parts) == 0 {
 		return f64(l.y)
 	}
-	return l.parts[len(l.parts) - 1].top + f64(l.y)
+	return last_part(l).top + f64(l.y)
+}
+
+// How many blocks have a box: the ones that are laid out, and the one in
+// progress.
+@(private)
+box_count :: proc(l: ^Layout) -> int {
+	return l.next_block + (l.in_block ? 1 : 0)
 }
 
 // The part that the layout works on.
@@ -181,8 +194,8 @@ last_part :: proc(l: ^Layout) -> ^Part {
 	return &l.parts[len(l.parts) - 1]
 }
 
-// Shows the records in work as the ones of the last part. After each
-// change to them: an array that grows moves.
+// Shows the records in work as the ones of the last part. `step` calls it
+// after each block: an array that grows moves.
 @(private)
 show_work :: proc(l: ^Layout) {
 	part := last_part(l)
@@ -220,7 +233,16 @@ close_part :: proc(l: ^Layout) {
 	part.boxes = take(&memory, &work.boxes)
 	part.tasks = take(&memory, &work.tasks)
 	part.decor = take(&memory, &work.decor)
-	part.closed = true
+}
+
+@(private)
+work_delete :: proc(l: ^Layout) {
+	delete(l.work.paras)
+	delete(l.work.lines)
+	delete(l.work.decor)
+	delete(l.work.boxes)
+	delete(l.work.tasks)
+	l.work = {}
 }
 
 @(private)
@@ -259,11 +281,7 @@ destroy :: proc(l: ^Layout) {
 	}
 	delete(l.fonts)
 	delete(l.parts)
-	delete(l.work.paras)
-	delete(l.work.lines)
-	delete(l.work.decor)
-	delete(l.work.boxes)
-	delete(l.work.tasks)
+	work_delete(l)
 	l^ = {}
 }
 
@@ -582,9 +600,10 @@ step :: proc(l: ^Layout, until_y: f64, budget_ms: f64 = 0) -> bool {
 			open_part(l)
 		}
 		work := &l.work
+		blocks := l.doc.parts[len(l.parts) - 1]
 		// The block in progress has its box already.
 		slot := l.in_block ? len(work.boxes) - 1 : len(work.boxes)
-		b := &l.doc.parts[len(l.parts) - 1].blocks[slot]
+		b := &blocks.blocks[slot]
 		new_lines := len(work.lines)
 		x := l.column_x + f32(b.list_depth) * l.m.list_indent + f32(b.quote_depth) * l.m.quote_indent
 		width := l.column - (x - l.column_x)
@@ -661,13 +680,19 @@ step :: proc(l: ^Layout, until_y: f64, budget_ms: f64 = 0) -> bool {
 		if first, end := trim(l, part, new_lines, len(part.lines)); first < end {
 			note_live(part, first, end)
 		}
-		if finished && len(part.boxes) == l.doc.parts[len(l.parts) - 1].count {
+		if finished && len(part.boxes) == blocks.count {
 			close_part(l)
 		}
 	}
 	l.content_height = reached(l) + f64(l.m.page_pad)
+	if done(l) {
+		// No part is in work any more: a part with one very long block
+		// made these arrays as large as that block.
+		work_delete(l)
+	}
 	when ODIN_DEBUG {
-		assert(check(l) == "", check(l))
+		problem := check(l)
+		assert(problem == "", problem)
 	}
 	return progressed
 }
@@ -677,14 +702,12 @@ step :: proc(l: ^Layout, until_y: f64, budget_ms: f64 = 0) -> bool {
 // The new part starts where the one before it ends.
 @(private)
 open_part :: proc(l: ^Layout) {
-	for len(l.parts) == 0 || last_part(l).closed {
-		top: f64
-		if len(l.parts) > 0 {
-			top = reached(l)
-			l.y = 0
-		}
-		// A part of the document with no block has no records to wait for.
-		append(&l.parts, Part{top = top, closed = l.doc.parts[len(l.parts)].count == 0})
+	if len(l.parts) == 0 {
+		append(&l.parts, Part{})
+	} else if last_part(l).memory != nil {
+		top := reached(l)
+		l.y = 0
+		append(&l.parts, Part{top = top})
 	}
 }
 

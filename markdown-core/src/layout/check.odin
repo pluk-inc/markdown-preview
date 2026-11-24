@@ -7,7 +7,7 @@ import "../text"
 // keeps sums and ranges that it changes in place (the top of a part, the
 // height of a part, the ranges of a box), and a wrong one shows only much
 // later, as text at a wrong place. So the tests ask after each change,
-// and a build with debug information asks after each step.
+// and a build with `-debug` (the tests are one) asks after each step.
 check :: proc(l: ^Layout) -> string {
 	if l.doc == nil {
 		return len(l.parts) == 0 ? "" : "parts with no document"
@@ -61,10 +61,10 @@ check :: proc(l: ^Layout) -> string {
 			y = task.y
 		}
 	}
-	if boxes != l.next_block + (l.in_block ? 1 : 0) {
+	if boxes != box_count(l) {
 		return "the boxes are not the blocks that the layout reached"
 	}
-	if len(l.parts) > 0 && l.y != l.parts[len(l.parts) - 1].height {
+	if len(l.parts) > 0 && l.y != last_part(l).height {
 		return "the layout is not at the bottom of its last part"
 	}
 	if boxes > 0 && l.content_height != reached(l) + f64(l.m.page_pad) {
