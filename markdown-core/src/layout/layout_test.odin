@@ -468,3 +468,24 @@ test_a_place_is_the_same_text_at_another_width :: proc(t: ^testing.T) {
 	_, below := place_at(&wide.page, wide.page.content_height + 100)
 	testing.expect(t, !below)
 }
+
+@(test)
+test_a_place_in_blank_lines_of_code_keeps_its_height :: proc(t: ^testing.T) {
+	// Blank lines of a code block have no line of their own.
+	f: Fixture
+	setup(&f, "```\nA\n\n\n\n\n\n\n\n\n\n\n\n\nB\n```\n", 600)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	box := f.page.boxes[0]
+	testing.expect_value(t, box.line_end - box.line_first, 2)
+	a, b := f.page.lines[box.line_first], f.page.lines[box.line_first + 1]
+	height := f.page.paras[a.para].line_height
+	testing.expect(t, b.top - a.top > 10 * height)
+	// Near the start of the blank run, far above B.
+	y := a.top + 2.5 * height
+	place, ok := place_at(&f.page, y)
+	testing.expect(t, ok)
+	back, back_ok := place_y(&f.page, place)
+	testing.expect(t, back_ok)
+	testing.expect(t, abs(back - y) < 0.01)
+}

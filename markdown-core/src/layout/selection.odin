@@ -40,7 +40,7 @@ selection_range :: proc(s: Selection) -> (from, to: Position, ok: bool) {
 Place :: struct {
 	block:    int, // the block of the line, to find it without a search
 	pos:      Position,
-	fraction: f32, // below 0 for a height above the line (between two blocks)
+	fraction: f32, // below 0 for a height above the line (between two blocks, in blank lines of code)
 }
 
 // The place at a height of the page. False when the page has no text at
@@ -60,7 +60,10 @@ place_at :: proc(l: ^Layout, y: f32) -> (place: Place, ok: bool) {
 			if para.src == nil || line.top + para.line_height <= y {
 				continue
 			}
-			fraction := clamp((y - line.top) / para.line_height, -4, 1)
+			// Not limited above the line: the room above it can be many
+			// lines high (blank lines of a code block have no line of
+			// their own), and all of it is a place.
+			fraction := (y - line.top) / para.line_height
 			return {i, {para.order, para.base + line.line.start}, fraction}, true
 		}
 		// A block with no text (a rule): the next one.
