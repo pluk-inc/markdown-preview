@@ -44,7 +44,7 @@ take_place :: proc(l: ^Layout, y: f64) -> Reader_Place {
 // it had. The offset of the reader's view then shows the same text, with
 // no new offset. With no place, the top of the page stays where it is.
 restore_place :: proc(l: ^Layout, kept: Reader_Place) {
-	if !kept.known || l.doc == nil {
+	if !kept.known {
 		return
 	}
 	lay_out_block(l, kept.place.block)

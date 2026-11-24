@@ -184,6 +184,9 @@ final class NativeRendererView: NSView {
     }
 
     @objc private func pageDidScroll() {
+        // The core takes the reader's place from the last offset that it
+        // heard of, when the layout changes.
+        mdcore_note_scroll(ctx, scrollY)
         // Another place of the page is under the pointer now.
         updatePointerShape()
         updateTaskCheckBoxes()
@@ -297,17 +300,8 @@ final class NativeRendererView: NSView {
     /// Reads the reader settings and the theme again and shows the document
     /// with them. For a change of a setting, the theme, or the appearance.
     func applyStyle() {
-        noteScroll()
         NativeRendererStyle(appearance: effectiveAppearance, zoom: textZoom).apply(to: ctx)
         relayout(force: true)
-    }
-
-    /// Tells the core where the view is, before a change to what the
-    /// layout is made from. The core takes the reader's place from a
-    /// frame, and the last frame can be of an offset before the last
-    /// scroll.
-    private func noteScroll() {
-        if hasPageToDraw { mdcore_note_scroll(ctx, scrollY) }
     }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -473,7 +467,6 @@ final class NativeRendererView: NSView {
             return
         }
         shownMarkdown = markdown
-        noteScroll()
         var text = markdown
         text.withUTF8 { utf8 in
             utf8.withMemoryRebound(to: CChar.self) { mdcore_set_markdown(ctx, $0.baseAddress, $0.count) }
@@ -515,8 +508,6 @@ final class NativeRendererView: NSView {
         let viewHeight = scrollView.contentView.bounds.height
         // The new size, then its frame.
         drawNow { [ctx] in
-            // Before the new layout: the place of the offset of now.
-            mdcore_note_scroll(ctx, offset)
             mdcore_set_page_width(ctx, pageWidth)
             mdcore_resize(ctx, size.width, size.height, scale)
             // Not past an end of the new page, where the scroll view
@@ -533,6 +524,8 @@ final class NativeRendererView: NSView {
     /// at; the scroll view then goes there too.
     private func drawNow(before: (() -> Double?)? = nil) {
         guard hasPageToDraw else { return }
+        // Also for a view that never scrolled.
+        mdcore_note_scroll(ctx, scrollY)
         let drawn = renderLoop.frameNow(at: scrollY, before: before)
         // Also takes the check boxes again, when the layout is a new one.
         updatePageArea()

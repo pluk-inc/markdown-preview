@@ -938,7 +938,8 @@ lay_out_end :: proc(l: ^Layout, height, anchor_y: f64) -> (changed: bool) {
 	return
 }
 
-// Lays out a part down to one block, which a place is in (`place_y`).
+// Lays out a part down to one block, which a place is in
+// (`restore_place`).
 // That part is the anchor: it is where the view goes.
 lay_out_block :: proc(l: ^Layout, block: int) -> bool {
 	if l.doc == nil || block < 0 || block >= l.doc.count {

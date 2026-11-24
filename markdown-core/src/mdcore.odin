@@ -75,11 +75,17 @@ Ctx :: struct {
 	// The strip at the top of the view that the host covers (a toolbar):
 	// the reader sees the page from the scroll position plus this.
 	top_inset:       f64,
-	// The place of the reader, from the last frame, and the scroll
-	// position of that frame. A new layout puts the place at the height
-	// it had, so the scroll position of the host shows the same text.
+	// The place of the reader: the first line that their view shows. A
+	// new layout puts it at the height it had, so the scroll position of
+	// the host shows the same text. The host says its scroll position
+	// when it changes (`mdcore_note_scroll`, with no wait for the state),
+	// and each call that changes the layout takes the place first, from
+	// the layout before the change (`take_place`). Not a frame: a new
+	// layout put the place where it was, and to take it again from each
+	// step of a live resize moves it by a little each time.
 	place:           layout.Reader_Place,
-	place_scroll:    f64,
+	host_scroll:     u64, // the bits of the scroll position; read and written with no lock
+	place_stale:     bool, // the host scrolled since the place was taken; with no lock too
 	layout_valid:    bool,
 	revision:        int, // goes up when the layout gave a place or a height to something
 	// The display list: the quads of the page between shown_y0 and shown_y1.
@@ -187,7 +193,6 @@ mdcore_create :: proc "c" (surface: rawptr) -> rawptr {
 	runtime.default_temp_allocator_init(&ctx.scratch, 64 * 1024, context.allocator)
 	ctx.temp = runtime.default_temp_allocator(&ctx.scratch)
 	ctx.scale = 2
-	ctx.place_scroll = math.nan_f64()
 	ctx.style = default_style()
 	renderer.init(&ctx.gpu, surface)
 	return ctx
@@ -252,7 +257,8 @@ mdcore_set_style :: proc "c" (handle: rawptr, style: ^base.Style) {
 	}
 	fresh.bold_font = text.font_retain(fresh.bold_font != nil ? fresh.bold_font : fresh.body_font)
 	fresh.heading_font = text.font_retain(fresh.heading_font != nil ? fresh.heading_font : fresh.bold_font)
-	// The layout holds fonts of the old style.
+	// The layout holds fonts of the old style. It still knows the place.
+	take_place(ctx)
 	layout.begin(&ctx.page, nil, fresh, 0)
 	style_release(&ctx.style)
 	ctx.style = fresh
@@ -275,7 +281,7 @@ mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	// of the page stays where it is: a host that keeps the reader's offset
 	// (the same file with a change) is as far below it as before.
 	ctx.place = {}
-	ctx.place_scroll = math.nan_f64() // the next frame takes the place
+	sync.atomic_store(&ctx.place_stale, true)
 	ctx.scroll = ctx.page.origin
 	ctx.layout_valid = false
 }
@@ -309,6 +315,7 @@ mdcore_resize :: proc "c" (handle: rawptr, width, height, scale: f64) {
 	ctx.width = f32(width)
 	page_width := layout.page_width(ctx.width, ctx.page_width)
 	if !ctx.layout_valid || page_width != ctx.layout_width {
+		take_place(ctx)
 		ctx.layout_width = page_width
 		layout.begin(&ctx.page, &ctx.doc, ctx.style, page_width)
 		// The text that the reader was at keeps its height on the page.
@@ -386,36 +393,34 @@ scroll_to :: proc(ctx: ^Ctx, scroll_y, anchor_y: f64) {
 	   layout.lay_out(&ctx.page, ctx.scroll - LAID_ABOVE * height, ctx.scroll + LAID_BELOW * height, anchor_y) {
 		layout_changed(ctx)
 	}
-	// The place of the reader, after a scroll. Not after a new layout
-	// alone: that one put the place where it was, and to take it again
-	// from each of the steps of a live resize moves it by a little each
-	// time.
-	if scroll_y != ctx.place_scroll {
-		ctx.place = layout.take_place(&ctx.page, scroll_y + ctx.top_inset)
-		ctx.place_scroll = scroll_y
-	}
 }
 
-// See the header.
-@(export)
-mdcore_note_scroll :: proc "c" (handle: rawptr, scroll_y: f64) {
-	context = runtime.default_context()
-	ctx := cast(^Ctx)handle
-	context.temp_allocator = ctx.temp
-	hold(ctx)
-	// Nothing to do for the position of the last frame: that is the
-	// usual case, and each step of a live resize.
-	if !ctx.layout_valid || scroll_y == ctx.place_scroll {
+// Takes the reader's place from the layout that is there, when the host
+// scrolled since it was taken. Each call that ends or changes the layout
+// calls this first.
+@(private)
+take_place :: proc(ctx: ^Ctx) {
+	if !ctx.layout_valid || !sync.atomic_load(&ctx.place_stale) {
 		return
 	}
-	// Only the line of the place needs its records, not all that a frame
-	// shows: the layout is at its end.
-	at := scroll_y + ctx.top_inset
+	sync.atomic_store(&ctx.place_stale, false)
+	// Only the line of the place needs its records.
+	at := transmute(f64)sync.atomic_load(&ctx.host_scroll) + ctx.top_inset
 	if layout.lay_out(&ctx.page, at, at + 1, at) {
 		layout_changed(ctx)
 	}
 	ctx.place = layout.take_place(&ctx.page, at)
-	ctx.place_scroll = scroll_y
+}
+
+// See the header. No wait for the state of the view: the host calls this
+// for each step of a scroll.
+@(export)
+mdcore_note_scroll :: proc "c" (handle: rawptr, scroll_y: f64) {
+	ctx := cast(^Ctx)handle
+	bits := transmute(u64)scroll_y
+	if sync.atomic_exchange(&ctx.host_scroll, bits) != bits {
+		sync.atomic_store(&ctx.place_stale, true)
+	}
 }
 
 // `anchor_y`: the height of the page whose text stays where it is when
@@ -482,13 +487,16 @@ mdcore_set_task_checked :: proc "c" (handle: rawptr, line: c.long, checked: bool
 // See the header.
 @(export)
 mdcore_set_top_inset :: proc "c" (handle: rawptr, inset: f64) {
+	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
-	sync.lock(&ctx.lock)
-	defer sync.unlock(&ctx.lock)
+	context.temp_allocator = ctx.temp
+	hold(ctx)
 	if inset != ctx.top_inset {
+		// The place was of the line below the strip before.
+		take_place(ctx)
 		ctx.top_inset = inset
-		// Another line is the first one now: the next frame takes it.
-		ctx.place_scroll = math.nan_f64()
+		// Another line is the first one now.
+		sync.atomic_store(&ctx.place_stale, true)
 	}
 }
 

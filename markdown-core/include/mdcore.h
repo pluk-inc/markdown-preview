@@ -144,20 +144,19 @@ bool mdcore_set_task_checked(void *ctx, long line, bool checked);
 // The core keeps the reader's place: the first line of text that the view
 // shows. A new layout of the same document (another width, another style)
 // puts that line at the height of the page that it had, so the host draws
-// at the scroll position that it has and sees the same text. The place is
-// taken from a frame after each scroll. At the top of the page there is
-// none, and the top stays the top.
+// at the scroll position that it has and sees the same text. At the top of
+// the page there is no place, and the top stays the top.
 //
 // The height of the strip at the top of the view that the host covers (a
 // toolbar that the page scrolls under). The first line that shows is the
 // one below it. 0 when nothing covers the view.
 void mdcore_set_top_inset(void *ctx, double inset);
 
-// The scroll position of the view now. A frame says it too, but a frame
-// can be one refresh behind: a host calls this before it changes what
-// the layout is made from (mdcore_resize with a new width, mdcore_set_style,
-// mdcore_set_markdown), so the place that is kept is the one of the text
-// that the reader sees at that moment.
+// The scroll position of the view. The host calls this each time the
+// position changes, and before the first frame; it never waits. The core
+// takes the place from the last position in each call that changes the
+// layout (mdcore_resize with a new width, mdcore_set_style,
+// mdcore_set_markdown), so the host has nothing to do there.
 void mdcore_note_scroll(void *ctx, double scroll_y);
 
 // The shape that the pointer has over a point in document space. The core

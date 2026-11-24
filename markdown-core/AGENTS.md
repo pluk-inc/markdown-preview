@@ -115,14 +115,16 @@ These came from the maintainer. Do not undo one without asking.
   for a part above it. Do not lay out from the first block down to reach
   something, and do not read a height of the page as if it started at 0.
 - The core keeps the reader's place: the first line that the view shows
-  below the strip that the host covers (`mdcore_set_top_inset`). A frame
-  takes it after a scroll, and a new layout of the same document puts it
-  at the height of the page that it had (`restore_place`). So a host
-  draws at the scroll offset that it has after a new width or style, and
-  carries no place. The place is not taken again after a new layout
-  alone: the steps of a live resize would add up. A frame can be one
-  refresh behind the scroll view, so a host says its offset before it
-  changes the width, the style, or the text (`mdcore_note_scroll`).
+  below the strip that the host covers (`mdcore_set_top_inset`). The host
+  says its scroll offset each time it changes (`mdcore_note_scroll`,
+  which never waits). Each core call that ends or changes the layout
+  takes the place first, from the layout that is still there
+  (`take_place` in `mdcore.odin`), and a new layout of the same document
+  puts it at the height of the page that it had (`restore_place`). So a
+  host draws at the offset that it has after a new width or style, and
+  carries no place. A new call that changes the layout calls
+  `take_place` first; the host needs no new call for it. A frame does
+  not take the place: the steps of a live resize would add up.
 - A host gives its scroll area the top and the height of the page
   (`mdcore_page_area`), and takes the two again when
   `mdcore_layout_revision` changed. A scroll to the top or to the end of
