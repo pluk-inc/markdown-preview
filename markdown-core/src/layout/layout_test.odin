@@ -3,6 +3,8 @@ package layout
 import "../base"
 import "../document"
 import "../text"
+import "core:fmt"
+import "core:math"
 import "core:strings"
 import "core:testing"
 
@@ -40,6 +42,14 @@ teardown :: proc(f: ^Fixture) {
 	}
 }
 
+// The records of a document that has one part: its tops count from the
+// top of the page.
+@(private = "file")
+only :: proc(l: ^Layout) -> ^Part {
+	assert(len(l.parts) == 1)
+	return &l.parts[0]
+}
+
 @(test)
 test_boxes_go_down_the_page :: proc(t: ^testing.T) {
 	f: Fixture
@@ -47,14 +57,14 @@ test_boxes_go_down_the_page :: proc(t: ^testing.T) {
 	defer teardown(&f)
 	step(&f.page, 1e30)
 	testing.expect(t, done(&f.page))
-	testing.expect_value(t, len(f.page.boxes), len(f.doc.blocks))
+	testing.expect_value(t, len(only(&f.page).boxes), f.doc.count)
 	bottom: f32
-	for box in f.page.boxes {
+	for box in only(&f.page).boxes {
 		testing.expect(t, box.top >= bottom)
 		testing.expect(t, box.bottom > box.top)
 		bottom = box.bottom
 	}
-	testing.expect(t, f.page.content_height > bottom)
+	testing.expect(t, f.page.content_height > f64(bottom))
 }
 
 @(test)
@@ -65,10 +75,10 @@ test_steps_give_the_same_layout :: proc(t: ^testing.T) {
 	setup(&parts, SOURCE, 600)
 	defer teardown(&parts)
 	step(&whole.page, 1e30)
-	for until: f32 = 40; !done(&parts.page); until += 40 {
+	for until: f64 = 40; !done(&parts.page); until += 40 {
 		step(&parts.page, until)
 	}
-	testing.expect_value(t, len(parts.page.lines), len(whole.page.lines))
+	testing.expect_value(t, len(only(&parts.page).lines), len(only(&whole.page).lines))
 	testing.expect_value(t, parts.page.content_height, whole.page.content_height)
 }
 
@@ -81,7 +91,7 @@ test_narrow_page_has_more_lines :: proc(t: ^testing.T) {
 	defer teardown(&narrow)
 	step(&wide.page, 1e30)
 	step(&narrow.page, 1e30)
-	testing.expect(t, len(narrow.page.lines) > len(wide.page.lines))
+	testing.expect(t, len(only(&narrow.page).lines) > len(only(&wide.page).lines))
 }
 
 @(test)
@@ -105,9 +115,9 @@ test_hit_test_finds_the_line :: proc(t: ^testing.T) {
 	step(&f.page, 1e30)
 	// A point in the last line gives a position in the last paragraph, on a
 	// character boundary of its UTF-8 text.
-	last := f.page.lines[len(f.page.lines) - 1]
-	para := &f.page.paras[last.para]
-	pos, ok := hit_test(&f.page, last.x + last.line.width - 1, last.top + 2)
+	last := only(&f.page).lines[len(only(&f.page).lines) - 1]
+	para := &only(&f.page).paras[last.para]
+	pos, ok := hit_test(&f.page, last.x + last.line.width - 1, f64(last.top + 2))
 	testing.expect(t, ok)
 	testing.expect_value(t, pos.order, para.order)
 	testing.expect(t, pos.index > 0 && pos.index <= len(para.src.bytes))
@@ -122,7 +132,7 @@ test_hit_test_looks_past_blocks_without_text :: proc(t: ^testing.T) {
 	setup(&f, "***\n\n***\n\ntext\n", 600)
 	defer teardown(&f)
 	step(&f.page, 1e30)
-	_, ok := hit_test(&f.page, 100, f.page.boxes[0].top)
+	_, ok := hit_test(&f.page, 100, f64(only(&f.page).boxes[0].top))
 	testing.expect(t, ok)
 }
 
@@ -133,7 +143,7 @@ test_marker_of_an_item_that_starts_with_code :: proc(t: ^testing.T) {
 	defer teardown(&f)
 	step(&f.page, 1e30)
 	markers := 0
-	for para in f.page.paras {
+	for para in only(&f.page).paras {
 		if para.src == nil {
 			markers += 1
 		}
@@ -161,7 +171,7 @@ test_display_makes_quads_only_for_the_range :: proc(t: ^testing.T) {
 	testing.expect(t, len(rects) > 0)
 	clear(&rects)
 	clear(&glyphs)
-	display(&f.page, &cache, 0, f.page.boxes[0].bottom, 0, &rects, &glyphs, &scratch)
+	display(&f.page, &cache, 0, f64(only(&f.page).boxes[0].bottom), 0, &rects, &glyphs, &scratch)
 	testing.expect(t, len(glyphs) > 0 && len(glyphs) < all)
 	clear(&glyphs)
 	display(&f.page, &cache, f.page.content_height + 10, f.page.content_height + 500, 0, &rects, &glyphs, &scratch)
@@ -170,8 +180,10 @@ test_display_makes_quads_only_for_the_range :: proc(t: ^testing.T) {
 
 @(private = "file")
 shaped_lines :: proc(l: ^Layout) -> (count: int) {
-	for line in l.lines {
-		count += text.line_shaped(line.line) ? 1 : 0
+	for part in l.parts {
+		for line in part.lines {
+			count += text.line_shaped(line.line) ? 1 : 0
+		}
 	}
 	return
 }
@@ -183,13 +195,13 @@ test_only_the_window_keeps_shaped_text :: proc(t: ^testing.T) {
 	defer teardown(&f)
 	// A window on the first block only; the steps release the rest.
 	keep(&f.page, 0, 30)
-	for until: f32 = 40; !done(&f.page); until += 40 {
+	for until: f64 = 40; !done(&f.page); until += 40 {
 		step(&f.page, until)
 	}
-	first := f.page.boxes[0]
+	first := only(&f.page).boxes[0]
 	testing.expect_value(t, shaped_lines(&f.page), first.line_end - first.line_first)
-	for para in f.page.paras {
-		inside := para.src == &f.doc.blocks[0].text
+	for para in only(&f.page).paras {
+		inside := para.src == &document.block_at(&f.doc, 0).text
 		testing.expect_value(t, para.handle != nil, inside)
 	}
 	// The copied text needs no shaped text.
@@ -198,15 +210,15 @@ test_only_the_window_keeps_shaped_text :: proc(t: ^testing.T) {
 	selection_text(&f.page, select_all(&f.page), &out)
 	testing.expect(t, len(out) > 100)
 	// A point in a released line shapes that line.
-	last := f.page.lines[len(f.page.lines) - 1]
-	pos, ok := hit_test(&f.page, last.x + 20, last.top + 2)
+	last := only(&f.page).lines[len(only(&f.page).lines) - 1]
+	pos, ok := hit_test(&f.page, last.x + 20, f64(last.top + 2))
 	testing.expect(t, ok)
 	testing.expect(t, pos.index > 0)
-	testing.expect(t, text.line_shaped(f.page.lines[len(f.page.lines) - 1].line))
+	testing.expect(t, text.line_shaped(only(&f.page).lines[len(only(&f.page).lines) - 1].line))
 	// The window moves away: all of it is released.
 	keep(&f.page, -20, -10)
 	testing.expect_value(t, shaped_lines(&f.page), 0)
-	for para in f.page.paras {
+	for para in only(&f.page).paras {
 		testing.expect(t, para.handle == nil)
 	}
 }
@@ -218,10 +230,10 @@ test_a_long_code_block_is_released_line_by_line :: proc(t: ^testing.T) {
 	defer teardown(&f)
 	step(&f.page, 1e30)
 	testing.expect_value(t, shaped_lines(&f.page), 8)
-	third := f.page.lines[2]
-	keep(&f.page, third.top + 1, third.top + 2)
+	third := only(&f.page).lines[2]
+	keep(&f.page, f64(third.top + 1), f64(third.top + 2))
 	testing.expect_value(t, shaped_lines(&f.page), 1)
-	testing.expect(t, text.line_shaped(f.page.lines[2].line))
+	testing.expect(t, text.line_shaped(only(&f.page).lines[2].line))
 }
 
 @(test)
@@ -261,25 +273,29 @@ test_a_task_keeps_a_place_for_its_check_box :: proc(t: ^testing.T) {
 	defer teardown(&f)
 	step(&f.page, 1e30)
 	// The plain item has none.
-	testing.expect_value(t, len(f.page.tasks), 3)
-	one, two := f.page.tasks[0], f.page.tasks[1]
+	testing.expect_value(t, len(only(&f.page).tasks), 3)
+	one, two := only(&f.page).tasks[0], only(&f.page).tasks[1]
 	// A task knows its block, which has its line and its state.
 	testing.expect_value(t, one.block, 0)
 	testing.expect_value(t, two.block, 1)
-	testing.expect_value(t, f.page.tasks[2].block, 3)
+	testing.expect_value(t, only(&f.page).tasks[2].block, 3)
 	testing.expect(t, two.y > one.y)
 	// The box stands left of the text of its item, and the layout draws
 	// nothing in its place.
-	first := f.page.lines[f.page.boxes[0].line_first]
+	first := only(&f.page).lines[only(&f.page).boxes[0].line_first]
 	size := task_box_size(f.page.m)
 	testing.expect(t, one.x + size < first.x)
-	testing.expect_value(t, len(f.page.decor), 0)
+	testing.expect_value(t, len(only(&f.page).decor), 0)
 	// Only the box that a range touches.
-	part := tasks_between(&f.page, two.y + 1, two.y + size - 1)
-	testing.expect_value(t, len(part), 1)
-	testing.expect_value(t, part[0].block, 1)
-	testing.expect_value(t, len(tasks_between(&f.page, 0, 1e30)), 3)
-	testing.expect_value(t, len(tasks_between(&f.page, f.page.tasks[2].y + size, 1e30)), 0)
+	found: [4]Task_Place
+	testing.expect_value(t, tasks_between(&f.page, f64(two.y + 1), f64(two.y + size - 1), found[:]), 1)
+	testing.expect(t, found[0].block == document.block_at(&f.doc, 1))
+	// On a whole point of the page, for the control of the host.
+	testing.expect_value(t, found[0].y, math.round(f64(two.y)))
+	testing.expect_value(t, tasks_between(&f.page, 0, 1e30, found[:]), 3)
+	testing.expect_value(t, tasks_between(&f.page, math.round(f64(only(&f.page).tasks[2].y)) + f64(size), 1e30, found[:]), 0)
+	// All of them are counted when the caller has room for fewer.
+	testing.expect_value(t, tasks_between(&f.page, 0, 1e30, found[:1]), 3)
 }
 
 @(test)
@@ -341,8 +357,8 @@ test_the_page_width_is_the_wanted_part_of_the_view :: proc(t: ^testing.T) {
 	defer teardown(&narrow)
 	step(&wide.page, 1e30)
 	step(&narrow.page, 1e30)
-	testing.expect(t, len(narrow.page.lines) > len(wide.page.lines))
-	for line in narrow.page.lines {
+	testing.expect(t, len(only(&narrow.page).lines) > len(only(&wide.page).lines))
+	for line in only(&narrow.page).lines {
 		testing.expect(t, line.x + line.line.width <= 300)
 	}
 }
@@ -353,10 +369,10 @@ test_only_a_line_of_text_is_text_for_the_pointer :: proc(t: ^testing.T) {
 	setup(&f, "First paragraph.\n\n- [ ] a task\n\nLast paragraph.\n", 600)
 	defer teardown(&f)
 	step(&f.page, 1e30)
-	first := f.page.lines[f.page.boxes[0].line_first]
-	item := f.page.lines[f.page.boxes[1].line_first]
-	mid :: proc(l: ^Layout, line: Line) -> f32 {
-		return line.top + l.paras[line.para].line_height / 2
+	first := only(&f.page).lines[only(&f.page).boxes[0].line_first]
+	item := only(&f.page).lines[only(&f.page).boxes[1].line_first]
+	mid :: proc(l: ^Layout, line: Line) -> f64 {
+		return f64(line.top + only(l).paras[line.para].line_height / 2)
 	}
 	// On the text, and right of its end on the same line.
 	testing.expect(t, text_at(&f.page, first.x + 5, mid(&f.page, first)))
@@ -366,11 +382,11 @@ test_only_a_line_of_text_is_text_for_the_pointer :: proc(t: ^testing.T) {
 	testing.expect(t, !text_at(&f.page, f.page.column_x + f.page.column + 5, mid(&f.page, first)))
 	// Not in the margin left of it, and not between two blocks.
 	testing.expect(t, !text_at(&f.page, first.x - 5, mid(&f.page, first)))
-	gap := (f.page.boxes[0].bottom + f.page.boxes[1].top) / 2
-	testing.expect(t, f.page.boxes[1].top > f.page.boxes[0].bottom)
+	gap := f64(only(&f.page).boxes[0].bottom + only(&f.page).boxes[1].top) / 2
+	testing.expect(t, only(&f.page).boxes[1].top > only(&f.page).boxes[0].bottom)
 	testing.expect(t, !text_at(&f.page, first.x + 5, gap))
 	// Not at the check box of the task, which is left of its text.
-	box := f.page.tasks[0]
+	box := only(&f.page).tasks[0]
 	testing.expect(t, !text_at(&f.page, box.x + 2, mid(&f.page, item)))
 	testing.expect(t, text_at(&f.page, item.x + 2, mid(&f.page, item)))
 	// In a code block of many lines, and in a table: the same answers as
@@ -380,10 +396,10 @@ test_only_a_line_of_text_is_text_for_the_pointer :: proc(t: ^testing.T) {
 		setup(&g, "```\none\ntwo\nthree\nfour\nfive\n```\n\n| a | b |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n\n- item\n", 600)
 		defer teardown(&g)
 		step(&g.page, 1e30)
-		for box in g.page.boxes {
-			for line in g.page.lines[box.line_first:box.line_end] {
-				para := &g.page.paras[line.para]
-				at := line.top + para.line_height / 2
+		for box in only(&g.page).boxes {
+			for line in only(&g.page).lines[box.line_first:box.line_end] {
+				para := &only(&g.page).paras[line.para]
+				at := f64(line.top + para.line_height / 2)
 				testing.expect_value(t, text_at(&g.page, line.x + 1, at), para.src != nil)
 				testing.expect(t, !text_at(&g.page, 2, at))
 			}
@@ -397,15 +413,15 @@ test_only_a_line_of_text_is_text_for_the_pointer :: proc(t: ^testing.T) {
 		defer teardown(&g)
 		step(&g.page, 1e30)
 		texts, marker_lines := 0, 0
-		for box in g.page.boxes {
-			for line in g.page.lines[box.line_first:box.line_end] {
-				para := &g.page.paras[line.para]
+		for box in only(&g.page).boxes {
+			for line in only(&g.page).lines[box.line_first:box.line_end] {
+				para := &only(&g.page).paras[line.para]
 				if para.src == nil {
 					marker_lines += 1
 					continue
 				}
 				texts += 1
-				testing.expect(t, text_at(&g.page, line.x + 1, line.top + para.line_height / 2))
+				testing.expect(t, text_at(&g.page, line.x + 1, f64(line.top + para.line_height / 2)))
 			}
 		}
 		testing.expect(t, texts >= 1)
@@ -430,18 +446,18 @@ test_a_place_is_the_same_text_at_another_width :: proc(t: ^testing.T) {
 	defer teardown(&narrow)
 	step(&wide.page, 1e30)
 	// Not in a layout that did not reach the block yet.
-	_, early := place_y(&narrow.page, Place{block = len(wide.page.boxes) - 1})
+	_, early := place_y(&narrow.page, Place{block = len(only(&wide.page).boxes) - 1})
 	testing.expect(t, !early)
-	for line in wide.page.lines {
-		para := &wide.page.paras[line.para]
+	for line in only(&wide.page).lines {
+		para := &only(&wide.page).paras[line.para]
 		if para.src == nil {
 			continue
 		}
 		// A height in the line: the place is that line.
-		y := line.top + para.line_height * 0.25
+		y := f64(line.top + para.line_height * 0.25)
 		place, ok := place_at(&wide.page, y)
 		testing.expect(t, ok)
-		if wide.page.doc.blocks[place.block].kind != .Table {
+		if document.block_at(&wide.doc, place.block).kind != .Table {
 			testing.expect_value(t, place.byte, para.base + line.line.start)
 			testing.expect(t, place_text(&wide.page, place.block, place.cell) == para.src)
 		} else {
@@ -463,7 +479,7 @@ test_a_place_is_the_same_text_at_another_width :: proc(t: ^testing.T) {
 		testing.expect(t, again.byte <= place.byte)
 	}
 	// Between two blocks: the next line, from above it. Below the page: none.
-	gap := (wide.page.boxes[0].bottom + wide.page.boxes[1].top) / 2
+	gap := f64(only(&wide.page).boxes[0].bottom + only(&wide.page).boxes[1].top) / 2
 	between, _ := place_at(&wide.page, gap)
 	testing.expect_value(t, between.block, 1)
 	testing.expect(t, between.fraction < 0)
@@ -478,13 +494,13 @@ test_a_place_in_blank_lines_of_code_keeps_its_height :: proc(t: ^testing.T) {
 	setup(&f, "```\nA\n\n\n\n\n\n\n\n\n\n\n\n\nB\n```\n", 600)
 	defer teardown(&f)
 	step(&f.page, 1e30)
-	box := f.page.boxes[0]
+	box := only(&f.page).boxes[0]
 	testing.expect_value(t, box.line_end - box.line_first, 2)
-	a, b := f.page.lines[box.line_first], f.page.lines[box.line_first + 1]
-	height := f.page.paras[a.para].line_height
+	a, b := only(&f.page).lines[box.line_first], only(&f.page).lines[box.line_first + 1]
+	height := only(&f.page).paras[a.para].line_height
 	testing.expect(t, b.top - a.top > 10 * height)
 	// Near the start of the blank run, far above B.
-	y := a.top + 2.5 * height
+	y := f64(a.top + 2.5 * height)
 	place, ok := place_at(&f.page, y)
 	testing.expect(t, ok)
 	back, back_ok := place_y(&f.page, place)
@@ -505,13 +521,277 @@ test_a_place_is_the_same_text_when_a_block_before_it_got_a_line :: proc(t: ^test
 	step(&before.page, 1e30)
 	step(&after.page, 1e30)
 	// The last line of the paragraph.
-	last := before.page.lines[len(before.page.lines) - 1]
-	height := before.page.paras[last.para].line_height
-	place, ok := place_at(&before.page, last.top + height / 2)
+	last := only(&before.page).lines[len(only(&before.page).lines) - 1]
+	height := only(&before.page).paras[last.para].line_height
+	place, ok := place_at(&before.page, f64(last.top + height / 2))
 	testing.expect(t, ok)
 	testing.expect_value(t, place.block, 1)
 	there, there_ok := place_y(&after.page, place)
 	testing.expect(t, there_ok)
-	same := after.page.lines[len(after.page.lines) - 1]
-	testing.expect(t, abs(there - (same.top + height / 2)) < 0.01)
+	same := only(&after.page).lines[len(only(&after.page).lines) - 1]
+	testing.expect(t, abs(there - f64(same.top + height / 2)) < 0.01)
+}
+
+// A document of more parts than one: paragraphs that wrap, some headings,
+// tasks, a table, and a code block, many times.
+@(private = "file")
+long_source :: proc(sections: int) -> string {
+	b := strings.builder_make()
+	for i in 0 ..< sections {
+		fmt.sbprintf(&b, "## Section %d\n\n", i)
+		fmt.sbprintf(&b, "Paragraph %d with enough words in it to go over the end of a line in a narrow page, and `code`.\n\n", i)
+		fmt.sbprintf(&b, "- [ ] open task %d\n- [x] done task %d\n- plain %d\n\n", i, i, i)
+		fmt.sbprintf(&b, "| a%d | b |\n| - | - |\n| 1 | 2 |\n\n", i)
+		fmt.sbprintf(&b, "```\ncode %d\n\nmore\n```\n\n", i)
+	}
+	return strings.to_string(b)
+}
+
+// Blocks for each section of `long_source`.
+@(private = "file")
+SECTION_BLOCKS :: 7
+
+@(private = "file")
+expect_ok :: proc(t: ^testing.T, l: ^Layout, loc := #caller_location) {
+	testing.expect_value(t, check(l), "", loc)
+}
+
+@(test)
+test_a_long_document_has_its_records_in_parts :: proc(t: ^testing.T) {
+	source := long_source(40)
+	defer delete(source)
+	f: Fixture
+	setup(&f, source, 500)
+	defer teardown(&f)
+	testing.expect_value(t, f.doc.count, 40 * SECTION_BLOCKS)
+	step(&f.page, 1e30)
+	expect_ok(t, &f.page)
+	// A part of the layout for each part of the document, with a box for
+	// each of its blocks, and each part starts where the one before ends.
+	testing.expect_value(t, len(f.page.parts), len(f.doc.parts))
+	testing.expect(t, len(f.page.parts) >= 4)
+	for part, p in f.page.parts {
+		testing.expect_value(t, len(part.boxes), f.doc.parts[p].count)
+		testing.expect(t, part.height > 0)
+		if p > 0 {
+			before := f.page.parts[p - 1]
+			testing.expect_value(t, part.top, before.top + f64(before.height))
+		}
+	}
+	last := f.page.parts[len(f.page.parts) - 1]
+	testing.expect_value(t, f.page.content_height, last.top + f64(last.height) + f64(f.page.m.page_pad))
+}
+
+@(test)
+test_small_steps_give_the_same_parts :: proc(t: ^testing.T) {
+	source := long_source(30)
+	defer delete(source)
+	whole, stepped: Fixture
+	setup(&whole, source, 500)
+	defer teardown(&whole)
+	setup(&stepped, source, 500)
+	defer teardown(&stepped)
+	step(&whole.page, 1e30)
+	// Steps that end in the middle of parts, and of code blocks.
+	for until: f64 = 25; !done(&stepped.page); until += 25 {
+		step(&stepped.page, until, 0.01)
+		expect_ok(t, &stepped.page)
+	}
+	testing.expect_value(t, stepped.page.content_height, whole.page.content_height)
+	testing.expect_value(t, len(stepped.page.parts), len(whole.page.parts))
+	for part, p in whole.page.parts {
+		other := stepped.page.parts[p]
+		testing.expect_value(t, other.top, part.top)
+		testing.expect_value(t, other.height, part.height)
+		testing.expect_value(t, len(other.lines), len(part.lines))
+		testing.expect_value(t, len(other.decor), len(part.decor))
+		testing.expect_value(t, len(other.tasks), len(part.tasks))
+		for box, i in part.boxes {
+			testing.expect_value(t, other.boxes[i], box)
+		}
+		for line, i in part.lines {
+			testing.expect_value(t, other.lines[i].top, line.top)
+			testing.expect_value(t, other.lines[i].x, line.x)
+		}
+	}
+}
+
+@(test)
+test_a_place_in_a_later_part_has_the_number_of_its_block :: proc(t: ^testing.T) {
+	source := long_source(40)
+	defer delete(source)
+	wide, narrow: Fixture
+	setup(&wide, source, 800)
+	defer teardown(&wide)
+	setup(&narrow, source, 300)
+	defer teardown(&narrow)
+	step(&wide.page, 1e30)
+	for &part, p in wide.page.parts {
+		for box, i in part.boxes {
+			block := wide.doc.starts[p] + i
+			b := document.block_at(&wide.doc, block)
+			if b.kind == .Table {
+				continue
+			}
+			// The first line of the text of the block.
+			line := part.lines[text_first(&part, box)]
+			para := &part.paras[line.para]
+			y := part.top + f64(line.top + para.line_height / 2)
+			place, ok := place_at(&wide.page, y)
+			testing.expect(t, ok)
+			testing.expect_value(t, place.block, block)
+			back, back_ok := place_y(&wide.page, place)
+			testing.expect(t, back_ok)
+			testing.expect(t, abs(back - y) < 0.01)
+			testing.expect(t, text_at(&wide.page, line.x + 1, y))
+			// The caret there is in the paragraph of that line.
+			pos, hit := hit_test(&wide.page, line.x + 1, y)
+			testing.expect(t, hit)
+			testing.expect_value(t, pos.order, para.order)
+		}
+	}
+	// The narrow layout is laid out only down to the place, in a later
+	// part, and has the same text there.
+	block := 3 * document.PART_BLOCKS + 1
+	_, early := place_y(&narrow.page, Place{block = block})
+	testing.expect(t, !early)
+	step_to_block(&narrow.page, block)
+	expect_ok(t, &narrow.page)
+	y, ok := place_y(&narrow.page, Place{block = block})
+	testing.expect(t, ok)
+	again, again_ok := place_at(&narrow.page, y)
+	testing.expect(t, again_ok)
+	testing.expect_value(t, again.block, block)
+	testing.expect(t, !done(&narrow.page))
+}
+
+@(test)
+test_the_tasks_of_all_parts_go_down_the_page :: proc(t: ^testing.T) {
+	SECTIONS :: 40
+	source := long_source(SECTIONS)
+	defer delete(source)
+	f: Fixture
+	setup(&f, source, 500)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	found := make([]Task_Place, 2 * SECTIONS + 8)
+	defer delete(found)
+	testing.expect_value(t, tasks_between(&f.page, 0, 1e30, found), 2 * SECTIONS)
+	size := f64(task_box_size(f.page.m))
+	for task, i in found[:2 * SECTIONS] {
+		// Open and done in turn, as the source has them.
+		testing.expect_value(t, task.block.marker, i % 2 == 0 ? document.Marker.Task_Open : document.Marker.Task_Done)
+		testing.expect_value(t, task.y, math.round(task.y))
+		if i > 0 {
+			testing.expect(t, task.y > found[i - 1].y)
+		}
+		// A range that has only this box gives only it, in each part.
+		one: [2]Task_Place
+		testing.expect_value(t, tasks_between(&f.page, task.y + 1, task.y + size - 1, one[:]), 1)
+		testing.expect(t, one[0].block == task.block)
+	}
+	// A range over the border of two parts has the tasks of the two: from
+	// the last task above the border to the first one below it.
+	border := f.page.parts[1].top
+	above := 0
+	for found[above + 1].y < border {
+		above += 1
+	}
+	two: [4]Task_Place
+	testing.expect_value(t, tasks_between(&f.page, found[above].y, found[above + 1].y + size, two[:]), 2)
+	testing.expect(t, two[0].block == found[above].block && two[1].block == found[above + 1].block)
+}
+
+@(test)
+test_the_text_of_all_parts_is_copied_in_order :: proc(t: ^testing.T) {
+	source := long_source(30)
+	defer delete(source)
+	f: Fixture
+	setup(&f, source, 500)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	out: [dynamic]u8
+	defer delete(out)
+	selection_text(&f.page, select_all(&f.page), &out)
+	copied := string(out[:])
+	at := 0
+	for i in 0 ..< 30 {
+		for want in ([]string{fmt.tprintf("Section %d\n", i), fmt.tprintf("open task %d\n", i), fmt.tprintf("a%d\n", i), fmt.tprintf("code %d\n\nmore", i)}) {
+			found := strings.index(copied[at:], want)
+			testing.expect(t, found >= 0)
+			at += max(found, 0)
+		}
+	}
+}
+
+@(test)
+test_a_range_in_a_later_part_shows_and_keeps_only_that_part :: proc(t: ^testing.T) {
+	source := long_source(40)
+	defer delete(source)
+	f: Fixture
+	setup(&f, source, 500)
+	defer teardown(&f)
+	// The window is in the third part; the steps release the rest.
+	step(&f.page, 1e30)
+	third := f.page.parts[2]
+	from, to := third.top + 10, third.top + f64(third.height) - 10
+	keep(&f.page, from, to)
+	expect_ok(t, &f.page)
+	for part, p in f.page.parts {
+		shaped := 0
+		for line in part.lines {
+			shaped += text.line_shaped(line.line) ? 1 : 0
+		}
+		testing.expect_value(t, shaped > 0, p == 2)
+	}
+	cache: text.Glyph_Cache
+	defer text.cache_destroy(&cache)
+	text.cache_set_scale(&cache, 2)
+	rects, glyphs: [dynamic]base.Quad
+	scratch: text.Glyph_Buffer
+	defer delete(rects)
+	defer delete(glyphs)
+	defer text.glyph_buffer_destroy(&scratch)
+	// The quads count from the origin, whatever the height of the page.
+	origin := math.floor(from * 2)
+	display(&f.page, &cache, from, to, origin, &rects, &glyphs, &scratch)
+	testing.expect(t, len(glyphs) > 100)
+	for quad in glyphs {
+		testing.expect(t, quad.pos.y > -100 && f64(quad.pos.y) < (to - from) * 2 + 100)
+	}
+	expect_ok(t, &f.page)
+}
+
+@(test)
+test_a_check_box_that_reaches_out_of_its_part_is_found :: proc(t: ^testing.T) {
+	// One task for each block, and lines that are lower than a check box:
+	// the box of the last task of a part ends below the part.
+	b := strings.builder_make()
+	defer strings.builder_destroy(&b)
+	COUNT :: 2 * document.PART_BLOCKS + 3
+	for i in 0 ..< COUNT {
+		fmt.sbprintf(&b, "- [ ] task %d\n", i)
+	}
+	f: Fixture
+	setup(&f, strings.to_string(b), 500)
+	defer teardown(&f)
+	f.style.line_height = 0.6
+	begin(&f.page, &f.doc, f.style, 500)
+	step(&f.page, 1e30)
+	expect_ok(t, &f.page)
+	found := make([]Task_Place, COUNT)
+	defer delete(found)
+	testing.expect_value(t, tasks_between(&f.page, 0, 1e30, found), COUNT)
+	size := f64(task_box_size(f.page.m))
+	first := f.page.parts[0]
+	last := found[document.PART_BLOCKS - 1]
+	testing.expect(t, last.y + size > first.top + f64(first.height))
+	// Each box is found by its last point and by its first one.
+	for task in found {
+		one: [4]Task_Place
+		count := tasks_between(&f.page, task.y + size - 1, task.y + size - 0.5, one[:])
+		testing.expect(t, count >= 1 && one[0].block == task.block)
+		count = tasks_between(&f.page, task.y, task.y + 0.5, one[:])
+		testing.expect(t, count >= 1 && one[count - 1].block == task.block)
+	}
 }

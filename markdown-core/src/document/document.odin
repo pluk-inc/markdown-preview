@@ -71,9 +71,72 @@ Block :: struct {
 	aligns:      [dynamic]base.Align,
 }
 
+// The memory of one part of the document, in bytes. A little less than
+// 16 KB, which the system's allocator gives with no room that is not
+// used; the allocator of the core puts a few bytes of its own before the
+// part. (One block more, and a part takes 20 KB from the system.)
+PART_BYTES :: 16 * 1024 - 64
+
+// How many blocks a part of the document has at most.
+PART_BLOCKS :: (PART_BYTES - size_of(int)) / size_of(Block)
+
+// A part of the document: blocks that are next to each other. The blocks
+// are in parts, not in one array, so that a change to the document moves
+// the blocks of one part only, and so that the layout can keep its records
+// for each part by itself (`layout.Part`). A block stays at its address
+// while its part has the same blocks.
+Part :: struct {
+	blocks: [PART_BLOCKS]Block,
+	count:  int,
+}
+
+#assert(size_of(Part) <= PART_BYTES)
+
 Document :: struct {
-	blocks: [dynamic]Block,
+	parts:  [dynamic]^Part,
+	starts: [dynamic]int, // for each part, the number of its first block
+	count:  int, // the blocks of all parts
 	links:  [dynamic]string,
+}
+
+// Adds a block at the end of the document.
+append_block :: proc(doc: ^Document, b: Block) {
+	if len(doc.parts) == 0 || doc.parts[len(doc.parts) - 1].count == PART_BLOCKS {
+		append(&doc.parts, new(Part))
+		append(&doc.starts, doc.count)
+	}
+	part := doc.parts[len(doc.parts) - 1]
+	part.blocks[part.count] = b
+	part.count += 1
+	doc.count += 1
+}
+
+// The part that has the block with a number, and the place of the block
+// in it. The number must be one of a block of the document.
+locate :: proc(doc: ^Document, block: int) -> (part, slot: int) {
+	// The last part that starts at or before the block.
+	lo, hi := 0, len(doc.starts)
+	for lo < hi {
+		mid := (lo + hi) / 2
+		if doc.starts[mid] <= block {
+			lo = mid + 1
+		} else {
+			hi = mid
+		}
+	}
+	return lo - 1, block - doc.starts[lo - 1]
+}
+
+// The block with a number, from 0. For one block: a procedure that goes
+// through the blocks goes through the parts.
+block_at :: proc(doc: ^Document, block: int) -> ^Block {
+	part, slot := locate(doc, block)
+	return &doc.parts[part].blocks[slot]
+}
+
+// The blocks of a part.
+part_blocks :: proc(part: ^Part) -> []Block {
+	return part.blocks[:part.count]
 }
 
 text_destroy :: proc(t: ^Text) {
@@ -91,38 +154,48 @@ set_task_done :: proc(doc: ^Document, line: int, done: bool) -> bool {
 	if line <= 0 {
 		return false
 	}
-	for &b, i in doc.blocks {
-		if b.task_line != line {
-			continue
-		}
-		b.marker = done ? .Task_Done : .Task_Open
-		b.done = done
-		// The later blocks of the same item, which can come after lists
-		// inside it. The item is over where its list is.
-		for &next in doc.blocks[i + 1:] {
-			if next.list_depth < b.list_depth {
-				break
+	for part, p in doc.parts {
+		for &b, slot in part_blocks(part) {
+			if b.task_line != line {
+				continue
 			}
-			if next.item == b.item {
-				next.done = done
+			b.marker = done ? .Task_Done : .Task_Open
+			b.done = done
+			// The later blocks of the same item, which can come after
+			// lists inside it. The item is over where its list is.
+			from := slot + 1
+			for later in doc.parts[p:] {
+				for &next in part_blocks(later)[from:] {
+					if next.list_depth < b.list_depth {
+						return true
+					}
+					if next.item == b.item {
+						next.done = done
+					}
+				}
+				from = 0
 			}
+			return true
 		}
-		return true
 	}
 	return false
 }
 
 destroy :: proc(doc: ^Document) {
-	for &b in doc.blocks {
-		text_destroy(&b.text)
-		delete(b.language)
-		for &cell in b.cells {
-			text_destroy(&cell)
+	for part in doc.parts {
+		for &b in part_blocks(part) {
+			text_destroy(&b.text)
+			delete(b.language)
+			for &cell in b.cells {
+				text_destroy(&cell)
+			}
+			delete(b.cells)
+			delete(b.aligns)
 		}
-		delete(b.cells)
-		delete(b.aligns)
+		free(part)
 	}
-	delete(doc.blocks)
+	delete(doc.parts)
+	delete(doc.starts)
 	for link in doc.links {
 		delete(link)
 	}

@@ -146,7 +146,7 @@ start_block :: proc(p: ^Parser, kind: Block_Kind) -> Block {
 @(private)
 push_block :: proc(p: ^Parser) {
 	text_fit(&p.block.text)
-	append(&p.doc.blocks, p.block)
+	append_block(p.doc, p.block)
 	p.block = {}
 	p.cur = nil
 }
@@ -242,7 +242,7 @@ enter_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 		p.item_count += 1
 		p.lists[len(p.lists) - 1].item = p.item_count
 	case .Hr:
-		append(&p.doc.blocks, start_block(p, .Rule))
+		append_block(p.doc, start_block(p, .Rule))
 	case .H:
 		open_text(p, .Heading, clamp(int((cast(^Md_H_Detail)detail).level), 1, 6))
 	case .P:
@@ -334,7 +334,7 @@ leave_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 			append(&p.table.aligns, base.Align.Left)
 		}
 		p.in_table = false
-		append(&p.doc.blocks, p.table)
+		append_block(p.doc, p.table)
 		p.table = {}
 	}
 	return 0

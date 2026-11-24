@@ -57,13 +57,13 @@ Ctx :: struct {
 	page_width:      f32, // the part of the width that the page is laid out in; 0 for all of it
 	layout_width:    f32, // the width of the layout that is there now
 	scale:           f32,
-	scroll:          f32, // points
+	scroll:          f64, // points
 	layout_valid:    bool,
 	// The display list: the quads of the page between shown_y0 and shown_y1.
 	display_valid:   bool,
-	shown_y0:        f32, // points
-	shown_y1:        f32,
-	origin_px:       f32, // device pixels; the y that the quads count from
+	shown_y0:        f64, // points
+	shown_y1:        f64,
+	origin_px:       f64, // device pixels; the y that the quads count from
 	rects:           [dynamic]base.Quad,
 	glyphs:          [dynamic]base.Quad,
 	selection_quads: [dynamic]base.Quad,
@@ -109,9 +109,10 @@ style_release :: proc(style: ^base.Style) {
 // gives them to the renderer.
 @(private)
 show :: proc(ctx: ^Ctx) {
-	ctx.shown_y0 = max(ctx.scroll - SHOWN_ABOVE * ctx.height, 0)
-	ctx.shown_y1 = ctx.scroll + SHOWN_BELOW * ctx.height
-	ctx.origin_px = f32(int(ctx.shown_y0 * ctx.scale))
+	height := f64(ctx.height)
+	ctx.shown_y0 = max(ctx.scroll - SHOWN_ABOVE * height, 0)
+	ctx.shown_y1 = ctx.scroll + SHOWN_BELOW * height
+	ctx.origin_px = f64(int(ctx.shown_y0 * f64(ctx.scale)))
 	clear(&ctx.rects)
 	clear(&ctx.glyphs)
 	layout.display(&ctx.page, &ctx.cache, ctx.shown_y0, ctx.shown_y1, ctx.origin_px, &ctx.rects, &ctx.glyphs, &ctx.glyph_buffer)
@@ -125,7 +126,8 @@ show :: proc(ctx: ^Ctx) {
 // the selection there shapes nothing again.
 @(private)
 keep_window :: proc(ctx: ^Ctx) {
-	layout.keep(&ctx.page, ctx.scroll - KEPT_ABOVE * ctx.height, ctx.scroll + KEPT_BELOW * ctx.height)
+	height := f64(ctx.height)
+	layout.keep(&ctx.page, ctx.scroll - KEPT_ABOVE * height, ctx.scroll + KEPT_BELOW * height)
 }
 
 @(private)
@@ -138,8 +140,9 @@ show_selection :: proc(ctx: ^Ctx) {
 // True when the view came near the edge of the part that has quads.
 @(private)
 left_shown_part :: proc(ctx: ^Ctx) -> bool {
-	margin := SHOWN_MARGIN * ctx.height
-	return (ctx.shown_y0 > 0 && ctx.scroll - margin < ctx.shown_y0) || ctx.scroll + ctx.height + margin > ctx.shown_y1
+	height := f64(ctx.height)
+	margin := SHOWN_MARGIN * height
+	return (ctx.shown_y0 > 0 && ctx.scroll - margin < ctx.shown_y0) || ctx.scroll + height + margin > ctx.shown_y1
 }
 
 @(export)
@@ -283,7 +286,7 @@ mdcore_resize :: proc "c" (handle: rawptr, width, height, scale: f64) {
 	keep_window(ctx)
 	renderer.resize(&ctx.gpu, ctx.width, ctx.height, ctx.scale, page_width)
 	// Only what the view shows now; mdcore_layout_more does the rest.
-	if layout.step(&ctx.page, ctx.scroll + 2 * ctx.height) {
+	if layout.step(&ctx.page, ctx.scroll + 2 * f64(ctx.height)) {
 		ctx.display_valid = false
 	}
 }
@@ -299,7 +302,7 @@ mdcore_layout_more :: proc "c" (handle: rawptr, budget_ms: f64) -> bool {
 	if !ctx.layout_valid || layout.done(&ctx.page) {
 		return false
 	}
-	reached := ctx.page.y
+	reached := layout.reached(&ctx.page)
 	layout.step(&ctx.page, 1e30, budget_ms)
 	if reached < ctx.shown_y1 {
 		ctx.display_valid = false // the new blocks are in the shown part
@@ -312,7 +315,7 @@ mdcore_content_height :: proc "c" (handle: rawptr) -> f64 {
 	ctx := cast(^Ctx)handle
 	sync.lock(&ctx.lock)
 	defer sync.unlock(&ctx.lock)
-	return f64(ctx.page.content_height)
+	return ctx.page.content_height
 }
 
 @(export)
@@ -339,17 +342,17 @@ draw :: proc(handle: rawptr, scroll_y: f64, with_window: bool) {
 		if !ctx.layout_valid {
 			return
 		}
-		ctx.scroll = f32(scroll_y)
+		ctx.scroll = scroll_y
 		keep_window(ctx)
 		// The view can scroll past what the steps laid out so far.
-		if layout.step(&ctx.page, ctx.scroll + 2 * ctx.height) {
+		if layout.step(&ctx.page, ctx.scroll + 2 * f64(ctx.height)) {
 			ctx.display_valid = false
 		}
 		if !ctx.display_valid || left_shown_part(ctx) {
 			show(ctx)
 		}
 		renderer.sync_atlases(&ctx.gpu, &ctx.cache)
-		frame = renderer.frame_begin(&ctx.gpu, f32(int(ctx.scroll * ctx.scale)) - ctx.origin_px)
+		frame = renderer.frame_begin(&ctx.gpu, f32(f64(int(ctx.scroll * f64(ctx.scale))) - ctx.origin_px))
 	}
 	// The frame can wait for the display. Other calls go on meanwhile, but
 	// no other frame: the draw lock is held to its end.
@@ -368,13 +371,13 @@ mdcore_tasks :: proc "c" (handle: rawptr, top, bottom: f64, out: [^]Host_Task, c
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
 	hold(ctx)
-	tasks := layout.tasks_between(&ctx.page, f32(top), f32(bottom))
+	tasks := make([]layout.Task_Place, max(int(capacity), 0), context.temp_allocator)
+	count := layout.tasks_between(&ctx.page, top, bottom, tasks)
 	size := f64(layout.task_box_size(ctx.page.m))
-	for t, i in tasks[:min(len(tasks), int(capacity))] {
-		b := ctx.doc.blocks[t.block]
-		out[i] = {f64(t.x), f64(t.y), size, c.long(b.task_line), b.marker == .Task_Done}
+	for t, i in tasks[:min(count, len(tasks))] {
+		out[i] = {f64(t.x), t.y, size, c.long(t.block.task_line), t.block.marker == .Task_Done}
 	}
-	return c.long(len(tasks))
+	return c.long(count)
 }
 
 @(export)
@@ -405,7 +408,7 @@ mdcore_place_at :: proc "c" (handle: rawptr, y: f64, out: ^Host_Place) -> bool {
 	if !ctx.layout_valid {
 		return false
 	}
-	place := layout.place_at(&ctx.page, f32(y)) or_return
+	place := layout.place_at(&ctx.page, y) or_return
 	out^ = {c.long(place.block), c.long(place.cell), c.long(place.byte), f64(place.fraction)}
 	return true
 }
@@ -420,16 +423,16 @@ mdcore_place_y :: proc "c" (handle: rawptr, place: ^Host_Place, y: ^f64) -> bool
 		return false
 	}
 	wanted := layout.Place{int(place.block), int(place.cell), int(place.byte), f32(place.fraction)}
-	reached := ctx.page.y
+	reached := layout.reached(&ctx.page)
 	layout.step_to_block(&ctx.page, wanted.block)
 	at := layout.place_y(&ctx.page, wanted) or_return
 	// And what a view shows below it, so the page is tall enough for the
 	// host to scroll there.
-	layout.step(&ctx.page, at + 2 * ctx.height)
-	if ctx.page.y != reached {
+	layout.step(&ctx.page, at + 2 * f64(ctx.height))
+	if layout.reached(&ctx.page) != reached {
 		ctx.display_valid = false
 	}
-	y^ = f64(at)
+	y^ = at
 	return true
 }
 
@@ -454,7 +457,7 @@ mdcore_pointer_shape :: proc "c" (handle: rawptr, x, y: f64) -> Pointer_Shape {
 		return .Busy
 	}
 	defer sync.unlock(&ctx.lock)
-	if ctx.layout_valid && layout.text_at(&ctx.page, f32(x), f32(y)) {
+	if ctx.layout_valid && layout.text_at(&ctx.page, f32(x), y) {
 		return .Text
 	}
 	return .Default
@@ -467,7 +470,7 @@ mdcore_mouse :: proc "c" (handle: rawptr, x, y: f64, phase: c.int) {
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
 	hold(ctx)
-	pos, ok := layout.hit_test(&ctx.page, f32(x), f32(y))
+	pos, ok := layout.hit_test(&ctx.page, f32(x), y)
 	if !ok {
 		return
 	}
