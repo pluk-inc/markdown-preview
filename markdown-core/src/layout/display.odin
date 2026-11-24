@@ -39,15 +39,22 @@ display :: proc(
 	buffer: ^text.Glyph_Buffer,
 ) {
 	scale := cache.scale
-	for box in l.boxes[first_box_below(l, y0):] {
+	first := first_box_below(l, y0)
+	for box, i in l.boxes[first:] {
 		if box.top >= y1 {
 			break
 		}
+		// A box is the place of the block with the same number.
+		done := l.doc.blocks[first + i].done
 		for d in l.decor[box.decor_first:box.decor_end] {
 			if d.y + d.h < y0 || d.y > y1 {
 				continue
 			}
-			append(d.above ? glyphs : rects, rect_quad(d.x, d.y, d.w, d.h, d.color, d.radius, scale, origin_y))
+			color := d.color
+			if d.above && done && box.line_first < box.line_end {
+				color = span_color(l, &l.paras[l.lines[box.line_first].para], d.text_style, true)
+			}
+			append(d.above ? glyphs : rects, rect_quad(d.x, d.y, d.w, d.h, color, d.radius, scale, origin_y))
 		}
 		for i in box.line_first ..< box.line_end {
 			line := l.lines[i]
@@ -74,7 +81,7 @@ display :: proc(
 					index := para.base + g.index
 					if span == nil || index < span.start || index >= span.end {
 						span = document.span_at(para.src, index)
-						color = span_color(l, para, span.style)
+						color = span_color(l, para, span.style, done)
 					}
 				}
 				px := (line.x + g.x) * scale

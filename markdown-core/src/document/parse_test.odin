@@ -261,3 +261,39 @@ test_task_lines_count_each_kind_of_line_ending :: proc(t: ^testing.T) {
 		testing.expect_value(t, b.task_line, i + 1)
 	}
 }
+
+@(test)
+test_a_task_set_in_place_is_the_document_of_the_changed_source :: proc(t: ^testing.T) {
+	// Line 1 has a later paragraph, a list inside, and a paragraph after
+	// that list; line 4 is an item inside; line 8 is in a quote.
+	Case :: struct {
+		line:   int,
+		done:   bool,
+		source: string,
+	}
+	BEFORE :: "- [ ] one\n\n  more of one\n  - [x] inside\n\n  last of one\n- [ ] two\n> - [x] quoted\n\nafter\n"
+	cases := []Case {
+		{1, true, "- [x] one\n\n  more of one\n  - [x] inside\n\n  last of one\n- [ ] two\n> - [x] quoted\n\nafter\n"},
+		{4, false, "- [ ] one\n\n  more of one\n  - [ ] inside\n\n  last of one\n- [ ] two\n> - [x] quoted\n\nafter\n"},
+		{7, true, "- [ ] one\n\n  more of one\n  - [x] inside\n\n  last of one\n- [x] two\n> - [x] quoted\n\nafter\n"},
+		{8, false, "- [ ] one\n\n  more of one\n  - [x] inside\n\n  last of one\n- [ ] two\n> - [ ] quoted\n\nafter\n"},
+	}
+	for c in cases {
+		doc := parse(BEFORE)
+		defer destroy(&doc)
+		want := parse(c.source)
+		defer destroy(&want)
+		testing.expect(t, set_task_done(&doc, c.line, c.done))
+		testing.expect_value(t, len(doc.blocks), len(want.blocks))
+		for b, i in want.blocks {
+			testing.expect_value(t, doc.blocks[i].marker, b.marker)
+			testing.expect_value(t, doc.blocks[i].done, b.done)
+		}
+	}
+	// No task has its mark on these lines.
+	doc := parse(BEFORE)
+	defer destroy(&doc)
+	testing.expect(t, !set_task_done(&doc, 3, true))
+	testing.expect(t, !set_task_done(&doc, 0, true))
+	testing.expect(t, !set_task_done(&doc, 99, true))
+}

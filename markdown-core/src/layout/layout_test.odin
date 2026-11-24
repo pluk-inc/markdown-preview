@@ -262,11 +262,10 @@ test_a_task_keeps_a_place_for_its_check_box :: proc(t: ^testing.T) {
 	// The plain item has none.
 	testing.expect_value(t, len(f.page.tasks), 3)
 	one, two := f.page.tasks[0], f.page.tasks[1]
-	testing.expect_value(t, one.line, 1)
-	testing.expect_value(t, one.done, false)
-	testing.expect_value(t, two.line, 2)
-	testing.expect_value(t, two.done, true)
-	testing.expect_value(t, f.page.tasks[2].line, 4)
+	// A task knows its block, which has its line and its state.
+	testing.expect_value(t, one.block, 0)
+	testing.expect_value(t, two.block, 1)
+	testing.expect_value(t, f.page.tasks[2].block, 3)
 	testing.expect(t, two.y > one.y)
 	// The box stands left of the text of its item, and the layout draws
 	// nothing in its place.
@@ -277,7 +276,50 @@ test_a_task_keeps_a_place_for_its_check_box :: proc(t: ^testing.T) {
 	// Only the box that a range touches.
 	part := tasks_between(&f.page, two.y + 1, two.y + size - 1)
 	testing.expect_value(t, len(part), 1)
-	testing.expect_value(t, part[0].line, 2)
+	testing.expect_value(t, part[0].block, 1)
 	testing.expect_value(t, len(tasks_between(&f.page, 0, 1e30)), 3)
 	testing.expect_value(t, len(tasks_between(&f.page, f.page.tasks[2].y + size, 1e30)), 0)
+}
+
+@(test)
+test_a_task_checked_in_place_draws_as_one_parsed_checked :: proc(t: ^testing.T) {
+	// The text of a checked item is softer, also its line through text
+	// and the text of a later paragraph of the item. A link keeps its color.
+	OPEN :: "- [ ] one ~~two~~ [three](https://example.com)\n\n  more\n- [ ] other\n"
+	DONE :: "- [x] one ~~two~~ [three](https://example.com)\n\n  more\n- [ ] other\n"
+	changed, parsed: Fixture
+	setup(&changed, OPEN, 600)
+	defer teardown(&changed)
+	setup(&parsed, DONE, 600)
+	defer teardown(&parsed)
+	for f in ([]^Fixture{&changed, &parsed}) {
+		f.page.style.text = {0, 0, 0, 255}
+		f.page.style.secondary = {200, 200, 200, 255}
+		f.page.style.link = {0, 0, 255, 255}
+		step(&f.page, 1e30)
+	}
+	// After the layout, with no new one.
+	testing.expect(t, document.set_task_done(&changed.doc, 1, true))
+
+	cache: text.Glyph_Cache
+	defer text.cache_destroy(&cache)
+	text.cache_set_scale(&cache, 2)
+	rects, glyphs, want_rects, want_glyphs: [dynamic]base.Quad
+	scratch: text.Glyph_Buffer
+	defer delete(rects)
+	defer delete(glyphs)
+	defer delete(want_rects)
+	defer delete(want_glyphs)
+	defer text.glyph_buffer_destroy(&scratch)
+	display(&changed.page, &cache, 0, 1e30, 0, &rects, &glyphs, &scratch)
+	display(&parsed.page, &cache, 0, 1e30, 0, &want_rects, &want_glyphs, &scratch)
+	testing.expect_value(t, len(glyphs), len(want_glyphs))
+	soft := 0
+	for quad, i in want_glyphs {
+		testing.expect_value(t, glyphs[i].pos, quad.pos)
+		testing.expect_value(t, glyphs[i].color, quad.color)
+		soft += quad.color == mix(changed.page.style.secondary, changed.page.style.text, 0.3) ? 1 : 0
+	}
+	// The soft color is there: the item's text, the line through it, "more".
+	testing.expect(t, soft > 8)
 }

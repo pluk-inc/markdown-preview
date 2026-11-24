@@ -356,9 +356,24 @@ mdcore_tasks :: proc "c" (handle: rawptr, top, bottom: f64, out: [^]Host_Task, c
 	tasks := layout.tasks_between(&ctx.page, f32(top), f32(bottom))
 	size := f64(layout.task_box_size(ctx.page.m))
 	for t, i in tasks[:min(len(tasks), int(capacity))] {
-		out[i] = {f64(t.x), f64(t.y), size, c.long(t.line), t.done}
+		b := ctx.doc.blocks[t.block]
+		out[i] = {f64(t.x), f64(t.y), size, c.long(b.task_line), b.marker == .Task_Done}
 	}
 	return c.long(len(tasks))
+}
+
+@(export)
+mdcore_set_task_checked :: proc "c" (handle: rawptr, line: c.long, checked: bool) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	if !document.set_task_done(&ctx.doc, int(line), checked) {
+		return false
+	}
+	// The places are the same; only the color of the item's text changes.
+	ctx.display_valid = false
+	return true
 }
 
 // phase 0 = mouse down, 1 = drag. x and y are points in document space.

@@ -367,23 +367,45 @@ final class NativeRendererView: NSView {
         updateTaskCheckBoxes()
     }
 
+    /// The text of the document that the core shows now.
+    private var shownMarkdown: String?
+
     @objc private func taskCheckBoxClicked(_ sender: NSButton) {
-        taskCheckboxToggled?(sender.tag, sender.state == .on)
+        let line = sender.tag
+        let checked = sender.state == .on
+        // The core changes the state of this one task in place: no new
+        // parse, no new layout, and the page does not move. The text that
+        // the view shows gets the same change, so `open` knows the
+        // document that the owner saves and gives back, and does nothing
+        // for it.
+        if let shown = shownMarkdown,
+           let changed = TaskCheckboxSource.settingChecked(checked, onLine: line, in: shown),
+           mdcore_set_task_checked(ctx, line, checked) {
+            shownMarkdown = changed
+            setNeedsDraw()
+        }
+        taskCheckboxToggled?(line, checked)
     }
 
     /// Shows a document. `keepsScroll` is for the same document with a
     /// change in it (a task that was checked, a file saved by another
     /// app): the reader stays where they are.
     func open(_ markdown: String, keepsScroll: Bool) {
+        // The document that shows already: after a click on a task, the
+        // saved text comes back here, and the core has that change.
+        if keepsScroll, hasDocument, markdown == shownMarkdown { return }
+        shownMarkdown = markdown
         var text = markdown
         text.withUTF8 { utf8 in
             utf8.withMemoryRebound(to: CChar.self) { mdcore_set_markdown(ctx, $0.baseAddress, $0.count) }
         }
         hasDocument = true
         endScrollAnimation()
-        // The layout starts again from the top and reaches the end of the
-        // document some steps later. Until then the page keeps the height
-        // it had, or the scroll bar would jump to another place and back.
+        // For the same file with a change from outside (another app saved
+        // it, or a click on a task could not be saved): the layout starts
+        // again from the top and reaches the end of the document some
+        // steps later. Until then the page keeps the height it had, or the
+        // scroll bar would jump to another place and back.
         heldPageHeight = keepsScroll ? page.frame.height : nil
         // Before the layout: it lays out what the view shows, and that must
         // be the top of a new document, not the place the old one was at.

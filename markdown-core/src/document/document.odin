@@ -81,6 +81,37 @@ text_destroy :: proc(t: ^Text) {
 	t^ = {}
 }
 
+// Sets the state of the task whose mark is on a source line, in place: the
+// marker of the item, and `done` of each block that stands directly in it
+// (not of the items inside it, which have their own state). False when no
+// task has its mark on that line. The result is the same as a new parse
+// of the source with that mark changed.
+set_task_done :: proc(doc: ^Document, line: int, done: bool) -> bool {
+	if line <= 0 {
+		return false
+	}
+	for &b, i in doc.blocks {
+		if b.task_line != line {
+			continue
+		}
+		b.marker = done ? .Task_Done : .Task_Open
+		b.done = done
+		// The later blocks of the item are at its depth and continue it.
+		// Deeper blocks belong to lists inside it. The item ends at a
+		// block that is less deep, or that starts another item.
+		for &next in doc.blocks[i + 1:] {
+			if next.list_depth < b.list_depth || (next.list_depth == b.list_depth && next.spacing != .Continuation) {
+				break
+			}
+			if next.list_depth == b.list_depth {
+				next.done = done
+			}
+		}
+		return true
+	}
+	return false
+}
+
 destroy :: proc(doc: ^Document) {
 	for &b in doc.blocks {
 		text_destroy(&b.text)
