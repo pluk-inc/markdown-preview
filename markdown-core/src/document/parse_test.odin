@@ -682,6 +682,10 @@ test_a_block_knows_its_lines_of_the_source :: proc(t: ^testing.T) {
 		"x\n\n-\n  foo\n- [ ]\n  task\n\n> \n> quote\n\n- <b>\n\n  </b>\n- > <i>\n\nend\n",
 		{"x\n\n", "-\n  foo\n", "- [ ]\n  task\n\n", "> \n> quote\n\n", "- <b>\n\n  </b>\n", "- > <i>\n\n", "end\n"},
 	)
+	// An item keeps its line when a quote with nothing in it ends
+	// before the first block of the item.
+	expect_sources(t, "intro\n\n- >\n\n  tail\n", {"intro\n\n", "- >\n\n  tail\n"})
+	expect_sources(t, "> <div>\n\nnext\n- a\n  - > <i>\n\n  b\n", {"> <div>\n\nnext\n", "- a\n", "  - > <i>\n\n", "  b\n"})
 	// A line under definitions of links only is a rule.
 	expect_sources(t, "intro\n\n[a]: /x\n---\nend\n", {"intro\n\n[a]: /x\n", "---\n", "end\n"})
 	// A paragraph keeps the definitions that it starts with.

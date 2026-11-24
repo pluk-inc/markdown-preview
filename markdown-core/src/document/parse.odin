@@ -46,9 +46,15 @@ Parser :: struct {
 	// The start of the source line of the block that comes next: of the
 	// first thing that started after the last block, so a block that is
 	// the first one of a list item or a quote starts at the line of
-	// their mark. `at_known` is false when nothing started yet.
+	// their mark. `at_known` is false when nothing started yet. A list,
+	// an item, or a quote that ends with no block in it takes its start
+	// with it (`at_depth`: how many of these were open around the thing
+	// that started), so the start of an item stays when an empty quote
+	// in it ends.
 	at:           int,
 	at_known:     bool,
+	at_depth:     int,
+	open:         int, // the lists, items, and quotes that are open
 	item_count:   int, // list items so far
 	item_blocks:  int, // blocks of the open item so far
 	// The source, and how far its lines are counted: task marks come in
@@ -242,6 +248,10 @@ enter_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 		close_text(p)
 	}
 	#partial switch type {
+	case .Quote, .Ul, .Ol, .Li:
+		p.open += 1
+	}
+	#partial switch type {
 	case .Quote:
 		p.quote += 1
 	case .Ul:
@@ -308,15 +318,22 @@ enter_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 leave_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.int {
 	p := cast(^Parser)userdata
 	context = p.ctx
+	// What started in a list, an item, or a quote and made no block (a
+	// quote with only raw HTML in it) is no start of the block after it.
+	defer #partial switch type {
+	case .Quote, .Ul, .Ol, .Li:
+		p.open -= 1
+		if p.at_depth >= p.open {
+			p.at_known = false
+		}
+	}
 	#partial switch type {
 	case .Quote:
 		close_text(p)
 		p.quote -= 1
-		p.at_known = false
 	case .Ul, .Ol:
 		close_text(p)
 		pop(&p.lists)
-		p.at_known = false
 	case .Li:
 		close_text(p)
 		if p.item_blocks == 0 {
@@ -325,9 +342,6 @@ leave_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 			open_text(p, .Paragraph)
 			close_text(p)
 		}
-		// What started in the item and made no block (a quote with only
-		// raw HTML in it) is no start of the block after the item.
-		p.at_known = false
 		p.lists[len(p.lists) - 1].next += 1
 		// A later block of the parent item is a continuation of it.
 		p.item_blocks = 1
@@ -380,6 +394,7 @@ on_block_offset :: proc "c" (type: Md_Block, offset: c.uint, userdata: rawptr) {
 	if type != .Html && !p.at_known {
 		p.at = int(offset)
 		p.at_known = true
+		p.at_depth = p.open
 	}
 }
 
