@@ -270,6 +270,9 @@ struct MD_CTX_tag {
      * Used only with MD_FLAG_PRESERVEBLANKLINES. */
     unsigned n_blank_lines;
 
+    /* Start of the input line that is analyzed now. (Not in upstream.) */
+    OFF line_beg;
+
     /* For container block analysis. */
     MD_CONTAINER* containers;
     int n_containers;
@@ -5399,6 +5402,9 @@ struct MD_BLOCK_tag {
      * MD_BLOCK_OL:     Start item number.
      */
     MD_SIZE n_lines;
+
+    /* Start of the input line where the block starts. (Not in upstream.) */
+    OFF beg;
 };
 
 struct MD_CONTAINER_tag {
@@ -5583,6 +5589,9 @@ md_process_leaf_block(MD_CTX* ctx, MD_BLOCK* block)
 
     memset(&det, 0, sizeof(det));
 
+    if(ctx->parser.block_offset != NULL  &&  block->type != MD_BLOCK_BLANK)
+        ctx->parser.block_offset(block->type, block->beg, ctx->userdata);
+
     if(ctx->n_containers == 0)
         is_in_tight_list = false;
     else
@@ -5727,6 +5736,8 @@ md_process_all_blocks(MD_CTX* ctx)
             }
 
             if(block->flags & MD_BLOCK_CONTAINER_OPENER) {
+                if(ctx->parser.block_offset != NULL)
+                    ctx->parser.block_offset(block->type, block->beg, ctx->userdata);
                 MD_ENTER_BLOCK(block->type, &det);
 
                 if(block->type == MD_BLOCK_UL || block->type == MD_BLOCK_OL) {
@@ -5839,6 +5850,7 @@ md_start_new_block(MD_CTX* ctx, const MD_LINE_ANALYSIS* line)
     block->flags = 0;
     block->data = line->data;
     block->n_lines = 0;
+    block->beg = ctx->line_beg;
 
     ctx->current_block = block;
     return 0;
@@ -5928,6 +5940,7 @@ md_consume_link_reference_definitions(MD_CTX* ctx)
 
         memset(hr_block, 0, sizeof(MD_BLOCK));
         hr_block->type = MD_BLOCK_HR;
+        hr_block->beg = ctx->line_beg;
     }
 
     return 0;
@@ -6024,6 +6037,7 @@ md_flush_blank_lines(MD_CTX* ctx)
     block->flags = 0;
     block->data = ctx->n_blank_lines;
     block->n_lines = 0;
+    block->beg = ctx->line_beg;
 
     ctx->n_blank_lines = 0;
     return 0;
@@ -6047,6 +6061,7 @@ md_push_container_bytes(MD_CTX* ctx, MD_BLOCKTYPE type, unsigned start,
     block->flags = flags;
     block->data = data;
     block->n_lines = start;
+    block->beg = ctx->line_beg;
 
 abort:
     return ret;
@@ -7361,6 +7376,7 @@ md_process_doc(MD_CTX *ctx)
         if(line == pivot_line)
             line = (line == &line_buf[0] ? &line_buf[1] : &line_buf[0]);
 
+        ctx->line_beg = off;
         MD_CHECK(md_analyze_line(ctx, off, &off, pivot_line, line));
         MD_CHECK(md_process_line(ctx, &pivot_line, line));
     }

@@ -1,5 +1,7 @@
 package document
 
+import "core:slice"
+
 // A change of a document, as the range of its blocks that became other
 // blocks. The blocks before the range and after it are the same for a
 // layout as before, and they are at the address they had when their part
@@ -48,29 +50,17 @@ text_equal :: proc(a, b: ^Text) -> bool {
 	return true
 }
 
-// True when a layout gives two blocks the same records: all that a block
-// says but the line of its task mark, the number of its list item, and
-// its state in a checked item, which are read when the page is drawn.
-// A new field of `Block` that a layout reads goes in here.
+// True when a layout gives two blocks the same records: the two have the
+// same shape and the same texts. What else a block says (its place in the
+// source, its task mark, its state in a checked item) is not read by a
+// layout.
 @(private)
 layout_equal :: proc(a, b: ^Block) -> bool {
-	if a.kind != b.kind ||
-	   a.level != b.level ||
+	if a.shape != b.shape ||
 	   a.language != b.language ||
-	   a.marker != b.marker ||
-	   a.number != b.number ||
-	   a.spacing != b.spacing ||
-	   a.list_depth != b.list_depth ||
-	   a.quote_depth != b.quote_depth ||
-	   a.columns != b.columns ||
 	   len(a.cells) != len(b.cells) ||
-	   len(a.aligns) != len(b.aligns) {
+	   !slice.equal(a.aligns[:], b.aligns[:]) {
 		return false
-	}
-	for align, i in a.aligns {
-		if align != b.aligns[i] {
-			return false
-		}
 	}
 	for &cell, i in a.cells {
 		if !text_equal(&cell, &b.cells[i]) {
@@ -161,6 +151,7 @@ replace :: proc(doc, fresh: ^Document) -> (change: Change) {
 		walk_next(&new)
 	}
 	doc.links, fresh.links = fresh.links, doc.links
+	doc.source, fresh.source = fresh.source, doc.source
 
 	change = {first = head, removed = before - head - tail, added = after - head - tail, count = after}
 	if change.removed > 0 || change.added > 0 {

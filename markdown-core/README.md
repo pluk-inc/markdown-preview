@@ -20,7 +20,7 @@ markdown-core/
     text/          fonts, line breaking, glyph bitmaps, the glyph cache
     layout/        places of blocks and lines, the display list, the selection
     renderer/      draws the display list on the GPU
-  pkg/md4c/        the Markdown parser (C), built into the library
+  pkg/md4c/        the Markdown parser (C) with one change, built into the library
   build.sh         builds libmdcore.a
   test.sh          runs the unit tests
   bench/           the benchmark programs: the core alone, and the app
@@ -32,7 +32,7 @@ markdown-core/
 
 | Step | Package | What it does |
 | --- | --- | --- |
-| Parse | `document` | md4c reads the source; the result is the blocks of the document with styled text, with no fonts, colors, or sizes. The blocks are in parts of about 60, each part one piece of memory |
+| Parse | `document` | md4c reads the source; the result is the blocks of the document with styled text, with no fonts, colors, or sizes. The blocks are in parts of about 60, each part one piece of memory. The document keeps the source, and each block knows its lines of it |
 | Change | `document`, `layout` | a new text of the same document is compared with the old one block by block, from the two ends; the blocks at the start and at the end that are the same stay where they are, and the parts of what is between them are made and laid out again |
 | Lay out | `layout` | gives every block, line, and decoration a place on the page, for the part of the page that the view shows. What nobody looked at has a height that is estimated from its text, so the first frame, a new width, and a jump to the end cost the work of one view. The records are kept for each part of the document by itself, and a height in them counts from the top of that part |
 | Keep | `layout` | keeps the shaped text only for the lines near the view, and shapes a line again when the view comes to it, so the largest part of the memory does not grow with the document (the document model and the records of the blocks still do) |

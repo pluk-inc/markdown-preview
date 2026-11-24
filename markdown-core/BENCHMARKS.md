@@ -65,6 +65,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-24 | a selection is two addresses in the document; a copy reads the document | 586 / 570 | 58 / 97 | 560 / 820 | 69 / 68 | none | 0.46 / 0.39 | 7.0 / 21.5 (15.4 before all of it was laid out) |
 | 2026-11-24 | the core keeps the reader's place across a new layout | 553 / 537 | 53 / 87 | 490 / 710 | 63 / 66 | none | 0.48 / 0.40 | 7.0 / 21.4 (15.3 before all of it was laid out) |
 | 2026-11-24 | a changed text changes the document in place | 566 / 577 | 57 / 92 | 540 / 800 | 61 / 67 | none | 0.43 / 0.39 | 7.0 / 22.9 with the changed text of the benchmark (15.4 before all of it was laid out) |
+| 2026-11-24 | the document keeps its source; each block knows its lines of it | 558 / 576 | 61 / 107 | 470 / 700 | 59 / 69 | none | 0.45 / 0.39 | 7.0 / 25.3 (16.2 at the first frame) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -478,3 +479,56 @@ at launch than the ones in its middle, whichever build that was:
 So the three builds do not differ: CPU 520 to 560 ms short and 780 to
 820 ms long, memory 56 to 57 MB short and 90 to 96 MB long for each of
 them.
+
+## The source kept, and a block's lines of it (2026-11-24)
+
+The document keeps the Markdown text, and each block has the start of its
+first line in it. The parser copy says the start of each block through one
+new callback.
+
+`core.py`, short / long, the base (a changed text in place) and the
+change, one after the other, two times each:
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 59 / 72 | 59 / 69 |
+| Scroll frame, new glyphs / ready (CPU ms, long) | 0.51 / 0.42 | 0.45 / 0.39 |
+| A change of the text in its middle (ms) | 8.4 / 26 | 8.5 / 27 |
+| Heap at the first frame (MB) | 5.3 / 15.6 | 5.3 / 16.2 |
+| Heap with all of the document laid out (MB) | 7.0 / 24.7 | 7.0 / 25.3 |
+
+No time changed. The heap of the long document has 1.1 MB more for the
+kept source and 0.5 MB less because the arrays of a text are copied to
+their exact size (an array that is made smaller in place keeps its room
+in the system's allocator).
+
+One number is not explained, and it is not from this change: with a block
+of 280 bytes (58 in a part) the heap at the first frame is 1.6 MB lower
+than with one of 264 bytes (61 in a part): 14.0 MB against 15.6 MB on the
+base with 16 bytes added to the block, 14.6 MB against 16.2 MB on the
+change. The base with 58 blocks of 264 bytes in a part shows 15.8 MB, so
+it is not the number of blocks in a part. The block of the change has 264
+bytes (its small fields stand together). See Open work in `AGENTS.md`.
+
+The footprint of the process for the parse of the long document alone
+(a small program, not `core.py`): +16.2 MB on the base and +17.0 MB with
+the change, of which 7.4 and 8.0 MB are in use after it.
+
+`app.py`, short / long, three launches for each number, the base built
+from the same commit of `main` on the same day:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 624 / 626 | 62 / 108 | 470 / 760 |
+| change | 558 / 576 | 61 / 107 | 470 / 700 |
+| change | 543 / 573 | 61 / 107 | 460 / 710 |
+| base | 574 / 635 | 62 / 104 | 460 / 750 |
+
+Memory is the same. The long document shows about 50 ms less to the
+first frame and 50 ms less CPU. The reason is not verified: a text that
+the host sets a second time at launch would explain it, because that is
+now one comparison with the kept source and not a parse. (A first
+comparison used a copy of the base app that was
+built before the last commits of the base, and showed 7 MB less memory
+for it; a base must be built from the commit that the change starts
+from.)

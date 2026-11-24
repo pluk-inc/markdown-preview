@@ -468,6 +468,22 @@ typedef struct MD_PARSER {
     /* Reserved. Set to NULL.
      */
     void (*syntax)(void);
+
+    /* Not in upstream md4c (see README.md of this folder). Optional (may be
+     * NULL).
+     *
+     * Called for each block right before the block is given to the other
+     * callbacks: before enter_block() of a container block (quote, list,
+     * list item) and of a leaf block, and also for a paragraph of a tight
+     * list, which has no enter_block(). Not called for MD_BLOCK_DOC,
+     * MD_BLOCK_BLANK, the parts of a table, and footnote definitions.
+     *
+     * The offset is the one of the start of the input line where the block
+     * starts. For a block quote and a list, that is the line of its first
+     * mark. Lines that the block gave away (reference definitions at the
+     * start of a paragraph) still count as its start.
+     */
+    void (*block_offset)(MD_BLOCKTYPE /*type*/, MD_OFFSET /*offset*/, void* /*userdata*/);
 } MD_PARSER;
 
 

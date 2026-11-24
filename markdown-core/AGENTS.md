@@ -83,7 +83,23 @@ These came from the maintainer. Do not undo one without asking.
 - The C API in `include/mdcore.h` is the contract with hosts. A change to
   `mdcore_style` must be made in the header and in `base.Style` together;
   the two have the same fields in the same order.
-- `pkg/md4c` is an unchanged copy of upstream. Do not patch it here.
+- `pkg/md4c` is a copy of upstream with one change, which is also there
+  as a patch file: the parser says where in the source each block starts
+  (`pkg/md4c/README.md`). Do not add another change, but for something
+  that only the parser knows and that the core cannot do without.
+- The document keeps its source (`Document.source`), and each block has
+  its range of it (`document.block_source`): from the start of its first
+  line to the start of the next block's first line, so the ranges of all
+  blocks are the source. The first block of a list item or a quote
+  starts at the line of their mark. Only the start of a block that is in
+  no list and no quote is a place where a parse of a piece of the source
+  can start: a block inside has the marks of what it is in before it.
+  The source is always
+  the text of the blocks: code that changes a block in place changes the
+  source too (`set_task_done`). A field of a block that a layout reads
+  goes in `document.Shape` (one value) or beside the texts of `Block`
+  (and in `layout_equal`); all other fields are below them, and a change
+  to one of those needs no new records.
 - A change to the parser or the layout comes with a unit test
   (`*_test.odin`), and `markdown-core/test.sh` must pass.
 - Every block keeps its small records (place, line ranges and widths,
@@ -442,9 +458,24 @@ Task check boxes, left on purpose:
   scroll channel beside the two that the web view has. One scroll intent
   on `display` (top, keep, anchor, target) for the two renderers would
   replace it.
-- The task is known by its source line, which the parser counts from
-  md4c's byte offset, because the app's toggle takes a line. A byte offset
-  in the model and in the C API would follow the rule for text offsets.
+- The task is known by its source line in the C API, which the parser
+  counts from md4c's byte offset, because the app's toggle takes a line.
+  The model has the byte offset too (`Block.task_mark`). A byte offset
+  in the C API would follow the rule for text offsets.
+- The heap depends on the size of a block in a way that is not
+  explained: with a block of 280 bytes (58 in a part) the benchmark
+  shows 1.6 MB less heap for 1 MB of text than with one of 264 bytes (61
+  in a part), on the base and on this change. The two parts are in the
+  same size class of the system (16 KB), and a part with 58 blocks of 264
+  bytes does not show it. The block has 264 bytes now. Find the reason
+  before the next change to the size of a block or of a part.
+- The parse of 1 MB leaves about 9 MB of memory that is free but still
+  counts for the process (footprint +16 MB, in use +7 MB): what md4c
+  and the growing arrays needed for a moment.
+- A block has the lines after it that are no block (raw HTML, the
+  definitions of links, empty lines) in its range of the source, and the
+  first block also the ones before it. An editor needs a rule for a
+  caret in those lines.
 - The buttons of one view above and below are made before the first frame
   shows. Not measurable at launch so far (`BENCHMARKS.md`).
 - The core draws no box of its own. A host without a control (the
@@ -454,9 +485,12 @@ The base for an editor (the maintainer's direction of 2026-11-24, see
 Decisions). Four things an editor needs that a reader does not, with
 what is there and what is next:
 
-1. **Where the text lives.** Today each block has a copy of its text and
-   the source is not kept. Next: the source is kept, and a block knows
-   its range of it.
+1. **Where the text lives.** Done: the document keeps the source, and a
+   block knows its range of it (the start of its first line; the parser
+   copy says it). A block still has a copy of its text, because that
+   text is not the source: marks are gone, spaces are one space, an
+   entity is its character. Not done: the source is one piece of memory
+   that a change copies; a change as a range of it.
 2. **What a block is.** Done: the blocks are in parts of one piece of
    memory each, so a later change moves the blocks of one part. Not done:
    an identity of a block that stays through a change (a place, a
@@ -492,9 +526,13 @@ The order of the next steps, from the review of the second step:
   change in the part of the reader, above the first line that shows,
   needs the place there too.
 - Done: a changed text makes only its parts again (4).
-- Next: the source text is kept and a block knows its range of it, so a
-  change can come as a range of the source and not as a full text. Then
-  the parse of what changed only.
+- Done: the source text is kept and a block knows its range of it.
+- Next: a change comes as a range of the source and not as a full text.
+  Then the parse of what changed only: with the ranges, the parser can
+  read the blocks around a change and stop where its blocks are the
+  ones of before. Measure first; a definition of a link changes text at
+  any distance, so a document with one needs a rule (a full parse of
+  100 KB is 2 ms).
 
 Left on purpose in the first step:
 
@@ -680,3 +718,19 @@ export.
   document sees no move when the file gets text near its top. This is
   the entry that an editor types through later; it still parses all of
   the text for each change.
+- **2026-11-24** — Sixth step of the base: the document keeps its source
+  and each block knows its lines of it. md4c knows the lines of a block
+  and gives them to no callback, so its copy here got one change, kept
+  as a patch file: a callback with the start of each block. The other
+  ways were worse: a guess from the places of the text (wrong for a
+  block with no text of its own: an image with no words, an empty item,
+  a rule, a fence) or a block parser of our own. A task click now
+  changes its mark in the kept source too. `Block` has its fields in
+  two groups, what a layout reads and what it does not, so the test for
+  "the same for a layout" compares the first group as one value. A text
+  that the document has already (the host's own save that comes back)
+  is known by a comparison with the kept source and is not parsed. The
+  arrays of a text are copied to their exact size, because the system
+  keeps the room of an array that is made smaller in place. Cost: 1.1 MB
+  of heap for 1.1 MB of source, less 0.5 MB from the exact arrays; no
+  time.

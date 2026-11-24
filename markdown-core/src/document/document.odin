@@ -52,23 +52,38 @@ Spacing :: enum u8 {
 	Continuation, // a later block of an item
 }
 
-Block :: struct {
+// What a block is for a layout, but its texts: each field has one value,
+// so two of these compare with `==`. A new field that a layout reads goes
+// in here (or, a text, in `Block` and in `layout_equal`).
+Shape :: struct {
 	kind:        Block_Kind,
-	level:       int, // heading: 1 to 6
-	text:        Text, // paragraph, heading, code
-	language:    string, // code: the info string's first word
 	marker:      Marker,
-	number:      int, // marker == .Number
-	task_line:   int, // a task marker: the source line of its "[ ]", from 1
-	done:        bool, // the block stands directly in a checked task item
-	item:        int, // the list item that the block stands directly in: a number from 1, 0 for none
 	spacing:     Spacing,
+	level:       int, // heading: 1 to 6
+	number:      int, // marker == .Number
 	list_depth:  int,
 	quote_depth: int,
+	columns:     int, // table
+}
+
+Block :: struct {
+	// What a layout reads: the shape and the texts. Two blocks that are
+	// the same in these get the same records (`layout_equal`).
+	using shape: Shape,
+	text:        Text, // paragraph, heading, code
+	language:    string, // code: the info string's first word
 	// Table: row-major cells, the first row is the header.
 	cells:       [dynamic]Text,
-	columns:     int,
 	aligns:      [dynamic]base.Align,
+
+	// What no layout reads. A change to one of these needs no new records.
+	// The start of the block's first line in `Document.source`; for the
+	// first block of a list item or a quote, the line of their mark.
+	source:      int,
+	task_line:   int, // a task marker: the source line of its "[ ]", from 1
+	task_mark:   int, // a task marker: the byte between its "[" and "]" in the source
+	done:        bool, // the block stands directly in a checked task item
+	item:        int, // the list item that the block stands directly in: a number from 1, 0 for none
 }
 
 // The memory of one part of the document, in bytes. A little less than
@@ -97,6 +112,22 @@ Document :: struct {
 	starts: [dynamic]int, // for each part, the number of its first block
 	count:  int, // the blocks of all parts
 	links:  [dynamic]string,
+	// The Markdown text that the blocks came from. Each block has a range
+	// of it (`block_source`), and a change to a block in place changes it
+	// too (`set_task_done`), so it is always the text of the blocks.
+	source: []u8,
+}
+
+// The range of the source that a block has: from the start of its first
+// line to the start of the first line of the next block. So the ranges
+// of all blocks are the source, with no byte two times. A block has the
+// lines after it that are not a block: empty lines, the end of a code
+// fence, raw HTML, the definition of a link. The first block also has
+// such lines before it.
+block_source :: proc(doc: ^Document, block: int) -> (start, end: int) {
+	start = block == 0 ? 0 : block_at(doc, block).source
+	end = block + 1 < doc.count ? block_at(doc, block + 1).source : len(doc.source)
+	return
 }
 
 // Adds a block at the end of the document.
@@ -149,7 +180,7 @@ text_destroy :: proc(t: ^Text) {
 // marker of the item, and `done` of each block that stands directly in it
 // (not of the items inside it, which have their own state). False when no
 // task has its mark on that line. The result is the same as a new parse
-// of the source with that mark changed.
+// of the source with that mark changed, and the source gets that mark.
 set_task_done :: proc(doc: ^Document, line: int, done: bool) -> bool {
 	if line <= 0 {
 		return false
@@ -161,6 +192,7 @@ set_task_done :: proc(doc: ^Document, line: int, done: bool) -> bool {
 			}
 			b.marker = done ? .Task_Done : .Task_Open
 			b.done = done
+			doc.source[b.task_mark] = done ? 'x' : ' '
 			// The later blocks of the same item, which can come after
 			// lists inside it. The item is over where its list is.
 			from := slot + 1
@@ -207,6 +239,7 @@ destroy :: proc(doc: ^Document) {
 		delete(link)
 	}
 	delete(doc.links)
+	delete(doc.source)
 	doc^ = {}
 }
 
