@@ -35,6 +35,9 @@ final class NativeRendererView: NSView {
     private let scrollView = NSScrollView()
     private let page = PageArea()
     private var layoutScheduled = false
+    /// The height that the page keeps while a document that opened again
+    /// in place (`open` with `keepsScroll`) is laid out down to its end.
+    private var heldPageHeight: CGFloat?
     /// Goes up with each new layout (a document, a size, a style).
     private var layoutCount = 0
     /// Draws the frames and runs the layout steps off the main thread, so
@@ -183,7 +186,7 @@ final class NativeRendererView: NSView {
 
     /// Makes the scroll view's page as tall as what the core laid out.
     private func updatePageHeight() {
-        let size = NSSize(width: bounds.width, height: max(mdcore_content_height(ctx), 1))
+        let size = NSSize(width: bounds.width, height: max(mdcore_content_height(ctx), heldPageHeight ?? 0, 1))
         if page.frame.size != size { page.setFrameSize(size) }
         updateTaskCheckBoxes()
     }
@@ -347,6 +350,10 @@ final class NativeRendererView: NSView {
         }
         hasDocument = true
         endScrollAnimation()
+        // The layout starts again from the top and reaches the end of the
+        // document some steps later. Until then the page keeps the height
+        // it had, or the scroll bar would jump to another place and back.
+        heldPageHeight = keepsScroll ? page.frame.height : nil
         // Before the layout: it lays out what the view shows, and that must
         // be the top of a new document, not the place the old one was at.
         if !keepsScroll { scroll(toY: 0) }
@@ -392,6 +399,9 @@ final class NativeRendererView: NSView {
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.layoutScheduled = false
+                // The layout of this document is complete: its height is
+                // the real one now.
+                if !more && layout == self.layoutCount { self.heldPageHeight = nil }
                 self.updatePageHeight()
                 // A step that ran for a layout before the present one
                 // says nothing about what is left of this one.
