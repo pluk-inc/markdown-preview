@@ -1062,3 +1062,84 @@ test_select_all_is_all_of_the_text_with_no_layout :: proc(t: ^testing.T) {
 	defer teardown(&empty)
 	testing.expect(t, !select_all(&empty.doc).active)
 }
+
+@(test)
+test_a_new_layout_puts_the_readers_place_at_the_height_it_had :: proc(t: ^testing.T) {
+	source := long_source(60)
+	defer delete(source)
+	f: Fixture
+	setup(&f, source, 800)
+	defer teardown(&f)
+	// A reader far down the page.
+	y := f.page.content_height * 0.6
+	lay_out(&f.page, y, y + 600, y)
+	kept := take_place(&f.page, y)
+	testing.expect(t, kept.known)
+	testing.expect_value(t, kept.y, y)
+	// Some widths one after the other, as a live resize gives them. The
+	// place is taken one time, so the steps do not add up.
+	for width in ([]f32{640, 500, 380, 300, 420, 800}) {
+		begin(&f.page, &f.doc, f.style, width)
+		restore_place(&f.page, kept)
+		expect_ok(t, &f.page)
+		// The same text is at the same height of the page, so a view at
+		// the same offset shows it.
+		at, ok := place_y(&f.page, kept.place)
+		testing.expect(t, ok)
+		testing.expect(t, abs(at - y) < 0.01)
+		lay_out(&f.page, y, y + 600, y)
+		again, found := place_at(&f.page, y)
+		testing.expect(t, found)
+		testing.expect_value(t, again.block, kept.place.block)
+		testing.expect_value(t, again.cell, kept.place.cell)
+		testing.expect(t, again.byte <= kept.place.byte)
+		// Only the part of the place and what the view shows has records.
+		testing.expect_value(t, len(f.page.parts[0].boxes), 0)
+	}
+	// The top of the page moved for it.
+	testing.expect(t, f.page.origin != 0)
+	testing.expect_value(t, f.page.parts[0].top, f.page.origin)
+}
+
+@(test)
+test_a_reader_at_the_top_stays_at_the_top :: proc(t: ^testing.T) {
+	source := long_source(20)
+	defer delete(source)
+	f: Fixture
+	setup(&f, source, 800)
+	defer teardown(&f)
+	lay_out(&f.page, 0, 600, 0)
+	// At the top, and a little into the room above the first line.
+	testing.expect(t, !take_place(&f.page, 0).known)
+	testing.expect(t, !take_place(&f.page, 0.4).known)
+	kept := take_place(&f.page, 0)
+	begin(&f.page, &f.doc, f.style, 300)
+	restore_place(&f.page, kept)
+	expect_ok(t, &f.page)
+	testing.expect_value(t, f.page.origin, 0)
+	// Below all of the text there is no place, and nothing moves.
+	lay_out_end(&f.page, 600, 0)
+	below := take_place(&f.page, f.page.origin + f.page.content_height + 50)
+	testing.expect(t, !below.known)
+}
+
+@(test)
+test_a_new_layout_keeps_the_top_of_the_page :: proc(t: ^testing.T) {
+	source := long_source(60)
+	defer delete(source)
+	f: Fixture
+	setup(&f, source, 500)
+	defer teardown(&f)
+	// The top of the page moved: a part above the view got its height.
+	y := f.page.content_height / 2
+	lay_out(&f.page, y, y + 600, y)
+	anchor := part_at(&f.page, y)
+	lay_out_part(&f.page, anchor - 1, anchor)
+	origin := f.page.origin
+	testing.expect(t, origin != 0)
+	// A new layout with no place (a new document) starts where it was.
+	begin(&f.page, &f.doc, f.style, 400)
+	expect_ok(t, &f.page)
+	testing.expect_value(t, f.page.origin, origin)
+	testing.expect_value(t, f.page.parts[0].top, origin)
+}

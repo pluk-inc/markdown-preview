@@ -72,6 +72,14 @@ Ctx :: struct {
 	layout_width:    f32, // the width of the layout that is there now
 	scale:           f32,
 	scroll:          f64, // points
+	// The strip at the top of the view that the host covers (a toolbar):
+	// the reader sees the page from the scroll position plus this.
+	top_inset:       f64,
+	// The place of the reader, from the last frame, and the scroll
+	// position of that frame. A new layout puts the place at the height
+	// it had, so the scroll position of the host shows the same text.
+	place:           layout.Reader_Place,
+	place_scroll:    f64,
 	layout_valid:    bool,
 	revision:        int, // goes up when the layout gave a place or a height to something
 	// The display list: the quads of the page between shown_y0 and shown_y1.
@@ -179,6 +187,7 @@ mdcore_create :: proc "c" (surface: rawptr) -> rawptr {
 	runtime.default_temp_allocator_init(&ctx.scratch, 64 * 1024, context.allocator)
 	ctx.temp = runtime.default_temp_allocator(&ctx.scratch)
 	ctx.scale = 2
+	ctx.place_scroll = math.nan_f64()
 	ctx.style = default_style()
 	renderer.init(&ctx.gpu, surface)
 	return ctx
@@ -262,10 +271,12 @@ mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	document.destroy(&ctx.doc)
 	ctx.doc = document.parse(length > 0 ? string(utf8[:length]) : "")
 	ctx.selection = {}
-	// A new document starts at its top. A host that keeps the reader's
-	// offset (the same file with a change) draws at that offset again. A
-	// place of the old document is no address in the new one.
-	ctx.scroll = 0
+	// A place of the old document is no address in the new one. The top
+	// of the page stays where it is: a host that keeps the reader's offset
+	// (the same file with a change) is as far below it as before.
+	ctx.place = {}
+	ctx.place_scroll = math.nan_f64() // the next frame takes the place
+	ctx.scroll = ctx.page.origin
 	ctx.layout_valid = false
 }
 
@@ -300,6 +311,8 @@ mdcore_resize :: proc "c" (handle: rawptr, width, height, scale: f64) {
 	if !ctx.layout_valid || page_width != ctx.layout_width {
 		ctx.layout_width = page_width
 		layout.begin(&ctx.page, &ctx.doc, ctx.style, page_width)
+		// The text that the reader was at keeps its height on the page.
+		layout.restore_place(&ctx.page, ctx.place)
 		ctx.layout_valid = true
 		layout_changed(ctx)
 	}
@@ -383,6 +396,14 @@ draw :: proc(handle: rawptr, scroll_y, anchor_y: f64, with_window: bool) {
 		   layout.lay_out(&ctx.page, ctx.scroll - LAID_ABOVE * height, ctx.scroll + LAID_BELOW * height, anchor_y) {
 			layout_changed(ctx)
 		}
+		// The place of the reader, after a scroll. Not after a new layout
+		// alone: that one put the place where it was, and to take it
+		// again from each of the steps of a live resize moves it by a
+		// little each time.
+		if scroll_y != ctx.place_scroll {
+			ctx.place = layout.take_place(&ctx.page, scroll_y + ctx.top_inset)
+			ctx.place_scroll = scroll_y
+		}
 		if !ctx.display_valid || left_shown_part(ctx) {
 			show(ctx)
 		}
@@ -429,41 +450,17 @@ mdcore_set_task_checked :: proc "c" (handle: rawptr, line: c.long, checked: bool
 	return true
 }
 
-Host_Place :: struct {
-	block, cell, byte: c.long,
-	fraction:          f64,
-}
-
+// See the header.
 @(export)
-mdcore_place_at :: proc "c" (handle: rawptr, y: f64, out: ^Host_Place) -> bool {
-	context = runtime.default_context()
+mdcore_set_top_inset :: proc "c" (handle: rawptr, inset: f64) {
 	ctx := cast(^Ctx)handle
-	context.temp_allocator = ctx.temp
-	hold(ctx)
-	if !ctx.layout_valid {
-		return false
+	sync.lock(&ctx.lock)
+	defer sync.unlock(&ctx.lock)
+	if inset != ctx.top_inset {
+		ctx.top_inset = inset
+		// Another line is the first one now: the next frame takes it.
+		ctx.place_scroll = math.nan_f64()
 	}
-	place := layout.place_at(&ctx.page, y) or_return
-	out^ = {c.long(place.block), c.long(place.cell), c.long(place.byte), f64(place.fraction)}
-	return true
-}
-
-@(export)
-mdcore_place_y :: proc "c" (handle: rawptr, place: ^Host_Place, y: ^f64) -> bool {
-	context = runtime.default_context()
-	ctx := cast(^Ctx)handle
-	context.temp_allocator = ctx.temp
-	hold(ctx)
-	if !ctx.layout_valid {
-		return false
-	}
-	wanted := layout.Place{{int(place.block), int(place.cell), int(place.byte)}, f32(place.fraction)}
-	// Only the part of the place, not the parts above it.
-	if layout.lay_out_block(&ctx.page, wanted.block) {
-		layout_changed(ctx)
-	}
-	y^ = layout.place_y(&ctx.page, wanted) or_return
-	return true
 }
 
 // The shape of the pointer over a place of the page. The core decides

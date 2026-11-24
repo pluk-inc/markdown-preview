@@ -113,6 +113,13 @@ These came from the maintainer. Do not undo one without asking.
   keeps its height on the page, and the top of the page (`origin`) moves
   for a part above it. Do not lay out from the first block down to reach
   something, and do not read a height of the page as if it started at 0.
+- The core keeps the reader's place: the first line that the view shows
+  below the strip that the host covers (`mdcore_set_top_inset`). A frame
+  takes it after a scroll, and a new layout of the same document puts it
+  at the height of the page that it had (`restore_place`). So a host
+  draws at the scroll offset that it has after a new width or style, and
+  carries no place. The place is not taken again after a new layout
+  alone: the steps of a live resize would add up.
 - A host gives its scroll area the top and the height of the page
   (`mdcore_page_area`), and takes the two again when
   `mdcore_layout_revision` changed. A scroll to the top or to the end of
@@ -384,9 +391,9 @@ The window around the page, left on purpose:
 
 Task check boxes, left on purpose:
 
-- For another width or text size the view asks for the reader's place
-  again (`mdcore_place_y`); for a document that opens again in place it
-  draws as far below the top of the page as before, in points.
+- The core keeps the reader's place across a new width or style. For a
+  document that opens again in place it keeps the top of the page, so the
+  view is as far below it as before, in points.
 - A place is an address in the document: block, cell, byte. It needs no
   layout to be made, so Find, a jump to a footnote or a heading, and the
   way back from Edit mode can use it; none of them does yet. The same
@@ -452,12 +459,11 @@ The order of the next steps, from the review of the second step:
 
 - Done: the selection as a document address, with the copied text
   taken from the document.
-- Then the core keeps the reader's place itself: the anchor as a line
-  address in the layout, set by a frame, and a new layout that puts the
-  top of the page where that line keeps its height. Today the anchor is
-  a part, each layout call gets it as a height, and the host carries the
-  place across a new width (`relayout`, `keptPlace`). A change in the
-  part of the reader, above the first line that shows, needs the line.
+- Done: the core keeps the reader's place (`Reader_Place`, taken from a
+  frame after a scroll, put back by a new layout). Not done: the layout
+  calls of a frame still take their anchor as a part (`lay_out`), so a
+  change in the part of the reader, above the first line that shows,
+  needs the place there too.
 - Then one procedure "this part has another text": set the part back
   (no `part_clear` yet; `begin` makes the first state of a part in
   place), lay it out again, and move what is below it or the top of the
@@ -632,3 +638,10 @@ export.
   (0.34 s with the layout that it needed after the second step). The
   numbers in reading order that the layout kept for the selection are
   gone.
+- **2026-11-24** — Fourth step of the base: the core keeps the reader's
+  place. The view had carried it across each new layout with five calls
+  and three values of its own; now a new layout puts the first line that
+  the reader sees at the height it had, and the view draws at the offset
+  that it has. The two place calls of the API are gone. This is the
+  form that a change of the text needs: the core must hold the line that
+  stays, because only the core sees a change before the view does.

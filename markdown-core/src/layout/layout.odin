@@ -146,7 +146,9 @@ Layout :: struct {
 	parts:          [dynamic]Part,
 	// The top of the page. A part above the view that gets its real
 	// height moves this, and not the text that the view shows: the
-	// heights of the page that a host has stay true.
+	// heights of the page that a host has stay true. A new layout
+	// (`begin`) keeps it too, and `restore_place` moves it for the place
+	// of the reader.
 	origin:         f64,
 	content_height: f64,
 	// The part whose records are in `work`, or -1. The three values after
@@ -329,7 +331,6 @@ reset :: proc(l: ^Layout) {
 	clear(&l.work.boxes)
 	clear(&l.work.tasks)
 	l.open = -1
-	l.origin = 0
 	l.content_height = 0
 }
 

@@ -117,8 +117,8 @@ final class NativeRendererView: NSView {
             let wasAtTop = scrollY <= topScrollY + 0.5
             endScrollAnimation()
             scrollView.contentInsets = NSEdgeInsets(top: topInset, left: 0, bottom: 0, right: 0)
-            // The place was taken below the strip that was covered before.
-            keptPlace = nil
+            // The first line that the reader sees is another one now.
+            mdcore_set_top_inset(ctx, topInset)
             updateCoveredEdgeBacking()
             if wasAtTop { scroll(toY: topScrollY) }
             setNeedsDraw()
@@ -188,9 +188,6 @@ final class NativeRendererView: NSView {
         updatePointerShape()
         updateTaskCheckBoxes()
         guard !followsRenderLoop else { return }
-        // The reader went to another place: the kept one is not theirs any
-        // more, also when they come back to the same offset later.
-        if let keptPlace, abs(keptPlace.scrollY - scrollY) > 0.01 { self.keptPlace = nil }
         setNeedsDraw()
     }
 
@@ -300,33 +297,9 @@ final class NativeRendererView: NSView {
     /// Reads the reader settings and the theme again and shows the document
     /// with them. For a change of a setting, the theme, or the appearance.
     func applyStyle() {
-        // Before the style: it ends the layout that knows the place.
-        let place = placeAtTop()
         NativeRendererStyle(appearance: effectiveAppearance, zoom: textZoom).apply(to: ctx)
-        relayout(force: true, keeping: place)
+        relayout(force: true)
     }
-
-    /// The place in the document of the first text that the reader sees,
-    /// to show it again after a new layout (`relayout`). An offset in
-    /// points is another text after the lines are broken again. Nil for a
-    /// page at its top, which stays at its top.
-    private func placeAtTop() -> mdcore_place? {
-        // A key scroll in progress goes on in the old layout's offsets: it
-        // ends where it is.
-        endScrollAnimation()
-        guard hasDocument, scrollY > topScrollY + 0.5 else { return nil }
-        // The same place as for the layout before, while the reader did
-        // not scroll: a place taken again from each new layout is the
-        // start of another line each time, and the steps of a live resize
-        // would add up.
-        if let kept = keptPlace, abs(kept.scrollY - scrollY) < 0.5 { return kept.place }
-        var place = mdcore_place()
-        return mdcore_place_at(ctx, scrollY + topInset, &place) ? place : nil
-    }
-
-    /// The place that the last new layout kept, and the offset it has in
-    /// that layout.
-    private var keptPlace: (place: mdcore_place, scrollY: CGFloat)?
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
@@ -491,10 +464,6 @@ final class NativeRendererView: NSView {
             return
         }
         shownMarkdown = markdown
-        // Another text has other blocks: a place of the old one (a block
-        // number) can be other text in it. The same file with a change
-        // keeps its offset in points, which is near the same text.
-        keptPlace = nil
         var text = markdown
         text.withUTF8 { utf8 in
             utf8.withMemoryRebound(to: CChar.self) { mdcore_set_markdown(ctx, $0.baseAddress, $0.count) }
@@ -504,15 +473,17 @@ final class NativeRendererView: NSView {
         // Before the layout: it lays out what the view shows, and that must
         // be the top of a new document, not the place the old one was at.
         if !keepsScroll { scroll(toY: topScrollY) }
-        relayout(force: true, keeping: nil, takesPlace: false)
+        relayout(force: true)
     }
 
     /// Gives the core the view's size and draws. Skips a call that changes
     /// nothing, because one turn can report the same size more than once.
-    /// `keeping`: the reader's place, taken by a caller whose change ended
-    /// the layout already (a new style). `takesPlace` false: the layout
-    /// that is there is of another text, and the offset stays as it is.
-    private func relayout(force: Bool = false, keeping kept: mdcore_place? = nil, takesPlace: Bool = true) {
+    ///
+    /// The offset of the scroll view stays as it is. The core keeps the
+    /// first text that the reader sees at its height of the page in the
+    /// new layout (a new width, a new style), and the top of the page
+    /// where it is for a new document.
+    private func relayout(force: Bool = false) {
         // The core needs this layout also when the view has no size now
         // and gets its old size back later.
         if force { laidOutSize = .zero }
@@ -526,30 +497,22 @@ final class NativeRendererView: NSView {
         laidOutScale = scale
         laidOutPageWidth = pageWidth
         let size = bounds.size
-        // The first text that the reader sees stays where it is on screen:
-        // its place, from the layout that is there still.
-        let place = takesPlace ? kept ?? placeAtTop() : nil
+        // A key scroll in progress goes to an offset of the layout before:
+        // it ends where it is.
+        endScrollAnimation()
+        let offset = scrollY
         let topInset = topInset
-        // With no place: as far below the top of the page as now. A new
-        // layout has its top at another height.
-        let belowTop = scrollY - page.frame.minY
         let viewHeight = scrollView.contentView.bounds.height
-        var found = false
-        // The new size, then its frame, at the offset that the place has now.
+        // The new size, then its frame.
         drawNow { [ctx] in
             mdcore_set_page_width(ctx, pageWidth)
             mdcore_resize(ctx, size.width, size.height, scale)
-            var y = 0.0, top = 0.0, height = 0.0
-            if var place { found = mdcore_place_y(ctx, &place, &y) }
-            // After the place: its part got its real height for it.
+            // Not past an end of the new page, where the scroll view
+            // cannot go: the frame must be the one that stays.
+            var top = 0.0, height = 0.0
             _ = mdcore_page_area(ctx, &top, &height)
-            y = found ? y - topInset : top + belowTop
-            // Not past an end of the page, where the scroll view cannot
-            // go: the frame must be the one that stays.
-            return Self.clamped(y, top: top, height: height, inset: topInset, viewHeight: viewHeight)
+            return Self.clamped(offset, top: top, height: height, inset: topInset, viewHeight: viewHeight)
         }
-        // A place that the new document does not have is not kept.
-        keptPlace = found ? place.map { ($0, scrollY) } : nil
     }
 
     /// Draws a frame now and waits for it: the first frame of a document,

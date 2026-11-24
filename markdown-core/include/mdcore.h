@@ -141,28 +141,17 @@ long mdcore_tasks(void *ctx, double top, double bottom, mdcore_task *out, long c
 // to set it again. False when no task has its mark on that line.
 bool mdcore_set_task_checked(void *ctx, long line, bool checked);
 
-// A place in the document: a byte of its text and a height in the line
-// that has it. It stays valid when the document is laid out again
-// (another width, another style), which an offset in points does not.
-// The address is in the document and needs no layout: the number of the
-// block, the cell for a table (0 in each other block), and the byte in
-// that text. `fraction` is the height, in line heights from the top of
-// the line.
-typedef struct {
-    long block, cell, byte;
-    double fraction;
-} mdcore_place;
-
-// The place at a height of the page, in document space. A host takes it
-// before it changes the width or the style, for the text at the top of
-// what the reader sees. False when no text is at or below that height.
-bool mdcore_place_at(void *ctx, double y, mdcore_place *place);
-
-// The height of a place in the layout that is there now, after
-// mdcore_resize. Lays out the part of the document that the place is in,
-// when it has no records yet; not what is above it. False when the
-// document has no such block any more.
-bool mdcore_place_y(void *ctx, const mdcore_place *place, double *y);
+// The core keeps the reader's place: the first line of text that the view
+// shows. A new layout of the same document (another width, another style)
+// puts that line at the height of the page that it had, so the host draws
+// at the scroll position that it has and sees the same text. The place is
+// taken from a frame after each scroll. At the top of the page there is
+// none, and the top stays the top.
+//
+// The height of the strip at the top of the view that the host covers (a
+// toolbar that the page scrolls under). The first line that shows is the
+// one below it. 0 when nothing covers the view.
+void mdcore_set_top_inset(void *ctx, double inset);
 
 // The shape that the pointer has over a point in document space. The core
 // decides it and the host shows it: the text cursor on a line of text,
