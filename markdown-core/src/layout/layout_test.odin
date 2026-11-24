@@ -1268,6 +1268,7 @@ test_a_place_on_a_rule_or_in_blank_code_lines_is_the_text_below :: proc(t: ^test
 	setup(&f, "First.\n\n---\n\n```\n\n\n\n\n\n\n\n\ncode\n```\n\nLast.\n", 500)
 	defer teardown(&f)
 	lay_out(&f.page, 0, 60, 0)
+	expect_ok(t, &f.page)
 	rule := only(&f.page).boxes[1]
 	// With records only down to the rule there is no line below it yet.
 	y := f64(rule.top)
@@ -1275,6 +1276,7 @@ test_a_place_on_a_rule_or_in_blank_code_lines_is_the_text_below :: proc(t: ^test
 	// With the block below it laid out, the place is its first line of
 	// text, from far above it.
 	lay_out(&f.page, y, y + 600, y)
+	expect_ok(t, &f.page)
 	kept := take_place(&f.page, y)
 	testing.expect(t, kept.known)
 	testing.expect_value(t, kept.place.block, 2)
@@ -1282,6 +1284,7 @@ test_a_place_on_a_rule_or_in_blank_code_lines_is_the_text_below :: proc(t: ^test
 	testing.expect(t, !early.known || early.place == kept.place)
 	begin(&f.page, &f.doc, f.style, 300)
 	restore_place(&f.page, kept)
+	expect_ok(t, &f.page)
 	at, ok := place_y(&f.page, kept.place)
 	testing.expect(t, ok)
 	testing.expect(t, abs(at - y) < 0.01)
