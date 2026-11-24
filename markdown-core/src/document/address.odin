@@ -38,6 +38,16 @@ block_texts :: proc(b: ^Block) -> []Text {
 	return ([^]Text)(&b.text)[:1]
 }
 
+// The text that an address is in. Nil when the document has no such text
+// (no such block, a rule, no such cell).
+text_at :: proc(doc: ^Document, at: Address) -> ^Text {
+	if at.block < 0 || at.block >= doc.count {
+		return nil
+	}
+	texts := block_texts(block_at(doc, at.block))
+	return at.cell >= 0 && at.cell < len(texts) ? &texts[at.cell] : nil
+}
+
 // The start of the first text of the document that is not empty, and the
 // end of the last one: the two ends of all of its text. False for a
 // document with no text.
@@ -82,29 +92,32 @@ text_between :: proc(doc: ^Document, from, to: Address, out: ^[dynamic]u8) {
 	// since the last bytes.
 	owed := 0
 	wrote := false
-	p, slot := locate(doc, from.block)
-	for block := from.block; block <= to.block && p < len(doc.parts); block += 1 {
-		for text, cell in block_texts(&doc.parts[p].blocks[slot]) {
-			at := Address{block, cell, 0}
-			if before(at, Address{from.block, from.cell, 0}) || before(Address{to.block, to.cell, 0}, at) {
-				continue
+	first, slot := locate(doc, from.block)
+	for part, p in doc.parts[first:] {
+		for &b, n in part_blocks(part)[slot:] {
+			block := doc.starts[first + p] + slot + n
+			if block > to.block {
+				return
 			}
-			start := block == from.block && cell == from.cell ? clamp(from.byte, 0, len(text.bytes)) : 0
-			end := block == to.block && cell == to.cell ? clamp(to.byte, 0, len(text.bytes)) : len(text.bytes)
-			if start < end {
-				if wrote {
-					for _ in 0 ..< owed {
-						append(out, '\n')
-					}
+			for text, cell in block_texts(&b) {
+				// The cells before the first one and after the last one.
+				if (block == from.block && cell < from.cell) || (block == to.block && cell > to.cell) {
+					continue
 				}
-				append(out, ..text.bytes[start:end])
-				wrote, owed = true, 0
+				start := block == from.block && cell == from.cell ? clamp(from.byte, 0, len(text.bytes)) : 0
+				end := block == to.block && cell == to.cell ? clamp(to.byte, 0, len(text.bytes)) : len(text.bytes)
+				if start < end {
+					if wrote {
+						for _ in 0 ..< owed {
+							append(out, '\n')
+						}
+					}
+					append(out, ..text.bytes[start:end])
+					wrote, owed = true, 0
+				}
+				owed += 1
 			}
-			owed += 1
 		}
-		slot += 1
-		if slot >= doc.parts[p].count {
-			p, slot = p + 1, 0
-		}
+		slot = 0
 	}
 }

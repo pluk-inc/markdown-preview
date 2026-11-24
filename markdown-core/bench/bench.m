@@ -159,12 +159,11 @@ int main(int argc, const char *argv[]) {
     // height is enough.
     // CPU time: a frame waits for the display.
     double layout_start = thread_cpu_ms();
+    double y = 0, unused = 0;
+    mdcore_page_area(ctx, &y, &unused);
     for (;;) {
         double page_top = 0, page_height = 0;
         mdcore_page_area(ctx, &page_top, &page_height);
-        static double y;
-        static bool started;
-        if (!started) { y = page_top; started = true; }
         if (y >= page_top + page_height) break;
         @autoreleasepool {
             mdcore_draw(ctx, y);

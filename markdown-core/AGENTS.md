@@ -108,7 +108,7 @@ These came from the maintainer. Do not undo one without asking.
   fraction when the part does.
 - The layout is made where the view is, and a part that nobody looked at
   has an estimated height and no records. Code that needs records calls
-  for them first (`lay_out`, `lay_out_block`, `lay_out_blocks`) and says
+  for them first (`lay_out`, `lay_out_block`) and says
   what must stay in place (the anchor): text at the anchor and below it
   keeps its height on the page, and the top of the page (`origin`) moves
   for a part above it. Do not lay out from the first block down to reach

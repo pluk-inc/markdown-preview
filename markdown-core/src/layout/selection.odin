@@ -31,31 +31,11 @@ selection_range :: proc(s: Selection) -> (from, to: document.Address, ok: bool) 
 // that line the height is, in line heights. An offset in points says
 // nothing after the lines are broken again; this does.
 //
-// The address is in the document, not in a layout: the block, the cell
-// for a table, and the byte in that text. So it needs no layout to be
-// made, and it is the same text when another block got more or fewer
-// lines.
+// The address is in the document, so the place is the same text in each
+// layout.
 Place :: struct {
 	using at: document.Address, // of the first byte of the line
 	fraction: f32, // below 0 for a height above the line (between two blocks, in blank lines of code)
-}
-
-// The text of a place: of its block, or of its cell in a table. Nil when
-// the document has no such text.
-@(private)
-place_text :: proc(l: ^Layout, block, cell: int) -> ^document.Text {
-	if block < 0 || block >= l.doc.count {
-		return nil
-	}
-	return block_text(document.block_at(l.doc, block), cell)
-}
-
-@(private)
-block_text :: proc(b: ^document.Block, cell: int) -> ^document.Text {
-	if b.kind != .Table {
-		return &b.text
-	}
-	return cell >= 0 && cell < len(b.cells) ? &b.cells[cell] : nil
 }
 
 // The place at a height of the page. False when the page has no text at
@@ -136,7 +116,7 @@ place_y :: proc(l: ^Layout, place: Place) -> (y: f64, ok: bool) {
 	}
 	box := part.boxes[slot]
 	b := &l.doc.parts[p].blocks[slot]
-	src := block_text(b, place.cell)
+	src := document.text_at(l.doc, place.at)
 	// The line that has the byte of the place: the last line of its text
 	// that starts at or before it.
 	found := -1

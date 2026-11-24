@@ -49,12 +49,6 @@ step :: proc(l: ^Layout, until: f64) -> bool {
 	return lay_out(l, -1e30, until, 0)
 }
 
-// The text that an address is in.
-@(private = "file")
-text_of :: proc(doc: ^document.Document, a: document.Address) -> ^document.Text {
-	return &document.block_texts(document.block_at(doc, a.block))[a.cell]
-}
-
 // The selection of all of the document.
 @(private = "file")
 all :: proc(l: ^Layout) -> Selection {
@@ -138,11 +132,11 @@ test_hit_test_finds_the_line :: proc(t: ^testing.T) {
 	para := &only(&f.page).paras[last.para]
 	pos, ok := hit_test(&f.page, last.x + last.line.width - 1, f64(last.top + 2))
 	testing.expect(t, ok)
-	testing.expect(t, text_of(&f.doc, pos) == para.src)
+	testing.expect(t, document.text_at(&f.doc, pos) == para.src)
 	testing.expect(t, pos.byte > 0 && pos.byte <= len(para.src.bytes))
 	// A point far below the page still gives the last line.
 	below, _ := hit_test(&f.page, 0, f.page.content_height + 5000)
-	testing.expect(t, text_of(&f.doc, below) == para.src)
+	testing.expect(t, document.text_at(&f.doc, below) == para.src)
 }
 
 @(test)
@@ -478,10 +472,10 @@ test_a_place_is_the_same_text_at_another_width :: proc(t: ^testing.T) {
 		testing.expect(t, ok)
 		if document.block_at(&wide.doc, place.block).kind != .Table {
 			testing.expect_value(t, place.byte, para.base + line.line.start)
-			testing.expect(t, place_text(&wide.page, place.block, place.cell) == para.src)
+			testing.expect(t, document.text_at(&wide.doc, place.at) == para.src)
 		} else {
 			// The first cell of the row at that height.
-			testing.expect(t, place_text(&wide.page, place.block, place.cell) != nil)
+			testing.expect(t, document.text_at(&wide.doc, place.at) != nil)
 		}
 		// The same layout gives the height back.
 		back, back_ok := place_y(&wide.page, place)
@@ -666,7 +660,7 @@ test_a_place_in_a_later_part_has_the_number_of_its_block :: proc(t: ^testing.T) 
 			// The caret there is in the paragraph of that line.
 			pos, hit := hit_test(&wide.page, line.x + 1, y)
 			testing.expect(t, hit)
-			testing.expect(t, text_of(&wide.doc, pos) == para.src)
+			testing.expect(t, document.text_at(&wide.doc, pos) == para.src)
 		}
 	}
 	// The narrow layout is laid out only down to the place, in a later
