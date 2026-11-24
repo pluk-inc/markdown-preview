@@ -119,6 +119,8 @@ Part :: struct {
 	in_block:    bool, // the last box is of a block in progress (a long code block)
 	code_offset: int, // of that block: the byte offset of its next line
 	y:           f32, // the bottom of what is laid out
+	rest:        f32, // the estimated height of the blocks that have no box yet
+	block_rest:  f32, // the estimated height of the block in progress, at its start
 	live_first:  int, // all lines with shaped text are in [live_first, live_end)
 	live_end:    int,
 }
@@ -189,7 +191,8 @@ begin :: proc(l: ^Layout, doc: ^document.Document, style: base.Style, width: f32
 	if doc != nil {
 		for _, p in doc.parts {
 			start := part_start(l, p)
-			append(&l.parts, Part{height = start + estimate(l, p, 0), y = start})
+			rest := estimate(l, p, 0)
+			append(&l.parts, Part{height = start + rest, y = start, rest = rest})
 		}
 	}
 	sum_tops(l)
@@ -649,10 +652,9 @@ space_above :: proc(l: ^Layout, b: ^document.Block, heading_size: f32) -> f32 {
 }
 
 // The height of a block that is not laid out, with the space above it:
-// from the size of its text, with no shaping. `from_byte`: of a code
-// block that is laid out down to that byte, the rest.
+// from the size of its text, with no shaping.
 @(private)
-estimate_block :: proc(l: ^Layout, b: ^document.Block, first: bool, from_byte := 0) -> f32 {
+estimate_block :: proc(l: ^Layout, b: ^document.Block, first: bool) -> f32 {
 	// The mean width of a character, in sizes of its font.
 	CHAR :: 0.5
 	MONO_CHAR :: 0.6
@@ -669,8 +671,7 @@ estimate_block :: proc(l: ^Layout, b: ^document.Block, first: bool, from_byte :=
 		line := math.round(l.m.code_size * CODE_LINE_HEIGHT)
 		per_line := max(width - 2 * CODE_PAD, 20) / (MONO_CHAR * l.m.code_size)
 		lines, run: f32
-		bytes := b.text.bytes[min(from_byte, len(b.text.bytes)):]
-		for c in bytes {
+		for c in b.text.bytes {
 			if c == '\n' {
 				lines += max(math.ceil(run / per_line), 1)
 				run = 0
@@ -679,15 +680,12 @@ estimate_block :: proc(l: ^Layout, b: ^document.Block, first: bool, from_byte :=
 			}
 		}
 		lines += max(math.ceil(run / per_line), 1)
-		height = lines * line + (from_byte == 0 ? 2 * CODE_PAD : CODE_PAD)
+		height = lines * line + 2 * CODE_PAD
 	case .Rule:
 		height = 1
 	case .Table:
 		rows := b.columns > 0 ? len(b.cells) / b.columns : 0
 		height = f32(rows) * (math.round(l.m.body * l.m.line_height) + 2 * CELL_PAD_Y)
-	}
-	if from_byte > 0 {
-		return height
 	}
 	return height + (first ? 0 : space_above(l, b, size))
 }
@@ -755,6 +753,12 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 			if index > 0 || slot > 0 {
 				l.y += space_above(l, b, heading_size)
 			}
+			// The block has a box from here on: its estimate goes out of
+			// the rest of the part. The estimate of a block is made one
+			// time for the first height of the part and one time here.
+			part := open_part(l)
+			part.block_rest = estimate_block(l, b, index == 0 && slot == 0)
+			part.rest -= part.block_rest
 			append(&work.boxes, Box{top = l.y, bottom = l.y, line_first = len(work.lines), decor_first = len(work.decor)})
 			l.in_block = true
 			l.code_offset = 0
@@ -841,11 +845,15 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 		part.complete = true
 		close_part(l)
 	} else {
-		// What is laid out, and an estimate for the rest: of the block
-		// in progress, and of the blocks after it.
-		part.height = l.y + estimate(l, index, len(work.boxes))
+		// What is laid out, and an estimate for the rest: of the blocks
+		// with no box, and of the block in progress.
+		part.height = l.y + max(part.rest, 0)
 		if l.in_block {
-			part.height += estimate_block(l, &blocks.blocks[len(work.boxes) - 1], false, max(l.code_offset, 1))
+			// What is left of a code block: of its first estimate, the
+			// share of the bytes that have no line yet. No look at the
+			// bytes again: a long block is laid out in many calls.
+			bytes := len(blocks.blocks[len(work.boxes) - 1].text.bytes)
+			part.height += part.block_rest * f32(max(bytes - l.code_offset, 0)) / f32(max(bytes, 1))
 		}
 	}
 	return true

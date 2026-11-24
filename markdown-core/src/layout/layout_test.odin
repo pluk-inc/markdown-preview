@@ -920,9 +920,14 @@ test_parts_laid_out_in_any_order_give_the_same_page :: proc(t: ^testing.T) {
 	defer teardown(&mixed)
 	step(&down.page, 1e30)
 	// From the last part to the first, with the view at the end.
+	end: f64
 	for p := len(up.page.parts) - 1; p >= 0; p -= 1 {
 		lay_out_part(&up.page, p, len(up.page.parts) - 1)
 		expect_ok(t, &up.page)
+		if p == len(up.page.parts) - 1 {
+			// The end of the page with the real height of the last part.
+			end = up.page.origin + up.page.content_height
+		}
 	}
 	// Some of one part, then another part, then the rest of the first:
 	// the part goes out of work and comes back.
@@ -954,8 +959,10 @@ test_parts_laid_out_in_any_order_give_the_same_page :: proc(t: ^testing.T) {
 		selection_text(&f.page, all(&f.page), &b)
 		testing.expect_value(t, string(b[:]), string(a[:]))
 	}
-	// With the view at the end, the end stayed and the top moved.
-	testing.expect(t, abs(up.page.origin + up.page.content_height - (down.page.content_height + up.page.origin)) < 0.01)
+	// With the view at the end, the end stayed where it was after the
+	// last part, and the top of the page moved.
+	testing.expect_value(t, up.page.origin + up.page.content_height, end)
+	testing.expect(t, up.page.origin != 0)
 }
 
 @(test)

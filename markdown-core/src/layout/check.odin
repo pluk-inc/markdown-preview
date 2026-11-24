@@ -59,6 +59,9 @@ check :: proc(l: ^Layout) -> string {
 		if part.height < y {
 			return "a part is lower than what is laid out of it"
 		}
+		if len(part.boxes) == 0 && part.height != part.y + part.rest {
+			return "a part with no records does not have its estimated height"
+		}
 		for line, i in part.lines {
 			if line.para < 0 || line.para >= len(part.paras) {
 				return "a line of no paragraph"
