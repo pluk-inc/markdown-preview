@@ -338,9 +338,10 @@ The window around the page, left on purpose:
 
 Task check boxes, left on purpose:
 
-- A new layout (another width or text size, or a document that opens
-  again in place) starts from the top, and the view asks for the reader's
-  place again (`mdcore_place_y`). Far down a long document that lays out
+- A new layout starts from the top. For another width or text size the
+  view asks for the reader's place again (`mdcore_place_y`); for a
+  document that opens again in place it draws at the same offset in
+  points. Far down a long document each of the two lays out
   everything above the reader on the main thread: 0.37 s for each step of
   a live resize at the end of the 1.1 MB document (`BENCHMARKS.md`).
   Heights that are estimated for the blocks above the place would remove

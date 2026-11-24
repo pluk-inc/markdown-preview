@@ -238,8 +238,9 @@ mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	ctx.selection = {}
 	// A new document starts at its top, so the first layout does not go
 	// down to the place the old one was scrolled to. A host that keeps the
-	// reader's place (the same file with a change) asks for it again
-	// (`mdcore_place_y`), and pays for the layout down to it there.
+	// reader's offset (the same file with a change) draws at that offset
+	// again, and pays for the layout down to it there. A place of the old
+	// document is no address in the new one.
 	ctx.scroll = 0
 	ctx.layout_valid = false
 }
