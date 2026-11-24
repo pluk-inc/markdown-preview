@@ -55,6 +55,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-24 | the view goes under the toolbar on macOS 26, so the page shows through it | 674 / 592 | 57 / 101 | 510 / 1080 | – | – | – | – |
 | 2026-11-24 | a task changes in place; the page beside a scroll bar that takes room; Go menu scroll actions | 653 / 667 | 61 / 104 | 470 / 1120 | – | – | 0.33 / 0.33 | 6.7 / 20.7 |
 | 2026-11-24 | the text cursor only over text; the core gives the shape of the pointer | 583 / 607 | 55 / 96 | 480 / 1020 | – | – | – | 6.6 / 20.7 |
+| 2026-11-24 | the system backing of the covered top edge covers the find bar too | 621 / 633 | 54 / 96 | 510 / 1090 | – | – | – | – |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -258,3 +259,13 @@ the answer is "busy" and the view asks again 30 ms later. Before that
 change it waited, up to the 4 ms of a layout step, on the main thread.
 Not measured: the main thread during a scroll with the pointer on the
 page of the front window.
+
+## The backing behind the find bar (2026-11-24)
+
+`app.py`, `main` and the change one after the other, short / long: launch
+to the first frame 586 / 638 against 621 / 633 ms, CPU 500 / 1090 against
+510 / 1090 ms, memory 53 / 95 against 54 / 96 MB. Two pairs of an earlier
+form of the change gave 588 / 616 and 574 / 583 against 590 / 598 and
+580 / 640 ms. No difference outside what the runs differ by. No file of
+the core changed, so `core.py` was not run. The benchmark opens no find
+bar; the change does work only when the covered strip changes its height.

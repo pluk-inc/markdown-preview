@@ -325,6 +325,17 @@ Speed and memory (the 1.1 MB document):
   once outside the window: 6 to 7 % of the layout.
 - Layout records are 64 bytes for a paragraph and for a line; 40 would do.
 
+The window around the page, left on purpose:
+
+- Find does not search in the native renderer: the search runs in the web
+  view, which has no page then, and the find bar says "Not found".
+- When the reader comes back from Edit mode with the search open, the
+  page goes back to another place. Left as it is: Edit mode is to move to
+  this core.
+- Not checked on macOS 26.1 to 26.x, where the find bar is an accessory of
+  the split view, and on macOS 15, where the view starts below the
+  toolbar and a find bar lies over its first lines.
+
 Task check boxes, left on purpose:
 
 - A document that opens again in place (another app saved the file, or a
@@ -466,3 +477,13 @@ scroll position, footnotes and alerts, VoiceOver, print and export.
   core decides the shape of the pointer and the scroll view shows it as
   the cursor of its document; a link that opens will add a shape. The
   question does not wait for the core's lock.
+- **2026-11-24** — The maintainer saw the page through the find bar. The
+  web view never had this, because WebKit backs all of its covered strip.
+  A first fix put a view of the page color behind the bar; the maintainer
+  wanted the translucent look that the toolbar has, and pointed to the
+  earlier fixes for the web view. Those use the system's own backing of a
+  scroll view's covered edge, and the native scroll view has the same
+  one, sized from its safe area. The rest of the covered strip is now
+  added to that safe area. Rule from this: before something is built for
+  the area around the toolbar, look at how the web view got it, and test
+  with the find bar, the tab bar, and Edit mode.
