@@ -94,12 +94,11 @@ final class NativeRendererView: NSView {
             self, selector: #selector(pageDidScroll),
             name: NSView.boundsDidChangeNotification, object: scrollView.contentView
         )
-        // A scroll bar that takes room (the system setting "always") makes
-        // the visible part narrower when it shows. The page follows it.
-        scrollView.contentView.postsFrameChangedNotifications = true
+        // A scroll bar that takes room (the system setting "always", or a
+        // mouse) has its strip at the right edge; see `pageWidth`.
         NotificationCenter.default.addObserver(
-            self, selector: #selector(visiblePartDidChange),
-            name: NSView.frameDidChangeNotification, object: scrollView.contentView
+            self, selector: #selector(scrollerStyleDidChange),
+            name: NSScroller.preferredScrollerStyleDidChangeNotification, object: nil
         )
         // A scroll by hand takes over from a scroll that the keyboard started.
         NotificationCenter.default.addObserver(
@@ -141,8 +140,17 @@ final class NativeRendererView: NSView {
         return min(max(top, y), max(top, page.frame.height - scrollView.contentView.bounds.height))
     }
 
-    @objc private func visiblePartDidChange() {
+    @objc private func scrollerStyleDidChange() {
         relayout()
+    }
+
+    /// The width that the page is laid out in. A scroll bar that takes
+    /// room has its strip free at all times, also while a short document
+    /// shows no bar: the width of the page then does not depend on its
+    /// height, so a bar that comes or goes starts no second layout.
+    private var pageWidth: CGFloat {
+        guard scrollView.scrollerStyle == .legacy else { return bounds.width }
+        return max(bounds.width - NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy), 1)
     }
 
     @objc private func pageDidScroll() {
@@ -229,8 +237,8 @@ final class NativeRendererView: NSView {
     /// Makes the scroll view's page as tall as what the core laid out.
     private func updatePageHeight() {
         laidOutHeight = mdcore_content_height(ctx)
-        // As wide as the visible part: a wider page could move sideways.
-        let size = NSSize(width: scrollView.contentSize.width, height: max(laidOutHeight, heldPageHeight ?? 0, 1))
+        // Not wider than the visible part: a wider page could move sideways.
+        let size = NSSize(width: pageWidth, height: max(laidOutHeight, heldPageHeight ?? 0, 1))
         if page.frame.size != size { page.setFrameSize(size) }
         updateTaskCheckBoxes()
     }
@@ -438,9 +446,9 @@ final class NativeRendererView: NSView {
         if force { laidOutSize = .zero }
         guard hasPageToDraw else { return }
         let scale = Double(window?.backingScaleFactor ?? 2)
-        // The part beside a scroll bar that takes room. The frame is as
-        // large as the view; the page is laid out in that part of it.
-        let pageWidth = scrollView.contentSize.width
+        // The frame is as large as the view; the page is laid out in the
+        // part of it beside a scroll bar that takes room.
+        let pageWidth = pageWidth
         guard bounds.size != laidOutSize || scale != laidOutScale || pageWidth != laidOutPageWidth else { return }
         laidOutSize = bounds.size
         laidOutScale = scale
@@ -559,11 +567,9 @@ final class NativeRendererView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
-        let step = visibleHeight - 60
         switch event.keyCode {
-        // From the place a scroll in progress goes to, so fast key presses add up.
         case Key.pageDown: scrollPageDown(nil)
-        case Key.space: animateScroll(toY: scrollTarget + (event.modifierFlags.contains(.shift) ? -step : step))
+        case Key.space: event.modifierFlags.contains(.shift) ? scrollPageUp(nil) : scrollPageDown(nil)
         case Key.pageUp: scrollPageUp(nil)
         // With Command, as the Go menu has them, for a key that the menu
         // did not take.
@@ -576,7 +582,8 @@ final class NativeRendererView: NSView {
     }
 
     // The scroll actions of the Go menu, which takes its key equivalents
-    // before `keyDown` gets them.
+    // before `keyDown` gets them. Each goes from the place that a scroll
+    // in progress goes to, so fast key presses add up.
 
     override func scrollLineUp(_ sender: Any?) { animateScroll(toY: scrollTarget - 48) }
     override func scrollLineDown(_ sender: Any?) { animateScroll(toY: scrollTarget + 48) }
