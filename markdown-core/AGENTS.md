@@ -119,7 +119,9 @@ These came from the maintainer. Do not undo one without asking.
   at the height of the page that it had (`restore_place`). So a host
   draws at the scroll offset that it has after a new width or style, and
   carries no place. The place is not taken again after a new layout
-  alone: the steps of a live resize would add up.
+  alone: the steps of a live resize would add up. A frame can be one
+  refresh behind the scroll view, so a host says its offset before it
+  changes the width, the style, or the text (`mdcore_note_scroll`).
 - A host gives its scroll area the top and the height of the page
   (`mdcore_page_area`), and takes the two again when
   `mdcore_layout_revision` changed. A scroll to the top or to the end of

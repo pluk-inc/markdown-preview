@@ -153,6 +153,13 @@ bool mdcore_set_task_checked(void *ctx, long line, bool checked);
 // one below it. 0 when nothing covers the view.
 void mdcore_set_top_inset(void *ctx, double inset);
 
+// The scroll position of the view now. A frame says it too, but a frame
+// can be one refresh behind: a host calls this before it changes what
+// the layout is made from (mdcore_resize with a new width, mdcore_set_style,
+// mdcore_set_markdown), so the place that is kept is the one of the text
+// that the reader sees at that moment.
+void mdcore_note_scroll(void *ctx, double scroll_y);
+
 // The shape that the pointer has over a point in document space. The core
 // decides it and the host shows it: the text cursor on a line of text,
 // the default one in the margin, between blocks, and at a list marker or

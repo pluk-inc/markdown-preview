@@ -374,6 +374,40 @@ mdcore_draw_with_window :: proc "c" (handle: rawptr, scroll_y: f64) {
 	draw(handle, scroll_y, scroll_y, true)
 }
 
+// The view is at a scroll position: lays out what it shows there, and
+// takes the reader's place from it. `anchor_y`: the height of the page
+// whose text stays where it is when a part is laid out for it.
+@(private)
+scroll_to :: proc(ctx: ^Ctx, scroll_y, anchor_y: f64) {
+	ctx.scroll = scroll_y
+	keep_window(ctx)
+	height := f64(ctx.height)
+	if !layout.laid_out(&ctx.page, ctx.scroll - NEEDED_ABOVE * height, ctx.scroll + NEEDED_BELOW * height) &&
+	   layout.lay_out(&ctx.page, ctx.scroll - LAID_ABOVE * height, ctx.scroll + LAID_BELOW * height, anchor_y) {
+		layout_changed(ctx)
+	}
+	// The place of the reader, after a scroll. Not after a new layout
+	// alone: that one put the place where it was, and to take it again
+	// from each of the steps of a live resize moves it by a little each
+	// time.
+	if scroll_y != ctx.place_scroll {
+		ctx.place = layout.take_place(&ctx.page, scroll_y + ctx.top_inset)
+		ctx.place_scroll = scroll_y
+	}
+}
+
+// See the header.
+@(export)
+mdcore_note_scroll :: proc "c" (handle: rawptr, scroll_y: f64) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	if ctx.layout_valid && ctx.height > 0 {
+		scroll_to(ctx, scroll_y, scroll_y)
+	}
+}
+
 // `anchor_y`: the height of the page whose text stays where it is when
 // this frame lays out a part.
 @(private)
@@ -388,22 +422,7 @@ draw :: proc(handle: rawptr, scroll_y, anchor_y: f64, with_window: bool) {
 		if !ctx.layout_valid {
 			return
 		}
-		ctx.scroll = scroll_y
-		keep_window(ctx)
-		// What this frame shows must have its records.
-		height := f64(ctx.height)
-		if !layout.laid_out(&ctx.page, ctx.scroll - NEEDED_ABOVE * height, ctx.scroll + NEEDED_BELOW * height) &&
-		   layout.lay_out(&ctx.page, ctx.scroll - LAID_ABOVE * height, ctx.scroll + LAID_BELOW * height, anchor_y) {
-			layout_changed(ctx)
-		}
-		// The place of the reader, after a scroll. Not after a new layout
-		// alone: that one put the place where it was, and to take it
-		// again from each of the steps of a live resize moves it by a
-		// little each time.
-		if scroll_y != ctx.place_scroll {
-			ctx.place = layout.take_place(&ctx.page, scroll_y + ctx.top_inset)
-			ctx.place_scroll = scroll_y
-		}
+		scroll_to(ctx, scroll_y, anchor_y)
 		if !ctx.display_valid || left_shown_part(ctx) {
 			show(ctx)
 		}
