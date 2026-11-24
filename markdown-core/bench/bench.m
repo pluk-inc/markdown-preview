@@ -178,9 +178,20 @@ int main(int argc, const char *argv[]) {
         }
     }
     printf("type_middle_cpu_ms %.2f\n", (thread_cpu_ms() - type_start) / KEYS);
+    // The end of the last line that is text of the page: not an empty
+    // line, and not the definition of a link ("[name]: target"), which
+    // shows nothing and changes text at other places.
     long last = (long)changed.length;
     const char *text = changed.bytes;
-    while (last > 0 && (text[last - 1] == '\n' || text[last - 1] == '\r')) last--;
+    for (;;) {
+        while (last > 0 && (text[last - 1] == '\n' || text[last - 1] == '\r')) last--;
+        long line = last;
+        while (line > 0 && text[line - 1] != '\n' && text[line - 1] != '\r') line--;
+        long first = line;
+        while (first < last && text[first] == ' ') first++;
+        if (last == 0 || text[first] != '[') break;
+        last = line;
+    }
     type_start = thread_cpu_ms();
     for (int key = 0; key < KEYS; key++) {
         // The keys before are in the text too.

@@ -541,8 +541,8 @@ The order of the next steps, from the review of the second step:
   `mdcore_replace_text`). No host calls it yet; the benchmark types
   through it. It still parses all of the new source: one typed
   character costs 9 to 10 ms of CPU in 1 MB, with no layout in it.
-- In 9 KB a typed character costs 5.2 ms in a full part and 1.3 ms in
-  a part with few blocks. That is not the parse: a change to one block
+- In 9 KB a typed character costs 5 ms. That is not the parse: a
+  change to one block
   lays out all blocks of its part again (58 blocks at most, with their
   text shaped again).
   A layout that makes only the changed block again is as much needed
@@ -767,7 +767,7 @@ export.
   new layout of the same source: the check that the parse of only what
   changed needs before it is written. The benchmark has the number
   that this work is for: one typed character, 9 to 10 ms of CPU in
-  1.1 MB (the parse of all), and 1.3 to 5.2 ms in 9 KB, where it is the
-  layout of the full part for one changed block, not the parse. Two
+  1.1 MB (the parse of all), and 5 ms in 9 KB, where it is the layout
+  of the full part for one changed block, not the parse. Two
   threads that change the source at one time are in order by a lock
   for such calls, which a frame does not take.

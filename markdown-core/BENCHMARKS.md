@@ -545,21 +545,23 @@ frame waits for the display, so the time on the clock says nothing).
 
 | | Short | Long |
 | --- | --- | --- |
-| A typed character in the middle of the text (CPU ms) | 5.2 | 10.4 |
-| A typed character at the end of the text (CPU ms) | 1.3 | 8.9 |
+| A typed character in the middle of the text (CPU ms) | 5.0 | 10.4 |
+| A typed character at the end of the text (CPU ms) | 4.8 | 10.5 |
+
+The end of the text is the end of its last line that shows on the page
+(the benchmark document ends with definitions of links, which show
+nothing).
 
 An editor has 8.3 ms for a key at 120 Hz. Two costs are in these
 numbers:
 
 - The parse of all of the new source and the comparison of all blocks:
-  about 9 ms for the long document, 0.1 ms for the short one. In the
-  long document the view does not show the middle, so its 10.4 ms have
-  no layout in them.
+  it is most of the 10 ms of the long document, and 0.1 ms of the short
+  one.
 - The layout of the part of the document that has the changed block:
   all blocks of the part are laid out again, with their text shaped
-  again, when the part is near the view. The short document shows it:
-  5.2 ms in its middle, where the part is full (58 blocks), and 1.3 ms
-  at its end, where the last part has few blocks.
+  again, when the part is near the view. It is the 5 ms of the short
+  document, where all of the text is near the view.
 
 So two things are between this and a key that costs less than 1 ms: the
 parse of only what changed, and a layout that makes only the changed
