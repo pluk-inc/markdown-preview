@@ -390,6 +390,15 @@ mdcore_set_task_checked :: proc "c" (handle: rawptr, line: c.long, checked: bool
 	return true
 }
 
+@(export)
+mdcore_text_at :: proc "c" (handle: rawptr, x, y: f64) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	return ctx.layout_valid && layout.text_at(&ctx.page, f32(x), f32(y))
+}
+
 // phase 0 = mouse down, 1 = drag. x and y are points in document space.
 @(export)
 mdcore_mouse :: proc "c" (handle: rawptr, x, y: f64, phase: c.int) {

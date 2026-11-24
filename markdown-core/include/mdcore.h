@@ -115,6 +115,11 @@ long mdcore_tasks(void *ctx, double top, double bottom, mdcore_task *out, long c
 // to set it again. False when no task has its mark on that line.
 bool mdcore_set_task_checked(void *ctx, long line, bool checked);
 
+// True when a point in document space is on a line of text, and not in
+// the margin, between blocks, or at a list marker or a check box. A host
+// shows the text cursor only there.
+bool mdcore_text_at(void *ctx, double x, double y);
+
 // Selection. phase: 0 = mouse down, 1 = drag. x, y are in document space.
 void mdcore_mouse(void *ctx, double x, double y, int phase);
 void mdcore_select_all(void *ctx);

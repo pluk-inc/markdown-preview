@@ -534,6 +534,11 @@ final class NativeRendererView: NSView {
 
     // MARK: Input
 
+    /// True when a point of the page is on a line of text.
+    fileprivate func isText(at point: NSPoint) -> Bool {
+        hasDocument && mdcore_text_at(ctx, point.x, point.y)
+    }
+
     /// A pointer event on the page. `point` is in page coordinates, which
     /// are the core's document space. phase: 0 = down, 1 = drag.
     fileprivate func pointer(at point: NSPoint, phase: Int32) {
@@ -613,7 +618,26 @@ private final class PageArea: NSView {
 
     override var isFlipped: Bool { true }
 
-    override func resetCursorRects() { addCursorRect(bounds, cursor: .iBeam) }
+    // The text cursor only over a line of text; the arrow in the margin,
+    // between blocks, and around a list marker or a check box. The page
+    // knows where its text is only from the core, so the cursor follows
+    // the pointer and is not a fixed rectangle.
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(
+            rect: .zero, options: [.mouseMoved, .cursorUpdate, .activeInKeyWindow, .inVisibleRect], owner: self
+        ))
+    }
+
+    override func mouseMoved(with event: NSEvent) { setCursor(for: event) }
+    override func cursorUpdate(with event: NSEvent) { setCursor(for: event) }
+
+    private func setCursor(for event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        (owner?.isText(at: point) == true ? NSCursor.iBeam : NSCursor.arrow).set()
+    }
 
     override func mouseDown(with event: NSEvent) {
         owner?.pointer(at: convert(event.locationInWindow, from: nil), phase: 0)

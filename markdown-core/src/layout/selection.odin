@@ -32,6 +32,25 @@ selection_range :: proc(s: Selection) -> (from, to: Position, ok: bool) {
 	return from, to, true
 }
 
+// True when a point of the page is on a line of text: in its height, and
+// not left of where it starts. The margin, the space between blocks, and
+// the place of a list marker or a check box are not text. For the pointer:
+// a host shows the text cursor only there.
+text_at :: proc(l: ^Layout, x, y: f32) -> bool {
+	i := first_box_below(l, y)
+	if i >= len(l.boxes) || l.boxes[i].top > y {
+		return false
+	}
+	box := l.boxes[i]
+	for line in l.lines[box.line_first:box.line_end] {
+		para := &l.paras[line.para]
+		if para.src != nil && y >= line.top && y < line.top + para.line_height && x >= line.x {
+			return true
+		}
+	}
+	return false
+}
+
 // The caret position nearest to a point of the page.
 hit_test :: proc(l: ^Layout, x, y: f32) -> (pos: Position, ok: bool) {
 	if len(l.boxes) == 0 {
