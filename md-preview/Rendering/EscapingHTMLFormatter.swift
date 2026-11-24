@@ -711,24 +711,42 @@ nonisolated enum TaskCheckboxSource {
     }()
 
     /// Returns a copy with the task marker on the 1-based source line set to
-    /// the requested state. The source line comes from swift-markdown's range,
-    /// so duplicate task labels and nested lists remain unambiguous.
+    /// the requested state. The source line comes from the parser of the
+    /// renderer that shows the box, so duplicate task labels and nested
+    /// lists remain unambiguous. A line ends with LF, CR LF, or CR alone,
+    /// as those parsers count it; the rest of the text stays as it is.
     static func settingChecked(_ checked: Bool,
                                onLine sourceLine: Int,
                                in markdown: String) -> String? {
         guard sourceLine > 0 else { return nil }
-        var lines = markdown.components(separatedBy: "\n")
-        let index = sourceLine - 1
-        guard lines.indices.contains(index) else { return nil }
+        let bytes = markdown.utf8
+        var start = bytes.startIndex
+        var number = 1
+        var index = bytes.startIndex
+        while number < sourceLine {
+            guard index < bytes.endIndex else { return nil }
+            let byte = bytes[index]
+            var next = bytes.index(after: index)
+            if byte == UInt8(ascii: "\r") || byte == UInt8(ascii: "\n") {
+                if byte == UInt8(ascii: "\r"), next < bytes.endIndex, bytes[next] == UInt8(ascii: "\n") {
+                    next = bytes.index(after: next)
+                }
+                number += 1
+                start = next
+            }
+            index = next
+        }
+        let end = bytes[start...].firstIndex { $0 == UInt8(ascii: "\r") || $0 == UInt8(ascii: "\n") } ?? bytes.endIndex
 
-        let line = lines[index]
+        let line = String(markdown[start..<end])
         let fullRange = NSRange(line.startIndex..<line.endIndex, in: line)
         guard let match = markerRegex.firstMatch(in: line, range: fullRange),
               let markerRange = Range(match.range(at: 2), in: line) else {
             return nil
         }
-        lines[index].replaceSubrange(markerRange, with: checked ? "x" : " ")
-        return lines.joined(separator: "\n")
+        var changed = line
+        changed.replaceSubrange(markerRange, with: checked ? "x" : " ")
+        return String(markdown[..<start]) + changed + String(markdown[end...])
     }
 }
 
