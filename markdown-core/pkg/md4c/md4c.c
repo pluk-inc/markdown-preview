@@ -5859,6 +5859,15 @@ md_start_new_block(MD_CTX* ctx, const MD_LINE_ANALYSIS* line)
 /* Forward declarations */
 static int md_is_hr_line(MD_CTX* ctx, OFF beg, OFF* p_end, OFF* p_killer);
 
+/* Start of the input line that has an offset. (Not in upstream.) */
+static OFF
+md_line_start(MD_CTX* ctx, OFF off)
+{
+    while(off > 0  &&  CH(off-1) != _T('\n')  &&  CH(off-1) != _T('\r'))
+        off--;
+    return off;
+}
+
 /* Eat from start of current (textual) block any reference definitions and/or
  * footnote definitions, and remember them.
  *
@@ -5872,6 +5881,7 @@ md_consume_link_reference_definitions(MD_CTX* ctx)
     MD_SIZE n_lines = ctx->current_block->n_lines;
     MD_SIZE n = 0;
     bool inject_hr = false;
+    OFF hr_beg = 0;         /* (Not in upstream.) */
     OFF ignored;
 
     while(n < n_lines) {
@@ -5909,7 +5919,11 @@ md_consume_link_reference_definitions(MD_CTX* ctx)
      * (https://github.com/mity/md4c/issues/414) */
     if(n < n_lines  &&  md_is_hr_line(ctx, lines[n].beg, &ignored, &ignored)) {
         inject_hr = true;
+        hr_beg = md_line_start(ctx, lines[n].beg);
         n++;    /* Remove one more line below. */
+        /* The rest of the block comes after the HR. (Not in upstream.) */
+        if(n < n_lines)
+            ctx->current_block->beg = md_line_start(ctx, lines[n].beg);
     }
 
     if(n == n_lines) {
@@ -5940,7 +5954,7 @@ md_consume_link_reference_definitions(MD_CTX* ctx)
 
         memset(hr_block, 0, sizeof(MD_BLOCK));
         hr_block->type = MD_BLOCK_HR;
-        hr_block->beg = ctx->line_beg;
+        hr_block->beg = hr_beg;
     }
 
     return 0;

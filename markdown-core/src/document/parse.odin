@@ -95,6 +95,17 @@ parse :: proc(source: string) -> Document {
 	close_text(&p)
 	delete(p.lists)
 	doc.source = slice.clone(transmute([]u8)source)
+	when ODIN_DEBUG {
+		// The blocks are in the order of the source, each with lines of
+		// its own.
+		last := -1
+		for part in doc.parts {
+			for &b in part_blocks(part) {
+				assert(b.source > last && b.source < max(len(source), 1), "a block starts before the block before it ends")
+				last = b.source
+			}
+		}
+	}
 	return doc
 }
 

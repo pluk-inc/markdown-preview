@@ -686,8 +686,15 @@ test_a_block_knows_its_lines_of_the_source :: proc(t: ^testing.T) {
 	// before the first block of the item.
 	expect_sources(t, "intro\n\n- >\n\n  tail\n", {"intro\n\n", "- >\n\n  tail\n"})
 	expect_sources(t, "> <div>\n\nnext\n- a\n  - > <i>\n\n  b\n", {"> <div>\n\nnext\n", "- a\n", "  - > <i>\n\n", "  b\n"})
-	// A line under definitions of links only is a rule.
+	expect_sources(t, "# title\n\n-\n  > <div></div>\n\n  later\n", {"# title\n\n", "-\n  > <div></div>\n\n  later\n"})
+	// A line under definitions of links only is a rule; the rest of the
+	// paragraph comes after it.
 	expect_sources(t, "intro\n\n[a]: /x\n---\nend\n", {"intro\n\n[a]: /x\n", "---\n", "end\n"})
+	expect_sources(
+		t,
+		"# Before\n\n[a]: /u\n    ---\ntext\n\nAfter\n",
+		{"# Before\n\n[a]: /u\n", "    ---\n", "text\n\n", "After\n"},
+	)
 	// A paragraph keeps the definitions that it starts with.
 	expect_sources(t, "one\n\n[a]: /x\ntwo [a]\n", {"one\n\n", "[a]: /x\ntwo [a]\n"})
 }
