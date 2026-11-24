@@ -15,6 +15,7 @@ package mdcore
 import "base"
 import "base:runtime"
 import "core:c"
+import "core:math"
 import "core:sync"
 import "document"
 import "layout"
@@ -25,6 +26,19 @@ import "text"
 // scroll position.
 SHOWN_ABOVE :: 2
 SHOWN_BELOW :: 3
+// A frame needs the records of what the view shows and half a view more
+// on each side, so a part does not get its real height in the view. When
+// some of that has none, it lays out more than it needs: the next frames
+// of a scroll then find theirs, and a scroll lays out a few times for
+// each view height, not for each frame.
+LAID_ABOVE :: 1
+LAID_BELOW :: 2.5
+// The same margin as for the quads: the view, and that much more.
+NEEDED_ABOVE :: LAID_ABOVE - SHOWN_MARGIN
+NEEDED_BELOW :: LAID_BELOW - 1 - SHOWN_MARGIN
+// How much of the end of the document `mdcore_layout_end` lays out, in
+// view heights: the last view, and what a frame lays out above it.
+LAID_AT_END :: 1 + LAID_ABOVE
 // Shaped text is kept for this many view heights around the scroll
 // position: the shown part, and how far the view moves in it before the
 // quads are made again.
@@ -59,6 +73,7 @@ Ctx :: struct {
 	scale:           f32,
 	scroll:          f64, // points
 	layout_valid:    bool,
+	revision:        int, // goes up when the layout gave a place or a height to something
 	// The display list: the quads of the page between shown_y0 and shown_y1.
 	display_valid:   bool,
 	shown_y0:        f64, // points
@@ -110,9 +125,9 @@ style_release :: proc(style: ^base.Style) {
 @(private)
 show :: proc(ctx: ^Ctx) {
 	height := f64(ctx.height)
-	ctx.shown_y0 = max(ctx.scroll - SHOWN_ABOVE * height, 0)
+	ctx.shown_y0 = max(ctx.scroll - SHOWN_ABOVE * height, ctx.page.origin)
 	ctx.shown_y1 = ctx.scroll + SHOWN_BELOW * height
-	ctx.origin_px = f64(int(ctx.shown_y0 * f64(ctx.scale)))
+	ctx.origin_px = math.floor(ctx.shown_y0 * f64(ctx.scale))
 	clear(&ctx.rects)
 	clear(&ctx.glyphs)
 	layout.display(&ctx.page, &ctx.cache, ctx.shown_y0, ctx.shown_y1, ctx.origin_px, &ctx.rects, &ctx.glyphs, &ctx.glyph_buffer)
@@ -137,12 +152,20 @@ show_selection :: proc(ctx: ^Ctx) {
 	renderer.set_selection(&ctx.gpu, ctx.selection_quads[:])
 }
 
+// After the layout gave something a place or a height: the quads are of
+// the layout before it, and so is what the host has from it.
+@(private)
+layout_changed :: proc(ctx: ^Ctx) {
+	ctx.display_valid = false
+	ctx.revision += 1
+}
+
 // True when the view came near the edge of the part that has quads.
 @(private)
 left_shown_part :: proc(ctx: ^Ctx) -> bool {
 	height := f64(ctx.height)
 	margin := SHOWN_MARGIN * height
-	return (ctx.shown_y0 > 0 && ctx.scroll - margin < ctx.shown_y0) || ctx.scroll + height + margin > ctx.shown_y1
+	return (ctx.shown_y0 > ctx.page.origin && ctx.scroll - margin < ctx.shown_y0) || ctx.scroll + height + margin > ctx.shown_y1
 }
 
 @(export)
@@ -239,11 +262,9 @@ mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	document.destroy(&ctx.doc)
 	ctx.doc = document.parse(length > 0 ? string(utf8[:length]) : "")
 	ctx.selection = {}
-	// A new document starts at its top, so the first layout does not go
-	// down to the place the old one was scrolled to. A host that keeps the
-	// reader's offset (the same file with a change) draws at that offset
-	// again, and pays for the layout down to it there. A place of the old
-	// document is no address in the new one.
+	// A new document starts at its top. A host that keeps the reader's
+	// offset (the same file with a change) draws at that offset again. A
+	// place of the old document is no address in the new one.
 	ctx.scroll = 0
 	ctx.layout_valid = false
 }
@@ -258,8 +279,8 @@ mdcore_set_page_width :: proc "c" (handle: rawptr, width: f64) {
 	ctx.page_width = f32(max(width, 0))
 }
 
-// Sets the view size in points and the backing scale. Lays out what the
-// view shows now when the document, the style, or the width changed.
+// Sets the view size in points and the backing scale. Starts a new
+// layout when the document, the style, or the width changed.
 @(export)
 mdcore_resize :: proc "c" (handle: rawptr, width, height, scale: f64) {
 	context = runtime.default_context()
@@ -280,58 +301,70 @@ mdcore_resize :: proc "c" (handle: rawptr, width, height, scale: f64) {
 		ctx.layout_width = page_width
 		layout.begin(&ctx.page, &ctx.doc, ctx.style, page_width)
 		ctx.layout_valid = true
-		ctx.display_valid = false
+		layout_changed(ctx)
 	}
 	ctx.height, ctx.scale = f32(height), f32(scale)
 	keep_window(ctx)
 	renderer.resize(&ctx.gpu, ctx.width, ctx.height, ctx.scale, page_width)
-	// Only what the view shows now; mdcore_layout_more does the rest.
-	if layout.step(&ctx.page, ctx.scroll + 2 * f64(ctx.height)) {
-		ctx.display_valid = false
-	}
+	// No layout here: the next frame lays out what it shows, where the
+	// host draws it (a place can be at another height in a new layout).
 }
 
-// Continues the layout for about `budget_ms`. Returns true while blocks are
-// left; the host calls it again from the run loop.
 @(export)
-mdcore_layout_more :: proc "c" (handle: rawptr, budget_ms: f64) -> bool {
+mdcore_layout_revision :: proc "c" (handle: rawptr) -> c.long {
+	ctx := cast(^Ctx)handle
+	sync.lock(&ctx.lock)
+	defer sync.unlock(&ctx.lock)
+	return c.long(ctx.revision)
+}
+
+// See the header.
+@(export)
+mdcore_layout_end :: proc "c" (handle: rawptr) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
 	hold(ctx)
-	if !ctx.layout_valid || layout.done(&ctx.page) {
-		return false
+	if !ctx.layout_valid {
+		return
 	}
-	reached := layout.reached(&ctx.page)
-	layout.step(&ctx.page, 1e30, budget_ms)
-	if reached < ctx.shown_y1 {
-		ctx.display_valid = false // the new blocks are in the shown part
+	if layout.lay_out_end(&ctx.page, LAID_AT_END * f64(ctx.height), ctx.scroll) {
+		layout_changed(ctx)
 	}
-	return !layout.done(&ctx.page)
 }
 
+// See the header.
 @(export)
-mdcore_content_height :: proc "c" (handle: rawptr) -> f64 {
+mdcore_page_area :: proc "c" (handle: rawptr, top, height: ^f64) -> c.long {
 	ctx := cast(^Ctx)handle
 	sync.lock(&ctx.lock)
 	defer sync.unlock(&ctx.lock)
-	return ctx.page.content_height
+	top^, height^ = ctx.page.origin, ctx.page.content_height
+	return c.long(ctx.revision)
 }
 
 @(export)
 mdcore_draw :: proc "c" (handle: rawptr, scroll_y: f64) {
 	context = runtime.default_context()
-	draw(handle, scroll_y, false)
+	draw(handle, scroll_y, scroll_y, false)
+}
+
+@(export)
+mdcore_draw_toward :: proc "c" (handle: rawptr, scroll_y, target_y: f64) {
+	context = runtime.default_context()
+	draw(handle, scroll_y, target_y, false)
 }
 
 @(export)
 mdcore_draw_with_window :: proc "c" (handle: rawptr, scroll_y: f64) {
 	context = runtime.default_context()
-	draw(handle, scroll_y, true)
+	draw(handle, scroll_y, scroll_y, true)
 }
 
+// `anchor_y`: the height of the page whose text stays where it is when
+// this frame lays out a part.
 @(private)
-draw :: proc(handle: rawptr, scroll_y: f64, with_window: bool) {
+draw :: proc(handle: rawptr, scroll_y, anchor_y: f64, with_window: bool) {
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
 	sync.lock(&ctx.draw_lock)
@@ -344,15 +377,17 @@ draw :: proc(handle: rawptr, scroll_y: f64, with_window: bool) {
 		}
 		ctx.scroll = scroll_y
 		keep_window(ctx)
-		// The view can scroll past what the steps laid out so far.
-		if layout.step(&ctx.page, ctx.scroll + 2 * f64(ctx.height)) {
-			ctx.display_valid = false
+		// What this frame shows must have its records.
+		height := f64(ctx.height)
+		if !layout.laid_out(&ctx.page, ctx.scroll - NEEDED_ABOVE * height, ctx.scroll + NEEDED_BELOW * height) &&
+		   layout.lay_out(&ctx.page, ctx.scroll - LAID_ABOVE * height, ctx.scroll + LAID_BELOW * height, anchor_y) {
+			layout_changed(ctx)
 		}
 		if !ctx.display_valid || left_shown_part(ctx) {
 			show(ctx)
 		}
 		renderer.sync_atlases(&ctx.gpu, &ctx.cache)
-		frame = renderer.frame_begin(&ctx.gpu, f32(f64(int(ctx.scroll * f64(ctx.scale))) - ctx.origin_px))
+		frame = renderer.frame_begin(&ctx.gpu, f32(math.floor(ctx.scroll * f64(ctx.scale)) - ctx.origin_px))
 	}
 	// The frame can wait for the display. Other calls go on meanwhile, but
 	// no other frame: the draw lock is held to its end.
@@ -423,16 +458,11 @@ mdcore_place_y :: proc "c" (handle: rawptr, place: ^Host_Place, y: ^f64) -> bool
 		return false
 	}
 	wanted := layout.Place{int(place.block), int(place.cell), int(place.byte), f32(place.fraction)}
-	reached := layout.reached(&ctx.page)
-	layout.step_to_block(&ctx.page, wanted.block)
-	at := layout.place_y(&ctx.page, wanted) or_return
-	// And what a view shows below it, so the page is tall enough for the
-	// host to scroll there.
-	layout.step(&ctx.page, at + 2 * f64(ctx.height))
-	if layout.reached(&ctx.page) != reached {
-		ctx.display_valid = false
+	// Only the part of the place, not the parts above it.
+	if layout.lay_out_block(&ctx.page, wanted.block) {
+		layout_changed(ctx)
 	}
-	y^ = at
+	y^ = layout.place_y(&ctx.page, wanted) or_return
 	return true
 }
 
@@ -447,7 +477,7 @@ Pointer_Shape :: enum c.int {
 
 // The one export that does not wait for the view's state (`hold`): the
 // host asks on its main thread for each move of the pointer and each step
-// of a scroll, and a layout step or a frame can have the state for some
+// of a scroll, and a layout call or a frame can have the state for some
 // milliseconds. It reads only, and uses no working memory.
 @(export)
 mdcore_pointer_shape :: proc "c" (handle: rawptr, x, y: f64) -> Pointer_Shape {
@@ -488,9 +518,12 @@ mdcore_select_all :: proc "c" (handle: rawptr) {
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
 	hold(ctx)
-	// All of the document, not only the part that is laid out so far.
-	layout.step(&ctx.page, 1e30)
-	ctx.selection = layout.select_all(&ctx.page)
+	// The text that the view shows stays where it is.
+	changed: bool
+	ctx.selection, changed = layout.select_all(&ctx.page, ctx.scroll)
+	if changed {
+		layout_changed(ctx)
+	}
 	ctx.display_valid = false
 }
 
@@ -502,7 +535,13 @@ mdcore_selection_text :: proc "c" (handle: rawptr, length: ^c.long) -> [^]u8 {
 	context.temp_allocator = ctx.temp
 	hold(ctx)
 	clear(&ctx.clipboard)
-	layout.selection_text(&ctx.page, ctx.selection, &ctx.clipboard)
+	if from, to, ok := layout.selection_range(ctx.selection); ok && ctx.layout_valid {
+		// The text comes from the records of its blocks.
+		if layout.lay_out_blocks(&ctx.page, from.block, to.block, ctx.scroll) {
+			layout_changed(ctx)
+		}
+		layout.selection_text(&ctx.page, ctx.selection, &ctx.clipboard)
+	}
 	length^ = c.long(len(ctx.clipboard))
 	return raw_data(ctx.clipboard)
 }

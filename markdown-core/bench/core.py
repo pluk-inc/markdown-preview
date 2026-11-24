@@ -23,15 +23,20 @@ OUT = CORE / "build" / "bench"
 METRICS = [
     ("source_kb", "Source (KB)"),
     ("first_frame_ms", "First frame (ms)"),
-    ("full_layout_ms", "Layout of the rest (ms)"),
     ("first_scroll_frame_cpu_ms", "Scroll frame, new glyphs (CPU ms)"),
     ("first_scroll_longest_frame_cpu_ms", "Longest such frame (CPU ms)"),
     ("jump_frame_cpu_ms", "Frame after a jump to the top (CPU ms)"),
     ("second_scroll_frame_cpu_ms", "Scroll frame, glyphs ready (CPU ms)"),
     ("second_scroll_longest_frame_cpu_ms", "Longest such frame (CPU ms)"),
+    ("end_frame_ms", "To the end: layout and first frame there (ms)"),
+    ("resize_at_end_ms", "A new width at the end: layout and frame (ms)"),
+    ("select_all_ms", "Select All (ms)"),
+    ("full_layout_ms", "Layout of all of the document, for a copy of all of it (ms)"),
+    ("estimate_error_percent", "Estimated page height against the real one (%)"),
     ("total_cpu_ms", "CPU for the full run (ms)"),
     ("first_frame_heap_mb", "Heap at the first frame (MB)"),
-    ("heap_mb", "Heap at the end (MB)"),
+    ("scrolled_heap_mb", "Heap after the scroll passes (MB)"),
+    ("heap_mb", "Heap with all of the document laid out (MB)"),
 ]
 
 

@@ -34,17 +34,12 @@ final class NativeRendererView: NSView {
     private var hasDocument = false
     private let scrollView = NSScrollView()
     private let page = PageArea()
-    private var layoutScheduled = false
-    /// The height that the page keeps while a document that opened again
-    /// in place (`open` with `keepsScroll`) is laid out down to its end.
-    private var heldPageHeight: CGFloat?
-    /// How far down the core laid the page out, at the last look. The page
-    /// can be taller (`heldPageHeight`).
-    private var laidOutHeight: CGFloat = 0
-    /// Goes up with each new layout (a document, a size, a style).
-    private var layoutCount = 0
-    /// Draws the frames and runs the layout steps off the main thread, so
-    /// work that makes glyphs or breaks lines does not hold it.
+    /// The core's number of its layout at the last look
+    /// (`mdcore_page_area`). What the view has from another one (the
+    /// places of the check boxes) is old.
+    private var layoutRevision = 0
+    /// Draws the frames off the main thread, so work that makes glyphs or
+    /// breaks lines does not hold it.
     /// Read in `deinit`, which is why it is unsafe.
     nonisolated(unsafe) private var renderLoop: NativeRenderLoop!
     /// True while the scroll view takes the offset of a scroll that the
@@ -151,16 +146,28 @@ final class NativeRendererView: NSView {
         super.layout()
     }
 
-    /// The offset at the top of the page.
-    private var topScrollY: CGFloat { -scrollView.contentInsets.top }
+    /// The offset at the top of the page. The page does not start at 0:
+    /// the core moves its top when a part above the reader gets its real
+    /// height, so the text that shows keeps its offset (`updatePageArea`).
+    private var topScrollY: CGFloat { page.frame.minY - scrollView.contentInsets.top }
 
     /// The height of the part of the view that the toolbar does not cover.
-    private var visibleHeight: CGFloat { scrollView.contentView.bounds.height + topScrollY }
+    private var visibleHeight: CGFloat { scrollView.contentView.bounds.height - scrollView.contentInsets.top }
 
     /// An offset, kept inside the page.
     private func clamped(_ y: CGFloat) -> CGFloat {
-        let top = topScrollY
-        return min(max(top, y), max(top, page.frame.height - scrollView.contentView.bounds.height))
+        Self.clamped(
+            y, top: page.frame.minY, height: page.frame.height,
+            inset: scrollView.contentInsets.top, viewHeight: scrollView.contentView.bounds.height
+        )
+    }
+
+    /// An offset, kept inside a page that is `height` tall from `top`
+    /// down, in a view whose first `inset` points are covered.
+    nonisolated private static func clamped(
+        _ y: CGFloat, top: CGFloat, height: CGFloat, inset: CGFloat, viewHeight: CGFloat
+    ) -> CGFloat {
+        min(max(top - inset, y), max(top - inset, top + height - viewHeight))
     }
 
     @objc private func scrollerStyleDidChange() {
@@ -181,6 +188,9 @@ final class NativeRendererView: NSView {
         updatePointerShape()
         updateTaskCheckBoxes()
         guard !followsRenderLoop else { return }
+        // The reader went to another place: the kept one is not theirs any
+        // more, also when they come back to the same offset later.
+        if let keptPlace, abs(keptPlace.scrollY - scrollY) > 0.01 { self.keptPlace = nil }
         setNeedsDraw()
     }
 
@@ -202,6 +212,11 @@ final class NativeRendererView: NSView {
     /// After a frame that was a step of a key scroll or that made the page
     /// taller, on the main thread.
     private func frameDidDraw(_ step: NativeRenderLoop.ScrollStep?) {
+        // A draw lays out the parts of the page that it shows first. The
+        // main thread reads the range of the page itself: one sent from
+        // the render thread can come after a newer one. Before the step
+        // of a scroll, which must be inside that range.
+        updatePageArea()
         // Not for a scroll that the reader took over or that another key
         // press replaced meanwhile: its last frames can come late.
         if let step, step.scroll == scrollAnimation?.scroll {
@@ -219,22 +234,19 @@ final class NativeRendererView: NSView {
             // the scroll view could go.
             if abs(scrollY - step.y) > 0.5 { endScrollAnimation() }
         }
-        // A draw can lay out more of the page, when the view came to the
-        // end of what the steps reached. The main thread reads the height
-        // itself: a height sent from the render thread can come after a
-        // newer one.
-        updatePageHeight()
     }
 
     /// Scrolls to an offset over a short time, as the system's views do
     /// for the keyboard. The render loop moves the page, one step for each
     /// frame, and the scroll view follows.
-    private func animateScroll(toY y: CGFloat) {
+    /// `toFixedPlace`: to the top or the end of the document, which must
+    /// be the top or the end when the scroll gets there.
+    private func animateScroll(toY y: CGFloat, toFixedPlace: Bool = false) {
         let target = clamped(y)
         // The new place replaces the one a scroll in progress went to.
         endScrollAnimation()
         guard abs(target - scrollY) > 1 else { return scroll(toY: target) }
-        scrollAnimation = (renderLoop.animateScroll(from: scrollY, to: target), target)
+        scrollAnimation = (renderLoop.animateScroll(from: scrollY, to: target, toFixedPlace: toFixedPlace), target)
     }
 
     private func endScrollAnimation() {
@@ -259,12 +271,21 @@ final class NativeRendererView: NSView {
         scrollView.reflectScrolledClipView(scrollView.contentView)
     }
 
-    /// Makes the scroll view's page as tall as what the core laid out.
-    private func updatePageHeight() {
-        laidOutHeight = mdcore_content_height(ctx)
+    /// Gives the scroll view's page the range that the page has in the
+    /// core: its top and its height. The two change when the core lays
+    /// out a part whose height was estimated. The top is not 0 then; the
+    /// offsets of the text that shows stay as they are.
+    private func updatePageArea() {
+        var top = 0.0, height = 0.0
+        layoutRevision = mdcore_page_area(ctx, &top, &height)
         // Not wider than the visible part: a wider page could move sideways.
-        let size = NSSize(width: pageWidth, height: max(laidOutHeight, heldPageHeight ?? 0, 1))
-        if page.frame.size != size { page.setFrameSize(size) }
+        let frame = NSRect(x: 0, y: top, width: pageWidth, height: max(height, 1))
+        if page.frame != frame {
+            page.frame = frame
+            // A height in the page area is a height of the core's page,
+            // for the check boxes and the pointer.
+            page.setBoundsOrigin(frame.origin)
+        }
         updateTaskCheckBoxes()
         // After each layout and each frame that laid out more: other text
         // can be under a pointer that did not move.
@@ -316,7 +337,7 @@ final class NativeRendererView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     deinit {
-        // No frame and no layout step may run when the core goes away.
+        // No frame may run when the core goes away.
         renderLoop.stop()
         mdcore_destroy(ctx)
     }
@@ -344,9 +365,9 @@ final class NativeRendererView: NSView {
         let size = button.bounds.size
         return (size, button.cell?.imageRect(forBounds: NSRect(origin: .zero, size: size)) ?? NSRect(origin: .zero, size: size))
     }()
-    /// The part of the page that has its check boxes, and how far down the
-    /// page was laid out when the core was asked for them. Nil: ask again.
-    private var taskBoxRange: (top: CGFloat, bottom: CGFloat, laidOutTo: CGFloat)?
+    /// The range of the page that has its check boxes, and the layout
+    /// that the core gave them for (`layoutRevision`). Nil: ask again.
+    private var taskBoxRange: (top: CGFloat, bottom: CGFloat, revision: Int)?
     private var taskBuffer = [mdcore_task](repeating: mdcore_task(), count: 256)
 
     /// Puts a check box on each task near the visible part of the page.
@@ -357,10 +378,8 @@ final class NativeRendererView: NSView {
         if let range = taskBoxRange {
             // Room for a quarter of a view more in each direction.
             let covers = scrollY - viewHeight / 4 >= range.top && scrollY + viewHeight * 1.25 <= range.bottom
-            // The layout had reached the end of the part, or it did not
-            // go on since then.
-            let complete = range.laidOutTo >= range.bottom || laidOutHeight == range.laidOutTo
-            if covers && complete { return }
+            // And the layout is the one that the boxes were placed in.
+            if covers && range.revision == layoutRevision { return }
         }
         var count = 0
         if hasDocument {
@@ -375,7 +394,7 @@ final class NativeRendererView: NSView {
                 taskBuffer = [mdcore_task](repeating: mdcore_task(), count: count)
                 count = min(mdcore_tasks(ctx, top, bottom, &taskBuffer, count), count)
             }
-            taskBoxRange = (top, bottom, laidOutHeight)
+            taskBoxRange = (top, bottom, layoutRevision)
         }
         let tasks = taskBuffer[..<count]
 
@@ -482,12 +501,6 @@ final class NativeRendererView: NSView {
         }
         hasDocument = true
         endScrollAnimation()
-        // For the same file with a change from outside (another app saved
-        // it, or a click on a task could not be saved): the layout starts
-        // again from the top and reaches the end of the document some
-        // steps later. Until then the page keeps the height it had, or the
-        // scroll bar would jump to another place and back.
-        heldPageHeight = keepsScroll ? page.frame.height : nil
         // Before the layout: it lays out what the view shows, and that must
         // be the top of a new document, not the place the old one was at.
         if !keepsScroll { scroll(toY: topScrollY) }
@@ -513,29 +526,30 @@ final class NativeRendererView: NSView {
         laidOutScale = scale
         laidOutPageWidth = pageWidth
         let size = bounds.size
-        layoutCount += 1
         // The first text that the reader sees stays where it is on screen:
         // its place, from the layout that is there still.
         let place = takesPlace ? kept ?? placeAtTop() : nil
         let topInset = topInset
-        let top = topScrollY
+        // With no place: as far below the top of the page as now. A new
+        // layout has its top at another height.
+        let belowTop = scrollY - page.frame.minY
         let viewHeight = scrollView.contentView.bounds.height
         var found = false
         // The new size, then its frame, at the offset that the place has now.
         drawNow { [ctx] in
             mdcore_set_page_width(ctx, pageWidth)
             mdcore_resize(ctx, size.width, size.height, scale)
-            guard var place else { return nil }
-            var y = 0.0
-            guard mdcore_place_y(ctx, &place, &y) else { return nil }
-            found = true
-            // Not past the end of the page, where the scroll view cannot
+            var y = 0.0, top = 0.0, height = 0.0
+            if var place { found = mdcore_place_y(ctx, &place, &y) }
+            // After the place: its part got its real height for it.
+            _ = mdcore_page_area(ctx, &top, &height)
+            y = found ? y - topInset : top + belowTop
+            // Not past an end of the page, where the scroll view cannot
             // go: the frame must be the one that stays.
-            return min(y - topInset, max(top, mdcore_content_height(ctx) - viewHeight))
+            return Self.clamped(y, top: top, height: height, inset: topInset, viewHeight: viewHeight)
         }
         // A place that the new document does not have is not kept.
         keptPlace = found ? place.map { ($0, scrollY) } : nil
-        continueLayout()
     }
 
     /// Draws a frame now and waits for it: the first frame of a document,
@@ -545,10 +559,8 @@ final class NativeRendererView: NSView {
     private func drawNow(before: (() -> Double?)? = nil) {
         guard hasPageToDraw else { return }
         let drawn = renderLoop.frameNow(at: scrollY, before: before)
-        // The page was laid out again from its top (a new document, size,
-        // or style): each check box can have another place.
-        taskBoxRange = nil
-        updatePageHeight()
+        // Also takes the check boxes again, when the layout is a new one.
+        updatePageArea()
         if abs(drawn - scrollY) > 0.01 {
             // That frame is drawn already.
             followsRenderLoop = true
@@ -557,29 +569,6 @@ final class NativeRendererView: NSView {
             // The scroll view could not go there (the end of the page):
             // the frame for where it is.
             if abs(drawn - scrollY) > 0.5 { setNeedsDraw() }
-        }
-    }
-
-    /// Lays out the rest of a long document in steps shorter than a frame,
-    /// off the main thread, so frames go between them.
-    private func continueLayout() {
-        guard !layoutScheduled else { return }
-        layoutScheduled = true
-        nonisolated(unsafe) let ctx = ctx
-        let layout = layoutCount
-        renderLoop.perform { [weak self] in
-            let more = mdcore_layout_more(ctx, 4)
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.layoutScheduled = false
-                // The layout of this document is complete: its height is
-                // the real one now.
-                if !more && layout == self.layoutCount { self.heldPageHeight = nil }
-                self.updatePageHeight()
-                // A step that ran for a layout before the present one
-                // says nothing about what is left of this one.
-                if more || layout != self.layoutCount { self.continueLayout() }
-            }
         }
     }
 
@@ -642,7 +631,7 @@ final class NativeRendererView: NSView {
             switch mdcore_pointer_shape(ctx, point.x, point.y) {
             case MDCORE_POINTER_TEXT: cursor = .iBeam
             case MDCORE_POINTER_BUSY:
-                // A layout step or a frame has the core. The main thread
+                // A frame has the core. The main thread
                 // does not wait for it: the cursor stays, and one later
                 // call asks again.
                 guard !pointerShapeRetryScheduled else { return }
@@ -682,7 +671,7 @@ final class NativeRendererView: NSView {
 
     override func selectAll(_ sender: Any?) {
         mdcore_select_all(ctx)
-        updatePageHeight()
+        updatePageArea()
         setNeedsDraw()
     }
 
@@ -719,13 +708,15 @@ final class NativeRendererView: NSView {
     override func scrollLineDown(_ sender: Any?) { animateScroll(toY: scrollTarget + 48) }
     override func scrollPageUp(_ sender: Any?) { animateScroll(toY: scrollTarget - (visibleHeight - 60)) }
     override func scrollPageDown(_ sender: Any?) { animateScroll(toY: scrollTarget + (visibleHeight - 60)) }
-    override func scrollToBeginningOfDocument(_ sender: Any?) { animateScroll(toY: topScrollY) }
+    override func scrollToBeginningOfDocument(_ sender: Any?) {
+        animateScroll(toY: topScrollY, toFixedPlace: true)
+    }
 
     override func scrollToEndOfDocument(_ sender: Any?) {
-        // The end of the document, not of the part laid out so far.
-        _ = mdcore_layout_more(ctx, 0)
-        updatePageHeight()
-        animateScroll(toY: .greatestFiniteMagnitude)
+        // The end of the document at its real height, not at an estimate.
+        mdcore_layout_end(ctx)
+        updatePageArea()
+        animateScroll(toY: .greatestFiniteMagnitude, toFixedPlace: true)
     }
 }
 

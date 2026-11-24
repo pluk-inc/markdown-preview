@@ -91,8 +91,8 @@ These came from the maintainer. Do not undo one without asking.
   their shaped text, the text system's paragraph and line objects
   (`layout/window.odin`). Code that reads glyphs or a caret's x takes its
   line from `shaped_line`, which shapes it again when needed. Code that
-  works on the full document (the copied text, Select All, the page
-  height) must use the records only, or it shapes all of the document.
+  works on a long range of the document (the copied text) must use the
+  records only, or it shapes all of that range.
 - The blocks of the document are in parts (`document.Part`), and the
   layout keeps its records for each part by itself (`layout.Part`). A
   height in a record (a line, a box, a decoration, a task) counts from
@@ -102,9 +102,21 @@ These came from the maintainer. Do not undo one without asking.
   What must stand on a whole point or a whole pixel is put there on the
   page (`page_pixel`, `tasks_between`), not in the part, or it moves by a
   fraction when the part does.
+- The layout is made where the view is, and a part that nobody looked at
+  has an estimated height and no records. Code that needs records calls
+  for them first (`lay_out`, `lay_out_block`, `lay_out_blocks`) and says
+  what must stay in place (the anchor): text at the anchor and below it
+  keeps its height on the page, and the top of the page (`origin`) moves
+  for a part above it. Do not lay out from the first block down to reach
+  something, and do not read a height of the page as if it started at 0.
+- A host gives its scroll area the top and the height of the page
+  (`mdcore_page_area`), and takes the two again when
+  `mdcore_layout_revision` changed. A scroll to the top or to the end of
+  the document is a scroll to a fixed place (`mdcore_draw_toward`,
+  `mdcore_layout_end`); a scroll by a distance is not.
 - The layout changes its sums and ranges in place. `layout.check` looks
   at all of them and says what is wrong; a new test of the layout calls it
-  after each change, and a build with `-debug` calls it after each step.
+  after each change, and a build with `-debug` calls it after each `lay_out`.
 - A block is reached through its part (`part.blocks[slot]`) in a loop,
   and by its number (`document.block_at`) for one block. The number of a
   block is not an identity: it will change when a block is added above
@@ -125,7 +137,8 @@ These came from the maintainer. Do not undo one without asking.
   that is not in front, and its callbacks stopped with a transparent
   layer. `CVDisplayLink` is deprecated since macOS 15, so the build has
   warnings for it.
-- Frames and layout steps run off the main thread. A draw can wait for a
+- Frames run off the main thread, and the layout that they need runs
+  in them. A draw can wait for a
   drawable and can make glyph bitmaps, and on the main thread that held
   scroll events: a scroll took up to twice its time (see Numbers). Only a
   frame that must be there with the window's (the first frame, a new
@@ -277,12 +290,20 @@ Known limits, found in review and left on purpose:
 - The document model of a 1 MB source takes about 20 MB of heap, and the
   app process holds about 45 MB more for the long document than for the
   short one outside the core. Neither was looked at yet.
-- The full layout still runs for every block (about 0.3 s of CPU for 1 MB,
-  in steps), because the page height comes from it. A layout that starts
-  with estimated heights would remove that; it makes the scroll bar less
-  exact, so it needs the maintainer's word first.
-- The End key and Select All still lay out the rest of the document on
-  the main thread, in one call.
+- A copy of a selection lays out each part that the selection goes
+  over, in one call on the main thread (0.33 s for all of 1 MB). The text
+  that it needs is in the document; it takes it from the layout records.
+  Select All lays out only the first and the last part.
+- A part with one very long block (a code block of thousands of lines) is
+  laid out from its first line. A view that comes into it from below, or
+  a jump into its middle, lays out all of it down to the view in one
+  frame. Code lines in parts of their own would remove it.
+- The height of a part that is not laid out is estimated from the size of
+  its text and a mean width of a character (`estimate_block`). For five
+  documents the page height was within 1.3% of the real one
+  (`BENCHMARKS.md`); text of wide characters and a narrow column are
+  farther off. The scroll bar moves by that difference when the reader
+  comes to such a part.
 - The core has no way to call the host yet (open a link, load an image).
   It needs a callback struct given at creation.
 
@@ -300,11 +321,12 @@ Design, before the features that need it:
   with a kind and a title) and footnotes (a numbered container) do not fit
   two integers. Form: a list of containers in the document, and a
   container number in each block. Before alerts and footnotes.
-- **A selection position is a layout address** (`Position{order, index}`).
-  Copy and Select All need the full layout for it, empty code lines use up
-  a number with no paragraph, and links, Find, footnote jumps, and
-  accessibility all need document addresses. Form: `{block, cell, byte}`
-  in the `document` package. Before links.
+- **A selection position is half a document address**
+  (`Position{block, order, index}`: the paragraph is known by its number
+  in reading order in its block, not by its cell). Copy takes the text
+  from the layout records, so it lays out what the selection goes over. Links, Find, footnote jumps, and accessibility all need document
+  addresses. Form: `{block, cell, byte}` in the `document` package, as a
+  place has it, and the copied text from the document. Before links.
 - **Layout records hold resolved colors**, and `mdcore_style` is mirrored
   field by field in three places. A change of colors alone (light, dark, a
   theme) throws the layout away. Form: color roles in the records,
@@ -368,14 +390,9 @@ The window around the page, left on purpose:
 
 Task check boxes, left on purpose:
 
-- A new layout starts from the top. For another width or text size the
-  view asks for the reader's place again (`mdcore_place_y`); for a
-  document that opens again in place it draws at the same offset in
-  points. Far down a long document each of the two lays out
-  everything above the reader on the main thread: 0.37 s for each step of
-  a live resize at the end of the 1.1 MB document (`BENCHMARKS.md`).
-  Heights that are estimated for the blocks above the place would remove
-  that. A click on a task does not go this way any more.
+- For another width or text size the view asks for the reader's place
+  again (`mdcore_place_y`); for a document that opens again in place it
+  draws as far below the top of the page as before, in points.
 - A place is an address in the document: block, cell, byte. It needs no
   layout to be made, so Find, a jump to a footnote or a heading, and the
   way back from Edit mode can use it; none of them does yet. The same
@@ -386,9 +403,6 @@ Task check boxes, left on purpose:
 - A selection position is still a layout address (the reading-order
   number of a paragraph). It is the next thing to move to block, cell,
   and byte.
-- `mdcore_resize` still lays out down to the offset that the old layout
-  had, before the view asks for the place. With a shorter new layout
-  (wider window, smaller text) that is work for nothing.
 - After a click on a task the app makes the sidebar outline and the
   inspector numbers again for the full document, off the main thread
   (0.3 s of CPU for 725 KB). Neither changes with a task mark. This is in
@@ -405,10 +419,6 @@ Task check boxes, left on purpose:
 - `Block.done` and `Block.task_line` are on each block of an item, and
   `Block.item` says which item that is (a number from the parser). They
   belong to one item record when the model gets containers.
-- The view finds out that the layout moved from the page height and
-  from a range that it clears by hand after a new layout. A revision
-  number of the layout from the core would replace both, also for later
-  features that move blocks (images that load).
 - `ContentViewController` keeps the scroll place when the same file opens
   again (`isSameFile`). That is a guess of the caller's intent, and a third
   scroll channel beside the two that the web view has. One scroll intent
@@ -435,30 +445,56 @@ what is there and what is next:
    selection, and a task still use the number of the block), and the
    procedures that add and remove blocks.
 3. **How the layout knows its work.** Done: records for each part by
-   itself, with heights from the top of the part, and the top of a part
-   as a sum. Not done: the layout still goes from the first block down,
-   and each top is set once, in order. Next: a height that is estimated
-   for a part that is not laid out, a layout that starts at the part the
-   view shows, and tops that are summed again from the first part that
-   changed. That removes the 0.37 s for each step of a live resize far
-   down a long document, and the layout of all blocks for the End key.
+   itself, with heights from the top of the part; a part for each part
+   of the document from the start, with an estimated height while it has
+   no records; a layout that is made where the view is (`lay_out`), with
+   the top of the page as the thing that moves when a part above the view
+   gets its real height. Not done: a part whose text changed (it needs
+   its records made again, which `advance` can do, and its state set
+   back).
 4. **How a change comes in.** Today: a new document, and one task in
    place. Next: one entry, "this range of the source is now this text".
    md4c reads a full document only; how to read a part of one is not
    decided and must be measured first.
 
+The order of the next steps, from the review of the second step:
+
+- First the selection as a document address (`{block, cell, byte}`, as
+  a place), with the copied text taken from the document. It removes
+  the reading-order numbers (`Para.order`, `Box.orders`, `Layout.order`)
+  and the layout that a copy needs, and it leaves one address type for
+  the step after it to change.
+- Then the core keeps the reader's place itself: the anchor as a line
+  address in the layout, set by a frame, and a new layout that puts the
+  top of the page where that line keeps its height. Today the anchor is
+  a part, each layout call gets it as a height, and the host carries the
+  place across a new width (`relayout`, `keptPlace`). A change in the
+  part of the reader, above the first line that shows, needs the line.
+- Then one procedure "this part has another text": set the part back
+  (no `part_clear` yet; `begin` makes the first state of a part in
+  place), lay it out again, and move what is below it or the top of the
+  page.
+
 Left on purpose in the first step:
 
 - `document.locate` and `first_part_below` search all parts (a binary
   search). Fine for the 250 parts of 1 MB.
-- `hit_test` counts the blocks around a point by their numbers, which
-  holds only while the layout goes from the first block down.
 - The search for a place in an ordered list is written out in six
   procedures (parts, boxes, lines, spans, blocks). One helper for all is
   not made.
-- `Para.order` is still a number in reading order over the full
-  document, so the selection is the last record that needs the layout
-  from the top.
+- A selection position is the number of a block, the number of a
+  paragraph in it, and a byte. The number of a block is not an identity
+  yet (see 2).
+- All tops are summed again after each part that got another height
+  (`sum_tops`): 250 additions for 1 MB.
+- The estimate of a code block reads each of its bytes two times: at
+  each new layout (each step of a live resize), and when the block gets
+  its box. A line count and a longest line from the parser would make it
+  one division. Not measured on a document that is mostly code.
+- A view that scrolls through text with no records lays out a piece each
+  half view height, and then makes its quads again and asks for the
+  check boxes again. The check boxes are asked for after each layout
+  change, also one that moved none of them.
 
 Next features after that, in the order that seems best (not agreed with
 the maintainer): links that open, images, code colors, Find, the
@@ -590,3 +626,14 @@ export.
   16.9 KB, and it does not give back the spare room of an array that
   shrinks. So a part is a little under 16 KB, and a finished part's
   records are copied once into memory of their exact size.
+- **2026-11-24** — Second step of the base: the layout is made where the
+  view is. A part that nobody looked at has a height that is estimated
+  from its text; the maintainer agreed to a scroll bar that is a little
+  less exact for that. Nothing lays out the rest in the background any
+  more. A part above the reader that gets its real height moves the top
+  of the page, not the text on screen, so the host's scroll offset needs
+  no correction at the right moment; the page area of the scroll view
+  just gets another range. A selection position got the number of its
+  block, so it says the same in a layout that started at another place.
+  For 1 MB: the first frame 52 ms (75 before), the End key 8 ms (0.3 s of
+  layout before), a new width at the end 10 ms (0.37 s before).

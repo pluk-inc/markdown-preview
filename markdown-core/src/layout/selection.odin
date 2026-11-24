@@ -5,10 +5,11 @@ import "../base"
 import "../text"
 import "core:math"
 
-// A caret position: a paragraph by its number in reading order, and a byte
-// offset in the source text of that paragraph.
+// A caret position: a paragraph by its block and its number in reading
+// order in that block, and a byte offset in the source text of that
+// paragraph. It says the same in each layout of the document.
 Position :: struct {
-	order, index: int,
+	block, order, index: int,
 }
 
 Selection :: struct {
@@ -18,6 +19,9 @@ Selection :: struct {
 
 @(private)
 before :: proc(a, b: Position) -> bool {
+	if a.block != b.block {
+		return a.block < b.block
+	}
 	return a.order < b.order || (a.order == b.order && a.index < b.index)
 }
 
@@ -138,14 +142,17 @@ line_at_or_above :: proc(part: ^Part, box: Box, y: f32) -> int {
 	return lo - 1
 }
 
-// The height of a place in this layout. False while the layout has not
-// reached the end of its block (`step_to_block`).
+// The height of a place in this layout. False while its block is not
+// laid out to its end (`lay_out_block`).
 place_y :: proc(l: ^Layout, place: Place) -> (y: f64, ok: bool) {
-	if place.block < 0 || place.block >= l.next_block {
+	if place.block < 0 || place.block >= l.doc.count {
 		return
 	}
 	p, slot := document.locate(l.doc, place.block)
 	part := &l.parts[p]
+	if slot >= blocks_done(part) {
+		return
+	}
 	box := part.boxes[slot]
 	b := &l.doc.parts[p].blocks[slot]
 	src := block_text(b, place.cell)
@@ -222,71 +229,103 @@ text_at :: proc(l: ^Layout, x: f32, y: f64) -> bool {
 	return at >= text_first(part, box) && on_line(l, part, part.lines[at], x, y)
 }
 
-// The caret position nearest to a point of the page.
-hit_test :: proc(l: ^Layout, x: f32, y: f64) -> (pos: Position, ok: bool) {
-	count := box_count(l)
-	if count == 0 {
-		return
+// The box before or after one, in the parts that have boxes. False at
+// the two ends.
+@(private)
+next_box :: proc(l: ^Layout, part, slot, step: int) -> (p, s: int, ok: bool) {
+	p, s = part, slot + step
+	for s < 0 || s >= len(l.parts[p].boxes) {
+		p += step
+		if p < 0 || p >= len(l.parts) {
+			return
+		}
+		s = step > 0 ? 0 : len(l.parts[p].boxes) - 1
 	}
+	return p, s, true
+}
+
+// The caret position nearest to a point of the page, in what is laid out.
+hit_test :: proc(l: ^Layout, x: f32, y: f64) -> (pos: Position, ok: bool) {
 	// The block at y, and the ones around it for a point between blocks or
 	// in a block that has no text.
-	center := count - 1
-	if p := first_part_below(l, y); p < len(l.parts) {
-		part := &l.parts[p]
-		center = l.doc.starts[p] + min(first_box_below(part, f32(y - part.top)), len(part.boxes) - 1)
-	}
-	best_part, best := -1, -1
-	best_score: f64 = 1e30
-	for reach := 1; best < 0; reach *= 4 {
-		first := max(center - reach, 0)
-		last := min(center + reach, count - 1)
-		p, slot := document.locate(l.doc, first)
-		for _ in first ..= last {
-			if slot == len(l.parts[p].boxes) {
-				p, slot = p + 1, 0
-			}
-			part := &l.parts[p]
-			box := part.boxes[slot]
-			slot += 1
-			for i in box.line_first ..< box.line_end {
-				line := part.lines[i]
-				para := &part.paras[line.para]
-				if para.src == nil {
-					continue
-				}
-				top := part.top + f64(line.top)
-				bottom := top + f64(para.line_height)
-				right := line.x + line.line.width
-				dy := y < top ? top - y : (y >= bottom ? y - bottom : 0)
-				dx := x < line.x ? line.x - x : (x > right ? x - right : 0)
-				score := dy * 1000 + f64(dx)
-				if score < best_score {
-					best_part, best, best_score = p, i, score
-				}
-			}
-		}
-		if first == 0 && last == count - 1 {
-			break
-		}
-	}
-	if best < 0 {
+	p := part_at(l, y)
+	if p < 0 {
 		return
 	}
-	line := shaped_line(l, best_part, best)
-	para := &l.parts[best_part].paras[line.para]
-	return Position{para.order, para.base + text.line_index_for_x(line.line, x - line.x)}, true
+	slot := min(first_box_below(&l.parts[p], f32(y - l.parts[p].top)), len(l.parts[p].boxes) - 1)
+	if slot < 0 {
+		// A part with no records: the nearest box after it, or before it.
+		p, slot = next_box(l, p, -1, 1) or_else (next_box(l, p, 0, -1) or_return)
+	}
+	Best :: struct {
+		part, slot, line: int,
+		score:            f64,
+	}
+	best := Best{-1, -1, -1, 1e30}
+	look :: proc(l: ^Layout, p, slot: int, x: f32, y: f64, best: ^Best) {
+		part := &l.parts[p]
+		box := part.boxes[slot]
+		for i in box.line_first ..< box.line_end {
+			line := part.lines[i]
+			para := &part.paras[line.para]
+			if para.src == nil {
+				continue
+			}
+			top := part.top + f64(line.top)
+			bottom := top + f64(para.line_height)
+			right := line.x + line.line.width
+			dy := y < top ? top - y : (y >= bottom ? y - bottom : 0)
+			dx := x < line.x ? line.x - x : (x > right ? x - right : 0)
+			score := dy * 1000 + f64(dx)
+			if score < best.score {
+				best^ = {p, slot, i, score}
+			}
+		}
+	}
+	look(l, p, slot, x, y, &best)
+	// More boxes on each side, in the order down the page, until one has
+	// text.
+	up_p, up_s, down_p, down_s := p, slot, p, slot
+	up, down := true, true
+	for reach := 1; (up || down) && (best.line < 0 || reach == 1); reach *= 4 {
+		for _ in 0 ..< reach {
+			if up {
+				up_p, up_s, up = next_box(l, up_p, up_s, -1)
+				if up {
+					look(l, up_p, up_s, x, y, &best)
+				}
+			}
+			if down {
+				down_p, down_s, down = next_box(l, down_p, down_s, 1)
+				if down {
+					look(l, down_p, down_s, x, y, &best)
+				}
+			}
+		}
+	}
+	if best.line < 0 {
+		return
+	}
+	line := shaped_line(l, best.part, best.line)
+	para := &l.parts[best.part].paras[line.para]
+	return Position{l.doc.starts[best.part] + best.slot, para.order, para.base + text.line_index_for_x(line.line, x - line.x)}, true
 }
 
 // The part of a line that is in the selection, as byte offsets in the
-// source text of its paragraph.
+// source text of its paragraph. `block`: the number of its block.
 @(private)
-selected_part :: proc(para: ^Para, line: Line, from, to: Position) -> (start, end: int, ok: bool) {
-	if para.src == nil || para.order < from.order || para.order > to.order {
+selected_part :: proc(para: ^Para, block: int, line: Line, from, to: Position) -> (start, end: int, ok: bool) {
+	if para.src == nil {
+		return
+	}
+	at := Position{block, para.order, 0}
+	first, last := Position{from.block, from.order, 0}, Position{to.block, to.order, 0}
+	if before(at, first) || before(last, at) {
 		return
 	}
 	line_start, line_end := para.base + line.line.start, para.base + line.line.end
-	start = para.order == from.order ? max(from.index, line_start) : line_start
-	end = para.order == to.order ? min(to.index, line_end) : line_end
+	start = at == first ? max(from.index, line_start) : line_start
+	end = at == last ? min(to.index, line_end) : line_end
 	return start, end, start < end
 }
 
@@ -303,17 +342,19 @@ selection_quads :: proc(l: ^Layout, s: Selection, y0, y1: f64, scale: f32, origi
 		}
 		// The range from the top of the part.
 		top, bottom := f32(y0 - part.top), f32(y1 - part.top)
-		for box in part.boxes[first_box_below(part, top):] {
+		first := first_box_below(part, top)
+		for box, n in part.boxes[first:] {
 			if box.top >= bottom {
 				break
 			}
+			block := l.doc.starts[p] + first + n
 			for i in box.line_first ..< box.line_end {
 				line := part.lines[i]
 				para := &part.paras[line.para]
 				if line.top + para.line_height < top || line.top > bottom {
 					continue // a long block: only its lines in the range
 				}
-				start, end := selected_part(para, line, from, to) or_continue
+				start, end := selected_part(para, block, line, from, to) or_continue
 				line = shaped_line(l, p, i)^
 				x1 := text.line_x_for_index(line.line, start - para.base)
 				x2 := text.line_x_for_index(line.line, end - para.base)
@@ -326,42 +367,80 @@ selection_quads :: proc(l: ^Layout, s: Selection, y0, y1: f64, scale: f32, origi
 	}
 }
 
-// The first and the last caret position of what is laid out.
-select_all :: proc(l: ^Layout) -> (s: Selection) {
-	for part in l.parts {
-		for para in part.paras {
-			if para.src == nil {
-				continue
+// The first and the last caret position of the document. It lays out the
+// part that each of the two is in (`anchor_y` as for `lay_out`), not what
+// is between them: a position says the same with no layout. `changed`:
+// it made records.
+select_all :: proc(l: ^Layout, anchor_y: f64) -> (s: Selection, changed: bool) {
+	// The text line of a part that is the first or the last one.
+	edge :: proc(l: ^Layout, p: int, last: bool) -> (block: int, para: Para, ok: bool) {
+		part := &l.parts[p]
+		for n in 0 ..< len(part.boxes) {
+			slot := last ? len(part.boxes) - 1 - n : n
+			box := part.boxes[slot]
+			for m in 0 ..< box.line_end - box.line_first {
+				line := part.lines[last ? box.line_end - 1 - m : box.line_first + m]
+				if para = part.paras[line.para]; para.src != nil {
+					return l.doc.starts[p] + slot, para, true
+				}
 			}
-			if !s.active {
-				s.anchor = Position{para.order, para.base}
-				s.active = true
-			}
-			s.focus = Position{para.order, para.base + para.len}
+		}
+		return
+	}
+	anchor := part_at(l, anchor_y)
+	// From the first part down to one that has text.
+	for p in 0 ..< len(l.parts) {
+		changed |= lay_out_part(l, p, anchor)
+		if block, para, ok := edge(l, p, false); ok {
+			s.anchor = Position{block, para.order, para.base}
+			s.active = true
+			break
+		}
+	}
+	// From the last part up. A document with text has an end too.
+	for p := len(l.parts) - 1; p >= 0 && s.active; p -= 1 {
+		changed |= lay_out_part(l, p, anchor)
+		if block, para, ok := edge(l, p, true); ok {
+			s.focus = Position{block, para.order, para.base + para.len}
+			break
 		}
 	}
 	return
 }
 
-// Appends the selected text to `out` as UTF-8. A new paragraph starts a new
-// line; empty lines of a code block stay.
+// Appends the selected text to `out` as UTF-8, from the blocks that are
+// laid out (`lay_out_blocks`). A new paragraph starts a new line; empty
+// lines of a code block stay.
 selection_text :: proc(l: ^Layout, s: Selection, out: ^[dynamic]u8) {
 	from, to, ok := selection_range(s)
-	if !ok {
+	if !ok || l.doc.count == 0 {
 		return
 	}
-	last_order := -1
-	for &part in l.parts {
-		for line in part.lines {
-			para := &part.paras[line.para]
-			start, end := selected_part(para, line, from, to) or_continue
-			if last_order >= 0 {
-				for _ in 0 ..< para.order - last_order {
-					append(out, '\n')
+	// The number of a paragraph in reading order from the first block of
+	// the selection: the numbers of the blocks before it, and its own.
+	base, last := 0, -1
+	p, slot := document.locate(l.doc, clamp(from.block, 0, l.doc.count - 1))
+	for block := from.block; block <= to.block && p < len(l.parts); block += 1 {
+		part := &l.parts[p]
+		if slot < len(part.boxes) {
+			box := part.boxes[slot]
+			for line in part.lines[box.line_first:box.line_end] {
+				para := &part.paras[line.para]
+				start, end := selected_part(para, block, line, from, to) or_continue
+				order := base + para.order
+				if last >= 0 {
+					for _ in 0 ..< order - last {
+						append(out, '\n')
+					}
 				}
+				last = order
+				append(out, ..para.src.bytes[start:end])
 			}
-			last_order = para.order
-			append(out, ..para.src.bytes[start:end])
+			base += box.orders
+		}
+		slot += 1
+		if slot >= l.doc.parts[p].count {
+			p, slot = p + 1, 0
 		}
 	}
 }

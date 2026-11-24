@@ -13,7 +13,7 @@ import "../text"
 //
 // So a procedure that reads glyphs takes its line from `shaped_line`,
 // which shapes the line again when it was released: the same text and
-// fonts give the same glyphs. `keep` and the layout steps release what is
+// fonts give the same glyphs. `keep` and the layout release what is
 // outside the window. They work on a paragraph at a time, and a line of a
 // code block is its own paragraph, so a long code block is not one unit.
 

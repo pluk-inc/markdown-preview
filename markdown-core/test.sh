@@ -19,7 +19,7 @@ libtool -static -o "$WORK/libmdcore_md4c.a" "$WORK/md4c.o" "$WORK/entity.o"
 
 for package in document layout; do
     # With debug information: the layout then checks its records after
-    # each step (layout/check.odin).
+    # each layout call (layout/check.odin).
     odin test "$SRC/src/$package" -out:"$WORK/$package-tests" -debug \
         -extra-linker-flags:"-L$WORK"
 done
