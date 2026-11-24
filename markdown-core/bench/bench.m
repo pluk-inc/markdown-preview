@@ -161,9 +161,13 @@ int main(int argc, const char *argv[]) {
     }
     printf("change_ms %.2f\n", now_ms() - change_start);
 
-    // Keys that are typed into that paragraph, one character each, as an
-    // editor gives them: the range of the source that changes, and the
-    // frame after it. CPU time: a frame waits for the display.
+    // Keys that are typed, one character each, as an editor gives them:
+    // the range of the source that changes, and the frame after it. CPU
+    // time: a frame waits for the display. First into the new paragraph
+    // in the middle: in a long text the view at the end does not show
+    // it, and the frame has no layout of it. Then at the end of the last
+    // line of the text, which the view shows: the frame lays out the
+    // part of the text that changed.
     enum { KEYS = 10 };
     double type_start = thread_cpu_ms();
     for (int key = 0; key < KEYS; key++) {
@@ -173,7 +177,20 @@ int main(int argc, const char *argv[]) {
             mdcore_draw(ctx, bottom);
         }
     }
-    printf("type_cpu_ms %.2f\n", (thread_cpu_ms() - type_start) / KEYS);
+    printf("type_middle_cpu_ms %.2f\n", (thread_cpu_ms() - type_start) / KEYS);
+    long last = (long)changed.length;
+    const char *text = changed.bytes;
+    while (last > 0 && (text[last - 1] == '\n' || text[last - 1] == '\r')) last--;
+    type_start = thread_cpu_ms();
+    for (int key = 0; key < KEYS; key++) {
+        // The keys before are in the text too.
+        long caret = last + KEYS + key;
+        mdcore_replace_text(ctx, caret, caret, "x", 1);
+        @autoreleasepool {
+            mdcore_draw(ctx, bottom);
+        }
+    }
+    printf("type_end_cpu_ms %.2f\n", (thread_cpu_ms() - type_start) / KEYS);
     // The estimate for the comparison below is of this text.
     mdcore_page_area(ctx, &top, &height);
 

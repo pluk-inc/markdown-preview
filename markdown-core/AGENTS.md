@@ -540,9 +540,11 @@ The order of the next steps, from the review of the second step:
 - Done: a change comes as a range of the source (`document.Edit`,
   `mdcore_replace_text`). No host calls it yet; the benchmark types
   through it. It still parses all of the new source: one typed
-  character costs 10 ms of CPU in 1 MB, and 4.8 ms in 9 KB.
-- The 4.8 ms are not the parse: a change to one block lays out all
-  blocks of its part again (58 blocks, with their text shaped again).
+  character costs 9 to 10 ms of CPU in 1 MB, with no layout in it.
+- In 9 KB a typed character costs 5.2 ms in a full part and 1.3 ms in
+  a part with few blocks. That is not the parse: a change to one block
+  lays out all blocks of its part again (58 blocks at most, with their
+  text shaped again).
   A layout that makes only the changed block again is as much needed
   for a key under 1 ms as the parse of what changed. For it, the
   records of a part must let one block's records be put in the place
@@ -764,8 +766,8 @@ export.
   and 80 with a layout, and compare each result with a new parse and a
   new layout of the same source: the check that the parse of only what
   changed needs before it is written. The benchmark has the number
-  that this work is for: one typed character, 4.8 ms of CPU in 9 KB
-  and 10 ms in 1.1 MB. The small document shows that half of it is the
+  that this work is for: one typed character, 9 to 10 ms of CPU in
+  1.1 MB (the parse of all), and 1.3 to 5.2 ms in 9 KB, where it is the
   layout of the full part for one changed block, not the parse. Two
   threads that change the source at one time are in order by a lock
   for such calls, which a frame does not take.

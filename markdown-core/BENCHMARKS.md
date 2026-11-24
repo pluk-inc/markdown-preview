@@ -22,7 +22,7 @@ markdown-core/bench/app.py <Markdown Preview.app>   # the app, cold launch; add 
   to and makes the glyph bitmaps, the second has them), a jump back to
   the top between them, a jump to the end, a new width there, the same
   text again with one paragraph more in its middle, ten characters typed
-  into that paragraph, Select All,
+  into that paragraph and ten at the end of the text, Select All,
   a copy of all of the text, frames through all of the document (so all
   of it is laid out), and the heap. It takes a minute and
   shows no window. A scroll frame is CPU time of the drawing thread, because
@@ -537,25 +537,33 @@ from.)
 
 ## A change as a range of the source (2026-11-24)
 
-`core.py` has a new step: ten characters typed into a paragraph in the
-middle of the text, one call and one frame for each
-(`mdcore_replace_text`), with the reader at the end. The number is the
-CPU time for one of them (a frame waits for the display, so the time on
-the clock says nothing).
+`core.py` has two new steps, with the reader at the end of the text: ten
+characters typed into a paragraph in the middle of the text, and ten at
+the end of its last line, one call and one frame for each
+(`mdcore_replace_text`). The number is the CPU time for one of them (a
+frame waits for the display, so the time on the clock says nothing).
 
 | | Short | Long |
 | --- | --- | --- |
-| A typed character in its middle: parse, compare, and frame (CPU ms) | 4.8 | 10.1 |
+| A typed character in the middle of the text (CPU ms) | 5.2 | 10.4 |
+| A typed character at the end of the text (CPU ms) | 1.3 | 8.9 |
 
-An editor has 8.3 ms for a key at 120 Hz, so the long document is over
-it. The two numbers say where the time goes. The short document is 9 KB:
-its parse is 0.1 ms, and its 4.8 ms are the layout of the part of the
-document that has the changed block (all of its blocks are laid out
-again, with their text shaped again, when one of them changes) and the
-frame. The long document adds 5 ms to that: the parse of all of the
-source and the comparison of all blocks. So two things are between this
-and a key that costs less than 1 ms: the parse of only what changed,
-and a layout that makes only the changed block again, not its part.
+An editor has 8.3 ms for a key at 120 Hz. Two costs are in these
+numbers:
+
+- The parse of all of the new source and the comparison of all blocks:
+  about 9 ms for the long document, 0.1 ms for the short one. In the
+  long document the view does not show the middle, so its 10.4 ms have
+  no layout in them.
+- The layout of the part of the document that has the changed block:
+  all blocks of the part are laid out again, with their text shaped
+  again, when the part is near the view. The short document shows it:
+  5.2 ms in its middle, where the part is full (58 blocks), and 1.3 ms
+  at its end, where the last part has few blocks.
+
+So two things are between this and a key that costs less than 1 ms: the
+parse of only what changed, and a layout that makes only the changed
+block again, not its part.
 
 The other numbers of `core.py` are the ones of the base (the source
 kept): first frame 58 / 70 ms against 56 / 70 ms, scroll frames 0.44 and
