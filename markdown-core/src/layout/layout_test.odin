@@ -1260,3 +1260,29 @@ test_a_change_while_a_part_is_in_work_and_of_all_of_the_document :: proc(t: ^tes
 	testing.expect_value(t, same.parts_removed + same.parts_added, 0)
 	testing.expect(t, only(&f.page).memory == memory)
 }
+
+@(test)
+test_a_place_on_a_rule_or_in_blank_code_lines_is_the_text_below :: proc(t: ^testing.T) {
+	// A view whose first height is on a rule, with text far below it.
+	f: Fixture
+	setup(&f, "First.\n\n---\n\n```\n\n\n\n\n\n\n\n\ncode\n```\n\nLast.\n", 500)
+	defer teardown(&f)
+	lay_out(&f.page, 0, 60, 0)
+	rule := only(&f.page).boxes[1]
+	// With records only down to the rule there is no line below it yet.
+	y := f64(rule.top)
+	early := take_place(&f.page, y)
+	// With the block below it laid out, the place is its first line of
+	// text, from far above it.
+	lay_out(&f.page, y, y + 600, y)
+	kept := take_place(&f.page, y)
+	testing.expect(t, kept.known)
+	testing.expect_value(t, kept.place.block, 2)
+	testing.expect(t, kept.place.fraction < 0)
+	testing.expect(t, !early.known || early.place == kept.place)
+	begin(&f.page, &f.doc, f.style, 300)
+	restore_place(&f.page, kept)
+	at, ok := place_y(&f.page, kept.place)
+	testing.expect(t, ok)
+	testing.expect(t, abs(at - y) < 0.01)
+}

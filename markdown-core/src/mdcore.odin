@@ -438,12 +438,21 @@ take_place :: proc(ctx: ^Ctx) {
 		return
 	}
 	sync.atomic_store(&ctx.place_stale, false)
-	// Only the line of the place needs its records.
+	// Only the line of the place needs its records: the first line of
+	// text at or below the height. That can be some way down (below a
+	// rule, below blank lines of a code block), so the range grows until
+	// it has one, or until the end of the page.
 	at := transmute(f64)sync.atomic_load(&ctx.host_scroll) + ctx.top_inset
-	if layout.lay_out(&ctx.page, at, at + 1, at) {
-		layout_changed(ctx)
+	for reach := f64(1);; reach *= 8 {
+		if layout.lay_out(&ctx.page, at, at + reach, at) {
+			layout_changed(ctx)
+		}
+		ctx.place = layout.take_place(&ctx.page, at)
+		bottom := ctx.page.origin + ctx.page.content_height
+		if ctx.place.known || at <= ctx.page.origin + 0.5 || at + reach >= bottom {
+			break
+		}
 	}
-	ctx.place = layout.take_place(&ctx.page, at)
 }
 
 // See the header. No wait for the state of the view: the host calls this

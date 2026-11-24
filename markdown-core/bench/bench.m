@@ -156,6 +156,8 @@ int main(int argc, const char *argv[]) {
         mdcore_draw(ctx, bottom);
     }
     printf("change_ms %.2f\n", now_ms() - change_start);
+    // The estimate for the comparison below is of this text.
+    mdcore_page_area(ctx, &top, &height);
 
     // Select All and a copy of all of the text: the two take the text
     // from the document, with no layout.
