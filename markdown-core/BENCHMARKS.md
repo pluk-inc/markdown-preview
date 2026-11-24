@@ -408,9 +408,14 @@ other, short / long.
 A copy does not lay out anything any more, so the heap stays at what the
 reader went through. The first frame and the scroll frames do the same
 work in the two; the differences are what two runs on this Mac differ by
-(the base ran first in each pair). The app numbers are the same too; its
-memory for the long document was 92 and 96 MB for one build in two runs
-earlier this day.
+(the base ran first in each pair).
+
+The app memory of the long document was 5 MB higher for the change in
+the run of the table (97 against 92 MB). So the two builds ran again in
+turn, three times each with three launches: launch 566, 544, 561 against
+548, 551, 541 ms; CPU 800, 770, 770 against 770, 780, 770 ms; memory 96,
+96, 95 against 96, 96, 96 MB. No difference. One run of `app.py` can be
+5 MB off for the memory.
 
 `core.py` has a new last step for the number "all of the document laid
 out": frames from the top to the end, each second view height. It costs
