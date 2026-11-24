@@ -372,6 +372,22 @@ test_only_a_line_of_text_is_text_for_the_pointer :: proc(t: ^testing.T) {
 	box := f.page.tasks[0]
 	testing.expect(t, !text_at(&f.page, box.x + 2, mid(&f.page, item)))
 	testing.expect(t, text_at(&f.page, item.x + 2, mid(&f.page, item)))
+	// In a code block of many lines, and in a table: the same answers as
+	// a look at each line.
+	{
+		g: Fixture
+		setup(&g, "```\none\ntwo\nthree\nfour\nfive\n```\n\n| a | b |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n\n- item\n", 600)
+		defer teardown(&g)
+		step(&g.page, 1e30)
+		for box in g.page.boxes {
+			for line in g.page.lines[box.line_first:box.line_end] {
+				para := &g.page.paras[line.para]
+				at := line.top + para.line_height / 2
+				testing.expect_value(t, text_at(&g.page, line.x + 1, at), para.src != nil)
+				testing.expect(t, !text_at(&g.page, 2, at))
+			}
+		}
+	}
 	// Not above the page and not below it.
 	testing.expect(t, !text_at(&f.page, first.x + 5, -10))
 	testing.expect(t, !text_at(&f.page, first.x + 5, f.page.content_height + 100))

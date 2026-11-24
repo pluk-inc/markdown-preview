@@ -44,12 +44,41 @@ text_at :: proc(l: ^Layout, x, y: f32) -> bool {
 		return false
 	}
 	box := l.boxes[i]
-	for line in l.lines[box.line_first:box.line_end] {
+	on_line :: proc(l: ^Layout, line: Line, x, y: f32) -> bool {
 		para := &l.paras[line.para]
 		if para.src == nil || y < line.top || y >= line.top + para.line_height || x < line.x {
-			continue
+			return false
 		}
-		if x <= max(l.column_x + l.column, line.x + line.line.width) {
+		return x <= max(l.column_x + l.column, line.x + line.line.width)
+	}
+	if l.doc.blocks[i].kind == .Table {
+		// The cells of a row are side by side: each line is a candidate.
+		for line in l.lines[box.line_first:box.line_end] {
+			if on_line(l, line, x, y) {
+				return true
+			}
+		}
+		return false
+	}
+	// The lines of other blocks go down the page, so the ones at y are
+	// found without a look at each line: a code block can have many.
+	lo, hi := box.line_first, box.line_end
+	for lo < hi {
+		mid := (lo + hi) / 2
+		if l.lines[mid].top <= y {
+			lo = mid + 1
+		} else {
+			hi = mid
+		}
+	}
+	// The lines that start at or above y, from the nearest one up: the
+	// line itself, and a marker that stands at the same height.
+	for k := lo - 1; k >= box.line_first; k -= 1 {
+		line := l.lines[k]
+		if y >= line.top + l.paras[line.para].line_height {
+			break
+		}
+		if on_line(l, line, x, y) {
 			return true
 		}
 	}
