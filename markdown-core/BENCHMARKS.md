@@ -2,7 +2,8 @@
 
 The main numbers of the native renderer, recorded over time, so that each
 new feature shows what it costs. Add a row when a pull request changes
-`markdown-core/` or the host view. Do not edit old rows.
+`markdown-core/` or the host view: `app.py` each time, `core.py` when
+files of the core changed. Do not edit old rows.
 
 ## How to measure
 
@@ -52,6 +53,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-23 | cleanup of the core; no growth slack kept in the document model | – | – | – | 60 / 70 | 2.9 / 301 | – | 6.6 / 20.2 |
 | 2026-11-23 | task check boxes (system buttons on the page); a resize frame in step with the window | 562 / 543 | 58 / 99 | 460 / 1080 | – | – | – | – |
 | 2026-11-24 | the view goes under the toolbar on macOS 26, so the page shows through it | 674 / 592 | 57 / 101 | 510 / 1080 | – | – | – | – |
+| 2026-11-24 | a task changes in place; the page beside a scroll bar that takes room; Go menu scroll actions | 653 / 667 | 61 / 104 | 470 / 1120 | – | – | 0.33 / 0.33 | 6.7 / 20.7 |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -210,3 +212,29 @@ What is left is not in the renderer: a sample showed about 20 ms on the
 main thread for the click (the change of the source text and the save),
 and the rest on the queue that makes the sidebar outline and the
 inspector numbers again for the full document. See Open work.
+
+## Numbers that earlier rows left out (2026-11-24)
+
+Two rows above have a dash where a program was not run. What is known:
+
+- "frames from a CVDisplayLink": that pull request changed no file of the
+  core, so `core.py` would have measured the same core two times.
+- "cleanup of the core": `app.py` on that commit, measured on 2026-11-23
+  as the base of the next pull request: 620 / 530 ms to the first frame,
+  460 / 1090 ms of CPU. Its own base was not measured with `app.py` on
+  the same day, so there is no pair; the row before it (704 / 717 ms) is
+  from another run and another load of the Mac.
+- "the view goes under the toolbar": no file of the core changed.
+
+## Review findings on the lower pull requests (2026-11-24)
+
+The two programs, the base (a task changes in place) and the change one
+after the other. `app.py`, launch to the first frame, short / long: base
+686 / 609 ms, change 653 / 667 ms; CPU 480 / 1130 against 470 / 1120 ms;
+memory 57 / 101 against 61 / 104 MB. The two launch numbers move in
+opposite directions, which is what the runs differ by. `core.py`: the
+same in each line that is stable (scroll frame with the glyphs ready 0.285
+/ 0.335 against 0.293 / 0.331 ms, CPU for the full run 244 / 1291 against
+242 / 1298 ms, heap at the end 6.7 / 20.7 MB for the two). The heap of
+the long document is 0.5 MB above the cleanup row: each block got the
+number of its list item with the change before this one.

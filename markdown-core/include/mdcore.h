@@ -68,6 +68,12 @@ void mdcore_set_markdown(void *ctx, const char *utf8, long length);
 // makes the glyph bitmaps again.
 void mdcore_resize(void *ctx, double width, double height, double scale);
 
+// The page is laid out in the left `width` points of the view, and the
+// rest stays empty: for a host that covers a strip at the right edge of
+// the view (a scroll bar that takes room). 0, the default, is the full
+// width. Call mdcore_resize after it.
+void mdcore_set_page_width(void *ctx, double width);
+
 // Continues the layout of a long document for about budget_ms; 0 lays out
 // all that is left. Returns true while more is left; call it again from the
 // run loop.

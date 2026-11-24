@@ -210,6 +210,13 @@ span_font :: proc(l: ^Layout, style: document.Inline_Set, size: f32, heading: bo
 	return font(l, .Regular, size)
 }
 
+// The width that a page is laid out and drawn in, for a view of
+// `view_width` whose host wants the page in its left `wanted` points
+// (0: all of the view). Not wider than the view.
+page_width :: proc(view_width, wanted: f32) -> f32 {
+	return wanted > 0 ? min(wanted, view_width) : view_width
+}
+
 // The color of the text of a checked task: softer, with no line through
 // it, so a long list stays easy to read.
 done_color :: proc(l: ^Layout) -> base.Color {

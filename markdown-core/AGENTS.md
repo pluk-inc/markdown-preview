@@ -155,8 +155,13 @@ Things that cost time before:
 
 The main numbers are recorded in `BENCHMARKS.md`, with the two programs
 that measure them (`bench/core.py`, `bench/app.py`). Before a pull request
-that changes the core or the host view, run both on the base and on the
-change, and add a row.
+that changes the core or the host view, measure the base and the change
+one after the other, and add a row: `app.py` for each such pull request,
+and `core.py` when files of the core changed. A run of `core.py` for a
+change with no core code measures the same program two times; leave it
+out and say so in the section. For a feature that the two benchmark
+documents do not contain (tasks, tables in number), measure a document
+that is full of it too.
 
 The first version of the core, measured on screen on 2026-11-21 with a
 Release build and a new document (another method, so do not compare it
@@ -446,3 +451,10 @@ scroll position, footnotes and alerts, VoiceOver, print and export.
   renderer. The core now changes the one task in place
   (`mdcore_set_task_checked`), and the view does nothing for the text
   that it shows already. Rule from this: fix the cause, not what shows.
+- **2026-11-24** — A check of all review threads of the stack found a
+  late review round on the lower pull requests that nobody had answered.
+  Its findings went into one pull request on top: the page beside a
+  scroll bar that takes room (`mdcore_set_page_width`), the scroll
+  actions of the Go menu, a forced layout for a view with no size, and
+  the outline's remembered heading after a live edit. The benchmark rule
+  above was made exact at the same time.

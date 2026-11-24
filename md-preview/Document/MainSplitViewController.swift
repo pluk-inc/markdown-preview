@@ -219,7 +219,10 @@ final class MainSplitViewController: NSSplitViewController {
         // Each part replaces only its own late result: an update of the
         // numbers alone (the sidebar is closed) must not drop an outline
         // that is still on its way.
-        if outline != nil { cancelOutlineWork() }
+        if outline != nil {
+            cancelOutlineWork()
+            sidebarViewController?.liveOutlineReplacesFirstOutline()
+        }
         if metadata != nil { numbersAreLive = true }
         if let outline, isSidebarVisible && sidebarMode == .outline {
             sidebarViewController?.refreshOutline(
