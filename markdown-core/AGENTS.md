@@ -53,6 +53,15 @@ These came from the maintainer. Do not undo one without asking.
 - **The core is a product, not a prototype.** It was rewritten from zero
   into packages for that reason. Keep the package borders and the two
   platform seams (see below) when you add to it.
+- **The base carries an editor before the reader gets its missing
+  features** (2026-11-24). The editor of the app is to move to this core
+  later. So the structure that an editor needs (a change to one block
+  that costs the work of one block, text that is laid out where the view
+  is and not from the top, addresses that stay true through a change)
+  comes first, and links, Find, footnotes, images, and code colors come
+  after it. The reason: a base made for a reader only would be made
+  again for the editor, and that second time costs speed. See "The base
+  for an editor" in Open work.
 - **One pull request for one line of work.** Do not stack branches for
   parts of the same change. Since 2026-11-23 the first pull request (#665)
   is the base, and each later line of work is a pull request stacked on
@@ -79,6 +88,22 @@ These came from the maintainer. Do not undo one without asking.
   line from `shaped_line`, which shapes it again when needed. Code that
   works on the full document (the copied text, Select All, the page
   height) must use the records only, or it shapes all of the document.
+- The blocks of the document are in parts (`document.Part`), and the
+  layout keeps its records for each part by itself (`layout.Part`). A
+  height in a record (a line, a box, a decoration, a task) counts from
+  the top of its part; only `Part.top` is a height of the page, and it is
+  a 64-bit number. Do not put a height of the page in a record: then a
+  block that gets another height is a change to each record below it.
+  What must stand on a whole point or a whole pixel is put there on the
+  page (`rect_quad`, `tasks_between`), not in the part, or it moves by a
+  fraction when the part does.
+- The layout changes its sums and ranges in place. `layout.check` looks
+  at all of them and says what is wrong; a new test of the layout calls it
+  after each change, and a build with `-debug` calls it after each step.
+- A block is reached through its part (`part.blocks[slot]`) in a loop,
+  and by its number (`document.block_at`) for one block. The number of a
+  block is not an identity: it will change when a block is added above
+  it.
 - The Swift host owns the view, the scroll position, and the events. The
   scroll bar is AppKit's: a transparent `NSScrollView` over the Metal
   layer.
@@ -397,9 +422,45 @@ Task check boxes, left on purpose:
 - The core draws no box of its own. A host without a control (the
   benchmark program, another platform) shows a task with no box.
 
-Next features, in the order that seems best (not agreed with the
-maintainer): links that open, images, code colors, Find, the outline's
-scroll position, footnotes and alerts, VoiceOver, print and export.
+The base for an editor (the maintainer's direction of 2026-11-24, see
+Decisions). Four things an editor needs that a reader does not, with
+what is there and what is next:
+
+1. **Where the text lives.** Today each block has a copy of its text and
+   the source is not kept. Next: the source is kept, and a block knows
+   its range of it.
+2. **What a block is.** Done: the blocks are in parts of one piece of
+   memory each, so a later change moves the blocks of one part. Not done:
+   an identity of a block that stays through a change (a place, a
+   selection, and a task still use the number of the block), and the
+   procedures that add and remove blocks.
+3. **How the layout knows its work.** Done: records for each part by
+   itself, with heights from the top of the part, and the top of a part
+   as a sum. Not done: the layout still goes from the first block down,
+   and each top is set once, in order. Next: a height that is estimated
+   for a part that is not laid out, a layout that starts at the part the
+   view shows, and tops that are summed again from the first part that
+   changed. That removes the 0.37 s for each step of a live resize far
+   down a long document, and the layout of all blocks for the End key.
+4. **How a change comes in.** Today: a new document, and one task in
+   place. Next: one entry, "this range of the source is now this text".
+   md4c reads a full document only; how to read a part of one is not
+   decided and must be measured first.
+
+Left on purpose in the first step:
+
+- `document.locate` and `first_part_below` search all parts (a binary
+  search). Fine for the 250 parts of 1 MB.
+- The arrays that the layout builds a part in keep the size of the
+  largest part so far.
+- `Para.order` is still a number in reading order over the full
+  document, so the selection is the last record that needs the layout
+  from the top.
+
+Next features after that, in the order that seems best (not agreed with
+the maintainer): links that open, images, code colors, Find, the
+outline's scroll position, footnotes and alerts, VoiceOver, print and
+export.
 
 ## Timeline
 
@@ -513,3 +574,16 @@ scroll position, footnotes and alerts, VoiceOver, print and export.
   scrolls, and the top of the document is its own case. The view now asks
   the core for the place of the first text that shows and for the height
   that this place has in the new layout.
+- **2026-11-24** — The maintainer set the order of the work: the base
+  must carry an editor first, then the reader gets its missing features.
+  First step: the blocks of the document are in parts of 16 KB, and the
+  layout keeps the records of each part in one piece of memory, with
+  heights from the top of the part. Nothing changes on screen. From the
+  terminal that the window technique came from: data in pages of one
+  allocation, sums that are changed in place with a full check of them in
+  debug builds, and a warning it gives about itself (a walk from the
+  first page to find a position). Two things were found by measurement,
+  not by thought: the system's allocator gives 20 KB for a part of
+  16.9 KB, and it does not give back the spare room of an array that
+  shrinks. So a part is a little under 16 KB, and a finished part's
+  records are copied once into memory of their exact size.

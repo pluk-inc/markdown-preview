@@ -3,6 +3,7 @@ package layout
 import "../document"
 import "../base"
 import "../text"
+import "core:math"
 
 // A caret position: a paragraph by its number in reading order, and a byte
 // offset in the source text of that paragraph.
@@ -44,7 +45,7 @@ selection_range :: proc(s: Selection) -> (from, to: Position, ok: bool) {
 // made, and it is the same text when another block got more or fewer
 // lines.
 Place :: struct {
-	block:    int,
+	block:    int, // its number in the document
 	cell:     int, // of a table; 0 in each other block
 	byte:     int, // in the text of the block or of the cell
 	fraction: f32, // below 0 for a height above the line (between two blocks, in blank lines of code)
@@ -54,10 +55,10 @@ Place :: struct {
 // the document has no such text.
 @(private)
 place_text :: proc(l: ^Layout, block, cell: int) -> ^document.Text {
-	if block < 0 || block >= len(l.doc.blocks) {
+	if block < 0 || block >= l.doc.count {
 		return nil
 	}
-	b := &l.doc.blocks[block]
+	b := document.block_at(l.doc, block)
 	if b.kind != .Table {
 		return &b.text
 	}
@@ -66,32 +67,38 @@ place_text :: proc(l: ^Layout, block, cell: int) -> ^document.Text {
 
 // The place at a height of the page. False when the page has no text at
 // or below it.
-place_at :: proc(l: ^Layout, y: f32) -> (place: Place, ok: bool) {
-	for i in first_box_below(l, y) ..< len(l.boxes) {
-		box := l.boxes[i]
-		// The first line of text that ends below y. In a table that is a
-		// cell of the row at y, and each line is a candidate. In another
-		// block it is the line at y, or the first one for a y above them.
-		from := box.line_first
-		if l.doc.blocks[i].kind != .Table {
-			from = max(line_at_or_above(l, box, y), text_first(l, box))
-		}
-		for line in l.lines[from:box.line_end] {
-			para := &l.paras[line.para]
-			if para.src == nil || line.top + para.line_height <= y {
-				continue
+place_at :: proc(l: ^Layout, y: f64) -> (place: Place, ok: bool) {
+	for p in first_part_below(l, y) ..< len(l.parts) {
+		part := &l.parts[p]
+		y := f32(y - part.top)
+		for i in first_box_below(part, y) ..< len(part.boxes) {
+			box := part.boxes[i]
+			b := &l.doc.parts[p].blocks[i]
+			// The first line of text that ends below y. In a table that is
+			// a cell of the row at y, and each line is a candidate. In
+			// another block it is the line at y, or the first one for a y
+			// above them.
+			from := box.line_first
+			if b.kind != .Table {
+				from = max(line_at_or_above(part, box, y), text_first(part, box))
 			}
-			// Not limited above the line: the room above it can be many
-			// lines high (blank lines of a code block have no line of
-			// their own), and all of it is a place.
-			fraction := (y - line.top) / para.line_height
-			cell := 0
-			if b := &l.doc.blocks[i]; b.kind == .Table {
-				cell = int(uintptr(para.src) - uintptr(raw_data(b.cells))) / size_of(document.Text)
+			for line in part.lines[from:box.line_end] {
+				para := &part.paras[line.para]
+				if para.src == nil || line.top + para.line_height <= y {
+					continue
+				}
+				// Not limited above the line: the room above it can be many
+				// lines high (blank lines of a code block have no line of
+				// their own), and all of it is a place.
+				fraction := (y - line.top) / para.line_height
+				cell := 0
+				if b.kind == .Table {
+					cell = int(uintptr(para.src) - uintptr(raw_data(b.cells))) / size_of(document.Text)
+				}
+				return {l.doc.starts[p] + i, cell, para.base + line.line.start, fraction}, true
 			}
-			return {i, cell, para.base + line.line.start, fraction}, true
+			// A block with no text (a rule): the next one.
 		}
-		// A block with no text (a rule): the next one.
 	}
 	return
 }
@@ -100,25 +107,25 @@ place_at :: proc(l: ^Layout, y: f32) -> (place: Place, ok: bool) {
 // of a list item comes before it, and its lines (a long number can wrap)
 // start at the height of the text again.
 @(private)
-text_first :: proc(l: ^Layout, box: Box) -> int {
+text_first :: proc(part: ^Part, box: Box) -> int {
 	first := box.line_first
-	for first < box.line_end && l.paras[l.lines[first].para].src == nil {
+	for first < box.line_end && part.paras[part.lines[first].para].src == nil {
 		first += 1
 	}
 	return first
 }
 
-// The last line of the text of a block that starts at or above y, or the
-// line before the text when none does. Not for a table. The lines of the
-// text go down the page, so this does not look at each one: a code block
-// can have many.
+// The last line of the text of a block that starts at or above y (from
+// the top of the part), or the line before the text when none does. Not
+// for a table. The lines of the text go down the page, so this does not
+// look at each one: a code block can have many.
 @(private)
-line_at_or_above :: proc(l: ^Layout, box: Box, y: f32) -> int {
-	first := text_first(l, box)
+line_at_or_above :: proc(part: ^Part, box: Box, y: f32) -> int {
+	first := text_first(part, box)
 	lo, hi := first, box.line_end
 	for lo < hi {
 		mid := (lo + hi) / 2
-		if l.lines[mid].top <= y {
+		if part.lines[mid].top <= y {
 			lo = mid + 1
 		} else {
 			hi = mid
@@ -128,35 +135,37 @@ line_at_or_above :: proc(l: ^Layout, box: Box, y: f32) -> int {
 }
 
 // The height of a place in this layout. False while the layout has not
-// reached its block (`step_to_block`).
-place_y :: proc(l: ^Layout, place: Place) -> (y: f32, ok: bool) {
-	if place.block < 0 || place.block >= len(l.boxes) || (place.block == l.next_block && l.in_block) {
+// reached the end of its block (`step_to_block`).
+place_y :: proc(l: ^Layout, place: Place) -> (y: f64, ok: bool) {
+	if place.block < 0 || place.block >= l.next_block {
 		return
 	}
-	box := l.boxes[place.block]
+	p, slot := document.locate(l.doc, place.block)
+	part := &l.parts[p]
+	box := part.boxes[slot]
 	src := place_text(l, place.block, place.cell)
 	// The line that has the byte of the place: the last line of its text
 	// that starts at or before it.
 	found := -1
-	if src != nil && l.doc.blocks[place.block].kind != .Table {
+	if src != nil && l.doc.parts[p].blocks[slot].kind != .Table {
 		// The lines of the text are in the order of its bytes.
-		lo, hi := text_first(l, box), box.line_end
+		lo, hi := text_first(part, box), box.line_end
 		for lo < hi {
 			mid := (lo + hi) / 2
-			line := l.lines[mid]
-			if l.paras[line.para].base + line.line.start <= place.byte {
+			line := part.lines[mid]
+			if part.paras[line.para].base + line.line.start <= place.byte {
 				lo = mid + 1
 			} else {
 				hi = mid
 			}
 		}
-		if lo > text_first(l, box) {
+		if lo > text_first(part, box) {
 			found = lo - 1
 		}
 	} else if src != nil {
 		for i in box.line_first ..< box.line_end {
-			line := l.lines[i]
-			para := &l.paras[line.para]
+			line := part.lines[i]
+			para := &part.paras[line.para]
 			if para.src == src && para.base + line.line.start <= place.byte {
 				found = i
 			}
@@ -164,10 +173,10 @@ place_y :: proc(l: ^Layout, place: Place) -> (y: f32, ok: bool) {
 	}
 	if found < 0 {
 		// The text of the block is another one now: its top.
-		return box.top, true
+		return part.top + f64(box.top), true
 	}
-	line := l.lines[found]
-	return line.top + place.fraction * l.paras[line.para].line_height, true
+	line := part.lines[found]
+	return part.top + f64(line.top + place.fraction * part.paras[line.para].line_height), true
 }
 
 // True when a point of the page is on a line of text: in its height, not
@@ -176,69 +185,97 @@ place_y :: proc(l: ^Layout, place: Place) -> (y: f32, ok: bool) {
 // The margins, the space between blocks, and
 // the place of a list marker or a check box are not text. For the pointer:
 // a host shows the text cursor only there.
-text_at :: proc(l: ^Layout, x, y: f32) -> bool {
-	i := first_box_below(l, y)
-	if i >= len(l.boxes) {
+text_at :: proc(l: ^Layout, x: f32, y: f64) -> bool {
+	p := first_part_below(l, y)
+	if p >= len(l.parts) {
 		return false
 	}
-	box := l.boxes[i]
-	on_line :: proc(l: ^Layout, line: Line, x, y: f32) -> bool {
-		para := &l.paras[line.para]
+	part := &l.parts[p]
+	y := f32(y - part.top)
+	i := first_box_below(part, y)
+	if i >= len(part.boxes) {
+		return false
+	}
+	box := part.boxes[i]
+	on_line :: proc(l: ^Layout, part: ^Part, line: Line, x, y: f32) -> bool {
+		para := &part.paras[line.para]
 		if para.src == nil || y < line.top || y >= line.top + para.line_height || x < line.x {
 			return false
 		}
 		return x <= max(l.column_x + l.column, line.x + line.line.width)
 	}
-	if l.doc.blocks[i].kind == .Table {
+	if l.doc.parts[p].blocks[i].kind == .Table {
 		// The cells of a row are side by side: each line is a candidate.
-		for line in l.lines[box.line_first:box.line_end] {
-			if on_line(l, line, x, y) {
+		for line in part.lines[box.line_first:box.line_end] {
+			if on_line(l, part, line, x, y) {
 				return true
 			}
 		}
 		return false
 	}
-	at := line_at_or_above(l, box, y)
-	return at >= text_first(l, box) && on_line(l, l.lines[at], x, y)
+	at := line_at_or_above(part, box, y)
+	return at >= text_first(part, box) && on_line(l, part, part.lines[at], x, y)
+}
+
+// How many blocks have a box: the ones that are laid out, and the one in
+// progress.
+@(private)
+box_count :: proc(l: ^Layout) -> int {
+	return l.next_block + (l.in_block ? 1 : 0)
 }
 
 // The caret position nearest to a point of the page.
-hit_test :: proc(l: ^Layout, x, y: f32) -> (pos: Position, ok: bool) {
-	if len(l.boxes) == 0 {
+hit_test :: proc(l: ^Layout, x: f32, y: f64) -> (pos: Position, ok: bool) {
+	count := box_count(l)
+	if count == 0 {
 		return
 	}
 	// The block at y, and the ones around it for a point between blocks or
 	// in a block that has no text.
-	center := min(first_box_below(l, y), len(l.boxes) - 1)
-	best := -1
-	best_score: f32 = 1e30
+	center := count - 1
+	if p := first_part_below(l, y); p < len(l.parts) {
+		part := &l.parts[p]
+		center = l.doc.starts[p] + min(first_box_below(part, f32(y - part.top)), len(part.boxes) - 1)
+	}
+	best_part, best := -1, -1
+	best_score: f64 = 1e30
 	for reach := 1; best < 0; reach *= 4 {
 		first := max(center - reach, 0)
-		last := min(center + reach, len(l.boxes) - 1)
-		for i in l.boxes[first].line_first ..< l.boxes[last].line_end {
-			line := l.lines[i]
-			para := &l.paras[line.para]
-			if para.src == nil {
-				continue
+		last := min(center + reach, count - 1)
+		p, slot := document.locate(l.doc, first)
+		for _ in first ..= last {
+			for slot >= len(l.parts[p].boxes) {
+				p, slot = p + 1, 0
 			}
-			bottom := line.top + para.line_height
-			right := line.x + line.line.width
-			dy := y < line.top ? line.top - y : (y >= bottom ? y - bottom : 0)
-			dx := x < line.x ? line.x - x : (x > right ? x - right : 0)
-			score := dy * 1000 + dx
-			if score < best_score {
-				best, best_score = i, score
+			part := &l.parts[p]
+			box := part.boxes[slot]
+			slot += 1
+			for i in box.line_first ..< box.line_end {
+				line := part.lines[i]
+				para := &part.paras[line.para]
+				if para.src == nil {
+					continue
+				}
+				top := part.top + f64(line.top)
+				bottom := top + f64(para.line_height)
+				right := line.x + line.line.width
+				dy := y < top ? top - y : (y >= bottom ? y - bottom : 0)
+				dx := x < line.x ? line.x - x : (x > right ? x - right : 0)
+				score := dy * 1000 + f64(dx)
+				if score < best_score {
+					best_part, best, best_score = p, i, score
+				}
 			}
 		}
-		if first == 0 && last == len(l.boxes) - 1 {
+		if first == 0 && last == count - 1 {
 			break
 		}
 	}
 	if best < 0 {
 		return
 	}
-	line := shaped_line(l, best)
-	para := &l.paras[line.para]
+	line := shaped_line(l, best_part, best)
+	para := &l.parts[best_part].paras[line.para]
 	return Position{para.order, para.base + text.line_index_for_x(line.line, x - line.x)}, true
 }
 
@@ -256,44 +293,54 @@ selected_part :: proc(para: ^Para, line: Line, from, to: Position) -> (start, en
 }
 
 // Makes the highlight quads of the selection between y0 and y1 (points).
-selection_quads :: proc(l: ^Layout, s: Selection, y0, y1: f32, scale, origin_y: f32, out: ^[dynamic]base.Quad) {
+selection_quads :: proc(l: ^Layout, s: Selection, y0, y1: f64, scale: f32, origin_y: f64, out: ^[dynamic]base.Quad) {
 	from, to, ok := selection_range(s)
 	if !ok {
 		return
 	}
-	for box in l.boxes[first_box_below(l, y0):] {
-		if box.top >= y1 {
+	for p in first_part_below(l, y0) ..< len(l.parts) {
+		part := &l.parts[p]
+		if part.top >= y1 {
 			break
 		}
-		for i in box.line_first ..< box.line_end {
-			line := l.lines[i]
-			para := &l.paras[line.para]
-			if line.top + para.line_height < y0 || line.top > y1 {
-				continue // a long block: only its lines in the range
+		// The range from the top of the part.
+		top, bottom := f32(y0 - part.top), f32(y1 - part.top)
+		for box in part.boxes[first_box_below(part, top):] {
+			if box.top >= bottom {
+				break
 			}
-			start, end := selected_part(para, line, from, to) or_continue
-			line = shaped_line(l, i)^
-			x1 := text.line_x_for_index(line.line, start - para.base)
-			x2 := text.line_x_for_index(line.line, end - para.base)
-			if x2 < x1 {
-				x1, x2 = x2, x1
+			for i in box.line_first ..< box.line_end {
+				line := part.lines[i]
+				para := &part.paras[line.para]
+				if line.top + para.line_height < top || line.top > bottom {
+					continue // a long block: only its lines in the range
+				}
+				start, end := selected_part(para, line, from, to) or_continue
+				line = shaped_line(l, p, i)^
+				x1 := text.line_x_for_index(line.line, start - para.base)
+				x2 := text.line_x_for_index(line.line, end - para.base)
+				if x2 < x1 {
+					x1, x2 = x2, x1
+				}
+				append(out, rect_quad(line.x + x1, line.top, max(x2 - x1, 2), para.line_height, l.style.selection, 0, scale, part.top, origin_y))
 			}
-			append(out, rect_quad(line.x + x1, line.top, max(x2 - x1, 2), para.line_height, l.style.selection, 0, scale, origin_y))
 		}
 	}
 }
 
-// The first and the last caret position of the part that is laid out.
+// The first and the last caret position of what is laid out.
 select_all :: proc(l: ^Layout) -> (s: Selection) {
-	for para in l.paras {
-		if para.src == nil {
-			continue
+	for part in l.parts {
+		for para in part.paras {
+			if para.src == nil {
+				continue
+			}
+			if !s.active {
+				s.anchor = Position{para.order, para.base}
+				s.active = true
+			}
+			s.focus = Position{para.order, para.base + para.len}
 		}
-		if !s.active {
-			s.anchor = Position{para.order, para.base}
-			s.active = true
-		}
-		s.focus = Position{para.order, para.base + para.len}
 	}
 	return
 }
@@ -306,27 +353,37 @@ selection_text :: proc(l: ^Layout, s: Selection, out: ^[dynamic]u8) {
 		return
 	}
 	last_order := -1
-	for line in l.lines {
-		para := &l.paras[line.para]
-		start, end := selected_part(para, line, from, to) or_continue
-		if last_order >= 0 {
-			for _ in 0 ..< para.order - last_order {
-				append(out, '\n')
+	for &part in l.parts {
+		for line in part.lines {
+			para := &part.paras[line.para]
+			start, end := selected_part(para, line, from, to) or_continue
+			if last_order >= 0 {
+				for _ in 0 ..< para.order - last_order {
+					append(out, '\n')
+				}
 			}
+			last_order = para.order
+			append(out, ..para.src.bytes[start:end])
 		}
-		last_order = para.order
-		append(out, ..para.src.bytes[start:end])
 	}
 }
 
-// The first task whose box ends below y, or len(tasks).
+// The check box of a task on the page, for a host that puts its own
+// control on it.
+Task_Place :: struct {
+	x:     f32, // points; the side is `task_box_size`
+	y:     f64,
+	block: ^document.Block, // has the line of the task and its state
+}
+
+// The first task of a part whose box ends below y (from the top of the
+// part), or len(tasks).
 @(private)
-first_task_below :: proc(l: ^Layout, y: f32) -> int {
-	size := task_box_size(l.m)
-	lo, hi := 0, len(l.tasks)
+first_task_below :: proc(part: ^Part, y, size: f32) -> int {
+	lo, hi := 0, len(part.tasks)
 	for lo < hi {
 		mid := (lo + hi) / 2
-		if l.tasks[mid].y + size <= y {
+		if part.tasks[mid].y + size <= y {
 			lo = mid + 1
 		} else {
 			hi = mid
@@ -335,13 +392,33 @@ first_task_below :: proc(l: ^Layout, y: f32) -> int {
 	return lo
 }
 
-// The tasks whose boxes are between two heights of the page, for a host
-// that puts its own control on each one.
-tasks_between :: proc(l: ^Layout, top, bottom: f32) -> []Task {
-	first := first_task_below(l, top)
-	last := first
-	for last < len(l.tasks) && l.tasks[last].y < bottom {
-		last += 1
+// Writes the tasks whose boxes are between two heights of the page to
+// `out`, down the page. Returns how many there are, which can be more
+// than `out` has room for.
+tasks_between :: proc(l: ^Layout, top, bottom: f64, out: []Task_Place) -> (count: int) {
+	size := task_box_size(l.m)
+	// The box of a task can start a little above its block, so above the
+	// top of the first block of a part: by less than a line.
+	reach := f64(l.m.body * l.m.line_height)
+	for p in first_part_below(l, top) ..< len(l.parts) {
+		part := &l.parts[p]
+		if part.top - reach >= bottom {
+			break
+		}
+		// One point before `top`: a box goes to a whole point of the page.
+		for task in part.tasks[first_task_below(part, f32(top - part.top) - 1, size):] {
+			y := math.round(part.top + f64(task.y))
+			if y >= bottom {
+				break
+			}
+			if y + f64(size) <= top {
+				continue
+			}
+			if count < len(out) {
+				out[count] = {task.x, y, &l.doc.parts[p].blocks[task.block]}
+			}
+			count += 1
+		}
 	}
-	return l.tasks[first:last]
+	return
 }

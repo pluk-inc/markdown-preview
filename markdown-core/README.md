@@ -32,8 +32,8 @@ markdown-core/
 
 | Step | Package | What it does |
 | --- | --- | --- |
-| Parse | `document` | md4c reads the source; the result is a list of blocks with styled text, with no fonts, colors, or sizes |
-| Lay out | `layout` | gives every block, line, and decoration a place on the page, in steps, so a long document does not hold the first frame |
+| Parse | `document` | md4c reads the source; the result is the blocks of the document with styled text, with no fonts, colors, or sizes. The blocks are in parts of about 60, each part one piece of memory |
+| Lay out | `layout` | gives every block, line, and decoration a place on the page, in steps, so a long document does not hold the first frame. The records are kept for each part of the document by itself, and a height in them counts from the top of that part |
 | Keep | `layout` | keeps the shaped text only for the lines near the view, and shapes a line again when the view comes to it, so the largest part of the memory does not grow with the document (the document model and the records of the blocks still do) |
 | Show | `layout` | makes the quads (the display list) of the part of the page around the scroll position only |
 | Draw | `renderer` | draws rectangles, then the selection, then one quad for each glyph |
