@@ -51,6 +51,7 @@ final class NativeRendererView: NSView {
     /// render loop animates: that frame is drawn already.
     private var followsRenderLoop = false
     private var laidOutSize = NSSize.zero
+    private var laidOutPageWidth: CGFloat = 0
     private var laidOutScale = 0.0
 
     override var isFlipped: Bool { true }
@@ -93,6 +94,13 @@ final class NativeRendererView: NSView {
             self, selector: #selector(pageDidScroll),
             name: NSView.boundsDidChangeNotification, object: scrollView.contentView
         )
+        // A scroll bar that takes room (the system setting "always") makes
+        // the visible part narrower when it shows. The page follows it.
+        scrollView.contentView.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(visiblePartDidChange),
+            name: NSView.frameDidChangeNotification, object: scrollView.contentView
+        )
         // A scroll by hand takes over from a scroll that the keyboard started.
         NotificationCenter.default.addObserver(
             self, selector: #selector(userWillScroll),
@@ -131,6 +139,10 @@ final class NativeRendererView: NSView {
     private func clamped(_ y: CGFloat) -> CGFloat {
         let top = topScrollY
         return min(max(top, y), max(top, page.frame.height - scrollView.contentView.bounds.height))
+    }
+
+    @objc private func visiblePartDidChange() {
+        relayout()
     }
 
     @objc private func pageDidScroll() {
@@ -217,7 +229,8 @@ final class NativeRendererView: NSView {
     /// Makes the scroll view's page as tall as what the core laid out.
     private func updatePageHeight() {
         laidOutHeight = mdcore_content_height(ctx)
-        let size = NSSize(width: bounds.width, height: max(laidOutHeight, heldPageHeight ?? 0, 1))
+        // As wide as the visible part: a wider page could move sideways.
+        let size = NSSize(width: scrollView.contentSize.width, height: max(laidOutHeight, heldPageHeight ?? 0, 1))
         if page.frame.size != size { page.setFrameSize(size) }
         updateTaskCheckBoxes()
     }
@@ -231,9 +244,6 @@ final class NativeRendererView: NSView {
     /// with them. For a change of a setting, the theme, or the appearance.
     func applyStyle() {
         NativeRendererStyle(appearance: effectiveAppearance, zoom: textZoom).apply(to: ctx)
-        // The core needs a new layout, also when the view has no size now and
-        // gets its old size back later.
-        laidOutSize = .zero
         relayout(force: true)
     }
 
@@ -423,15 +433,25 @@ final class NativeRendererView: NSView {
     /// Gives the core the view's size and draws. Skips a call that changes
     /// nothing, because one turn can report the same size more than once.
     private func relayout(force: Bool = false) {
+        // The core needs this layout also when the view has no size now
+        // and gets its old size back later.
+        if force { laidOutSize = .zero }
         guard hasPageToDraw else { return }
         let scale = Double(window?.backingScaleFactor ?? 2)
-        guard force || bounds.size != laidOutSize || scale != laidOutScale else { return }
+        // The part beside a scroll bar that takes room. The frame is as
+        // large as the view; the page is laid out in that part of it.
+        let pageWidth = scrollView.contentSize.width
+        guard bounds.size != laidOutSize || scale != laidOutScale || pageWidth != laidOutPageWidth else { return }
         laidOutSize = bounds.size
         laidOutScale = scale
+        laidOutPageWidth = pageWidth
         let size = bounds.size
         layoutCount += 1
         // The new size, then its frame.
-        drawNow { [ctx] in mdcore_resize(ctx, size.width, size.height, scale) }
+        drawNow { [ctx] in
+            mdcore_set_page_width(ctx, pageWidth)
+            mdcore_resize(ctx, size.width, size.height, scale)
+        }
         continueLayout()
     }
 
@@ -542,18 +562,33 @@ final class NativeRendererView: NSView {
         let step = visibleHeight - 60
         switch event.keyCode {
         // From the place a scroll in progress goes to, so fast key presses add up.
-        case Key.pageDown, Key.space: animateScroll(toY: scrollTarget + step)
-        case Key.pageUp: animateScroll(toY: scrollTarget - step)
-        case Key.downArrow: animateScroll(toY: scrollTarget + 48)
-        case Key.upArrow: animateScroll(toY: scrollTarget - 48)
-        case Key.home: animateScroll(toY: topScrollY)
-        case Key.end:
-            // The end of the document, not of the part laid out so far.
-            _ = mdcore_layout_more(ctx, 0)
-            updatePageHeight()
-            animateScroll(toY: .greatestFiniteMagnitude)
+        case Key.pageDown: scrollPageDown(nil)
+        case Key.space: animateScroll(toY: scrollTarget + (event.modifierFlags.contains(.shift) ? -step : step))
+        case Key.pageUp: scrollPageUp(nil)
+        // With Command, as the Go menu has them, for a key that the menu
+        // did not take.
+        case Key.downArrow: event.modifierFlags.contains(.command) ? scrollToEndOfDocument(nil) : scrollLineDown(nil)
+        case Key.upArrow: event.modifierFlags.contains(.command) ? scrollToBeginningOfDocument(nil) : scrollLineUp(nil)
+        case Key.home: scrollToBeginningOfDocument(nil)
+        case Key.end: scrollToEndOfDocument(nil)
         default: super.keyDown(with: event)
         }
+    }
+
+    // The scroll actions of the Go menu, which takes its key equivalents
+    // before `keyDown` gets them.
+
+    override func scrollLineUp(_ sender: Any?) { animateScroll(toY: scrollTarget - 48) }
+    override func scrollLineDown(_ sender: Any?) { animateScroll(toY: scrollTarget + 48) }
+    override func scrollPageUp(_ sender: Any?) { animateScroll(toY: scrollTarget - (visibleHeight - 60)) }
+    override func scrollPageDown(_ sender: Any?) { animateScroll(toY: scrollTarget + (visibleHeight - 60)) }
+    override func scrollToBeginningOfDocument(_ sender: Any?) { animateScroll(toY: topScrollY) }
+
+    override func scrollToEndOfDocument(_ sender: Any?) {
+        // The end of the document, not of the part laid out so far.
+        _ = mdcore_layout_more(ctx, 0)
+        updatePageHeight()
+        animateScroll(toY: .greatestFiniteMagnitude)
     }
 }
 

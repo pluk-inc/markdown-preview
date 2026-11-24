@@ -54,6 +54,8 @@ Ctx :: struct {
 	selection:       layout.Selection,
 	// The view.
 	width, height:   f32, // points
+	page_width:      f32, // the part of the width that the page is laid out in; 0 for all of it
+	layout_width:    f32, // the width of the layout that is there now
 	scale:           f32,
 	scroll:          f32, // points
 	layout_valid:    bool,
@@ -242,6 +244,16 @@ mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	ctx.layout_valid = false
 }
 
+// See the header.
+@(export)
+mdcore_set_page_width :: proc "c" (handle: rawptr, width: f64) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	ctx.page_width = f32(max(width, 0))
+}
+
 // Sets the view size in points and the backing scale. Lays out what the
 // view shows now when the document, the style, or the width changed.
 @(export)
@@ -258,9 +270,11 @@ mdcore_resize :: proc "c" (handle: rawptr, width, height, scale: f64) {
 		text.cache_set_scale(&ctx.cache, f32(scale))
 		ctx.display_valid = false
 	}
-	if !ctx.layout_valid || f32(width) != ctx.width {
-		ctx.width = f32(width)
-		layout.begin(&ctx.page, &ctx.doc, ctx.style, ctx.width)
+	ctx.width = f32(width)
+	page_width := ctx.page_width > 0 ? min(ctx.page_width, ctx.width) : ctx.width
+	if !ctx.layout_valid || page_width != ctx.layout_width {
+		ctx.layout_width = page_width
+		layout.begin(&ctx.page, &ctx.doc, ctx.style, page_width)
 		ctx.layout_valid = true
 		ctx.display_valid = false
 	}

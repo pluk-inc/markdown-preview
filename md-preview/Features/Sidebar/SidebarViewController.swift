@@ -202,6 +202,14 @@ final class SidebarViewController: NSViewController {
         displayOutline(outline, fileName: fileName)
     }
 
+    /// An outline from a live edit replaces the first outline of the
+    /// document, also one that is not here yet. The heading that the page
+    /// reported for the text before the edit is not replayed on it: an
+    /// edit can move the headings, and their numbers are positions.
+    func liveOutlineReplacesFirstOutline() {
+        awaitsFirstOutline = false
+    }
+
     func refreshOutline(outline: [TOCItem], fileName: String) {
         // Invalidate the full-source cache: its value predates this live outline.
         lastRenderedMarkdown = nil

@@ -2,7 +2,8 @@
 
 The main numbers of the native renderer, recorded over time, so that each
 new feature shows what it costs. Add a row when a pull request changes
-`markdown-core/` or the host view. Do not edit old rows.
+`markdown-core/` or the host view: `app.py` each time, `core.py` when
+files of the core changed. Do not edit old rows.
 
 ## How to measure
 
@@ -210,3 +211,16 @@ What is left is not in the renderer: a sample showed about 20 ms on the
 main thread for the click (the change of the source text and the save),
 and the rest on the queue that makes the sidebar outline and the
 inspector numbers again for the full document. See Open work.
+
+## Numbers that earlier rows left out (2026-11-24)
+
+Two rows above have a dash where a program was not run. What is known:
+
+- "frames from a CVDisplayLink": that pull request changed no file of the
+  core, so `core.py` would have measured the same core two times.
+- "cleanup of the core": `app.py` on that commit, measured on 2026-11-23
+  as the base of the next pull request: 620 / 530 ms to the first frame,
+  460 / 1090 ms of CPU. Its own base was not measured with `app.py` on
+  the same day, so there is no pair; the row before it (704 / 717 ms) is
+  from another run and another load of the Mac.
+- "the view goes under the toolbar": no file of the core changed.
