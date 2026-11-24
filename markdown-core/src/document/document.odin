@@ -99,6 +99,12 @@ destroy :: proc(doc: ^Document) {
 
 // The span that holds the byte at `index`.
 span_at :: proc(t: ^Text, index: int) -> ^Span {
+	return &t.spans[span_index(t, index)]
+}
+
+// The number of the span that holds the byte at `index`: the first one
+// that ends after it. The text has one span or more.
+span_index :: proc(t: ^Text, index: int) -> int {
 	lo, hi := 0, len(t.spans) - 1
 	for lo < hi {
 		mid := (lo + hi) / 2
@@ -108,5 +114,5 @@ span_at :: proc(t: ^Text, index: int) -> ^Span {
 			hi = mid
 		}
 	}
-	return &t.spans[lo]
+	return lo
 }

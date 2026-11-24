@@ -341,8 +341,9 @@ final class ContentViewController: NSViewController {
         nativeRenderer != nil || deferredNativeMarkdown != nil
     }
 
-    /// True once the first document's frame has been presented (two
-    /// animation frames after it reached the DOM). The launch pump in
+    /// True once the first document's frame has been presented: for the
+    /// web view two animation frames after it reached the DOM, for the
+    /// native renderer when its first frame is drawn. The launch pump in
     /// DocumentWindowController stops on it.
     private(set) var hasPaintedFirstDocument = false
 
