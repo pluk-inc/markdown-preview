@@ -55,9 +55,18 @@ Change :: struct {
 	count:         int, // the blocks of the document now
 	// The parts of the document that were made again: `parts_removed`
 	// parts from `part_first` on went, and `parts_added` came for them.
+	// None when the range has as many blocks as before: each of them
+	// is then at the place in memory of the block that it is for.
 	part_first:    int,
 	parts_removed: int,
 	parts_added:   int,
+	// For a change of one block to one block with a text (no table): how
+	// many bytes of its text are the same at the start and at the end,
+	// and how much longer the text is. An address in those bytes is an
+	// address of the same text after the change (`moved`).
+	text_head, text_tail: int,
+	text_grew:     int,
+	text_was:      int, // the bytes of the text before
 }
 
 // The address that an address of the document before the change has now.
@@ -72,6 +81,17 @@ moved :: proc(change: Change, at: Address) -> (now: Address, same: bool) {
 	if at.block >= change.first + change.removed {
 		now.block += change.added - change.removed
 		return now, true
+	}
+	// In a block that got other text at its place: text before the
+	// change and text after it are the reader's text still.
+	if change.removed == 1 && change.added == 1 && at.cell == 0 && change.text_head + change.text_tail > 0 {
+		if at.byte <= change.text_head {
+			return now, true
+		}
+		if at.byte >= change.text_was - change.text_tail {
+			now.byte += change.text_grew
+			return now, true
+		}
 	}
 	return {max(min(change.first, change.count - 1), 0), 0, 0}, false
 }
@@ -541,7 +561,28 @@ commit :: proc(doc: ^Document, p: ^Pending) -> (change: Change) {
 		added   = p.added - head - tail,
 		count   = doc.count - p.count + p.added,
 	}
-	if change.removed > 0 || change.added > 0 {
+	if change.removed == change.added {
+		// As many blocks as before: each takes the place of the block
+		// that was there, and no other block of a part moves. A layout
+		// keeps its records of the other blocks of the part.
+		old, new := walk_from(doc, change.first, 1), walk_from(fresh, head, 1)
+		for _ in 0 ..< change.added {
+			a, b := walk_block(&old), walk_block(&new)
+			if change.added == 1 && a.kind != .Table && b.kind != .Table {
+				before, after := a.text.bytes[:], b.text.bytes[:]
+				change.text_head = slice.prefix_length(before, after)
+				rest := min(len(before), len(after)) - change.text_head
+				for change.text_tail < rest && before[len(before) - 1 - change.text_tail] == after[len(after) - 1 - change.text_tail] {
+					change.text_tail += 1
+				}
+				change.text_was, change.text_grew = len(before), len(after) - len(before)
+			}
+			block_destroy(a)
+			a^, b^ = b^, {}
+			walk_next(&old)
+			walk_next(&new)
+		}
+	} else {
 		rebuild(doc, fresh, head, &change)
 	}
 	// The offsets count from the parts again.
