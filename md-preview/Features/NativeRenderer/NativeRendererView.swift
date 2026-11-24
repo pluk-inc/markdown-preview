@@ -85,7 +85,7 @@ final class NativeRendererView: NSView {
         scrollView.borderType = .noBorder
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
-        // The owner says how much of the view the toolbar covers (`topInset`).
+        // The owner says how much of the view is covered at its top (`topInset`).
         scrollView.automaticallyAdjustsContentInsets = false
         scrollView.documentView = page
         addSubview(scrollView)
@@ -111,11 +111,10 @@ final class NativeRendererView: NSView {
     /// and past the end while the scroll view stretches at an end.
     private var scrollY: CGFloat { scrollView.contentView.bounds.origin.y }
 
-    /// The height of the strip at the top of the view that the toolbar
-    /// covers, when the owner puts the view under it. The page starts below
-    /// the strip and scrolls under it, so it shows through the toolbar,
-    /// softly, as in each app of the system. Zero for a view that starts
-    /// below the toolbar.
+    /// The height of the strip at the top of the view that is covered: by
+    /// the toolbar, and by a bar that the app puts below it (the find bar).
+    /// The page starts below the strip and scrolls under it. Zero for a
+    /// view that starts below the toolbar.
     var topInset: CGFloat = 0 {
         didSet {
             guard topInset != oldValue else { return }
@@ -123,9 +122,31 @@ final class NativeRendererView: NSView {
             let wasAtTop = scrollY <= topScrollY + 0.5
             endScrollAnimation()
             scrollView.contentInsets = NSEdgeInsets(top: topInset, left: 0, bottom: 0, right: 0)
+            updateCoveredEdgeBacking()
             if wasAtTop { scroll(toY: topScrollY) }
             setNeedsDraw()
         }
+    }
+
+    /// The system backs the covered top edge of a scroll view itself: the
+    /// page shows through, blurred, with a line that closes the strip. It
+    /// sizes that backing from the scroll view's safe area, which has only
+    /// the window's own chrome in it. This adds the rest of `topInset` (a
+    /// bar of the app below the toolbar), so the backing covers all of the
+    /// strip, as WebKit's does in the web view. The place of the page does
+    /// not depend on it: that is `contentInsets`, set by hand.
+    private func updateCoveredEdgeBacking() {
+        let extra = max(0, topInset - safeAreaInsets.top)
+        if scrollView.additionalSafeAreaInsets.top != extra {
+            scrollView.additionalSafeAreaInsets = NSEdgeInsets(top: extra, left: 0, bottom: 0, right: 0)
+        }
+    }
+
+    override func layout() {
+        // The safe area of this view can have changed (the tab bar came
+        // or went) with no new `topInset`.
+        updateCoveredEdgeBacking()
+        super.layout()
     }
 
     /// The offset at the top of the page.
