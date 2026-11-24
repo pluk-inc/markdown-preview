@@ -90,9 +90,13 @@ These came from the maintainer. Do not undo one without asking.
   decorations) for the full document. Only the lines near the view keep
   their shaped text, the text system's paragraph and line objects
   (`layout/window.odin`). Code that reads glyphs or a caret's x takes its
-  line from `shaped_line`, which shapes it again when needed. Code that
-  works on a long range of the document (the copied text) must use the
-  records only, or it shapes all of that range.
+  line from `shaped_line`, which shapes it again when needed.
+- A caret, the ends of a selection, and the place of a view are addresses
+  in the document (`document.Address`: block, cell, byte), not in a
+  layout. Work on the text of a range (the copied text, Select All, later
+  Find) reads the document (`document.text_between`) and needs no layout.
+  Only what is drawn (the highlight on the lines that show) reads the
+  records.
 - The blocks of the document are in parts (`document.Part`), and the
   layout keeps its records for each part by itself (`layout.Part`). A
   height in a record (a line, a box, a decoration, a task) counts from
@@ -290,10 +294,6 @@ Known limits, found in review and left on purpose:
 - The document model of a 1 MB source takes about 20 MB of heap, and the
   app process holds about 45 MB more for the long document than for the
   short one outside the core. Neither was looked at yet.
-- A copy of a selection lays out each part that the selection goes
-  over, in one call on the main thread (0.33 s for all of 1 MB). The text
-  that it needs is in the document; it takes it from the layout records.
-  Select All lays out only the first and the last part.
 - A part with one very long block (a code block of thousands of lines) is
   laid out from its first line. A view that comes into it from below, or
   a jump into its middle, lays out all of it down to the view in one
@@ -321,12 +321,6 @@ Design, before the features that need it:
   with a kind and a title) and footnotes (a numbered container) do not fit
   two integers. Form: a list of containers in the document, and a
   container number in each block. Before alerts and footnotes.
-- **A selection position is half a document address**
-  (`Position{block, order, index}`: the paragraph is known by its number
-  in reading order in its block, not by its cell). Copy takes the text
-  from the layout records, so it lays out what the selection goes over. Links, Find, footnote jumps, and accessibility all need document
-  addresses. Form: `{block, cell, byte}` in the `document` package, as a
-  place has it, and the copied text from the document. Before links.
 - **Layout records hold resolved colors**, and `mdcore_style` is mirrored
   field by field in three places. A change of colors alone (light, dark, a
   theme) throws the layout away. Form: color roles in the records,
@@ -400,9 +394,6 @@ Task check boxes, left on purpose:
   the old text can be other text in the new one, so the view keeps its
   offset in points there, as before. Blocks with a stable identity, or a
   map of the address through the change, would let it keep the place.
-- A selection position is still a layout address (the reading-order
-  number of a paragraph). It is the next thing to move to block, cell,
-  and byte.
 - After a click on a task the app makes the sidebar outline and the
   inspector numbers again for the full document, off the main thread
   (0.3 s of CPU for 725 KB). Neither changes with a task mark. This is in
@@ -459,11 +450,8 @@ what is there and what is next:
 
 The order of the next steps, from the review of the second step:
 
-- First the selection as a document address (`{block, cell, byte}`, as
-  a place), with the copied text taken from the document. It removes
-  the reading-order numbers (`Para.order`, `Box.orders`, `Layout.order`)
-  and the layout that a copy needs, and it leaves one address type for
-  the step after it to change.
+- Done: the selection as a document address, with the copied text
+  taken from the document.
 - Then the core keeps the reader's place itself: the anchor as a line
   address in the layout, set by a frame, and a new layout that puts the
   top of the page where that line keeps its height. Today the anchor is
@@ -482,9 +470,9 @@ Left on purpose in the first step:
 - The search for a place in an ordered list is written out in six
   procedures (parts, boxes, lines, spans, blocks). One helper for all is
   not made.
-- A selection position is the number of a block, the number of a
-  paragraph in it, and a byte. The number of a block is not an identity
-  yet (see 2).
+- An address has the number of its block, which is not an identity yet
+  (see 2). It is the one type that the identity changes: a selection, a
+  place, and a caret all use it.
 - All tops are summed again after each part that got another height
   (`sum_tops`): 250 additions for 1 MB.
 - The estimate of a code block reads each of its bytes two times: at
@@ -637,3 +625,10 @@ export.
   block, so it says the same in a layout that started at another place.
   For 1 MB: the first frame 52 ms (75 before), the End key 8 ms (0.3 s of
   layout before), a new width at the end 10 ms (0.37 s before).
+- **2026-11-24** — Third step of the base: a caret and the ends of a
+  selection are addresses in the document (block, cell, byte), the same
+  type as the place of a view. The copied text and Select All read the
+  document, so they need no layout: a copy of all of 1 MB takes 2 ms
+  (0.34 s with the layout that it needed after the second step). The
+  numbers in reading order that the layout kept for the selection are
+  gone.

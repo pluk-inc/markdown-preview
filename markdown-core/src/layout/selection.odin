@@ -5,34 +5,21 @@ import "../base"
 import "../text"
 import "core:math"
 
-// A caret position: a paragraph by its block and its number in reading
-// order in that block, and a byte offset in the source text of that
-// paragraph. It says the same in each layout of the document.
-Position :: struct {
-	block, order, index: int,
-}
-
+// The ends of a selection are addresses in the document, so a selection
+// needs no layout: only its highlight on the lines that show does.
 Selection :: struct {
 	active:        bool,
-	anchor, focus: Position,
-}
-
-@(private)
-before :: proc(a, b: Position) -> bool {
-	if a.block != b.block {
-		return a.block < b.block
-	}
-	return a.order < b.order || (a.order == b.order && a.index < b.index)
+	anchor, focus: document.Address,
 }
 
 // The two ends of the selection in reading order. False when nothing is
 // selected.
-selection_range :: proc(s: Selection) -> (from, to: Position, ok: bool) {
+selection_range :: proc(s: Selection) -> (from, to: document.Address, ok: bool) {
 	if !s.active || s.anchor == s.focus {
 		return
 	}
 	from, to = s.anchor, s.focus
-	if before(to, from) {
+	if document.before(to, from) {
 		from, to = to, from
 	}
 	return from, to, true
@@ -49,9 +36,7 @@ selection_range :: proc(s: Selection) -> (from, to: Position, ok: bool) {
 // made, and it is the same text when another block got more or fewer
 // lines.
 Place :: struct {
-	block:    int, // its number in the document
-	cell:     int, // of a table; 0 in each other block
-	byte:     int, // in the text of the block or of the cell
+	using at: document.Address, // of the first byte of the line
 	fraction: f32, // below 0 for a height above the line (between two blocks, in blank lines of code)
 }
 
@@ -99,11 +84,7 @@ place_at :: proc(l: ^Layout, y: f64) -> (place: Place, ok: bool) {
 				// lines high (blank lines of a code block have no line of
 				// their own), and all of it is a place.
 				fraction := (y - line.top) / para.line_height
-				cell := 0
-				if b.kind == .Table {
-					cell = int(uintptr(para.src) - uintptr(raw_data(b.cells))) / size_of(document.Text)
-				}
-				return {l.doc.starts[p] + i, cell, para.base + line.line.start, fraction}, true
+				return {{l.doc.starts[p] + i, document.cell_of(b, para.src), para.base + line.line.start}, fraction}, true
 			}
 			// A block with no text (a rule): the next one.
 		}
@@ -245,7 +226,7 @@ next_box :: proc(l: ^Layout, part, slot, step: int) -> (p, s: int, ok: bool) {
 }
 
 // The caret position nearest to a point of the page, in what is laid out.
-hit_test :: proc(l: ^Layout, x: f32, y: f64) -> (pos: Position, ok: bool) {
+hit_test :: proc(l: ^Layout, x: f32, y: f64) -> (pos: document.Address, ok: bool) {
 	// The block at y, and the ones around it for a point between blocks or
 	// in a block that has no text.
 	p := part_at(l, y)
@@ -308,24 +289,27 @@ hit_test :: proc(l: ^Layout, x: f32, y: f64) -> (pos: Position, ok: bool) {
 	}
 	line := shaped_line(l, best.part, best.line)
 	para := &l.parts[best.part].paras[line.para]
-	return Position{l.doc.starts[best.part] + best.slot, para.order, para.base + text.line_index_for_x(line.line, x - line.x)}, true
+	b := &l.doc.parts[best.part].blocks[best.slot]
+	return {l.doc.starts[best.part] + best.slot, document.cell_of(b, para.src), para.base + text.line_index_for_x(line.line, x - line.x)}, true
 }
 
 // The part of a line that is in the selection, as byte offsets in the
-// source text of its paragraph. `block`: the number of its block.
+// source text of its paragraph. `b`, `block`: the block of the line and
+// its number.
 @(private)
-selected_part :: proc(para: ^Para, block: int, line: Line, from, to: Position) -> (start, end: int, ok: bool) {
+selected_part :: proc(para: ^Para, b: ^document.Block, block: int, line: Line, from, to: document.Address) -> (start, end: int, ok: bool) {
 	if para.src == nil {
 		return
 	}
-	at := Position{block, para.order, 0}
-	first, last := Position{from.block, from.order, 0}, Position{to.block, to.order, 0}
-	if before(at, first) || before(last, at) {
+	// The addresses of the two ends of the line.
+	cell := document.cell_of(b, para.src)
+	first := document.Address{block, cell, para.base + line.line.start}
+	last := document.Address{block, cell, para.base + line.line.end}
+	if !document.before(first, to) || !document.before(from, last) {
 		return
 	}
-	line_start, line_end := para.base + line.line.start, para.base + line.line.end
-	start = at == first ? max(from.index, line_start) : line_start
-	end = at == last ? min(to.index, line_end) : line_end
+	start = document.before(first, from) ? from.byte : first.byte
+	end = document.before(to, last) ? to.byte : last.byte
 	return start, end, start < end
 }
 
@@ -348,13 +332,14 @@ selection_quads :: proc(l: ^Layout, s: Selection, y0, y1: f64, scale: f32, origi
 				break
 			}
 			block := l.doc.starts[p] + first + n
+			b := &l.doc.parts[p].blocks[first + n]
 			for i in box.line_first ..< box.line_end {
 				line := part.lines[i]
 				para := &part.paras[line.para]
 				if line.top + para.line_height < top || line.top > bottom {
 					continue // a long block: only its lines in the range
 				}
-				start, end := selected_part(para, block, line, from, to) or_continue
+				start, end := selected_part(para, b, block, line, from, to) or_continue
 				line = shaped_line(l, p, i)^
 				x1 := text.line_x_for_index(line.line, start - para.base)
 				x2 := text.line_x_for_index(line.line, end - para.base)
@@ -367,81 +352,18 @@ selection_quads :: proc(l: ^Layout, s: Selection, y0, y1: f64, scale: f32, origi
 	}
 }
 
-// The first and the last caret position of the document. It lays out the
-// part that each of the two is in (`anchor_y` as for `lay_out`), not what
-// is between them: a position says the same with no layout. `changed`:
-// it made records.
-select_all :: proc(l: ^Layout, anchor_y: f64) -> (s: Selection, changed: bool) {
-	// The text line of a part that is the first or the last one.
-	edge :: proc(l: ^Layout, p: int, last: bool) -> (block: int, para: Para, ok: bool) {
-		part := &l.parts[p]
-		for n in 0 ..< len(part.boxes) {
-			slot := last ? len(part.boxes) - 1 - n : n
-			box := part.boxes[slot]
-			for m in 0 ..< box.line_end - box.line_first {
-				line := part.lines[last ? box.line_end - 1 - m : box.line_first + m]
-				if para = part.paras[line.para]; para.src != nil {
-					return l.doc.starts[p] + slot, para, true
-				}
-			}
-		}
-		return
-	}
-	anchor := part_at(l, anchor_y)
-	// From the first part down to one that has text.
-	for p in 0 ..< len(l.parts) {
-		changed |= lay_out_part(l, p, anchor)
-		if block, para, ok := edge(l, p, false); ok {
-			s.anchor = Position{block, para.order, para.base}
-			s.active = true
-			break
-		}
-	}
-	// From the last part up. A document with text has an end too.
-	for p := len(l.parts) - 1; p >= 0 && s.active; p -= 1 {
-		changed |= lay_out_part(l, p, anchor)
-		if block, para, ok := edge(l, p, true); ok {
-			s.focus = Position{block, para.order, para.base + para.len}
-			break
-		}
-	}
+// The selection of all of the text of a document. Not active for a
+// document with no text.
+select_all :: proc(doc: ^document.Document) -> (s: Selection) {
+	s.anchor, s.focus, s.active = document.text_ends(doc)
 	return
 }
 
-// Appends the selected text to `out` as UTF-8, from the blocks that are
-// laid out (`lay_out_blocks`). A new paragraph starts a new line; empty
-// lines of a code block stay.
-selection_text :: proc(l: ^Layout, s: Selection, out: ^[dynamic]u8) {
-	from, to, ok := selection_range(s)
-	if !ok || l.doc.count == 0 {
-		return
-	}
-	// The number of a paragraph in reading order from the first block of
-	// the selection: the numbers of the blocks before it, and its own.
-	base, last := 0, -1
-	p, slot := document.locate(l.doc, clamp(from.block, 0, l.doc.count - 1))
-	for block := from.block; block <= to.block && p < len(l.parts); block += 1 {
-		part := &l.parts[p]
-		if slot < len(part.boxes) {
-			box := part.boxes[slot]
-			for line in part.lines[box.line_first:box.line_end] {
-				para := &part.paras[line.para]
-				start, end := selected_part(para, block, line, from, to) or_continue
-				order := base + para.order
-				if last >= 0 {
-					for _ in 0 ..< order - last {
-						append(out, '\n')
-					}
-				}
-				last = order
-				append(out, ..para.src.bytes[start:end])
-			}
-			base += box.orders
-		}
-		slot += 1
-		if slot >= l.doc.parts[p].count {
-			p, slot = p + 1, 0
-		}
+// Appends the selected text to `out` as UTF-8. The text is the document's:
+// no part of the selection needs a layout.
+selection_text :: proc(doc: ^document.Document, s: Selection, out: ^[dynamic]u8) {
+	if from, to, ok := selection_range(s); ok {
+		document.text_between(doc, from, to, out)
 	}
 }
 

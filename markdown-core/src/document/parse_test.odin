@@ -351,3 +351,58 @@ test_a_task_item_that_goes_into_the_next_part_is_set_in_all_of_it :: proc(t: ^te
 	testing.expect_value(t, block_at(&doc, PART_BLOCKS - 1).marker, Marker.Task_Done)
 	testing.expect(t, block_at(&doc, PART_BLOCKS).done)
 }
+
+@(private = "file")
+between :: proc(doc: ^Document, from, to: Address) -> string {
+	out: [dynamic]u8
+	text_between(doc, from, to, &out)
+	return string(out[:])
+}
+
+@(test)
+test_the_text_between_two_addresses :: proc(t: ^testing.T) {
+	// Block 0: a heading. 1: a paragraph. 2: a rule. 3: code with blank
+	// lines, also at its end. 4: a table with an empty cell. 5: the end.
+	doc := parse("# Title\n\nSome words.\n\n---\n\n```\none\n\ntwo\n\n```\n\n| a |  |\n| - | - |\n| 1 | 2 |\n\nEnd.\n")
+	defer destroy(&doc)
+	testing.expect_value(t, doc.count, 6)
+	first, last, ok := text_ends(&doc)
+	testing.expect(t, ok)
+	testing.expect_value(t, first, Address{0, 0, 0})
+	testing.expect_value(t, last, Address{5, 0, 4})
+	// Each text on a line of its own; a rule gives no line; the blank
+	// lines of the code stay; the empty cell gives an empty line.
+	all_text := between(&doc, first, last)
+	defer delete(all_text)
+	testing.expect_value(t, all_text, "Title\nSome words.\none\n\ntwo\n\na\n\n1\n2\nEnd.")
+	// From the middle of one text to the middle of another.
+	part := between(&doc, Address{1, 0, 5}, Address{3, 0, 2})
+	defer delete(part)
+	testing.expect_value(t, part, "words.\non")
+	// In one text.
+	one := between(&doc, Address{1, 0, 0}, Address{1, 0, 4})
+	defer delete(one)
+	testing.expect_value(t, one, "Some")
+	// From one cell to another: the cells between them, each on a line.
+	cells := between(&doc, Address{4, 0, 0}, Address{4, 3, 1})
+	defer delete(cells)
+	testing.expect_value(t, cells, "a\n\n1\n2")
+	// Texts with nothing in the range at the two ends give no line.
+	ends := between(&doc, Address{0, 0, 5}, Address{1, 0, 4})
+	defer delete(ends)
+	testing.expect_value(t, ends, "Some")
+	// Nothing for a document with no text.
+	rules := parse("***\n\n***\n")
+	defer destroy(&rules)
+	_, _, any := text_ends(&rules)
+	testing.expect(t, !any)
+}
+
+@(test)
+test_addresses_are_in_reading_order :: proc(t: ^testing.T) {
+	testing.expect(t, before(Address{0, 0, 9}, Address{1, 0, 0}))
+	testing.expect(t, before(Address{1, 0, 9}, Address{1, 1, 0}))
+	testing.expect(t, before(Address{1, 1, 0}, Address{1, 1, 1}))
+	testing.expect(t, !before(Address{1, 1, 1}, Address{1, 1, 1}))
+	testing.expect(t, !before(Address{2, 0, 0}, Address{1, 5, 5}))
+}

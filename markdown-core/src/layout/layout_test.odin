@@ -49,11 +49,16 @@ step :: proc(l: ^Layout, until: f64) -> bool {
 	return lay_out(l, -1e30, until, 0)
 }
 
+// The text that an address is in.
+@(private = "file")
+text_of :: proc(doc: ^document.Document, a: document.Address) -> ^document.Text {
+	return &document.block_texts(document.block_at(doc, a.block))[a.cell]
+}
+
 // The selection of all of the document.
 @(private = "file")
 all :: proc(l: ^Layout) -> Selection {
-	s, _ := select_all(l, 0)
-	return s
+	return select_all(l.doc)
 }
 
 // The records of a document that has one part: its tops count from the
@@ -116,7 +121,7 @@ test_select_all_copies_the_text :: proc(t: ^testing.T) {
 	step(&f.page, 1e30)
 	out: [dynamic]u8
 	defer delete(out)
-	selection_text(&f.page, all(&f.page), &out)
+	selection_text(&f.doc, all(&f.page), &out)
 	expected := "Title\nFirst paragraph with code and some more words to wrap over lines.\none\ntwo\nline 1\n\n\n\n\nline 6\na\nb\n1\n2\nLast é 😀 paragraph."
 	testing.expect_value(t, string(out[:]), expected)
 }
@@ -133,11 +138,11 @@ test_hit_test_finds_the_line :: proc(t: ^testing.T) {
 	para := &only(&f.page).paras[last.para]
 	pos, ok := hit_test(&f.page, last.x + last.line.width - 1, f64(last.top + 2))
 	testing.expect(t, ok)
-	testing.expect_value(t, pos.order, para.order)
-	testing.expect(t, pos.index > 0 && pos.index <= len(para.src.bytes))
+	testing.expect(t, text_of(&f.doc, pos) == para.src)
+	testing.expect(t, pos.byte > 0 && pos.byte <= len(para.src.bytes))
 	// A point far below the page still gives the last line.
 	below, _ := hit_test(&f.page, 0, f.page.content_height + 5000)
-	testing.expect_value(t, below.order, para.order)
+	testing.expect(t, text_of(&f.doc, below) == para.src)
 }
 
 @(test)
@@ -221,13 +226,13 @@ test_only_the_window_keeps_shaped_text :: proc(t: ^testing.T) {
 	// The copied text needs no shaped text.
 	out: [dynamic]u8
 	defer delete(out)
-	selection_text(&f.page, all(&f.page), &out)
+	selection_text(&f.doc, all(&f.page), &out)
 	testing.expect(t, len(out) > 100)
 	// A point in a released line shapes that line.
 	last := only(&f.page).lines[len(only(&f.page).lines) - 1]
 	pos, ok := hit_test(&f.page, last.x + 20, f64(last.top + 2))
 	testing.expect(t, ok)
-	testing.expect(t, pos.index > 0)
+	testing.expect(t, pos.byte > 0)
 	testing.expect(t, text.line_shaped(only(&f.page).lines[len(only(&f.page).lines) - 1].line))
 	// The window moves away: all of it is released.
 	keep(&f.page, -20, -10)
@@ -460,7 +465,7 @@ test_a_place_is_the_same_text_at_another_width :: proc(t: ^testing.T) {
 	defer teardown(&narrow)
 	step(&wide.page, 1e30)
 	// Not in a layout that did not reach the block yet.
-	_, early := place_y(&narrow.page, Place{block = len(only(&wide.page).boxes) - 1})
+	_, early := place_y(&narrow.page, Place{at = {block = len(only(&wide.page).boxes) - 1}})
 	testing.expect(t, !early)
 	for line in only(&wide.page).lines {
 		para := &only(&wide.page).paras[line.para]
@@ -661,17 +666,17 @@ test_a_place_in_a_later_part_has_the_number_of_its_block :: proc(t: ^testing.T) 
 			// The caret there is in the paragraph of that line.
 			pos, hit := hit_test(&wide.page, line.x + 1, y)
 			testing.expect(t, hit)
-			testing.expect_value(t, pos.order, para.order)
+			testing.expect(t, text_of(&wide.doc, pos) == para.src)
 		}
 	}
 	// The narrow layout is laid out only down to the place, in a later
 	// part, and has the same text there.
 	block := 3 * document.PART_BLOCKS + 1
-	_, early := place_y(&narrow.page, Place{block = block})
+	_, early := place_y(&narrow.page, Place{at = {block = block}})
 	testing.expect(t, !early)
 	lay_out_block(&narrow.page, block)
 	expect_ok(t, &narrow.page)
-	y, ok := place_y(&narrow.page, Place{block = block})
+	y, ok := place_y(&narrow.page, Place{at = {block = block}})
 	testing.expect(t, ok)
 	again, again_ok := place_at(&narrow.page, y)
 	testing.expect(t, again_ok)
@@ -726,7 +731,7 @@ test_the_text_of_all_parts_is_copied_in_order :: proc(t: ^testing.T) {
 	step(&f.page, 1e30)
 	out: [dynamic]u8
 	defer delete(out)
-	selection_text(&f.page, all(&f.page), &out)
+	selection_text(&f.doc, all(&f.page), &out)
 	copied := string(out[:])
 	at := 0
 	for i in 0 ..< 30 {
@@ -937,7 +942,7 @@ test_parts_laid_out_in_any_order_give_the_same_page :: proc(t: ^testing.T) {
 	expect_ok(t, &mixed.page)
 	testing.expect(t, mixed.page.parts[0].memory != nil)
 	lay_out_part(&mixed.page, 0, 0)
-	lay_out_blocks(&mixed.page, 0, max(int), 0)
+	step(&mixed.page, 1e30)
 	expect_ok(t, &mixed.page)
 
 	want := page_lines(&down.page)
@@ -955,8 +960,8 @@ test_parts_laid_out_in_any_order_give_the_same_page :: proc(t: ^testing.T) {
 		a, b: [dynamic]u8
 		defer delete(a)
 		defer delete(b)
-		selection_text(&down.page, all(&down.page), &a)
-		selection_text(&f.page, all(&f.page), &b)
+		selection_text(&down.doc, all(&down.page), &a)
+		selection_text(&f.doc, all(&f.page), &b)
 		testing.expect_value(t, string(b[:]), string(a[:]))
 	}
 	// With the view at the end, the end stayed where it was after the
@@ -1001,60 +1006,63 @@ test_a_long_code_block_is_laid_out_down_to_the_view_only :: proc(t: ^testing.T) 
 }
 
 @(test)
-test_a_selection_is_the_same_text_in_a_layout_from_another_place :: proc(t: ^testing.T) {
+test_a_selection_needs_no_layout :: proc(t: ^testing.T) {
 	source := long_source(40)
 	defer delete(source)
 	whole, far: Fixture
 	setup(&whole, source, 500)
 	defer teardown(&whole)
-	setup(&far, source, 500)
+	setup(&far, source, 300)
 	defer teardown(&far)
 	step(&whole.page, 1e30)
-	// A selection made in a layout from the top: from a line of part 1
-	// to a line of part 3.
+	// A selection made in one layout: from a line of part 1 to a line of
+	// part 3.
 	a, _ := hit_test(&whole.page, 120, whole.page.parts[1].top + 40)
 	b, _ := hit_test(&whole.page, 300, whole.page.parts[3].top + 200)
-	selection := Selection{true, a, b}
+	testing.expect(t, document.before(a, b))
+	selection := Selection{true, b, a}
 	want, got: [dynamic]u8
 	defer delete(want)
 	defer delete(got)
-	selection_text(&whole.page, selection, &want)
+	selection_text(&whole.doc, selection, &want)
 	testing.expect(t, len(want) > 500)
-	// The same positions in a layout that has only those blocks.
-	from, to, _ := selection_range(selection)
-	lay_out_blocks(&far.page, from.block, to.block, 0)
-	expect_ok(t, &far.page)
-	testing.expect(t, !done(&far.page))
-	selection_text(&far.page, selection, &got)
+	// The same addresses with a layout of another width that has no
+	// records: the same text, and still no records.
+	selection_text(&far.doc, selection, &got)
 	testing.expect_value(t, string(got[:]), string(want[:]))
+	for part in far.page.parts {
+		testing.expect_value(t, len(part.boxes), 0)
+	}
+	// The highlight is made for the lines that a view shows, in a part
+	// between the two ends: all of each line of text there.
+	y := far.page.parts[2].top + 100
+	lay_out(&far.page, y, y + 400, y)
+	quads: [dynamic]base.Quad
+	defer delete(quads)
+	selection_quads(&far.page, selection, y, y + 400, 2, 0, &quads)
+	testing.expect(t, len(quads) > 5)
+	// And none for a view outside the selection.
+	clear(&quads)
+	lay_out(&far.page, 0, 200, 0)
+	selection_quads(&far.page, selection, 0, 200, 2, 0, &quads)
+	testing.expect_value(t, len(quads), 0)
 }
 
 @(test)
-test_select_all_lays_out_the_two_ends_only :: proc(t: ^testing.T) {
-	source := long_source(60)
-	defer delete(source)
-	f, whole: Fixture
-	setup(&f, source, 500)
+test_select_all_is_all_of_the_text_with_no_layout :: proc(t: ^testing.T) {
+	f: Fixture
+	setup(&f, SOURCE, 600)
 	defer teardown(&f)
-	setup(&whole, source, 500)
-	defer teardown(&whole)
-	step(&whole.page, 1e30)
-	want, _ := select_all(&whole.page, 0)
-	// With the view in the middle: its text stays where it is.
-	y := f.page.content_height / 2
-	lay_out(&f.page, y, y + 600, y)
-	top := f.page.parts[part_at(&f.page, y)].top
-	got, changed := select_all(&f.page, y)
-	expect_ok(t, &f.page)
-	testing.expect(t, changed)
-	testing.expect_value(t, got, want)
-	testing.expect_value(t, f.page.parts[part_at(&f.page, y)].top, top)
-	testing.expect(t, f.page.parts[0].complete && f.page.parts[len(f.page.parts) - 1].complete)
-	testing.expect_value(t, len(f.page.parts[1].boxes), 0)
+	all_text := select_all(&f.doc)
+	testing.expect(t, all_text.active)
+	testing.expect_value(t, all_text.anchor, document.Address{0, 0, 0})
+	// The last block is the paragraph after the table.
+	last := f.doc.count - 1
+	testing.expect_value(t, all_text.focus, document.Address{last, 0, len(document.block_at(&f.doc, last).text.bytes)})
+	testing.expect_value(t, len(only(&f.page).boxes), 0)
 	// A document with no text has no selection.
 	empty: Fixture
 	setup(&empty, "***\n\n***\n", 500)
 	defer teardown(&empty)
-	none, _ := select_all(&empty.page, 0)
-	testing.expect(t, !none.active)
+	testing.expect(t, !select_all(&empty.doc).active)
 }

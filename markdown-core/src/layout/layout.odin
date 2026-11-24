@@ -58,7 +58,6 @@ Para :: struct {
 	block:       int, // of a list marker: the place in the part of the block that has its text
 	base:        int, // byte offset of the paragraph in src
 	len:         int, // bytes
-	order:       int, // its number in reading order in its block, from 0
 	using look:  Text_Look,
 }
 
@@ -84,7 +83,6 @@ Box :: struct {
 	top, bottom:             f32,
 	line_first, line_end:    int,
 	decor_first, decor_end:  int,
-	orders:                  int, // how many numbers in reading order the block used
 }
 
 // The records of the blocks of one part of the document
@@ -151,14 +149,13 @@ Layout :: struct {
 	// heights of the page that a host has stay true.
 	origin:         f64,
 	content_height: f64,
-	// The part whose records are in `work`, or -1. The four values after
+	// The part whose records are in `work`, or -1. The three values after
 	// it are of that part, and of its block in progress.
 	open:           int,
 	work:           Work,
 	code_offset:    int,
 	in_block:       bool,
 	y:              f32, // from the top of the open part
-	order:          int, // the next number in reading order in the block
 	// The range of the page that keeps its shaped text (window.odin).
 	keep_y0:        f64,
 	keep_y1:        f64,
@@ -295,7 +292,6 @@ open_for_work :: proc(l: ^Layout, index: int) {
 	part.memory = nil
 	show_work(l)
 	l.in_block, l.code_offset, l.y = part.in_block, part.code_offset, part.y
-	l.order = l.in_block ? work.boxes[len(work.boxes) - 1].orders : 0
 }
 
 @(private)
@@ -466,11 +462,9 @@ make_para :: proc(l: ^Layout, src: ^document.Text, from, to: int, look: Text_Loo
 			src = src,
 			base = from,
 			len = to - from,
-			order = l.order,
 			look = look,
 		},
 	)
-	l.order += 1
 	shape_para(l, l.open, &paras[len(paras) - 1])
 	return len(paras) - 1
 }
@@ -762,7 +756,6 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 			append(&work.boxes, Box{top = l.y, bottom = l.y, line_first = len(work.lines), decor_first = len(work.decor)})
 			l.in_block = true
 			l.code_offset = 0
-			l.order = 0
 			// The marker of a list item stands at the first line of its
 			// first block, whatever the kind of the block.
 			body_line := math.round(l.m.body * l.m.line_height)
@@ -826,7 +819,6 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 		box.bottom = l.y
 		box.line_end = len(work.lines)
 		box.decor_end = len(work.decor)
-		box.orders = l.order
 		show_work(l)
 		part := open_part(l)
 		// The new lines keep their shaped text only inside the window.
@@ -945,21 +937,6 @@ lay_out_end :: proc(l: ^Layout, height, anchor_y: f64) -> (changed: bool) {
 	return
 }
 
-// Lays out the parts of the blocks from one number to another, with all
-// their blocks. For work on a range of the document (the copied text).
-lay_out_blocks :: proc(l: ^Layout, first, last: int, anchor_y: f64) -> (changed: bool) {
-	if l.doc == nil || l.doc.count == 0 {
-		return false
-	}
-	anchor := part_at(l, anchor_y)
-	from, _ := document.locate(l.doc, clamp(first, 0, l.doc.count - 1))
-	to, _ := document.locate(l.doc, clamp(last, 0, l.doc.count - 1))
-	for p in from ..= to {
-		changed |= lay_out_part(l, p, anchor)
-	}
-	return
-}
-
 // Lays out a part down to one block, which a place is in (`place_y`).
 // That part is the anchor: it is where the view goes.
 lay_out_block :: proc(l: ^Layout, block: int) -> bool {
@@ -1001,9 +978,7 @@ place_code :: proc(l: ^Layout, b: ^document.Block, x, width, until: f32) -> bool
 			para := make_para(l, &b.text, l.code_offset, end, look)
 			l.y = place_para(l, para, x + CODE_PAD, l.y, width - 2 * CODE_PAD)
 		} else {
-			// An empty line: it has a number in reading order, so the copied
-			// text keeps it.
-			l.order += 1
+			// An empty line has no paragraph, only its height.
 			l.y += look.line_height
 		}
 		l.code_offset = end + 1
