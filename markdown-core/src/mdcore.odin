@@ -65,7 +65,7 @@ Ctx :: struct {
 	page:            layout.Layout,
 	cache:           text.Glyph_Cache,
 	gpu:             renderer.Renderer,
-	selection:       layout.Selection,
+	selection:       document.Selection,
 	// The view.
 	width, height:   f32, // points
 	page_width:      f32, // the part of the width that the page is laid out in; 0 for all of it
@@ -544,7 +544,7 @@ mdcore_select_all :: proc "c" (handle: rawptr) {
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
 	hold(ctx)
-	ctx.selection = layout.select_all(&ctx.doc)
+	ctx.selection = document.select_all(&ctx.doc)
 	ctx.display_valid = false
 }
 
@@ -556,7 +556,7 @@ mdcore_selection_text :: proc "c" (handle: rawptr, length: ^c.long) -> [^]u8 {
 	context.temp_allocator = ctx.temp
 	hold(ctx)
 	clear(&ctx.clipboard)
-	layout.selection_text(&ctx.doc, ctx.selection, &ctx.clipboard)
+	document.selection_text(&ctx.doc, ctx.selection, &ctx.clipboard)
 	length^ = c.long(len(ctx.clipboard))
 	return raw_data(ctx.clipboard)
 }

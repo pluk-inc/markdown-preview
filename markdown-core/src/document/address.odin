@@ -17,12 +17,44 @@ before :: proc(a, b: Address) -> bool {
 	return a.cell < b.cell || (a.cell == b.cell && a.byte < b.byte)
 }
 
-// The cell of a table that a text is, or 0 for the text of another block.
+// Which of the texts of its block a text is (`block_texts`): the cell of
+// a table, 0 in each other block.
 cell_of :: proc(b: ^Block, text: ^Text) -> int {
-	if b.kind != .Table {
-		return 0
+	return int(uintptr(text) - uintptr(raw_data(block_texts(b)))) / size_of(Text)
+}
+
+// A selection: two addresses. It needs no layout; only its highlight on
+// the lines that show does (`layout.selection_quads`).
+Selection :: struct {
+	active:        bool,
+	anchor, focus: Address,
+}
+
+// The two ends of a selection in reading order. False when nothing is
+// selected.
+selection_range :: proc(s: Selection) -> (from, to: Address, ok: bool) {
+	if !s.active || s.anchor == s.focus {
+		return
 	}
-	return int(uintptr(text) - uintptr(raw_data(b.cells))) / size_of(Text)
+	from, to = s.anchor, s.focus
+	if before(to, from) {
+		from, to = to, from
+	}
+	return from, to, true
+}
+
+// The selection of all of the text of a document. Not active for a
+// document with no text.
+select_all :: proc(doc: ^Document) -> (s: Selection) {
+	s.anchor, s.focus, s.active = text_ends(doc)
+	return
+}
+
+// Appends the selected text to `out` as UTF-8.
+selection_text :: proc(doc: ^Document, s: Selection, out: ^[dynamic]u8) {
+	if from, to, ok := selection_range(s); ok {
+		text_between(doc, from, to, out)
+	}
 }
 
 // The texts of a block in reading order: its cells for a table, its own

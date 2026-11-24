@@ -5,26 +5,6 @@ import "../base"
 import "../text"
 import "core:math"
 
-// The ends of a selection are addresses in the document, so a selection
-// needs no layout: only its highlight on the lines that show does.
-Selection :: struct {
-	active:        bool,
-	anchor, focus: document.Address,
-}
-
-// The two ends of the selection in reading order. False when nothing is
-// selected.
-selection_range :: proc(s: Selection) -> (from, to: document.Address, ok: bool) {
-	if !s.active || s.anchor == s.focus {
-		return
-	}
-	from, to = s.anchor, s.focus
-	if document.before(to, from) {
-		from, to = to, from
-	}
-	return from, to, true
-}
-
 // A place in the document, for a view that must show the same text after
 // a new layout (another width, another text size): the line of text at a
 // height of the page, by the address of its first byte, and how far down
@@ -330,8 +310,8 @@ selected_part :: proc(para: ^Para, b: ^document.Block, block: int, line: Line, f
 }
 
 // Makes the highlight quads of the selection between y0 and y1 (points).
-selection_quads :: proc(l: ^Layout, s: Selection, y0, y1: f64, scale: f32, origin_y: f64, out: ^[dynamic]base.Quad) {
-	from, to, ok := selection_range(s)
+selection_quads :: proc(l: ^Layout, s: document.Selection, y0, y1: f64, scale: f32, origin_y: f64, out: ^[dynamic]base.Quad) {
+	from, to, ok := document.selection_range(s)
 	if !ok {
 		return
 	}
@@ -365,21 +345,6 @@ selection_quads :: proc(l: ^Layout, s: Selection, y0, y1: f64, scale: f32, origi
 				append(out, rect_quad(line.x + x1, line.top, max(x2 - x1, 2), para.line_height, l.style.selection, 0, scale, part.top, origin_y))
 			}
 		}
-	}
-}
-
-// The selection of all of the text of a document. Not active for a
-// document with no text.
-select_all :: proc(doc: ^document.Document) -> (s: Selection) {
-	s.anchor, s.focus, s.active = document.text_ends(doc)
-	return
-}
-
-// Appends the selected text to `out` as UTF-8. The text is the document's:
-// no part of the selection needs a layout.
-selection_text :: proc(doc: ^document.Document, s: Selection, out: ^[dynamic]u8) {
-	if from, to, ok := selection_range(s); ok {
-		document.text_between(doc, from, to, out)
 	}
 }
 
