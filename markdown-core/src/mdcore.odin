@@ -390,13 +390,24 @@ mdcore_set_task_checked :: proc "c" (handle: rawptr, line: c.long, checked: bool
 	return true
 }
 
+// The shape of the pointer over a place of the page. The core decides
+// it, because it knows what is there; the host only shows it. A link
+// that opens will add a shape here.
+Pointer_Shape :: enum c.int {
+	Default = 0,
+	Text    = 1,
+}
+
 @(export)
-mdcore_text_at :: proc "c" (handle: rawptr, x, y: f64) -> bool {
+mdcore_pointer_shape :: proc "c" (handle: rawptr, x, y: f64) -> Pointer_Shape {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
 	hold(ctx)
-	return ctx.layout_valid && layout.text_at(&ctx.page, f32(x), f32(y))
+	if ctx.layout_valid && layout.text_at(&ctx.page, f32(x), f32(y)) {
+		return .Text
+	}
+	return .Default
 }
 
 // phase 0 = mouse down, 1 = drag. x and y are points in document space.

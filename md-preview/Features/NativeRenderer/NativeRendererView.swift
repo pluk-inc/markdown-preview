@@ -154,6 +154,8 @@ final class NativeRendererView: NSView {
     }
 
     @objc private func pageDidScroll() {
+        // Another place of the page is under the pointer now.
+        page.updateCursor()
         updateTaskCheckBoxes()
         guard !followsRenderLoop else { return }
         setNeedsDraw()
@@ -534,9 +536,13 @@ final class NativeRendererView: NSView {
 
     // MARK: Input
 
-    /// True when a point of the page is on a line of text.
-    fileprivate func isText(at point: NSPoint) -> Bool {
-        hasDocument && mdcore_text_at(ctx, point.x, point.y)
+    /// The cursor for a point of the page. The core decides the shape.
+    fileprivate func cursor(at point: NSPoint) -> NSCursor {
+        guard hasDocument else { return .arrow }
+        switch mdcore_pointer_shape(ctx, point.x, point.y) {
+        case MDCORE_POINTER_TEXT: return .iBeam
+        default: return .arrow
+        }
     }
 
     /// A pointer event on the page. `point` is in page coordinates, which
@@ -619,9 +625,10 @@ private final class PageArea: NSView {
     override var isFlipped: Bool { true }
 
     // The text cursor only over a line of text; the arrow in the margin,
-    // between blocks, and around a list marker or a check box. The page
-    // knows where its text is only from the core, so the cursor follows
-    // the pointer and is not a fixed rectangle.
+    // between blocks, and around a list marker or a check box. The core
+    // knows what is under the pointer, so the cursor is asked for when the
+    // pointer moves or the page moves under it, and is not a fixed
+    // rectangle.
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -631,12 +638,16 @@ private final class PageArea: NSView {
         ))
     }
 
-    override func mouseMoved(with event: NSEvent) { setCursor(for: event) }
-    override func cursorUpdate(with event: NSEvent) { setCursor(for: event) }
+    override func mouseMoved(with event: NSEvent) { updateCursor() }
+    override func cursorUpdate(with event: NSEvent) { updateCursor() }
 
-    private func setCursor(for event: NSEvent) {
-        let point = convert(event.locationInWindow, from: nil)
-        (owner?.isText(at: point) == true ? NSCursor.iBeam : NSCursor.arrow).set()
+    /// Sets the cursor for the place of the pointer, when the pointer is
+    /// over the visible part of the page in the key window.
+    func updateCursor() {
+        guard let window, window.isKeyWindow else { return }
+        let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        guard visibleRect.contains(point), window.contentView?.hitTest(window.mouseLocationOutsideOfEventStream)?.isDescendant(of: self) == true else { return }
+        owner?.cursor(at: point).set()
     }
 
     override func mouseDown(with event: NSEvent) {
