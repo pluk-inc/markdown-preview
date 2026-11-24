@@ -60,9 +60,15 @@ text_at :: proc(l: ^Layout, x, y: f32) -> bool {
 		}
 		return false
 	}
-	// The lines of other blocks go down the page, so the ones at y are
-	// found without a look at each line: a code block can have many.
-	lo, hi := box.line_first, box.line_end
+	// The marker of a list item comes first, and its lines (a long number
+	// can wrap) start at the height of the text again. After it the lines
+	// of the text go down the page, so the one at y is found without a
+	// look at each line: a code block can have many.
+	first := box.line_first
+	for first < box.line_end && l.paras[l.lines[first].para].src == nil {
+		first += 1
+	}
+	lo, hi := first, box.line_end
 	for lo < hi {
 		mid := (lo + hi) / 2
 		if l.lines[mid].top <= y {
@@ -71,18 +77,8 @@ text_at :: proc(l: ^Layout, x, y: f32) -> bool {
 			hi = mid
 		}
 	}
-	// The lines that start at or above y, from the nearest one up: the
-	// line itself, and a marker that stands at the same height.
-	for k := lo - 1; k >= box.line_first; k -= 1 {
-		line := l.lines[k]
-		if y >= line.top + l.paras[line.para].line_height {
-			break
-		}
-		if on_line(l, line, x, y) {
-			return true
-		}
-	}
-	return false
+	// The last line that starts at or above y.
+	return lo > first && on_line(l, l.lines[lo - 1], x, y)
 }
 
 // The caret position nearest to a point of the page.

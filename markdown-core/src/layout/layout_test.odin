@@ -388,6 +388,28 @@ test_only_a_line_of_text_is_text_for_the_pointer :: proc(t: ^testing.T) {
 			}
 		}
 	}
+	// A number so long that it wraps: its lines come before the text of
+	// the item and start at the same height again.
+	{
+		g: Fixture
+		setup(&g, "123456789. first line of the item\n   second paragraph of it\n", 600)
+		defer teardown(&g)
+		step(&g.page, 1e30)
+		texts, marker_lines := 0, 0
+		for box in g.page.boxes {
+			for line in g.page.lines[box.line_first:box.line_end] {
+				para := &g.page.paras[line.para]
+				if para.src == nil {
+					marker_lines += 1
+					continue
+				}
+				texts += 1
+				testing.expect(t, text_at(&g.page, line.x + 1, line.top + para.line_height / 2))
+			}
+		}
+		testing.expect(t, texts >= 1)
+		testing.expect(t, marker_lines >= 2)
+	}
 	// Not above the page and not below it.
 	testing.expect(t, !text_at(&f.page, first.x + 5, -10))
 	testing.expect(t, !text_at(&f.page, first.x + 5, f.page.content_height + 100))
