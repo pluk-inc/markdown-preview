@@ -71,6 +71,16 @@ void mdcore_set_style(void *ctx, const mdcore_style *style);
 // when the view has no layout yet.
 void mdcore_set_markdown(void *ctx, const char *utf8, long length);
 
+// Puts a text in the place of the bytes from `start` to `end` of the
+// text of the document: the same result as mdcore_set_markdown with the
+// full text after that change, for a host that knows what changed (a
+// key that was typed). `start == end` puts the text in; an empty text
+// takes the range out. The offsets are UTF-8 byte offsets in the text
+// that the document has now (after each task that was set, see
+// mdcore_set_task_checked), and must not cut a character. A range that
+// reaches out of the text is cut to it.
+void mdcore_replace_text(void *ctx, long start, long end, const char *utf8, long length);
+
 // Sets the view size and backing scale. Starts a new layout when the
 // document, the style, or the width changed; the next frame lays out
 // what it shows. A new scale only makes the glyph bitmaps again.

@@ -31,6 +31,7 @@ METRICS = [
     ("end_frame_ms", "To the end: layout and first frame there (ms)"),
     ("resize_at_end_ms", "A new width at the end: layout and frame (ms)"),
     ("change_ms", "A change of the text in its middle: parse, compare, and frame (ms)"),
+    ("type_cpu_ms", "A typed character in its middle: parse, compare, and frame (CPU ms)"),
     ("select_all_ms", "Select All (ms)"),
     ("copy_all_ms", "Copy of all of the text (ms)"),
     ("full_layout_cpu_ms", "All of the document laid out, by frames through it (CPU ms)"),

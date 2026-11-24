@@ -21,7 +21,8 @@ markdown-core/bench/app.py <Markdown Preview.app>   # the app, cold launch; add 
   two scroll passes of 24,000 points (the first lays out what it comes
   to and makes the glyph bitmaps, the second has them), a jump back to
   the top between them, a jump to the end, a new width there, the same
-  text again with one paragraph more in its middle, Select All,
+  text again with one paragraph more in its middle, ten characters typed
+  into that paragraph, Select All,
   a copy of all of the text, frames through all of the document (so all
   of it is laid out), and the heap. It takes a minute and
   shows no window. A scroll frame is CPU time of the drawing thread, because
@@ -66,6 +67,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-24 | the core keeps the reader's place across a new layout | 553 / 537 | 53 / 87 | 490 / 710 | 63 / 66 | none | 0.48 / 0.40 | 7.0 / 21.4 (15.3 before all of it was laid out) |
 | 2026-11-24 | a changed text changes the document in place | 566 / 577 | 57 / 92 | 540 / 800 | 61 / 67 | none | 0.43 / 0.39 | 7.0 / 22.9 with the changed text of the benchmark (15.4 before all of it was laid out) |
 | 2026-11-24 | the document keeps its source; each block knows its lines of it | 558 / 576 | 61 / 107 | 470 / 700 | 59 / 69 | none | 0.45 / 0.39 | 7.0 / 25.3 (16.2 at the first frame) |
+| 2026-11-24 | a change of the source as a range and a text | 574 / 582 | 62 / 108 | 465 / 705 | 59 / 71 | none | 0.43 / 0.37 | 7.0 / 25.4 (16.2 at the first frame) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -532,3 +534,51 @@ comparison used a copy of the base app that was
 built before the last commits of the base, and showed 7 MB less memory
 for it; a base must be built from the commit that the change starts
 from.)
+
+## A change as a range of the source (2026-11-24)
+
+`core.py` has a new step: ten characters typed into a paragraph in the
+middle of the text, one call and one frame for each
+(`mdcore_replace_text`), with the reader at the end. The number is the
+CPU time for one of them (a frame waits for the display, so the time on
+the clock says nothing).
+
+| | Short | Long |
+| --- | --- | --- |
+| A typed character in its middle: parse, compare, and frame (CPU ms) | 4.8 | 10.1 |
+
+An editor has 8.3 ms for a key at 120 Hz, so the long document is over
+it. The two numbers say where the time goes. The short document is 9 KB:
+its parse is 0.1 ms, and its 4.8 ms are the layout of the part of the
+document that has the changed block (all of its blocks are laid out
+again, with their text shaped again, when one of them changes) and the
+frame. The long document adds 5 ms to that: the parse of all of the
+source and the comparison of all blocks. So two things are between this
+and a key that costs less than 1 ms: the parse of only what changed,
+and a layout that makes only the changed block again, not its part.
+
+The other numbers of `core.py` are the ones of the base (the source
+kept): first frame 58 / 70 ms against 56 / 70 ms, scroll frames 0.44 and
+0.37 ms against 0.42 and 0.37 ms, heap 16.2 MB at the first frame for
+the two.
+
+`app.py`, short / long, five launches for each number, the base built
+from its commit on the same day:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 529 / 568 | 62 / 108 | 450 / 700 |
+| change | 572 / 584 | 62 / 107 | 460 / 700 |
+| change | 575 / 579 | 62 / 108 | 470 / 710 |
+| base | 552 / 562 | 61 / 108 | 450 / 700 |
+
+Memory and CPU are the same. The change is in the middle of the order,
+where a build is 20 to 30 ms slower at launch than at the two ends,
+whichever build it is (see "A changed text in place"); the launch path
+has the same work in the two builds.
+
+A run before this one, with three launches for each number, showed 155
+to 198 MB in four of its eight numbers, for the base and for the change.
+The run above did not show it. The reason is not known; a number that
+is 90 MB over the others is a sign of it, and the run is then made
+again.

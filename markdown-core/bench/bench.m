@@ -160,6 +160,20 @@ int main(int argc, const char *argv[]) {
         mdcore_draw(ctx, bottom);
     }
     printf("change_ms %.2f\n", now_ms() - change_start);
+
+    // Keys that are typed into that paragraph, one character each, as an
+    // editor gives them: the range of the source that changes, and the
+    // frame after it. CPU time: a frame waits for the display.
+    enum { KEYS = 10 };
+    double type_start = thread_cpu_ms();
+    for (int key = 0; key < KEYS; key++) {
+        long caret = (long)at + 4 + key;
+        mdcore_replace_text(ctx, caret, caret, "x", 1);
+        @autoreleasepool {
+            mdcore_draw(ctx, bottom);
+        }
+    }
+    printf("type_cpu_ms %.2f\n", (thread_cpu_ms() - type_start) / KEYS);
     // The estimate for the comparison below is of this text.
     mdcore_page_area(ctx, &top, &height);
 
