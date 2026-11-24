@@ -259,25 +259,40 @@ mdcore_set_style :: proc "c" (handle: rawptr, style: ^base.Style) {
 	ctx.layout_valid = false
 }
 
-// Replaces the document. The host calls mdcore_resize after it.
+// Takes a new text of the document. See the header.
 @(export)
 mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
 	hold(ctx)
-	// The layout points into the old document.
-	layout.begin(&ctx.page, nil, ctx.style, 0)
-	document.destroy(&ctx.doc)
-	ctx.doc = document.parse(length > 0 ? string(utf8[:length]) : "")
+	fresh := document.parse(length > 0 ? string(utf8[:length]) : "")
 	ctx.selection = {}
-	// A place of the old document is no address in the new one. The top
-	// of the page stays where it is: a host that keeps the reader's offset
-	// (the same file with a change) is as far below it as before.
-	ctx.place = {}
-	ctx.place_scroll = math.nan_f64() // the next frame takes the place
-	ctx.scroll = ctx.page.origin
-	ctx.layout_valid = false
+	if !ctx.layout_valid {
+		// No layout to keep (the first document, or after a new style).
+		layout.begin(&ctx.page, nil, ctx.style, 0)
+		document.destroy(&ctx.doc)
+		ctx.doc = fresh
+		ctx.place = {}
+		ctx.place_scroll = math.nan_f64() // the next frame takes the place
+		ctx.scroll = ctx.page.origin
+		return
+	}
+	// The document changes in place: the blocks that are the same keep
+	// their records, and the layout makes only the parts of the others
+	// again. A document with no block in common is the same case.
+	change := document.replace(&ctx.doc, &fresh)
+	layout.apply_change(&ctx.page, change)
+	// The reader's place has the number that its block has now. A place
+	// in the blocks that changed is gone: the top of the page stays then.
+	if at, ok := document.moved(change, ctx.place.place.at); ok && ctx.place.known {
+		ctx.place.place.at = at
+		layout.restore_place(&ctx.page, ctx.place)
+	} else {
+		ctx.place = {}
+		ctx.place_scroll = math.nan_f64()
+	}
+	layout_changed(ctx)
 }
 
 // See the header.

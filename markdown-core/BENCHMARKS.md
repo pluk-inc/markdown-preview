@@ -20,7 +20,8 @@ markdown-core/bench/app.py <Markdown Preview.app>   # the app, cold launch; add 
   through its C API in a new process each time: the first frame, the layout
   two scroll passes of 24,000 points (the first lays out what it comes
   to and makes the glyph bitmaps, the second has them), a jump back to
-  the top between them, a jump to the end, a new width there, Select All,
+  the top between them, a jump to the end, a new width there, the same
+  text again with one paragraph more in its middle, Select All,
   a copy of all of the text, frames through all of the document (so all
   of it is laid out), and the heap. It takes a minute and
   shows no window. A scroll frame is CPU time of the drawing thread, because
@@ -63,6 +64,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-24 | the layout is made where the view is; estimated heights for the rest | 617 / 634 | 53 / 92 | 490 / 740 | 69 / 45 | none (see the section) | 0.52 / 0.44 | 6.9 / 20.4 (15.5 before Select All) |
 | 2026-11-24 | a selection is two addresses in the document; a copy reads the document | 586 / 570 | 58 / 97 | 560 / 820 | 69 / 68 | none | 0.46 / 0.39 | 7.0 / 21.5 (15.4 before all of it was laid out) |
 | 2026-11-24 | the core keeps the reader's place across a new layout | 553 / 537 | 53 / 87 | 490 / 710 | 63 / 66 | none | 0.48 / 0.40 | 7.0 / 21.4 (15.3 before all of it was laid out) |
+| 2026-11-24 | a changed text changes the document in place | 566 / 577 | 57 / 92 | 540 / 800 | 61 / 67 | none | 0.43 / 0.39 | 7.0 / 22.9 with the changed text of the benchmark (15.4 before all of it was laid out) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -442,3 +444,37 @@ first, three pairs: launch 537, 621, 603 against 620, 618, 616 ms; CPU
 91 MB. So the build that runs second in a pair is the slower one, and
 the two builds do not differ. To judge a launch time of this size,
 measure in the two orders.
+
+## A changed text in place (2026-11-24)
+
+`core.py` has a new step: with the reader at the end, the document gets
+the same text again with one paragraph more in its middle. The time is
+for the parse of the new text, the comparison with the old blocks, the
+one part that is made again, and the frame at the same scroll position:
+8.6 ms for the short document, 28.6 ms for the long one. About 24 ms of
+the long one is the parse of all of the text, which this change does not
+remove. The other numbers of `core.py` are the ones of the base (the
+reader's place in the core): first frame 61 / 67 ms, scroll frames 0.43
+and 0.39 ms, heap 13.7 MB at the first frame and 15.4 MB after the scroll
+passes.
+
+What the number does not show is what changed for the reader. Before, a
+new text was a new document: the view kept its distance from the top of
+the page, so text that came in above the reader moved what they read,
+and all that was laid out was laid out again when the reader came to
+it. Now the first line that shows stays where it is, and the parts that
+did not change keep their records.
+
+`app.py`, short / long, the base, the step before it (a selection as
+addresses), and the change, in three orders with three launches for each
+number. The builds at the two ends of an order were 20 to 30 ms faster
+at launch than the ones in its middle, whichever build that was:
+
+| Order | Launch to the first frame (ms), short |
+| --- | --- |
+| selection, place, change, change, place, selection | 540, 566, 562, 560, 581, 549 |
+| change, selection, selection, place, selection, change | 566, 564, 566, 555, 531, 554 |
+
+So the three builds do not differ: CPU 520 to 560 ms short and 780 to
+820 ms long, memory 56 to 57 MB short and 90 to 96 MB long for each of
+them.

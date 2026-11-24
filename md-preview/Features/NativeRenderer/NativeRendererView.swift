@@ -480,9 +480,13 @@ final class NativeRendererView: NSView {
         }
         hasDocument = true
         endScrollAnimation()
-        // Before the layout: it lays out what the view shows, and that must
-        // be the top of a new document, not the place the old one was at.
-        if !keepsScroll { scroll(toY: topScrollY) }
+        // The core changed the document in place: what is the same as
+        // before kept its layout, and the reader's place its height. A new
+        // document starts at its top, which can be at another height now.
+        if !keepsScroll {
+            updatePageArea()
+            scroll(toY: topScrollY)
+        }
         relayout(force: true)
     }
 

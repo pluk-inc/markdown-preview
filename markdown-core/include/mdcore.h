@@ -60,7 +60,13 @@ typedef struct {
 // core draws on a transparent surface.
 void mdcore_set_style(void *ctx, const mdcore_style *style);
 
-// Replaces the document. Call mdcore_resize after it to lay it out.
+// Takes the text of the document, UTF-8. For a text that is the text
+// before with a change (the same file, saved by another app), the layout
+// stays for all that did not change: the core compares the blocks, makes
+// only the changed parts again, and keeps the reader's place when it is
+// not in them. A text of another document is the same call; the top of
+// the page stays then, and the host scrolls to it. Call mdcore_resize
+// after it when the view has no layout yet.
 void mdcore_set_markdown(void *ctx, const char *utf8, long length);
 
 // Sets the view size and backing scale. Starts a new layout when the

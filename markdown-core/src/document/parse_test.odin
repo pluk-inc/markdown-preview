@@ -406,3 +406,187 @@ test_addresses_are_in_reading_order :: proc(t: ^testing.T) {
 	testing.expect(t, !before(Address{1, 1, 1}, Address{1, 1, 1}))
 	testing.expect(t, !before(Address{2, 0, 0}, Address{1, 5, 5}))
 }
+
+// Paragraphs, one for each number, with some other kinds between them.
+@(private = "file")
+numbered :: proc(count: int, changed := -1, extra := -1, without := -1) -> string {
+	b := strings.builder_make()
+	for i in 0 ..< count {
+		if i == without {
+			continue
+		}
+		if i == extra {
+			strings.write_string(&b, "An extra paragraph.\n\n- with\n- a list\n\n")
+		}
+		switch {
+		case i == changed:
+			fmt.sbprintf(&b, "Paragraph %d with **other** words.\n\n", i)
+		case i % 17 == 5:
+			fmt.sbprintf(&b, "| a%d | b |\n| - | - |\n| 1 | [l](https://example.com/%d) |\n\n", i, i)
+		case i % 17 == 9:
+			fmt.sbprintf(&b, "- [ ] task %d\n\n", i)
+		case i % 17 == 13:
+			fmt.sbprintf(&b, "```\ncode %d\n```\n\n", i)
+		case:
+			fmt.sbprintf(&b, "Paragraph %d with a [link](https://example.com/%d).\n\n", i, i)
+		}
+	}
+	return strings.to_string(b)
+}
+
+// Checks that a document is the one that a parse of `source` gives, and
+// that its parts agree with each other.
+@(private = "file")
+expect_document :: proc(t: ^testing.T, doc: ^Document, source: string, loc := #caller_location) {
+	want := parse(source)
+	defer destroy(&want)
+	testing.expect_value(t, doc.count, want.count, loc)
+	testing.expect_value(t, len(doc.parts), len(doc.starts), loc)
+	count := 0
+	for part, p in doc.parts {
+		testing.expect_value(t, doc.starts[p], count, loc)
+		testing.expect(t, part.count > 0 && part.count <= PART_BLOCKS, loc = loc)
+		count += part.count
+	}
+	testing.expect_value(t, count, doc.count, loc)
+	testing.expect_value(t, len(doc.links), len(want.links), loc)
+	for i in 0 ..< min(doc.count, want.count) {
+		a, b := block_at(doc, i), block_at(&want, i)
+		testing.expect(t, layout_equal(a, b), loc = loc)
+		testing.expect_value(t, a.task_line, b.task_line, loc)
+		testing.expect_value(t, a.item, b.item, loc)
+		testing.expect_value(t, a.done, b.done, loc)
+		for span, n in a.text.spans {
+			testing.expect_value(t, span.link, b.text.spans[n].link, loc)
+		}
+	}
+	for link, i in want.links {
+		testing.expect_value(t, doc.links[i], link, loc)
+	}
+}
+
+@(test)
+test_a_change_in_the_middle_keeps_the_other_blocks_in_place :: proc(t: ^testing.T) {
+	COUNT :: 5 * PART_BLOCKS
+	AT :: 2 * PART_BLOCKS + 7
+	before, after := numbered(COUNT), numbered(COUNT, changed = AT)
+	defer delete(before)
+	defer delete(after)
+	doc, fresh := parse(before), parse(after)
+	defer destroy(&doc)
+	first, last := block_at(&doc, 3), block_at(&doc, COUNT - 3)
+	parts := [2]^Part{doc.parts[0], doc.parts[4]}
+	change := replace(&doc, &fresh)
+	testing.expect_value(t, fresh.count, 0)
+	testing.expect_value(t, change.first, AT)
+	testing.expect_value(t, change.removed, 1)
+	testing.expect_value(t, change.added, 1)
+	// One part was made again, and each other one is where it was.
+	testing.expect_value(t, change.part_first, 2)
+	testing.expect_value(t, change.parts_removed, 1)
+	testing.expect_value(t, change.parts_added, 1)
+	testing.expect(t, doc.parts[0] == parts[0] && doc.parts[4] == parts[1])
+	testing.expect(t, block_at(&doc, 3) == first && block_at(&doc, COUNT - 3) == last)
+	expect_document(t, &doc, after)
+	// The addresses before the block, in it, and after it.
+	now, ok := moved(change, Address{AT - 1, 0, 4})
+	testing.expect(t, ok && now == Address{AT - 1, 0, 4})
+	_, ok = moved(change, Address{AT, 0, 0})
+	testing.expect(t, !ok)
+	now, ok = moved(change, Address{AT + 1, 2, 4})
+	testing.expect(t, ok && now == Address{AT + 1, 2, 4})
+}
+
+@(test)
+test_blocks_that_come_and_go_move_the_numbers_after_them :: proc(t: ^testing.T) {
+	COUNT :: 4 * PART_BLOCKS
+	AT :: PART_BLOCKS + 20
+	base := numbered(COUNT)
+	defer delete(base)
+	{
+		// Three blocks more (a paragraph and a list of two items).
+		after := numbered(COUNT, extra = AT)
+		defer delete(after)
+		doc, fresh := parse(base), parse(after)
+		defer destroy(&doc)
+		last := block_at(&doc, COUNT - 1)
+		change := replace(&doc, &fresh)
+		testing.expect_value(t, change.first, AT)
+		testing.expect_value(t, change.removed, 0)
+		testing.expect_value(t, change.added, 3)
+		expect_document(t, &doc, after)
+		now, ok := moved(change, Address{AT, 0, 2})
+		testing.expect(t, ok && now == Address{AT + 3, 0, 2})
+		// The last part did not move; the block has another number.
+		testing.expect(t, block_at(&doc, COUNT + 2) == last)
+	}
+	{
+		// One block fewer.
+		after := numbered(COUNT, without = AT)
+		defer delete(after)
+		doc, fresh := parse(base), parse(after)
+		defer destroy(&doc)
+		change := replace(&doc, &fresh)
+		testing.expect_value(t, change.first, AT)
+		testing.expect_value(t, change.removed, 1)
+		testing.expect_value(t, change.added, 0)
+		expect_document(t, &doc, after)
+		now, ok := moved(change, Address{AT + 1, 0, 0})
+		testing.expect(t, ok && now == Address{AT, 0, 0})
+	}
+}
+
+@(test)
+test_a_change_at_each_end_and_of_all_of_the_document :: proc(t: ^testing.T) {
+	COUNT :: 3 * PART_BLOCKS
+	base := numbered(COUNT)
+	defer delete(base)
+	cases := [?]string {
+		numbered(COUNT, changed = 0),
+		numbered(COUNT, changed = COUNT - 1),
+		numbered(COUNT, extra = 0),
+		numbered(COUNT + 40),
+		numbered(PART_BLOCKS / 2),
+		numbered(COUNT, without = 0),
+		"# Another document\n\nWith two blocks.\n",
+		"",
+		base,
+	}
+	for after, i in cases {
+		doc, fresh := parse(base), parse(after)
+		change := replace(&doc, &fresh)
+		expect_document(t, &doc, after)
+		if after == base {
+			// The same text: no block is another one, no part is made again.
+			testing.expect_value(t, change.removed + change.added, 0)
+			testing.expect_value(t, change.parts_removed + change.parts_added, 0)
+		}
+		// And back again, also from an empty document.
+		again := parse(base)
+		replace(&doc, &again)
+		expect_document(t, &doc, base)
+		destroy(&doc)
+		if i < len(cases) - 1 {
+			delete(after)
+		}
+	}
+}
+
+@(test)
+test_a_task_mark_and_a_link_number_change_no_block_for_a_layout :: proc(t: ^testing.T) {
+	// A line more at the top moves the line of the task; a link more at
+	// the top moves the number of the link after it. A checked mark is
+	// another marker, so that block is another one.
+	doc := parse("First.\n\n- [ ] task\n\nA [link](https://a.example).\n")
+	defer destroy(&doc)
+	task := block_at(&doc, 1)
+	fresh := parse("First\nwith a [link](https://b.example).\n\n- [ ] task\n\nA [link](https://a.example).\n")
+	change := replace(&doc, &fresh)
+	testing.expect_value(t, change.first, 0)
+	testing.expect_value(t, change.removed, 1)
+	testing.expect_value(t, change.added, 1)
+	testing.expect_value(t, block_at(&doc, 1).task_line, 4)
+	testing.expect_value(t, block_at(&doc, 2).text.spans[1].link, 2)
+	testing.expect_value(t, doc.links[1], "https://a.example")
+	_ = task
+}

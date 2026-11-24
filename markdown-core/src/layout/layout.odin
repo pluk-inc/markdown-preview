@@ -189,12 +189,46 @@ begin :: proc(l: ^Layout, doc: ^document.Document, style: base.Style, width: f32
 	l.keep_y0, l.keep_y1 = 0, 1e30
 	if doc != nil {
 		for _, p in doc.parts {
-			start := part_start(l, p)
-			rest := estimate(l, p, 0)
-			append(&l.parts, Part{height = start + rest, y = start, rest = rest})
+			append(&l.parts, part_new(l, p))
 		}
 	}
 	sum_tops(l)
+}
+
+// The records of a part of the document that is not laid out: none, and
+// a height that is estimated.
+@(private)
+part_new :: proc(l: ^Layout, part: int) -> Part {
+	start := part_start(l, part)
+	rest := estimate(l, part, 0)
+	return {height = start + rest, y = start, rest = rest}
+}
+
+// After a change of the document (`document.replace`): the parts that
+// were made again get parts with no records and an estimated height. The
+// records of each other part stay, also of the parts below the change,
+// which are at another height of the page after it. The top of the page
+// stays; the owner puts the reader's place back after it
+// (`restore_place`).
+apply_change :: proc(l: ^Layout, change: document.Change) {
+	if change.parts_removed == 0 && change.parts_added == 0 {
+		return
+	}
+	// The numbers of the parts are other ones after it.
+	close_part(l)
+	first := change.part_first
+	for &part in l.parts[first:][:change.parts_removed] {
+		part_destroy(&part)
+	}
+	remove_range(&l.parts, first, first + change.parts_removed)
+	for p in first ..< first + change.parts_added {
+		inject_at(&l.parts, p, part_new(l, p))
+	}
+	sum_tops(l)
+	when ODIN_DEBUG {
+		problem := check(l)
+		assert(problem == "", problem)
+	}
 }
 
 // The y that the first block of a part starts at: the page has room above
