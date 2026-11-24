@@ -32,6 +32,55 @@ selection_range :: proc(s: Selection) -> (from, to: Position, ok: bool) {
 	return from, to, true
 }
 
+// True when a point of the page is on a line of text: in its height, not
+// left of where it starts, and not right of the column (the space after a
+// short line is the line's; a table wider than the column is all text).
+// The margins, the space between blocks, and
+// the place of a list marker or a check box are not text. For the pointer:
+// a host shows the text cursor only there.
+text_at :: proc(l: ^Layout, x, y: f32) -> bool {
+	i := first_box_below(l, y)
+	if i >= len(l.boxes) {
+		return false
+	}
+	box := l.boxes[i]
+	on_line :: proc(l: ^Layout, line: Line, x, y: f32) -> bool {
+		para := &l.paras[line.para]
+		if para.src == nil || y < line.top || y >= line.top + para.line_height || x < line.x {
+			return false
+		}
+		return x <= max(l.column_x + l.column, line.x + line.line.width)
+	}
+	if l.doc.blocks[i].kind == .Table {
+		// The cells of a row are side by side: each line is a candidate.
+		for line in l.lines[box.line_first:box.line_end] {
+			if on_line(l, line, x, y) {
+				return true
+			}
+		}
+		return false
+	}
+	// The marker of a list item comes first, and its lines (a long number
+	// can wrap) start at the height of the text again. After it the lines
+	// of the text go down the page, so the one at y is found without a
+	// look at each line: a code block can have many.
+	first := box.line_first
+	for first < box.line_end && l.paras[l.lines[first].para].src == nil {
+		first += 1
+	}
+	lo, hi := first, box.line_end
+	for lo < hi {
+		mid := (lo + hi) / 2
+		if l.lines[mid].top <= y {
+			lo = mid + 1
+		} else {
+			hi = mid
+		}
+	}
+	// The last line that starts at or above y.
+	return lo > first && on_line(l, l.lines[lo - 1], x, y)
+}
+
 // The caret position nearest to a point of the page.
 hit_test :: proc(l: ^Layout, x, y: f32) -> (pos: Position, ok: bool) {
 	if len(l.boxes) == 0 {

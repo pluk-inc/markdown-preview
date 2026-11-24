@@ -154,6 +154,8 @@ final class NativeRendererView: NSView {
     }
 
     @objc private func pageDidScroll() {
+        // Another place of the page is under the pointer now.
+        updatePointerShape()
         updateTaskCheckBoxes()
         guard !followsRenderLoop else { return }
         setNeedsDraw()
@@ -241,6 +243,9 @@ final class NativeRendererView: NSView {
         let size = NSSize(width: pageWidth, height: max(laidOutHeight, heldPageHeight ?? 0, 1))
         if page.frame.size != size { page.setFrameSize(size) }
         updateTaskCheckBoxes()
+        // After each layout and each frame that laid out more: other text
+        // can be under a pointer that did not move.
+        updatePointerShape()
     }
 
     /// The zoom of the document: the text size is the body size times this.
@@ -516,7 +521,12 @@ final class NativeRendererView: NSView {
         super.viewDidMoveToWindow()
         if window == nil { endScrollAnimation() }
         NotificationCenter.default.removeObserver(self, name: NSWindow.didChangeScreenNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didBecomeKeyNotification, object: nil)
         if let window {
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(windowDidBecomeKey),
+                name: NSWindow.didBecomeKeyNotification, object: window
+            )
             NotificationCenter.default.addObserver(
                 self, selector: #selector(followDisplay),
                 name: NSWindow.didChangeScreenNotification, object: window
@@ -533,6 +543,46 @@ final class NativeRendererView: NSView {
     }
 
     // MARK: Input
+
+    /// Shows the cursor for the place of the pointer. The core decides
+    /// the shape, and the scroll view shows it as the cursor of its
+    /// document, which is the system's way for a scrolled page: no cursor
+    /// is set by hand, and none is left behind when the pointer goes out.
+    fileprivate func updatePointerShape() {
+        guard let window, window.isKeyWindow else { return }
+        let point = page.convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        // Only for a pointer on the part of the page that shows below the
+        // toolbar: the cursor of the document is for all of the scroll
+        // view, also for the strip that the toolbar covers.
+        var shown = scrollView.contentView.bounds
+        shown.origin.y += topInset
+        shown.size.height -= topInset
+        var cursor = NSCursor.arrow
+        if hasDocument, shown.contains(point) {
+            switch mdcore_pointer_shape(ctx, point.x, point.y) {
+            case MDCORE_POINTER_TEXT: cursor = .iBeam
+            case MDCORE_POINTER_BUSY:
+                // A layout step or a frame has the core. The main thread
+                // does not wait for it: the cursor stays, and one later
+                // call asks again.
+                guard !pointerShapeRetryScheduled else { return }
+                pointerShapeRetryScheduled = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
+                    self?.pointerShapeRetryScheduled = false
+                    self?.updatePointerShape()
+                }
+                return
+            default: break
+            }
+        }
+        if scrollView.documentCursor !== cursor { scrollView.documentCursor = cursor }
+    }
+
+    private var pointerShapeRetryScheduled = false
+
+    @objc private func windowDidBecomeKey() {
+        updatePointerShape()
+    }
 
     /// A pointer event on the page. `point` is in page coordinates, which
     /// are the core's document space. phase: 0 = down, 1 = drag.
@@ -600,7 +650,8 @@ final class NativeRendererView: NSView {
 }
 
 /// The system's check box, on a task of the page. Only the cursor is its
-/// own: the arrow, where the page around it has the text cursor.
+/// own: the arrow on all of the button, also where its frame reaches the
+/// start of the item's text.
 private final class TaskCheckBox: NSButton {
     override func resetCursorRects() { addCursorRect(bounds, cursor: .arrow) }
 }
@@ -613,7 +664,20 @@ private final class PageArea: NSView {
 
     override var isFlipped: Bool { true }
 
-    override func resetCursorRects() { addCursorRect(bounds, cursor: .iBeam) }
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        // For the cursor (`updatePointerShape`). `.inVisibleRect` follows
+        // the size of the page, so the area is added one time.
+        addTrackingArea(NSTrackingArea(
+            rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self
+        ))
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func mouseEntered(with event: NSEvent) { owner?.updatePointerShape() }
+    override func mouseMoved(with event: NSEvent) { owner?.updatePointerShape() }
 
     override func mouseDown(with event: NSEvent) {
         owner?.pointer(at: convert(event.locationInWindow, from: nil), phase: 0)

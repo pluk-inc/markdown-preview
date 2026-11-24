@@ -345,3 +345,72 @@ test_the_page_width_is_the_wanted_part_of_the_view :: proc(t: ^testing.T) {
 		testing.expect(t, line.x + line.line.width <= 300)
 	}
 }
+
+@(test)
+test_only_a_line_of_text_is_text_for_the_pointer :: proc(t: ^testing.T) {
+	f: Fixture
+	setup(&f, "First paragraph.\n\n- [ ] a task\n\nLast paragraph.\n", 600)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	first := f.page.lines[f.page.boxes[0].line_first]
+	item := f.page.lines[f.page.boxes[1].line_first]
+	mid :: proc(l: ^Layout, line: Line) -> f32 {
+		return line.top + l.paras[line.para].line_height / 2
+	}
+	// On the text, and right of its end on the same line.
+	testing.expect(t, text_at(&f.page, first.x + 5, mid(&f.page, first)))
+	testing.expect(t, text_at(&f.page, first.x + first.line.width + 50, mid(&f.page, first)))
+	// Not in the margin right of the column.
+	testing.expect(t, text_at(&f.page, f.page.column_x + f.page.column - 1, mid(&f.page, first)))
+	testing.expect(t, !text_at(&f.page, f.page.column_x + f.page.column + 5, mid(&f.page, first)))
+	// Not in the margin left of it, and not between two blocks.
+	testing.expect(t, !text_at(&f.page, first.x - 5, mid(&f.page, first)))
+	gap := (f.page.boxes[0].bottom + f.page.boxes[1].top) / 2
+	testing.expect(t, f.page.boxes[1].top > f.page.boxes[0].bottom)
+	testing.expect(t, !text_at(&f.page, first.x + 5, gap))
+	// Not at the check box of the task, which is left of its text.
+	box := f.page.tasks[0]
+	testing.expect(t, !text_at(&f.page, box.x + 2, mid(&f.page, item)))
+	testing.expect(t, text_at(&f.page, item.x + 2, mid(&f.page, item)))
+	// In a code block of many lines, and in a table: the same answers as
+	// a look at each line.
+	{
+		g: Fixture
+		setup(&g, "```\none\ntwo\nthree\nfour\nfive\n```\n\n| a | b |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n\n- item\n", 600)
+		defer teardown(&g)
+		step(&g.page, 1e30)
+		for box in g.page.boxes {
+			for line in g.page.lines[box.line_first:box.line_end] {
+				para := &g.page.paras[line.para]
+				at := line.top + para.line_height / 2
+				testing.expect_value(t, text_at(&g.page, line.x + 1, at), para.src != nil)
+				testing.expect(t, !text_at(&g.page, 2, at))
+			}
+		}
+	}
+	// A number so long that it wraps: its lines come before the text of
+	// the item and start at the same height again.
+	{
+		g: Fixture
+		setup(&g, "123456789. first line of the item\n   second paragraph of it\n", 600)
+		defer teardown(&g)
+		step(&g.page, 1e30)
+		texts, marker_lines := 0, 0
+		for box in g.page.boxes {
+			for line in g.page.lines[box.line_first:box.line_end] {
+				para := &g.page.paras[line.para]
+				if para.src == nil {
+					marker_lines += 1
+					continue
+				}
+				texts += 1
+				testing.expect(t, text_at(&g.page, line.x + 1, line.top + para.line_height / 2))
+			}
+		}
+		testing.expect(t, texts >= 1)
+		testing.expect(t, marker_lines >= 2)
+	}
+	// Not above the page and not below it.
+	testing.expect(t, !text_at(&f.page, first.x + 5, -10))
+	testing.expect(t, !text_at(&f.page, first.x + 5, f.page.content_height + 100))
+}
