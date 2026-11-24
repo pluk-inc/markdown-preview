@@ -51,8 +51,8 @@ step :: proc(l: ^Layout, until: f64) -> bool {
 
 // The selection of all of the document.
 @(private = "file")
-all :: proc(l: ^Layout) -> Selection {
-	return select_all(l.doc)
+all :: proc(l: ^Layout) -> document.Selection {
+	return document.select_all(l.doc)
 }
 
 // The records of a document that has one part: its tops count from the
@@ -115,7 +115,7 @@ test_select_all_copies_the_text :: proc(t: ^testing.T) {
 	step(&f.page, 1e30)
 	out: [dynamic]u8
 	defer delete(out)
-	selection_text(&f.doc, all(&f.page), &out)
+	document.selection_text(&f.doc, all(&f.page), &out)
 	expected := "Title\nFirst paragraph with code and some more words to wrap over lines.\none\ntwo\nline 1\n\n\n\n\nline 6\na\nb\n1\n2\nLast é 😀 paragraph."
 	testing.expect_value(t, string(out[:]), expected)
 }
@@ -220,7 +220,7 @@ test_only_the_window_keeps_shaped_text :: proc(t: ^testing.T) {
 	// The copied text needs no shaped text.
 	out: [dynamic]u8
 	defer delete(out)
-	selection_text(&f.doc, all(&f.page), &out)
+	document.selection_text(&f.doc, all(&f.page), &out)
 	testing.expect(t, len(out) > 100)
 	// A point in a released line shapes that line.
 	last := only(&f.page).lines[len(only(&f.page).lines) - 1]
@@ -725,7 +725,7 @@ test_the_text_of_all_parts_is_copied_in_order :: proc(t: ^testing.T) {
 	step(&f.page, 1e30)
 	out: [dynamic]u8
 	defer delete(out)
-	selection_text(&f.doc, all(&f.page), &out)
+	document.selection_text(&f.doc, all(&f.page), &out)
 	copied := string(out[:])
 	at := 0
 	for i in 0 ..< 30 {
@@ -954,8 +954,8 @@ test_parts_laid_out_in_any_order_give_the_same_page :: proc(t: ^testing.T) {
 		a, b: [dynamic]u8
 		defer delete(a)
 		defer delete(b)
-		selection_text(&down.doc, all(&down.page), &a)
-		selection_text(&f.doc, all(&f.page), &b)
+		document.selection_text(&down.doc, all(&down.page), &a)
+		document.selection_text(&f.doc, all(&f.page), &b)
 		testing.expect_value(t, string(b[:]), string(a[:]))
 	}
 	// With the view at the end, the end stayed where it was after the
@@ -1014,15 +1014,15 @@ test_a_selection_needs_no_layout :: proc(t: ^testing.T) {
 	a, _ := hit_test(&whole.page, 120, whole.page.parts[1].top + 40)
 	b, _ := hit_test(&whole.page, 300, whole.page.parts[3].top + 200)
 	testing.expect(t, document.before(a, b))
-	selection := Selection{true, b, a}
+	selection := document.Selection{true, b, a}
 	want, got: [dynamic]u8
 	defer delete(want)
 	defer delete(got)
-	selection_text(&whole.doc, selection, &want)
+	document.selection_text(&whole.doc, selection, &want)
 	testing.expect(t, len(want) > 500)
 	// The same addresses with a layout of another width that has no
 	// records: the same text, and still no records.
-	selection_text(&far.doc, selection, &got)
+	document.selection_text(&far.doc, selection, &got)
 	testing.expect_value(t, string(got[:]), string(want[:]))
 	for part in far.page.parts {
 		testing.expect_value(t, len(part.boxes), 0)
@@ -1049,7 +1049,7 @@ test_select_all_is_all_of_the_text_with_no_layout :: proc(t: ^testing.T) {
 	f: Fixture
 	setup(&f, SOURCE, 600)
 	defer teardown(&f)
-	all_text := select_all(&f.doc)
+	all_text := document.select_all(&f.doc)
 	testing.expect(t, all_text.active)
 	testing.expect_value(t, all_text.anchor, document.Address{0, 0, 0})
 	// The last block is the paragraph after the table.
@@ -1060,7 +1060,7 @@ test_select_all_is_all_of_the_text_with_no_layout :: proc(t: ^testing.T) {
 	empty: Fixture
 	setup(&empty, "***\n\n***\n", 500)
 	defer teardown(&empty)
-	testing.expect(t, !select_all(&empty.doc).active)
+	testing.expect(t, !document.select_all(&empty.doc).active)
 }
 
 @(test)
@@ -1149,6 +1149,7 @@ test_a_new_layout_keeps_the_top_of_the_page :: proc(t: ^testing.T) {
 change_to :: proc(f: ^Fixture, source: string) -> document.Change {
 	fresh := document.parse(source)
 	change := document.replace(&f.doc, &fresh)
+	document.destroy(&fresh)
 	apply_change(&f.page, change)
 	return change
 }
@@ -1201,8 +1202,8 @@ test_a_changed_block_lays_out_its_part_again_and_keeps_the_others :: proc(t: ^te
 	}
 	// The reader's place, with the number that its block has now, is put
 	// back at the height it had: the text of their view did not move.
-	now, ok := document.moved(change, kept.place.at)
-	testing.expect(t, ok)
+	now, same := document.moved(change, kept.place.at)
+	testing.expect(t, same)
 	testing.expect_value(t, now.block, kept.place.block + 1)
 	kept.place.at = now
 	restore_place(&f.page, kept)

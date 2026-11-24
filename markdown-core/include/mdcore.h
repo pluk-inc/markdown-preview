@@ -63,10 +63,11 @@ void mdcore_set_style(void *ctx, const mdcore_style *style);
 // Takes the text of the document, UTF-8. For a text that is the text
 // before with a change (the same file, saved by another app), the layout
 // stays for all that did not change: the core compares the blocks, makes
-// only the changed parts again, and keeps the reader's place when it is
-// not in them. A text of another document is the same call; the top of
-// the page stays then, and the host scrolls to it. Call mdcore_resize
-// after it when the view has no layout yet.
+// only the changed parts again, and keeps the reader's place and the
+// selection (one in the blocks that changed goes to the start of them). A
+// text of another document is the same call; the host then scrolls to the
+// top of the page and ends the selection. Call mdcore_resize after it
+// when the view has no layout yet.
 void mdcore_set_markdown(void *ctx, const char *utf8, long length);
 
 // Sets the view size and backing scale. Starts a new layout when the
@@ -150,20 +151,19 @@ bool mdcore_set_task_checked(void *ctx, long line, bool checked);
 // The core keeps the reader's place: the first line of text that the view
 // shows. A new layout of the same document (another width, another style)
 // puts that line at the height of the page that it had, so the host draws
-// at the scroll position that it has and sees the same text. The place is
-// taken from a frame after each scroll. At the top of the page there is
-// none, and the top stays the top.
+// at the scroll position that it has and sees the same text. At the top of
+// the page there is no place, and the top stays the top.
 //
 // The height of the strip at the top of the view that the host covers (a
 // toolbar that the page scrolls under). The first line that shows is the
 // one below it. 0 when nothing covers the view.
 void mdcore_set_top_inset(void *ctx, double inset);
 
-// The scroll position of the view now. A frame says it too, but a frame
-// can be one refresh behind: a host calls this before it changes what
-// the layout is made from (mdcore_resize with a new width, mdcore_set_style,
-// mdcore_set_markdown), so the place that is kept is the one of the text
-// that the reader sees at that moment.
+// The scroll position of the view. The host calls this each time the
+// position changes, and before the first frame; it never waits. The core
+// takes the place from the last position in each call that changes the
+// layout (mdcore_resize with a new width, mdcore_set_style,
+// mdcore_set_markdown), so the host has nothing to do there.
 void mdcore_note_scroll(void *ctx, double scroll_y);
 
 // The shape that the pointer has over a point in document space. The core
@@ -183,6 +183,9 @@ mdcore_pointer mdcore_pointer_shape(void *ctx, double x, double y);
 // Selection. phase: 0 = mouse down, 1 = drag. x, y are in document space.
 void mdcore_mouse(void *ctx, double x, double y, int phase);
 void mdcore_select_all(void *ctx);
+// Ends the selection. mdcore_set_markdown keeps a selection through a
+// change of the text; a host calls this for the text of another document.
+void mdcore_select_none(void *ctx);
 // The selected text as UTF-8. The pointer is valid until the next call.
 const char *mdcore_selection_text(void *ctx, long *length);
 

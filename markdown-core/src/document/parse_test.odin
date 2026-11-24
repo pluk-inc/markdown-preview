@@ -477,7 +477,7 @@ test_a_change_in_the_middle_keeps_the_other_blocks_in_place :: proc(t: ^testing.
 	first, last := block_at(&doc, 3), block_at(&doc, COUNT - 3)
 	parts := [2]^Part{doc.parts[0], doc.parts[4]}
 	change := replace(&doc, &fresh)
-	testing.expect_value(t, fresh.count, 0)
+	destroy(&fresh)
 	testing.expect_value(t, change.first, AT)
 	testing.expect_value(t, change.removed, 1)
 	testing.expect_value(t, change.added, 1)
@@ -489,12 +489,13 @@ test_a_change_in_the_middle_keeps_the_other_blocks_in_place :: proc(t: ^testing.
 	testing.expect(t, block_at(&doc, 3) == first && block_at(&doc, COUNT - 3) == last)
 	expect_document(t, &doc, after)
 	// The addresses before the block, in it, and after it.
-	now, ok := moved(change, Address{AT - 1, 0, 4})
-	testing.expect(t, ok && now == Address{AT - 1, 0, 4})
-	_, ok = moved(change, Address{AT, 0, 0})
-	testing.expect(t, !ok)
-	now, ok = moved(change, Address{AT + 1, 2, 4})
-	testing.expect(t, ok && now == Address{AT + 1, 2, 4})
+	now, same := moved(change, Address{AT - 1, 0, 4})
+	testing.expect(t, same && now == Address{AT - 1, 0, 4})
+	// An address in the block that changed is at its start now.
+	now, same = moved(change, Address{AT, 0, 9})
+	testing.expect(t, !same && now == Address{AT, 0, 0})
+	now, same = moved(change, Address{AT + 1, 2, 4})
+	testing.expect(t, same && now == Address{AT + 1, 2, 4})
 }
 
 @(test)
@@ -511,12 +512,13 @@ test_blocks_that_come_and_go_move_the_numbers_after_them :: proc(t: ^testing.T) 
 		defer destroy(&doc)
 		last := block_at(&doc, COUNT - 1)
 		change := replace(&doc, &fresh)
+		destroy(&fresh)
 		testing.expect_value(t, change.first, AT)
 		testing.expect_value(t, change.removed, 0)
 		testing.expect_value(t, change.added, 3)
 		expect_document(t, &doc, after)
-		now, ok := moved(change, Address{AT, 0, 2})
-		testing.expect(t, ok && now == Address{AT + 3, 0, 2})
+		now, same := moved(change, Address{AT, 0, 2})
+		testing.expect(t, same && now == Address{AT + 3, 0, 2})
 		// The last part did not move; the block has another number.
 		testing.expect(t, block_at(&doc, COUNT + 2) == last)
 	}
@@ -527,12 +529,17 @@ test_blocks_that_come_and_go_move_the_numbers_after_them :: proc(t: ^testing.T) 
 		doc, fresh := parse(base), parse(after)
 		defer destroy(&doc)
 		change := replace(&doc, &fresh)
+		destroy(&fresh)
 		testing.expect_value(t, change.first, AT)
 		testing.expect_value(t, change.removed, 1)
 		testing.expect_value(t, change.added, 0)
+		// An address in the block that went is at the block that came
+		// to its number.
+		gone, same := moved(change, Address{AT, 0, 3})
+		testing.expect(t, !same && gone == Address{AT, 0, 0})
 		expect_document(t, &doc, after)
-		now, ok := moved(change, Address{AT + 1, 0, 0})
-		testing.expect(t, ok && now == Address{AT, 0, 0})
+		now, kept := moved(change, Address{AT + 1, 0, 0})
+		testing.expect(t, kept && now == Address{AT, 0, 0})
 	}
 }
 
@@ -555,7 +562,13 @@ test_a_change_at_each_end_and_of_all_of_the_document :: proc(t: ^testing.T) {
 	for after, i in cases {
 		doc, fresh := parse(base), parse(after)
 		change := replace(&doc, &fresh)
+		destroy(&fresh)
 		expect_document(t, &doc, after)
+		testing.expect_value(t, change.count, doc.count)
+		// An address of the old end is in the new document, or at its
+		// first block when that has none.
+		end, _ := moved(change, Address{3 * PART_BLOCKS - 1, 0, 0})
+		testing.expect(t, end.block >= 0 && end.block < max(doc.count, 1))
 		if after == base {
 			// The same text: no block is another one, no part is made again.
 			testing.expect_value(t, change.removed + change.added, 0)
@@ -564,9 +577,12 @@ test_a_change_at_each_end_and_of_all_of_the_document :: proc(t: ^testing.T) {
 		// And back again, also from an empty document.
 		again := parse(base)
 		replace(&doc, &again)
+		destroy(&again)
 		expect_document(t, &doc, base)
 		destroy(&doc)
-		if i < len(cases) - 1 {
+		// The first six are made here; the others are constants and
+		// the base.
+		if i < 6 {
 			delete(after)
 		}
 	}
@@ -582,6 +598,7 @@ test_a_task_mark_and_a_link_number_change_no_block_for_a_layout :: proc(t: ^test
 	task := block_at(&doc, 1)
 	fresh := parse("First\nwith a [link](https://b.example).\n\n- [ ] task\n\nA [link](https://a.example).\n")
 	change := replace(&doc, &fresh)
+	destroy(&fresh)
 	testing.expect_value(t, change.first, 0)
 	testing.expect_value(t, change.removed, 1)
 	testing.expect_value(t, change.added, 1)

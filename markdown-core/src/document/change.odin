@@ -8,6 +8,7 @@ Change :: struct {
 	first:         int, // the number of the first block of the range
 	removed:       int, // how many blocks of the document before were in it
 	added:         int, // how many blocks are in it now
+	count:         int, // the blocks of the document now
 	// The parts of the document that were made again: `parts_removed`
 	// parts from `part_first` on went, and `parts_added` came for them.
 	part_first:    int,
@@ -16,17 +17,19 @@ Change :: struct {
 }
 
 // The address that an address of the document before the change has now.
-// False for an address in the range that changed.
-moved :: proc(change: Change, at: Address) -> (now: Address, ok: bool) {
+// One in the range that changed has no text that is its own any more: it
+// goes to the start of the range (or to the last block, for a range at
+// the end), and `same` is false.
+moved :: proc(change: Change, at: Address) -> (now: Address, same: bool) {
 	now = at
 	if at.block < change.first {
 		return now, true
 	}
-	if at.block < change.first + change.removed {
-		return now, false
+	if at.block >= change.first + change.removed {
+		now.block += change.added - change.removed
+		return now, true
 	}
-	now.block += change.added - change.removed
-	return now, true
+	return {max(min(change.first, change.count - 1), 0), 0, 0}, false
 }
 
 @(private)
@@ -48,6 +51,7 @@ text_equal :: proc(a, b: ^Text) -> bool {
 // True when a layout gives two blocks the same records: all that a block
 // says but the line of its task mark, the number of its list item, and
 // its state in a checked item, which are read when the page is drawn.
+// A new field of `Block` that a layout reads goes in here.
 @(private)
 layout_equal :: proc(a, b: ^Block) -> bool {
 	if a.kind != b.kind ||
@@ -76,70 +80,92 @@ layout_equal :: proc(a, b: ^Block) -> bool {
 	return text_equal(&a.text, &b.text)
 }
 
-@(private)
-block_destroy :: proc(b: ^Block) {
-	text_destroy(&b.text)
-	delete(b.language)
-	for &cell in b.cells {
-		text_destroy(&cell)
-	}
-	delete(b.cells)
-	delete(b.aligns)
-	b^ = {}
-}
-
 // Gives a block of the document the content of an equal block of the new
 // document, at the address it has: the block and each of its cells stay
-// where a layout knows them. `fresh` is empty after it.
+// where a layout knows them. The new block gets the old content, which
+// goes with the new document.
 @(private)
 adopt :: proc(old, fresh: ^Block) {
-	// The cells stay in the array of the old block.
-	cells := old.cells
-	for &cell, i in cells {
-		text_destroy(&cell)
-		cell = fresh.cells[i]
+	for &cell, i in old.cells {
+		cell, fresh.cells[i] = fresh.cells[i], cell
 	}
-	delete(fresh.cells)
-	text_destroy(&old.text)
-	delete(old.language)
-	delete(old.aligns)
-	old^ = fresh^
-	old.cells = cells
-	fresh^ = {}
+	old^, fresh^ = fresh^, old^
+	// The cells stay in the array of the old block.
+	old.cells, fresh.cells = fresh.cells, old.cells
+}
+
+// A walk over the blocks of a document, from one end.
+@(private)
+Walk :: struct {
+	doc:        ^Document,
+	part, slot: int,
+	step:       int, // 1 from the first block on, -1 from the last one back
+}
+
+@(private)
+walk :: proc(doc: ^Document, step: int) -> Walk {
+	if step > 0 || len(doc.parts) == 0 {
+		return {doc, 0, 0, step}
+	}
+	last := len(doc.parts) - 1
+	return {doc, last, doc.parts[last].count - 1, step}
+}
+
+// The block that the walk is at. Nil at the end of it.
+@(private)
+walk_block :: proc(w: ^Walk) -> ^Block {
+	if w.part < 0 || w.part >= len(w.doc.parts) {
+		return nil
+	}
+	return &w.doc.parts[w.part].blocks[w.slot]
+}
+
+@(private)
+walk_next :: proc(w: ^Walk) {
+	w.slot += w.step
+	if w.slot >= 0 && w.slot < w.doc.parts[w.part].count {
+		return
+	}
+	w.part += w.step
+	if w.part >= 0 && w.part < len(w.doc.parts) {
+		w.slot = w.step > 0 ? 0 : w.doc.parts[w.part].count - 1
+	}
 }
 
 // Makes `doc` the document `fresh`, and says which range of its blocks
 // changed. The blocks at the start and at the end that are the same for a
 // layout keep their place in memory, when the range is not in their part.
-// `fresh` is used up: it is empty after the call.
+// `fresh` holds what is left of the two documents after it; the caller
+// destroys it.
 replace :: proc(doc, fresh: ^Document) -> (change: Change) {
 	before, after := doc.count, fresh.count
-	// The same blocks at the start, and at the end of what is left.
-	head := 0
-	for head < min(before, after) && layout_equal(block_at(doc, head), block_at(fresh, head)) {
-		head += 1
+	// The same blocks at the start, and at the end of what is left. Each
+	// is taken over as it is found.
+	head, tail := 0, 0
+	for old, new := walk(doc, 1), walk(fresh, 1); head < min(before, after); head += 1 {
+		a, b := walk_block(&old), walk_block(&new)
+		if !layout_equal(a, b) {
+			break
+		}
+		adopt(a, b)
+		walk_next(&old)
+		walk_next(&new)
 	}
-	tail := 0
-	for tail < min(before, after) - head && layout_equal(block_at(doc, before - 1 - tail), block_at(fresh, after - 1 - tail)) {
-		tail += 1
+	for old, new := walk(doc, -1), walk(fresh, -1); tail < min(before, after) - head; tail += 1 {
+		a, b := walk_block(&old), walk_block(&new)
+		if !layout_equal(a, b) {
+			break
+		}
+		adopt(a, b)
+		walk_next(&old)
+		walk_next(&new)
 	}
-	for i in 0 ..< head {
-		adopt(block_at(doc, i), block_at(fresh, i))
-	}
-	for i in 0 ..< tail {
-		adopt(block_at(doc, before - 1 - i), block_at(fresh, after - 1 - i))
-	}
-	for link in doc.links {
-		delete(link)
-	}
-	delete(doc.links)
-	doc.links, fresh.links = fresh.links, nil
+	doc.links, fresh.links = fresh.links, doc.links
 
-	change = {first = head, removed = before - head - tail, added = after - head - tail}
+	change = {first = head, removed = before - head - tail, added = after - head - tail, count = after}
 	if change.removed > 0 || change.added > 0 {
 		rebuild(doc, fresh, &change)
 	}
-	destroy(fresh)
 	return
 }
 
@@ -149,29 +175,23 @@ replace :: proc(doc, fresh: ^Document) -> (change: Change) {
 @(private)
 rebuild :: proc(doc, fresh: ^Document, change: ^Change) {
 	end := change.first + change.removed
-	// The part of the first block of the range, or of the block before it
-	// for a range at the end. The blocks of that part before the range
-	// stay.
-	first, keep_before := 0, 0
-	if change.first < doc.count {
-		first, keep_before = locate(doc, change.first)
-	} else if len(doc.parts) > 0 {
-		first = len(doc.parts) - 1
-		keep_before = doc.parts[first].count
+	// The parts from the one of the first block of the range to the one
+	// of the first block after it go. For a range at the end, that is the
+	// last part two times. Of the first one the blocks before the range
+	// stay, of the last one the blocks from the end of the range on.
+	first, last, keep_before, keep_from := 0, -1, 0, 0
+	if doc.count > 0 {
+		first, _ = locate(doc, min(change.first, doc.count - 1))
+		last, _ = locate(doc, min(end, doc.count - 1))
+		keep_before = change.first - doc.starts[first]
+		keep_from = end - doc.starts[last]
 	}
-	// The part of the first block after the range, whose blocks from that
-	// one on stay. With no block after the range: the last part.
-	last, keep_from := len(doc.parts) - 1, 0
-	if end < doc.count {
-		last, keep_from = locate(doc, end)
-	} else if last >= 0 {
-		keep_from = doc.parts[last].count
-	}
+	removed := last - first + 1
 
-	// The blocks of the new parts, in order: they move out of the parts
-	// that go.
+	// The blocks of the new parts, in order. They move out of the parts
+	// that go and out of the new document.
 	blocks := make([dynamic]Block, 0, keep_before + change.added + PART_BLOCKS, context.temp_allocator)
-	if len(doc.parts) > 0 {
+	if removed > 0 {
 		append(&blocks, ..doc.parts[first].blocks[:keep_before])
 	}
 	for i in 0 ..< change.added {
@@ -179,16 +199,15 @@ rebuild :: proc(doc, fresh: ^Document, change: ^Change) {
 		append(&blocks, b^)
 		b^ = {}
 	}
-	if last >= 0 {
+	if removed > 0 {
 		append(&blocks, ..doc.parts[last].blocks[keep_from:doc.parts[last].count])
 	}
 	// The blocks of the range go with their parts.
-	removed := len(doc.parts) > 0 ? last - first + 1 : 0
-	for p in first ..< first + removed {
+	for p in first ..= last {
 		part := doc.parts[p]
 		from := p == first ? keep_before : 0
 		to := p == last ? keep_from : part.count
-		for &b in part.blocks[from:max(from, to)] {
+		for &b in part.blocks[from:to] {
 			block_destroy(&b)
 		}
 		free(part)

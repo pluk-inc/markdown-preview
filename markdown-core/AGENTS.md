@@ -94,7 +94,8 @@ These came from the maintainer. Do not undo one without asking.
 - A caret, the ends of a selection, and the place of a view are addresses
   in the document (`document.Address`: block, cell, byte), not in a
   layout. Work on the text of a range (the copied text, Select All, later
-  Find) reads the document (`document.text_between`) and needs no layout.
+  Find) reads the document (`document.text_between`) and needs no layout;
+  the selection itself is a type of the document (`document.Selection`).
   Only what is drawn (the highlight on the lines that show) reads the
   records.
 - The blocks of the document are in parts (`document.Part`), and the
@@ -119,17 +120,21 @@ These came from the maintainer. Do not undo one without asking.
   same for a layout at its address (`adopt`), and `layout.apply_change`
   keeps the records of each part that was not made again. Code that
   holds an address through a change takes its new one from
-  `document.moved`. What a block says that a layout does not read (the
+  `document.moved` (an address in the blocks that changed goes to the
+  start of them). The parse of the new text runs before the core takes
+  its lock, and what is left of the two texts is freed after it. What a block says that a layout does not read (the
   line of a task, the number of a link) is not part of "the same".
 - The core keeps the reader's place: the first line that the view shows
-  below the strip that the host covers (`mdcore_set_top_inset`). A frame
-  takes it after a scroll, and a new layout of the same document puts it
-  at the height of the page that it had (`restore_place`). So a host
-  draws at the scroll offset that it has after a new width or style, and
-  carries no place. The place is not taken again after a new layout
-  alone: the steps of a live resize would add up. A frame can be one
-  refresh behind the scroll view, so a host says its offset before it
-  changes the width, the style, or the text (`mdcore_note_scroll`).
+  below the strip that the host covers (`mdcore_set_top_inset`). The host
+  says its scroll offset each time it changes (`mdcore_note_scroll`,
+  which never waits). Each core call that ends or changes the layout
+  takes the place first, from the layout that is still there
+  (`take_place` in `mdcore.odin`), and a new layout of the same document
+  puts it at the height of the page that it had (`restore_place`). So a
+  host draws at the offset that it has after a new width or style, and
+  carries no place. A new call that changes the layout calls
+  `take_place` first; the host needs no new call for it. A frame does
+  not take the place: the steps of a live resize would add up.
 - A host gives its scroll area the top and the height of the page
   (`mdcore_page_area`), and takes the two again when
   `mdcore_layout_revision` changed. A scroll to the top or to the end of
@@ -402,9 +407,14 @@ The window around the page, left on purpose:
 Task check boxes, left on purpose:
 
 - The core keeps the reader's place across a new width or style, and
-  across a change of the text when the place is not in the blocks that
-  changed. A place in those blocks is gone: the top of the page stays
-  then, so the view is as far below it as before.
+  across a change of the text. A place in the blocks that changed goes
+  to the start of them.
+- "The same for a layout" compares the number of an ordered list item,
+  because the marker is drawn from it. So one item more near the top of
+  a long numbered list makes all items after it again. `layout_equal` is
+  a list of fields kept by hand: a `Block` in two parts (what a layout
+  reads, and what is read when the page is drawn) would make it one
+  comparison, and gives the source range of a block its place.
 - A place is an address in the document: block, cell, byte. Find, a jump
   to a footnote or a heading, and the way back from Edit mode can use
   it; none of them does yet.
