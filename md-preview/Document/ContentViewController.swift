@@ -815,8 +815,11 @@ final class ContentViewController: NSViewController {
         // until the window is recreated. Keeping the explicit value equal
         // to the chrome strip matches the automatic behavior exactly.
         let inset = fullChromeTopInset
-        guard view.window != nil, inset > 0 else { return }
+        guard view.window != nil else { return }
+        // Zero too (full screen): the native view has no inset of its own
+        // to fall back on, as the web view has.
         nativeRenderer?.topInset = inset
+        guard inset > 0 else { return }
         if webView.webView.obscuredContentInsets.top != inset {
             webView.webView.obscuredContentInsets = NSEdgeInsets(
                 top: inset, left: 0, bottom: 0, right: 0

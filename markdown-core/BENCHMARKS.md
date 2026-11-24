@@ -51,6 +51,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-23 | frames from a CVDisplayLink, at the rate of the display | 704 / 717 | 66 / 111 | 575 / 1235 | – | – | – | – |
 | 2026-11-23 | cleanup of the core; no growth slack kept in the document model | – | – | – | 60 / 70 | 2.9 / 301 | – | 6.6 / 20.2 |
 | 2026-11-23 | task check boxes (system buttons on the page); a resize frame in step with the window | 562 / 543 | 58 / 99 | 460 / 1080 | – | – | – | – |
+| 2026-11-24 | the view goes under the toolbar on macOS 26, so the page shows through it | 674 / 592 | 57 / 101 | 510 / 1080 | – | – | – | – |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -181,3 +182,15 @@ system's check box itself, which on macOS 27 answers and draws through
 its own view tree (a sample showed its layout, its drawing, and the
 tracking areas of the window). Why the larger document costs more for
 each press was not checked.
+
+## The view under the toolbar (2026-11-24)
+
+`app.py`, the base (task check boxes) and the change one after the other,
+two and three runs of five launches. Launch to the first frame, short /
+long document: base 613 / 594 and 651 / 582 ms; change 668 / 594,
+674 / 554 and 687 / 592 ms. The long document shows no change. The short
+one is 20 to 60 ms later in each run, at the edge of what the runs differ
+by; if it is real, the view now draws the strip under the toolbar too and
+the system makes its edge effect at the first frame. Not looked into.
+Memory and CPU did not change. The core is not touched, so `core.py` was
+not run.
