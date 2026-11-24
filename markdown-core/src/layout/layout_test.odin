@@ -761,3 +761,37 @@ test_a_range_in_a_later_part_shows_and_keeps_only_that_part :: proc(t: ^testing.
 	}
 	expect_ok(t, &f.page)
 }
+
+@(test)
+test_a_check_box_that_reaches_out_of_its_part_is_found :: proc(t: ^testing.T) {
+	// One task for each block, and lines that are lower than a check box:
+	// the box of the last task of a part ends below the part.
+	b := strings.builder_make()
+	defer strings.builder_destroy(&b)
+	COUNT :: 2 * document.PART_BLOCKS + 3
+	for i in 0 ..< COUNT {
+		fmt.sbprintf(&b, "- [ ] task %d\n", i)
+	}
+	f: Fixture
+	setup(&f, strings.to_string(b), 500)
+	defer teardown(&f)
+	f.style.line_height = 0.6
+	begin(&f.page, &f.doc, f.style, 500)
+	step(&f.page, 1e30)
+	expect_ok(t, &f.page)
+	found := make([]Task_Place, COUNT)
+	defer delete(found)
+	testing.expect_value(t, tasks_between(&f.page, 0, 1e30, found), COUNT)
+	size := f64(task_box_size(f.page.m))
+	first := f.page.parts[0]
+	last := found[document.PART_BLOCKS - 1]
+	testing.expect(t, last.y + size > first.top + f64(first.height))
+	// Each box is found by its last point and by its first one.
+	for task in found {
+		one: [4]Task_Place
+		count := tasks_between(&f.page, task.y + size - 1, task.y + size - 0.5, one[:])
+		testing.expect(t, count >= 1 && one[0].block == task.block)
+		count = tasks_between(&f.page, task.y, task.y + 0.5, one[:])
+		testing.expect(t, count >= 1 && one[count - 1].block == task.block)
+	}
+}

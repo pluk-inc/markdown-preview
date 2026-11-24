@@ -379,7 +379,9 @@ Task_Place :: struct {
 // than `out` has room for.
 tasks_between :: proc(l: ^Layout, top, bottom: f64, out: []Task_Place) -> (count: int) {
 	size := f64(task_box_size(l.m))
-	for p in first_part_below(l, top) ..< len(l.parts) {
+	// A box can reach out of its part at the two ends (`OVERHANG`), so
+	// the parts next to the range are looked at too.
+	for p in first_part_below(l, top - OVERHANG) ..< len(l.parts) {
 		part := &l.parts[p]
 		if part.top - OVERHANG >= bottom {
 			break

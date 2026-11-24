@@ -95,9 +95,10 @@ Box :: struct {
 // part, while the layout works on it, are in arrays of the layout that
 // grow (`Layout.work`), and the part shows what they have now.
 //
-// The marker of a list item that starts with a rule stands a little above
-// its block. So a record of the first block of a part can start above the
-// top of the part, by less than `OVERHANG`.
+// A record can reach out of its part by less than `OVERHANG`: above the
+// top (the marker of a list item that starts with a rule stands a little
+// above its block), and below the end (the check box of a task is higher
+// than a line with a small line spacing).
 Part :: struct {
 	top:        f64, // of the part on the page, points
 	height:     f32, // down to the bottom of its last block that is laid out
@@ -111,7 +112,7 @@ Part :: struct {
 	live_end:   int,
 }
 
-// How far above the top of its part a record can start at most, in points.
+// How far out of its part a record can reach at most, in points.
 OVERHANG :: 64.0
 
 // The records of the part that the layout works on. They are used again
