@@ -111,25 +111,35 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
         start()
     }
 
-    /// Runs `before`, then draws a frame at this offset, on the main
+    /// Runs `before`, then draws a frame at this offset, or at the one that
+    /// `before` returns (the layout that it made can have the reader's
+    /// place at another offset). Returns the offset of the frame. On the main
     /// thread. For a frame that must be there with the window's: the first
     /// one, and one for a new size. It goes to the screen with the main
     /// thread's transaction, so it shows with the window's new size and
     /// with the views that the caller moves after it, not one step before
     /// them. The core lets one call at a time work, so this waits for a
     /// layout step or a frame of the link that is in progress.
-    func frameNow(at y: Double, before: (() -> Void)? = nil) {
+    @discardableResult
+    func frameNow(at offset: Double, before: (() -> Double?)? = nil) -> Double {
         dispatchPrecondition(condition: .onQueue(.main))
+        // No frame of the link between the new layout and the offset that
+        // it gives: it would show that layout at the old offset. The frame
+        // below replaces each request that waits.
+        lock.lock()
+        wantsFrame = false
+        lock.unlock()
+        let y = before?() ?? offset
         lock.lock()
         scrollY = y
         let olderFrameInFlight = tickInFlight
         lock.unlock()
-        before?()
         autoreleasepool { mdcore_draw_with_window(ctx, y) }
         // A frame of the link that took an older offset can be drawn after
         // this one. One more frame then makes the newest offset the last
         // one on screen.
         if olderFrameInFlight { requestFrame(at: y) }
+        return y
     }
 
     /// Scrolls from one offset to another over a short time, as the

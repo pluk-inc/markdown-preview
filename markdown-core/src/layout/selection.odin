@@ -1,5 +1,6 @@
 package layout
 
+import "../document"
 import "../base"
 import "../text"
 
@@ -32,6 +33,143 @@ selection_range :: proc(s: Selection) -> (from, to: Position, ok: bool) {
 	return from, to, true
 }
 
+// A place in the document, for a view that must show the same text after
+// a new layout (another width, another text size): the line of text at a
+// height of the page, by the address of its first byte, and how far down
+// that line the height is, in line heights. An offset in points says
+// nothing after the lines are broken again; this does.
+//
+// The address is in the document, not in a layout: the block, the cell
+// for a table, and the byte in that text. So it needs no layout to be
+// made, and it is the same text when another block got more or fewer
+// lines.
+Place :: struct {
+	block:    int,
+	cell:     int, // of a table; 0 in each other block
+	byte:     int, // in the text of the block or of the cell
+	fraction: f32, // below 0 for a height above the line (between two blocks, in blank lines of code)
+}
+
+// The text of a place: of its block, or of its cell in a table. Nil when
+// the document has no such text.
+@(private)
+place_text :: proc(l: ^Layout, block, cell: int) -> ^document.Text {
+	if block < 0 || block >= len(l.doc.blocks) {
+		return nil
+	}
+	b := &l.doc.blocks[block]
+	if b.kind != .Table {
+		return &b.text
+	}
+	return cell >= 0 && cell < len(b.cells) ? &b.cells[cell] : nil
+}
+
+// The place at a height of the page. False when the page has no text at
+// or below it.
+place_at :: proc(l: ^Layout, y: f32) -> (place: Place, ok: bool) {
+	for i in first_box_below(l, y) ..< len(l.boxes) {
+		box := l.boxes[i]
+		// The first line of text that ends below y. In a table that is a
+		// cell of the row at y, and each line is a candidate. In another
+		// block it is the line at y, or the first one for a y above them.
+		from := box.line_first
+		if l.doc.blocks[i].kind != .Table {
+			from = max(line_at_or_above(l, box, y), text_first(l, box))
+		}
+		for line in l.lines[from:box.line_end] {
+			para := &l.paras[line.para]
+			if para.src == nil || line.top + para.line_height <= y {
+				continue
+			}
+			// Not limited above the line: the room above it can be many
+			// lines high (blank lines of a code block have no line of
+			// their own), and all of it is a place.
+			fraction := (y - line.top) / para.line_height
+			cell := 0
+			if b := &l.doc.blocks[i]; b.kind == .Table {
+				cell = int(uintptr(para.src) - uintptr(raw_data(b.cells))) / size_of(document.Text)
+			}
+			return {i, cell, para.base + line.line.start, fraction}, true
+		}
+		// A block with no text (a rule): the next one.
+	}
+	return
+}
+
+// The first line of the text of a block that is not a table. The marker
+// of a list item comes before it, and its lines (a long number can wrap)
+// start at the height of the text again.
+@(private)
+text_first :: proc(l: ^Layout, box: Box) -> int {
+	first := box.line_first
+	for first < box.line_end && l.paras[l.lines[first].para].src == nil {
+		first += 1
+	}
+	return first
+}
+
+// The last line of the text of a block that starts at or above y, or the
+// line before the text when none does. Not for a table. The lines of the
+// text go down the page, so this does not look at each one: a code block
+// can have many.
+@(private)
+line_at_or_above :: proc(l: ^Layout, box: Box, y: f32) -> int {
+	first := text_first(l, box)
+	lo, hi := first, box.line_end
+	for lo < hi {
+		mid := (lo + hi) / 2
+		if l.lines[mid].top <= y {
+			lo = mid + 1
+		} else {
+			hi = mid
+		}
+	}
+	return lo - 1
+}
+
+// The height of a place in this layout. False while the layout has not
+// reached its block (`step_to_block`).
+place_y :: proc(l: ^Layout, place: Place) -> (y: f32, ok: bool) {
+	if place.block < 0 || place.block >= len(l.boxes) || (place.block == l.next_block && l.in_block) {
+		return
+	}
+	box := l.boxes[place.block]
+	src := place_text(l, place.block, place.cell)
+	// The line that has the byte of the place: the last line of its text
+	// that starts at or before it.
+	found := -1
+	if src != nil && l.doc.blocks[place.block].kind != .Table {
+		// The lines of the text are in the order of its bytes.
+		lo, hi := text_first(l, box), box.line_end
+		for lo < hi {
+			mid := (lo + hi) / 2
+			line := l.lines[mid]
+			if l.paras[line.para].base + line.line.start <= place.byte {
+				lo = mid + 1
+			} else {
+				hi = mid
+			}
+		}
+		if lo > text_first(l, box) {
+			found = lo - 1
+		}
+	} else if src != nil {
+		for i in box.line_first ..< box.line_end {
+			line := l.lines[i]
+			para := &l.paras[line.para]
+			if para.src == src && para.base + line.line.start <= place.byte {
+				found = i
+			}
+		}
+	}
+	if found < 0 {
+		// The text of the block is another one now: its top.
+		return box.top, true
+	}
+	line := l.lines[found]
+	return line.top + place.fraction * l.paras[line.para].line_height, true
+}
+
 // True when a point of the page is on a line of text: in its height, not
 // left of where it starts, and not right of the column (the space after a
 // short line is the line's; a table wider than the column is all text).
@@ -60,25 +198,8 @@ text_at :: proc(l: ^Layout, x, y: f32) -> bool {
 		}
 		return false
 	}
-	// The marker of a list item comes first, and its lines (a long number
-	// can wrap) start at the height of the text again. After it the lines
-	// of the text go down the page, so the one at y is found without a
-	// look at each line: a code block can have many.
-	first := box.line_first
-	for first < box.line_end && l.paras[l.lines[first].para].src == nil {
-		first += 1
-	}
-	lo, hi := first, box.line_end
-	for lo < hi {
-		mid := (lo + hi) / 2
-		if l.lines[mid].top <= y {
-			lo = mid + 1
-		} else {
-			hi = mid
-		}
-	}
-	// The last line that starts at or above y.
-	return lo > first && on_line(l, l.lines[lo - 1], x, y)
+	at := line_at_or_above(l, box, y)
+	return at >= text_first(l, box) && on_line(l, l.lines[at], x, y)
 }
 
 // The caret position nearest to a point of the page.

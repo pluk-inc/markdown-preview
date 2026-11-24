@@ -56,6 +56,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-24 | a task changes in place; the page beside a scroll bar that takes room; Go menu scroll actions | 653 / 667 | 61 / 104 | 470 / 1120 | – | – | 0.33 / 0.33 | 6.7 / 20.7 |
 | 2026-11-24 | the text cursor only over text; the core gives the shape of the pointer | 583 / 607 | 55 / 96 | 480 / 1020 | – | – | – | 6.6 / 20.7 |
 | 2026-11-24 | the system backing of the covered top edge covers the find bar too | 621 / 633 | 54 / 96 | 510 / 1090 | – | – | – | – |
+| 2026-11-24 | the reader keeps their place when the text is laid out again | 683 / 665 | 56 / 99 | 620 / 1260 | – | – | 0.44 / 0.35 | 6.6 / 20.7 |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -269,3 +270,29 @@ form of the change gave 588 / 616 and 574 / 583 against 590 / 598 and
 580 / 640 ms. No difference outside what the runs differ by. No file of
 the core changed, so `core.py` was not run. The benchmark opens no find
 bar; the change does work only when the covered strip changes its height.
+
+## The reader's place across a new layout (2026-11-24)
+
+The two programs, the base (the find bar backing) and the change one after
+the other, on a Mac that was busier than for the rows above (the base is
+682 / 651 ms here against 621 / 633 ms some hours before). `app.py`, short
+/ long: launch to the first frame 682 / 651 against 683 / 665 ms, CPU
+630 / 1240 against 620 / 1260 ms, memory 58 / 102 against 56 / 99 MB.
+`core.py`: heap at the end 6.6 / 20.7 MB for the two, CPU for the full
+run 317 / 1638 against 352 / 1485 ms. No difference outside what the runs
+differ by.
+
+Neither program changes the width, which is where the change works. So
+one more measure, not from `app.py`: the 1.1 MB document, the view at its
+end, 20 changes of the window width sent one after the other, CPU of the
+app process, two runs each.
+
+| | Base | With the place kept |
+| --- | --- | --- |
+| CPU for 20 width changes at the end (s) | 7.43, 7.50 | 7.54, 7.54 |
+| What shows after them | text from another part of the document | the same line as before |
+
+The place costs nothing that this shows. The cost that was there before
+is large: 0.37 s for each width change at the end of a long document,
+because each new layout goes from the top down to the reader, on the
+main thread. See Open work.

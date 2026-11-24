@@ -3,6 +3,7 @@ package layout
 import "../base"
 import "../document"
 import "../text"
+import "core:strings"
 import "core:testing"
 
 @(private = "file")
@@ -413,4 +414,104 @@ test_only_a_line_of_text_is_text_for_the_pointer :: proc(t: ^testing.T) {
 	// Not above the page and not below it.
 	testing.expect(t, !text_at(&f.page, first.x + 5, -10))
 	testing.expect(t, !text_at(&f.page, first.x + 5, f.page.content_height + 100))
+}
+
+@(test)
+test_a_place_is_the_same_text_at_another_width :: proc(t: ^testing.T) {
+	// Long paragraphs, so the lines break at other bytes in another width.
+	source := strings.repeat("One two three four five six seven eight nine ten eleven twelve. ", 12)
+	defer delete(source)
+	doc := strings.concatenate({"# Title\n\n", source, "\n\n- item ", source, "\n\n---\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n", source, "\n"})
+	defer delete(doc)
+	wide, narrow: Fixture
+	setup(&wide, doc, 900)
+	defer teardown(&wide)
+	setup(&narrow, doc, 420)
+	defer teardown(&narrow)
+	step(&wide.page, 1e30)
+	// Not in a layout that did not reach the block yet.
+	_, early := place_y(&narrow.page, Place{block = len(wide.page.boxes) - 1})
+	testing.expect(t, !early)
+	for line in wide.page.lines {
+		para := &wide.page.paras[line.para]
+		if para.src == nil {
+			continue
+		}
+		// A height in the line: the place is that line.
+		y := line.top + para.line_height * 0.25
+		place, ok := place_at(&wide.page, y)
+		testing.expect(t, ok)
+		if wide.page.doc.blocks[place.block].kind != .Table {
+			testing.expect_value(t, place.byte, para.base + line.line.start)
+			testing.expect(t, place_text(&wide.page, place.block, place.cell) == para.src)
+		} else {
+			// The first cell of the row at that height.
+			testing.expect(t, place_text(&wide.page, place.block, place.cell) != nil)
+		}
+		// The same layout gives the height back.
+		back, back_ok := place_y(&wide.page, place)
+		testing.expect(t, back_ok)
+		testing.expect(t, abs(back - y) < 0.01)
+		// In another width: the line that has the same byte.
+		step_to_block(&narrow.page, place.block)
+		there, there_ok := place_y(&narrow.page, place)
+		testing.expect(t, there_ok)
+		again, again_ok := place_at(&narrow.page, there)
+		testing.expect(t, again_ok)
+		testing.expect_value(t, again.block, place.block)
+		testing.expect_value(t, again.cell, place.cell)
+		testing.expect(t, again.byte <= place.byte)
+	}
+	// Between two blocks: the next line, from above it. Below the page: none.
+	gap := (wide.page.boxes[0].bottom + wide.page.boxes[1].top) / 2
+	between, _ := place_at(&wide.page, gap)
+	testing.expect_value(t, between.block, 1)
+	testing.expect(t, between.fraction < 0)
+	_, below := place_at(&wide.page, wide.page.content_height + 100)
+	testing.expect(t, !below)
+}
+
+@(test)
+test_a_place_in_blank_lines_of_code_keeps_its_height :: proc(t: ^testing.T) {
+	// Blank lines of a code block have no line of their own.
+	f: Fixture
+	setup(&f, "```\nA\n\n\n\n\n\n\n\n\n\n\n\n\nB\n```\n", 600)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	box := f.page.boxes[0]
+	testing.expect_value(t, box.line_end - box.line_first, 2)
+	a, b := f.page.lines[box.line_first], f.page.lines[box.line_first + 1]
+	height := f.page.paras[a.para].line_height
+	testing.expect(t, b.top - a.top > 10 * height)
+	// Near the start of the blank run, far above B.
+	y := a.top + 2.5 * height
+	place, ok := place_at(&f.page, y)
+	testing.expect(t, ok)
+	back, back_ok := place_y(&f.page, place)
+	testing.expect(t, back_ok)
+	testing.expect(t, abs(back - y) < 0.01)
+}
+
+@(test)
+test_a_place_is_the_same_text_when_a_block_before_it_got_a_line :: proc(t: ^testing.T) {
+	// Another app adds a line to a code block above the reader. The block
+	// of the place and its text are as they were.
+	TAIL :: "\n\nSome words of the paragraph that the reader is in, enough of them for more than one line of text in this width, and some more.\n"
+	before, after: Fixture
+	setup(&before, "```\none\ntwo\n```" + TAIL, 300)
+	defer teardown(&before)
+	setup(&after, "```\none\n\ninserted\ntwo\n```" + TAIL, 300)
+	defer teardown(&after)
+	step(&before.page, 1e30)
+	step(&after.page, 1e30)
+	// The last line of the paragraph.
+	last := before.page.lines[len(before.page.lines) - 1]
+	height := before.page.paras[last.para].line_height
+	place, ok := place_at(&before.page, last.top + height / 2)
+	testing.expect(t, ok)
+	testing.expect_value(t, place.block, 1)
+	there, there_ok := place_y(&after.page, place)
+	testing.expect(t, there_ok)
+	same := after.page.lines[len(after.page.lines) - 1]
+	testing.expect(t, abs(there - (same.top + height / 2)) < 0.01)
 }

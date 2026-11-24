@@ -238,8 +238,9 @@ mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	ctx.selection = {}
 	// A new document starts at its top, so the first layout does not go
 	// down to the place the old one was scrolled to. A host that keeps the
-	// reader's place (the same file with a change) pays for the layout down
-	// to that place in its first draw.
+	// reader's offset (the same file with a change) draws at that offset
+	// again, and pays for the layout down to it there. A place of the old
+	// document is no address in the new one.
 	ctx.scroll = 0
 	ctx.layout_valid = false
 }
@@ -387,6 +388,48 @@ mdcore_set_task_checked :: proc "c" (handle: rawptr, line: c.long, checked: bool
 	}
 	// The places are the same; only the color of the item's text changes.
 	ctx.display_valid = false
+	return true
+}
+
+Host_Place :: struct {
+	block, cell, byte: c.long,
+	fraction:          f64,
+}
+
+@(export)
+mdcore_place_at :: proc "c" (handle: rawptr, y: f64, out: ^Host_Place) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	if !ctx.layout_valid {
+		return false
+	}
+	place := layout.place_at(&ctx.page, f32(y)) or_return
+	out^ = {c.long(place.block), c.long(place.cell), c.long(place.byte), f64(place.fraction)}
+	return true
+}
+
+@(export)
+mdcore_place_y :: proc "c" (handle: rawptr, place: ^Host_Place, y: ^f64) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	if !ctx.layout_valid {
+		return false
+	}
+	wanted := layout.Place{int(place.block), int(place.cell), int(place.byte), f32(place.fraction)}
+	reached := ctx.page.y
+	layout.step_to_block(&ctx.page, wanted.block)
+	at := layout.place_y(&ctx.page, wanted) or_return
+	// And what a view shows below it, so the page is tall enough for the
+	// host to scroll there.
+	layout.step(&ctx.page, at + 2 * ctx.height)
+	if ctx.page.y != reached {
+		ctx.display_valid = false
+	}
+	y^ = f64(at)
 	return true
 }
 
