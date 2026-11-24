@@ -243,6 +243,9 @@ final class NativeRendererView: NSView {
         let size = NSSize(width: pageWidth, height: max(laidOutHeight, heldPageHeight ?? 0, 1))
         if page.frame.size != size { page.setFrameSize(size) }
         updateTaskCheckBoxes()
+        // After each layout and each frame that laid out more: other text
+        // can be under a pointer that did not move.
+        updatePointerShape()
     }
 
     /// The zoom of the document: the text size is the body size times this.
@@ -475,8 +478,6 @@ final class NativeRendererView: NSView {
         // or style): each check box can have another place.
         taskBoxRange = nil
         updatePageHeight()
-        // Other text can be under a pointer that did not move.
-        updatePointerShape()
     }
 
     /// Lays out the rest of a long document in steps shorter than a frame,
@@ -553,7 +554,7 @@ final class NativeRendererView: NSView {
         // Only for a pointer on the part of the page that shows below the
         // toolbar: the cursor of the document is for all of the scroll
         // view, also for the strip that the toolbar covers.
-        var shown = page.visibleRect
+        var shown = scrollView.contentView.bounds
         shown.origin.y += topInset
         shown.size.height -= topInset
         var cursor = NSCursor.arrow

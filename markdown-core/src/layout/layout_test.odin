@@ -360,6 +360,9 @@ test_only_a_line_of_text_is_text_for_the_pointer :: proc(t: ^testing.T) {
 	// On the text, and right of its end on the same line.
 	testing.expect(t, text_at(&f.page, first.x + 5, mid(&f.page, first)))
 	testing.expect(t, text_at(&f.page, first.x + first.line.width + 50, mid(&f.page, first)))
+	// Not in the margin right of the column.
+	testing.expect(t, text_at(&f.page, f.page.column_x + f.page.column - 1, mid(&f.page, first)))
+	testing.expect(t, !text_at(&f.page, f.page.column_x + f.page.column + 5, mid(&f.page, first)))
 	// Not in the margin left of it, and not between two blocks.
 	testing.expect(t, !text_at(&f.page, first.x - 5, mid(&f.page, first)))
 	gap := (f.page.boxes[0].bottom + f.page.boxes[1].top) / 2

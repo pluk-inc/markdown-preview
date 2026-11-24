@@ -32,8 +32,10 @@ selection_range :: proc(s: Selection) -> (from, to: Position, ok: bool) {
 	return from, to, true
 }
 
-// True when a point of the page is on a line of text: in its height, and
-// not left of where it starts. The margin, the space between blocks, and
+// True when a point of the page is on a line of text: in its height, not
+// left of where it starts, and not right of the column (the space after a
+// short line is the line's; a table wider than the column is all text).
+// The margins, the space between blocks, and
 // the place of a list marker or a check box are not text. For the pointer:
 // a host shows the text cursor only there.
 text_at :: proc(l: ^Layout, x, y: f32) -> bool {
@@ -44,7 +46,10 @@ text_at :: proc(l: ^Layout, x, y: f32) -> bool {
 	box := l.boxes[i]
 	for line in l.lines[box.line_first:box.line_end] {
 		para := &l.paras[line.para]
-		if para.src != nil && y >= line.top && y < line.top + para.line_height && x >= line.x {
+		if para.src == nil || y < line.top || y >= line.top + para.line_height || x < line.x {
+			continue
+		}
+		if x <= max(l.column_x + l.column, line.x + line.line.width) {
 			return true
 		}
 	}
