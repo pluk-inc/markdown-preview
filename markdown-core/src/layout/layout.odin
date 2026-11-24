@@ -83,6 +83,7 @@ Layout :: struct {
 	lines:          [dynamic]Line,
 	decor:          [dynamic]Decor,
 	boxes:          [dynamic]Box,
+	tasks:          [dynamic]Task, // down the page
 	content_height: f32,
 	// The part of the page that keeps its shaped text (window.odin).
 	keep_y0:        f32,
@@ -137,6 +138,7 @@ reset :: proc(l: ^Layout) {
 	clear(&l.paras)
 	clear(&l.decor)
 	clear(&l.boxes)
+	clear(&l.tasks)
 	l.live_first, l.live_end = 0, 0
 	l.next_block = 0
 	l.code_offset = 0
@@ -155,6 +157,7 @@ destroy :: proc(l: ^Layout) {
 	delete(l.paras)
 	delete(l.decor)
 	delete(l.boxes)
+	delete(l.tasks)
 	l^ = {}
 }
 
@@ -211,6 +214,11 @@ span_color :: proc(l: ^Layout, para: ^Para, style: document.Inline_Set) -> base.
 	if .Link in style {
 		return l.style.link
 	}
+	if para.done && !para.quote && .Image not_in style {
+		// A done task reads as done by a softer color, with no line
+		// through it, so a long list stays easy to read.
+		return mix(l.style.secondary, l.style.text, 0.3)
+	}
 	if para.quote || .Image in style {
 		return l.style.secondary
 	}
@@ -228,7 +236,19 @@ Text_Look :: struct {
 	heading:     bool, // the base weight is semibold
 	mono:        bool, // a line of a code block
 	quote:       bool,
+	done:        bool, // text of a checked task item
 }
+
+// The place of the check box of a task item. The layout draws nothing
+// there: the host puts its own control on it (`tasks_between`).
+Task :: struct {
+	x, y: f32, // points, document space; the side is `task_box_size`
+	line: int, // the source line of its mark, from 1
+	done: bool,
+}
+
+TASK_BOX :: 1.0 // side of a task box, in body sizes
+TASK_GAP :: 0.25 // between the box and the text
 
 // Makes the paragraph of the bytes [from, to) of `src` and returns its
 // index in l.paras.
@@ -352,17 +372,43 @@ marker_text :: proc(b: ^document.Block) -> string {
 		return "•"
 	case .Number:
 		return fmt.tprintf("%d.", b.number)
-	case .Task_Open:
-		return "☐"
-	case .Task_Done:
-		return "☑"
+	case .Task_Open, .Task_Done:
+		// A box that the host draws (`place_task`).
 	}
 	return ""
+}
+
+// Part `t` of the way from one color to another.
+@(private)
+mix :: proc(a, b: base.Color, t: f32) -> base.Color {
+	lerp :: proc(x, y: u8, t: f32) -> u8 {
+		return u8(math.round(f32(x) + (f32(y) - f32(x)) * t))
+	}
+	return {lerp(a.r, b.r, t), lerp(a.g, b.g, t), lerp(a.b, b.b, t), lerp(a.a, b.a, t)}
+}
+
+// The side of a task's check box, in points.
+task_box_size :: proc(m: base.Metrics) -> f32 {
+	return math.round(m.body * TASK_BOX)
+}
+
+// Keeps the place of the check box of a task item: left of x, at the
+// middle of its first line.
+@(private)
+place_task :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32) {
+	size := task_box_size(l.m)
+	bx := math.round(x - l.m.body * TASK_GAP - size)
+	by := math.round(y + (line_height - size) / 2)
+	append(&l.tasks, Task{bx, by, b.task_line, b.marker == .Task_Done})
 }
 
 // The bullet, number, or box of a list item, right-aligned left of x.
 @(private)
 place_marker :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32) {
+	if b.marker == .Task_Open || b.marker == .Task_Done {
+		place_task(l, b, x, y, line_height)
+		return
+	}
 	label := marker_text(b)
 	if label == "" {
 		return
@@ -445,6 +491,7 @@ step :: proc(l: ^Layout, until_y: f32, budget_ms: f64 = 0) -> bool {
 				line_height = b.kind == .Heading ? heading_size * HEADING_LINE_HEIGHT : math.round(heading_size * l.m.line_height),
 				heading     = b.kind == .Heading,
 				quote       = b.quote_depth > 0,
+				done        = b.done,
 			}
 			para := make_para(l, &b.text, 0, len(b.text.bytes), look)
 			l.y = place_para(l, para, x, l.y, width)
@@ -495,6 +542,7 @@ step_code :: proc(l: ^Layout, b: ^document.Block, x, width: f32, started: time.T
 		line_height = math.round(size * CODE_LINE_HEIGHT),
 		mono        = true,
 		quote       = b.quote_depth > 0,
+		done        = b.done,
 	}
 	bytes := b.text.bytes[:]
 	if l.code_offset == 0 {
@@ -535,6 +583,7 @@ place_table :: proc(l: ^Layout, b: ^document.Block, x, y, width: f32) -> f32 {
 		size        = l.m.body,
 		line_height = math.round(l.m.body * l.m.line_height),
 		quote       = b.quote_depth > 0,
+		done        = b.done,
 	}
 	head_look := body_look
 	head_look.heading = true

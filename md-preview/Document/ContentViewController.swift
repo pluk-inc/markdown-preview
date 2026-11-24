@@ -114,8 +114,7 @@ final class ContentViewController: NSViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(updatePointerTracking),
                                                name: UserDefaults.didChangeNotification, object: nil)
         webView.taskCheckboxToggled = { [weak self] line, checked in
-            (self?.view.window?.windowController as? DocumentWindowController)?
-                .toggleTaskCheckbox(onLine: line, checked: checked)
+            self?.toggleTaskCheckbox(onLine: line, checked: checked)
         }
         webView.fragmentLinkActivated = { [weak self] fragment in
             self?.scrollToElement(id: fragment)
@@ -241,6 +240,9 @@ final class ContentViewController: NSViewController {
         if !webView.hasRequestedDocument, let sourceURL {
             snapshotSource = (sourceURL, DocumentSnapshotCache.hash(markdown))
         }
+        // The same file again (a task was checked, another app saved it):
+        // the native reader stays at its place.
+        let isSameFile = sourceURL != nil && exportSource?.sourceURL == sourceURL
         exportSource = ExportSource(
             markdown: markdown,
             sourceURL: sourceURL,
@@ -259,7 +261,7 @@ final class ContentViewController: NSViewController {
         if RendererSetting.current == .native {
             // The saved picture of the web page is not this renderer's page.
             removeSnapshotOverlay()
-            showNativeRenderer(markdown: markdown)
+            showNativeRenderer(markdown: markdown, keepsScroll: isSameFile)
             // Nothing waits for the web page: the launch pump can stop.
             hasPaintedFirstDocument = true
             return
@@ -270,39 +272,45 @@ final class ContentViewController: NSViewController {
         scheduleHeadingOffsetsRefresh()
     }
 
+    /// A click on a task's check box, in either renderer.
+    private func toggleTaskCheckbox(onLine line: Int, checked: Bool) {
+        (view.window?.windowController as? DocumentWindowController)?
+            .toggleTaskCheckbox(onLine: line, checked: checked)
+    }
+
     // MARK: - Experimental native renderer
 
     private var nativeRenderer: NativeRendererView?
     /// The document the native renderer draws right after the window's
     /// first frame. Its parse, layout and Metal setup would otherwise hold
     /// that frame back.
-    private var deferredNativeMarkdown: String?
+    private var deferredNativeMarkdown: (markdown: String, keepsScroll: Bool)?
 
-    private func showNativeRenderer(markdown: String) {
+    private func showNativeRenderer(markdown: String, keepsScroll: Bool) {
         webView.suppressesPageLoads = true
         // A visible WKWebView keeps WebKit's GPU process busy for nothing.
         webView.isHidden = true
         guard view.window?.isVisible == true else {
-            deferredNativeMarkdown = markdown
+            deferredNativeMarkdown = (markdown, keepsScroll)
             // The window controller draws it right after its first frame.
             // This is for a window that comes on screen another way.
             DispatchQueue.main.async { [weak self] in self?.showDeferredNativeRenderer() }
             return
         }
-        drawNativeRenderer(markdown: markdown)
+        drawNativeRenderer(markdown: markdown, keepsScroll: keepsScroll)
     }
 
     /// Draws the document that waited for the window's first frame.
     /// Returns false when nothing waited.
     @discardableResult
     func showDeferredNativeRenderer() -> Bool {
-        guard let markdown = deferredNativeMarkdown else { return false }
+        guard let deferred = deferredNativeMarkdown else { return false }
         deferredNativeMarkdown = nil
-        drawNativeRenderer(markdown: markdown)
+        drawNativeRenderer(markdown: deferred.markdown, keepsScroll: deferred.keepsScroll)
         return true
     }
 
-    private func drawNativeRenderer(markdown: String) {
+    private func drawNativeRenderer(markdown: String, keepsScroll: Bool) {
         if nativeRenderer == nil {
             let renderer = NativeRendererView(frame: view.bounds)
             renderer.textZoom = webView.pageZoom
@@ -315,6 +323,9 @@ final class ContentViewController: NSViewController {
                 renderer.bottomAnchor.constraint(equalTo: view.bottomAnchor)
             ])
             nativeRenderer = renderer
+            renderer.taskCheckboxToggled = { [weak self] line, checked in
+                self?.toggleTaskCheckbox(onLine: line, checked: checked)
+            }
             // The scroll keys must work without a click first, as they do
             // in the web view. Leave a sidebar or field selection alone.
             if let window = view.window,
@@ -323,7 +334,7 @@ final class ContentViewController: NSViewController {
                 window.makeFirstResponder(renderer)
             }
         }
-        nativeRenderer?.open(markdown)
+        nativeRenderer?.open(markdown, keepsScroll: keepsScroll)
         // The frame is drawn, and goes to the screen with the other changes
         // of this turn of the run loop; `markdown-core/bench/app.py` reads
         // this.
@@ -356,7 +367,7 @@ final class ContentViewController: NSViewController {
         resetScrollspy()
         webView.clearContent()
         deferredNativeMarkdown = nil
-        nativeRenderer?.open("")
+        nativeRenderer?.open("", keepsScroll: false)
     }
 
     private var loadingOverlay: DocumentLoadingOverlayView?

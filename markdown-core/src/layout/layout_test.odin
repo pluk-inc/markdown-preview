@@ -252,3 +252,32 @@ test_released_text_has_the_same_glyphs_again :: proc(t: ^testing.T) {
 		testing.expect_value(t, restored[i].uv, quad.uv)
 	}
 }
+
+@(test)
+test_a_task_keeps_a_place_for_its_check_box :: proc(t: ^testing.T) {
+	f: Fixture
+	setup(&f, "- [ ] one\n- [x] two\n- plain\n- [ ] three\n", 600)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	// The plain item has none.
+	testing.expect_value(t, len(f.page.tasks), 3)
+	one, two := f.page.tasks[0], f.page.tasks[1]
+	testing.expect_value(t, one.line, 1)
+	testing.expect_value(t, one.done, false)
+	testing.expect_value(t, two.line, 2)
+	testing.expect_value(t, two.done, true)
+	testing.expect_value(t, f.page.tasks[2].line, 4)
+	testing.expect(t, two.y > one.y)
+	// The box stands left of the text of its item, and the layout draws
+	// nothing in its place.
+	first := f.page.lines[f.page.boxes[0].line_first]
+	size := task_box_size(f.page.m)
+	testing.expect(t, one.x + size < first.x)
+	testing.expect_value(t, len(f.page.decor), 0)
+	// Only the box that a range touches.
+	part := tasks_between(&f.page, two.y + 1, two.y + size - 1)
+	testing.expect_value(t, len(part), 1)
+	testing.expect_value(t, part[0].line, 2)
+	testing.expect_value(t, len(tasks_between(&f.page, 0, 1e30)), 3)
+	testing.expect_value(t, len(tasks_between(&f.page, f.page.tasks[2].y + size, 1e30)), 0)
+}

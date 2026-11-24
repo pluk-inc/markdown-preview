@@ -87,6 +87,21 @@ void mdcore_draw(void *ctx, double scroll_y);
 // the views.
 void mdcore_draw_with_window(void *ctx, double scroll_y);
 
+typedef struct {
+    double x, y, size; // the box: its top left and its side, in document space
+    long line;         // source line of the "[ ]", from 1
+    bool checked;
+} mdcore_task;
+
+// The core draws no check box for a task: it keeps the place free, and
+// the host puts its own control there (the system's check box on Apple
+// systems). This gives the tasks whose boxes are between two heights of
+// the page that is laid out now, down the page. Writes at most `capacity`
+// of them and returns how many there are: with a larger number, call
+// again with more room. The host changes the source and sets the document
+// again to check one; the core does not edit it.
+long mdcore_tasks(void *ctx, double top, double bottom, mdcore_task *out, long capacity);
+
 // Selection. phase: 0 = mouse down, 1 = drag. x, y are in document space.
 void mdcore_mouse(void *ctx, double x, double y, int phase);
 void mdcore_select_all(void *ctx);

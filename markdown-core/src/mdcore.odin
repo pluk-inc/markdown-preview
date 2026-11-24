@@ -235,7 +235,9 @@ mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	ctx.doc = document.parse(length > 0 ? string(utf8[:length]) : "")
 	ctx.selection = {}
 	// A new document starts at its top, so the first layout does not go
-	// down to the place the old one was scrolled to.
+	// down to the place the old one was scrolled to. A host that keeps the
+	// reader's place (the same file with a change) pays for the layout down
+	// to that place in its first draw.
 	ctx.scroll = 0
 	ctx.layout_valid = false
 }
@@ -337,6 +339,26 @@ draw :: proc(handle: rawptr, scroll_y: f64, with_window: bool) {
 	// The frame can wait for the display. Other calls go on meanwhile, but
 	// no other frame: the draw lock is held to its end.
 	renderer.frame_draw(&frame, with_window)
+}
+
+Host_Task :: struct {
+	x, y, size: f64,
+	line:       c.long,
+	checked:    bool,
+}
+
+@(export)
+mdcore_tasks :: proc "c" (handle: rawptr, top, bottom: f64, out: [^]Host_Task, capacity: c.long) -> c.long {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	tasks := layout.tasks_between(&ctx.page, f32(top), f32(bottom))
+	size := f64(layout.task_box_size(ctx.page.m))
+	for t, i in tasks[:min(len(tasks), int(capacity))] {
+		out[i] = {f64(t.x), f64(t.y), size, c.long(t.line), t.done}
+	}
+	return c.long(len(tasks))
 }
 
 // phase 0 = mouse down, 1 = drag. x and y are points in document space.

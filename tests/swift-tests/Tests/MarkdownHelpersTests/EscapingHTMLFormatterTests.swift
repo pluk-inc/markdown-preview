@@ -102,6 +102,20 @@ final class EscapingHTMLFormatterTests: XCTestCase {
         )
     }
 
+    func testTaskCheckboxSourceCountsEachKindOfLineEndingAndKeepsIt() {
+        // CR alone, CR LF, and LF each end one line, as the parsers count.
+        let markdown = "- [ ] one\r- [ ] two\r\n- [ ] three\n- [ ] four"
+        XCTAssertEqual(
+            TaskCheckboxSource.settingChecked(true, onLine: 2, in: markdown),
+            "- [ ] one\r- [x] two\r\n- [ ] three\n- [ ] four"
+        )
+        XCTAssertEqual(
+            TaskCheckboxSource.settingChecked(true, onLine: 4, in: markdown),
+            "- [ ] one\r- [ ] two\r\n- [ ] three\n- [x] four"
+        )
+        XCTAssertNil(TaskCheckboxSource.settingChecked(true, onLine: 5, in: markdown))
+    }
+
     func testTaskCheckboxSourceRejectsNonTaskLine() {
         XCTAssertNil(TaskCheckboxSource.settingChecked(true, onLine: 1, in: "Plain text"))
         XCTAssertNil(TaskCheckboxSource.settingChecked(true, onLine: 2, in: "- [ ] Task"))

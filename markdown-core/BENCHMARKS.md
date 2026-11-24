@@ -50,6 +50,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-23 | outline and inspector numbers off the main thread | 648 / 653 | 69 / 103 | 600 / 1090 | – | – | – | – |
 | 2026-11-23 | frames from a CVDisplayLink, at the rate of the display | 704 / 717 | 66 / 111 | 575 / 1235 | – | – | – | – |
 | 2026-11-23 | cleanup of the core; no growth slack kept in the document model | – | – | – | 60 / 70 | 2.9 / 301 | – | 6.6 / 20.2 |
+| 2026-11-23 | task check boxes (system buttons on the page); a resize frame in step with the window | 562 / 543 | 58 / 99 | 460 / 1080 | – | – | – | – |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -150,3 +151,33 @@ scroll frame 0.34 / 0.32 CPU ms, heap 10.9 / 133 MB.
   layout. The app's memory for the long document follows it.
 - The longest scroll frame was 9 ms of CPU with new glyphs and 2 ms with
   the glyphs ready.
+
+## Task check boxes (2026-11-23)
+
+The benchmark documents have no tasks, so they do not show what a check
+box costs. Two documents of tasks only: 320 tasks (24 KB) and 9,600 tasks
+(725 KB). Three Release builds, one after the other on the same Mac, five
+launches each, median, app process only. Not from `app.py`: the script
+that made the comparison with the web view, which also sends 30 Page Down
+presses.
+
+| 320 tasks / 9,600 tasks | Base (core cleanup) | Resize frame in step | Task check boxes |
+| --- | --- | --- | --- |
+| Launch to first document frame (ms) | 575 / 566 | 549 / 541 | 574 / 561 |
+| Memory at rest (MB) | 58 / 80 | 58 / 79 | 63 / 80 |
+| CPU until 4 s after the first frame (s) | 0.48 / 0.88 | 0.45 / 0.82 | 0.49 / 0.80 |
+| CPU for 30 Page Down presses (s) | 0.69 / 1.00 | 0.66 / 1.04 | 1.09 / 1.82 |
+
+The check boxes cost nothing at launch and about 5 MB for the buttons.
+They cost main-thread time in a scroll: 13 to 27 ms more for each Page
+Down in a document that is tasks from top to bottom, where each press
+puts about 25 buttons on new tasks. The frames of the text do not wait for
+it; they come from the render thread. The first version cost 1.76 s for
+the 320 tasks. What brought it down: no question to the core and no move
+of a button while the view stays in the part that has its boxes, the
+size of the system's check box asked for one time, and no cursor
+rectangles of the page that change with the boxes. What is left is the
+system's check box itself, which on macOS 27 answers and draws through
+its own view tree (a sample showed its layout, its drawing, and the
+tracking areas of the window). Why the larger document costs more for
+each press was not checked.
