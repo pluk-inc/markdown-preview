@@ -18,6 +18,42 @@ Place :: struct {
 	fraction: f32, // below 0 for a height above the line (between two blocks, in blank lines of code)
 }
 
+// The place of a reader: the line at the first height of the page that
+// their view shows, and that height. A layout keeps none: the owner of a
+// layout takes it from a frame (`take_place`) and gives it to the layout
+// that comes after (`restore_place`).
+Reader_Place :: struct {
+	known: bool, // false at the top of the page, and with no text at the height
+	place: Place,
+	y:     f64, // the height of the page that the place was at
+}
+
+// The place of a reader whose view shows the page from the height y down.
+// None at the top of the page: there the top stays the top, whatever the
+// room above the first line is in another layout.
+take_place :: proc(l: ^Layout, y: f64) -> Reader_Place {
+	if y <= l.origin + 0.5 {
+		return {}
+	}
+	place, ok := place_at(l, y)
+	return {ok, place, y}
+}
+
+// After a new layout of the same document: lays out the block of the
+// place, and moves the top of the page so that the place is at the height
+// it had. The offset of the reader's view then shows the same text, with
+// no new offset. With no place, the top of the page stays where it is.
+restore_place :: proc(l: ^Layout, kept: Reader_Place) {
+	if !kept.known {
+		return
+	}
+	lay_out_block(l, kept.place.block)
+	if y, ok := place_y(l, kept.place); ok {
+		l.origin += kept.y - y
+		sum_tops(l)
+	}
+}
+
 // The place at a height of the page. False when the page has no text at
 // or below it.
 place_at :: proc(l: ^Layout, y: f64) -> (place: Place, ok: bool) {

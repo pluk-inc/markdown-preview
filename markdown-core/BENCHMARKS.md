@@ -62,6 +62,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-24 | blocks and layout records in parts of the document | 623 / 611 | 54 / 96 | 500 / 1040 | 64 / 75 | 2.9 / 301 | 0.42 / 0.40 | 6.7 / 20.0 |
 | 2026-11-24 | the layout is made where the view is; estimated heights for the rest | 617 / 634 | 53 / 92 | 490 / 740 | 69 / 45 | none (see the section) | 0.52 / 0.44 | 6.9 / 20.4 (15.5 before Select All) |
 | 2026-11-24 | a selection is two addresses in the document; a copy reads the document | 586 / 570 | 58 / 97 | 560 / 820 | 69 / 68 | none | 0.46 / 0.39 | 7.0 / 21.5 (15.4 before all of it was laid out) |
+| 2026-11-24 | the core keeps the reader's place across a new layout | 553 / 537 | 53 / 87 | 490 / 710 | 63 / 66 | none | 0.48 / 0.40 | 7.0 / 21.4 (15.3 before all of it was laid out) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -422,3 +423,22 @@ out": frames from the top to the end, each second view height. It costs
 2.1 s of CPU for the long document, most of it for the quads and the
 glyph bitmaps of each frame, not for the layout (0.33 s when the base
 measured that alone).
+
+## The reader's place in the core (2026-11-24)
+
+The base (a selection as addresses) and the change. `core.py`, short /
+long: first frame 63 / 66 ms, a new width at the end 17 / 10 ms, scroll
+frames 0.48 and 0.40 ms, heap 13.7 MB at the first frame and 15.3 MB
+after the scroll passes. The same as the base (62 / 66, 17 / 10, 0.48 and
+0.40, 13.7, 15.4). The new width at the end now has the place kept by the
+core, where the benchmark asked for it before.
+
+`app.py`, long document, the two builds in turn with three launches for
+each number. The base first, two pairs: launch 552, 537 against 565,
+569 ms; CPU 710, 720 against 720, 720 ms; memory 92, 91 against 92,
+91 MB. That looked like 10 to 30 ms more for the launch. The change
+first, three pairs: launch 537, 621, 603 against 620, 618, 616 ms; CPU
+710, 760, 750 against 770, 760, 760 ms; memory 87, 91, 91 against 91, 92,
+91 MB. So the build that runs second in a pair is the slower one, and
+the two builds do not differ. To judge a launch time of this size,
+measure in the two orders.

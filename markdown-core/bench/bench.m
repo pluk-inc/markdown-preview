@@ -127,16 +127,12 @@ int main(int argc, const char *argv[]) {
     printf("end_frame_ms %.2f\n", now_ms() - end_start);
 
     // A new width with the reader at the end, as one step of a live
-    // resize: the place of the first line, the new layout, and the frame
-    // at that place.
+    // resize: the new layout, which keeps the reader's place, and the
+    // frame at the same scroll position.
     double resize_start = now_ms();
-    mdcore_place place;
-    bool has_place = mdcore_place_at(ctx, bottom, &place);
     mdcore_resize(ctx, VIEW_WIDTH - 40, VIEW_HEIGHT, VIEW_SCALE);
-    double at = 0;
-    if (has_place) mdcore_place_y(ctx, &place, &at);
     @autoreleasepool {
-        mdcore_draw(ctx, at);
+        mdcore_draw(ctx, bottom);
     }
     printf("resize_at_end_ms %.2f\n", now_ms() - resize_start);
     // The estimate of the page height in this width, with only the last
