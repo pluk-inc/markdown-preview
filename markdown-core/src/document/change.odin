@@ -85,11 +85,14 @@ moved :: proc(change: Change, at: Address) -> (now: Address, same: bool) {
 	// In a block that got other text at its place: text before the
 	// change and text after it are the reader's text still.
 	if change.removed == 1 && change.added == 1 && at.cell == 0 && change.text_head + change.text_tail > 0 {
-		if at.byte <= change.text_head {
-			return now, true
-		}
+		// An address right where text came in is of the text after it:
+		// the line that was there is lower now, and a caret is after
+		// what it typed. So the text at the end counts first.
 		if at.byte >= change.text_was - change.text_tail {
 			now.byte += change.text_grew
+			return now, true
+		}
+		if at.byte <= change.text_head {
 			return now, true
 		}
 	}
