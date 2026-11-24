@@ -323,3 +323,25 @@ test_a_task_checked_in_place_draws_as_one_parsed_checked :: proc(t: ^testing.T) 
 	// The soft color is there: the item's text, the line through it, "more".
 	testing.expect(t, soft > 8)
 }
+
+@(test)
+test_the_page_width_is_the_wanted_part_of_the_view :: proc(t: ^testing.T) {
+	testing.expect_value(t, page_width(800, 600), 600)
+	testing.expect_value(t, page_width(800, 400), 400)
+	// All of the view when the host wants no part, and never more than it.
+	testing.expect_value(t, page_width(800, 0), 800)
+	testing.expect_value(t, page_width(800, 900), 800)
+	// The layout breaks its lines in that width.
+	SOURCE :: "Words that fill more than one line of a narrow page, and one line of a wide one, we hope.\n"
+	wide, narrow: Fixture
+	setup(&wide, SOURCE, page_width(800, 0))
+	defer teardown(&wide)
+	setup(&narrow, SOURCE, page_width(800, 300))
+	defer teardown(&narrow)
+	step(&wide.page, 1e30)
+	step(&narrow.page, 1e30)
+	testing.expect(t, len(narrow.page.lines) > len(wide.page.lines))
+	for line in narrow.page.lines {
+		testing.expect(t, line.x + line.line.width <= 300)
+	}
+}

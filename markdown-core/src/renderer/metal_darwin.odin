@@ -91,6 +91,7 @@ Renderer :: struct {
 	layer:         ^CA.MetalLayer,
 	width, height: f32, // points
 	scale:         f32,
+	page_width:    f32, // points from the left that the page is drawn in
 	rects:         Quad_Buffer,
 	selection:     Quad_Buffer,
 	glyphs:        Quad_Buffer,
@@ -111,8 +112,11 @@ destroy :: proc(r: ^Renderer) {
 	r^ = {}
 }
 
-resize :: proc(r: ^Renderer, width, height, scale: f32) {
+// `page_width`: nothing of the page is drawn right of it, also not a table
+// that is wider than the page.
+resize :: proc(r: ^Renderer, width, height, scale, page_width: f32) {
 	r.width, r.height, r.scale = width, height, scale
+	r.page_width = page_width
 	r.layer->setContentsScale(f64(scale))
 	r.layer->setDrawableSize(CG.Size{f64(width * scale), f64(height * scale)})
 }
@@ -257,6 +261,12 @@ frame_draw :: proc(f: ^Frame, with_window: bool) {
 			viewport = {f.width * f.scale, f.height * f.scale},
 			scroll   = {0, f.scroll_px},
 		}
+		texture := drawable->texture()
+		clip := MTL.ScissorRect {
+			width  = min(NS.UInteger(max(f.page_width * f.scale, 1)), texture->width()),
+			height = texture->height(),
+		}
+		MTL.RenderCommandEncoder_setScissorRects_slice(enc, {clip})
 		enc->setRenderPipelineState(shared.pipeline)
 		enc->setVertexBytes(&uniforms, size_of(Uniforms), 1)
 		enc->setFragmentTexture(f.gray.texture, 0)

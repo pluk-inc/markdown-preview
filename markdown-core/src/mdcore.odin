@@ -271,7 +271,7 @@ mdcore_resize :: proc "c" (handle: rawptr, width, height, scale: f64) {
 		ctx.display_valid = false
 	}
 	ctx.width = f32(width)
-	page_width := ctx.page_width > 0 ? min(ctx.page_width, ctx.width) : ctx.width
+	page_width := layout.page_width(ctx.width, ctx.page_width)
 	if !ctx.layout_valid || page_width != ctx.layout_width {
 		ctx.layout_width = page_width
 		layout.begin(&ctx.page, &ctx.doc, ctx.style, page_width)
@@ -280,7 +280,7 @@ mdcore_resize :: proc "c" (handle: rawptr, width, height, scale: f64) {
 	}
 	ctx.height, ctx.scale = f32(height), f32(scale)
 	keep_window(ctx)
-	renderer.resize(&ctx.gpu, ctx.width, ctx.height, ctx.scale)
+	renderer.resize(&ctx.gpu, ctx.width, ctx.height, ctx.scale, page_width)
 	// Only what the view shows now; mdcore_layout_more does the rest.
 	if layout.step(&ctx.page, ctx.scroll + 2 * ctx.height) {
 		ctx.display_valid = false
