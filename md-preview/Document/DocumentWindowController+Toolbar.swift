@@ -333,11 +333,12 @@ extension DocumentWindowController {
     }
 
     private func makeShareItem() -> NSToolbarItem {
-        let item = NSSharingServicePickerToolbarItem(itemIdentifier: .share)
+        let item = ShareToolbarItem(itemIdentifier: .share)
+        item.hasItems = { [weak self] in self?.currentMarkdown != nil }
         item.label = NSLocalizedString("Share", comment: "Share toolbar item label")
         item.paletteLabel = NSLocalizedString("Share", comment: "Share toolbar palette label")
         item.toolTip = NSLocalizedString("Share document", comment: "Share toolbar item tooltip")
-        item.delegate = self
+        item.attach(self)
         return item
     }
 
@@ -590,6 +591,9 @@ extension DocumentWindowController {
 
     func items(for pickerToolbarItem: NSSharingServicePickerToolbarItem) -> [Any] {
         guard let currentMarkdown else { return [] }
+        // The item sets itself up: the plain text is enough for that. The
+        // header, with its word count, is for the popover.
+        guard (pickerToolbarItem as? ShareToolbarItem)?.isAttaching != true else { return [currentMarkdown] }
         let title = currentFileURL?.lastPathComponent ?? documentWindow.title
         return [SharePreviewItem.make(markdown: currentMarkdown, title: title, fileURL: currentFileURL)]
     }
@@ -609,6 +613,30 @@ extension DocumentWindowController {
         // The share-link row ends the section, right above the system's Copy,
         // which sits in its own section that apps cannot add rows to.
         return services + shareLinkServices() + proposedServices
+    }
+}
+
+/// The system's share item validates itself by asking its delegate for the
+/// items to share, and the toolbar validates its items again and again
+/// while events come in (about four times a second during a scroll). Making
+/// the items counts the words of the document for the popover's header, so
+/// on a 1 MB document that held the main thread half of the time. This item
+/// only asks if there is something to share; the items are made when the
+/// reader opens the popover.
+private final class ShareToolbarItem: NSSharingServicePickerToolbarItem {
+    var hasItems: () -> Bool = { false }
+    /// True while the item gets its delegate. It asks the new delegate for
+    /// the items at once, while the toolbar is built.
+    private(set) var isAttaching = false
+
+    func attach(_ delegate: NSSharingServicePickerToolbarItemDelegate) {
+        isAttaching = true
+        self.delegate = delegate
+        isAttaching = false
+    }
+
+    override func validate() {
+        isEnabled = hasItems()
     }
 }
 
