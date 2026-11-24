@@ -201,8 +201,10 @@ begin :: proc(l: ^Layout, doc: ^document.Document, style: base.Style, width: f32
 // its first block.
 @(private)
 part_start :: proc(l: ^Layout, part: int) -> f32 {
-	return part == 0 ? l.m.page_pad * 0.6 : 0
+	return part == 0 ? l.m.page_pad * TOP_PAD : 0
 }
+
+TOP_PAD :: 0.6 // the room above the first block, in page paddings
 
 // Gives each part its top from the heights of the parts above it, and
 // the page its height.
@@ -214,7 +216,7 @@ sum_tops :: proc(l: ^Layout) {
 		top += f64(part.height)
 	}
 	if len(l.parts) == 0 {
-		top += f64(l.m.page_pad * 0.6)
+		top += f64(l.m.page_pad * TOP_PAD)
 	} else {
 		top += f64(l.m.page_pad)
 	}
@@ -227,13 +229,6 @@ open_part :: proc(l: ^Layout) -> ^Part {
 	return &l.parts[l.open]
 }
 
-// True when the last box of a part is of a block whose layout is in
-// progress.
-@(private)
-part_in_block :: proc(l: ^Layout, part: int) -> bool {
-	return part == l.open ? l.in_block : l.parts[part].in_block
-}
-
 // Shows the records in work as the ones of the open part. `advance`
 // calls it after each block: an array that grows moves.
 @(private)
@@ -244,8 +239,7 @@ show_work :: proc(l: ^Layout) {
 }
 
 // Ends the work on the open part: its records go from the arrays that
-// grow into one piece of memory of their exact size, and the part keeps
-// how far its layout is.
+// grow into one piece of memory of their exact size.
 @(private)
 close_part :: proc(l: ^Layout) {
 	take :: proc(memory: ^[]u8, records: ^[dynamic]$T) -> []T {
@@ -261,10 +255,6 @@ close_part :: proc(l: ^Layout) {
 	}
 	part := open_part(l)
 	work := &l.work
-	if l.in_block {
-		work.boxes[len(work.boxes) - 1].orders = l.order
-	}
-	part.in_block, part.code_offset, part.y = l.in_block, l.code_offset, l.y
 	bytes :=
 		len(work.paras) * size_of(Para) +
 		len(work.lines) * size_of(Line) +
@@ -459,7 +449,7 @@ Task :: struct {
 TASK_BOX :: 1.0 // side of a task box, in body sizes
 TASK_GAP :: 0.25 // between the box and the text
 
-// Makes the paragraph of the bytes [from, to) of `src` in the last part
+// Makes the paragraph of the bytes [from, to) of `src` in the open part
 // and returns its index in the paragraphs of that part.
 @(private)
 make_para :: proc(l: ^Layout, src: ^document.Text, from, to: int, look: Text_Look) -> int {
@@ -513,7 +503,7 @@ shape_marker :: proc(l: ^Layout, para: ^Para, label: string) {
 	para.handle = text.paragraph_create(label, runs[:])
 }
 
-// Breaks a paragraph of the last part into lines of `width` at (x, y).
+// Breaks a paragraph of the open part into lines of `width` at (x, y).
 // Returns the y below the last line.
 @(private)
 place_para :: proc(l: ^Layout, index: int, x, y, width: f32, align := base.Align.Left) -> f32 {
@@ -709,14 +699,26 @@ estimate :: proc(l: ^Layout, part, from: int) -> (height: f32) {
 	return
 }
 
+// True when the time of a call is over. A budget of 0 is no limit.
+@(private)
+over :: proc(started: time.Tick, budget_ms: f64) -> bool {
+	return budget_ms > 0 && time.duration_milliseconds(time.tick_since(started)) > budget_ms
+}
+
 // Lays out blocks of a part, from where its layout is: until the part
 // has records down to `until` (from its top) and for the block `until_slot`,
 // or `budget_ms` ends (0 = no time limit). Returns true when the height
 // of the part is another one after it. The caller sums the tops again.
 @(private)
 advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int, started: time.Tick, budget_ms: f64) -> bool {
-	if l.parts[index].complete {
-		return false
+	{
+		// Nothing to do for a part that has what the caller wants: no
+		// records are moved for it.
+		part := &l.parts[index]
+		slot := part.in_block ? len(part.boxes) - 1 : len(part.boxes)
+		if part.complete || (part.y >= until && slot > until_slot) {
+			return false
+		}
 	}
 	open_for_work(l, index)
 	defer free_all(context.temp_allocator)
@@ -729,7 +731,7 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int, started: ti
 		if slot >= blocks.count || (l.y >= until && slot > until_slot) {
 			break
 		}
-		if progressed && budget_ms > 0 && time.duration_milliseconds(time.tick_since(started)) > budget_ms {
+		if progressed && over(started, budget_ms) {
 			break
 		}
 		progressed = true
@@ -813,9 +815,13 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int, started: ti
 			note_live(part, first, end)
 		}
 	}
+	if !progressed {
+		return false
+	}
 	part := open_part(l)
 	before := part.height
-	part.y = l.y
+	// The part has how far its layout is at all times but in this call.
+	part.y, part.in_block, part.code_offset = l.y, l.in_block, l.code_offset
 	if !l.in_block && len(work.boxes) == blocks.count {
 		part.height = l.y
 		part.complete = true
@@ -865,9 +871,6 @@ lay_out :: proc(l: ^Layout, y0, y1, anchor_y: f64, budget_ms: f64 = 0) -> (chang
 		return false
 	}
 	started := time.tick_now()
-	over :: proc(started: time.Tick, budget_ms: f64) -> bool {
-		return budget_ms > 0 && time.duration_milliseconds(time.tick_since(started)) > budget_ms
-	}
 	anchor := part_at(l, anchor_y)
 	// From the anchor down. A part is laid out only down to the end of
 	// the range, so a part with one very long block does not hold a frame.
@@ -905,17 +908,31 @@ lay_out :: proc(l: ^Layout, y0, y1, anchor_y: f64, budget_ms: f64 = 0) -> (chang
 
 // True when the page has its records between two heights.
 laid_out :: proc(l: ^Layout, y0, y1: f64) -> bool {
-	for p := max(first_part_below(l, y0), 0); p < len(l.parts); p += 1 {
+	for p := first_part_below(l, y0); p < len(l.parts); p += 1 {
 		part := &l.parts[p]
 		if part.top >= y1 {
 			break
 		}
-		y := p == l.open ? l.y : part.y
-		if !part.complete && part.top + f64(y) < y1 {
+		if !part.complete && part.top + f64(part.y) < y1 {
 			return false
 		}
 	}
 	return true
+}
+
+// Lays out the last parts of the document, with all their blocks, until
+// `height` points of its end have their records: the end of the page is
+// then at its real height. `anchor_y` as for `lay_out`.
+lay_out_end :: proc(l: ^Layout, height, anchor_y: f64) -> (changed: bool) {
+	anchor := part_at(l, anchor_y)
+	real: f64
+	for p := len(l.parts) - 1; p >= 0 && real < height; p -= 1 {
+		if !l.parts[p].complete && lay_out_part(l, p, anchor) {
+			changed = true
+		}
+		real += f64(l.parts[p].height)
+	}
+	return
 }
 
 // Lays out the parts of the blocks from one number to another, with all
@@ -962,7 +979,7 @@ step_code :: proc(l: ^Layout, b: ^document.Block, x, width, until: f32, started:
 	}
 	count := 0
 	for l.code_offset <= len(bytes) {
-		if count > 0 && count % 32 == 0 && budget_ms > 0 && time.duration_milliseconds(time.tick_since(started)) > budget_ms {
+		if count > 0 && count % 32 == 0 && over(started, budget_ms) {
 			return false
 		}
 		// Not past what the caller wants: a block can be many views long.

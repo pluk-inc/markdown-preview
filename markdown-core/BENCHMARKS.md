@@ -59,7 +59,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-24 | the system backing of the covered top edge covers the find bar too | 621 / 633 | 54 / 96 | 510 / 1090 | – | – | – | – |
 | 2026-11-24 | the reader keeps their place when the text is laid out again | 683 / 665 | 56 / 99 | 620 / 1260 | – | – | 0.44 / 0.35 | 6.6 / 20.7 |
 | 2026-11-24 | blocks and layout records in parts of the document | 623 / 611 | 54 / 96 | 500 / 1040 | 64 / 75 | 2.9 / 301 | 0.42 / 0.40 | 6.7 / 20.0 |
-| 2026-11-24 | the layout is made where the view is; estimated heights for the rest | 649 / 632 | 53 / 90 | 500 / 750 | 66 / 48 | none (see the section) | 0.58 / 0.39 | 6.9 / 20.4 (15.4 before Select All) |
+| 2026-11-24 | the layout is made where the view is; estimated heights for the rest | 617 / 634 | 53 / 92 | 490 / 740 | 69 / 45 | none (see the section) | 0.52 / 0.44 | 6.9 / 20.4 (15.5 before Select All) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -350,18 +350,18 @@ other, short / long.
 
 | | Base | Change |
 | --- | --- | --- |
-| `core.py`: first frame (ms) | 64 / 75 | 66 / 48 |
-| To the end of the document: layout and the first frame there (ms) | 3 / 301 and a frame | 8 / 10 |
-| A new width with the reader at the end: layout and frame (ms) | – / 370 | 12 / 10 |
-| Layout of all of the document (ms) | 2.9 / 301 | 4.9 / 336, only for Select All |
-| Scroll frame, new glyphs (CPU ms) | 0.47 / 0.41 | 0.65 / 0.58 |
-| Scroll frame, glyphs ready (CPU ms) | 0.32 / 0.37 | 0.35 / 0.39 |
-| Heap at the first frame (MB) | 5.1 / 13.6 | 5.1 / 13.6 |
-| Heap after the two scroll passes (MB) | 6.7 / 20.0 | 6.6 / 15.4 |
+| `core.py`: first frame (ms) | 64 / 75 | 69 / 45 |
+| To the end of the document: layout and the first frame there (ms) | 3 / 301 and a frame | 8 / 11 |
+| A new width with the reader at the end: layout and frame (ms) | – / 370 | 15 / 10 |
+| Layout of all of the document (ms) | 2.9 / 301 | 5.7 / 332, only for Select All |
+| Scroll frame, new glyphs (CPU ms) | 0.47 / 0.41 | 0.63 / 0.52 |
+| Scroll frame, glyphs ready (CPU ms) | 0.32 / 0.37 | 0.43 / 0.44 |
+| Heap at the first frame (MB) | 5.1 / 13.6 | 5.3 / 13.8 |
+| Heap after the two scroll passes (MB) | 6.7 / 20.0 | 6.6 / 15.5 |
 | Heap with all of it laid out (MB) | 6.7 / 20.0 | 6.9 / 20.4 |
-| `app.py`: launch to the first frame (ms) | 615 / 641 | 649 / 632 |
-| `app.py`: CPU to 3 s after (ms) | 510 / 1060 | 500 / 750 |
-| `app.py`: memory (MB) | 53 / 96 | 53 / 90 |
+| `app.py`: launch to the first frame (ms) | 615 / 641 | 617 / 634 |
+| `app.py`: CPU to 3 s after (ms) | 510 / 1060 | 490 / 740 |
+| `app.py`: memory (MB) | 53 / 96 | 53 / 92 |
 
 The base numbers for the end and for the new width are from the records
 above (the layout of the rest, and the 0.37 s for each step of a live
@@ -369,9 +369,12 @@ resize at the end), not from a new run: the base has no call for them.
 
 What to read from it:
 
-- The first frame of the long document does not lay out two views below
-  the first one any more, only what it shows and one view more.
-- A scroll frame that comes to new text is slower (0.58 against 0.41 ms),
+- The run of the change was on a busier Mac than the one of the base
+  (the frames with glyphs ready do the same work in the two, 0.44
+  against 0.37 ms).
+- The first frame of the long document lays out the view and a view and
+  a half below it. Before, it also had the background layout behind it.
+- A scroll frame that comes to new text is slower (0.52 against 0.41 ms),
   because it now lays out that text too. Before, the background had done
   that work, 300 ms of it for 1 MB, also for text that nobody went to.
 - The app does 0.3 s less work for the long document, and keeps the

@@ -26,8 +26,7 @@ check :: proc(l: ^Layout) -> string {
 		}
 		top += f64(part.height)
 		count := l.doc.parts[p].count
-		in_block := part_in_block(l, p)
-		y := p == l.open ? l.y : part.y
+		in_block, y := part.in_block, part.y
 		if part.complete {
 			complete += 1
 			if len(part.boxes) != count || in_block || p == l.open {

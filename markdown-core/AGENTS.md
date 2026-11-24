@@ -472,6 +472,15 @@ Left on purpose in the first step:
   yet (see 2).
 - All tops are summed again after each part that got another height
   (`sum_tops`): 250 additions for 1 MB.
+- The estimate of a code block reads each of its bytes, at each new
+  layout (each step of a live resize) and again for the rest of a block
+  whose layout is in progress. A line count and a longest line from the
+  parser would make it one division. Not measured on a document that is
+  mostly code.
+- A view that scrolls through text with no records lays out a piece each
+  half view height, and then makes its quads again and asks for the
+  check boxes again. The check boxes are asked for after each layout
+  change, also one that moved none of them.
 
 Next features after that, in the order that seems best (not agreed with
 the maintainer): links that open, images, code colors, Find, the

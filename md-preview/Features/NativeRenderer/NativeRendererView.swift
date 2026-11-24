@@ -34,13 +34,10 @@ final class NativeRendererView: NSView {
     private var hasDocument = false
     private let scrollView = NSScrollView()
     private let page = PageArea()
-    private var layoutScheduled = false
     /// The core's number of its layout at the last look
     /// (`mdcore_layout_revision`). What the view has from another one (the
     /// places of the check boxes) is old.
     private var layoutRevision = 0
-    /// Goes up with each new layout (a document, a size, a style).
-    private var layoutCount = 0
     /// Draws the frames and runs the layout steps off the main thread, so
     /// work that makes glyphs or breaks lines does not hold it.
     /// Read in `deinit`, which is why it is unsafe.
@@ -159,8 +156,18 @@ final class NativeRendererView: NSView {
 
     /// An offset, kept inside the page.
     private func clamped(_ y: CGFloat) -> CGFloat {
-        let top = topScrollY
-        return min(max(top, y), max(top, page.frame.maxY - scrollView.contentView.bounds.height))
+        Self.clamped(
+            y, top: page.frame.minY, height: page.frame.height,
+            inset: scrollView.contentInsets.top, viewHeight: scrollView.contentView.bounds.height
+        )
+    }
+
+    /// An offset, kept inside a page that is `height` tall from `top`
+    /// down, in a view whose first `inset` points are covered.
+    nonisolated private static func clamped(
+        _ y: CGFloat, top: CGFloat, height: CGFloat, inset: CGFloat, viewHeight: CGFloat
+    ) -> CGFloat {
+        min(max(top - inset, y), max(top - inset, top + height - viewHeight))
     }
 
     @objc private func scrollerStyleDidChange() {
@@ -205,6 +212,11 @@ final class NativeRendererView: NSView {
     /// After a frame that was a step of a key scroll or that made the page
     /// taller, on the main thread.
     private func frameDidDraw(_ step: NativeRenderLoop.ScrollStep?) {
+        // A draw lays out the parts of the page that it shows first. The
+        // main thread reads the range of the page itself: one sent from
+        // the render thread can come after a newer one. Before the step
+        // of a scroll, which must be inside that range.
+        updatePageArea()
         // Not for a scroll that the reader took over or that another key
         // press replaced meanwhile: its last frames can come late.
         if let step, step.scroll == scrollAnimation?.scroll {
@@ -222,10 +234,6 @@ final class NativeRendererView: NSView {
             // the scroll view could go.
             if abs(scrollY - step.y) > 0.5 { endScrollAnimation() }
         }
-        // A draw lays out the parts of the page that it shows first. The
-        // main thread reads the range of the page itself: one sent from
-        // the render thread can come after a newer one.
-        updatePageArea()
     }
 
     /// Scrolls to an offset over a short time, as the system's views do
@@ -268,11 +276,10 @@ final class NativeRendererView: NSView {
     /// out a part whose height was estimated. The top is not 0 then; the
     /// offsets of the text that shows stay as they are.
     private func updatePageArea() {
-        layoutRevision = mdcore_layout_revision(ctx)
+        var top = 0.0, height = 0.0
+        layoutRevision = mdcore_page_area(ctx, &top, &height)
         // Not wider than the visible part: a wider page could move sideways.
-        let frame = NSRect(
-            x: 0, y: mdcore_content_top(ctx), width: pageWidth, height: max(mdcore_content_height(ctx), 1)
-        )
+        let frame = NSRect(x: 0, y: top, width: pageWidth, height: max(height, 1))
         if page.frame != frame {
             page.frame = frame
             // A height in the page area is a height of the core's page,
@@ -358,8 +365,8 @@ final class NativeRendererView: NSView {
         let size = button.bounds.size
         return (size, button.cell?.imageRect(forBounds: NSRect(origin: .zero, size: size)) ?? NSRect(origin: .zero, size: size))
     }()
-    /// The part of the page that has its check boxes, and how far down the
-    /// page was laid out when the core was asked for them. Nil: ask again.
+    /// The range of the page that has its check boxes, and the layout
+    /// that the core gave them for (`layoutRevision`). Nil: ask again.
     private var taskBoxRange: (top: CGFloat, bottom: CGFloat, revision: Int)?
     private var taskBuffer = [mdcore_task](repeating: mdcore_task(), count: 256)
 
@@ -519,7 +526,6 @@ final class NativeRendererView: NSView {
         laidOutScale = scale
         laidOutPageWidth = pageWidth
         let size = bounds.size
-        layoutCount += 1
         // The first text that the reader sees stays where it is on screen:
         // its place, from the layout that is there still.
         let place = takesPlace ? kept ?? placeAtTop() : nil
@@ -533,21 +539,21 @@ final class NativeRendererView: NSView {
         drawNow { [ctx] in
             mdcore_set_page_width(ctx, pageWidth)
             mdcore_resize(ctx, size.width, size.height, scale)
-            var y = 0.0
+            var y = 0.0, top = 0.0, height = 0.0
             if var place, mdcore_place_y(ctx, &place, &y) {
                 found = true
                 y -= topInset
+                _ = mdcore_page_area(ctx, &top, &height)
             } else {
-                y = mdcore_content_top(ctx) + belowTop
+                _ = mdcore_page_area(ctx, &top, &height)
+                y = top + belowTop
             }
             // Not past an end of the page, where the scroll view cannot
             // go: the frame must be the one that stays.
-            let top = mdcore_content_top(ctx)
-            return max(min(y, top + mdcore_content_height(ctx) - viewHeight), top - topInset)
+            return Self.clamped(y, top: top, height: height, inset: topInset, viewHeight: viewHeight)
         }
         // A place that the new document does not have is not kept.
         keptPlace = found ? place.map { ($0, scrollY) } : nil
-        continueLayout()
     }
 
     /// Draws a frame now and waits for it: the first frame of a document,
@@ -557,9 +563,7 @@ final class NativeRendererView: NSView {
     private func drawNow(before: (() -> Double?)? = nil) {
         guard hasPageToDraw else { return }
         let drawn = renderLoop.frameNow(at: scrollY, before: before)
-        // The page was laid out again from its top (a new document, size,
-        // or style): each check box can have another place.
-        taskBoxRange = nil
+        // Also takes the check boxes again, when the layout is a new one.
         updatePageArea()
         if abs(drawn - scrollY) > 0.01 {
             // That frame is drawn already.
@@ -569,27 +573,6 @@ final class NativeRendererView: NSView {
             // The scroll view could not go there (the end of the page):
             // the frame for where it is.
             if abs(drawn - scrollY) > 0.5 { setNeedsDraw() }
-        }
-    }
-
-    /// Lays out the page around the view, some view heights on each side,
-    /// in steps shorter than a frame, off the main thread: the first
-    /// frames of a scroll then have their text already.
-    private func continueLayout() {
-        guard !layoutScheduled else { return }
-        layoutScheduled = true
-        nonisolated(unsafe) let ctx = ctx
-        let layout = layoutCount
-        renderLoop.perform { [weak self] in
-            let more = mdcore_layout_more(ctx, 4)
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.layoutScheduled = false
-                self.updatePageArea()
-                // A step that ran for a layout before the present one
-                // says nothing about what is left of this one.
-                if more || layout != self.layoutCount { self.continueLayout() }
-            }
         }
     }
 

@@ -86,12 +86,6 @@ void mdcore_set_page_width(void *ctx, double width);
 // same space, in which the page is from mdcore_content_top down for
 // mdcore_content_height points. A host gives its scroll area that range.
 
-// Lays out the page around the last scroll position, some view heights on
-// each side, for about budget_ms; 0 does all of it. Returns true while
-// some of that is left; call it again from the run loop. A frame lays out
-// what it shows by itself; this makes the frames after it cheaper.
-bool mdcore_layout_more(void *ctx, double budget_ms);
-
 // The height of the page, and the height that it starts at. Read the two
 // after a frame or a layout call: each can be another one then.
 double mdcore_content_height(void *ctx);
@@ -102,6 +96,11 @@ double mdcore_content_top(void *ctx);
 // started. A host that keeps something from the layout (the range of the
 // page, the places of its controls) takes it again when this changed.
 long mdcore_layout_revision(void *ctx);
+
+// The top and the height of the page and the number of the layout that
+// they are of, from one look: a frame on another thread can change each
+// between two calls.
+long mdcore_page_area(void *ctx, double *top, double *height);
 
 // Lays out the last view heights of the document, so its end is at its
 // real height: for a scroll to the end. The text that the view shows now

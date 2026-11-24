@@ -846,7 +846,6 @@ test_a_view_far_down_lays_out_only_what_it_shows :: proc(t: ^testing.T) {
 	y := f.page.content_height / 2
 	testing.expect(t, lay_out(&f.page, y, y + 600, y))
 	expect_ok(t, &f.page)
-	testing.expect(t, laid_out(&f.page, y, y + 600))
 	with_records := 0
 	for part in f.page.parts {
 		with_records += len(part.boxes) > 0 ? 1 : 0
@@ -860,7 +859,19 @@ test_a_view_far_down_lays_out_only_what_it_shows :: proc(t: ^testing.T) {
 	_, hit := hit_test(&f.page, 200, y + 300)
 	testing.expect(t, hit)
 	// The same range again is no work.
+	testing.expect(t, laid_out(&f.page, y, y + 600))
+	testing.expect(t, !laid_out(&f.page, y, y + 6000))
 	testing.expect(t, !lay_out(&f.page, y, y + 600, y))
+	// The end of the document, with the view where it is: the last parts
+	// get their real heights, and the text of the view stays.
+	top := f.page.parts[part_at(&f.page, y)].top
+	testing.expect(t, lay_out_end(&f.page, 1200, y))
+	expect_ok(t, &f.page)
+	last := f.page.parts[len(f.page.parts) - 1]
+	testing.expect(t, last.complete)
+	testing.expect_value(t, f.page.parts[part_at(&f.page, y)].top, top)
+	testing.expect_value(t, f.page.origin, 0)
+	testing.expect(t, !lay_out_end(&f.page, 1200, y))
 }
 
 @(test)

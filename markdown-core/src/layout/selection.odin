@@ -150,7 +150,7 @@ place_y :: proc(l: ^Layout, place: Place) -> (y: f64, ok: bool) {
 	}
 	p, slot := document.locate(l.doc, place.block)
 	part := &l.parts[p]
-	if slot >= len(part.boxes) || (slot == len(part.boxes) - 1 && part_in_block(l, p)) {
+	if slot >= len(part.boxes) || (slot == len(part.boxes) - 1 && part.in_block) {
 		return
 	}
 	box := part.boxes[slot]
@@ -258,10 +258,10 @@ hit_test :: proc(l: ^Layout, x: f32, y: f64) -> (pos: Position, ok: bool) {
 		p, slot = next_box(l, p, -1, 1) or_else (next_box(l, p, 0, -1) or_return)
 	}
 	Best :: struct {
-		part, line: int,
-		score:      f64,
+		part, slot, line: int,
+		score:            f64,
 	}
-	best := Best{-1, -1, 1e30}
+	best := Best{-1, -1, -1, 1e30}
 	look :: proc(l: ^Layout, p, slot: int, x: f32, y: f64, best: ^Best) {
 		part := &l.parts[p]
 		box := part.boxes[slot]
@@ -278,7 +278,7 @@ hit_test :: proc(l: ^Layout, x: f32, y: f64) -> (pos: Position, ok: bool) {
 			dx := x < line.x ? line.x - x : (x > right ? x - right : 0)
 			score := dy * 1000 + f64(dx)
 			if score < best.score {
-				best^ = {p, i, score}
+				best^ = {p, slot, i, score}
 			}
 		}
 	}
@@ -308,23 +308,7 @@ hit_test :: proc(l: ^Layout, x: f32, y: f64) -> (pos: Position, ok: bool) {
 	}
 	line := shaped_line(l, best.part, best.line)
 	para := &l.parts[best.part].paras[line.para]
-	return Position{block_of(l, best.part, best.line), para.order, para.base + text.line_index_for_x(line.line, x - line.x)}, true
-}
-
-// The number in the document of the block that a line of a part is of.
-@(private)
-block_of :: proc(l: ^Layout, p, line: int) -> int {
-	part := &l.parts[p]
-	lo, hi := 0, len(part.boxes)
-	for lo < hi {
-		mid := (lo + hi) / 2
-		if part.boxes[mid].line_end <= line {
-			lo = mid + 1
-		} else {
-			hi = mid
-		}
-	}
-	return l.doc.starts[p] + lo
+	return Position{l.doc.starts[best.part] + best.slot, para.order, para.base + text.line_index_for_x(line.line, x - line.x)}, true
 }
 
 // The part of a line that is in the selection, as byte offsets in the
