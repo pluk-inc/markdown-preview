@@ -321,6 +321,7 @@ enter_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 	case .Tr:
 		p.row_cells = 0
 		p.skip_row = len(p.table.cells) + p.table.columns > p.max_cells
+		p.doc.cells_cut ||= p.skip_row
 	case .Th, .Td:
 		p.cell = {}
 		p.cur = &p.cell
@@ -404,6 +405,7 @@ leave_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 			append(&p.table.aligns, base.Align.Left)
 		}
 		p.in_table = false
+		p.doc.cells_most = max(p.doc.cells_most, len(p.table.cells))
 		append_block(p.doc, p.table)
 		p.table = {}
 	}

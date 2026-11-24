@@ -236,7 +236,10 @@ prepare :: proc(doc: ^Document, edit: Edit) -> (p: Pending) {
 	p.source = edited(doc.source, {p.edit.start, p.edit.end, edit.text})
 	// The list of links gets the links of each edit and loses none; a
 	// parse of all makes it small again.
-	if doc.count > 0 && !doc.defs_marked && !doc.defs_cut && len(doc.links) <= 2 * doc.links_parsed + LINKS_SLACK {
+	// A table that has all of its rows keeps them in a source of the new
+	// size.
+	tables := !doc.cells_cut && doc.cells_most <= MIN_TABLE_CELLS + len(p.source)
+	if doc.count > 0 && tables && !doc.defs_marked && !doc.defs_cut && len(doc.links) <= 2 * doc.links_parsed + LINKS_SLACK {
 		if prepare_piece(doc, &p) {
 			return
 		}
@@ -482,7 +485,10 @@ commit :: proc(doc: ^Document, p: ^Pending) -> (change: Change) {
 		doc.defs, fresh.defs = fresh.defs, doc.defs
 		doc.defs_marked, doc.defs_cut = fresh.defs_marked, fresh.defs_cut
 		doc.defs_used, doc.def_longest = fresh.defs_used, fresh.def_longest
+		doc.cells_most, doc.cells_cut = fresh.cells_most, fresh.cells_cut
 	} else {
+		doc.cells_most = max(doc.cells_most, fresh.cells_most)
+		doc.cells_cut ||= fresh.cells_cut
 		for part in fresh.parts {
 			for &b in part_blocks(part) {
 				for &t in block_texts(&b) {

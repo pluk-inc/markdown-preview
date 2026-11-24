@@ -192,6 +192,13 @@ Document :: struct {
 	// How many links the last parse of all of the source gave. An edit
 	// adds the links of its blocks and takes none out; see `prepare`.
 	links_parsed: int,
+	// A table keeps a number of cells that is of the size of all of
+	// the source at most (`MIN_TABLE_CELLS`), so another size can be
+	// another table at any distance: the cells of the largest table so
+	// far, and if a table lost rows to the limit. An edit takes
+	// nothing off the first; see `prepare`.
+	cells_most:  int,
+	cells_cut:   bool,
 	// The parser has a limit for the uses of definitions: 16 times the
 	// size of what it parses, 1 MB at most (`defs_limit`). What the
 	// uses so far count for in it, if a use had no room (it is text

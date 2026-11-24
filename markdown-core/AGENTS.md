@@ -182,7 +182,10 @@ These came from the maintainer. Do not undo one without asking.
     for a piece: list items get numbers after the last one of the
     document (`Document.items`), links go to the end of the list of
     links, and the limit for the cells of a table is the one of all of
-    the source. Do not end the
+    the source. That limit is of the size of the source, so an edit
+    far from a very large table can give it other rows: a document
+    with a table that lost rows, or whose largest table is over the
+    limit of the new size, gets a parse of all. Do not end the
   layout for a new text: `document.replace` keeps the blocks at the start
   and at the end of the document that are the same for a layout at their
   address (`adopt`), and `layout.apply_change` keeps the records of each

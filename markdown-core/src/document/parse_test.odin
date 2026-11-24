@@ -793,7 +793,23 @@ test_an_edit_that_a_piece_is_not_right_for_gives_the_document_too :: proc(t: ^te
 	defer delete(limit_before)
 	limit_after := strings.concatenate({"[img]: /", long_target, "\n\nfirst\n\nsecond\n\nthird ", uses, "\n\nfourth\n\nfifth\n"})
 	defer delete(limit_after)
+	// A table of 30 columns and 3,000 rows of one cell asks for more
+	// cells than a source of its size can have: the rows that it keeps
+	// are of the size of all of the source, also of text far from it.
+	table := strings.builder_make()
+	defer strings.builder_destroy(&table)
+	strings.write_string(&table, "|")
+	for _ in 0 ..< 30 {strings.write_string(&table, "a|")}
+	strings.write_string(&table, "\n|")
+	for _ in 0 ..< 30 {strings.write_string(&table, "-|")}
+	strings.write_string(&table, "\n")
+	for _ in 0 ..< 3000 {strings.write_string(&table, "a|\n")}
+	table_before := strings.concatenate({strings.to_string(table), "\none\n\ntwo\n\nthree\n\nfour\n\nfive\n\nsix\n"})
+	defer delete(table_before)
+	table_after := strings.concatenate({strings.to_string(table), "\none\n\ntwo\n\nthree\n\nfour\n\nfive\n\nsix and thirty characters more, far away\n"})
+	defer delete(table_after)
 	cases := []Case {
+		{table_before, table_after},
 		// A list that the edit makes goes on in the list after it, whose
 		// first block is in a list inside: "e" is item 3 then.
 		{"x\n\n1. - b\n   - c\n2. e\n", "1. a\n\n1. - b\n   - c\n2. e\n"},
