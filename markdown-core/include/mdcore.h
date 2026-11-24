@@ -98,8 +98,7 @@ typedef struct {
 // systems). This gives the tasks whose boxes are between two heights of
 // the page that is laid out now, down the page. Writes at most `capacity`
 // of them and returns how many there are: with a larger number, call
-// again with more room. The host changes the source and sets the document
-// again to check one; the core does not edit it.
+// again with more room. To check one, see mdcore_set_task_checked.
 long mdcore_tasks(void *ctx, double top, double bottom, mdcore_task *out, long capacity);
 
 // Checks or opens the task whose "[ ]" is on a source line, in place: the

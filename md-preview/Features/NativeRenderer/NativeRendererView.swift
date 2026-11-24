@@ -252,8 +252,8 @@ final class NativeRendererView: NSView {
     }
 
     /// A click on the check box of a task item: the source line of its
-    /// "[ ]" (from 1) and the state it must get. The owner changes the
-    /// source and opens it again; this view only shows it.
+    /// "[ ]" (from 1) and the state it got. The view shows the new state
+    /// already; the owner changes the source and saves it.
     var taskCheckboxToggled: ((_ line: Int, _ checked: Bool) -> Void)?
 
     /// The check boxes of the tasks in view: the system's own buttons, as
@@ -387,13 +387,20 @@ final class NativeRendererView: NSView {
         taskCheckboxToggled?(line, checked)
     }
 
-    /// Shows a document. `keepsScroll` is for the same document with a
-    /// change in it (a task that was checked, a file saved by another
-    /// app): the reader stays where they are.
+    /// Shows a document. `keepsScroll` is for the same document again (the
+    /// text after a click on a task, a file saved by another app): the
+    /// reader stays where they are.
     func open(_ markdown: String, keepsScroll: Bool) {
         // The document that shows already: after a click on a task, the
         // saved text comes back here, and the core has that change.
-        if keepsScroll, hasDocument, markdown == shownMarkdown { return }
+        if keepsScroll, hasDocument, markdown == shownMarkdown {
+            // A click that changed nothing (the app could not find the
+            // task in its text) changed the button itself all the same.
+            // The boxes take their state from the document again.
+            taskBoxRange = nil
+            updateTaskCheckBoxes()
+            return
+        }
         shownMarkdown = markdown
         var text = markdown
         text.withUTF8 { utf8 in

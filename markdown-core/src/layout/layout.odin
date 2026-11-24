@@ -65,7 +65,7 @@ Decor :: struct {
 	color:      base.Color,
 	radius:     f32,
 	above:      bool, // a line through text: drawn over the selection, as the text is
-	text_style: document.Inline_Set, // of that text, for its color
+	soft_done:  bool, // of text that is softer in a checked task (`done_color`)
 }
 
 // The place of one block and the range of its records.
@@ -210,6 +210,12 @@ span_font :: proc(l: ^Layout, style: document.Inline_Set, size: f32, heading: bo
 	return font(l, .Regular, size)
 }
 
+// The color of the text of a checked task: softer, with no line through
+// it, so a long list stays easy to read.
+done_color :: proc(l: ^Layout) -> base.Color {
+	return mix(l.style.secondary, l.style.text, 0.3)
+}
+
 // The color of the text of a span. `done`: its block stands in a checked
 // task item. The state is read from the document when the page is drawn,
 // not kept in the layout, so a task that is checked needs no new layout.
@@ -218,9 +224,7 @@ span_color :: proc(l: ^Layout, para: ^Para, style: document.Inline_Set, done: bo
 		return l.style.link
 	}
 	if done && !para.quote && .Image not_in style {
-		// A done task reads as done by a softer color, with no line
-		// through it, so a long list stays easy to read.
-		return mix(l.style.secondary, l.style.text, 0.3)
+		return done_color(l)
 	}
 	if para.quote || .Image in style {
 		return l.style.secondary
@@ -362,9 +366,11 @@ decorate_line :: proc(l: ^Layout, para: ^Para, line: text.Line, x, top: f32) {
 		if .Strike in span.style {
 			thickness := max(1, math.round(para.size / 14))
 			y := top + para.line_height / 2 + para.size * 0.08
-			// The color of the text, which is softer in a checked task:
-			// the display takes it from the state of the block.
-			append(&l.decor, Decor{x = x1, y = y, w = x2 - x1, h = thickness, color = span_color(l, para, span.style, false), above = true, text_style = span.style})
+			// The color of the text. Where that is softer in a checked
+			// task, the display takes it from the state of the block.
+			color := span_color(l, para, span.style, false)
+			soft := span_color(l, para, span.style, true) != color
+			append(&l.decor, Decor{x = x1, y = y, w = x2 - x1, h = thickness, color = color, above = true, soft_done = soft})
 		}
 	}
 }

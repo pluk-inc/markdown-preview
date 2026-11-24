@@ -290,6 +290,18 @@ test_a_task_set_in_place_is_the_document_of_the_changed_source :: proc(t: ^testi
 			testing.expect_value(t, doc.blocks[i].done, b.done)
 		}
 	}
+	{
+		// An item with no block of its own, a list in it, then a later
+		// block of it: that block is not in the task before it.
+		doc := parse("- [ ] a\n- - b\n\n  tail\n")
+		defer destroy(&doc)
+		want := parse("- [x] a\n- - b\n\n  tail\n")
+		defer destroy(&want)
+		testing.expect(t, set_task_done(&doc, 1, true))
+		for b, i in want.blocks {
+			testing.expect_value(t, doc.blocks[i].done, b.done)
+		}
+	}
 	// No task has its mark on these lines.
 	doc := parse(BEFORE)
 	defer destroy(&doc)

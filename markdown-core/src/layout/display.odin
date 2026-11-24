@@ -50,10 +50,7 @@ display :: proc(
 			if d.y + d.h < y0 || d.y > y1 {
 				continue
 			}
-			color := d.color
-			if d.above && done && box.line_first < box.line_end {
-				color = span_color(l, &l.paras[l.lines[box.line_first].para], d.text_style, true)
-			}
+			color := d.soft_done && done ? done_color(l) : d.color
 			append(d.above ? glyphs : rects, rect_quad(d.x, d.y, d.w, d.h, color, d.radius, scale, origin_y))
 		}
 		for i in box.line_first ..< box.line_end {

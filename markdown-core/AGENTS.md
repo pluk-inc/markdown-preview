@@ -339,8 +339,9 @@ Task check boxes, left on purpose:
 - The system moves the check boxes with the scroll view; the text is drawn
   by the render thread. A box can be one frame ahead of its text. Not
   measured.
-- `Block.done` and `Block.task_line` are on each block of an item; they
-  belong to the item when the model gets containers.
+- `Block.done` and `Block.task_line` are on each block of an item, and
+  `Block.item` says which item that is (a number from the parser). They
+  belong to one item record when the model gets containers.
 - The view finds out that the layout moved from the page height and
   from a range that it clears by hand after a new layout. A revision
   number of the layout from the core would replace both, also for later
