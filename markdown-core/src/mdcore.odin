@@ -391,8 +391,8 @@ mdcore_set_task_checked :: proc "c" (handle: rawptr, line: c.long, checked: bool
 }
 
 Host_Place :: struct {
-	block, order, index: c.long,
-	fraction:            f64,
+	block, cell, byte: c.long,
+	fraction:          f64,
 }
 
 @(export)
@@ -405,7 +405,7 @@ mdcore_place_at :: proc "c" (handle: rawptr, y: f64, out: ^Host_Place) -> bool {
 		return false
 	}
 	place := layout.place_at(&ctx.page, f32(y)) or_return
-	out^ = {c.long(place.block), c.long(place.pos.order), c.long(place.pos.index), f64(place.fraction)}
+	out^ = {c.long(place.block), c.long(place.cell), c.long(place.byte), f64(place.fraction)}
 	return true
 }
 
@@ -418,7 +418,7 @@ mdcore_place_y :: proc "c" (handle: rawptr, place: ^Host_Place, y: ^f64) -> bool
 	if !ctx.layout_valid {
 		return false
 	}
-	wanted := layout.Place{int(place.block), {int(place.order), int(place.index)}, f32(place.fraction)}
+	wanted := layout.Place{int(place.block), int(place.cell), int(place.byte), f32(place.fraction)}
 	reached := ctx.page.y
 	layout.step_to_block(&ctx.page, wanted.block)
 	at := layout.place_y(&ctx.page, wanted) or_return

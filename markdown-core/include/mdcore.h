@@ -115,11 +115,15 @@ long mdcore_tasks(void *ctx, double top, double bottom, mdcore_task *out, long c
 // to set it again. False when no task has its mark on that line.
 bool mdcore_set_task_checked(void *ctx, long line, bool checked);
 
-// A place in the document: a line of text and a height in it. It stays
-// valid when the document is laid out again (another width, another
-// style), which an offset in points does not. The fields are the core's.
+// A place in the document: a byte of its text and a height in the line
+// that has it. It stays valid when the document is laid out again
+// (another width, another style), which an offset in points does not.
+// The address is in the document and needs no layout: the number of the
+// block, the cell for a table (0 in each other block), and the byte in
+// that text. `fraction` is the height, in line heights from the top of
+// the line.
 typedef struct {
-    long block, order, index;
+    long block, cell, byte;
     double fraction;
 } mdcore_place;
 

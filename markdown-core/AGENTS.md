@@ -345,12 +345,15 @@ Task check boxes, left on purpose:
   a live resize at the end of the 1.1 MB document (`BENCHMARKS.md`).
   Heights that are estimated for the blocks above the place would remove
   that. A click on a task does not go this way any more.
-- A place is found by the number of its block and the reading-order
-  number of its paragraph, which exist only after a layout. Find, a jump
-  to a footnote or a heading, and the way back from Edit mode need an
-  address that a host or the core can make with no layout: block and
-  byte. The same file with a change keeps "the same block number", not
-  the same text.
+- A place is an address in the document: block, cell, byte. It needs no
+  layout to be made, so Find, a jump to a footnote or a heading, and the
+  way back from Edit mode can use it; none of them does yet. The same
+  file with a change keeps "the same block number": text that another
+  app put in above the reader as new blocks moves the place. A map of
+  the address through the change would remove that.
+- A selection position is still a layout address (the reading-order
+  number of a paragraph). It is the next thing to move to block, cell,
+  and byte.
 - `mdcore_resize` still lays out down to the offset that the old layout
   had, before the view asks for the place. With a shorter new layout
   (wider window, smaller text) that is work for nothing.

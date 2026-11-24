@@ -1,5 +1,6 @@
 package layout
 
+import "../document"
 import "../base"
 import "../text"
 
@@ -37,10 +38,30 @@ selection_range :: proc(s: Selection) -> (from, to: Position, ok: bool) {
 // height of the page, by the address of its first byte, and how far down
 // that line the height is, in line heights. An offset in points says
 // nothing after the lines are broken again; this does.
+//
+// The address is in the document, not in a layout: the block, the cell
+// for a table, and the byte in that text. So it needs no layout to be
+// made, and it is the same text when another block got more or fewer
+// lines.
 Place :: struct {
-	block:    int, // the block of the line, to find it without a search
-	pos:      Position,
+	block:    int,
+	cell:     int, // of a table; 0 in each other block
+	byte:     int, // in the text of the block or of the cell
 	fraction: f32, // below 0 for a height above the line (between two blocks, in blank lines of code)
+}
+
+// The text of a place: of its block, or of its cell in a table. Nil when
+// the document has no such text.
+@(private)
+place_text :: proc(l: ^Layout, block, cell: int) -> ^document.Text {
+	if block < 0 || block >= len(l.doc.blocks) {
+		return nil
+	}
+	b := &l.doc.blocks[block]
+	if b.kind != .Table {
+		return &b.text
+	}
+	return cell >= 0 && cell < len(b.cells) ? &b.cells[cell] : nil
 }
 
 // The place at a height of the page. False when the page has no text at
@@ -64,7 +85,11 @@ place_at :: proc(l: ^Layout, y: f32) -> (place: Place, ok: bool) {
 			// lines high (blank lines of a code block have no line of
 			// their own), and all of it is a place.
 			fraction := (y - line.top) / para.line_height
-			return {i, {para.order, para.base + line.line.start}, fraction}, true
+			cell := 0
+			if b := &l.doc.blocks[i]; b.kind == .Table {
+				cell = int(uintptr(para.src) - uintptr(raw_data(b.cells))) / size_of(document.Text)
+			}
+			return {i, cell, para.base + line.line.start, fraction}, true
 		}
 		// A block with no text (a rule): the next one.
 	}
@@ -109,21 +134,32 @@ place_y :: proc(l: ^Layout, place: Place) -> (y: f32, ok: bool) {
 		return
 	}
 	box := l.boxes[place.block]
-	// The line that has the byte of the place: the last line of its
-	// paragraph that starts at or before it.
+	src := place_text(l, place.block, place.cell)
+	// The line that has the byte of the place: the last line of its text
+	// that starts at or before it.
 	found := -1
-	for i in box.line_first ..< box.line_end {
-		line := l.lines[i]
-		para := &l.paras[line.para]
-		if para.src == nil {
-			continue
+	if src != nil && l.doc.blocks[place.block].kind != .Table {
+		// The lines of the text are in the order of its bytes.
+		lo, hi := text_first(l, box), box.line_end
+		for lo < hi {
+			mid := (lo + hi) / 2
+			line := l.lines[mid]
+			if l.paras[line.para].base + line.line.start <= place.byte {
+				lo = mid + 1
+			} else {
+				hi = mid
+			}
 		}
-		// The paragraphs of a block are in reading order.
-		if para.order > place.pos.order {
-			break
+		if lo > text_first(l, box) {
+			found = lo - 1
 		}
-		if para.order == place.pos.order && para.base + line.line.start <= place.pos.index {
-			found = i
+	} else if src != nil {
+		for i in box.line_first ..< box.line_end {
+			line := l.lines[i]
+			para := &l.paras[line.para]
+			if para.src == src && para.base + line.line.start <= place.byte {
+				found = i
+			}
 		}
 	}
 	if found < 0 {

@@ -290,6 +290,9 @@ final class NativeRendererView: NSView {
     /// points is another text after the lines are broken again. Nil for a
     /// page at its top, which stays at its top.
     private func placeAtTop() -> mdcore_place? {
+        // A key scroll in progress goes on in the old layout's offsets: it
+        // ends where it is.
+        endScrollAnimation()
         guard hasDocument, scrollY > topScrollY + 0.5 else { return nil }
         // The same place as for the layout before, while the reader did
         // not scroll: a place taken again from each new layout is the

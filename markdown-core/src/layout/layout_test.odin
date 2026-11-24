@@ -442,7 +442,11 @@ test_a_place_is_the_same_text_at_another_width :: proc(t: ^testing.T) {
 		place, ok := place_at(&wide.page, y)
 		testing.expect(t, ok)
 		if wide.page.doc.blocks[place.block].kind != .Table {
-			testing.expect_value(t, place.pos, Position{para.order, para.base + line.line.start})
+			testing.expect_value(t, place.byte, para.base + line.line.start)
+			testing.expect(t, place_text(&wide.page, place.block, place.cell) == para.src)
+		} else {
+			// The first cell of the row at that height.
+			testing.expect(t, place_text(&wide.page, place.block, place.cell) != nil)
 		}
 		// The same layout gives the height back.
 		back, back_ok := place_y(&wide.page, place)
@@ -455,10 +459,8 @@ test_a_place_is_the_same_text_at_another_width :: proc(t: ^testing.T) {
 		again, again_ok := place_at(&narrow.page, there)
 		testing.expect(t, again_ok)
 		testing.expect_value(t, again.block, place.block)
-		if wide.page.doc.blocks[place.block].kind != .Table {
-			testing.expect_value(t, again.pos.order, place.pos.order)
-			testing.expect(t, again.pos.index <= place.pos.index)
-		}
+		testing.expect_value(t, again.cell, place.cell)
+		testing.expect(t, again.byte <= place.byte)
 	}
 	// Between two blocks: the next line, from above it. Below the page: none.
 	gap := (wide.page.boxes[0].bottom + wide.page.boxes[1].top) / 2
@@ -488,4 +490,28 @@ test_a_place_in_blank_lines_of_code_keeps_its_height :: proc(t: ^testing.T) {
 	back, back_ok := place_y(&f.page, place)
 	testing.expect(t, back_ok)
 	testing.expect(t, abs(back - y) < 0.01)
+}
+
+@(test)
+test_a_place_is_the_same_text_when_a_block_before_it_got_a_line :: proc(t: ^testing.T) {
+	// Another app adds a line to a code block above the reader. The block
+	// of the place and its text are as they were.
+	TAIL :: "\n\nSome words of the paragraph that the reader is in, enough of them for more than one line of text in this width, and some more.\n"
+	before, after: Fixture
+	setup(&before, "```\none\ntwo\n```" + TAIL, 300)
+	defer teardown(&before)
+	setup(&after, "```\none\n\ninserted\ntwo\n```" + TAIL, 300)
+	defer teardown(&after)
+	step(&before.page, 1e30)
+	step(&after.page, 1e30)
+	// The last line of the paragraph.
+	last := before.page.lines[len(before.page.lines) - 1]
+	height := before.page.paras[last.para].line_height
+	place, ok := place_at(&before.page, last.top + height / 2)
+	testing.expect(t, ok)
+	testing.expect_value(t, place.block, 1)
+	there, there_ok := place_y(&after.page, place)
+	testing.expect(t, there_ok)
+	same := after.page.lines[len(after.page.lines) - 1]
+	testing.expect(t, abs(there - (same.top + height / 2)) < 0.01)
 }
