@@ -317,10 +317,13 @@ final class ContentViewController: NSViewController {
             renderer.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(renderer)
             // Under the toolbar on macOS 26, where the page shows through
-            // it; below it before that (see the view's scroll view).
+            // it; the view gets the height of that strip, as the web view
+            // does (`updateObscuredContentInsets`). Below the toolbar before
+            // that: it is opaque there.
             let top: NSLayoutYAxisAnchor
             if #available(macOS 26.0, *) {
                 top = view.topAnchor
+                renderer.topInset = fullChromeTopInset
             } else {
                 top = view.safeAreaLayoutGuide.topAnchor
             }
@@ -813,6 +816,7 @@ final class ContentViewController: NSViewController {
         // to the chrome strip matches the automatic behavior exactly.
         let inset = fullChromeTopInset
         guard view.window != nil, inset > 0 else { return }
+        nativeRenderer?.topInset = inset
         if webView.webView.obscuredContentInsets.top != inset {
             webView.webView.obscuredContentInsets = NSEdgeInsets(
                 top: inset, left: 0, bottom: 0, right: 0

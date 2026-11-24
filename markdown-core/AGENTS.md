@@ -428,3 +428,8 @@ scroll position, footnotes and alerts, VoiceOver, print and export.
   `NSButton` on each. A copy of the web view's box drawing was tried and
   dropped the same day: the system's own look stays. The core's own box
   drawing went away with it.
+- **2026-11-24** — The maintainer saw that the toolbar no longer showed
+  the page through it. The native view started below the toolbar, so
+  nothing was under it. On macOS 26 the view now goes up to the top of the
+  window, and its owner gives it the height of the strip that the toolbar
+  covers (`topInset`), the same value that the web view gets.
