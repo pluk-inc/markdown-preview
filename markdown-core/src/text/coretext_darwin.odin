@@ -216,17 +216,23 @@ Line :: struct {
 	descent:    f32,
 }
 
+// The typesetter of a paragraph, made at its first use.
+@(private)
+typesetter :: proc(p: ^Paragraph) -> CT.TypesetterRef {
+	if p.typesetter == nil {
+		p.typesetter = CT.TypesetterCreateWithAttributedString(CF.AttributedStringRef(p.astr))
+	}
+	return p.typesetter
+}
+
 // The line that starts at byte `start` and fits in `width`. False at the
 // end of the paragraph. The caller owns the line (`line_destroy`).
 paragraph_next_line :: proc(p: ^Paragraph, start: int, width: f32) -> (line: Line, ok: bool) {
 	if start >= p.len {
 		return
 	}
-	if p.typesetter == nil {
-		p.typesetter = CT.TypesetterCreateWithAttributedString(CF.AttributedStringRef(p.astr))
-	}
 	start16 := to_16(p, start)
-	count := CT.TypesetterSuggestLineBreak(p.typesetter, start16, f64(width))
+	count := CT.TypesetterSuggestLineBreak(typesetter(p), start16, f64(width))
 	if count <= 0 {
 		return
 	}
@@ -250,6 +256,28 @@ line_destroy :: proc(line: Line) {
 	if line.handle != nil {
 		CF.Release(CF.TypeRef(line.handle))
 	}
+}
+
+// Frees the shaped glyphs of a line and keeps its numbers: the range, the
+// width, the ascent, and the descent. `line_restore` makes the glyphs
+// again; until then the line must not go to a procedure that reads glyphs.
+line_release :: proc(line: ^Line) {
+	line_destroy(line^)
+	line.handle = nil
+	line.para = nil
+}
+
+// Shapes a released line again. `p` is a paragraph with the same text and
+// fonts as the one that the line was broken from.
+line_restore :: proc(line: ^Line, p: ^Paragraph) {
+	start16 := to_16(p, line.start)
+	line.handle = CT.TypesetterCreateLine(typesetter(p), CF.Range{start16, to_16(p, line.end) - start16})
+	line.para = p
+}
+
+// True while the line has its shaped glyphs.
+line_shaped :: proc(line: Line) -> bool {
+	return line.handle != nil
 }
 
 // The glyphs of one line, and the buffers that the backend fills them

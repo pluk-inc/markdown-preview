@@ -4,7 +4,8 @@
 // from these records, only for the part of the page that the view shows.
 //
 // The layout runs in steps (`step`), so the first frame of a long document
-// does not wait for all of it.
+// does not wait for all of it. Every block keeps its records; only the
+// lines near the view keep their shaped text (window.odin).
 package layout
 
 import "../base"
@@ -43,13 +44,17 @@ Sized_Font :: struct {
 // One laid-out text: a paragraph, a heading, a line of a code block, a
 // table cell, or a list marker.
 Para :: struct {
-	handle:      ^text.Paragraph,
+	handle:      ^text.Paragraph, // nil while it is released (window.odin), and for empty text
 	src:         ^document.Text, // nil for a list marker, which cannot be selected
+	block:       int, // of a list marker: the block that has its text
 	base:        int, // byte offset of the paragraph in src
+	len:         int, // bytes
 	order:       int, // its number in reading order; the same after a new layout
 	size:        f32,
 	line_height: f32,
 	quote:       bool,
+	heading:     bool, // the base weight is semibold
+	mono:        bool, // a line of a code block
 }
 
 Line :: struct {
@@ -84,6 +89,11 @@ Layout :: struct {
 	decor:          [dynamic]Decor,
 	boxes:          [dynamic]Box,
 	content_height: f32,
+	// The part of the page that keeps its shaped text (window.odin).
+	keep_y0:        f32,
+	keep_y1:        f32,
+	live_first:     int, // all lines with shaped text are in [live_first, live_end)
+	live_end:       int,
 	// Progress.
 	next_block:     int,
 	code_offset:    int, // code block in progress: byte offset of its next line
@@ -119,6 +129,7 @@ begin :: proc(l: ^Layout, doc: ^document.Document, style: base.Style, width: f32
 	l.column -= 2 * inset
 	l.y = l.m.page_pad * 0.6
 	l.content_height = l.y
+	l.keep_y0, l.keep_y1 = 0, 1e30
 }
 
 @(private)
@@ -133,6 +144,7 @@ reset :: proc(l: ^Layout) {
 	clear(&l.paras)
 	clear(&l.decor)
 	clear(&l.boxes)
+	l.live_first, l.live_end = 0, 0
 	l.next_block = 0
 	l.code_offset = 0
 	l.in_block = false
@@ -230,34 +242,57 @@ Text_Look :: struct {
 // index in l.paras.
 @(private)
 make_para :: proc(l: ^Layout, src: ^document.Text, from, to: int, look: Text_Look) -> int {
+	l.order += 1
+	append(
+		&l.paras,
+		Para {
+			src = src,
+			base = from,
+			len = to - from,
+			order = l.order,
+			size = look.size,
+			line_height = look.line_height,
+			quote = look.quote,
+			heading = look.heading,
+			mono = look.mono,
+		},
+	)
+	shape_para(l, &l.paras[len(l.paras) - 1])
+	return len(l.paras) - 1
+}
+
+// Makes the shaped text of a paragraph from its record.
+@(private)
+shape_para :: proc(l: ^Layout, para: ^Para) {
+	if para.len == 0 {
+		return
+	}
+	if para.src == nil {
+		shape_marker(l, para, marker_text(l, &l.doc.blocks[para.block]))
+		return
+	}
+	from, to := para.base, para.base + para.len
 	runs := make([dynamic]text.Run, 0, 8, context.temp_allocator)
-	if look.mono {
-		append(&runs, text.Run{0, to - from, font(l, .Mono, look.size)})
+	if para.mono {
+		append(&runs, text.Run{0, to - from, font(l, .Mono, para.size)})
 	} else {
-		for span in src.spans {
+		for span in para.src.spans {
 			if span.end <= from {
 				continue
 			}
 			if span.start >= to {
 				break
 			}
-			append(&runs, text.Run{max(span.start, from) - from, min(span.end, to) - from, span_font(l, span.style, look.size, look.heading)})
+			append(&runs, text.Run{max(span.start, from) - from, min(span.end, to) - from, span_font(l, span.style, para.size, para.heading)})
 		}
 	}
-	l.order += 1
-	append(
-		&l.paras,
-		Para {
-			handle = text.paragraph_create(string(src.bytes[from:to]), runs[:]),
-			src = src,
-			base = from,
-			order = l.order,
-			size = look.size,
-			line_height = look.line_height,
-			quote = look.quote,
-		},
-	)
-	return len(l.paras) - 1
+	para.handle = text.paragraph_create(string(para.src.bytes[from:to]), runs[:])
+}
+
+@(private)
+shape_marker :: proc(l: ^Layout, para: ^Para, label: string) {
+	runs := [1]text.Run{{0, len(label), font(l, .Regular, para.size)}}
+	para.handle = text.paragraph_create(label, runs[:])
 }
 
 // Breaks a paragraph into lines of `width` at (x, y). Returns the y below
@@ -265,7 +300,7 @@ make_para :: proc(l: ^Layout, src: ^document.Text, from, to: int, look: Text_Loo
 @(private)
 place_para :: proc(l: ^Layout, index: int, x, y, width: f32, align := base.Align.Left) -> f32 {
 	para := &l.paras[index]
-	if para.handle.len == 0 {
+	if para.len == 0 {
 		return y + para.line_height
 	}
 	y := y
@@ -357,9 +392,8 @@ place_marker :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32) {
 	if label == "" {
 		return
 	}
-	size := l.m.body
-	runs := [1]text.Run{{0, len(label), font(l, .Regular, size)}}
-	append(&l.paras, Para{handle = text.paragraph_create(label, runs[:]), size = size, line_height = line_height})
+	append(&l.paras, Para{block = l.next_block, len = len(label), size = l.m.body, line_height = line_height})
+	shape_marker(l, &l.paras[len(l.paras) - 1], label)
 	place_para(l, len(l.paras) - 1, x - l.m.list_indent, y, l.m.list_indent - 8, .Right)
 }
 
@@ -397,6 +431,7 @@ step :: proc(l: ^Layout, until_y: f32, budget_ms: f64 = 0) -> bool {
 			break
 		}
 		progressed = true
+		new_lines := len(l.lines)
 		b := &l.doc.blocks[l.next_block]
 		x := l.column_x + f32(b.list_depth) * l.m.list_indent + f32(b.quote_depth) * l.m.quote_indent
 		width := l.column - (x - l.column_x)
@@ -466,6 +501,10 @@ step :: proc(l: ^Layout, until_y: f32, budget_ms: f64 = 0) -> bool {
 		box.bottom = l.y
 		box.line_end = len(l.lines)
 		box.decor_end = len(l.decor)
+		// The new lines keep their shaped text only inside the window.
+		if first, end := trim(l, new_lines, len(l.lines)); first < end {
+			note_live(l, first, end)
+		}
 	}
 	l.content_height = l.y + l.m.page_pad
 	return progressed
@@ -532,7 +571,9 @@ place_table :: proc(l: ^Layout, b: ^document.Block, x, y, width: f32) -> f32 {
 		for col in 0 ..< columns {
 			cell := &b.cells[row * columns + col]
 			para := make_para(l, cell, 0, len(cell.bytes), row == 0 ? head_look : body_look)
-			widths[col] = max(widths[col], text.paragraph_natural_width(l.paras[para].handle) + 1)
+			if handle := l.paras[para].handle; handle != nil {
+				widths[col] = max(widths[col], text.paragraph_natural_width(handle) + 1)
+			}
 		}
 	}
 	total: f32

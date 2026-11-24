@@ -49,11 +49,13 @@ display :: proc(
 			}
 			append(d.above ? glyphs : rects, rect_quad(d.x, d.y, d.w, d.h, d.color, d.radius, scale, origin_y))
 		}
-		for line in l.lines[box.line_first:box.line_end] {
+		for i in box.line_first ..< box.line_end {
+			line := l.lines[i]
 			para := &l.paras[line.para]
 			if line.top + para.line_height < y0 || line.top > y1 {
 				continue
 			}
+			line = shaped_line(l, i)^
 			baseline := line.top + (para.line_height - (line.line.ascent + line.line.descent)) / 2 + line.line.ascent
 			text.line_glyphs(line.line, buffer)
 			// Glyphs come in runs of one span, so the color is looked up

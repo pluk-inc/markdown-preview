@@ -25,6 +25,11 @@ import "text"
 // list is made again.
 SHOWN_ABOVE :: 2
 SHOWN_BELOW :: 3
+// Shaped text is kept for this many view heights around the scroll
+// position: the shown part, and how far the view moves in it before the
+// quads are made again.
+KEPT_ABOVE :: SHOWN_ABOVE + 2
+KEPT_BELOW :: SHOWN_BELOW + 2
 SHOWN_MARGIN :: 0.5
 
 Ctx :: struct {
@@ -98,6 +103,14 @@ show :: proc(ctx: ^Ctx) {
 	renderer.set_display(&ctx.gpu, ctx.rects[:], ctx.glyphs[:])
 	show_selection(ctx)
 	ctx.display_valid = true
+}
+
+// The lines around the scroll position keep their shaped text. The window
+// covers the part that has quads wherever the view is in it, so a drag of
+// the selection there shapes nothing again.
+@(private)
+keep_window :: proc(ctx: ^Ctx) {
+	layout.keep(&ctx.page, ctx.scroll - KEPT_ABOVE * ctx.height, ctx.scroll + KEPT_BELOW * ctx.height)
 }
 
 @(private)
@@ -209,6 +222,7 @@ mdcore_resize :: proc "c" (handle: rawptr, width, height, scale: f64) {
 		ctx.display_valid = false
 	}
 	ctx.height, ctx.scale = f32(height), f32(scale)
+	keep_window(ctx)
 	renderer.resize(&ctx.gpu, ctx.width, ctx.height, ctx.scale)
 	// Only what the view shows now; mdcore_layout_more does the rest.
 	if layout.step(&ctx.page, ctx.scroll + 2 * ctx.height) {
@@ -246,6 +260,7 @@ mdcore_draw :: proc "c" (handle: rawptr, scroll_y: f64) {
 		return
 	}
 	ctx.scroll = f32(scroll_y)
+	keep_window(ctx)
 	// The view can scroll past what the steps laid out so far.
 	if layout.step(&ctx.page, ctx.scroll + 2 * ctx.height) {
 		ctx.display_valid = false

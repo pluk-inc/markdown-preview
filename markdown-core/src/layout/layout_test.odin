@@ -166,3 +166,89 @@ test_display_makes_quads_only_for_the_range :: proc(t: ^testing.T) {
 	display(&f.page, &cache, f.page.content_height + 10, f.page.content_height + 500, 0, &rects, &glyphs, &scratch)
 	testing.expect_value(t, len(glyphs), 0)
 }
+
+@(private = "file")
+shaped_lines :: proc(l: ^Layout) -> (count: int) {
+	for line in l.lines {
+		count += text.line_shaped(line.line) ? 1 : 0
+	}
+	return
+}
+
+@(test)
+test_only_the_window_keeps_shaped_text :: proc(t: ^testing.T) {
+	f: Fixture
+	setup(&f, SOURCE, 600)
+	defer teardown(&f)
+	// A window on the first block only; the steps release the rest.
+	keep(&f.page, 0, 30)
+	for until: f32 = 40; !done(&f.page); until += 40 {
+		step(&f.page, until)
+	}
+	first := f.page.boxes[0]
+	testing.expect_value(t, shaped_lines(&f.page), first.line_end - first.line_first)
+	for para in f.page.paras {
+		inside := para.src == &f.doc.blocks[0].text
+		testing.expect_value(t, para.handle != nil, inside)
+	}
+	// The copied text needs no shaped text.
+	out: [dynamic]u8
+	defer delete(out)
+	selection_text(&f.page, select_all(&f.page), &out)
+	testing.expect(t, len(out) > 100)
+	// A point in a released line shapes that line.
+	last := f.page.lines[len(f.page.lines) - 1]
+	pos, ok := hit_test(&f.page, last.x + 20, last.top + 2)
+	testing.expect(t, ok)
+	testing.expect(t, pos.index > 0)
+	testing.expect(t, text.line_shaped(f.page.lines[len(f.page.lines) - 1].line))
+	// The window moves away: all of it is released.
+	keep(&f.page, -20, -10)
+	testing.expect_value(t, shaped_lines(&f.page), 0)
+	for para in f.page.paras {
+		testing.expect(t, para.handle == nil)
+	}
+}
+
+@(test)
+test_a_long_code_block_is_released_line_by_line :: proc(t: ^testing.T) {
+	f: Fixture
+	setup(&f, "```\na\nb\nc\nd\ne\nf\ng\nh\n```\n", 600)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	testing.expect_value(t, shaped_lines(&f.page), 8)
+	third := f.page.lines[2]
+	keep(&f.page, third.top + 1, third.top + 2)
+	testing.expect_value(t, shaped_lines(&f.page), 1)
+	testing.expect(t, text.line_shaped(f.page.lines[2].line))
+}
+
+@(test)
+test_released_text_has_the_same_glyphs_again :: proc(t: ^testing.T) {
+	whole, windowed: Fixture
+	setup(&whole, SOURCE, 600)
+	defer teardown(&whole)
+	setup(&windowed, SOURCE, 600)
+	defer teardown(&windowed)
+	step(&whole.page, 1e30)
+	keep(&windowed.page, -20, -10) // nothing stays shaped
+	step(&windowed.page, 1e30)
+	testing.expect_value(t, shaped_lines(&windowed.page), 0)
+
+	cache: text.Glyph_Cache
+	defer text.cache_destroy(&cache)
+	text.cache_set_scale(&cache, 2)
+	rects, glyphs, restored: [dynamic]base.Quad
+	scratch: text.Glyph_Buffer
+	defer delete(rects)
+	defer delete(glyphs)
+	defer delete(restored)
+	defer text.glyph_buffer_destroy(&scratch)
+	display(&whole.page, &cache, 0, 1e30, 0, &rects, &glyphs, &scratch)
+	display(&windowed.page, &cache, 0, 1e30, 0, &rects, &restored, &scratch)
+	testing.expect_value(t, len(restored), len(glyphs))
+	for quad, i in glyphs {
+		testing.expect_value(t, restored[i].pos, quad.pos)
+		testing.expect_value(t, restored[i].uv, quad.uv)
+	}
+}
