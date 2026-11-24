@@ -116,7 +116,9 @@ These came from the maintainer. Do not undo one without asking.
 - The core lets one call at a time work on a view's state, from any
   thread (`hold` in `mdcore.odin`), and `mdcore_draw` gives the state free
   before it waits for the display (`renderer.frame_begin` under the lock,
-  `frame_draw` after it). A new export calls `hold`. Code after the block
+  `frame_draw` after it). A new export calls `hold`. The one exception is
+  `mdcore_pointer_shape`, which the main thread calls for each move of the
+  pointer: it tries the lock and says "busy" when it does not get it. Code after the block
   that holds the state in `mdcore_draw` must use only the frame.
 - The working memory of a call is the view's own (`ctx.temp`), not the
   thread's: a queue's threads come and go, and each would leave its own
@@ -458,3 +460,9 @@ scroll position, footnotes and alerts, VoiceOver, print and export.
   actions of the Go menu, a forced layout for a view with no size, and
   the outline's remembered heading after a live edit. The benchmark rule
   above was made exact at the same time.
+- **2026-11-24** — The maintainer saw the text cursor around the check
+  boxes and in the margin. The cursor is now the text one only on a line
+  of text. As in the terminal that the window technique came from, the
+  core decides the shape of the pointer and the scroll view shows it as
+  the cursor of its document; a link that opens will add a shape. The
+  question does not wait for the core's lock.

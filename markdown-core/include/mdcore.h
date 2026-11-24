@@ -119,12 +119,15 @@ bool mdcore_set_task_checked(void *ctx, long line, bool checked);
 // decides it and the host shows it: the text cursor on a line of text,
 // the default one in the margin, between blocks, and at a list marker or
 // a check box. Ask again when the pointer moves and when the page moves
-// under it.
+// under it. This call never waits: when a layout step or a frame works on
+// the renderer, it returns MDCORE_POINTER_BUSY, and the host keeps the
+// shape that it shows and asks again a little later.
 typedef enum {
     MDCORE_POINTER_DEFAULT = 0,
     MDCORE_POINTER_TEXT = 1,
-} mdcore_pointer_shape_t;
-mdcore_pointer_shape_t mdcore_pointer_shape(void *ctx, double x, double y);
+    MDCORE_POINTER_BUSY = 2,
+} mdcore_pointer;
+mdcore_pointer mdcore_pointer_shape(void *ctx, double x, double y);
 
 // Selection. phase: 0 = mouse down, 1 = drag. x, y are in document space.
 void mdcore_mouse(void *ctx, double x, double y, int phase);

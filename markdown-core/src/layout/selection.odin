@@ -38,7 +38,7 @@ selection_range :: proc(s: Selection) -> (from, to: Position, ok: bool) {
 // a host shows the text cursor only there.
 text_at :: proc(l: ^Layout, x, y: f32) -> bool {
 	i := first_box_below(l, y)
-	if i >= len(l.boxes) || l.boxes[i].top > y {
+	if i >= len(l.boxes) {
 		return false
 	}
 	box := l.boxes[i]

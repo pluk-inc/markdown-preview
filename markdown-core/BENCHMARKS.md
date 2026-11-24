@@ -54,6 +54,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-23 | task check boxes (system buttons on the page); a resize frame in step with the window | 562 / 543 | 58 / 99 | 460 / 1080 | – | – | – | – |
 | 2026-11-24 | the view goes under the toolbar on macOS 26, so the page shows through it | 674 / 592 | 57 / 101 | 510 / 1080 | – | – | – | – |
 | 2026-11-24 | a task changes in place; the page beside a scroll bar that takes room; Go menu scroll actions | 653 / 667 | 61 / 104 | 470 / 1120 | – | – | 0.33 / 0.33 | 6.7 / 20.7 |
+| 2026-11-24 | the text cursor only over text; the core gives the shape of the pointer | 583 / 607 | 55 / 96 | 480 / 1020 | – | – | – | 6.6 / 20.7 |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -238,3 +239,22 @@ same in each line that is stable (scroll frame with the glyphs ready 0.285
 242 / 1298 ms, heap at the end 6.7 / 20.7 MB for the two). The heap of
 the long document is 0.5 MB above the cleanup row: each block got the
 number of its list item with the change before this one.
+
+## The shape of the pointer (2026-11-24)
+
+The two programs, the base (the review findings) and the change one after
+the other. `app.py`, short / long: launch to the first frame 587 / 580
+against 583 / 607 ms (two earlier pairs: 599 / 593 and 602 / 608 against
+569 / 610 and 601 / 608), CPU 490 / 1030 against 480 / 1020 ms, memory
+54 / 96 against 55 / 96 MB. `core.py`: heap 6.6 / 20.7 MB for the two, CPU
+for the full run 314 / 1581 against 304 / 1576 ms. No difference.
+
+Neither program moves the pointer, so they do not show the new work
+itself: one question to the core for each move of the pointer and each
+step of a scroll. Measured apart, in a loop over the layout of the long
+document (15,360 blocks, 27,136 lines): 173 ns for one answer. The
+question never waits for the core: when a layout step or a frame has it,
+the answer is "busy" and the view asks again 30 ms later. Before that
+change it waited, up to the 4 ms of a layout step, on the main thread.
+Not measured: the main thread during a scroll with the pointer on the
+page of the front window.

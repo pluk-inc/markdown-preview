@@ -396,14 +396,21 @@ mdcore_set_task_checked :: proc "c" (handle: rawptr, line: c.long, checked: bool
 Pointer_Shape :: enum c.int {
 	Default = 0,
 	Text    = 1,
+	Busy    = 2, // not known now: another call works on the view
 }
 
+// The one export that does not wait for the view's state (`hold`): the
+// host asks on its main thread for each move of the pointer and each step
+// of a scroll, and a layout step or a frame can have the state for some
+// milliseconds. It reads only, and uses no working memory.
 @(export)
 mdcore_pointer_shape :: proc "c" (handle: rawptr, x, y: f64) -> Pointer_Shape {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
-	context.temp_allocator = ctx.temp
-	hold(ctx)
+	if !sync.try_lock(&ctx.lock) {
+		return .Busy
+	}
+	defer sync.unlock(&ctx.lock)
 	if ctx.layout_valid && layout.text_at(&ctx.page, f32(x), f32(y)) {
 		return .Text
 	}
