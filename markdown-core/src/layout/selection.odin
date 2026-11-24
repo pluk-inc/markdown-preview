@@ -32,6 +32,62 @@ selection_range :: proc(s: Selection) -> (from, to: Position, ok: bool) {
 	return from, to, true
 }
 
+// A place in the document, for a view that must show the same text after
+// a new layout (another width, another text size): the line of text at a
+// height of the page, by the address of its first byte, and how far down
+// that line the height is, in line heights. An offset in points says
+// nothing after the lines are broken again; this does.
+Place :: struct {
+	block:    int, // the block of the line, to find it without a search
+	pos:      Position,
+	fraction: f32, // below 0 for a height above the line (between two blocks)
+}
+
+// The place at a height of the page. False when the page has no text at
+// or below it.
+place_at :: proc(l: ^Layout, y: f32) -> (place: Place, ok: bool) {
+	for i in first_box_below(l, y) ..< len(l.boxes) {
+		box := l.boxes[i]
+		// The first line of text that ends below y. In a table that is a
+		// cell of the row at y.
+		for line in l.lines[box.line_first:box.line_end] {
+			para := &l.paras[line.para]
+			if para.src == nil || line.top + para.line_height <= y {
+				continue
+			}
+			fraction := clamp((y - line.top) / para.line_height, -4, 1)
+			return {i, {para.order, para.base + line.line.start}, fraction}, true
+		}
+		// A block with no text (a rule): the next one.
+	}
+	return
+}
+
+// The height of a place in this layout. False while the layout has not
+// reached its block (`step_to_block`).
+place_y :: proc(l: ^Layout, place: Place) -> (y: f32, ok: bool) {
+	if place.block < 0 || place.block >= len(l.boxes) || (place.block == l.next_block && l.in_block) {
+		return
+	}
+	box := l.boxes[place.block]
+	// The line that has the byte of the place: the last line of its
+	// paragraph that starts at or before it.
+	found := -1
+	for i in box.line_first ..< box.line_end {
+		line := l.lines[i]
+		para := &l.paras[line.para]
+		if para.src != nil && para.order == place.pos.order && para.base + line.line.start <= place.pos.index {
+			found = i
+		}
+	}
+	if found < 0 {
+		// The text of the block is another one now: its top.
+		return box.top, true
+	}
+	line := l.lines[found]
+	return line.top + place.fraction * l.paras[line.para].line_height, true
+}
+
 // True when a point of the page is on a line of text: in its height, not
 // left of where it starts, and not right of the column (the space after a
 // short line is the line's; a table wider than the column is all text).

@@ -3,6 +3,7 @@ package layout
 import "../base"
 import "../document"
 import "../text"
+import "core:strings"
 import "core:testing"
 
 @(private = "file")
@@ -413,4 +414,57 @@ test_only_a_line_of_text_is_text_for_the_pointer :: proc(t: ^testing.T) {
 	// Not above the page and not below it.
 	testing.expect(t, !text_at(&f.page, first.x + 5, -10))
 	testing.expect(t, !text_at(&f.page, first.x + 5, f.page.content_height + 100))
+}
+
+@(test)
+test_a_place_is_the_same_text_at_another_width :: proc(t: ^testing.T) {
+	// Long paragraphs, so the lines break at other bytes in another width.
+	source := strings.repeat("One two three four five six seven eight nine ten eleven twelve. ", 12)
+	defer delete(source)
+	doc := strings.concatenate({"# Title\n\n", source, "\n\n- item ", source, "\n\n---\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n", source, "\n"})
+	defer delete(doc)
+	wide, narrow: Fixture
+	setup(&wide, doc, 900)
+	defer teardown(&wide)
+	setup(&narrow, doc, 420)
+	defer teardown(&narrow)
+	step(&wide.page, 1e30)
+	// Not in a layout that did not reach the block yet.
+	_, early := place_y(&narrow.page, Place{block = len(wide.page.boxes) - 1})
+	testing.expect(t, !early)
+	for line in wide.page.lines {
+		para := &wide.page.paras[line.para]
+		if para.src == nil {
+			continue
+		}
+		// A height in the line: the place is that line.
+		y := line.top + para.line_height * 0.25
+		place, ok := place_at(&wide.page, y)
+		testing.expect(t, ok)
+		if wide.page.doc.blocks[place.block].kind != .Table {
+			testing.expect_value(t, place.pos, Position{para.order, para.base + line.line.start})
+		}
+		// The same layout gives the height back.
+		back, back_ok := place_y(&wide.page, place)
+		testing.expect(t, back_ok)
+		testing.expect(t, abs(back - y) < 0.01)
+		// In another width: the line that has the same byte.
+		step_to_block(&narrow.page, place.block)
+		there, there_ok := place_y(&narrow.page, place)
+		testing.expect(t, there_ok)
+		again, again_ok := place_at(&narrow.page, there)
+		testing.expect(t, again_ok)
+		testing.expect_value(t, again.block, place.block)
+		if wide.page.doc.blocks[place.block].kind != .Table {
+			testing.expect_value(t, again.pos.order, place.pos.order)
+			testing.expect(t, again.pos.index <= place.pos.index)
+		}
+	}
+	// Between two blocks: the next line, from above it. Below the page: none.
+	gap := (wide.page.boxes[0].bottom + wide.page.boxes[1].top) / 2
+	between, _ := place_at(&wide.page, gap)
+	testing.expect_value(t, between.block, 1)
+	testing.expect(t, between.fraction < 0)
+	_, below := place_at(&wide.page, wide.page.content_height + 100)
+	testing.expect(t, !below)
 }

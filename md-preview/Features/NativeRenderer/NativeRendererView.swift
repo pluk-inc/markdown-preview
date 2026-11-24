@@ -277,9 +277,30 @@ final class NativeRendererView: NSView {
     /// Reads the reader settings and the theme again and shows the document
     /// with them. For a change of a setting, the theme, or the appearance.
     func applyStyle() {
+        // Before the style: it ends the layout that knows the place.
+        let place = placeAtTop()
         NativeRendererStyle(appearance: effectiveAppearance, zoom: textZoom).apply(to: ctx)
-        relayout(force: true)
+        relayout(force: true, keeping: place)
     }
+
+    /// The place in the document of the first text that the reader sees,
+    /// to show it again after a new layout (`relayout`). An offset in
+    /// points is another text after the lines are broken again. Nil for a
+    /// page at its top, which stays at its top.
+    private func placeAtTop() -> mdcore_place? {
+        guard hasDocument, scrollY > topScrollY + 0.5 else { return nil }
+        // The same place as for the layout before, while the reader did
+        // not scroll: a place taken again from each new layout is the
+        // start of another line each time, and the steps of a live resize
+        // would add up.
+        if let kept = keptPlace, abs(kept.scrollY - scrollY) < 0.5 { return kept.place }
+        var place = mdcore_place()
+        return mdcore_place_at(ctx, scrollY + topInset, &place) ? place : nil
+    }
+
+    /// The place that the last new layout kept, and the offset it has in
+    /// that layout.
+    private var keptPlace: (place: mdcore_place, scrollY: CGFloat)?
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
@@ -446,6 +467,9 @@ final class NativeRendererView: NSView {
             return
         }
         shownMarkdown = markdown
+        // The same file with a change: its text is mostly where it was,
+        // by block and byte, so the reader's place is asked for again.
+        let place = keepsScroll ? placeAtTop() : nil
         var text = markdown
         text.withUTF8 { utf8 in
             utf8.withMemoryRebound(to: CChar.self) { mdcore_set_markdown(ctx, $0.baseAddress, $0.count) }
@@ -461,12 +485,14 @@ final class NativeRendererView: NSView {
         // Before the layout: it lays out what the view shows, and that must
         // be the top of a new document, not the place the old one was at.
         if !keepsScroll { scroll(toY: topScrollY) }
-        relayout(force: true)
+        relayout(force: true, keeping: place)
     }
 
     /// Gives the core the view's size and draws. Skips a call that changes
     /// nothing, because one turn can report the same size more than once.
-    private func relayout(force: Bool = false) {
+    /// `keeping`: the reader's place, taken by a caller whose change ended
+    /// the layout already (a new style, a new text).
+    private func relayout(force: Bool = false, keeping kept: mdcore_place? = nil) {
         // The core needs this layout also when the view has no size now
         // and gets its old size back later.
         if force { laidOutSize = .zero }
@@ -481,24 +507,43 @@ final class NativeRendererView: NSView {
         laidOutPageWidth = pageWidth
         let size = bounds.size
         layoutCount += 1
-        // The new size, then its frame.
+        // The first text that the reader sees stays where it is on screen:
+        // its place, from the layout that is there still.
+        let place = kept ?? placeAtTop()
+        let topInset = topInset
+        // The new size, then its frame, at the offset that the place has now.
         drawNow { [ctx] in
             mdcore_set_page_width(ctx, pageWidth)
             mdcore_resize(ctx, size.width, size.height, scale)
+            guard var place else { return nil }
+            var y = 0.0
+            return mdcore_place_y(ctx, &place, &y) ? y - topInset : nil
         }
+        keptPlace = place.map { ($0, scrollY) }
         continueLayout()
     }
 
     /// Draws a frame now and waits for it: the first frame of a document,
     /// and a frame for a new size, which must be there with the window's.
     /// `before` runs ahead of the frame.
-    private func drawNow(before: (() -> Void)? = nil) {
+    /// `before` runs ahead of the frame, and can give the offset to draw
+    /// at; the scroll view then goes there too.
+    private func drawNow(before: (() -> Double?)? = nil) {
         guard hasPageToDraw else { return }
-        renderLoop.frameNow(at: scrollY, before: before)
+        let drawn = renderLoop.frameNow(at: scrollY, before: before)
         // The page was laid out again from its top (a new document, size,
         // or style): each check box can have another place.
         taskBoxRange = nil
         updatePageHeight()
+        if abs(drawn - scrollY) > 0.01 {
+            // That frame is drawn already.
+            followsRenderLoop = true
+            scroll(toY: drawn)
+            followsRenderLoop = false
+            // The scroll view could not go there (the end of the page):
+            // the frame for where it is.
+            if abs(drawn - scrollY) > 0.5 { setNeedsDraw() }
+        }
     }
 
     /// Lays out the rest of a long document in steps shorter than a frame,

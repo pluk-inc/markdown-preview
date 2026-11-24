@@ -390,6 +390,47 @@ mdcore_set_task_checked :: proc "c" (handle: rawptr, line: c.long, checked: bool
 	return true
 }
 
+Host_Place :: struct {
+	block, order, index: c.long,
+	fraction:            f64,
+}
+
+@(export)
+mdcore_place_at :: proc "c" (handle: rawptr, y: f64, out: ^Host_Place) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	if !ctx.layout_valid {
+		return false
+	}
+	place := layout.place_at(&ctx.page, f32(y)) or_return
+	out^ = {c.long(place.block), c.long(place.pos.order), c.long(place.pos.index), f64(place.fraction)}
+	return true
+}
+
+@(export)
+mdcore_place_y :: proc "c" (handle: rawptr, place: ^Host_Place, y: ^f64) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	if !ctx.layout_valid {
+		return false
+	}
+	wanted := layout.Place{int(place.block), {int(place.order), int(place.index)}, f32(place.fraction)}
+	reached := ctx.page.y
+	layout.step_to_block(&ctx.page, wanted.block)
+	at := layout.place_y(&ctx.page, wanted) or_return
+	// And what a view shows below it, so the host can scroll there.
+	layout.step(&ctx.page, at + 3 * ctx.height)
+	if ctx.page.y != reached {
+		ctx.display_valid = false
+	}
+	y^ = f64(at)
+	return true
+}
+
 // The shape of the pointer over a place of the page. The core decides
 // it, because it knows what is there; the host only shows it. A link
 // that opens will add a shape here.

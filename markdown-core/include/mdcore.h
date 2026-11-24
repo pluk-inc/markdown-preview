@@ -115,6 +115,26 @@ long mdcore_tasks(void *ctx, double top, double bottom, mdcore_task *out, long c
 // to set it again. False when no task has its mark on that line.
 bool mdcore_set_task_checked(void *ctx, long line, bool checked);
 
+// A place in the document: a line of text and a height in it. It stays
+// valid when the document is laid out again (another width, another
+// style), which an offset in points does not. The fields are the core's.
+typedef struct {
+    long block, order, index;
+    double fraction;
+} mdcore_place;
+
+// The place at a height of the page, in document space. A host takes it
+// before it changes the width or the style, for the text at the top of
+// what the reader sees. False when no text is at or below that height.
+bool mdcore_place_at(void *ctx, double y, mdcore_place *place);
+
+// The height of a place in the layout that is there now, after
+// mdcore_resize. Lays the document out down to the place and one view
+// more, when it did not reach it yet: far down a long document that is
+// all the work above the place, in this call. False when the document has
+// no such block any more.
+bool mdcore_place_y(void *ctx, const mdcore_place *place, double *y);
+
 // The shape that the pointer has over a point in document space. The core
 // decides it and the host shows it: the text cursor on a line of text,
 // the default one in the margin, between blocks, and at a list marker or
