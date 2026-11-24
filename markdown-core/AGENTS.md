@@ -94,7 +94,8 @@ These came from the maintainer. Do not undo one without asking.
 - A caret, the ends of a selection, and the place of a view are addresses
   in the document (`document.Address`: block, cell, byte), not in a
   layout. Work on the text of a range (the copied text, Select All, later
-  Find) reads the document (`document.text_between`) and needs no layout.
+  Find) reads the document (`document.text_between`) and needs no layout;
+  the selection itself is a type of the document (`document.Selection`).
   Only what is drawn (the highlight on the lines that show) reads the
   records.
 - The blocks of the document are in parts (`document.Part`), and the
