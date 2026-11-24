@@ -141,10 +141,73 @@ final class MainSplitViewController: NSSplitViewController {
             assetBaseURL: assetBaseURL,
             renderImmediately: renderImmediately
         )
-        sidebarViewController?.display(markdown: markdown, fileName: fileName, fileURL: url)
         inspectorViewController?.setSelectedText(nil)
-        inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))
+        showOutlineAndMetadata(markdown: markdown, fileName: fileName, url: url)
     }
+
+    /// Sets the sidebar's outline and the inspector's numbers for a
+    /// document: at once for a small one, off the main thread for a large
+    /// one.
+    private func showOutlineAndMetadata(markdown: String, fileName: String, url: URL?) {
+        cancelOutlineWork()
+        guard markdown.utf8.count > Self.syncSidebarLimit else {
+            sidebarViewController?.display(markdown: markdown, fileName: fileName, fileURL: url)
+            inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))
+            return
+        }
+        sidebarViewController?.prepare(for: url)
+        makeOutlineAndMetadata(markdown: markdown, fileName: fileName, url: url)
+    }
+
+    /// The off-main part: makes the outline and the numbers of a large
+    /// document and sets them when they are ready.
+    private func makeOutlineAndMetadata(markdown: String, fileName: String, url: URL?) {
+        cancelOutlineWork()
+        let request = outlineRequest
+        numbersAreLive = false
+        // `@Sendable`: without it the block counts as main-thread code, and
+        // the system stops the app when it runs on the queue.
+        let work = DispatchWorkItem { @Sendable [weak self] in
+            let outline = MarkdownTOC.parse(markdown)
+            let metadata = DocumentMetadata.make(url: url, markdown: markdown)
+            DispatchQueue.main.async {
+                // Not for a document that was replaced or edited meanwhile.
+                guard let self, self.outlineRequest == request else { return }
+                self.outlineWork = nil
+                self.sidebarViewController?.refreshOutline(outline: outline, fileName: fileName)
+                // Live numbers of an edit can be there already.
+                if !self.numbersAreLive {
+                    self.inspectorViewController?.display(metadata: metadata)
+                }
+            }
+        }
+        outlineWork = work
+        Self.outlineQueue.async(execute: work)
+    }
+
+    /// Drops the work that is on its way: one that did not start is not
+    /// run, and the result of one that runs is not set.
+    private func cancelOutlineWork() {
+        outlineWork?.cancel()
+        outlineWork = nil
+        outlineRequest += 1
+    }
+
+    /// A document up to this size (bytes) has its outline and its inspector
+    /// numbers made in `display`, so they are there with the page. For a
+    /// larger one they cost a visible wait before the window shows (about
+    /// 190 ms for 1 MB), so they are made off the main thread and come a
+    /// moment after the page.
+    private static let syncSidebarLimit = 64 * 1024
+    /// One document after the other: several full parses at one time would
+    /// take the cores from the page.
+    private static let outlineQueue = DispatchQueue(label: "md-preview.document-outline", qos: .userInitiated)
+    /// The work that is on its way off the main thread, if one is.
+    private var outlineWork: DispatchWorkItem?
+    /// Goes up when that work is dropped, so its late result is not set.
+    private var outlineRequest = 0
+    /// True when an edit set the inspector's numbers while that work ran.
+    private var numbersAreLive = false
 
     /// Update selected-range statistics without refreshing the preview or TOC.
     func updateInspectorSelection(_ text: String?) {
@@ -153,6 +216,11 @@ final class MainSplitViewController: NSSplitViewController {
   
     /// Apply already-computed live results; AppKit and SwiftUI remain on main.
     func applyLiveSidebarUpdates(outline: [TOCItem]?, metadata: DocumentMetadata?, fileURL: URL?) {
+        // Each part replaces only its own late result: an update of the
+        // numbers alone (the sidebar is closed) must not drop an outline
+        // that is still on its way.
+        if outline != nil { cancelOutlineWork() }
+        if metadata != nil { numbersAreLive = true }
         if let outline, isSidebarVisible && sidebarMode == .outline {
             sidebarViewController?.refreshOutline(
                 outline: outline,
@@ -170,6 +238,12 @@ final class MainSplitViewController: NSSplitViewController {
     func openFileURLDidChange(_ newURL: URL, markdown: String) {
         contentViewController?.sourceFileURLDidChange(newURL)
         sidebarViewController?.openFileURLDidChange(newURL)
+        if outlineWork != nil {
+            // The outline and the numbers of this text are still on their
+            // way, with the old name. Make them again for the new one.
+            makeOutlineAndMetadata(markdown: markdown, fileName: ReleaseNotes.displayName(for: newURL), url: newURL)
+            return
+        }
         if isEditingDocument {
             // Preserve live counts until the editor snapshot is fetched for the new URL.
             inspectorViewController?.updateFileURL(newURL)
@@ -198,6 +272,7 @@ final class MainSplitViewController: NSSplitViewController {
     }
 
     func clearContent() {
+        cancelOutlineWork()
         inspectorViewController?.setSelectedText(nil)
         contentViewController?.clearContent()
     }

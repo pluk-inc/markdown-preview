@@ -176,6 +176,21 @@ each in two sittings:
 
 Launch time and memory at rest (`bench/app.py`) did not change.
 
+GPU memory, 2026-11-23: while frames are drawn, the app's footprint has
+about 89 MB of GPU driver memory that is not ours (the device reports 14
+to 36 MB for our buffers and textures). Five seconds after the last frame
+it is gone: 117 MB before a scroll, 215 MB right after it, 123 MB at rest.
+So "memory after the scroll" above is the moment of work, not what the
+app keeps.
+
+Launch of a long document, 2026-11-23, Release, from the launch
+signposts: the step before the window shows took 39 ms for a 9 KB
+document and 232 ms for the 1.1 MB one, because the sidebar outline and
+the inspector numbers were made there on the main thread. They are now
+made off the main thread for a document above 64 KB: that step takes 4 ms,
+and launch to first frame went from 889–899 ms to 645–653 ms, the same as
+a short document.
+
 The slow frames that stay (10 to 50 ms, a few in the first screens of a
 document) are glyphs drawn for the first time and the first growth of the
 glyph atlas. Later passes over the same text have none.
@@ -197,9 +212,6 @@ Known limits, found in review and left on purpose:
 - A `WKWebView` object still exists in a native window, which starts
   WebKit's GPU process (about 5 MB). Making the web view on demand would
   remove it.
-- The app shows a 1 MB document about 250 ms later than a short one, which
-  the core's first frame does not account for (`BENCHMARKS.md`). Not found
-  yet.
 - The document model of a 1 MB source takes about 20 MB of heap, and the
   app process holds about 45 MB more for the long document than for the
   short one outside the core. Neither was looked at yet.
@@ -207,11 +219,6 @@ Known limits, found in review and left on purpose:
   in steps), because the page height comes from it. A layout that starts
   with estimated heights would remove that; it makes the scroll bar less
   exact, so it needs the maintainer's word first.
-- After a scroll the app holds about 89 MB of GPU memory that it did not
-  hold before (the footprint tool shows it as owned graphics memory, in
-  about 33 parts). It is there with and without the render queue and the
-  kept window. The first thing to check: every new display list gets a
-  new buffer, and the old ones may stay in the driver's pool.
 - The End key and Select All still lay out the rest of the document on
   the main thread, in one call.
 - The core has no way to call the host yet (open a link, load an image).
@@ -262,3 +269,11 @@ scroll position, footnotes and alerts, VoiceOver, print and export.
   maintainer asked for before the change ("we need to test with memory,
   CPU and everything else"): the main thread is free during a scroll, and
   CPU and memory do not change. Second stacked pull request.
+- **2026-11-23** — A trackpad scroll of a long document was rough. A
+  recording of the maintainer's scroll and a sample of the main thread
+  showed the cause outside the renderer: the toolbar's share item counted
+  the words of the document at each validation. Lesson for tests: a
+  scroll made by code sends no events and does not show such a stop.
+- **2026-11-23** — The 250 ms that a long document added to the launch
+  was the sidebar outline and the inspector numbers, made before the
+  window shows. Moved off the main thread for large documents.

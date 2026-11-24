@@ -166,13 +166,31 @@ final class SidebarViewController: NSViewController {
     }
 
     func display(markdown: String, fileName: String, fileURL: URL?) {
-        loadViewIfNeeded()
-        // A newly opened document must not inherit another file's outline choices.
-        if pendingFileURL != fileURL?.standardizedFileURL {
-            resetOutlineState = true
-        }
-        setOpenFileURL(fileURL)
+        prepare(for: fileURL)
         refreshOutline(markdown: markdown, fileName: fileName)
+        // Also when the text and the name are the ones shown already, and
+        // the outline was not set again.
+        awaitsFirstOutline = false
+    }
+
+    /// The part of a new document's display that needs no outline. A caller
+    /// that parses the outline off the main thread calls this at once, and
+    /// `refreshOutline(outline:fileName:)` when the outline is ready.
+    func prepare(for fileURL: URL?) {
+        loadViewIfNeeded()
+        let isOtherFile = pendingFileURL != fileURL?.standardizedFileURL
+        setOpenFileURL(fileURL)
+        activeHeadingID = nil
+        awaitsFirstOutline = true
+        guard isOtherFile else { return }
+        // A newly opened document must not inherit another file's outline
+        // choices, or its rows: until the new outline is here, a click on a
+        // row of the document before would scroll this page to a heading
+        // number of the other one.
+        resetOutlineState = true
+        titleItem = nil
+        roots = []
+        outlineView.reloadData()
     }
 
     /// Full document display may parse synchronously; live edits supply a
@@ -192,6 +210,8 @@ final class SidebarViewController: NSViewController {
 
     private func displayOutline(_ outline: [TOCItem], fileName: String) {
         loadViewIfNeeded()
+        let isFirstOutline = awaitsFirstOutline
+        awaitsFirstOutline = false
         guard resetOutlineState || outline != lastRenderedOutline || fileName != lastRenderedFileName else { return }
 
         // Source lines can change without altering the visible heading tree.
@@ -213,6 +233,10 @@ final class SidebarViewController: NSViewController {
             outlineView.expandItem(root, expandChildren: true)
         }
         outlineView.deselectAll(nil)
+        // The page can report its heading before a late first outline is
+        // here. Not for a later outline: an edit can move the headings,
+        // and their numbers are positions.
+        if isFirstOutline, let activeHeadingID { setActiveHeading(activeHeadingID) }
     }
 
     /// Reuse the existing outline rows when only source locations changed.
@@ -295,12 +319,19 @@ final class SidebarViewController: NSViewController {
         openFolder(root, selectedFileURL: file)
     }
 
+    /// The heading that the page reported last, for an outline that comes
+    /// after it.
+    private var activeHeadingID: Int?
+    /// True from a new document's `prepare` until its first outline is set.
+    private var awaitsFirstOutline = false
+
     /// Highlights the matching TOC row. Selecting via the API doesn't
     /// dispatch the outline's action, so this won't loop back into
     /// `onSelectHeading`. We don't `scrollRowToVisible` — yanking the
     /// sidebar while the user scrolls the doc feels jumpy.
     func setActiveHeading(_ headingID: Int?) {
         loadViewIfNeeded()
+        activeHeadingID = headingID
         guard let headingID,
               let node = findNode(withID: headingID, in: roots) else {
             outlineView.deselectAll(nil)
