@@ -62,6 +62,11 @@ These came from the maintainer. Do not undo one without asking.
   after it. The reason: a base made for a reader only would be made
   again for the editor, and that second time costs speed. See "The base
   for an editor" in Open work.
+- **A reader at the end of the document is kept by the first line that
+  shows, as at each other place** (2026-11-24). With a narrower window the
+  end then goes out of view. Browsers and editors do the same; only a
+  view of text that grows (a terminal, a log) keeps the end. Do not add a
+  rule for the end to a resize.
 - **One pull request for one line of work.** Do not stack branches for
   parts of the same change. Since 2026-11-23 the first pull request (#665)
   is the base, and each later line of work is a pull request stacked on
@@ -384,9 +389,6 @@ Task check boxes, left on purpose:
 - `mdcore_resize` still lays out down to the offset that the old layout
   had, before the view asks for the place. With a shorter new layout
   (wider window, smaller text) that is work for nothing.
-- A reader at the end of the document is kept by the first line that
-  shows, as each other place. With a narrower window the end then goes
-  out of view. Not decided if the end must stay the end.
 - After a click on a task the app makes the sidebar outline and the
   inspector numbers again for the full document, off the main thread
   (0.3 s of CPU for 725 KB). Neither changes with a task mark. This is in
