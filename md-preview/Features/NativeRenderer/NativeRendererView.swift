@@ -38,6 +38,9 @@ final class NativeRendererView: NSView {
     /// The height that the page keeps while a document that opened again
     /// in place (`open` with `keepsScroll`) is laid out down to its end.
     private var heldPageHeight: CGFloat?
+    /// How far down the core laid the page out, at the last look. The page
+    /// can be taller (`heldPageHeight`).
+    private var laidOutHeight: CGFloat = 0
     /// Goes up with each new layout (a document, a size, a style).
     private var layoutCount = 0
     /// Draws the frames and runs the layout steps off the main thread, so
@@ -186,7 +189,8 @@ final class NativeRendererView: NSView {
 
     /// Makes the scroll view's page as tall as what the core laid out.
     private func updatePageHeight() {
-        let size = NSSize(width: bounds.width, height: max(mdcore_content_height(ctx), heldPageHeight ?? 0, 1))
+        laidOutHeight = mdcore_content_height(ctx)
+        let size = NSSize(width: bounds.width, height: max(laidOutHeight, heldPageHeight ?? 0, 1))
         if page.frame.size != size { page.setFrameSize(size) }
         updateTaskCheckBoxes()
     }
@@ -258,7 +262,7 @@ final class NativeRendererView: NSView {
             let covers = scrollY - viewHeight / 4 >= range.top && scrollY + viewHeight * 1.25 <= range.bottom
             // The layout had reached the end of the part, or it did not
             // go on since then.
-            let complete = range.laidOutTo >= range.bottom || page.frame.height == range.laidOutTo
+            let complete = range.laidOutTo >= range.bottom || laidOutHeight == range.laidOutTo
             if covers && complete { return }
         }
         var count = 0
@@ -274,7 +278,7 @@ final class NativeRendererView: NSView {
                 taskBuffer = [mdcore_task](repeating: mdcore_task(), count: count)
                 count = min(mdcore_tasks(ctx, top, bottom, &taskBuffer, count), count)
             }
-            taskBoxRange = (top, bottom, page.frame.height)
+            taskBoxRange = (top, bottom, laidOutHeight)
         }
         let tasks = taskBuffer[..<count]
 
