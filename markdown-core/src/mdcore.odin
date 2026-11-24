@@ -403,9 +403,19 @@ mdcore_note_scroll :: proc "c" (handle: rawptr, scroll_y: f64) {
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
 	hold(ctx)
-	if ctx.layout_valid && ctx.height > 0 {
-		scroll_to(ctx, scroll_y, scroll_y)
+	// Nothing to do for the position of the last frame: that is the
+	// usual case, and each step of a live resize.
+	if !ctx.layout_valid || scroll_y == ctx.place_scroll {
+		return
 	}
+	// Only the line of the place needs its records, not all that a frame
+	// shows: the layout is at its end.
+	at := scroll_y + ctx.top_inset
+	if layout.lay_out(&ctx.page, at, at + 1, at) {
+		layout_changed(ctx)
+	}
+	ctx.place = layout.take_place(&ctx.page, at)
+	ctx.place_scroll = scroll_y
 }
 
 // `anchor_y`: the height of the page whose text stays where it is when
