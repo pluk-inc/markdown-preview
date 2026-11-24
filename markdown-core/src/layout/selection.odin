@@ -49,8 +49,13 @@ place_at :: proc(l: ^Layout, y: f32) -> (place: Place, ok: bool) {
 	for i in first_box_below(l, y) ..< len(l.boxes) {
 		box := l.boxes[i]
 		// The first line of text that ends below y. In a table that is a
-		// cell of the row at y.
-		for line in l.lines[box.line_first:box.line_end] {
+		// cell of the row at y, and each line is a candidate. In another
+		// block it is the line at y, or the first one for a y above them.
+		from := box.line_first
+		if l.doc.blocks[i].kind != .Table {
+			from = max(line_at_or_above(l, box, y), text_first(l, box))
+		}
+		for line in l.lines[from:box.line_end] {
 			para := &l.paras[line.para]
 			if para.src == nil || line.top + para.line_height <= y {
 				continue
@@ -61,6 +66,37 @@ place_at :: proc(l: ^Layout, y: f32) -> (place: Place, ok: bool) {
 		// A block with no text (a rule): the next one.
 	}
 	return
+}
+
+// The first line of the text of a block that is not a table. The marker
+// of a list item comes before it, and its lines (a long number can wrap)
+// start at the height of the text again.
+@(private)
+text_first :: proc(l: ^Layout, box: Box) -> int {
+	first := box.line_first
+	for first < box.line_end && l.paras[l.lines[first].para].src == nil {
+		first += 1
+	}
+	return first
+}
+
+// The last line of the text of a block that starts at or above y, or the
+// line before the text when none does. Not for a table. The lines of the
+// text go down the page, so this does not look at each one: a code block
+// can have many.
+@(private)
+line_at_or_above :: proc(l: ^Layout, box: Box, y: f32) -> int {
+	first := text_first(l, box)
+	lo, hi := first, box.line_end
+	for lo < hi {
+		mid := (lo + hi) / 2
+		if l.lines[mid].top <= y {
+			lo = mid + 1
+		} else {
+			hi = mid
+		}
+	}
+	return lo - 1
 }
 
 // The height of a place in this layout. False while the layout has not
@@ -76,7 +112,14 @@ place_y :: proc(l: ^Layout, place: Place) -> (y: f32, ok: bool) {
 	for i in box.line_first ..< box.line_end {
 		line := l.lines[i]
 		para := &l.paras[line.para]
-		if para.src != nil && para.order == place.pos.order && para.base + line.line.start <= place.pos.index {
+		if para.src == nil {
+			continue
+		}
+		// The paragraphs of a block are in reading order.
+		if para.order > place.pos.order {
+			break
+		}
+		if para.order == place.pos.order && para.base + line.line.start <= place.pos.index {
 			found = i
 		}
 	}
@@ -116,25 +159,8 @@ text_at :: proc(l: ^Layout, x, y: f32) -> bool {
 		}
 		return false
 	}
-	// The marker of a list item comes first, and its lines (a long number
-	// can wrap) start at the height of the text again. After it the lines
-	// of the text go down the page, so the one at y is found without a
-	// look at each line: a code block can have many.
-	first := box.line_first
-	for first < box.line_end && l.paras[l.lines[first].para].src == nil {
-		first += 1
-	}
-	lo, hi := first, box.line_end
-	for lo < hi {
-		mid := (lo + hi) / 2
-		if l.lines[mid].top <= y {
-			lo = mid + 1
-		} else {
-			hi = mid
-		}
-	}
-	// The last line that starts at or above y.
-	return lo > first && on_line(l, l.lines[lo - 1], x, y)
+	at := line_at_or_above(l, box, y)
+	return at >= text_first(l, box) && on_line(l, l.lines[at], x, y)
 }
 
 // The caret position nearest to a point of the page.

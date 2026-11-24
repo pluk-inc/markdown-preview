@@ -123,6 +123,12 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
     @discardableResult
     func frameNow(at offset: Double, before: (() -> Double?)? = nil) -> Double {
         dispatchPrecondition(condition: .onQueue(.main))
+        // No frame of the link between the new layout and the offset that
+        // it gives: it would show that layout at the old offset. The frame
+        // below replaces each request that waits.
+        lock.lock()
+        wantsFrame = false
+        lock.unlock()
         let y = before?() ?? offset
         lock.lock()
         scrollY = y

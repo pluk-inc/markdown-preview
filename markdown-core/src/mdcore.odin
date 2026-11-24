@@ -238,8 +238,8 @@ mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	ctx.selection = {}
 	// A new document starts at its top, so the first layout does not go
 	// down to the place the old one was scrolled to. A host that keeps the
-	// reader's place (the same file with a change) pays for the layout down
-	// to that place in its first draw.
+	// reader's place (the same file with a change) asks for it again
+	// (`mdcore_place_y`), and pays for the layout down to it there.
 	ctx.scroll = 0
 	ctx.layout_valid = false
 }
@@ -422,8 +422,9 @@ mdcore_place_y :: proc "c" (handle: rawptr, place: ^Host_Place, y: ^f64) -> bool
 	reached := ctx.page.y
 	layout.step_to_block(&ctx.page, wanted.block)
 	at := layout.place_y(&ctx.page, wanted) or_return
-	// And what a view shows below it, so the host can scroll there.
-	layout.step(&ctx.page, at + 3 * ctx.height)
+	// And what a view shows below it, so the page is tall enough for the
+	// host to scroll there.
+	layout.step(&ctx.page, at + 2 * ctx.height)
 	if ctx.page.y != reached {
 		ctx.display_valid = false
 	}

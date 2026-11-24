@@ -122,6 +122,8 @@ final class NativeRendererView: NSView {
             let wasAtTop = scrollY <= topScrollY + 0.5
             endScrollAnimation()
             scrollView.contentInsets = NSEdgeInsets(top: topInset, left: 0, bottom: 0, right: 0)
+            // The place was taken below the strip that was covered before.
+            keptPlace = nil
             updateCoveredEdgeBacking()
             if wasAtTop { scroll(toY: topScrollY) }
             setNeedsDraw()
@@ -511,21 +513,28 @@ final class NativeRendererView: NSView {
         // its place, from the layout that is there still.
         let place = kept ?? placeAtTop()
         let topInset = topInset
+        let top = topScrollY
+        let viewHeight = scrollView.contentView.bounds.height
+        var found = false
         // The new size, then its frame, at the offset that the place has now.
         drawNow { [ctx] in
             mdcore_set_page_width(ctx, pageWidth)
             mdcore_resize(ctx, size.width, size.height, scale)
             guard var place else { return nil }
             var y = 0.0
-            return mdcore_place_y(ctx, &place, &y) ? y - topInset : nil
+            guard mdcore_place_y(ctx, &place, &y) else { return nil }
+            found = true
+            // Not past the end of the page, where the scroll view cannot
+            // go: the frame must be the one that stays.
+            return min(y - topInset, max(top, mdcore_content_height(ctx) - viewHeight))
         }
-        keptPlace = place.map { ($0, scrollY) }
+        // A place that the new document does not have is not kept.
+        keptPlace = found ? place.map { ($0, scrollY) } : nil
         continueLayout()
     }
 
     /// Draws a frame now and waits for it: the first frame of a document,
     /// and a frame for a new size, which must be there with the window's.
-    /// `before` runs ahead of the frame.
     /// `before` runs ahead of the frame, and can give the offset to draw
     /// at; the scroll view then goes there too.
     private func drawNow(before: (() -> Double?)? = nil) {

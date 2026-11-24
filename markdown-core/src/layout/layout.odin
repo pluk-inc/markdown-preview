@@ -548,8 +548,6 @@ step :: proc(l: ^Layout, until_y: f32, budget_ms: f64 = 0) -> bool {
 	return progressed
 }
 
-// Lays out lines of a code block, each as its own paragraph, so a very long
-// block does not hold one step. Returns true at the end of the block.
 // Lays out down to the end of a block. For a place that the view must
 // show (`place_y`): the layout above it is necessary to know where it is.
 step_to_block :: proc(l: ^Layout, block: int) {
@@ -558,6 +556,8 @@ step_to_block :: proc(l: ^Layout, block: int) {
 	}
 }
 
+// Lays out lines of a code block, each as its own paragraph, so a very long
+// block does not hold one step. Returns true at the end of the block.
 @(private)
 step_code :: proc(l: ^Layout, b: ^document.Block, x, width: f32, started: time.Tick, budget_ms: f64) -> bool {
 	size := l.m.code_size

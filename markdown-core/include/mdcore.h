@@ -129,9 +129,9 @@ typedef struct {
 bool mdcore_place_at(void *ctx, double y, mdcore_place *place);
 
 // The height of a place in the layout that is there now, after
-// mdcore_resize. Lays the document out down to the place and one view
-// more, when it did not reach it yet: far down a long document that is
-// all the work above the place, in this call. False when the document has
+// mdcore_resize. Lays the document out down to the place and two view
+// heights more, when it did not reach that yet: far down a long document
+// that is all the work above the place, in this call. False when the document has
 // no such block any more.
 bool mdcore_place_y(void *ctx, const mdcore_place *place, double *y);
 

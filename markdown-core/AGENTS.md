@@ -338,12 +338,25 @@ The window around the page, left on purpose:
 
 Task check boxes, left on purpose:
 
-- A document that opens again in place (another app saved the file, or a
-  click on a task could not be saved) is parsed and laid out from the top,
-  and the view keeps its scroll offset in points. Far down a long document
-  the first draw then lays out everything above the reader on the main
-  thread. A scroll anchor in the document in place of an offset would
-  remove that. A click on a task does not go this way any more.
+- A new layout (another width or text size, or a document that opens
+  again in place) starts from the top, and the view asks for the reader's
+  place again (`mdcore_place_y`). Far down a long document that lays out
+  everything above the reader on the main thread: 0.37 s for each step of
+  a live resize at the end of the 1.1 MB document (`BENCHMARKS.md`).
+  Heights that are estimated for the blocks above the place would remove
+  that. A click on a task does not go this way any more.
+- A place is found by the number of its block and the reading-order
+  number of its paragraph, which exist only after a layout. Find, a jump
+  to a footnote or a heading, and the way back from Edit mode need an
+  address that a host or the core can make with no layout: block and
+  byte. The same file with a change keeps "the same block number", not
+  the same text.
+- `mdcore_resize` still lays out down to the offset that the old layout
+  had, before the view asks for the place. With a shorter new layout
+  (wider window, smaller text) that is work for nothing.
+- A reader at the end of the document is kept by the first line that
+  shows, as each other place. With a narrower window the end then goes
+  out of view. Not decided if the end must stay the end.
 - After a click on a task the app makes the sidebar outline and the
   inspector numbers again for the full document, off the main thread
   (0.3 s of CPU for 725 KB). Neither changes with a task mark. This is in
@@ -487,3 +500,11 @@ scroll position, footnotes and alerts, VoiceOver, print and export.
   added to that safe area. Rule from this: before something is built for
   the area around the toolbar, look at how the web view got it, and test
   with the find bar, the tab bar, and Edit mode.
+- **2026-11-24** — First step of the base that later features need: a
+  place in the document in place of an offset in points. A new width or
+  text size showed other text, far down a document many paragraphs away.
+  From the terminal that the window technique came from: a position is an
+  address in the data, the view keeps one such address until the reader
+  scrolls, and the top of the document is its own case. The view now asks
+  the core for the place of the first text that shows and for the height
+  that this place has in the new layout.
