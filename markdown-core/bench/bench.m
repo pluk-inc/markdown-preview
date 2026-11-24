@@ -94,12 +94,8 @@ int main(int argc, const char *argv[]) {
     printf("first_frame_ms %.2f\n", now_ms() - start);
     printf("first_frame_heap_mb %.1f\n", heap_mb());
 
-    double layout_start = now_ms();
-    while (mdcore_layout_more(ctx, 0)) {
-    }
-    printf("full_layout_ms %.2f\n", now_ms() - layout_start);
+    // The height is an estimate for what no frame showed yet.
     double height = mdcore_content_height(ctx);
-    printf("page_height_pt %.0f\n", height);
 
     double end = height - VIEW_HEIGHT;
     if (end < 0) end = 0;
@@ -114,6 +110,41 @@ int main(int argc, const char *argv[]) {
     }
     printf("jump_frame_cpu_ms %.2f\n", thread_cpu_ms() - jump_start);
     scroll_pass(ctx, "second_scroll", end);
+    printf("scrolled_heap_mb %.1f\n", heap_mb());
+
+    // To the end of the document, as the End key does: the first frame
+    // there.
+    double end_start = now_ms();
+    mdcore_layout_end(ctx);
+    double bottom = mdcore_content_top(ctx) + mdcore_content_height(ctx) - VIEW_HEIGHT;
+    if (bottom < mdcore_content_top(ctx)) bottom = mdcore_content_top(ctx);
+    @autoreleasepool {
+        mdcore_draw(ctx, bottom);
+    }
+    printf("end_frame_ms %.2f\n", now_ms() - end_start);
+
+    // A new width with the reader at the end, as one step of a live
+    // resize: the place of the first line, the new layout, and the frame
+    // at that place.
+    double resize_start = now_ms();
+    mdcore_place place;
+    bool has_place = mdcore_place_at(ctx, bottom, &place);
+    mdcore_resize(ctx, VIEW_WIDTH - 40, VIEW_HEIGHT, VIEW_SCALE);
+    double at = 0;
+    if (has_place) mdcore_place_y(ctx, &place, &at);
+    @autoreleasepool {
+        mdcore_draw(ctx, at);
+    }
+    printf("resize_at_end_ms %.2f\n", now_ms() - resize_start);
+
+    // All of the document, as Select All needs it.
+    double layout_start = now_ms();
+    mdcore_select_all(ctx);
+    printf("full_layout_ms %.2f\n", now_ms() - layout_start);
+    // How far the height of the page was from the real one before any
+    // of it was laid out but the first view.
+    double real = mdcore_content_height(ctx);
+    printf("estimate_error_percent %.1f\n", real > 0 ? (height - real) / real * 100 : 0);
 
     printf("heap_mb %.1f\n", heap_mb());
     printf("total_cpu_ms %.0f\n", cpu_ms());

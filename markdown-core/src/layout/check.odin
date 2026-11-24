@@ -12,22 +12,36 @@ check :: proc(l: ^Layout) -> string {
 	if l.doc == nil {
 		return len(l.parts) == 0 ? "" : "parts with no document"
 	}
-	if len(l.parts) > len(l.doc.parts) {
-		return "more parts than the document has"
+	if len(l.parts) != len(l.doc.parts) {
+		return "not a part for each part of the document"
 	}
-	boxes := 0
-	top: f64
+	if l.open >= len(l.parts) {
+		return "the open part is no part"
+	}
+	complete := 0
+	top := l.origin
 	for &part, p in l.parts {
-		last := p == len(l.parts) - 1
 		if part.top != top {
 			return "a part does not start where the part before it ends"
 		}
 		top += f64(part.height)
 		count := l.doc.parts[p].count
-		if len(part.boxes) > count || (!last && len(part.boxes) != count) {
-			return "a part does not have a box for each of its blocks"
+		in_block := part_in_block(l, p)
+		y := p == l.open ? l.y : part.y
+		if part.complete {
+			complete += 1
+			if len(part.boxes) != count || in_block || p == l.open {
+				return "a complete part does not have a closed box for each of its blocks"
+			}
+			if part.height != y {
+				return "the height of a complete part is not the bottom of its last box"
+			}
+		} else if len(part.boxes) > count || (len(part.boxes) == count && !in_block) {
+			return "a part that is not complete has all its boxes"
 		}
-		boxes += len(part.boxes)
+		if p != l.open && (part.memory == nil) != (len(part.boxes) == 0) {
+			return "the records of a part are not in its own memory"
+		}
 		bottom: f32
 		lines, decor := 0, 0
 		for box in part.boxes {
@@ -42,8 +56,11 @@ check :: proc(l: ^Layout) -> string {
 		if lines != len(part.lines) || decor != len(part.decor) {
 			return "a part has records that are in no box"
 		}
-		if part.height != bottom {
-			return "the height of a part is not the bottom of its last box"
+		if len(part.boxes) > 0 && y != bottom {
+			return "the layout of a part is not at the bottom of its last box"
+		}
+		if part.height < y {
+			return "a part is lower than what is laid out of it"
 		}
 		for line, i in part.lines {
 			if line.para < 0 || line.para >= len(part.paras) {
@@ -53,21 +70,18 @@ check :: proc(l: ^Layout) -> string {
 				return "a line with shaped text outside the range that is known to have some"
 			}
 		}
-		y: f32 = -1e30
+		task_y: f32 = -1e30
 		for task in part.tasks {
-			if task.block < 0 || task.block >= len(part.boxes) || task.y < y {
+			if task.block < 0 || task.block >= len(part.boxes) || task.y < task_y {
 				return "the tasks of a part do not go down its blocks"
 			}
-			y = task.y
+			task_y = task.y
 		}
 	}
-	if boxes != box_count(l) {
-		return "the boxes are not the blocks that the layout reached"
+	if complete != l.complete {
+		return "the count of the complete parts is wrong"
 	}
-	if len(l.parts) > 0 && l.y != last_part(l).height {
-		return "the layout is not at the bottom of its last part"
-	}
-	if boxes > 0 && l.content_height != reached(l) + f64(l.m.page_pad) {
+	if len(l.parts) > 0 && l.content_height != top - l.origin + f64(l.m.page_pad) {
 		return "the page height is not the sum of the parts"
 	}
 	return ""

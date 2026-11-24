@@ -56,12 +56,12 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
     nonisolated(unsafe) private var wantsFrame = false
     nonisolated(unsafe) private var isRunning = false
     nonisolated(unsafe) private var idleTicks = 0
-    nonisolated(unsafe) private var animation: (scroll: Int, from: Double, to: Double, start: CFTimeInterval)?
+    nonisolated(unsafe) private var animation: (scroll: Int, from: Double, to: Double, start: CFTimeInterval, toFixedPlace: Bool)?
     nonisolated(unsafe) private var scrollCount = 0
     /// True from the point a frame of the link took its offset until it is
     /// drawn.
     nonisolated(unsafe) private var tickInFlight = false
-    nonisolated(unsafe) private var lastHeight = 0.0
+    nonisolated(unsafe) private var lastRevision = -1
 
     /// `ctx` is the core's renderer; it must live until `stop()` returned.
     init(ctx: UnsafeMutableRawPointer?) {
@@ -146,11 +146,15 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
     /// system's views do for the keyboard. Each frame of it is reported
     /// through `didDraw`, with the number that this returns: a frame of a
     /// scroll that another one replaced can come after it.
-    func animateScroll(from: Double, to: Double) -> Int {
+    ///
+    /// `toFixedPlace`: the scroll goes to a place of the document (its
+    /// top, its end), not a distance. A part that a frame lays out on the
+    /// way then leaves that place where it is (`mdcore_draw_toward`).
+    func animateScroll(from: Double, to: Double, toFixedPlace: Bool) -> Int {
         lock.lock()
         scrollCount += 1
         let scroll = scrollCount
-        animation = (scroll, from, to, CACurrentMediaTime())
+        animation = (scroll, from, to, CACurrentMediaTime(), toFixedPlace)
         lock.unlock()
         start()
         return scroll
@@ -181,6 +185,7 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
     private func tick() {
         lock.lock()
         var step: ScrollStep?
+        var target: Double?
         if let animation {
             // Without a clock there are no steps: the scroll goes to its end.
             let progress = link == nil
@@ -189,6 +194,7 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
             let eased = 1 - pow(1 - progress, 3)
             scrollY = animation.from + (animation.to - animation.from) * eased
             step = ScrollStep(scroll: animation.scroll, y: scrollY, isLast: progress >= 1)
+            if animation.toFixedPlace { target = animation.to }
             wantsFrame = true
             if progress >= 1 { self.animation = nil }
         }
@@ -208,18 +214,20 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
         tickInFlight = true
         lock.unlock()
 
-        autoreleasepool { mdcore_draw(ctx, y) }
-        // A draw can lay out more of the page. Read here, where a wait for
-        // the core holds nothing.
-        let height = mdcore_content_height(ctx)
+        autoreleasepool {
+            if let target { mdcore_draw_toward(ctx, y, target) } else { mdcore_draw(ctx, y) }
+        }
+        // A draw can lay out a part of the page. Read here, where a wait
+        // for the core holds nothing.
+        let revision = mdcore_layout_revision(ctx)
         lock.lock()
         tickInFlight = false
-        let heightChanged = height != lastHeight
-        lastHeight = height
+        let layoutChanged = revision != lastRevision
+        lastRevision = revision
         lock.unlock()
         // The main thread has work after a frame only for a step of a
-        // scroll or a page that grew: no hop for the other frames.
-        guard step != nil || heightChanged else { return }
+        // scroll or a layout that changed: no hop for the other frames.
+        guard step != nil || layoutChanged else { return }
         DispatchQueue.main.async { [weak self] in
             self?.didDraw?(step)
         }

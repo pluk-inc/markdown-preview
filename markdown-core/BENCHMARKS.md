@@ -18,9 +18,10 @@ markdown-core/bench/app.py <Markdown Preview.app>   # the app, cold launch; add 
 
 - **`core.py`** builds the core and `bench/bench.m` and runs the core
   through its C API in a new process each time: the first frame, the layout
-  of the rest, two scroll passes of 24,000 points (the first makes the
-  glyph bitmaps, the second has them), a jump back to the top between
-  them, and the heap. It takes a minute and
+  two scroll passes of 24,000 points (the first lays out what it comes
+  to and makes the glyph bitmaps, the second has them), a jump back to
+  the top between them, a jump to the end, a new width there, the layout
+  of all of the document (as Select All needs it), and the heap. It takes a minute and
   shows no window. A scroll frame is CPU time of the drawing thread, because
   a draw waits for the display.
 - **`app.py`** starts a Release build of the app with a document, in the
@@ -58,6 +59,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-24 | the system backing of the covered top edge covers the find bar too | 621 / 633 | 54 / 96 | 510 / 1090 | – | – | – | – |
 | 2026-11-24 | the reader keeps their place when the text is laid out again | 683 / 665 | 56 / 99 | 620 / 1260 | – | – | 0.44 / 0.35 | 6.6 / 20.7 |
 | 2026-11-24 | blocks and layout records in parts of the document | 623 / 611 | 54 / 96 | 500 / 1040 | 64 / 75 | 2.9 / 301 | 0.42 / 0.40 | 6.7 / 20.0 |
+| 2026-11-24 | the layout is made where the view is; estimated heights for the rest | 649 / 632 | 53 / 90 | 500 / 750 | 66 / 48 | none (see the section) | 0.58 / 0.39 | 6.9 / 20.4 (15.4 before Select All) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -335,3 +337,47 @@ document of 1,841 blocks at two widths: the same lines, boxes,
 decorations, and tasks, at heights that differ by 0.11 points at most
 (85,566 points down). That difference is the error that the base adds up
 in a 32-bit height; a part now counts from its own top.
+
+## The layout where the view is (2026-11-24)
+
+Before this change the core laid out all of a document, the part after
+the first view in steps in the background, because the height of the page
+came from that. Now a part that no frame showed has a height that is
+estimated from its text, and nothing lays out the rest. `core.py` got
+three new numbers for this, and lost "layout of the rest", which is no
+step any more. The base (blocks in parts) and the change one after the
+other, short / long.
+
+| | Base | Change |
+| --- | --- | --- |
+| `core.py`: first frame (ms) | 64 / 75 | 66 / 48 |
+| To the end of the document: layout and the first frame there (ms) | 3 / 301 and a frame | 8 / 10 |
+| A new width with the reader at the end: layout and frame (ms) | – / 370 | 12 / 10 |
+| Layout of all of the document (ms) | 2.9 / 301 | 4.9 / 336, only for Select All |
+| Scroll frame, new glyphs (CPU ms) | 0.47 / 0.41 | 0.65 / 0.58 |
+| Scroll frame, glyphs ready (CPU ms) | 0.32 / 0.37 | 0.35 / 0.39 |
+| Heap at the first frame (MB) | 5.1 / 13.6 | 5.1 / 13.6 |
+| Heap after the two scroll passes (MB) | 6.7 / 20.0 | 6.6 / 15.4 |
+| Heap with all of it laid out (MB) | 6.7 / 20.0 | 6.9 / 20.4 |
+| `app.py`: launch to the first frame (ms) | 615 / 641 | 649 / 632 |
+| `app.py`: CPU to 3 s after (ms) | 510 / 1060 | 500 / 750 |
+| `app.py`: memory (MB) | 53 / 96 | 53 / 90 |
+
+The base numbers for the end and for the new width are from the records
+above (the layout of the rest, and the 0.37 s for each step of a live
+resize at the end), not from a new run: the base has no call for them.
+
+What to read from it:
+
+- The first frame of the long document does not lay out two views below
+  the first one any more, only what it shows and one view more.
+- A scroll frame that comes to new text is slower (0.58 against 0.41 ms),
+  because it now lays out that text too. Before, the background had done
+  that work, 300 ms of it for 1 MB, also for text that nobody went to.
+- The app does 0.3 s less work for the long document, and keeps the
+  records only of what was shown.
+- The estimated height of the page, before anything but the first view
+  was laid out, against the real one: -1.3% for the benchmark document,
+  0.0% for a 725 KB document of tasks, -0.5% and 0.2% for two documents
+  of this repository (`AGENTS.md` of the core, `CHANGELOG.md`). `core.py`
+  prints it.

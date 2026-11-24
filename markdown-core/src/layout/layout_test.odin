@@ -42,6 +42,13 @@ teardown :: proc(f: ^Fixture) {
 	}
 }
 
+// Lays out from the top of the page down to a height, as a reader does
+// who goes down the document.
+@(private = "file")
+step :: proc(l: ^Layout, until: f64, budget_ms: f64 = 0) -> bool {
+	return lay_out(l, -1e30, until, 0, budget_ms)
+}
+
 // The records of a document that has one part: its tops count from the
 // top of the page.
 @(private = "file")
@@ -469,7 +476,7 @@ test_a_place_is_the_same_text_at_another_width :: proc(t: ^testing.T) {
 		testing.expect(t, back_ok)
 		testing.expect(t, abs(back - y) < 0.01)
 		// In another width: the line that has the same byte.
-		step_to_block(&narrow.page, place.block)
+		lay_out_block(&narrow.page, place.block)
 		there, there_ok := place_y(&narrow.page, place)
 		testing.expect(t, there_ok)
 		again, again_ok := place_at(&narrow.page, there)
@@ -655,7 +662,7 @@ test_a_place_in_a_later_part_has_the_number_of_its_block :: proc(t: ^testing.T) 
 	block := 3 * document.PART_BLOCKS + 1
 	_, early := place_y(&narrow.page, Place{block = block})
 	testing.expect(t, !early)
-	step_to_block(&narrow.page, block)
+	lay_out_block(&narrow.page, block)
 	expect_ok(t, &narrow.page)
 	y, ok := place_y(&narrow.page, Place{block = block})
 	testing.expect(t, ok)
@@ -794,4 +801,200 @@ test_a_check_box_that_reaches_out_of_its_part_is_found :: proc(t: ^testing.T) {
 		count = tasks_between(&f.page, task.y, task.y + 0.5, one[:])
 		testing.expect(t, count >= 1 && one[count - 1].block == task.block)
 	}
+}
+
+// The lines of all parts, with their tops on the page from the top of
+// the page.
+@(private = "file")
+page_lines :: proc(l: ^Layout) -> (lines: [dynamic]f64) {
+	for part in l.parts {
+		for line in part.lines {
+			append(&lines, part.top - l.origin + f64(line.top), f64(line.x), f64(line.line.width))
+		}
+	}
+	return
+}
+
+@(test)
+test_a_new_layout_has_a_height_for_each_part_and_no_records :: proc(t: ^testing.T) {
+	source := long_source(60)
+	defer delete(source)
+	f: Fixture
+	setup(&f, source, 500)
+	defer teardown(&f)
+	expect_ok(t, &f.page)
+	testing.expect_value(t, len(f.page.parts), len(f.doc.parts))
+	for part in f.page.parts {
+		testing.expect(t, part.height > 0)
+		testing.expect_value(t, len(part.boxes), 0)
+	}
+	estimated := f.page.content_height
+	step(&f.page, 1e30)
+	// The estimate is near the real height: the scroll bar of a document
+	// that nobody went through is near the real one.
+	testing.expect(t, abs(estimated - f.page.content_height) < 0.2 * f.page.content_height)
+}
+
+@(test)
+test_a_view_far_down_lays_out_only_what_it_shows :: proc(t: ^testing.T) {
+	source := long_source(60)
+	defer delete(source)
+	f: Fixture
+	setup(&f, source, 500)
+	defer teardown(&f)
+	// A view of 600 points at the middle of the page.
+	y := f.page.content_height / 2
+	testing.expect(t, lay_out(&f.page, y, y + 600, y))
+	expect_ok(t, &f.page)
+	testing.expect(t, laid_out(&f.page, y, y + 600))
+	with_records := 0
+	for part in f.page.parts {
+		with_records += len(part.boxes) > 0 ? 1 : 0
+	}
+	testing.expect(t, with_records >= 1 && with_records <= 3)
+	testing.expect_value(t, len(f.page.parts[0].boxes), 0)
+	// Text is there, and a caret in it.
+	place, ok := place_at(&f.page, y + 300)
+	testing.expect(t, ok)
+	testing.expect(t, place.block > 0)
+	_, hit := hit_test(&f.page, 200, y + 300)
+	testing.expect(t, hit)
+	// The same range again is no work.
+	testing.expect(t, !lay_out(&f.page, y, y + 600, y))
+}
+
+@(test)
+test_a_part_above_the_view_moves_the_top_of_the_page_not_the_view :: proc(t: ^testing.T) {
+	source := long_source(60)
+	defer delete(source)
+	f: Fixture
+	setup(&f, source, 500)
+	defer teardown(&f)
+	y := f.page.content_height / 2
+	lay_out(&f.page, y, y + 600, y)
+	anchor := part_at(&f.page, y)
+	top := f.page.parts[anchor].top
+	bottom := f.page.origin + f.page.content_height
+	testing.expect_value(t, f.page.origin, 0)
+	// The reader goes up: the range now has the part above.
+	above := f.page.parts[anchor - 1]
+	testing.expect(t, lay_out(&f.page, above.top + f64(above.height) - 10, y + 600, y))
+	expect_ok(t, &f.page)
+	testing.expect(t, f.page.parts[anchor - 1].complete)
+	// The part of the view and the end of the page are where they were.
+	testing.expect_value(t, f.page.parts[anchor].top, top)
+	testing.expect_value(t, f.page.origin + f.page.content_height, bottom)
+	// The top of the page took the difference.
+	testing.expect_value(t, f.page.origin, f64(above.height) - f64(f.page.parts[anchor - 1].height))
+	testing.expect_value(t, f.page.parts[0].top, f.page.origin)
+}
+
+@(test)
+test_parts_laid_out_in_any_order_give_the_same_page :: proc(t: ^testing.T) {
+	source := long_source(40)
+	defer delete(source)
+	down, up, mixed: Fixture
+	setup(&down, source, 500)
+	defer teardown(&down)
+	setup(&up, source, 500)
+	defer teardown(&up)
+	setup(&mixed, source, 500)
+	defer teardown(&mixed)
+	step(&down.page, 1e30)
+	// From the last part to the first, with the view at the end.
+	for p := len(up.page.parts) - 1; p >= 0; p -= 1 {
+		lay_out_part(&up.page, p, len(up.page.parts) - 1)
+		expect_ok(t, &up.page)
+	}
+	// Some of one part, then another part, then the rest of the first:
+	// the part goes out of work and comes back.
+	lay_out(&mixed.page, 0, 150, 0)
+	testing.expect(t, !mixed.page.parts[0].complete && len(mixed.page.parts[0].boxes) > 0)
+	lay_out_part(&mixed.page, 2, 0)
+	expect_ok(t, &mixed.page)
+	testing.expect(t, mixed.page.parts[0].memory != nil)
+	lay_out_part(&mixed.page, 0, 0)
+	lay_out_blocks(&mixed.page, 0, max(int), 0)
+	expect_ok(t, &mixed.page)
+
+	want := page_lines(&down.page)
+	defer delete(want)
+	for f in ([]^Fixture{&up, &mixed}) {
+		testing.expect(t, done(&f.page))
+		testing.expect(t, abs(f.page.content_height - down.page.content_height) < 0.01)
+		got := page_lines(&f.page)
+		defer delete(got)
+		testing.expect_value(t, len(got), len(want))
+		for value, i in want {
+			testing.expect(t, abs(got[i] - value) < 0.01)
+		}
+		// The text that is copied is the same too.
+		a, b: [dynamic]u8
+		defer delete(a)
+		defer delete(b)
+		selection_text(&down.page, select_all(&down.page), &a)
+		selection_text(&f.page, select_all(&f.page), &b)
+		testing.expect_value(t, string(b[:]), string(a[:]))
+	}
+	// With the view at the end, the end stayed and the top moved.
+	testing.expect(t, abs(up.page.origin + up.page.content_height - (down.page.content_height + up.page.origin)) < 0.01)
+}
+
+@(test)
+test_a_long_code_block_is_laid_out_down_to_the_view_only :: proc(t: ^testing.T) {
+	b := strings.builder_make()
+	defer strings.builder_destroy(&b)
+	strings.write_string(&b, "```\n")
+	for i in 0 ..< 3000 {
+		fmt.sbprintf(&b, "line %d\n", i)
+	}
+	strings.write_string(&b, "```\n\nafter\n")
+	f: Fixture
+	setup(&f, strings.to_string(b), 500)
+	defer teardown(&f)
+	estimated := f.page.content_height
+	lay_out(&f.page, 0, 600, 0)
+	expect_ok(t, &f.page)
+	part := f.page.parts[0]
+	testing.expect(t, !part.complete)
+	testing.expect(t, len(part.lines) > 10 && len(part.lines) < 200)
+	// The rest of the block is in the height as an estimate.
+	testing.expect(t, abs(f.page.content_height - estimated) < 0.05 * estimated)
+	// Farther down the same block: it goes on where it was.
+	lay_out(&f.page, 3000, 3600, 3000)
+	expect_ok(t, &f.page)
+	testing.expect(t, len(f.page.parts[0].lines) > len(part.lines))
+	step(&f.page, 1e30)
+	testing.expect(t, done(&f.page))
+	testing.expect_value(t, len(f.page.parts[0].lines), 3001)
+	testing.expect(t, abs(f.page.content_height - estimated) < 0.05 * estimated)
+}
+
+@(test)
+test_a_selection_is_the_same_text_in_a_layout_from_another_place :: proc(t: ^testing.T) {
+	source := long_source(40)
+	defer delete(source)
+	whole, far: Fixture
+	setup(&whole, source, 500)
+	defer teardown(&whole)
+	setup(&far, source, 500)
+	defer teardown(&far)
+	step(&whole.page, 1e30)
+	// A selection made in a layout from the top: from a line of part 1
+	// to a line of part 3.
+	a, _ := hit_test(&whole.page, 120, whole.page.parts[1].top + 40)
+	b, _ := hit_test(&whole.page, 300, whole.page.parts[3].top + 200)
+	selection := Selection{true, a, b}
+	want, got: [dynamic]u8
+	defer delete(want)
+	defer delete(got)
+	selection_text(&whole.page, selection, &want)
+	testing.expect(t, len(want) > 500)
+	// The same positions in a layout that has only those blocks.
+	from, to, _ := selection_range(selection)
+	lay_out_blocks(&far.page, from.block, to.block, 0)
+	expect_ok(t, &far.page)
+	testing.expect(t, !done(&far.page))
+	selection_text(&far.page, selection, &got)
+	testing.expect_value(t, string(got[:]), string(want[:]))
 }
