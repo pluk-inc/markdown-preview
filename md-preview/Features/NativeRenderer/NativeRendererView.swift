@@ -84,7 +84,7 @@ final class NativeRendererView: NSView {
         scrollView.borderType = .noBorder
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
-        // The view already starts below the toolbar.
+        // The owner says how much of the view the toolbar covers (`topInset`).
         scrollView.automaticallyAdjustsContentInsets = false
         scrollView.documentView = page
         addSubview(scrollView)
@@ -100,9 +100,38 @@ final class NativeRendererView: NSView {
         )
     }
 
-    /// The offset of the page in the view, in points. Below zero and past
-    /// the end while the scroll view stretches at an end.
+    /// The offset of the page in the view, in points. Below `topScrollY`
+    /// and past the end while the scroll view stretches at an end.
     private var scrollY: CGFloat { scrollView.contentView.bounds.origin.y }
+
+    /// The height of the strip at the top of the view that the toolbar
+    /// covers, when the owner puts the view under it. The page starts below
+    /// the strip and scrolls under it, so it shows through the toolbar,
+    /// softly, as in each app of the system. Zero for a view that starts
+    /// below the toolbar.
+    var topInset: CGFloat = 0 {
+        didSet {
+            guard topInset != oldValue else { return }
+            // A page at its top stays at its top.
+            let wasAtTop = scrollY <= topScrollY + 0.5
+            endScrollAnimation()
+            scrollView.contentInsets = NSEdgeInsets(top: topInset, left: 0, bottom: 0, right: 0)
+            if wasAtTop { scroll(toY: topScrollY) }
+            setNeedsDraw()
+        }
+    }
+
+    /// The offset at the top of the page.
+    private var topScrollY: CGFloat { -scrollView.contentInsets.top }
+
+    /// The height of the part of the view that the toolbar does not cover.
+    private var visibleHeight: CGFloat { scrollView.contentView.bounds.height + topScrollY }
+
+    /// An offset, kept inside the page.
+    private func clamped(_ y: CGFloat) -> CGFloat {
+        let top = topScrollY
+        return min(max(top, y), max(top, page.frame.height - scrollView.contentView.bounds.height))
+    }
 
     @objc private func pageDidScroll() {
         updateTaskCheckBoxes()
@@ -156,8 +185,7 @@ final class NativeRendererView: NSView {
     /// for the keyboard. The render loop moves the page, one step for each
     /// frame, and the scroll view follows.
     private func animateScroll(toY y: CGFloat) {
-        let limit = max(0, page.frame.height - scrollView.contentView.bounds.height)
-        let target = min(max(0, y), limit)
+        let target = clamped(y)
         // The new place replaces the one a scroll in progress went to.
         endScrollAnimation()
         guard abs(target - scrollY) > 1 else { return scroll(toY: target) }
@@ -182,8 +210,7 @@ final class NativeRendererView: NSView {
 
     /// Scrolls to an offset, kept inside the page.
     private func scroll(toY y: CGFloat) {
-        let limit = max(0, page.frame.height - scrollView.contentView.bounds.height)
-        scrollView.contentView.scroll(to: NSPoint(x: 0, y: min(max(0, y), limit)))
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: clamped(y)))
         scrollView.reflectScrolledClipView(scrollView.contentView)
     }
 
@@ -360,7 +387,7 @@ final class NativeRendererView: NSView {
         heldPageHeight = keepsScroll ? page.frame.height : nil
         // Before the layout: it lays out what the view shows, and that must
         // be the top of a new document, not the place the old one was at.
-        if !keepsScroll { scroll(toY: 0) }
+        if !keepsScroll { scroll(toY: topScrollY) }
         relayout(force: true)
     }
 
@@ -483,14 +510,14 @@ final class NativeRendererView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
-        let step = bounds.height - 60
+        let step = visibleHeight - 60
         switch event.keyCode {
         // From the place a scroll in progress goes to, so fast key presses add up.
         case Key.pageDown, Key.space: animateScroll(toY: scrollTarget + step)
         case Key.pageUp: animateScroll(toY: scrollTarget - step)
         case Key.downArrow: animateScroll(toY: scrollTarget + 48)
         case Key.upArrow: animateScroll(toY: scrollTarget - 48)
-        case Key.home: animateScroll(toY: 0)
+        case Key.home: animateScroll(toY: topScrollY)
         case Key.end:
             // The end of the document, not of the part laid out so far.
             _ = mdcore_layout_more(ctx, 0)
