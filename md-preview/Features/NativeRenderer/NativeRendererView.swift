@@ -181,6 +181,9 @@ final class NativeRendererView: NSView {
         updatePointerShape()
         updateTaskCheckBoxes()
         guard !followsRenderLoop else { return }
+        // The reader went to another place: the kept one is not theirs any
+        // more, also when they come back to the same offset later.
+        if let keptPlace, abs(keptPlace.scrollY - scrollY) > 0.01 { self.keptPlace = nil }
         setNeedsDraw()
     }
 
