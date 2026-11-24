@@ -702,6 +702,15 @@ estimate :: proc(l: ^Layout, part, from: int) -> (height: f32) {
 	return
 }
 
+// The bars at the left of a block in a quote, one for each level.
+@(private)
+push_quote_bars :: proc(l: ^Layout, b: ^document.Block, top, height: f32) {
+	for depth in 0 ..< b.quote_depth {
+		bar_x := l.column_x + f32(b.list_depth) * l.m.list_indent + f32(depth) * l.m.quote_indent
+		push_decor(l, bar_x, top, 3, height, l.style.quote_bar, 1.5)
+	}
+}
+
 // How many blocks of a part have all their records.
 @(private)
 blocks_done :: proc(part: ^Part) -> int {
@@ -760,6 +769,12 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 				place_marker(l, b, x, l.y, heading_size * HEADING_LINE_HEIGHT)
 			case .Code:
 				place_marker(l, b, x, l.y + CODE_PAD, math.round(l.m.code_size * CODE_LINE_HEIGHT))
+				// The card and the quote bars are there from the first
+				// line and grow with the block: a long one can stay in
+				// progress while the reader is in it.
+				push_decor(l, x - 0.5, l.y - 0.5, width + 1, 0, l.style.code_border, 8.5)
+				push_decor(l, x, l.y, width, 0, l.style.code_background, 8)
+				push_quote_bars(l, b, l.y, 0)
 			case .Table:
 				place_marker(l, b, x, l.y + CELL_PAD_Y, body_line)
 			case .Rule:
@@ -782,12 +797,13 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 		case .Code:
 			// All of a block that the caller wants to its end.
 			finished = place_code(l, b, x, width, slot <= until_slot ? max(f32) : until)
+			// Down to the padding below the last line that is there.
+			bottom := l.y + CODE_PAD
+			work.decor[box.decor_first].h = bottom - box.top + 1
+			for &d in work.decor[box.decor_first + 1:][:1 + b.quote_depth] {
+				d.h = bottom - box.top
+			}
 			if finished {
-				// Backgrounds are drawn before all glyphs, so the card can
-				// be added after the text gave its height.
-				bottom := l.y + CODE_PAD
-				push_decor(l, x - 0.5, box.top - 0.5, width + 1, bottom - box.top + 1, l.style.code_border, 8.5)
-				push_decor(l, x, box.top, width, bottom - box.top, l.style.code_background, 8)
 				l.y = bottom
 			}
 		case .Rule:
@@ -798,9 +814,8 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 		}
 
 		if finished {
-			for depth in 0 ..< b.quote_depth {
-				bar_x := l.column_x + f32(b.list_depth) * l.m.list_indent + f32(depth) * l.m.quote_indent
-				push_decor(l, bar_x, box.top, 3, l.y - box.top, l.style.quote_bar, 1.5)
+			if b.kind != .Code {
+				push_quote_bars(l, b, box.top, l.y - box.top)
 			}
 			l.in_block = false
 		}

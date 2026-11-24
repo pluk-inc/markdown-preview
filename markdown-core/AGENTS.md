@@ -403,9 +403,6 @@ Task check boxes, left on purpose:
 - A selection position is still a layout address (the reading-order
   number of a paragraph). It is the next thing to move to block, cell,
   and byte.
-- `mdcore_resize` still lays out down to the offset that the old layout
-  had, before the view asks for the place. With a shorter new layout
-  (wider window, smaller text) that is work for nothing.
 - After a click on a task the app makes the sidebar outline and the
   inspector numbers again for the full document, off the main thread
   (0.3 s of CPU for 725 KB). Neither changes with a task mark. This is in

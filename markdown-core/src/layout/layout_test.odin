@@ -976,12 +976,17 @@ test_a_long_code_block_is_laid_out_down_to_the_view_only :: proc(t: ^testing.T) 
 	part := f.page.parts[0]
 	testing.expect(t, !part.complete)
 	testing.expect(t, len(part.lines) > 10 && len(part.lines) < 200)
+	// The card of the block is there for what is laid out of it.
+	testing.expect_value(t, len(part.decor), 2)
+	card := part.decor[1].h
+	testing.expect(t, part.decor[1].y + card >= part.y)
 	// The rest of the block is in the height as an estimate.
 	testing.expect(t, abs(f.page.content_height - estimated) < 0.05 * estimated)
 	// Farther down the same block: it goes on where it was.
 	lay_out(&f.page, 3000, 3600, 3000)
 	expect_ok(t, &f.page)
 	testing.expect(t, len(f.page.parts[0].lines) > len(part.lines))
+	testing.expect(t, f.page.parts[0].decor[1].h > card)
 	step(&f.page, 1e30)
 	testing.expect(t, done(&f.page))
 	testing.expect_value(t, len(f.page.parts[0].lines), 3001)

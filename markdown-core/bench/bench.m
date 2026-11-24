@@ -139,6 +139,9 @@ int main(int argc, const char *argv[]) {
         mdcore_draw(ctx, at);
     }
     printf("resize_at_end_ms %.2f\n", now_ms() - resize_start);
+    // The estimate of the page height in this width, with only the last
+    // view laid out, for the comparison with the real one below.
+    mdcore_page_area(ctx, &top, &height);
 
     // Select All needs the two ends of the document only.
     double select_start = now_ms();
@@ -149,8 +152,8 @@ int main(int argc, const char *argv[]) {
     long copied = 0;
     mdcore_selection_text(ctx, &copied);
     printf("full_layout_ms %.2f\n", now_ms() - layout_start);
-    // How far the height of the page was from the real one before any
-    // of it was laid out but the first view.
+    // How far the height of the page was from the real one in the same
+    // width, before any of it was laid out but one view.
     double real = 0;
     mdcore_page_area(ctx, &top, &real);
     printf("estimate_error_percent %.1f\n", real > 0 ? (height - real) / real * 100 : 0);

@@ -381,7 +381,8 @@ What to read from it:
 - The app does 0.3 s less work for the long document, and keeps the
   records only of what was shown.
 - The estimated height of the page, before anything but the first view
-  was laid out, against the real one: -1.3% for the benchmark document,
+  was laid out, against the real one in the same width: -1.3% for the
+  long benchmark document (-0.4% for the short one),
   0.0% for a 725 KB document of tasks, -0.5% and 0.2% for two documents
   of this repository (`AGENTS.md` of the core, `CHANGELOG.md`). `core.py`
   prints it.
