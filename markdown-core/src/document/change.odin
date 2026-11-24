@@ -1,6 +1,8 @@
 package document
 
+import "core:bytes"
 import "core:slice"
+import "core:strings"
 
 // A change of the source of a document: the bytes from `start` to `end`
 // become `text`. A text that is put in has `start == end`; a text that is
@@ -162,49 +164,398 @@ walk_next :: proc(w: ^Walk) {
 	}
 }
 
-// Makes `doc` the document `fresh`, and says which range of its blocks
-// changed. The blocks at the start and at the end that are the same for a
-// layout keep their place in memory, when the range is not in their part.
-// `fresh` holds what is left of the two documents after it; the caller
-// destroys it.
-replace :: proc(doc, fresh: ^Document) -> (change: Change) {
-	before, after := doc.count, fresh.count
-	// The same blocks at the start, and at the end of what is left. Each
-	// is taken over as it is found.
-	head, tail := 0, 0
-	for old, new := walk(doc, 1), walk(fresh, 1); head < min(before, after); head += 1 {
-		a, b := walk_block(&old), walk_block(&new)
-		if !layout_equal(a, b) {
-			break
-		}
-		adopt(a, b)
-		walk_next(&old)
-		walk_next(&new)
+// A walk that starts at the block with a number.
+@(private)
+walk_from :: proc(doc: ^Document, block, step: int) -> Walk {
+	if block < 0 || block >= doc.count {
+		return {doc, -1, 0, step}
 	}
-	for old, new := walk(doc, -1), walk(fresh, -1); tail < min(before, after) - head; tail += 1 {
-		a, b := walk_block(&old), walk_block(&new)
-		if !layout_equal(a, b) {
-			break
-		}
-		adopt(a, b)
-		walk_next(&old)
-		walk_next(&new)
-	}
-	doc.links, fresh.links = fresh.links, doc.links
-	doc.source, fresh.source = fresh.source, doc.source
+	part, slot := locate(doc, block)
+	return {doc, part, slot, step}
+}
 
-	change = {first = head, removed = before - head - tail, added = after - head - tail, count = after}
-	if change.removed > 0 || change.added > 0 {
-		rebuild(doc, fresh, &change)
+// True for a block where a parse of a piece of the source can start: it
+// is in no list and no quote, or it is the first block of one that is
+// in none. The lines before it do not change what it and the text after
+// it are.
+@(private)
+starts_piece :: proc(doc: ^Document, block: int) -> bool {
+	b := block_at(doc, block)
+	if b.list_depth == 0 && b.quote_depth == 0 {
+		return true
 	}
+	if block == 0 {
+		return true
+	}
+	before := block_at(doc, block - 1)
+	return before.list_depth == 0 && before.quote_depth == 0
+}
+
+// How many blocks after an edit are parsed again to see that they are
+// the blocks of before: then the text after them is as it was too.
+GUARD_BLOCKS :: 2
+
+// An edit that is ready to be made: all that reads the document and
+// takes time is done, with no change to the document. See `prepare`.
+Pending :: struct {
+	edit:         Edit, // cut to the source; its text is not kept
+	bytes:        int, // how much longer the source gets
+	source:       []u8, // the new source; after `commit`, the old one
+	// The first `added` blocks of `fresh` take the place of `count`
+	// blocks from `first` on. The blocks of `fresh` after them were
+	// parsed only to be compared; the document keeps its own.
+	fresh:        Document,
+	added:        int,
+	first, count: int,
+	// Where the text that `fresh` was parsed from starts in the new
+	// source. Before the source, when definitions of links from before
+	// the piece come first in that text.
+	base:         int,
+	// For a piece, `fresh` has the definitions of links of the piece,
+	// where the new source has them: as many as the document has from
+	// `defs_first` on, with the same text.
+	defs_first:   int,
+	all:          bool, // all of the source was parsed
+}
+
+// Makes ready an edit of the source of a document, and changes nothing:
+// a caller can do this beside readers of the document, and then make the
+// change with `commit` in a short time. The caller ends it with `discard`.
+//
+// Only the blocks around the edit are parsed when that gives the same
+// document as a parse of all of the new source. The piece starts at a
+// block that is in no list and no quote, before the edit, and ends some
+// blocks after the edit. Those last blocks must come out as they were,
+// at their place: then nothing that the edit opened (a code fence, a
+// list) reaches into the text after the piece. If they do not, or the
+// edit changes the definition of a link, all of the source is parsed.
+prepare :: proc(doc: ^Document, edit: Edit) -> (p: Pending) {
+	p.edit.start = clamp(edit.start, 0, len(doc.source))
+	p.edit.end = clamp(edit.end, p.edit.start, len(doc.source))
+	p.bytes = len(edit.text) - (p.edit.end - p.edit.start)
+	p.source = edited(doc.source, {p.edit.start, p.edit.end, edit.text})
+	// The list of links gets the links of each edit and loses none; a
+	// parse of all makes it small again.
+	if doc.count > 0 && !doc.defs_marked && !doc.defs_cut && len(doc.links) <= 2 * doc.links_parsed + LINKS_SLACK {
+		if prepare_piece(doc, &p) {
+			return
+		}
+	}
+	p.fresh = parse_owned(p.source)
+	// The document takes the source from `p`.
+	p.fresh.source = nil
+	p.first, p.count, p.added, p.base, p.all = 0, doc.count, p.fresh.count, 0, true
 	return
 }
 
-// Puts the blocks `change.added` of `fresh` in the place of the blocks
-// `change.removed` of `doc`. The parts that have a block of the range, or
+// How many links more than two times the links of the last parse of all
+// the list of links can have before an edit is a parse of all.
+LINKS_SLACK :: 256
+
+// The first word of each name in brackets in a text, as numbers
+// (`word_number`). `any`: a name can be one that these do not cover, so
+// each definition counts.
+@(private)
+Names :: struct {
+	words: [dynamic]u64,
+	any:   bool,
+}
+
+@(private)
+names_in :: proc(text: []u8) -> (names: Names) {
+	for rest := text; len(rest) > 0; {
+		open := bytes.index_byte(rest, '[')
+		if open < 0 {
+			break
+		}
+		at := open + 1
+		for at < len(rest) && (rest[at] == ' ' || rest[at] == '\t') {
+			at += 1
+		}
+		first := at
+		for at < len(rest) && !ends_word(rest[at]) {
+			at += 1
+		}
+		// A name that goes on in the next line can have the marks of a
+		// quote or a list before its first word.
+		names.any ||= first == at && at < len(rest) && (rest[at] == '\n' || rest[at] == '\r')
+		names.any ||= !plain_word(rest[first:at])
+		append(&names.words, word_number(rest[first:at]))
+		rest = rest[open + 1:]
+	}
+	// For some names only; a text with many is rare.
+	names.any ||= len(names.words) > 64
+	return
+}
+
+// The part of `prepare` that parses a piece. False when the piece does
+// not give the document of the new source.
+@(private)
+prepare_piece :: proc(doc: ^Document, p: ^Pending) -> bool {
+	// The piece starts at the last block before the edit where a parse
+	// can start. An edit in the first line of that block can make the
+	// line a part of the block before it (a line under a paragraph makes
+	// it a heading), so the piece then starts one such block earlier.
+	first := block_at_offset(doc, p.edit.start)
+	for !starts_piece(doc, first) {
+		first -= 1
+	}
+	if first > 0 {
+		line := block_start(doc, first)
+		line_end := strings.index_any(string(doc.source[line:]), "\r\n")
+		if line_end < 0 || p.edit.start <= line + line_end {
+			first -= 1
+			for !starts_piece(doc, first) {
+				first -= 1
+			}
+		}
+	}
+	// It ends after the blocks that the edit is in, where the next such
+	// block starts, and then has the blocks that are compared.
+	last := block_at_offset(doc, p.edit.end) + 1
+	for last < doc.count && !starts_piece(doc, last) {
+		last += 1
+	}
+	guard := min(GUARD_BLOCKS, doc.count - last)
+	// The blocks that are compared show that they are as they were, not
+	// that the lists around them are. A list that the edit makes can go
+	// on in a list after it, and then the numbers of later items are
+	// others. Only the first block of a list says that its list starts
+	// there, so no other block in a list is compared.
+	if guard > 0 {
+		after := block_at(doc, last)
+		if after.list_depth > 0 && after.spacing != .List_Start {
+			return false
+		}
+	}
+	end := last + guard
+	p.first, p.count = first, last - first
+	start := first == 0 ? 0 : block_start(doc, first)
+	old_end := end < doc.count ? block_start(doc, end) : len(doc.source)
+	piece := p.source[start:old_end + p.bytes]
+
+	// The definitions of links of the document: the ones before the
+	// piece, the ones in it, and the ones after it. A definition is in
+	// the lines of one block or between two, so none is over an end.
+	before := 0
+	for before < len(doc.defs) && doc.defs[before].end <= start {
+		before += 1
+	}
+	inside := 0
+	for before + inside < len(doc.defs) && doc.defs[before + inside].start < old_end {
+		inside += 1
+	}
+	// The text that is parsed: the definitions of the rest of the
+	// document that the piece can use, before it and after it as they
+	// are in the source (the order says which of two with one name
+	// counts), with an empty line between. A link that a definition
+	// gives its target has the name of the definition in brackets, so
+	// a definition counts when the first word of its name is the first
+	// word in a pair of brackets of the piece.
+	text := make([dynamic]u8, 0, len(piece) + 64)
+	led, trailed := 0, 0
+	if len(doc.defs) > inside {
+		names := names_in(piece)
+		defer delete(names.words)
+		used :: proc(names: Names, def: Def) -> bool {
+			return len(names.words) > 0 && (names.any || def.always || slice.contains(names.words[:], def.word))
+		}
+		for def in doc.defs[:before] {
+			if used(names, def) {
+				append(&text, ..doc.source[def.start:def.end])
+				append(&text, '\n')
+				led += 1
+			}
+		}
+		if led > 0 {
+			append(&text, '\n')
+		}
+		p.base = start - len(text)
+		append(&text, ..piece)
+		for def in doc.defs[before + inside:] {
+			if used(names, def) {
+				if trailed == 0 {
+					append(&text, "\n\n")
+				}
+				append(&text, ..doc.source[def.start:def.end])
+				append(&text, '\n')
+				trailed += 1
+			}
+		}
+	} else {
+		p.base = start
+		append(&text, ..piece)
+	}
+	lead := start - p.base
+	p.fresh = parse_piece(text[:], doc.items, len(p.source))
+	fresh := &p.fresh
+	p.added = fresh.count - guard
+	// The definitions came out as definitions, and the ones of the piece
+	// are the ones it had, with the same text: an edit that changes one
+	// changes text at other places. Each block is in the piece.
+	ok := len(fresh.defs) == led + inside + trailed && fresh.count >= guard
+	for i := 0; ok && i < inside; i += 1 {
+		old, new := doc.defs[before + i], fresh.defs[led + i]
+		ok = new.start >= lead && new.end <= lead + len(piece) && string(doc.source[old.start:old.end]) == string(text[new.start:new.end])
+	}
+	if ok && fresh.count > 0 {
+		ok = block_start(fresh, 0) >= lead && block_start(fresh, fresh.count - 1) < lead + len(piece)
+	}
+	// The limit of the parser for the uses of definitions is of the
+	// text that it parses. Each use of the piece had room in the limit
+	// of the piece, and a parse of all of the source has room for each
+	// use of the document: for the ones so far, the ones of the piece,
+	// and one more, whichever definition it is of.
+	ok &&= !fresh.defs_cut && doc.defs_used + fresh.defs_used + doc.def_longest < defs_limit(len(p.source))
+	// The blocks after the edit, as they were, at their place.
+	for i := 0; ok && i < guard; i += 1 {
+		old, new := last + i, fresh.count - guard + i
+		ok = layout_equal(block_at(doc, old), block_at(fresh, new)) && block_start(doc, old) + p.bytes == p.base + block_start(fresh, new)
+	}
+	if !ok {
+		destroy(fresh)
+		return false
+	}
+	// Of the definitions, the ones of the piece stay, where the new
+	// source has them.
+	p.defs_first = before
+	remove_range(&fresh.defs, led + inside, len(fresh.defs))
+	remove_range(&fresh.defs, 0, led)
+	for &def in fresh.defs {
+		def.start += p.base
+		def.end += p.base
+	}
+	return true
+}
+
+// Frees what is left of an edit: before `commit`, the new source and the
+// new blocks; after it, the old ones.
+discard :: proc(p: ^Pending) {
+	destroy(&p.fresh)
+	delete(p.source)
+	p^ = {}
+}
+
+// Makes an edit of the source of a document that `prepare` made ready,
+// with no change to the document between the two, and says which range
+// of its blocks changed. The blocks at the start and at the end of what
+// was parsed that are the same for a layout keep their place in memory,
+// when the range is not in their part; each block that was not parsed
+// stays as it is.
+commit :: proc(doc: ^Document, p: ^Pending) -> (change: Change) {
+	fresh := &p.fresh
+	end := p.first + p.count
+	// The lines that the source gets. A line ends at a byte or not by
+	// that byte and the next one, so the byte before the edit counts.
+	lines :=
+		count_lines(p.source, p.edit.start - 1, p.edit.end + p.bytes) -
+		count_lines(doc.source, p.edit.start - 1, p.edit.end)
+
+	// The parts that can get other blocks: for the time of the change,
+	// the offsets of their blocks count from the start of the new source.
+	// Each block after the edit is that much later; for the parts after
+	// these, that is one number.
+	low, high := 0, -1
+	if doc.count > 0 {
+		low, _ = locate(doc, max(p.first - 1, 0))
+		high, _ = locate(doc, min(end, doc.count - 1))
+	}
+	for part, i in doc.parts[low:high + 1] {
+		for &b, slot in part_blocks(part) {
+			move_block(&b, part.source + (doc.starts[low + i] + slot >= end ? p.bytes : 0))
+		}
+	}
+	for part in doc.parts[high + 1:] {
+		part.source += p.bytes
+		part.line += lines
+	}
+	for part in fresh.parts {
+		for &b in part_blocks(part) {
+			move_block(&b, p.base + part.source)
+		}
+	}
+
+	// The links of the new blocks go to the end of the list.
+	if p.all {
+		doc.links, fresh.links = fresh.links, doc.links
+		doc.links_parsed = len(doc.links)
+		doc.defs, fresh.defs = fresh.defs, doc.defs
+		doc.defs_marked, doc.defs_cut = fresh.defs_marked, fresh.defs_cut
+		doc.defs_used, doc.def_longest = fresh.defs_used, fresh.def_longest
+	} else {
+		for part in fresh.parts {
+			for &b in part_blocks(part) {
+				for &t in block_texts(&b) {
+					for &span in t.spans {
+						span.link += span.link > 0 ? len(doc.links) : 0
+					}
+				}
+			}
+		}
+		append(&doc.links, ..fresh.links[:])
+		clear(&fresh.links)
+		// The definitions of the piece are where the new source has
+		// them; the ones after it are as much later as the source is
+		// longer.
+		copy(doc.defs[p.defs_first:], fresh.defs[:])
+		for &def in doc.defs[p.defs_first + len(fresh.defs):] {
+			def.start += p.bytes
+			def.end += p.bytes
+		}
+		doc.defs_used += fresh.defs_used
+	}
+	doc.items = fresh.items
+	doc.source, p.source = p.source, doc.source
+
+	// The same blocks at the start, and at the end of what is left. Each
+	// is taken over as it is found.
+	shortest := min(p.count, p.added)
+	head, tail := 0, 0
+	for old, new := walk_from(doc, p.first, 1), walk(fresh, 1); head < shortest; head += 1 {
+		a, b := walk_block(&old), walk_block(&new)
+		if !layout_equal(a, b) {
+			break
+		}
+		adopt(a, b)
+		walk_next(&old)
+		walk_next(&new)
+	}
+	for old, new := walk_from(doc, end - 1, -1), walk_from(fresh, p.added - 1, -1); tail < shortest - head; tail += 1 {
+		a, b := walk_block(&old), walk_block(&new)
+		if !layout_equal(a, b) {
+			break
+		}
+		adopt(a, b)
+		walk_next(&old)
+		walk_next(&new)
+	}
+	change = {
+		first   = p.first + head,
+		removed = p.count - head - tail,
+		added   = p.added - head - tail,
+		count   = doc.count - p.count + p.added,
+	}
+	if change.removed > 0 || change.added > 0 {
+		rebuild(doc, fresh, head, &change)
+	}
+	// The offsets count from the parts again.
+	anchor(doc, low, high + change.parts_added - change.parts_removed)
+	return
+}
+
+// Makes an edit of the source of a document in one step. For a caller
+// with no readers beside it.
+apply :: proc(doc: ^Document, edit: Edit) -> Change {
+	p := prepare(doc, edit)
+	defer discard(&p)
+	return commit(doc, &p)
+}
+
+// Puts the blocks `change.added` of `fresh`, from the block `from` of it
+// on, in the place of the blocks `change.removed` of `doc`. The parts that have a block of the range, or
 // the block before it or after it, are made again; each other part stays.
 @(private)
-rebuild :: proc(doc, fresh: ^Document, change: ^Change) {
+rebuild :: proc(doc, fresh: ^Document, from: int, change: ^Change) {
 	end := change.first + change.removed
 	// The parts from the one of the first block of the range to the one
 	// of the first block after it go. For a range at the end, that is the
@@ -226,7 +577,7 @@ rebuild :: proc(doc, fresh: ^Document, change: ^Change) {
 		append(&blocks, ..doc.parts[first].blocks[:keep_before])
 	}
 	for i in 0 ..< change.added {
-		b := block_at(fresh, change.first + i)
+		b := block_at(fresh, from + i)
 		append(&blocks, b^)
 		b^ = {}
 	}

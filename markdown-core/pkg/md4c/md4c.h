@@ -484,6 +484,29 @@ typedef struct MD_PARSER {
      * start of a paragraph) still count as its start.
      */
     void (*block_offset)(MD_BLOCKTYPE /*type*/, MD_OFFSET /*offset*/, void* /*userdata*/);
+
+    /* Not in upstream md4c (see README.md of this folder). Optional (may be
+     * NULL).
+     *
+     * Called for each link reference definition when the parser takes it
+     * out of its paragraph, also for one that an earlier definition of the
+     * same label makes of no effect: with the offsets in the input of its
+     * first byte (the '[' of its label) and of the end of its last line.
+     * The calls come in the order of the input, before any call for a
+     * block.
+     */
+    void (*ref_def)(MD_OFFSET /*beg*/, MD_OFFSET /*end*/, void* /*userdata*/);
+
+    /* Not in upstream md4c (see README.md of this folder). Optional (may be
+     * NULL).
+     *
+     * Called each time a link or an image takes its target from a link
+     * reference definition: with the size that the use counts for in the
+     * limit of the parser for such uses (16 times the input size, 1 MB at
+     * most), and non-zero when the limit had room for it. A use that it
+     * had no room for is text, not a link, and so is each use after it.
+     */
+    void (*ref_def_use)(MD_SIZE /*size*/, int /*accepted*/, void* /*userdata*/);
 } MD_PARSER;
 
 

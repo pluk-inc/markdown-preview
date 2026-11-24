@@ -84,16 +84,19 @@ These came from the maintainer. Do not undo one without asking.
   `mdcore_style` must be made in the header and in `base.Style` together;
   the two have the same fields in the same order.
 - `pkg/md4c` is a copy of upstream with one change, which is also there
-  as a patch file: the parser says where in the source each block starts
-  (`pkg/md4c/README.md`). Do not add another change, but for something
+  as a patch file: the parser says where in the source each block starts,
+  where each definition of a link is, and what each use of one counts
+  for in its limit (`pkg/md4c/README.md`). Do not add another change, but for something
   that only the parser knows and that the core cannot do without.
 - The document keeps its source (`Document.source`), and each block has
   its range of it (`document.block_source`): from the start of its first
   line to the start of the next block's first line, so the ranges of all
   blocks are the source. The first block of a list item or a quote
-  starts at the line of their mark. Only the start of a block that is in
-  no list and no quote is a place where a parse of a piece of the source
-  can start: a block inside has the marks of what it is in before it.
+  starts at the line of their mark. An offset in a block (`Block.source`,
+  `Block.task_mark`) counts from the start of its part (`Part.source`),
+  and a part has the number of lines before it (`Part.line`): an edit
+  then moves all that is after it with two numbers for each part. Read
+  an offset through `block_start` and `task_line`, not from the field.
   The source is always
   the text of the blocks: code that changes a block in place changes the
   source too (`set_task_done`). A field of a block that a layout reads
@@ -140,7 +143,46 @@ These came from the maintainer. Do not undo one without asking.
   the layout of the parts that changed) is there one time. A call
   that changes the source holds `source_lock` from its edit to its end,
   so an edit is of the source that is there; the parse runs with only
-  that lock, which no frame takes. Do not end the
+  that lock, which no frame takes.
+- An edit parses a piece of the source, not all of it (`document.prepare`,
+  then `commit`). The result must be the document that a parse of all of
+  the new source gives, each time; the tests compare the two for each
+  of some thousand random edits, and a change to this code runs them.
+  What makes a piece right:
+  - It starts at a block that is in no list and no quote (or is the
+    first of one): the lines before such a block do not change what it
+    is. One such block earlier when the edit is in the first line of
+    its block, because that line can become a part of the block before.
+  - It ends at a block start after the edit, and has two blocks more
+    (`GUARD_BLOCKS`). Those two must come out as they were, at their
+    place. If the edit opened something that takes the text after it (a
+    code fence, a raw HTML block, a list that the next lines go into),
+    they do not, and all of the source is parsed. The two are only
+    compared: the document keeps its own blocks there. They show that
+    they are as they were, not that the lists around them are: a list
+    that the edit makes can go on in the list after it, and then later
+    items have other numbers. So a block in a list is compared only
+    when it is the first block of its list (`List_Start`).
+  - A definition of a link changes text at any distance. The piece is
+    parsed with the definitions of the rest of the document that it
+    can use (the first word of the name is the first word in a pair of
+    brackets of the piece), and its own definitions must come out with
+    the text they had: an edit that makes, changes, or takes out a
+    definition is a parse of all. The parser takes two names as one by
+    rules for all of Unicode; a name with a byte that is not plain
+    ASCII counts for each piece, and a piece with such a name gets each
+    definition.
+  - The parser has a limit for the uses of definitions that is of the
+    size of the text it parses (16 times, 1 MB at most). A piece is
+    right only when each of its uses had room in the limit of the
+    piece, and a parse of all has room for each use of the document
+    (`Document.defs_used`, which an edit adds to and takes nothing off,
+    so after many edits one of them is a parse of all).
+  - What a parse numbers from the start of the document is made right
+    for a piece: list items get numbers after the last one of the
+    document (`Document.items`), links go to the end of the list of
+    links, and the limit for the cells of a table is the one of all of
+    the source. Do not end the
   layout for a new text: `document.replace` keeps the blocks at the start
   and at the end of the document that are the same for a layout at their
   address (`adopt`), and `layout.apply_change` keeps the records of each
@@ -459,18 +501,18 @@ Task check boxes, left on purpose:
 - The system moves the check boxes with the scroll view; the text is drawn
   by the render thread. A box can be one frame ahead of its text. Not
   measured.
-- `Block.done` and `Block.task_line` are on each block of an item, and
-  `Block.item` says which item that is (a number from the parser). They
-  belong to one item record when the model gets containers.
+- `Block.done` is on each block of an item, and
+  `Block.item` says which item that is (a number from the parser). The
+  two belong to one item record when the model gets containers.
 - `ContentViewController` keeps the scroll place when the same file opens
   again (`isSameFile`). That is a guess of the caller's intent, and a third
   scroll channel beside the two that the web view has. One scroll intent
   on `display` (top, keep, anchor, target) for the two renderers would
   replace it.
-- The task is known by its source line in the C API, which the parser
-  counts from md4c's byte offset, because the app's toggle takes a line.
-  The model has the byte offset too (`Block.task_mark`). A byte offset
-  in the C API would follow the rule for text offsets.
+- The task is known by its source line in the C API, because the app's
+  toggle takes a line. The model has only the byte offset
+  (`Block.task_mark`) and counts the line from its part when asked. A
+  byte offset in the C API would follow the rule for text offsets.
 - The heap depends on the size of a block in a way that is not
   explained: with a block of 280 bytes (58 in a part) the benchmark
   shows 1.6 MB less heap for 1 MB of text than with one of 264 bytes (61
@@ -549,15 +591,36 @@ The order of the next steps, from the review of the second step:
   for a key under 1 ms as the parse of what changed. For it, the
   records of a part must let one block's records be put in the place
   of the old ones.
-- `Block.source` is an offset in all of the source. With a parse of
-  only what changed, each block after an edit needs a new offset. An
-  offset from the start of its part, and a start for each part, makes
-  that a change to the parts only.
-- Next: the parse of what changed only: with the ranges, the parser can
-  read the blocks around a change and stop where its blocks are the
-  ones of before. Measure first; a definition of a link changes text at
-  any distance, so a document with one needs a rule (a full parse of
-  100 KB is 2 ms).
+- Done: an edit parses only the blocks around it, and the offsets of
+  the blocks count from their part. A typed character in 1 MB: the
+  parse side is 0.5 ms (10 ms before).
+- Next: a layout that makes only the changed block again. It is what is
+  left of a key: 3 to 4 ms when the view shows the part of the change.
+- Then: an identity of a block that stays through a change (2).
+- The source is one piece of memory, and each edit makes a copy of it
+  with the change (about 0.2 ms for 1 MB, the largest part of what is
+  left of the parse side). A store of the text that an edit changes in
+  place (a gap, or pieces) removes it.
+- A piece starts at a block that is in no list and no quote. An edit
+  far down a list of some thousand items parses the list from its
+  start.
+- A document with many definitions of one name (the long benchmark
+  document has each of its 25 definitions 128 times) gives a piece all
+  of them, when the piece has the first word of the name. The first one
+  with a name is the one that counts; the others could stay out.
+- The list of links (`Document.links`) gets the links of the blocks of
+  each edit and loses none, until the next parse of all. When it is two
+  times as long as the last parse of all made it, the next edit is a
+  parse of all. Links that belong to their block would need no list.
+- An edit that the piece is not right for costs the parse of the piece
+  and then the parse of all.
+- The first block of a list is `List_Start` only when no other list
+  starts in its first item: for "1. - b" the list inside takes the
+  mark, and the block gets the space of a later item. A layout fault
+  that was there before; and an edit before such a list is a parse of
+  all.
+- The searches for a place in an ordered list are written out in five
+  procedures of `document.odin` now. One helper is not made.
 
 Left on purpose in the first step:
 
@@ -771,3 +834,20 @@ export.
   of the full part for one changed block, not the parse. Two
   threads that change the source at one time are in order by a lock
   for such calls, which a frame does not take.
+- **2026-11-24** — Eighth step of the base: an edit parses only the
+  blocks around it. The piece starts at a block in no list and no
+  quote, and ends two blocks after the edit; when those two do not come
+  out as they were, all of the source is parsed, as before. The first
+  form sent each document with a definition of a link to the parse of
+  all, and the benchmark document, which has definitions as many real
+  documents do, had no gain. So the parser copy says where each
+  definition is (the second callback of its one change), and a piece
+  is parsed with the definitions that its words can use. Offsets in
+  the blocks count from their part, so a block after an edit is not
+  touched. The random edits of the step before found three faults
+  while this was written, and a review that looked for a piece that is
+  not the document of its source found three more (a list that goes on
+  in the next list, names with letters that are not ASCII, the limit
+  of the parser for uses of definitions); each is a rule and a test
+  now. A typed character in the middle of 1.1 MB: 1.5 ms of CPU (10.4
+  before).
