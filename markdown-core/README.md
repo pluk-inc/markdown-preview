@@ -58,7 +58,9 @@ own text system counts in.
 
 The host of this app is
 `md-preview/Features/NativeRenderer/NativeRendererView.swift`. It owns the
-view, its `CAMetalLayer`, the scroll position, and the input events.
+view, its `CAMetalLayer`, the scroll position, and the input events. It
+draws the frames on a queue of its own, so the main thread stays free for
+events; `include/mdcore.h` says which calls can come from which thread.
 
 ## Build
 

@@ -1,7 +1,6 @@
 package layout
 
 import "../text"
-import "base:runtime"
 
 // The window: the part of the page whose lines keep their shaped text.
 //
@@ -30,7 +29,6 @@ keep :: proc(l: ^Layout, y0, y1: f32) {
 shaped_line :: proc(l: ^Layout, index: int) -> ^Line {
 	line := &l.lines[index]
 	if !text.line_shaped(line.line) {
-		runtime.DEFAULT_TEMP_ALLOCATOR_TEMP_GUARD()
 		para := &l.paras[line.para]
 		if para.handle == nil {
 			shape_para(l, para)

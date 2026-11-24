@@ -2,8 +2,16 @@
 //
 // The host app owns a view with a CAMetalLayer, the scroll position, and the
 // input events. The core parses the Markdown, lays it out, and draws into
-// the layer. All calls are made on the main thread. Sizes and positions are
-// in points; "document space" is the view's y plus the scroll offset.
+// the layer. Sizes and positions are in points; "document space" is the
+// view's y plus the scroll offset.
+//
+// Threads: a call on a renderer can come from any thread. The core lets
+// one call at a time work on a renderer, with one exception: mdcore_draw
+// gives the renderer free before it waits for the display, so the other
+// calls do not wait for a frame. Draws do not overlap, and mdcore_resize
+// and mdcore_destroy wait for the draw in progress. Two things stay with
+// the host: calls of mdcore_create do not overlap, and no call uses a
+// renderer after its mdcore_destroy began.
 #ifndef MDCORE_H
 #define MDCORE_H
 
@@ -66,7 +74,8 @@ bool mdcore_layout_more(void *ctx, double budget_ms);
 // Height of the part that is laid out so far.
 double mdcore_content_height(void *ctx);
 
-// Draws one frame at the given scroll offset.
+// Draws one frame at the given scroll offset. Can wait for the display;
+// see "Threads" above.
 void mdcore_draw(void *ctx, double scroll_y);
 
 // Selection. phase: 0 = mouse down, 1 = drag. x, y are in document space.

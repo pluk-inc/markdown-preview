@@ -15,6 +15,7 @@ package mdcore
 import "base"
 import "base:runtime"
 import "core:c"
+import "core:sync"
 import "document"
 import "layout"
 import "renderer"
@@ -33,6 +34,17 @@ KEPT_BELOW :: SHOWN_BELOW + 2
 SHOWN_MARGIN :: 0.5
 
 Ctx :: struct {
+	// One call at a time works on the state. The host can call from its
+	// main thread and from a thread that draws.
+	lock:            sync.Mutex,
+	// Held for all of a draw, which gives `lock` free before it waits for
+	// the display. A call that the frame in progress cannot live with (a
+	// new size, the end of the view) takes it first.
+	draw_lock:       sync.Mutex,
+	// Working memory of one call. The context's own is one for each
+	// thread, and the threads of a host's queue come and go.
+	scratch:         runtime.Default_Temp_Allocator,
+	temp:            runtime.Allocator,
 	doc:             document.Document,
 	style:           base.Style,
 	page:            layout.Layout,
@@ -135,10 +147,25 @@ mdcore_create :: proc "c" (surface: rawptr) -> rawptr {
 		runtime_started = true
 	}
 	ctx := new(Ctx)
+	runtime.default_temp_allocator_init(&ctx.scratch, 64 * 1024, context.allocator)
+	ctx.temp = runtime.default_temp_allocator(&ctx.scratch)
 	ctx.scale = 2
 	ctx.style = default_style()
 	renderer.init(&ctx.gpu, surface)
 	return ctx
+}
+
+// Takes the view's state for one call and gives it back at the end of the
+// caller's scope, with the working memory of the call freed.
+@(private, deferred_in = release)
+hold :: proc(ctx: ^Ctx) {
+	sync.lock(&ctx.lock)
+}
+
+@(private)
+release :: proc(ctx: ^Ctx) {
+	free_all(ctx.temp)
+	sync.unlock(&ctx.lock)
 }
 
 // Frees the view's state. The surface stays with the host.
@@ -149,6 +176,9 @@ mdcore_destroy :: proc "c" (handle: rawptr) {
 	if ctx == nil {
 		return
 	}
+	// After the frame and the call in progress. The locks go with the state.
+	sync.lock(&ctx.draw_lock)
+	sync.lock(&ctx.lock)
 	layout.destroy(&ctx.page)
 	document.destroy(&ctx.doc)
 	text.cache_destroy(&ctx.cache)
@@ -159,6 +189,7 @@ mdcore_destroy :: proc "c" (handle: rawptr) {
 	delete(ctx.selection_quads)
 	text.glyph_buffer_destroy(&ctx.glyph_buffer)
 	delete(ctx.clipboard)
+	runtime.default_temp_allocator_destroy(&ctx.scratch)
 	free(ctx)
 }
 
@@ -167,6 +198,8 @@ mdcore_destroy :: proc "c" (handle: rawptr) {
 mdcore_set_style :: proc "c" (handle: rawptr, style: ^base.Style) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
 	fresh := style^
 	// A font the host left out falls back on another one.
 	if fresh.body_font == nil {
@@ -193,6 +226,8 @@ mdcore_set_style :: proc "c" (handle: rawptr, style: ^base.Style) {
 mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
 	// The layout points into the old document.
 	layout.begin(&ctx.page, nil, ctx.style, 0)
 	document.destroy(&ctx.doc)
@@ -210,6 +245,11 @@ mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 mdcore_resize :: proc "c" (handle: rawptr, width, height, scale: f64) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	// Not in the middle of a frame, which has the old size.
+	sync.lock(&ctx.draw_lock)
+	defer sync.unlock(&ctx.draw_lock)
+	hold(ctx)
 	if f32(scale) != ctx.cache.scale {
 		// Every glyph bitmap has the old size.
 		text.cache_set_scale(&ctx.cache, f32(scale))
@@ -236,6 +276,8 @@ mdcore_resize :: proc "c" (handle: rawptr, width, height, scale: f64) {
 mdcore_layout_more :: proc "c" (handle: rawptr, budget_ms: f64) -> bool {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
 	if !ctx.layout_valid || layout.done(&ctx.page) {
 		return false
 	}
@@ -249,27 +291,39 @@ mdcore_layout_more :: proc "c" (handle: rawptr, budget_ms: f64) -> bool {
 
 @(export)
 mdcore_content_height :: proc "c" (handle: rawptr) -> f64 {
-	return f64((cast(^Ctx)handle).page.content_height)
+	ctx := cast(^Ctx)handle
+	sync.lock(&ctx.lock)
+	defer sync.unlock(&ctx.lock)
+	return f64(ctx.page.content_height)
 }
 
 @(export)
 mdcore_draw :: proc "c" (handle: rawptr, scroll_y: f64) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
-	if !ctx.layout_valid {
-		return
+	context.temp_allocator = ctx.temp
+	sync.lock(&ctx.draw_lock)
+	defer sync.unlock(&ctx.draw_lock)
+	frame: renderer.Frame
+	{
+		hold(ctx)
+		if !ctx.layout_valid {
+			return
+		}
+		ctx.scroll = f32(scroll_y)
+		keep_window(ctx)
+		// The view can scroll past what the steps laid out so far.
+		if layout.step(&ctx.page, ctx.scroll + 2 * ctx.height) {
+			ctx.display_valid = false
+		}
+		if !ctx.display_valid || left_shown_part(ctx) {
+			show(ctx)
+		}
+		renderer.sync_atlases(&ctx.gpu, &ctx.cache)
+		frame = renderer.frame_begin(&ctx.gpu, f32(int(ctx.scroll * ctx.scale)) - ctx.origin_px)
 	}
-	ctx.scroll = f32(scroll_y)
-	keep_window(ctx)
-	// The view can scroll past what the steps laid out so far.
-	if layout.step(&ctx.page, ctx.scroll + 2 * ctx.height) {
-		ctx.display_valid = false
-	}
-	if !ctx.display_valid || left_shown_part(ctx) {
-		show(ctx)
-	}
-	renderer.sync_atlases(&ctx.gpu, &ctx.cache)
-	renderer.draw(&ctx.gpu, f32(int(ctx.scroll * ctx.scale)) - ctx.origin_px)
+	// The frame can wait for the display. Other calls go on meanwhile.
+	renderer.frame_draw(&frame)
 }
 
 // phase 0 = mouse down, 1 = drag. x and y are points in document space.
@@ -277,6 +331,8 @@ mdcore_draw :: proc "c" (handle: rawptr, scroll_y: f64) {
 mdcore_mouse :: proc "c" (handle: rawptr, x, y: f64, phase: c.int) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
 	pos, ok := layout.hit_test(&ctx.page, f32(x), f32(y))
 	if !ok {
 		return
@@ -293,6 +349,8 @@ mdcore_mouse :: proc "c" (handle: rawptr, x, y: f64, phase: c.int) {
 mdcore_select_all :: proc "c" (handle: rawptr) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
 	// All of the document, not only the part that is laid out so far.
 	layout.step(&ctx.page, 1e30)
 	ctx.selection = layout.select_all(&ctx.page)
@@ -304,6 +362,8 @@ mdcore_select_all :: proc "c" (handle: rawptr) {
 mdcore_selection_text :: proc "c" (handle: rawptr, length: ^c.long) -> [^]u8 {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
 	clear(&ctx.clipboard)
 	layout.selection_text(&ctx.page, ctx.selection, &ctx.clipboard)
 	length^ = c.long(len(ctx.clipboard))

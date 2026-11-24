@@ -14,9 +14,10 @@
 //  and draws the page there.
 //
 //  Drawing follows the display, not the events: a scroll or a selection
-//  change only marks the view, and a display link draws one frame for the
-//  next refresh. A draw waits for a drawable, so one draw for each event
-//  would hold the main thread and make the scroll fall behind the fingers.
+//  change only marks the view, and a display link asks for one frame for
+//  the next refresh. The frame is drawn on a queue of this view, because a
+//  draw can wait for a drawable and can make glyph bitmaps, and on the main
+//  thread that made the scroll fall behind the fingers.
 //
 //  The core is a static archive that the "Build Markdown Core" phase makes
 //  and the app target links. `MDCore` is its C header, as a module.
@@ -33,6 +34,16 @@ final class NativeRendererView: NSView {
     private let scrollView = NSScrollView()
     private let page = PageArea()
     private var layoutScheduled = false
+    /// Goes up with each new layout (a document, a size, a style).
+    private var layoutCount = 0
+    /// The frames and the layout steps run here, one after the other, so
+    /// work that makes glyphs, breaks lines, or waits for the display does
+    /// not hold the main thread. The core takes calls from any thread. A
+    /// block for this queue must not keep the view alive: the last release
+    /// would run `deinit` on the queue, which waits for the queue.
+    private let renderQueue = DispatchQueue(label: "md-preview.native-renderer", qos: .userInteractive)
+    /// True from the time a frame goes to the queue until it is drawn.
+    private var frameInFlight = false
     private var laidOutSize = NSSize.zero
     private var laidOutScale = 0.0
 
@@ -99,7 +110,7 @@ final class NativeRendererView: NSView {
 
     /// Asks for a frame at the next refresh.
     private func setNeedsDraw() {
-        guard let displayLink else { return draw() }
+        guard let displayLink else { return draw(wait: true) }
         needsDraw = true
         displayLink.isPaused = false
     }
@@ -114,8 +125,7 @@ final class NativeRendererView: NSView {
             if progress >= 1 { scrollAnimation = nil }
         }
         if needsDraw {
-            needsDraw = false
-            draw()
+            draw(wait: false)
         } else {
             link.isPaused = true
         }
@@ -149,10 +159,8 @@ final class NativeRendererView: NSView {
 
     /// Makes the scroll view's page as tall as what the core laid out.
     private func updatePageHeight() {
-        let height = max(mdcore_content_height(ctx), 1)
-        if page.frame.size != NSSize(width: bounds.width, height: height) {
-            page.setFrameSize(NSSize(width: bounds.width, height: height))
-        }
+        let size = NSSize(width: bounds.width, height: max(mdcore_content_height(ctx), 1))
+        if page.frame.size != size { page.setFrameSize(size) }
     }
 
     /// The zoom of the document: the text size is the body size times this.
@@ -179,6 +187,8 @@ final class NativeRendererView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     deinit {
+        // No frame may be in the queue when the core goes away.
+        renderQueue.sync {}
         mdcore_destroy(ctx)
     }
 
@@ -203,36 +213,68 @@ final class NativeRendererView: NSView {
         guard force || bounds.size != laidOutSize || scale != laidOutScale else { return }
         laidOutSize = bounds.size
         laidOutScale = scale
-        mdcore_resize(ctx, bounds.width, bounds.height, scale)
-        updatePageHeight()
-        draw()
+        let size = bounds.size
+        layoutCount += 1
+        // The new size, then its frame, in one visit to the queue.
+        draw(wait: true) { [ctx] in mdcore_resize(ctx, size.width, size.height, scale) }
         continueLayout()
     }
 
-    private func draw() {
+    /// Draws one frame on the render queue. With `wait` the main thread
+    /// waits for it: the first frame of a document and the frame for a new
+    /// size must be there with the window's. Without it, a frame that is
+    /// wanted while one is in the queue waits for the next refresh.
+    /// `before` runs on the queue ahead of the draw.
+    private func draw(wait: Bool, before: (@Sendable () -> Void)? = nil) {
+        guard wait || !frameInFlight else { return }
+        needsDraw = false
         guard hasDocument, bounds.width > 0, bounds.height > 0 else { return }
-        autoreleasepool { mdcore_draw(ctx, scrollY) }
+        nonisolated(unsafe) let ctx = ctx
+        let y = scrollY
+        let frame: @Sendable () -> Void = {
+            before?()
+            autoreleasepool { mdcore_draw(ctx, y) }
+        }
         // A draw can lay out more of the page, when the view came to the
-        // end of what the steps reached.
-        updatePageHeight()
+        // end of what the steps reached. The main thread reads the height
+        // itself: a height sent from the queue can come after a newer one.
+        if wait {
+            renderQueue.sync(execute: frame)
+            updatePageHeight()
+        } else {
+            frameInFlight = true
+            renderQueue.async { [weak self] in
+                frame()
+                DispatchQueue.main.async {
+                    self?.frameInFlight = false
+                    self?.updatePageHeight()
+                }
+            }
+        }
     }
 
     /// Lays out the rest of a long document in steps shorter than a frame,
-    /// between events.
+    /// on the render queue, so frames go between them.
     private func continueLayout() {
         guard !layoutScheduled else { return }
         layoutScheduled = true
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.layoutScheduled = false
-            let more = mdcore_layout_more(self.ctx, 8)
-            self.updatePageHeight()
-            if more { self.continueLayout() }
+        nonisolated(unsafe) let ctx = ctx
+        let layout = layoutCount
+        renderQueue.async { [weak self] in
+            let more = mdcore_layout_more(ctx, 4)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.layoutScheduled = false
+                self.updatePageHeight()
+                // A step that ran for a layout before the present one
+                // says nothing about what is left of this one.
+                if more || layout != self.layoutCount { self.continueLayout() }
+            }
         }
     }
 
     override func updateLayer() {
-        draw()
+        draw(wait: true)
     }
 
     override func setFrameSize(_ newSize: NSSize) {
