@@ -348,9 +348,10 @@ Task check boxes, left on purpose:
 - A place is an address in the document: block, cell, byte. It needs no
   layout to be made, so Find, a jump to a footnote or a heading, and the
   way back from Edit mode can use it; none of them does yet. The same
-  file with a change keeps "the same block number": text that another
-  app put in above the reader as new blocks moves the place. A map of
-  the address through the change would remove that.
+  file that opens again with a change does not use it: a block number of
+  the old text can be other text in the new one, so the view keeps its
+  offset in points there, as before. Blocks with a stable identity, or a
+  map of the address through the change, would let it keep the place.
 - A selection position is still a layout address (the reading-order
   number of a paragraph). It is the next thing to move to block, cell,
   and byte.

@@ -472,9 +472,10 @@ final class NativeRendererView: NSView {
             return
         }
         shownMarkdown = markdown
-        // The same file with a change: its text is mostly where it was,
-        // by block and byte, so the reader's place is asked for again.
-        let place = keepsScroll ? placeAtTop() : nil
+        // Another text has other blocks: a place of the old one (a block
+        // number) can be other text in it. The same file with a change
+        // keeps its offset in points, which is near the same text.
+        keptPlace = nil
         var text = markdown
         text.withUTF8 { utf8 in
             utf8.withMemoryRebound(to: CChar.self) { mdcore_set_markdown(ctx, $0.baseAddress, $0.count) }
@@ -490,14 +491,15 @@ final class NativeRendererView: NSView {
         // Before the layout: it lays out what the view shows, and that must
         // be the top of a new document, not the place the old one was at.
         if !keepsScroll { scroll(toY: topScrollY) }
-        relayout(force: true, keeping: place)
+        relayout(force: true, keeping: nil, takesPlace: false)
     }
 
     /// Gives the core the view's size and draws. Skips a call that changes
     /// nothing, because one turn can report the same size more than once.
     /// `keeping`: the reader's place, taken by a caller whose change ended
-    /// the layout already (a new style, a new text).
-    private func relayout(force: Bool = false, keeping kept: mdcore_place? = nil) {
+    /// the layout already (a new style). `takesPlace` false: the layout
+    /// that is there is of another text, and the offset stays as it is.
+    private func relayout(force: Bool = false, keeping kept: mdcore_place? = nil, takesPlace: Bool = true) {
         // The core needs this layout also when the view has no size now
         // and gets its old size back later.
         if force { laidOutSize = .zero }
@@ -514,7 +516,7 @@ final class NativeRendererView: NSView {
         layoutCount += 1
         // The first text that the reader sees stays where it is on screen:
         // its place, from the layout that is there still.
-        let place = kept ?? placeAtTop()
+        let place = takesPlace ? kept ?? placeAtTop() : nil
         let topInset = topInset
         let top = topScrollY
         let viewHeight = scrollView.contentView.bounds.height
