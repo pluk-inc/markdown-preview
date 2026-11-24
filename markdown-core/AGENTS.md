@@ -116,9 +116,12 @@ These came from the maintainer. Do not undo one without asking.
   something, and do not read a height of the page as if it started at 0.
 - The text of the document comes in through one call, also when it is
   the text before with a change (`mdcore_set_markdown`). Do not end the
-  layout for a new text: `document.replace` keeps each block that is the
-  same for a layout at its address (`adopt`), and `layout.apply_change`
-  keeps the records of each part that was not made again. Code that
+  layout for a new text: `document.replace` keeps the blocks at the start
+  and at the end of the document that are the same for a layout at their
+  address (`adopt`), and `layout.apply_change` keeps the records of each
+  part that was not made again. All between the first and the last
+  block that changed is made again, also a block there that did not
+  change. Code that
   holds an address through a change takes its new one from
   `document.moved` (an address in the blocks that changed goes to the
   start of them). The parse of the new text runs before the core takes
