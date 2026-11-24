@@ -1031,6 +1031,7 @@ test_a_selection_needs_no_layout :: proc(t: ^testing.T) {
 	// between the two ends: all of each line of text there.
 	y := far.page.parts[2].top + 100
 	lay_out(&far.page, y, y + 400, y)
+	expect_ok(t, &far.page)
 	quads: [dynamic]base.Quad
 	defer delete(quads)
 	selection_quads(&far.page, selection, y, y + 400, 2, 0, &quads)
@@ -1038,6 +1039,7 @@ test_a_selection_needs_no_layout :: proc(t: ^testing.T) {
 	// And none for a view outside the selection.
 	clear(&quads)
 	lay_out(&far.page, 0, 200, 0)
+	expect_ok(t, &far.page)
 	selection_quads(&far.page, selection, 0, 200, 2, 0, &quads)
 	testing.expect_value(t, len(quads), 0)
 }

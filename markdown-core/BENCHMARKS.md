@@ -61,7 +61,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-24 | the reader keeps their place when the text is laid out again | 683 / 665 | 56 / 99 | 620 / 1260 | – | – | 0.44 / 0.35 | 6.6 / 20.7 |
 | 2026-11-24 | blocks and layout records in parts of the document | 623 / 611 | 54 / 96 | 500 / 1040 | 64 / 75 | 2.9 / 301 | 0.42 / 0.40 | 6.7 / 20.0 |
 | 2026-11-24 | the layout is made where the view is; estimated heights for the rest | 617 / 634 | 53 / 92 | 490 / 740 | 69 / 45 | none (see the section) | 0.52 / 0.44 | 6.9 / 20.4 (15.5 before Select All) |
-| 2026-11-24 | a selection is two addresses in the document; a copy reads the document | – | – | – | 62 / 66 | none | 0.48 / 0.40 | 7.0 / 21.8 (15.5 before all of it was laid out) |
+| 2026-11-24 | a selection is two addresses in the document; a copy reads the document | 586 / 570 | 58 / 97 | 560 / 820 | 69 / 68 | none | 0.46 / 0.39 | 7.0 / 21.5 (15.4 before all of it was laid out) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -391,8 +391,8 @@ What to read from it:
 
 ## A selection as addresses in the document (2026-11-24)
 
-The base (the layout where the view is) and the change, `core.py`, short
-/ long. Only the core changed, so `app.py` was not run.
+The base (the layout where the view is) and the change, one after the
+other, short / long.
 
 | | Base | Change |
 | --- | --- | --- |
@@ -400,15 +400,20 @@ The base (the layout where the view is) and the change, `core.py`, short
 | Copy of all of the text (ms) | 0.04 / 355, with the layout of all of it | 0.03 / 1.9 |
 | First frame (ms), 7 runs in turn, long | 62 | 44 |
 | Scroll frame, new glyphs / ready (CPU ms), 7 runs in turn, long | 0.446 / 0.370 | 0.468 / 0.397 |
-| Heap after the scroll passes and a copy of all (MB) | 6.9 / 20.4 | 6.6 / 15.5 plus the copied text |
+| Heap after the scroll passes and a copy of all (MB) | 6.9 / 20.4 | 6.6 / 15.4 plus the copied text |
+| `app.py`: launch to the first frame (ms) | 578 / 619 | 586 / 570 |
+| `app.py`: CPU to 3 s after (ms) | 570 / 830 | 560 / 820 |
+| `app.py`: memory (MB) | 57 / 92 | 58 / 97 |
 
 A copy does not lay out anything any more, so the heap stays at what the
 reader went through. The first frame and the scroll frames do the same
 work in the two; the differences are what two runs on this Mac differ by
-(the base ran first in each pair).
+(the base ran first in each pair). The app numbers are the same too; its
+memory for the long document was 92 and 96 MB for one build in two runs
+earlier this day.
 
 `core.py` has a new last step for the number "all of the document laid
-out": frames from the top to the end, each third view height. It costs
-1.4 s of CPU for the long document, most of it for the quads and the
+out": frames from the top to the end, each second view height. It costs
+2.1 s of CPU for the long document, most of it for the quads and the
 glyph bitmaps of each frame, not for the layout (0.33 s when the base
 measured that alone).

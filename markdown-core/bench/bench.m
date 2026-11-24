@@ -155,8 +155,8 @@ int main(int argc, const char *argv[]) {
     printf("scrolled_and_copied_heap_mb %.1f\n", heap_mb());
 
     // All of the document laid out, by frames from the top to the end.
-    // A frame lays out more than three view heights, so each third view
-    // height is enough.
+    // A frame lays out two and a half view heights below its scroll
+    // position, so a step of two view heights reaches the end of the page.
     // CPU time: a frame waits for the display.
     double layout_start = thread_cpu_ms();
     double y = 0, unused = 0;
@@ -168,7 +168,7 @@ int main(int argc, const char *argv[]) {
         @autoreleasepool {
             mdcore_draw(ctx, y);
         }
-        y += 3 * VIEW_HEIGHT;
+        y += 2 * VIEW_HEIGHT;
     }
     printf("full_layout_cpu_ms %.2f\n", thread_cpu_ms() - layout_start);
     // How far the height of the page was from the real one in the same
