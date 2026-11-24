@@ -37,7 +37,7 @@ markdown-core/
 | Keep | `layout` | keeps the shaped text only for the lines near the view, and shapes a line again when the view comes to it, so the largest part of the memory does not grow with the document (the document model and the records of the blocks still do) |
 | Show | `layout` | makes the quads (the display list) of the part of the page around the scroll position only |
 | Draw | `renderer` | draws rectangles, then the selection, then one quad for each glyph |
-| Select | `layout` | hit testing, the highlight, and the copied text |
+| Select | `document`, `layout` | a selection is two addresses in the document; Select All and the copied text read the document, with no layout. The layout finds the address at a point and makes the highlight on the lines that show |
 
 A package uses only the packages before it in the folder list, and `base`
 uses none. `mdcore.odin` uses all of them.

@@ -21,7 +21,8 @@ markdown-core/bench/app.py <Markdown Preview.app>   # the app, cold launch; add 
   two scroll passes of 24,000 points (the first lays out what it comes
   to and makes the glyph bitmaps, the second has them), a jump back to
   the top between them, a jump to the end, a new width there, Select All,
-  a copy of all of the document (which lays out all of it), and the heap. It takes a minute and
+  a copy of all of the text, frames through all of the document (so all
+  of it is laid out), and the heap. It takes a minute and
   shows no window. A scroll frame is CPU time of the drawing thread, because
   a draw waits for the display.
 - **`app.py`** starts a Release build of the app with a document, in the
@@ -60,6 +61,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-24 | the reader keeps their place when the text is laid out again | 683 / 665 | 56 / 99 | 620 / 1260 | – | – | 0.44 / 0.35 | 6.6 / 20.7 |
 | 2026-11-24 | blocks and layout records in parts of the document | 623 / 611 | 54 / 96 | 500 / 1040 | 64 / 75 | 2.9 / 301 | 0.42 / 0.40 | 6.7 / 20.0 |
 | 2026-11-24 | the layout is made where the view is; estimated heights for the rest | 617 / 634 | 53 / 92 | 490 / 740 | 69 / 45 | none (see the section) | 0.52 / 0.44 | 6.9 / 20.4 (15.5 before Select All) |
+| 2026-11-24 | a selection is two addresses in the document; a copy reads the document | 586 / 570 | 58 / 97 | 560 / 820 | 69 / 68 | none | 0.46 / 0.39 | 7.0 / 21.5 (15.4 before all of it was laid out) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -386,3 +388,37 @@ What to read from it:
   0.0% for a 725 KB document of tasks, -0.5% and 0.2% for two documents
   of this repository (`AGENTS.md` of the core, `CHANGELOG.md`). `core.py`
   prints it.
+
+## A selection as addresses in the document (2026-11-24)
+
+The base (the layout where the view is) and the change, one after the
+other, short / long.
+
+| | Base | Change |
+| --- | --- | --- |
+| Select All (ms) | 5.4 / 4.4 | 0.00 / 0.00 |
+| Copy of all of the text (ms) | 0.04 / 355, with the layout of all of it | 0.03 / 1.9 |
+| First frame (ms), 7 runs in turn, long | 62 | 44 |
+| Scroll frame, new glyphs / ready (CPU ms), 7 runs in turn, long | 0.446 / 0.370 | 0.468 / 0.397 |
+| Heap after the scroll passes and a copy of all (MB) | 6.9 / 20.4 | 6.6 / 15.4 plus the copied text |
+| `app.py`: launch to the first frame (ms) | 578 / 619 | 586 / 570 |
+| `app.py`: CPU to 3 s after (ms) | 570 / 830 | 560 / 820 |
+| `app.py`: memory (MB) | 57 / 92 | 58 / 97 |
+
+A copy does not lay out anything any more, so the heap stays at what the
+reader went through. The first frame and the scroll frames do the same
+work in the two; the differences are what two runs on this Mac differ by
+(the base ran first in each pair).
+
+The app memory of the long document was 5 MB higher for the change in
+the run of the table (97 against 92 MB). So the two builds ran again in
+turn, three times each with three launches: launch 566, 544, 561 against
+548, 551, 541 ms; CPU 800, 770, 770 against 770, 780, 770 ms; memory 96,
+96, 95 against 96, 96, 96 MB. No difference. One run of `app.py` can be
+5 MB off for the memory.
+
+`core.py` has a new last step for the number "all of the document laid
+out": frames from the top to the end, each second view height. It costs
+2.1 s of CPU for the long document, most of it for the quads and the
+glyph bitmaps of each frame, not for the layout (0.33 s when the base
+measured that alone).

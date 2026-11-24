@@ -65,7 +65,7 @@ Ctx :: struct {
 	page:            layout.Layout,
 	cache:           text.Glyph_Cache,
 	gpu:             renderer.Renderer,
-	selection:       layout.Selection,
+	selection:       document.Selection,
 	// The view.
 	width, height:   f32, // points
 	page_width:      f32, // the part of the width that the page is laid out in; 0 for all of it
@@ -457,7 +457,7 @@ mdcore_place_y :: proc "c" (handle: rawptr, place: ^Host_Place, y: ^f64) -> bool
 	if !ctx.layout_valid {
 		return false
 	}
-	wanted := layout.Place{int(place.block), int(place.cell), int(place.byte), f32(place.fraction)}
+	wanted := layout.Place{{int(place.block), int(place.cell), int(place.byte)}, f32(place.fraction)}
 	// Only the part of the place, not the parts above it.
 	if layout.lay_out_block(&ctx.page, wanted.block) {
 		layout_changed(ctx)
@@ -518,12 +518,7 @@ mdcore_select_all :: proc "c" (handle: rawptr) {
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
 	hold(ctx)
-	// The text that the view shows stays where it is.
-	changed: bool
-	ctx.selection, changed = layout.select_all(&ctx.page, ctx.scroll)
-	if changed {
-		layout_changed(ctx)
-	}
+	ctx.selection = document.select_all(&ctx.doc)
 	ctx.display_valid = false
 }
 
@@ -535,13 +530,7 @@ mdcore_selection_text :: proc "c" (handle: rawptr, length: ^c.long) -> [^]u8 {
 	context.temp_allocator = ctx.temp
 	hold(ctx)
 	clear(&ctx.clipboard)
-	if from, to, ok := layout.selection_range(ctx.selection); ok && ctx.layout_valid {
-		// The text comes from the records of its blocks.
-		if layout.lay_out_blocks(&ctx.page, from.block, to.block, ctx.scroll) {
-			layout_changed(ctx)
-		}
-		layout.selection_text(&ctx.page, ctx.selection, &ctx.clipboard)
-	}
+	document.selection_text(&ctx.doc, ctx.selection, &ctx.clipboard)
 	length^ = c.long(len(ctx.clipboard))
 	return raw_data(ctx.clipboard)
 }

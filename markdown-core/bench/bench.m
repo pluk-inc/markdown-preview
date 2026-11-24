@@ -143,15 +143,34 @@ int main(int argc, const char *argv[]) {
     // view laid out, for the comparison with the real one below.
     mdcore_page_area(ctx, &top, &height);
 
-    // Select All needs the two ends of the document only.
+    // Select All and a copy of all of the text: the two take the text
+    // from the document, with no layout.
     double select_start = now_ms();
     mdcore_select_all(ctx);
     printf("select_all_ms %.2f\n", now_ms() - select_start);
-    // A copy of all of it takes the text from the records of each block.
-    double layout_start = now_ms();
+    double copy_start = now_ms();
     long copied = 0;
     mdcore_selection_text(ctx, &copied);
-    printf("full_layout_ms %.2f\n", now_ms() - layout_start);
+    printf("copy_all_ms %.2f\n", now_ms() - copy_start);
+    printf("scrolled_and_copied_heap_mb %.1f\n", heap_mb());
+
+    // All of the document laid out, by frames from the top to the end.
+    // A frame lays out two and a half view heights below its scroll
+    // position, so a step of two view heights reaches the end of the page.
+    // CPU time: a frame waits for the display.
+    double layout_start = thread_cpu_ms();
+    double y = 0, unused = 0;
+    mdcore_page_area(ctx, &y, &unused);
+    for (;;) {
+        double page_top = 0, page_height = 0;
+        mdcore_page_area(ctx, &page_top, &page_height);
+        if (y >= page_top + page_height) break;
+        @autoreleasepool {
+            mdcore_draw(ctx, y);
+        }
+        y += 2 * VIEW_HEIGHT;
+    }
+    printf("full_layout_cpu_ms %.2f\n", thread_cpu_ms() - layout_start);
     // How far the height of the page was from the real one in the same
     // width, before any of it was laid out but one view.
     double real = 0;
