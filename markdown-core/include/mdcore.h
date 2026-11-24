@@ -63,9 +63,9 @@ void mdcore_set_style(void *ctx, const mdcore_style *style);
 // Replaces the document. Call mdcore_resize after it to lay it out.
 void mdcore_set_markdown(void *ctx, const char *utf8, long length);
 
-// Sets the view size and backing scale. Lays out what the view shows now
-// when the document, the style, or the width changed. A new scale only
-// makes the glyph bitmaps again.
+// Sets the view size and backing scale. Starts a new layout when the
+// document, the style, or the width changed; the next frame lays out
+// what it shows. A new scale only makes the glyph bitmaps again.
 void mdcore_resize(void *ctx, double width, double height, double scale);
 
 // The page is laid out in the left `width` points of the view, and the
@@ -80,16 +80,11 @@ void mdcore_set_page_width(void *ctx, double width);
 // where the reader goes.
 //
 // Text that the view shows stays at its height when a part above it gets
-// its real height: the top of the page moves in its place
-// (mdcore_content_top), below 0 or above it. All heights of the page in
-// this API (a scroll position, a place, a task, the pointer) count in the
-// same space, in which the page is from mdcore_content_top down for
-// mdcore_content_height points. A host gives its scroll area that range.
-
-// The height of the page, and the height that it starts at. Read the two
-// after a frame or a layout call: each can be another one then.
-double mdcore_content_height(void *ctx);
-double mdcore_content_top(void *ctx);
+// its real height: the top of the page moves in its place, below 0 or
+// above it. All heights of the page in this API (a scroll position, a
+// place, a task, the pointer) count in the same space, in which the page
+// is from its top down for its height (mdcore_page_area). A host gives
+// its scroll area that range.
 
 // A number that goes up each time the layout gave something a place or a
 // height: a frame or a layout call laid out a part, or a new layout
@@ -97,9 +92,9 @@ double mdcore_content_top(void *ctx);
 // page, the places of its controls) takes it again when this changed.
 long mdcore_layout_revision(void *ctx);
 
-// The top and the height of the page and the number of the layout that
-// they are of, from one look: a frame on another thread can change each
-// between two calls.
+// The top and the height of the page, and the number of the layout that
+// they are of (mdcore_layout_revision), from one look: a frame on another
+// thread can change each between two calls.
 long mdcore_page_area(void *ctx, double *top, double *height);
 
 // Lays out the last view heights of the document, so its end is at its
@@ -173,7 +168,7 @@ bool mdcore_place_y(void *ctx, const mdcore_place *place, double *y);
 // decides it and the host shows it: the text cursor on a line of text,
 // the default one in the margin, between blocks, and at a list marker or
 // a check box. Ask again when the pointer moves and when the page moves
-// under it. This call never waits: when a layout step or a frame works on
+// under it. This call never waits: when a layout call or a frame works on
 // the renderer, it returns MDCORE_POINTER_BUSY, and the host keeps the
 // shape that it shows and asks again a little later.
 typedef enum {

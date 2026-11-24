@@ -45,9 +45,8 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
 
     nonisolated(unsafe) private let ctx: UnsafeMutableRawPointer?
     nonisolated(unsafe) private var link: CVDisplayLink?
-    /// Layout steps, and frames that the main thread waits for. The core
-    /// lets one draw at a time run, so these and the link's frames do not
-    /// overlap.
+    /// The frames when there is no display link, and the wait for them
+    /// at the end.
     private let queue = DispatchQueue(label: "md-preview.native-renderer", qos: .userInteractive)
 
     private let lock = NSLock()
@@ -96,11 +95,6 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
         queue.sync {}
     }
 
-    /// Runs `work` off the main thread, between frames.
-    func perform(_ work: @escaping @Sendable () -> Void) {
-        queue.async(execute: work)
-    }
-
     /// Asks for a frame at this scroll offset at the next refresh. A newer
     /// request replaces one that is not drawn yet.
     func requestFrame(at y: Double) {
@@ -119,7 +113,7 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
     /// thread's transaction, so it shows with the window's new size and
     /// with the views that the caller moves after it, not one step before
     /// them. The core lets one call at a time work, so this waits for a
-    /// layout step or a frame of the link that is in progress.
+    /// frame of the link that is in progress.
     @discardableResult
     func frameNow(at offset: Double, before: (() -> Double?)? = nil) -> Double {
         dispatchPrecondition(condition: .onQueue(.main))

@@ -95,7 +95,8 @@ int main(int argc, const char *argv[]) {
     printf("first_frame_heap_mb %.1f\n", heap_mb());
 
     // The height is an estimate for what no frame showed yet.
-    double height = mdcore_content_height(ctx);
+    double top = 0, height = 0;
+    mdcore_page_area(ctx, &top, &height);
 
     double end = height - VIEW_HEIGHT;
     if (end < 0) end = 0;
@@ -116,8 +117,10 @@ int main(int argc, const char *argv[]) {
     // there.
     double end_start = now_ms();
     mdcore_layout_end(ctx);
-    double bottom = mdcore_content_top(ctx) + mdcore_content_height(ctx) - VIEW_HEIGHT;
-    if (bottom < mdcore_content_top(ctx)) bottom = mdcore_content_top(ctx);
+    double end_top = 0, end_height = 0;
+    mdcore_page_area(ctx, &end_top, &end_height);
+    double bottom = end_top + end_height - VIEW_HEIGHT;
+    if (bottom < end_top) bottom = end_top;
     @autoreleasepool {
         mdcore_draw(ctx, bottom);
     }
@@ -137,13 +140,19 @@ int main(int argc, const char *argv[]) {
     }
     printf("resize_at_end_ms %.2f\n", now_ms() - resize_start);
 
-    // All of the document, as Select All needs it.
-    double layout_start = now_ms();
+    // Select All needs the two ends of the document only.
+    double select_start = now_ms();
     mdcore_select_all(ctx);
+    printf("select_all_ms %.2f\n", now_ms() - select_start);
+    // A copy of all of it takes the text from the records of each block.
+    double layout_start = now_ms();
+    long copied = 0;
+    mdcore_selection_text(ctx, &copied);
     printf("full_layout_ms %.2f\n", now_ms() - layout_start);
     // How far the height of the page was from the real one before any
     // of it was laid out but the first view.
-    double real = mdcore_content_height(ctx);
+    double real = 0;
+    mdcore_page_area(ctx, &top, &real);
     printf("estimate_error_percent %.1f\n", real > 0 ? (height - real) / real * 100 : 0);
 
     printf("heap_mb %.1f\n", heap_mb());

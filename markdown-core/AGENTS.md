@@ -91,8 +91,8 @@ These came from the maintainer. Do not undo one without asking.
   their shaped text, the text system's paragraph and line objects
   (`layout/window.odin`). Code that reads glyphs or a caret's x takes its
   line from `shaped_line`, which shapes it again when needed. Code that
-  works on the full document (the copied text, Select All, the page
-  height) must use the records only, or it shapes all of the document.
+  works on a long range of the document (the copied text) must use the
+  records only, or it shapes all of that range.
 - The blocks of the document are in parts (`document.Part`), and the
   layout keeps its records for each part by itself (`layout.Part`). A
   height in a record (a line, a box, a decoration, a task) counts from
@@ -109,14 +109,14 @@ These came from the maintainer. Do not undo one without asking.
   keeps its height on the page, and the top of the page (`origin`) moves
   for a part above it. Do not lay out from the first block down to reach
   something, and do not read a height of the page as if it started at 0.
-- A host gives its scroll area the range from `mdcore_content_top` for
-  `mdcore_content_height`, and takes the two again when
+- A host gives its scroll area the top and the height of the page
+  (`mdcore_page_area`), and takes the two again when
   `mdcore_layout_revision` changed. A scroll to the top or to the end of
   the document is a scroll to a fixed place (`mdcore_draw_toward`,
   `mdcore_layout_end`); a scroll by a distance is not.
 - The layout changes its sums and ranges in place. `layout.check` looks
   at all of them and says what is wrong; a new test of the layout calls it
-  after each change, and a build with `-debug` calls it after each step.
+  after each change, and a build with `-debug` calls it after each `lay_out`.
 - A block is reached through its part (`part.blocks[slot]`) in a loop,
   and by its number (`document.block_at`) for one block. The number of a
   block is not an identity: it will change when a block is added above
@@ -137,7 +137,8 @@ These came from the maintainer. Do not undo one without asking.
   that is not in front, and its callbacks stopped with a transparent
   layer. `CVDisplayLink` is deprecated since macOS 15, so the build has
   warnings for it.
-- Frames and layout steps run off the main thread. A draw can wait for a
+- Frames run off the main thread, and the layout that they need runs
+  in them. A draw can wait for a
   drawable and can make glyph bitmaps, and on the main thread that held
   scroll events: a scroll took up to twice its time (see Numbers). Only a
   frame that must be there with the window's (the first frame, a new
@@ -289,10 +290,10 @@ Known limits, found in review and left on purpose:
 - The document model of a 1 MB source takes about 20 MB of heap, and the
   app process holds about 45 MB more for the long document than for the
   short one outside the core. Neither was looked at yet.
-- Select All and a copy of a selection lay out each part that they go
+- A copy of a selection lays out each part that the selection goes
   over, in one call on the main thread (0.33 s for all of 1 MB). The text
-  that they need is in the document; they take it from the layout
-  records.
+  that it needs is in the document; it takes it from the layout records.
+  Select All lays out only the first and the last part.
 - A part with one very long block (a code block of thousands of lines) is
   laid out from its first line. A view that comes into it from below, or
   a jump into its middle, lays out all of it down to the view in one
@@ -322,9 +323,8 @@ Design, before the features that need it:
   container number in each block. Before alerts and footnotes.
 - **A selection position is half a document address**
   (`Position{block, order, index}`: the paragraph is known by its number
-  in reading order in its block, not by its cell). Copy and Select All
-  take the text from the layout records, so they lay out what they go
-  over. Links, Find, footnote jumps, and accessibility all need document
+  in reading order in its block, not by its cell). Copy takes the text
+  from the layout records, so it lays out what the selection goes over. Links, Find, footnote jumps, and accessibility all need document
   addresses. Form: `{block, cell, byte}` in the `document` package, as a
   place has it, and the copied text from the document. Before links.
 - **Layout records hold resolved colors**, and `mdcore_style` is mirrored
@@ -459,6 +459,24 @@ what is there and what is next:
    place. Next: one entry, "this range of the source is now this text".
    md4c reads a full document only; how to read a part of one is not
    decided and must be measured first.
+
+The order of the next steps, from the review of the second step:
+
+- First the selection as a document address (`{block, cell, byte}`, as
+  a place), with the copied text taken from the document. It removes
+  the reading-order numbers (`Para.order`, `Box.orders`, `Layout.order`)
+  and the layout that a copy needs, and it leaves one address type for
+  the step after it to change.
+- Then the core keeps the reader's place itself: the anchor as a line
+  address in the layout, set by a frame, and a new layout that puts the
+  top of the page where that line keeps its height. Today the anchor is
+  a part, each layout call gets it as a height, and the host carries the
+  place across a new width (`relayout`, `keptPlace`). A change in the
+  part of the reader, above the first line that shows, needs the line.
+- Then one procedure "this part has another text": set the part back
+  (no `part_clear` yet; `begin` makes the first state of a part in
+  place), lay it out again, and move what is below it or the top of the
+  page.
 
 Left on purpose in the first step:
 

@@ -20,8 +20,8 @@ markdown-core/bench/app.py <Markdown Preview.app>   # the app, cold launch; add 
   through its C API in a new process each time: the first frame, the layout
   two scroll passes of 24,000 points (the first lays out what it comes
   to and makes the glyph bitmaps, the second has them), a jump back to
-  the top between them, a jump to the end, a new width there, the layout
-  of all of the document (as Select All needs it), and the heap. It takes a minute and
+  the top between them, a jump to the end, a new width there, Select All,
+  a copy of all of the document (which lays out all of it), and the heap. It takes a minute and
   shows no window. A scroll frame is CPU time of the drawing thread, because
   a draw waits for the display.
 - **`app.py`** starts a Release build of the app with a document, in the
@@ -353,7 +353,8 @@ other, short / long.
 | `core.py`: first frame (ms) | 64 / 75 | 69 / 45 |
 | To the end of the document: layout and the first frame there (ms) | 3 / 301 and a frame | 8 / 11 |
 | A new width with the reader at the end: layout and frame (ms) | – / 370 | 15 / 10 |
-| Layout of all of the document (ms) | 2.9 / 301 | 5.7 / 332, only for Select All |
+| Select All (ms) | 2.9 / 301, the layout of the rest | 5.4 / 4.4 |
+| Layout of all of the document (ms) | 2.9 / 301 | 5.7 / 332, only for a copy of all of it |
 | Scroll frame, new glyphs (CPU ms) | 0.47 / 0.41 | 0.63 / 0.52 |
 | Scroll frame, glyphs ready (CPU ms) | 0.32 / 0.37 | 0.43 / 0.44 |
 | Heap at the first frame (MB) | 5.1 / 13.6 | 5.3 / 13.8 |

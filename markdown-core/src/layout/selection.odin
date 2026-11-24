@@ -150,7 +150,7 @@ place_y :: proc(l: ^Layout, place: Place) -> (y: f64, ok: bool) {
 	}
 	p, slot := document.locate(l.doc, place.block)
 	part := &l.parts[p]
-	if slot >= len(part.boxes) || (slot == len(part.boxes) - 1 && part.in_block) {
+	if slot >= blocks_done(part) {
 		return
 	}
 	box := part.boxes[slot]
@@ -367,22 +367,42 @@ selection_quads :: proc(l: ^Layout, s: Selection, y0, y1: f64, scale: f32, origi
 	}
 }
 
-// The first and the last caret position of what is laid out.
-select_all :: proc(l: ^Layout) -> (s: Selection) {
-	for part, p in l.parts {
-		for box, slot in part.boxes {
-			for line in part.lines[box.line_first:box.line_end] {
-				para := part.paras[line.para]
-				if para.src == nil {
-					continue
+// The first and the last caret position of the document. It lays out the
+// part that each of the two is in (`anchor_y` as for `lay_out`), not what
+// is between them: a position says the same with no layout. `changed`:
+// it made records.
+select_all :: proc(l: ^Layout, anchor_y: f64) -> (s: Selection, changed: bool) {
+	// The text line of a part that is the first or the last one.
+	edge :: proc(l: ^Layout, p: int, last: bool) -> (block: int, para: Para, ok: bool) {
+		part := &l.parts[p]
+		for n in 0 ..< len(part.boxes) {
+			slot := last ? len(part.boxes) - 1 - n : n
+			box := part.boxes[slot]
+			for m in 0 ..< box.line_end - box.line_first {
+				line := part.lines[last ? box.line_end - 1 - m : box.line_first + m]
+				if para = part.paras[line.para]; para.src != nil {
+					return l.doc.starts[p] + slot, para, true
 				}
-				block := l.doc.starts[p] + slot
-				if !s.active {
-					s.anchor = Position{block, para.order, para.base}
-					s.active = true
-				}
-				s.focus = Position{block, para.order, para.base + para.len}
 			}
+		}
+		return
+	}
+	anchor := part_at(l, anchor_y)
+	// From the first part down to one that has text.
+	for p in 0 ..< len(l.parts) {
+		changed |= lay_out_part(l, p, anchor)
+		if block, para, ok := edge(l, p, false); ok {
+			s.anchor = Position{block, para.order, para.base}
+			s.active = true
+			break
+		}
+	}
+	// From the last part up. A document with text has an end too.
+	for p := len(l.parts) - 1; p >= 0 && s.active; p -= 1 {
+		changed |= lay_out_part(l, p, anchor)
+		if block, para, ok := edge(l, p, true); ok {
+			s.focus = Position{block, para.order, para.base + para.len}
+			break
 		}
 	}
 	return

@@ -35,11 +35,11 @@ final class NativeRendererView: NSView {
     private let scrollView = NSScrollView()
     private let page = PageArea()
     /// The core's number of its layout at the last look
-    /// (`mdcore_layout_revision`). What the view has from another one (the
+    /// (`mdcore_page_area`). What the view has from another one (the
     /// places of the check boxes) is old.
     private var layoutRevision = 0
-    /// Draws the frames and runs the layout steps off the main thread, so
-    /// work that makes glyphs or breaks lines does not hold it.
+    /// Draws the frames off the main thread, so work that makes glyphs or
+    /// breaks lines does not hold it.
     /// Read in `deinit`, which is why it is unsafe.
     nonisolated(unsafe) private var renderLoop: NativeRenderLoop!
     /// True while the scroll view takes the offset of a scroll that the
@@ -152,7 +152,7 @@ final class NativeRendererView: NSView {
     private var topScrollY: CGFloat { page.frame.minY - scrollView.contentInsets.top }
 
     /// The height of the part of the view that the toolbar does not cover.
-    private var visibleHeight: CGFloat { scrollView.contentView.bounds.height + topScrollY }
+    private var visibleHeight: CGFloat { scrollView.contentView.bounds.height - scrollView.contentInsets.top }
 
     /// An offset, kept inside the page.
     private func clamped(_ y: CGFloat) -> CGFloat {
@@ -337,7 +337,7 @@ final class NativeRendererView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     deinit {
-        // No frame and no layout step may run when the core goes away.
+        // No frame may run when the core goes away.
         renderLoop.stop()
         mdcore_destroy(ctx)
     }
@@ -540,14 +540,10 @@ final class NativeRendererView: NSView {
             mdcore_set_page_width(ctx, pageWidth)
             mdcore_resize(ctx, size.width, size.height, scale)
             var y = 0.0, top = 0.0, height = 0.0
-            if var place, mdcore_place_y(ctx, &place, &y) {
-                found = true
-                y -= topInset
-                _ = mdcore_page_area(ctx, &top, &height)
-            } else {
-                _ = mdcore_page_area(ctx, &top, &height)
-                y = top + belowTop
-            }
+            if var place { found = mdcore_place_y(ctx, &place, &y) }
+            // After the place: its part got its real height for it.
+            _ = mdcore_page_area(ctx, &top, &height)
+            y = found ? y - topInset : top + belowTop
             // Not past an end of the page, where the scroll view cannot
             // go: the frame must be the one that stays.
             return Self.clamped(y, top: top, height: height, inset: topInset, viewHeight: viewHeight)
@@ -635,7 +631,7 @@ final class NativeRendererView: NSView {
             switch mdcore_pointer_shape(ctx, point.x, point.y) {
             case MDCORE_POINTER_TEXT: cursor = .iBeam
             case MDCORE_POINTER_BUSY:
-                // A layout step or a frame has the core. The main thread
+                // A frame has the core. The main thread
                 // does not wait for it: the cursor stays, and one later
                 // call asks again.
                 guard !pointerShapeRetryScheduled else { return }

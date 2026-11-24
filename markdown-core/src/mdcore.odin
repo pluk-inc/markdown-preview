@@ -31,10 +31,11 @@ SHOWN_BELOW :: 3
 // some of that has none, it lays out more than it needs: the next frames
 // of a scroll then find theirs, and a scroll lays out a few times for
 // each view height, not for each frame.
-NEEDED_ABOVE :: 0.5
-NEEDED_BELOW :: 1.5
 LAID_ABOVE :: 1
 LAID_BELOW :: 2.5
+// The same margin as for the quads: the view, and that much more.
+NEEDED_ABOVE :: LAID_ABOVE - SHOWN_MARGIN
+NEEDED_BELOW :: LAID_BELOW - 1 - SHOWN_MARGIN
 // How much of the end of the document `mdcore_layout_end` lays out, in
 // view heights: the last view, and what a frame lays out above it.
 LAID_AT_END :: 1 + LAID_ABOVE
@@ -261,11 +262,9 @@ mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	document.destroy(&ctx.doc)
 	ctx.doc = document.parse(length > 0 ? string(utf8[:length]) : "")
 	ctx.selection = {}
-	// A new document starts at its top, so the first layout does not go
-	// down to the place the old one was scrolled to. A host that keeps the
-	// reader's offset (the same file with a change) draws at that offset
-	// again, and pays for the layout down to it there. A place of the old
-	// document is no address in the new one.
+	// A new document starts at its top. A host that keeps the reader's
+	// offset (the same file with a change) draws at that offset again. A
+	// place of the old document is no address in the new one.
 	ctx.scroll = 0
 	ctx.layout_valid = false
 }
@@ -280,8 +279,8 @@ mdcore_set_page_width :: proc "c" (handle: rawptr, width: f64) {
 	ctx.page_width = f32(max(width, 0))
 }
 
-// Sets the view size in points and the backing scale. Lays out what the
-// view shows now when the document, the style, or the width changed.
+// Sets the view size in points and the backing scale. Starts a new
+// layout when the document, the style, or the width changed.
 @(export)
 mdcore_resize :: proc "c" (handle: rawptr, width, height, scale: f64) {
 	context = runtime.default_context()
@@ -312,27 +311,11 @@ mdcore_resize :: proc "c" (handle: rawptr, width, height, scale: f64) {
 }
 
 @(export)
-mdcore_content_height :: proc "c" (handle: rawptr) -> f64 {
-	ctx := cast(^Ctx)handle
-	sync.lock(&ctx.lock)
-	defer sync.unlock(&ctx.lock)
-	return ctx.page.content_height
-}
-
-@(export)
 mdcore_layout_revision :: proc "c" (handle: rawptr) -> c.long {
 	ctx := cast(^Ctx)handle
 	sync.lock(&ctx.lock)
 	defer sync.unlock(&ctx.lock)
 	return c.long(ctx.revision)
-}
-
-@(export)
-mdcore_content_top :: proc "c" (handle: rawptr) -> f64 {
-	ctx := cast(^Ctx)handle
-	sync.lock(&ctx.lock)
-	defer sync.unlock(&ctx.lock)
-	return ctx.page.origin
 }
 
 // See the header.
@@ -494,7 +477,7 @@ Pointer_Shape :: enum c.int {
 
 // The one export that does not wait for the view's state (`hold`): the
 // host asks on its main thread for each move of the pointer and each step
-// of a scroll, and a layout step or a frame can have the state for some
+// of a scroll, and a layout call or a frame can have the state for some
 // milliseconds. It reads only, and uses no working memory.
 @(export)
 mdcore_pointer_shape :: proc "c" (handle: rawptr, x, y: f64) -> Pointer_Shape {
@@ -535,11 +518,13 @@ mdcore_select_all :: proc "c" (handle: rawptr) {
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
 	hold(ctx)
-	// All of the document, not only what is laid out so far. The text
-	// that the view shows stays where it is.
-	layout.lay_out_blocks(&ctx.page, 0, max(int), ctx.scroll)
-	ctx.selection = layout.select_all(&ctx.page)
-	layout_changed(ctx)
+	// The text that the view shows stays where it is.
+	changed: bool
+	ctx.selection, changed = layout.select_all(&ctx.page, ctx.scroll)
+	if changed {
+		layout_changed(ctx)
+	}
+	ctx.display_valid = false
 }
 
 // The selected text as UTF-8. The pointer is valid until the next call.

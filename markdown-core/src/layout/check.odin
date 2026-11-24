@@ -7,7 +7,7 @@ import "../text"
 // keeps sums and ranges that it changes in place (the top of a part, the
 // height of a part, the ranges of a box), and a wrong one shows only much
 // later, as text at a wrong place. So the tests ask after each change,
-// and a build with `-debug` (the tests are one) asks after each step.
+// and a build with `-debug` (the tests are one) asks after each `lay_out`.
 check :: proc(l: ^Layout) -> string {
 	if l.doc == nil {
 		return len(l.parts) == 0 ? "" : "parts with no document"
@@ -18,7 +18,6 @@ check :: proc(l: ^Layout) -> string {
 	if l.open >= len(l.parts) {
 		return "the open part is no part"
 	}
-	complete := 0
 	top := l.origin
 	for &part, p in l.parts {
 		if part.top != top {
@@ -28,7 +27,6 @@ check :: proc(l: ^Layout) -> string {
 		count := l.doc.parts[p].count
 		in_block, y := part.in_block, part.y
 		if part.complete {
-			complete += 1
 			if len(part.boxes) != count || in_block || p == l.open {
 				return "a complete part does not have a closed box for each of its blocks"
 			}
@@ -76,9 +74,6 @@ check :: proc(l: ^Layout) -> string {
 			}
 			task_y = task.y
 		}
-	}
-	if complete != l.complete {
-		return "the count of the complete parts is wrong"
 	}
 	if len(l.parts) > 0 && l.content_height != top - l.origin + f64(l.m.page_pad) {
 		return "the page height is not the sum of the parts"
