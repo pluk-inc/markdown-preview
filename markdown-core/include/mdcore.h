@@ -60,7 +60,14 @@ typedef struct {
 // core draws on a transparent surface.
 void mdcore_set_style(void *ctx, const mdcore_style *style);
 
-// Replaces the document. Call mdcore_resize after it to lay it out.
+// Takes the text of the document, UTF-8. For a text that is the text
+// before with a change (the same file, saved by another app), the layout
+// stays for all that did not change: the core compares the blocks, makes
+// only the changed parts again, and keeps the reader's place and the
+// selection (one in the blocks that changed goes to the start of them). A
+// text of another document is the same call; the host then scrolls to the
+// top of the page and ends the selection. Call mdcore_resize after it
+// when the view has no layout yet.
 void mdcore_set_markdown(void *ctx, const char *utf8, long length);
 
 // Sets the view size and backing scale. Starts a new layout when the
@@ -176,6 +183,9 @@ mdcore_pointer mdcore_pointer_shape(void *ctx, double x, double y);
 // Selection. phase: 0 = mouse down, 1 = drag. x, y are in document space.
 void mdcore_mouse(void *ctx, double x, double y, int phase);
 void mdcore_select_all(void *ctx);
+// Ends the selection. mdcore_set_markdown keeps a selection through a
+// change of the text; a host calls this for the text of another document.
+void mdcore_select_none(void *ctx);
 // The selected text as UTF-8. The pointer is valid until the next call.
 const char *mdcore_selection_text(void *ctx, long *length);
 

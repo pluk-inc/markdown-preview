@@ -181,16 +181,23 @@ set_task_done :: proc(doc: ^Document, line: int, done: bool) -> bool {
 	return false
 }
 
+// Frees all that a block owns.
+@(private)
+block_destroy :: proc(b: ^Block) {
+	text_destroy(&b.text)
+	delete(b.language)
+	for &cell in b.cells {
+		text_destroy(&cell)
+	}
+	delete(b.cells)
+	delete(b.aligns)
+	b^ = {}
+}
+
 destroy :: proc(doc: ^Document) {
 	for part in doc.parts {
 		for &b in part_blocks(part) {
-			text_destroy(&b.text)
-			delete(b.language)
-			for &cell in b.cells {
-				text_destroy(&cell)
-			}
-			delete(b.cells)
-			delete(b.aligns)
+			block_destroy(&b)
 		}
 		free(part)
 	}

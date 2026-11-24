@@ -130,6 +130,7 @@ int main(int argc, const char *argv[]) {
     // resize: the new layout, which keeps the reader's place, and the
     // frame at the same scroll position.
     double resize_start = now_ms();
+    mdcore_note_scroll(ctx, bottom);
     mdcore_resize(ctx, VIEW_WIDTH - 40, VIEW_HEIGHT, VIEW_SCALE);
     @autoreleasepool {
         mdcore_draw(ctx, bottom);
@@ -137,6 +138,29 @@ int main(int argc, const char *argv[]) {
     printf("resize_at_end_ms %.2f\n", now_ms() - resize_start);
     // The estimate of the page height in this width, with only the last
     // view laid out, for the comparison with the real one below.
+    mdcore_page_area(ctx, &top, &height);
+
+    // The file changed outside the app, with the reader at the end: the
+    // same text with a paragraph more in its middle. The core compares
+    // the blocks, makes one part again, and draws at the same position.
+    NSMutableData *changed = [source mutableCopy];
+    NSRange middle = [source rangeOfData:[@"\n\n" dataUsingEncoding:NSUTF8StringEncoding]
+                                 options:0
+                                   range:NSMakeRange(source.length / 2, source.length / 2)];
+    NSData *more = [@"\n\nA paragraph that another program put in the file.\n\n" dataUsingEncoding:NSUTF8StringEncoding];
+    // At the end for a text with no blank line in its second half, so the
+    // text is another one in each case.
+    NSUInteger at = middle.location != NSNotFound ? middle.location : changed.length;
+    [changed replaceBytesInRange:NSMakeRange(at, 0) withBytes:more.bytes length:more.length];
+    double change_start = now_ms();
+    // The reader is at the end, as the view says it when it scrolls.
+    mdcore_note_scroll(ctx, bottom);
+    mdcore_set_markdown(ctx, changed.bytes, (long)changed.length);
+    @autoreleasepool {
+        mdcore_draw(ctx, bottom);
+    }
+    printf("change_ms %.2f\n", now_ms() - change_start);
+    // The estimate for the comparison below is of this text.
     mdcore_page_area(ctx, &top, &height);
 
     // Select All and a copy of all of the text: the two take the text

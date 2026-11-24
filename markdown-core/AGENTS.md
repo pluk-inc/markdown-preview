@@ -114,6 +114,19 @@ These came from the maintainer. Do not undo one without asking.
   keeps its height on the page, and the top of the page (`origin`) moves
   for a part above it. Do not lay out from the first block down to reach
   something, and do not read a height of the page as if it started at 0.
+- The text of the document comes in through one call, also when it is
+  the text before with a change (`mdcore_set_markdown`). Do not end the
+  layout for a new text: `document.replace` keeps the blocks at the start
+  and at the end of the document that are the same for a layout at their
+  address (`adopt`), and `layout.apply_change` keeps the records of each
+  part that was not made again. All between the first and the last
+  block that changed is made again, also a block there that did not
+  change. Code that
+  holds an address through a change takes its new one from
+  `document.moved` (an address in the blocks that changed goes to the
+  start of them). The parse of the new text runs before the core takes
+  its lock, and what is left of the two texts is freed after it. What a block says that a layout does not read (the
+  line of a task, the number of a link) is not part of "the same".
 - The core keeps the reader's place: the first line that the view shows
   below the strip that the host covers (`mdcore_set_top_inset`). The host
   says its scroll offset each time it changes (`mdcore_note_scroll`,
@@ -396,16 +409,18 @@ The window around the page, left on purpose:
 
 Task check boxes, left on purpose:
 
-- The core keeps the reader's place across a new width or style. For a
-  document that opens again in place it keeps the top of the page, so the
-  view is as far below it as before, in points.
-- A place is an address in the document: block, cell, byte. It needs no
-  layout to be made, so Find, a jump to a footnote or a heading, and the
-  way back from Edit mode can use it; none of them does yet. The same
-  file that opens again with a change does not use it: a block number of
-  the old text can be other text in the new one, so the view keeps its
-  offset in points there, as before. Blocks with a stable identity, or a
-  map of the address through the change, would let it keep the place.
+- The core keeps the reader's place across a new width or style, and
+  across a change of the text. A place in the blocks that changed goes
+  to the start of them.
+- "The same for a layout" compares the number of an ordered list item,
+  because the marker is drawn from it. So one item more near the top of
+  a long numbered list makes all items after it again. `layout_equal` is
+  a list of fields kept by hand: a `Block` in two parts (what a layout
+  reads, and what is read when the page is drawn) would make it one
+  comparison, and gives the source range of a block its place.
+- A place is an address in the document: block, cell, byte. Find, a jump
+  to a footnote or a heading, and the way back from Edit mode can use
+  it; none of them does yet.
 - After a click on a task the app makes the sidebar outline and the
   inspector numbers again for the full document, off the main thread
   (0.3 s of CPU for 725 KB). Neither changes with a task mark. This is in
@@ -455,10 +470,17 @@ what is there and what is next:
    gets its real height. Not done: a part whose text changed (it needs
    its records made again, which `advance` can do, and its state set
    back).
-4. **How a change comes in.** Today: a new document, and one task in
-   place. Next: one entry, "this range of the source is now this text".
-   md4c reads a full document only; how to read a part of one is not
-   decided and must be measured first.
+4. **How a change comes in.** Done: one entry for the text of the
+   document (`mdcore_set_markdown`, `document.replace`). It compares the
+   blocks of the old and the new text, keeps the ones that are the same
+   at the two ends where they are, and makes only the parts of the
+   others again; the layout keeps the records of the rest. A new
+   document is the case with no block in common. Not done: the new text
+   is still parsed in full (24 ms for 1 MB), because md4c reads full
+   documents only. How to parse only what changed is not decided and
+   must be measured first. And the blocks that are the same must be at
+   the two ends: a text with two changes far from each other makes all
+   between them again.
 
 The order of the next steps, from the review of the second step:
 
@@ -469,10 +491,10 @@ The order of the next steps, from the review of the second step:
   calls of a frame still take their anchor as a part (`lay_out`), so a
   change in the part of the reader, above the first line that shows,
   needs the place there too.
-- Then one procedure "this part has another text": set the part back
-  (no `part_clear` yet; `begin` makes the first state of a part in
-  place), lay it out again, and move what is below it or the top of the
-  page.
+- Done: a changed text makes only its parts again (4).
+- Next: the source text is kept and a block knows its range of it, so a
+  change can come as a range of the source and not as a full text. Then
+  the parse of what changed only.
 
 Left on purpose in the first step:
 
@@ -650,3 +672,11 @@ export.
   that it has. The two place calls of the API are gone. This is the
   form that a change of the text needs: the core must hold the line that
   stays, because only the core sees a change before the view does.
+- **2026-11-24** — Fifth step of the base: a changed text changes the
+  document in place. Until now each new text was a new document and a
+  new layout, also when another app saved one more line. Now the core
+  compares the blocks, keeps what is the same where it is, and makes
+  one part again for a change in one block. A reader far down a long
+  document sees no move when the file gets text near its top. This is
+  the entry that an editor types through later; it still parses all of
+  the text for each change.

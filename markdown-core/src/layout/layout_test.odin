@@ -1144,6 +1144,123 @@ test_a_new_layout_keeps_the_top_of_the_page :: proc(t: ^testing.T) {
 	testing.expect_value(t, f.page.parts[0].top, origin)
 }
 
+// Makes the document of a fixture the one of another source, in place.
+@(private = "file")
+change_to :: proc(f: ^Fixture, source: string) -> document.Change {
+	fresh := document.parse(source)
+	change := document.replace(&f.doc, &fresh)
+	document.destroy(&fresh)
+	apply_change(&f.page, change)
+	return change
+}
+
+@(test)
+test_a_changed_block_lays_out_its_part_again_and_keeps_the_others :: proc(t: ^testing.T) {
+	SECTIONS :: 60
+	before := long_source(SECTIONS)
+	defer delete(before)
+	// A paragraph of four lines more, in the middle.
+	b := strings.builder_make()
+	defer strings.builder_destroy(&b)
+	half := strings.index(before, "## Section 30\n")
+	strings.write_string(&b, before[:half])
+	strings.write_string(&b, "A new paragraph that goes over more than one line of this narrow page, so that the text below it goes down by some lines, and then some more words.\n\n")
+	strings.write_string(&b, before[half:])
+	after := strings.to_string(b)
+
+	f, fresh: Fixture
+	setup(&f, before, 500)
+	defer teardown(&f)
+	setup(&fresh, after, 500)
+	defer teardown(&fresh)
+	step(&f.page, 1e30)
+	step(&fresh.page, 1e30)
+	memory := make([]rawptr, len(f.page.parts))
+	defer delete(memory)
+	for part, p in f.page.parts {
+		memory[p] = part.memory
+	}
+	// A reader below the change.
+	y := f.page.content_height * 0.8
+	kept := take_place(&f.page, y)
+
+	change := change_to(&f, after)
+	expect_ok(t, &f.page)
+	testing.expect_value(t, change.removed, 0)
+	testing.expect_value(t, change.added, 1)
+	testing.expect_value(t, change.parts_removed, 1)
+	// Only the part of the change has no records; each other part has
+	// the records it had, in the memory it had.
+	for part, p in f.page.parts {
+		if p == change.part_first || (change.parts_added == 2 && p == change.part_first + 1) {
+			testing.expect_value(t, len(part.boxes), 0)
+			continue
+		}
+		old := p < change.part_first ? p : p - change.parts_added + change.parts_removed
+		testing.expect(t, part.complete)
+		testing.expect(t, part.memory == memory[old])
+	}
+	// The reader's place, with the number that its block has now, is put
+	// back at the height it had: the text of their view did not move.
+	now, same := document.moved(change, kept.place.at)
+	testing.expect(t, same)
+	testing.expect_value(t, now.block, kept.place.block + 1)
+	kept.place.at = now
+	restore_place(&f.page, kept)
+	expect_ok(t, &f.page)
+	at, found := place_y(&f.page, kept.place)
+	testing.expect(t, found)
+	testing.expect(t, abs(at - y) < 0.01)
+	// With the changed part laid out, the page is the one that a new
+	// layout of the new text gives.
+	step(&f.page, 1e30)
+	expect_ok(t, &f.page)
+	testing.expect(t, abs(f.page.content_height - fresh.page.content_height) < 0.01)
+	want, got := page_lines(&fresh.page), page_lines(&f.page)
+	defer delete(want)
+	defer delete(got)
+	testing.expect_value(t, len(got), len(want))
+	for value, i in want {
+		testing.expect(t, abs(got[i] - value) < 0.01)
+	}
+}
+
+@(test)
+test_a_change_while_a_part_is_in_work_and_of_all_of_the_document :: proc(t: ^testing.T) {
+	before, after := long_source(30), long_source(12)
+	defer delete(before)
+	defer delete(after)
+	f, fresh: Fixture
+	setup(&f, before, 500)
+	defer teardown(&f)
+	setup(&fresh, after, 500)
+	defer teardown(&fresh)
+	// Some of the first part is laid out and is in work.
+	lay_out(&f.page, 0, 150, 0)
+	testing.expect(t, f.page.open == 0)
+	// Fewer sections: the end of the document goes.
+	change_to(&f, after)
+	expect_ok(t, &f.page)
+	testing.expect_value(t, len(f.page.parts), len(f.doc.parts))
+	step(&f.page, 1e30)
+	step(&fresh.page, 1e30)
+	expect_ok(t, &f.page)
+	testing.expect(t, abs(f.page.content_height - fresh.page.content_height) < 0.01)
+	// To an empty document, and to one with no block in common.
+	change_to(&f, "")
+	expect_ok(t, &f.page)
+	testing.expect_value(t, len(f.page.parts), 0)
+	change_to(&f, "# Other\n\nText.\n")
+	expect_ok(t, &f.page)
+	step(&f.page, 1e30)
+	testing.expect_value(t, len(only(&f.page).boxes), 2)
+	// The same text again changes nothing.
+	memory := only(&f.page).memory
+	same := change_to(&f, "# Other\n\nText.\n")
+	testing.expect_value(t, same.parts_removed + same.parts_added, 0)
+	testing.expect(t, only(&f.page).memory == memory)
+}
+
 @(test)
 test_a_place_on_a_rule_or_in_blank_code_lines_is_the_text_below :: proc(t: ^testing.T) {
 	// A view whose first height is on a rule, with text far below it.

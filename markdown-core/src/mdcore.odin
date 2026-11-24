@@ -265,25 +265,59 @@ mdcore_set_style :: proc "c" (handle: rawptr, style: ^base.Style) {
 	ctx.layout_valid = false
 }
 
-// Replaces the document. The host calls mdcore_resize after it.
+// Takes a new text of the document. See the header.
 @(export)
 mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
+	// The parse needs nothing of the view, so frames go on while it runs.
+	fresh := document.parse(length > 0 ? string(utf8[:length]) : "")
+	{
+		context.temp_allocator = ctx.temp
+		hold(ctx)
+		// From the layout of the text before.
+		take_place(ctx)
+		// The document changes in place: the blocks that are the same
+		// keep their records, and the layout makes only the parts of the
+		// others again. The first document and a document with no block
+		// in common are the same case.
+		change := document.replace(&ctx.doc, &fresh)
+		if ctx.layout_valid {
+			layout.apply_change(&ctx.page, change)
+		}
+		// Each address that the view holds has the number that its block
+		// has now. One in the blocks that changed is at the start of
+		// them, so a reader who is in such a block stays there.
+		ctx.selection.anchor, _ = document.moved(change, ctx.selection.anchor)
+		ctx.selection.focus, _ = document.moved(change, ctx.selection.focus)
+		if ctx.place.known {
+			same: bool
+			ctx.place.place.at, same = document.moved(change, ctx.place.place.at)
+			if !same {
+				ctx.place.place.fraction = 0
+			}
+		}
+		if change.count == 0 {
+			ctx.selection, ctx.place = {}, {}
+		}
+		if ctx.layout_valid {
+			layout.restore_place(&ctx.page, ctx.place)
+			layout_changed(ctx)
+		}
+	}
+	// What is left of the two texts, with no wait of a frame for it.
+	document.destroy(&fresh)
+}
+
+// See the header.
+@(export)
+mdcore_select_none :: proc "c" (handle: rawptr) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
 	hold(ctx)
-	// The layout points into the old document.
-	layout.begin(&ctx.page, nil, ctx.style, 0)
-	document.destroy(&ctx.doc)
-	ctx.doc = document.parse(length > 0 ? string(utf8[:length]) : "")
 	ctx.selection = {}
-	// A place of the old document is no address in the new one. The top
-	// of the page stays where it is: a host that keeps the reader's offset
-	// (the same file with a change) is as far below it as before.
-	ctx.place = {}
-	sync.atomic_store(&ctx.place_stale, true)
-	ctx.scroll = ctx.page.origin
-	ctx.layout_valid = false
+	show_selection(ctx)
 }
 
 // See the header.
