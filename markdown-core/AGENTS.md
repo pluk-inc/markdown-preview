@@ -81,22 +81,33 @@ These came from the maintainer. Do not undo one without asking.
 - The Swift host owns the view, the scroll position, and the events. The
   scroll bar is AppKit's: a transparent `NSScrollView` over the Metal
   layer.
-- The host asks for one frame for each display refresh, from a display
-  link (`NSView.displayLink`), never one for each event. An event calls
-  `setNeedsDraw()`.
-- Frames and layout steps run on the view's render queue, not on the main
-  thread. A draw can wait for a drawable and can make glyph bitmaps, and
-  on the main thread that held scroll events: a scroll took up to twice
-  its time (see Numbers). Only a frame that must be there with the
-  window's (the first frame, a new size, a new style) is drawn while the
-  main thread waits, and it goes through the same queue so the frames stay
-  in order.
+- The host draws one frame for each refresh of the display, never one for
+  each event. An event calls `setNeedsDraw()`, which asks the render loop
+  (`NativeRenderLoop`) for a frame at the scroll offset; a newer request
+  replaces one that is not drawn yet.
+- The render loop's clock is a `CVDisplayLink`, and frames are drawn on
+  its thread. Do not change it for a display link from AppKit
+  (`NSView.displayLink`, and the ones of a window or a screen): on a
+  120 Hz display those fire 64 times a second whatever rate they are asked
+  for, and `CVDisplayLink` 130 (see Numbers). `CAMetalDisplayLink` has the
+  full rate, but most of its frames did not reach the screen for a window
+  that is not in front, and its callbacks stopped with a transparent
+  layer. `CVDisplayLink` is deprecated since macOS 15, so the build has
+  warnings for it.
+- Frames and layout steps run off the main thread. A draw can wait for a
+  drawable and can make glyph bitmaps, and on the main thread that held
+  scroll events: a scroll took up to twice its time (see Numbers). Only a
+  frame that must be there with the window's (the first frame, a new
+  size, a new style) is drawn while the main thread waits.
+- A keyboard scroll is animated by the render loop, one step for each
+  frame, and the scroll view follows on the main thread
+  (`frameDidDraw`). The scroll view is not the clock for it.
 - The main thread reads the page height from the core itself, after the
   queue's work. Do not send a height from the queue to the main thread: it
   can come after a newer one and make the page shorter for a moment, and
   then the End key stops at the wrong place.
-- A block for the render queue must not keep the view alive. The view's
-  `deinit` waits for the queue.
+- A block for the render loop must not keep the view alive. The view's
+  `deinit` stops the loop and waits for it.
 - The core lets one call at a time work on a view's state, from any
   thread (`hold` in `mdcore.odin`), and `mdcore_draw` gives the state free
   before it waits for the display (`renderer.frame_begin` under the lock,
@@ -175,6 +186,15 @@ each in two sittings:
 | Memory after the scroll | 200–212 MB | 202–210 MB |
 
 Launch time and memory at rest (`bench/app.py`) did not change.
+
+Frame rate, 2026-11-23, on the built-in 120 Hz display. Callbacks a
+second of each clock, in a small test program: `NSView.displayLink` 64
+(also with a request for 120, and also from a window or a screen),
+`CVDisplayLink` 130, `CAMetalDisplayLink` 123 to 128. In the app, a
+keyboard scroll of 14 pages: with `NSView.displayLink` all 172 frame gaps
+were 16.7 ms; with `CVDisplayLink` 314 of 322 are 8.3 ms. A screen
+recording of the maintainer's trackpad scroll before the change showed 55
+updates a second, one in five late by a refresh.
 
 GPU memory, 2026-11-23: while frames are drawn, the app's footprint has
 about 89 MB of GPU driver memory that is not ours (the device reports 14
@@ -277,3 +297,7 @@ scroll position, footnotes and alerts, VoiceOver, print and export.
 - **2026-11-23** — The 250 ms that a long document added to the launch
   was the sidebar outline and the inspector numbers, made before the
   window shows. Moved off the main thread for large documents.
+- **2026-11-23** — The maintainer decided to keep the render thread. His
+  screen recording showed the page at 60 frames a second on a 120 Hz
+  display. The cause was the clock: AppKit's display links fire at 60
+  there. The frames now come from a `CVDisplayLink`, on its thread.

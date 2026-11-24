@@ -14,10 +14,11 @@
 //  and draws the page there.
 //
 //  Drawing follows the display, not the events: a scroll or a selection
-//  change only marks the view, and a display link asks for one frame for
-//  the next refresh. The frame is drawn on a queue of this view, because a
-//  draw can wait for a drawable and can make glyph bitmaps, and on the main
-//  thread that made the scroll fall behind the fingers.
+//  change only asks the render loop for a frame, and the loop draws one
+//  frame for each refresh of the display, off the main thread
+//  (`NativeRenderLoop`). A draw can wait for a drawable and can make glyph
+//  bitmaps, and on the main thread that made the scroll fall behind the
+//  fingers.
 //
 //  The core is a static archive that the "Build Markdown Core" phase makes
 //  and the app target links. `MDCore` is its C header, as a module.
@@ -36,14 +37,13 @@ final class NativeRendererView: NSView {
     private var layoutScheduled = false
     /// Goes up with each new layout (a document, a size, a style).
     private var layoutCount = 0
-    /// The frames and the layout steps run here, one after the other, so
-    /// work that makes glyphs, breaks lines, or waits for the display does
-    /// not hold the main thread. The core takes calls from any thread. A
-    /// block for this queue must not keep the view alive: the last release
-    /// would run `deinit` on the queue, which waits for the queue.
-    private let renderQueue = DispatchQueue(label: "md-preview.native-renderer", qos: .userInteractive)
-    /// True from the time a frame goes to the queue until it is drawn.
-    private var frameInFlight = false
+    /// Draws the frames and runs the layout steps off the main thread, so
+    /// work that makes glyphs or breaks lines does not hold it.
+    /// Read in `deinit`, which is why it is unsafe.
+    nonisolated(unsafe) private var renderLoop: NativeRenderLoop!
+    /// True while the scroll view takes the offset of a scroll that the
+    /// render loop animates: that frame is drawn already.
+    private var followsRenderLoop = false
     private var laidOutSize = NSSize.zero
     private var laidOutScale = 0.0
 
@@ -65,6 +65,10 @@ final class NativeRendererView: NSView {
         wantsLayer = true
         layerContentsRedrawPolicy = .duringViewResize
         ctx = mdcore_create(Unmanaged.passUnretained(layer!).toOpaque())
+        renderLoop = NativeRenderLoop(ctx: ctx)
+        renderLoop.didDraw = { [weak self] step in
+            self?.frameDidDraw(step)
+        }
         applyStyle()
 
         page.owner = self
@@ -95,59 +99,78 @@ final class NativeRendererView: NSView {
     private var scrollY: CGFloat { scrollView.contentView.bounds.origin.y }
 
     @objc private func pageDidScroll() {
+        guard !followsRenderLoop else { return }
         setNeedsDraw()
     }
 
     // MARK: Frames
 
-    /// Fires one time for each refresh of the view's display, while a
-    /// frame is wanted. Paused the rest of the time.
-    private var displayLink: CADisplayLink?
-    private var needsDraw = false
-    /// A scroll in progress that this view animates (Page Down, arrows).
-    private var scrollAnimation: (from: CGFloat, to: CGFloat, start: CFTimeInterval)?
-    private static let scrollAnimationDuration: CFTimeInterval = 0.2
+    /// The keyboard scroll in progress: its number in the render loop and
+    /// the offset that it goes to.
+    private var scrollAnimation: (scroll: Int, target: CGFloat)?
 
-    /// Asks for a frame at the next refresh.
+    /// False without a document or a size: there is nothing to draw then.
+    private var hasPageToDraw: Bool { hasDocument && bounds.width > 0 && bounds.height > 0 }
+
+    /// Asks for a frame at the next refresh of the display.
     private func setNeedsDraw() {
-        guard let displayLink else { return draw(wait: true) }
-        needsDraw = true
-        displayLink.isPaused = false
+        guard hasPageToDraw else { return }
+        renderLoop.requestFrame(at: scrollY)
     }
 
-    @objc private func displayLinkDidFire(_ link: CADisplayLink) {
-        if let animation = scrollAnimation {
-            let progress = min((link.targetTimestamp - animation.start) / Self.scrollAnimationDuration, 1)
-            // Ease out: fast at the start, slow into the end.
-            let eased = 1 - pow(1 - progress, 3)
-            scroll(toY: animation.from + (animation.to - animation.from) * eased)
-            needsDraw = true
-            if progress >= 1 { scrollAnimation = nil }
+    /// After a frame that was a step of a key scroll or that made the page
+    /// taller, on the main thread.
+    private func frameDidDraw(_ step: NativeRenderLoop.ScrollStep?) {
+        // Not for a scroll that the reader took over or that another key
+        // press replaced meanwhile: its last frames can come late.
+        if let step, step.scroll == scrollAnimation?.scroll {
+            followsRenderLoop = true
+            scroll(toY: step.y)
+            followsRenderLoop = false
+            if step.isLast {
+                scrollAnimation = nil
+                // A frame that the main thread drew meanwhile (a new size)
+                // had the offset before this step. Draw the end again.
+                setNeedsDraw()
+            }
+            // The page can have become shorter under the scroll (a new
+            // size, a zoom), so the frame is past the end. Draw it where
+            // the scroll view could go.
+            if abs(scrollY - step.y) > 0.5 { endScrollAnimation() }
         }
-        if needsDraw {
-            draw(wait: false)
-        } else {
-            link.isPaused = true
-        }
+        // A draw can lay out more of the page, when the view came to the
+        // end of what the steps reached. The main thread reads the height
+        // itself: a height sent from the render thread can come after a
+        // newer one.
+        updatePageHeight()
     }
 
     /// Scrolls to an offset over a short time, as the system's views do
-    /// for the keyboard.
+    /// for the keyboard. The render loop moves the page, one step for each
+    /// frame, and the scroll view follows.
     private func animateScroll(toY y: CGFloat) {
         let limit = max(0, page.frame.height - scrollView.contentView.bounds.height)
         let target = min(max(0, y), limit)
         // The new place replaces the one a scroll in progress went to.
+        endScrollAnimation()
+        guard abs(target - scrollY) > 1 else { return scroll(toY: target) }
+        scrollAnimation = (renderLoop.animateScroll(from: scrollY, to: target), target)
+    }
+
+    private func endScrollAnimation() {
+        guard scrollAnimation != nil else { return }
         scrollAnimation = nil
-        guard let displayLink, abs(target - scrollY) > 1 else { return scroll(toY: target) }
-        scrollAnimation = (scrollY, target, CACurrentMediaTime())
-        displayLink.isPaused = false
+        renderLoop.cancelScrollAnimation()
+        // The loop can have drawn a step that the scroll view never took.
+        // The page must show the offset of the scroll view.
+        setNeedsDraw()
     }
 
     /// The offset that the view scrolls to, when it is on its way there.
-    private var scrollTarget: CGFloat { scrollAnimation?.to ?? scrollY }
+    private var scrollTarget: CGFloat { scrollAnimation?.target ?? scrollY }
 
     @objc private func userWillScroll() {
-        scrollAnimation = nil
+        endScrollAnimation()
     }
 
     /// Scrolls to an offset, kept inside the page.
@@ -187,8 +210,8 @@ final class NativeRendererView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     deinit {
-        // No frame may be in the queue when the core goes away.
-        renderQueue.sync {}
+        // No frame and no layout step may run when the core goes away.
+        renderLoop.stop()
         mdcore_destroy(ctx)
     }
 
@@ -198,7 +221,7 @@ final class NativeRendererView: NSView {
             utf8.withMemoryRebound(to: CChar.self) { mdcore_set_markdown(ctx, $0.baseAddress, $0.count) }
         }
         hasDocument = true
-        scrollAnimation = nil
+        endScrollAnimation()
         // Before the layout: it lays out what the view shows, and that must
         // be the top of the new document, not the place the old one was at.
         scroll(toY: 0)
@@ -208,59 +231,36 @@ final class NativeRendererView: NSView {
     /// Gives the core the view's size and draws. Skips a call that changes
     /// nothing, because one turn can report the same size more than once.
     private func relayout(force: Bool = false) {
-        guard hasDocument, bounds.width > 0, bounds.height > 0 else { return }
+        guard hasPageToDraw else { return }
         let scale = Double(window?.backingScaleFactor ?? 2)
         guard force || bounds.size != laidOutSize || scale != laidOutScale else { return }
         laidOutSize = bounds.size
         laidOutScale = scale
         let size = bounds.size
         layoutCount += 1
-        // The new size, then its frame, in one visit to the queue.
-        draw(wait: true) { [ctx] in mdcore_resize(ctx, size.width, size.height, scale) }
+        // The new size, then its frame, in this order off the main thread.
+        nonisolated(unsafe) let ctx = ctx
+        drawNow { mdcore_resize(ctx, size.width, size.height, scale) }
         continueLayout()
     }
 
-    /// Draws one frame on the render queue. With `wait` the main thread
-    /// waits for it: the first frame of a document and the frame for a new
-    /// size must be there with the window's. Without it, a frame that is
-    /// wanted while one is in the queue waits for the next refresh.
-    /// `before` runs on the queue ahead of the draw.
-    private func draw(wait: Bool, before: (@Sendable () -> Void)? = nil) {
-        guard wait || !frameInFlight else { return }
-        needsDraw = false
-        guard hasDocument, bounds.width > 0, bounds.height > 0 else { return }
-        nonisolated(unsafe) let ctx = ctx
-        let y = scrollY
-        let frame: @Sendable () -> Void = {
-            before?()
-            autoreleasepool { mdcore_draw(ctx, y) }
-        }
-        // A draw can lay out more of the page, when the view came to the
-        // end of what the steps reached. The main thread reads the height
-        // itself: a height sent from the queue can come after a newer one.
-        if wait {
-            renderQueue.sync(execute: frame)
-            updatePageHeight()
-        } else {
-            frameInFlight = true
-            renderQueue.async { [weak self] in
-                frame()
-                DispatchQueue.main.async {
-                    self?.frameInFlight = false
-                    self?.updatePageHeight()
-                }
-            }
-        }
+    /// Draws a frame now and waits for it: the first frame of a document,
+    /// and a frame for a new size, which must be there with the window's.
+    /// `before` runs off the main thread ahead of the frame.
+    private func drawNow(before: (@Sendable () -> Void)? = nil) {
+        guard hasPageToDraw else { return }
+        renderLoop.frameNow(at: scrollY, before: before)
+        updatePageHeight()
     }
 
     /// Lays out the rest of a long document in steps shorter than a frame,
-    /// on the render queue, so frames go between them.
+    /// off the main thread, so frames go between them.
     private func continueLayout() {
         guard !layoutScheduled else { return }
         layoutScheduled = true
         nonisolated(unsafe) let ctx = ctx
         let layout = layoutCount
-        renderQueue.async { [weak self] in
+        renderLoop.perform { [weak self] in
             let more = mdcore_layout_more(ctx, 4)
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -274,7 +274,7 @@ final class NativeRendererView: NSView {
     }
 
     override func updateLayer() {
-        draw(wait: true)
+        drawNow()
     }
 
     override func setFrameSize(_ newSize: NSSize) {
@@ -289,18 +289,22 @@ final class NativeRendererView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        // The link follows the display that the view is on. It keeps the
-        // view alive, so it must end when the view leaves its window.
-        displayLink?.invalidate()
-        displayLink = nil
-        scrollAnimation = nil
-        if window != nil {
-            let link = displayLink(target: self, selector: #selector(displayLinkDidFire))
-            link.isPaused = true
-            link.add(to: .main, forMode: .common)
-            displayLink = link
+        if window == nil { endScrollAnimation() }
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didChangeScreenNotification, object: nil)
+        if let window {
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(followDisplay),
+                name: NSWindow.didChangeScreenNotification, object: window
+            )
         }
+        followDisplay()
         relayout()
+    }
+
+    /// The render loop's clock runs at the refresh rate of one display.
+    @objc private func followDisplay() {
+        guard let number = window?.screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return }
+        renderLoop.setDisplay(CGDirectDisplayID(number.uint32Value))
     }
 
     // MARK: Input
