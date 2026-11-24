@@ -189,7 +189,15 @@ int main(int argc, const char *argv[]) {
         while (line > 0 && text[line - 1] != '\n' && text[line - 1] != '\r') line--;
         long first = line;
         while (first < last && text[first] == ' ') first++;
-        if (last == 0 || text[first] != '[') break;
+        // A definition has "]:" after its name; a line that starts with
+        // a link ("[text](target)") shows on the page.
+        bool definition = false;
+        if (first < last && text[first] == '[') {
+            for (long at = first + 1; at + 1 < last && !definition; at++) {
+                definition = text[at] == ']' && text[at + 1] == ':';
+            }
+        }
+        if (last == 0 || !definition) break;
         last = line;
     }
     type_start = thread_cpu_ms();
