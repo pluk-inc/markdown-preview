@@ -16,6 +16,7 @@ List :: struct {
 	ordered: bool,
 	next:    int,
 	done:    bool, // the open item is a checked task
+	item:    int, // the number of the open item
 }
 
 @(private)
@@ -41,6 +42,7 @@ Parser :: struct {
 	item_marker:  Marker, // marker of the list item that has no block yet
 	item_number:  int,
 	item_line:    int, // a task: the source line of its mark, from 1
+	item_count:   int, // list items so far
 	item_blocks:  int, // blocks of the open item so far
 	// The source, and how far its lines are counted: task marks come in
 	// source order, so each count starts where the one before ended.
@@ -134,6 +136,7 @@ start_block :: proc(p: ^Parser, kind: Block_Kind) -> Block {
 		list_depth  = len(p.lists),
 		quote_depth = p.quote,
 		done        = len(p.lists) > 0 && p.lists[len(p.lists) - 1].done,
+		item        = len(p.lists) > 0 ? p.lists[len(p.lists) - 1].item : 0,
 	}
 	take_item_position(p, &b)
 	return b
@@ -236,6 +239,8 @@ enter_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 			p.item_marker = list.ordered ? .Number : .Bullet
 		}
 		p.lists[len(p.lists) - 1].done = is_done
+		p.item_count += 1
+		p.lists[len(p.lists) - 1].item = p.item_count
 	case .Hr:
 		append(&p.doc.blocks, start_block(p, .Rule))
 	case .H:

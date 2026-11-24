@@ -98,9 +98,16 @@ typedef struct {
 // systems). This gives the tasks whose boxes are between two heights of
 // the page that is laid out now, down the page. Writes at most `capacity`
 // of them and returns how many there are: with a larger number, call
-// again with more room. The host changes the source and sets the document
-// again to check one; the core does not edit it.
+// again with more room. To check one, see mdcore_set_task_checked.
 long mdcore_tasks(void *ctx, double top, double bottom, mdcore_task *out, long capacity);
+
+// Checks or opens the task whose "[ ]" is on a source line, in place: the
+// document that is set stays, with no new parse and no new layout, and
+// the next frame shows the text of the item in its new color. The result
+// is the same as mdcore_set_markdown with that one mark changed, so a
+// host that then gets the changed source from its own save does not have
+// to set it again. False when no task has its mark on that line.
+bool mdcore_set_task_checked(void *ctx, long line, bool checked);
 
 // Selection. phase: 0 = mouse down, 1 = drag. x, y are in document space.
 void mdcore_mouse(void *ctx, double x, double y, int phase);

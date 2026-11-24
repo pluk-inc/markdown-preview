@@ -64,7 +64,8 @@ Decor :: struct {
 	x, y, w, h: f32,
 	color:      base.Color,
 	radius:     f32,
-	above:      bool, // drawn over the selection, as the text is
+	above:      bool, // a line through text: drawn over the selection, as the text is
+	soft_done:  bool, // of text that is softer in a checked task (`done_color`)
 }
 
 // The place of one block and the range of its records.
@@ -209,15 +210,21 @@ span_font :: proc(l: ^Layout, style: document.Inline_Set, size: f32, heading: bo
 	return font(l, .Regular, size)
 }
 
-// The color of the text of a span.
-span_color :: proc(l: ^Layout, para: ^Para, style: document.Inline_Set) -> base.Color {
+// The color of the text of a checked task: softer, with no line through
+// it, so a long list stays easy to read.
+done_color :: proc(l: ^Layout) -> base.Color {
+	return mix(l.style.secondary, l.style.text, 0.3)
+}
+
+// The color of the text of a span. `done`: its block stands in a checked
+// task item. The state is read from the document when the page is drawn,
+// not kept in the layout, so a task that is checked needs no new layout.
+span_color :: proc(l: ^Layout, para: ^Para, style: document.Inline_Set, done: bool) -> base.Color {
 	if .Link in style {
 		return l.style.link
 	}
-	if para.done && !para.quote && .Image not_in style {
-		// A done task reads as done by a softer color, with no line
-		// through it, so a long list stays easy to read.
-		return mix(l.style.secondary, l.style.text, 0.3)
+	if done && !para.quote && .Image not_in style {
+		return done_color(l)
 	}
 	if para.quote || .Image in style {
 		return l.style.secondary
@@ -236,15 +243,14 @@ Text_Look :: struct {
 	heading:     bool, // the base weight is semibold
 	mono:        bool, // a line of a code block
 	quote:       bool,
-	done:        bool, // text of a checked task item
 }
 
 // The place of the check box of a task item. The layout draws nothing
-// there: the host puts its own control on it (`tasks_between`).
+// there: the host puts its own control on it (`tasks_between`). The line
+// of the task and its state are in the block.
 Task :: struct {
-	x, y: f32, // points, document space; the side is `task_box_size`
-	line: int, // the source line of its mark, from 1
-	done: bool,
+	x, y:  f32, // points, document space; the side is `task_box_size`
+	block: int,
 }
 
 TASK_BOX :: 1.0 // side of a task box, in body sizes
@@ -360,7 +366,11 @@ decorate_line :: proc(l: ^Layout, para: ^Para, line: text.Line, x, top: f32) {
 		if .Strike in span.style {
 			thickness := max(1, math.round(para.size / 14))
 			y := top + para.line_height / 2 + para.size * 0.08
-			append(&l.decor, Decor{x = x1, y = y, w = x2 - x1, h = thickness, color = span_color(l, para, span.style), above = true})
+			// The color of the text. Where that is softer in a checked
+			// task, the display takes it from the state of the block.
+			color := span_color(l, para, span.style, false)
+			soft := span_color(l, para, span.style, true) != color
+			append(&l.decor, Decor{x = x1, y = y, w = x2 - x1, h = thickness, color = color, above = true, soft_done = soft})
 		}
 	}
 }
@@ -399,7 +409,7 @@ place_task :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32) {
 	size := task_box_size(l.m)
 	bx := math.round(x - l.m.body * TASK_GAP - size)
 	by := math.round(y + (line_height - size) / 2)
-	append(&l.tasks, Task{bx, by, b.task_line, b.marker == .Task_Done})
+	append(&l.tasks, Task{bx, by, l.next_block})
 }
 
 // The bullet, number, or box of a list item, right-aligned left of x.
@@ -491,7 +501,6 @@ step :: proc(l: ^Layout, until_y: f32, budget_ms: f64 = 0) -> bool {
 				line_height = b.kind == .Heading ? heading_size * HEADING_LINE_HEIGHT : math.round(heading_size * l.m.line_height),
 				heading     = b.kind == .Heading,
 				quote       = b.quote_depth > 0,
-				done        = b.done,
 			}
 			para := make_para(l, &b.text, 0, len(b.text.bytes), look)
 			l.y = place_para(l, para, x, l.y, width)
@@ -542,7 +551,6 @@ step_code :: proc(l: ^Layout, b: ^document.Block, x, width: f32, started: time.T
 		line_height = math.round(size * CODE_LINE_HEIGHT),
 		mono        = true,
 		quote       = b.quote_depth > 0,
-		done        = b.done,
 	}
 	bytes := b.text.bytes[:]
 	if l.code_offset == 0 {
@@ -583,7 +591,6 @@ place_table :: proc(l: ^Layout, b: ^document.Block, x, y, width: f32) -> f32 {
 		size        = l.m.body,
 		line_height = math.round(l.m.body * l.m.line_height),
 		quote       = b.quote_depth > 0,
-		done        = b.done,
 	}
 	head_look := body_look
 	head_look.heading = true

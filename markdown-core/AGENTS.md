@@ -320,11 +320,16 @@ Speed and memory (the 1.1 MB document):
 
 Task check boxes, left on purpose:
 
-- A checked task sets the whole document again, and the view keeps its
-  scroll offset in points. Far down a long document the first draw then
-  lays out everything above the reader on the main thread. A change of the
-  one block's state in place, and a scroll anchor in the document in place
-  of an offset, would remove both.
+- A document that opens again in place (another app saved the file, or a
+  click on a task could not be saved) is parsed and laid out from the top,
+  and the view keeps its scroll offset in points. Far down a long document
+  the first draw then lays out everything above the reader on the main
+  thread. A scroll anchor in the document in place of an offset would
+  remove that. A click on a task does not go this way any more.
+- After a click on a task the app makes the sidebar outline and the
+  inspector numbers again for the full document, off the main thread
+  (0.3 s of CPU for 725 KB). Neither changes with a task mark. This is in
+  the app, for the two renderers.
 - A scroll through a document that is all tasks costs 13 to 27 ms of
   main-thread time more for each Page Down (`BENCHMARKS.md`). The cost is
   in the system's check box. A lighter control, or boxes that are placed
@@ -334,8 +339,9 @@ Task check boxes, left on purpose:
 - The system moves the check boxes with the scroll view; the text is drawn
   by the render thread. A box can be one frame ahead of its text. Not
   measured.
-- `Block.done` and `Block.task_line` are on each block of an item; they
-  belong to the item when the model gets containers.
+- `Block.done` and `Block.task_line` are on each block of an item, and
+  `Block.item` says which item that is (a number from the parser). They
+  belong to one item record when the model gets containers.
 - The view finds out that the layout moved from the page height and
   from a range that it clears by hand after a new layout. A revision
   number of the layout from the core would replace both, also for later
@@ -433,3 +439,10 @@ scroll position, footnotes and alerts, VoiceOver, print and export.
   nothing was under it. On macOS 26 the view now goes up to the top of the
   window, and its owner gives it the height of the strip that the toolbar
   covers (`topInset`), the same value that the web view gets.
+- **2026-11-24** — The maintainer saw the scroll bar jump and come back
+  after a click on a task. A first fix kept the height of the page while
+  the document was laid out again, which hid the effect. The maintainer
+  asked for the cause to be fixed: a click was a new document for the
+  renderer. The core now changes the one task in place
+  (`mdcore_set_task_checked`), and the view does nothing for the text
+  that it shows already. Rule from this: fix the cause, not what shows.

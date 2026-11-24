@@ -194,3 +194,19 @@ by; if it is real, the view now draws the strip under the toolbar too and
 the system makes its edge effect at the first frame. Not looked into.
 Memory and CPU did not change. The core is not touched, so `core.py` was
 not run.
+
+## A click on a task (2026-11-24)
+
+One click on a check box at the end of the 9,600-task document (725 KB),
+by the accessibility press action, three clicks, CPU of the app process
+from just before the click to 3 s after it. Not from `app.py`.
+
+| | A click was a new document | The task changes in place |
+| --- | --- | --- |
+| CPU for one click (s) | 0.64, 0.72, 0.64 | 0.30, 0.42, 0.30 |
+| Scroll bar | moved to another place and back (before the page kept its height) | does not move |
+
+What is left is not in the renderer: a sample showed about 20 ms on the
+main thread for the click (the change of the source text and the save),
+and the rest on the queue that makes the sidebar outline and the
+inspector numbers again for the full document. See Open work.
