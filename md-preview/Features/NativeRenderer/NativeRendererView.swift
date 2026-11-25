@@ -187,6 +187,8 @@ final class NativeRendererView: NSView {
         // The core takes the reader's place from the last offset that it
         // heard of, when the layout changes.
         mdcore_note_scroll(ctx, scrollY)
+        // The window of an input method goes with the caret.
+        if markedText != nil { inputContext?.invalidateCharacterCoordinates() }
         // Another place of the page is under the pointer now.
         updatePointerShape()
         updateTaskCheckBoxes()
@@ -287,6 +289,7 @@ final class NativeRendererView: NSView {
             page.setBoundsOrigin(frame.origin)
         }
         updateTaskCheckBoxes()
+        if markedText != nil { inputContext?.invalidateCharacterCoordinates() }
         // After each layout and each frame that laid out more: other text
         // can be under a pointer that did not move.
         updatePointerShape()
@@ -356,7 +359,7 @@ final class NativeRendererView: NSView {
     /// the source of the document, in bytes, and the text itself, which
     /// the system's text input counts in UTF-16 units. The next form of
     /// it, or the final text, takes its place.
-    private var markedText: (start: Int, length: Int, text: String)?
+    private var markedText: (start: Int, length: Int, text: String, selection: NSRange)?
     /// The caret that the reader sees: the system's own, which blinks as
     /// the system's settings say. It is on the page, at the place that
     /// the core gives.
@@ -738,7 +741,9 @@ final class NativeRendererView: NSView {
     override func keyDown(with event: NSEvent) {
         if isEditable {
             // Escape leaves Edit mode, also before a click gave a caret.
-            if event.keyCode == Key.escape {
+            // Not while an input method has text that is not final: the
+            // key is the input method's, to take that text back.
+            if event.keyCode == Key.escape, markedText == nil {
                 cancelOperation(nil)
                 return
             }
@@ -977,8 +982,17 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         // the document as it is typed, and each new form takes the place
         // of the one before. It has no line under it yet.
         let text = replacingMarked(replacementRange, with: plainText(string))
+        // The selection that the input method has in its text counts
+        // from the start of the new part.
+        var selection = selectedRange
+        if markedText != nil, replacementRange.location != NSNotFound {
+            selection.location += replacementRange.location
+        }
+        let units = text.utf16.count
+        selection.location = min(max(selection.location, 0), units)
+        selection.length = min(max(selection.length, 0), units - selection.location)
         let start = put(text)
-        markedText = text.isEmpty || start < 0 ? nil : (start, text.utf8.count, text)
+        markedText = text.isEmpty || start < 0 ? nil : (start, text.utf8.count, text, selection)
         didEdit()
     }
 
@@ -987,11 +1001,12 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
     }
 
     // The view gives the system's text input the text that is not final
-    // as the only text there is: it starts at 0, and the caret is at its
-    // end. A caret inside that text is not a thing the view has yet.
+    // as the only text there is: it starts at 0. The selection in it is
+    // the one that the input method gave; the view's own caret shows at
+    // the end of that text.
 
     func selectedRange() -> NSRange {
-        NSRange(location: markedText?.text.utf16.count ?? 0, length: 0)
+        markedText?.selection ?? NSRange(location: 0, length: 0)
     }
 
     func markedRange() -> NSRange {
