@@ -91,6 +91,10 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address, allocator := co
 		for end < len(source) && (source[end] == ' ' || source[end] == '\t') {
 			end += 1
 		}
+		// A backslash before the line break is a part of that break.
+		if end + 1 < len(source) && source[end] == '\\' && (source[end + 1] == '\n' || source[end + 1] == '\r') {
+			end += 1
+		}
 		if end < len(source) && (source[end] == '\n' || source[end] == '\r') {
 			_, end = line_at(source, end)
 		} else {
