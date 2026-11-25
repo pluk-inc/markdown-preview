@@ -51,16 +51,20 @@ block_map :: proc(doc: ^Document, block: int) -> (places: [dynamic]Place) {
 	}
 	place_escapes(&places, text[:])
 	// Where the text of the block can start, for a block with no text
-	// from the source at all (a code block of empty lines): after its
-	// first line, which is its fence.
+	// from the source at all: a code block of empty lines starts after
+	// its first line, which is its fence; each other block (a paragraph
+	// of a NUL byte) at its own start.
 	content := block_start(doc, block) - base
-	for content < len(text) && text[content] != '\n' && text[content] != '\r' {
-		content += 1
+	if block_at(doc, block).kind == .Code {
+		for content < len(text) && text[content] != '\n' && text[content] != '\r' {
+			content += 1
+		}
+		if content + 1 < len(text) && text[content] == '\r' && text[content + 1] == '\n' {
+			content += 1
+		}
+		content = min(content + 1, len(text))
 	}
-	if content + 1 < len(text) && text[content] == '\r' && text[content + 1] == '\n' {
-		content += 1
-	}
-	place_made(places[:], text[:], min(content + 1, len(text)))
+	place_made(places[:], text[:], content)
 	destroy(&fresh)
 	for &place in places {
 		place.source += base
