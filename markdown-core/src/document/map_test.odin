@@ -172,6 +172,9 @@ test_a_character_goes_out_with_all_that_the_source_has_for_it :: proc(t: ^testin
 		// A NUL byte shows as one character of three bytes.
 		{"a\x00\n", {0, 0, 4}, "\x00"},
 		{"a\x00b\n", {0, 0, 4}, "\x00"},
+		// Also when it is all of a paragraph, after a block before it.
+		{"\x00\n", {0, 0, 3}, "\x00"},
+		{"x\n\n\x00\n", {1, 0, 3}, "\x00"},
 	}
 	for c in cases {
 		doc := parse(c.source)
