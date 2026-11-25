@@ -634,8 +634,6 @@ decorate_line :: proc(l: ^Layout, para: ^Para, line: text.Line, x, top: f32) {
 @(private)
 marker_text :: proc(b: ^document.Block) -> string {
 	#partial switch b.marker {
-	case .Bullet:
-		return "•"
 	case .Number:
 		return fmt.tprintf("%d.", b.number)
 	case .Task_Open, .Task_Done:
@@ -643,6 +641,11 @@ marker_text :: proc(b: ^document.Block) -> string {
 	}
 	return ""
 }
+
+// The circle of a bullet, in sizes of the body text: how far across it
+// is, and the room between it and the text of its item.
+BULLET_SIZE :: 0.4
+BULLET_GAP :: 0.75
 
 // Part `t` of the way from one color to another.
 @(private)
@@ -675,6 +678,14 @@ place_task :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32) {
 place_marker :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32) {
 	if b.marker == .Task_Open || b.marker == .Task_Done {
 		place_task(l, b, x, y, line_height)
+		return
+	}
+	if b.marker == .Bullet {
+		// A circle, as the web preview paints it: 0.4 em across, 0.75 em
+		// before the text of the item, at the middle of the line. The
+		// bullet of the font is a third of that in the system font.
+		across := BULLET_SIZE * l.m.body
+		push_decor(l, x - BULLET_GAP * l.m.body - across, y + (line_height - across) / 2, across, across, l.style.link, across / 2)
 		return
 	}
 	label := marker_text(b)
@@ -836,13 +847,14 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 			case .Heading:
 				place_marker(l, b, x, l.y, heading_size * HEADING_LINE_HEIGHT)
 			case .Code:
-				place_marker(l, b, x, l.y + CODE_PAD, math.round(l.m.code_size * CODE_LINE_HEIGHT))
 				// The card and the quote bars are there from the first
 				// line and grow with the block: a long one can stay in
-				// progress while the reader is in it.
+				// progress while the reader is in it. They are the first
+				// records of the box, so the marker comes after them.
 				push_decor(l, x - 0.5, l.y - 0.5, width + 1, 0, l.style.code_border, 8.5)
 				push_decor(l, x, l.y, width, 0, l.style.code_background, 8)
 				push_quote_bars(l, b, l.y, 0)
+				place_marker(l, b, x, l.y + CODE_PAD, math.round(l.m.code_size * CODE_LINE_HEIGHT))
 			case .Table:
 				place_marker(l, b, x, l.y + CELL_PAD_Y, body_line)
 			case .Rule:

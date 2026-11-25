@@ -299,7 +299,24 @@ test_a_task_keeps_a_place_for_its_check_box :: proc(t: ^testing.T) {
 	first := only(&f.page).lines[only(&f.page).boxes[0].line_first]
 	size := task_box_size(f.page.m)
 	testing.expect(t, one.x + size < first.x)
-	testing.expect_value(t, len(only(&f.page).decor), 0)
+	for task in ([]int{0, 1, 3}) {
+		box := only(&f.page).boxes[task]
+		testing.expect_value(t, box.decor_end, box.decor_first)
+	}
+	// The plain item has its bullet: a circle 0.4 of the body size
+	// across, 0.75 of it before the text, at the middle of the line.
+	plain := only(&f.page).boxes[2]
+	testing.expect_value(t, plain.decor_end - plain.decor_first, 1)
+	bullet := only(&f.page).decor[plain.decor_first]
+	text_line := only(&f.page).lines[plain.line_first]
+	body := f.page.m.body
+	testing.expect_value(t, bullet.w, 0.4 * body)
+	testing.expect_value(t, bullet.h, bullet.w)
+	testing.expect_value(t, bullet.radius, bullet.w / 2)
+	testing.expect_value(t, bullet.x + bullet.w, text_line.x - 0.75 * body)
+	line_height := only(&f.page).paras[text_line.para].line_height
+	testing.expect_value(t, bullet.y + bullet.h / 2, text_line.top + line_height / 2)
+	testing.expect_value(t, bullet.color, f.page.style.link)
 	// Only the box that a range touches.
 	found: [4]Task_Place
 	testing.expect_value(t, tasks_between(&f.page, f64(two.y + 1), f64(two.y + size - 1), found[:]), 1)

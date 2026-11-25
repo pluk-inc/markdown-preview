@@ -113,7 +113,9 @@ display_part :: proc(
 			// Glyphs come in runs of one span, so the color is looked up
 			// only when the span changes.
 			span: ^document.Span
-			color := l.style.secondary
+			// The number of a list item has the color of a link, as the
+			// circle of a bullet has; text with no span is soft.
+			color := para.src == nil ? l.style.link : l.style.secondary
 			// The same for the font: a line has a few runs of one font each.
 			run_font: base.Font
 			run_font_id: u16
