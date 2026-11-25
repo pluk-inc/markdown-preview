@@ -111,6 +111,16 @@ test_a_block_with_marks_as_text_has_its_places :: proc(t: ^testing.T) {
 			defer delete(places)
 			text := block_at(&doc, block).text.bytes[:]
 			for byte in 0 ..= len(text) {
+				// A byte in a thing that the source has in another form
+				// (the mark of a task, which has its check box) is no
+				// place of its own: the thing is one piece.
+				inside := false
+				for place in places {
+					inside ||= place.whole && byte > place.text && byte < place.text + place.text_len
+				}
+				if inside {
+					continue
+				}
 				offset, ok := place_of(&doc, places[:], {block = block, byte = byte})
 				testing.expectf(t, ok, "reveal %d: no place for byte %d of block %d", at, byte, block)
 				back := address_for(&doc, places[:], block, offset)
@@ -294,4 +304,17 @@ test_marks_make_no_block_for_an_item_with_no_text :: proc(t: ^testing.T) {
 		delete(places)
 		testing.expect_value(t, fmt.tprintf("%s", block_at(&doc, last).text.bytes[:]), before)
 	}
+}
+
+// Text that is typed before the first letter of a task whose mark shows
+// goes after its check box.
+@(test)
+test_the_text_of_a_task_starts_after_its_check_box :: proc(t: ^testing.T) {
+	doc := parse_owned(transmute([]u8)fmt.aprintf("%s", "- [ ] task\n"), 7)
+	defer destroy(&doc)
+	testing.expect_value(t, fmt.tprintf("%s", block_at(&doc, 0).text.bytes[:]), "- task")
+	offset, ok := source_of(&doc, {block = 0, byte = 2})
+	testing.expect(t, ok)
+	testing.expect_value(t, offset, 6)
+	testing.expect_value(t, address_of(&doc, 6), Address{block = 0, byte = 2})
 }
