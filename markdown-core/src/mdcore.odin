@@ -1085,6 +1085,9 @@ mdcore_deleted_text :: proc "c" (handle: rawptr, length: ^c.long) -> [^]u8 {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
+	// A delete writes the bytes with this lock.
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
 	hold(ctx)
 	length^ = c.long(len(ctx.gone))
 	return raw_data(ctx.gone)
