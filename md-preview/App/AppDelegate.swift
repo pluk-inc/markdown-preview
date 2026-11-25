@@ -1020,12 +1020,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
           IFS=$old_ifs
 
           for dir in /usr/local/bin /opt/homebrew/bin; do
-            if path_contains "$dir"; then
-              if can_install_without_sudo "$dir"; then
-                printf '%s\t%s\n' "$dir" "false"
-              else
-                printf '%s\t%s\n' "$dir" "true"
-              fi
+            if path_contains "$dir" && can_install_without_sudo "$dir"; then
+              printf '%s\t%s\n' "$dir" "false"
               return 0
             fi
           done
@@ -1033,6 +1029,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
           for dir do
             if is_safe_path_dir "$dir" && can_install_without_sudo "$dir"; then
               printf '%s\t%s\n' "$dir" "false"
+              return 0
+            fi
+          done
+
+          for dir in /usr/local/bin /opt/homebrew/bin; do
+            if path_contains "$dir"; then
+              printf '%s\t%s\n' "$dir" "true"
               return 0
             fi
           done
