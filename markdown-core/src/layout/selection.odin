@@ -400,22 +400,35 @@ line_of_byte :: proc(part: ^Part, box: Box, b: ^document.Block, src: ^document.T
 // The address for a caret at a point of the page. As `hit_test`, and
 // also at text that has no line: an empty line of a code block, and a
 // block with no text (an item of a list with nothing in it).
-caret_hit :: proc(l: ^Layout, x: f32, y: f64) -> (at: document.Address, ok: bool) {
+caret_hit :: proc(l: ^Layout, x: f32, y: f64) -> (at: document.Address, upstream: bool, ok: bool) {
 	p := part_at(l, y)
 	if p < 0 {
 		return
 	}
 	part := &l.parts[p]
 	from_top := f32(y - part.top)
+	// A block with no text has no line that `hit_test` can find: it is
+	// the place when its box is the one with the point, or the nearest
+	// one to a point between two boxes.
+	near, gap := -1, max(f32)
+	for box, slot in part.boxes {
+		away := from_top < box.top ? box.top - from_top : max(from_top - box.bottom, 0)
+		if away < gap {
+			near, gap = slot, away
+		}
+	}
+	if near >= 0 {
+		b := &l.doc.parts[p].blocks[near]
+		if (b.kind == .Paragraph || b.kind == .Heading) && len(b.text.bytes) == 0 {
+			return {l.doc.starts[p] + near, 0, 0}, false, true
+		}
+	}
 	for box, slot in part.boxes {
 		if from_top < box.top || from_top >= box.bottom {
 			continue
 		}
 		b := &l.doc.parts[p].blocks[slot]
 		block := l.doc.starts[p] + slot
-		if (b.kind == .Paragraph || b.kind == .Heading) && len(b.text.bytes) == 0 {
-			return {block, 0, 0}, true
-		}
 		if b.kind != .Code {
 			break
 		}
@@ -445,21 +458,31 @@ caret_hit :: proc(l: ^Layout, x: f32, y: f64) -> (at: document.Address, ok: bool
 			if at > len(bytes) || strings.count(string(bytes[byte:at]), "\n") != down || (at < len(bytes) && bytes[at] != '\n') {
 				break
 			}
-			return {block, 0, at}, true
+			return {block, 0, at}, false, true
 		}
 		if down >= 0 && down < len(bytes) && strings.count(string(bytes[:down + 1]), "\n") == down + 1 {
-			return {block, 0, down}, true
+			return {block, 0, down}, false, true
 		}
 		break
 	}
-	return hit_test(l, x, y)
+	at = hit_test(l, x, y) or_return
+	// The end of a line that goes on in the next line is the start of
+	// that one too. For a point in the first of the two or above it,
+	// the caret is at the end of that first line.
+	if _, top, _, ok_down := caret_y(l, at, false); ok_down && top > y {
+		_, top_up, _, _ := caret_y(l, at, true)
+		upstream = top_up < top
+	}
+	return at, upstream, true
 }
 
 // Where a caret at an address of the document is: its x, the top of its
 // line from the top of the part of its block, the height of the line,
-// and that part. False when the block has no records (`lay_out_block`
-// makes them) or no text (a rule).
-caret_place :: proc(l: ^Layout, at: document.Address) -> (x, top, height: f32, part_index: int, ok: bool) {
+// and that part. A byte where a line of a paragraph ends and the next
+// one starts has two places: the start of the second line, and with
+// `upstream` the end of the first one. False when the block has no
+// records (`lay_out_block` makes them) or no text (a rule).
+caret_place :: proc(l: ^Layout, at: document.Address, upstream := false) -> (x, top, height: f32, part_index: int, ok: bool) {
 	if l.doc == nil || at.block < 0 || at.block >= l.doc.count {
 		return
 	}
@@ -476,7 +499,7 @@ caret_place :: proc(l: ^Layout, at: document.Address) -> (x, top, height: f32, p
 		return
 	}
 	box := part.boxes[slot]
-	found := line_of_byte(part, box, b, src, at.byte)
+	found := caret_line(part, box, b, src, at.byte, upstream)
 	if found < 0 {
 		// Text with no line: an empty paragraph, or the empty lines at
 		// the start of a code block. At the start of the block.
@@ -504,6 +527,88 @@ caret_place :: proc(l: ^Layout, at: document.Address) -> (x, top, height: f32, p
 	return x, line.top, height, p, true
 }
 
+// The line that a caret at a byte of a text is in (`line_of_byte`), or
+// with `upstream` the line before it, when that one ends at the byte
+// and is of the same paragraph.
+@(private)
+caret_line :: proc(part: ^Part, box: Box, b: ^document.Block, src: ^document.Text, byte: int, upstream: bool) -> int {
+	found := line_of_byte(part, box, b, src, byte)
+	if upstream && found > box.line_first {
+		line, before := part.lines[found], part.lines[found - 1]
+		base := part.paras[line.para].base
+		if before.para == line.para && base + line.line.start == byte && base + before.line.end == byte {
+			return found - 1
+		}
+	}
+	return found
+}
+
+// `caret_place` with the top of the line as a height of the page.
+caret_y :: proc(l: ^Layout, at: document.Address, upstream: bool) -> (x: f32, y: f64, height: f32, ok: bool) {
+	top: f32
+	p: int
+	x, top, height, p = caret_place(l, at, upstream) or_return
+	return x, l.parts[p].top + f64(top), height, true
+}
+
+// The place for a caret one line above or below a caret, as near to the
+// x `goal` as that line has a place. False when the caret has no place,
+// and when what is laid out has no line of text there: the caret is in
+// the first or the last line.
+caret_line_step :: proc(l: ^Layout, at: document.Address, upstream: bool, goal: f32, down: bool) -> (next: document.Address, next_upstream: bool, ok: bool) {
+	_, here, height := caret_y(l, at, upstream) or_return
+	// A point above the line or below it; then farther, over what is
+	// between two blocks, until the nearest text is of another line.
+	// The steps are less than a line, so no line is left out: a block
+	// with no text is found only by a point in it.
+	reach := f64(max(height / 2, 4))
+	for probe := down ? here + f64(height) + 1 : here - 1; probe >= l.origin && probe <= l.origin + l.content_height; probe += down ? reach : -reach {
+		next, next_upstream = caret_hit(l, goal, probe) or_return
+		_, y, _ := caret_y(l, next, next_upstream) or_return
+		if down ? y > here : y < here {
+			return next, next_upstream, true
+		}
+	}
+	return {}, false, false
+}
+
+// The place at the start or at the end of the line that a caret is in.
+// The end of a line that goes on in the next line is the byte where
+// that one starts, with `upstream`. False when the caret has no place.
+caret_line_end :: proc(l: ^Layout, at: document.Address, upstream: bool, end: bool) -> (next: document.Address, next_upstream: bool, ok: bool) {
+	_, _, _, p := caret_place(l, at, upstream) or_return
+	_, slot := document.locate(l.doc, at.block)
+	part := &l.parts[p]
+	src := document.text_at(l.doc, at)
+	bytes := src.bytes[:]
+	next = at
+	found := caret_line(part, part.boxes[slot], &l.doc.parts[p].blocks[slot], src, at.byte, upstream)
+	line_start, line_end := 0, -1
+	if found >= 0 {
+		line := part.lines[found]
+		base := part.paras[line.para].base
+		line_start, line_end = base + line.line.start, base + line.line.end
+	}
+	if at.byte > line_end {
+		// An empty line of a code block, or a text with no line: from
+		// the line break before the byte to the one after it.
+		next.byte = document.paragraph_end(bytes, at.byte, end)
+		return next, false, true
+	}
+	if !end {
+		next.byte = line_start
+		return next, false, true
+	}
+	next.byte = line_end
+	if line_end > line_start && bytes[line_end - 1] == '\n' {
+		// The line break is the end of a line of code.
+		next.byte = line_end - 1
+	} else if line_end < len(bytes) && bytes[line_end] != '\n' {
+		next_upstream = true
+	}
+	return next, next_upstream, true
+}
+
 // Where a caret is in a document with no block: where the first line of
 // its first paragraph starts when text comes. `top` is from the top of
 // the page (`Layout.origin`).
@@ -519,7 +624,7 @@ caret_quad_empty :: proc(l: ^Layout, scale: f32, origin_y: f64, out: ^[dynamic]b
 
 // The quad of a caret at an address, in the display space of
 // `selection_quads`. Nothing when the caret has no place.
-caret_quad :: proc(l: ^Layout, at: document.Address, y0, y1: f64, scale: f32, origin_y: f64, out: ^[dynamic]base.Quad) {
+caret_quad :: proc(l: ^Layout, at: document.Address, upstream: bool, y0, y1: f64, scale: f32, origin_y: f64, out: ^[dynamic]base.Quad) {
 	// Not for a caret whose block is out of the range that is shown:
 	// its place needs the shaped text of its line.
 	if l.doc == nil || at.block < 0 || at.block >= l.doc.count {
@@ -530,7 +635,7 @@ caret_quad :: proc(l: ^Layout, at: document.Address, y0, y1: f64, scale: f32, or
 	if slot >= len(part.boxes) || part.top + f64(part.boxes[slot].bottom) < y0 || part.top + f64(part.boxes[slot].top) > y1 {
 		return
 	}
-	x, top, height, p, ok := caret_place(l, at)
+	x, top, height, p, ok := caret_place(l, at, upstream)
 	if !ok {
 		return
 	}

@@ -67,9 +67,83 @@ static void scroll_pass(void *ctx, const char *name, double end) {
     printf("%s_longest_frame_cpu_ms %.2f\n", name, longest);
 }
 
+// The keys that move the caret, through all of a document: each step to
+// the right is later in the source and each one to the left earlier,
+// each line down is lower on the page and each line up higher, and the
+// caret gets from one end of the document to the other. Returns what is
+// wrong, or NULL.
+static const char *caret_walk(void *ctx, long length) {
+    if (!mdcore_caret_set(ctx, VIEW_WIDTH / 2, 40)) return "no caret at a click";
+    mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false);
+    if (mdcore_caret_move(ctx, MDCORE_MOVE_UP, false) || mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, false)) {
+        return "a move at the start of the document";
+    }
+    long first = mdcore_caret_offset(ctx), at = first, steps = 0;
+    while (mdcore_caret_move(ctx, MDCORE_MOVE_RIGHT, false)) {
+        long now = mdcore_caret_offset(ctx);
+        if (now <= at || ++steps > length) return "a step to the right that is not later in the source";
+        at = now;
+    }
+    long last = at;
+    mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false);
+    mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_END, false);
+    if (mdcore_caret_offset(ctx) != last) return "the end of the document is not where the steps to the right end";
+    if (mdcore_caret_move(ctx, MDCORE_MOVE_DOWN, false)) return "a move at the end of the document";
+    for (steps = 0; mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, false);) {
+        long now = mdcore_caret_offset(ctx);
+        if (now >= at || ++steps > length) return "a step to the left that is not earlier in the source";
+        at = now;
+    }
+    if (at != first) return "the steps to the left do not end at the start of the document";
+    for (int word = 0; word < 2; word++) {
+        for (steps = 0; mdcore_caret_move(ctx, word ? MDCORE_MOVE_WORD_LEFT : MDCORE_MOVE_WORD_RIGHT, false);) {
+            long now = mdcore_caret_offset(ctx);
+            if ((word ? now >= at : now <= at) || ++steps > length) return "a step of a word in the wrong direction";
+            at = now;
+        }
+        if (at != (word ? first : last)) return "the steps of a word do not end at an end of the document";
+    }
+    double x = 0, y = 0, line = 0, height = 0;
+    if (!mdcore_caret_rect(ctx, &x, &y, &height)) return "no place for the caret at the start";
+    // The last press in the last line goes to the end of the document,
+    // in that line; each press before it is a line lower.
+    for (steps = 0; mdcore_caret_move(ctx, MDCORE_MOVE_DOWN, false);) {
+        if (!mdcore_caret_rect(ctx, &x, &line, &height) || line < y || ++steps > length) return "a line down that is higher";
+        if (line == y && mdcore_caret_offset(ctx) != last) return "a line down that is not lower";
+        y = line;
+    }
+    if (mdcore_caret_offset(ctx) != last) return "the lines down do not end at the end of the document";
+    for (steps = 0; mdcore_caret_move(ctx, MDCORE_MOVE_UP, false);) {
+        if (!mdcore_caret_rect(ctx, &x, &line, &height) || line > y || ++steps > length) return "a line up that is lower";
+        if (line == y && mdcore_caret_offset(ctx) != first) return "a line up that is not higher";
+        y = line;
+    }
+    if (mdcore_caret_offset(ctx) != first) return "the lines up do not end at the start of the document";
+    // Select All puts the caret at the end, so a step with the selection
+    // makes it shorter, and one with none goes to its end.
+    mdcore_select_all(ctx);
+    if (!mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, true) || !mdcore_has_selection(ctx)) return "Select All and a step with the selection";
+    mdcore_select_all(ctx);
+    long selected_end = mdcore_caret_offset(ctx);
+    if (!mdcore_caret_move(ctx, MDCORE_MOVE_RIGHT, false) || mdcore_has_selection(ctx) || mdcore_caret_offset(ctx) != selected_end) {
+        return "Select All and a step to the right";
+    }
+    // A typed character ends the selection at the caret: a step back
+    // with the selection selects that character and no more.
+    mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false);
+    mdcore_caret_move(ctx, MDCORE_MOVE_RIGHT, false);
+    mdcore_insert(ctx, "q", 1);
+    long selected = 0;
+    if (!mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, true)) return "a step with the selection after a typed character";
+    const char *text = mdcore_selection_text(ctx, &selected);
+    if (selected != 1 || text[0] != 'q') return "the selection after a typed character does not start at the caret";
+    return NULL;
+}
+
 int main(int argc, const char *argv[]) {
-    if (argc != 2) {
-        fprintf(stderr, "usage: mdcore-bench <file.md>\n");
+    bool walk = argc == 3 && strcmp(argv[2], "--caret-walk") == 0;
+    if (argc != 2 && !walk) {
+        fprintf(stderr, "usage: mdcore-bench <file.md> [--caret-walk]\n");
         return 2;
     }
     // The class of an app's main thread. Without it the system can run the
@@ -90,6 +164,14 @@ int main(int argc, const char *argv[]) {
     mdcore_resize(ctx, VIEW_WIDTH, VIEW_HEIGHT, VIEW_SCALE);
     @autoreleasepool {
         mdcore_draw(ctx, 0);
+    }
+    if (walk) {
+        const char *wrong = caret_walk(ctx, (long)source.length);
+        if (wrong != NULL) {
+            fprintf(stderr, "the caret in %s: %s\n", argv[1], wrong);
+            return 1;
+        }
+        return 0;
     }
     printf("first_frame_ms %.2f\n", now_ms() - start);
     printf("first_frame_heap_mb %.1f\n", heap_mb());
@@ -243,6 +325,34 @@ int main(int argc, const char *argv[]) {
     bool same = caret && after_length == before_length && memcmp(after, before.bytes, (size_t)before_length) == 0;
     if (!caret || !moved || !same) {
         fprintf(stderr, "the caret did not work: caret %d, moved %d, text as before %d\n", caret, moved, same);
+        return 1;
+    }
+    // The keys that move the caret: each step, and the frame after it.
+    // A step and the step back give the place of before, the caret of a
+    // line below is lower, and a step with the selection selects text.
+    long home = mdcore_caret_offset(ctx);
+    bool moves = true;
+    double move_start = thread_cpu_ms();
+    for (int key = 0; key < KEYS; key++) {
+        moves = mdcore_caret_move(ctx, key % 2 == 0 ? MDCORE_MOVE_LEFT : MDCORE_MOVE_RIGHT, false) && moves;
+        @autoreleasepool {
+            mdcore_draw(ctx, bottom);
+        }
+    }
+    printf("caret_move_cpu_ms %.2f\n", (thread_cpu_ms() - move_start) / KEYS);
+    moves = moves && (KEYS % 2 != 0 || mdcore_caret_offset(ctx) == home);
+    double line_x = 0, line_y = 0, below_y = 0;
+    moves = moves && mdcore_caret_rect(ctx, &line_x, &line_y, &caret_height);
+    moves = moves && mdcore_caret_move(ctx, MDCORE_MOVE_DOWN, false) && mdcore_caret_rect(ctx, &line_x, &below_y, &caret_height) && below_y > line_y;
+    moves = moves && mdcore_caret_move(ctx, MDCORE_MOVE_UP, false) && mdcore_caret_rect(ctx, &line_x, &below_y, &caret_height) && below_y == line_y;
+    moves = moves && !mdcore_has_selection(ctx) && mdcore_caret_move(ctx, MDCORE_MOVE_WORD_LEFT, true) && mdcore_has_selection(ctx);
+    moves = moves && mdcore_caret_move(ctx, MDCORE_MOVE_RIGHT, false) && !mdcore_has_selection(ctx);
+    // The two ends of the document, from the middle of it.
+    long caret_middle = mdcore_caret_offset(ctx);
+    moves = moves && mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false) && mdcore_caret_offset(ctx) < caret_middle;
+    moves = moves && !mdcore_caret_move(ctx, MDCORE_MOVE_UP, false);
+    if (!moves) {
+        fprintf(stderr, "the caret did not move as the keys say\n");
         return 1;
     }
     mdcore_caret_clear(ctx);

@@ -23,10 +23,13 @@ markdown-core/bench/app.py <Markdown Preview.app>   # the app, cold launch; add 
   the top between them, a jump to the end, a new width there, the same
   text again with one paragraph more in its middle, ten characters typed
   into that paragraph and ten at the end of the text, ten at a caret
-  that a click put in the view, Select All,
+  that a click put in the view, ten steps of that caret to the left and
+  to the right, Select All,
   a copy of all of the text, frames through all of the document (so all
-  of it is laid out), and the heap. It takes a minute and
-  shows no window. A scroll frame is CPU time of the drawing thread, because
+  of it is laid out), and the heap. Before the runs it walks the caret
+  through two documents with each key that moves it, and stops with a
+  message when a move is wrong (`mdcore-bench <file> --caret-walk`). It
+  takes a minute and shows no window. A scroll frame is CPU time of the drawing thread, because
   a draw waits for the display.
 - **`app.py`** starts a Release build of the app with a document, in the
   background, and measures from the `open` command to the signpost of the
@@ -73,6 +76,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-24 | a key lays out its block again, not its part | 558 / 560 | 62 / 108 (see the section) | 450 / 695 | 60 / 70 | none | 0.50 / 0.42 | 7.2 / 25.5 (16.1 at the first frame) |
 | 2026-11-25 | a caret, and text that is typed at it | 596 / 587 | 53 / 98 | 505 / 730 | 66 / 72 | none | 0.51 / 0.43 | 7.1 / 26.7 (16.2 at the first frame) |
 | 2026-11-25 | Edit Mode in the native view | 569 / 579 | 53 / 99 | 475 / 720 | 61 / 71 | none | 0.52 / 0.44 | 7.2 / 26.7 (16.2 at the first frame) |
+| 2026-11-25 | the keys that move the caret | 650 / 628 | 59 / 105 | 545 / 875 | 56 / 81 | none | none / 0.42 | 7.1 / 26.6 (16.2 at the first frame) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -775,3 +779,41 @@ change, two runs each in turns:
 
 The same for the two, as it must be: the benchmark calls neither of
 the new calls.
+
+## The keys that move the caret (2026-11-25)
+
+The arrow keys and the other keys that move the caret, with the
+selection. Nothing of it runs before a key. The Mac was busier than for
+the rows above (other builds ran), so read this row against its own
+base only. `app.py`, short / long, five launches for each number, the
+base built from its commit on the same day:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 644 / 623 | 66 / 108 | 510 / 810 |
+| change | 665 / 632 | 56 / 104 | 530 / 870 |
+| change | 635 / 624 | 61 / 106 | 560 / 880 |
+| base | 597 / 607 | 59 / 112 | 510 / 800 |
+
+`core.py`, short / long, the base and the change, two runs each in
+turns (base, change, change, base):
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 63, 60 / 71, 76 | 43, 70 / 75, 88 |
+| Scroll frame, glyphs ready (CPU ms) | 0.32, 0.34 / 0.41, 0.43 | 0.48, 0.42 / 0.39, 0.45 |
+| A typed character in the middle of the text (CPU ms) | 1.1, 1.5 / 1.3, 1.8 | 1.4, 1.4 / 1.3, 1.7 |
+| A typed character at the end of the text (CPU ms) | 1.1, 1.4 / 2.2, 2.6 | 1.5, 1.3 / 2.8, 2.4 |
+| A typed character at a caret (CPU ms) | 1.8, 1.8 / 1.4, 2.0 | 1.8, 1.6 / 1.9, 2.1 |
+| A step of the caret to the left or to the right (CPU ms) | none | 0.58, 0.50 / 0.46, 0.53 |
+| Heap at the first frame (MB) | 5.3 / 16.2 | 5.3 / 16.2 |
+| Heap with all of the document laid out (MB) | 7.1 / 26.7 | 7.1 / 26.6 |
+
+No number moved by more than the two runs of one build differ. A step
+of the caret is 0.5 ms with its frame, in 9 KB and in 1.1 MB: it makes
+the map of the caret's block (one parse of the lines of that block) and
+the quads of the selection, not the quads of the page. The first form
+of the step made the quads of the page too and was 1.2 ms. The 20 ms
+that the app's CPU number is higher in the long document is inside
+what the two base runs of the row above it differ by on a busy Mac; the
+launch runs no code of this change.

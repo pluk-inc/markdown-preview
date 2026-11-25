@@ -111,6 +111,37 @@ long mdcore_caret_offset(void *ctx);
 // the block of the caret has no layout.
 bool mdcore_caret_rect(void *ctx, double *x, double *y, double *height);
 
+// The moves of a caret. Left and right are against the reading order
+// and in it.
+typedef enum {
+    MDCORE_MOVE_LEFT = 0,       // one character
+    MDCORE_MOVE_RIGHT = 1,
+    MDCORE_MOVE_WORD_LEFT = 2,  // to the start of a word
+    MDCORE_MOVE_WORD_RIGHT = 3, // to the end of a word
+    MDCORE_MOVE_UP = 4,         // one line, at the same x where the line has text there
+    MDCORE_MOVE_DOWN = 5,
+    MDCORE_MOVE_LINE_START = 6,
+    MDCORE_MOVE_LINE_END = 7,
+    MDCORE_MOVE_DOCUMENT_START = 8,
+    MDCORE_MOVE_DOCUMENT_END = 9,
+    // A text is one paragraph; each line of a code block is one.
+    MDCORE_MOVE_PARAGRAPH_START = 10,
+    MDCORE_MOVE_PARAGRAPH_END = 11,
+} mdcore_move;
+
+// Moves the caret. With `extend`, the text from where the caret was to
+// where it is now is selected, or the selection that ends at the caret
+// gets longer or shorter; with no `extend`, the selection ends, and a
+// step to the left or to the right goes to that end of it. The caret
+// goes over each place where the source has no room for text (a table
+// cell with no text). The end of a line that goes on in the next line
+// is the same place in the text as the start of that one: the caret
+// shows at the end of the line after a move to it or a click right of
+// it. Up in the first line goes to the start of the document, and down
+// in the last line to its end. False when the caret did not move and
+// the selection did not change, and for no caret.
+bool mdcore_caret_move(void *ctx, mdcore_move move, bool extend);
+
 // Puts text in at the caret, as mdcore_replace_text does at its place in
 // the source, and the caret is after the text. Text at the end of bold
 // text is bold: it goes where the character before the caret is. Does
@@ -238,11 +269,17 @@ typedef enum {
 mdcore_pointer mdcore_pointer_shape(void *ctx, double x, double y);
 
 // Selection. phase: 0 = mouse down, 1 = drag. x, y are in document space.
+// A view with a caret has it at the end of the selection that a drag
+// moves, where the source has room for text there.
 void mdcore_mouse(void *ctx, double x, double y, int phase);
+// A view with a caret has it at the end of the selection after this.
 void mdcore_select_all(void *ctx);
 // Ends the selection. mdcore_set_markdown keeps a selection through a
 // change of the text; a host calls this for the text of another document.
 void mdcore_select_none(void *ctx);
+// True when text is selected. A host that draws the caret itself shows
+// none then.
+bool mdcore_has_selection(void *ctx);
 // The selected text as UTF-8. The pointer is valid until the next call.
 const char *mdcore_selection_text(void *ctx, long *length);
 

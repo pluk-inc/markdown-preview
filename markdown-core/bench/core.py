@@ -34,6 +34,7 @@ METRICS = [
     ("type_middle_cpu_ms", "A typed character in the middle of the text, the view at the end (CPU ms)"),
     ("type_end_cpu_ms", "A typed character at the end of the text, the view at the end (CPU ms)"),
     ("type_caret_cpu_ms", "A typed character at a caret that a click put in the view (CPU ms)"),
+    ("caret_move_cpu_ms", "A step of the caret to the left or to the right (CPU ms)"),
     ("select_all_ms", "Select All (ms)"),
     ("copy_all_ms", "Copy of all of the text (ms)"),
     ("full_layout_cpu_ms", "All of the document laid out, by frames through it (CPU ms)"),
@@ -59,6 +60,23 @@ def build() -> Path:
     return program
 
 
+def caret_document(path: Path) -> Path:
+    """A document with the places that are hard for a caret."""
+    text = "# \n\na\n\n| x | y |\n| - | - |\n" + "|  |  |\n" * 40 + "\nmiddle\n\n"
+    text += "#\n\n" * 70 + "-\n" * 70 + "\n" + "# \n\n" * 6 + "---\n\n" * 500 + "after the rules\n\n"
+    text += "日本語の文章がここにあります。" * 6 + "\n\n"
+    text += "```\nab   \n\n\tcd\n```\n\n> a &amp; **b** \\* `c`  \n> [d](https://example.com) e\u0301 👨‍👩‍👧‍👦\n\n---\n\nz\n\n- \n"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def check_caret(program: Path, document: Path) -> None:
+    """Moves the caret through all of a document; stops when a move is wrong."""
+    result = subprocess.run([program, document, "--caret-walk"], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise SystemExit(result.stderr.strip() or f"the caret walk of {document} did not end")
+
+
 def measure(program: Path, document: Path, runs: int) -> dict[str, float]:
     samples: dict[str, list[float]] = {}
     for _ in range(runs):
@@ -75,6 +93,8 @@ def main() -> None:
     args = parser.parse_args()
 
     program = build()
+    for document in (SHORT, caret_document(OUT / "caret.md")):
+        check_caret(program, document)
     results = [measure(program, document, args.runs) for document in (SHORT, write_long(OUT / "long.md"))]
     print("| | Short | Long |")
     print("| --- | --- | --- |")

@@ -711,6 +711,10 @@ final class NativeRendererView: NSView {
                 inputContext?.discardMarkedText()
             }
             updateCaretIndicator()
+        } else if isEditable, hasCaret {
+            // A drag moves the caret with the end of the selection, and
+            // the caret does not show while text is selected.
+            updateCaretIndicator()
         }
         setNeedsDraw()
     }
@@ -869,6 +873,21 @@ private final class PageArea: NSView {
 
 // MARK: - Edit mode: text input
 
+extension NativeRendererView: NSMenuItemValidation {
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        switch menuItem.action {
+        case #selector(scrollLineUp(_:)), #selector(scrollLineDown(_:)),
+             #selector(scrollToBeginningOfDocument(_:)), #selector(scrollToEndOfDocument(_:)):
+            // The Go menu has the arrow keys, and takes them before
+            // `keyDown`. With a caret they are the caret's: an item that
+            // is off lets its key through.
+            return !(isEditable && hasCaret)
+        default:
+            return true
+        }
+    }
+}
+
 extension NativeRendererView: DocumentEditor {
     func fetchMarkdown(_ completion: @escaping (String?) -> Void) {
         var length = 0
@@ -888,11 +907,17 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         // `open` compares with the text that it showed; that is another
         // one now.
         shownMarkdown = nil
+        caretDidMove()
+        contentDidChange?()
+    }
+
+    /// After the caret got another place: the view shows it there.
+    private func caretDidMove() {
+        // A move to a part of the page that had no layout gave it one.
+        // The caret's own view gets its place with the page area.
         updatePageArea()
         keepCaretInView()
-        updateCaretIndicator()
         setNeedsDraw()
-        contentDidChange?()
     }
 
     /// Puts the system's caret where the core's caret is, and shows it
@@ -900,7 +925,8 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
     fileprivate func updateCaretIndicator() {
         var x = 0.0, y = 0.0, height = 0.0
         let takesKeys = isEditable && hasCaret && window?.firstResponder === self && window?.isKeyWindow == true
-        guard takesKeys, mdcore_caret_rect(ctx, &x, &y, &height) else {
+        // With text selected, the selection shows where the keys go.
+        guard takesKeys, !mdcore_has_selection(ctx), mdcore_caret_rect(ctx, &x, &y, &height) else {
             caretIndicator.displayMode = .hidden
             return
         }
@@ -1041,12 +1067,58 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         NSNotFound
     }
 
+    /// The commands of the system's key bindings that move the caret,
+    /// with the move of the core for each and if it selects.
+    private static let caretMoves: [Selector: (move: mdcore_move, extend: Bool)] = {
+        typealias R = NSResponder
+        let moves: [(Selector, Selector, mdcore_move)] = [
+            (#selector(R.moveLeft(_:)), #selector(R.moveLeftAndModifySelection(_:)), MDCORE_MOVE_LEFT),
+            (#selector(R.moveBackward(_:)), #selector(R.moveBackwardAndModifySelection(_:)), MDCORE_MOVE_LEFT),
+            (#selector(R.moveRight(_:)), #selector(R.moveRightAndModifySelection(_:)), MDCORE_MOVE_RIGHT),
+            (#selector(R.moveForward(_:)), #selector(R.moveForwardAndModifySelection(_:)), MDCORE_MOVE_RIGHT),
+            (#selector(R.moveWordLeft(_:)), #selector(R.moveWordLeftAndModifySelection(_:)), MDCORE_MOVE_WORD_LEFT),
+            (#selector(R.moveWordBackward(_:)), #selector(R.moveWordBackwardAndModifySelection(_:)), MDCORE_MOVE_WORD_LEFT),
+            (#selector(R.moveWordRight(_:)), #selector(R.moveWordRightAndModifySelection(_:)), MDCORE_MOVE_WORD_RIGHT),
+            (#selector(R.moveWordForward(_:)), #selector(R.moveWordForwardAndModifySelection(_:)), MDCORE_MOVE_WORD_RIGHT),
+            (#selector(R.moveUp(_:)), #selector(R.moveUpAndModifySelection(_:)), MDCORE_MOVE_UP),
+            (#selector(R.moveDown(_:)), #selector(R.moveDownAndModifySelection(_:)), MDCORE_MOVE_DOWN),
+            (#selector(R.moveToLeftEndOfLine(_:)), #selector(R.moveToLeftEndOfLineAndModifySelection(_:)), MDCORE_MOVE_LINE_START),
+            (#selector(R.moveToBeginningOfLine(_:)), #selector(R.moveToBeginningOfLineAndModifySelection(_:)), MDCORE_MOVE_LINE_START),
+            (#selector(R.moveToRightEndOfLine(_:)), #selector(R.moveToRightEndOfLineAndModifySelection(_:)), MDCORE_MOVE_LINE_END),
+            (#selector(R.moveToEndOfLine(_:)), #selector(R.moveToEndOfLineAndModifySelection(_:)), MDCORE_MOVE_LINE_END),
+            (#selector(R.moveToBeginningOfParagraph(_:)), #selector(R.moveToBeginningOfParagraphAndModifySelection(_:)), MDCORE_MOVE_PARAGRAPH_START),
+            (#selector(R.moveToEndOfParagraph(_:)), #selector(R.moveToEndOfParagraphAndModifySelection(_:)), MDCORE_MOVE_PARAGRAPH_END),
+            (#selector(R.moveToBeginningOfDocument(_:)), #selector(R.moveToBeginningOfDocumentAndModifySelection(_:)), MDCORE_MOVE_DOCUMENT_START),
+            (#selector(R.moveToEndOfDocument(_:)), #selector(R.moveToEndOfDocumentAndModifySelection(_:)), MDCORE_MOVE_DOCUMENT_END),
+        ]
+        var table: [Selector: (move: mdcore_move, extend: Bool)] = [:]
+        for (plain, selecting, move) in moves {
+            table[plain] = (move, false)
+            table[selecting] = (move, true)
+        }
+        // With Option and Shift, up and down select to the two ends of
+        // the paragraph.
+        table[#selector(R.moveParagraphBackwardAndModifySelection(_:))] = (MDCORE_MOVE_PARAGRAPH_START, true)
+        table[#selector(R.moveParagraphForwardAndModifySelection(_:))] = (MDCORE_MOVE_PARAGRAPH_END, true)
+        return table
+    }()
+
     override func doCommand(by selector: Selector) {
-        // The commands that the view has (delete, a new line, the scroll
-        // keys). Each other one (the arrow keys) does nothing yet.
+        if isEditable, hasCaret, let move = Self.caretMoves[selector] {
+            moveCaret(move.move, extend: move.extend)
+            return
+        }
+        // The other commands that the view has (delete, a new line, the
+        // scroll keys). Each one that it does not have does nothing.
         if responds(to: selector) {
             perform(selector, with: nil)
         }
+    }
+
+    /// Moves the caret as a key says, and keeps it in view.
+    private func moveCaret(_ move: mdcore_move, extend: Bool) {
+        guard mdcore_caret_move(ctx, move, extend) else { return }
+        caretDidMove()
     }
 
     override func deleteBackward(_ sender: Any?) {

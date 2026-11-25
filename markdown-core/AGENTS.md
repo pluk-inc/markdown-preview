@@ -32,7 +32,8 @@ that a click checks and saves, quotes, code blocks, tables, rules, emoji,
 text of any script that CoreText can shape.
 Scrolling with the system scroll bar, selection by drag, Select All, Copy.
 Edit Mode in its first form: a caret at a click, typed text (also from an
-input method), delete, Return, paste, save.
+input method), delete, Return, paste, save, and the keys that move the
+caret, with Shift to select.
 The reader style from the app: font, text size and zoom, line spacing,
 bold text, margins, content width, theme colors, light and dark.
 
@@ -70,6 +71,24 @@ These came from the maintainer. Do not undo one without asking.
   after it. The reason: a base made for a reader only would be made
   again for the editor, and that second time costs speed. See "The base
   for an editor" in Open work.
+- **The copy of md4c with its patch stays** (2026-11-25). The other
+  ways were looked at and not taken: to find the starts of blocks and
+  the definitions of links with a scan of our own (a second parser that
+  must agree with md4c each time), and another parser. A pull request
+  to md4c for the three calls is a thing to do only when the maintainer
+  asks for it.
+- **Edit Mode shows what the Edit Mode of the web view shows**
+  (2026-11-25): the text as a reader sees it, with the Markdown marks
+  only where the caret is, and the source of the document as a view of
+  its own. The rules of the web editor are the ones to copy
+  (`scripts/editor-bundle/entry-cm.js`, `buildDecorations`): marks show
+  only with the keys in the view and nothing selected; the marks of
+  bold, italic, strikethrough, inline code, a link (with its target),
+  and a backslash show when the caret is in their text or at an end of
+  it; the marks of a heading, a list item, a quote, a rule, and a code
+  fence show when the caret is in their line; the check box of a task
+  stays a check box; a table cell shows its source while it has the
+  caret. Not done yet: see Open work.
 - **A reader at the end of the document is kept by the first line that
   shows, as at each other place** (2026-11-24). With a narrower window the
   end then goes out of view. Browsers and editors do the same; only a
@@ -699,11 +718,53 @@ The order of the next steps, from the review of the second step:
   native renderer on: the native view comes with a document that has a
   file. And a change of the renderer setting during Edit Mode in the
   native view leaves Edit Mode, with the edits kept as the draft.
-- Next for the editor, in the order that a reader misses them: the
-  arrow keys and the other keys that move the caret; a selection that
-  typing takes the place of, with cut; undo; Return that knows its
-  block (a new list item, a line in a code block).
-- Not done for the caret: the arrow keys, a selection that typing takes
+- Done: the keys that move the caret (`mdcore_caret_move`). A step of
+  a character or a word is in the document (`document/move.odin`): a
+  character is one as a reader sees it (the grapheme iterator of
+  `core:unicode/utf8`, from the last ASCII byte before the place; a
+  step in plain text reads two bytes), and at an end of a text the
+  step goes to the text beside it (`text_beside`). A line up or down,
+  and the two ends of a line, are in the layout (`caret_line_step`,
+  `caret_line_end`): the line above is found with a point above the
+  caret's line at the x where the keys started (`Ctx.caret_goal`), in
+  steps of less than a line, until `caret_hit` gives a place of another
+  line. So a click and the keys have one meaning of "the text at this
+  point", a table goes up in its column, and an empty line of code and
+  a block with no text are lines.
+  - **A stop** (`Stop`, `stop_at`, `stop_from` in `mdcore.odin`) is a
+    place that a caret can have: an address that the source has room
+    for, with its offset. A move goes to an address one time
+    (`move_from`), and then to the first stop from there, with no
+    limit of tries. A step to the left or right goes on until the stop
+    is another one in its direction, and each move but up and down
+    must end before or after where it started, or the caret stays.
+  - **The caret has a side** (`Ctx.caret_upstream`): the byte where a
+    line of a paragraph ends and the next one starts is one address and
+    two places on the page. The end of a line, and a click right of a
+    line, give the address with the side "the line before"
+    (`caret_place` and `caret_line` take it). An edit and each other
+    move end it. It is not in `document.Address`: a selection and the
+    place of the view do not need it.
+  - **One writer** (`set_caret`) puts the caret at a stop and makes it
+    the end of the selection. A click, a drag, a move, and Select All
+    with a caret go through it; an edit goes through `caret_changed`.
+  - `mdcore.odin` has no unit tests, so `bench/core.py` first walks the
+    caret through two documents (`mdcore-bench <file> --caret-walk`):
+    the short fixture, and one that it writes with the hard places
+    (many table cells and headings with no text in a row, blocks with
+    no text at the two ends, text with no spaces). A step with its
+    frame: 0.5 ms of CPU (`BENCHMARKS.md`).
+- Next for the editor, in the order that a reader misses them: a
+  selection that typing takes the place of, with cut; the marks at the
+  caret (Decisions); undo; Return that knows its block (a new list
+  item, a line in a code block).
+- Not done for the keys that move the caret: text that reads from right
+  to left (left and right are against the reading order and in it,
+  which is the other way on the page there); Page Up and Page Down
+  scroll and do not move the caret; Option with up and down; a drag
+  that starts in Edit Mode selects from the caret's stop, and one over
+  a place with no stop keeps the caret where it was.
+- Not done for the caret: a selection that typing takes
   the place of, a delete at the start of a block (to join it with the
   block before), Enter (the source needs a line break that is right for
   the block: a new paragraph, a new list item), a caret in a table cell
@@ -1008,3 +1069,22 @@ export.
   that was there. Checked on the hidden display: a caret, typed text,
   delete, Return, leave Edit Mode and enter it again, an automatic
   save to the file.
+- **2026-11-25** — The keys that move the caret. The maintainer said
+  yes to the md4c copy with its patch, and that Edit Mode shows what
+  the web Edit Mode shows (Decisions). The step itself is over the text
+  of the blocks, as the caret was already, so it is not made again when
+  the marks show at the caret: the text of the caret's block is then
+  another text, and the steps are the same. Checked on the hidden
+  display with a log of the caret after each key: each arrow key with
+  and without Option, Command, and Shift, through a heading, a
+  paragraph of two lines, a list, a code block with an empty line, and
+  a table with an empty cell; and that the view goes with the caret in
+  a long document. That check found two faults that the unit tests of
+  the two packages could not, and a reviewer with the task to break the
+  moves found five more (a limit of tries that many cells with no text
+  in a row used up; up and down that went the wrong way at a first or
+  last block with no text; two at the end of a line). The answer to all
+  of them was structure, not a case for each: a stop, a side for the
+  caret, and one writer (Open work). `mdcore.odin` has no unit tests,
+  so the benchmark script now walks the caret through two documents
+  and stops when a move is wrong.
