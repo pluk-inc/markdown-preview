@@ -151,6 +151,25 @@ place_made :: proc(places: []Place, source: []u8, content: int) {
 		}
 		return at, at
 	}
+	// The start of the spaces and tabs that end at `end` and give an
+	// indent of some columns, not before `low`. A tab gives all of the
+	// columns that are left: the parser makes spaces of the part of a
+	// tab that is no indent of the block.
+	indent_before :: proc(source: []u8, end, low, columns: int) -> int {
+		at, left := end, columns
+		for at > low && left > 0 {
+			switch source[at - 1] {
+			case ' ':
+				left -= 1
+			case '\t':
+				left = 0
+			case:
+				return at
+			}
+			at -= 1
+		}
+		return at
+	}
 	for i := 0; i < len(places); {
 		if !places[i].made {
 			i += 1
@@ -176,7 +195,8 @@ place_made :: proc(places: []Place, source: []u8, content: int) {
 			a = content
 		} else if a < 0 {
 			// At the start of the text: back from the text after it,
-			// over as many line breaks, and to each NUL byte.
+			// over as many line breaks, to each NUL byte, and over the
+			// spaces of an indent.
 			a = b
 			#reverse for place in places[i:j] {
 				switch {
@@ -189,6 +209,8 @@ place_made :: proc(places: []Place, source: []u8, content: int) {
 							break
 						}
 					}
+				case:
+					a = indent_before(source, a, content, place.text_len)
 				}
 			}
 		}
@@ -199,7 +221,7 @@ place_made :: proc(places: []Place, source: []u8, content: int) {
 		m := j
 		for m > i && !places[m - 1].line_break && !places[m - 1].nul {
 			place := &places[m - 1]
-			place.source = max(b - place.text_len, a)
+			place.source = indent_before(source, b, a, place.text_len)
 			place.source_len = b - place.source
 			place.whole = place.source_len != place.text_len
 			b = place.source
