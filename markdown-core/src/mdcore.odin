@@ -629,6 +629,15 @@ mdcore_caret_move :: proc "c" (handle: rawptr, move: Move, extend: bool) -> bool
 	// selection that is in its direction, and a step of one character
 	// goes no farther than that.
 	at, upstream := ctx.caret_at, ctx.caret_upstream
+	if ctx.caret_spaces > 0 && move == .Left {
+		// After spaces at the end of a text, which are no places of the
+		// text: a step to the left is one space of the source back. The
+		// address stays the end of the text.
+		ctx.caret -= 1
+		caret_changed(ctx)
+		ctx.selection = {anchor = ctx.caret_at, focus = ctx.caret_at, active = true}
+		return true
+	}
 	anchor := ctx.selection.active && ctx.selection.focus == at ? ctx.selection.anchor : at
 	collapse := !extend && anchor != at
 	if collapse {
@@ -664,7 +673,9 @@ mdcore_caret_move :: proc "c" (handle: rawptr, move: Move, extend: bool) -> bool
 				return false
 			}
 		}
-		goal = ctx.caret_goal.? or_else x
+		// The x that the caret shows at: after the spaces at the end of
+		// a text too.
+		goal = ctx.caret_goal.? or_else x + layout.caret_spaces(&ctx.page, at, at == ctx.caret_at ? ctx.caret_spaces : 0, x)
 	}
 	keep_goal := move in MOVES_VERTICAL
 	next: document.Address
@@ -849,7 +860,7 @@ mdcore_caret_rect :: proc "c" (handle: rawptr, x, y, height: ^f64) -> bool {
 		return true
 	}
 	cx, cy, h := layout.caret_y(&ctx.page, ctx.caret_at, ctx.caret_upstream) or_return
-	cx += layout.caret_spaces(&ctx.page, ctx.caret_at, ctx.caret_spaces)
+	cx += layout.caret_spaces(&ctx.page, ctx.caret_at, ctx.caret_spaces, cx)
 	x^, y^, height^ = f64(cx), cy, f64(h)
 	return true
 }
@@ -899,6 +910,7 @@ mdcore_insert_break :: proc "c" (handle: rawptr) {
 		}
 		if offset, placed := document.place_of(&ctx.doc, ctx.caret_places[:], ctx.caret_at); placed {
 			ctx.caret = offset
+			ctx.caret_spaces = document.spaces_before(&ctx.doc, ctx.caret_at, offset)
 		}
 	}
 }

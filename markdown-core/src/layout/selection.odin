@@ -560,10 +560,12 @@ caret_line :: proc(part: ^Part, box: Box, b: ^document.Block, src: ^document.Tex
 	return found
 }
 
-// How wide some spaces are in the font of the text of an address: for a
-// caret after spaces that the source has at the end of a text and the
-// text has not (`document.spaces_before`).
-caret_spaces :: proc(l: ^Layout, at: document.Address, count: int) -> f32 {
+// How far right of `x` a caret is that is after some spaces in the font
+// of the text of an address: a caret after spaces that the source has
+// at the end of a text and the text has not (`document.spaces_before`).
+// Not out of the column: the spaces at the end of a full line do not
+// go to a next line, and the caret stays in the page.
+caret_spaces :: proc(l: ^Layout, at: document.Address, count: int, x: f32) -> f32 {
 	if count <= 0 || l.doc == nil || at.block < 0 || at.block >= l.doc.count {
 		return 0
 	}
@@ -572,7 +574,7 @@ caret_spaces :: proc(l: ^Layout, at: document.Address, count: int) -> f32 {
 	runs := [1]text.Run{{0, 1, span_font(l, {}, l.m.body * HEADING_SCALE[heading ? b.level : 0], heading)}}
 	space := text.paragraph_create(" ", runs[:])
 	defer text.paragraph_destroy(space)
-	return f32(count) * text.paragraph_natural_width(space)
+	return clamp(f32(count) * text.paragraph_natural_width(space), 0, max(l.column_x + l.column - x, 0))
 }
 
 // `caret_place` with the top of the line as a height of the page.
@@ -676,5 +678,5 @@ caret_quad :: proc(l: ^Layout, at: document.Address, upstream: bool, spaces: int
 		return
 	}
 	// One point wide at least, and two device pixels.
-	append(out, rect_quad(x + caret_spaces(l, at, spaces) - 0.5, top, max(1, 2 / scale), height, l.style.text, 0, scale, l.parts[p].top, origin_y))
+	append(out, rect_quad(x + caret_spaces(l, at, spaces, x) - 0.5, top, max(1, 2 / scale), height, l.style.text, 0, scale, l.parts[p].top, origin_y))
 }

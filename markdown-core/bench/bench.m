@@ -163,8 +163,15 @@ static const char *caret_walk(void *ctx, long length) {
         if (!mdcore_caret_rect(ctx, &space_x, &line, &height) || space_x <= end_x || line != y) return "the caret does not move for a space at the end of a text";
         mdcore_insert(ctx, " ", 1);
         if (!mdcore_caret_rect(ctx, &two_x, &line, &height) || two_x <= space_x) return "the caret does not move for a second space";
+        // A step to the left is one space back, and not a letter.
+        if (!mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, false) || !mdcore_caret_rect(ctx, &x, &line, &height) || x != space_x) return "a step to the left after two spaces is not one space";
+        if (!mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, false) || !mdcore_caret_rect(ctx, &x, &line, &height) || x != end_x) return "a step to the left after one space is not the end of the text";
+        // Two spaces again after the two that are after the caret now,
+        // and a delete for each of the four: the text of before.
+        mdcore_insert(ctx, "  ", 2);
         mdcore_delete_backward(ctx);
         mdcore_delete_backward(ctx);
+        mdcore_replace_text(ctx, mdcore_caret_offset(ctx), mdcore_caret_offset(ctx) + 2, "", 0);
         after = mdcore_source(ctx, &after_length);
         if (!mdcore_caret_rect(ctx, &x, &line, &height) || x != end_x || after_length != before_length || memcmp(after, before.bytes, (size_t)before_length) != 0) {
             return "a delete after a space at the end of a text does not take the space";

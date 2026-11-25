@@ -828,6 +828,20 @@ The order of the next steps, from the review of the second step:
     empty line. Return and then a delete, and a typed character and
     then a delete, give the source of before: the two are tested as
     pairs.
+- Done: a caret after a space at the end of a text. Markdown leaves the
+  spaces at the end of a paragraph out of its text, so the caret did
+  not move for a space until a character came after it, and a delete
+  took the last letter and not the space. The caret knows how many
+  spaces of the source are before it that the text has not
+  (`document.spaces_before`, `Ctx.caret_spaces`): it shows after them
+  (`layout.caret_spaces`, not out of the column), a delete takes one of
+  them, and a step to the left goes one of them back. This goes with
+  the caret; the page is as a reader has it. Not done: a space at the
+  start of a text, a second space in a text (a run of spaces shows as
+  one), a space before a line break in a paragraph (the caret goes to
+  the start of the next line), a space before the "#" that ends a
+  heading. After two spaces and then a character, the character shows
+  one space after the text, so the caret goes back by one space.
 - Next for the editor, in the order that a reader misses them: a
   selection that typing takes the place of, with cut; the marks at the
   caret (Decisions); undo.

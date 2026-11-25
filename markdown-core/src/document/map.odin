@@ -1,5 +1,6 @@
 package document
 
+import "core:bytes"
 import "core:strings"
 import "core:unicode/utf8"
 
@@ -372,9 +373,11 @@ spaces_before :: proc(doc: ^Document, at: Address, offset: int) -> (count: int) 
 		count += 1
 	}
 	// Only at the end of a line: spaces before more text are in the text
-	// as one space.
+	// as one space. And only after text of that line: spaces after the
+	// marks of a line with nothing more in it are no end of a text.
 	end, _ := line_at(source, offset)
-	if !blank(source[offset:end]) {
+	before := bytes.trim_left(source[line_start(source, offset):offset - count], {' ', '\t', '>'})
+	if !blank(source[offset:end]) || len(before) == 0 {
 		return 0
 	}
 	return

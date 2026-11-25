@@ -366,6 +366,9 @@ test_spaces_at_the_end_of_a_text_are_before_the_caret :: proc(t: ^testing.T) {
 		{"ab cd\n", 3, 0},
 		{"```\nab \n```\n", 7, 0},
 		{"-  \n", 3, 0},
+		// Not after the marks of a later line with nothing in it.
+		{"> ab\n> ", 7, 0},
+		{"- ab\n  ", 7, 0},
 	}
 	for c in cases {
 		doc := parse(c.source)
