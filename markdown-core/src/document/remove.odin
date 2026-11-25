@@ -1,5 +1,7 @@
 package document
 
+import "core:unicode/utf8"
+
 // Text that goes out of the source: a selection that a key deletes or
 // that typed text takes the place of, a word, a line. The range is
 // between two places of a caret, so it has no part of a thing that the
@@ -158,7 +160,9 @@ range_edit :: proc(pairs: []Pair, source: []u8, from, to: int, text: string, all
 		append(&out, ..source[mark.start:mark.end])
 	}
 	append(&out, ..source[start - before:start])
-	caret = head - before + len(out)
+	// The caret is after the new text, in the styles that it is in, or
+	// with none at the place where the two parts of the text meet.
+	caret = head - before + (len(text) > 0 ? len(text) : len(out))
 	append(&out, ..source[end:end + after])
 	for mark in opens {
 		append(&out, ..source[mark.start:mark.end])
@@ -304,6 +308,32 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 	} else {
 		edit, caret = range_edit(pairs, doc.source, from, to, text, allocator)
 	}
+	// The line under a heading is a line of the heading after its text:
+	// it goes after the text of the last block, so the first block is
+	// the heading that it was, with that text.
+	if first != last && a.kind == .Heading {
+		source := doc.source
+		lines := block_start(doc, first) + int(a.lines)
+		if text_end, placed := place_of(doc, places, {block = first, byte = len(a.text.bytes)}); placed && text_end <= lines {
+			_, under := line_at(source, text_end)
+			rest := min(block_start(doc, last) + int(b.lines), len(source))
+			if under < lines && lines <= edit.end && rest >= edit.end {
+				nl := line_ending(source)
+				out := make([dynamic]u8, 0, len(edit.text) + rest - edit.end + lines - under + 4, allocator)
+				append(&out, edit.text)
+				append(&out, ..source[edit.end:rest])
+				if len(out) == 0 || (out[len(out) - 1] != '\n' && out[len(out) - 1] != '\r') {
+					append(&out, nl)
+				}
+				append(&out, ..source[under:lines])
+				if out[len(out) - 1] != '\n' && out[len(out) - 1] != '\r' && rest < len(source) {
+					append(&out, nl)
+				}
+				delete(edit.text, allocator)
+				edit = {edit.start, rest, string(out[:])}
+			}
+		}
+	}
 	edit, caret = keep_defs(doc, edit, caret, line, allocator)
 	return edit, caret, true
 }
@@ -357,8 +387,22 @@ transpose :: proc(doc: ^Document, places: []Place, at: Address, allocator := con
 	if middle <= 0 || last <= middle {
 		return
 	}
-	a_start, a_end := char_before(doc, places, {block = at.block, cell = at.cell, byte = middle}) or_return
-	b_start, b_end := char_before(doc, places, {block = at.block, cell = at.cell, byte = last}) or_return
+	first := char_step(text.bytes[:], middle, false)
+	// The range of the source of a character of some bytes of the text:
+	// from the start of its first code point to the end of its last
+	// one. False when the source has more between the two than the
+	// text (a mark, an entity).
+	source_of_char :: proc(doc: ^Document, places: []Place, at: Address, text: []u8, from, to: int) -> (start, end: int, ok: bool) {
+		_, size := utf8.decode_rune(text[from:to])
+		at := at
+		at.byte = from + size
+		start, _ = char_before(doc, places, at) or_return
+		at.byte = to
+		_, end = char_before(doc, places, at) or_return
+		return start, end, end - start == to - from
+	}
+	a_start, a_end := source_of_char(doc, places, at, text.bytes[:], first, middle) or_return
+	b_start, b_end := source_of_char(doc, places, at, text.bytes[:], middle, last) or_return
 	if a_end != b_start {
 		return
 	}

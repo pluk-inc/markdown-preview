@@ -1181,14 +1181,18 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
     /// to where a move goes. `keepsText`: for Control-Y.
     private func delete(to move: mdcore_move, keepsText: Bool = false) {
         markedText = nil
+        var kept: String?
         if keepsText {
             // The text that goes is the selection that the move makes.
             // At the end of a paragraph that is no text: the line break
             // goes.
             if !mdcore_has_selection(ctx) { mdcore_caret_move(ctx, move, true) }
-            Self.killed = selectedText ?? "\n"
+            kept = selectedText ?? "\n"
         }
         if mdcore_delete(ctx, move) {
+            // Only what went is kept: a delete that took nothing leaves
+            // the text of the one before.
+            if let kept { Self.killed = kept }
             didEdit()
         } else {
             // A selection that the core takes no text out for stays.

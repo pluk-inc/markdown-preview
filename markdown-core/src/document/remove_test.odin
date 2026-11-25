@@ -84,6 +84,10 @@ test_text_goes_out_and_the_styles_of_the_rest_stay :: proc(t: ^testing.T) {
 		{"# ab\n\n- cd\n", {block = 0, cell = 0, byte = 1}, {block = 1, cell = 0, byte = 1}, "", "# ad\n"},
 		{"ab\n\n# mid\n\n> cd\n", {block = 0, cell = 0, byte = 2}, {block = 2, cell = 0, byte = 0}, "", "abcd\n"},
 		{"**ab**\n\n_cd_\n", {block = 0, cell = 0, byte = 1}, {block = 1, cell = 0, byte = 1}, "", "**a**_d_\n"},
+		// A heading with a line under it keeps that line, after the
+		// text that comes to it.
+		{"Head\n====\n\ntext\n", {block = 0, cell = 0, byte = 4}, {block = 1, cell = 0, byte = 0}, "", "Headtext\n====\n"},
+		{"Head\n====\n\ntext\n\nz\n", {block = 0, cell = 0, byte = 2}, {block = 1, cell = 0, byte = 2}, "", "Hext\n====\n\nz\n"},
 		// All of the text of a block: its marks stay, for text to come.
 		{"# ab\n", {block = 0, cell = 0, byte = 0}, {block = 0, cell = 0, byte = 2}, "", "# \n"},
 		{"- ab\n- cd\n", {block = 0, cell = 0, byte = 0}, {block = 0, cell = 0, byte = 2}, "", "- \n- cd\n"},
@@ -161,4 +165,42 @@ test_each_range_of_a_text_goes_out_of_its_text_only :: proc(t: ^testing.T) {
 	}
 	testing.expect_value(t, failed, 0)
 	testing.expectf(t, limits * 10 < total, "%d of %d ranges leave a mark as text", limits, total)
+}
+
+@(test)
+test_the_caret_after_new_text_is_after_that_text :: proc(t: ^testing.T) {
+	doc := parse("a **bc** d\n")
+	defer destroy(&doc)
+	a, _ := source_of(&doc, {block = 0, byte = 3})
+	b, _ := source_of(&doc, {block = 0, byte = 6})
+	edit, caret, ok := replace_range(&doc, a, b, "X", allocator = context.temp_allocator)
+	testing.expect(t, ok)
+	testing.expect_value(t, after(&doc, edit), "a **bX**\n")
+	testing.expect_value(t, caret, 6)
+}
+
+@(test)
+test_two_characters_change_places_as_wholes :: proc(t: ^testing.T) {
+	Case :: struct {
+		source: string,
+		byte:   int,
+		after:  string,
+	}
+	cases := []Case {
+		{"abc\n", 1, "bac\n"},
+		{"abc\n", 3, "acb\n"},
+		// A letter with a mark of its own is one character.
+		{"ae\u0301b\n", 4, "abe\u0301\n"},
+		// Not over a mark of a style.
+		{"**a**b\n", 1, ""},
+		{"a\n", 1, ""},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		places := block_map(&doc, 0)
+		defer delete(places)
+		edit, _, ok := transpose(&doc, places[:], {block = 0, byte = c.byte}, context.temp_allocator)
+		testing.expectf(t, (ok ? after(&doc, edit) : "") == c.after, "%q at %d: %q, not %q", c.source, c.byte, ok ? after(&doc, edit) : "", c.after)
+	}
 }
