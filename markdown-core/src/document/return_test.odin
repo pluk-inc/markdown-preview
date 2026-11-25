@@ -27,8 +27,11 @@ test_return_puts_in_what_the_block_of_the_caret_needs :: proc(t: ^testing.T) {
 		{"abcd\n", {0, 0, 2}, "ab\n\ncd\n", 4, 0},
 		// In an empty line: one more.
 		{"ab\n\n\nnext\n", {0, 0, 3}, "ab\n\n\n\nnext\n", 4, 0},
-		// A new line of code.
+		// A new line of code, with what the line starts with: in a
+		// list item and in a quote it is a line of that code.
 		{"```\nab\n```\n", {0, 0, 1}, "```\na\nb\n```\n", 6, 0},
+		{"- a\n\n  ```\n  ab\n  ```\n", {1, 0, 1}, "- a\n\n  ```\n  a\n  b\n  ```\n", 17, 0},
+		{"> ```\n> ab\n> ```\n", {0, 0, 1}, "> ```\n> a\n> b\n> ```\n", 12, 0},
 		// A new item of a list, of the kind of the item.
 		{"- one\n- two\n", {0, 0, 3}, "- one\n- \n- two\n", 8, 0},
 		{"  * one\n", {0, 0, 3}, "  * one\n  * \n", 12, 0},
@@ -40,6 +43,9 @@ test_return_puts_in_what_the_block_of_the_caret_needs :: proc(t: ^testing.T) {
 		{"- one\n- \n- two\n", {1, 0, 0}, "- one\n- two\n", 5, 0},
 		{"- one\n- \n", {1, 0, 0}, "- one\n\n", 6, 0},
 		{"- one\n- \n\nz\n", {1, 0, 0}, "- one\n\n\nz\n", 6, 0},
+		// The first block of the source: its line goes.
+		{"- \n- two\n", {0, 0, 0}, "- two\n", 0, 2},
+		{"- \n\nz\n", {0, 0, 0}, "\nz\n", 0, 1},
 		// Not in a quote: an empty line after it.
 		{"> - one\n", {0, 0, 3}, "> - one\n\n", 8, 0},
 		// After the lists that are in the item.
@@ -65,6 +71,7 @@ test_return_puts_in_what_the_block_of_the_caret_needs :: proc(t: ^testing.T) {
 		places := block_map(&doc, c.at.block)
 		defer delete(places)
 		start, end, text, caret, ok := line_break(&doc, places[:], c.at)
+		defer delete(text)
 		testing.expect(t, ok)
 		apply(&doc, {start, end, text})
 		testing.expect_value(t, string(doc.source), c.after)
@@ -121,6 +128,7 @@ test_a_delete_takes_out_what_return_made :: proc(t: ^testing.T) {
 		defer destroy(&doc)
 		places := block_map(&doc, c.at.block)
 		start, end, text, caret, ok := line_break(&doc, places[:], c.at)
+		defer delete(text)
 		delete(places)
 		testing.expect(t, ok)
 		apply(&doc, {start, end, text})
@@ -150,6 +158,7 @@ test_the_line_of_a_paragraph_stays_when_its_only_character_goes :: proc(t: ^test
 			line, _ := empty_address(&doc, 0, n)
 			offset := empty_offset(&doc, 0, n)
 			text := empty_text(&doc, "x")
+			defer delete(text)
 			apply(&doc, {offset, offset, text})
 			at := address_of(&doc, offset + len(text))
 			testing.expect_value(t, at, Address{1, 0, 1})

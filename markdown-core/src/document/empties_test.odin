@@ -40,6 +40,8 @@ test_the_lines_that_return_makes_are_empty_paragraphs :: proc(t: ^testing.T) {
 		// lines at the end of code with no end mark are code.
 		{"\n\n\nab\n", {0}, {}},
 		{"```\nc\n\n\n", {0}, {}},
+		{"    code\n\n<!--\n\n\n", {0}, {}},
+		{"    a\n\n    b\n\n\nz\n", {1, 0}, {13}},
 		{"- ```\n  c\n  ```\n\n\nz\n", {1, 0}, {16}},
 	}
 	for c in cases {
@@ -122,7 +124,9 @@ test_text_typed_in_an_empty_paragraph_is_a_paragraph_at_its_place :: proc(t: ^te
 			doc = parse(source)
 			defer destroy(&doc)
 			offset := empty_offset(&doc, 0, n)
-			apply(&doc, {offset, offset, empty_text(&doc, "x")})
+			text := empty_text(&doc, "x")
+			defer delete(text)
+			apply(&doc, {offset, offset, text})
 			testing.expect_value(t, doc.count, 2 + int(doc.count > 2))
 			typed := block_at(&doc, 1)
 			testing.expect_value(t, typed.kind, Block_Kind.Paragraph)

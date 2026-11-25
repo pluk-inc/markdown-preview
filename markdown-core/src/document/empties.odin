@@ -88,28 +88,31 @@ lines_end :: proc(source: []u8, b: ^Block, start, next: int) -> (end: int, ok: b
 		}
 		return end, true
 	}
-	// Code can have empty lines, so its end is found from the back: the
-	// last line with something in it before `next` is the end mark of a
-	// fence, or a line of code that is code by its indent.
-	first_end, _ := line_at(source, start)
-	fenced := fence_line(source[start:first_end])
-	end = next
-	for end > start {
-		before := break_before(source, end)
-		line := before
-		for line > start && source[line - 1] != '\n' && source[line - 1] != '\r' {
-			line -= 1
-		}
-		if !blank(source[line:before]) {
-			// The end mark is not the line that starts the fence.
-			return end, fenced ? line > start && fence_line(source[line:before]) : true
-		}
-		if line == end {
-			break
-		}
-		end = line
+	// Code can have empty lines, so its end is counted: one line of
+	// the source for each line of its text, and for a fence the line
+	// that starts it and the line that ends it. A fence with no end
+	// mark has no end that the lines show.
+	lines := 0
+	if len(b.text.bytes) > 0 {
+		lines = bytes.count(b.text.bytes[:], {'\n'}) + int(b.text.bytes[len(b.text.bytes) - 1] != '\n')
 	}
-	return end, false
+	first_end, after := line_at(source, start)
+	fenced := fence_line(source[start:first_end])
+	end = fenced ? after : start
+	for _ in 0 ..< lines {
+		if end >= next {
+			return next, false
+		}
+		_, end = line_at(source, end)
+	}
+	if fenced {
+		mark_end, after_mark := line_at(source, end)
+		if end >= next || !fence_line(source[end:mark_end]) {
+			return next, false
+		}
+		end = after_mark
+	}
+	return min(end, next), true
 }
 
 // True for a line that starts or ends a fence of code, after the marks
@@ -253,11 +256,12 @@ empty_at :: proc(doc: ^Document, block, offset: int) -> int {
 // it, so it is a paragraph of its own, and it is at the place of the
 // line that it was typed in: the line before it shows no more (it ends
 // the text before the new paragraph), and the lines after it are as
-// they were. In the temporary memory of the context.
-empty_text :: proc(doc: ^Document, text: string) -> string {
-	out := make([]u8, len(line_ending(doc.source)) + len(text), context.temp_allocator)
-	copy(out, line_ending(doc.source))
-	copy(out[len(line_ending(doc.source)):], text)
+// they were. Memory of `allocator`, the caller's to delete.
+empty_text :: proc(doc: ^Document, text: string, allocator := context.allocator) -> string {
+	nl := line_ending(doc.source)
+	out := make([]u8, len(nl) + len(text), allocator)
+	copy(out, nl)
+	copy(out[len(nl):], text)
 	return string(out)
 }
 

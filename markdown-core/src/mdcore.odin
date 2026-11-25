@@ -311,7 +311,6 @@ mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 mdcore_replace_text :: proc "c" (handle: rawptr, start, end: c.long, utf8: [^]u8, length: c.long) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
-	context.temp_allocator = ctx.temp
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
 	typed(ctx, length > 0 ? string(utf8[:length]) : "", int(start), int(end))
@@ -320,12 +319,16 @@ mdcore_replace_text :: proc "c" (handle: rawptr, start, end: c.long, utf8: [^]u8
 // Text that a reader put in, from a key or from the host: it takes the
 // place of a range of the source. In an empty paragraph it starts a
 // paragraph of its own there (`document.empty_text`). The caller holds
-// `source_lock`.
+// `source_lock`, and not the lock of the state: the text that is made
+// here is memory of its own, because a frame uses the working memory
+// of the view at the same time.
 @(private)
 typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
-	text := text
 	if len(text) > 0 && start == end && start == ctx.caret && ctx.doc.count > 0 && document.empty_of(&ctx.doc, ctx.caret_at) > 0 {
-		text = document.empty_text(&ctx.doc, text)
+		own := document.empty_text(&ctx.doc, text)
+		defer delete(own)
+		change_source_held(ctx, own, [2]int{start, end})
+		return
 	}
 	change_source_held(ctx, text, [2]int{start, end})
 }
@@ -855,7 +858,6 @@ mdcore_insert :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	if ctx.caret < 0 || length <= 0 {
 		return
 	}
-	context.temp_allocator = ctx.temp
 	typed(ctx, string(utf8[:length]), ctx.caret, ctx.caret)
 }
 
@@ -864,13 +866,15 @@ mdcore_insert :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 mdcore_insert_break :: proc "c" (handle: rawptr) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
-	context.temp_allocator = ctx.temp
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
 	if ctx.caret < 0 || ctx.doc.count == 0 {
 		return
 	}
+	// The text is memory of its own: a frame uses the working memory of
+	// the view at the same time.
 	if start, end, text, caret, ok := document.line_break(&ctx.doc, ctx.caret_places[:], ctx.caret_at); ok {
+		defer delete(text)
 		change_source_held(ctx, text, [2]int{start, end}, caret)
 		// The caret can be before the marks of its new line (the mark
 		// of a quote): text that is typed goes where its address is.
