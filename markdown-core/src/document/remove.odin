@@ -1,6 +1,7 @@
 package document
 
 import "core:bytes"
+import "core:mem"
 import "core:unicode/utf8"
 
 // Text that goes out of the source: a selection that a key deletes or
@@ -36,10 +37,9 @@ import "core:unicode/utf8"
 // edit gives, after the new text. Memory of `allocator`, the caller's
 // to delete.
 //
-// `gone`: gets the bytes of the source that go and do not come back in
-// the edit, in their order: the range with no mark and no space that
-// stays. What a host puts in again to have the text of before.
-range_edit :: proc(pairs: []Pair, source: []u8, from, to: int, text: string, allocator := context.allocator, gone: ^[dynamic]u8 = nil) -> (edit: Edit, caret: int) {
+// `kept`: gets the ranges of the source in the range of the edit that
+// the text of the edit has again (a mark, spaces): they did not go.
+range_edit :: proc(pairs: []Pair, source: []u8, from, to: int, text: string, allocator := context.allocator, kept: ^[dynamic][2]int = nil) -> (edit: Edit, caret: int) {
 	start, end := from, to
 	// The styles that have all of their text in the range, from the
 	// inside out: "**_text_**" has two.
@@ -180,18 +180,13 @@ range_edit :: proc(pairs: []Pair, source: []u8, from, to: int, text: string, all
 	for mark in opens {
 		append(&out, ..source[mark.start:mark.end])
 	}
-	if gone != nil {
-		for at in head - before ..< end + after {
-			stays := (at >= start - before && at < start) || at >= end
-			for mark in closes {
-				stays ||= at >= mark.start && at < mark.end
-			}
-			for mark in opens {
-				stays ||= at >= mark.start && at < mark.end
-			}
-			if !stays {
-				append(gone, source[at])
-			}
+	if kept != nil {
+		append(kept, [2]int{start - before, start}, [2]int{end, end + after})
+		for mark in closes {
+			append(kept, [2]int{mark.start, mark.end})
+		}
+		for mark in opens {
+			append(kept, [2]int{mark.start, mark.end})
 		}
 	}
 	return {head - before, end + after, string(out[:])}, caret
@@ -280,8 +275,32 @@ Held :: struct {
 // its blocks, which then go with their lines; and one from a cell of a
 // table to another one.
 //
-// `gone`: gets the bytes of the source that go (`range_edit`).
+// `gone`: gets the bytes of the source that go and do not come back in
+// the edit, in their order: the range with no mark, no space, no
+// definition, and no line that stays. What a host puts in again to
+// have the text of before.
 replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{}, allocator := context.allocator, gone: ^[dynamic]u8 = nil) -> (edit: Edit, caret: int, ok: bool) {
+	if gone == nil {
+		return replace_range_kept(doc, from, to, text, held, allocator, nil)
+	}
+	kept: [dynamic][2]int
+	defer delete(kept)
+	edit, caret = replace_range_kept(doc, from, to, text, held, allocator, &kept) or_return
+	for at in edit.start ..< edit.end {
+		stays := false
+		for range in kept {
+			stays ||= at >= range[0] && at < range[1]
+		}
+		if !stays {
+			append(gone, doc.source[at])
+		}
+	}
+	return edit, caret, true
+}
+
+// `replace_range`, with the ranges of the source in the edit that stay.
+@(private)
+replace_range_kept :: proc(doc: ^Document, from, to: int, text: string, held: Held, allocator: mem.Allocator, kept: ^[dynamic][2]int) -> (edit: Edit, caret: int, ok: bool) {
 	if doc.count == 0 || from < 0 || to < from || to > len(doc.source) {
 		return
 	}
@@ -324,10 +343,7 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 				append(&out, nl)
 				append(&out, nl)
 			}
-			if gone != nil {
-				append(gone, ..doc.source[line:end])
-			}
-			edit, caret = keep_defs(doc, {line, end, string(out[:])}, line + len(text), line, allocator, gone)
+			edit, caret = keep_defs(doc, {line, end, string(out[:])}, line + len(text), line, allocator, kept)
 			return edit, caret, true
 		}
 		// The marks of the two blocks, in the order of the source.
@@ -350,10 +366,7 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 			append(&out, nl)
 			append(&out, nl)
 		}
-		if gone != nil {
-			append(gone, ..doc.source[line:end])
-		}
-		edit, caret = keep_defs(doc, {line, end, string(out[:])}, line + len(text), line, allocator, gone)
+		edit, caret = keep_defs(doc, {line, end, string(out[:])}, line + len(text), line, allocator, kept)
 		return edit, caret, true
 	}
 	// From an empty paragraph: what comes in its place is a paragraph of
@@ -362,9 +375,9 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 	if empty_at(doc, first, from) > 0 && (len(text) > 0 || first != last) {
 		led := empty_text(doc, text)
 		defer delete(led)
-		edit, caret = range_edit(pairs, doc.source, from, to, led, allocator, gone)
+		edit, caret = range_edit(pairs, doc.source, from, to, led, allocator, kept)
 	} else {
-		edit, caret = range_edit(pairs, doc.source, from, to, text, allocator, gone)
+		edit, caret = range_edit(pairs, doc.source, from, to, text, allocator, kept)
 	}
 	// All of the text of a paragraph went, and nothing came: its line
 	// stays, as an empty line. The paragraph had an empty line before
@@ -407,17 +420,16 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 					append(&out, nl)
 				}
 				delete(edit.text, allocator)
-				// The line under the heading stays, so it did not go.
-				if gone != nil && under >= edit.start {
-					clear(gone)
-					append(gone, ..source[edit.start:under])
-					append(gone, ..source[lines:edit.end])
+				// The line under the heading and the rest of the last
+				// block stay.
+				if kept != nil {
+					append(kept, [2]int{under, lines}, [2]int{edit.end, rest})
 				}
 				edit = {edit.start, rest, string(out[:])}
 			}
 		}
 	}
-	edit, caret = keep_defs(doc, edit, caret, line, allocator, gone)
+	edit, caret = keep_defs(doc, edit, caret, line, allocator, kept)
 	return edit, caret, true
 }
 
@@ -452,7 +464,7 @@ covers :: proc(doc: ^Document, first, last: int, places, places_last: []Place, f
 // `edit.text` is memory of `allocator`, and so is the text of the
 // result.
 @(private)
-keep_defs :: proc(doc: ^Document, edit: Edit, caret, line: int, allocator := context.allocator, gone: ^[dynamic]u8 = nil) -> (kept: Edit, at: int) {
+keep_defs :: proc(doc: ^Document, edit: Edit, caret, line: int, allocator := context.allocator, stay: ^[dynamic][2]int = nil) -> (kept: Edit, at: int) {
 	size := 0
 	for def in doc.defs {
 		if def.start >= edit.start && def.end <= edit.end {
@@ -474,16 +486,17 @@ keep_defs :: proc(doc: ^Document, edit: Edit, caret, line: int, allocator := con
 			append(&out, ..doc.source[def.start:def.end])
 			append(&out, nl)
 			// A definition that stays did not go.
-			if gone != nil {
-				if found := bytes.index(gone[:], doc.source[def.start:def.end]); found >= 0 {
-					remove_range(gone, found, found + def.end - def.start)
-				}
+			if stay != nil {
+				append(stay, [2]int{def.start, def.end})
 			}
 		}
 	}
 	append(&out, nl)
 	moved := len(out)
 	append(&out, ..doc.source[line:edit.start])
+	if stay != nil {
+		append(stay, [2]int{line, edit.start})
+	}
 	append(&out, edit.text)
 	delete(edit.text, allocator)
 	return {line, edit.end, string(out[:])}, caret + moved
