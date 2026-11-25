@@ -62,6 +62,13 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
     nonisolated(unsafe) private var tickInFlight = false
     /// When the last frame was drawn.
     nonisolated(unsafe) private var lastFrameTime: CFTimeInterval = 0
+    /// The time of one refresh of the display that the view is on.
+    nonisolated(unsafe) private var refreshPeriod: CFTimeInterval = 1.0 / 60
+    /// Held for all of a frame of `tick`, from before it takes its offset:
+    /// a frame of the link and a frame that did not wait for it do not
+    /// draw at the same time, and the one that takes the newer offset
+    /// draws last.
+    private let frameLock = NSLock()
     nonisolated(unsafe) private var lastRevision = -1
 
     /// `ctx` is the core's renderer; it must live until `stop()` returned.
@@ -80,7 +87,13 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
 
     /// The display that the view is on now. The link follows its refresh.
     func setDisplay(_ display: CGDirectDisplayID) {
-        if let link { CVDisplayLinkSetCurrentCGDisplay(link, display) }
+        guard let link else { return }
+        CVDisplayLinkSetCurrentCGDisplay(link, display)
+        let period = CVDisplayLinkGetNominalOutputVideoRefreshPeriod(link)
+        guard period.flags & Int32(CVTimeFlags.isIndefinite.rawValue) == 0, period.timeValue > 0, period.timeScale > 0 else { return }
+        lock.lock()
+        refreshPeriod = Double(period.timeValue) / Double(period.timeScale)
+        lock.unlock()
     }
 
     /// Ends the frames and waits for the one in progress and for the work
@@ -99,37 +112,23 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
 
     /// Asks for a frame at this scroll offset at the next refresh. A newer
     /// request replaces one that is not drawn yet.
-    func requestFrame(at y: Double) {
+    ///
+    /// `soon`: the frame does not wait for the refresh, for a key, which
+    /// the reader then sees up to one refresh sooner. It is drawn on the
+    /// queue of the loop, not on the main thread, which a wait for a
+    /// drawable would stop. The layer has a few drawables, and each is
+    /// free again after the refresh that showed it, so there is no more
+    /// than one such frame for each refresh: when a frame was drawn less
+    /// than one refresh before, or one is in progress, or a scroll has its
+    /// steps from the clock, the frame waits for the refresh.
+    func requestFrame(at y: Double, soon: Bool = false) {
         lock.lock()
         scrollY = y
         wantsFrame = true
+        let early = soon && animation == nil && !tickInFlight && CACurrentMediaTime() - lastFrameTime >= refreshPeriod
         lock.unlock()
-        start()
-    }
-
-    /// The shortest time between a frame and a frame that does not wait
-    /// for the clock of the display: one refresh of a 120 Hz display. The
-    /// layer has a few drawables, and each is free again after the
-    /// refresh that showed it, so no more than one such frame for each
-    /// refresh.
-    private static let earlyFrameGap: CFTimeInterval = 1.0 / 120
-
-    /// Asks for a frame at this scroll offset now, not at the next refresh:
-    /// for a key, which the reader sees one wait for the clock of the
-    /// display sooner. The frame is drawn on the queue of the loop, not on
-    /// the main thread, which a wait for a drawable would stop. When a
-    /// frame was drawn less than one refresh before, or one is in
-    /// progress, or a scroll has its steps from the clock, this is
-    /// `requestFrame`.
-    func requestFrameSoon(at y: Double) {
-        lock.lock()
-        scrollY = y
-        wantsFrame = true
-        let early = animation == nil && !tickInFlight && CACurrentMediaTime() - lastFrameTime >= Self.earlyFrameGap
-        lock.unlock()
-        // The link runs for the frames that come after this one.
-        start()
-        if early { queue.async { [self] in tick() } }
+        // The frame that does not wait needs no clock.
+        if early { queue.async { [self] in tick(early: true) } } else { start() }
     }
 
     /// Runs `before`, then draws a frame at this offset, or at the one that
@@ -156,6 +155,9 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
         let olderFrameInFlight = tickInFlight
         lock.unlock()
         autoreleasepool { mdcore_draw_with_window(ctx, y) }
+        lock.lock()
+        lastFrameTime = CACurrentMediaTime()
+        lock.unlock()
         // A frame of the link that took an older offset can be drawn after
         // this one. One more frame then makes the newest offset the last
         // one on screen.
@@ -203,10 +205,12 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
     }
 
     /// One refresh of the display, on the link's thread; or a frame that
-    /// does not wait for one, on the queue (`requestFrameSoon`). The two
-    /// can come at the same time: the frame that is wanted is taken by one
-    /// of them under the lock, and the core lets one draw at a time work.
-    private func tick() {
+    /// does not wait for one (`early`), on the queue. The two can come at
+    /// the same time: one of them takes the frame that is wanted, and the
+    /// other one waits for it to be drawn first (`frameLock`).
+    private func tick(early: Bool = false) {
+        frameLock.lock()
+        defer { frameLock.unlock() }
         lock.lock()
         var step: ScrollStep?
         var target: Double?
@@ -222,7 +226,13 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
             wantsFrame = true
             if progress >= 1 { self.animation = nil }
         }
-        guard wantsFrame, isRunning else {
+        // A frame that does not wait is wanted with no clock that runs;
+        // after `stop` no frame is wanted.
+        guard wantsFrame, isRunning || early else {
+            if early {
+                lock.unlock()
+                return
+            }
             idleTicks += 1
             let stops = isRunning && idleTicks == Self.idleTicksBeforeStop
             lock.unlock()

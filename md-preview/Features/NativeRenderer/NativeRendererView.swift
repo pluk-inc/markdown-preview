@@ -205,10 +205,12 @@ final class NativeRendererView: NSView {
     /// False without a document or a size: there is nothing to draw then.
     private var hasPageToDraw: Bool { hasDocument && bounds.width > 0 && bounds.height > 0 }
 
-    /// Asks for a frame at the next refresh of the display.
-    private func setNeedsDraw() {
+    /// Asks for a frame at the next refresh of the display. `soon`: for
+    /// a key, the frame does not wait for the refresh
+    /// (`NativeRenderLoop.requestFrame`).
+    private func setNeedsDraw(soon: Bool = false) {
         guard hasPageToDraw else { return }
-        renderLoop.requestFrame(at: scrollY)
+        renderLoop.requestFrame(at: scrollY, soon: soon)
     }
 
     /// After a frame that was a step of a key scroll or that made the page
@@ -283,11 +285,12 @@ final class NativeRendererView: NSView {
         // Not wider than the visible part: a wider page could move sideways.
         let frame = NSRect(x: 0, y: top, width: pageWidth, height: max(height, 1))
         // What is at a place of the page is the same while the layout and
-        // the page area are: this runs after each frame and after each
-        // key, and most of them change neither.
-        let moved = revision != layoutRevision || page.frame != frame
+        // the page area are: this runs after each key, each step of a
+        // scroll, and each new layout, and most of them change neither.
+        let frameChanged = page.frame != frame
+        let moved = revision != layoutRevision || frameChanged
         layoutRevision = revision
-        if page.frame != frame {
+        if frameChanged {
             page.frame = frame
             // A height in the page area is a height of the core's page,
             // for the check boxes and the pointer.
@@ -928,7 +931,14 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         // `open` compares with the text that it showed; that is another
         // one now.
         shownMarkdown = nil
+        let caretFrame = caretIndicator.frame
         caretDidMove()
+        // The caret starts its blink again with each change of the text,
+        // also with one that leaves it where it was (a delete of the
+        // text after it).
+        if caretIndicator.frame == caretFrame, caretIndicator.displayMode == .automatic {
+            caretIndicator.displayMode = .automatic
+        }
         contentDidChange?()
     }
 
@@ -938,15 +948,7 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         // The caret's own view gets its place with the page area.
         updatePageArea()
         keepCaretInView()
-        drawNow()
-    }
-
-    /// Asks for a frame now, for a key: a frame at the next refresh of
-    /// the display waits for the clock of the display first, up to one
-    /// refresh, and the reader sees the key that much later.
-    private func drawNow() {
-        guard hasPageToDraw else { return }
-        renderLoop.requestFrameSoon(at: scrollY)
+        setNeedsDraw(soon: true)
     }
 
     /// Puts the system's caret where the core's caret is, and shows it
@@ -965,7 +967,7 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         // With text selected, the selection shows where the keys go.
         // A change of the system's caret starts its blink again and
         // makes a display pass, so only what is another value is set:
-        // this runs after each frame.
+        // this runs after each key and each step of a scroll.
         guard takesKeys, !mdcore_has_selection(ctx), mdcore_caret_rect(ctx, &x, &y, &height) else {
             if caretIndicator.displayMode != .hidden { caretIndicator.displayMode = .hidden }
             return
