@@ -1,6 +1,5 @@
 package document
 
-import "core:bytes"
 import "core:strings"
 import "core:unicode/utf8"
 
@@ -265,6 +264,32 @@ place_of :: proc(doc: ^Document, places: []Place, at: Address) -> (offset: int, 
 	if n := empty_of(doc, at); n > 0 {
 		return empty_offset(doc, at.block, n), true
 	}
+	// After spaces at the end of the text: where those spaces start in
+	// its last line, and as many on.
+	if n := spaces_of(doc, at); n > 0 {
+		first, _ := end_spaces_at(doc, places, at) or_return
+		return first + n, true
+	}
+	return text_place(doc, places, at)
+}
+
+// Where the spaces at the end of the text of a block are in the source
+// (`Block.end_spaces`): where they start, and the end of the line that
+// they end. They are after the end of the text (`place_of`), and after
+// the marks that close it ("**" after bold text).
+@(private)
+end_spaces_at :: proc(doc: ^Document, places: []Place, at: Address) -> (first, line_end: int, ok: bool) {
+	at := at
+	at.spaces = 0
+	text_end := text_place(doc, places, at) or_return
+	line_end, _ = line_at(doc.source, text_end)
+	first = max(line_end - int(block_at(doc, at.block).end_spaces), text_end)
+	return first, line_end, true
+}
+
+// `place_of` for an address in the text.
+@(private)
+text_place :: proc(doc: ^Document, places: []Place, at: Address) -> (offset: int, ok: bool) {
 	// The last piece of the text of the cell that starts at the address
 	// or before it.
 	found := -1
@@ -353,46 +378,25 @@ address_in :: proc(places: []Place, block, offset: int) -> (at: Address) {
 	return
 }
 
-// How many spaces the source has right before an offset, when they are
-// spaces at the end of the text of an address: Markdown leaves spaces
-// at the end of a paragraph out of its text, so a caret after a space
-// that was just typed is at the end of the text, as it was before the
-// space. With this number, the caret shows after those spaces, and a
-// delete takes one of them. 0 for each other offset: one in the text,
-// in code or a table (their spaces are text), and at a text with
-// nothing in it.
-spaces_before :: proc(doc: ^Document, at: Address, offset: int) -> (count: int) {
-	b := block_at(doc, at.block)
-	texts := block_texts(b)
-	if b.kind == .Code || b.kind == .Table || at.cell >= len(texts) || at.byte != len(texts[at.cell].bytes) || at.byte == 0 {
-		return 0
-	}
-	source := doc.source
-	offset := clamp(offset, 0, len(source))
-	for offset - count > 0 && (source[offset - count - 1] == ' ' || source[offset - count - 1] == '\t') {
-		count += 1
-	}
-	// Only at the end of a line: spaces before more text are in the text
-	// as one space. And only after text of that line: spaces after the
-	// marks of a line with nothing more in it are no end of a text.
-	end, _ := line_at(source, offset)
-	before := bytes.trim_left(source[line_start(source, offset):offset - count], {' ', '\t', '>'})
-	if !blank(source[offset:end]) || len(before) == 0 {
-		return 0
-	}
-	return
-}
-
 // `address_in` for a block of a document: an offset in an empty
 // paragraph after the block, or after one, is the address of that
-// paragraph (`empties.odin`).
+// paragraph (`empties.odin`), and one in the spaces at the end of its
+// text is after some of them (`Address.spaces`).
 address_for :: proc(doc: ^Document, places: []Place, block, offset: int) -> Address {
 	if n := empty_at(doc, block, offset); n > 0 {
 		if at, ok := empty_address(doc, block, n); ok {
 			return at
 		}
 	}
-	return address_in(places, block, offset)
+	at := address_in(places, block, offset)
+	// An offset in the spaces at the end of the text, or after them:
+	// after as many of them as are before the offset.
+	if b := block_at(doc, block); b.end_spaces > 0 && with_end_spaces(doc, at).spaces > 0 {
+		if first, line_end, ok := end_spaces_at(doc, places, at); ok && offset > first && offset <= line_end {
+			at.spaces = offset - first
+		}
+	}
+	return at
 }
 
 // `place_of` with a map that is made for the call.

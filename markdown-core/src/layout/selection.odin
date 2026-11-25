@@ -81,7 +81,7 @@ place_at :: proc(l: ^Layout, y: f64) -> (place: Place, ok: bool) {
 				// lines high (blank lines of a code block have no line of
 				// their own), and all of it is a place.
 				fraction := (y - line.top) / para.line_height
-				return {{l.doc.starts[p] + i, document.cell_of(b, para.src), para.base + line.line.start}, fraction}, true
+				return {{block = l.doc.starts[p] + i, cell = document.cell_of(b, para.src), byte = para.base + line.line.start}, fraction}, true
 			}
 			// A block with no text (a rule): the next one.
 		}
@@ -261,7 +261,7 @@ hit_test :: proc(l: ^Layout, x: f32, y: f64) -> (pos: document.Address, ok: bool
 	line := shaped_line(l, best.part, best.line)
 	para := &l.parts[best.part].paras[line.para]
 	b := &l.doc.parts[best.part].blocks[best.slot]
-	return {l.doc.starts[best.part] + best.slot, document.cell_of(b, para.src), para.base + text.line_index_for_x(line.line, x - line.x)}, true
+	return {block = l.doc.starts[best.part] + best.slot, cell = document.cell_of(b, para.src), byte = para.base + text.line_index_for_x(line.line, x - line.x)}, true
 }
 
 // The part of a line that is in the selection, as byte offsets in the
@@ -274,8 +274,8 @@ selected_part :: proc(para: ^Para, b: ^document.Block, block: int, line: Line, f
 	}
 	// The addresses of the two ends of the line.
 	cell := document.cell_of(b, para.src)
-	first := document.Address{block, cell, para.base + line.line.start}
-	last := document.Address{block, cell, para.base + line.line.end}
+	first := document.Address{block = block, cell = cell, byte = para.base + line.line.start}
+	last := document.Address{block = block, cell = cell, byte = para.base + line.line.end}
 	if !document.before(first, to) || !document.before(from, last) {
 		return
 	}
@@ -430,7 +430,7 @@ caret_hit :: proc(l: ^Layout, x: f32, y: f64) -> (at: document.Address, upstream
 			}
 		}
 		if (b.kind == .Paragraph || b.kind == .Heading) && len(b.text.bytes) == 0 {
-			return {l.doc.starts[p] + near, 0, 0}, false, true
+			return {block = l.doc.starts[p] + near}, false, true
 		}
 	}
 	for box, slot in part.boxes {
@@ -468,10 +468,10 @@ caret_hit :: proc(l: ^Layout, x: f32, y: f64) -> (at: document.Address, upstream
 			if at > len(bytes) || strings.count(string(bytes[byte:at]), "\n") != down || (at < len(bytes) && bytes[at] != '\n') {
 				break
 			}
-			return {block, 0, at}, false, true
+			return {block = block, byte = at}, false, true
 		}
 		if down >= 0 && down < len(bytes) && strings.count(string(bytes[:down + 1]), "\n") == down + 1 {
-			return {block, 0, down}, false, true
+			return {block = block, byte = down}, false, true
 		}
 		break
 	}
@@ -541,7 +541,7 @@ caret_place :: proc(l: ^Layout, at: document.Address, upstream := false) -> (x, 
 		return line.x, line.top + height * f32(breaks), height, p, true
 	}
 	x = line.x + text.line_x_for_index(line.line, min(at.byte, end) - para.base)
-	return x, line.top, height, p, true
+	return x + caret_spaces(l, at, x), line.top, height, p, true
 }
 
 // The line that a caret at a byte of a text is in (`line_of_byte`), or
@@ -560,13 +560,14 @@ caret_line :: proc(part: ^Part, box: Box, b: ^document.Block, src: ^document.Tex
 	return found
 }
 
-// How far right of `x` a caret is that is after some spaces in the font
-// of the text of an address: a caret after spaces that the source has
-// at the end of a text and the text has not (`document.spaces_before`).
+// How far right of `x` a caret is that is after spaces at the end of
+// the text of its block (`Address.spaces`), in the font of that text.
 // Not out of the column: the spaces at the end of a full line do not
 // go to a next line, and the caret stays in the page.
-caret_spaces :: proc(l: ^Layout, at: document.Address, count: int, x: f32) -> f32 {
-	if count <= 0 || l.doc == nil || at.block < 0 || at.block >= l.doc.count {
+@(private)
+caret_spaces :: proc(l: ^Layout, at: document.Address, x: f32) -> f32 {
+	count := document.spaces_of(l.doc, at)
+	if count <= 0 {
 		return 0
 	}
 	b := document.block_at(l.doc, at.block)
@@ -620,6 +621,7 @@ caret_line_end :: proc(l: ^Layout, at: document.Address, upstream: bool, end: bo
 	src := document.text_at(l.doc, at)
 	bytes := src.bytes[:]
 	next = at
+	next.spaces = 0
 	found := caret_line(part, part.boxes[slot], &l.doc.parts[p].blocks[slot], src, at.byte, upstream)
 	line_start, line_end := 0, -1
 	if found >= 0 {
@@ -644,7 +646,9 @@ caret_line_end :: proc(l: ^Layout, at: document.Address, upstream: bool, end: bo
 	} else if line_end < len(bytes) && bytes[line_end] != '\n' {
 		next_upstream = true
 	}
-	return next, next_upstream, true
+	// The end of the last line of a text is after the spaces that the
+	// source has there.
+	return document.with_end_spaces(l.doc, next), next_upstream, true
 }
 
 // Where a caret is in a document with no block: where the first line of
@@ -662,7 +666,7 @@ caret_quad_empty :: proc(l: ^Layout, scale: f32, origin_y: f64, out: ^[dynamic]b
 
 // The quad of a caret at an address, in the display space of
 // `selection_quads`. Nothing when the caret has no place.
-caret_quad :: proc(l: ^Layout, at: document.Address, upstream: bool, spaces: int, y0, y1: f64, scale: f32, origin_y: f64, out: ^[dynamic]base.Quad) {
+caret_quad :: proc(l: ^Layout, at: document.Address, upstream: bool, y0, y1: f64, scale: f32, origin_y: f64, out: ^[dynamic]base.Quad) {
 	// Not for a caret whose block is out of the range that is shown:
 	// its place needs the shaped text of its line.
 	if l.doc == nil || at.block < 0 || at.block >= l.doc.count {
@@ -678,5 +682,5 @@ caret_quad :: proc(l: ^Layout, at: document.Address, upstream: bool, spaces: int
 		return
 	}
 	// One point wide at least, and two device pixels.
-	append(out, rect_quad(x + caret_spaces(l, at, spaces, x) - 0.5, top, max(1, 2 / scale), height, l.style.text, 0, scale, l.parts[p].top, origin_y))
+	append(out, rect_quad(x - 0.5, top, max(1, 2 / scale), height, l.style.text, 0, scale, l.parts[p].top, origin_y))
 }

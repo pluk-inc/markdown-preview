@@ -231,15 +231,48 @@ count_empties :: proc(doc: ^Document, end: int, followed, followed_in_list: bool
 	for part in doc.parts {
 		for &b in part_blocks(part) {
 			if before != nil {
-				_, count := empty_lines(doc.source[:end], before, before.source, b.source, in_list(&b), false)
+				lines, count := empty_lines(doc.source[:end], before, before.source, b.source, in_list(&b), false)
 				before.empties = empties_in(count)
+				before.end_spaces = end_spaces_of(doc.source[:end], before, before.source, lines)
 			}
 			before = &b
 		}
 	}
 	if before != nil {
-		_, count := empty_lines(doc.source[:end], before, before.source, end, followed_in_list, !followed)
+		lines, count := empty_lines(doc.source[:end], before, before.source, end, followed_in_list, !followed)
 		before.empties = empties_in(count)
+		before.end_spaces = end_spaces_of(doc.source[:end], before, before.source, lines)
+	}
+}
+
+// How many spaces and tabs the line where the text of a paragraph or a
+// heading ends has at its end (`Block.end_spaces`), with `lines` where
+// the lines of the block end (`lines_end`) and `first` where they
+// start. That is the last line of the block that has text after its
+// marks: not a line of a quote with only its ">" in it, and not the
+// line under a heading that the line makes ("---"). None for a text
+// with nothing in it (an item of a list with no text yet).
+@(private)
+end_spaces_of :: proc(source: []u8, b: ^Block, first, lines: int) -> u16 {
+	if (b.kind != .Paragraph && b.kind != .Heading) || len(b.text.bytes) == 0 {
+		return 0
+	}
+	end := break_before(source, lines)
+	for {
+		start := line_start(source, end)
+		count := 0
+		for end - count > start && (source[end - count - 1] == ' ' || source[end - count - 1] == '\t') {
+			count += 1
+		}
+		text := bytes.trim_left(source[start:end - count], {' ', '\t', '>'})
+		under := b.kind == .Heading && len(text) > 0 && len(bytes.trim(text, {'=', '-'})) == 0
+		if (len(text) == 0 || under) && start > first {
+			// No text of the block on this line: it ends on a line
+			// before it.
+			end = break_before(source, start)
+			continue
+		}
+		return len(text) == 0 ? 0 : u16(min(count, int(max(u16))))
 	}
 }
 
@@ -298,24 +331,29 @@ empty_text :: proc(doc: ^Document, text: string, allocator := context.allocator)
 	return string(out)
 }
 
-// The address of an empty paragraph of a block: after the end of its
-// last text, one byte for each; with 0, the end of that text. False
-// for a block with no text (a rule).
+// The address of an empty paragraph of a block (`Address.empty`); with
+// 0, the end of its last text. False for a block with no text (a rule).
 empty_address :: proc(doc: ^Document, block, n: int) -> (at: Address, ok: bool) {
 	texts := block_texts(block_at(doc, block))
 	if len(texts) == 0 {
 		return
 	}
-	return {block, len(texts) - 1, len(texts[len(texts) - 1].bytes) + n}, true
+	return {block = block, cell = len(texts) - 1, byte = len(texts[len(texts) - 1].bytes), empty = n}, true
 }
 
 // Which empty paragraph of its block an address is: its number from 1,
-// or 0 for an address in the text.
+// or 0 for an address in the text. Not more than the block has.
 empty_of :: proc(doc: ^Document, at: Address) -> int {
+	return clamp(at.empty, 0, int(block_at(doc, at.block).empties))
+}
+
+// How many of the spaces at the end of the text of its block are
+// before an address (`Address.spaces`). Not more than the block has.
+spaces_of :: proc(doc: ^Document, at: Address) -> int {
 	b := block_at(doc, at.block)
 	texts := block_texts(b)
-	if at.cell != len(texts) - 1 || at.cell < 0 {
+	if at.empty > 0 || at.spaces <= 0 || at.cell != len(texts) - 1 || at.byte != len(texts[at.cell].bytes) {
 		return 0
 	}
-	return clamp(at.byte - len(texts[at.cell].bytes), 0, int(b.empties))
+	return min(at.spaces, int(b.end_spaces))
 }

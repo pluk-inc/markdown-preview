@@ -94,6 +94,12 @@ Block :: struct {
 	task_mark:   int,
 	done:        bool, // the block stands directly in a checked task item
 	fenced:      bool, // code: between two fence lines, not code by its indent
+	// How many spaces and tabs the source has after the end of the text
+	// of a paragraph or a heading, on its last line: Markdown leaves
+	// them out of the text, and a caret has a place after each of them
+	// (`Address.spaces`). 0 for each other block. Counted with the empty
+	// paragraphs (`count_empties`).
+	end_spaces:  u16,
 	item:        int, // the list item that the block stands directly in: a number from 1, 0 for none
 }
 
