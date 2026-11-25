@@ -367,6 +367,8 @@ test_spaces_at_the_end_of_a_text_are_before_the_caret :: proc(t: ^testing.T) {
 		{"- a  \n  >\n", 5, 2},
 		// Before raw HTML right after the text, which is no block.
 		{"ab \n<!-- hidden -->\n", 3, 1},
+		// After the marks that close the text on a later line.
+		{"[ab](\n/u\n) \n", 11, 1},
 		{"ab  \n<div>\nx\n</div>\n\nz\n", 4, 2},
 		{"T\n=== \n", 7, 0},
 		{"- one \n- two\n", 6, 1},

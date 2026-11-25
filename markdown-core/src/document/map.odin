@@ -289,15 +289,18 @@ place_of :: proc(doc: ^Document, places: []Place, at: Address) -> (offset: int, 
 // Where the spaces at the end of the text of a block are in the source
 // (`Block.end_spaces`): where they start, and the end of the line that
 // they end. They are after the end of the text (`place_of`), and after
-// the marks that close it ("**" after bold text).
+// the marks that close it ("**" after bold text, also on a later line).
 @(private)
 end_spaces_at :: proc(doc: ^Document, places: []Place, at: Address) -> (first, line_end: int, ok: bool) {
 	at := at
 	at.spaces = 0
 	text_end := text_place(doc, places, at) or_return
-	line_end, _ = line_at(doc.source, text_end)
-	first = max(line_end - int(block_at(doc, at.block).end_spaces), text_end)
-	return first, line_end, true
+	// The line that the count is of (`Block.end_spaces`).
+	b := block_at(doc, at.block)
+	start := block_start(doc, at.block)
+	_, line_end = end_spaces_line(doc.source, b, start, start + int(b.lines))
+	first = max(line_end - int(b.end_spaces), text_end)
+	return first, line_end, line_end >= text_end
 }
 
 // `place_of` for an address in the text.
