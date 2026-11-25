@@ -517,7 +517,7 @@ Task :: struct {
 }
 
 TASK_BOX :: 1.0 // side of a task box, in body sizes
-TASK_GAP :: 0.25 // between the box and the text
+TASK_GAP :: 0.4 // between the box and the text
 
 // Makes the paragraph of the bytes [from, to) of `src` in the open part
 // and returns its index in the paragraphs of that part.
