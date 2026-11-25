@@ -352,6 +352,34 @@ address_in :: proc(places: []Place, block, offset: int) -> (at: Address) {
 	return
 }
 
+// How many spaces the source has right before an offset, when they are
+// spaces at the end of the text of an address: Markdown leaves spaces
+// at the end of a paragraph out of its text, so a caret after a space
+// that was just typed is at the end of the text, as it was before the
+// space. With this number, the caret shows after those spaces, and a
+// delete takes one of them. 0 for each other offset: one in the text,
+// in code or a table (their spaces are text), and at a text with
+// nothing in it.
+spaces_before :: proc(doc: ^Document, at: Address, offset: int) -> (count: int) {
+	b := block_at(doc, at.block)
+	texts := block_texts(b)
+	if b.kind == .Code || b.kind == .Table || at.cell >= len(texts) || at.byte != len(texts[at.cell].bytes) || at.byte == 0 {
+		return 0
+	}
+	source := doc.source
+	offset := clamp(offset, 0, len(source))
+	for offset - count > 0 && (source[offset - count - 1] == ' ' || source[offset - count - 1] == '\t') {
+		count += 1
+	}
+	// Only at the end of a line: spaces before more text are in the text
+	// as one space.
+	end, _ := line_at(source, offset)
+	if !blank(source[offset:end]) {
+		return 0
+	}
+	return
+}
+
 // `address_in` for a block of a document: an offset in an empty
 // paragraph after the block, or after one, is the address of that
 // paragraph (`empties.odin`).

@@ -560,6 +560,21 @@ caret_line :: proc(part: ^Part, box: Box, b: ^document.Block, src: ^document.Tex
 	return found
 }
 
+// How wide some spaces are in the font of the text of an address: for a
+// caret after spaces that the source has at the end of a text and the
+// text has not (`document.spaces_before`).
+caret_spaces :: proc(l: ^Layout, at: document.Address, count: int) -> f32 {
+	if count <= 0 || l.doc == nil || at.block < 0 || at.block >= l.doc.count {
+		return 0
+	}
+	b := document.block_at(l.doc, at.block)
+	heading := b.kind == .Heading
+	runs := [1]text.Run{{0, 1, span_font(l, {}, l.m.body * HEADING_SCALE[heading ? b.level : 0], heading)}}
+	space := text.paragraph_create(" ", runs[:])
+	defer text.paragraph_destroy(space)
+	return f32(count) * text.paragraph_natural_width(space)
+}
+
 // `caret_place` with the top of the line as a height of the page.
 caret_y :: proc(l: ^Layout, at: document.Address, upstream: bool) -> (x: f32, y: f64, height: f32, ok: bool) {
 	top: f32
@@ -645,7 +660,7 @@ caret_quad_empty :: proc(l: ^Layout, scale: f32, origin_y: f64, out: ^[dynamic]b
 
 // The quad of a caret at an address, in the display space of
 // `selection_quads`. Nothing when the caret has no place.
-caret_quad :: proc(l: ^Layout, at: document.Address, upstream: bool, y0, y1: f64, scale: f32, origin_y: f64, out: ^[dynamic]base.Quad) {
+caret_quad :: proc(l: ^Layout, at: document.Address, upstream: bool, spaces: int, y0, y1: f64, scale: f32, origin_y: f64, out: ^[dynamic]base.Quad) {
 	// Not for a caret whose block is out of the range that is shown:
 	// its place needs the shaped text of its line.
 	if l.doc == nil || at.block < 0 || at.block >= l.doc.count {
@@ -661,5 +676,5 @@ caret_quad :: proc(l: ^Layout, at: document.Address, upstream: bool, y0, y1: f64
 		return
 	}
 	// One point wide at least, and two device pixels.
-	append(out, rect_quad(x - 0.5, top, max(1, 2 / scale), height, l.style.text, 0, scale, l.parts[p].top, origin_y))
+	append(out, rect_quad(x + caret_spaces(l, at, spaces) - 0.5, top, max(1, 2 / scale), height, l.style.text, 0, scale, l.parts[p].top, origin_y))
 }

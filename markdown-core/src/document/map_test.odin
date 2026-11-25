@@ -340,3 +340,36 @@ mixed_text :: proc() -> string {
 	strings.write_string(&b, "> a quote\n> on two lines\n>\n> - in a quote\n\nSetext\n---\n\n| a | **b** |\n|:-|-:|\n| one | two |\n\n    indented code\n\n```odin\nfenced\n\tcode\n```\n\n[ref]: https://ref.example\n\nA last one with [ref] and é.\n")
 	return strings.to_string(b)
 }
+
+@(test)
+test_spaces_at_the_end_of_a_text_are_before_the_caret :: proc(t: ^testing.T) {
+	Case :: struct {
+		source: string,
+		offset: int,
+		spaces: int,
+	}
+	cases := []Case {
+		// A space typed at the end of a paragraph, and two, and a tab.
+		{"ab \n\nnext\n", 3, 1},
+		{"ab  \n", 4, 2},
+		{"ab \t", 4, 2},
+		// At the end of the text, before the spaces: none before it.
+		{"ab  \n", 2, 0},
+		{"ab  \n", 3, 1},
+		// After the marks that end the text, and in a heading and a
+		// list item.
+		{"**ab** \n", 7, 1},
+		{"# T \n", 4, 1},
+		{"- one \n- two\n", 6, 1},
+		// Not before more text of the line, not in code, and not in a
+		// text with nothing in it.
+		{"ab cd\n", 3, 0},
+		{"```\nab \n```\n", 7, 0},
+		{"-  \n", 3, 0},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		testing.expect_value(t, spaces_before(&doc, address_of(&doc, c.offset), c.offset), c.spaces)
+	}
+}

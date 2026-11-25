@@ -81,6 +81,11 @@ Ctx :: struct {
 	// is two places on the page. The caret is at the end of the first
 	// line with this, and at the start of the second one with no such.
 	caret_upstream:  bool,
+	// How many spaces of the source are before the caret that the text
+	// of its block has not: spaces at the end of a paragraph, which
+	// Markdown leaves out. The caret shows after them, and a delete
+	// takes one of them (`document.spaces_before`).
+	caret_spaces:    int,
 	// The x that a caret goes to in each line that it comes to with the
 	// keys for the line above and below: the x that it had in the line
 	// where those keys started. Each other move of the caret ends it.
@@ -190,7 +195,7 @@ show_selection :: proc(ctx: ^Ctx) {
 		if ctx.doc.count == 0 {
 			layout.caret_quad_empty(&ctx.page, ctx.scale, ctx.origin_px, &ctx.selection_quads)
 		} else {
-			layout.caret_quad(&ctx.page, ctx.caret_at, ctx.caret_upstream, ctx.shown_y0, ctx.shown_y1, ctx.scale, ctx.origin_px, &ctx.selection_quads)
+			layout.caret_quad(&ctx.page, ctx.caret_at, ctx.caret_upstream, ctx.caret_spaces, ctx.shown_y0, ctx.shown_y1, ctx.scale, ctx.origin_px, &ctx.selection_quads)
 		}
 	}
 	renderer.set_selection(&ctx.gpu, ctx.selection_quads[:])
@@ -437,6 +442,7 @@ caret_changed :: proc(ctx: ^Ctx) {
 	delete(ctx.caret_places)
 	ctx.caret_places = document.block_map(&ctx.doc, block)
 	ctx.caret_at = document.address_for(&ctx.doc, ctx.caret_places[:], block, ctx.caret)
+	ctx.caret_spaces = document.spaces_before(&ctx.doc, ctx.caret_at, ctx.caret)
 	ctx.caret_upstream, ctx.caret_goal = false, nil
 	caret_placed(ctx)
 }
@@ -545,6 +551,7 @@ set_caret :: proc(ctx: ^Ctx, stop: Stop, upstream: bool, anchor: document.Addres
 		ctx.caret_places = stop.places
 	}
 	ctx.caret, ctx.caret_at = stop.offset, stop.at
+	ctx.caret_spaces = document.spaces_before(&ctx.doc, stop.at, stop.offset)
 	ctx.caret_upstream, ctx.caret_goal = upstream, nil
 	ctx.selection = {anchor = anchor, focus = stop.at, active = true}
 	caret_placed(ctx)
@@ -842,6 +849,7 @@ mdcore_caret_rect :: proc "c" (handle: rawptr, x, y, height: ^f64) -> bool {
 		return true
 	}
 	cx, cy, h := layout.caret_y(&ctx.page, ctx.caret_at, ctx.caret_upstream) or_return
+	cx += layout.caret_spaces(&ctx.page, ctx.caret_at, ctx.caret_spaces)
 	x^, y^, height^ = f64(cx), cy, f64(h)
 	return true
 }
@@ -903,6 +911,12 @@ mdcore_delete_backward :: proc "c" (handle: rawptr) {
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
 	if ctx.caret < 0 || ctx.doc.count == 0 {
+		return
+	}
+	// A space at the end of a text, which the text has not: that space
+	// goes, not the last character of the text.
+	if ctx.caret_spaces > 0 {
+		change_source_held(ctx, "", [2]int{ctx.caret - 1, ctx.caret})
 		return
 	}
 	// An empty paragraph or a list item with no text goes, and the
