@@ -88,6 +88,7 @@ test_text_goes_out_and_the_styles_of_the_rest_stay :: proc(t: ^testing.T) {
 		// text that comes to it.
 		{"Head\n====\n\ntext\n", {block = 0, cell = 0, byte = 4}, {block = 1, cell = 0, byte = 0}, "", "Headtext\n====\n"},
 		{"Head\n====\n\ntext\n\nz\n", {block = 0, cell = 0, byte = 2}, {block = 1, cell = 0, byte = 2}, "", "Hext\n====\n\nz\n"},
+		{"Head\n====\n\ntext\n", {block = 0, cell = 0, byte = 0}, {block = 1, cell = 0, byte = 4}, "", "\n"},
 		// All of the text of a block: its marks stay, for text to come.
 		{"# ab\n", {block = 0, cell = 0, byte = 0}, {block = 0, cell = 0, byte = 2}, "", "# \n"},
 		{"- ab\n- cd\n", {block = 0, cell = 0, byte = 0}, {block = 0, cell = 0, byte = 2}, "", "- \n- cd\n"},

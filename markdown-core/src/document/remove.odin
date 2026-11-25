@@ -1,5 +1,6 @@
 package document
 
+import "core:bytes"
 import "core:unicode/utf8"
 
 // Text that goes out of the source: a selection that a key deletes or
@@ -317,7 +318,10 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 		if text_end, placed := place_of(doc, places, {block = first, byte = len(a.text.bytes)}); placed && text_end <= lines {
 			_, under := line_at(source, text_end)
 			rest := min(block_start(doc, last) + int(b.lines), len(source))
-			if under < lines && lines <= edit.end && rest >= edit.end {
+			// Not for a heading that has no text then: the line under
+			// nothing is text itself.
+			stays := blank(source[line_start(source, edit.start):edit.start]) && len(edit.text) == 0 && blank(bytes.trim_right(source[edit.end:rest], {'\n', '\r'}))
+			if under < lines && lines <= edit.end && rest >= edit.end && !stays {
 				nl := line_ending(source)
 				out := make([dynamic]u8, 0, len(edit.text) + rest - edit.end + lines - under + 4, allocator)
 				append(&out, edit.text)
