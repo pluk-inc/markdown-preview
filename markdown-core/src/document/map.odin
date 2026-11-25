@@ -55,10 +55,14 @@ block_map :: proc(doc: ^Document, block: int) -> (places: [dynamic]Place) {
 	// its first line, which is its fence; each other block (a paragraph
 	// of a NUL byte) at its own start.
 	content := block_start(doc, block) - base
-	if block_at(doc, block).kind == .Code {
-		for content < len(text) && text[content] != '\n' && text[content] != '\r' {
-			content += 1
-		}
+	line := content
+	for line < len(text) && text[line] != '\n' && text[line] != '\r' {
+		line += 1
+	}
+	first_line := string(text[min(content, len(text)):line])
+	// Code in a fence, not code by its indent, which has no such line.
+	if block_at(doc, block).kind == .Code && (strings.contains(first_line, "```") || strings.contains(first_line, "~~~")) {
+		content = line
 		if content + 1 < len(text) && text[content] == '\r' && text[content + 1] == '\n' {
 			content += 1
 		}

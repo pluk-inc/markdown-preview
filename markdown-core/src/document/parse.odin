@@ -63,6 +63,7 @@ Parser :: struct {
 	places:       ^[dynamic]Place,
 	places_block: int, // the number of that block in what is parsed
 	bytes:        []u8, // what is parsed
+	after_nul:    bool, // the text before was the character for a NUL byte
 	// Table.
 	table:        Block,
 	in_table:     bool,
@@ -538,6 +539,8 @@ on_text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr)
 			at = from
 		}
 	}
+	after_nul := p.after_nul
+	p.after_nul = type == .Nullchar
 	#partial switch type {
 	case .Nullchar:
 		append_rune(p, utf8.RUNE_ERROR, nul = true)
@@ -550,6 +553,18 @@ on_text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr)
 	case .Normal:
 		append_collapsed(p, s, at)
 	case:
+		// In a code block the parser gives a NUL byte two times: as
+		// the character that stands for it, and then as the byte, at
+		// the start of the text after it. The byte is no text; it is
+		// where the character is in the source.
+		if after_nul && len(s) > 0 && s[0] == 0 {
+			if p.places != nil && at >= 0 && len(p.places) > 0 && p.places[len(p.places) - 1].nul {
+				place := &p.places[len(p.places) - 1]
+				place.source, place.source_len, place.made = at, 1, false
+			}
+			s = s[1:]
+			at += at >= 0 ? 1 : 0
+		}
 		// A line of code is in the source; the line break after it and
 		// the spaces of its indent are made. In inline code, a made
 		// space is for a line break.

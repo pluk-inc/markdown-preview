@@ -428,10 +428,11 @@ mdcore_caret_set :: proc "c" (handle: rawptr, x, y: f64) -> bool {
 	at := layout.caret_hit(&ctx.page, f32(x), y) or_return
 	// Not at text that has no place in the source for text to go to.
 	ctx.caret = document.source_of(&ctx.doc, at) or_return
-	// The selection is empty and at the caret: a drag from here selects
-	// from this place (`mdcore_mouse`).
-	ctx.selection = {anchor = at, focus = at, active = true}
 	caret_changed(ctx)
+	// The selection is empty and at the caret, which can be beside the
+	// point (at an end of an entity that is one thing): a drag from here
+	// selects from this place (`mdcore_mouse`).
+	ctx.selection = {anchor = ctx.caret_at, focus = ctx.caret_at, active = true}
 	return true
 }
 
