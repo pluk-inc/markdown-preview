@@ -23,26 +23,47 @@ char_step :: proc(text: []u8, at: int, forward: bool) -> int {
 	if forward ? at >= len(text) : at <= 0 {
 		return at
 	}
-	// A line break is a character, and no character goes over one, so
-	// only the line of the byte is read.
-	if text[forward ? at : at - 1] == '\n' {
-		return forward ? at + 1 : at - 1
+	// An ASCII character starts a character, and is all of it when no
+	// mark comes after it: most steps read two bytes. A line break is
+	// such a character.
+	if forward {
+		if text[at] == '\n' || (text[at] < 0x80 && (at + 1 == len(text) || text[at + 1] < 0x80)) {
+			return at + 1
+		}
+	} else if text[at - 1] < 0x80 {
+		return at - 1
 	}
-	start := bytes.last_index_byte(text[:at], '\n') + 1
-	stop := bytes.index_byte(text[at:], '\n')
-	end := stop < 0 ? len(text) : at + stop
+	// No character goes over a line break, and one starts at each ASCII
+	// byte: the characters are read from the last such place before the
+	// byte, to the end of the line.
+	start := at
+	for start > 0 && text[start - 1] != '\n' {
+		start -= 1
+		if text[start] < 0x80 {
+			break
+		}
+	}
+	end := paragraph_end(text, at, true)
 	it := utf8.decode_grapheme_iterator_make(string(text[start:end]))
-	before := start
+	next, before := end, start
 	for _, grapheme in utf8.decode_grapheme_iterate(&it) {
 		first := start + grapheme.byte_index
 		if first > at {
-			return forward ? first : before
+			next = first
+			break
 		}
 		if first < at {
 			before = first
 		}
 	}
-	return forward ? end : before
+	// Bytes that are no UTF-8 are one character each for the reader of
+	// characters; a step does not end in the middle of what the source
+	// has as one run of them.
+	to := forward ? next : before
+	for to > 0 && to < len(text) && text[to] & 0xc0 == 0x80 {
+		to += forward ? 1 : -1
+	}
+	return to
 }
 
 // True for a character that is a part of a word: one that starts with a letter, a
@@ -108,6 +129,20 @@ text_beside :: proc(doc: ^Document, at: Address, forward: bool) -> (next: Addres
 		block += step
 		if block >= 0 && block < doc.count {
 			cell = forward ? 0 : len(block_texts(block_at(doc, block))) - 1
+		}
+	}
+	return
+}
+
+// The two ends of the text of a document for a caret: the start of its
+// first text and the end of its last one, also of a text with nothing
+// in it (an item of a list with no text yet). False for a document
+// with no text.
+caret_ends :: proc(doc: ^Document) -> (first, last: Address, ok: bool) {
+	first = text_beside(doc, {0, -1, 0}, true) or_return
+	for block := doc.count - 1; block >= 0; block -= 1 {
+		if texts := block_texts(block_at(doc, block)); len(texts) > 0 {
+			return first, {block, len(texts) - 1, len(texts[len(texts) - 1].bytes)}, true
 		}
 	}
 	return

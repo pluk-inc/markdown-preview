@@ -60,6 +60,23 @@ def build() -> Path:
     return program
 
 
+def caret_document(path: Path) -> Path:
+    """A document with the places that are hard for a caret."""
+    text = "# \n\na\n\n| x | y |\n| - | - |\n" + "|  |  |\n" * 40 + "\nmiddle\n\n"
+    text += "#\n\n" * 70 + "-\n" * 70 + "\n" + "# \n\n" * 6
+    text += "日本語の文章がここにあります。" * 6 + "\n\n"
+    text += "```\nab   \n\n\tcd\n```\n\n> a &amp; **b** \\* `c`  \n> [d](https://example.com) e\u0301 👨‍👩‍👧‍👦\n\n---\n\nz\n\n- \n"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def check_caret(program: Path, document: Path) -> None:
+    """Moves the caret through all of a document; stops when a move is wrong."""
+    result = subprocess.run([program, document, "--caret-walk"], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise SystemExit(result.stderr.strip() or f"the caret walk of {document} did not end")
+
+
 def measure(program: Path, document: Path, runs: int) -> dict[str, float]:
     samples: dict[str, list[float]] = {}
     for _ in range(runs):
@@ -76,6 +93,8 @@ def main() -> None:
     args = parser.parse_args()
 
     program = build()
+    for document in (SHORT, caret_document(OUT / "caret.md")):
+        check_caret(program, document)
     results = [measure(program, document, args.runs) for document in (SHORT, write_long(OUT / "long.md"))]
     print("| | Short | Long |")
     print("| --- | --- | --- |")

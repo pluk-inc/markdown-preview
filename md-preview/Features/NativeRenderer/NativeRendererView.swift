@@ -711,6 +711,10 @@ final class NativeRendererView: NSView {
                 inputContext?.discardMarkedText()
             }
             updateCaretIndicator()
+        } else if isEditable, hasCaret {
+            // A drag moves the caret with the end of the selection, and
+            // the caret does not show while text is selected.
+            updateCaretIndicator()
         }
         setNeedsDraw()
     }
@@ -903,11 +907,17 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         // `open` compares with the text that it showed; that is another
         // one now.
         shownMarkdown = nil
+        caretDidMove()
+        contentDidChange?()
+    }
+
+    /// After the caret got another place: the view shows it there.
+    private func caretDidMove() {
+        // A move to a part of the page that had no layout gave it one.
+        // The caret's own view gets its place with the page area.
         updatePageArea()
         keepCaretInView()
-        updateCaretIndicator()
         setNeedsDraw()
-        contentDidChange?()
     }
 
     /// Puts the system's caret where the core's caret is, and shows it
@@ -1059,9 +1069,9 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
 
     /// The commands of the system's key bindings that move the caret,
     /// with the move of the core for each and if it selects.
-    private static let caretMoves: [Selector: (move: Int32, extend: Bool)] = {
+    private static let caretMoves: [Selector: (move: mdcore_move, extend: Bool)] = {
         typealias R = NSResponder
-        let moves: [(Selector, Selector, Int)] = [
+        let moves: [(Selector, Selector, mdcore_move)] = [
             (#selector(R.moveLeft(_:)), #selector(R.moveLeftAndModifySelection(_:)), MDCORE_MOVE_LEFT),
             (#selector(R.moveBackward(_:)), #selector(R.moveBackwardAndModifySelection(_:)), MDCORE_MOVE_LEFT),
             (#selector(R.moveRight(_:)), #selector(R.moveRightAndModifySelection(_:)), MDCORE_MOVE_RIGHT),
@@ -1081,15 +1091,15 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
             (#selector(R.moveToBeginningOfDocument(_:)), #selector(R.moveToBeginningOfDocumentAndModifySelection(_:)), MDCORE_MOVE_DOCUMENT_START),
             (#selector(R.moveToEndOfDocument(_:)), #selector(R.moveToEndOfDocumentAndModifySelection(_:)), MDCORE_MOVE_DOCUMENT_END),
         ]
-        var table: [Selector: (move: Int32, extend: Bool)] = [:]
+        var table: [Selector: (move: mdcore_move, extend: Bool)] = [:]
         for (plain, selecting, move) in moves {
-            table[plain] = (Int32(move), false)
-            table[selecting] = (Int32(move), true)
+            table[plain] = (move, false)
+            table[selecting] = (move, true)
         }
         // With Option and Shift, up and down select to the two ends of
         // the paragraph.
-        table[#selector(R.moveParagraphBackwardAndModifySelection(_:))] = (Int32(MDCORE_MOVE_PARAGRAPH_START), true)
-        table[#selector(R.moveParagraphForwardAndModifySelection(_:))] = (Int32(MDCORE_MOVE_PARAGRAPH_END), true)
+        table[#selector(R.moveParagraphBackwardAndModifySelection(_:))] = (MDCORE_MOVE_PARAGRAPH_START, true)
+        table[#selector(R.moveParagraphForwardAndModifySelection(_:))] = (MDCORE_MOVE_PARAGRAPH_END, true)
         return table
     }()
 
@@ -1106,13 +1116,9 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
     }
 
     /// Moves the caret as a key says, and keeps it in view.
-    private func moveCaret(_ move: Int32, extend: Bool) {
+    private func moveCaret(_ move: mdcore_move, extend: Bool) {
         guard mdcore_caret_move(ctx, move, extend) else { return }
-        // A move to a part of the page that had no layout gave it one.
-        updatePageArea()
-        keepCaretInView()
-        updateCaretIndicator()
-        setNeedsDraw()
+        caretDidMove()
     }
 
     override func deleteBackward(_ sender: Any?) {

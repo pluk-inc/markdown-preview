@@ -1433,6 +1433,14 @@ test_the_caret_of_an_empty_document_is_where_its_first_text_starts :: proc(t: ^t
 	testing.expect_value(t, height, theight)
 }
 
+// The top of the line of a caret, as a height of the page.
+@(private = "file")
+caret_top :: proc(t: ^testing.T, f: ^Fixture, at: document.Address, upstream := false, loc := #caller_location) -> f64 {
+	_, y, _, ok := caret_y(&f.page, at, upstream)
+	testing.expect(t, ok, loc = loc)
+	return y
+}
+
 @(test)
 test_a_caret_goes_up_and_down_by_one_line :: proc(t: ^testing.T) {
 	// A paragraph of some lines, a short one, and a code block with an
@@ -1442,90 +1450,142 @@ test_a_caret_goes_up_and_down_by_one_line :: proc(t: ^testing.T) {
 	defer teardown(&f)
 	step(&f.page, 1e30)
 	expect_ok(t, &f.page)
-	y_of :: proc(t: ^testing.T, f: ^Fixture, at: document.Address) -> f64 {
-		_, top, _, p, ok := caret_place(&f.page, at)
-		testing.expect(t, ok)
-		return f.page.parts[p].top + f64(top)
+	Stop :: struct {
+		at:       document.Address,
+		upstream: bool,
 	}
 	// Down from the start, with the x of a place in the first line: each
 	// step is one line lower, and no line is left out.
 	x, _, _, _, _ := caret_place(&f.page, {0, 0, 6})
-	path: [dynamic]document.Address
+	path: [dynamic]Stop
 	defer delete(path)
-	append(&path, document.Address{0, 0, 6})
-	for {
-		next, ok := caret_line_step(&f.page, path[len(path) - 1], x, true)
-		if !ok {
-			break
-		}
-		testing.expect(t, y_of(t, &f, next) > y_of(t, &f, path[len(path) - 1]))
-		append(&path, next)
-		if len(path) > 40 {
-			break
-		}
+	append(&path, Stop{{0, 0, 6}, false})
+	for len(path) < 40 {
+		last := path[len(path) - 1]
+		next, upstream := caret_line_step(&f.page, last.at, last.upstream, x, true) or_break
+		testing.expect(t, caret_top(t, &f, next, upstream) > caret_top(t, &f, last.at, last.upstream))
+		append(&path, Stop{next, upstream})
 	}
 	first_lines := 0
-	for at in path {
-		first_lines += int(at.block == 0)
+	for stop in path {
+		first_lines += int(stop.at.block == 0)
 	}
 	testing.expect(t, first_lines >= 3)
 	// The short paragraph, and the three lines of the code block: the
 	// empty one between two with text too.
 	testing.expect_value(t, len(path), first_lines + 4)
-	testing.expect_value(t, path[first_lines].block, 1)
-	testing.expect_value(t, path[first_lines + 2], document.Address{2, 0, 6})
-	testing.expect_value(t, path[len(path) - 1].block, 2)
+	testing.expect_value(t, path[first_lines].at.block, 1)
+	testing.expect_value(t, path[first_lines + 2].at, document.Address{2, 0, 6})
+	testing.expect_value(t, path[len(path) - 1].at.block, 2)
 	// And up again, through the same lines.
 	at := path[len(path) - 1]
 	for i := len(path) - 2; i >= 0; i -= 1 {
-		next, ok := caret_line_step(&f.page, at, x, false)
+		next, upstream, ok := caret_line_step(&f.page, at.at, at.upstream, x, false)
 		testing.expect(t, ok)
-		testing.expect_value(t, y_of(t, &f, next), y_of(t, &f, path[i]))
+		testing.expect_value(t, caret_top(t, &f, next, upstream), caret_top(t, &f, path[i].at, path[i].upstream))
+		at = {next, upstream}
+	}
+	_, _, ok := caret_line_step(&f.page, at.at, at.upstream, x, false)
+	testing.expect(t, !ok)
+}
+
+@(test)
+test_a_caret_goes_through_each_block_with_no_text :: proc(t: ^testing.T) {
+	// Six headings with no text between two paragraphs: each is a line
+	// for the caret, down and up.
+	f: Fixture
+	setup(&f, "a\n\n# \n\n# \n\n# \n\n# \n\n# \n\n# \n\nz\n", 300)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	expect_ok(t, &f.page)
+	at := document.Address{0, 0, 0}
+	for block in 1 ..= 7 {
+		next, _, ok := caret_line_step(&f.page, at, false, 40, true)
+		testing.expect(t, ok)
+		testing.expect_value(t, next.block, block)
 		at = next
 	}
-	_, ok := caret_line_step(&f.page, at, x, false)
-	testing.expect(t, !ok)
+	for block := 6; block >= 0; block -= 1 {
+		next, _, ok := caret_line_step(&f.page, at, false, 40, false)
+		testing.expect(t, ok)
+		testing.expect_value(t, next.block, block)
+		at = next
+	}
 }
 
 @(test)
 test_a_caret_goes_to_the_two_ends_of_its_line :: proc(t: ^testing.T) {
 	f: Fixture
-	setup(&f, "One paragraph with enough words in it to go over the end of a line in a narrow page, and then some.\n\n```\nfirst\n\nthird\n```\n", 300)
+	setup(&f, "One paragraph with enough words in it to go over the end of a line in a narrow page, and then some.\n\n```\nfirst\n\nthird  \n```\n", 300)
 	defer teardown(&f)
 	step(&f.page, 1e30)
 	expect_ok(t, &f.page)
-	place :: proc(f: ^Fixture, at: document.Address) -> (x, top: f32) {
-		x, top, _, _, _ = caret_place(&f.page, at)
-		return
-	}
 	// In the second line of the paragraph: the two ends are in that
 	// line, the start at the left and the end right of each place of it.
-	second, found := caret_line_step(&f.page, {0, 0, 6}, 60, true)
+	second, second_up, found := caret_line_step(&f.page, {0, 0, 6}, false, 60, true)
 	testing.expect(t, found)
-	start, _ := caret_line_end(&f.page, second, false)
-	end, _ := caret_line_end(&f.page, second, true)
-	sx, stop := place(&f, start)
-	ex, etop := place(&f, end)
-	_, top := place(&f, second)
-	x0, _ := place(&f, {0, 0, 0})
+	start, start_up, _ := caret_line_end(&f.page, second, second_up, false)
+	end, end_up, _ := caret_line_end(&f.page, second, second_up, true)
+	top := caret_top(t, &f, second, second_up)
 	testing.expect(t, start.byte > 0 && end.byte > start.byte)
-	testing.expect_value(t, stop, top)
-	testing.expect_value(t, etop, top)
+	testing.expect_value(t, caret_top(t, &f, start, start_up), top)
+	testing.expect_value(t, caret_top(t, &f, end, end_up), top)
+	sx, _, _, _, _ := caret_place(&f.page, start, start_up)
+	ex, _, _, _, _ := caret_place(&f.page, end, end_up)
+	x0, _, _, _, _ := caret_place(&f.page, {0, 0, 0})
 	testing.expect_value(t, sx, x0)
 	testing.expect(t, ex > sx + 100)
+	// The end of the line is the byte where the next line starts: the
+	// same address is at the start of that line with no side, and the
+	// two ends of the line from there are the same two.
+	testing.expect(t, end_up && !start_up)
+	testing.expect(t, caret_top(t, &f, end, false) > top)
+	again, again_up, _ := caret_line_end(&f.page, end, end_up, true)
+	testing.expect(t, again == end && again_up)
+	back, _, _ := caret_line_end(&f.page, end, end_up, false)
+	testing.expect_value(t, back, start)
+	// A click right of the text of the first line is at the end of that
+	// line, not at the start of the next one.
+	first_top := caret_top(t, &f, {0, 0, 0})
+	right, right_up, hit := caret_hit(&f.page, 290, first_top + 4)
+	testing.expect(t, hit && right_up)
+	testing.expect_value(t, caret_top(t, &f, right, right_up), first_top)
+	testing.expect_value(t, right, start)
 	// The first line starts at the start of the text.
-	first, _ := caret_line_end(&f.page, {0, 0, 6}, false)
+	first, _, _ := caret_line_end(&f.page, {0, 0, 6}, false, false)
 	testing.expect_value(t, first, document.Address{0, 0, 0})
-	// A line of code ends before its line break; an empty line is its
-	// own two ends.
-	code_end, _ := caret_line_end(&f.page, {1, 0, 2}, true)
+	// A line of code ends before its line break, after the spaces that
+	// it ends with; an empty line is its own two ends.
+	code_end, code_up, _ := caret_line_end(&f.page, {1, 0, 2}, false, true)
 	testing.expect_value(t, code_end, document.Address{1, 0, 5})
-	code_start, _ := caret_line_end(&f.page, {1, 0, 9}, false)
+	testing.expect(t, !code_up)
+	code_start, _, _ := caret_line_end(&f.page, {1, 0, 9}, false, false)
 	testing.expect_value(t, code_start, document.Address{1, 0, 7})
+	spaces_end, _, _ := caret_line_end(&f.page, {1, 0, 9}, false, true)
+	testing.expect_value(t, spaces_end, document.Address{1, 0, 14})
 	for end_of in ([]bool{false, true}) {
-		empty, _ := caret_line_end(&f.page, {1, 0, 6}, end_of)
+		empty, _, _ := caret_line_end(&f.page, {1, 0, 6}, false, end_of)
 		testing.expect_value(t, empty, document.Address{1, 0, 6})
 	}
+}
+
+@(test)
+test_the_end_of_a_line_with_no_space_is_in_that_line :: proc(t: ^testing.T) {
+	// Text that a line cuts between two characters: the end of the
+	// first line is the start of the second one, and the caret shows at
+	// the end of the first.
+	f: Fixture
+	setup(&f, "\u65e5\u672c\u8a9e\u306e\u6587\u7ae0\u304c\u3053\u3053\u306b\u3042\u308a\u307e\u3059\u3002\u65e5\u672c\u8a9e\u306e\u6587\u7ae0\u304c\u3053\u3053\u306b\u3042\u308a\u307e\u3059\u3002\u65e5\u672c\u8a9e\u306e\u6587\u7ae0\u304c\u3053\u3053\u306b\u3042\u308a\u307e\u3059\u3002\n", 200)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	expect_ok(t, &f.page)
+	top := caret_top(t, &f, {0, 0, 3})
+	end, upstream, ok := caret_line_end(&f.page, {0, 0, 3}, false, true)
+	testing.expect(t, ok && upstream && end.byte > 3)
+	testing.expect_value(t, caret_top(t, &f, end, upstream), top)
+	// The end again from there is the same place, not the next line's.
+	again, again_up, _ := caret_line_end(&f.page, end, upstream, true)
+	testing.expect(t, again == end && again_up)
 }
 
 @(test)
@@ -1541,12 +1601,12 @@ test_a_click_puts_a_caret_at_text_with_no_line :: proc(t: ^testing.T) {
 	for at in ([]document.Address{{0, 0, 0}, {0, 0, 7}, {0, 0, 8}, {1, 0, 0}}) {
 		x, top, height, p, ok := caret_place(&f.page, at)
 		testing.expect(t, ok)
-		hit, found := caret_hit(&f.page, x + 1, f.page.parts[p].top + f64(top + height / 2))
+		hit, _, found := caret_hit(&f.page, x + 1, f.page.parts[p].top + f64(top + height / 2))
 		testing.expect(t, found)
 		testing.expect_value(t, hit, at)
 	}
 	// A point in a line with text is in that text, as before.
 	x, top, height, p, _ := caret_place(&f.page, {0, 0, 3})
-	hit, found := caret_hit(&f.page, x, f.page.parts[p].top + f64(top + height / 2))
+	hit, _, found := caret_hit(&f.page, x, f.page.parts[p].top + f64(top + height / 2))
 	testing.expect(t, found && hit.block == 0 && hit.byte >= 1 && hit.byte <= 6)
 }

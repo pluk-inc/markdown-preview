@@ -66,3 +66,39 @@ test_a_step_at_the_end_of_a_text_goes_to_the_text_beside_it :: proc(t: ^testing.
 	_, ok = step(&doc, {0, 0, 0}, .Character, false)
 	testing.expect(t, !ok)
 }
+
+@(test)
+test_a_step_does_not_end_in_bytes_that_are_no_text :: proc(t: ^testing.T) {
+	// A character that is cut, and bytes that start none: each step
+	// ends where a character can start, and the steps reach the two
+	// ends of the text.
+	text := transmute([]u8)string("a\xffb\xc3\n\xe2\x82z")
+	for forward in ([]bool{true, false}) {
+		at := forward ? 0 : len(text)
+		for _ in 0 ..< len(text) {
+			next := char_step(text, at, forward)
+			if next == at {
+				break
+			}
+			testing.expect(t, forward ? next > at : next < at)
+			testing.expect(t, next == len(text) || text[next] & 0xc0 != 0x80)
+			at = next
+		}
+		testing.expect_value(t, at, forward ? len(text) : 0)
+	}
+}
+
+@(test)
+test_the_ends_of_a_document_for_a_caret_are_of_each_text :: proc(t: ^testing.T) {
+	// A text with nothing in it is a place for a caret; a rule is not.
+	doc := parse("# \n\nz\n\n- \n\n---\n")
+	defer destroy(&doc)
+	first, last, ok := caret_ends(&doc)
+	testing.expect(t, ok)
+	testing.expect_value(t, first, Address{0, 0, 0})
+	testing.expect_value(t, last, Address{2, 0, 0})
+	rule := parse("---\n")
+	defer destroy(&rule)
+	_, _, ok = caret_ends(&rule)
+	testing.expect(t, !ok)
+}

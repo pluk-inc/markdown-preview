@@ -40,6 +40,7 @@ markdown-core/
 | Show | `layout` | makes the quads (the display list) of the part of the page around the scroll position only |
 | Draw | `renderer` | draws rectangles, then the selection, then one quad for each glyph |
 | Type | `document`, `mdcore.odin` | the caret of an editor is an offset in the source. The core finds where a piece of the text of a block is in the source, and back, by a parse of the lines around that block when it is asked for. A typed text goes into the source at the caret, as each other change does |
+| Move | `document`, `layout`, `mdcore.odin` | a key moves the caret by a character or a word (in the text of the document), by a line or to an end of one (in the layout), or to an end of the document. The caret then goes to the first place from there that the source has room for. With the selection, the caret is the end of it that moves |
 | Select | `document`, `layout` | a selection is two addresses in the document; Select All and the copied text read the document, with no layout. The layout finds the address at a point and makes the highlight on the lines that show |
 
 A package uses only the packages before it in the folder list, and `base`
@@ -102,6 +103,10 @@ that open, Find, the outline, print, export, and VoiceOver.
 
 Edit Mode has its first form: a click puts a caret in the text, and the
 reader types, deletes the character before the caret, starts a new
-paragraph with Return, pastes, and saves. It does not have the arrow
-keys, a selection that typing takes the place of, undo, the formatting
-bar, images that are pasted, or a caret in a table cell with no text.
+paragraph with Return, pastes, and saves. The arrow keys move the caret
+(with Option by a word, with Command to the ends of a line and of the
+document), and with Shift they select. It does not have a selection
+that typing takes the place of, undo, the formatting bar, images that
+are pasted, or a caret in a table cell with no text. Markdown marks do
+not show at the caret yet, so the caret has no place between a mark and
+its text.
