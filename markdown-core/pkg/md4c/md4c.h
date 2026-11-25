@@ -507,6 +507,18 @@ typedef struct MD_PARSER {
      * had no room for is text, not a link, and so is each use after it.
      */
     void (*ref_def_use)(MD_SIZE /*size*/, int /*accepted*/, void* /*userdata*/);
+
+    /* Not in upstream md4c (see README.md of this folder). Optional (may be
+     * NULL).
+     *
+     * Called for each mark of the inline syntax when the parser comes to
+     * it, with its range in the input: right before the enter_span() or
+     * leave_span() calls that the mark gives (one mark gives two for
+     * "***"), and also before a mark that gives none (a backslash escape, a
+     * line break). The mark that closes a link or an image has its
+     * destination and title: "](target)".
+     */
+    void (*mark_offset)(MD_OFFSET /*beg*/, MD_OFFSET /*end*/, void* /*userdata*/);
 } MD_PARSER;
 
 

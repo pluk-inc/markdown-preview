@@ -4904,6 +4904,10 @@ md_process_inlines(MD_CTX* ctx, const MD_LINE* lines, MD_SIZE n_lines)
 
         /* If reached the mark, process it and move to next one. */
         if(off >= mark->beg) {
+            /* (Not in upstream.) */
+            if(ctx->parser.mark_offset != NULL)
+                ctx->parser.mark_offset(mark->beg, mark->end, ctx->userdata);
+
             switch(mark->ch) {
                 case '\\':      /* Backslash escape. */
                     if(ISNEWLINE(mark->beg+1))

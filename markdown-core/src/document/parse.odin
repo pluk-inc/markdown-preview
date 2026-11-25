@@ -62,6 +62,13 @@ Parser :: struct {
 	// for a parse that makes a document only.
 	places:       ^[dynamic]Place,
 	places_block: int, // the number of that block in what is parsed
+	// And where the marks of its styles are (`Pair`), with the ones that
+	// have no end yet, and the mark that the parser is at: its range,
+	// and how much of it the spans so far took.
+	pairs:        ^[dynamic]Pair,
+	pairs_open:   [dynamic]int,
+	mark:         [2]int,
+	mark_at:      int,
 	bytes:        []u8, // what is parsed
 	after_nul:    bool, // the text before was the character for a NUL byte
 	// Table.
@@ -90,7 +97,7 @@ parse_owned :: proc(bytes: []u8) -> Document {
 // `end`, `followed`, and `followed_in_list`: see `count_empties`; with
 // none, the piece is all of a source.
 @(private)
-parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place = nil, places_block := 0, end := -1, followed := false, followed_in_list := false) -> Document {
+parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place = nil, places_block := 0, end := -1, followed := false, followed_in_list := false, pairs: ^[dynamic]Pair = nil) -> Document {
 	source := string(bytes)
 	doc: Document
 	p := Parser {
@@ -100,6 +107,7 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 		item_count   = items,
 		places       = places,
 		places_block = places_block,
+		pairs        = pairs,
 		bytes        = bytes,
 	}
 	md := Md_Parser {
@@ -112,12 +120,14 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 		block_offset = on_block_offset,
 		ref_def     = on_ref_def,
 		ref_def_use = on_ref_def_use,
+		mark_offset = pairs != nil ? on_mark_offset : nil,
 	}
 	// md4c takes a 32-bit size; a larger source is cut there.
 	size := c.uint(min(len(source), int(max(c.int))))
 	md_parse(raw_data(source), size, &md, &p)
 	close_text(&p)
 	delete(p.lists)
+	delete(p.pairs_open)
 	doc.source = bytes
 	doc.items = p.item_count
 	doc.links_parsed = len(doc.links)
@@ -481,6 +491,57 @@ on_ref_def_use :: proc "c" (size: c.uint, accepted: c.int, userdata: rawptr) {
 	}
 }
 
+// The two marks of a style of the text of a block in the source: the
+// ones that start and end bold text, code, a link ("[" and "](target)").
+// An edit that takes one of them out and not the other makes text of
+// the other one (`range_edit`).
+Pair :: struct {
+	open, open_end:   int,
+	close, close_end: int,
+	// Markdown reads the marks as marks only with no space on their
+	// inner side: bold, italic, and struck text.
+	tight:            bool,
+}
+
+@(private)
+on_mark_offset :: proc "c" (start, end: c.uint, userdata: rawptr) {
+	p := cast(^Parser)userdata
+	p.mark = {int(start), int(end)}
+	p.mark_at = int(start)
+}
+
+// The part of the mark that the parser is at that a span takes: one
+// mark is the start of two spans for "***".
+@(private)
+mark_part :: proc(p: ^Parser, type: Md_Span) -> (start, end: int) {
+	start = clamp(p.mark_at, p.mark[0], p.mark[1])
+	end = p.mark[1]
+	#partial switch type {
+	case .Em:
+		end = min(start + 1, end)
+	case .Strong:
+		end = min(start + 2, end)
+	}
+	p.mark_at = end
+	return
+}
+
+// Notes a mark of a span of the block that `block_map` asks for.
+@(private)
+note_mark :: proc(p: ^Parser, type: Md_Span, opens: bool) {
+	if p.pairs == nil || p.doc.count != p.places_block {
+		return
+	}
+	start, end := mark_part(p, type)
+	if opens {
+		append(&p.pairs_open, len(p.pairs))
+		append(p.pairs, Pair{start, end, -1, -1, type == .Em || type == .Strong || type == .Del})
+	} else if len(p.pairs_open) > 0 {
+		pair := &p.pairs[pop(&p.pairs_open)]
+		pair.close, pair.close_end = start, end
+	}
+}
+
 @(private)
 span_counter :: proc(p: ^Parser, type: Md_Span) -> ^int {
 	#partial switch type {
@@ -502,6 +563,7 @@ span_counter :: proc(p: ^Parser, type: Md_Span) -> ^int {
 enter_span :: proc "c" (type: Md_Span, detail: rawptr, userdata: rawptr) -> c.int {
 	p := cast(^Parser)userdata
 	context = p.ctx
+	note_mark(p, type, true)
 	if type == .A {
 		append(&p.doc.links, strings.clone(attribute((cast(^Md_A_Detail)detail).href)))
 		p.link = len(p.doc.links)
@@ -515,6 +577,7 @@ enter_span :: proc "c" (type: Md_Span, detail: rawptr, userdata: rawptr) -> c.in
 leave_span :: proc "c" (type: Md_Span, detail: rawptr, userdata: rawptr) -> c.int {
 	p := cast(^Parser)userdata
 	context = p.ctx
+	note_mark(p, type, false)
 	if type == .A {
 		p.link = 0
 	} else if counter := span_counter(p, type); counter != nil {
