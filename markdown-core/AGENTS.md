@@ -94,6 +94,12 @@ These came from the maintainer. Do not undo one without asking.
   editor only. What an editor needs to show (an empty line for the
   caret) is a thing of the document that the two modes show, or goes
   with the caret itself. Ask before a difference between the two.
+- **The bullet of a list item is a small circle in the color of the
+  text** (2026-11-25): a quarter of the size of the text across, a third
+  of it before the text, as the bullet of a text font is. Not the
+  circle of the web preview, which is larger and has the color of a
+  link; the maintainer saw that one in a test build and said no. The
+  numbers of a numbered list have the color of the text too.
 - **A reader at the end of the document is kept by the first line that
   shows, as at each other place** (2026-11-24). With a narrower window the
   end then goes out of view. Browsers and editors do the same; only a
@@ -513,6 +519,18 @@ Design, before the features that need it:
 - **Images and links**: the parser counts an image but drops its source,
   and a link's target is cloned but not used. md4c has no footnotes or
   alerts, so both need a pass in `parse.odin` over its output.
+- The bullet of a list item is a record of the box (`Decor`) and not a
+  character: the bullet of the system font is a fifth of the size of
+  the text, and each font has its own. It and the check box of a task
+  have their middle where a font has the middle of its bullet, a
+  little above the middle of the small letters (`marker_middle`); the
+  middle of the line box is near the middle of the capital letters and
+  looks too high. The bullet knows the line that its text stands on
+  (`Decor.baseline`) and is drawn from the whole pixel of that line
+  with a size in whole pixels (`mark_quad`): each edge to its own
+  pixel made it 8 or 9 pixels high and a pixel higher or lower beside
+  its text from line to line. Not done: the check box is a view of the
+  system that the host places in points, with no such rule.
 - The marker of a list item has its place from a switch on the block kind
   with each kind's padding repeated, and the first-line height of a block
   is written in two or three places for each kind.
@@ -1178,3 +1196,12 @@ export.
   display with a log of the caret: Return after a list item, a
   paragraph, and a heading; typing and delete in the new line; Return
   two times and delete in a list; up and down through the new lines.
+- **2026-11-25** — The bullet. The maintainer compared the list of a
+  test build with the reference editor: the bullet was small and gray
+  (the character of the system font), then too large and too far from
+  the text (the circle of the web preview), and one pixel higher in one
+  line than in the next. The sizes come from a measure of the bullet
+  character of two text fonts (0.24 of the size across, its middle 0.30
+  above the line of the text), and the pixel came from a measure of a
+  screenshot: after the change each bullet is 8 by 8 pixels and 11
+  above the bottom of its text, at each depth of a list.
