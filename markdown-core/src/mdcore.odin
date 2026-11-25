@@ -391,6 +391,9 @@ change_source_held :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil) 
 			ctx.caret -= 1
 		}
 		caret_changed(ctx)
+		// An edit ends the selection, at the caret: the ends that the
+		// change moved with the text are no place of the caret.
+		ctx.selection = {anchor = ctx.caret_at, focus = ctx.caret_at, active = true}
 	}
 	if ctx.layout_valid {
 		layout.restore_place(&ctx.page, ctx.place)
@@ -455,35 +458,58 @@ stop_delete :: proc(stop: Stop) {
 	}
 }
 
-// The stop of an address. False for an address that the source has no
-// room for (a table cell with no text).
+// The stop of an address, with a map that is of its block (`found.places`
+// from a look at an address of the same block before, or none). False
+// for an address that the source has no room for (a table cell with no
+// text); `found` then still has the map, for the next look.
 @(private)
-stop_at :: proc(ctx: ^Ctx, at: document.Address) -> (stop: Stop, ok: bool) {
-	stop.places = ctx.caret_places
-	if ctx.caret < 0 || at.block != ctx.caret_at.block {
-		stop.places, stop.made = document.block_map(&ctx.doc, at.block), true
+stop_look :: proc(ctx: ^Ctx, at: document.Address, held: Stop) -> (found: Stop, ok: bool) {
+	found = held
+	if found.places == nil {
+		found.places = ctx.caret_places
+		if ctx.caret < 0 || at.block != ctx.caret_at.block {
+			found.places, found.made = document.block_map(&ctx.doc, at.block), true
+		}
 	}
-	stop.offset, ok = document.place_of(&ctx.doc, stop.places[:], at)
+	found.offset, ok = document.place_of(&ctx.doc, found.places[:], at)
 	// The address that the caret gets from that offset can be another
 	// one (the two ends of one thing of the source), in the same block.
-	if ok && document.block_at_offset(&ctx.doc, stop.offset) == at.block {
-		stop.at = document.address_in(stop.places[:], at.block, stop.offset)
-		return stop, true
+	ok &&= document.block_at_offset(&ctx.doc, found.offset) == at.block
+	if ok {
+		found.at = document.address_in(found.places[:], at.block, found.offset)
 	}
-	stop_delete(stop)
-	return {}, false
+	return
+}
+
+// The stop of an address. False for an address that is none.
+@(private)
+stop_at :: proc(ctx: ^Ctx, at: document.Address) -> (stop: Stop, ok: bool) {
+	if stop, ok = stop_look(ctx, at, {}); !ok {
+		stop_delete(stop)
+		return {}, false
+	}
+	return
 }
 
 // The stop at an address, or the first one from there in reading order
-// or against it. False when the rest of the document has none.
+// or against it. False when the rest of the document has none. The map
+// of a block is made one time for all of its addresses.
 @(private)
 stop_from :: proc(ctx: ^Ctx, at: document.Address, forward: bool) -> (stop: Stop, ok: bool) {
 	at := at
 	for {
-		if stop, ok = stop_at(ctx, at); ok {
+		if stop, ok = stop_look(ctx, at, stop); ok {
 			return
 		}
-		at = document.step(&ctx.doc, at, .Character, forward) or_return
+		next, more := document.step(&ctx.doc, at, .Character, forward)
+		if !more || next.block != at.block {
+			stop_delete(stop)
+			stop = {}
+		}
+		if !more {
+			return {}, false
+		}
+		at = next
 	}
 }
 
@@ -568,8 +594,8 @@ mdcore_caret_move :: proc "c" (handle: rawptr, move: Move, extend: bool) -> bool
 	// selected and no `extend`, the move starts at the end of the
 	// selection that is in its direction, and a step of one character
 	// goes no farther than that.
-	anchor := ctx.selection.active ? ctx.selection.anchor : ctx.caret_at
 	at, upstream := ctx.caret_at, ctx.caret_upstream
+	anchor := ctx.selection.active && ctx.selection.focus == at ? ctx.selection.anchor : at
 	collapse := !extend && anchor != at
 	if collapse {
 		first, last, _ := document.selection_range({active = true, anchor = anchor, focus = at})
@@ -579,22 +605,34 @@ mdcore_caret_move :: proc "c" (handle: rawptr, move: Move, extend: bool) -> bool
 		}
 		if move == .Left || move == .Right {
 			if stop, ok := stop_from(ctx, at, move == .Right); ok {
-				set_caret(ctx, stop, false, stop.at)
+				set_caret(ctx, stop, upstream && stop.at == at, stop.at)
 				return true
 			}
 		}
 	}
 	move := move
 	goal: f32
-	if move in MOVES_VERTICAL && ctx.layout_valid {
-		// The lines around the caret have their records: a line with
-		// none is no line that the caret can go to.
-		if x, y, _, placed := layout.caret_y(&ctx.page, at, upstream); placed {
-			goal = ctx.caret_goal.? or_else x
-			reach := f64(ctx.height)
-			if !layout.laid_out(&ctx.page, y - reach, y + reach) && layout.lay_out(&ctx.page, y - reach, y + reach, y) {
+	if move in MOVES_VERTICAL {
+		// The line of the caret and the lines around it have their
+		// records: a line with none is no line that the caret can go
+		// to, and is not the end of the document.
+		if !ctx.layout_valid {
+			return false
+		}
+		x, y, _, placed := layout.caret_y(&ctx.page, at, upstream)
+		if !placed {
+			if layout.lay_out_block(&ctx.page, at.block) {
 				layout_changed(ctx)
 			}
+			x, y, _, placed = layout.caret_y(&ctx.page, at, upstream)
+			if !placed {
+				return false
+			}
+		}
+		goal = ctx.caret_goal.? or_else x
+		reach := f64(ctx.height)
+		if !layout.laid_out(&ctx.page, y - reach, y + reach) && layout.lay_out(&ctx.page, y - reach, y + reach, y) {
+			layout_changed(ctx)
 		}
 	}
 	keep_goal := move in MOVES_VERTICAL
@@ -607,21 +645,33 @@ mdcore_caret_move :: proc "c" (handle: rawptr, move: Move, extend: bool) -> bool
 	}
 	// Some addresses are no place for a caret (a table cell with no
 	// text), and some are one place of the source: the caret goes to
-	// the first stop on from where the move went to, and a step to the
-	// left or to the right goes on until the caret is at another stop.
+	// the first stop on from where the move went to (back into the
+	// text from its end), and a step to the left or to the right goes
+	// on until the caret is at another stop. A step of a word goes on
+	// by words.
+	forward := move in MOVES_FORWARD
+	words := move == .Word_Left || move == .Word_Right
+	on_from_there := bit_set[Move]{.Right, .Word_Right, .Down, .Document_Start, .Line_Start, .Paragraph_Start}
 	for found {
-		forward := move in MOVES_FORWARD
-		stop := stop_from(ctx, next, forward || move == .Down || move == .Document_Start) or_break
-		// The side is of the address that the move went to.
-		next_upstream &&= stop.at == next
-		moved: bool
-		switch {
-		case move in MOVES_VERTICAL:
-			moved = stop.at != at || next_upstream != upstream
-		case forward:
-			moved = document.before(at, stop.at)
-		case:
-			moved = document.before(stop.at, at)
+		stop: Stop
+		placed: bool
+		if words {
+			stop, placed = stop_at(ctx, next)
+		} else {
+			stop, placed = stop_from(ctx, next, move in on_from_there)
+		}
+		moved := false
+		if placed {
+			// The side is of the address that the move went to.
+			next_upstream &&= stop.at == next
+			switch {
+			case move in MOVES_VERTICAL:
+				moved = stop.at != at || next_upstream != upstream
+			case forward:
+				moved = document.before(at, stop.at)
+			case:
+				moved = document.before(stop.at, at)
+			}
 		}
 		if moved {
 			set_caret(ctx, stop, next_upstream, extend ? anchor : stop.at)
@@ -630,7 +680,9 @@ mdcore_caret_move :: proc "c" (handle: rawptr, move: Move, extend: bool) -> bool
 			}
 			return true
 		}
-		stop_delete(stop)
+		if placed {
+			stop_delete(stop)
+		}
 		#partial switch move {
 		case .Left, .Right, .Word_Left, .Word_Right:
 			next, next_upstream, found = move_from(ctx, next, false, move, goal)
@@ -641,8 +693,8 @@ mdcore_caret_move :: proc "c" (handle: rawptr, move: Move, extend: bool) -> bool
 	if collapse {
 		// The caret is at an end of the document already: the selection
 		// ends all the same, at its end in the direction of the move.
-		if stop, ok := stop_from(ctx, at, move in MOVES_FORWARD); ok {
-			set_caret(ctx, stop, false, stop.at)
+		if stop, ok := stop_from(ctx, at, forward); ok {
+			set_caret(ctx, stop, upstream && stop.at == at, stop.at)
 			return true
 		}
 	}
@@ -666,9 +718,21 @@ mdcore_caret_set :: proc "c" (handle: rawptr, x, y: f64) -> bool {
 		ctx.display_valid = false
 		return true
 	}
-	at, upstream := layout.caret_hit(&ctx.page, f32(x), y) or_return
 	// Not at text that has no place in the source for text to go to.
-	stop := stop_at(ctx, at) or_return
+	// The caret then stays, and so does the selection at it: the click
+	// (`mdcore_mouse`) put the selection at the text of the point.
+	stop: Stop
+	at, upstream, placed := layout.caret_hit(&ctx.page, f32(x), y)
+	if placed {
+		stop, placed = stop_at(ctx, at)
+	}
+	if !placed {
+		if ctx.caret >= 0 {
+			ctx.selection = {anchor = ctx.caret_at, focus = ctx.caret_at, active = true}
+			show_selection(ctx)
+		}
+		return false
+	}
 	// The selection is empty and at the caret, which can be beside the
 	// point (at an end of an entity that is one thing): a drag from here
 	// selects from this place (`mdcore_mouse`).
@@ -1065,10 +1129,13 @@ mdcore_mouse :: proc "c" (handle: rawptr, x, y: f64, phase: c.int) {
 		if !hit {
 			return
 		}
-		if stop, placed := stop_at(ctx, pos); placed && (stop.at != ctx.caret_at || !ctx.selection.active) {
-			set_caret(ctx, stop, upstream && stop.at == pos, ctx.selection.active ? ctx.selection.anchor : stop.at)
-		} else if placed {
-			stop_delete(stop)
+		if stop, placed := stop_at(ctx, pos); placed {
+			upstream &&= stop.at == pos
+			if stop.at != ctx.caret_at || upstream != ctx.caret_upstream || !ctx.selection.active {
+				set_caret(ctx, stop, upstream, ctx.selection.active ? ctx.selection.anchor : stop.at)
+			} else {
+				stop_delete(stop)
+			}
 		}
 		return
 	}

@@ -105,19 +105,20 @@ static const char *caret_walk(void *ctx, long length) {
     }
     double x = 0, y = 0, line = 0, height = 0;
     if (!mdcore_caret_rect(ctx, &x, &y, &height)) return "no place for the caret at the start";
+    // The last press in the last line goes to the end of the document,
+    // in that line; each press before it is a line lower.
     for (steps = 0; mdcore_caret_move(ctx, MDCORE_MOVE_DOWN, false);) {
-        if (mdcore_caret_offset(ctx) == last) break;
-        if (!mdcore_caret_rect(ctx, &x, &line, &height) || line <= y || ++steps > length) return "a line down that is not lower";
+        if (!mdcore_caret_rect(ctx, &x, &line, &height) || line < y || ++steps > length) return "a line down that is higher";
+        if (line == y && mdcore_caret_offset(ctx) != last) return "a line down that is not lower";
         y = line;
     }
-    if (mdcore_caret_offset(ctx) != last && !mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_END, false)) return "the lines down do not get to the last line";
-    mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_END, false);
-    if (!mdcore_caret_rect(ctx, &x, &y, &height)) return "no place for the caret at the end";
+    if (mdcore_caret_offset(ctx) != last) return "the lines down do not end at the end of the document";
     for (steps = 0; mdcore_caret_move(ctx, MDCORE_MOVE_UP, false);) {
-        if (mdcore_caret_offset(ctx) == first) break;
-        if (!mdcore_caret_rect(ctx, &x, &line, &height) || line >= y || ++steps > length) return "a line up that is not higher";
+        if (!mdcore_caret_rect(ctx, &x, &line, &height) || line > y || ++steps > length) return "a line up that is lower";
+        if (line == y && mdcore_caret_offset(ctx) != first) return "a line up that is not higher";
         y = line;
     }
+    if (mdcore_caret_offset(ctx) != first) return "the lines up do not end at the start of the document";
     // Select All puts the caret at the end, so a step with the selection
     // makes it shorter, and one with none goes to its end.
     mdcore_select_all(ctx);
@@ -127,6 +128,15 @@ static const char *caret_walk(void *ctx, long length) {
     if (!mdcore_caret_move(ctx, MDCORE_MOVE_RIGHT, false) || mdcore_has_selection(ctx) || mdcore_caret_offset(ctx) != selected_end) {
         return "Select All and a step to the right";
     }
+    // A typed character ends the selection at the caret: a step back
+    // with the selection selects that character and no more.
+    mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false);
+    mdcore_caret_move(ctx, MDCORE_MOVE_RIGHT, false);
+    mdcore_insert(ctx, "q", 1);
+    long selected = 0;
+    if (!mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, true)) return "a step with the selection after a typed character";
+    const char *text = mdcore_selection_text(ctx, &selected);
+    if (selected != 1 || text[0] != 'q') return "the selection after a typed character does not start at the caret";
     return NULL;
 }
 

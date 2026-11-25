@@ -1,5 +1,6 @@
 package document
 
+import "core:strings"
 import "core:testing"
 
 @(test)
@@ -101,4 +102,32 @@ test_the_ends_of_a_document_for_a_caret_are_of_each_text :: proc(t: ^testing.T) 
 	defer destroy(&rule)
 	_, _, ok = caret_ends(&rule)
 	testing.expect(t, !ok)
+}
+
+@(test)
+test_a_sign_that_goes_before_a_digit_is_one_character_with_it :: proc(t: ^testing.T) {
+	// An Arabic number sign takes the digit after it: an ASCII byte is
+	// not the start of a character each time.
+	text := transmute([]u8)string("\u06001x")
+	testing.expect_value(t, char_step(text, 3, false), 0)
+	testing.expect_value(t, char_step(text, 0, true), 3)
+	testing.expect_value(t, char_step(text, 4, false), 3)
+}
+
+@(test)
+test_a_step_of_a_word_reads_a_long_line_one_time :: proc(t: ^testing.T) {
+	// A word of 20,000 letters with an accent, and a second word: the
+	// steps are the two ends of each, in a time that a key can take.
+	b := strings.builder_make()
+	defer strings.builder_destroy(&b)
+	for _ in 0 ..< 20000 {
+		strings.write_string(&b, "\u00e9")
+	}
+	strings.write_string(&b, " two")
+	text := transmute([]u8)strings.to_string(b)
+	testing.expect_value(t, word_step(text, 0, true), 40000)
+	testing.expect_value(t, word_step(text, 40000, true), 40004)
+	testing.expect_value(t, word_step(text, 40004, false), 40001)
+	testing.expect_value(t, word_step(text, 40001, false), 0)
+	testing.expect_value(t, word_step(text, 20000, false), 0)
 }

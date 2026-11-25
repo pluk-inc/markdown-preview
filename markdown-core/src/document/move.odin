@@ -23,47 +23,59 @@ char_step :: proc(text: []u8, at: int, forward: bool) -> int {
 	if forward ? at >= len(text) : at <= 0 {
 		return at
 	}
-	// An ASCII character starts a character, and is all of it when no
-	// mark comes after it: most steps read two bytes. A line break is
-	// such a character.
+	// A character of ASCII between two others of ASCII is a character of
+	// its own: no mark goes on it from behind, and nothing before it
+	// takes it in. Most steps read three bytes. A line break is such a
+	// character each time.
 	if forward {
 		if text[at] == '\n' || (text[at] < 0x80 && (at + 1 == len(text) || text[at + 1] < 0x80)) {
 			return at + 1
 		}
-	} else if text[at - 1] < 0x80 {
+	} else if text[at - 1] == '\n' || (text[at - 1] < 0x80 && (at == 1 || text[at - 2] < 0x80) && (at == len(text) || text[at] < 0x80)) {
 		return at - 1
 	}
-	// No character goes over a line break, and one starts at each ASCII
-	// byte: the characters are read from the last such place before the
-	// byte, to the end of the line.
-	start := at
-	for start > 0 && text[start - 1] != '\n' {
-		start -= 1
-		if text[start] < 0x80 {
-			break
+	bounds := line_characters(text, at)
+	defer delete(bounds)
+	to := at
+	if forward {
+		for bound in bounds {
+			if bound > at {
+				to = bound
+				break
+			}
 		}
-	}
-	end := paragraph_end(text, at, true)
-	it := utf8.decode_grapheme_iterator_make(string(text[start:end]))
-	next, before := end, start
-	for _, grapheme in utf8.decode_grapheme_iterate(&it) {
-		first := start + grapheme.byte_index
-		if first > at {
-			next = first
-			break
+	} else {
+		#reverse for bound in bounds {
+			if bound < at {
+				to = bound
+				break
+			}
 		}
-		if first < at {
-			before = first
-		}
-	}
-	// Bytes that are no UTF-8 are one character each for the reader of
-	// characters; a step does not end in the middle of what the source
-	// has as one run of them.
-	to := forward ? next : before
-	for to > 0 && to < len(text) && text[to] & 0xc0 == 0x80 {
-		to += forward ? 1 : -1
 	}
 	return to
+}
+
+// Where each character of the line of a byte starts, and the end of
+// the line: no character goes over a line break. Bytes that are no
+// UTF-8 are one character for each run of them that the reader of
+// characters cuts, so no start is in the middle of what a source has
+// as a cut character. The caller deletes the result.
+@(private = "file")
+line_characters :: proc(text: []u8, at: int) -> (bounds: [dynamic]int) {
+	start, end := paragraph_end(text, at, false), paragraph_end(text, at, true)
+	// At the start of the line for a byte that is the line break.
+	if at > 0 && at == start && at == end {
+		start = paragraph_end(text, at - 1, false)
+	}
+	it := utf8.decode_grapheme_iterator_make(string(text[start:end]))
+	for _, grapheme in utf8.decode_grapheme_iterate(&it) {
+		first := start + grapheme.byte_index
+		if first == start || first >= len(text) || text[first] & 0xc0 != 0x80 {
+			append(&bounds, first)
+		}
+	}
+	append(&bounds, end)
+	return
 }
 
 // True for a character that is a part of a word: one that starts with a letter, a
@@ -75,31 +87,50 @@ in_word :: proc(text: []u8, at: int) -> bool {
 }
 
 // The end of the word at a byte of a text or after it, or the start of
-// the word at the byte or before it.
+// the word at the byte or before it. The characters of a line are read
+// one time for a step in it.
 word_step :: proc(text: []u8, at: int, forward: bool) -> int {
 	at := clamp(at, 0, len(text))
-	if forward {
-		for at < len(text) && !in_word(text, at) {
-			at = char_step(text, at, true)
+	for forward ? at < len(text) : at > 0 {
+		// Over a line break, which is in no word.
+		if text[forward ? at : at - 1] == '\n' {
+			at += forward ? 1 : -1
+			continue
 		}
-		for at < len(text) && in_word(text, at) {
-			at = char_step(text, at, true)
+		bounds := line_characters(text, forward ? at : at - 1)
+		defer delete(bounds)
+		last := len(bounds) - 1
+		if forward {
+			i := 0
+			for i < last && bounds[i] < at {
+				i += 1
+			}
+			for i < last && !in_word(text, bounds[i]) {
+				i += 1
+			}
+			if i < last {
+				for i < last && in_word(text, bounds[i]) {
+					i += 1
+				}
+				return bounds[i]
+			}
+			at = bounds[last]
+		} else {
+			i := last
+			for i > 0 && bounds[i] > at {
+				i -= 1
+			}
+			for i > 0 && !in_word(text, bounds[i - 1]) {
+				i -= 1
+			}
+			if i > 0 {
+				for i > 0 && in_word(text, bounds[i - 1]) {
+					i -= 1
+				}
+				return bounds[i]
+			}
+			at = bounds[0]
 		}
-		return at
-	}
-	for at > 0 {
-		before := char_step(text, at, false)
-		if in_word(text, before) {
-			break
-		}
-		at = before
-	}
-	for at > 0 {
-		before := char_step(text, at, false)
-		if !in_word(text, before) {
-			break
-		}
-		at = before
 	}
 	return at
 }
