@@ -497,6 +497,25 @@ char_before :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end
 	return
 }
 
+// The range of the source of a character that is the bytes `from` to
+// `to` of the text of an address: from the start of its first code
+// point to the end of its last one (a letter with a mark of its own, an
+// emoji of some parts). False when the source has more between the two
+// than the text has (a mark, an entity).
+char_source :: proc(doc: ^Document, places: []Place, at: Address, from, to: int) -> (start, end: int, ok: bool) {
+	texts := block_texts(block_at(doc, at.block))
+	if at.cell >= len(texts) || from < 0 || to > len(texts[at.cell].bytes) || from >= to {
+		return
+	}
+	_, size := utf8.decode_rune(texts[at.cell].bytes[from:to])
+	at := at
+	at.byte = from + size
+	start, _ = char_before(doc, places, at) or_return
+	at.byte = to
+	_, end = char_before(doc, places, at) or_return
+	return start, end, end - start == to - from
+}
+
 // The address in the text of a block that an offset of the source is at:
 // in the text that is in the source there, or at the end of the text
 // before it when the offset is in marks or between blocks.

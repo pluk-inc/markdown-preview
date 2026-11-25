@@ -191,3 +191,20 @@ test_a_character_of_a_mark_over_two_lines_is_its_bytes :: proc(t: ^testing.T) {
 	testing.expect(t, ok)
 	testing.expect_value(t, string(doc.source[first:last]), "/")
 }
+
+@(test)
+test_the_source_of_a_character_of_some_code_points :: proc(t: ^testing.T) {
+	// A letter with a mark of its own, and an emoji of three parts.
+	for source in ([]string{"aéb\n", "a\U0001F469‍\U0001F4BBb\n"}) {
+		doc := parse(source)
+		defer destroy(&doc)
+		places := block_map(&doc, 0)
+		defer delete(places)
+		text := block_at(&doc, 0).text.bytes[:]
+		to := char_step(text, 1, true)
+		first, last, ok := char_source(&doc, places[:], {block = 0}, 1, to)
+		testing.expect(t, ok)
+		testing.expect_value(t, first, 1)
+		testing.expect_value(t, last, len(source) - 2)
+	}
+}

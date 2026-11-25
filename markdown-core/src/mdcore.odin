@@ -1318,8 +1318,16 @@ delete_to :: proc(ctx: ^Ctx, move: Move) -> bool {
 	// over two lines are a line break and the mark of a quote, which
 	// are no part of the character on either side.
 	if now := ctx.caret_at; (move == .Left || move == .Right) && was.block == now.block && was.cell == now.cell && was.empty == 0 && now.empty == 0 && was.spaces == 0 && now.spaces == 0 {
-		later := move == .Left ? was : now
-		if first, last, found := document.char_before(&ctx.doc, ctx.caret_places[:], later); found && first >= from && last <= to && first < last {
+		earlier, later := move == .Left ? now : was, move == .Left ? was : now
+		// All of the character: a letter with a mark of its own is some
+		// code points, and one step. A thing that the source has in
+		// another form (an entity) is one piece, which goes as a whole.
+		first, last, found := document.char_source(&ctx.doc, ctx.caret_places[:], later, earlier.byte, later.byte)
+		if !found {
+			first, last, found = document.char_before(&ctx.doc, ctx.caret_places[:], later)
+			found &&= later.byte - earlier.byte <= 4
+		}
+		if found && first >= from && last <= to && first < last {
 			from, to = first, last
 		}
 	}
