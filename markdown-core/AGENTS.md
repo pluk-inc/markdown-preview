@@ -144,6 +144,18 @@ These came from the maintainer. Do not undo one without asking.
   that changes the source holds `source_lock` from its edit to its end,
   so an edit is of the source that is there; the parse runs with only
   that lock, which no frame takes.
+- A change of the document has two forms, and the layout has one way
+  for each (`layout.apply_change`). When the range of the change has
+  as many blocks as before, each new block is at the place in memory
+  of the block before it, no part is made again, and the layout makes
+  only the records of those blocks again: it takes them out of the
+  part, lays the blocks out, and moves the records below by what the
+  new text is higher (`remake_blocks`). When the number of blocks is
+  another one, the parts of the range are made again and have no
+  records. The records of a box are next to each other in each array
+  (lines, decorations, paragraphs), and a box has its range of each;
+  a new kind of record needs its range in `Box` too, or it cannot be
+  taken out for one block.
 - An edit parses a piece of the source, not all of it (`document.prepare`,
   then `commit`). The result must be the document that a parse of all of
   the new source gives, each time; the tests compare the two for each
@@ -198,7 +210,9 @@ These came from the maintainer. Do not undo one without asking.
   change. Code that
   holds an address through a change takes its new one from
   `document.moved` (an address in the blocks that changed goes to the
-  start of them). The parse of the new text runs before the core takes
+  start of them; in one block that got other text, an address in the
+  text that is the same before the change or after it stays in that
+  text). The parse of the new text runs before the core takes
   its lock, and what is left of the two texts is freed after it. What a block says that a layout does not read (the
   line of a task, the number of a link) is not part of "the same".
 - The core keeps the reader's place: the first line that the view shows
@@ -560,9 +574,9 @@ what is there and what is next:
    of the document from the start, with an estimated height while it has
    no records; a layout that is made where the view is (`lay_out`), with
    the top of the page as the thing that moves when a part above the view
-   gets its real height. Not done: a part whose text changed (it needs
-   its records made again, which `advance` can do, and its state set
-   back).
+   gets its real height; a block that got other text at its place
+   gets its records again and the other blocks of the part keep theirs.
+   Not done: the same for a block that comes in or goes out.
 4. **How a change comes in.** Done: one entry for the text of the
    document (`mdcore_set_markdown`, `document.replace`). It compares the
    blocks of the old and the new text, keeps the ones that are the same
@@ -601,9 +615,29 @@ The order of the next steps, from the review of the second step:
 - Done: an edit parses only the blocks around it, and the offsets of
   the blocks count from their part. A typed character in 1 MB: the
   parse side is 0.5 ms (10 ms before).
-- Next: a layout that makes only the changed block again. It is what is
-  left of a key: 3 to 4 ms when the view shows the part of the change.
-- Then: an identity of a block that stays through a change (2).
+- Done: an edit that leaves the number of blocks (a key in a block)
+  changes the blocks at their place in memory, and the layout makes
+  only their records again (`remake_blocks`). A typed character in
+  9 KB: 1.3 ms (5 ms before).
+- Not done: an edit that makes a block more or a block fewer (Enter in
+  a paragraph, a paragraph joined with the next one) still makes the
+  part of the change again, in the document and in the layout: 3 to
+  4 ms when the view shows it. For it, the blocks below the change
+  must move in their part and the records must follow; the layout has
+  the address of a text (`Para.src`), which is then another one.
+- The records below a changed block move by the difference of two
+  heights, and a new layout adds the heights in another order. The two
+  can be a last bit of a 32-bit number apart, and that adds up over
+  many keys in one part, until the part is laid out again. Far below a
+  pixel; the tests compare with 0.01 points.
+- One procedure for each change in a part (take the records of some
+  blocks out, put the ones of other blocks in, move the numbers of the
+  blocks below) would do the two forms of a change that are there now,
+  and the document would make parts again only when a part is full.
+- Next: an identity of a block that stays through a change (2).
+- What is left of a key that the view shows is the frame: about 1 ms,
+  most of it the quads of the view, which are all made again after
+  each change of the layout.
 - The source is one piece of memory, and each edit makes a copy of it
   with the change (about 0.2 ms for 1 MB, the largest part of what is
   left of the parse side). A store of the text that an edit changes in
@@ -858,3 +892,13 @@ export.
   of the parser for uses of definitions); each is a rule and a test
   now. A typed character in the middle of 1.1 MB: 1.5 ms of CPU (10.4
   before).
+- **2026-11-24** — Ninth step of the base: a key makes the records of
+  one block again, not of its part. An edit that leaves the number of
+  blocks changes them at their place in memory; the layout takes the
+  records of those blocks out of the part, lays the blocks out, and
+  moves what is below by the height that changed. An address in a
+  block that a key changed (the reader's place, an end of the
+  selection) stays in its text when the key was after it, and moves
+  with its text when the key was before it. A typed character
+  that the view shows: 1.3 ms of CPU in 9 KB (5.0 before), 3.1 ms at
+  the end of 1.1 MB (6.1 before).

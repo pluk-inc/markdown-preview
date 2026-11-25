@@ -40,17 +40,25 @@ check :: proc(l: ^Layout) -> string {
 			return "the records of a part are not in its own memory"
 		}
 		bottom: f32
-		lines, decor := 0, 0
+		lines, decor, paras := 0, 0, 0
 		for box in part.boxes {
 			if box.top < bottom || box.bottom < box.top {
 				return "the boxes of a part do not go down the page"
 			}
-			if box.line_first != lines || box.line_end < lines || box.decor_first != decor || box.decor_end < decor {
+			if box.line_first != lines || box.line_end < lines || box.decor_first != decor || box.decor_end < decor || box.para_first != paras || box.para_end < paras {
 				return "the records of a box do not come after the ones of the box before it"
 			}
-			bottom, lines, decor = box.bottom, box.line_end, box.decor_end
+			if box.line_end > len(part.lines) || box.decor_end > len(part.decor) || box.para_end > len(part.paras) {
+				return "a box has records that its part does not have"
+			}
+			for line in part.lines[box.line_first:box.line_end] {
+				if line.para < box.para_first || line.para >= box.para_end {
+					return "a line of a paragraph of another box"
+				}
+			}
+			bottom, lines, decor, paras = box.bottom, box.line_end, box.decor_end, box.para_end
 		}
-		if lines != len(part.lines) || decor != len(part.decor) {
+		if lines != len(part.lines) || decor != len(part.decor) || paras != len(part.paras) {
 			return "a part has records that are in no box"
 		}
 		if len(part.boxes) > 0 && y != bottom {

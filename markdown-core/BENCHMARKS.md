@@ -69,6 +69,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-24 | the document keeps its source; each block knows its lines of it | 558 / 576 | 61 / 107 | 470 / 700 | 59 / 69 | none | 0.45 / 0.39 | 7.0 / 25.3 (16.2 at the first frame) |
 | 2026-11-24 | a change of the source as a range and a text | 574 / 582 | 62 / 108 | 465 / 705 | 59 / 71 | none | 0.43 / 0.37 | 7.0 / 25.4 (16.2 at the first frame) |
 | 2026-11-24 | an edit parses only the blocks around it | 577 / 599 | 62 / 107 | 460 / 700 | 60 / 74 | none | 0.47 / 0.42 | 7.0 / 25.3 (16.1 at the first frame) |
+| 2026-11-24 | a key lays out its block again, not its part | 558 / 560 | 62 / 108 (see the section) | 450 / 695 | 60 / 70 | none | 0.50 / 0.42 | 7.2 / 25.5 (16.1 at the first frame) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -647,3 +648,57 @@ from its commit on the same day:
 | base | 568 / 594 | 62 / 109 | 460 / 710 |
 
 The app is the same at launch: no part of it types into the core yet.
+
+## A key lays out its block, not its part (2026-11-24)
+
+An edit that leaves the number of blocks (each key in a block) changes
+the block at its place, and the layout makes only its records again.
+`core.py`, short / long, the base (the parse of only what changed) and
+the change:
+
+| | Base | Change |
+| --- | --- | --- |
+| A typed character in the middle of the text (CPU ms) | 4.9 / 1.5 | 1.3 / 1.4 |
+| A typed character at the end of the text (CPU ms) | 4.8 / 6.1 | 1.3 / 3.1 |
+| A change of the text in its middle, the full text given (ms) | 8.6 / 8.9 | 8.4 / 8.8 |
+| First frame (ms) | 59 / 70 | 60 / 70 |
+| Heap at the first frame (MB) | 5.3 / 16.1 | 5.3 / 16.1 |
+
+The short document is all near the view, so each key in it paid for the
+layout of a full part (up to 58 blocks); now it pays for one block. In
+the long document the middle is not near the view at the end, so that
+number had no layout in it and did not change.
+
+Where the time of a key goes now, from a timer in the core (not in
+`core.py`). Short document: 0.07 ms to make the edit ready, 0.01 ms to
+put the block in, 0.1 to 0.25 ms for the layout of the block and the
+reader's place, and about 1 ms for the frame after it. Long document,
+at the end: 2.5 ms to make the edit ready, 0.01 ms, 0.3 ms, and the
+frame. The 2.5 ms are the parse of a piece that has all 3,200
+definitions of links of the document with it: the benchmark document
+has each of its 25 definitions 128 times, and the piece at its end has
+the last of those definitions in it, with their names. Which rule
+makes each definition count there was not looked at. A document has a
+definition one time, as a rule.
+
+What is left of a key that the view shows is the frame after it, about
+1 ms. The step that puts a paragraph in the middle (one block more)
+did not change: a change of the number of blocks still makes its part
+again.
+
+`app.py`, short / long, five launches for each number, the base built
+from its commit on the same day:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 552 / 565 | 155 / 201 | 460 / 700 |
+| change | 565 / 557 | 155 / 200 | 450 / 690 |
+| change | 551 / 563 | 155 / 108 | 450 / 700 |
+| base | 583 / 644 | 62 / 107 | 500 / 760 |
+
+Launch and CPU are the same. The memory numbers of the first five
+documents are 93 MB over the usual ones, for the base and for the
+change, and the last three are the usual ones (62 and 107 MB): the same
+jump as in one run of "A change as a range of the source", again not
+from a build. The reason is still not known. One built-in display was
+on; no other display was there when it was looked at after the run.

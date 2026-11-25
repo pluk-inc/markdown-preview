@@ -83,6 +83,7 @@ Box :: struct {
 	top, bottom:             f32,
 	line_first, line_end:    int,
 	decor_first, decor_end:  int,
+	para_first, para_end:    int,
 }
 
 // The records of the blocks of one part of the document
@@ -155,6 +156,9 @@ Layout :: struct {
 	// it are of that part, and of its block in progress.
 	open:           int,
 	work:           Work,
+	// Room for the records below a change, while the changed blocks are
+	// laid out (`remake_blocks`). Empty at each other time.
+	below:          Work,
 	code_offset:    int,
 	in_block:       bool,
 	y:              f32, // from the top of the open part
@@ -204,14 +208,31 @@ part_new :: proc(l: ^Layout, part: int) -> Part {
 	return {height = start + rest, y = start, rest = rest}
 }
 
-// After a change of the document (`document.replace`): the parts that
+// After a change of the document (`document.commit`): the parts that
 // were made again get parts with no records and an estimated height. The
 // records of each other part stay, also of the parts below the change,
-// which are at another height of the page after it. The top of the page
+// which are at another height of the page after it. A change that made
+// no part again (as many blocks as before) makes only the records of its
+// blocks again (`remake_blocks`). The top of the page
 // stays; the owner puts the reader's place back after it
 // (`restore_place`).
 apply_change :: proc(l: ^Layout, change: document.Change) {
 	if change.parts_removed == 0 && change.parts_added == 0 {
+		// The blocks of the range are at the places of the blocks
+		// before: only their records are made again.
+		for block := change.first; block < change.first + change.added; {
+			p, slot := document.locate(l.doc, block)
+			count := min(change.first + change.added - block, l.doc.parts[p].count - slot)
+			remake_blocks(l, p, slot, count)
+			block += count
+		}
+		if change.added > 0 {
+			sum_tops(l)
+			when ODIN_DEBUG {
+				problem := check(l)
+				assert(problem == "", problem)
+			}
+		}
 		return
 	}
 	// The numbers of the parts are other ones after it.
@@ -331,13 +352,22 @@ open_for_work :: proc(l: ^Layout, index: int) {
 }
 
 @(private)
-work_delete :: proc(l: ^Layout) {
-	delete(l.work.paras)
-	delete(l.work.lines)
-	delete(l.work.decor)
-	delete(l.work.boxes)
-	delete(l.work.tasks)
-	l.work = {}
+work_delete :: proc(work: ^Work) {
+	delete(work.paras)
+	delete(work.lines)
+	delete(work.decor)
+	delete(work.boxes)
+	delete(work.tasks)
+	work^ = {}
+}
+
+@(private)
+work_clear :: proc(work: ^Work) {
+	clear(&work.paras)
+	clear(&work.lines)
+	clear(&work.decor)
+	clear(&work.boxes)
+	clear(&work.tasks)
 }
 
 @(private)
@@ -359,11 +389,7 @@ reset :: proc(l: ^Layout) {
 		part_destroy(&part)
 	}
 	clear(&l.parts)
-	clear(&l.work.paras)
-	clear(&l.work.lines)
-	clear(&l.work.decor)
-	clear(&l.work.boxes)
-	clear(&l.work.tasks)
+	work_clear(&l.work)
 	l.open = -1
 	l.content_height = 0
 }
@@ -375,7 +401,8 @@ destroy :: proc(l: ^Layout) {
 	}
 	delete(l.fonts)
 	delete(l.parts)
-	work_delete(l)
+	work_delete(&l.work)
+	work_delete(&l.below)
 	l^ = {}
 }
 
@@ -788,7 +815,7 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 			part := open_part(l)
 			part.block_rest = estimate_block(l, b, index == 0 && slot == 0)
 			part.rest -= part.block_rest
-			append(&work.boxes, Box{top = l.y, bottom = l.y, line_first = len(work.lines), decor_first = len(work.decor)})
+			append(&work.boxes, Box{top = l.y, bottom = l.y, line_first = len(work.lines), decor_first = len(work.decor), para_first = len(work.paras)})
 			l.in_block = true
 			l.code_offset = 0
 			// The marker of a list item stands at the first line of its
@@ -854,6 +881,7 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 		box.bottom = l.y
 		box.line_end = len(work.lines)
 		box.decor_end = len(work.decor)
+		box.para_end = len(work.paras)
 		show_work(l)
 		part := open_part(l)
 		// The new lines keep their shaped text only inside the window.
@@ -864,8 +892,17 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 	if !progressed {
 		return false
 	}
+	end_work(l)
+	return true
+}
+
+// After work on the open part: the part has how far its layout is and
+// its height, and a part with all its blocks is closed.
+@(private)
+end_work :: proc(l: ^Layout) {
 	part := open_part(l)
-	// The part has how far its layout is at all times but in this call.
+	blocks := l.doc.parts[l.open]
+	work := &l.work
 	part.y, part.in_block, part.code_offset = l.y, l.in_block, l.code_offset
 	if !l.in_block && len(work.boxes) == blocks.count {
 		part.height = l.y
@@ -874,6 +911,7 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 	} else {
 		// What is laid out, and an estimate for the rest: of the blocks
 		// with no box, and of the block in progress.
+		part.complete = false
 		part.height = l.y + max(part.rest, 0)
 		if l.in_block {
 			// What is left of a code block: of its first estimate, the
@@ -883,7 +921,129 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 			part.height += part.block_rest * f32(max(bytes - l.code_offset, 0)) / f32(max(bytes, 1))
 		}
 	}
-	return true
+}
+
+// Some blocks of a part got other content at their place in memory
+// (`document.commit`, for as many blocks as before): `count` blocks from
+// the block `first` of the part on. The records of the other blocks of
+// the part stay. The ones below the change move by what the new text is
+// higher. The caller sums the tops again.
+@(private)
+remake_blocks :: proc(l: ^Layout, index, first, count: int) {
+	if first >= len(l.parts[index].boxes) {
+		// No records of them: the part has another estimate. Not
+		// through `end_work` for a part with no records at all, which
+		// stays closed.
+		part := &l.parts[index]
+		part.rest = estimate(l, index, len(part.boxes))
+		if len(part.boxes) == 0 {
+			part.height = part.y + part.rest
+		} else {
+			open_for_work(l, index)
+			end_work(l)
+		}
+		return
+	}
+	open_for_work(l, index)
+	part := open_part(l)
+	work, below := &l.work, &l.below
+	// The layout of the part as it was.
+	was := part^
+	a := work.boxes[first]
+	above := first > 0 ? work.boxes[first - 1].bottom : part_start(l, index)
+	// The records below the changed blocks stay when the layout of the
+	// part was past those blocks. If not (the change is in the block
+	// that the layout was at, or reaches blocks with no records), the
+	// part keeps its records down to the change.
+	stays := first + count <= blocks_done(part)
+	b := stays ? work.boxes[first + count - 1] : work.boxes[len(work.boxes) - 1]
+	for line in work.lines[a.line_first:b.line_end] {
+		text.line_destroy(line.line)
+	}
+	for para in work.paras[a.para_first:b.para_end] {
+		text.paragraph_destroy(para.handle)
+	}
+	// The tasks go down the blocks.
+	tasks, tasks_end := 0, 0
+	for tasks < len(work.tasks) && work.tasks[tasks].block < first {
+		tasks += 1
+	}
+	for tasks_end = tasks; tasks_end < len(work.tasks) && work.tasks[tasks_end].block < first + count; {
+		tasks_end += 1
+	}
+	if stays {
+		// Out of the way of the layout of the changed blocks, which
+		// puts its records at the end.
+		append(&below.boxes, ..work.boxes[first + count:])
+		append(&below.lines, ..work.lines[b.line_end:])
+		append(&below.decor, ..work.decor[b.decor_end:])
+		append(&below.paras, ..work.paras[b.para_end:])
+		append(&below.tasks, ..work.tasks[tasks_end:])
+	}
+	resize(&work.boxes, first)
+	resize(&work.lines, a.line_first)
+	resize(&work.decor, a.decor_first)
+	resize(&work.paras, a.para_first)
+	resize(&work.tasks, tasks)
+	show_work(l)
+	l.y, l.in_block, l.code_offset = above, false, 0
+	// The lines that can have shaped text: the ones above the change now,
+	// then the new ones, then the ones below.
+	part.live_first, part.live_end = min(was.live_first, a.line_first), min(was.live_end, a.line_first)
+	if !stays {
+		part.rest = estimate(l, index, first)
+		end_work(l)
+		return
+	}
+	// The layout of the part is above the changed blocks for a moment.
+	// `advance` takes each block that it lays out from the estimate of
+	// what is left of the part; these were not in it.
+	part.y, part.in_block, part.complete = above, false, false
+	advance(l, index, 0, first + count - 1)
+	if l.open != index {
+		// The changed blocks were the last ones: the part is complete.
+		return
+	}
+	part = open_part(l)
+	part.rest, part.block_rest = was.rest, was.block_rest
+	// The records below again, after the new ones, each as much lower
+	// as the changed blocks are higher.
+	down := l.y - b.bottom
+	boxes, lines, decor, paras := len(work.boxes), len(work.lines), len(work.decor), len(work.paras)
+	tasks = len(work.tasks)
+	append(&work.boxes, ..below.boxes[:])
+	append(&work.lines, ..below.lines[:])
+	append(&work.decor, ..below.decor[:])
+	append(&work.paras, ..below.paras[:])
+	append(&work.tasks, ..below.tasks[:])
+	work_clear(below)
+	for &box in work.boxes[boxes:] {
+		box.top += down
+		box.bottom += down
+		box.line_first += lines - b.line_end
+		box.line_end += lines - b.line_end
+		box.decor_first += decor - b.decor_end
+		box.decor_end += decor - b.decor_end
+		box.para_first += paras - b.para_end
+		box.para_end += paras - b.para_end
+	}
+	for &line in work.lines[lines:] {
+		line.para += paras - b.para_end
+		line.top += down
+	}
+	for &d in work.decor[decor:] {
+		d.y += down
+	}
+	for &task in work.tasks[tasks:] {
+		task.y += down
+	}
+	show_work(l)
+	if was.live_end > b.line_end {
+		note_live(part, max(was.live_first, b.line_end) + lines - b.line_end, was.live_end + lines - b.line_end)
+	}
+	// The layout of the part is where it was, that much lower.
+	l.y, l.in_block, l.code_offset = was.y + down, was.in_block, was.code_offset
+	end_work(l)
 }
 
 // Lays out a part with all its blocks, or down to the block `until_slot`.

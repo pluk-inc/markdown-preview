@@ -538,26 +538,66 @@ test_a_change_in_the_middle_keeps_the_other_blocks_in_place :: proc(t: ^testing.
 	doc := parse(before)
 	defer destroy(&doc)
 	first, last := block_at(&doc, 3), block_at(&doc, COUNT - 3)
-	parts := [2]^Part{doc.parts[0], doc.parts[4]}
+	changed, beside := block_at(&doc, AT), block_at(&doc, AT + 1)
+	parts := [3]^Part{doc.parts[0], doc.parts[2], doc.parts[4]}
 	change := change_to(&doc, after)
 	testing.expect_value(t, change.first, AT)
 	testing.expect_value(t, change.removed, 1)
 	testing.expect_value(t, change.added, 1)
-	// One part was made again, and each other one is where it was.
-	testing.expect_value(t, change.part_first, 2)
-	testing.expect_value(t, change.parts_removed, 1)
-	testing.expect_value(t, change.parts_added, 1)
-	testing.expect(t, doc.parts[0] == parts[0] && doc.parts[4] == parts[1])
+	// As many blocks as before: no part was made again. The block is at
+	// the place of the one before it, and so is each other block.
+	testing.expect_value(t, change.parts_removed, 0)
+	testing.expect_value(t, change.parts_added, 0)
+	testing.expect(t, doc.parts[0] == parts[0] && doc.parts[2] == parts[1] && doc.parts[4] == parts[2])
 	testing.expect(t, block_at(&doc, 3) == first && block_at(&doc, COUNT - 3) == last)
+	testing.expect(t, block_at(&doc, AT) == changed && block_at(&doc, AT + 1) == beside)
 	expect_document(t, &doc, after)
 	// The addresses before the block, in it, and after it.
 	now, same := moved(change, Address{AT - 1, 0, 4})
 	testing.expect(t, same && now == Address{AT - 1, 0, 4})
-	// An address in the block that changed is at its start now.
+	// In the block that changed, "Paragraph 123 with a link." to
+	// "Paragraph 123 with other words.": an address in the text that
+	// is the same at the start stays, one in the text that is the same
+	// at the end (the full stop) moves with it, and one in the text
+	// that changed is at the start of the block.
+	old_text, new_text := len("Paragraph 123 with a link."), len("Paragraph 123 with other words.")
 	now, same = moved(change, Address{AT, 0, 9})
+	testing.expect(t, same && now == Address{AT, 0, 9})
+	now, same = moved(change, Address{AT, 0, old_text})
+	testing.expect(t, same && now == Address{AT, 0, new_text})
+	now, same = moved(change, Address{AT, 0, 22})
 	testing.expect(t, !same && now == Address{AT, 0, 0})
 	now, same = moved(change, Address{AT + 1, 2, 4})
 	testing.expect(t, same && now == Address{AT + 1, 2, 4})
+}
+
+@(test)
+test_an_address_where_text_comes_in_is_of_the_text_after_it :: proc(t: ^testing.T) {
+	// A line more at the start of a code block: the line that was the
+	// first one is the second one now, and an address at its start goes
+	// with it.
+	doc := parse("intro\n\n```\nold\nmore\n```\n\nend\n")
+	defer destroy(&doc)
+	change := change_to(&doc, "intro\n\n```\nnew\nold\nmore\n```\n\nend\n")
+	testing.expect_value(t, change.first, 1)
+	testing.expect_value(t, change.removed, 1)
+	testing.expect_value(t, change.added, 1)
+	now, same := moved(change, Address{1, 0, 0})
+	testing.expect(t, same && now == Address{1, 0, 4})
+	now, same = moved(change, Address{1, 0, 4})
+	testing.expect(t, same && now == Address{1, 0, 8})
+	// Text that comes in at the end: an address at the old end is after it.
+	change = change_to(&doc, "intro\n\n```\nnew\nold\nmore\nlast\n```\n\nend\n")
+	now, same = moved(change, Address{1, 0, 12})
+	testing.expect(t, same && now == Address{1, 0, 17})
+	now, same = moved(change, Address{1, 0, 3})
+	testing.expect(t, same && now == Address{1, 0, 3})
+	// Text that goes out: an address in it is at the start of the block.
+	change = change_to(&doc, "intro\n\n```\nnew\nlast\n```\n\nend\n")
+	now, same = moved(change, Address{1, 0, 6})
+	testing.expect(t, !same && now == Address{1, 0, 0})
+	now, same = moved(change, Address{1, 0, 13})
+	testing.expect(t, same && now == Address{1, 0, 4})
 }
 
 @(test)
