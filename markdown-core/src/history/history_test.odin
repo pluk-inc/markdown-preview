@@ -80,6 +80,8 @@ test_letters_typed_in_a_row_are_one_group :: proc(t: ^testing.T) {
 	type(&x, "b", 0.1)
 	type(&x, "c", 0.3)
 	testing.expect_value(t, len(x.h.groups), 1)
+	// One step: Undo is one change of the source.
+	testing.expect_value(t, len(x.h.steps), 1)
 	testing.expect(t, take_back(&x))
 	testing.expect_value(t, string(x.bytes[:]), "")
 	testing.expect_value(t, x.caret, 0)
@@ -132,6 +134,7 @@ test_a_line_break_and_a_delete_are_groups_of_their_own :: proc(t: ^testing.T) {
 	back(&x, 0.3)
 	back(&x, 0.5)
 	testing.expect_value(t, len(x.h.groups), 3)
+	testing.expect_value(t, len(x.h.steps), 3)
 	testing.expect_value(t, string(x.bytes[:]), "ab")
 	take_back(&x)
 	testing.expect_value(t, string(x.bytes[:]), "ab\nc")
@@ -182,6 +185,30 @@ test_the_forms_of_the_text_of_an_input_method_are_one_group :: proc(t: ^testing.
 	take_back(&x)
 	take_back(&x)
 	testing.expect_value(t, string(x.bytes[:]), "")
+}
+
+// An input method that starts over text that is selected: its first
+// form takes the place of the selection, and its later forms go on in
+// that group, so one Undo gives the selected text back.
+@(test)
+test_an_input_method_over_a_selection_is_one_group :: proc(t: ^testing.T) {
+	x: Text
+	defer free_text(&x)
+	append(&x.bytes, "a hello")
+	x.caret = 7
+	edit(&x, 2, 7, "n", 30, .Other, anchor = 2)
+	edit(&x, 2, 3, "ni", 31, .Replace)
+	edit(&x, 2, 4, "你", 40, .Replace)
+	testing.expect_value(t, string(x.bytes[:]), "a 你")
+	testing.expect_value(t, len(x.h.groups), 1)
+	take_back(&x)
+	testing.expect_value(t, string(x.bytes[:]), "a hello")
+	testing.expect_value(t, x.caret, 7)
+	// A paste after it is a group of its own, and so is typing after
+	// the paste.
+	edit(&x, 7, 7, "XY", 50)
+	type(&x, "z", 50.1)
+	testing.expect_value(t, len(x.h.groups), 2)
 }
 
 // In an empty line the first form came with a line break before it; the
@@ -242,7 +269,8 @@ test_the_oldest_groups_go_at_the_limit :: proc(t: ^testing.T) {
 		type(&x, "0123456789", f64(i) * 10)
 	}
 	testing.expect_value(t, len(x.h.groups), 6)
-	trim(&x.h, 25)
+	// Room for two groups of ten bytes and one step each.
+	trim(&x.h, 2 * (10 + size_of(Step) + size_of(Group)) + 5)
 	testing.expect_value(t, len(x.h.groups), 2)
 	testing.expect_value(t, x.h.done, 2)
 	testing.expect(t, take_back(&x))
@@ -252,4 +280,30 @@ test_the_oldest_groups_go_at_the_limit :: proc(t: ^testing.T) {
 	make_again(&x)
 	make_again(&x)
 	testing.expect_value(t, len(x.bytes), 60)
+}
+
+// Characters that go one after the other with the Delete key and with
+// the forward delete are one step each way.
+@(test)
+test_deletes_in_a_row_are_one_step :: proc(t: ^testing.T) {
+	x: Text
+	defer free_text(&x)
+	append(&x.bytes, "abcdef")
+	x.caret = 4
+	back(&x, 0)
+	back(&x, 0.1)
+	testing.expect_value(t, string(x.bytes[:]), "abef")
+	edit(&x, 2, 3, "", 0.2, .Forward)
+	edit(&x, 2, 3, "", 0.3, .Forward)
+	testing.expect_value(t, string(x.bytes[:]), "ab")
+	testing.expect_value(t, len(x.h.groups), 2)
+	testing.expect_value(t, len(x.h.steps), 2)
+	take_back(&x)
+	testing.expect_value(t, string(x.bytes[:]), "abef")
+	take_back(&x)
+	testing.expect_value(t, string(x.bytes[:]), "abcdef")
+	testing.expect_value(t, x.caret, 4)
+	make_again(&x)
+	make_again(&x)
+	testing.expect_value(t, string(x.bytes[:]), "ab")
 }

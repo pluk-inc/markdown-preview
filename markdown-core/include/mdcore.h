@@ -174,6 +174,9 @@ bool mdcore_caret_move(void *ctx, mdcore_move move, bool extend);
 // what goes). Does nothing with no caret. False when nothing changed: no
 // caret, no text, or a selection that has no edit.
 bool mdcore_insert(void *ctx, const char *utf8, long length);
+// mdcore_insert for text that the reader did not type (a paste, Control-Y):
+// it is one step of Undo of its own, and typed text after it is another.
+bool mdcore_paste(void *ctx, const char *utf8, long length);
 
 // Return at the caret: what the block of the caret needs for it. In
 // code, a new line. At the end of the text of a list item, a new item
@@ -245,6 +248,9 @@ bool mdcore_transpose(void *ctx);
 // document (mdcore_set_markdown with another text) ends both.
 bool mdcore_undo(void *ctx);
 bool mdcore_redo(void *ctx);
+// Ends the history: for another document, also one with the same text
+// (two empty files).
+void mdcore_forget_history(void *ctx);
 // True when mdcore_undo (mdcore_redo) has a change.
 bool mdcore_can_undo(void *ctx);
 bool mdcore_can_redo(void *ctx);
