@@ -189,6 +189,14 @@ void mdcore_insert_break(void *ctx);
 // its blocks), and for one from a cell of a table to another cell.
 bool mdcore_delete(void *ctx, mdcore_move move);
 
+// The bytes of the source that the last mdcore_delete that changed the
+// source took out, as UTF-8: the text with the marks that went with
+// it, and no mark that stayed for the text around it. Text that puts
+// them in again at the caret gives the text of before (Control-Y after
+// Control-K). Valid until the next call that deletes; for the thread
+// that makes those calls.
+const char *mdcore_deleted_text(void *ctx, long *length);
+
 // Takes out the lines of the source that the caret is in, or the text
 // that is selected, with their line breaks. True when the source
 // changed.
