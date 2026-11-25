@@ -174,3 +174,20 @@ test_two_styles_of_one_mark_show_for_the_same_offsets :: proc(t: ^testing.T) {
 		testing.expect_value(t, pair.to, 9)
 	}
 }
+
+// One character at a mark that goes on in a next line of a quote: the
+// bytes of the character, with the line break and the mark of the quote
+// between the two pieces of the mark left as they are.
+@(test)
+test_a_character_of_a_mark_over_two_lines_is_its_bytes :: proc(t: ^testing.T) {
+	doc := parse_owned(transmute([]u8)fmt.aprintf("%s", "> [x](\n> /a)\n"), 3)
+	defer destroy(&doc)
+	places := block_map(&doc, 0)
+	defer delete(places)
+	text := string(block_at(&doc, 0).text.bytes[:])
+	testing.expect_value(t, text, "[x](/a)")
+	// The "/" is the fifth character.
+	first, last, ok := char_before(&doc, places[:], {block = 0, byte = 5})
+	testing.expect(t, ok)
+	testing.expect_value(t, string(doc.source[first:last]), "/")
+}

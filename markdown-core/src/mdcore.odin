@@ -1060,6 +1060,14 @@ mdcore_caret_clear :: proc "c" (handle: rawptr) {
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
 	hold(ctx)
+	// A selection with marks that show is of those marks only (text
+	// that is selected shows none): it goes with them, or its ends
+	// would be at other text.
+	if ctx.doc.reveal != nil {
+		if _, _, selected := document.selection_range(ctx.selection); selected {
+			ctx.selection = {}
+		}
+	}
 	ctx.caret = -1
 	ctx.display_valid = false
 	reveal_update(ctx)
@@ -1162,13 +1170,17 @@ replace_between :: proc(ctx: ^Ctx, from, to: int, text: string) -> bool {
 	// The map of the block of the caret is there already.
 	// The marks that show at the caret are text: one that is selected
 	// goes as text does, and is not kept for the text of its style. So
-	// the edit does not know the elements of those marks.
+	// the edit does not know the elements of the marks that go.
 	pairs := ctx.caret_pairs[:]
 	hidden: [dynamic]document.Pair
 	defer delete(hidden)
 	if shown, shows := ctx.doc.reveal.?; shows {
 		for pair in ctx.caret_pairs {
-			if !pair_has(pair, shown) {
+			// Only the elements with a mark that the range has a byte
+			// of: for each other one the edit keeps the style right, as
+			// it does with no marks in the text.
+			touched := pair_has(pair, shown) && ((from < pair.open_end && to > pair.open) || (pair.close >= 0 && from < pair.close_end && to > pair.close))
+			if !touched {
 				append(&hidden, pair)
 			}
 		}
@@ -1288,7 +1300,7 @@ delete_back :: proc(ctx: ^Ctx) -> bool {
 // True when the source changed. The caller holds `source_lock`.
 @(private)
 delete_to :: proc(ctx: ^Ctx, move: Move) -> bool {
-	start := ctx.caret
+	start, was := ctx.caret, ctx.caret_at
 	moved: bool
 	{
 		// The marks stay as they are for the selection of a moment that
@@ -1300,7 +1312,18 @@ delete_to :: proc(ctx: ^Ctx, move: Move) -> bool {
 	if !moved {
 		return false
 	}
-	if ctx.caret != start && replace_between(ctx, min(start, ctx.caret), max(start, ctx.caret), "") {
+	from, to := min(start, ctx.caret), max(start, ctx.caret)
+	// One character of a text goes with the bytes that the source has
+	// for it, and no more: between two pieces of a mark that shows
+	// over two lines are a line break and the mark of a quote, which
+	// are no part of the character on either side.
+	if now := ctx.caret_at; (move == .Left || move == .Right) && was.block == now.block && was.cell == now.cell && was.empty == 0 && now.empty == 0 && was.spaces == 0 && now.spaces == 0 {
+		later := move == .Left ? was : now
+		if first, last, found := document.char_before(&ctx.doc, ctx.caret_places[:], later); found && first >= from && last <= to && first < last {
+			from, to = first, last
+		}
+	}
+	if ctx.caret != start && replace_between(ctx, from, to, "") {
 		return true
 	}
 	// No edit for that text: the caret is where it was, with nothing

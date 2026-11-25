@@ -109,6 +109,8 @@ static const char *caret_walk(void *ctx, long length) {
             if (!mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, true) || mdcore_caret_offset(ctx) != from || mdcore_has_selection(ctx)) {
                 return "a step with the selection and the step back do not end where they started";
             }
+        } else if (from != last) {
+            return "no step with the selection from a place that is not the end";
         }
         if (!mdcore_caret_move(ctx, MDCORE_MOVE_RIGHT, false)) break;
     }
