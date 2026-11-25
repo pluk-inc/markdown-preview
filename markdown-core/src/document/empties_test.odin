@@ -41,6 +41,10 @@ test_the_lines_that_return_makes_are_empty_paragraphs :: proc(t: ^testing.T) {
 		{"\n\n\nab\n", {0}, {}},
 		{"```\nc\n\n\n", {0}, {}},
 		{"    code\n\n<!--\n\n\n", {0}, {}},
+		// Code that ends in an empty line, and code of one empty line.
+		{"```\na\n\n```\n\n\nz\n", {1, 0}, {11}},
+		{"```\n\n```\n\n\nz\n", {1, 0}, {9}},
+		{"```\n```\n\n\nz\n", {1, 0}, {8}},
 		// Code by its indent that shows the marks of a fence is no
 		// fence.
 		{"    ```\n    x\n\n\nz\n", {1, 0}, {14}},

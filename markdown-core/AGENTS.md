@@ -842,9 +842,7 @@ The order of the next steps, from the review of the second step:
   source with no line break at its end has one after Return and a
   delete, and a paragraph with a block right after it has one empty
   line there after the two; a document of only empty lines has no
-  block and no caret; a fence of code with one empty line in it and no
-  text has no empty lines after it (its end is counted from the lines
-  of its text, and it has none).
+  block and no caret.
 - Not done for the caret: a selection that typing takes
   the place of, a delete at the start of a block with text (to join it
   with the block before), a caret in a table cell with no text, undo.

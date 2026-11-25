@@ -102,9 +102,11 @@ lines_end :: proc(source: []u8, b: ^Block, start, next: int) -> (end: int, ok: b
 	// the source for each line of its text, and for a fence the line
 	// that starts it and the line that ends it. A fence with no end
 	// mark has no end that the lines show.
+	// The text has a line break between two lines and none after the
+	// last one, so a text that ends with one has an empty last line.
 	lines := 0
 	if len(b.text.bytes) > 0 {
-		lines = bytes.count(b.text.bytes[:], {'\n'}) + int(b.text.bytes[len(b.text.bytes) - 1] != '\n')
+		lines = bytes.count(b.text.bytes[:], {'\n'}) + 1
 	}
 	_, after := line_at(source, start)
 	fenced := b.fenced
@@ -117,6 +119,11 @@ lines_end :: proc(source: []u8, b: ^Block, start, next: int) -> (end: int, ok: b
 	}
 	if fenced {
 		mark_end, after_mark := line_at(source, end)
+		// Code of one empty line has no text, as code of no line has.
+		if lines == 0 && end < next && blank(source[end:mark_end]) {
+			end = after_mark
+			mark_end, after_mark = line_at(source, end)
+		}
 		if end >= next || !fence_line(source[end:mark_end]) {
 			return next, false
 		}
