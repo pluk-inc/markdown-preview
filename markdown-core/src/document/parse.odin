@@ -617,17 +617,22 @@ line_mark :: proc(p: ^Parser, line, text: int) {
 	}
 	// To the end of the last line of the block, before its line break.
 	block_end := break_before(p.bytes, clamp(p.block.source + int(p.block.lines), text, len(p.bytes)))
-	// The mark is all that the source has before the text: with the
-	// check box of a task, which does not show as text, it is one piece
-	// that ends where the text starts, so text that is typed before the
-	// first letter of a task goes after its check box.
+	// The mark is all that the source has before the text, with the
+	// check box of a task, which does not show as text.
 	if p.pairs != nil && p.doc.count == p.places_block {
 		append(p.pairs, Pair{mark, text, -1, block_end, false, mark, block_end, true})
 	}
 	if reveal, shows := p.reveal.?; shows && reveal >= mark && reveal <= block_end {
 		p.marking = true
-		append_text(p, string(p.bytes[mark:mark_end]), mark, text - mark)
+		append_text(p, string(p.bytes[mark:mark_end]), mark, mark_end - mark)
 		p.marking = false
+		// The check box of a task is a piece with no text, after the
+		// mark that shows: each byte of that mark is a byte of the
+		// source, and text that is typed before the first letter of
+		// the task goes after its check box.
+		if mark_end < text && p.places != nil && p.doc.count == p.places_block {
+			append(p.places, Place{0, len(p.cur.bytes), 0, mark_end, text - mark_end, true, false, false, false})
+		}
 		p.doc.reveal = reveal
 		p.block.mark_shown = true
 	}
