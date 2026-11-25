@@ -128,6 +128,28 @@ static const char *caret_walk(void *ctx, long length) {
     if (!mdcore_caret_move(ctx, MDCORE_MOVE_RIGHT, false) || mdcore_has_selection(ctx) || mdcore_caret_offset(ctx) != selected_end) {
         return "Select All and a step to the right";
     }
+    // Return at the end of the first paragraph: the caret is in a line
+    // of its own below, a character typed there is a new paragraph, and
+    // a delete for each takes all of it out again.
+    mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false);
+    mdcore_caret_move(ctx, MDCORE_MOVE_PARAGRAPH_END, false);
+    long before_length = 0, after_length = 0;
+    NSData *before = [NSData dataWithBytes:mdcore_source(ctx, &before_length) length:(NSUInteger)before_length];
+    long end_of_first = mdcore_caret_offset(ctx);
+    if (!mdcore_caret_rect(ctx, &x, &y, &height)) return "no place for the caret at the end of the first paragraph";
+    mdcore_insert_break(ctx);
+    if (!mdcore_caret_rect(ctx, &x, &line, &height) || line <= y) return "the caret after Return is not in a line below";
+    if (!mdcore_caret_move(ctx, MDCORE_MOVE_UP, false) || mdcore_caret_offset(ctx) > end_of_first) return "up from the line that Return made";
+    if (!mdcore_caret_move(ctx, MDCORE_MOVE_DOWN, false) || !mdcore_caret_rect(ctx, &x, &y, &height) || y != line) return "down into the line that Return made";
+    mdcore_insert(ctx, "w", 1);
+    if (!mdcore_caret_rect(ctx, &x, &y, &height) || y != line) return "a character typed in the line that Return made is in another line";
+    mdcore_delete_backward(ctx);
+    if (!mdcore_caret_rect(ctx, &x, &y, &height) || y != line) return "the line that Return made does not stay when its text goes";
+    mdcore_delete_backward(ctx);
+    const char *after = mdcore_source(ctx, &after_length);
+    if (mdcore_caret_offset(ctx) != end_of_first || after_length != before_length || memcmp(after, before.bytes, (size_t)before_length) != 0) {
+        return "a delete in the line that Return made does not give the text of before";
+    }
     // A typed character ends the selection at the caret: a step back
     // with the selection selects that character and no more.
     mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false);

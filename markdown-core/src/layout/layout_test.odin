@@ -1589,6 +1589,59 @@ test_the_end_of_a_line_with_no_space_is_in_that_line :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_each_empty_paragraph_shows_as_a_line :: proc(t: ^testing.T) {
+	// The same two paragraphs with one empty line after each, and with
+	// more: each line more is a line of the page, so what is after it
+	// is lower.
+	reader, editor: Fixture
+	setup(&reader, "first\n\nsecond\n", 300)
+	defer teardown(&reader)
+	step(&reader.page, 1e30)
+	expect_ok(t, &reader.page)
+	setup(&editor, "first\n\n\n\nsecond\n\n", 300)
+	defer teardown(&editor)
+	step(&editor.page, 1e30)
+	expect_ok(t, &editor.page)
+	testing.expect_value(t, int(document.block_at(editor.page.doc, 0).empties), 2)
+	testing.expect_value(t, int(document.block_at(editor.page.doc, 1).empties), 1)
+	each := f64(empty_height(&editor.page))
+	testing.expect_value(t, caret_top(t, &editor, {1, 0, 0}), caret_top(t, &reader, {1, 0, 0}) + 2 * each)
+	testing.expect_value(t, editor.page.content_height, reader.page.content_height + 3 * each)
+	// The caret goes down through "first", its two empty paragraphs,
+	// "second", and the one after it; a click in each line is that line.
+	path := []document.Address{{0, 0, 2}, {0, 0, 6}, {0, 0, 7}, {1, 0, 2}, {1, 0, 7}}
+	x, _, _, _ := caret_y(&editor.page, path[0], false)
+	for at, i in path {
+		cx, y, height, ok := caret_y(&editor.page, at, false)
+		testing.expect(t, ok)
+		hit, _, found := caret_hit(&editor.page, cx + 1, y + f64(height) / 2)
+		testing.expect(t, found)
+		testing.expect_value(t, hit, at)
+		if i + 1 < len(path) {
+			next, _, moved := caret_line_step(&editor.page, at, false, x, true)
+			testing.expect(t, moved)
+			testing.expect_value(t, next.block, path[i + 1].block)
+			testing.expect_value(t, document.empty_of(editor.page.doc, next), document.empty_of(editor.page.doc, path[i + 1]))
+			testing.expect(t, caret_top(t, &editor, next) > y)
+		}
+	}
+	// And up again.
+	at := path[len(path) - 1]
+	for i := len(path) - 2; i >= 0; i -= 1 {
+		next, _, moved := caret_line_step(&editor.page, at, false, x, false)
+		testing.expect(t, moved)
+		testing.expect_value(t, caret_top(t, &editor, next), caret_top(t, &editor, path[i]))
+		at = next
+	}
+	// An empty paragraph is a line with one place.
+	for end in ([]bool{false, true}) {
+		same, _, ok := caret_line_end(&editor.page, {0, 0, 6}, false, end)
+		testing.expect(t, ok)
+		testing.expect_value(t, same, document.Address{0, 0, 6})
+	}
+}
+
+@(test)
 test_a_click_puts_a_caret_at_text_with_no_line :: proc(t: ^testing.T) {
 	// A code block with empty lines, at its start and between two lines
 	// with text, and a list item with nothing in it.

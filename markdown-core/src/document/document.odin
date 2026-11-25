@@ -60,6 +60,11 @@ Shape :: struct {
 	kind:        Block_Kind,
 	marker:      Marker,
 	spacing:     Spacing,
+	// How many empty paragraphs come after the block: lines of the
+	// source with nothing in them that are a paragraph of their own when
+	// text is typed into them (`empties.odin`). The page shows each as
+	// an empty line. Small, and here, so a block is no larger for it.
+	empties:     u16,
 	level:       int, // heading: 1 to 6
 	number:      int, // marker == .Number
 	list_depth:  int,
@@ -88,6 +93,7 @@ Block :: struct {
 	// `source` is; 0 for no task. Its line: `task_line`.
 	task_mark:   int,
 	done:        bool, // the block stands directly in a checked task item
+	fenced:      bool, // code: between two fence lines, not code by its indent
 	item:        int, // the list item that the block stands directly in: a number from 1, 0 for none
 }
 

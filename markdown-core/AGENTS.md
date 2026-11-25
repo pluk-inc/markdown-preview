@@ -89,6 +89,11 @@ These came from the maintainer. Do not undo one without asking.
   fence show when the caret is in their line; the check box of a task
   stays a check box; a table cell shows its source while it has the
   caret. Not done yet: see Open work.
+- **Read mode and Edit Mode show the same page** (2026-11-25): the
+  same layout, heights, and lines. No rule of the layout is of the
+  editor only. What an editor needs to show (an empty line for the
+  caret) is a thing of the document that the two modes show, or goes
+  with the caret itself. Ask before a difference between the two.
 - **A reader at the end of the document is kept by the first line that
   shows, as at each other place** (2026-11-24). With a narrower window the
   end then goes out of view. Browsers and editors do the same; only a
@@ -754,21 +759,93 @@ The order of the next steps, from the review of the second step:
     (many table cells and headings with no text in a row, blocks with
     no text at the two ends, text with no spaces). A step with its
     frame: 0.5 ms of CPU (`BENCHMARKS.md`).
+- Done: Return that knows its block, and the line that it makes.
+  Markdown has no paragraph with no text, so the line that Return
+  makes after a paragraph had no place on the page, and the caret
+  stayed at the end of the text before it until a character came.
+  - **An empty paragraph** (`document/empties.odin`) is a line of the
+    source with nothing in it right after the lines of a block: each
+    such line but the last one, as the web editor shows them (the
+    maintainer chose that, 2026-11-25; a first form had only the lines
+    where typed text is a paragraph by itself). Each block has their
+    number (`Shape.empties`, so a change of the empty lines after a
+    block is a change of that block for a layout), and each is an
+    address of the text of its block: a byte after the end of its last
+    text, one for each (`empty_address`, `empty_of`, `empty_offset`).
+    `place_of`, `address_for`, `step`, and the caret places of the
+    layout know them, so a caret and the keys that move it need no
+    other kind of place. Text that is typed in one goes in with a line
+    break before it (`empty_text`, in `mdcore.typed`): it is then a
+    paragraph of its own, at the place of the line that it was typed
+    in. A block has none where text typed there breaks what is around
+    it: a rule (no text, so no address), a block before one that goes
+    on a list, lines after raw HTML or a definition of a link, code
+    with no end mark.
+  - **The page shows them**, in Read mode and in Edit Mode the same
+    (Decisions): the box of a block has a line at its bottom for each
+    (`layout.empty_height`), and all below is lower. A first form
+    showed them only in Edit Mode, with a switch; the maintainer saw
+    the page change between the two modes and said no.
+  - **Return** (`document.line_break`, `mdcore_insert_break`) is of the
+    block and not of the byte of the caret: in fenced code a line
+    break; at the end of the text of a list item a new item of its
+    kind after the lists in it (the next number, a task that is not
+    done); at the end of each other text an empty line after the lines
+    of the block (after the line under a heading, after the marks that
+    end bold text); in an empty line one more; in an item with no
+    text, that item becomes an empty line, so Return two times ends a
+    list; in the text, the spaces and the line break at the caret
+    become the one empty line between the two halves. The line breaks
+    are of the kind that the source has.
+  - **A delete** (`document.delete_back`) takes out an empty line, an
+    item with no text, and with the only character of a paragraph the
+    empty line before it, so the line of that paragraph stays as an
+    empty line. Return and then a delete, and a typed character and
+    then a delete, give the source of before: the two are tested as
+    pairs.
 - Next for the editor, in the order that a reader misses them: a
   selection that typing takes the place of, with cut; the marks at the
-  caret (Decisions); undo; Return that knows its block (a new list
-  item, a line in a code block).
-- Not done for the keys that move the caret: text that reads from right
-  to left (left and right are against the reading order and in it,
-  which is the other way on the page there); Page Up and Page Down
-  scroll and do not move the caret; Option with up and down; a drag
-  that starts in Edit Mode selects from the caret's stop, and one over
-  a place with no stop keeps the caret where it was.
+  caret (Decisions); undo.
+- Where the lines of a block end is found from the source a second
+  time (`empties.lines_end`, with `fence_line` for a fence of code):
+  the parser read those lines and knows it. A callback of the parser
+  for the end of a block, as there is one for its start, takes that
+  second reader out, and one read of the lines of each block at each
+  parse with it.
+- The host knows that text in an empty line gets a line break before
+  it (`NativeRendererView.put`, the `lead` of the text of an input
+  method), to take it back with text that an input method takes back.
+  The core could say where the text starts.
+- Before the selection work: `Address.byte` has two meanings now (a
+  byte of the text, and past its end an empty paragraph). Code that
+  cuts text with it clamps, so a selection over empty paragraphs draws
+  nothing on their lines and a copy leaves them out, and the pointer
+  is not the text pointer over them. A field of its own in `Address`
+  for the empty paragraph makes `byte` a byte of the text for each
+  reader again, and gives a rule its empty paragraphs. Do that first.
+- Not as the web preview for empty lines: the web preview gives lines
+  with nothing in them no room, and this renderer shows each but the
+  last as a line, in Read mode too (Decisions). So a document with
+  more than one empty line between two blocks is longer here.
+- Not as the web editor for empty lines: none shows before a block
+  that goes on a list, after a rule, and after raw HTML or a definition
+  of a link (see above for the reason of each).
+- Not done for Return: in a table; at the end of a text whose next
+  block goes on a list (an item with more blocks, a block before a
+  nested item of another kind): nothing happens there; in a quote the
+  new paragraph is after the quote and not in it, and a quote that
+  goes on below is cut in two; in the text, the rest can become
+  another kind of block when it starts with a mark ("a - b" cut before
+  the "-" gives a list item), and bold text that is cut keeps one mark
+  in each half; the items after a new numbered item keep their numbers
+  in the source (they show right, because the first number counts); a
+  source with no line break at its end has one after Return and a
+  delete, and a paragraph with a block right after it has one empty
+  line there after the two; a document of only empty lines has no
+  block and no caret.
 - Not done for the caret: a selection that typing takes
-  the place of, a delete at the start of a block (to join it with the
-  block before), Enter (the source needs a line break that is right for
-  the block: a new paragraph, a new list item), a caret in a table cell
-  with no text, undo.
+  the place of, a delete at the start of a block with text (to join it
+  with the block before), a caret in a table cell with no text, undo.
 - A delete of the only character between two marks leaves the marks:
   "**a**" is "****" after it, which is a rule, and "`a`" is two
   backticks. The marks must go with their last character, or the
@@ -1088,3 +1165,16 @@ export.
   caret, and one writer (Open work). `mdcore.odin` has no unit tests,
   so the benchmark script now walks the caret through two documents
   and stops when a move is wrong.
+- **2026-11-25** — Return. The maintainer saw in a test build that the
+  caret did not move after Return until a character was typed. Two
+  causes, each of the structure: the line that Return makes was no
+  place in the document, and Return put its line breaks at the byte of
+  the caret, which is inside the lines of the block at the end of a
+  heading with a line under it and at the end of bold text. So the
+  document got empty paragraphs as places of the text of a block, and
+  Return became a call that knows the block. The maintainer then chose
+  the rule of the web editor for which lines show (each but the last),
+  and that Read mode shows them as Edit Mode does. Checked on the hidden
+  display with a log of the caret: Return after a list item, a
+  paragraph, and a heading; typing and delete in the new line; Return
+  two times and delete in a list; up and down through the new lines.

@@ -361,7 +361,10 @@ final class NativeRendererView: NSView {
     /// the source of the document, in bytes, and the text itself, which
     /// the system's text input counts in UTF-16 units. The next form of
     /// it, or the final text, takes its place.
-    private var markedText: (start: Int, length: Int, text: String, selection: NSRange)?
+    /// `lead`: the bytes that the core put before the text when it went
+    /// into an empty line (a line break). They go with the text when
+    /// the input method takes all of it back.
+    private var markedText: (start: Int, length: Int, text: String, selection: NSRange, lead: Int)?
     /// The caret that the reader sees: the system's own, which blinks as
     /// the system's settings say. It is on the page, at the place that
     /// the core gives.
@@ -956,14 +959,18 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
 
     /// Puts text in at the caret, or in the place of the text of an input
     /// method that is not final. Returns where the text starts in the
-    /// source.
+    /// source, and how many bytes the core has before it for it.
     @discardableResult
-    private func put(_ text: String) -> Int {
+    private func put(_ text: String) -> (start: Int, lead: Int) {
         var text = text
-        let start = markedText?.start ?? mdcore_caret_offset(ctx)
-        let end = start + (markedText?.length ?? 0)
+        let marked = markedText
+        var start = marked?.start ?? mdcore_caret_offset(ctx)
+        let end = start + (marked?.length ?? 0)
         markedText = nil
-        guard hasCaret, start >= 0 else { return start }
+        guard hasCaret, start >= 0 else { return (start, 0) }
+        // With all of the text of the input method taken back, the line
+        // break that came with it goes too: the line is empty again.
+        if text.isEmpty { start -= marked?.lead ?? 0 }
         text.withUTF8 { utf8 in
             utf8.withMemoryRebound(to: CChar.self) {
                 // One change of the source, also for a text that takes
@@ -971,7 +978,10 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
                 mdcore_replace_text(ctx, start, end, $0.baseAddress, $0.count)
             }
         }
-        return start
+        // The text ends at the caret. In an empty line the core put a
+        // line break before it, so it starts later than `start`.
+        let placed = mdcore_caret_offset(ctx) - text.utf8.count
+        return (placed, marked?.lead ?? max(placed - start, 0))
     }
 
     /// Scrolls so that the line of the caret shows, with a little room.
@@ -1019,8 +1029,8 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         let units = text.utf16.count
         selection.location = min(max(selection.location, 0), units)
         selection.length = min(max(selection.length, 0), units - selection.location)
-        let start = put(text)
-        markedText = text.isEmpty || start < 0 ? nil : (start, text.utf8.count, text, selection)
+        let (start, lead) = put(text)
+        markedText = text.isEmpty || start < 0 ? nil : (start, text.utf8.count, text, selection, lead)
         didEdit()
     }
 
@@ -1130,8 +1140,11 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
 
     override func insertNewline(_ sender: Any?) {
         guard isEditable, hasCaret else { return }
-        // A new paragraph: Markdown ends one with an empty line.
-        put("\n\n")
+        // What Return is depends on the block of the caret (a new
+        // paragraph, a new list item, a new line of code): the core
+        // knows it.
+        markedText = nil
+        mdcore_insert_break(ctx)
         didEdit()
     }
 

@@ -311,7 +311,26 @@ mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 mdcore_replace_text :: proc "c" (handle: rawptr, start, end: c.long, utf8: [^]u8, length: c.long) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
-	change_source(ctx, length > 0 ? string(utf8[:length]) : "", [2]int{int(start), int(end)})
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	typed(ctx, length > 0 ? string(utf8[:length]) : "", int(start), int(end))
+}
+
+// Text that a reader put in, from a key or from the host: it takes the
+// place of a range of the source. In an empty paragraph it starts a
+// paragraph of its own there (`document.empty_text`). The caller holds
+// `source_lock`, and not the lock of the state: the text that is made
+// here is memory of its own, because a frame uses the working memory
+// of the view at the same time.
+@(private)
+typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
+	if len(text) > 0 && start == end && start == ctx.caret && ctx.doc.count > 0 && document.empty_of(&ctx.doc, ctx.caret_at) > 0 {
+		own := document.empty_text(&ctx.doc, text)
+		defer delete(own)
+		change_source_held(ctx, own, [2]int{start, end})
+		return
+	}
+	change_source_held(ctx, text, [2]int{start, end})
 }
 
 // The one way that the source of the document changes (but for a task
@@ -334,7 +353,7 @@ change_source :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil) {
 // `change_source` for a caller that holds `source_lock`: one that made
 // the range from the source as it is (a key at the caret).
 @(private)
-change_source_held :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil) {
+change_source_held :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil, caret_after := -1) {
 	edit: document.Edit
 	if r, given := range.?; given {
 		edit = {r[0], r[1], text}
@@ -384,6 +403,10 @@ change_source_held :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil) 
 		} else if ctx.caret > edit.start {
 			ctx.caret = edit.end + pending.bytes
 		}
+		// The caller knows a place for it in the new text.
+		if caret_after >= 0 {
+			ctx.caret = min(caret_after, len(ctx.doc.source))
+		}
 		// Not in a character: an edit that the core found between two
 		// texts can end in one.
 		source := ctx.doc.source
@@ -413,7 +436,7 @@ caret_changed :: proc(ctx: ^Ctx) {
 	block := document.block_at_offset(&ctx.doc, ctx.caret)
 	delete(ctx.caret_places)
 	ctx.caret_places = document.block_map(&ctx.doc, block)
-	ctx.caret_at = document.address_in(ctx.caret_places[:], block, ctx.caret)
+	ctx.caret_at = document.address_for(&ctx.doc, ctx.caret_places[:], block, ctx.caret)
 	ctx.caret_upstream, ctx.caret_goal = false, nil
 	caret_placed(ctx)
 }
@@ -476,7 +499,7 @@ stop_look :: proc(ctx: ^Ctx, at: document.Address, held: Stop) -> (found: Stop, 
 	// one (the two ends of one thing of the source), in the same block.
 	ok &&= document.block_at_offset(&ctx.doc, found.offset) == at.block
 	if ok {
-		found.at = document.address_in(found.places[:], at.block, found.offset)
+		found.at = document.address_for(&ctx.doc, found.places[:], at.block, found.offset)
 	}
 	return
 }
@@ -572,6 +595,10 @@ move_from :: proc(ctx: ^Ctx, at: document.Address, upstream: bool, move: Move, g
 			return
 		}
 		next, ok = at, true
+		// An empty paragraph is a paragraph with one place.
+		if document.empty_of(&ctx.doc, at) > 0 {
+			return
+		}
 		next.byte = document.paragraph_end(src.bytes[:], at.byte, move == .Paragraph_End)
 	}
 	return
@@ -831,7 +858,41 @@ mdcore_insert :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	if ctx.caret < 0 || length <= 0 {
 		return
 	}
-	change_source_held(ctx, string(utf8[:length]), [2]int{ctx.caret, ctx.caret})
+	typed(ctx, string(utf8[:length]), ctx.caret, ctx.caret)
+}
+
+// Return at the caret. See the header.
+@(export)
+mdcore_insert_break :: proc "c" (handle: rawptr) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	if ctx.caret < 0 {
+		return
+	}
+	if ctx.doc.count == 0 {
+		// A document with no block: a line break, as each other text
+		// that is typed there.
+		change_source_held(ctx, document.line_ending(ctx.doc.source), [2]int{ctx.caret, ctx.caret})
+		return
+	}
+	// The text is memory of its own: a frame uses the working memory of
+	// the view at the same time.
+	if start, end, text, caret, ok := document.line_break(&ctx.doc, ctx.caret_places[:], ctx.caret_at); ok {
+		defer delete(text)
+		change_source_held(ctx, text, [2]int{start, end}, caret)
+		// The caret can be before the marks of its new line (the mark
+		// of a quote): text that is typed goes where its address is.
+		// Not in a document that has no block now (the item with no
+		// text was all of it): the caret has no address there.
+		if ctx.doc.count == 0 {
+			return
+		}
+		if offset, placed := document.place_of(&ctx.doc, ctx.caret_places[:], ctx.caret_at); placed {
+			ctx.caret = offset
+		}
+	}
 }
 
 // Takes out the character before the caret. See the header.
@@ -842,6 +903,12 @@ mdcore_delete_backward :: proc "c" (handle: rawptr) {
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
 	if ctx.caret < 0 || ctx.doc.count == 0 {
+		return
+	}
+	// An empty paragraph or a list item with no text goes, and the
+	// caret is at the end of what is before it.
+	if start, end, caret, ok := document.delete_back(&ctx.doc, ctx.caret_places[:], ctx.caret_at); ok {
+		change_source_held(ctx, "", [2]int{start, end}, caret)
 		return
 	}
 	// Nothing at the start of a block: to join it with the block before

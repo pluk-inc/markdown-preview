@@ -142,15 +142,33 @@ typedef enum {
 // the selection did not change, and for no caret.
 bool mdcore_caret_move(void *ctx, mdcore_move move, bool extend);
 
+// Each line of the source with nothing in it after a block, but the
+// last one, shows as an empty line of the page, and a caret can be in
+// it (the line that Return makes after a paragraph).
+//
+// Text that goes in at the caret when the caret is in such a line
+// starts a paragraph of its own there:
+// the core puts a line break before it, with mdcore_insert and with
+// mdcore_replace_text for an empty range at the caret. The text then
+// ends at the caret, and starts its own length before it.
+//
 // Puts text in at the caret, as mdcore_replace_text does at its place in
 // the source, and the caret is after the text. Text at the end of bold
 // text is bold: it goes where the character before the caret is. Does
 // nothing with no caret.
 void mdcore_insert(void *ctx, const char *utf8, long length);
 
+// Return at the caret: what the block of the caret needs for it. In
+// code, a new line. At the end of the text of a list item, a new item
+// of the same kind. At the end of each other text, an empty line after
+// the block, with the caret in it. In an empty line, one more. In the
+// text, the rest of the text is a paragraph of its own. Does nothing in
+// a table, and with no caret.
+void mdcore_insert_break(void *ctx);
+
 // Takes out the character before the caret: all that the source has for
-// it (an entity, a run of spaces that shows as one space). Does nothing
-// at the start of a block.
+// it (an entity, a run of spaces that shows as one space). In an empty
+// paragraph, the paragraph goes. Does nothing at the start of a block.
 void mdcore_delete_backward(void *ctx);
 
 // The text of the document as it is now, UTF-8: what a host saves after

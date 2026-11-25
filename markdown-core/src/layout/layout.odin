@@ -707,6 +707,13 @@ space_above :: proc(l: ^Layout, b: ^document.Block, heading_size: f32) -> f32 {
 	return l.m.paragraph
 }
 
+// The room of one empty paragraph: the space above a paragraph, and a
+// line of body text.
+@(private)
+empty_height :: proc(l: ^Layout) -> f32 {
+	return l.m.paragraph + math.round(l.m.body * l.m.line_height)
+}
+
 // The height of a block that is not laid out, with the space above it:
 // from the size of its text, with no shaping.
 @(private)
@@ -743,6 +750,8 @@ estimate_block :: proc(l: ^Layout, b: ^document.Block, first: bool) -> f32 {
 		rows := b.columns > 0 ? len(b.cells) / b.columns : 0
 		height = f32(rows) * (math.round(l.m.body * l.m.line_height) + 2 * CELL_PAD_Y)
 	}
+	// The lines of its empty paragraphs.
+	height += f32(b.empties) * empty_height(l)
 	return height + (first ? 0 : space_above(l, b, size))
 }
 
@@ -877,6 +886,10 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 				push_quote_bars(l, b, box.top, l.y - box.top)
 			}
 			l.in_block = false
+			// Each empty paragraph after the block has a line of its
+			// own at the bottom of the box of the block, where a caret
+			// can be.
+			l.y += f32(b.empties) * empty_height(l)
 		}
 		box.bottom = l.y
 		box.line_end = len(work.lines)

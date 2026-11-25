@@ -155,7 +155,15 @@ text_beside :: proc(doc: ^Document, at: Address, forward: bool) -> (next: Addres
 	for block >= 0 && block < doc.count {
 		texts := block_texts(block_at(doc, block))
 		if cell >= 0 && cell < len(texts) {
-			return {block, cell, forward ? 0 : len(texts[cell].bytes)}, true
+			if forward {
+				return {block, cell, 0}, true
+			}
+			// The end of the last text of a block is after its empty
+			// paragraphs.
+			if cell == len(texts) - 1 {
+				return empty_address(doc, block, int(block_at(doc, block).empties))
+			}
+			return {block, cell, len(texts[cell].bytes)}, true
 		}
 		block += step
 		if block >= 0 && block < doc.count {
@@ -172,8 +180,8 @@ text_beside :: proc(doc: ^Document, at: Address, forward: bool) -> (next: Addres
 caret_ends :: proc(doc: ^Document) -> (first, last: Address, ok: bool) {
 	first = text_beside(doc, {0, -1, 0}, true) or_return
 	for block := doc.count - 1; block >= 0; block -= 1 {
-		if texts := block_texts(block_at(doc, block)); len(texts) > 0 {
-			return first, {block, len(texts) - 1, len(texts[len(texts) - 1].bytes)}, true
+		if at, has := empty_address(doc, block, int(block_at(doc, block).empties)); has {
+			return first, at, true
 		}
 	}
 	return
@@ -184,10 +192,21 @@ caret_ends :: proc(doc: ^Document) -> (first, last: Address, ok: bool) {
 // there is no such address.
 step :: proc(doc: ^Document, at: Address, how: Step, forward: bool) -> (next: Address, ok: bool) {
 	text := text_at(doc, at)
+	// An empty paragraph after the last text of a block is one step, of
+	// each kind.
+	if text != nil && at.byte >= len(text.bytes) {
+		b := block_at(doc, at.block)
+		n := empty_of(doc, at)
+		last := at.cell == len(block_texts(b)) - 1
+		if forward ? last && n < int(b.empties) : n > 0 {
+			return empty_address(doc, at.block, n + (forward ? 1 : -1))
+		}
+	}
 	if text == nil || (forward ? at.byte >= len(text.bytes) : at.byte <= 0) {
 		next = text_beside(doc, at, forward) or_return
 		// The step of a word goes on to the word of the text beside.
-		if beside := text_at(doc, next); how == .Word && beside != nil {
+		// Not from an empty paragraph, which is a stop of its own.
+		if beside := text_at(doc, next); how == .Word && beside != nil && next.byte <= len(beside.bytes) {
 			next.byte = word_step(beside.bytes[:], next.byte, forward)
 		}
 		return next, true
