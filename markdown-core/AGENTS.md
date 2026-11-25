@@ -959,6 +959,21 @@ The order of the next steps, from the review of the second step:
   (`Pair.line`, `close` is -1), so the edit that takes a range out does
   not keep it and does not take it for the text. The core needed one
   line for it (`pair_has`).
+- Done: the mark of a list item and of a quote, by the rule that the
+  second review gave. The parser gives the lines of a paragraph too,
+  and what the first line of a block has before its text, from its
+  first byte that is no space, is its mark (`on_line_offset`): "#",
+  "-", "12.", ">", "> - ". It shows for a caret in the block, not in
+  the line only: a block that the page wraps has no lines of the
+  source to show marks at. The block says that its mark is in its
+  text (`Shape.mark_shown`), and the layout then draws no bullet and
+  no number (`place_marker`). A task keeps its check box: its mark
+  ends before the "[". The mark is in the column of the text, so the
+  text of the item goes to the right while it shows.
+- Not done for the marks of a line: the ">" of the later lines of a
+  quote, the fence lines of code, the line under a heading, a rule,
+  an item of a list with no text, and a table cell that shows its
+  source.
 - For the other marks of a line, from a second review: the parser
   call for the lines of a heading (`line_offset`) is to become one
   call for each line of text of each block, and the rule one rule for
@@ -985,8 +1000,8 @@ The order of the next steps, from the review of the second step:
   the marks of an element go with the last text between them also
   while they show, as with no marks in the text (an edit knows each
   element but the ones with a mark that the range has a byte of).
-- Next for the editor, in the order that a reader misses them: the
-  marks of a list item, a quote, and a code fence; undo.
+- Next for the editor, in the order that a reader misses them: undo;
+  the fence lines of code and the line under a heading.
 - Done: where the lines of a block end comes from the parser
   (`block_offset` gives the end too, `Block.lines`), as its start does.
   Before, `empties.lines_end` and `fence_line` read the lines a second

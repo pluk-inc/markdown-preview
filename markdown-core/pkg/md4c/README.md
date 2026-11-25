@@ -15,8 +15,8 @@ range of each definition of a link, `ref_def_use` each use of a
 definition with what it counts for in the parser's limit for such uses,
 `mark_offset` the range of each mark of the inline syntax (the two
 marks of bold text, of code, of a link) with the range of its element,
-and `line_offset` each line of the text of a heading with the start of
-its line of the source (what is between the two is the marks of the
+and `line_offset` each line of the text of a heading and of a
+paragraph with the start of its line of the source (what is between the two is the marks of the
 line).
 The parser knows these, but upstream gives them to no callback, and the
 core needs them: a block must know its range of the source and its lines, and a parse
