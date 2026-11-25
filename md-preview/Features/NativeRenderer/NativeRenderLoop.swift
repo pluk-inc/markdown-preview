@@ -60,6 +60,8 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
     /// True from the point a frame of the link took its offset until it is
     /// drawn.
     nonisolated(unsafe) private var tickInFlight = false
+    /// When the last frame was drawn.
+    nonisolated(unsafe) private var lastFrameTime: CFTimeInterval = 0
     nonisolated(unsafe) private var lastRevision = -1
 
     /// `ctx` is the core's renderer; it must live until `stop()` returned.
@@ -103,6 +105,31 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
         wantsFrame = true
         lock.unlock()
         start()
+    }
+
+    /// The shortest time between a frame and a frame that does not wait
+    /// for the clock of the display: one refresh of a 120 Hz display. The
+    /// layer has a few drawables, and each is free again after the
+    /// refresh that showed it, so no more than one such frame for each
+    /// refresh.
+    private static let earlyFrameGap: CFTimeInterval = 1.0 / 120
+
+    /// Asks for a frame at this scroll offset now, not at the next refresh:
+    /// for a key, which the reader sees one wait for the clock of the
+    /// display sooner. The frame is drawn on the queue of the loop, not on
+    /// the main thread, which a wait for a drawable would stop. When a
+    /// frame was drawn less than one refresh before, or one is in
+    /// progress, or a scroll has its steps from the clock, this is
+    /// `requestFrame`.
+    func requestFrameSoon(at y: Double) {
+        lock.lock()
+        scrollY = y
+        wantsFrame = true
+        let early = animation == nil && !tickInFlight && CACurrentMediaTime() - lastFrameTime >= Self.earlyFrameGap
+        lock.unlock()
+        // The link runs for the frames that come after this one.
+        start()
+        if early { queue.async { [self] in tick() } }
     }
 
     /// Runs `before`, then draws a frame at this offset, or at the one that
@@ -175,7 +202,10 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
         if !wasRunning { CVDisplayLinkStart(link) }
     }
 
-    /// One refresh of the display, on the link's thread.
+    /// One refresh of the display, on the link's thread; or a frame that
+    /// does not wait for one, on the queue (`requestFrameSoon`). The two
+    /// can come at the same time: the frame that is wanted is taken by one
+    /// of them under the lock, and the core lets one draw at a time work.
     private func tick() {
         lock.lock()
         var step: ScrollStep?
@@ -216,6 +246,7 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
         let revision = mdcore_layout_revision(ctx)
         lock.lock()
         tickInFlight = false
+        lastFrameTime = CACurrentMediaTime()
         let layoutChanged = revision != lastRevision
         lastRevision = revision
         lock.unlock()

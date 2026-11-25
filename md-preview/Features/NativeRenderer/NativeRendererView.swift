@@ -938,7 +938,15 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         // The caret's own view gets its place with the page area.
         updatePageArea()
         keepCaretInView()
-        setNeedsDraw()
+        drawNow()
+    }
+
+    /// Asks for a frame now, for a key: a frame at the next refresh of
+    /// the display waits for the clock of the display first, up to one
+    /// refresh, and the reader sees the key that much later.
+    private func drawNow() {
+        guard hasPageToDraw else { return }
+        renderLoop.requestFrameSoon(at: scrollY)
     }
 
     /// Puts the system's caret where the core's caret is, and shows it
