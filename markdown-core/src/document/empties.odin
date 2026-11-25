@@ -8,8 +8,9 @@ import "core:bytes"
 // it, and the first character that is typed there starts its text. So a
 // document says for each block how many such lines come after it
 // (`Shape.empties`), and each is a place of the text of that block: an
-// address with a byte after the end of the last text of the block, one
-// byte for each line (`empty_address`, `empty_of`, `empty_offset`).
+// address at the end of the last text of the block, with the number of
+// the line in a field of its own (`Address.empty`; `empty_address`,
+// `empty_of`, `empty_offset`).
 //
 // Which lines: each line with nothing in it right after the lines of a
 // block, but the last one (the end of a source that ends with a line
@@ -24,9 +25,10 @@ import "core:bytes"
 // them. Text typed between two blocks of a list makes two lists of it,
 // or takes a block out of its item, so a block has none when the block
 // after it is in a list and does not start one (`in_list`). And the
-// empty lines must come right after the lines of the block: ones after
-// raw HTML or after a definition of a link are not counted, and ones in
-// code with no end mark are code.
+// empty lines must come right after the lines of the block, as the
+// parser says where they end (`Block.lines`): ones after raw HTML or
+// after a definition of a link are not counted, and ones in code with
+// no end mark are lines of the code.
 
 // The start of the line break that ends at an offset, or the offset.
 @(private)
@@ -79,110 +81,17 @@ blank :: proc(line: []u8) -> bool {
 	return true
 }
 
-// Where the lines of a block end in a source: the start of the line
-// after its last one (the end of the source for a last line with no
-// line break). `next`: where the block after it starts, or the end of
-// the source. False for a block whose end the lines do not show: code
-// with no end mark.
-@(private)
-lines_end :: proc(source: []u8, b: ^Block, start, next: int) -> (end: int, ok: bool) {
-	if b.kind != .Code {
-		// No line of these blocks is empty.
-		end = start
-		for end < next {
-			text_end, after := line_at(source, end)
-			if blank(source[end:text_end]) {
-				break
-			}
-			end = after
-		}
-		return end, true
-	}
-	// Code can have empty lines, so its end is counted: one line of
-	// the source for each line of its text, and for a fence the line
-	// that starts it and the line that ends it. A fence with no end
-	// mark has no end that the lines show.
-	// The text has a line break between two lines and none after the
-	// last one, so a text that ends with one has an empty last line.
-	lines := 0
-	if len(b.text.bytes) > 0 {
-		lines = bytes.count(b.text.bytes[:], {'\n'}) + 1
-	}
-	fenced := b.fenced
-	end = start
-	// The line that starts the fence: the first line of the block, or a
-	// later one when the block starts at the line of the mark of a
-	// quote or of a list item with nothing more in it.
-	for fenced {
-		if end >= next {
-			return next, false
-		}
-		text_end, after := line_at(source, end)
-		opens := fence_line(source[end:text_end])
-		end = after
-		if opens {
-			break
-		}
-	}
-	for _ in 0 ..< lines {
-		if end >= next {
-			return next, false
-		}
-		_, end = line_at(source, end)
-	}
-	if fenced {
-		mark_end, after_mark := line_at(source, end)
-		// Code of one empty line has no text, as code of no line has.
-		// In a quote that line has the mark of the quote.
-		if lines == 0 && end < next && blank(bytes.trim_left(source[end:mark_end], {' ', '\t', '>'})) {
-			end = after_mark
-			mark_end, after_mark = line_at(source, end)
-		}
-		if end >= next || !fence_line(source[end:mark_end]) {
-			return next, false
-		}
-		end = after_mark
-	}
-	return min(end, next), true
-}
-
-// True for a line that ends a fence of code, after the marks of a quote
-// or of a list item before it. If a block of code is in a fence, the
-// parser says (`Block.fenced`): a line of code by its indent can start
-// with the marks of a fence.
-@(private)
-fence_line :: proc(line: []u8) -> bool {
-	text := bytes.trim_left(line, {' ', '\t', '>'})
-	// The mark of a list item: a bullet, or a number.
-	if len(text) > 1 && (text[0] == '-' || text[0] == '*' || text[0] == '+') && text[1] == ' ' {
-		text = bytes.trim_left(text[1:], {' '})
-	} else {
-		digits := 0
-		for digits < len(text) && text[digits] >= '0' && text[digits] <= '9' {
-			digits += 1
-		}
-		if digits > 0 && digits < len(text) && (text[digits] == '.' || text[digits] == ')') {
-			text = bytes.trim_left(text[digits + 1:], {' '})
-		}
-	}
-	return bytes.has_prefix(text, {'`', '`', '`'}) || bytes.has_prefix(text, {'~', '~', '~'})
-}
-
 // The empty lines right after the lines of a block: where the first
 // one starts (where the lines of the block end), and how many there
-// are. `whole`: the
-// source ends where `source` ends, so its end is a line when a line
-// break is before it. No lines for a block that has no empty
-// paragraphs; `first` is then where its lines end all the same, when
-// the lines show it.
+// are. `whole`: the source ends where `source` ends, so its end is a
+// line when a line break is before it. No lines for a block that has
+// no empty paragraphs; `first` is then where its lines end all the
+// same.
 @(private)
 empty_lines :: proc(source: []u8, b: ^Block, start, next: int, next_in_list, whole: bool) -> (first, count: int) {
 	whole := whole
-	followed, found: bool
-	first, found = lines_end(source, b, start, next)
-	if !found {
-		return next, 0
-	}
+	followed: bool
+	first = min(start + int(b.lines), next)
 	at := first
 	for at < len(source) {
 		text_end, after := line_at(source, at)
@@ -231,15 +140,48 @@ count_empties :: proc(doc: ^Document, end: int, followed, followed_in_list: bool
 	for part in doc.parts {
 		for &b in part_blocks(part) {
 			if before != nil {
-				_, count := empty_lines(doc.source[:end], before, before.source, b.source, in_list(&b), false)
+				lines, count := empty_lines(doc.source[:end], before, before.source, b.source, in_list(&b), false)
 				before.empties = empties_in(count)
+				before.end_spaces = end_spaces_of(doc.source[:end], before, before.source, lines)
 			}
 			before = &b
 		}
 	}
 	if before != nil {
-		_, count := empty_lines(doc.source[:end], before, before.source, end, followed_in_list, !followed)
+		lines, count := empty_lines(doc.source[:end], before, before.source, end, followed_in_list, !followed)
 		before.empties = empties_in(count)
+		before.end_spaces = end_spaces_of(doc.source[:end], before, before.source, lines)
+	}
+}
+
+// How many spaces and tabs the line where the text of a paragraph or a
+// heading ends has at its end (`Block.end_spaces`), with `lines` where
+// the lines of the block end (`Block.lines`) and `first` where they
+// start. That is the last line of the block that has text after its
+// marks: not a line of a quote with only its ">" in it, and not the
+// line under a heading that the line makes ("---"). None for a text
+// with nothing in it (an item of a list with no text yet).
+@(private)
+end_spaces_of :: proc(source: []u8, b: ^Block, first, lines: int) -> u16 {
+	if (b.kind != .Paragraph && b.kind != .Heading) || len(b.text.bytes) == 0 {
+		return 0
+	}
+	end := break_before(source, lines)
+	for {
+		start := line_start(source, end)
+		count := 0
+		for end - count > start && (source[end - count - 1] == ' ' || source[end - count - 1] == '\t') {
+			count += 1
+		}
+		text := bytes.trim_left(source[start:end - count], {' ', '\t', '>'})
+		under := b.kind == .Heading && len(text) > 0 && len(bytes.trim(text, {'=', '-'})) == 0
+		if (len(text) == 0 || under) && start > first {
+			// No text of the block on this line: it ends on a line
+			// before it.
+			end = break_before(source, start)
+			continue
+		}
+		return len(text) == 0 ? 0 : u16(min(count, int(max(u16))))
 	}
 }
 
@@ -298,24 +240,29 @@ empty_text :: proc(doc: ^Document, text: string, allocator := context.allocator)
 	return string(out)
 }
 
-// The address of an empty paragraph of a block: after the end of its
-// last text, one byte for each; with 0, the end of that text. False
-// for a block with no text (a rule).
+// The address of an empty paragraph of a block (`Address.empty`); with
+// 0, the end of its last text. False for a block with no text (a rule).
 empty_address :: proc(doc: ^Document, block, n: int) -> (at: Address, ok: bool) {
 	texts := block_texts(block_at(doc, block))
 	if len(texts) == 0 {
 		return
 	}
-	return {block, len(texts) - 1, len(texts[len(texts) - 1].bytes) + n}, true
+	return {block = block, cell = len(texts) - 1, byte = len(texts[len(texts) - 1].bytes), empty = n}, true
 }
 
 // Which empty paragraph of its block an address is: its number from 1,
-// or 0 for an address in the text.
+// or 0 for an address in the text. Not more than the block has.
 empty_of :: proc(doc: ^Document, at: Address) -> int {
+	return clamp(at.empty, 0, int(block_at(doc, at.block).empties))
+}
+
+// How many of the spaces at the end of the text of its block are
+// before an address (`Address.spaces`). Not more than the block has.
+spaces_of :: proc(doc: ^Document, at: Address) -> int {
 	b := block_at(doc, at.block)
 	texts := block_texts(b)
-	if at.cell != len(texts) - 1 || at.cell < 0 {
+	if at.empty > 0 || at.spaces <= 0 || at.cell != len(texts) - 1 || at.byte != len(texts[at.cell].bytes) {
 		return 0
 	}
-	return clamp(at.byte - len(texts[at.cell].bytes), 0, int(b.empties))
+	return min(at.spaces, int(b.end_spaces))
 }

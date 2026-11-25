@@ -478,12 +478,18 @@ typedef struct MD_PARSER {
      * list, which has no enter_block(). Not called for MD_BLOCK_DOC,
      * MD_BLOCK_BLANK, the parts of a table, and footnote definitions.
      *
-     * The offset is the one of the start of the input line where the block
+     * `beg` is the offset of the start of the input line where the block
      * starts. For a block quote and a list, that is the line of its first
      * mark. Lines that the block gave away (reference definitions at the
      * start of a paragraph) still count as its start.
+     *
+     * `end` is the offset of the start of the input line after the last
+     * line of a leaf block (the end of the input when there is none): the
+     * closing fence of code and the underline of a Setext heading are lines
+     * of the block, and the blank lines after it are not. For a container
+     * block, `end` is `beg`.
      */
-    void (*block_offset)(MD_BLOCKTYPE /*type*/, MD_OFFSET /*offset*/, void* /*userdata*/);
+    void (*block_offset)(MD_BLOCKTYPE /*type*/, MD_OFFSET /*beg*/, MD_OFFSET /*end*/, void* /*userdata*/);
 
     /* Not in upstream md4c (see README.md of this folder). Optional (may be
      * NULL).

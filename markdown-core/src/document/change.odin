@@ -96,7 +96,7 @@ moved :: proc(change: Change, at: Address) -> (now: Address, same: bool) {
 			return now, true
 		}
 	}
-	return {max(min(change.first, change.count - 1), 0), 0, 0}, false
+	return {block = max(min(change.first, change.count - 1), 0)}, false
 }
 
 @(private)

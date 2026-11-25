@@ -5,16 +5,57 @@ package document
 // of the cell. It needs no layout, so it says the same in each layout of
 // the document. A caret, the ends of a selection, and the place of a view
 // are such addresses.
+//
+// Two kinds of places come after the end of the text of a block, and
+// the text has no byte for them. `spaces`: how many of the spaces that
+// the source has after the end of the text (`Block.end_spaces`) are
+// before the place. `empty`: which empty paragraph after the block the
+// place is in, from 1 (`empties.odin`). For each, `byte` is the end of
+// the last text of the block. Both are 0 for a place in the text.
 Address :: struct {
 	block, cell, byte: int,
+	empty, spaces:     int,
 }
 
 // True when `a` comes before `b` in reading order.
 before :: proc(a, b: Address) -> bool {
-	if a.block != b.block {
+	switch {
+	case a.block != b.block:
 		return a.block < b.block
+	case a.cell != b.cell:
+		return a.cell < b.cell
+	case a.empty != b.empty:
+		return a.empty < b.empty
+	case a.byte != b.byte:
+		return a.byte < b.byte
 	}
-	return a.cell < b.cell || (a.cell == b.cell && a.byte < b.byte)
+	return a.spaces < b.spaces
+}
+
+// The last place of a block: after its last empty paragraph, or after
+// the spaces at the end of its text. False for a block with no text (a
+// rule).
+block_end :: proc(doc: ^Document, block: int) -> (at: Address, ok: bool) {
+	b := block_at(doc, block)
+	if b.empties > 0 {
+		return empty_address(doc, block, int(b.empties))
+	}
+	at = empty_address(doc, block, 0) or_return
+	at.spaces = int(b.end_spaces)
+	return at, true
+}
+
+// An address with the end of its text, and with the spaces after it:
+// the end of a line that is the last one of a block. Other addresses
+// as they are.
+with_end_spaces :: proc(doc: ^Document, at: Address) -> Address {
+	at := at
+	b := block_at(doc, at.block)
+	texts := block_texts(b)
+	if at.empty == 0 && at.cell == len(texts) - 1 && at.byte == len(texts[at.cell].bytes) {
+		at.spaces = int(b.end_spaces)
+	}
+	return at
 }
 
 // Which of the texts of its block a text is (`block_texts`): the cell of
@@ -88,7 +129,7 @@ text_ends :: proc(doc: ^Document) -> (first, last: Address, ok: bool) {
 		for &b, slot in part_blocks(part) {
 			for text, cell in block_texts(&b) {
 				if len(text.bytes) > 0 {
-					first, ok = {doc.starts[p] + slot, cell, 0}, true
+					first, ok = {block = doc.starts[p] + slot, cell = cell}, true
 					break outer
 				}
 			}
@@ -103,7 +144,7 @@ text_ends :: proc(doc: ^Document) -> (first, last: Address, ok: bool) {
 			texts := block_texts(&blocks[slot])
 			for cell := len(texts) - 1; cell >= 0; cell -= 1 {
 				if n := len(texts[cell].bytes); n > 0 {
-					return first, {doc.starts[p] + slot, cell, n}, true
+					return first, {block = doc.starts[p] + slot, cell = cell, byte = n}, true
 				}
 			}
 		}

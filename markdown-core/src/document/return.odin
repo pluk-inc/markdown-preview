@@ -155,8 +155,12 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address, allocator := co
 delete_back :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end, caret: int, ok: bool) {
 	if n := empty_of(doc, at); n > 0 {
 		start, end = empty_range(doc, at.block, n)
+		// The empty paragraph before it, or the end of the text.
 		before := at
-		before.byte -= 1
+		before.empty -= 1
+		if before.empty == 0 {
+			before = with_end_spaces(doc, before)
+		}
 		caret = place_of(doc, places, before) or_return
 		return start, end, caret, caret <= start
 	}

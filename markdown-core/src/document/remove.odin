@@ -263,10 +263,10 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 			// All of the text of the blocks: from the start of the first
 			// text or before it, to the end of the last text or after it.
 			texts := block_texts(b)
-			head, has_head := place_of(doc, places, {first, 0, 0})
+			head, has_head := place_of(doc, places, {block = first})
 			tail, has_tail := len(doc.source), true
 			if len(texts) > 0 {
-				tail, has_tail = place_of(doc, places_last, {last, len(texts) - 1, len(texts[len(texts) - 1].bytes)})
+				tail, has_tail = place_of(doc, places_last, {block = last, cell = len(texts) - 1, byte = len(texts[len(texts) - 1].bytes)})
 			}
 			if (has_head && from > head) || (has_tail && to < tail) {
 				return
@@ -357,8 +357,8 @@ transpose :: proc(doc: ^Document, places: []Place, at: Address, allocator := con
 	if middle <= 0 || last <= middle {
 		return
 	}
-	a_start, a_end := char_before(doc, places, {at.block, at.cell, middle}) or_return
-	b_start, b_end := char_before(doc, places, {at.block, at.cell, last}) or_return
+	a_start, a_end := char_before(doc, places, {block = at.block, cell = at.cell, byte = middle}) or_return
+	b_start, b_end := char_before(doc, places, {block = at.block, cell = at.cell, byte = last}) or_return
 	if a_end != b_start {
 		return
 	}

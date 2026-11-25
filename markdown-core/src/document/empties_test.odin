@@ -87,7 +87,7 @@ test_a_step_goes_through_each_empty_paragraph :: proc(t: ^testing.T) {
 	// "ab", two empty paragraphs, "z".
 	doc := parse("ab\n\n\n\nz\n")
 	defer destroy(&doc)
-	path := []Address{{0, 0, 1}, {0, 0, 2}, {0, 0, 3}, {0, 0, 4}, {1, 0, 0}, {1, 0, 1}}
+	path := []Address{{block = 0, byte = 1}, {block = 0, byte = 2}, {block = 0, byte = 2, empty = 1}, {block = 0, byte = 2, empty = 2}, {block = 1}, {block = 1, byte = 1}}
 	for at, i in path[:len(path) - 1] {
 		next, ok := step(&doc, at, .Character, true)
 		testing.expect(t, ok)
@@ -99,27 +99,27 @@ test_a_step_goes_through_each_empty_paragraph :: proc(t: ^testing.T) {
 	// A step of a word stops in each empty paragraph too. From the last
 	// one it goes to the end of the first word after it, and from that
 	// text back into the paragraph.
-	word, _ := step(&doc, {0, 0, 2}, .Word, true)
-	testing.expect_value(t, word, Address{0, 0, 3})
-	word, _ = step(&doc, {0, 0, 4}, .Word, true)
-	testing.expect_value(t, word, Address{1, 0, 1})
-	word, _ = step(&doc, {1, 0, 0}, .Word, false)
-	testing.expect_value(t, word, Address{0, 0, 4})
-	word, _ = step(&doc, {0, 0, 3}, .Word, false)
-	testing.expect_value(t, word, Address{0, 0, 2})
+	word, _ := step(&doc, {block = 0, byte = 2}, .Word, true)
+	testing.expect_value(t, word, Address{block = 0, byte = 2, empty = 1})
+	word, _ = step(&doc, {block = 0, byte = 2, empty = 2}, .Word, true)
+	testing.expect_value(t, word, Address{block = 1, byte = 1})
+	word, _ = step(&doc, {block = 1}, .Word, false)
+	testing.expect_value(t, word, Address{block = 0, byte = 2, empty = 2})
+	word, _ = step(&doc, {block = 0, byte = 2, empty = 1}, .Word, false)
+	testing.expect_value(t, word, Address{block = 0, byte = 2})
 	_, last, _ := caret_ends(&doc)
-	testing.expect_value(t, last, Address{1, 0, 1})
+	testing.expect_value(t, last, Address{block = 1, byte = 1})
 	// The end of a document that ends in an empty paragraph is in it.
 	ends := parse("ab\n\n")
 	defer destroy(&ends)
 	_, last, _ = caret_ends(&ends)
-	testing.expect_value(t, last, Address{0, 0, 3})
+	testing.expect_value(t, last, Address{block = 0, byte = 2, empty = 1})
 	// An offset in an empty paragraph is that paragraph; one in the
 	// last empty line, which is none, is the one before it.
-	testing.expect_value(t, address_of(&doc, 2), Address{0, 0, 2})
-	testing.expect_value(t, address_of(&doc, 3), Address{0, 0, 3})
-	testing.expect_value(t, address_of(&doc, 4), Address{0, 0, 4})
-	testing.expect_value(t, address_of(&doc, 5), Address{0, 0, 4})
+	testing.expect_value(t, address_of(&doc, 2), Address{block = 0, byte = 2})
+	testing.expect_value(t, address_of(&doc, 3), Address{block = 0, byte = 2, empty = 1})
+	testing.expect_value(t, address_of(&doc, 4), Address{block = 0, byte = 2, empty = 2})
+	testing.expect_value(t, address_of(&doc, 5), Address{block = 0, byte = 2, empty = 2})
 }
 
 @(test)
