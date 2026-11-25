@@ -78,6 +78,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-25 | Edit Mode in the native view | 569 / 579 | 53 / 99 | 475 / 720 | 61 / 71 | none | 0.52 / 0.44 | 7.2 / 26.7 (16.2 at the first frame) |
 | 2026-11-25 | the keys that move the caret | 650 / 628 | 59 / 105 | 545 / 875 | 56 / 81 | none | none / 0.42 | 7.1 / 26.6 (16.2 at the first frame) |
 | 2026-11-25 | Return, and the empty line that it makes | 616 / 565 | 61 / 107 | 490 / 775 | 48 / 61 | none | none / 0.34 | 7.2 / 26.6 (16.1 at the first frame) |
+| 2026-11-25 | the bullet of a list item as a circle | 598 / 596 | 51 / 96 | 490 / 740 | 62 / 78 | none | 0.49 / 0.41 | 7.0 / 26.2 (16.1 at the first frame) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -855,3 +856,36 @@ frame, which did not move. The memory of the app is what the two base
 runs differ by (54 to 64 MB). The walk of the caret before the runs
 now also presses Return, types, and deletes, and stops when the text
 is not the text of before.
+
+## The bullet of a list item as a circle (2026-11-25)
+
+The bullet is a record of its box and no paragraph of one character,
+and the check box of a task has its height from the font. `app.py`,
+short / long, five launches for each number, the base built from its
+commit on the same day:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 595 / 598 | 51 / 96 | 500 / 740 |
+| change | 593 / 587 | 51 / 94 | 490 / 740 |
+| change | 602 / 605 | 51 / 97 | 490 / 740 |
+| base | 613 / 653 | 50 / 97 | 500 / 770 |
+
+`core.py`, short / long, the base and the change, two runs each in
+turns (base, change, change, base):
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 64, 61 / 80, 80 | 61, 63 / 79, 77 |
+| Scroll frame, new glyphs (CPU ms) | 0.63, 0.61 / 0.47, 0.48 | 0.57, 0.58 / 0.48, 0.50 |
+| Scroll frame, glyphs ready (CPU ms) | 0.34, 0.33 / 0.41, 0.43 | 0.35, 0.42 / 0.42, 0.40 |
+| A typed character in the middle of the text (CPU ms) | 1.2, 1.2 / 1.4, 1.7 | 1.2, 1.4 / 1.6, 1.5 |
+| Heap at the first frame (MB) | 5.3 / 16.2 | 5.3 / 16.1 |
+| Heap with all of the document laid out (MB) | 7.1, 7.2 / 26.6 | 7.0 / 26.2 |
+
+No time moved. The heap with all of the long document laid out is
+0.4 MB lower: a bullet was a paragraph record and a line record with a
+shaped line, and is one record of its box now. A first run of this
+benchmark showed 40 ms more for a launch of the change; two reviewer
+agents had started in the middle of it. This run had the Mac to
+itself.
