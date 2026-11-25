@@ -98,4 +98,10 @@ with each change to the parser or the layout.
 ## What it does not do yet
 
 Images, math, diagrams, syntax colors, footnotes, alerts, raw HTML, links
-that open, Find, Edit Mode, the outline, print, export, and VoiceOver.
+that open, Find, the outline, print, export, and VoiceOver.
+
+Edit Mode has its first form: a click puts a caret in the text, and the
+reader types, deletes the character before the caret, starts a new
+paragraph with Return, pastes, and saves. It does not have the arrow
+keys, a selection that typing takes the place of, undo, the formatting
+bar, images that are pasted, or a caret in a table cell with no text.

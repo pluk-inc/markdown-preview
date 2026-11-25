@@ -21,13 +21,22 @@ extension DocumentWindowController {
         releaseDownloadPlaceholder()
         split.updateInspectorSelection(nil)
 
-        // Edit the complete source. Frontmatter is stripped only by the
-        // read-only renderer; the editor must expose and preserve it.
-        let editor = split.enterEditMode(
-            markdown: markdown,
-            assetBaseURL: currentFileURL?.deletingLastPathComponent(),
-            autofocus: autofocus
-        )
+        // With the native renderer, its view is the editor: it has the
+        // document already. The web editor comes in for the web renderer.
+        let native = split.enterNativeEditMode()
+        let editor: any DocumentEditor
+        if let native {
+            editor = native
+        } else {
+            // Edit the complete source. Frontmatter is stripped only by
+            // the read-only renderer; the editor must expose and
+            // preserve it.
+            editor = split.enterEditMode(
+                markdown: markdown,
+                assetBaseURL: currentFileURL?.deletingLastPathComponent(),
+                autofocus: autofocus
+            )
+        }
         invalidateInspectorRefresh()
         split.onLiveMetadataNeedsRefresh = { [weak self, weak editor] in
             guard let self, let editor else { return }
@@ -38,34 +47,52 @@ extension DocumentWindowController {
         }
         editor.contentDidChange = { [weak self, weak editor] in
             guard let self, let editor else { return }
-            self.editorChangeRevision += 1
-            self.pendingInspectorComputation?.cancel()
-            self.hasUnsavedEditorChanges = true
-            self.stopAutoSaveTimer()
-            self.startAutoSaveTimerIfNeeded()
-            self.scheduleInspectorRefresh(from: editor)
+            self.editorContentDidChange(in: editor)
         }
-        editor.formattingDidChange = { [weak self] heading, commands, selection in
+        beginEditorBaseline()
+        guard let web = editor as? EditorViewController else {
+            // The view takes the keys, so Escape leaves Edit mode also
+            // before a click. No formatting bar: its commands are of the
+            // web editor.
+            documentWindow.makeFirstResponder(native)
+            updateEditToolbarItem()
+            return
+        }
+        web.formattingDidChange = { [weak self] heading, commands, selection in
             self?.updateFormattingSelection(heading: heading, commands: commands)
             self?.mainSplit?.updateInspectorSelection(selection)
         }
-        editor.pasteImageRequested = { [weak self] from, to in
+        web.pasteImageRequested = { [weak self] from, to in
             self?.pasteImage(at: from, replacing: to)
         }
-        editor.imageClicked = { [weak self] url in
+        web.imageClicked = { [weak self] url in
             self?.renameImage(at: url)
-        }
-        if editorBaselineMarkdown == nil {
-            editorBaselineMarkdown = currentMarkdown
-            editorChangeRevision = 0
-            hasUnsavedEditorChanges = false
         }
         showEditAccessory()
         updateEditToolbarItem()
     }
 
+    /// The text on disk that the edits of this session are compared with.
+    private func beginEditorBaseline() {
+        if editorBaselineMarkdown == nil {
+            editorBaselineMarkdown = currentMarkdown
+            editorChangeRevision = 0
+            hasUnsavedEditorChanges = false
+        }
+    }
+
+    /// The reader changed the text in an editor.
+    private func editorContentDidChange(in editor: any DocumentEditor) {
+        editorChangeRevision += 1
+        pendingInspectorComputation?.cancel()
+        hasUnsavedEditorChanges = true
+        stopAutoSaveTimer()
+        startAutoSaveTimerIfNeeded()
+        scheduleInspectorRefresh(from: editor)
+    }
+
     /// Throttle editor snapshots and refresh only the currently visible panes.
-    private func scheduleInspectorRefresh(from editor: EditorViewController) {
+    private func scheduleInspectorRefresh(from editor: any DocumentEditor) {
         guard pendingInspectorRefresh == nil,
               let split = mainSplit,
               split.isInspectorVisible
@@ -76,7 +103,7 @@ extension DocumentWindowController {
             self.pendingInspectorRefresh = nil
             guard let editor,
                   self.inspectorRefreshSessionID == sessionID,
-                  self.mainSplit?.editorViewController === editor else { return }
+                  self.mainSplit?.documentEditor === editor else { return }
 
             let revision = self.editorChangeRevision
             let fileURL = self.currentFileURL
@@ -85,7 +112,7 @@ extension DocumentWindowController {
                       self.inspectorRefreshSessionID == sessionID,
                       self.editorChangeRevision == revision,
                       self.currentFileURL == fileURL,
-                      self.mainSplit?.editorViewController === editor else { return }
+                      self.mainSplit?.documentEditor === editor else { return }
                 self.computeVisibleSidebars(markdown: markdown, fileURL: fileURL,
                                             revision: revision, sessionID: sessionID)
             }
@@ -112,7 +139,7 @@ extension DocumentWindowController {
                       self.inspectorRefreshSessionID == sessionID,
                       self.editorChangeRevision == revision,
                       self.currentFileURL == fileURL,
-                      self.mainSplit?.editorViewController != nil else { return }
+                      self.mainSplit?.documentEditor != nil else { return }
                 self.mainSplit?.applyLiveSidebarUpdates(
                     outline: outline, metadata: metadata, fileURL: fileURL
                 )
@@ -124,7 +151,7 @@ extension DocumentWindowController {
 
     /// The file URL changed while editing; invalidate old-URL work and read the live editor again.
     func refreshInspectorAfterRename() {
-        guard let editor = mainSplit?.editorViewController else { return }
+        guard let editor = mainSplit?.documentEditor else { return }
         invalidateInspectorRefresh()
         scheduleInspectorRefresh(from: editor)
     }
@@ -142,7 +169,7 @@ extension DocumentWindowController {
     /// renders the in-memory source, while the disk baseline is kept for a
     /// later Save or close decision.
     func previewPendingEdits() {
-        guard let split = mainSplit, let editor = split.editorViewController else { return }
+        guard let split = mainSplit, let editor = split.documentEditor else { return }
         editor.fetchMarkdown { [weak self] markdown in
             guard let self, let markdown else {
                 NSSound.beep()
@@ -339,8 +366,10 @@ extension DocumentWindowController {
             performPendingEditorCommit(body: body, editor: nil, exitAfter: exitAfter)
             return
         }
-        guard let editor = split.editorViewController else {
-            finishEditorCommit(success: true)
+        guard let editor = split.documentEditor else {
+            // No editor and no draft to take the text from: with edits
+            // that are not saved, that is no save.
+            finishEditorCommit(success: !hasUnsavedEditorChanges)
             return
         }
         let revision = editorChangeRevision
@@ -360,7 +389,7 @@ extension DocumentWindowController {
     }
 
     private func performPendingEditorCommit(body: String,
-                                            editor: EditorViewController?,
+                                            editor: (any DocumentEditor)?,
                                             revision: Int? = nil,
                                             exitAfter: Bool) {
         isEditorCommitInFlight = true
@@ -422,7 +451,7 @@ extension DocumentWindowController {
 
     private func handleEditedMarkdownSaveResult(_ result: EditedMarkdownSaveResult,
                                                 body: String,
-                                                editor: EditorViewController?,
+                                                editor: (any DocumentEditor)?,
                                                 revision: Int?,
                                                 exitAfter: Bool) {
         switch result {
@@ -454,7 +483,7 @@ extension DocumentWindowController {
     }
 
     func adoptExternalMarkdown(_ markdown: String,
-                              editor: EditorViewController?,
+                              editor: (any DocumentEditor)?,
                               exitAfter: Bool) {
         invalidateInspectorRefresh()
         currentMarkdown = markdown
@@ -534,9 +563,9 @@ extension DocumentWindowController {
             return
         }
         split.updateInspectorSelection(nil)
-        split.editorViewController?.contentDidChange = nil
+        split.documentEditor?.contentDidChange = nil
+        split.documentEditor?.cancelRequested = nil
         split.editorViewController?.formattingDidChange = nil
-        split.editorViewController?.cancelRequested = nil
         split.editorViewController?.pasteImageRequested = nil
         split.editorViewController?.imageClicked = nil
         invalidateInspectorRefresh()

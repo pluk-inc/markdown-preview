@@ -47,7 +47,9 @@ extension DocumentWindowController {
         syncSidebarToolbarState()
     }
 
-    var canFormatMarkdown: Bool { isEditing }
+    /// The format commands are of the web editor: the native renderer's
+    /// Edit mode does not have them yet.
+    var canFormatMarkdown: Bool { isEditing && mainSplit?.editorViewController != nil }
 
     func formatMarkdown(_ command: String) {
         guard isEditing else { return }

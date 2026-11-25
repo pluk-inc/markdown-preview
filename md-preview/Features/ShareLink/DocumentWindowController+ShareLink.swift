@@ -67,7 +67,7 @@ extension DocumentWindowController {
     /// The text a link shares: while editing, the editor's live text, which
     /// `currentMarkdown` only catches up with on save or preview.
     private func withSharedMarkdown(_ body: @escaping (String) -> Void) {
-        guard isEditing, let editor = mainSplit?.editorViewController else {
+        guard isEditing, let editor = mainSplit?.documentEditor else {
             if let markdown = currentMarkdown { body(markdown) }
             return
         }

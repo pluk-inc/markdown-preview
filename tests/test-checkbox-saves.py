@@ -33,7 +33,7 @@ final class NSAlert {
     var informativeText = ""
     static var respond: ((Response) -> Void)?
     func addButton(withTitle: String) {}
-    func beginSheetModal(for window: Int, completionHandler: @escaping (Response) -> Void) {
+    func beginSheetModal(for window: Window, completionHandler: @escaping (Response) -> Void) {
         NSAlert.respond = completionHandler
     }
 }
@@ -44,7 +44,7 @@ final class NSSavePanel {
     var url: URL?
     static var pending: NSSavePanel?
     static var respond: ((Response) -> Void)?
-    func beginSheetModal(for window: Int, completionHandler: @escaping (Response) -> Void) {
+    func beginSheetModal(for window: Window, completionHandler: @escaping (Response) -> Void) {
         Self.pending = self
         Self.respond = completionHandler
     }
@@ -54,18 +54,29 @@ final class Document {
     func replaceContents(markdown: String, fileURL: URL? = nil) { contents = markdown }
 }
 enum NSSound { static func beep() {} }
-final class Editor {
+// What the session needs of an editor, as in production.
+protocol DocumentEditor: AnyObject {
+    var contentDidChange: (() -> Void)? { get set }
+    var cancelRequested: (() -> Void)? { get set }
+    func fetchMarkdown(_ completion: @escaping (String?) -> Void)
+}
+final class Editor: DocumentEditor {
     var markdown = ""
     var cancelRequested: (() -> Void)?
     var contentDidChange: (() -> Void)?
     var formattingDidChange: ((Int, Set<String>, String?) -> Void)?
     var pasteImageRequested: ((Int, Int) -> Void)?
     var imageClicked: ((URL) -> Void)?
-    func fetchMarkdown(_ completion: (String?) -> Void) { completion(markdown) }
+    func fetchMarkdown(_ completion: @escaping (String?) -> Void) { completion(markdown) }
 }
+typealias EditorViewController = Editor
+final class Window { func makeFirstResponder(_ responder: AnyObject?) {} }
 final class Split {
     var isEditingDocument = false
     var editorViewController: Editor? = Editor()
+    // The web editor is the one under test: no native renderer here.
+    var documentEditor: (any DocumentEditor)? { editorViewController }
+    func enterNativeEditMode() -> Editor? { nil }
     var onLiveMetadataNeedsRefresh: (() -> Void)?
     func updateInspectorSelection(_ text: String?) {}
     func enterEditMode(markdown: String, assetBaseURL: URL?, autofocus: Bool) -> Editor {
@@ -86,7 +97,7 @@ final class Controller {
     // Inspector refresh is outside the checkbox/save behavior under test.
     var pendingInspectorComputation: DispatchWorkItem?
     func invalidateInspectorRefresh() {}
-    func scheduleInspectorRefresh(from editor: Editor) {}
+    func scheduleInspectorRefresh(from editor: any DocumentEditor) {}
     func stopAutoSaveTimer() {}
     func startAutoSaveTimerIfNeeded() {}
     func updateFormattingSelection(heading: Int, commands: Set<String>) {}
@@ -107,16 +118,17 @@ final class Controller {
     var currentMarkdown: String?
     var currentFileURL: URL?
     var markdownDocument: Document? = Document()
-    var documentWindow = 0
+    var documentWindow = Window()
     var rendered = ""
     func renderCurrentDocument(text: String, fileURL: URL) { rendered = text }
     func handleRename(to url: URL) { currentFileURL = url }
 '''
-for name in ['enterEditMode', 'previewPendingEdits', 'diskFileState', 'saveEditedMarkdown', 'toggleTaskCheckbox', 'rerenderCurrentPreview',
+for name in ['enterEditMode', 'beginEditorBaseline', 'editorContentDidChange', 'previewPendingEdits', 'diskFileState', 'saveEditedMarkdown', 'toggleTaskCheckbox', 'rerenderCurrentPreview',
              'presentExternalEditConflict', 'presentUnavailableFileConflict',
              'persistEditedMarkdown', 'write']:
     signature = ('private ' if name in ['presentExternalEditConflict', 'presentUnavailableFileConflict',
-                                       'persistEditedMarkdown', 'write'] else '') + 'func ' + name + '('
+                                       'persistEditedMarkdown', 'write',
+                                       'beginEditorBaseline', 'editorContentDidChange'] else '') + 'func ' + name + '('
     swift += extract(source, signature) + '\n'
 swift += '}\n'
 swift += extract((root / 'md-preview/Rendering/EscapingHTMLFormatter.swift').read_text(),

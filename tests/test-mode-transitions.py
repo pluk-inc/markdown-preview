@@ -70,7 +70,7 @@ struct Deadline { static func now() -> Self { Self() }; static func +(lhs: Self,
 }
 enum MarkdownHTML { static let preferredPageWidth: Double = 820 }
 final class Constraint { var constant: Double = 0 }
-final class NativeRenderer { var textZoom: Double = 1 }
+final class NativeRenderer { var textZoom: Double = 1; var isEditable = false }
 @MainActor final class Preview {
     let view = View()
     var nativeRenderer: NativeRenderer?
@@ -111,7 +111,7 @@ swift += '''
 swift += '\n'.join(method(name) for name in [
     '@IBAction func zoomInDocument', '@IBAction func zoomOutDocument',
     '@IBAction func resetDocumentZoom', 'func applyTextSizeSetting()',
-    'var isEditingDocument:', 'func enterEditMode',
+    'var isNativeEditing:', 'var isEditingDocument:', 'func enterEditMode',
     'private func revealEditorIfPrepared', 'func exitEditMode'
 ])
 swift += '\n    init() {\n' + method('    contentViewController?.zoomDidChange =') + '\n    }\n}\n'
