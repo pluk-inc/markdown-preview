@@ -341,7 +341,9 @@ mdcore_replace_text :: proc "c" (handle: rawptr, start, end: c.long, utf8: [^]u8
 // of the view at the same time.
 @(private)
 typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
-	if len(text) > 0 && start == end && start == ctx.caret && ctx.doc.count > 0 && document.empty_of(&ctx.doc, ctx.caret_at) > 0 {
+	// Not for text that starts with a line break itself (the bytes of a
+	// delete that come back): it has what makes it a paragraph of its own.
+	if len(text) > 0 && text[0] != '\n' && text[0] != '\r' && start == end && start == ctx.caret && ctx.doc.count > 0 && document.empty_of(&ctx.doc, ctx.caret_at) > 0 {
 		own := document.empty_text(&ctx.doc, text)
 		defer delete(own)
 		change_source_held(ctx, own, [2]int{start, end})
