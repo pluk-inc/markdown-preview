@@ -311,7 +311,23 @@ mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 mdcore_replace_text :: proc "c" (handle: rawptr, start, end: c.long, utf8: [^]u8, length: c.long) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
-	change_source(ctx, length > 0 ? string(utf8[:length]) : "", [2]int{int(start), int(end)})
+	context.temp_allocator = ctx.temp
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	typed(ctx, length > 0 ? string(utf8[:length]) : "", int(start), int(end))
+}
+
+// Text that a reader put in, from a key or from the host: it takes the
+// place of a range of the source. In an empty paragraph it starts a
+// paragraph of its own there (`document.empty_text`). The caller holds
+// `source_lock`.
+@(private)
+typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
+	text := text
+	if len(text) > 0 && start == end && start == ctx.caret && ctx.doc.count > 0 && document.empty_of(&ctx.doc, ctx.caret_at) > 0 {
+		text = document.empty_text(&ctx.doc, text)
+	}
+	change_source_held(ctx, text, [2]int{start, end})
 }
 
 // The one way that the source of the document changes (but for a task
@@ -839,7 +855,8 @@ mdcore_insert :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	if ctx.caret < 0 || length <= 0 {
 		return
 	}
-	change_source_held(ctx, string(utf8[:length]), [2]int{ctx.caret, ctx.caret})
+	context.temp_allocator = ctx.temp
+	typed(ctx, string(utf8[:length]), ctx.caret, ctx.caret)
 }
 
 // Return at the caret. See the header.

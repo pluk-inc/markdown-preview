@@ -22,7 +22,7 @@ line_ending :: proc(source: []u8) -> string {
 // What Return puts into the source for a caret at an address of the
 // text of a block, where, and where the caret is after it:
 //
-// - In an empty paragraph, one more after it.
+// - In an empty paragraph, one more: a line break at the caret.
 // - In code, a line break at the caret: a new line of the code, with
 //   the indent of code that is code by its indent.
 // - At the end of the text of a list item, a new item of the same kind
@@ -49,7 +49,7 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end:
 	offset := place_of(doc, places, at) or_return
 	two := strings.concatenate({nl, nl}, context.temp_allocator)
 	if empty_of(doc, at) > 0 {
-		return offset, offset, two, offset + len(two), true
+		return offset, offset, nl, offset + len(nl), true
 	}
 	texts := block_texts(b)
 	if b.kind == .Table || at.cell >= len(texts) {
@@ -91,12 +91,11 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end:
 		}
 		return start, end, two, start + len(two), true
 	}
-	// At the end of the text: after the lines of the block.
-	after, empty, followed := block_empty_lines(doc, at.block)
-	// The empty paragraph is the second line after the block. With a
-	// line with something in it right after, it needs a line that ends
-	// it too.
-	breaks := empty == 0 && followed ? strings.concatenate({nl, nl, nl}, context.temp_allocator) : two
+	// At the end of the text: after the lines of the block. The empty
+	// paragraph is the first line after them, and the line after it
+	// ends it: a block with no empty line after it needs the two.
+	after, empty, _ := block_empty_lines(doc, at.block)
+	breaks := empty == 0 ? two : nl
 	if is_item(doc, at.block) {
 		if len(texts[at.cell].bytes) == 0 {
 			// No text: the line of the item becomes an empty paragraph.
@@ -106,7 +105,7 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end:
 			if at.block + 1 < doc.count && in_list(block_at(doc, at.block + 1)) {
 				return start, end, "", start, true
 			}
-			return start, end, breaks, start + len(two), true
+			return start, end, breaks, start + len(nl), true
 		}
 		if mark, has := item_mark(doc, at.block); has {
 			// After the lists that are in the item.
@@ -124,13 +123,13 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end:
 		return
 	}
 	after = break_before(source, after)
-	return after, after, breaks, after + len(two), true
+	return after, after, breaks, after + len(nl), true
 }
 
-// What a delete takes out for a caret at an address that is not after a
-// character: an empty paragraph, or a list item with no text. The caret
-// is then at `caret`, the end of what is before it. False at each other
-// address.
+// What a delete takes out for a caret at an address where it is more
+// than the character before the caret, or another thing: an empty
+// paragraph, a list item with no text, or the only character of a
+// paragraph. The caret is then at `caret`. False at each other address.
 delete_back :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end, caret: int, ok: bool) {
 	if n := empty_of(doc, at); n > 0 {
 		start, end = empty_range(doc, at.block, n)
@@ -139,8 +138,29 @@ delete_back :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end
 		caret = place_of(doc, places, before) or_return
 		return start, end, caret, caret <= start
 	}
-	start, end = empty_item(doc, at.block) or_return
-	return start, end, start, true
+	if start, end, ok = empty_item(doc, at.block); ok {
+		return start, end, start, true
+	}
+	// The only character of a paragraph: its line stays, as an empty
+	// line. The paragraph had an empty line before it, which showed as
+	// no line; with the character out, that one shows, so one of the
+	// two goes with the character.
+	b := block_at(doc, at.block)
+	if at.block == 0 || b.kind != .Paragraph || b.list_depth > 0 || b.quote_depth > 0 || at.byte != len(b.text.bytes) {
+		return
+	}
+	from, to := char_before(doc, places, at) or_return
+	line := block_start(doc, at.block)
+	line_end, _ := line_at(doc.source, line)
+	before := break_before(doc.source, line)
+	above := before
+	for above > 0 && doc.source[above - 1] != '\n' && doc.source[above - 1] != '\r' {
+		above -= 1
+	}
+	if from != line || to != line_end || before == line || !blank(doc.source[above:before]) || block_at(doc, at.block - 1).kind == .Rule {
+		return
+	}
+	return above, to, above, true
 }
 
 // True for a block that is the first and only block of a list item

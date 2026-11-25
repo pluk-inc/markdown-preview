@@ -975,7 +975,9 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
                 mdcore_replace_text(ctx, start, end, $0.baseAddress, $0.count)
             }
         }
-        return start
+        // The text ends at the caret. In an empty line the core put a
+        // line break before it, so it starts later than `start`.
+        return mdcore_caret_offset(ctx) - text.utf8.count
     }
 
     /// Scrolls so that the line of the caret shows, with a little room.

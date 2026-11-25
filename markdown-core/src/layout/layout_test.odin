@@ -1590,7 +1590,7 @@ test_the_end_of_a_line_with_no_space_is_in_that_line :: proc(t: ^testing.T) {
 
 @(test)
 test_an_editor_shows_each_empty_paragraph_as_a_line :: proc(t: ^testing.T) {
-	SOURCE :: "first\n\n\n\n\n\nsecond\n\n\n"
+	SOURCE :: "first\n\n\n\nsecond\n\n"
 	// A reader gives the empty lines no room; an editor gives each
 	// empty paragraph a line, so what is after them is lower.
 	reader, editor: Fixture

@@ -11,21 +11,22 @@ import "core:bytes"
 // address with a byte after the end of the last text of the block, one
 // byte for each line (`empty_address`, `empty_of`, `empty_offset`).
 //
-// Which lines: right after the lines of a block come empty lines b0, b1,
-// b2, and so on, to the next line with something in it or to the end of
-// the source (the end of a source that ends with a line break is such a
-// line too). b0 ends the block. b1 is an empty paragraph: text typed
-// there has an empty line before it, so it is a paragraph of its own.
-// b2 ends that one, b3 is the next, and so on. The last empty line
-// before a line with something in it is no paragraph: text typed there
-// is the first line of what comes.
+// Which lines: each line with nothing in it right after the lines of a
+// block, but the last one (the end of a source that ends with a line
+// break is such a line too). That is what an editor of the lines of
+// the source shows: one line for each, and the last one is the one
+// that ends the text before the next block. Text that is typed in such
+// a line must be a paragraph of its own, at that place: it goes in
+// with a line break before it (`empty_text`), so it has an empty line
+// before it, and the lines after it are as they were.
 //
 // Not after each block. A rule has no text, so it has no address for
 // them. Text typed between two blocks of a list makes two lists of it,
 // or takes a block out of its item, so a block has none when the block
-// after it is in a list and does not start one (`in_list`). And the empty lines must come right after the
-// lines of the block: ones after raw HTML or after a definition of a
-// link are not counted, and ones in code with no end mark are code.
+// after it is in a list and does not start one (`in_list`). And the
+// empty lines must come right after the lines of the block: ones after
+// raw HTML or after a definition of a link are not counted, and ones in
+// code with no end mark are code.
 
 // The start of the line break that ends at an offset, or the offset.
 @(private)
@@ -177,10 +178,10 @@ in_list :: proc(b: ^Block) -> bool {
 	return b.list_depth > 0 && b.spacing != .List_Start
 }
 
-// How many of some empty lines are empty paragraphs.
+// How many of some empty lines are empty paragraphs: each but the last.
 @(private)
-empties_in :: proc(count: int, followed: bool) -> u16 {
-	return u16(clamp((followed ? count - 1 : count) / 2, 0, int(max(u16))))
+empties_in :: proc(count: int) -> u16 {
+	return u16(clamp(count - 1, 0, int(max(u16))))
 }
 
 // Gives each block of a document that was parsed its number of empty
@@ -195,14 +196,14 @@ count_empties :: proc(doc: ^Document, end: int, followed, followed_in_list: bool
 		for &b in part_blocks(part) {
 			if before != nil {
 				_, count, _ := empty_lines(doc.source[:end], before, before.source, b.source, in_list(&b), false)
-				before.empties = empties_in(count, true)
+				before.empties = empties_in(count)
 			}
 			before = &b
 		}
 	}
 	if before != nil {
-		_, count, more := empty_lines(doc.source[:end], before, before.source, end, followed && followed_in_list, !followed)
-		before.empties = empties_in(count, more || followed)
+		_, count, _ := empty_lines(doc.source[:end], before, before.source, end, followed && followed_in_list, !followed)
+		before.empties = empties_in(count)
 	}
 }
 
@@ -218,24 +219,18 @@ block_empty_lines :: proc(doc: ^Document, block: int) -> (first, count: int, fol
 // `n` from 1. The block has that many.
 empty_offset :: proc(doc: ^Document, block, n: int) -> int {
 	at, _, _ := block_empty_lines(doc, block)
-	// Two lines on for each: the line that ends what is before it, and
-	// the paragraph itself.
-	for _ in 0 ..< 2 * n - 1 {
+	for _ in 1 ..< n {
 		_, at = line_at(doc.source, at)
 	}
 	return at
 }
 
-// The lines of the source that an empty paragraph of a block is: the
-// line that ends what is before it, and its own line. With these out,
-// the source has one empty paragraph less after the block.
+// The line of the source that an empty paragraph of a block is, with
+// its line break. With it out, the source has one empty paragraph less
+// after the block.
 empty_range :: proc(doc: ^Document, block, n: int) -> (start, end: int) {
-	start, _, _ = block_empty_lines(doc, block)
-	for _ in 0 ..< 2 * n - 2 {
-		_, start = line_at(doc.source, start)
-	}
+	start = empty_offset(doc, block, n)
 	_, end = line_at(doc.source, start)
-	_, end = line_at(doc.source, end)
 	return
 }
 
@@ -246,9 +241,24 @@ empty_at :: proc(doc: ^Document, block, offset: int) -> int {
 	if empties == 0 {
 		return 0
 	}
-	// Paragraph n starts 2n - 1 lines after the first empty line.
 	first, _, _ := block_empty_lines(doc, block)
-	return clamp((count_lines(doc.source, first, offset) + 1) / 2, 0, empties)
+	if offset < first {
+		return 0
+	}
+	return min(count_lines(doc.source, first, offset) + 1, empties)
+}
+
+// Text that is typed in an empty paragraph, as it goes into the source:
+// with a line break before it. The text then has an empty line before
+// it, so it is a paragraph of its own, and it is at the place of the
+// line that it was typed in: the line before it shows no more (it ends
+// the text before the new paragraph), and the lines after it are as
+// they were. In the temporary memory of the context.
+empty_text :: proc(doc: ^Document, text: string) -> string {
+	out := make([]u8, len(line_ending(doc.source)) + len(text), context.temp_allocator)
+	copy(out, line_ending(doc.source))
+	copy(out[len(line_ending(doc.source)):], text)
+	return string(out)
 }
 
 // The address of an empty paragraph of a block: after the end of its
