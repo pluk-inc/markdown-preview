@@ -5,6 +5,7 @@ import "../document"
 import "../text"
 import "core:fmt"
 import "core:math"
+import "core:math/rand"
 import "core:strings"
 import "core:testing"
 
@@ -1288,4 +1289,57 @@ test_a_place_on_a_rule_or_in_blank_code_lines_is_the_text_below :: proc(t: ^test
 	at, ok := place_y(&f.page, kept.place)
 	testing.expect(t, ok)
 	testing.expect(t, abs(at - y) < 0.01)
+}
+
+@(test)
+test_a_layout_after_edits_is_the_layout_of_its_source :: proc(t: ^testing.T) {
+	PIECES := []string{"x", "\n\n", "# ", "- ", "> ", "```\n", "| a |\n| - |\n", "\n\nA new paragraph with some words in it.\n\n"}
+	before := long_source(30)
+	defer delete(before)
+	f: Fixture
+	setup(&f, before, 500)
+	defer teardown(&f)
+	lay_out(&f.page, 0, 600, 0)
+	// The same numbers each run.
+	state := rand.create(0x9e3779b97f4a7c15)
+	context.random_generator = rand.default_random_generator(&state)
+	for edit in 0 ..< 80 {
+		e: document.Edit
+		e.start = rand.int_max(len(f.doc.source) + 1)
+		e.end = e.start
+		if rand.int_max(2) == 0 {
+			e.text = PIECES[rand.int_max(len(PIECES))]
+		} else {
+			e.end = min(e.start + rand.int_max(30), len(f.doc.source))
+		}
+		now := document.edited(f.doc.source, e)
+		defer delete(now)
+		change_to(&f, string(now))
+		expect_ok(t, &f.page)
+		// A view at some height of the page, as after a scroll.
+		y := f.page.origin + f64(rand.int_max(1000)) / 1000 * f.page.content_height
+		lay_out(&f.page, y, y + 600, y)
+		expect_ok(t, &f.page)
+		// Each tenth edit: all of it laid out has the lines of a new
+		// layout of the same source, at the same places. The edits
+		// between leave parts with no records and parts with records
+		// of before, as a view that scrolls does.
+		if edit % 10 != 9 {
+			continue
+		}
+		step(&f.page, 1e30)
+		expect_ok(t, &f.page)
+		fresh: Fixture
+		setup(&fresh, string(f.doc.source), 500)
+		defer teardown(&fresh)
+		step(&fresh.page, 1e30)
+		testing.expect(t, abs(f.page.content_height - fresh.page.content_height) < 0.01)
+		want, got := page_lines(&fresh.page), page_lines(&f.page)
+		defer delete(want)
+		defer delete(got)
+		testing.expect_value(t, len(got), len(want))
+		for value, i in want[:min(len(want), len(got))] {
+			testing.expect(t, abs(got[i] - value) < 0.01)
+		}
+	}
 }

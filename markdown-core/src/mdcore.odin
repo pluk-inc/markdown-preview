@@ -66,6 +66,9 @@ Ctx :: struct {
 	cache:           text.Glyph_Cache,
 	gpu:             renderer.Renderer,
 	selection:       document.Selection,
+	// Held for all of a change of the source of the document, before
+	// `lock`. A frame does not take it.
+	source_lock:     sync.Mutex,
 	// The view.
 	width, height:   f32, // points
 	page_width:      f32, // the part of the width that the page is laid out in; 0 for all of it
@@ -270,52 +273,72 @@ mdcore_set_style :: proc "c" (handle: rawptr, style: ^base.Style) {
 mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
-	text := length > 0 ? string(utf8[:length]) : ""
-	{
-		hold(ctx)
-		// The text that the document has: a host that gets its own save
-		// back, or the source after a task click. Nothing changes.
-		if string(ctx.doc.source) == text {
-			return
+	change_source(ctx, length > 0 ? string(utf8[:length]) : "")
+}
+
+// Puts a text in the place of a range of the source. See the header.
+@(export)
+mdcore_replace_text :: proc "c" (handle: rawptr, start, end: c.long, utf8: [^]u8, length: c.long) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	change_source(ctx, length > 0 ? string(utf8[:length]) : "", [2]int{int(start), int(end)})
+}
+
+// The one way that the source of the document changes (but for a task
+// that is set in place): `text` takes the place of a range of the source
+// that is there, or, with no range, is all of the new source. The document
+// changes in place: the blocks that are the same keep their records, and
+// the layout makes only the parts of the others again. The first
+// document and a document with no block in common are the same case.
+@(private)
+change_source :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil) {
+	// One change at a time, from its edit to its end: the edit is of the
+	// source that is there, and the parse runs with no lock on the state,
+	// so frames go on. Only a call that changes the source takes this
+	// lock, and only such a call reads the source.
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	edit: document.Edit
+	if r, given := range.?; given {
+		edit = {r[0], r[1], text}
+	} else {
+		edit = document.edit_between(ctx.doc.source, text)
+	}
+	// The text that the document has: a host that gets its own save
+	// back, or the source after a task click.
+	if document.edit_is_empty(edit) {
+		return
+	}
+	fresh := document.parse_owned(document.edited(ctx.doc.source, edit))
+	// What is left of the two texts goes with no wait of a frame.
+	defer document.destroy(&fresh)
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	// From the layout of the text before.
+	take_place(ctx)
+	change := document.replace(&ctx.doc, &fresh)
+	if ctx.layout_valid {
+		layout.apply_change(&ctx.page, change)
+	}
+	// Each address that the view holds has the number that its block
+	// has now. One in the blocks that changed is at the start of
+	// them, so a reader who is in such a block stays there.
+	ctx.selection.anchor, _ = document.moved(change, ctx.selection.anchor)
+	ctx.selection.focus, _ = document.moved(change, ctx.selection.focus)
+	if ctx.place.known {
+		same: bool
+		ctx.place.place.at, same = document.moved(change, ctx.place.place.at)
+		if !same {
+			ctx.place.place.fraction = 0
 		}
 	}
-	// The parse needs nothing of the view, so frames go on while it runs.
-	fresh := document.parse(text)
-	{
-		context.temp_allocator = ctx.temp
-		hold(ctx)
-		// From the layout of the text before.
-		take_place(ctx)
-		// The document changes in place: the blocks that are the same
-		// keep their records, and the layout makes only the parts of the
-		// others again. The first document and a document with no block
-		// in common are the same case.
-		change := document.replace(&ctx.doc, &fresh)
-		if ctx.layout_valid {
-			layout.apply_change(&ctx.page, change)
-		}
-		// Each address that the view holds has the number that its block
-		// has now. One in the blocks that changed is at the start of
-		// them, so a reader who is in such a block stays there.
-		ctx.selection.anchor, _ = document.moved(change, ctx.selection.anchor)
-		ctx.selection.focus, _ = document.moved(change, ctx.selection.focus)
-		if ctx.place.known {
-			same: bool
-			ctx.place.place.at, same = document.moved(change, ctx.place.place.at)
-			if !same {
-				ctx.place.place.fraction = 0
-			}
-		}
-		if change.count == 0 {
-			ctx.selection, ctx.place = {}, {}
-		}
-		if ctx.layout_valid {
-			layout.restore_place(&ctx.page, ctx.place)
-			layout_changed(ctx)
-		}
+	if change.count == 0 {
+		ctx.selection, ctx.place = {}, {}
 	}
-	// What is left of the two texts, with no wait of a frame for it.
-	document.destroy(&fresh)
+	if ctx.layout_valid {
+		layout.restore_place(&ctx.page, ctx.place)
+		layout_changed(ctx)
+	}
 }
 
 // See the header.
@@ -527,6 +550,9 @@ mdcore_set_task_checked :: proc "c" (handle: rawptr, line: c.long, checked: bool
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
+	// The mark goes into the source too.
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
 	hold(ctx)
 	if !document.set_task_done(&ctx.doc, int(line), checked) {
 		return false

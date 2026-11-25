@@ -160,6 +160,56 @@ int main(int argc, const char *argv[]) {
         mdcore_draw(ctx, bottom);
     }
     printf("change_ms %.2f\n", now_ms() - change_start);
+
+    // Keys that are typed, one character each, as an editor gives them:
+    // the range of the source that changes, and the frame after it. CPU
+    // time: a frame waits for the display. First into the new paragraph
+    // in the middle: in a long text the view at the end does not show
+    // it, and the frame has no layout of it. Then at the end of the last
+    // line of the text, which the view shows: the frame lays out the
+    // part of the text that changed.
+    enum { KEYS = 10 };
+    double type_start = thread_cpu_ms();
+    for (int key = 0; key < KEYS; key++) {
+        long caret = (long)at + 4 + key;
+        mdcore_replace_text(ctx, caret, caret, "x", 1);
+        @autoreleasepool {
+            mdcore_draw(ctx, bottom);
+        }
+    }
+    printf("type_middle_cpu_ms %.2f\n", (thread_cpu_ms() - type_start) / KEYS);
+    // The end of the last line that is text of the page: not an empty
+    // line, and not the definition of a link ("[name]: target"), which
+    // shows nothing and changes text at other places.
+    long last = (long)changed.length;
+    const char *text = changed.bytes;
+    for (;;) {
+        while (last > 0 && (text[last - 1] == '\n' || text[last - 1] == '\r')) last--;
+        long line = last;
+        while (line > 0 && text[line - 1] != '\n' && text[line - 1] != '\r') line--;
+        long first = line;
+        while (first < last && text[first] == ' ') first++;
+        // A definition has "]:" after its name; a line that starts with
+        // a link ("[text](target)") shows on the page.
+        bool definition = false;
+        if (first < last && text[first] == '[') {
+            for (long at = first + 1; at + 1 < last && !definition; at++) {
+                definition = text[at] == ']' && text[at + 1] == ':';
+            }
+        }
+        if (last == 0 || !definition) break;
+        last = line;
+    }
+    type_start = thread_cpu_ms();
+    for (int key = 0; key < KEYS; key++) {
+        // The keys before are in the text too.
+        long caret = last + KEYS + key;
+        mdcore_replace_text(ctx, caret, caret, "x", 1);
+        @autoreleasepool {
+            mdcore_draw(ctx, bottom);
+        }
+    }
+    printf("type_end_cpu_ms %.2f\n", (thread_cpu_ms() - type_start) / KEYS);
     // The estimate for the comparison below is of this text.
     mdcore_page_area(ctx, &top, &height);
 

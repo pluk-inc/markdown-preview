@@ -130,8 +130,17 @@ These came from the maintainer. Do not undo one without asking.
   keeps its height on the page, and the top of the page (`origin`) moves
   for a part above it. Do not lay out from the first block down to reach
   something, and do not read a height of the page as if it started at 0.
-- The text of the document comes in through one call, also when it is
-  the text before with a change (`mdcore_set_markdown`). Do not end the
+- The source of the document changes in one place, `change_source` in
+  `mdcore.odin`: a text takes the place of a range of the source
+  (`document.Edit`). A key that an editor types is that call
+  (`mdcore_replace_text`), and a full text is the case where the core
+  finds the range itself (`mdcore_set_markdown`, `edit_between`). Only a
+  task that is set changes the source in place with no edit. Do not add
+  a second way in: what comes after an edit (the place, the selection,
+  the layout of the parts that changed) is there one time. A call
+  that changes the source holds `source_lock` from its edit to its end,
+  so an edit is of the source that is there; the parse runs with only
+  that lock, which no frame takes. Do not end the
   layout for a new text: `document.replace` keeps the blocks at the start
   and at the end of the document that are the same for a layout at their
   address (`adopt`), and `layout.apply_change` keeps the records of each
@@ -490,7 +499,8 @@ what is there and what is next:
    copy says it). A block still has a copy of its text, because that
    text is not the source: marks are gone, spaces are one space, an
    entity is its character. Not done: the source is one piece of memory
-   that a change copies; a change as a range of it.
+   that each change copies (0.05 ms for 1 MB; not the cost that counts
+   while the parse is full).
 2. **What a block is.** Done: the blocks are in parts of one piece of
    memory each, so a later change moves the blocks of one part. Not done:
    an identity of a block that stays through a change (a place, a
@@ -527,8 +537,23 @@ The order of the next steps, from the review of the second step:
   needs the place there too.
 - Done: a changed text makes only its parts again (4).
 - Done: the source text is kept and a block knows its range of it.
-- Next: a change comes as a range of the source and not as a full text.
-  Then the parse of what changed only: with the ranges, the parser can
+- Done: a change comes as a range of the source (`document.Edit`,
+  `mdcore_replace_text`). No host calls it yet; the benchmark types
+  through it. It still parses all of the new source: one typed
+  character costs 9 to 10 ms of CPU in 1 MB, with no layout in it.
+- In 9 KB a typed character costs 5 ms. That is not the parse: a
+  change to one block
+  lays out all blocks of its part again (58 blocks at most, with their
+  text shaped again).
+  A layout that makes only the changed block again is as much needed
+  for a key under 1 ms as the parse of what changed. For it, the
+  records of a part must let one block's records be put in the place
+  of the old ones.
+- `Block.source` is an offset in all of the source. With a parse of
+  only what changed, each block after an edit needs a new offset. An
+  offset from the start of its part, and a start for each part, makes
+  that a change to the parts only.
+- Next: the parse of what changed only: with the ranges, the parser can
   read the blocks around a change and stop where its blocks are the
   ones of before. Measure first; a definition of a link changes text at
   any distance, so a document with one needs a rule (a full parse of
@@ -734,3 +759,15 @@ export.
   keeps the room of an array that is made smaller in place. Cost: 1.1 MB
   of heap for 1.1 MB of source, less 0.5 MB from the exact arrays; no
   time.
+- **2026-11-24** — Seventh step of the base: a change of the source is
+  a range and a text. One procedure makes each change of the source,
+  and the two calls of the API (a full text, a range) are cases of it.
+  The parse is still full. Tests make 300 random edits of a document
+  and 80 with a layout, and compare each result with a new parse and a
+  new layout of the same source: the check that the parse of only what
+  changed needs before it is written. The benchmark has the number
+  that this work is for: one typed character, 9 to 10 ms of CPU in
+  1.1 MB (the parse of all), and 5 ms in 9 KB, where it is the layout
+  of the full part for one changed block, not the parse. Two
+  threads that change the source at one time are in order by a lock
+  for such calls, which a frame does not take.

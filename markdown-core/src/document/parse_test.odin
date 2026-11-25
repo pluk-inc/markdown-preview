@@ -2,6 +2,7 @@ package document
 
 import "../base"
 import "core:fmt"
+import "core:math/rand"
 import "core:strings"
 import "core:testing"
 
@@ -713,4 +714,81 @@ test_the_sources_of_the_blocks_are_the_source :: proc(t: ^testing.T) {
 		at = end
 	}
 	testing.expect_value(t, at, len(source))
+}
+
+@(test)
+test_an_edit_is_what_two_sources_do_not_have_in_common :: proc(t: ^testing.T) {
+	Case :: struct {
+		before, after: string,
+		start, end:    int,
+		text:          string,
+	}
+	cases := []Case {
+		{"one two three", "one 2 three", 4, 7, "2"},
+		{"one two", "one two three", 7, 7, " three"},
+		{"one two three", "two three", 0, 4, ""},
+		{"", "new", 0, 0, "new"},
+		{"old", "", 0, 3, ""},
+		{"same", "same", 4, 4, ""},
+		// The same bytes at the two ends count one time.
+		{"aaa", "aa", 2, 3, ""},
+		{"aa", "aaa", 2, 2, "a"},
+	}
+	for c in cases {
+		e := edit_between(transmute([]u8)c.before, c.after)
+		testing.expect_value(t, e.start, c.start)
+		testing.expect_value(t, e.end, c.end)
+		testing.expect_value(t, e.text, c.text)
+		testing.expect_value(t, edit_is_empty(e), c.before == c.after)
+		now := edited(transmute([]u8)c.before, e)
+		defer delete(now)
+		testing.expect_value(t, string(now), c.after)
+	}
+	// A range that reaches out of the source is cut to it.
+	out := edited(transmute([]u8)string("abc"), {2, 99, "X"})
+	defer delete(out)
+	testing.expect_value(t, string(out), "abX")
+	out2 := edited(transmute([]u8)string("abc"), {-5, 1, "X"})
+	defer delete(out2)
+	testing.expect_value(t, string(out2), "Xbc")
+}
+
+// Makes an edit of the source of a document, the way the core does it.
+@(private = "file")
+apply :: proc(doc: ^Document, e: Edit) {
+	fresh := parse_owned(edited(doc.source, e))
+	replace(doc, &fresh)
+	destroy(&fresh)
+}
+
+@(test)
+test_a_document_after_edits_is_the_document_of_its_source :: proc(t: ^testing.T) {
+	// Texts that change what the lines around them are.
+	PIECES := []string {
+		"x", " ", "\n", "\n\n", "# ", "- ", "  ", "    ", "> ", "1. ", "- [ ] ", "```\n", "| a | b |\n| - | - |\n",
+		"---\n", "===\n", "[r]: /u\n", "[r] ", "<div>\n", "*", "`", "\n\nA new paragraph.\n\n",
+	}
+	source := numbered(2 * PART_BLOCKS)
+	defer delete(source)
+	doc := parse(source)
+	defer destroy(&doc)
+	// The same numbers each run.
+	state := rand.create(0x2545f4914f6cdd1d)
+	context.random_generator = rand.default_random_generator(&state)
+	for _ in 0 ..< 300 {
+		e: Edit
+		e.start = rand.int_max(len(doc.source) + 1)
+		e.end = e.start
+		switch rand.int_max(3) {
+		case 0:
+			e.text = PIECES[rand.int_max(len(PIECES))]
+		case 1:
+			e.end = min(e.start + rand.int_max(40), len(doc.source))
+		case 2:
+			e.end = min(e.start + rand.int_max(12), len(doc.source))
+			e.text = PIECES[rand.int_max(len(PIECES))]
+		}
+		apply(&doc, e)
+		expect_document(t, &doc, string(doc.source))
+	}
 }

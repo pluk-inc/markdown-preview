@@ -2,6 +2,46 @@ package document
 
 import "core:slice"
 
+// A change of the source of a document: the bytes from `start` to `end`
+// become `text`. A text that is put in has `start == end`; a text that is
+// taken out has an empty `text`.
+Edit :: struct {
+	start, end: int,
+	text:       string,
+}
+
+// The smallest edit that makes a source the text `now`: what is between
+// the bytes that the two have in common at their start and at their end.
+// It can start or end in the middle of a character.
+edit_between :: proc(source: []u8, now: string) -> (e: Edit) {
+	head := slice.prefix_length(source, transmute([]u8)now)
+	// Not into the bytes of the start: text that is there two times
+	// counts one time.
+	rest := min(len(source), len(now)) - head
+	tail := 0
+	#no_bounds_check for tail < rest && source[len(source) - 1 - tail] == now[len(now) - 1 - tail] {
+		tail += 1
+	}
+	return {head, len(source) - tail, now[head:len(now) - tail]}
+}
+
+// True for an edit that changes nothing.
+edit_is_empty :: proc(e: Edit) -> bool {
+	return e.start == e.end && len(e.text) == 0
+}
+
+// A source with an edit, in new memory. The range of the edit is cut to
+// the source.
+edited :: proc(source: []u8, e: Edit) -> []u8 {
+	start := clamp(e.start, 0, len(source))
+	end := clamp(e.end, start, len(source))
+	out := make([]u8, start + len(e.text) + len(source) - end)
+	copy(out, source[:start])
+	copy(out[start:], e.text)
+	copy(out[start + len(e.text):], source[end:])
+	return out
+}
+
 // A change of a document, as the range of its blocks that became other
 // blocks. The blocks before the range and after it are the same for a
 // layout as before, and they are at the address they had when their part

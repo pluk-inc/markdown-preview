@@ -73,6 +73,13 @@ Parser :: struct {
 
 // Parses a Markdown source. The caller owns the result (`destroy`).
 parse :: proc(source: string) -> Document {
+	return parse_owned(slice.clone(transmute([]u8)source))
+}
+
+// Parses a Markdown source that the document keeps: memory of the
+// allocator of the context, which goes with the document.
+parse_owned :: proc(bytes: []u8) -> Document {
+	source := string(bytes)
 	doc: Document
 	p := Parser {
 		ctx       = context,
@@ -94,7 +101,7 @@ parse :: proc(source: string) -> Document {
 	md_parse(raw_data(source), size, &md, &p)
 	close_text(&p)
 	delete(p.lists)
-	doc.source = slice.clone(transmute([]u8)source)
+	doc.source = bytes
 	when ODIN_DEBUG {
 		// The blocks are in the order of the source, each with lines of
 		// its own.
