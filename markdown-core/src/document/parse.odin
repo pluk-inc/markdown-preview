@@ -634,11 +634,24 @@ note_mark :: proc(p: ^Parser, type: Md_Span, opens: bool, autolink := false) {
 				}
 			}
 		}
-		if to > from {
-			p.marking = true
-			append_text(p, string(p.bytes[from:to]), from, to - from)
-			p.marking = false
-			p.doc.reveal = reveal
+		// A mark that goes on in a next line (the target of a link): its
+		// bytes of each line, with no line break and no mark of a quote
+		// at the start of the next line, which are no text of the block.
+		for from < to {
+			line := from
+			for line < to && p.bytes[line] != '\n' && p.bytes[line] != '\r' {
+				line += 1
+			}
+			if line > from {
+				p.marking = true
+				append_text(p, string(p.bytes[from:line]), from, line - from)
+				p.marking = false
+				p.doc.reveal = reveal
+			}
+			from = line
+			for from < to && (p.bytes[from] == '\n' || p.bytes[from] == '\r' || p.bytes[from] == ' ' || p.bytes[from] == '\t' || p.bytes[from] == '>') {
+				from += 1
+			}
 		}
 	}
 	if !noted {

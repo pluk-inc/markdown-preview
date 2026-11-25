@@ -67,6 +67,9 @@ test_the_marks_of_the_element_of_an_offset_are_text :: proc(t: ^testing.T) {
 		// Of code that goes on in a next line of a quote, the backticks
 		// only.
 		{"> `\n> x\n> `\n", 6, "`x`", "^ ^"},
+		// The target of a link in a next line of a quote: no line break
+		// and no mark of the quote in the text.
+		{"> [x](\n> /a)\n", 3, "[x](/a)", "^ ^^^^^"},
 		// Not the "<" and ">" of an address.
 		{"a <https://e.com> c\n", 5, "a https://e.com c", "                 "},
 	}

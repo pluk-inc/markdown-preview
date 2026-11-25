@@ -571,6 +571,12 @@ reveal_update :: proc(ctx: ^Ctx) -> (changed: bool) {
 		}
 		hides = !only_marks
 	}
+	// A selection of marks that show keeps them also while the view does
+	// not take the keys: with no marks it would be a selection of
+	// nothing, and it is there again when the view takes the keys.
+	if selected && !hides && ctx.unfocused {
+		return false
+	}
 	want: Maybe(int)
 	count := 0
 	if ctx.caret >= 0 && !ctx.unfocused && !hides {
@@ -1317,6 +1323,8 @@ mdcore_delete :: proc "c" (handle: rawptr, move: Move) -> bool {
 	ctx := cast(^Ctx)handle
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
+	// The bytes of the delete before are of that delete only.
+	clear(&ctx.gone)
 	if ctx.caret < 0 || ctx.doc.count == 0 || move < min(Move) || move > max(Move) {
 		return false
 	}

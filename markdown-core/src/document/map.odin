@@ -44,30 +44,35 @@ reveal_block :: proc(doc: ^Document, block: int, reveal: Maybe(int), pairs: ^[dy
 	}
 	// The links of the new text, in their order, are the links that the
 	// text had: each gets the number that the document has for it.
+	// The numbers that the document has for them, in the order of the
+	// text; and for each link of the new text, which of those it is.
 	numbers := make([dynamic]int, context.temp_allocator)
+	seen := make([]bool, len(doc.links) + 1, context.temp_allocator)
 	for &t in block_texts(old) {
 		for span in t.spans {
-			if span.link > 0 && !slice.contains(numbers[:], span.link) {
+			if span.link > 0 && span.link <= len(doc.links) && !seen[span.link] {
+				seen[span.link] = true
 				append(&numbers, span.link)
 			}
 		}
 	}
-	fresh_numbers := make([dynamic]int, context.temp_allocator)
+	order := make([]int, len(fresh.links) + 1, context.temp_allocator)
+	count := 0
 	for &t in block_texts(new) {
 		for &span in t.spans {
-			if span.link == 0 {
+			if span.link <= 0 || span.link > len(fresh.links) {
+				span.link = 0
 				continue
 			}
-			at, found := slice.linear_search(fresh_numbers[:], span.link)
-			if !found {
-				at = len(fresh_numbers)
-				append(&fresh_numbers, span.link)
+			if order[span.link] == 0 {
+				count += 1
+				order[span.link] = count
+				if count > len(numbers) {
+					append(&doc.links, strings.clone(fresh.links[span.link - 1]))
+					append(&numbers, len(doc.links))
+				}
 			}
-			if at >= len(numbers) {
-				append(&doc.links, strings.clone(fresh.links[span.link - 1]))
-				append(&numbers, len(doc.links))
-			}
-			span.link = numbers[at]
+			span.link = numbers[order[span.link] - 1]
 		}
 	}
 	old.text, new.text = new.text, old.text

@@ -113,7 +113,8 @@ long mdcore_caret_offset(void *ctx);
 // caret, and while the view does not take the keys. A selection of
 // only characters of marks that show (Shift and a step over a "*") is
 // no text selected for this: the marks stay, and a delete takes the
-// selected mark.
+// selected mark. Such a selection keeps the marks also while the view
+// does not take the keys.
 //
 // Says if the view takes the keys (true at the start).
 void mdcore_set_focused(void *ctx, bool focused);

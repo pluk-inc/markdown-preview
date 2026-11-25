@@ -76,14 +76,17 @@ static const char *caret_walk(void *ctx, long length) {
     // A click: the button down, the caret, and the button up at the
     // same point. Nothing is selected, also when the click made the
     // marks of its line show and the text moved under the pointer.
+    int clicks = 0;
     for (double click_y = 20; click_y < 400; click_y += 20) {
         mdcore_mouse(ctx, 60, click_y, 0);
         if (mdcore_caret_set(ctx, 60, click_y)) {
+            clicks += 1;
             mdcore_mouse(ctx, 60, click_y, 1);
             mdcore_mouse(ctx, 61, click_y + 1, 1);
             if (mdcore_has_selection(ctx)) return "a click selected text";
         }
     }
+    if (clicks == 0) return "no click put a caret in the text";
     if (!mdcore_caret_set(ctx, VIEW_WIDTH / 2, 40)) return "no caret at a click";
     mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false);
     if (mdcore_caret_move(ctx, MDCORE_MOVE_UP, false) || mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, false)) {
