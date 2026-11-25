@@ -74,6 +74,7 @@ test_the_marks_of_the_element_of_an_offset_are_text :: proc(t: ^testing.T) {
 		// The first line only: a later line of a quote keeps its mark
 		// out of the text.
 		{"> one\n> two\n", 9, "> one two", "^^       "},
+		{"- a\n\n> one\n> two\n", 0, "- a", "^^ "},
 		// A task keeps its check box: the "-" only.
 		{"- [ ] task\n", 8, "- task", "^^    "},
 		{"- [x] task\n", 8, "- task", "^^    "},
@@ -242,5 +243,25 @@ test_the_source_of_a_character_of_some_code_points :: proc(t: ^testing.T) {
 		testing.expect(t, ok)
 		testing.expect_value(t, first, 1)
 		testing.expect_value(t, last, len(source) - 2)
+	}
+}
+
+// The marks of a block that has more than one line are one mark, of its
+// first line, also with the caret in another block; and a parse that
+// notes marks makes the blocks that a parse with none makes.
+@(test)
+test_a_block_has_one_line_mark :: proc(t: ^testing.T) {
+	doc := parse("> one\n> two\n> three\n\n- a\n- <b></b>\n- c\n")
+	defer destroy(&doc)
+	pairs: [dynamic]Pair
+	defer delete(pairs)
+	places := block_map(&doc, 0, &pairs)
+	delete(places)
+	testing.expect_value(t, len(pairs), 1)
+	// An item with only raw HTML has no block, with marks noted too.
+	for at in 0 ..= len(doc.source) {
+		all := parse_owned(transmute([]u8)fmt.aprintf("%s", doc.source), at)
+		testing.expect_value(t, all.count, doc.count)
+		destroy(&all)
 	}
 }

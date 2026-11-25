@@ -80,6 +80,13 @@ Parser :: struct {
 	element:      [2]int,
 	reveal:       Maybe(int),
 	marking:      bool, // the text that comes is such a mark
+	// The first line of the text of the block that comes has not come
+	// yet (`on_line_offset`); and that line, for a paragraph of a list
+	// item that is opened when its text comes (`text_open`): the start
+	// of the line and of its text.
+	first_line:   bool,
+	line_waits:   bool,
+	line:         [2]int,
 	bytes:        []u8, // what is parsed
 	after_nul:    bool, // the text before was the character for a NUL byte
 	// Table.
@@ -499,6 +506,7 @@ on_block_offset :: proc "c" (type: Md_Block, beg, end: c.uint, userdata: rawptr)
 	case .Quote, .Ul, .Ol, .Li:
 	case:
 		p.at_end, p.at_end_known = int(end), true
+		p.first_line, p.line_waits = true, false
 	}
 }
 
@@ -579,21 +587,31 @@ mark_part :: proc(p: ^Parser, type: Md_Span) -> (start, end: int) {
 on_line_offset :: proc "c" (line, start, end: c.uint, userdata: rawptr) {
 	p := cast(^Parser)userdata
 	context = p.ctx
-	line, text := int(line), int(start)
-	if p.in_table || p.in_html || text > len(p.bytes) || line > text || !text_open(p) || len(p.cur.bytes) > 0 {
+	// The first line of the block only: each line comes before the text.
+	if !p.first_line || int(start) > len(p.bytes) {
 		return
 	}
+	p.first_line = false
+	if p.cur == nil {
+		// A paragraph of a list item with no block of its own yet: it
+		// is opened when its text comes, and not for text that does
+		// not show (raw HTML), so the mark waits for that.
+		p.line, p.line_waits = {int(line), int(start)}, true
+		return
+	}
+	line_mark(p, int(line), int(start))
+}
+
+// The mark of the block that is open, from the first line of its text:
+// see `on_line_offset`.
+@(private)
+line_mark :: proc(p: ^Parser, line, text: int) {
 	mark := line
 	for mark < text && (p.bytes[mark] == ' ' || p.bytes[mark] == '\t') {
 		mark += 1
 	}
-	mark_end := text
-	if p.block.marker == .Task_Open || p.block.marker == .Task_Done {
-		for mark_end > mark && p.bytes[mark_end - 1] != '[' {
-			mark_end -= 1
-		}
-		mark_end = max(mark_end - 1, mark)
-	}
+	// A task keeps its check box: to before its "[".
+	mark_end := p.block.task_mark > 0 ? min(p.block.task_mark - 1, text) : text
 	if mark >= mark_end {
 		return
 	}
@@ -607,7 +625,7 @@ on_line_offset :: proc "c" (line, start, end: c.uint, userdata: rawptr) {
 		append_text(p, string(p.bytes[mark:mark_end]), mark, mark_end - mark)
 		p.marking = false
 		p.doc.reveal = reveal
-		p.block.mark_shown = p.block.marker == .Bullet || p.block.marker == .Number
+		p.block.mark_shown = true
 	}
 }
 
@@ -732,6 +750,11 @@ text_open :: proc(p: ^Parser) -> bool {
 			return false
 		}
 		open_text(p, .Paragraph)
+		// The mark of its first line, which came before it was open.
+		if p.line_waits {
+			p.line_waits = false
+			line_mark(p, p.line[0], p.line[1])
+		}
 	}
 	return true
 }
