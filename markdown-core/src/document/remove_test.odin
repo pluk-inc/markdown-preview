@@ -90,6 +90,12 @@ test_text_goes_out_and_the_styles_of_the_rest_stay :: proc(t: ^testing.T) {
 		{"Head\n====\n\ntext\n\nz\n", {block = 0, cell = 0, byte = 2}, {block = 1, cell = 0, byte = 2}, "", "Hext\n====\n\nz\n"},
 		{"Head\n====\n\ntext\n", {block = 0, cell = 0, byte = 0}, {block = 1, cell = 0, byte = 4}, "", "\n"},
 		{"Head\n====\n\ntext\n\n\n\nz\n", {block = 0, cell = 0, byte = 0}, {block = 1, byte = 4, empty = 2}, "", "\n\nz\n"},
+		// From an empty paragraph after a heading with a line under it:
+		// no second line under the text that comes there.
+		{"Sub\n===\n\n\n\nend\n", {block = 0, byte = 3, empty = 1}, {block = 1, byte = 1}, "", "Sub\n===\n\nnd\n"},
+		// The line under a heading comes after the first line of what
+		// joins it; the next lines of a quote stay a quote.
+		{"Head\n----\n> q\n> r\n", {block = 0, byte = 4}, {block = 1, byte = 0}, "", "Headq\n----\n> r\n"},
 		// All of the text of a paragraph: its line is an empty line,
 		// and the empty line before it goes, so no line more shows.
 		{"ab\n\ncd\n", {block = 1, cell = 0, byte = 0}, {block = 1, cell = 0, byte = 2}, "", "ab\n\n"},
@@ -338,6 +344,9 @@ test_the_bytes_that_go_come_back_as_the_text_of_before :: proc(t: ^testing.T) {
 		// The rest of code and text after it: the text comes back after
 		// the code, where an entity is a character.
 		{"`ab` &amp; c\n", {block = 0, byte = 1}, {block = 0, byte = 5}, "b &amp; "},
+		// The end of a block that is joined with the next one, after a
+		// mark that stays: the bytes come back after the mark.
+		{"ab\n\ncd **ef**\n\nq\n", {block = 1, byte = 4}, {block = 2, byte = 0}, "f\n\n"},
 		// A definition of a link that stays did not go.
 		{"ab\n\n[d]: /u\n\ncd\n", {block = 0, byte = 1}, {block = 1, byte = 1}, "b\n\n\n\nc"},
 		// Text that is the text of a definition goes; the definition
