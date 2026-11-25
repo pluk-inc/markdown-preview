@@ -80,6 +80,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-25 | Return, and the empty line that it makes | 616 / 565 | 61 / 107 | 490 / 775 | 48 / 61 | none | none / 0.34 | 7.2 / 26.6 (16.1 at the first frame) |
 | 2026-11-25 | the bullet of a list item as a circle | 598 / 596 | 51 / 96 | 490 / 740 | 62 / 78 | none | 0.49 / 0.41 | 7.0 / 26.2 (16.1 at the first frame) |
 | 2026-11-25 | a caret after a space at the end of a text | 635 / 619 | 56 / 103 | 545 / 840 | 66 / 81 | none | none | 7.1 / 26.2 (16.1 at the first frame) |
+| 2026-11-25 | a selection that goes, and the delete keys | 620 / 613 | 52 / 100 | 495 / 745 | 69 / 82 | none | none | 7.0 / 26.2 (16.1 at the first frame) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -924,3 +925,45 @@ character at the end of the long text is 2.7 and 3.3 for the base and
 Mac for some seconds of this run). The walk of the caret before the
 runs types two spaces at the end of a paragraph and goes back over
 them.
+
+## A selection that goes, and the delete keys (2026-11-25)
+
+A delete is a move of the caret with the selection and then one edit of
+a range of the source. The parser says where the marks of the styles
+are, only for the parse that makes the map of one block; the map of
+the block of the caret keeps them. Nothing of it runs before a key.
+`app.py`, short / long, five launches for each number, the base built
+from its commit on the same day:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 592 / 540 | 53 / 99 | 480 / 680 |
+| change | 620 / 613 | 52 / 100 | 490 / 740 |
+| change | 620 / 613 | 52 / 99 | 500 / 750 |
+| base | 625 / 639 | 53 / 98 | 500 / 760 |
+
+`core.py`, short / long, the base and the change, three runs each in
+turns (base, change, change, base, change, base):
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 68, 55, 63 / 83, 84, 89 | 68, 69, 69 / 87, 82, 81 |
+| A typed character in the middle of the text (CPU ms) | 1.09, 0.98, 1.00 / 1.62, 1.32, 1.33 | 0.83, 1.49, 1.04 / 1.36, 1.13, 1.34 |
+| A typed character at the end of the text (CPU ms) | 0.78, 0.96, 0.88 / 2.08, 1.79, 1.91 | 0.89, 1.38, 0.90 / 1.97, 1.84, 1.99 |
+| A typed character at a caret (CPU ms) | 1.11, 1.20, 1.09 / 1.38, 1.24, 1.30 | 1.06, 1.66, 1.25 / 1.61, 1.22, 1.49 |
+| A step of the caret to the left or to the right (CPU ms) | 0.28, 0.49, 0.35 / 0.42, 0.34, 0.45 | 0.27, 0.58, 0.40 / 0.41, 0.29, 0.42 |
+| Heap at the first frame (MB) | 5.3 / 16.1 | 5.3 / 16.1 |
+| Heap with all of the document laid out (MB) | 7.0 / 26.1, 26.2 | 7.0 / 26.1, 26.2 |
+
+The Mac was not quiet: another session built and measured on it, with
+a load of 6 to 12 through these runs (and 20 to 100 through a first
+set, which is not here). So the runs of one build differ by as much as
+the two builds do. The launch, the memory, and the heap are the same.
+The median of a typed character at a caret is 1.25 / 1.49 against
+1.11 / 1.30: this can be the marks that the map of the caret's block
+keeps now, or the load (the second run of the change is the high one
+in each row of the short document, also in the rows that the change
+has no part in). To measure again on a quiet Mac. The time of a
+delete key has no number yet: the benchmark does deletes to check
+them, not to time them.
+
