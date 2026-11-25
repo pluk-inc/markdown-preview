@@ -571,6 +571,12 @@ reveal_update :: proc(ctx: ^Ctx) -> (changed: bool) {
 		}
 		hides = !only_marks
 	}
+	// A selection of marks that show keeps them also while the view does
+	// not take the keys: with no marks it would be a selection of
+	// nothing, and it is there again when the view takes the keys.
+	if selected && !hides && ctx.unfocused {
+		return false
+	}
 	want: Maybe(int)
 	count := 0
 	if ctx.caret >= 0 && !ctx.unfocused && !hides {
