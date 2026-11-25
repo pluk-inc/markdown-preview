@@ -314,6 +314,64 @@ names_in :: proc(text: []u8) -> (names: Names) {
 	return
 }
 
+// The text that is parsed for a piece of the source: the piece, with the
+// definitions of links of the rest of the document that it can use,
+// before it and after it as they are in the source (the order says which
+// of two with one name counts), and an empty line between. `piece` is
+// the piece as it is now; `start` and `old_end` are where it is in the
+// source of the document. A link that a definition gives its target has
+// the name of the definition in brackets, so a definition counts when the
+// first word of its name is the first word in a pair of brackets of the
+// piece.
+//
+// Of the definitions of the document, `before` are before the piece and
+// `inside` in it; `led` and `trailed` are in the text before the piece
+// and after it; the piece starts at `lead` in the text.
+@(private)
+piece_text :: proc(doc: ^Document, piece: []u8, start, old_end: int) -> (text: [dynamic]u8, before, inside, led, trailed, lead: int) {
+	// A definition is in the lines of one block or between two, so none
+	// is over an end of the piece.
+	for before < len(doc.defs) && doc.defs[before].end <= start {
+		before += 1
+	}
+	for before + inside < len(doc.defs) && doc.defs[before + inside].start < old_end {
+		inside += 1
+	}
+	text = make([dynamic]u8, 0, len(piece) + 64)
+	if len(doc.defs) == inside {
+		append(&text, ..piece)
+		return
+	}
+	names := names_in(piece)
+	defer delete(names.words)
+	used :: proc(names: Names, def: Def) -> bool {
+		return len(names.words) > 0 && (names.any || def.always || slice.contains(names.words[:], def.word))
+	}
+	for def in doc.defs[:before] {
+		if used(names, def) {
+			append(&text, ..doc.source[def.start:def.end])
+			append(&text, '\n')
+			led += 1
+		}
+	}
+	if led > 0 {
+		append(&text, '\n')
+	}
+	lead = len(text)
+	append(&text, ..piece)
+	for def in doc.defs[before + inside:] {
+		if used(names, def) {
+			if trailed == 0 {
+				append(&text, "\n\n")
+			}
+			append(&text, ..doc.source[def.start:def.end])
+			append(&text, '\n')
+			trailed += 1
+		}
+	}
+	return
+}
+
 // The part of `prepare` that parses a piece. False when the piece does
 // not give the document of the new source.
 @(private)
@@ -360,59 +418,8 @@ prepare_piece :: proc(doc: ^Document, p: ^Pending) -> bool {
 	old_end := end < doc.count ? block_start(doc, end) : len(doc.source)
 	piece := p.source[start:old_end + p.bytes]
 
-	// The definitions of links of the document: the ones before the
-	// piece, the ones in it, and the ones after it. A definition is in
-	// the lines of one block or between two, so none is over an end.
-	before := 0
-	for before < len(doc.defs) && doc.defs[before].end <= start {
-		before += 1
-	}
-	inside := 0
-	for before + inside < len(doc.defs) && doc.defs[before + inside].start < old_end {
-		inside += 1
-	}
-	// The text that is parsed: the definitions of the rest of the
-	// document that the piece can use, before it and after it as they
-	// are in the source (the order says which of two with one name
-	// counts), with an empty line between. A link that a definition
-	// gives its target has the name of the definition in brackets, so
-	// a definition counts when the first word of its name is the first
-	// word in a pair of brackets of the piece.
-	text := make([dynamic]u8, 0, len(piece) + 64)
-	led, trailed := 0, 0
-	if len(doc.defs) > inside {
-		names := names_in(piece)
-		defer delete(names.words)
-		used :: proc(names: Names, def: Def) -> bool {
-			return len(names.words) > 0 && (names.any || def.always || slice.contains(names.words[:], def.word))
-		}
-		for def in doc.defs[:before] {
-			if used(names, def) {
-				append(&text, ..doc.source[def.start:def.end])
-				append(&text, '\n')
-				led += 1
-			}
-		}
-		if led > 0 {
-			append(&text, '\n')
-		}
-		p.base = start - len(text)
-		append(&text, ..piece)
-		for def in doc.defs[before + inside:] {
-			if used(names, def) {
-				if trailed == 0 {
-					append(&text, "\n\n")
-				}
-				append(&text, ..doc.source[def.start:def.end])
-				append(&text, '\n')
-				trailed += 1
-			}
-		}
-	} else {
-		p.base = start
-		append(&text, ..piece)
-	}
-	lead := start - p.base
+	text, before, inside, led, trailed, lead := piece_text(doc, piece, start, old_end)
+	p.base = start - lead
 	p.fresh = parse_piece(text[:], doc.items, len(p.source))
 	fresh := &p.fresh
 	p.added = fresh.count - guard

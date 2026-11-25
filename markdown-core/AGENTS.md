@@ -110,7 +110,28 @@ These came from the maintainer. Do not undo one without asking.
   their shaped text, the text system's paragraph and line objects
   (`layout/window.odin`). Code that reads glyphs or a caret's x takes its
   line from `shaped_line`, which shapes it again when needed.
-- A caret, the ends of a selection, and the place of a view are addresses
+- The caret of an editor is an offset in the source (`Ctx.caret` in
+  `mdcore.odin`), because the source is what an edit changes and what a
+  typed character is put into. Its address in the text of a block, for
+  its place on the page, is made from the offset after each change
+  (`document.address_of`); do not keep the address as the truth, or the
+  caret loses its place when the text around it gets other marks. The
+  text of a block is not its source (no marks, an entity as its
+  character), and the way from one to the other is `src/document/map.odin`:
+  made for one block when asked, by a parse of the lines around the
+  block that notes where each piece of its text came from. Nothing of
+  it is kept in the document. Text goes in at the end of the text
+  before the caret (so it is in the marks of the character before it),
+  and a character goes out with all that the source has for it. Text
+  that the parser makes (the space for a line break, an empty line of
+  a code block, the spaces of an indent) has no bytes of its own in the
+  source: its place is what is between the pieces of text around it
+  (`place_made`), so a line break in a quote is the break and the mark
+  of the next line. Do not give such a piece a place by a count from
+  the start of what was parsed. An address with no room in the source
+  for text (a table cell with no text, a block with no text and no
+  space after its mark) has no place, and gets no caret.
+- The ends of a selection and the place of a view are addresses
   in the document (`document.Address`: block, cell, byte), not in a
   layout. Work on the text of a range (the copied text, Select All, later
   Find) reads the document (`document.text_between`) and needs no layout;
@@ -630,7 +651,35 @@ The order of the next steps, from the review of the second step:
   blocks out, put the ones of other blocks in, move the numbers of the
   blocks below) would do the two forms of a change that are there now,
   and the document would make parts again only when a part is full.
-- Next: an identity of a block that stays through a change (2).
+- Done: the first step of the editor in the core. A caret at a clicked
+  place, text put in at it, the character before it taken out, its
+  place for the host, and the source for a save (`mdcore_caret_set`,
+  `mdcore_insert`, `mdcore_delete_backward`, `mdcore_caret_rect`,
+  `mdcore_source`). No part of the app calls these yet; the benchmark
+  does. A key at the caret: 1.8 ms of CPU.
+- Next: the host side, so a reader can type in the native view: key
+  input (also from an input method), the caret that blinks, a save.
+- Not done for the caret: the arrow keys, a selection that typing takes
+  the place of, a delete at the start of a block (to join it with the
+  block before), Enter (the source needs a line break that is right for
+  the block: a new paragraph, a new list item), a caret in a document
+  with no text (it has an offset and no place on the page), a caret in
+  a table cell with no text, undo.
+- A delete of the only character between two marks leaves the marks:
+  "**a**" is "****" after it, which is a rule, and "`a`" is two
+  backticks. The marks must go with their last character, or the
+  block of the caret must show its marks, so the reader takes them
+  out. This waits for the decision on what the editor shows.
+- The places of the text of the caret's block are made by a parse of
+  the lines around the block after each key (one parse; kept until
+  the next change for the next key). The parse of the edit read the
+  same lines just before; one parse could give the two. In a list of
+  some thousand items each parse is of all of the list.
+- An identity of a block that stays through a change (2), and a store
+  of the source that an edit changes in place, have no user yet: each
+  address that the core holds is moved with each change, and the copy
+  of the source is 0.2 ms for 1 MB. They wait for a thing that needs
+  them (many addresses that live long, as the results of a search).
 - What is left of a key that the view shows is the frame: about 1 ms,
   most of it the quads of the view, which are all made again after
   each change of the layout.
@@ -898,3 +947,13 @@ export.
   with its text when the key was before it. A typed character
   that the view shows: 1.3 ms of CPU in 9 KB (5.0 before), 3.1 ms at
   the end of 1.1 MB (6.1 before).
+- **2026-11-25** — First step of the editor, in the core: a caret. The
+  caret is an offset in the source; a click gives it the place of the
+  text under the point, a typed text goes into the source there, and
+  the character before it goes out with all that the source has for
+  it. For this, the core can say where a piece of the text of a block
+  is in the source and back, by a parse of the lines around the block
+  that is made when it is asked for; nothing is kept. An identity for
+  blocks and a store for the text were next in the plan and have no
+  user yet, so they wait. A key at the caret: 1.8 ms of CPU in 9 KB,
+  2.0 ms in 1.1 MB.

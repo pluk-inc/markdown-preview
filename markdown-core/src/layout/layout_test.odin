@@ -1360,3 +1360,47 @@ test_a_layout_after_edits_is_the_layout_of_its_source :: proc(t: ^testing.T) {
 		}
 	}
 }
+
+@(test)
+test_a_caret_has_the_place_of_its_address :: proc(t: ^testing.T) {
+	// A paragraph of some lines, a code block with an empty line, a rule.
+	f: Fixture
+	setup(&f, "One paragraph with enough words in it to go over the end of a line in a narrow page, and then some.\n\n```\nfirst\n\nthird\n```\n\n---\n", 300)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	place :: proc(f: ^Fixture, at: document.Address) -> (x, top, height: f32, ok: bool) {
+		x, top, height, _, ok = caret_place(&f.page, at)
+		return
+	}
+	// Along a line the caret goes right; at the start of the next line
+	// it is at the left again, one line lower.
+	x0, top0, height, ok0 := place(&f, {0, 0, 0})
+	x5, top5, _, ok5 := place(&f, {0, 0, 5})
+	testing.expect(t, ok0 && ok5)
+	testing.expect(t, x5 > x0 && top5 == top0 && height > 0)
+	second := f.page.parts[0].lines[1]
+	x, top, _, _ := place(&f, {0, 0, second.line.start})
+	testing.expect_value(t, x, second.x)
+	testing.expect_value(t, top, second.top)
+	testing.expect(t, top > top0)
+	// The end of the text is at the end of its last line.
+	last := f.page.parts[0].lines[f.page.parts[0].boxes[0].line_end - 1]
+	x, top, _, _ = place(&f, {0, 0, len(document.block_at(&f.doc, 0).text.bytes)})
+	testing.expect(t, top == last.top && x > last.x)
+	// "first\n\nthird": the empty line has no line record, and the caret
+	// is one line below "first" on it, and "third" one more.
+	_, first, line, _ := place(&f, {1, 0, 0})
+	x, top, _, _ = place(&f, {1, 0, 6})
+	testing.expect(t, abs(top - (first + line)) < 0.01)
+	_, third, _, _ := place(&f, {1, 0, 7})
+	testing.expect(t, abs(third - (first + 2 * line)) < 0.01)
+	// A rule has no text, and so no caret.
+	_, _, _, ok := place(&f, {2, 0, 0})
+	testing.expect(t, !ok)
+	// A block with no records has none either.
+	g: Fixture
+	setup(&g, "Not laid out.\n", 300)
+	defer teardown(&g)
+	_, _, _, ok = place(&g, {0, 0, 0})
+	testing.expect(t, !ok)
+}

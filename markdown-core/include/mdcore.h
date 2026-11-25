@@ -81,6 +81,38 @@ void mdcore_set_markdown(void *ctx, const char *utf8, long length);
 // reaches out of the text is cut to it.
 void mdcore_replace_text(void *ctx, long start, long end, const char *utf8, long length);
 
+// The caret of an editor: the place where typed text goes. A view has
+// none until one of these calls gives it one, and the core draws it.
+//
+// Puts the caret at the text that is nearest to a point (x in the view,
+// y in the space of the page) and ends the selection. False when no text
+// is there. In a document with no text, the caret is at its start.
+bool mdcore_caret_set(void *ctx, double x, double y);
+
+// Takes the caret away.
+void mdcore_caret_clear(void *ctx);
+
+// Where the caret is: its x in the view, the top of its line in the
+// space of the page, and the height of the line. For a host that keeps
+// the caret in view or puts an input window at it. False for no caret,
+// and when the block of the caret has no layout.
+bool mdcore_caret_rect(void *ctx, double *x, double *y, double *height);
+
+// Puts text in at the caret, as mdcore_replace_text does at its place in
+// the source, and the caret is after the text. Text at the end of bold
+// text is bold: it goes where the character before the caret is. Does
+// nothing with no caret.
+void mdcore_insert(void *ctx, const char *utf8, long length);
+
+// Takes out the character before the caret: all that the source has for
+// it (an entity, a run of spaces that shows as one space). Does nothing
+// at the start of a block.
+void mdcore_delete_backward(void *ctx);
+
+// The text of the document as it is now, UTF-8: what a host saves after
+// edits. The pointer is good until the next call of this.
+const char *mdcore_source(void *ctx, long *length);
+
 // Sets the view size and backing scale. Starts a new layout when the
 // document, the style, or the width changed; the next frame lays out
 // what it shows. A new scale only makes the glyph bitmaps again.
