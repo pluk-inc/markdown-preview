@@ -77,6 +77,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-25 | a caret, and text that is typed at it | 596 / 587 | 53 / 98 | 505 / 730 | 66 / 72 | none | 0.51 / 0.43 | 7.1 / 26.7 (16.2 at the first frame) |
 | 2026-11-25 | Edit Mode in the native view | 569 / 579 | 53 / 99 | 475 / 720 | 61 / 71 | none | 0.52 / 0.44 | 7.2 / 26.7 (16.2 at the first frame) |
 | 2026-11-25 | the keys that move the caret | 650 / 628 | 59 / 105 | 545 / 875 | 56 / 81 | none | none / 0.42 | 7.1 / 26.6 (16.2 at the first frame) |
+| 2026-11-25 | Return, and the empty line that it makes | 616 / 565 | 61 / 107 | 490 / 775 | 48 / 61 | none | none / 0.34 | 7.2 / 26.6 (16.1 at the first frame) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -817,3 +818,40 @@ of the step made the quads of the page too and was 1.2 ms. The 20 ms
 that the app's CPU number is higher in the long document is inside
 what the two base runs of the row above it differ by on a busy Mac; the
 launch runs no code of this change.
+
+## Return, and the empty line that it makes (2026-11-25)
+
+Each block has the number of empty lines after it that show, the
+layout gives each a line, and Return is a call that knows its block.
+The number is in two bytes that a block had spare, so a block is no
+larger. `app.py`, short / long, five launches for each number, the
+base built from its commit on the same day:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 599 / 557 | 54 / 100 | 510 / 780 |
+| change | 603 / 587 | 60 / 107 | 470 / 780 |
+| change | 629 / 543 | 61 / 107 | 510 / 770 |
+| base | 534 / 532 | 64 / 109 | 450 / 770 |
+
+`core.py`, short / long, the base and the change, two runs each in
+turns (base, change, change, base):
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 49, 49 / 60, 62 | 48, 49 / 63, 60 |
+| Scroll frame, glyphs ready (CPU ms) | 0.28, 0.29 / 0.38, 0.35 | 0.28, 0.30 / 0.34, 0.34 |
+| A typed character in the middle of the text (CPU ms) | 1.1, 1.0 / 1.5, 1.3 | 1.1, 1.1 / 1.3, 1.4 |
+| A typed character at the end of the text (CPU ms) | 1.1, 1.0 / 2.8, 2.7 | 1.0, 0.8 / 2.6, 2.4 |
+| A typed character at a caret (CPU ms) | 1.2, 1.2 / 1.8, 1.4 | 1.3, 1.0 / 1.3, 1.8 |
+| A step of the caret to the left or to the right (CPU ms) | 0.32, 0.34 / 0.39, 0.32 | 0.34, 0.28 / 0.30, 0.33 |
+| Heap at the first frame (MB) | 5.3 / 16.1 | 5.3 / 16.1 |
+| Heap with all of the document laid out (MB) | 7.1, 7.2 / 26.7, 26.6 | 7.2, 7.1 / 26.6, 26.6 |
+
+No number moved by more than the two runs of one build differ. The
+parse counts the empty lines after each block with one more read of
+the lines of the block (to find where they end): that is in the first
+frame, which did not move. The memory of the app is what the two base
+runs differ by (54 to 64 MB). The walk of the caret before the runs
+now also presses Return, types, and deletes, and stops when the text
+is not the text of before.
