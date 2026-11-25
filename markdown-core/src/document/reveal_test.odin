@@ -57,6 +57,10 @@ test_the_marks_of_the_element_of_an_offset_are_text :: proc(t: ^testing.T) {
 		{"> ## T\n", 5, "## T", "^^^ "},
 		{"- # T\n", 5, "# T", "^^ "},
 		{"## \n\ntext\n", 1, "## ", "^^^"},
+		{"#\n\ntext\n", 0, "#", "^"},
+		// With raw HTML or a NUL byte at the start of the text.
+		{"# <b>x</b>\n", 6, "# x", "^^ "},
+		{"# \x00b\n", 4, "# \uFFFDb", "^^    "},
 		// Not the line under a heading.
 		{"Title\n=====\n", 2, "Title", "     "},
 		// Not the "<" and ">" of an address.
