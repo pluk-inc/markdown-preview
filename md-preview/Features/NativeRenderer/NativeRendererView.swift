@@ -353,10 +353,10 @@ final class NativeRendererView: NSView {
     /// A click gave the view a caret.
     private var hasCaret = false
     /// The text of an input method that is not final yet: where it is in
-    /// the source of the document, in bytes, and how long it is in the
-    /// units that the system's text input counts in (UTF-16). The next
-    /// form of it, or the final text, takes its place.
-    private var markedText: (start: Int, length: Int, units: Int)?
+    /// the source of the document, in bytes, and the text itself, which
+    /// the system's text input counts in UTF-16 units. The next form of
+    /// it, or the final text, takes its place.
+    private var markedText: (start: Int, length: Int, text: String)?
     /// The caret that the reader sees: the system's own, which blinks as
     /// the system's settings say. It is on the page, at the place that
     /// the core gives.
@@ -859,11 +859,9 @@ private final class PageArea: NSView {
 extension NativeRendererView: DocumentEditor {
     func fetchMarkdown(_ completion: @escaping (String?) -> Void) {
         var length = 0
-        guard let bytes = mdcore_source(ctx, &length) else {
-            completion(nil)
-            return
-        }
-        completion(String(decoding: UnsafeRawBufferPointer(start: bytes, count: length), as: UTF8.self))
+        let bytes = mdcore_source(ctx, &length)
+        // A document with no text has no bytes, and that is its text.
+        completion(String(decoding: UnsafeRawBufferPointer(start: bytes, count: bytes == nil ? 0 : length), as: UTF8.self))
     }
 
     func load(markdown: String, assetBaseURL: URL?) {
@@ -962,9 +960,16 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         // The text of an input method while the reader makes it: it is in
         // the document as it is typed, and each new form takes the place
         // of the one before. It has no line under it yet.
-        let text = plainText(string)
+        var text = plainText(string)
+        // An input method can give a new form of a part of its text only:
+        // the range counts from the start of the text that is not final,
+        // in UTF-16 units.
+        if let marked = markedText?.text, replacementRange.location != NSNotFound,
+           let range = Range(replacementRange, in: marked) {
+            text = marked.replacingCharacters(in: range, with: text)
+        }
         let start = put(text)
-        markedText = text.isEmpty || start < 0 ? nil : (start, text.utf8.count, text.utf16.count)
+        markedText = text.isEmpty || start < 0 ? nil : (start, text.utf8.count, text)
         didEdit()
     }
 
@@ -977,11 +982,11 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
     // end. A caret inside that text is not a thing the view has yet.
 
     func selectedRange() -> NSRange {
-        NSRange(location: markedText?.units ?? 0, length: 0)
+        NSRange(location: markedText?.text.utf16.count ?? 0, length: 0)
     }
 
     func markedRange() -> NSRange {
-        markedText.map { NSRange(location: 0, length: $0.units) } ?? NSRange(location: NSNotFound, length: 0)
+        markedText.map { NSRange(location: 0, length: $0.text.utf16.count) } ?? NSRange(location: NSNotFound, length: 0)
     }
 
     func hasMarkedText() -> Bool {
