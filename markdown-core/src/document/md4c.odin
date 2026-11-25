@@ -126,6 +126,9 @@ Md_Parser :: struct {
 	text:        proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr) -> c.int,
 	debug_log:   proc "c" (msg: cstring, userdata: rawptr),
 	syntax:      proc "c" (),
+	// Not in upstream md4c (pkg/md4c/README.md): the start of the source
+	// line where a block starts, before the block comes.
+	block_offset: proc "c" (type: Md_Block, offset: c.uint, userdata: rawptr),
 }
 
 Md_Entity :: struct {

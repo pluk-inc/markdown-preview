@@ -3,6 +3,7 @@ package document
 import "../base"
 import "base:runtime"
 import "core:c"
+import "core:slice"
 import "core:strings"
 import "core:unicode/utf8"
 
@@ -41,7 +42,19 @@ Parser :: struct {
 	lists:        [dynamic]List,
 	item_marker:  Marker, // marker of the list item that has no block yet
 	item_number:  int,
-	item_line:    int, // a task: the source line of its mark, from 1
+	item_mark:    int, // a task: the byte offset of its mark in the source; 0 for no task
+	// The start of the source line of the block that comes next: of the
+	// first thing that started after the last block, so a block that is
+	// the first one of a list item or a quote starts at the line of
+	// their mark. `at_known` is false when nothing started yet. A list,
+	// an item, or a quote that ends with no block in it takes its start
+	// with it (`at_depth`: how many of these were open around the thing
+	// that started), so the start of an item stays when an empty quote
+	// in it ends.
+	at:           int,
+	at_known:     bool,
+	at_depth:     int,
+	open:         int, // the lists, items, and quotes that are open
 	item_count:   int, // list items so far
 	item_blocks:  int, // blocks of the open item so far
 	// The source, and how far its lines are counted: task marks come in
@@ -74,12 +87,25 @@ parse :: proc(source: string) -> Document {
 		enter_span  = enter_span,
 		leave_span  = leave_span,
 		text        = on_text,
+		block_offset = on_block_offset,
 	}
 	// md4c takes a 32-bit size; a larger source is cut there.
 	size := c.uint(min(len(source), int(max(c.int))))
 	md_parse(raw_data(source), size, &md, &p)
 	close_text(&p)
 	delete(p.lists)
+	doc.source = slice.clone(transmute([]u8)source)
+	when ODIN_DEBUG {
+		// The blocks are in the order of the source, each with lines of
+		// its own.
+		last := -1
+		for part in doc.parts {
+			for &b in part_blocks(part) {
+				assert(b.source > last && b.source < max(len(source), 1), "a block starts before the block before it ends")
+				last = b.source
+			}
+		}
+	}
 	return doc
 }
 
@@ -132,12 +158,12 @@ open_text :: proc(p: ^Parser, kind: Block_Kind, level := 0) {
 @(private)
 start_block :: proc(p: ^Parser, kind: Block_Kind) -> Block {
 	b := Block {
-		kind        = kind,
-		list_depth  = len(p.lists),
-		quote_depth = p.quote,
-		done        = len(p.lists) > 0 && p.lists[len(p.lists) - 1].done,
-		item        = len(p.lists) > 0 ? p.lists[len(p.lists) - 1].item : 0,
+		shape = {kind = kind, list_depth = len(p.lists), quote_depth = p.quote},
+		source = p.at,
+		done = len(p.lists) > 0 && p.lists[len(p.lists) - 1].done,
+		item = len(p.lists) > 0 ? p.lists[len(p.lists) - 1].item : 0,
 	}
+	p.at_known = false
 	take_item_position(p, &b)
 	return b
 }
@@ -155,8 +181,21 @@ push_block :: proc(p: ^Parser) {
 // texts have one span, and the first one reserves room for eight.
 @(private)
 text_fit :: proc(t: ^Text) {
-	shrink(&t.bytes)
-	shrink(&t.spans)
+	fit(&t.bytes)
+	fit(&t.spans)
+}
+
+// Makes an array as large as what it holds, in new memory: the system
+// keeps the room of an array that is made smaller in place.
+@(private)
+fit :: proc(array: ^[dynamic]$T) {
+	if cap(array) == len(array) {
+		return
+	}
+	exact := make([dynamic]T, len(array), len(array))
+	copy(exact[:], array[:])
+	delete(array^)
+	array^ = exact
 }
 
 // Gives a block its marker and its place in the open list item.
@@ -168,7 +207,11 @@ take_item_position :: proc(p: ^Parser, b: ^Block) {
 	if p.item_blocks == 0 {
 		b.marker = p.item_marker
 		b.number = p.item_number
-		b.task_line = p.item_line
+		if p.item_mark > 0 {
+			// Task marks come in source order, as `line_of` needs them.
+			b.task_line = line_of(p, p.item_mark)
+			b.task_mark = p.item_mark
+		}
 		b.spacing = p.list_start ? .List_Start : .Item
 		p.list_start = false
 	} else {
@@ -216,6 +259,10 @@ enter_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 		close_text(p)
 	}
 	#partial switch type {
+	case .Quote, .Ul, .Ol, .Li:
+		p.open += 1
+	}
+	#partial switch type {
 	case .Quote:
 		p.quote += 1
 	case .Ul:
@@ -229,12 +276,12 @@ enter_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 		li := cast(^Md_Li_Detail)detail
 		p.item_blocks = 0
 		p.item_number = list.next
-		p.item_line = 0
+		p.item_mark = 0
 		is_done := false
 		if li.is_task != 0 {
 			is_done = li.task_mark != ' '
 			p.item_marker = is_done ? .Task_Done : .Task_Open
-			p.item_line = line_of(p, int(li.task_mark_offset))
+			p.item_mark = int(li.task_mark_offset)
 		} else {
 			p.item_marker = list.ordered ? .Number : .Bullet
 		}
@@ -282,6 +329,15 @@ enter_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 leave_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.int {
 	p := cast(^Parser)userdata
 	context = p.ctx
+	// What started in a list, an item, or a quote and made no block (a
+	// quote with only raw HTML in it) is no start of the block after it.
+	defer #partial switch type {
+	case .Quote, .Ul, .Ol, .Li:
+		p.open -= 1
+		if p.at_depth >= p.open {
+			p.at_known = false
+		}
+	}
 	#partial switch type {
 	case .Quote:
 		close_text(p)
@@ -292,7 +348,8 @@ leave_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 	case .Li:
 		close_text(p)
 		if p.item_blocks == 0 {
-			// An item with nothing in it still shows its marker.
+			// An item with nothing in it still shows its marker. Its
+			// block starts where the item does.
 			open_text(p, .Paragraph)
 			close_text(p)
 		}
@@ -338,6 +395,18 @@ leave_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 		p.table = {}
 	}
 	return 0
+}
+
+@(private)
+on_block_offset :: proc "c" (type: Md_Block, offset: c.uint, userdata: rawptr) {
+	p := cast(^Parser)userdata
+	// Raw HTML is no block of the document: its lines go with the block
+	// before it.
+	if type != .Html && !p.at_known {
+		p.at = int(offset)
+		p.at_known = true
+		p.at_depth = p.open
+	}
 }
 
 @(private)

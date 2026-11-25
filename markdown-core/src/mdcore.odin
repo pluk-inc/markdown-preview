@@ -270,8 +270,17 @@ mdcore_set_style :: proc "c" (handle: rawptr, style: ^base.Style) {
 mdcore_set_markdown :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
+	text := length > 0 ? string(utf8[:length]) : ""
+	{
+		hold(ctx)
+		// The text that the document has: a host that gets its own save
+		// back, or the source after a task click. Nothing changes.
+		if string(ctx.doc.source) == text {
+			return
+		}
+	}
 	// The parse needs nothing of the view, so frames go on while it runs.
-	fresh := document.parse(length > 0 ? string(utf8[:length]) : "")
+	fresh := document.parse(text)
 	{
 		context.temp_allocator = ctx.temp
 		hold(ctx)

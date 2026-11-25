@@ -66,7 +66,8 @@ void mdcore_set_style(void *ctx, const mdcore_style *style);
 // only the changed parts again, and keeps the reader's place and the
 // selection (one in the blocks that changed goes to the start of them). A
 // text of another document is the same call; the host then scrolls to the
-// top of the page and ends the selection. Call mdcore_resize after it
+// top of the page and ends the selection. The text that the document
+// has costs one comparison and no parse. Call mdcore_resize after it
 // when the view has no layout yet.
 void mdcore_set_markdown(void *ctx, const char *utf8, long length);
 
@@ -143,9 +144,10 @@ long mdcore_tasks(void *ctx, double top, double bottom, mdcore_task *out, long c
 // Checks or opens the task whose "[ ]" is on a source line, in place: the
 // document that is set stays, with no new parse and no new layout, and
 // the next frame shows the text of the item in its new color. The result
-// is the same as mdcore_set_markdown with that one mark changed, so a
-// host that then gets the changed source from its own save does not have
-// to set it again. False when no task has its mark on that line.
+// is the same as mdcore_set_markdown with that one mark changed (the
+// source that the core keeps gets the mark too), so a host that then
+// gets the changed source from its own save does not have to set it
+// again. False when no task has its mark on that line.
 bool mdcore_set_task_checked(void *ctx, long line, bool checked);
 
 // The core keeps the reader's place: the first line of text that the view

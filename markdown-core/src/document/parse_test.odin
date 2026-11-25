@@ -286,6 +286,7 @@ test_a_task_set_in_place_is_the_document_of_the_changed_source :: proc(t: ^testi
 		want := parse(c.source)
 		defer destroy(&want)
 		testing.expect(t, set_task_done(&doc, c.line, c.done))
+		testing.expect_value(t, string(doc.source), c.source)
 		testing.expect_value(t, doc.count, want.count)
 		for i in 0 ..< want.count {
 			testing.expect_value(t, block_at(&doc, i).marker, block_at(&want, i).marker)
@@ -450,10 +451,13 @@ expect_document :: proc(t: ^testing.T, doc: ^Document, source: string, loc := #c
 	}
 	testing.expect_value(t, count, doc.count, loc)
 	testing.expect_value(t, len(doc.links), len(want.links), loc)
+	testing.expect_value(t, string(doc.source), source, loc)
 	for i in 0 ..< min(doc.count, want.count) {
 		a, b := block_at(doc, i), block_at(&want, i)
 		testing.expect(t, layout_equal(a, b), loc = loc)
+		testing.expect_value(t, a.source, b.source, loc)
 		testing.expect_value(t, a.task_line, b.task_line, loc)
+		testing.expect_value(t, a.task_mark, b.task_mark, loc)
 		testing.expect_value(t, a.item, b.item, loc)
 		testing.expect_value(t, a.done, b.done, loc)
 		for span, n in a.text.spans {
@@ -606,4 +610,107 @@ test_a_task_mark_and_a_link_number_change_no_block_for_a_layout :: proc(t: ^test
 	testing.expect_value(t, block_at(&doc, 2).text.spans[1].link, 2)
 	testing.expect_value(t, doc.links[1], "https://a.example")
 	_ = task
+}
+
+// The source of each block of a document, in order.
+@(private = "file")
+expect_sources :: proc(t: ^testing.T, source: string, want: []string, loc := #caller_location) {
+	doc := parse(source)
+	defer destroy(&doc)
+	testing.expect_value(t, doc.count, len(want), loc)
+	for i in 0 ..< min(doc.count, len(want)) {
+		start, end := block_source(&doc, i)
+		testing.expect_value(t, string(doc.source[start:end]), want[i], loc)
+	}
+}
+
+@(test)
+test_a_block_knows_its_lines_of_the_source :: proc(t: ^testing.T) {
+	// A block has its first line with all marks before its text, and the
+	// lines after it that are no block: empty lines, the line under a
+	// heading, the end of a fence.
+	expect_sources(
+		t,
+		"# Title\n\nOne\ntwo\n\nHead\n====\n***\n```odin\ncode\n```\n\n    more code\n\n| a |\n| - |\n| 1 |\n\nlast",
+		{
+			"# Title\n\n",
+			"One\ntwo\n\n",
+			"Head\n====\n",
+			"***\n",
+			"```odin\ncode\n```\n\n",
+			"    more code\n\n",
+			"| a |\n| - |\n| 1 |\n\n",
+			"last",
+		},
+	)
+	// Blocks in lists and quotes: each starts at the start of its line,
+	// before the marks of what it is in.
+	expect_sources(
+		t,
+		"- one\n- two\n\n  more\n  - [ ] in\n    ```\n    x\n    ```\n> quote\n> > # deep\n\n1. a\r\n2. b\r\n",
+		{
+			"- one\n",
+			"- two\n\n",
+			"  more\n",
+			"  - [ ] in\n",
+			"    ```\n    x\n    ```\n",
+			"> quote\n",
+			"> > # deep\n\n",
+			"1. a\r\n",
+			"2. b\r\n",
+		},
+	)
+	// A block with no text of its own still has its line: an image with
+	// no words, an item with nothing in it, an empty fence.
+	expect_sources(
+		t,
+		"![](a.png)\n\n-\n- x\n-\n\n```\n```\ntext\n",
+		{"![](a.png)\n\n", "-\n", "- x\n", "-\n\n", "```\n```\n", "text\n"},
+	)
+	// What is no block goes with the block before it; before the first
+	// block, with that one.
+	expect_sources(
+		t,
+		"\n<div>\nraw\n</div>\n\nfirst [a]\n\n[a]: https://example.com\n\n<!-- note -->\n\nsecond\n",
+		{"\n<div>\nraw\n</div>\n\nfirst [a]\n\n[a]: https://example.com\n\n<!-- note -->\n\n", "second\n"},
+	)
+	// The first block of a list item or a quote has the line of their
+	// mark, also when its text starts on a later line. An item with only
+	// raw HTML in it has its line too.
+	expect_sources(
+		t,
+		"x\n\n-\n  foo\n- [ ]\n  task\n\n> \n> quote\n\n- <b>\n\n  </b>\n- > <i>\n\nend\n",
+		{"x\n\n", "-\n  foo\n", "- [ ]\n  task\n\n", "> \n> quote\n\n", "- <b>\n\n  </b>\n", "- > <i>\n\n", "end\n"},
+	)
+	// An item keeps its line when a quote with nothing in it ends
+	// before the first block of the item.
+	expect_sources(t, "intro\n\n- >\n\n  tail\n", {"intro\n\n", "- >\n\n  tail\n"})
+	expect_sources(t, "> <div>\n\nnext\n- a\n  - > <i>\n\n  b\n", {"> <div>\n\nnext\n", "- a\n", "  - > <i>\n\n", "  b\n"})
+	expect_sources(t, "# title\n\n-\n  > <div></div>\n\n  later\n", {"# title\n\n", "-\n  > <div></div>\n\n  later\n"})
+	// A line under definitions of links only is a rule; the rest of the
+	// paragraph comes after it.
+	expect_sources(t, "intro\n\n[a]: /x\n---\nend\n", {"intro\n\n[a]: /x\n", "---\n", "end\n"})
+	expect_sources(
+		t,
+		"# Before\n\n[a]: /u\n    ---\ntext\n\nAfter\n",
+		{"# Before\n\n[a]: /u\n", "    ---\n", "text\n\n", "After\n"},
+	)
+	// A paragraph keeps the definitions that it starts with.
+	expect_sources(t, "one\n\n[a]: /x\ntwo [a]\n", {"one\n\n", "[a]: /x\ntwo [a]\n"})
+}
+
+@(test)
+test_the_sources_of_the_blocks_are_the_source :: proc(t: ^testing.T) {
+	source := numbered(3 * PART_BLOCKS)
+	defer delete(source)
+	doc := parse(source)
+	defer destroy(&doc)
+	at := 0
+	for i in 0 ..< doc.count {
+		start, end := block_source(&doc, i)
+		testing.expect_value(t, start, at)
+		testing.expect(t, end > start)
+		at = end
+	}
+	testing.expect_value(t, at, len(source))
 }
