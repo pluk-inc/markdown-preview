@@ -1360,3 +1360,98 @@ test_a_layout_after_edits_is_the_layout_of_its_source :: proc(t: ^testing.T) {
 		}
 	}
 }
+
+@(test)
+test_a_caret_has_the_place_of_its_address :: proc(t: ^testing.T) {
+	// A paragraph of some lines, a code block with an empty line, a rule.
+	f: Fixture
+	setup(&f, "One paragraph with enough words in it to go over the end of a line in a narrow page, and then some.\n\n```\nfirst\n\nthird\n```\n\n---\n", 300)
+	defer teardown(&f)
+	expect_ok(t, &f.page)
+	step(&f.page, 1e30)
+	expect_ok(t, &f.page)
+	place :: proc(f: ^Fixture, at: document.Address) -> (x, top, height: f32, ok: bool) {
+		x, top, height, _, ok = caret_place(&f.page, at)
+		return
+	}
+	// Along a line the caret goes right; at the start of the next line
+	// it is at the left again, one line lower.
+	x0, top0, height, ok0 := place(&f, {0, 0, 0})
+	x5, top5, _, ok5 := place(&f, {0, 0, 5})
+	testing.expect(t, ok0 && ok5)
+	testing.expect(t, x5 > x0 && top5 == top0 && height > 0)
+	second := f.page.parts[0].lines[1]
+	x, top, _, _ := place(&f, {0, 0, second.line.start})
+	testing.expect_value(t, x, second.x)
+	testing.expect_value(t, top, second.top)
+	testing.expect(t, top > top0)
+	// The end of the text is at the end of its last line.
+	last := f.page.parts[0].lines[f.page.parts[0].boxes[0].line_end - 1]
+	x, top, _, _ = place(&f, {0, 0, len(document.block_at(&f.doc, 0).text.bytes)})
+	testing.expect(t, top == last.top && x > last.x)
+	// "first\n\nthird": the empty line has no line record, and the caret
+	// is one line below "first" on it, and "third" one more.
+	_, first, line, _ := place(&f, {1, 0, 0})
+	x, top, _, _ = place(&f, {1, 0, 6})
+	testing.expect(t, abs(top - (first + line)) < 0.01)
+	_, third, _, _ := place(&f, {1, 0, 7})
+	testing.expect(t, abs(third - (first + 2 * line)) < 0.01)
+	// A rule has no text, and so no caret.
+	_, _, _, ok := place(&f, {2, 0, 0})
+	testing.expect(t, !ok)
+	// A block with no records has none either.
+	g: Fixture
+	setup(&g, "Not laid out.\n", 300)
+	defer teardown(&g)
+	expect_ok(t, &g.page)
+	_, _, _, ok = place(&g, {0, 0, 0})
+	testing.expect(t, !ok)
+}
+
+@(test)
+test_the_caret_of_an_empty_document_is_where_its_first_text_starts :: proc(t: ^testing.T) {
+	empty: Fixture
+	setup(&empty, "", 300)
+	defer teardown(&empty)
+	step(&empty.page, 1e30)
+	expect_ok(t, &empty.page)
+	x, top, height := caret_place_empty(&empty.page)
+	out: [dynamic]base.Quad
+	defer delete(out)
+	caret_quad_empty(&empty.page, 2, 0, &out)
+	testing.expect_value(t, len(out), 1)
+	// The same place as the caret before the first character typed.
+	typed: Fixture
+	setup(&typed, "a\n", 300)
+	defer teardown(&typed)
+	step(&typed.page, 1e30)
+	expect_ok(t, &typed.page)
+	tx, ttop, theight, p, ok := caret_place(&typed.page, {0, 0, 0})
+	testing.expect(t, ok)
+	testing.expect_value(t, x, tx)
+	testing.expect_value(t, empty.page.origin + f64(top), typed.page.parts[p].top + f64(ttop))
+	testing.expect_value(t, height, theight)
+}
+
+@(test)
+test_a_click_puts_a_caret_at_text_with_no_line :: proc(t: ^testing.T) {
+	// A code block with empty lines, at its start and between two lines
+	// with text, and a list item with nothing in it.
+	f: Fixture
+	setup(&f, "```\n\nfirst\n\n\nfourth\n```\n\n- \n- item\n", 300)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	expect_ok(t, &f.page)
+	// A point in the middle of the line of each address is that address.
+	for at in ([]document.Address{{0, 0, 0}, {0, 0, 7}, {0, 0, 8}, {1, 0, 0}}) {
+		x, top, height, p, ok := caret_place(&f.page, at)
+		testing.expect(t, ok)
+		hit, found := caret_hit(&f.page, x + 1, f.page.parts[p].top + f64(top + height / 2))
+		testing.expect(t, found)
+		testing.expect_value(t, hit, at)
+	}
+	// A point in a line with text is in that text, as before.
+	x, top, height, p, _ := caret_place(&f.page, {0, 0, 3})
+	hit, found := caret_hit(&f.page, x, f.page.parts[p].top + f64(top + height / 2))
+	testing.expect(t, found && hit.block == 0 && hit.byte >= 1 && hit.byte <= 6)
+}

@@ -22,7 +22,8 @@ markdown-core/bench/app.py <Markdown Preview.app>   # the app, cold launch; add 
   to and makes the glyph bitmaps, the second has them), a jump back to
   the top between them, a jump to the end, a new width there, the same
   text again with one paragraph more in its middle, ten characters typed
-  into that paragraph and ten at the end of the text, Select All,
+  into that paragraph and ten at the end of the text, ten at a caret
+  that a click put in the view, Select All,
   a copy of all of the text, frames through all of the document (so all
   of it is laid out), and the heap. It takes a minute and
   shows no window. A scroll frame is CPU time of the drawing thread, because
@@ -70,6 +71,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-24 | a change of the source as a range and a text | 574 / 582 | 62 / 108 | 465 / 705 | 59 / 71 | none | 0.43 / 0.37 | 7.0 / 25.4 (16.2 at the first frame) |
 | 2026-11-24 | an edit parses only the blocks around it | 577 / 599 | 62 / 107 | 460 / 700 | 60 / 74 | none | 0.47 / 0.42 | 7.0 / 25.3 (16.1 at the first frame) |
 | 2026-11-24 | a key lays out its block again, not its part | 558 / 560 | 62 / 108 (see the section) | 450 / 695 | 60 / 70 | none | 0.50 / 0.42 | 7.2 / 25.5 (16.1 at the first frame) |
+| 2026-11-25 | a caret, and text that is typed at it | 596 / 587 | 53 / 98 | 505 / 730 | 66 / 72 | none | 0.51 / 0.43 | 7.1 / 26.7 (16.2 at the first frame) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -702,3 +704,43 @@ change, and the last three are the usual ones (62 and 107 MB): the same
 jump as in one run of "A change as a range of the source", again not
 from a build. The reason is still not known. One built-in display was
 on; no other display was there when it was looked at after the run.
+
+## A caret, and text typed at it (2026-11-25)
+
+`core.py` has one step more: a click in the middle of the view puts a
+caret in the text there, ten characters are typed at the caret with a
+frame after each, and then each is taken out again. The benchmark stops
+with an error when the caret did not move to the right or the text is
+not the one of before at the end.
+
+| | Short | Long |
+| --- | --- | --- |
+| A typed character at an offset in the middle of the text (CPU ms) | 1.3 | 1.5 |
+| A typed character at an offset at the end of the text (CPU ms) | 1.4 | 2.7 |
+| A typed character at a caret that a click put in the view (CPU ms) | 2.0 | 1.8 |
+
+The other numbers of `core.py` are the ones of the base (a key lays out
+its block): the first frame is 51 to 58 ms (short) and 61 to 75 ms
+(long) for the two over ten runs of the benchmark program each, in
+turns; scroll frames 0.50 and 0.42 ms against 0.51 and 0.43 ms. The heap
+with all of the document laid out has 1.2 MB more for the long document
+(26.7 MB): the benchmark asks for the source two times, and the core
+keeps the copy that it gave.
+
+A key at the caret has more in it than a key at an offset of the source
+that the caller knows: the place of the caret on the page after the key
+is found by a parse of the lines around its block.
+
+`app.py`, short / long, five launches for each number, the base built
+from its commit on the same day:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 613 / 609 | 54 / 100 | 500 / 750 |
+| change | 588 / 586 | 53 / 96 | 510 / 730 |
+| change | 603 / 588 | 53 / 100 | 500 / 730 |
+| base | 611 / 596 | 53 / 100 | 500 / 750 |
+
+The app is the same: no part of it has a caret yet. The memory is 8 MB
+under the numbers of the day before for the two builds alike, as the
+launch time is 30 ms over them: the state of the Mac, not the builds.

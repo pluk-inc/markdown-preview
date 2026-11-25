@@ -210,6 +210,42 @@ int main(int argc, const char *argv[]) {
         }
     }
     printf("type_end_cpu_ms %.2f\n", (thread_cpu_ms() - type_start) / KEYS);
+
+    // The same through the caret, as a key in an editor is: a click in
+    // the middle of the view puts the caret in the text there, each key
+    // goes in at the caret, and then each is taken out again. The text
+    // is then the one of before.
+    long before_length = 0, after_length = 0;
+    NSData *before = [NSData dataWithBytes:mdcore_source(ctx, &before_length) length:(NSUInteger)before_length];
+    bool caret = false;
+    for (double y = bottom + VIEW_HEIGHT / 2; !caret && y < bottom + VIEW_HEIGHT; y += 20) {
+        caret = mdcore_caret_set(ctx, VIEW_WIDTH / 2, y);
+    }
+    double caret_x = 0, caret_y = 0, caret_height = 0;
+    caret = caret && mdcore_caret_rect(ctx, &caret_x, &caret_y, &caret_height);
+    type_start = thread_cpu_ms();
+    for (int key = 0; caret && key < KEYS; key++) {
+        mdcore_insert(ctx, "x", 1);
+        @autoreleasepool {
+            mdcore_draw(ctx, bottom);
+        }
+    }
+    printf("type_caret_cpu_ms %.2f\n", (thread_cpu_ms() - type_start) / KEYS);
+    // To the right, or on another line when the text went over the end
+    // of its line.
+    double moved_x = 0, moved_y = 0;
+    bool moved = caret && mdcore_caret_rect(ctx, &moved_x, &moved_y, &caret_height)
+        && (moved_x > caret_x || moved_y != caret_y);
+    for (int key = 0; caret && key < KEYS; key++) {
+        mdcore_delete_backward(ctx);
+    }
+    const char *after = mdcore_source(ctx, &after_length);
+    bool same = caret && after_length == before_length && memcmp(after, before.bytes, (size_t)before_length) == 0;
+    if (!caret || !moved || !same) {
+        fprintf(stderr, "the caret did not work: caret %d, moved %d, text as before %d\n", caret, moved, same);
+        return 1;
+    }
+    mdcore_caret_clear(ctx);
     // The estimate for the comparison below is of this text.
     mdcore_page_area(ctx, &top, &height);
 

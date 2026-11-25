@@ -66,6 +66,17 @@ Ctx :: struct {
 	cache:           text.Glyph_Cache,
 	gpu:             renderer.Renderer,
 	selection:       document.Selection,
+	// The caret of an editor: where text that is typed goes. An offset
+	// in the source of the document, because that is what an edit
+	// changes; -1 for no caret. `caret_at` is the address in the text of
+	// a block that the offset is at now, for the place on the page.
+	caret:           int,
+	caret_at:        document.Address,
+	// Where the text of the block of the caret is in the source
+	// (`document.block_map`), for the next key. Of the document as it
+	// is: each change makes it again.
+	caret_places:    [dynamic]document.Place,
+	source_out:      [dynamic]u8, // the source, for `mdcore_source`
 	// Held for all of a change of the source of the document, before
 	// `lock`. A frame does not take it.
 	source_lock:     sync.Mutex,
@@ -166,6 +177,13 @@ keep_window :: proc(ctx: ^Ctx) {
 show_selection :: proc(ctx: ^Ctx) {
 	clear(&ctx.selection_quads)
 	layout.selection_quads(&ctx.page, ctx.selection, ctx.shown_y0, ctx.shown_y1, ctx.scale, ctx.origin_px, &ctx.selection_quads)
+	if ctx.caret >= 0 && ctx.layout_valid {
+		if ctx.doc.count == 0 {
+			layout.caret_quad_empty(&ctx.page, ctx.scale, ctx.origin_px, &ctx.selection_quads)
+		} else {
+			layout.caret_quad(&ctx.page, ctx.caret_at, ctx.shown_y0, ctx.shown_y1, ctx.scale, ctx.origin_px, &ctx.selection_quads)
+		}
+	}
 	renderer.set_selection(&ctx.gpu, ctx.selection_quads[:])
 }
 
@@ -196,6 +214,7 @@ mdcore_create :: proc "c" (surface: rawptr) -> rawptr {
 	runtime.default_temp_allocator_init(&ctx.scratch, 64 * 1024, context.allocator)
 	ctx.temp = runtime.default_temp_allocator(&ctx.scratch)
 	ctx.scale = 2
+	ctx.caret = -1
 	ctx.style = default_style()
 	renderer.init(&ctx.gpu, surface)
 	return ctx
@@ -235,6 +254,8 @@ mdcore_destroy :: proc "c" (handle: rawptr) {
 	delete(ctx.selection_quads)
 	text.glyph_buffer_destroy(&ctx.glyph_buffer)
 	delete(ctx.clipboard)
+	delete(ctx.source_out)
+	delete(ctx.caret_places)
 	runtime.default_temp_allocator_destroy(&ctx.scratch)
 	free(ctx)
 }
@@ -298,6 +319,13 @@ change_source :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil) {
 	// lock, and only such a call reads the source.
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
+	change_source_held(ctx, text, range)
+}
+
+// `change_source` for a caller that holds `source_lock`: one that made
+// the range from the source as it is (a key at the caret).
+@(private)
+change_source_held :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil) {
 	edit: document.Edit
 	if r, given := range.?; given {
 		edit = {r[0], r[1], text}
@@ -337,10 +365,159 @@ change_source :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil) {
 	if change.count == 0 {
 		ctx.selection, ctx.place = {}, {}
 	}
+	// The caret is an offset in the source: after the edit it is as much
+	// later as the source is longer, and one that was in the text that
+	// went is at the end of the text that came.
+	if ctx.caret >= 0 {
+		edit := pending.edit
+		if ctx.caret >= edit.end {
+			ctx.caret += pending.bytes
+		} else if ctx.caret > edit.start {
+			ctx.caret = edit.end + pending.bytes
+		}
+		// Not in a character: an edit that the core found between two
+		// texts can end in one.
+		source := ctx.doc.source
+		for ctx.caret > 0 && ctx.caret < len(source) && source[ctx.caret] & 0xc0 == 0x80 {
+			ctx.caret -= 1
+		}
+		caret_changed(ctx)
+	}
 	if ctx.layout_valid {
 		layout.restore_place(&ctx.page, ctx.place)
 		layout_changed(ctx)
 	}
+}
+
+// After the caret or the document changed: the address of the caret in
+// the text, where the text of its block is in the source, and the
+// records of its block, so the caret has a place. The caller holds
+// `source_lock` and the lock of the state.
+@(private)
+caret_changed :: proc(ctx: ^Ctx) {
+	if ctx.caret < 0 || ctx.doc.count == 0 {
+		return
+	}
+	block := document.block_at_offset(&ctx.doc, ctx.caret)
+	delete(ctx.caret_places)
+	ctx.caret_places = document.block_map(&ctx.doc, block)
+	ctx.caret_at = document.address_in(ctx.caret_places[:], block, ctx.caret)
+	// The records of its block, when the caret has no place with the
+	// ones that are there: a long code block is not laid out to its end
+	// for a caret in one of its first lines.
+	if ctx.layout_valid {
+		if _, _, _, _, placed := layout.caret_place(&ctx.page, ctx.caret_at); !placed {
+			layout.lay_out_block(&ctx.page, block)
+		}
+	}
+	ctx.display_valid = false
+}
+
+// Puts the caret at the text that is nearest to a point of the page.
+// See the header.
+@(export)
+mdcore_caret_set :: proc "c" (handle: rawptr, x, y: f64) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	// The source does not change under the look at it.
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	hold(ctx)
+	if ctx.doc.count == 0 {
+		// A document with no text yet: text goes at its start.
+		ctx.caret = 0
+		ctx.display_valid = false
+		return true
+	}
+	at := layout.caret_hit(&ctx.page, f32(x), y) or_return
+	// Not at text that has no place in the source for text to go to.
+	ctx.caret = document.source_of(&ctx.doc, at) or_return
+	caret_changed(ctx)
+	// The selection is empty and at the caret, which can be beside the
+	// point (at an end of an entity that is one thing): a drag from here
+	// selects from this place (`mdcore_mouse`).
+	ctx.selection = {anchor = ctx.caret_at, focus = ctx.caret_at, active = true}
+	return true
+}
+
+// See the header.
+@(export)
+mdcore_caret_clear :: proc "c" (handle: rawptr) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	hold(ctx)
+	ctx.caret = -1
+	ctx.display_valid = false
+}
+
+// See the header.
+@(export)
+mdcore_caret_rect :: proc "c" (handle: rawptr, x, y, height: ^f64) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	if ctx.caret < 0 || !ctx.layout_valid {
+		return false
+	}
+	if ctx.doc.count == 0 {
+		cx, top, h := layout.caret_place_empty(&ctx.page)
+		x^, y^, height^ = f64(cx), ctx.page.origin + f64(top), f64(h)
+		return true
+	}
+	cx, top, h, part := layout.caret_place(&ctx.page, ctx.caret_at) or_return
+	x^, y^, height^ = f64(cx), ctx.page.parts[part].top + f64(top), f64(h)
+	return true
+}
+
+// Puts text in at the caret. See the header.
+@(export)
+mdcore_insert :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	// From the look at the caret to the end of the change: no other
+	// change of the source comes between.
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	if ctx.caret < 0 || length <= 0 {
+		return
+	}
+	change_source_held(ctx, string(utf8[:length]), [2]int{ctx.caret, ctx.caret})
+}
+
+// Takes out the character before the caret. See the header.
+@(export)
+mdcore_delete_backward :: proc "c" (handle: rawptr) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	if ctx.caret < 0 || ctx.doc.count == 0 {
+		return
+	}
+	// Nothing at the start of a block: to join it with the block before
+	// is not a thing the core does yet.
+	if start, end, ok := document.char_before(&ctx.doc, ctx.caret_places[:], ctx.caret_at); ok {
+		change_source_held(ctx, "", [2]int{start, end})
+	}
+}
+
+// The source of the document as it is now. See the header.
+@(export)
+mdcore_source :: proc "c" (handle: rawptr, length: ^c.long) -> [^]u8 {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	hold(ctx)
+	clear(&ctx.source_out)
+	append(&ctx.source_out, ..ctx.doc.source)
+	length^ = c.long(len(ctx.source_out))
+	return raw_data(ctx.source_out)
 }
 
 // See the header.
