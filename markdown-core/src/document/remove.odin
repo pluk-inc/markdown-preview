@@ -46,7 +46,7 @@ range_edit :: proc(pairs: []Pair, source: []u8, from, to: int, text: string, all
 	for grown := true; grown; {
 		grown = false
 		for pair in pairs {
-			if pair.close < 0 || pair.open_end < start || pair.close > end || (pair.open >= start && pair.close_end <= end) {
+			if pair.close < 0 || pair.line || pair.open_end < start || pair.close > end || (pair.open >= start && pair.close_end <= end) {
 				continue
 			}
 			// No text of the range is before its first mark or after
@@ -71,12 +71,12 @@ range_edit :: proc(pairs: []Pair, source: []u8, from, to: int, text: string, all
 	defer delete(closes)
 	defer delete(opens)
 	#reverse for pair in pairs {
-		if pair.close >= 0 && inside(pair.close, pair.close_end, start, end) && !inside(pair.open, pair.open_end, start, end) {
+		if pair.close >= 0 && !pair.line && inside(pair.close, pair.close_end, start, end) && !inside(pair.open, pair.open_end, start, end) {
 			append(&closes, Mark{pair.close, pair.close_end, pair.tight})
 		}
 	}
 	for pair in pairs {
-		if pair.close >= 0 && inside(pair.open, pair.open_end, start, end) && !inside(pair.close, pair.close_end, start, end) {
+		if pair.close >= 0 && !pair.line && inside(pair.open, pair.open_end, start, end) && !inside(pair.close, pair.close_end, start, end) {
 			append(&opens, Mark{pair.open, pair.open_end, pair.tight})
 		}
 	}

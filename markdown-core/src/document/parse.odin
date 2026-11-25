@@ -80,9 +80,6 @@ Parser :: struct {
 	element:      [2]int,
 	reveal:       Maybe(int),
 	marking:      bool, // the text that comes is such a mark
-	// The text of a heading has not started: the "#" before it is the
-	// mark of its line (`line_mark`).
-	heading:      bool,
 	bytes:        []u8, // what is parsed
 	after_nul:    bool, // the text before was the character for a NUL byte
 	// Table.
@@ -136,6 +133,7 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 		ref_def     = on_ref_def,
 		ref_def_use = on_ref_def_use,
 		mark_offset = pairs != nil || reveal != nil ? on_mark_offset : nil,
+		line_offset = pairs != nil || reveal != nil ? on_line_offset : nil,
 	}
 	// md4c takes a 32-bit size; a larger source is cut there.
 	size := c.uint(min(len(source), int(max(c.int))))
@@ -376,7 +374,6 @@ enter_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 		append_block(p.doc, start_block(p, .Rule))
 	case .H:
 		open_text(p, .Heading, clamp(int((cast(^Md_H_Detail)detail).level), 1, 6))
-		p.heading = p.reveal != nil || p.pairs != nil
 	case .P:
 		open_text(p, .Paragraph)
 	case .Code:
@@ -564,38 +561,34 @@ mark_part :: proc(p: ^Parser, type: Md_Span) -> (start, end: int) {
 	return
 }
 
-// The mark of the line of a heading, when the first thing of its text
-// comes, at `at` of what is parsed: the "#"s with the spaces after
-// them. A heading with a line under it has none. It is noted as a
-// mark with no second mark (`Pair.line`), and it is text when the
-// offset whose marks show is in the line.
+// A line of the text of a heading, from the parser, before its text:
+// the "#"s of the line with the spaces after them are its mark (the
+// first line only; a heading with a line under it has none). It is
+// noted as a mark with no second mark (`Pair.line`), and it is text
+// when the offset whose marks show is in the line.
 @(private)
-line_mark :: proc(p: ^Parser, at: int) {
-	p.heading = false
-	if at <= 0 || at > len(p.bytes) || p.cur == nil || p.in_table {
+on_line_offset :: proc "c" (line, start, end: c.uint, userdata: rawptr) {
+	p := cast(^Parser)userdata
+	context = p.ctx
+	line, text := int(line), int(start)
+	if p.cur == nil || p.in_table || len(p.cur.bytes) > 0 || text > len(p.bytes) {
 		return
 	}
-	spaces := at
-	for spaces > 0 && (p.bytes[spaces - 1] == ' ' || p.bytes[spaces - 1] == '\t') {
-		spaces -= 1
+	// After the marks of a quote or a list item that the line is in.
+	mark := line
+	for mark < text && p.bytes[mark] != '#' {
+		mark += 1
 	}
-	start := spaces
-	for start > 0 && p.bytes[start - 1] == '#' {
-		start -= 1
-	}
-	if start == spaces || len(p.cur.bytes) > 0 {
+	if mark == text {
 		return
 	}
-	end := at
-	for end < len(p.bytes) && p.bytes[end] != '\n' && p.bytes[end] != '\r' {
-		end += 1
-	}
+	line_end, _ := line_at(p.bytes, text)
 	if p.pairs != nil && p.doc.count == p.places_block {
-		append(p.pairs, Pair{start, at, -1, end, false, true})
+		append(p.pairs, Pair{mark, text, -1, line_end, false, true})
 	}
-	if reveal, shows := p.reveal.?; shows && reveal >= start && reveal <= end {
+	if reveal, shows := p.reveal.?; shows && reveal >= mark && reveal <= line_end {
 		p.marking = true
-		append_text(p, string(p.bytes[start:at]), start, at - start)
+		append_text(p, string(p.bytes[mark:text]), mark, text - mark)
 		p.marking = false
 		p.doc.reveal = reveal
 	}
@@ -606,9 +599,6 @@ line_mark :: proc(p: ^Parser, at: int) {
 // (`Document.reveal`).
 @(private)
 note_mark :: proc(p: ^Parser, type: Md_Span, opens: bool, autolink := false) {
-	if p.heading {
-		line_mark(p, p.mark[0])
-	}
 	reveal, shows := p.reveal.?
 	noted := p.pairs != nil && p.doc.count == p.places_block
 	if !noted && !shows {
@@ -711,14 +701,11 @@ on_text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr)
 	// Where the text is in what is parsed, for a parse that notes
 	// places; -1 for text that the parser made.
 	at := -1
-	if p.places != nil || p.heading {
+	if p.places != nil {
 		from := int(uintptr(text) - uintptr(raw_data(p.bytes)))
 		if uintptr(text) >= uintptr(raw_data(p.bytes)) && from < len(p.bytes) {
 			at = from
 		}
-	}
-	if p.heading {
-		line_mark(p, at)
 	}
 	after_nul := p.after_nul
 	p.after_nul = type == .Nullchar

@@ -51,6 +51,12 @@ test_the_marks_of_the_element_of_an_offset_are_text :: proc(t: ^testing.T) {
 		{"## Title **b**\n\ntext\n", 12, "## Title **b**", "^^^      ^^ ^^"},
 		{"## Title **b**\n\ntext\n", 17, "Title b", "       "},
 		{"# **b** c\n", 3, "# **b** c", "^^^^ ^^  "},
+		// With text that starts with a character with a backslash, in
+		// a quote and a list item, and with no text at all.
+		{"# \\#x\n", 4, "# #x", "^^  "},
+		{"> ## T\n", 5, "## T", "^^^ "},
+		{"- # T\n", 5, "# T", "^^ "},
+		{"## \n\ntext\n", 1, "## ", "^^^"},
 		// Not the line under a heading.
 		{"Title\n=====\n", 2, "Title", "     "},
 		// Not the "<" and ">" of an address.

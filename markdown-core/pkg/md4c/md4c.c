@@ -5569,6 +5569,9 @@ abort:
     return ret;
 }
 
+/* (Not in upstream.) */
+static OFF md_line_start(MD_CTX* ctx, OFF off);
+
 static int
 md_process_leaf_block(MD_CTX* ctx, MD_BLOCK* block)
 {
@@ -5650,6 +5653,17 @@ md_process_leaf_block(MD_CTX* ctx, MD_BLOCK* block)
 
     if(!is_in_tight_list  ||  block->type != MD_BLOCK_P)
         MD_ENTER_BLOCK(block->type, (void*) &det);
+
+    /* The lines of the text of a heading. (Not in upstream.) */
+    if(ctx->parser.line_offset != NULL  &&  block->type == MD_BLOCK_H) {
+        const MD_LINE* text_lines = (const MD_LINE*)(block + 1);
+        MD_SIZE line_index;
+
+        for(line_index = 0; line_index < block->n_lines; line_index++) {
+            ctx->parser.line_offset(md_line_start(ctx, text_lines[line_index].beg),
+                        text_lines[line_index].beg, text_lines[line_index].end, ctx->userdata);
+        }
+    }
 
     /* Process the block contents accordingly to is type. */
     switch(block->type) {
