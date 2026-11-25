@@ -193,6 +193,10 @@ These came from the maintainer. Do not undo one without asking.
     first of one): the lines before such a block do not change what it
     is. One such block earlier when the edit is in the first line of
     its block, because that line can become a part of the block before.
+    Not at a block right under a definition of a link: it is the rest
+    of the paragraph of the definition, and a line with a deep indent is
+    a rule or text there and code with no definition before it
+    (`under_def`).
   - It ends at a block start after the edit, and has two blocks more
     (`GUARD_BLOCKS`). Those two must come out as they were, at their
     place. If the edit opened something that takes the text after it (a
