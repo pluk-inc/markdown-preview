@@ -73,6 +73,10 @@ static void scroll_pass(void *ctx, const char *name, double end) {
 // caret gets from one end of the document to the other. Returns what is
 // wrong, or NULL.
 static const char *caret_walk(void *ctx, long length) {
+    // The source before the first change, for Undo at the end.
+    long first_size = 0;
+    const char *first_bytes = mdcore_source(ctx, &first_size);
+    NSData *first_source = [NSData dataWithBytes:first_bytes length:(NSUInteger)first_size];
     // A click: the button down, the caret, and the button up at the
     // same point. Nothing is selected, also when the click made the
     // marks of its line show and the text moved under the pointer.
@@ -292,6 +296,36 @@ static const char *caret_walk(void *ctx, long length) {
     mdcore_delete(ctx, MDCORE_MOVE_LEFT);
     mdcore_select_all(ctx);
     if (mdcore_selection_text(ctx, &selected) != NULL && selected > 0) return "text is there after a delete of all of it";
+    // Undo of a change over a selection selects that text again, and
+    // Redo makes the change again.
+    if (!mdcore_undo(ctx)) return "no Undo after a delete of all of the text";
+    NSData *whole = [NSData dataWithBytes:mdcore_source(ctx, &size) length:(NSUInteger)size];
+    if (size > 0 && !mdcore_has_selection(ctx)) return "Undo of a delete of a selection selects nothing";
+    if (!mdcore_redo(ctx)) return "no Redo after an Undo";
+    mdcore_source(ctx, &now);
+    if (now != 0 && now >= size) return "Redo did not take the text out again";
+    if (mdcore_can_undo(ctx, true)) return "Redo has a change after the last one";
+    mdcore_undo(ctx);
+    source = mdcore_source(ctx, &now);
+    if (now != size || memcmp(source, whole.bytes, (size_t)size) != 0) return "Undo after Redo did not give the same text";
+    // Each change of this walk taken back gives the source that the
+    // walk started with, byte for byte; made again, the source with no
+    // text; and taken back again, the first one.
+    long undone = 1;
+    while (mdcore_undo(ctx)) undone++;
+    source = mdcore_source(ctx, &now);
+    if (now != first_size || memcmp(source, first_source.bytes, (size_t)now) != 0) return "Undo of each change did not give the first source";
+    if (mdcore_can_undo(ctx, false)) return "Undo has a change at the first source";
+    long again = 0;
+    while (mdcore_redo(ctx)) again++;
+    mdcore_source(ctx, &now);
+    if (again != undone) return "Redo has another count of changes than Undo";
+    mdcore_select_all(ctx);
+    if (mdcore_selection_text(ctx, &selected) != NULL && selected > 0) return "text is there after Redo of each change";
+    while (mdcore_undo(ctx)) {
+    }
+    source = mdcore_source(ctx, &now);
+    if (now != first_size || memcmp(source, first_source.bytes, (size_t)now) != 0) return "Undo a second time did not give the first source";
     return NULL;
 }
 

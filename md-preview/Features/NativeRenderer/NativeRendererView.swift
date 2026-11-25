@@ -906,6 +906,10 @@ extension NativeRendererView: NSMenuItemValidation {
             return isEditable && hasCaret && mdcore_has_selection(ctx)
         case #selector(paste(_:)):
             return isEditable && hasCaret
+        case #selector(undo(_:)):
+            return isEditable && hasCaret && mdcore_can_undo(ctx, false)
+        case #selector(redo(_:)):
+            return isEditable && hasCaret && mdcore_can_undo(ctx, true)
         default:
             return true
         }
@@ -1279,5 +1283,27 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         guard isEditable, hasCaret, let text = NSPasteboard.general.string(forType: .string) else { return }
         put(text)
         didEdit()
+    }
+
+    // The core keeps the changes of the reader (`mdcore_undo`): the
+    // view's own Undo and Redo, before the window's undo manager.
+
+    @objc func undo(_ sender: Any?) {
+        stepHistory(redo: false)
+    }
+
+    @objc func redo(_ sender: Any?) {
+        stepHistory(redo: true)
+    }
+
+    private func stepHistory(redo: Bool) {
+        guard isEditable, hasCaret else { return }
+        // The text of an input method that is not final is a part of the
+        // last change: the input method lets it go.
+        if markedText != nil {
+            markedText = nil
+            inputContext?.discardMarkedText()
+        }
+        if redo ? mdcore_redo(ctx) : mdcore_undo(ctx) { didEdit() }
     }
 }
