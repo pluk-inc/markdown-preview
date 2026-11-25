@@ -760,43 +760,63 @@ The order of the next steps, from the review of the second step:
   stayed at the end of the text before it until a character came.
   - **An empty paragraph** (`document/empties.odin`) is a line of the
     source with nothing in it that is a paragraph of its own when text
-    is typed there: of the empty lines b0, b1, b2… after the lines of a
-    block, the odd ones, but not the last one before a block. Each
-    block has their number (`Shape.empties`, so a change of the empty
-    lines after a block is a change of that block for a layout), and
-    each is an address of the text of its block: a byte after the end
-    of its last text, one for each (`empty_address`, `empty_of`,
-    `empty_offset`). `place_of`, `address_for`, and `step` know them,
-    so a caret, the keys that move it, and a selection need no other
-    kind of place.
+    is typed there: of the empty lines b0, b1, b2… right after the
+    lines of a block, the odd ones, but not the last one before a line
+    with something in it. Each block has their number (`Shape.empties`,
+    so a change of the empty lines after a block is a change of that
+    block for a layout), and each is an address of the text of its
+    block: a byte after the end of its last text, one for each
+    (`empty_address`, `empty_of`, `empty_offset`). `place_of`,
+    `address_for`, `step`, and the caret places of the layout know
+    them, so a caret and the keys that move it need no other kind of
+    place. A block has none where text typed there is no paragraph of
+    its own or breaks what is around it: a rule (no text, so no
+    address), a block before one that goes on a list, lines after raw
+    HTML or a definition of a link, code with no end mark.
   - **An editor shows them** (`Layout.shows_empties`,
     `mdcore_set_editing`): the box of a block has a line at its bottom
     for each, and all below is lower. A reader gives them no room, so
     a document with such lines is a little longer in Edit Mode.
   - **Return** (`document.line_break`, `mdcore_insert_break`) is of the
-    block and not of the byte of the caret: in code a line break; at
-    the end of the text of a list item a new item of its kind (the
-    next number, a task that is not done); at the end of each other
-    text an empty paragraph after the lines of the block (after the
-    line under a heading, after the marks that end bold text); in an
-    item with no text, that item becomes an empty paragraph, so Return
-    two times ends a list. A delete in an empty paragraph or in an item
-    with no text takes it out (`empty_range`, `empty_item`).
+    block and not of the byte of the caret: in fenced code a line
+    break; at the end of the text of a list item a new item of its
+    kind after the lists in it (the next number, a task that is not
+    done); at the end of each other text an empty paragraph after the
+    lines of the block (after the line under a heading, after the
+    marks that end bold text); in an item with no text, that item
+    becomes an empty paragraph, so Return two times ends a list; in
+    the text, the spaces and the line break at the caret become the
+    one empty line between the two halves. The line breaks are of the
+    kind that the source has. A delete in an empty paragraph or in an
+    item with no text takes it out (`document.delete_back`), and the
+    two are tested as a pair: Return and then a delete give the source
+    of before.
 - Next for the editor, in the order that a reader misses them: a
   selection that typing takes the place of, with cut; the marks at the
   caret (Decisions); undo.
-- Not done for Return: in a table; in a quote (the new paragraph is
-  after the quote, not in it); in an item that has more blocks, and in
-  a list in a quote (an empty paragraph, not a new item); in the
-  middle of bold text the two halves keep one mark each; the items
-  after a new numbered item keep their numbers in the source (they
-  show right, because the first number counts).
-- Not done for the keys that move the caret: text that reads from right
-  to left (left and right are against the reading order and in it,
-  which is the other way on the page there); Page Up and Page Down
-  scroll and do not move the caret; Option with up and down; a drag
-  that starts in Edit Mode selects from the caret's stop, and one over
-  a place with no stop keeps the caret where it was.
+- Before the selection work: `Address.byte` has two meanings now (a
+  byte of the text, and past its end an empty paragraph). Code that
+  cuts text with it clamps, so a selection over empty paragraphs draws
+  nothing on their lines and a copy leaves them out, and the pointer
+  is not the text pointer over them. A field of its own in `Address`
+  for the empty paragraph makes `byte` a byte of the text for each
+  reader again, and gives a rule its empty paragraphs. Do that first.
+- Not the same as the web editor, which shows each empty line of the
+  source but the last as a line: here two empty lines between two
+  paragraphs show as none in Edit Mode, and three as one. The web
+  editor works on lines of the source; this one on paragraphs. Ask the
+  maintainer when a user reports it.
+- Not done for Return: in a table; at the end of a text whose next
+  block goes on a list (an item with more blocks, a block before a
+  nested item of another kind): nothing happens there; in a quote the
+  new paragraph is after the quote and not in it, and a quote that
+  goes on below is cut in two; in the text, the rest can become
+  another kind of block when it starts with a mark ("a - b" cut before
+  the "-" gives a list item), and bold text that is cut keeps one mark
+  in each half; the items after a new numbered item keep their numbers
+  in the source (they show right, because the first number counts); a
+  source with no line break at its end has one after Return and a
+  delete; a document of only empty lines has no block and no caret.
 - Not done for the caret: a selection that typing takes
   the place of, a delete at the start of a block with text (to join it
   with the block before), a caret in a table cell with no text, undo.

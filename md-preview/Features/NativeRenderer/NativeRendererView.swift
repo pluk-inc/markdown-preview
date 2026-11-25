@@ -351,7 +351,6 @@ final class NativeRendererView: NSView {
             } else {
                 hasCaret = false
                 mdcore_caret_clear(ctx)
-                setNeedsDraw()
             }
             updateCaretIndicator()
         }

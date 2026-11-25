@@ -2,106 +2,183 @@ package document
 
 import "core:strings"
 
+// What Return and a delete do where the answer is of the block of the
+// caret, and not of the byte that the caret is at.
+
+// The line break of a source: the kind of its first one.
+@(private)
+line_ending :: proc(source: []u8) -> string {
+	for ch, i in source {
+		switch ch {
+		case '\n':
+			return "\n"
+		case '\r':
+			return i + 1 < len(source) && source[i + 1] == '\n' ? "\r\n" : "\r"
+		}
+	}
+	return "\n"
+}
+
 // What Return puts into the source for a caret at an address of the
-// text of a block, where it goes, and where the caret is after it. The
-// answer is of the block, not of the byte of the caret:
+// text of a block, where, and where the caret is after it:
 //
-// - In code, a line break at the caret: a new line of the code.
+// - In an empty paragraph, one more after it.
+// - In code, a line break at the caret: a new line of the code, with
+//   the indent of code that is code by its indent.
 // - At the end of the text of a list item, a new item of the same kind
-//   after it (a number one higher, a task that is not done).
+//   after it and after the lists in it (a number one higher, a task
+//   that is not done).
+// - In a list item with no text, the item goes and an empty paragraph
+//   is there: Return two times ends a list. Between two items, the
+//   item only goes.
 // - At the end of each other text, an empty paragraph after the lines
 //   of the block: after the line under a heading, and after the marks
 //   that end bold text, which are after the caret in the source.
-// - In the text, two line breaks at the caret: the text after it is a
-//   paragraph of its own.
-// - In an empty paragraph, one more after it.
-// - In a list item with no text, the item goes and an empty paragraph
-//   is there: Return two times ends a list.
+// - In the text, the text after the caret is a paragraph of its own:
+//   two line breaks for the spaces and the line break at the caret.
 //
 // The text takes the place of the source from `start` to `end`. False
-// where Return does nothing yet (a table). `text` is in the temporary
-// memory of the context.
+// where Return does nothing yet: in a table, and at the end of a text
+// whose next block is in a list (text between two blocks of a list
+// makes two lists of it). `text` is in the temporary memory of the
+// context.
 line_break :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end: int, text: string, caret: int, ok: bool) {
 	b := block_at(doc, at.block)
-	if b.kind == .Table {
+	source := doc.source
+	nl := line_ending(source)
+	offset := place_of(doc, places, at) or_return
+	two := strings.concatenate({nl, nl}, context.temp_allocator)
+	if empty_of(doc, at) > 0 {
+		return offset, offset, two, offset + len(two), true
+	}
+	texts := block_texts(b)
+	if b.kind == .Table || at.cell >= len(texts) {
 		return
 	}
-	offset := place_of(doc, places, at) or_return
-	texts := block_texts(b)
+	block_begin := block_start(doc, at.block)
+	at_end := at.byte >= len(texts[at.cell].bytes)
 	if b.kind == .Code {
-		return offset, offset, "\n", offset + 1, true
+		first_end, _ := line_at(source, block_begin)
+		if fence_line(source[block_begin:first_end]) {
+			return offset, offset, nl, offset + len(nl), true
+		}
+		// Code by its indent: the new line has the indent. At its end,
+		// a line with only the indent is no code, so Return there is
+		// as at the end of each other text.
+		if !at_end {
+			indent := block_begin
+			for indent < first_end && (source[indent] == ' ' || source[indent] == '\t') {
+				indent += 1
+			}
+			text = strings.concatenate({nl, string(source[block_begin:indent])}, context.temp_allocator)
+			return offset, offset, text, offset + len(text), true
+		}
 	}
-	if empty_of(doc, at) > 0 || at.cell >= len(texts) || (at.byte < len(texts[at.cell].bytes)) {
-		return offset, offset, "\n\n", offset + 2, true
+	if !at_end {
+		// In the text: the spaces around the caret and one line break
+		// after it go, so the two halves have one empty line between.
+		start, end = offset, offset
+		for start > block_begin && (source[start - 1] == ' ' || source[start - 1] == '\t') {
+			start -= 1
+		}
+		for end < len(source) && (source[end] == ' ' || source[end] == '\t') {
+			end += 1
+		}
+		if end < len(source) && (source[end] == '\n' || source[end] == '\r') {
+			_, end = line_at(source, end)
+		} else {
+			end = max(end, offset)
+		}
+		return start, end, two, start + len(two), true
 	}
 	// At the end of the text: after the lines of the block.
-	after, empty := content_end(doc, at.block)
-	followed := at.block + 1 < doc.count
-	if mark, is_item := item_mark(doc, at.block); is_item {
-		if len(texts[at.cell].bytes) > 0 {
-			text = strings.concatenate({"\n", mark}, context.temp_allocator)
-			return after, after, text, after + len(text), true
-		}
-		// No text: the line of the item becomes an empty paragraph.
-		start, end = empty_item(doc, at.block) or_return
-		text = empty == 0 && followed ? "\n\n\n" : "\n\n"
-		return start, end, text, start + 2, true
-	}
+	after, empty, followed := block_empty_lines(doc, at.block)
 	// The empty paragraph is the second line after the block. With a
-	// block right after, it needs a line that ends it too.
-	text = empty == 0 && followed ? "\n\n\n" : "\n\n"
-	return after, after, text, after + 2, true
-}
-
-// The lines of a list item with no text, with the line break before
-// them: with these out of the source, the item is gone and the text
-// before it ends as it did. False for each other block, and for the
-// first block of the source.
-empty_item :: proc(doc: ^Document, block: int) -> (start, end: int, ok: bool) {
-	b := block_at(doc, block)
-	if _, is_item := item_mark(doc, block); !is_item || len(b.text.bytes) > 0 || block == 0 {
+	// line with something in it right after, it needs a line that ends
+	// it too.
+	breaks := empty == 0 && followed ? strings.concatenate({nl, nl, nl}, context.temp_allocator) : two
+	if is_item(doc, at.block) {
+		if len(texts[at.cell].bytes) == 0 {
+			// No text: the line of the item becomes an empty paragraph.
+			// Between two items it only goes: a paragraph there makes
+			// two lists of the list.
+			start, end = empty_item(doc, at.block) or_return
+			if at.block + 1 < doc.count && in_list(block_at(doc, at.block + 1)) {
+				return start, end, "", start, true
+			}
+			return start, end, breaks, start + len(two), true
+		}
+		if mark, has := item_mark(doc, at.block); has {
+			// After the lists that are in the item.
+			last := at.block
+			for last + 1 < doc.count && block_at(doc, last + 1).list_depth > b.list_depth {
+				last += 1
+			}
+			below, _, _ := block_empty_lines(doc, last)
+			below = break_before(source, below)
+			text = strings.concatenate({nl, mark}, context.temp_allocator)
+			return below, below, text, below + len(text), true
+		}
+	}
+	if at.block + 1 < doc.count && in_list(block_at(doc, at.block + 1)) {
 		return
 	}
-	start = block_start(doc, block)
-	if start > 0 && doc.source[start - 1] == '\n' {
-		start -= 1
+	after = break_before(source, after)
+	return after, after, breaks, after + len(two), true
+}
+
+// What a delete takes out for a caret at an address that is not after a
+// character: an empty paragraph, or a list item with no text. The caret
+// is then at `caret`, the end of what is before it. False at each other
+// address.
+delete_back :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end, caret: int, ok: bool) {
+	if n := empty_of(doc, at); n > 0 {
+		start, end = empty_range(doc, at.block, n)
+		before := at
+		before.byte -= 1
+		caret = place_of(doc, places, before) or_return
+		return start, end, caret, caret <= start
 	}
-	if start > 0 && doc.source[start - 1] == '\r' {
-		start -= 1
+	start, end = empty_item(doc, at.block) or_return
+	return start, end, start, true
+}
+
+// True for a block that is the first and only block of a list item
+// that is in no quote. The item can have lists in it.
+@(private)
+is_item :: proc(doc: ^Document, block: int) -> bool {
+	b := block_at(doc, block)
+	if b.marker == .None || (b.spacing != .Item && b.spacing != .List_Start) || b.quote_depth > 0 {
+		return false
 	}
-	end, _ = content_end(doc, block)
+	return block + 1 >= doc.count || block_at(doc, block + 1).item != b.item
+}
+
+// The lines of a list item with no text and nothing in it, with the
+// line break before them: with these out of the source, the item is
+// gone and the text before it ends as it did. False for each other
+// block, and for the first block of the source.
+@(private)
+empty_item :: proc(doc: ^Document, block: int) -> (start, end: int, ok: bool) {
+	b := block_at(doc, block)
+	if !is_item(doc, block) || len(b.text.bytes) > 0 || block == 0 {
+		return
+	}
+	if block + 1 < doc.count && block_at(doc, block + 1).list_depth > b.list_depth {
+		return
+	}
+	start = break_before(doc.source, block_start(doc, block))
+	end, _, _ = block_empty_lines(doc, block)
+	end = break_before(doc.source, end)
 	return start, end, end > start
 }
 
-// Where the lines of a block end in the source, before the line break
-// of its last line, and how many empty lines come after them.
-@(private)
-content_end :: proc(doc: ^Document, block: int) -> (end, empty: int) {
-	_, next := block_source(doc, block)
-	end, empty = empty_lines(doc.source, next, block + 1 < doc.count)
-	if end > 0 && doc.source[end - 1] == '\n' {
-		end -= 1
-	}
-	if end > 0 && doc.source[end - 1] == '\r' {
-		end -= 1
-	}
-	return
-}
-
-// The mark of a new list item after the item that a block is the first
-// and only block of: its indent, its bullet or the next number, and
-// the box of a task that is not done. False for each other block, and
-// for an item in a quote.
+// The mark of a new list item after the item of a block (`is_item`):
+// its indent, its bullet or the next number, and the box of a task
+// that is not done. False when the source has no such mark there, and
+// for a number that a list item cannot have.
 @(private)
 item_mark :: proc(doc: ^Document, block: int) -> (mark: string, ok: bool) {
-	b := block_at(doc, block)
-	if b.marker == .None || (b.spacing != .Item && b.spacing != .List_Start) || b.quote_depth > 0 {
-		return
-	}
-	// Not when the item goes on in the block after this one.
-	if block + 1 < doc.count && block_at(doc, block + 1).item == b.item {
-		return
-	}
 	source := doc.source
 	at := block_start(doc, block)
 	start := at
@@ -120,6 +197,10 @@ item_mark :: proc(doc: ^Document, block: int) -> (mark: string, ok: bool) {
 		for ch in source[at:digits] {
 			number = number * 10 + int(ch - '0')
 		}
+		// A number of a list item has nine digits at most.
+		if number + 1 > 999_999_999 {
+			return
+		}
 		strings.write_int(&out, number + 1)
 		strings.write_byte(&out, source[digits])
 	case at < len(source) && (source[at] == '-' || source[at] == '*' || source[at] == '+'):
@@ -128,6 +209,7 @@ item_mark :: proc(doc: ^Document, block: int) -> (mark: string, ok: bool) {
 		return
 	}
 	strings.write_byte(&out, ' ')
+	b := block_at(doc, block)
 	if b.marker == .Task_Open || b.marker == .Task_Done {
 		strings.write_string(&out, "[ ] ")
 	}

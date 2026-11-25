@@ -160,8 +160,10 @@ text_beside :: proc(doc: ^Document, at: Address, forward: bool) -> (next: Addres
 			}
 			// The end of the last text of a block is after its empty
 			// paragraphs.
-			empties := cell == len(texts) - 1 ? int(block_at(doc, block).empties) : 0
-			return {block, cell, len(texts[cell].bytes) + empties}, true
+			if cell == len(texts) - 1 {
+				return empty_address(doc, block, int(block_at(doc, block).empties))
+			}
+			return {block, cell, len(texts[cell].bytes)}, true
 		}
 		block += step
 		if block >= 0 && block < doc.count {
@@ -178,8 +180,8 @@ text_beside :: proc(doc: ^Document, at: Address, forward: bool) -> (next: Addres
 caret_ends :: proc(doc: ^Document) -> (first, last: Address, ok: bool) {
 	first = text_beside(doc, {0, -1, 0}, true) or_return
 	for block := doc.count - 1; block >= 0; block -= 1 {
-		if texts := block_texts(block_at(doc, block)); len(texts) > 0 {
-			return first, {block, len(texts) - 1, len(texts[len(texts) - 1].bytes) + int(block_at(doc, block).empties)}, true
+		if at, has := empty_address(doc, block, int(block_at(doc, block).empties)); has {
+			return first, at, true
 		}
 	}
 	return
@@ -190,12 +192,14 @@ caret_ends :: proc(doc: ^Document) -> (first, last: Address, ok: bool) {
 // there is no such address.
 step :: proc(doc: ^Document, at: Address, how: Step, forward: bool) -> (next: Address, ok: bool) {
 	text := text_at(doc, at)
-	// An empty paragraph after the text is one step, of each kind.
-	if text != nil {
-		if n := empty_of(doc, at); forward ? at.byte >= len(text.bytes) && n < int(block_at(doc, at.block).empties) && at.cell == len(block_texts(block_at(doc, at.block))) - 1 : n > 0 {
-			next = at
-			next.byte = len(text.bytes) + n + (forward ? 1 : -1)
-			return next, true
+	// An empty paragraph after the last text of a block is one step, of
+	// each kind.
+	if text != nil && at.byte >= len(text.bytes) {
+		b := block_at(doc, at.block)
+		n := empty_of(doc, at)
+		last := at.cell == len(block_texts(b)) - 1
+		if forward ? last && n < int(b.empties) : n > 0 {
+			return empty_address(doc, at.block, n + (forward ? 1 : -1))
 		}
 	}
 	if text == nil || (forward ? at.byte >= len(text.bytes) : at.byte <= 0) {

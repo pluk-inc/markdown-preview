@@ -447,7 +447,7 @@ prepare_piece :: proc(doc: ^Document, p: ^Pending) -> bool {
 
 	text, before, inside, led, trailed, lead := piece_text(doc, piece, start, old_end)
 	p.base = start - lead
-	p.fresh = parse_piece(text[:], doc.items, len(p.source), end = lead + len(piece), followed = end < doc.count)
+	p.fresh = parse_piece(text[:], doc.items, len(p.source), end = lead + len(piece), followed = end < doc.count, followed_in_list = end < doc.count && in_list(block_at(doc, end)))
 	fresh := &p.fresh
 	p.added = fresh.count - guard
 	// The definitions came out as definitions, and the ones of the piece

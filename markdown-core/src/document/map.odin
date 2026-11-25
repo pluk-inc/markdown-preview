@@ -26,7 +26,7 @@ block_map :: proc(doc: ^Document, block: int) -> (places: [dynamic]Place) {
 	start := first == 0 ? 0 : block_start(doc, first)
 	end := last < doc.count ? block_start(doc, last) : len(doc.source)
 	text, _, _, _, _, lead := piece_text(doc, doc.source[start:end], start, end)
-	fresh := parse_piece(text[:], 0, len(doc.source), &places, block - first, lead + end - start, last < doc.count)
+	fresh := parse_piece(text[:], 0, len(doc.source), &places, block - first, lead + end - start, last < doc.count, last < doc.count && in_list(block_at(doc, last)))
 	base := start - lead
 	// The piece must give the block as the document has it. It does not
 	// when the limit of the parser for the uses of definitions cuts a

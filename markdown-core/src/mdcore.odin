@@ -576,6 +576,10 @@ move_from :: proc(ctx: ^Ctx, at: document.Address, upstream: bool, move: Move, g
 			return
 		}
 		next, ok = at, true
+		// An empty paragraph is a paragraph with one place.
+		if document.empty_of(&ctx.doc, at) > 0 {
+			return
+		}
 		next.byte = document.paragraph_end(src.bytes[:], at.byte, move == .Paragraph_End)
 	}
 	return
@@ -851,6 +855,11 @@ mdcore_insert_break :: proc "c" (handle: rawptr) {
 	}
 	if start, end, text, caret, ok := document.line_break(&ctx.doc, ctx.caret_places[:], ctx.caret_at); ok {
 		change_source_held(ctx, text, [2]int{start, end}, caret)
+		// The caret can be before the marks of its new line (the mark
+		// of a quote): text that is typed goes where its address is.
+		if offset, placed := document.place_of(&ctx.doc, ctx.caret_places[:], ctx.caret_at); placed {
+			ctx.caret = offset
+		}
 	}
 }
 
@@ -864,22 +873,10 @@ mdcore_delete_backward :: proc "c" (handle: rawptr) {
 	if ctx.caret < 0 || ctx.doc.count == 0 {
 		return
 	}
-	if n := document.empty_of(&ctx.doc, ctx.caret_at); n > 0 {
-		// In an empty paragraph: the paragraph goes, and the caret is
-		// in the one before it, or at the end of the text of the block.
-		start, end := document.empty_range(&ctx.doc, ctx.caret_at.block, n)
-		before := ctx.caret_at
-		before.byte -= 1
-		if offset, ok := document.source_of(&ctx.doc, before); ok && offset <= start {
-			ctx.caret = offset
-			change_source_held(ctx, "", [2]int{start, end})
-		}
-		return
-	}
-	if start, end, ok := document.empty_item(&ctx.doc, ctx.caret_at.block); ok {
-		// In a list item with no text: the item goes, and the caret is
-		// at the end of the text before it.
-		change_source_held(ctx, "", [2]int{start, end}, start)
+	// An empty paragraph or a list item with no text goes, and the
+	// caret is at the end of what is before it.
+	if start, end, caret, ok := document.delete_back(&ctx.doc, ctx.caret_places[:], ctx.caret_at); ok {
+		change_source_held(ctx, "", [2]int{start, end}, caret)
 		return
 	}
 	// Nothing at the start of a block: to join it with the block before

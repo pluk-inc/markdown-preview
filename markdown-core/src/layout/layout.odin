@@ -755,6 +755,10 @@ estimate_block :: proc(l: ^Layout, b: ^document.Block, first: bool) -> f32 {
 		rows := b.columns > 0 ? len(b.cells) / b.columns : 0
 		height = f32(rows) * (math.round(l.m.body * l.m.line_height) + 2 * CELL_PAD_Y)
 	}
+	// The lines of its empty paragraphs, for an editor.
+	if l.shows_empties {
+		height += f32(b.empties) * empty_height(l)
+	}
 	return height + (first ? 0 : space_above(l, b, size))
 }
 

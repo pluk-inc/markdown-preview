@@ -28,13 +28,24 @@ test_the_lines_that_return_makes_are_empty_paragraphs :: proc(t: ^testing.T) {
 		// Line breaks of two bytes, and lines with spaces in them.
 		{"ab\r\n\r\n\r\n\r\nnext\r\n", {1, 0}, {6}},
 		{"ab\n  \n\t\n \nnext\n", {1, 0}, {6}},
-		// After each kind of block, and after a definition of a link.
-		{"# T\n\n\n\n- a\n\n\n\n> q\n\n\n\n```\nc\n```\n\n\n\n| a |\n| - |\n\n\n\nz\n", {1, 1, 1, 1, 1, 0}, {5, 12, 19, 32, 47}},
-		{"ab [r]\n\n[r]: /u\n\n\n\nnext\n", {1, 0}, {17}},
+		// After each kind of block with text.
+		{"# T\n\n\n\n- a\n\n\n\n> q\n\n\n\n```\nc\n```\n\n\n\n| a |\n| - |\n\n\n\n    i\n\n\n\nz\n", {1, 1, 1, 1, 1, 1, 0}, {5, 12, 19, 32, 47, 56}},
+		// Not after a rule, which has no text, and not before a block
+		// that goes on a list: text there makes two lists of it.
+		{"---\n\n\n\nz\n", {0, 0}, {}},
+		{"- a\n\n\n\n- b\n\n\n\nz\n", {0, 1, 0}, {12}},
+		{"- a\n\n\n\n  more\n", {0, 0}, {}},
+		{"- a\n  - b\n\n\n\n  - c\n", {0, 0, 0}, {}},
+		// Only right after the lines of the block: not after a
+		// definition of a link or raw HTML, whose lines are of no block.
+		{"ab [r]\n\n[r]: /u\n\n\n\nnext\n", {0, 0}, {}},
+		{"ab\n\n<!--\n\n\n\n", {0}, {}},
+		{"ab\n\n\n\n<div>\nx\n</div>\n", {1}, {4}},
 		// Lines at the start of the source are of no block, and the
 		// lines at the end of code with no end mark are code.
 		{"\n\n\nab\n", {0}, {}},
 		{"```\nc\n\n\n", {0}, {}},
+		{"- ```\n  c\n  ```\n\n\n\nz\n", {1, 0}, {17}},
 	}
 	for c in cases {
 		doc := parse(c.source)
