@@ -1029,8 +1029,10 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
                 // method, or of the text that is selected.
                 if marked != nil {
                     mdcore_replace_text(ctx, start, end, $0.baseAddress, $0.count)
+                } else if $0.count > 0, typed {
+                    applied = mdcore_insert(ctx, $0.baseAddress, $0.count)
                 } else if $0.count > 0 {
-                    applied = typed ? mdcore_insert(ctx, $0.baseAddress, $0.count) : mdcore_paste(ctx, $0.baseAddress, $0.count)
+                    applied = mdcore_paste(ctx, $0.baseAddress, $0.count)
                 }
             }
         }
