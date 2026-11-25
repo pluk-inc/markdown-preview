@@ -2,6 +2,7 @@ package document
 
 import "core:bytes"
 import "core:mem"
+import "core:slice"
 import "core:unicode/utf8"
 
 // Text that goes out of the source: a selection that a key deletes or
@@ -46,7 +47,7 @@ range_edit :: proc(pairs: []Pair, source: []u8, from, to: int, text: string, all
 	for grown := true; grown; {
 		grown = false
 		for pair in pairs {
-			if pair.close < 0 || pair.line || pair.open_end < start || pair.close > end || (pair.open >= start && pair.close_end <= end) {
+			if pair.close < 0 || pair.open_end < start || pair.close > end || (pair.open >= start && pair.close_end <= end) {
 				continue
 			}
 			// No text of the range is before its first mark or after
@@ -71,12 +72,12 @@ range_edit :: proc(pairs: []Pair, source: []u8, from, to: int, text: string, all
 	defer delete(closes)
 	defer delete(opens)
 	#reverse for pair in pairs {
-		if pair.close >= 0 && !pair.line && inside(pair.close, pair.close_end, start, end) && !inside(pair.open, pair.open_end, start, end) {
+		if pair.close >= 0 && inside(pair.close, pair.close_end, start, end) && !inside(pair.open, pair.open_end, start, end) {
 			append(&closes, Mark{pair.close, pair.close_end, pair.tight})
 		}
 	}
 	for pair in pairs {
-		if pair.close >= 0 && !pair.line && inside(pair.open, pair.open_end, start, end) && !inside(pair.close, pair.close_end, start, end) {
+		if pair.close >= 0 && inside(pair.open, pair.open_end, start, end) && !inside(pair.close, pair.close_end, start, end) {
 			append(&opens, Mark{pair.open, pair.open_end, pair.tight})
 		}
 	}
@@ -169,11 +170,14 @@ range_edit :: proc(pairs: []Pair, source: []u8, from, to: int, text: string, all
 	// the marks that end a style there (text that is typed next has that
 	// style, as the text that went had), but after the marks of code and
 	// of a link, where text reads in another way than outside (an
-	// entity, a mark), so the bytes that went give the text of before
-	// when they are put in again. And after spaces that moved out of a
-	// style, which are before the place.
+	// entity, a mark), and after each mark when the bytes that went end
+	// with a space or a line break (the end of a block that was joined),
+	// which is no end of text of a style. So the bytes that went give
+	// the text of before when they are put in again. And after spaces
+	// that moved out of a style, which are before the place.
 	caret = head - before + len(text)
-	if before > 0 || (len(text) == 0 && len(closes) > 0 && !closes[0].tight) {
+	ends_word := to > from && (source[to - 1] == ' ' || source[to - 1] == '\t' || source[to - 1] == '\n' || source[to - 1] == '\r')
+	if before > 0 || (len(text) == 0 && len(closes) > 0 && (!closes[0].tight || ends_word)) {
 		caret = head - before + len(out)
 	}
 	append(&out, ..source[end:end + after])
@@ -231,6 +235,7 @@ space_after :: proc(source: []u8, at: int) -> int {
 
 // The range of the source of the lines that two offsets are in, with
 // the line break of the last one: what goes out when the lines go.
+@(private)
 lines_range :: proc(source: []u8, from, to: int) -> (start, end: int) {
 	from := clamp(from, 0, len(source))
 	// The last line is the one of the last byte of the range: a range
@@ -286,14 +291,21 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 	kept: [dynamic][2]int
 	defer delete(kept)
 	edit, caret = replace_range_kept(doc, from, to, text, held, allocator, &kept) or_return
-	for at in edit.start ..< edit.end {
-		stays := false
-		for range in kept {
-			stays ||= at >= range[0] && at < range[1]
+	// The range of the edit with the ranges that stay out: what is
+	// between them, in the order of the source.
+	slice.sort_by(kept[:], proc(a, b: [2]int) -> bool {return a[0] < b[0]})
+	at := edit.start
+	for range in kept {
+		if range[1] <= at || range[0] >= edit.end {
+			continue
 		}
-		if !stays {
-			append(gone, doc.source[at])
+		if range[0] > at {
+			append(gone, ..doc.source[at:range[0]])
 		}
+		at = max(at, min(range[1], edit.end))
+	}
+	if at < edit.end {
+		append(gone, ..doc.source[at:edit.end])
 	}
 	return edit, caret, true
 }
@@ -328,22 +340,9 @@ replace_range_kept :: proc(doc: ^Document, from, to: int, text: string, held: He
 		places_last, pairs_last := map_of(doc, last, held, &made[1], &made_pairs[1])
 		verbatim :: proc(b: ^Block) -> bool {return b.kind == .Code || b.kind == .Table}
 		if verbatim(a) || verbatim(b) {
-			// All of the text of the blocks: from the start of the first
-			// text or before it, to the end of the last text or after it.
-			if !covers(doc, first, last, places, places_last, from, to) {
-				return
-			}
-			_, end := block_source(doc, last)
-			out := make([dynamic]u8, 0, len(text) + 4, allocator)
-			append(&out, text)
-			if len(text) > 0 && end < len(doc.source) {
-				// The text is a paragraph of its own before what comes
-				// after the blocks.
-				nl := line_ending(doc.source)
-				append(&out, nl)
-				append(&out, nl)
-			}
-			edit, caret = keep_defs(doc, {line, end, string(out[:])}, line + len(text), line, allocator, kept)
+			// All of the text of the blocks, or no edit.
+			covers(doc, first, last, places, places_last, from, to) or_return
+			edit, caret = whole_blocks(doc, line, last, text, allocator, kept)
 			return edit, caret, true
 		}
 		// The marks of the two blocks, in the order of the source.
@@ -355,18 +354,8 @@ replace_range_kept :: proc(doc: ^Document, from, to: int, text: string, held: He
 		pairs = both[:]
 	} else if a.kind == .Table && address_in(places, first, from).cell != address_in(places, first, to).cell {
 		// All of the cells of a table: the table goes with its lines.
-		if !covers(doc, first, last, places, places, from, to) {
-			return
-		}
-		_, end := block_source(doc, last)
-		out := make([dynamic]u8, 0, len(text) + 4, allocator)
-		append(&out, text)
-		if len(text) > 0 && end < len(doc.source) {
-			nl := line_ending(doc.source)
-			append(&out, nl)
-			append(&out, nl)
-		}
-		edit, caret = keep_defs(doc, {line, end, string(out[:])}, line + len(text), line, allocator, kept)
+		covers(doc, first, last, places, places, from, to) or_return
+		edit, caret = whole_blocks(doc, line, last, text, allocator, kept)
 		return edit, caret, true
 	}
 	// From an empty paragraph: what comes in its place is a paragraph of
@@ -394,20 +383,27 @@ replace_range_kept :: proc(doc: ^Document, from, to: int, text: string, held: He
 		}
 	}
 	// The line under a heading is a line of the heading after its text:
-	// it goes after the text of the last block, so the first block is
-	// the heading that it was, with that text.
+	// it goes after the first line of what stays of the last block, so
+	// the first block is the heading that it was, with that text. Only
+	// for a range that starts in the text of the heading, not in an
+	// empty paragraph after it.
 	if first != last && a.kind == .Heading {
 		source := doc.source
 		lines := block_start(doc, first) + int(a.lines)
 		if text_end, placed := place_of(doc, places, {block = first, byte = len(a.text.bytes)}); placed && text_end <= lines {
 			_, under := line_at(source, text_end)
 			rest := min(block_start(doc, last) + int(b.lines), len(source))
+			// The lines after the first one stay where they are: a line
+			// with the mark of a quote is no line of a heading.
+			if _, next := line_at(source, min(edit.end, len(source))); edit.end <= rest {
+				rest = min(rest, next)
+			}
 			// Not for a heading that has no text then: the line under
 			// nothing is text itself.
 			// And not for a range that ends after the lines of the last
 			// block (in its empty paragraphs): no text of it stays.
 			stays := rest < edit.end || (blank(source[line_start(source, edit.start):edit.start]) && len(edit.text) == 0 && blank(bytes.trim_right(source[edit.end:rest], {'\n', '\r'})))
-			if under < lines && lines <= edit.end && !stays {
+			if under < lines && lines <= edit.end && edit.start < under && !stays {
 				nl := line_ending(source)
 				out := make([dynamic]u8, 0, len(edit.text) + rest - edit.end + lines - under + 4, allocator)
 				append(&out, edit.text)
@@ -431,6 +427,23 @@ replace_range_kept :: proc(doc: ^Document, from, to: int, text: string, held: He
 	}
 	edit, caret = keep_defs(doc, edit, caret, line, allocator, kept)
 	return edit, caret, true
+}
+
+// The edit that takes some blocks out with their lines, from the start
+// of the first line of the first one, and puts `text` there as a
+// paragraph of its own.
+@(private)
+whole_blocks :: proc(doc: ^Document, line, last: int, text: string, allocator: mem.Allocator, kept: ^[dynamic][2]int) -> (edit: Edit, caret: int) {
+	_, end := block_source(doc, last)
+	out := make([dynamic]u8, 0, len(text) + 4, allocator)
+	append(&out, text)
+	if len(text) > 0 && end < len(doc.source) {
+		// Before what comes after the blocks.
+		nl := line_ending(doc.source)
+		append(&out, nl)
+		append(&out, nl)
+	}
+	return keep_defs(doc, {line, end, string(out[:])}, line + len(text), line, allocator, kept)
 }
 
 // True for a range of the source that has all of the text of some

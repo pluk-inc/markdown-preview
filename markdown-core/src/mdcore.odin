@@ -491,6 +491,13 @@ pair_has :: proc(pair: document.Pair, at: int) -> bool {
 	return (pair.close >= 0 || pair.line) && pair.open_end > pair.open && at >= pair.from && at <= pair.to
 }
 
+// True for bytes of the source that are all in one of the two marks of
+// an element.
+@(private)
+in_mark :: proc(pair: document.Pair, from, to: int) -> bool {
+	return (from >= pair.open && to <= pair.open_end) || (pair.close >= 0 && from >= pair.close && to <= pair.close_end)
+}
+
 // Makes the text of a block again with the marks of an offset as text,
 // or with none, and gives it its new layout. The addresses in that
 // block are of another text then. The caller holds the two locks.
@@ -556,7 +563,11 @@ reveal_update :: proc(ctx: ^Ctx) -> (changed: bool) {
 		for at := from; at < to && only_marks; at += 1 {
 			only_marks = false
 			for pair in ctx.caret_pairs {
+<<<<<<< HEAD
 				if (at >= pair.open && at < pair.open_end) || (pair.close >= 0 && at >= pair.close && at < pair.close_end) {
+=======
+				if in_mark(pair, at, at + 1) {
+>>>>>>> feature/native-marks-at-caret
 					only_marks = true
 					break
 				}
@@ -609,11 +620,12 @@ reveal_update :: proc(ctx: ^Ctx) -> (changed: bool) {
 		// At an end of a mark it stays: text that is typed after "**"
 		// is after it when the marks do not show too.
 		if count == 0 {
-			in_mark := false
+			inside := false
 			for pair in ctx.caret_pairs {
-				in_mark ||= (ctx.caret > pair.open && ctx.caret < pair.open_end) || (pair.close >= 0 && ctx.caret > pair.close && ctx.caret < pair.close_end)
+				// With a byte of the mark before it and one after it.
+				inside ||= in_mark(pair, ctx.caret - 1, ctx.caret + 1)
 			}
-			if offset, placed := document.place_of(&ctx.doc, ctx.caret_places[:], ctx.caret_at); placed && in_mark {
+			if offset, placed := document.place_of(&ctx.doc, ctx.caret_places[:], ctx.caret_at); placed && inside {
 				ctx.caret = offset
 			}
 		}

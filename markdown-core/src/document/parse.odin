@@ -537,8 +537,8 @@ Pair :: struct {
 	// The mark of a line (the "#" of a heading): `open` is the mark,
 	// `close_end` the end of the line, and there is no second mark
 	// (`close` is -1). It shows for a caret in the line. An edit does
-	// not keep it and does not take it for the text of the line: it
-	// is no element with two marks for `range_edit`.
+	// not keep it and does not take it for the text of the line:
+	// `range_edit` looks only at pairs that have a second mark.
 	line:             bool,
 }
 

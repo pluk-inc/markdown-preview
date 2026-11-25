@@ -886,6 +886,16 @@ The order of the next steps, from the review of the second step:
   block of the caret are kept with its places (`Ctx.caret_pairs`), so
   a delete in one block is two parses, as it was: the one of the edit
   and the one of the new map.
+- To do for the edit that takes a range out (`replace_range_kept`): it
+  is four steps that each write the edit again (`range_edit`, the
+  paragraph with no text, the line under a heading, the definitions
+  that stay), each made for a review finding. A second review after
+  those found two more faults in the step of the heading, of the kind
+  that comes from a step that looks at the edit of the step before and
+  not at the range. One list of the pieces of the source in order
+  (goes, stays, stays at another place) and the new text, from which
+  the edit, the caret, and the bytes that went are made one time, is
+  the form to move to; the cases of `remove_test.odin` are its check.
 - Not done for a delete: a range with one end in code or in a table
   and the other end in another block (nothing happens, but when the
   range has all of the text of its blocks: Select All and Delete give
@@ -949,6 +959,22 @@ The order of the next steps, from the review of the second step:
   (`Pair.line`, `close` is -1), so the edit that takes a range out does
   not keep it and does not take it for the text. The core needed one
   line for it (`pair_has`).
+- For the other marks of a line, from a second review: the parser
+  call for the lines of a heading (`line_offset`) is to become one
+  call for each line of text of each block, and the rule one rule for
+  each kind: the marks of a line are from its first byte that is no
+  space to the start of its text (the ">" of each line of a quote
+  comes with it). Lines with no text (a fence, the line under a
+  heading) need a call of their own. The bullet that the layout draws
+  must not draw while the mark of its item shows. The count of the
+  spaces at the end of a text (`Block.end_spaces`) is to come from the
+  end of the text of the line, which the same call gives: now it is
+  made from a look at the source that takes the marks of a line off by
+  a guess, and it counts the space of "# " when that shows as text
+  (`place_of` keeps the place in the line for that). And the ends of
+  the selection as offsets of the source in the core, beside the
+  caret, take `select_from` and the step that gives the selection its
+  addresses again out of `reveal_update`.
 - Not done for the marks: the other marks of a line (the mark of a
   list item and of a quote, a code fence, the line under a heading,
   the "#"s at the end of a heading), a backslash

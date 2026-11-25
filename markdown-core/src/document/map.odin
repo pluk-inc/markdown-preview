@@ -401,9 +401,11 @@ place_of :: proc(doc: ^Document, places: []Place, at: Address) -> (offset: int, 
 	// After spaces at the end of the text: where those spaces start in
 	// its last line, and as many on.
 	if n := spaces_of(doc, at); n > 0 {
-		// Not past the end of the line: a mark of the line that shows as
-		// text (the "# " of a heading with no text) has those spaces in
-		// the text already.
+		// Not past the end of the line: the count of the block
+		// (`Block.end_spaces`) is wrong while a mark of its line shows
+		// as text (the "# " of a heading with no text has the space in
+		// the text). The count must come from the end of the text of
+		// the line that the parser gives; see Open work.
 		first, line_end := end_spaces_at(doc, places, at) or_return
 		return min(first + n, max(line_end, first)), true
 	}
