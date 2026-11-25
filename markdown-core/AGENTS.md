@@ -886,6 +886,16 @@ The order of the next steps, from the review of the second step:
   block of the caret are kept with its places (`Ctx.caret_pairs`), so
   a delete in one block is two parses, as it was: the one of the edit
   and the one of the new map.
+- To do for the edit that takes a range out (`replace_range_kept`): it
+  is four steps that each write the edit again (`range_edit`, the
+  paragraph with no text, the line under a heading, the definitions
+  that stay), each made for a review finding. A second review after
+  those found two more faults in the step of the heading, of the kind
+  that comes from a step that looks at the edit of the step before and
+  not at the range. One list of the pieces of the source in order
+  (goes, stays, stays at another place) and the new text, from which
+  the edit, the caret, and the bytes that went are made one time, is
+  the form to move to; the cases of `remove_test.odin` are its check.
 - Not done for a delete: a range with one end in code or in a table
   and the other end in another block (nothing happens, but when the
   range has all of the text of its blocks: Select All and Delete give
