@@ -706,9 +706,8 @@ The order of the next steps, from the review of the second step:
 - Not done for the caret: the arrow keys, a selection that typing takes
   the place of, a delete at the start of a block (to join it with the
   block before), Enter (the source needs a line break that is right for
-  the block: a new paragraph, a new list item), a caret in a document
-  with no text (it has an offset and no place on the page), a caret in
-  a table cell with no text, undo.
+  the block: a new paragraph, a new list item), a caret in a table cell
+  with no text, undo.
 - A delete of the only character between two marks leaves the marks:
   "**a**" is "****" after it, which is a rule, and "`a`" is two
   backticks. The marks must go with their last character, or the
