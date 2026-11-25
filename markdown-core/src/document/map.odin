@@ -170,20 +170,26 @@ place_made :: proc(places: []Place, source: []u8, content: int) {
 		if j < len(places) && places[j].cell == cell {
 			b = places[j].source
 		}
-		breaks := 0
-		for place in places[i:j] {
-			breaks += int(place.line_break)
-		}
 		if a < 0 && b < 0 {
 			// No text from the source at all: from where the text of
 			// the block can start.
 			a = content
 		} else if a < 0 {
-			// At the start of the text: as many line breaks back from
-			// the text after it.
+			// At the start of the text: back from the text after it,
+			// over as many line breaks, and to each NUL byte.
 			a = b
-			for _ in 0 ..< breaks {
-				a = break_before(source, a)
+			#reverse for place in places[i:j] {
+				switch {
+				case place.line_break:
+					a = break_before(source, a)
+				case place.nul:
+					for k := a - 1; k >= content; k -= 1 {
+						if source[k] == 0 {
+							a = k
+							break
+						}
+					}
+				}
 			}
 		}
 		if b < 0 {

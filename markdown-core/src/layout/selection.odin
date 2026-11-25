@@ -504,6 +504,19 @@ caret_place :: proc(l: ^Layout, at: document.Address) -> (x, top, height: f32, p
 	return x, line.top, height, p, true
 }
 
+// Where a caret is in a document with no block: where the first line of
+// its first paragraph starts when text comes. `top` is from the top of
+// the page (`Layout.origin`).
+caret_place_empty :: proc(l: ^Layout) -> (x, top, height: f32) {
+	return l.column_x, part_start(l, 0), math.round(l.m.body * l.m.line_height)
+}
+
+// The quad of the caret of a document with no block, as `caret_quad`.
+caret_quad_empty :: proc(l: ^Layout, scale: f32, origin_y: f64, out: ^[dynamic]base.Quad) {
+	x, top, height := caret_place_empty(l)
+	append(out, rect_quad(x - 0.5, top, max(1, 2 / scale), height, l.style.text, 0, scale, l.origin, origin_y))
+}
+
 // The quad of a caret at an address, in the display space of
 // `selection_quads`. Nothing when the caret has no place.
 caret_quad :: proc(l: ^Layout, at: document.Address, y0, y1: f64, scale: f32, origin_y: f64, out: ^[dynamic]base.Quad) {

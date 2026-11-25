@@ -172,6 +172,8 @@ test_a_character_goes_out_with_all_that_the_source_has_for_it :: proc(t: ^testin
 		// A NUL byte shows as one character of three bytes.
 		{"a\x00\n", {0, 0, 4}, "\x00"},
 		{"a\x00b\n", {0, 0, 4}, "\x00"},
+		// And as the first character, with text after it.
+		{"\x00a\n", {0, 0, 3}, "\x00"},
 		// Also when it is all of a paragraph, after a block before it.
 		{"\x00\n", {0, 0, 3}, "\x00"},
 		{"x\n\n\x00\n", {1, 0, 3}, "\x00"},
@@ -183,6 +185,21 @@ test_a_character_goes_out_with_all_that_the_source_has_for_it :: proc(t: ^testin
 		defer destroy(&doc)
 		testing.expect_value(t, before(&doc, c.at), c.gone)
 	}
+}
+
+@(test)
+test_a_nul_byte_of_a_later_block_does_not_move_the_place_of_one_before :: proc(t: ^testing.T) {
+	// Two items of one list are parsed together. The NUL byte in the
+	// code of the second one is no place of the first one.
+	doc := parse("- \x00\n- ```\n  \x00x\n  ```\n")
+	defer destroy(&doc)
+	testing.expect_value(t, put_at(&doc, {0, 0, 3}), 3)
+	places := block_map(&doc, 0)
+	defer delete(places)
+	start, end, ok := char_before(&doc, places[:], {0, 0, 3})
+	testing.expect(t, ok)
+	testing.expect_value(t, start, 2)
+	testing.expect_value(t, end, 3)
 }
 
 @(test)

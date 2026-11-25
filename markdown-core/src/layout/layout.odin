@@ -1073,6 +1073,10 @@ part_at :: proc(l: ^Layout, y: f64) -> int {
 // height that the view is at: the text there and below it stays where it
 // is on the page (`lay_out_part`). Returns true when it made records.
 lay_out :: proc(l: ^Layout, y0, y1, anchor_y: f64) -> (changed: bool) {
+	// A document with no block has nothing to lay out.
+	if len(l.parts) == 0 {
+		return false
+	}
 	anchor := part_at(l, anchor_y)
 	// From the anchor down. A part is laid out only down to the end of
 	// the range, so a part with one very long block does not hold a frame.

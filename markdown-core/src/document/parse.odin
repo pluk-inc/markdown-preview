@@ -558,7 +558,7 @@ on_text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr)
 		// the start of the text after it. The byte is no text; it is
 		// where the character is in the source.
 		if after_nul && len(s) > 0 && s[0] == 0 {
-			if p.places != nil && at >= 0 && len(p.places) > 0 && p.places[len(p.places) - 1].nul {
+			if p.places != nil && p.doc.count == p.places_block && at >= 0 && len(p.places) > 0 && p.places[len(p.places) - 1].nul {
 				place := &p.places[len(p.places) - 1]
 				place.source, place.source_len, place.made = at, 1, false
 			}
