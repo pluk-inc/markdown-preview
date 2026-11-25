@@ -85,6 +85,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-25 | the mark of a heading at the caret | 557 / 603 | 53 / 100 | 470 / 735 | 59 / 76 | none | none | 7.0 / 26.1 (16.1 at the first frame) |
 | 2026-11-25 | the mark of a list item and of a quote at the caret | 601 / 609 | 62 / 108 (the base too) | 480 / 715 | 61 / 75 | none | none | 7.0 / 26.3 (16.1 at the first frame) |
 | 2026-11-25 | the frame for a key does not wait for the refresh | 611 / 586 | 65 / 110 (the base too) | 490 / 800 | none | none | none (the core is the same) | none |
+| 2026-11-25 | Undo and Redo | 608 / 601 | 65 / 111 (the base too) | 485 / 785 | none | none | 0.39 / 0.40 | 7.0 / 26.4 (the base too) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1117,3 +1118,36 @@ Memory and CPU of a set before it, with the same build of the change:
 65 / 110 MB and 490 / 800 ms, against 64 / 108 MB and 470 to 510 / 790
 to 810 ms for the base. No number of a launch moved by more than the
 runs of one build differ. The load was 4 to 5.
+
+## Undo and Redo (2026-11-25)
+
+Each change of the reader is a step of a history in the core: a copy of
+the bytes that went and that came, and the caret and the selection of
+its group. A typed character adds a step of one byte. The walk of
+`bench.m` now takes back each of its changes (some thousands of
+deletes, typed text, Ctrl+T) and checks the first source byte for byte,
+then makes them again and takes them back again.
+
+`app.py`, short / long, five launches for each number, the base (the
+frame for a key) built from its commit on the same day:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 619 / 611 | 65 / 111 | 490 / 800 |
+| change | 603 / 598 | 65 / 110 | 480 / 790 |
+| change | 612 / 603 | 65 / 112 | 490 / 780 |
+| base | 598 / 613 | 65 / 114 | 480 / 800 |
+
+`core.py`, short / long, in turns (base, change, change, base):
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 56, 58 / 75, 75 | 62, 62 / 78, 74 |
+| A typed character in the middle of the text (CPU ms) | 1.17, 1.26 / 1.31, 1.53 | 1.28, 1.18 / 1.67, 1.41 |
+| A typed character at the end of the text (CPU ms) | 1.33, 1.37 / 3.35, 2.82 | 1.27, 1.26 / 2.90, 3.77 |
+| A typed character at a caret (CPU ms) | 1.71, 1.77 / 1.78, 2.12 | 1.50, 1.35 / 1.66, 1.97 |
+| A step of the caret to the left or to the right (CPU ms) | 0.38, 0.37 / 0.35, 0.49 | 0.39, 0.41 / 0.42, 0.38 |
+| Heap with all of the document laid out (MB) | 7.0 / 26.3, 26.4 | 7.0 / 26.4 |
+
+No number moved by more than the two runs of one build differ. The load
+was 2 to 7.
