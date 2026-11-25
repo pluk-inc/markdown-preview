@@ -1192,11 +1192,22 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
     /// to where a move goes. `keepsText`: for Control-Y.
     private func delete(to move: mdcore_move, keepsText: Bool = false) {
         markedText = nil
-        // For Control-Y: the bytes of the source that go, which are what
-        // is between the bytes that the source has before and after.
-        let before = keepsText ? sourceBytes : []
+        // For Control-Y: the text that goes, which is the text of the
+        // selection that the move makes. Not the bytes of the source: a
+        // mark that the core keeps for the text that stays would come
+        // back a second time. With no such text (spaces at the end of a
+        // text, a line break), the bytes of the source that went: what
+        // is between the bytes that it has before and after.
+        var text: String?
+        if keepsText {
+            if !mdcore_has_selection(ctx) { mdcore_caret_move(ctx, move, true) }
+            text = selectedText
+        }
+        let before = keepsText && text == nil ? sourceBytes : []
         if mdcore_delete(ctx, move) {
-            if keepsText {
+            if let text {
+                Self.killed = text
+            } else if keepsText {
                 let after = sourceBytes
                 var head = 0
                 while head < min(before.count, after.count), before[head] == after[head] { head += 1 }

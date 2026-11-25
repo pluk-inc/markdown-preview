@@ -905,8 +905,10 @@ The order of the next steps, from the review of the second step:
   must stay one piece with the caret right after it for the text of an
   input method; Control-K
   keeps one text and does not add to it for some presses in a row.
-  The text that Control-K takes is the bytes of the source that went,
-  so it comes back with its marks.
+  The text that Control-K takes is what a copy of that selection
+  gives, so it comes back with no styles (the bytes of the source
+  would bring a mark that the core kept a second time); spaces and a
+  line break come back as the bytes that went.
 - Cut, Paste, and Select All are menu commands, which a test on the
   hidden display cannot send (a menu needs the app in front). Each is
   two calls that the keys check (a copy and a delete, an insert).
