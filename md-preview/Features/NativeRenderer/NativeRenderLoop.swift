@@ -62,6 +62,9 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
     nonisolated(unsafe) private var tickInFlight = false
     /// When the last frame was drawn.
     nonisolated(unsafe) private var lastFrameTime: CFTimeInterval = 0
+    /// A frame that does not wait for the refresh is in the queue: no
+    /// second one goes there before it took its frame.
+    nonisolated(unsafe) private var earlyQueued = false
     /// The time of one refresh of the display that the view is on.
     nonisolated(unsafe) private var refreshPeriod: CFTimeInterval = 1.0 / 60
     /// Held for all of a frame of `tick`, from before it takes its offset:
@@ -125,10 +128,18 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
         lock.lock()
         scrollY = y
         wantsFrame = true
-        let early = soon && animation == nil && !tickInFlight && CACurrentMediaTime() - lastFrameTime >= refreshPeriod
+        let early = soon && !earlyQueued && canDrawEarly
+        if early { earlyQueued = true }
         lock.unlock()
         // The frame that does not wait needs no clock.
         if early { queue.async { [self] in tick(early: true) } } else { start() }
+    }
+
+    /// A frame can be drawn with no wait for the refresh: no frame was
+    /// drawn in the last refresh, none is in progress, and no scroll has
+    /// its steps from the clock. Under the lock.
+    private var canDrawEarly: Bool {
+        animation == nil && !tickInFlight && CACurrentMediaTime() - lastFrameTime >= refreshPeriod
     }
 
     /// Runs `before`, then draws a frame at this offset, or at the one that
@@ -212,6 +223,17 @@ nonisolated final class NativeRenderLoop: @unchecked Sendable {
         frameLock.lock()
         defer { frameLock.unlock() }
         lock.lock()
+        if early {
+            earlyQueued = false
+            // A frame of the link was drawn, or a scroll started, while
+            // this one was in the queue: what is wanted now waits for
+            // the refresh, as a request that comes now does.
+            if wantsFrame, !canDrawEarly {
+                lock.unlock()
+                DispatchQueue.main.async { [weak self] in self?.start() }
+                return
+            }
+        }
         var step: ScrollStep?
         var target: Double?
         if let animation {
