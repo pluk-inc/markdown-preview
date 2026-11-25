@@ -1080,7 +1080,10 @@ mdcore_delete :: proc "c" (handle: rawptr, move: Move) -> bool {
 // See the header.
 @(export)
 mdcore_deleted_text :: proc "c" (handle: rawptr, length: ^c.long) -> [^]u8 {
+	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
 	length^ = c.long(len(ctx.gone))
 	return raw_data(ctx.gone)
 }

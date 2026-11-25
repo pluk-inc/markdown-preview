@@ -335,6 +335,11 @@ test_the_bytes_that_go_come_back_as_the_text_of_before :: proc(t: ^testing.T) {
 		// The spaces at the end of a text.
 		{"abc   \n", {block = 0, byte = 1}, {block = 0, byte = 3, spaces = 3}, "bc   "},
 		{"ab\n\ncd\n", {block = 0, byte = 2}, {block = 1, byte = 0}, "\n\n"},
+		// The rest of code and text after it: the text comes back after
+		// the code, where an entity is a character.
+		{"`ab` &amp; c\n", {block = 0, byte = 1}, {block = 0, byte = 5}, "b &amp; "},
+		// A definition of a link that stays did not go.
+		{"ab\n\n[d]: /u\n\ncd\n", {block = 0, byte = 1}, {block = 1, byte = 1}, "b\n\n\n\nc"},
 	}
 	for c in cases {
 		doc := parse(c.source)
