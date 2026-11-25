@@ -270,8 +270,10 @@ struct MD_CTX_tag {
      * Used only with MD_FLAG_PRESERVEBLANKLINES. */
     unsigned n_blank_lines;
 
-    /* Start of the input line that is analyzed now. (Not in upstream.) */
+    /* Start of the input line that is analyzed now, and of the line after
+     * it. (Not in upstream.) */
     OFF line_beg;
+    OFF line_next;
 
     /* For container block analysis. */
     MD_CONTAINER* containers;
@@ -5406,8 +5408,10 @@ struct MD_BLOCK_tag {
      */
     MD_SIZE n_lines;
 
-    /* Start of the input line where the block starts. (Not in upstream.) */
+    /* Start of the input line where the block starts, and of the input line
+     * after the last one that is a line of the block. (Not in upstream.) */
     OFF beg;
+    OFF end;
 };
 
 struct MD_CONTAINER_tag {
@@ -5593,7 +5597,7 @@ md_process_leaf_block(MD_CTX* ctx, MD_BLOCK* block)
     memset(&det, 0, sizeof(det));
 
     if(ctx->parser.block_offset != NULL  &&  block->type != MD_BLOCK_BLANK)
-        ctx->parser.block_offset(block->type, block->beg, ctx->userdata);
+        ctx->parser.block_offset(block->type, block->beg, block->end, ctx->userdata);
 
     if(ctx->n_containers == 0)
         is_in_tight_list = false;
@@ -5740,7 +5744,7 @@ md_process_all_blocks(MD_CTX* ctx)
 
             if(block->flags & MD_BLOCK_CONTAINER_OPENER) {
                 if(ctx->parser.block_offset != NULL)
-                    ctx->parser.block_offset(block->type, block->beg, ctx->userdata);
+                    ctx->parser.block_offset(block->type, block->beg, block->beg, ctx->userdata);
                 MD_ENTER_BLOCK(block->type, &det);
 
                 if(block->type == MD_BLOCK_UL || block->type == MD_BLOCK_OL) {
@@ -5854,6 +5858,7 @@ md_start_new_block(MD_CTX* ctx, const MD_LINE_ANALYSIS* line)
     block->data = line->data;
     block->n_lines = 0;
     block->beg = ctx->line_beg;
+    block->end = ctx->line_beg;
 
     ctx->current_block = block;
     return 0;
@@ -5885,6 +5890,7 @@ md_consume_link_reference_definitions(MD_CTX* ctx)
     MD_SIZE n = 0;
     bool inject_hr = false;
     OFF hr_beg = 0;         /* (Not in upstream.) */
+    OFF hr_end = 0;         /* (Not in upstream.) */
     OFF ignored;
 
     while(n < n_lines) {
@@ -5927,9 +5933,13 @@ md_consume_link_reference_definitions(MD_CTX* ctx)
         inject_hr = true;
         hr_beg = md_line_start(ctx, lines[n].beg);
         n++;    /* Remove one more line below. */
-        /* The rest of the block comes after the HR. (Not in upstream.) */
-        if(n < n_lines)
+        /* The rest of the block comes after the HR; the HR ends where it
+         * starts, or where the block ends. (Not in upstream.) */
+        hr_end = ctx->current_block->end;
+        if(n < n_lines) {
             ctx->current_block->beg = md_line_start(ctx, lines[n].beg);
+            hr_end = ctx->current_block->beg;
+        }
     }
 
     if(n == n_lines) {
@@ -5961,6 +5971,7 @@ md_consume_link_reference_definitions(MD_CTX* ctx)
         memset(hr_block, 0, sizeof(MD_BLOCK));
         hr_block->type = MD_BLOCK_HR;
         hr_block->beg = hr_beg;
+        hr_block->end = hr_end;
     }
 
     return 0;
@@ -6036,6 +6047,11 @@ md_add_line_into_current_block(MD_CTX* ctx, const MD_LINE_ANALYSIS* analysis)
         line->end = analysis->end;
     }
     ctx->current_block->n_lines++;
+    /* Where the lines of the block end. Not after a blank line of code by
+     * its indent: the ones at its end are no lines of it. (Not in
+     * upstream.) */
+    if(analysis->type != MD_LINE_INDENTEDCODE  ||  analysis->beg < analysis->end)
+        ctx->current_block->end = ctx->line_next;
 
     return 0;
 }
@@ -6058,6 +6074,7 @@ md_flush_blank_lines(MD_CTX* ctx)
     block->data = ctx->n_blank_lines;
     block->n_lines = 0;
     block->beg = ctx->line_beg;
+    block->end = ctx->line_beg;
 
     ctx->n_blank_lines = 0;
     return 0;
@@ -6082,6 +6099,7 @@ md_push_container_bytes(MD_CTX* ctx, MD_BLOCKTYPE type, unsigned start,
     block->data = data;
     block->n_lines = start;
     block->beg = ctx->line_beg;
+    block->end = ctx->line_beg;
 
 abort:
     return ret;
@@ -7244,6 +7262,9 @@ md_process_line(MD_CTX* ctx, const MD_LINE_ANALYSIS** p_pivot_line, MD_LINE_ANAL
 
     /* Blank line ends current leaf block. */
     if(line->type == MD_LINE_BLANK) {
+        /* A closing code fence is a line of its block. (Not in upstream.) */
+        if(ctx->current_block != NULL  &&  ctx->current_block->type == MD_BLOCK_CODE  &&  line->beg < line->end)
+            ctx->current_block->end = ctx->line_next;
         MD_CHECK(md_end_current_block(ctx));
         /* Count only genuinely empty lines: some non-blank lines (e.g. a closing
          * code fence) are internally retyped as MD_LINE_BLANK but still hold
@@ -7398,6 +7419,7 @@ md_process_doc(MD_CTX *ctx)
 
         ctx->line_beg = off;
         MD_CHECK(md_analyze_line(ctx, off, &off, pivot_line, line));
+        ctx->line_next = off;
         MD_CHECK(md_process_line(ctx, &pivot_line, line));
     }
 

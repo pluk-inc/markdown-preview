@@ -856,23 +856,26 @@ The order of the next steps, from the review of the second step:
 - Next for the editor, in the order that a reader misses them: a
   selection that typing takes the place of, with cut; the marks at the
   caret (Decisions); undo.
-- Where the lines of a block end is found from the source a second
-  time (`empties.lines_end`, with `fence_line` for a fence of code):
-  the parser read those lines and knows it. A callback of the parser
-  for the end of a block, as there is one for its start, takes that
-  second reader out, and one read of the lines of each block at each
-  parse with it.
+- Done: where the lines of a block end comes from the parser
+  (`block_offset` gives the end too, `Block.lines`), as its start does.
+  Before, `empties.lines_end` and `fence_line` read the lines a second
+  time and guessed: a fence in a quote or an item, raw HTML right after
+  a paragraph (its lines were read as lines of the paragraph, so the
+  spaces at the end of the paragraph were not counted), and more, each
+  a review finding. The parser knows: the closing fence and the line
+  under a heading are lines of the block, the blank lines after code by
+  its indent are not, an item with no text has the line of its mark.
 - The host knows that text in an empty line gets a line break before
   it (`NativeRendererView.put`, the `lead` of the text of an input
   method), to take it back with text that an input method takes back.
   The core could say where the text starts.
-- Before the selection work: `Address.byte` has two meanings now (a
-  byte of the text, and past its end an empty paragraph). Code that
-  cuts text with it clamps, so a selection over empty paragraphs draws
-  nothing on their lines and a copy leaves them out, and the pointer
-  is not the text pointer over them. A field of its own in `Address`
-  for the empty paragraph makes `byte` a byte of the text for each
-  reader again, and gives a rule its empty paragraphs. Do that first.
+- A selection over empty paragraphs or over the spaces at the end of a
+  text draws nothing on them and a copy leaves them out (`text_between`
+  and `selected_part` read bytes of the text), and the pointer is not
+  the text pointer over an empty paragraph. They are places of their
+  own in `Address` now (`empty`, `spaces`), so this is for the
+  selection work. A rule has no empty paragraphs (no text, so no
+  address).
 - Not as the web preview for empty lines: the web preview gives lines
   with nothing in them no room, and this renderer shows each but the
   last as a line, in Read mode too (Decisions). So a document with

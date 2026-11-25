@@ -52,6 +52,12 @@ Parser :: struct {
 	// that started), so the start of an item stays when an empty quote
 	// in it ends.
 	at:           int,
+	// Where the lines of the leaf block that comes next end: the start
+	// of the source line after its last one (`Block.lines`). Not known
+	// for a block that the parser has no leaf block for (a list item
+	// with no text): its lines are the line of its mark.
+	at_end:       int,
+	at_end_known: bool,
 	at_known:     bool,
 	at_depth:     int,
 	open:         int, // the lists, items, and quotes that are open
@@ -234,7 +240,12 @@ start_block :: proc(p: ^Parser, kind: Block_Kind) -> Block {
 		done = len(p.lists) > 0 && p.lists[len(p.lists) - 1].done,
 		item = len(p.lists) > 0 ? p.lists[len(p.lists) - 1].item : 0,
 	}
-	p.at_known = false
+	end := p.at_end
+	if !p.at_end_known {
+		_, end = line_at(p.bytes, p.at)
+	}
+	b.lines = u32(max(end - p.at, 0))
+	p.at_known, p.at_end_known = false, false
 	take_item_position(p, &b)
 	return b
 }
@@ -453,14 +464,22 @@ leave_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 }
 
 @(private)
-on_block_offset :: proc "c" (type: Md_Block, offset: c.uint, userdata: rawptr) {
+on_block_offset :: proc "c" (type: Md_Block, beg, end: c.uint, userdata: rawptr) {
 	p := cast(^Parser)userdata
 	// Raw HTML is no block of the document: its lines go with the block
 	// before it.
-	if type != .Html && !p.at_known {
-		p.at = int(offset)
+	if type == .Html {
+		return
+	}
+	if !p.at_known {
+		p.at = int(beg)
 		p.at_known = true
 		p.at_depth = p.open
+	}
+	#partial switch type {
+	case .Quote, .Ul, .Ol, .Li:
+	case:
+		p.at_end, p.at_end_known = int(end), true
 	}
 }
 
