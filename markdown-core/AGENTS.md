@@ -982,8 +982,9 @@ The order of the next steps, from the review of the second step:
   source (Decisions has the rules); the "<" and ">" of an address do
   not show; a move to an end of a line that makes marks show goes on
   one time to the end of the new text, so End is two moves there;
-  text between two marks that show goes with a delete and the marks
-  stay ("****"), as in a source.
+  the marks of an element go with the last text between them also
+  while they show, as with no marks in the text (an edit knows each
+  element but the ones with a mark that the range has a byte of).
 - Next for the editor, in the order that a reader misses them: the
   marks of a list item, a quote, and a code fence; undo.
 - Done: where the lines of a block end comes from the parser
