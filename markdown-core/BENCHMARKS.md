@@ -84,6 +84,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-25 | the marks at the caret | 580 / 591 | 53 / 99 | 485 / 725 | 63 / 80 | none | none | 7.0 / 26.2 (16.1 at the first frame) |
 | 2026-11-25 | the mark of a heading at the caret | 557 / 603 | 53 / 100 | 470 / 735 | 59 / 76 | none | none | 7.0 / 26.1 (16.1 at the first frame) |
 | 2026-11-25 | the mark of a list item and of a quote at the caret | 601 / 609 | 62 / 108 (the base too) | 480 / 715 | 61 / 75 | none | none | 7.0 / 26.3 (16.1 at the first frame) |
+| 2026-11-25 | the frame for a key does not wait for the refresh | 611 / 586 | 65 / 110 (the base too) | 490 / 800 | none | none | none (the core is the same) | none |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1074,3 +1075,45 @@ morning: the two builds moved together, so it is the state of the Mac
 (the same jump is in the section of the key that lays out its block).
 The load was 4 to 9.
 
+## The frame for a key does not wait for the refresh (2026-11-25)
+
+A key asked for a frame at the next refresh of the display, so the
+reader saw it up to one refresh later. The frame is now drawn at once
+on the queue of the render loop, when no frame was drawn in the last
+refresh and no scroll is in progress. The view also sets the caret, the
+check boxes, and the pointer only when the layout or the page area
+changed, not after each key. The core is the same, so `core.py` did not
+run.
+
+The time from a key to its frame has no program in `bench/` yet (see
+Open work in `AGENTS.md`). It was measured with a build that has time
+stamps in `keyDown` and around the draw of the frame: 200 keys, 50 ms
+apart, at a caret in the middle of the text, on a 60 Hz display, from
+the time of the key event to the frame handed to the display system,
+the median and the slowest of each set, in ms:
+
+| | Short document | Long document (1 MB) |
+| --- | --- | --- |
+| Base | 11.9 / 18.2 | not recorded |
+| Change | 3.4 / 5.4 | 4.0 / 9.1 |
+
+The CPU of the app process for each key, measured from outside for the
+same keys, was 5.6 ms (short) and 6.5 ms (long) with the change.
+
+`app.py`, short / long, five launches for each number, the base (the
+mark of a list item) built from its commit on the same day, in the
+order that they ran:
+
+| Order | Launch to the first frame (ms) |
+| --- | --- |
+| change | 623 / 598 |
+| base | 614 / 612 |
+| base | 638 / 620 |
+| change | 589 / 580 |
+| base | 617 / 620 |
+| change | 611 / 586 |
+
+Memory and CPU of a set before it, with the same build of the change:
+65 / 110 MB and 490 / 800 ms, against 64 / 108 MB and 470 to 510 / 790
+to 810 ms for the base. No number of a launch moved by more than the
+runs of one build differ. The load was 4 to 5.

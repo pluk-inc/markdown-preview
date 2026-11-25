@@ -474,6 +474,21 @@ Known limits, found in review and left on purpose:
 
 - One very long paragraph or one large table is laid out in one step. Code
   blocks stop between lines.
+- The time from a key to its frame has no program in `bench/`: it was
+  measured with a build that has time stamps in the view and in the render
+  loop (`BENCHMARKS.md`, "The frame for a key does not wait for the
+  refresh"). A program for it needs a way to put a caret in a window that
+  is not in front, and signposts for the key and for its frame.
+- The frame for a key that does not wait for the refresh
+  (`NativeRenderLoop.requestFrame(at:soon:)`) is drawn with the core held,
+  as each frame is. A draw that waits for a drawable holds the next key on
+  the main thread for that time. No more than one such frame for each
+  refresh keeps a drawable free; a draw that takes its drawable before it
+  takes the core would remove the wait.
+- After each key the render loop sees another layout revision (the edit
+  made it on the main thread) and reports the frame to the main thread,
+  which then finds nothing to do. The hop stays: a layout that a frame
+  makes is found the same way.
 - A glyph atlas that reaches 1024 × 16384 px drops new glyphs until the
   cache is emptied. More atlas pages would fix it.
 - The first growth of the glyph atlas costs one frame of 40 to 50 ms,
