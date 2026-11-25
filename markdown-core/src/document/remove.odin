@@ -542,21 +542,8 @@ transpose :: proc(doc: ^Document, places: []Place, at: Address, allocator := con
 			return
 		}
 	}
-	// The range of the source of a character of some bytes of the text:
-	// from the start of its first code point to the end of its last
-	// one. False when the source has more between the two than the
-	// text (a mark, an entity).
-	source_of_char :: proc(doc: ^Document, places: []Place, at: Address, text: []u8, from, to: int) -> (start, end: int, ok: bool) {
-		_, size := utf8.decode_rune(text[from:to])
-		at := at
-		at.byte = from + size
-		start, _ = char_before(doc, places, at) or_return
-		at.byte = to
-		_, end = char_before(doc, places, at) or_return
-		return start, end, end - start == to - from
-	}
-	a_start, a_end := source_of_char(doc, places, at, text.bytes[:], first, middle) or_return
-	b_start, b_end := source_of_char(doc, places, at, text.bytes[:], middle, last) or_return
+	a_start, a_end := char_source(doc, places, at, first, middle) or_return
+	b_start, b_end := char_source(doc, places, at, middle, last) or_return
 	if a_end != b_start {
 		return
 	}
