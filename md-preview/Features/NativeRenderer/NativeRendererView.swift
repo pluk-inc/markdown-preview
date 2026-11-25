@@ -289,6 +289,8 @@ final class NativeRendererView: NSView {
             page.setBoundsOrigin(frame.origin)
         }
         updateTaskCheckBoxes()
+        // The caret is where the new layout has its text.
+        if isEditable { updateCaretIndicator() }
         if markedText != nil { inputContext?.invalidateCharacterCoordinates() }
         // After each layout and each frame that laid out more: other text
         // can be under a pointer that did not move.
