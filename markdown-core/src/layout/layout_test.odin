@@ -299,7 +299,64 @@ test_a_task_keeps_a_place_for_its_check_box :: proc(t: ^testing.T) {
 	first := only(&f.page).lines[only(&f.page).boxes[0].line_first]
 	size := task_box_size(f.page.m)
 	testing.expect(t, one.x + size < first.x)
-	testing.expect_value(t, len(only(&f.page).decor), 0)
+	for task in ([]int{0, 1, 3}) {
+		box := only(&f.page).boxes[task]
+		testing.expect_value(t, box.decor_end, box.decor_first)
+	}
+	// The plain item has its bullet: a circle a quarter of the body size
+	// across, a third of it before the text, in the color of the text.
+	// Its middle is a little above the middle of the small letters, and
+	// the middle of a check box is at the same height in its line.
+	plain := only(&f.page).boxes[2]
+	testing.expect_value(t, plain.decor_end - plain.decor_first, 1)
+	bullet := only(&f.page).decor[plain.decor_first]
+	text_line := only(&f.page).lines[plain.line_first]
+	body := f.page.m.body
+	testing.expect_value(t, bullet.w, 0.25 * body)
+	testing.expect_value(t, bullet.h, bullet.w)
+	testing.expect_value(t, bullet.radius, bullet.w / 2)
+	testing.expect_value(t, bullet.x + bullet.w, text_line.x - 0.35 * body)
+	line_height := only(&f.page).paras[text_line.para].line_height
+	ascent, descent, x_height := text.font_metrics(f.style.body_font)
+	baseline := (line_height - (ascent + descent)) / 2 + ascent
+	middle := bullet.y + bullet.h / 2 - text_line.top
+	testing.expect(t, abs(middle - (baseline - 0.6 * x_height)) < 0.01)
+	testing.expect(t, middle > line_height / 2 && middle < baseline - x_height / 2)
+	testing.expect(t, abs(one.y + size / 2 - first.top - middle) < 0.01)
+	testing.expect_value(t, bullet.color, f.page.style.text)
+	// It is drawn from the pixel of the line that its text stands on:
+	// of one size and at one distance from that line, at each height of
+	// the page. The line is the one of the text itself, which gets a
+	// move down the page with an addition of its own: the distance that
+	// the bullet keeps is not from a sum of its own.
+	testing.expect(t, abs(bullet.y + bullet.to_baseline - text_line.top - baseline) < 0.01)
+	testing.expect_value(t, mark_baseline(&f.page, 0, plain, bullet), line_baseline(text_line.top, line_height, text_line.line.ascent, text_line.line.descent))
+	first_quad := mark_quad(bullet, text_line.top + baseline, bullet.color, 2, 0, 0)
+	for step in 1 ..< 40 {
+		moved := bullet
+		moved.y += f32(step) * 0.37
+		text_top := text_line.top + f32(step) * 0.37
+		text_baseline := line_baseline(text_top, line_height, ascent, descent)
+		for top in ([]f64{0, f64(step) * 0.13}) {
+			quad := mark_quad(moved, text_baseline, bullet.color, 2, top, 0)
+			testing.expect_value(t, quad.size, first_quad.size)
+			testing.expect_value(t, page_pixel(top, text_baseline, 2) - f64(quad.pos.y), page_pixel(0, text_line.top + baseline, 2) - f64(first_quad.pos.y))
+		}
+	}
+	testing.expect_value(t, first_quad.size.x, first_quad.size.y)
+	// A list item that starts with code whose first lines are empty:
+	// those lines have no record, and the bullet stays beside the first
+	// of them, not beside the first line with text.
+	code: Fixture
+	setup(&code, "- ```\n\n\n  text\n  ```\n", 600)
+	defer teardown(&code)
+	step(&code.page, 1e30)
+	code_box := only(&code.page).boxes[0]
+	code_bullet := only(&code.page).decor[code_box.decor_end - 1]
+	testing.expect(t, code_bullet.to_baseline > 0)
+	code_line := only(&code.page).lines[code_box.line_first]
+	testing.expect(t, code_line.top > code_bullet.y + code_bullet.h)
+	testing.expect_value(t, mark_baseline(&code.page, 0, code_box, code_bullet), code_bullet.y + code_bullet.to_baseline)
 	// Only the box that a range touches.
 	found: [4]Task_Place
 	testing.expect_value(t, tasks_between(&f.page, f64(two.y + 1), f64(two.y + size - 1), found[:]), 1)

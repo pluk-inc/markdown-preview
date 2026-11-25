@@ -73,6 +73,13 @@ Decor :: struct {
 	x, y, w, h: f32,
 	color:      base.Color,
 	radius:     f32,
+	// For a mark that stands beside text (the bullet of a list item):
+	// how far below y the line is that the text stands on; 0 for each
+	// other record. The text is drawn from the whole pixel of that
+	// line, so the mark is too: at the same distance from it in each
+	// line, and of the same size, in whole pixels (`mark_quad`). From
+	// y, so a record that moves down the page needs no other change.
+	to_baseline: f32,
 	above:      bool, // a line through text: drawn over the selection, as the text is
 	soft_done:  bool, // of text that is softer in a checked task (`done_color`)
 }
@@ -511,7 +518,7 @@ Task :: struct {
 }
 
 TASK_BOX :: 1.0 // side of a task box, in body sizes
-TASK_GAP :: 0.25 // between the box and the text
+TASK_GAP :: 0.4 // between the box and the text
 
 // Makes the paragraph of the bytes [from, to) of `src` in the open part
 // and returns its index in the paragraphs of that part.
@@ -634,14 +641,46 @@ decorate_line :: proc(l: ^Layout, para: ^Para, line: text.Line, x, top: f32) {
 @(private)
 marker_text :: proc(b: ^document.Block) -> string {
 	#partial switch b.marker {
-	case .Bullet:
-		return "•"
 	case .Number:
 		return fmt.tprintf("%d.", b.number)
-	case .Task_Open, .Task_Done:
-		// A box that the host draws (`place_task`).
 	}
+	// A bullet is a circle and a task a box, with no text
+	// (`place_marker`).
 	return ""
+}
+
+// The circle of a bullet, in sizes of the body text: how far across it
+// is, and the room between it and the text of its item. The sizes of
+// the bullet of a text font with the room that it has beside it: a
+// quarter of the size of the text, and a third of it to the text.
+BULLET_SIZE :: 0.25
+BULLET_GAP :: 0.35
+// Where the middle of a bullet or of a check box is above the line
+// that the text stands on, in heights of the small letters: where the
+// bullet of a font has its middle, a little above the middle of those
+// letters. The middle of the line box is higher (near the middle of
+// the capital letters), and a mark there looks too high beside small
+// letters.
+MARKER_MIDDLE :: 0.6
+
+// The height of the middle of the mark of a list item (`MARKER_MIDDLE`)
+// in a line at `y` with text of a font, and the line that the text
+// stands on. With no font, the middle of the line and no line of text:
+// a mark beside a block with no text (a rule).
+@(private)
+marker_middle :: proc(y, line_height: f32, text_font: base.Font) -> (middle, baseline: f32) {
+	if text_font == nil {
+		return y + line_height / 2, 0
+	}
+	ascent, descent, x_height := text.font_metrics(text_font)
+	baseline = line_baseline(y, line_height, ascent, descent)
+	return baseline - MARKER_MIDDLE * x_height, baseline
+}
+
+// The line that text stands on in a line of the page at `top`: the
+// height of the font is in the middle of the height of the line.
+line_baseline :: proc(top, line_height, ascent, descent: f32) -> f32 {
+	return top + (line_height - (ascent + descent)) / 2 + ascent
 }
 
 // Part `t` of the way from one color to another.
@@ -659,22 +698,44 @@ task_box_size :: proc(m: base.Metrics) -> f32 {
 }
 
 // Keeps the place of the check box of a task item: left of x, at the
-// middle of its first line.
+// height of a bullet in its first line (`marker_middle`).
 @(private)
-place_task :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32) {
+place_task :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32, text_font: base.Font) {
 	size := task_box_size(l.m)
 	bx := math.round(x - l.m.body * TASK_GAP - size)
 	// Not on a whole point here: that is a point of the page, and y is
 	// from the top of the part (`tasks_between`).
-	by := y + (line_height - size) / 2
+	middle, _ := marker_middle(y, line_height, text_font)
+	by := middle - size / 2
 	append(&l.work.tasks, Task{bx, by, len(l.work.boxes) - 1})
 }
 
 // The bullet, number, or box of a list item, right-aligned left of x.
+// `text_font`: the font of the text of the first line of the item, or
+// nil for a block with no text (a rule).
 @(private)
-place_marker :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32) {
+place_marker :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32, text_font: base.Font) {
 	if b.marker == .Task_Open || b.marker == .Task_Done {
-		place_task(l, b, x, y, line_height)
+		place_task(l, b, x, y, line_height, text_font)
+		return
+	}
+	if b.marker == .Bullet {
+		// A circle, not the bullet of the font: that one is a fifth of
+		// the size of the text in the system font, and each font has
+		// its own. In the color of the text of the item: softer in a
+		// quote.
+		across := BULLET_SIZE * l.m.body
+		middle, baseline := marker_middle(y, line_height, text_font)
+		top := middle - across / 2
+		append(&l.work.decor, Decor {
+			x           = x - BULLET_GAP * l.m.body - across,
+			y           = top,
+			w           = across,
+			h           = across,
+			color       = b.quote_depth > 0 ? l.style.secondary : l.style.text,
+			radius      = across / 2,
+			to_baseline = text_font != nil ? baseline - top : 0,
+		})
 		return
 	}
 	label := marker_text(b)
@@ -682,7 +743,7 @@ place_marker :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32) {
 		return
 	}
 	paras := &l.work.paras
-	append(paras, Para{block = len(l.work.boxes) - 1, len = len(label), size = l.m.body, line_height = line_height})
+	append(paras, Para{block = len(l.work.boxes) - 1, len = len(label), size = l.m.body, line_height = line_height, quote = b.quote_depth > 0})
 	shape_marker(l, &paras[len(paras) - 1], label)
 	place_para(l, len(paras) - 1, x - l.m.list_indent, y, l.m.list_indent - 8, .Right)
 }
@@ -832,21 +893,23 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 			body_line := math.round(l.m.body * l.m.line_height)
 			switch b.kind {
 			case .Paragraph:
-				place_marker(l, b, x, l.y, body_line)
+				place_marker(l, b, x, l.y, body_line, span_font(l, {}, l.m.body, false))
 			case .Heading:
-				place_marker(l, b, x, l.y, heading_size * HEADING_LINE_HEIGHT)
+				place_marker(l, b, x, l.y, heading_size * HEADING_LINE_HEIGHT, span_font(l, {}, heading_size, true))
 			case .Code:
-				place_marker(l, b, x, l.y + CODE_PAD, math.round(l.m.code_size * CODE_LINE_HEIGHT))
 				// The card and the quote bars are there from the first
 				// line and grow with the block: a long one can stay in
-				// progress while the reader is in it.
+				// progress while the reader is in it. They are the first
+				// records of the box, so the marker comes after them.
 				push_decor(l, x - 0.5, l.y - 0.5, width + 1, 0, l.style.code_border, 8.5)
 				push_decor(l, x, l.y, width, 0, l.style.code_background, 8)
 				push_quote_bars(l, b, l.y, 0)
+				place_marker(l, b, x, l.y + CODE_PAD, math.round(l.m.code_size * CODE_LINE_HEIGHT), font(l, .Mono, l.m.code_size))
 			case .Table:
-				place_marker(l, b, x, l.y + CELL_PAD_Y, body_line)
+				// The first row of a table is its header.
+				place_marker(l, b, x, l.y + CELL_PAD_Y, body_line, span_font(l, {}, l.m.body, true))
 			case .Rule:
-				place_marker(l, b, x, l.y - body_line / 2, body_line)
+				place_marker(l, b, x, l.y - body_line / 2, body_line, nil)
 			}
 		}
 		box := &work.boxes[slot]
