@@ -533,9 +533,10 @@ reveal_none :: proc(ctx: ^Ctx) {
 // with text selected, with no caret, and while the view does not take
 // the keys. The text of a block changes with it, so the caret and the
 // ends of the selection, which are offsets of the source for this, get
-// their addresses again. The caller holds the two locks.
+// their addresses again. True when the text of a block changed. The
+// caller holds the two locks.
 @(private)
-reveal_update :: proc(ctx: ^Ctx) {
+reveal_update :: proc(ctx: ^Ctx) -> (changed: bool) {
 	if ctx.reveal_frozen {
 		return
 	}
@@ -565,13 +566,13 @@ reveal_update :: proc(ctx: ^Ctx) {
 			}
 			if same {
 				ctx.doc.reveal = want
-				return
+				return false
 			}
 		}
 	}
 	if !had && count == 0 {
 		ctx.doc.reveal = want
-		return
+		return false
 	}
 	// The ends of the selection as offsets of the source, which the
 	// change of the text leaves as they are.
@@ -607,6 +608,7 @@ reveal_update :: proc(ctx: ^Ctx) {
 	if ctx.display_valid {
 		show_selection(ctx)
 	}
+	return true
 }
 
 // After the document changed, or the caret got another offset: the
@@ -728,7 +730,7 @@ stop_from :: proc(ctx: ^Ctx, at: document.Address, forward: bool) -> (stop: Stop
 // Puts the caret at a stop: the one writer of the caret that is not an
 // edit. The selection ends at the caret, and starts at `anchor`.
 @(private)
-set_caret :: proc(ctx: ^Ctx, stop: Stop, upstream: bool, anchor: document.Address) {
+set_caret :: proc(ctx: ^Ctx, stop: Stop, upstream: bool, anchor: document.Address) -> (revealed: bool) {
 	if stop.made {
 		delete(ctx.caret_places)
 		delete(ctx.caret_pairs)
@@ -739,7 +741,7 @@ set_caret :: proc(ctx: ^Ctx, stop: Stop, upstream: bool, anchor: document.Addres
 	ctx.caret_upstream, ctx.caret_goal = upstream, nil
 	ctx.selection = {anchor = anchor, focus = stop.at, active = true}
 	caret_placed(ctx)
-	reveal_update(ctx)
+	return reveal_update(ctx)
 }
 
 // The moves of `mdcore_caret_move`, with the numbers of the header.
@@ -762,6 +764,7 @@ Move :: enum c.int {
 // goes against it.
 MOVES_FORWARD :: bit_set[Move]{.Right, .Word_Right, .Line_End, .Document_End, .Paragraph_End}
 MOVES_VERTICAL :: bit_set[Move]{.Up, .Down}
+MOVES_TO_END :: bit_set[Move]{.Line_Start, .Line_End, .Document_Start, .Document_End, .Paragraph_Start, .Paragraph_End}
 
 // The address that a move of the caret goes to from a place, before
 // the look for a stop there. False when there is none: at an end of
@@ -815,7 +818,7 @@ mdcore_caret_move :: proc "c" (handle: rawptr, move: Move, extend: bool) -> bool
 // `mdcore_caret_move`, for a caller that holds `source_lock` and the
 // lock of the state.
 @(private)
-caret_move :: proc(ctx: ^Ctx, move: Move, extend: bool) -> bool {
+caret_move :: proc(ctx: ^Ctx, move: Move, extend: bool, again := false) -> bool {
 	if ctx.caret < 0 || ctx.doc.count == 0 || move < min(Move) || move > max(Move) {
 		return false
 	}
@@ -922,9 +925,16 @@ caret_move :: proc(ctx: ^Ctx, move: Move, extend: bool) -> bool {
 			}
 		}
 		if moved {
-			set_caret(ctx, stop, next_upstream, extend ? anchor : stop.at)
+			revealed := set_caret(ctx, stop, next_upstream, extend ? anchor : stop.at)
 			if keep_goal {
 				ctx.caret_goal = goal
+			}
+			// A move to an end of a line, a paragraph, or the document
+			// that made marks show there: the end is after those marks
+			// (before them, for a start), so the move goes on one time
+			// in the text with the marks.
+			if revealed && !again && move in MOVES_TO_END {
+				caret_move(ctx, move, extend, true)
 			}
 			return true
 		}
