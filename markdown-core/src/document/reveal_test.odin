@@ -265,3 +265,33 @@ test_a_block_has_one_line_mark :: proc(t: ^testing.T) {
 		destroy(&all)
 	}
 }
+
+// An item of a list whose first paragraph has no text that shows (raw
+// HTML, an image with no text): a parse that notes marks makes the
+// blocks that a parse with none makes, and the block after it has its
+// places and gets its marks. (Not an image with no text: an offset in
+// it shows its marks, which are text of a block then; no caret is at
+// such an offset, because the image has no place for one.)
+@(test)
+test_marks_make_no_block_for_an_item_with_no_text :: proc(t: ^testing.T) {
+	for source in ([]string{"- a\n- <b></b>\n  - y\n", "1. <b></b>\n   1. y\n", "> - <i></i>\n>   - y\n", "- <b></b>\n  # hh\n", "- [ ] <b></b>\n  - y\n"}) {
+		doc := parse(source)
+		defer destroy(&doc)
+		last := doc.count - 1
+		for at in 0 ..= len(source) {
+			all := parse_owned(transmute([]u8)fmt.aprintf("%s", source), at)
+			testing.expectf(t, all.count == doc.count, "%q with the marks of %d: %d blocks, not %d", source, at, all.count, doc.count)
+			destroy(&all)
+		}
+		places := block_map(&doc, last)
+		testing.expectf(t, len(places) > 0, "%q: no places for its last block", source)
+		delete(places)
+		before := fmt.tprintf("%s", block_at(&doc, last).text.bytes[:])
+		places, _ = reveal_block(&doc, last, len(source) - 1)
+		delete(places)
+		testing.expectf(t, len(block_at(&doc, last).text.bytes) >= len(before), "%q: the last block lost its text with marks", source)
+		places, _ = reveal_block(&doc, last, nil)
+		delete(places)
+		testing.expect_value(t, fmt.tprintf("%s", block_at(&doc, last).text.bytes[:]), before)
+	}
+}

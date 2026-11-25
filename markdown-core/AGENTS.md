@@ -970,6 +970,11 @@ The order of the next steps, from the review of the second step:
   no number (`place_marker`). A task keeps its check box: its mark
   ends before the "[". The mark is in the column of the text, so the
   text of the item goes to the right while it shows.
+- An element with marks and no text that shows (an image with no
+  text, as the only thing of a list item) makes a block when an offset
+  in it shows its marks, and a parse with no marks has no block for
+  it. No caret gets to such an offset now (the image has no place);
+  a caret that can be at an image must not have this.
 - Not done for the marks of a line: the ">" of the later lines of a
   quote, the fence lines of code, the line under a heading, a rule,
   an item of a list with no text, and a table cell that shows its
