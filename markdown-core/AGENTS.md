@@ -89,6 +89,11 @@ These came from the maintainer. Do not undo one without asking.
   fence show when the caret is in their line; the check box of a task
   stays a check box; a table cell shows its source while it has the
   caret. Not done yet: see Open work.
+- **Read mode and Edit Mode show the same page** (2026-11-25): the
+  same layout, heights, and lines. No rule of the layout is of the
+  editor only. What an editor needs to show (an empty line for the
+  caret) is a thing of the document that the two modes show, or goes
+  with the caret itself. Ask before a difference between the two.
 - **A reader at the end of the document is kept by the first line that
   shows, as at each other place** (2026-11-24). With a narrower window the
   end then goes out of view. Browsers and editors do the same; only a
@@ -776,10 +781,11 @@ The order of the next steps, from the review of the second step:
     it: a rule (no text, so no address), a block before one that goes
     on a list, lines after raw HTML or a definition of a link, code
     with no end mark.
-  - **An editor shows them** (`Layout.shows_empties`,
-    `mdcore_set_editing`): the box of a block has a line at its bottom
-    for each, and all below is lower. A reader gives them no room, so
-    a document with such lines is a little longer in Edit Mode.
+  - **The page shows them**, in Read mode and in Edit Mode the same
+    (Decisions): the box of a block has a line at its bottom for each
+    (`layout.empty_height`), and all below is lower. A first form
+    showed them only in Edit Mode, with a switch; the maintainer saw
+    the page change between the two modes and said no.
   - **Return** (`document.line_break`, `mdcore_insert_break`) is of the
     block and not of the byte of the caret: in fenced code a line
     break; at the end of the text of a list item a new item of its
@@ -807,6 +813,10 @@ The order of the next steps, from the review of the second step:
   is not the text pointer over them. A field of its own in `Address`
   for the empty paragraph makes `byte` a byte of the text for each
   reader again, and gives a rule its empty paragraphs. Do that first.
+- Not as the web preview for empty lines: the web preview gives lines
+  with nothing in them no room, and this renderer shows each but the
+  last as a line, in Read mode too (Decisions). So a document with
+  more than one empty line between two blocks is longer here.
 - Not as the web editor for empty lines: none shows before a block
   that goes on a list, after a rule, and after raw HTML or a definition
   of a link (see above for the reason of each).
@@ -1152,7 +1162,9 @@ export.
   the caret, which is inside the lines of the block at the end of a
   heading with a line under it and at the end of bold text. So the
   document got empty paragraphs as places of the text of a block, and
-  Return became a call that knows the block. Checked on the hidden
+  Return became a call that knows the block. The maintainer then chose
+  the rule of the web editor for which lines show (each but the last),
+  and that Read mode shows them as Edit Mode does. Checked on the hidden
   display with a log of the caret: Return after a list item, a
   paragraph, and a heading; typing and delete in the new line; Return
   two times and delete in a list; up and down through the new lines.

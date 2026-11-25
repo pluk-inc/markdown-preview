@@ -938,45 +938,6 @@ mdcore_set_page_width :: proc "c" (handle: rawptr, width: f64) {
 	ctx.page_width = f32(max(width, 0))
 }
 
-// See the header.
-@(export)
-mdcore_set_editing :: proc "c" (handle: rawptr, editing: bool) {
-	context = runtime.default_context()
-	ctx := cast(^Ctx)handle
-	context.temp_allocator = ctx.temp
-	// Not in the middle of a frame, which has the layout of before.
-	sync.lock(&ctx.draw_lock)
-	defer sync.unlock(&ctx.draw_lock)
-	hold(ctx)
-	if ctx.page.shows_empties == editing {
-		return
-	}
-	// A new layout only for a document that has such paragraphs: each
-	// other one has the same records with them and with none.
-	has := false
-	walk: for part in ctx.doc.parts {
-		for &b in document.part_blocks(part) {
-			if b.empties > 0 {
-				has = true
-				break walk
-			}
-		}
-	}
-	if !has || !ctx.layout_valid {
-		ctx.page.shows_empties = editing
-		return
-	}
-	take_place(ctx)
-	ctx.page.shows_empties = editing
-	layout.begin(&ctx.page, &ctx.doc, ctx.style, ctx.layout_width)
-	// The text that the reader was at keeps its height on the page.
-	layout.restore_place(&ctx.page, ctx.place)
-	layout_changed(ctx)
-	if ctx.caret >= 0 {
-		caret_placed(ctx)
-	}
-}
-
 // Sets the view size in points and the backing scale. Starts a new
 // layout when the document, the style, or the width changed.
 @(export)

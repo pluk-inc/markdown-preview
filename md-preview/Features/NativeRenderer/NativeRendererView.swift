@@ -339,11 +339,6 @@ final class NativeRendererView: NSView {
         didSet {
             guard isEditable != oldValue else { return }
             markedText = nil
-            // An editor shows a line for each empty paragraph (the line
-            // that Return makes); the heights of the page can change.
-            mdcore_set_editing(ctx, isEditable)
-            updatePageArea()
-            setNeedsDraw()
             if isEditable {
                 // The system's caret shows where the core's caret is.
                 mdcore_caret_show(ctx, false)
@@ -351,6 +346,7 @@ final class NativeRendererView: NSView {
             } else {
                 hasCaret = false
                 mdcore_caret_clear(ctx)
+                setNeedsDraw()
             }
             updateCaretIndicator()
         }

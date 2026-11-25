@@ -141,11 +141,6 @@ Work :: struct {
 
 Layout :: struct {
 	doc:            ^document.Document,
-	// For an editor: each empty paragraph after a block has a line of
-	// its own at the bottom of the box of that block (`empty_height`),
-	// where a caret can be. A reader has none: empty lines of the source
-	// take no room. A change of this needs a new layout (`begin`).
-	shows_empties:  bool,
 	style:          base.Style,
 	m:              base.Metrics,
 	// A part for each part of the document, in document order.
@@ -755,10 +750,8 @@ estimate_block :: proc(l: ^Layout, b: ^document.Block, first: bool) -> f32 {
 		rows := b.columns > 0 ? len(b.cells) / b.columns : 0
 		height = f32(rows) * (math.round(l.m.body * l.m.line_height) + 2 * CELL_PAD_Y)
 	}
-	// The lines of its empty paragraphs, for an editor.
-	if l.shows_empties {
-		height += f32(b.empties) * empty_height(l)
-	}
+	// The lines of its empty paragraphs.
+	height += f32(b.empties) * empty_height(l)
 	return height + (first ? 0 : space_above(l, b, size))
 }
 
@@ -893,9 +886,10 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 				push_quote_bars(l, b, box.top, l.y - box.top)
 			}
 			l.in_block = false
-			if l.shows_empties {
-				l.y += f32(b.empties) * empty_height(l)
-			}
+			// Each empty paragraph after the block has a line of its
+			// own at the bottom of the box of the block, where a caret
+			// can be.
+			l.y += f32(b.empties) * empty_height(l)
 		}
 		box.bottom = l.y
 		box.line_end = len(work.lines)

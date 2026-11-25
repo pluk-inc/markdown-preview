@@ -81,13 +81,6 @@ void mdcore_set_markdown(void *ctx, const char *utf8, long length);
 // reaches out of the text is cut to it.
 void mdcore_replace_text(void *ctx, long start, long end, const char *utf8, long length);
 
-// For an editor: each line of the source with nothing in it after a
-// block, but the last one, shows as an empty line, and a caret can be
-// in it (the line that Return makes after a paragraph). A reader shows
-// none of them. A change of this can give the
-// text other heights, as a new width does.
-void mdcore_set_editing(void *ctx, bool editing);
-
 // The caret of an editor: the place where typed text goes. A view has
 // none until one of these calls gives it one, and the core draws it.
 //
@@ -149,8 +142,12 @@ typedef enum {
 // the selection did not change, and for no caret.
 bool mdcore_caret_move(void *ctx, mdcore_move move, bool extend);
 
-// Text that goes in at the caret when the caret is in an empty line of
-// an editor (mdcore_set_editing) starts a paragraph of its own there:
+// Each line of the source with nothing in it after a block, but the
+// last one, shows as an empty line of the page, and a caret can be in
+// it (the line that Return makes after a paragraph).
+//
+// Text that goes in at the caret when the caret is in such a line
+// starts a paragraph of its own there:
 // the core puts a line break before it, with mdcore_insert and with
 // mdcore_replace_text for an empty range at the caret. The text then
 // ends at the caret, and starts its own length before it.
@@ -164,8 +161,7 @@ void mdcore_insert(void *ctx, const char *utf8, long length);
 // Return at the caret: what the block of the caret needs for it. In
 // code, a new line. At the end of the text of a list item, a new item
 // of the same kind. At the end of each other text, an empty line after
-// the block (with mdcore_set_editing it shows, and the caret is in
-// it). In an empty line, one more. In the text, the rest of the text
+// the block, with the caret in it. In an empty line, one more. In the text, the rest of the text
 // is a paragraph of its own. Does nothing in a table, and with no
 // caret.
 void mdcore_insert_break(void *ctx);

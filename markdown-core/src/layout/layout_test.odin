@@ -1589,17 +1589,16 @@ test_the_end_of_a_line_with_no_space_is_in_that_line :: proc(t: ^testing.T) {
 }
 
 @(test)
-test_an_editor_shows_each_empty_paragraph_as_a_line :: proc(t: ^testing.T) {
-	SOURCE :: "first\n\n\n\nsecond\n\n"
-	// A reader gives the empty lines no room; an editor gives each
-	// empty paragraph a line, so what is after them is lower.
+test_each_empty_paragraph_shows_as_a_line :: proc(t: ^testing.T) {
+	// The same two paragraphs with one empty line after each, and with
+	// more: each line more is a line of the page, so what is after it
+	// is lower.
 	reader, editor: Fixture
-	setup(&reader, SOURCE, 300)
+	setup(&reader, "first\n\nsecond\n", 300)
 	defer teardown(&reader)
 	step(&reader.page, 1e30)
 	expect_ok(t, &reader.page)
-	editor.page.shows_empties = true
-	setup(&editor, SOURCE, 300)
+	setup(&editor, "first\n\n\n\nsecond\n\n", 300)
 	defer teardown(&editor)
 	step(&editor.page, 1e30)
 	expect_ok(t, &editor.page)

@@ -104,7 +104,9 @@ that open, Find, the outline, print, export, and VoiceOver.
 Edit Mode has its first form: a click puts a caret in the text, and the
 reader types, deletes the character before the caret, pastes, and
 saves. Return starts a new paragraph, a new item in a list, or a new
-line in code, and the caret is in the new line at once. The arrow keys move the caret
+line in code, and the caret is in the new line at once. A line of the
+source with nothing in it shows as an empty line of the page (each but
+the last one before a block), in Read mode and in Edit Mode. The arrow keys move the caret
 (with Option by a word, with Command to the ends of a line and of the
 document), and with Shift they select. It does not have a selection
 that typing takes the place of, undo, the formatting bar, images that

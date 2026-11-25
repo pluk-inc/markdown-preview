@@ -73,11 +73,6 @@ static void scroll_pass(void *ctx, const char *name, double end) {
 // caret gets from one end of the document to the other. Returns what is
 // wrong, or NULL.
 static const char *caret_walk(void *ctx, long length) {
-    // As an editor has it: with a line for each empty paragraph.
-    mdcore_set_editing(ctx, true);
-    @autoreleasepool {
-        mdcore_draw(ctx, 0);
-    }
     if (!mdcore_caret_set(ctx, VIEW_WIDTH / 2, 40)) return "no caret at a click";
     mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false);
     if (mdcore_caret_move(ctx, MDCORE_MOVE_UP, false) || mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, false)) {

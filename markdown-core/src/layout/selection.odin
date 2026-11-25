@@ -420,7 +420,7 @@ caret_hit :: proc(l: ^Layout, x: f32, y: f64) -> (at: document.Address, upstream
 	if near >= 0 {
 		b := &l.doc.parts[p].blocks[near]
 		// The empty paragraphs of a block are at the bottom of its box.
-		if l.shows_empties && b.empties > 0 && near < blocks_done(part) {
+		if b.empties > 0 && near < blocks_done(part) {
 			each := empty_height(l)
 			if into := from_top - (part.boxes[near].bottom - f32(b.empties) * each); into >= 0 {
 				n := clamp(int(into / each) + 1, 1, int(b.empties))
@@ -511,13 +511,9 @@ caret_place :: proc(l: ^Layout, at: document.Address, upstream := false) -> (x, 
 	box := part.boxes[slot]
 	if n := document.empty_of(l.doc, at); n > 0 {
 		// An empty paragraph: its line at the bottom of the box, where
-		// a paragraph of the page starts. With no such lines (a reader),
-		// at the bottom of the block.
+		// a paragraph of the page starts.
 		height = math.round(l.m.body * l.m.line_height)
-		top = box.bottom - height
-		if l.shows_empties {
-			top -= f32(int(b.empties) - n) * empty_height(l)
-		}
+		top = box.bottom - height - f32(int(b.empties) - n) * empty_height(l)
 		return l.column_x, top, height, p, true
 	}
 	found := caret_line(part, box, b, src, at.byte, upstream)
