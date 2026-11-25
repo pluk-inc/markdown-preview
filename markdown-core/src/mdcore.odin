@@ -563,11 +563,7 @@ reveal_update :: proc(ctx: ^Ctx) -> (changed: bool) {
 		for at := from; at < to && only_marks; at += 1 {
 			only_marks = false
 			for pair in ctx.caret_pairs {
-<<<<<<< HEAD
-				if (at >= pair.open && at < pair.open_end) || (pair.close >= 0 && at >= pair.close && at < pair.close_end) {
-=======
 				if in_mark(pair, at, at + 1) {
->>>>>>> feature/native-marks-at-caret
 					only_marks = true
 					break
 				}
