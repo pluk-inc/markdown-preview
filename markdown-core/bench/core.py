@@ -63,7 +63,7 @@ def build() -> Path:
 def caret_document(path: Path) -> Path:
     """A document with the places that are hard for a caret."""
     text = "# \n\na\n\n| x | y |\n| - | - |\n" + "|  |  |\n" * 40 + "\nmiddle\n\n"
-    text += "#\n\n" * 70 + "-\n" * 70 + "\n" + "# \n\n" * 6
+    text += "#\n\n" * 70 + "-\n" * 70 + "\n" + "# \n\n" * 6 + "---\n\n" * 500 + "after the rules\n\n"
     text += "日本語の文章がここにあります。" * 6 + "\n\n"
     text += "```\nab   \n\n\tcd\n```\n\n> a &amp; **b** \\* `c`  \n> [d](https://example.com) e\u0301 👨‍👩‍👧‍👦\n\n---\n\nz\n\n- \n"
     path.write_text(text, encoding="utf-8")

@@ -631,13 +631,29 @@ mdcore_caret_move :: proc "c" (handle: rawptr, move: Move, extend: bool) -> bool
 			}
 		}
 		goal = ctx.caret_goal.? or_else x
-		reach := f64(ctx.height)
-		if move in MOVES_VERTICAL && !layout.laid_out(&ctx.page, y - reach, y + reach) && layout.lay_out(&ctx.page, y - reach, y + reach, y) {
-			layout_changed(ctx)
-		}
 	}
 	keep_goal := move in MOVES_VERTICAL
-	next, next_upstream, found := move_from(ctx, at, upstream, move, goal)
+	next: document.Address
+	next_upstream, found: bool
+	if move in MOVES_VERTICAL {
+		// The lines around the caret get their records, farther each
+		// time, until one of them is the next line or the page ends
+		// there: blocks with no text (many rules) can be between the
+		// caret and the next line.
+		for reach := f64(ctx.height);; reach *= 4 {
+			_, y, _, _ := layout.caret_y(&ctx.page, at, upstream)
+			if !layout.laid_out(&ctx.page, y - reach, y + reach) && layout.lay_out(&ctx.page, y - reach, y + reach, y) {
+				layout_changed(ctx)
+				_, y, _, _ = layout.caret_y(&ctx.page, at, upstream)
+			}
+			next, next_upstream, found = move_from(ctx, at, upstream, move, goal)
+			if found || (move == .Up ? y - reach <= ctx.page.origin : y + reach >= ctx.page.origin + ctx.page.content_height) {
+				break
+			}
+		}
+	} else {
+		next, next_upstream, found = move_from(ctx, at, upstream, move, goal)
+	}
 	if !found && move in MOVES_VERTICAL {
 		// No line above the first line and none below the last one: to
 		// that end of the document.
