@@ -528,6 +528,11 @@ Pair :: struct {
 	// Markdown reads the marks as marks only with no space on their
 	// inner side: bold, italic, and struck text.
 	tight:            bool,
+	// The offsets of the source whose marks show these two marks as
+	// text (`Document.reveal`): the range of the element, as the parser
+	// gives it with each of the two marks. For "***b***" the marks of
+	// the two styles are one mark of the parser with one such range.
+	from, to:         int,
 }
 
 @(private)
@@ -572,20 +577,40 @@ note_mark :: proc(p: ^Parser, type: Md_Span, opens: bool, autolink := false) {
 		end = start
 	}
 	if shows && end > start && reveal >= p.element[0] && reveal <= p.element[1] && !p.in_html && text_open(p) {
-		p.marking = true
-		append_text(p, string(p.bytes[start:end]), start, end - start)
-		p.marking = false
-		p.doc.reveal = reveal
+		// Of the mark of code only the backticks: the parser gives the
+		// space beside them with the mark, and a line break with the
+		// mark of a quote after it when the code goes on in a next line.
+		from, to := start, end
+		if type == .Code {
+			if opens {
+				to = from
+				for to < end && p.bytes[to] == '`' {
+					to += 1
+				}
+			} else {
+				from = to
+				for from > start && p.bytes[from - 1] == '`' {
+					from -= 1
+				}
+			}
+		}
+		if to > from {
+			p.marking = true
+			append_text(p, string(p.bytes[from:to]), from, to - from)
+			p.marking = false
+			p.doc.reveal = reveal
+		}
 	}
 	if !noted {
 		return
 	}
 	if opens {
 		append(&p.pairs_open, len(p.pairs))
-		append(p.pairs, Pair{start, end, -1, -1, type == .Em || type == .Strong || type == .Del})
+		append(p.pairs, Pair{start, end, -1, -1, type == .Em || type == .Strong || type == .Del, p.element[0], p.element[1]})
 	} else if len(p.pairs_open) > 0 {
 		pair := &p.pairs[pop(&p.pairs_open)]
 		pair.close, pair.close_end = start, end
+		pair.from, pair.to = min(pair.from, p.element[0]), max(pair.to, p.element[1])
 	}
 }
 

@@ -481,7 +481,7 @@ commit_held :: proc(ctx: ^Ctx, pending: ^document.Pending) {
 // or at one of its ends: its marks show for a caret there.
 @(private)
 pair_has :: proc(pair: document.Pair, at: int) -> bool {
-	return pair.close >= 0 && pair.open_end > pair.open && at >= pair.open && at <= pair.close_end
+	return pair.close >= 0 && pair.open_end > pair.open && at >= pair.from && at <= pair.to
 }
 
 // Makes the text of a block again with the marks of an offset as text,
@@ -503,6 +503,17 @@ reveal_block :: proc(ctx: ^Ctx, block: int, reveal: Maybe(int)) {
 	}
 	if ctx.layout_valid {
 		layout.apply_change(&ctx.page, change)
+	}
+	// The place of the reader is at the text that it was at: marks that
+	// came before it in its block make its byte another one.
+	if ctx.place.known {
+		same: bool
+		ctx.place.place.at, same = document.moved(change, ctx.place.place.at)
+		if !same {
+			ctx.place.place.fraction = 0
+		}
+	}
+	if ctx.layout_valid {
 		layout.restore_place(&ctx.page, ctx.place)
 		layout_changed(ctx)
 	}
@@ -532,6 +543,7 @@ reveal_update :: proc(ctx: ^Ctx) -> (changed: bool) {
 	// A selection of only bytes of marks that show (Shift and a step
 	// over a "*") is a selection of text that is there only while the
 	// marks show: they stay, as with nothing selected.
+	hides := selected
 	if selected && ctx.caret >= 0 && ctx.doc.reveal != nil {
 		only_marks := true
 		for at := from; at < to && only_marks; at += 1 {
@@ -543,11 +555,11 @@ reveal_update :: proc(ctx: ^Ctx) -> (changed: bool) {
 				}
 			}
 		}
-		selected = !only_marks
+		hides = !only_marks
 	}
 	want: Maybe(int)
 	count := 0
-	if ctx.caret >= 0 && !ctx.unfocused && !selected {
+	if ctx.caret >= 0 && !ctx.unfocused && !hides {
 		for pair in ctx.caret_pairs {
 			count += int(pair_has(pair, ctx.caret))
 		}
@@ -585,10 +597,16 @@ reveal_update :: proc(ctx: ^Ctx) -> (changed: bool) {
 	// The addresses of the offsets, in the text that the blocks have now.
 	if ctx.caret >= 0 {
 		ctx.caret_at = document.address_for(&ctx.doc, ctx.caret_places[:], ctx.caret_at.block, ctx.caret)
-		// With no marks in its block, the caret is at no byte of a mark
+		// With no marks in its block, the caret is at no byte in a mark
 		// that it was in: at the place where text goes for its address.
+		// At an end of a mark it stays: text that is typed after "**"
+		// is after it when the marks do not show too.
 		if count == 0 {
-			if offset, placed := document.place_of(&ctx.doc, ctx.caret_places[:], ctx.caret_at); placed {
+			in_mark := false
+			for pair in ctx.caret_pairs {
+				in_mark ||= (ctx.caret > pair.open && ctx.caret < pair.open_end) || (pair.close >= 0 && ctx.caret > pair.close && ctx.caret < pair.close_end)
+			}
+			if offset, placed := document.place_of(&ctx.doc, ctx.caret_places[:], ctx.caret_at); placed && in_mark {
 				ctx.caret = offset
 			}
 		}
@@ -994,6 +1012,8 @@ mdcore_caret_set :: proc "c" (handle: rawptr, x, y: f64) -> bool {
 		if ctx.caret >= 0 {
 			ctx.selection = {anchor = ctx.caret_at, focus = ctx.caret_at, active = true}
 			show_selection(ctx)
+			ctx.select_from = nil
+			reveal_update(ctx)
 		}
 		return false
 	}

@@ -125,5 +125,7 @@ table is selected, as with Select All). The marks of
 bold, italic, and struck text, of code, and of a link (with its
 target) show in gray while the caret is in their text or at an end of
 it, so the caret has a place on each side of a mark and a delete can
-take a mark. The marks of a line (the "#" of a heading, the mark of a
+take a mark. They do not show while text is selected (but a selection
+of only characters of those marks keeps them) and while the window
+does not have the keys. The marks of a line (the "#" of a heading, the mark of a
 list item or a quote, a code fence) do not show yet.

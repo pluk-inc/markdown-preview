@@ -110,7 +110,10 @@ long mdcore_caret_offset(void *ctx);
 // They are text for the caret then: it has a place before a mark and
 // after it, and a delete takes one character of a mark. Each other
 // mark does not show, and none shows with text selected, with no
-// caret, and while the view does not take the keys.
+// caret, and while the view does not take the keys. A selection of
+// only characters of marks that show (Shift and a step over a "*") is
+// no text selected for this: the marks stay, and a delete takes the
+// selected mark.
 //
 // Says if the view takes the keys (true at the start).
 void mdcore_set_focused(void *ctx, bool focused);
