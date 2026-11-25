@@ -339,6 +339,10 @@ typedef enum {
 mdcore_pointer mdcore_pointer_shape(void *ctx, double x, double y);
 
 // Selection. phase: 0 = mouse down, 1 = drag. x, y are in document space.
+// The pointer is in a drag when it is some points away from where the
+// button went down: before that, a call with phase 1 does nothing, so a
+// click selects nothing (the text under the pointer can be another one
+// after a click that made marks show).
 // A view with a caret has it at the end of the selection that a drag
 // moves, where the source has room for text there.
 void mdcore_mouse(void *ctx, double x, double y, int phase);

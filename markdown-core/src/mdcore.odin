@@ -88,6 +88,13 @@ Ctx :: struct {
 	// text with no marks, and the caret comes back to the one that it
 	// had when the selection is empty again.
 	select_from:     Maybe(int),
+	// Where the button of the pointer went down, and if the pointer
+	// went away from there since: a click is no drag. The text under
+	// the pointer can be another one after the click (marks that show
+	// at the caret move the text of its line), so the button that comes
+	// up at the same point selects nothing.
+	mouse_down:      [2]f64,
+	mouse_dragged:   bool,
 	// The bytes of the source that the last delete took out
 	// (`mdcore_deleted_text`).
 	gone:            [dynamic]u8,
@@ -754,6 +761,10 @@ set_caret :: proc(ctx: ^Ctx, stop: Stop, upstream: bool, anchor: document.Addres
 	ctx.selection = {anchor = anchor, focus = stop.at, active = true}
 	caret_placed(ctx)
 }
+
+// How far the pointer goes from the point of a click, in points, before
+// it is a drag that selects.
+MOUSE_SLOP :: 3
 
 // The moves of `mdcore_caret_move`, with the numbers of the header.
 Move :: enum c.int {
@@ -1676,6 +1687,14 @@ mdcore_mouse :: proc "c" (handle: rawptr, x, y: f64, phase: c.int) {
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
 	hold(ctx)
+	if phase == 0 {
+		ctx.mouse_down, ctx.mouse_dragged = {x, y}, false
+	} else if !ctx.mouse_dragged {
+		if abs(x - ctx.mouse_down.x) + abs(y - ctx.mouse_down.y) < MOUSE_SLOP {
+			return
+		}
+		ctx.mouse_dragged = true
+	}
 	if phase != 0 && ctx.caret >= 0 {
 		// The caret of an editor is the end of the selection that
 		// moves: the next key goes on from there. Its place is the one
