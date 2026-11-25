@@ -88,6 +88,9 @@ Ctx :: struct {
 	// text with no marks, and the caret comes back to the one that it
 	// had when the selection is empty again.
 	select_from:     Maybe(int),
+	// The bytes of the source that the last delete took out
+	// (`mdcore_deleted_text`).
+	gone:            [dynamic]u8,
 	caret_hidden:    bool, // the off half of a blink; the caret is there
 	// A byte where a line of a paragraph ends and the next one starts
 	// is two places on the page. The caret is at the end of the first
@@ -278,6 +281,7 @@ mdcore_destroy :: proc "c" (handle: rawptr) {
 	delete(ctx.source_out)
 	delete(ctx.caret_places)
 	delete(ctx.caret_pairs)
+	delete(ctx.gone)
 	runtime.default_temp_allocator_destroy(&ctx.scratch)
 	free(ctx)
 }
@@ -1109,8 +1113,23 @@ selection_offsets :: proc(ctx: ^Ctx) -> (from, to: int, ok: bool) {
 @(private)
 replace_between :: proc(ctx: ^Ctx, from, to: int, text: string) -> bool {
 	// The map of the block of the caret is there already.
-	held := document.Held{ctx.caret_at.block, ctx.caret_places[:], ctx.caret_pairs[:], true}
-	edit, caret := document.replace_range(&ctx.doc, from, to, text, held) or_return
+	// The marks that show at the caret are text: one that is selected
+	// goes as text does, and is not kept for the text of its style. So
+	// the edit does not know the elements of those marks.
+	pairs := ctx.caret_pairs[:]
+	hidden: [dynamic]document.Pair
+	defer delete(hidden)
+	if shown, shows := ctx.doc.reveal.?; shows {
+		for pair in ctx.caret_pairs {
+			if !pair_has(pair, shown) {
+				append(&hidden, pair)
+			}
+		}
+		pairs = hidden[:]
+	}
+	held := document.Held{ctx.caret_at.block, ctx.caret_places[:], pairs, true}
+	clear(&ctx.gone)
+	edit, caret := document.replace_range(&ctx.doc, from, to, text, held, gone = &ctx.gone) or_return
 	defer delete(edit.text)
 	change_source_held(ctx, edit.text, [2]int{edit.start, edit.end}, caret)
 	return true
@@ -1173,7 +1192,7 @@ mdcore_insert_break :: proc "c" (handle: rawptr) {
 		return
 	}
 	// Return does nothing in a table, so nothing goes there.
-	if ctx.doc.count > 0 && document.block_at(&ctx.doc, ctx.caret_at.block).kind == .Table {
+	if ctx.doc.count > 0 && ctx.caret_at.empty == 0 && document.block_at(&ctx.doc, ctx.caret_at.block).kind == .Table {
 		return
 	}
 	// The text that is selected goes first: the line break is at the
@@ -1207,6 +1226,8 @@ delete_back :: proc(ctx: ^Ctx) -> bool {
 	// An empty paragraph or a list item with no text goes, and the
 	// caret is at the end of what is before it.
 	if start, end, caret, ok := document.delete_back(&ctx.doc, ctx.caret_places[:], ctx.caret_at); ok {
+		clear(&ctx.gone)
+		append(&ctx.gone, ..ctx.doc.source[start:end])
 		change_source_held(ctx, "", [2]int{start, end}, caret)
 		return true
 	}
@@ -1283,6 +1304,14 @@ mdcore_delete :: proc "c" (handle: rawptr, move: Move) -> bool {
 		return delete_back(ctx)
 	}
 	return delete_to(ctx, move)
+}
+
+// See the header.
+@(export)
+mdcore_deleted_text :: proc "c" (handle: rawptr, length: ^c.long) -> [^]u8 {
+	ctx := cast(^Ctx)handle
+	length^ = c.long(len(ctx.gone))
+	return raw_data(ctx.gone)
 }
 
 // Takes out the lines of the source that the caret or the selection is

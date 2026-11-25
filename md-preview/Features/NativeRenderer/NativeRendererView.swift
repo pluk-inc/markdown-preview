@@ -1185,13 +1185,6 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         caretDidMove()
     }
 
-    /// The source of the document as the core has it now.
-    private var sourceBytes: [UInt8] {
-        var length = 0
-        guard let bytes = mdcore_source(ctx, &length), length > 0 else { return [] }
-        return Array(UnsafeRawBufferPointer(start: bytes, count: length))
-    }
-
     /// The text that is selected.
     private var selectedText: String? {
         var length = 0
@@ -1203,20 +1196,14 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
     /// to where a move goes. `keepsText`: for Control-Y.
     private func delete(to move: mdcore_move, keepsText: Bool = false) {
         markedText = nil
-        // For Control-Y: the bytes of the source that go, which are what
-        // is between the bytes that the source has before and after.
-        let before = keepsText ? sourceBytes : []
         if mdcore_delete(ctx, move) {
             if keepsText {
-                let after = sourceBytes
-                var head = 0
-                while head < min(before.count, after.count), before[head] == after[head] { head += 1 }
-                var tail = 0
-                while tail < min(before.count, after.count) - head,
-                      before[before.count - 1 - tail] == after[after.count - 1 - tail] { tail += 1 }
-                // Only what went is kept: a delete that took nothing
-                // leaves the text of the one before.
-                Self.killed = String(decoding: before[head..<(before.count - tail)], as: UTF8.self)
+                // For Control-Y: the bytes of the source that went, from
+                // the core, which knows the marks that stayed.
+                var length = 0
+                if let bytes = mdcore_deleted_text(ctx, &length), length > 0 {
+                    Self.killed = String(decoding: UnsafeRawBufferPointer(start: bytes, count: length), as: UTF8.self)
+                }
             }
             didEdit()
         } else {

@@ -35,7 +35,11 @@ import "core:unicode/utf8"
 // `caret`: the offset of the place of the range in the source that the
 // edit gives, after the new text. Memory of `allocator`, the caller's
 // to delete.
-range_edit :: proc(pairs: []Pair, source: []u8, from, to: int, text: string, allocator := context.allocator) -> (edit: Edit, caret: int) {
+//
+// `gone`: gets the bytes of the source that go and do not come back in
+// the edit, in their order: the range with no mark and no space that
+// stays. What a host puts in again to have the text of before.
+range_edit :: proc(pairs: []Pair, source: []u8, from, to: int, text: string, allocator := context.allocator, gone: ^[dynamic]u8 = nil) -> (edit: Edit, caret: int) {
 	start, end := from, to
 	// The styles that have all of their text in the range, from the
 	// inside out: "**_text_**" has two.
@@ -155,27 +159,35 @@ range_edit :: proc(pairs: []Pair, source: []u8, from, to: int, text: string, all
 			end = open.end
 		}
 	}
-	// Spaces at the end of the new text go after the marks that end
-	// right after it, as the spaces before the range do.
-	inner := text
-	if len(closes) > 0 && closes[0].tight {
-		for len(inner) > 0 && (inner[len(inner) - 1] == ' ' || inner[len(inner) - 1] == '\t') {
-			inner = inner[:len(inner) - 1]
-		}
-	}
 	out := make([dynamic]u8, 0, len(text) + before + after + 8, allocator)
-	append(&out, inner)
+	append(&out, text)
 	for mark in closes {
 		append(&out, ..source[mark.start:mark.end])
 	}
-	append(&out, text[len(inner):])
 	append(&out, ..source[start - before:start])
-	// The caret is after the new text, in the styles that it is in, or
-	// with none at the place where the two parts of the text meet.
-	caret = head - before + (len(text) > len(inner) || len(text) == 0 ? len(out) : len(text))
+	// The caret is after the new text, before the marks that end a style
+	// there: text that is typed next has that style, as the text that
+	// went had, and the bytes that went give the text of before when
+	// they are put in again. After spaces that moved out of a style,
+	// which are before the place.
+	caret = head - before + (before > 0 ? len(out) : len(text))
 	append(&out, ..source[end:end + after])
 	for mark in opens {
 		append(&out, ..source[mark.start:mark.end])
+	}
+	if gone != nil {
+		for at in head - before ..< end + after {
+			stays := (at >= start - before && at < start) || at >= end
+			for mark in closes {
+				stays ||= at >= mark.start && at < mark.end
+			}
+			for mark in opens {
+				stays ||= at >= mark.start && at < mark.end
+			}
+			if !stays {
+				append(gone, source[at])
+			}
+		}
 	}
 	return {head - before, end + after, string(out[:])}, caret
 }
@@ -262,7 +274,9 @@ Held :: struct {
 // is no text of a paragraph), but when the range has all of the text of
 // its blocks, which then go with their lines; and one from a cell of a
 // table to another one.
-replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{}, allocator := context.allocator) -> (edit: Edit, caret: int, ok: bool) {
+//
+// `gone`: gets the bytes of the source that go (`range_edit`).
+replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{}, allocator := context.allocator, gone: ^[dynamic]u8 = nil) -> (edit: Edit, caret: int, ok: bool) {
 	if doc.count == 0 || from < 0 || to < from || to > len(doc.source) {
 		return
 	}
@@ -305,6 +319,9 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 				append(&out, nl)
 				append(&out, nl)
 			}
+			if gone != nil {
+				append(gone, ..doc.source[line:end])
+			}
 			edit, caret = keep_defs(doc, {line, end, string(out[:])}, line + len(text), line, allocator)
 			return edit, caret, true
 		}
@@ -328,6 +345,9 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 			append(&out, nl)
 			append(&out, nl)
 		}
+		if gone != nil {
+			append(gone, ..doc.source[line:end])
+		}
 		edit, caret = keep_defs(doc, {line, end, string(out[:])}, line + len(text), line, allocator)
 		return edit, caret, true
 	}
@@ -337,9 +357,9 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 	if empty_at(doc, first, from) > 0 && (len(text) > 0 || first != last) {
 		led := empty_text(doc, text)
 		defer delete(led)
-		edit, caret = range_edit(pairs, doc.source, from, to, led, allocator)
+		edit, caret = range_edit(pairs, doc.source, from, to, led, allocator, gone)
 	} else {
-		edit, caret = range_edit(pairs, doc.source, from, to, text, allocator)
+		edit, caret = range_edit(pairs, doc.source, from, to, text, allocator, gone)
 	}
 	// All of the text of a paragraph went, and nothing came: its line
 	// stays, as an empty line. The paragraph had an empty line before
@@ -382,6 +402,12 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 					append(&out, nl)
 				}
 				delete(edit.text, allocator)
+				// The line under the heading stays, so it did not go.
+				if gone != nil && under >= edit.start {
+					clear(gone)
+					append(gone, ..source[edit.start:under])
+					append(gone, ..source[lines:edit.end])
+				}
 				edit = {edit.start, rest, string(out[:])}
 			}
 		}

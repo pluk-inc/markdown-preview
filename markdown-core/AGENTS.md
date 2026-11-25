@@ -901,11 +901,14 @@ The order of the next steps, from the review of the second step:
   block that the caret came from is thrown away one step before);
   a definition of a link in a quote that has more than one line
   comes out with the mark of the quote in it when it is kept; spaces
-  at the start of new text right after a mark that starts a style
-  stay inside of it; Control-K
+  at the start or the end of new text right beside a mark of a style
+  stay inside of it ("**bX **" is no bold text), because the new text
+  must stay one piece with the caret right after it for the text of an
+  input method; Control-K
   keeps one text and does not add to it for some presses in a row.
   The text that Control-K takes is the bytes of the source that went,
-  so it comes back with its marks.
+  which the core says (`mdcore_deleted_text`): with the marks that
+  went with their text, and no mark that stayed.
 - Cut, Paste, and Select All are menu commands, which a test on the
   hidden display cannot send (a menu needs the app in front). Each is
   two calls that the keys check (a copy and a delete, an insert).
@@ -927,16 +930,23 @@ The order of the next steps, from the review of the second step:
   the offset of the caret after it, so a typed character in bold text
   is one parse. The caret and the ends of the selection are offsets of
   the source through such a change, and get their addresses again.
+  One block gets or loses its marks by a parse of its lines from the
+  same source (`document.reveal_block`), not by an edit of nothing:
+  no copy of the source, no block beside it, and the links that the
+  text had. Marks that show are text for a delete too: one that is
+  selected goes (`replace_between` gives the edit the elements with no
+  marks in the text only). Shift with a step over a mark selects the
+  mark and the marks stay; and the caret comes back to the offset
+  where a selection started when it is empty again (`select_from`),
+  because the text with no marks has one place for some offsets.
 - Not done for the marks: the marks of a line (the "#" of a heading,
   the mark of a list item and of a quote, a code fence), a backslash
   before a character, an entity, and a table cell that shows its
   source (Decisions has the rules); the "<" and ">" of an address do
   not show; a move to an end of a line that makes marks show goes on
-  one time to the end of the new text, so End is two changes of the
-  text; a step of the caret into an element parses its block two
-  times more (one for the text with the marks, one for the map); the
-  delete of one character at the caret keeps the marks as they are for
-  the selection that it makes for a moment (`reveal_frozen`).
+  one time to the end of the new text, so End is two moves there;
+  text between two marks that show goes with a delete and the marks
+  stay ("****"), as in a source.
 - Next for the editor, in the order that a reader misses them: the
   marks of a line; undo.
 - Done: where the lines of a block end comes from the parser
@@ -1357,7 +1367,15 @@ export.
   edits) is as it was, and no second set of coordinates came in. The
   inline marks are this step; the marks of a line are the next one.
   The walk of the caret in the benchmark script found that End went
-  to the place before the marks that it made show. Checked on the
+  to the place before the marks that it made show, and later that a
+  mark that was selected did not go with a delete. A reviewer with
+  the task to break it compared the document with a parse of all of
+  the source after each key of random runs, with 33 hard sources at
+  each offset: no difference, and one fault of the caret (Shift and a
+  step over a mark left the caret in a mark that did not show), which
+  the walk now has a check for. The first form made a block again by
+  an edit of nothing, which copied the source and added to the list of
+  links each time; the efficiency review found that. Checked on the
   hidden display with screenshots: the marks of italic text, bold
   text, and a link with its target in gray at the caret, and none
   with text selected.

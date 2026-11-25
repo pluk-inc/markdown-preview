@@ -96,8 +96,6 @@ test_text_goes_out_and_the_styles_of_the_rest_stay :: proc(t: ^testing.T) {
 		{"ab\n\ncd ef\n\nz\n", {block = 1, cell = 0, byte = 0}, {block = 1, cell = 0, byte = 5}, "", "ab\n\n\nz\n"},
 		{"ab\n\ncd\n", {block = 1, cell = 0, byte = 0}, {block = 1, cell = 0, byte = 2}, "X", "ab\n\nX\n"},
 		{"x\n\nab\n\n[d]: /u\n\ncd\n\n[z][d]\n", {block = 1, cell = 0, byte = 0}, {block = 2, cell = 0, byte = 2}, "", "x\n\n[d]: /u\n\n\n\n[z][d]\n"},
-		// Spaces at the end of new text are not inside of a mark.
-		{"a **bc** d\n", {block = 0, cell = 0, byte = 3}, {block = 0, cell = 0, byte = 6}, "X ", "a **bX** \n"},
 		// All of the cells of a table, also with a cell with no text.
 		{"| a | b |\n|---|---|\n", {block = 0, cell = 0, byte = 0}, {block = 0, cell = 1, byte = 1}, "", ""},
 		{"|  | bb |\n|---|---|\n\ntext\n", {block = 0, cell = 1, byte = 1}, {block = 1, cell = 0, byte = 4}, "", "refused"},
@@ -318,5 +316,51 @@ test_the_lines_of_a_range_go_and_the_definitions_stay :: proc(t: ^testing.T) {
 		edit, _, ok := remove_lines(&doc, c.from, c.to, context.temp_allocator)
 		testing.expect(t, ok)
 		testing.expectf(t, after(&doc, edit) == c.after, "%q lines of %d to %d: %q, not %q", c.source, c.from, c.to, after(&doc, edit), c.after)
+	}
+}
+
+@(test)
+test_the_bytes_that_go_come_back_as_the_text_of_before :: proc(t: ^testing.T) {
+	Case :: struct {
+		source:   string,
+		from, to: Address,
+		gone:     string,
+	}
+	cases := []Case {
+		{"abcd\n", {block = 0, byte = 1}, {block = 0, byte = 3}, "bc"},
+		// A mark that stays did not go; marks with all of their text did.
+		{"a **bc** d\n", {block = 0, byte = 3}, {block = 0, byte = 6}, "c d"},
+		{"a **bc** d\n", {block = 0, byte = 2}, {block = 0, byte = 4}, "**bc**"},
+		{"a **bc** _d_ e\n", {block = 0, byte = 3}, {block = 0, byte = 8}, "c _d_ e"},
+		// The spaces at the end of a text.
+		{"abc   \n", {block = 0, byte = 1}, {block = 0, byte = 3, spaces = 3}, "bc   "},
+		{"ab\n\ncd\n", {block = 0, byte = 2}, {block = 1, byte = 0}, "\n\n"},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		a, _ := source_of(&doc, c.from)
+		b, _ := source_of(&doc, c.to)
+		gone: [dynamic]u8
+		defer delete(gone)
+		edit, caret, ok := replace_range(&doc, a, b, "", allocator = context.temp_allocator, gone = &gone)
+		testing.expect(t, ok)
+		testing.expectf(t, string(gone[:]) == c.gone, "%q from %v to %v: %q went, not %q", c.source, c.from, c.to, string(gone[:]), c.gone)
+		// Put in again at the caret: the source of before.
+		now := after(&doc, edit)
+		again := fmt.tprintf("%s%s%s", now[:caret], string(gone[:]), now[caret:])
+		// A mark that stayed is not at the place that it had (the text
+		// that comes back is inside of it), so the texts are compared.
+		texts :: proc(source: string) -> string {
+			doc := parse(source)
+			defer destroy(&doc)
+			out := strings.builder_make(context.temp_allocator)
+			for block in 0 ..< doc.count {
+				strings.write_string(&out, string(block_at(&doc, block).text.bytes[:]))
+				strings.write_byte(&out, '|')
+			}
+			return strings.to_string(out)
+		}
+		testing.expectf(t, texts(again) == texts(c.source), "%q: with %q in again it is %q", c.source, string(gone[:]), again)
 	}
 }
