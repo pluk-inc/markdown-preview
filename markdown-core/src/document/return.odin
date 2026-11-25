@@ -150,8 +150,9 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address, allocator := co
 
 // What a delete takes out for a caret at an address where it is more
 // than the character before the caret, or another thing: an empty
-// paragraph, a list item with no text, or the only character of a
-// paragraph. The caret is then at `caret`. False at each other address.
+// paragraph, or a list item with no text. The caret is then at `caret`.
+// False at each other address. (The last text of a paragraph that goes:
+// `replace_range`.)
 delete_back :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end, caret: int, ok: bool) {
 	if n := empty_of(doc, at); n > 0 {
 		start, end = empty_range(doc, at.block, n)
@@ -167,23 +168,7 @@ delete_back :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end
 	if start, end, ok = empty_item(doc, at.block); ok {
 		return start, end, start, true
 	}
-	// The only character of a paragraph: its line stays, as an empty
-	// line. The paragraph had an empty line before it, which showed as
-	// no line; with the character out, that one shows, so one of the
-	// two goes with the character.
-	b := block_at(doc, at.block)
-	if at.block == 0 || b.kind != .Paragraph || b.list_depth > 0 || b.quote_depth > 0 || at.byte != len(b.text.bytes) {
-		return
-	}
-	from, to := char_before(doc, places, at) or_return
-	line := block_start(doc, at.block)
-	line_end, _ := line_at(doc.source, line)
-	before := break_before(doc.source, line)
-	above := line_start(doc.source, before)
-	if from != line || to != line_end || before == line || !blank(doc.source[above:before]) || block_at(doc, at.block - 1).kind == .Rule {
-		return
-	}
-	return above, to, above, true
+	return
 }
 
 // True for a block that is the first and only block of a list item

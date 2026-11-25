@@ -309,6 +309,20 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 	} else {
 		edit, caret = range_edit(pairs, doc.source, from, to, text, allocator)
 	}
+	// All of the text of a paragraph went, and nothing came: its line
+	// stays, as an empty line. The paragraph had an empty line before
+	// it, which showed as no line; with the text out, that one shows,
+	// so one of the two goes with the text, and the caret is in the
+	// line where the paragraph was.
+	if len(edit.text) == 0 && first > 0 && a.kind == .Paragraph && a.list_depth == 0 && a.quote_depth == 0 && edit.start == line {
+		source := doc.source
+		line_end, _ := line_at(source, edit.end)
+		before := break_before(source, line)
+		above := line_start(source, before)
+		if line_end == edit.end && before < line && blank(source[above:before]) && block_at(doc, first - 1).kind != .Rule {
+			edit.start, caret = above, above
+		}
+	}
 	// The line under a heading is a line of the heading after its text:
 	// it goes after the text of the last block, so the first block is
 	// the heading that it was, with that text.
@@ -320,8 +334,10 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 			rest := min(block_start(doc, last) + int(b.lines), len(source))
 			// Not for a heading that has no text then: the line under
 			// nothing is text itself.
-			stays := blank(source[line_start(source, edit.start):edit.start]) && len(edit.text) == 0 && blank(bytes.trim_right(source[edit.end:rest], {'\n', '\r'}))
-			if under < lines && lines <= edit.end && rest >= edit.end && !stays {
+			// And not for a range that ends after the lines of the last
+			// block (in its empty paragraphs): no text of it stays.
+			stays := rest < edit.end || (blank(source[line_start(source, edit.start):edit.start]) && len(edit.text) == 0 && blank(bytes.trim_right(source[edit.end:rest], {'\n', '\r'})))
+			if under < lines && lines <= edit.end && !stays {
 				nl := line_ending(source)
 				out := make([dynamic]u8, 0, len(edit.text) + rest - edit.end + lines - under + 4, allocator)
 				append(&out, edit.text)

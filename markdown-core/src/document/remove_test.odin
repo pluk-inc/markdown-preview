@@ -89,6 +89,12 @@ test_text_goes_out_and_the_styles_of_the_rest_stay :: proc(t: ^testing.T) {
 		{"Head\n====\n\ntext\n", {block = 0, cell = 0, byte = 4}, {block = 1, cell = 0, byte = 0}, "", "Headtext\n====\n"},
 		{"Head\n====\n\ntext\n\nz\n", {block = 0, cell = 0, byte = 2}, {block = 1, cell = 0, byte = 2}, "", "Hext\n====\n\nz\n"},
 		{"Head\n====\n\ntext\n", {block = 0, cell = 0, byte = 0}, {block = 1, cell = 0, byte = 4}, "", "\n"},
+		{"Head\n====\n\ntext\n\n\n\nz\n", {block = 0, cell = 0, byte = 0}, {block = 1, byte = 4, empty = 2}, "", "\n\nz\n"},
+		// All of the text of a paragraph: its line is an empty line,
+		// and the empty line before it goes, so no line more shows.
+		{"ab\n\ncd\n", {block = 1, cell = 0, byte = 0}, {block = 1, cell = 0, byte = 2}, "", "ab\n\n"},
+		{"ab\n\ncd ef\n\nz\n", {block = 1, cell = 0, byte = 0}, {block = 1, cell = 0, byte = 5}, "", "ab\n\n\nz\n"},
+		{"ab\n\ncd\n", {block = 1, cell = 0, byte = 0}, {block = 1, cell = 0, byte = 2}, "X", "ab\n\nX\n"},
 		// All of the text of a block: its marks stay, for text to come.
 		{"# ab\n", {block = 0, cell = 0, byte = 0}, {block = 0, cell = 0, byte = 2}, "", "# \n"},
 		{"- ab\n- cd\n", {block = 0, cell = 0, byte = 0}, {block = 0, cell = 0, byte = 2}, "", "- \n- cd\n"},
@@ -203,5 +209,63 @@ test_two_characters_change_places_as_wholes :: proc(t: ^testing.T) {
 		defer delete(places)
 		edit, _, ok := transpose(&doc, places[:], {block = 0, byte = c.byte}, context.temp_allocator)
 		testing.expectf(t, (ok ? after(&doc, edit) : "") == c.after, "%q at %d: %q, not %q", c.source, c.byte, ok ? after(&doc, edit) : "", c.after)
+	}
+}
+
+// Each pair of places of a document with each kind of block: the edit
+// is in the source, the caret is in the new source, and the new source
+// parses.
+@(test)
+test_each_range_of_a_document_has_an_edit_in_the_source :: proc(t: ^testing.T) {
+	sources := []string {
+		"Head\n====\n\ntext **b**\n\n\n- one\n- two\n\n  more\n\n> quote\n> line\n\n```\ncode\n```\n\n| a | b |\n|---|---|\n| c | d |\n\n[d]: https://e.com\n\nlast [z][d]\n\n\n",
+		"Sub\n---\n\n\n\n# Top\n\n1. a\n2. b\n\n---\n\nend",
+		"\n\nHead\r\n====\r\n\r\ntext\r\n\r\n\r\n",
+	}
+	for source in sources {
+		doc := parse(source)
+		defer destroy(&doc)
+		stops: [dynamic]int
+		defer delete(stops)
+		for block in 0 ..< doc.count {
+			b := block_at(&doc, block)
+			for text, cell in block_texts(b) {
+				for byte in 0 ..= len(text.bytes) {
+					if offset, ok := source_of(&doc, {block = block, cell = cell, byte = byte}); ok {
+						append(&stops, offset)
+					}
+				}
+			}
+			for n in 1 ..= int(b.empties) {
+				if at, has := empty_address(&doc, block, n); has {
+					if offset, ok := source_of(&doc, at); ok {
+						append(&stops, offset)
+					}
+				}
+			}
+		}
+		for from in stops {
+			for to in stops {
+				if to < from {
+					continue
+				}
+				for text in ([]string{"", "X"}) {
+					edit, caret, ok := replace_range(&doc, from, to, text, allocator = context.temp_allocator)
+					if !ok {
+						continue
+					}
+					inside := edit.start >= 0 && edit.start <= edit.end && edit.end <= len(doc.source)
+					testing.expectf(t, inside, "%q from %d to %d: the edit %d to %d is not in the source", source, from, to, edit.start, edit.end)
+					if !inside {
+						return
+					}
+					now := after(&doc, edit)
+					testing.expectf(t, caret >= 0 && caret <= len(now), "%q from %d to %d: the caret %d is not in %q", source, from, to, caret, now)
+					fresh := parse(now)
+					destroy(&fresh)
+				}
+			}
+		}
+		free_all(context.temp_allocator)
 	}
 }
