@@ -939,8 +939,15 @@ The order of the next steps, from the review of the second step:
   mark and the marks stay; and the caret comes back to the offset
   where a selection started when it is empty again (`select_from`),
   because the text with no marks has one place for some offsets.
-- Not done for the marks: the marks of a line (the "#" of a heading,
-  the mark of a list item and of a quote, a code fence), a backslash
+- Done: the "#" of a heading shows for a caret in its line, by the
+  same mechanism. The parser notes it when the first thing of the text
+  of the heading comes (`line_mark`), as a mark with no second mark
+  (`Pair.line`, `close` is -1), so the edit that takes a range out does
+  not keep it and does not take it for the text. The core needed one
+  line for it (`pair_has`).
+- Not done for the marks: the other marks of a line (the mark of a
+  list item and of a quote, a code fence, the line under a heading,
+  the "#"s at the end of a heading, a heading with no text), a backslash
   before a character, an entity, and a table cell that shows its
   source (Decisions has the rules); the "<" and ">" of an address do
   not show; a move to an end of a line that makes marks show goes on
@@ -948,7 +955,7 @@ The order of the next steps, from the review of the second step:
   text between two marks that show goes with a delete and the marks
   stay ("****"), as in a source.
 - Next for the editor, in the order that a reader misses them: the
-  marks of a line; undo.
+  marks of a list item, a quote, and a code fence; undo.
 - Done: where the lines of a block end comes from the parser
   (`block_offset` gives the end too, `Block.lines`), as its start does.
   Before, `empties.lines_end` and `fence_line` read the lines a second
