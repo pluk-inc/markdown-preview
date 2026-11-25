@@ -46,6 +46,10 @@ test_the_lines_that_return_makes_are_empty_paragraphs :: proc(t: ^testing.T) {
 		{"```\n\n```\n\n\nz\n", {1, 0}, {9}},
 		{"```\n```\n\n\nz\n", {1, 0}, {8}},
 		{"> ```\n>\n> ```\n\n\nz\n", {1, 0}, {14}},
+		// A fence that starts after the line of the mark of its quote
+		// or of its list item.
+		{">\n> ```\n> c\n> ```\n\n\nz\n", {1, 0}, {18}},
+		{"-\n  ```\n  c\n  ```\n\n\nz\n", {1, 0}, {18}},
 		// Code by its indent that shows the marks of a fence is no
 		// fence.
 		{"    ```\n    x\n\n\nz\n", {1, 0}, {14}},

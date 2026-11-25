@@ -108,9 +108,22 @@ lines_end :: proc(source: []u8, b: ^Block, start, next: int) -> (end: int, ok: b
 	if len(b.text.bytes) > 0 {
 		lines = bytes.count(b.text.bytes[:], {'\n'}) + 1
 	}
-	_, after := line_at(source, start)
 	fenced := b.fenced
-	end = fenced ? after : start
+	end = start
+	// The line that starts the fence: the first line of the block, or a
+	// later one when the block starts at the line of the mark of a
+	// quote or of a list item with nothing more in it.
+	for fenced {
+		if end >= next {
+			return next, false
+		}
+		text_end, after := line_at(source, end)
+		opens := fence_line(source[end:text_end])
+		end = after
+		if opens {
+			break
+		}
+	}
 	for _ in 0 ..< lines {
 		if end >= next {
 			return next, false
