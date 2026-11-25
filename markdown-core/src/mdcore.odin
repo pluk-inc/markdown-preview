@@ -1123,6 +1123,7 @@ caret_to_place :: proc(ctx: ^Ctx) {
 	}
 	if offset, placed := document.place_of(&ctx.doc, ctx.caret_places[:], ctx.caret_at); placed && offset != ctx.caret {
 		context.temp_allocator = ctx.temp
+		// A reader of the caret holds the lock of the state.
 		hold(ctx)
 		ctx.caret = offset
 		reveal_update(ctx)
@@ -1132,7 +1133,7 @@ caret_to_place :: proc(ctx: ^Ctx) {
 // Puts text in at the caret, or in the place of the text that is
 // selected. See the header.
 @(export)
-mdcore_insert :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
+mdcore_insert :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) -> bool {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
 	// From the look at the caret to the end of the change: no other
@@ -1140,12 +1141,13 @@ mdcore_insert :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
 	if ctx.caret < 0 || length <= 0 {
-		return
+		return false
 	}
-	if selected, _ := replace_selection(ctx, string(utf8[:length])); selected {
-		return
+	if selected, changed := replace_selection(ctx, string(utf8[:length])); selected {
+		return changed
 	}
 	typed(ctx, string(utf8[:length]), ctx.caret, ctx.caret)
+	return true
 }
 
 // Return at the caret. See the header.
@@ -1156,6 +1158,10 @@ mdcore_insert_break :: proc "c" (handle: rawptr) {
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
 	if ctx.caret < 0 {
+		return
+	}
+	// Return does nothing in a table, so nothing goes there.
+	if ctx.doc.count > 0 && document.block_at(&ctx.doc, ctx.caret_at.block).kind == .Table {
 		return
 	}
 	// The text that is selected goes first: the line break is at the
@@ -1284,11 +1290,9 @@ mdcore_delete_lines :: proc "c" (handle: rawptr) -> bool {
 	if !selected {
 		from, to = ctx.caret, ctx.caret
 	}
-	start, end := document.lines_range(ctx.doc.source, from, to)
-	if start == end {
-		return false
-	}
-	change_source_held(ctx, "", [2]int{start, end}, start)
+	edit, caret := document.remove_lines(&ctx.doc, from, to) or_return
+	defer delete(edit.text)
+	change_source_held(ctx, edit.text, [2]int{edit.start, edit.end}, caret)
 	caret_to_place(ctx)
 	return true
 }
@@ -1333,6 +1337,7 @@ mdcore_select_none :: proc "c" (handle: rawptr) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
+	// An edit reads the selection with this lock.
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
 	hold(ctx)

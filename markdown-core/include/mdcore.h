@@ -167,8 +167,9 @@ bool mdcore_caret_move(void *ctx, mdcore_move move, bool extend);
 // the source, and the caret is after the text. Text at the end of bold
 // text is bold: it goes where the character before the caret is. With
 // text selected, the new text comes in its place (see mdcore_delete for
-// what goes). Does nothing with no caret.
-void mdcore_insert(void *ctx, const char *utf8, long length);
+// what goes). Does nothing with no caret. False when nothing changed: no
+// caret, no text, or a selection that has no edit.
+bool mdcore_insert(void *ctx, const char *utf8, long length);
 
 // Return at the caret: what the block of the caret needs for it. In
 // code, a new line. At the end of the text of a list item, a new item

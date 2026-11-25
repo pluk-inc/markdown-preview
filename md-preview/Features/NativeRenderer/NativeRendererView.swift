@@ -980,6 +980,7 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         // With all of the text of the input method taken back, the line
         // break that came with it goes too: the line is empty again.
         if text.isEmpty { start -= marked?.lead ?? 0 }
+        var applied = true
         text.withUTF8 { utf8 in
             utf8.withMemoryRebound(to: CChar.self) {
                 // One change of the source, also for a text that takes
@@ -987,11 +988,14 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
                 // method, or of the text that is selected.
                 if marked != nil {
                     mdcore_replace_text(ctx, start, end, $0.baseAddress, $0.count)
-                } else {
-                    mdcore_insert(ctx, $0.baseAddress, $0.count)
+                } else if $0.count > 0 {
+                    applied = mdcore_insert(ctx, $0.baseAddress, $0.count)
                 }
             }
         }
+        // The core put nothing in (a selection that it has no edit for):
+        // no text of an input method is in the document.
+        guard applied else { return (-1, 0) }
         // The text ends at the caret. In an empty line the core put a
         // line break before it, so it starts later than `start`.
         let placed = mdcore_caret_offset(ctx) - text.utf8.count
@@ -1170,6 +1174,13 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         caretDidMove()
     }
 
+    /// The source of the document as the core has it now.
+    private var sourceBytes: [UInt8] {
+        var length = 0
+        guard let bytes = mdcore_source(ctx, &length), length > 0 else { return [] }
+        return Array(UnsafeRawBufferPointer(start: bytes, count: length))
+    }
+
     /// The text that is selected.
     private var selectedText: String? {
         var length = 0
@@ -1181,18 +1192,21 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
     /// to where a move goes. `keepsText`: for Control-Y.
     private func delete(to move: mdcore_move, keepsText: Bool = false) {
         markedText = nil
-        var kept: String?
-        if keepsText {
-            // The text that goes is the selection that the move makes.
-            // At the end of a paragraph that is no text: the line break
-            // goes.
-            if !mdcore_has_selection(ctx) { mdcore_caret_move(ctx, move, true) }
-            kept = selectedText ?? "\n"
-        }
+        // For Control-Y: the bytes of the source that go, which are what
+        // is between the bytes that the source has before and after.
+        let before = keepsText ? sourceBytes : []
         if mdcore_delete(ctx, move) {
-            // Only what went is kept: a delete that took nothing leaves
-            // the text of the one before.
-            if let kept { Self.killed = kept }
+            if keepsText {
+                let after = sourceBytes
+                var head = 0
+                while head < min(before.count, after.count), before[head] == after[head] { head += 1 }
+                var tail = 0
+                while tail < min(before.count, after.count) - head,
+                      before[before.count - 1 - tail] == after[after.count - 1 - tail] { tail += 1 }
+                // Only what went is kept: a delete that took nothing
+                // leaves the text of the one before.
+                Self.killed = String(decoding: before[head..<(before.count - tail)], as: UTF8.self)
+            }
             didEdit()
         } else {
             // A selection that the core takes no text out for stays.
@@ -1206,9 +1220,14 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
     }
 
     @objc func cut(_ sender: Any?) {
-        guard isEditable, hasCaret, mdcore_has_selection(ctx) else { return }
-        copy(sender)
-        delete(to: MDCORE_MOVE_LEFT)
+        // The text goes to the pasteboard only when it went out of the
+        // document: the core has no edit for some selections.
+        guard isEditable, hasCaret, let text = selectedText else { return }
+        markedText = nil
+        guard mdcore_delete(ctx, MDCORE_MOVE_LEFT) else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        didEdit()
     }
 
     override func yank(_ sender: Any?) {

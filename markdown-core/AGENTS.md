@@ -898,10 +898,13 @@ The order of the next steps, from the review of the second step:
   Markdown reads of the rest ("<h>" is raw HTML); a delete that joins
   two blocks parses the two blocks again (five parses; the map of the
   block that the caret came from is thrown away one step before);
-  Control-K
+  a definition of a link in a quote that has more than one line
+  comes out with the mark of the quote in it when it is kept; spaces
+  at the start of new text right after a mark that starts a style
+  stay inside of it; Control-K
   keeps one text and does not add to it for some presses in a row.
-  The text that Control-K takes is what a copy of that selection
-  gives, so it comes back with no styles.
+  The text that Control-K takes is the bytes of the source that went,
+  so it comes back with its marks.
 - Cut, Paste, and Select All are menu commands, which a test on the
   hidden display cannot send (a menu needs the app in front). Each is
   two calls that the keys check (a copy and a delete, an insert).

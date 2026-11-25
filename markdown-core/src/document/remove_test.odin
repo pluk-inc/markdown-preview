@@ -96,6 +96,11 @@ test_text_goes_out_and_the_styles_of_the_rest_stay :: proc(t: ^testing.T) {
 		{"ab\n\ncd ef\n\nz\n", {block = 1, cell = 0, byte = 0}, {block = 1, cell = 0, byte = 5}, "", "ab\n\n\nz\n"},
 		{"ab\n\ncd\n", {block = 1, cell = 0, byte = 0}, {block = 1, cell = 0, byte = 2}, "X", "ab\n\nX\n"},
 		{"x\n\nab\n\n[d]: /u\n\ncd\n\n[z][d]\n", {block = 1, cell = 0, byte = 0}, {block = 2, cell = 0, byte = 2}, "", "x\n\n[d]: /u\n\n\n\n[z][d]\n"},
+		// Spaces at the end of new text are not inside of a mark.
+		{"a **bc** d\n", {block = 0, cell = 0, byte = 3}, {block = 0, cell = 0, byte = 6}, "X ", "a **bX** \n"},
+		// All of the cells of a table, also with a cell with no text.
+		{"| a | b |\n|---|---|\n", {block = 0, cell = 0, byte = 0}, {block = 0, cell = 1, byte = 1}, "", ""},
+		{"|  | bb |\n|---|---|\n\ntext\n", {block = 0, cell = 1, byte = 1}, {block = 1, cell = 0, byte = 4}, "", "refused"},
 		// All of the text of a block: its marks stay, for text to come.
 		{"# ab\n", {block = 0, cell = 0, byte = 0}, {block = 0, cell = 0, byte = 2}, "", "# \n"},
 		{"- ab\n- cd\n", {block = 0, cell = 0, byte = 0}, {block = 0, cell = 0, byte = 2}, "", "- \n- cd\n"},
@@ -126,6 +131,19 @@ test_text_goes_out_and_the_styles_of_the_rest_stay :: proc(t: ^testing.T) {
 plain :: proc(text: string) -> string {
 	fields := strings.fields(text, context.temp_allocator)
 	return strings.join(fields, " ", context.temp_allocator)
+}
+
+// A text with no mark characters and no spaces: what stays the same
+// when a mark shows as text.
+@(private = "file")
+unmarked :: proc(text: string) -> string {
+	out := make([dynamic]u8, context.temp_allocator)
+	for ch in transmute([]u8)text {
+		if !strings.contains_rune("*_~`[]() ", rune(ch)) {
+			append(&out, ch)
+		}
+	}
+	return string(out[:])
 }
 
 // Each range of each text of a document with styles: the text of the
@@ -160,7 +178,7 @@ test_each_range_of_a_text_goes_out_of_its_text_only :: proc(t: ^testing.T) {
 				// A mark that stays where Markdown reads it as text: one
 				// right after a letter and before another mark
 				// ("a**_b_**"). The text has the mark then. Few ranges.
-				if got != want && strings.contains_any(got, "*_~`[") {
+				if got != want && strings.contains_any(got, "*_~`[") && unmarked(got) == unmarked(want) {
 					limits += 1
 					continue
 				}
@@ -202,6 +220,15 @@ test_two_characters_change_places_as_wholes :: proc(t: ^testing.T) {
 		// Not over a mark of a style.
 		{"**a**b\n", 1, ""},
 		{"a\n", 1, ""},
+	}
+	// Not from an empty paragraph after the text.
+	{
+		doc := parse("ab\n\n\n")
+		defer destroy(&doc)
+		places := block_map(&doc, 0)
+		defer delete(places)
+		_, _, ok := transpose(&doc, places[:], {block = 0, byte = 2, empty = 1}, context.temp_allocator)
+		testing.expect(t, !ok)
 	}
 	for c in cases {
 		doc := parse(c.source)
@@ -268,5 +295,28 @@ test_each_range_of_a_document_has_an_edit_in_the_source :: proc(t: ^testing.T) {
 			}
 		}
 		free_all(context.temp_allocator)
+	}
+}
+
+@(test)
+test_the_lines_of_a_range_go_and_the_definitions_stay :: proc(t: ^testing.T) {
+	Case :: struct {
+		source:   string,
+		from, to: int,
+		after:    string,
+	}
+	cases := []Case {
+		{"one\ntwo\nthree\n", 5, 5, "one\nthree\n"},
+		// A range that ends at the start of a line has nothing of it.
+		{"one\n\nkeep\n", 0, 5, "keep\n"},
+		{"one\ntwo", 5, 5, "one\n"},
+		{"ab\n\n[d]: /u\n\ncd\n\n[z][d]\n", 0, 16, "[d]: /u\n\n\n[z][d]\n"},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		edit, _, ok := remove_lines(&doc, c.from, c.to, context.temp_allocator)
+		testing.expect(t, ok)
+		testing.expectf(t, after(&doc, edit) == c.after, "%q lines of %d to %d: %q, not %q", c.source, c.from, c.to, after(&doc, edit), c.after)
 	}
 }
