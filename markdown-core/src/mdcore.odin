@@ -612,10 +612,11 @@ mdcore_caret_move :: proc "c" (handle: rawptr, move: Move, extend: bool) -> bool
 	}
 	move := move
 	goal: f32
-	if move in MOVES_VERTICAL {
-		// The line of the caret and the lines around it have their
-		// records: a line with none is no line that the caret can go
-		// to, and is not the end of the document.
+	if move in MOVES_VERTICAL || move == .Line_Start || move == .Line_End {
+		// A move by lines needs the records of the line of the caret,
+		// and one up or down those of the lines around it: a line with
+		// none is no line that the caret can go to, and is not the end
+		// of the document.
 		if !ctx.layout_valid {
 			return false
 		}
@@ -631,7 +632,7 @@ mdcore_caret_move :: proc "c" (handle: rawptr, move: Move, extend: bool) -> bool
 		}
 		goal = ctx.caret_goal.? or_else x
 		reach := f64(ctx.height)
-		if !layout.laid_out(&ctx.page, y - reach, y + reach) && layout.lay_out(&ctx.page, y - reach, y + reach, y) {
+		if move in MOVES_VERTICAL && !layout.laid_out(&ctx.page, y - reach, y + reach) && layout.lay_out(&ctx.page, y - reach, y + reach, y) {
 			layout_changed(ctx)
 		}
 	}
