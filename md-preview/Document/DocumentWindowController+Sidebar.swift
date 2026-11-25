@@ -204,10 +204,12 @@ extension DocumentWindowController {
     }
 
     func reloadPreviewForSettingChange() {
-        if mainSplit?.isNativeEditing == true {
-            // The native view is the editor and has the edits: a reload
-            // can take the view away (another renderer). Leave Edit mode
-            // with the edits kept as the draft, which the reload shows.
+        if mainSplit?.isNativeEditing == true, RendererSetting.current != .native {
+            // The native view is the editor and has the edits, and the
+            // reload takes the view away for another renderer. Leave Edit
+            // mode with the edits kept as the draft, which the reload
+            // shows. Each other setting (a width, a font, the colors)
+            // gives the same view a new style, and the reader edits on.
             previewPendingEdits()
         }
         (documentWindow.contentViewController as? MainSplitViewController)?
