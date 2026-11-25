@@ -353,7 +353,8 @@ selection_quads :: proc(l: ^Layout, s: document.Selection, y0, y1: f64, scale: f
 Task_Place :: struct {
 	x:     f32, // points; the side is `task_box_size`
 	y:     f64,
-	block: ^document.Block, // has the line of the task and its state
+	block: ^document.Block, // has the state of the task
+	part:  ^document.Part, // of the block: the line of the task counts from it
 }
 
 // Writes the tasks whose boxes are between two heights of the page to
@@ -380,7 +381,7 @@ tasks_between :: proc(l: ^Layout, top, bottom: f64, out: []Task_Place) -> (count
 				continue
 			}
 			if count < len(out) {
-				out[count] = {task.x, y, &l.doc.parts[p].blocks[task.block]}
+				out[count] = {task.x, y, &l.doc.parts[p].blocks[task.block], l.doc.parts[p]}
 			}
 			count += 1
 		}

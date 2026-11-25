@@ -3,6 +3,7 @@
 package document
 
 import "../base"
+import "core:bytes"
 
 Inline :: enum u8 {
 	Bold,
@@ -77,13 +78,84 @@ Block :: struct {
 	aligns:      [dynamic]base.Align,
 
 	// What no layout reads. A change to one of these needs no new records.
-	// The start of the block's first line in `Document.source`; for the
-	// first block of a list item or a quote, the line of their mark.
+	// The start of the block's first line in the source; for the first
+	// block of a list item or a quote, the line of their mark. Counted
+	// from the start of the block's part (`Part.source`), so a change
+	// of the source moves the blocks after it with one number for each
+	// part. See `block_source`.
 	source:      int,
-	task_line:   int, // a task marker: the source line of its "[ ]", from 1
-	task_mark:   int, // a task marker: the byte between its "[" and "]" in the source
+	// A task marker: the byte between its "[" and "]", counted as
+	// `source` is; 0 for no task. Its line: `task_line`.
+	task_mark:   int,
 	done:        bool, // the block stands directly in a checked task item
 	item:        int, // the list item that the block stands directly in: a number from 1, 0 for none
+}
+
+// The limit of the parser for the uses of definitions of links, for a
+// text of a size: see `MD_PARSER.ref_def_use` in the parser copy.
+@(private)
+defs_limit :: proc(size: int) -> int {
+	return 16 * min(size, 1024 * 1024 / 16)
+}
+
+// The definition of a link in the source ("[name]: target").
+Def :: struct {
+	start, end: int, // its range of the source
+	// A number for the first word of its name, small letters for
+	// capital ones (`word_number`). Text that uses the definition has
+	// that word. `always`: the name has a byte that this does not
+	// cover (a letter that is not ASCII, a backslash), so each text
+	// can use it.
+	word:       u64,
+	always:     bool,
+}
+
+// A number for a word, the same for capital and small ASCII letters
+// (the FNV-1a hash of its bytes, with small letters for capital ones).
+@(private)
+word_number :: proc(word: []u8) -> (number: u64) {
+	number = 0xcbf29ce484222325
+	for ch in word {
+		number = (number ~ u64(ch >= 'A' && ch <= 'Z' ? ch + 32 : ch)) * 0x100000001b3
+	}
+	return
+}
+
+// True for a byte that ends a word of a name: white space and the two
+// brackets.
+@(private)
+ends_word :: proc(ch: u8) -> bool {
+	return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '[' || ch == ']'
+}
+
+// True for a word of a name that `word_number` covers: the parser takes
+// two names as one by rules for all of Unicode (capital and small
+// letters, kinds of white space), and a backslash is a byte of a name.
+@(private)
+plain_word :: proc(word: []u8) -> bool {
+	for ch in word {
+		if ch >= 0x80 || ch == '\\' || ch < ' ' {
+			return false
+		}
+	}
+	return true
+}
+
+// Fills in what a definition says of its name. `text` is its source,
+// from the "[" of the name on.
+@(private)
+def_name :: proc(def: ^Def, text: []u8) {
+	at := 1
+	for at < len(text) && (text[at] == ' ' || text[at] == '\t') {
+		at += 1
+	}
+	first := at
+	for at < len(text) && !ends_word(text[at]) {
+		at += 1
+	}
+	def.word = word_number(text[first:at])
+	// A name that starts in the next line is not covered either.
+	def.always = first == at || !plain_word(text[first:at])
 }
 
 // The memory of one part of the document, in bytes. A little less than
@@ -93,7 +165,7 @@ Block :: struct {
 PART_BYTES :: 16 * 1024 - 64
 
 // How many blocks a part of the document has at most.
-PART_BLOCKS :: (PART_BYTES - size_of(int)) / size_of(Block)
+PART_BLOCKS :: (PART_BYTES - 3 * size_of(int)) / size_of(Block)
 
 // A part of the document: blocks that are next to each other. The blocks
 // are in parts, not in one array, so that a change to the document moves
@@ -103,6 +175,11 @@ PART_BLOCKS :: (PART_BYTES - size_of(int)) / size_of(Block)
 Part :: struct {
 	blocks: [PART_BLOCKS]Block,
 	count:  int,
+	// Where the part is in the source: the start of the first line of
+	// its first block, and how many lines of the source end before it.
+	// The offsets of its blocks count from here.
+	source: int,
+	line:   int,
 }
 
 #assert(size_of(Part) <= PART_BYTES)
@@ -112,6 +189,36 @@ Document :: struct {
 	starts: [dynamic]int, // for each part, the number of its first block
 	count:  int, // the blocks of all parts
 	links:  [dynamic]string,
+	// How many links the last parse of all of the source gave. An edit
+	// adds the links of its blocks and takes none out; see `prepare`.
+	links_parsed: int,
+	// A table keeps a number of cells that is of the size of all of
+	// the source at most (`MIN_TABLE_CELLS`), so another size can be
+	// another table at any distance: the cells of the largest table so
+	// far, and if a table lost rows to the limit. An edit takes
+	// nothing off the first; see `prepare`.
+	cells_most:  int,
+	cells_cut:   bool,
+	// The parser has a limit for the uses of definitions: 16 times the
+	// size of what it parses, 1 MB at most (`defs_limit`). What the
+	// uses so far count for in it, if a use had no room (it is text
+	// then, and each use after it), and the longest definition. An
+	// edit adds to the first and takes nothing off; see `prepare`.
+	defs_used:   int,
+	defs_cut:    bool,
+	def_longest: int,
+	// The list items so far: an item gets the next number, and no item
+	// of the document has the number of another, also after edits.
+	items:  int,
+	// The definitions of links in the source ("[name]: target"): their
+	// ranges of it, in its order. One changes text at any distance, so
+	// a parse of a piece of the source gets the definitions of the
+	// rest of it, and an edit that changes one is a parse of all.
+	defs:   [dynamic]Def,
+	// A definition has the mark of a quote between its lines, so its
+	// text is no definition at another place. Then each edit is a parse
+	// of all of the source.
+	defs_marked: bool,
 	// The Markdown text that the blocks came from. Each block has a range
 	// of it (`block_source`), and a change to a block in place changes it
 	// too (`set_task_done`), so it is always the text of the blocks.
@@ -125,9 +232,103 @@ Document :: struct {
 // fence, raw HTML, the definition of a link. The first block also has
 // such lines before it.
 block_source :: proc(doc: ^Document, block: int) -> (start, end: int) {
-	start = block == 0 ? 0 : block_at(doc, block).source
-	end = block + 1 < doc.count ? block_at(doc, block + 1).source : len(doc.source)
+	start = block == 0 ? 0 : block_start(doc, block)
+	end = block + 1 < doc.count ? block_start(doc, block + 1) : len(doc.source)
 	return
+}
+
+// The start of the first line of a block in the source.
+block_start :: proc(doc: ^Document, block: int) -> int {
+	part, slot := locate(doc, block)
+	return doc.parts[part].source + doc.parts[part].blocks[slot].source
+}
+
+// The last block that starts at an offset of the source or before it; 0
+// when the first block starts after it. The document has a block.
+block_at_offset :: proc(doc: ^Document, offset: int) -> int {
+	// The last part that starts at the offset or before it, then the
+	// last block in it.
+	lo, hi := 0, len(doc.parts)
+	for lo < hi {
+		mid := (lo + hi) / 2
+		if doc.parts[mid].source <= offset {
+			lo = mid + 1
+		} else {
+			hi = mid
+		}
+	}
+	if lo == 0 {
+		return 0
+	}
+	part := doc.parts[lo - 1]
+	first, last := 0, part.count
+	for first < last {
+		mid := (first + last) / 2
+		if part.source + part.blocks[mid].source <= offset {
+			first = mid + 1
+		} else {
+			last = mid
+		}
+	}
+	return doc.starts[lo - 1] + first - 1
+}
+
+// How many lines of the source end between two offsets. A line ends
+// with LF, CR LF (counted at its LF), or CR alone, as the parser reads
+// lines.
+@(private)
+count_lines :: proc(source: []u8, from, to: int) -> (count: int) {
+	first, last := max(from, 0), min(to, len(source))
+	if first >= last {
+		return 0
+	}
+	// Most text has no CR; then this is one count of a byte.
+	if bytes.index_byte(source[first:min(last + 1, len(source))], '\r') < 0 {
+		return bytes.count(source[first:last], {'\n'})
+	}
+	#no_bounds_check for at in first ..< last {
+		ch := source[at]
+		count += int(ch == '\n')
+		if ch == '\r' && !(at + 1 < len(source) && source[at + 1] == '\n') {
+			count += 1
+		}
+	}
+	return
+}
+
+// The source line of the mark of a task, from 1; 0 for a block that is
+// no task. `part` is the part of the block.
+task_line :: proc(doc: ^Document, part: ^Part, b: ^Block) -> int {
+	if b.task_mark == 0 {
+		return 0
+	}
+	return part.line + count_lines(doc.source, part.source, part.source + b.task_mark) + 1
+}
+
+// Makes the offsets of the blocks of some parts count from their part,
+// and says where each of those parts is in the source. Before it, the
+// offsets of their blocks count from the start of the source; the part
+// before them, when there is one, is in order.
+@(private)
+anchor :: proc(doc: ^Document, first, last: int) {
+	for p in first ..= min(last, len(doc.parts) - 1) {
+		part := doc.parts[p]
+		base := part.blocks[0].source
+		part.line = p == 0 ? count_lines(doc.source, 0, base) : doc.parts[p - 1].line + count_lines(doc.source, doc.parts[p - 1].source, base)
+		part.source = base
+		for &b in part_blocks(part) {
+			move_block(&b, -base)
+		}
+	}
+}
+
+// Moves the offsets of a block in the source.
+@(private)
+move_block :: proc(b: ^Block, by: int) {
+	b.source += by
+	if b.task_mark > 0 {
+		b.task_mark += by
+	}
 }
 
 // Adds a block at the end of the document.
@@ -182,33 +383,53 @@ text_destroy :: proc(t: ^Text) {
 // task has its mark on that line. The result is the same as a new parse
 // of the source with that mark changed, and the source gets that mark.
 set_task_done :: proc(doc: ^Document, line: int, done: bool) -> bool {
-	if line <= 0 {
+	// The last part that starts on the line or before it.
+	lo, hi := 0, len(doc.parts)
+	for lo < hi {
+		mid := (lo + hi) / 2
+		if doc.parts[mid].line < line {
+			lo = mid + 1
+		} else {
+			hi = mid
+		}
+	}
+	if line <= 0 || lo == 0 {
 		return false
 	}
-	for part, p in doc.parts {
-		for &b, slot in part_blocks(part) {
-			if b.task_line != line {
-				continue
-			}
-			b.marker = done ? .Task_Done : .Task_Open
-			b.done = done
-			doc.source[b.task_mark] = done ? 'x' : ' '
-			// The later blocks of the same item, which can come after
-			// lists inside it. The item is over where its list is.
-			from := slot + 1
-			for later in doc.parts[p:] {
-				for &next in part_blocks(later)[from:] {
-					if next.list_depth < b.list_depth {
-						return true
-					}
-					if next.item == b.item {
-						next.done = done
-					}
-				}
-				from = 0
-			}
-			return true
+	p := lo - 1
+	part := doc.parts[p]
+	// The lines of the marks go up with the blocks.
+	at, counted := part.line + 1, part.source
+	for &b, slot in part_blocks(part) {
+		if b.task_mark == 0 {
+			continue
 		}
+		at += count_lines(doc.source, counted, part.source + b.task_mark)
+		counted = part.source + b.task_mark
+		if at < line {
+			continue
+		}
+		if at > line {
+			break
+		}
+		b.marker = done ? .Task_Done : .Task_Open
+		b.done = done
+		doc.source[counted] = done ? 'x' : ' '
+		// The later blocks of the same item, which can come after
+		// lists inside it. The item is over where its list is.
+		from := slot + 1
+		for later in doc.parts[p:] {
+			for &next in part_blocks(later)[from:] {
+				if next.list_depth < b.list_depth {
+					return true
+				}
+				if next.item == b.item {
+					next.done = done
+				}
+			}
+			from = 0
+		}
+		return true
 	}
 	return false
 }
@@ -239,6 +460,7 @@ destroy :: proc(doc: ^Document) {
 		delete(link)
 	}
 	delete(doc.links)
+	delete(doc.defs)
 	delete(doc.source)
 	doc^ = {}
 }

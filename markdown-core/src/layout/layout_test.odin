@@ -1148,9 +1148,7 @@ test_a_new_layout_keeps_the_top_of_the_page :: proc(t: ^testing.T) {
 // Makes the document of a fixture the one of another source, in place.
 @(private = "file")
 change_to :: proc(f: ^Fixture, source: string) -> document.Change {
-	fresh := document.parse(source)
-	change := document.replace(&f.doc, &fresh)
-	document.destroy(&fresh)
+	change := document.apply(&f.doc, document.edit_between(f.doc.source, source))
 	apply_change(&f.page, change)
 	return change
 }

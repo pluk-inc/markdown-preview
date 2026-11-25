@@ -2596,6 +2596,9 @@ md_is_link_reference(MD_CTX* ctx, const MD_LINE* lines, MD_SIZE n_lines,
             MD_LOG("Too many link reference definition instantiations.");
             ctx->max_ref_def_output = 0;
         }
+        /* (Not in upstream.) */
+        if(ctx->parser.ref_def_use != NULL)
+            ctx->parser.ref_def_use(output_size_estimation, ret, ctx->userdata);
     }
 
 abort:
@@ -5903,6 +5906,9 @@ md_consume_link_reference_definitions(MD_CTX* ctx)
             n_consumed = md_is_link_reference_definition(ctx, lines + n, n_lines - n);
             if(n_consumed < 0)
                 return -1;
+            /* (Not in upstream.) */
+            if(n_consumed > 0  &&  ctx->parser.ref_def != NULL)
+                ctx->parser.ref_def(lines[n].beg, lines[n + n_consumed - 1].end, ctx->userdata);
         }
 
         if(n_consumed == 0)

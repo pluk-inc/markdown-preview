@@ -129,6 +129,12 @@ Md_Parser :: struct {
 	// Not in upstream md4c (pkg/md4c/README.md): the start of the source
 	// line where a block starts, before the block comes.
 	block_offset: proc "c" (type: Md_Block, offset: c.uint, userdata: rawptr),
+	// Not in upstream md4c either: the range of the source of each
+	// definition of a link, in the order of the source.
+	ref_def:      proc "c" (start, end: c.uint, userdata: rawptr),
+	// And: each use of a definition, with the size that it counts for
+	// in the parser's limit for such uses, and if the limit had room.
+	ref_def_use:  proc "c" (size: c.uint, accepted: c.int, userdata: rawptr),
 }
 
 Md_Entity :: struct {

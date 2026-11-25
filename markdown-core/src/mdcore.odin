@@ -309,14 +309,16 @@ change_source :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil) {
 	if document.edit_is_empty(edit) {
 		return
 	}
-	fresh := document.parse_owned(document.edited(ctx.doc.source, edit))
+	// All that takes time, with no change to the document: the parse of
+	// the blocks around the edit, or of all of the source.
+	pending := document.prepare(&ctx.doc, edit)
 	// What is left of the two texts goes with no wait of a frame.
-	defer document.destroy(&fresh)
+	defer document.discard(&pending)
 	context.temp_allocator = ctx.temp
 	hold(ctx)
 	// From the layout of the text before.
 	take_place(ctx)
-	change := document.replace(&ctx.doc, &fresh)
+	change := document.commit(&ctx.doc, &pending)
 	if ctx.layout_valid {
 		layout.apply_change(&ctx.page, change)
 	}
@@ -540,7 +542,7 @@ mdcore_tasks :: proc "c" (handle: rawptr, top, bottom: f64, out: [^]Host_Task, c
 	count := layout.tasks_between(&ctx.page, top, bottom, tasks)
 	size := f64(layout.task_box_size(ctx.page.m))
 	for t, i in tasks[:min(count, len(tasks))] {
-		out[i] = {f64(t.x), t.y, size, c.long(t.block.task_line), t.block.marker == .Task_Done}
+		out[i] = {f64(t.x), t.y, size, c.long(document.task_line(&ctx.doc, t.part, t.block)), t.block.marker == .Task_Done}
 	}
 	return c.long(count)
 }

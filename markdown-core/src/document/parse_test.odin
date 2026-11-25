@@ -11,6 +11,34 @@ content :: proc(t: ^Text) -> string {
 	return string(t.bytes[:])
 }
 
+// The source line of the task of a block, from 1; 0 for no task.
+@(private = "file")
+line_of_task :: proc(doc: ^Document, block: int) -> int {
+	part, slot := locate(doc, block)
+	return task_line(doc, doc.parts[part], &doc.parts[part].blocks[slot])
+}
+
+// Where in the source the mark of the task of a block is: the byte
+// that a click changes. -1 for a block with no task.
+@(private = "file")
+mark_of_task :: proc(doc: ^Document, block: int) -> int {
+	part, slot := locate(doc, block)
+	mark := doc.parts[part].blocks[slot].task_mark
+	return mark == 0 ? -1 : doc.parts[part].source + mark
+}
+
+// The target of the link of a span; "" for no link.
+@(private = "file")
+target :: proc(doc: ^Document, span: Span) -> string {
+	return span.link > 0 ? doc.links[span.link - 1] : ""
+}
+
+// Makes the source of a document another text, as the core does it.
+@(private = "file")
+change_to :: proc(doc: ^Document, after: string) -> Change {
+	return apply(doc, edit_between(doc.source, after))
+}
+
 @(test)
 test_paragraph_and_heading :: proc(t: ^testing.T) {
 	doc := parse("# Title\n\nOne *two* **three** `four` ~~five~~\n")
@@ -237,20 +265,20 @@ test_task_items_know_their_line_and_state :: proc(t: ^testing.T) {
 	testing.expect_value(t, doc.count, 7)
 	open, done, more, inside, plain, after := block_at(&doc, 1), block_at(&doc, 2), block_at(&doc, 3), block_at(&doc, 4), block_at(&doc, 5), block_at(&doc, 6)
 	testing.expect_value(t, open.marker, Marker.Task_Open)
-	testing.expect_value(t, open.task_line, 3)
+	testing.expect_value(t, line_of_task(&doc, 1), 3)
 	testing.expect_value(t, open.done, false)
 	testing.expect_value(t, done.marker, Marker.Task_Done)
-	testing.expect_value(t, done.task_line, 4)
+	testing.expect_value(t, line_of_task(&doc, 2), 4)
 	testing.expect_value(t, done.done, true)
 	// A later block of the checked item is done too; an item inside it has
 	// its own state.
 	testing.expect_value(t, more.done, true)
 	testing.expect_value(t, more.marker, Marker.None)
 	testing.expect_value(t, inside.marker, Marker.Task_Open)
-	testing.expect_value(t, inside.task_line, 7)
+	testing.expect_value(t, line_of_task(&doc, 4), 7)
 	testing.expect_value(t, inside.done, false)
 	testing.expect_value(t, plain.done, false)
-	testing.expect_value(t, plain.task_line, 0)
+	testing.expect_value(t, line_of_task(&doc, 5), 0)
 	testing.expect_value(t, after.done, false)
 }
 
@@ -261,7 +289,7 @@ test_task_lines_count_each_kind_of_line_ending :: proc(t: ^testing.T) {
 	defer destroy(&doc)
 	testing.expect_value(t, doc.count, 4)
 	for i in 0 ..< doc.count {
-		testing.expect_value(t, block_at(&doc, i).task_line, i + 1)
+		testing.expect_value(t, line_of_task(&doc, i), i + 1)
 	}
 }
 
@@ -451,22 +479,52 @@ expect_document :: proc(t: ^testing.T, doc: ^Document, source: string, loc := #c
 		count += part.count
 	}
 	testing.expect_value(t, count, doc.count, loc)
-	testing.expect_value(t, len(doc.links), len(want.links), loc)
 	testing.expect_value(t, string(doc.source), source, loc)
+	Item :: type_of(Block{}.item)
+	there, back: map[Item]Item
+	defer delete(there)
+	defer delete(back)
 	for i in 0 ..< min(doc.count, want.count) {
 		a, b := block_at(doc, i), block_at(&want, i)
 		testing.expect(t, layout_equal(a, b), loc = loc)
-		testing.expect_value(t, a.source, b.source, loc)
-		testing.expect_value(t, a.task_line, b.task_line, loc)
-		testing.expect_value(t, a.task_mark, b.task_mark, loc)
-		testing.expect_value(t, a.item, b.item, loc)
+		testing.expect_value(t, block_start(doc, i), block_start(&want, i), loc)
+		testing.expect_value(t, line_of_task(doc, i), line_of_task(&want, i), loc)
+		testing.expect_value(t, mark_of_task(doc, i), mark_of_task(&want, i), loc)
 		testing.expect_value(t, a.done, b.done, loc)
+		// The same blocks are in one item, also with the blocks of an
+		// item inside between them; the number of the item is not the
+		// same after an edit. Each number of the one document is one
+		// number of the other.
+		testing.expect_value(t, a.item == 0, b.item == 0, loc)
+		if a.item != 0 && b.item != 0 {
+			if a.item not_in there {
+				there[a.item] = b.item
+			}
+			if b.item not_in back {
+				back[b.item] = a.item
+			}
+			testing.expect_value(t, there[a.item], b.item, loc)
+			testing.expect_value(t, back[b.item], a.item, loc)
+		}
 		for span, n in a.text.spans {
-			testing.expect_value(t, span.link, b.text.spans[n].link, loc)
+			testing.expect_value(t, target(doc, span), target(&want, b.text.spans[n]), loc)
+		}
+		for &cell, c in a.cells {
+			for span, n in cell.spans {
+				testing.expect_value(t, target(doc, span), target(&want, b.cells[c].spans[n]), loc)
+			}
 		}
 	}
-	for link, i in want.links {
-		testing.expect_value(t, doc.links[i], link, loc)
+	// The definitions of links are where the source has them.
+	testing.expect_value(t, len(doc.defs), len(want.defs), loc)
+	testing.expect_value(t, doc.defs_marked, want.defs_marked, loc)
+	for def, i in doc.defs[:min(len(doc.defs), len(want.defs))] {
+		testing.expect_value(t, def, want.defs[i], loc)
+	}
+	// Each part says where it is.
+	for part in doc.parts {
+		testing.expect_value(t, part.blocks[0].source, 0, loc)
+		testing.expect_value(t, part.line, count_lines(doc.source, 0, part.source), loc)
 	}
 }
 
@@ -477,12 +535,11 @@ test_a_change_in_the_middle_keeps_the_other_blocks_in_place :: proc(t: ^testing.
 	before, after := numbered(COUNT), numbered(COUNT, changed = AT)
 	defer delete(before)
 	defer delete(after)
-	doc, fresh := parse(before), parse(after)
+	doc := parse(before)
 	defer destroy(&doc)
 	first, last := block_at(&doc, 3), block_at(&doc, COUNT - 3)
 	parts := [2]^Part{doc.parts[0], doc.parts[4]}
-	change := replace(&doc, &fresh)
-	destroy(&fresh)
+	change := change_to(&doc, after)
 	testing.expect_value(t, change.first, AT)
 	testing.expect_value(t, change.removed, 1)
 	testing.expect_value(t, change.added, 1)
@@ -513,11 +570,10 @@ test_blocks_that_come_and_go_move_the_numbers_after_them :: proc(t: ^testing.T) 
 		// Three blocks more (a paragraph and a list of two items).
 		after := numbered(COUNT, extra = AT)
 		defer delete(after)
-		doc, fresh := parse(base), parse(after)
+		doc := parse(base)
 		defer destroy(&doc)
 		last := block_at(&doc, COUNT - 1)
-		change := replace(&doc, &fresh)
-		destroy(&fresh)
+		change := change_to(&doc, after)
 		testing.expect_value(t, change.first, AT)
 		testing.expect_value(t, change.removed, 0)
 		testing.expect_value(t, change.added, 3)
@@ -531,10 +587,9 @@ test_blocks_that_come_and_go_move_the_numbers_after_them :: proc(t: ^testing.T) 
 		// One block fewer.
 		after := numbered(COUNT, without = AT)
 		defer delete(after)
-		doc, fresh := parse(base), parse(after)
+		doc := parse(base)
 		defer destroy(&doc)
-		change := replace(&doc, &fresh)
-		destroy(&fresh)
+		change := change_to(&doc, after)
 		testing.expect_value(t, change.first, AT)
 		testing.expect_value(t, change.removed, 1)
 		testing.expect_value(t, change.added, 0)
@@ -565,9 +620,8 @@ test_a_change_at_each_end_and_of_all_of_the_document :: proc(t: ^testing.T) {
 		base,
 	}
 	for after, i in cases {
-		doc, fresh := parse(base), parse(after)
-		change := replace(&doc, &fresh)
-		destroy(&fresh)
+		doc := parse(base)
+		change := change_to(&doc, after)
 		expect_document(t, &doc, after)
 		testing.expect_value(t, change.count, doc.count)
 		// An address of the old end is in the new document, or at its
@@ -580,9 +634,7 @@ test_a_change_at_each_end_and_of_all_of_the_document :: proc(t: ^testing.T) {
 			testing.expect_value(t, change.parts_removed + change.parts_added, 0)
 		}
 		// And back again, also from an empty document.
-		again := parse(base)
-		replace(&doc, &again)
-		destroy(&again)
+		change_to(&doc, base)
 		expect_document(t, &doc, base)
 		destroy(&doc)
 		// The first six are made here; the others are constants and
@@ -601,15 +653,13 @@ test_a_task_mark_and_a_link_number_change_no_block_for_a_layout :: proc(t: ^test
 	doc := parse("First.\n\n- [ ] task\n\nA [link](https://a.example).\n")
 	defer destroy(&doc)
 	task := block_at(&doc, 1)
-	fresh := parse("First\nwith a [link](https://b.example).\n\n- [ ] task\n\nA [link](https://a.example).\n")
-	change := replace(&doc, &fresh)
-	destroy(&fresh)
+	change := change_to(&doc, "First\nwith a [link](https://b.example).\n\n- [ ] task\n\nA [link](https://a.example).\n")
 	testing.expect_value(t, change.first, 0)
 	testing.expect_value(t, change.removed, 1)
 	testing.expect_value(t, change.added, 1)
-	testing.expect_value(t, block_at(&doc, 1).task_line, 4)
-	testing.expect_value(t, block_at(&doc, 2).text.spans[1].link, 2)
-	testing.expect_value(t, doc.links[1], "https://a.example")
+	testing.expect_value(t, line_of_task(&doc, 1), 4)
+	testing.expect_value(t, target(&doc, block_at(&doc, 2).text.spans[1]), "https://a.example")
+	testing.expect_value(t, target(&doc, block_at(&doc, 0).text.spans[1]), "https://b.example")
 	_ = task
 }
 
@@ -753,42 +803,144 @@ test_an_edit_is_what_two_sources_do_not_have_in_common :: proc(t: ^testing.T) {
 	testing.expect_value(t, string(out2), "Xbc")
 }
 
-// Makes an edit of the source of a document, the way the core does it.
+@(test)
+test_an_edit_that_a_piece_is_not_right_for_gives_the_document_too :: proc(t: ^testing.T) {
+	Case :: struct {
+		before, after: string,
+	}
+	long_target := strings.repeat("a", 5000)
+	defer delete(long_target)
+	uses := strings.repeat("[img] ", 30)
+	defer delete(uses)
+	limit_before := strings.concatenate({"[img]: /", long_target, "\n\nfirst\n\nsecond\n\nthird\n\nfourth\n\nfifth\n"})
+	defer delete(limit_before)
+	limit_after := strings.concatenate({"[img]: /", long_target, "\n\nfirst\n\nsecond\n\nthird ", uses, "\n\nfourth\n\nfifth\n"})
+	defer delete(limit_after)
+	// A table of 30 columns and 3,000 rows of one cell asks for more
+	// cells than a source of its size can have: the rows that it keeps
+	// are of the size of all of the source, also of text far from it.
+	table := strings.builder_make()
+	defer strings.builder_destroy(&table)
+	strings.write_string(&table, "|")
+	for _ in 0 ..< 30 {strings.write_string(&table, "a|")}
+	strings.write_string(&table, "\n|")
+	for _ in 0 ..< 30 {strings.write_string(&table, "-|")}
+	strings.write_string(&table, "\n")
+	for _ in 0 ..< 3000 {strings.write_string(&table, "a|\n")}
+	table_before := strings.concatenate({strings.to_string(table), "\none\n\ntwo\n\nthree\n\nfour\n\nfive\n\nsix\n"})
+	defer delete(table_before)
+	table_after := strings.concatenate({strings.to_string(table), "\none\n\ntwo\n\nthree\n\nfour\n\nfive\n\nsix and thirty characters more, far away\n"})
+	defer delete(table_after)
+	cases := []Case {
+		{table_before, table_after},
+		// A list that the edit makes goes on in the list after it, whose
+		// first block is in a list inside: "e" is item 3 then.
+		{"x\n\n1. - b\n   - c\n2. e\n", "1. a\n\n1. - b\n   - c\n2. e\n"},
+		{"x\n\n> 1. - b\n>    - c\n> 2. e\n", "> 1. a\n\n> 1. - b\n>    - c\n> 2. e\n"},
+		// The parser takes names as one that have other bytes: a wide
+		// space for a space, the Kelvin sign for "k", a sharp s for "ss".
+		{"[note 1]: /n\n\nfirst\n\nsecond\n\nthird\n\nfourth\n\nfifth\n", "[note 1]: /n\n\nfirst\n\nsecond\n\nthird [note\u30001]\n\nfourth\n\nfifth\n"},
+		{"[k]: /a\n\n[K-x]: /b\n\nfirst\n\nsecond\n\nthird\n\nfourth\n\nfifth\n", "[k]: /a\n\n[K-x]: /b\n\nfirst\n\nsecond\n\nthird [\u212a]\n\nfourth\n\nfifth\n"},
+		{"[ss]: /s\n\nfirst\n\nsecond\n\nthird\n\nfourth\n\nfifth\n", "[ss]: /s\n\nfirst\n\nsecond\n\nthird [\u00df]\n\nfourth\n\nfifth\n"},
+		// A name that starts in the next line of a quote.
+		{"[far name]: /f\n\nfirst\n\nsecond\n\n> third\n\nfourth\n\nfifth\n", "[far name]: /f\n\nfirst\n\nsecond\n\n> third [\n> far name]\n\nfourth\n\nfifth\n"},
+		// More uses of a long definition than the limit of the parser
+		// for a small text has room for.
+		{limit_before, limit_after},
+		// A line that is a rule only under the definition before it;
+		// with no definition it is code.
+		{"# Before\n\n[a]: /u\n    ---\ntext\n\nAfter\n\nLast\n", "# Before\n\n[a]: /u\n    ---\ntext!\n\nAfter\n\nLast\n"},
+	}
+	for c in cases {
+		doc := parse(c.before)
+		defer destroy(&doc)
+		change_to(&doc, c.after)
+		expect_document(t, &doc, c.after)
+		// And back.
+		change_to(&doc, c.before)
+		expect_document(t, &doc, c.before)
+	}
+}
+
+// A source with each kind of block, and blocks in lists and quotes.
 @(private = "file")
-apply :: proc(doc: ^Document, e: Edit) {
-	fresh := parse_owned(edited(doc.source, e))
-	replace(doc, &fresh)
-	destroy(&fresh)
+mixed :: proc(sections: int) -> string {
+	b := strings.builder_make()
+	for i in 0 ..< sections {
+		fmt.sbprintf(&b, "## Section %d\n\nA paragraph of section %d\nwith two lines, a [link](https://example.com/%d), [ref one] and [two][ref two].\n\n", i, i, i)
+		if i % 3 == 1 {
+			fmt.sbprintf(&b, "[ref one]: https://one.example/%d\n[Ref Two]: <https://two.example> \"Title\"\n\n", i)
+		}
+		fmt.sbprintf(&b, "- item %d\n- [ ] task\n\n  more of the task\n  1. inside\n  2. inside\n     ```\n     code in a list\n     ```\n- last\n\n", i)
+		fmt.sbprintf(&b, "> quote %d\n> > deep\n>\n> - in a quote\n\n", i)
+		fmt.sbprintf(&b, "Setext %d\n---\n\n***\n\n<div>\nraw %d\n</div>\n\n<!-- a\n\ncomment -->\n\n", i, i)
+		fmt.sbprintf(&b, "| a%d | b |\n|:-|-:|\n| 1 | **2** |\n\n    indented %d\n\n```odin\nfenced\n\nlines\n```\n", i, i)
+		fmt.sbprintf(&b, "Text right after a fence.\r\n\r\n")
+	}
+	return strings.to_string(b)
 }
 
 @(test)
 test_a_document_after_edits_is_the_document_of_its_source :: proc(t: ^testing.T) {
 	// Texts that change what the lines around them are.
 	PIECES := []string {
-		"x", " ", "\n", "\n\n", "# ", "- ", "  ", "    ", "> ", "1. ", "- [ ] ", "```\n", "| a | b |\n| - | - |\n",
-		"---\n", "===\n", "[r]: /u\n", "[r] ", "<div>\n", "*", "`", "\n\nA new paragraph.\n\n",
+		"x", " ", "\n", "\n\n", "\r\n", "# ", "- ", "  ", "    ", "\t", "> ", ">", "1. ", "- [ ] ", "- [x] ", "```\n", "~~~\n",
+		"| a | b |\n| - | - |\n", "|", "---\n", "===\n", "<div>\n", "<pre>\n", "</pre>\n", "<!--", "-->", "*", "`", "[", "](u)",
+		"\n\nA new paragraph.\n\n", "&amp;", "\\",
 	}
-	source := numbered(2 * PART_BLOCKS)
-	defer delete(source)
-	doc := parse(source)
-	defer destroy(&doc)
-	// The same numbers each run.
-	state := rand.create(0x2545f4914f6cdd1d)
-	context.random_generator = rand.default_random_generator(&state)
-	for _ in 0 ..< 300 {
-		e: Edit
-		e.start = rand.int_max(len(doc.source) + 1)
-		e.end = e.start
-		switch rand.int_max(3) {
-		case 0:
-			e.text = PIECES[rand.int_max(len(PIECES))]
-		case 1:
-			e.end = min(e.start + rand.int_max(40), len(doc.source))
-		case 2:
-			e.end = min(e.start + rand.int_max(12), len(doc.source))
-			e.text = PIECES[rand.int_max(len(PIECES))]
+	// With these, a source gets definitions of links and loses them: an
+	// edit that changes one is a parse of all of the source.
+	DEFINITIONS := []string{"[r]: /u\n", "[r] ", "]:", "[ref one]", "\n[ref one]: /changed\n", "\n> [q]:\n> /quoted\n", "[a\nb]: /lines\n"}
+	Run :: struct {
+		seed:        u64,
+		definitions: bool,
+		mixed:       bool,
+	}
+	runs := []Run {
+		{0x2545f4914f6cdd1d, false, false},
+		{0x9e3779b97f4a7c15, false, true},
+		{0xd1b54a32d192ed03, false, true},
+		{0x94d049bb133111eb, false, true},
+		{0xbf58476d1ce4e5b9, true, true},
+		{0x1234567890abcdef, true, false},
+	}
+	for run in runs {
+		source := run.mixed ? mixed(12) : numbered(2 * PART_BLOCKS)
+		defer delete(source)
+		doc := parse(source)
+		defer destroy(&doc)
+		// The same numbers each run.
+		state := rand.create(run.seed)
+		context.random_generator = rand.default_random_generator(&state)
+		piece :: proc(pieces, definitions: []string, with: bool) -> string {
+			if with && rand.int_max(8) == 0 {
+				return definitions[rand.int_max(len(definitions))]
+			}
+			return pieces[rand.int_max(len(pieces))]
 		}
-		apply(&doc, e)
-		expect_document(t, &doc, string(doc.source))
+		pieces := 0
+		EDITS :: 300
+		for _ in 0 ..< EDITS {
+			e: Edit
+			e.start = rand.int_max(len(doc.source) + 1)
+			e.end = e.start
+			switch rand.int_max(3) {
+			case 0:
+				e.text = piece(PIECES, DEFINITIONS, run.definitions)
+			case 1:
+				e.end = min(e.start + rand.int_max(40), len(doc.source))
+			case 2:
+				e.end = min(e.start + rand.int_max(12), len(doc.source))
+				e.text = piece(PIECES, DEFINITIONS, run.definitions)
+			}
+			p := prepare(&doc, e)
+			pieces += p.all ? 0 : 1
+			commit(&doc, &p)
+			discard(&p)
+			expect_document(t, &doc, string(doc.source))
+		}
+		// Most edits need a piece only, also in a source with
+		// definitions of links.
+		testing.expect(t, pieces > EDITS / 2, fmt.tprintf("%d of %d edits parsed a piece", pieces, EDITS))
 	}
 }

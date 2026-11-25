@@ -57,11 +57,6 @@ Parser :: struct {
 	open:         int, // the lists, items, and quotes that are open
 	item_count:   int, // list items so far
 	item_blocks:  int, // blocks of the open item so far
-	// The source, and how far its lines are counted: task marks come in
-	// source order, so each count starts where the one before ended.
-	source:       string,
-	counted_to:   int,
-	counted_line: int,
 	list_start:   bool, // the next item is the first of a top-level list
 	// Table.
 	table:        Block,
@@ -79,13 +74,22 @@ parse :: proc(source: string) -> Document {
 // Parses a Markdown source that the document keeps: memory of the
 // allocator of the context, which goes with the document.
 parse_owned :: proc(bytes: []u8) -> Document {
+	return parse_piece(bytes, 0, len(bytes))
+}
+
+// Parses a piece of the source of a document that starts where a block
+// starts that is in no list and no quote. The offsets of its blocks count
+// from the start of the piece. `items` is the number of list items of
+// the document so far, and `full_size` the size of all of its source.
+@(private)
+parse_piece :: proc(bytes: []u8, items, full_size: int) -> Document {
 	source := string(bytes)
 	doc: Document
 	p := Parser {
-		ctx       = context,
-		doc       = &doc,
-		max_cells = MIN_TABLE_CELLS + len(source),
-		source    = source,
+		ctx        = context,
+		doc        = &doc,
+		max_cells  = MIN_TABLE_CELLS + full_size,
+		item_count = items,
 	}
 	md := Md_Parser {
 		flags       = MD_FLAG_TABLES | MD_FLAG_STRIKETHROUGH | MD_FLAG_TASKLISTS | MD_FLAG_PERMISSIVEAUTOLINKS,
@@ -95,6 +99,8 @@ parse_owned :: proc(bytes: []u8) -> Document {
 		leave_span  = leave_span,
 		text        = on_text,
 		block_offset = on_block_offset,
+		ref_def     = on_ref_def,
+		ref_def_use = on_ref_def_use,
 	}
 	// md4c takes a 32-bit size; a larger source is cut there.
 	size := c.uint(min(len(source), int(max(c.int))))
@@ -102,6 +108,22 @@ parse_owned :: proc(bytes: []u8) -> Document {
 	close_text(&p)
 	delete(p.lists)
 	doc.source = bytes
+	doc.items = p.item_count
+	doc.links_parsed = len(doc.links)
+	for &def in doc.defs {
+		def_name(&def, bytes[def.start:def.end])
+		doc.def_longest = max(doc.def_longest, def.end - def.start)
+		// The mark of a quote at the start of a later line.
+		for at := def.start; at < def.end; at += 1 {
+			if source[at] != '\n' && source[at] != '\r' {
+				continue
+			}
+			for at + 1 < def.end && (source[at + 1] == ' ' || source[at + 1] == '\t') {
+				at += 1
+			}
+			doc.defs_marked ||= at + 1 < def.end && source[at + 1] == '>'
+		}
+	}
 	when ODIN_DEBUG {
 		// The blocks are in the order of the source, each with lines of
 		// its own.
@@ -113,8 +135,11 @@ parse_owned :: proc(bytes: []u8) -> Document {
 			}
 		}
 	}
+	// The parser gave offsets from the start of the source.
+	anchor(&doc, 0, len(doc.parts) - 1)
 	return doc
 }
+
 
 @(private)
 current_style :: proc(p: ^Parser) -> Inline_Set {
@@ -214,11 +239,7 @@ take_item_position :: proc(p: ^Parser, b: ^Block) {
 	if p.item_blocks == 0 {
 		b.marker = p.item_marker
 		b.number = p.item_number
-		if p.item_mark > 0 {
-			// Task marks come in source order, as `line_of` needs them.
-			b.task_line = line_of(p, p.item_mark)
-			b.task_mark = p.item_mark
-		}
+		b.task_mark = p.item_mark
 		b.spacing = p.list_start ? .List_Start : .Item
 		p.list_start = false
 	} else {
@@ -233,21 +254,6 @@ close_text :: proc(p: ^Parser) {
 		return
 	}
 	push_block(p)
-}
-
-// The line of a byte of the source, from 1. Offsets come in source order.
-// A line ends with LF, CR LF, or CR alone, as the parser reads it.
-@(private)
-line_of :: proc(p: ^Parser, offset: int) -> int {
-	offset := min(offset, len(p.source))
-	for i in p.counted_to ..< offset {
-		c := p.source[i]
-		if c == '\n' || (c == '\r' && (i + 1 >= len(p.source) || p.source[i + 1] != '\n')) {
-			p.counted_line += 1
-		}
-	}
-	p.counted_to = offset
-	return p.counted_line + 1
 }
 
 @(private)
@@ -315,6 +321,7 @@ enter_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 	case .Tr:
 		p.row_cells = 0
 		p.skip_row = len(p.table.cells) + p.table.columns > p.max_cells
+		p.doc.cells_cut ||= p.skip_row
 	case .Th, .Td:
 		p.cell = {}
 		p.cur = &p.cell
@@ -398,6 +405,7 @@ leave_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 			append(&p.table.aligns, base.Align.Left)
 		}
 		p.in_table = false
+		p.doc.cells_most = max(p.doc.cells_most, len(p.table.cells))
 		append_block(p.doc, p.table)
 		p.table = {}
 	}
@@ -413,6 +421,23 @@ on_block_offset :: proc "c" (type: Md_Block, offset: c.uint, userdata: rawptr) {
 		p.at = int(offset)
 		p.at_known = true
 		p.at_depth = p.open
+	}
+}
+
+@(private)
+on_ref_def :: proc "c" (start, end: c.uint, userdata: rawptr) {
+	p := cast(^Parser)userdata
+	context = p.ctx
+	append(&p.doc.defs, Def{start = int(start), end = int(end)})
+}
+
+@(private)
+on_ref_def_use :: proc "c" (size: c.uint, accepted: c.int, userdata: rawptr) {
+	doc := (cast(^Parser)userdata).doc
+	if accepted != 0 {
+		doc.defs_used += int(size)
+	} else {
+		doc.defs_cut = true
 	}
 }
 

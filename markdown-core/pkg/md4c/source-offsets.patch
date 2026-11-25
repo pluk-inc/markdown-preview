@@ -1,16 +1,26 @@
 --- a/md4c.c
 +++ b/md4c.c
-@@ -270,6 +270,9 @@
+@@ -269,6 +269,9 @@
+     /* Pending count of blank lines not yet reported as MD_BLOCK_BLANK.
       * Used only with MD_FLAG_PRESERVEBLANKLINES. */
      unsigned n_blank_lines;
- 
++
 +    /* Start of the input line that is analyzed now. (Not in upstream.) */
 +    OFF line_beg;
-+
+ 
      /* For container block analysis. */
      MD_CONTAINER* containers;
-     int n_containers;
-@@ -5399,6 +5402,9 @@
+@@ -2593,6 +2596,9 @@
+             MD_LOG("Too many link reference definition instantiations.");
+             ctx->max_ref_def_output = 0;
+         }
++        /* (Not in upstream.) */
++        if(ctx->parser.ref_def_use != NULL)
++            ctx->parser.ref_def_use(output_size_estimation, ret, ctx->userdata);
+     }
+ 
+ abort:
+@@ -5399,6 +5405,9 @@
       * MD_BLOCK_OL:     Start item number.
       */
      MD_SIZE n_lines;
@@ -20,7 +30,7 @@
  };
  
  struct MD_CONTAINER_tag {
-@@ -5583,6 +5589,9 @@
+@@ -5583,6 +5592,9 @@
  
      memset(&det, 0, sizeof(det));
  
@@ -30,7 +40,7 @@
      if(ctx->n_containers == 0)
          is_in_tight_list = false;
      else
-@@ -5727,6 +5736,8 @@
+@@ -5727,6 +5739,8 @@
              }
  
              if(block->flags & MD_BLOCK_CONTAINER_OPENER) {
@@ -39,7 +49,7 @@
                  MD_ENTER_BLOCK(block->type, &det);
  
                  if(block->type == MD_BLOCK_UL || block->type == MD_BLOCK_OL) {
-@@ -5839,6 +5850,7 @@
+@@ -5839,6 +5853,7 @@
      block->flags = 0;
      block->data = line->data;
      block->n_lines = 0;
@@ -47,7 +57,7 @@
  
      ctx->current_block = block;
      return 0;
-@@ -5846,6 +5858,15 @@
+@@ -5846,6 +5861,15 @@
  
  /* Forward declarations */
  static int md_is_hr_line(MD_CTX* ctx, OFF beg, OFF* p_end, OFF* p_killer);
@@ -63,7 +73,7 @@
  
  /* Eat from start of current (textual) block any reference definitions and/or
   * footnote definitions, and remember them.
-@@ -5860,6 +5881,7 @@
+@@ -5860,6 +5884,7 @@
      MD_SIZE n_lines = ctx->current_block->n_lines;
      MD_SIZE n = 0;
      bool inject_hr = false;
@@ -71,7 +81,17 @@
      OFF ignored;
  
      while(n < n_lines) {
-@@ -5897,7 +5919,11 @@
+@@ -5881,6 +5906,9 @@
+             n_consumed = md_is_link_reference_definition(ctx, lines + n, n_lines - n);
+             if(n_consumed < 0)
+                 return -1;
++            /* (Not in upstream.) */
++            if(n_consumed > 0  &&  ctx->parser.ref_def != NULL)
++                ctx->parser.ref_def(lines[n].beg, lines[n + n_consumed - 1].end, ctx->userdata);
+         }
+ 
+         if(n_consumed == 0)
+@@ -5897,7 +5925,11 @@
       * (https://github.com/mity/md4c/issues/414) */
      if(n < n_lines  &&  md_is_hr_line(ctx, lines[n].beg, &ignored, &ignored)) {
          inject_hr = true;
@@ -83,7 +103,7 @@
      }
  
      if(n == n_lines) {
-@@ -5928,6 +5954,7 @@
+@@ -5928,6 +5960,7 @@
  
          memset(hr_block, 0, sizeof(MD_BLOCK));
          hr_block->type = MD_BLOCK_HR;
@@ -91,7 +111,7 @@
      }
  
      return 0;
-@@ -6024,6 +6051,7 @@
+@@ -6024,6 +6057,7 @@
      block->flags = 0;
      block->data = ctx->n_blank_lines;
      block->n_lines = 0;
@@ -99,7 +119,7 @@
  
      ctx->n_blank_lines = 0;
      return 0;
-@@ -6047,6 +6075,7 @@
+@@ -6047,6 +6081,7 @@
      block->flags = flags;
      block->data = data;
      block->n_lines = start;
@@ -107,7 +127,7 @@
  
  abort:
      return ret;
-@@ -7361,6 +7390,7 @@
+@@ -7361,6 +7396,7 @@
          if(line == pivot_line)
              line = (line == &line_buf[0] ? &line_buf[1] : &line_buf[0]);
  
@@ -117,7 +137,7 @@
      }
 --- a/md4c.h
 +++ b/md4c.h
-@@ -468,6 +468,22 @@
+@@ -468,6 +468,45 @@
      /* Reserved. Set to NULL.
       */
      void (*syntax)(void);
@@ -137,6 +157,29 @@
 +     * start of a paragraph) still count as its start.
 +     */
 +    void (*block_offset)(MD_BLOCKTYPE /*type*/, MD_OFFSET /*offset*/, void* /*userdata*/);
++
++    /* Not in upstream md4c (see README.md of this folder). Optional (may be
++     * NULL).
++     *
++     * Called for each link reference definition when the parser takes it
++     * out of its paragraph, also for one that an earlier definition of the
++     * same label makes of no effect: with the offsets in the input of its
++     * first byte (the '[' of its label) and of the end of its last line.
++     * The calls come in the order of the input, before any call for a
++     * block.
++     */
++    void (*ref_def)(MD_OFFSET /*beg*/, MD_OFFSET /*end*/, void* /*userdata*/);
++
++    /* Not in upstream md4c (see README.md of this folder). Optional (may be
++     * NULL).
++     *
++     * Called each time a link or an image takes its target from a link
++     * reference definition: with the size that the use counts for in the
++     * limit of the parser for such uses (16 times the input size, 1 MB at
++     * most), and non-zero when the limit had room for it. A use that it
++     * had no room for is text, not a link, and so is each use after it.
++     */
++    void (*ref_def_use)(MD_SIZE /*size*/, int /*accepted*/, void* /*userdata*/);
  } MD_PARSER;
  
  

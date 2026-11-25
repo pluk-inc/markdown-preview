@@ -68,6 +68,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-24 | a changed text changes the document in place | 566 / 577 | 57 / 92 | 540 / 800 | 61 / 67 | none | 0.43 / 0.39 | 7.0 / 22.9 with the changed text of the benchmark (15.4 before all of it was laid out) |
 | 2026-11-24 | the document keeps its source; each block knows its lines of it | 558 / 576 | 61 / 107 | 470 / 700 | 59 / 69 | none | 0.45 / 0.39 | 7.0 / 25.3 (16.2 at the first frame) |
 | 2026-11-24 | a change of the source as a range and a text | 574 / 582 | 62 / 108 | 465 / 705 | 59 / 71 | none | 0.43 / 0.37 | 7.0 / 25.4 (16.2 at the first frame) |
+| 2026-11-24 | an edit parses only the blocks around it | 577 / 599 | 62 / 107 | 460 / 700 | 60 / 74 | none | 0.47 / 0.42 | 7.0 / 25.3 (16.1 at the first frame) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -592,3 +593,57 @@ to 198 MB in four of its eight numbers, for the base and for the change.
 The run above did not show it. The reason is not known; a number that
 is 90 MB over the others is a sign of it, and the run is then made
 again.
+
+## The parse of only what changed (2026-11-24)
+
+An edit parses the blocks around it, not all of the source. `core.py`,
+short / long, the base (a change as a range) and the change, with the
+same benchmark program, one after the other:
+
+| | Base | Change |
+| --- | --- | --- |
+| A change of the text in its middle, the full text given (ms) | 8.5 / 26 | 8.6 / 8.0 |
+| A typed character in the middle of the text (CPU ms) | 5.0 / 10.4 | 4.9 / 1.5 |
+| A typed character at the end of the text (CPU ms) | 4.8 / 10.5 | 4.8 / 6.1 |
+| First frame (ms) | 59 / 64.7 | 59 / 65.9 |
+| Heap at the first frame (MB) | 5.3 / 16.2 | 5.3 / 16.1 |
+
+What a key in the long document has in it now, from a timer in the
+core (not in `core.py`):
+
+- In the middle, which the view at the end does not show: 0.5 ms to
+  make the edit ready (the copy of the 1.1 MB source with the change,
+  and the parse of the piece), 0.03 ms to put the blocks in, and
+  the frame.
+- At the end, which the view shows: about 1.2 ms to make the edit ready
+  and 3.5 ms for the layout of the part that changed. The piece there
+  has the definitions of links that the document ends with, and so it
+  gets each definition of the document with one of those names: the
+  long document is the short one 128 times, so each definition is there
+  128 times. A document has a definition one time, as a rule.
+
+The short document did not change: its 5 ms are the layout of the
+changed part, which is the next step. With it, the two costs that the
+section before names are one less.
+
+The first frame of the long document is the median of ten runs of the
+benchmark program for each, in turns: 1 ms more (1.5%). The parse of
+all now also notes each definition of a link and counts the lines to
+each part. The copy of all of the
+text went from 0.3 ms to 1.1 ms in this run order. The code of the
+copy did not change. The reason is not verified; the likely one is
+that on the base each of the twenty keys before it made all texts of
+the document again, so the copy read memory that was just written, and
+now the texts are the ones of the first parse.
+
+`app.py`, short / long, five launches for each number, the base built
+from its commit on the same day:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 603 / 586 | 62 / 108 | 480 / 710 |
+| change | 582 / 599 | 61 / 108 | 460 / 700 |
+| change | 572 / 598 | 62 / 106 | 460 / 700 |
+| base | 568 / 594 | 62 / 109 | 460 / 710 |
+
+The app is the same at launch: no part of it types into the core yet.
