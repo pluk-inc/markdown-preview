@@ -83,6 +83,14 @@ test_return_puts_in_what_the_block_of_the_caret_needs :: proc(t: ^testing.T) {
 		testing.expect(t, placed)
 		testing.expect_value(t, back, c.place > 0 ? c.place : caret)
 	}
+	// Nothing at the end of an item that has a block of its own after
+	// a list in it: a new item there would take that block.
+	more := parse("- a\n  - b\n\n  more\n")
+	defer destroy(&more)
+	more_places := block_map(&more, 0)
+	defer delete(more_places)
+	_, _, _, _, refused := line_break(&more, more_places[:], {0, 0, 1})
+	testing.expect(t, !refused)
 	// Nothing in a table yet.
 	table := parse("| a |\n| - |\n")
 	defer destroy(&table)

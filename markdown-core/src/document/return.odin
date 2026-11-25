@@ -6,7 +6,6 @@ import "core:strings"
 // caret, and not of the byte that the caret is at.
 
 // The line break of a source: the kind of its first one.
-@(private)
 line_ending :: proc(source: []u8) -> string {
 	for ch, i in source {
 		switch ch {
@@ -184,14 +183,20 @@ delete_back :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end
 }
 
 // True for a block that is the first and only block of a list item
-// that is in no quote. The item can have lists in it.
+// that is in no quote. The item can have lists in it, and no block of
+// its own after them.
 @(private)
 is_item :: proc(doc: ^Document, block: int) -> bool {
 	b := block_at(doc, block)
 	if b.marker == .None || (b.spacing != .Item && b.spacing != .List_Start) || b.quote_depth > 0 {
 		return false
 	}
-	return block + 1 >= doc.count || block_at(doc, block + 1).item != b.item
+	// The first block after the lists that are in the item.
+	after := block + 1
+	for after < doc.count && block_at(doc, after).list_depth > b.list_depth {
+		after += 1
+	}
+	return (block + 1 >= doc.count || block_at(doc, block + 1).item != b.item) && (after >= doc.count || block_at(doc, after).item != b.item)
 }
 
 // The lines of a list item with no text and nothing in it, with the

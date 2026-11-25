@@ -868,7 +868,13 @@ mdcore_insert_break :: proc "c" (handle: rawptr) {
 	ctx := cast(^Ctx)handle
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
-	if ctx.caret < 0 || ctx.doc.count == 0 {
+	if ctx.caret < 0 {
+		return
+	}
+	if ctx.doc.count == 0 {
+		// A document with no block: a line break, as each other text
+		// that is typed there.
+		change_source_held(ctx, document.line_ending(ctx.doc.source), [2]int{ctx.caret, ctx.caret})
 		return
 	}
 	// The text is memory of its own: a frame uses the working memory of
