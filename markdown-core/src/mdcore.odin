@@ -1323,6 +1323,8 @@ mdcore_delete :: proc "c" (handle: rawptr, move: Move) -> bool {
 	ctx := cast(^Ctx)handle
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
+	// The bytes of the delete before are of that delete only.
+	clear(&ctx.gone)
 	if ctx.caret < 0 || ctx.doc.count == 0 || move < min(Move) || move > max(Move) {
 		return false
 	}
