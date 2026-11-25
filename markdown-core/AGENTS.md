@@ -115,6 +115,18 @@ These came from the maintainer. Do not undo one without asking.
   is the text of before with the range out, which the first plan had:
   that check refuses what a reader of Markdown expects. What the core
   keeps right by itself is the styles (`document.range_edit`).
+- **Undo is a history of the source in the core** (2026-11-25), not the
+  undo manager of the window. A step is the bytes that went and came
+  at an offset, with the caret and the selection before and after; the
+  steps of one exported call are one group, and Undo makes the edit of
+  each step back through the one way that the source changes, so the
+  layout, the caret, and the marks at the caret work as for each other
+  edit. Steps of typed or deleted characters in a row less than 0.3 s
+  apart go on in one group, as the forms of the text of an input method
+  do; a move of the caret ends a group, and so does a line break that
+  is typed. A new text from the host (a file that another app changed)
+  ends the history: its steps are of a source that is no more. The
+  bytes of the history are kept to 16 MB; the oldest groups go first.
 - **A reader at the end of the document is kept by the first line that
   shows, as at each other place** (2026-11-24). With a narrower window the
   end then goes out of view. Browsers and editors do the same; only a
@@ -474,6 +486,12 @@ Known limits, found in review and left on purpose:
 
 - One very long paragraph or one large table is laid out in one step. Code
   blocks stop between lines.
+- Control-T after the first character of a paragraph that starts with a
+  word and a space ("A paragraph") puts the space first, where Markdown
+  does not show it, and a second Control-T then has no two characters to
+  change. The walk of `bench.m` stops there on
+  `~/Desktop/Pluk/md-test-docs/empty-lines.md` (also before Undo came).
+  `document.transpose` must not move a space to the start of a text.
 - The time from a key to its frame has no program in `bench/`: it was
   measured with a build that has time stamps in the view and in the render
   loop (`BENCHMARKS.md`, "The frame for a key does not wait for the
@@ -1014,8 +1032,8 @@ The order of the next steps, from the review of the second step:
   the marks of an element go with the last text between them also
   while they show, as with no marks in the text (an edit knows each
   element but the ones with a mark that the range has a byte of).
-- Next for the editor, in the order that a reader misses them: undo;
-  the fence lines of code and the line under a heading.
+- Next for the editor, in the order that a reader misses them: the
+  fence lines of code and the line under a heading.
 - Done: where the lines of a block end comes from the parser
   (`block_offset` gives the end too, `Block.lines`), as its start does.
   Before, `empties.lines_end` and `fence_line` read the lines a second
@@ -1056,7 +1074,7 @@ The order of the next steps, from the review of the second step:
   delete, and a paragraph with a block right after it has one empty
   line there after the two; a document of only empty lines has no
   block and no caret.
-- Not done for the caret: a caret in a table cell with no text, undo.
+- Not done for the caret: a caret in a table cell with no text.
 - Done: a delete of the only character between two marks takes the
   marks too ("**a**" was "****" after it, which is a rule). The Delete
   key is the range edit of one step to the left, as each other delete.

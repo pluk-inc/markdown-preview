@@ -414,8 +414,8 @@ text_destroy :: proc(t: ^Text) {
 // (not of the items inside it, which have their own state). False when no
 // task has its mark on that line. The result is the same as a new parse
 // of the source with that mark changed, and the source gets that mark.
-// `mark` gets the offset of the byte of the mark in the source, and
-// `was` the byte that it had.
+// `mark` gets the offset of the byte of the mark in the source when that
+// byte changed, and `was` the byte that it had ("x" or "X").
 set_task_done :: proc(doc: ^Document, line: int, done: bool, mark: ^int = nil, was: ^u8 = nil) -> bool {
 	// The last part that starts on the line or before it.
 	lo, hi := 0, len(doc.parts)
@@ -448,11 +448,11 @@ set_task_done :: proc(doc: ^Document, line: int, done: bool, mark: ^int = nil, w
 		}
 		b.marker = done ? .Task_Done : .Task_Open
 		b.done = done
-		if mark != nil {
+		if mark != nil && doc.source[counted] != (done ? 'x' : ' ') {
 			mark^ = counted
-		}
-		if was != nil {
-			was^ = doc.source[counted]
+			if was != nil {
+				was^ = doc.source[counted]
+			}
 		}
 		doc.source[counted] = done ? 'x' : ' '
 		// The later blocks of the same item, which can come after

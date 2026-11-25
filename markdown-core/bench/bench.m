@@ -304,7 +304,7 @@ static const char *caret_walk(void *ctx, long length) {
     if (!mdcore_redo(ctx)) return "no Redo after an Undo";
     mdcore_source(ctx, &now);
     if (now != 0 && now >= size) return "Redo did not take the text out again";
-    if (mdcore_can_undo(ctx, true)) return "Redo has a change after the last one";
+    if (mdcore_can_redo(ctx)) return "Redo has a change after the last one";
     mdcore_undo(ctx);
     source = mdcore_source(ctx, &now);
     if (now != size || memcmp(source, whole.bytes, (size_t)size) != 0) return "Undo after Redo did not give the same text";
@@ -315,7 +315,7 @@ static const char *caret_walk(void *ctx, long length) {
     while (mdcore_undo(ctx)) undone++;
     source = mdcore_source(ctx, &now);
     if (now != first_size || memcmp(source, first_source.bytes, (size_t)now) != 0) return "Undo of each change did not give the first source";
-    if (mdcore_can_undo(ctx, false)) return "Undo has a change at the first source";
+    if (mdcore_can_undo(ctx)) return "Undo has a change at the first source";
     long again = 0;
     while (mdcore_redo(ctx)) again++;
     mdcore_source(ctx, &now);

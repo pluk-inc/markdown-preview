@@ -1,6 +1,7 @@
 package history
 
 import "core:testing"
+import "core:time"
 
 // A source that the steps of a history are made on, as the owner does.
 @(private = "file")
@@ -10,44 +11,58 @@ Text :: struct {
 	caret: int,
 }
 
+// A time `s` seconds after a start.
 @(private = "file")
-edit :: proc(t: ^Text, start, end: int, came: string, now: f64, kind := Kind.Other) {
-	record(&t.h, start, t.bytes[start:end], came, t.caret, now, kind)
+at :: proc(s: f64) -> time.Tick {
+	return time.tick_add({}, time.Duration(s * f64(time.Second)))
+}
+
+// One change in one command of its own.
+@(private = "file")
+edit :: proc(t: ^Text, start, stop: int, came: string, s: f64, kind := Kind.Other, anchor := -1) {
+	begin(&t.h, kind, t.caret, anchor)
+	change(t, start, stop, came, s)
+	end(&t.h, t.caret)
+}
+
+// One change in the command in progress.
+@(private = "file")
+change :: proc(t: ^Text, start, end: int, came: string, s: f64) {
+	record(&t.h, start, t.bytes[start:end], came, at(s))
 	remove_range(&t.bytes, start, end)
 	inject_at(&t.bytes, start, ..transmute([]u8)came)
 	t.caret = start + len(came)
-	set_caret_after(&t.h, t.caret)
 }
 
 @(private = "file")
-type :: proc(t: ^Text, s: string, now: f64) {
-	edit(t, t.caret, t.caret, s, now, .Typing)
+type :: proc(t: ^Text, s: string, sec: f64) {
+	edit(t, t.caret, t.caret, s, sec, .Typing)
 }
 
 @(private = "file")
-back :: proc(t: ^Text, now: f64) {
-	edit(t, t.caret - 1, t.caret, "", now, .Back)
+back :: proc(t: ^Text, s: f64) {
+	edit(t, t.caret - 1, t.caret, "", s, .Back)
 }
 
 @(private = "file")
 take_back :: proc(t: ^Text) -> bool {
-	steps := undo(&t.h) or_return
+	steps, group := undo(&t.h) or_return
 	#reverse for step in steps {
 		remove_range(&t.bytes, step.start, step.start + len(came_of(&t.h, step)))
 		inject_at(&t.bytes, step.start, ..gone_of(&t.h, step))
-		t.caret = step.caret_before
 	}
+	t.caret = group.caret_before
 	return true
 }
 
 @(private = "file")
 make_again :: proc(t: ^Text) -> bool {
-	steps := redo(&t.h) or_return
+	steps, group := redo(&t.h) or_return
 	for step in steps {
 		remove_range(&t.bytes, step.start, step.start + len(gone_of(&t.h, step)))
 		inject_at(&t.bytes, step.start, ..came_of(&t.h, step))
-		t.caret = step.caret_after
 	}
+	t.caret = group.caret_after
 	return true
 }
 
@@ -132,23 +147,22 @@ test_the_steps_of_a_command_are_one_group :: proc(t: ^testing.T) {
 	type(&x, "abcd", 0)
 	// Return over a selection: the text goes, then the line break comes.
 	begin(&x.h, .Other, 3, 1)
-	x.caret = 3
-	edit(&x, 1, 3, "", 5)
-	edit(&x, 1, 1, "\n", 5)
-	end(&x.h)
+	change(&x, 1, 3, "", 5)
+	change(&x, 1, 1, "\n", 5)
+	// The command moved the caret after its last change.
+	x.caret = 2
+	end(&x.h, x.caret)
 	testing.expect_value(t, string(x.bytes[:]), "a\nd")
 	testing.expect_value(t, len(x.h.groups), 2)
 	take_back(&x)
 	testing.expect_value(t, string(x.bytes[:]), "abcd")
 	testing.expect_value(t, x.caret, 3)
-	testing.expect_value(t, steps_of(&x.h, 1)[0].anchor_before, 1)
+	testing.expect_value(t, x.h.groups[1].anchor_before, 1)
 	make_again(&x)
 	testing.expect_value(t, string(x.bytes[:]), "a\nd")
 	testing.expect_value(t, x.caret, 2)
 	// A command of its own after it, at the same time.
-	begin(&x.h, .Other, x.caret)
 	edit(&x, 0, 1, "", 5)
-	end(&x.h)
 	testing.expect_value(t, len(x.h.groups), 3)
 }
 
@@ -162,12 +176,42 @@ test_the_forms_of_the_text_of_an_input_method_are_one_group :: proc(t: ^testing.
 	testing.expect_value(t, len(x.h.groups), 1)
 	// Text that takes the place of other text is a group of its own.
 	type(&x, "a", 20)
-	edit(&x, 0, 3, "b", 21, .Replace)
+	edit(&x, 0, 4, "b", 21, .Replace)
 	testing.expect_value(t, len(x.h.groups), 3)
 	take_back(&x)
 	take_back(&x)
 	take_back(&x)
 	testing.expect_value(t, string(x.bytes[:]), "")
+}
+
+// In an empty line the first form came with a line break before it; the
+// input method that is let go takes the line break back with the text.
+@(test)
+test_an_input_method_that_is_let_go_in_an_empty_line_is_one_group :: proc(t: ^testing.T) {
+	x: Text
+	defer free_text(&x)
+	append(&x.bytes, "a\n")
+	x.caret = 2
+	type(&x, "\nか", 0)
+	edit(&x, 3, 6, "かな", 1, .Replace)
+	edit(&x, 2, 9, "", 2, .Replace)
+	testing.expect_value(t, string(x.bytes[:]), "a\n")
+	testing.expect_value(t, len(x.h.groups), 1)
+	take_back(&x)
+	testing.expect_value(t, string(x.bytes[:]), "a\n")
+	testing.expect(t, !can_undo(&x.h))
+}
+
+// A change to the same bytes is no step, and a command with no step
+// makes no group.
+@(test)
+test_a_change_to_the_same_bytes_is_none :: proc(t: ^testing.T) {
+	x: Text
+	defer free_text(&x)
+	type(&x, "abc", 0)
+	edit(&x, 0, 3, "abc", 5)
+	testing.expect_value(t, len(x.h.groups), 1)
+	testing.expect_value(t, len(x.h.steps), 1)
 }
 
 @(test)

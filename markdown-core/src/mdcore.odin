@@ -346,7 +346,7 @@ mdcore_replace_text :: proc "c" (handle: rawptr, start, end: c.long, utf8: [^]u8
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
 	command(ctx, .Replace)
-	defer history.end(&ctx.history)
+	defer history.end(&ctx.history, ctx.caret)
 	typed(ctx, length > 0 ? string(utf8[:length]) : "", int(start), int(end))
 }
 
@@ -402,13 +402,13 @@ change_source_held :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil, 
 		return
 	}
 	if !ctx.replaying {
-		if _, given := range.?; given && ctx.caret >= 0 {
+		if _, given := range.?; given && ctx.history.depth > 0 {
 			start := clamp(edit.start, 0, len(ctx.doc.source))
-			history.record(&ctx.history, start, ctx.doc.source[start:clamp(edit.end, start, len(ctx.doc.source))], edit.text, ctx.caret, seconds_now())
+			history.record(&ctx.history, start, ctx.doc.source[start:clamp(edit.end, start, len(ctx.doc.source))], edit.text, time.tick_now())
 		} else {
 			// Another text from the host (a file that was read again),
-			// or a change with no caret: the steps are of a source that
-			// is no more.
+			// or a change of no command of the reader: the steps are of
+			// a source that is no more.
 			history.clear(&ctx.history)
 		}
 	}
@@ -469,9 +469,6 @@ change_source_held :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil, 
 		// change moved with the text are no place of the caret.
 		ctx.selection = {anchor = ctx.caret_at, focus = ctx.caret_at, active = true}
 	}
-	if !ctx.replaying {
-		history.set_caret_after(&ctx.history, ctx.caret)
-	}
 	if ctx.layout_valid {
 		layout.restore_place(&ctx.page, ctx.place)
 		layout_changed(ctx)
@@ -479,21 +476,17 @@ change_source_held :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil, 
 	reveal_update(ctx)
 }
 
-// The time now, in seconds, for the steps of the history.
-@(private)
-seconds_now :: proc() -> f64 {
-	return f64(time.tick_now()._nsec) / 1e9
-}
-
 // Starts a command of the reader that changes the source: its changes
 // are one step of Undo, which puts the caret and the selection back as
-// they are now. The caller holds `source_lock`, and ends the command
-// with `history.end`.
+// they are now. With text selected it is a command of its own, of no
+// kind that goes on from another one. The caller holds `source_lock`,
+// and ends the command with `history.end` and the caret after all that
+// the command did.
 @(private)
 command :: proc(ctx: ^Ctx, kind: history.Kind) {
-	anchor := -1
+	kind, anchor := kind, -1
 	if from, to, selected := selection_offsets(ctx); selected {
-		anchor = ctx.caret == from ? to : from
+		kind, anchor = .Other, ctx.caret == from ? to : from
 	}
 	history.begin(&ctx.history, kind, ctx.caret, anchor)
 }
@@ -502,41 +495,42 @@ command :: proc(ctx: ^Ctx, kind: history.Kind) {
 // back, and puts the caret where it was then. The caller holds
 // `source_lock`.
 @(private)
-replay :: proc(ctx: ^Ctx, steps: []history.Step, back: bool) {
+replay :: proc(ctx: ^Ctx, steps: []history.Step, group: history.Group, back: bool) {
 	ctx.replaying = true
 	defer ctx.replaying = false
 	h := &ctx.history
 	if back {
 		#reverse for step in steps {
-			change_source_held(ctx, string(history.gone_of(h, step)), [2]int{step.start, step.start + len(history.came_of(h, step))}, step.caret_before)
+			change_source_held(ctx, string(history.gone_of(h, step)), [2]int{step.start, step.start + len(history.came_of(h, step))}, group.caret_before)
 		}
 	} else {
 		for step in steps {
-			change_source_held(ctx, string(history.came_of(h, step)), [2]int{step.start, step.start + len(history.gone_of(h, step))}, step.caret_after)
+			change_source_held(ctx, string(history.came_of(h, step)), [2]int{step.start, step.start + len(history.gone_of(h, step))}, group.caret_after)
 		}
 	}
-	// A change that came to nothing (the task of a click that the
-	// reader set back) left the caret where it was.
-	caret := back ? steps[0].caret_before : steps[len(steps) - 1].caret_after
+	// No caret (a task that was set in Read mode), or a view with no
+	// caret now: the caret stays as the change left it.
+	caret := back ? group.caret_before : group.caret_after
+	if caret < 0 || ctx.caret < 0 || ctx.doc.count == 0 {
+		return
+	}
 	context.temp_allocator = ctx.temp
 	hold(ctx)
-	if ctx.caret >= 0 && ctx.doc.count > 0 {
-		ctx.select_from = nil
-		// The text that was selected before the command is selected
-		// again: the caret is at the end where it was.
-		anchor := back ? steps[0].anchor_before : -1
-		ctx.caret = clamp(anchor >= 0 ? anchor : caret, 0, len(ctx.doc.source))
+	ctx.select_from = nil
+	// The text that was selected before the command is selected again:
+	// the caret is at the end where it was.
+	anchor := back ? group.anchor_before : -1
+	ctx.caret = clamp(anchor >= 0 ? anchor : caret, 0, len(ctx.doc.source))
+	caret_changed(ctx)
+	from := ctx.caret_at
+	if anchor >= 0 {
+		ctx.caret = clamp(caret, 0, len(ctx.doc.source))
 		caret_changed(ctx)
-		from := ctx.caret_at
-		if anchor >= 0 {
-			ctx.caret = clamp(caret, 0, len(ctx.doc.source))
-			caret_changed(ctx)
-			ctx.select_from = anchor
-		}
-		ctx.selection = {anchor = from, focus = ctx.caret_at, active = true}
-		ctx.display_valid = false
-		reveal_update(ctx)
+		ctx.select_from = anchor
 	}
+	ctx.selection = {anchor = from, focus = ctx.caret_at, active = true}
+	ctx.display_valid = false
+	reveal_update(ctx)
 }
 
 // Takes back the last change of the reader. See the header.
@@ -546,8 +540,8 @@ mdcore_undo :: proc "c" (handle: rawptr) -> bool {
 	ctx := cast(^Ctx)handle
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
-	steps := history.undo(&ctx.history) or_return
-	replay(ctx, steps, true)
+	steps, group := history.undo(&ctx.history) or_return
+	replay(ctx, steps, group, true)
 	return true
 }
 
@@ -558,19 +552,29 @@ mdcore_redo :: proc "c" (handle: rawptr) -> bool {
 	ctx := cast(^Ctx)handle
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
-	steps := history.redo(&ctx.history) or_return
-	replay(ctx, steps, false)
+	steps, group := history.redo(&ctx.history) or_return
+	replay(ctx, steps, group, false)
 	return true
 }
 
 // See the header.
 @(export)
-mdcore_can_undo :: proc "c" (handle: rawptr, redo: bool) -> bool {
+mdcore_can_undo :: proc "c" (handle: rawptr) -> bool {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
-	return redo ? history.can_redo(&ctx.history) : history.can_undo(&ctx.history)
+	return history.can_undo(&ctx.history)
+}
+
+// See the header.
+@(export)
+mdcore_can_redo :: proc "c" (handle: rawptr) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	return history.can_redo(&ctx.history)
 }
 
 // Makes the change of an edit that is ready, in the document and in the
@@ -1354,9 +1358,8 @@ mdcore_insert :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) -> bool 
 	if ctx.caret < 0 || length <= 0 {
 		return false
 	}
-	_, _, over := selection_offsets(ctx)
-	command(ctx, over ? .Other : .Typing)
-	defer history.end(&ctx.history)
+	command(ctx, .Typing)
+	defer history.end(&ctx.history, ctx.caret)
 	if selected, changed := replace_selection(ctx, string(utf8[:length])); selected {
 		return changed
 	}
@@ -1379,7 +1382,7 @@ mdcore_insert_break :: proc "c" (handle: rawptr) {
 		return
 	}
 	command(ctx, .Other)
-	defer history.end(&ctx.history)
+	defer history.end(&ctx.history, ctx.caret)
 	// The text that is selected goes first: the line break is at the
 	// place where it was. Nothing for a selection that has no edit.
 	if selected, changed := replace_selection(ctx, ""); selected && !changed {
@@ -1485,9 +1488,8 @@ mdcore_delete :: proc "c" (handle: rawptr, move: Move) -> bool {
 	if ctx.caret < 0 || ctx.doc.count == 0 || move < min(Move) || move > max(Move) {
 		return false
 	}
-	_, _, over := selection_offsets(ctx)
-	command(ctx, over ? .Other : move == .Left ? .Back : move == .Right ? .Forward : .Other)
-	defer history.end(&ctx.history)
+	command(ctx, move == .Left ? .Back : move == .Right ? .Forward : .Other)
+	defer history.end(&ctx.history, ctx.caret)
 	if selected, changed := replace_selection(ctx, ""); selected {
 		return changed
 	}
@@ -1547,7 +1549,7 @@ mdcore_delete_lines :: proc "c" (handle: rawptr) -> bool {
 	edit, caret := document.remove_lines(&ctx.doc, from, to) or_return
 	defer delete(edit.text)
 	command(ctx, .Other)
-	defer history.end(&ctx.history)
+	defer history.end(&ctx.history, ctx.caret)
 	change_source_held(ctx, edit.text, [2]int{edit.start, edit.end}, caret)
 	caret_to_place(ctx)
 	return true
@@ -1570,7 +1572,7 @@ mdcore_transpose :: proc "c" (handle: rawptr) -> bool {
 	edit, caret := document.transpose(&ctx.doc, ctx.caret_places[:], ctx.caret_at) or_return
 	defer delete(edit.text)
 	command(ctx, .Other)
-	defer history.end(&ctx.history)
+	defer history.end(&ctx.history, ctx.caret)
 	change_source_held(ctx, edit.text, [2]int{edit.start, edit.end}, caret)
 	return true
 }
@@ -1806,18 +1808,18 @@ mdcore_set_task_checked :: proc "c" (handle: rawptr, line: c.long, checked: bool
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
 	hold(ctx)
-	mark: int
+	mark := -1
 	was: u8
 	if !document.set_task_done(&ctx.doc, int(line), checked, &mark, &was) {
 		return false
 	}
-	// A step of Undo, for a view that takes the keys: the one byte of
-	// the mark. The caret stays where it is.
-	if now_byte := ctx.doc.source[mark]; ctx.caret >= 0 && now_byte != was {
-		history.seal(&ctx.history)
-		history.record(&ctx.history, mark, []u8{was}, string([]u8{now_byte}), ctx.caret, seconds_now())
-		history.set_caret_after(&ctx.history, ctx.caret)
-		history.seal(&ctx.history)
+	// A step of Undo: the one byte of the mark. Also with no caret (in
+	// Read mode): it is a change of the source as each other one, and a
+	// step that is not there would make the later ones wrong.
+	if mark >= 0 {
+		command(ctx, .Other)
+		history.record(&ctx.history, mark, []u8{was}, string(ctx.doc.source[mark:mark + 1]), time.tick_now())
+		history.end(&ctx.history, ctx.caret)
 	}
 	// The places are the same; only the color of the item's text changes.
 	ctx.display_valid = false

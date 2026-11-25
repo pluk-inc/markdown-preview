@@ -907,9 +907,9 @@ extension NativeRendererView: NSMenuItemValidation {
         case #selector(paste(_:)):
             return isEditable && hasCaret
         case #selector(undo(_:)):
-            return isEditable && hasCaret && mdcore_can_undo(ctx, false)
+            return isEditable && hasCaret && mdcore_can_undo(ctx)
         case #selector(redo(_:)):
-            return isEditable && hasCaret && mdcore_can_undo(ctx, true)
+            return isEditable && hasCaret && mdcore_can_redo(ctx)
         default:
             return true
         }
@@ -1299,10 +1299,12 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
     private func stepHistory(redo: Bool) {
         guard isEditable, hasCaret else { return }
         // The text of an input method that is not final is a part of the
-        // last change: the input method lets it go.
+        // last change: the input method lets it go first, while the view
+        // still knows its range (an input method can answer with the
+        // text as final, which then takes the place of that range).
         if markedText != nil {
-            markedText = nil
             inputContext?.discardMarkedText()
+            markedText = nil
         }
         if redo ? mdcore_redo(ctx) : mdcore_undo(ctx) { didEdit() }
     }

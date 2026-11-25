@@ -115,7 +115,10 @@ a word (with Option), to the ends of the line (with Command), to the
 end of the paragraph (Control-K, with Control-Y to put it back), and
 Delete at the start of a block joins it with the block before.
 Control-T changes the places of two characters, and Command-Shift-K
-takes the line of the source out. It does not have undo, the
+takes the line of the source out. Undo and Redo (Command-Z and
+Shift-Command-Z) take each change back and make it again: characters
+that are typed or deleted in a row are one step, and Undo of a change
+over a selection selects that text again. It does not have the
 formatting bar, images that are pasted, or a caret in a table cell with
 no text. Some selections have no edit yet, so typed text, a paste,
 Return, Delete, and Cut do nothing with them: one with an end in code

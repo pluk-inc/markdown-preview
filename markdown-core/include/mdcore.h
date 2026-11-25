@@ -239,14 +239,15 @@ bool mdcore_transpose(void *ctx);
 // before it that go on from each other in a short time: characters that
 // came one after the other at the caret, characters that went one after
 // the other, the forms of the text of an input method
-// (mdcore_replace_text for the text that the call before put in). A
-// move of the caret ends such a run. A change after an Undo ends what
-// Redo can make again. A new text of the document (mdcore_set_markdown
-// with another text) ends both.
+// (mdcore_replace_text for the end of the text that the calls before
+// put in). A move of the caret and a click end such a run. A change
+// after an Undo ends what Redo can make again. A new text of the
+// document (mdcore_set_markdown with another text) ends both.
 bool mdcore_undo(void *ctx);
 bool mdcore_redo(void *ctx);
-// True when mdcore_undo (mdcore_redo, with `redo`) has a change.
-bool mdcore_can_undo(void *ctx, bool redo);
+// True when mdcore_undo (mdcore_redo) has a change.
+bool mdcore_can_undo(void *ctx);
+bool mdcore_can_redo(void *ctx);
 
 // The text of the document as it is now, UTF-8: what a host saves after
 // edits. The pointer is good until the next call of this.
