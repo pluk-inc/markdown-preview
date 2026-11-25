@@ -18,6 +18,15 @@ line_of_task :: proc(doc: ^Document, block: int) -> int {
 	return task_line(doc, doc.parts[part], &doc.parts[part].blocks[slot])
 }
 
+// Where in the source the mark of the task of a block is: the byte
+// that a click changes. -1 for a block with no task.
+@(private = "file")
+mark_of_task :: proc(doc: ^Document, block: int) -> int {
+	part, slot := locate(doc, block)
+	mark := doc.parts[part].blocks[slot].task_mark
+	return mark == 0 ? -1 : doc.parts[part].source + mark
+}
+
 // The target of the link of a span; "" for no link.
 @(private = "file")
 target :: proc(doc: ^Document, span: Span) -> string {
@@ -471,18 +480,32 @@ expect_document :: proc(t: ^testing.T, doc: ^Document, source: string, loc := #c
 	}
 	testing.expect_value(t, count, doc.count, loc)
 	testing.expect_value(t, string(doc.source), source, loc)
+	Item :: type_of(Block{}.item)
+	there, back: map[Item]Item
+	defer delete(there)
+	defer delete(back)
 	for i in 0 ..< min(doc.count, want.count) {
 		a, b := block_at(doc, i), block_at(&want, i)
 		testing.expect(t, layout_equal(a, b), loc = loc)
 		testing.expect_value(t, block_start(doc, i), block_start(&want, i), loc)
 		testing.expect_value(t, line_of_task(doc, i), line_of_task(&want, i), loc)
+		testing.expect_value(t, mark_of_task(doc, i), mark_of_task(&want, i), loc)
 		testing.expect_value(t, a.done, b.done, loc)
-		// The same blocks are in one item; the number of the item is
-		// not the same after an edit.
-		if i > 0 {
-			testing.expect_value(t, a.item == block_at(doc, i - 1).item, b.item == block_at(&want, i - 1).item, loc)
-		}
+		// The same blocks are in one item, also with the blocks of an
+		// item inside between them; the number of the item is not the
+		// same after an edit. Each number of the one document is one
+		// number of the other.
 		testing.expect_value(t, a.item == 0, b.item == 0, loc)
+		if a.item != 0 && b.item != 0 {
+			if a.item not_in there {
+				there[a.item] = b.item
+			}
+			if b.item not_in back {
+				back[b.item] = a.item
+			}
+			testing.expect_value(t, there[a.item], b.item, loc)
+			testing.expect_value(t, back[b.item], a.item, loc)
+		}
 		for span, n in a.text.spans {
 			testing.expect_value(t, target(doc, span), target(&want, b.text.spans[n]), loc)
 		}
@@ -824,6 +847,9 @@ test_an_edit_that_a_piece_is_not_right_for_gives_the_document_too :: proc(t: ^te
 		// More uses of a long definition than the limit of the parser
 		// for a small text has room for.
 		{limit_before, limit_after},
+		// A line that is a rule only under the definition before it;
+		// with no definition it is code.
+		{"# Before\n\n[a]: /u\n    ---\ntext\n\nAfter\n\nLast\n", "# Before\n\n[a]: /u\n    ---\ntext!\n\nAfter\n\nLast\n"},
 	}
 	for c in cases {
 		doc := parse(c.before)
