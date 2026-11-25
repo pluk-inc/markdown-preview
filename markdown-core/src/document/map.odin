@@ -27,6 +27,19 @@ block_map :: proc(doc: ^Document, block: int) -> (places: [dynamic]Place) {
 	end := last < doc.count ? block_start(doc, last) : len(doc.source)
 	text, _, _, _, _, lead := piece_text(doc, doc.source[start:end], start, end)
 	fresh := parse_piece(text[:], 0, len(doc.source), &places, block - first)
+	base := start - lead
+	// The piece must give the block as the document has it. It does not
+	// when the limit of the parser for the uses of definitions cuts a
+	// use in the piece that a parse of all keeps: then the places are
+	// of another text. A parse of all of the source is right each time.
+	if block - first >= fresh.count || !layout_equal(block_at(doc, block), block_at(&fresh, block - first)) {
+		destroy(&fresh)
+		clear(&places)
+		text = make([dynamic]u8, len(doc.source))
+		copy(text[:], doc.source)
+		fresh = parse_piece(text[:], 0, len(doc.source), &places, block)
+		base = 0
+	}
 	// The line break at the end of a code block is no text of it.
 	texts := block_texts(block_at(doc, block))
 	for len(places) > 0 {
@@ -36,21 +49,51 @@ block_map :: proc(doc: ^Document, block: int) -> (places: [dynamic]Place) {
 		}
 		pop(&places)
 	}
+	place_escapes(&places, text[:])
 	place_made(places[:], text[:])
 	destroy(&fresh)
 	for &place in places {
-		place.source += start - lead
+		place.source += base
 	}
 	return
 }
 
-// Gives each piece that the parser made its place in the source: what
-// is between the pieces of the same text that are around it. A soft
-// line break in a quote is the line break and the mark of the quote on
-// the next line; an empty line of a code block is its line break. Of a
-// run of made pieces, the spaces of an indent at its end are the bytes
-// right before the text after them, and the line breaks have the rest,
-// each to the end of its line and the last one all that is left.
+// A character with a backslash before it in the source ("\\*") is the
+// two bytes: the parser gives the character only, and the backslash is
+// at no other piece. The piece that starts with such a character gets a
+// piece of its own for it.
+@(private)
+place_escapes :: proc(places: ^[dynamic]Place, source: []u8) {
+	for i := 0; i < len(places); i += 1 {
+		place := places[i]
+		if place.made || place.whole || place.source < 1 || source[place.source - 1] != '\\' {
+			continue
+		}
+		// Not a backslash that is text of the piece before.
+		if i > 0 && !places[i - 1].made && places[i - 1].source + places[i - 1].source_len >= place.source {
+			continue
+		}
+		rest := place
+		rest.text += 1
+		rest.text_len -= 1
+		rest.source += 1
+		rest.source_len -= 1
+		places[i] = {place.cell, place.text, 1, place.source - 1, 2, true, false, false, false}
+		if rest.text_len > 0 {
+			inject_at(places, i + 1, rest)
+			i += 1
+		}
+	}
+}
+
+// Gives each piece that the parser made its place in the source, from
+// what is between the pieces of the same text around it. A line break
+// is its bytes with the spaces (or the backslash) before it, and the
+// marks of a quote and the indent of the next line after it: a soft
+// line break in a quote goes out with the mark of the next line. Marks
+// of bold text and the like that are beside it are no part of it. The
+// spaces of an indent at the end of a run of made pieces are the bytes
+// right before the text after them.
 @(private)
 place_made :: proc(places: []Place, source: []u8) {
 	// The start of the line break that ends before `at`, or `at`.
@@ -65,18 +108,30 @@ place_made :: proc(places: []Place, source: []u8) {
 		}
 		return at
 	}
-	// The end of the line that `at` is in, after its line break; `limit`
-	// when the line goes on to there.
-	line_end :: proc(source: []u8, at, limit: int) -> int {
+	// The range of the first line break at `at` or after it and before
+	// `limit`, with what goes with it. `at`, `at` when there is none.
+	line_break :: proc(source: []u8, at, limit: int) -> (start, end: int) {
 		for i in at ..< limit {
-			if source[i] == '\n' {
-				return i + 1
+			if source[i] != '\n' && source[i] != '\r' {
+				continue
 			}
-			if source[i] == '\r' {
-				return i + 1 < limit && source[i + 1] == '\n' ? i + 2 : i + 1
+			start = i
+			for start > at && (source[start - 1] == ' ' || source[start - 1] == '\t') {
+				start -= 1
 			}
+			if start > at && source[start - 1] == '\\' {
+				start -= 1
+			}
+			end = i + 1
+			if source[i] == '\r' && end < limit && source[end] == '\n' {
+				end += 1
+			}
+			for end < limit && (source[end] == ' ' || source[end] == '\t' || source[end] == '>') {
+				end += 1
+			}
+			return
 		}
-		return limit
+		return at, at
 	}
 	for i := 0; i < len(places); {
 		if !places[i].made {
@@ -110,15 +165,11 @@ place_made :: proc(places: []Place, source: []u8) {
 			}
 		}
 		if b < 0 {
-			// At the end of the text: as many lines on.
-			b = a
-			for _ in 0 ..< breaks {
-				b = line_end(source, b, len(source))
-			}
+			b = len(source)
 		}
 		// The spaces of an indent, from the end.
 		m := j
-		for m > i && !places[m - 1].line_break {
+		for m > i && !places[m - 1].line_break && !places[m - 1].nul {
 			place := &places[m - 1]
 			place.source = max(b - place.text_len, a)
 			place.source_len = b - place.source
@@ -127,10 +178,21 @@ place_made :: proc(places: []Place, source: []u8) {
 			m -= 1
 		}
 		at := a
-		for &place, n in places[i:m] {
-			place.source = at
-			place.source_len = i + n == m - 1 ? b - at : (place.line_break ? line_end(source, at, b) - at : 0)
-			at += place.source_len
+		for &place in places[i:m] {
+			switch {
+			case place.line_break:
+				place.source, at = line_break(source, at, b)
+				place.source_len = at - place.source
+			case place.nul:
+				// The byte itself.
+				for at < b && source[at] != 0 {
+					at += 1
+				}
+				place.source, place.source_len = at, at < b ? 1 : 0
+				at += place.source_len
+			case:
+				place.source, place.source_len = at, 0
+			}
 		}
 		i = j
 	}
@@ -221,7 +283,9 @@ address_in :: proc(places: []Place, block, offset: int) -> (at: Address) {
 		within := offset - place.source
 		at.cell = place.cell
 		if place.whole {
-			at.byte = within >= place.source_len ? place.text + place.text_len : place.text
+			// Past its start is after it: a space that is typed into a
+			// run of spaces is before the caret.
+			at.byte = within > 0 ? place.text + place.text_len : place.text
 		} else {
 			at.byte = place.text + min(within, place.text_len)
 		}

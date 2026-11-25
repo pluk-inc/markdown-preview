@@ -162,7 +162,7 @@ current_style :: proc(p: ^Parser) -> Inline_Set {
 }
 
 @(private)
-append_text :: proc(p: ^Parser, s: string, source := -1, source_len := 0, line_break := false) {
+append_text :: proc(p: ^Parser, s: string, source := -1, source_len := 0, line_break := false, whole := false, nul := false) {
 	t := p.cur
 	if t == nil || len(s) == 0 {
 		return
@@ -171,7 +171,7 @@ append_text :: proc(p: ^Parser, s: string, source := -1, source_len := 0, line_b
 	append(&t.bytes, s)
 	if p.places != nil && p.doc.count == p.places_block {
 		cell := p.in_table && p.cur == &p.cell ? len(p.table.cells) : 0
-		append(p.places, Place{cell, start, len(s), source, source_len, source < 0 || source_len != len(s), source < 0, line_break})
+		append(p.places, Place{cell, start, len(s), source, source_len, whole || source < 0 || source_len != len(s), source < 0, line_break, nul})
 	}
 	style := current_style(p)
 	if n := len(t.spans); n > 0 && t.spans[n - 1].style == style && t.spans[n - 1].link == p.link {
@@ -182,9 +182,9 @@ append_text :: proc(p: ^Parser, s: string, source := -1, source_len := 0, line_b
 }
 
 @(private)
-append_rune :: proc(p: ^Parser, r: rune, source := -1, source_len := 0) {
+append_rune :: proc(p: ^Parser, r: rune, source := -1, source_len := 0, whole := false, nul := false) {
 	bytes, n := utf8.encode_rune(r)
-	append_text(p, string(bytes[:n]), source, source_len)
+	append_text(p, string(bytes[:n]), source, source_len, whole = whole, nul = nul)
 }
 
 // Where a piece of the text of a block came from in the source.
@@ -202,6 +202,7 @@ Place :: struct {
 	// place is what is between the pieces around it (`place_made`).
 	made:               bool,
 	line_break:         bool, // of a made piece: it is for a line break
+	nul:                bool, // of a made piece: it is for a NUL byte of the source
 }
 
 // Starts a paragraph or a heading. It takes the marker of a list item that
@@ -539,7 +540,7 @@ on_text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr)
 	}
 	#partial switch type {
 	case .Nullchar:
-		append_rune(p, utf8.RUNE_ERROR)
+		append_rune(p, utf8.RUNE_ERROR, nul = true)
 	case .Br:
 		append_text(p, "\n", line_break = true)
 	case .Softbr:
@@ -550,8 +551,9 @@ on_text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr)
 		append_collapsed(p, s, at)
 	case:
 		// A line of code is in the source; the line break after it and
-		// the spaces of its indent are made.
-		append_text(p, s, at, len(s), at < 0 && s == "\n")
+		// the spaces of its indent are made. In inline code, a made
+		// space is for a line break.
+		append_text(p, s, at, len(s), at < 0 && (s == "\n" || (s == " " && !p.in_code)))
 	}
 	return 0
 }
@@ -604,7 +606,7 @@ append_entity :: proc(p: ^Parser, s: string, at: int) {
 			value = min(value * radix + digit, 0x110000)
 		}
 		valid := value > 0 && value < 0x110000 && !(value >= 0xd800 && value < 0xe000)
-		append_rune(p, valid ? rune(value) : utf8.RUNE_ERROR, at, len(s))
+		append_rune(p, valid ? rune(value) : utf8.RUNE_ERROR, at, len(s), whole = true)
 		return
 	}
 	if entity := entity_lookup(raw_data(s), c.size_t(len(s))); entity != nil {
@@ -617,7 +619,7 @@ append_entity :: proc(p: ^Parser, s: string, at: int) {
 			copy(both[n:], second[:m])
 			n += m
 		}
-		append_text(p, string(both[:n]), at, len(s))
+		append_text(p, string(both[:n]), at, len(s), whole = true)
 		return
 	}
 	append_text(p, s, at, len(s))

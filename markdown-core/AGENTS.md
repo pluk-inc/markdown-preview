@@ -127,8 +127,15 @@ These came from the maintainer. Do not undo one without asking.
   a code block, the spaces of an indent) has no bytes of its own in the
   source: its place is what is between the pieces of text around it
   (`place_made`), so a line break in a quote is the break and the mark
-  of the next line. Do not give such a piece a place by a count from
-  the start of what was parsed. An address with no room in the source
+  of the next line; marks of bold text beside it are no part of it. Do
+  not give such a piece a place by a count from the start of what was
+  parsed. A character with a backslash before it is the two bytes
+  (`place_escapes`). The map is of the text that the document has: when
+  the parse of the lines around the block gives another text (the limit
+  of the parser for uses of definitions), the map comes from a parse of
+  all of the source. A click for a caret also finds text with no line
+  (`layout.caret_hit`): an empty line of a code block, an item of a
+  list with nothing in it. An address with no room in the source
   for text (a table cell with no text, a block with no text and no
   space after its mark) has no place, and gets no caret.
 - The ends of a selection and the place of a view are addresses

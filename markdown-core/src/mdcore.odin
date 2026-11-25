@@ -371,6 +371,12 @@ change_source_held :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil) 
 		} else if ctx.caret > edit.start {
 			ctx.caret = edit.end + pending.bytes
 		}
+		// Not in a character: an edit that the core found between two
+		// texts can end in one.
+		source := ctx.doc.source
+		for ctx.caret > 0 && ctx.caret < len(source) && source[ctx.caret] & 0xc0 == 0x80 {
+			ctx.caret -= 1
+		}
 		caret_changed(ctx)
 	}
 	if ctx.layout_valid {
@@ -392,8 +398,13 @@ caret_changed :: proc(ctx: ^Ctx) {
 	delete(ctx.caret_places)
 	ctx.caret_places = document.block_map(&ctx.doc, block)
 	ctx.caret_at = document.address_in(ctx.caret_places[:], block, ctx.caret)
+	// The records of its block, when the caret has no place with the
+	// ones that are there: a long code block is not laid out to its end
+	// for a caret in one of its first lines.
 	if ctx.layout_valid {
-		layout.lay_out_block(&ctx.page, block)
+		if _, _, _, _, placed := layout.caret_place(&ctx.page, ctx.caret_at); !placed {
+			layout.lay_out_block(&ctx.page, block)
+		}
 	}
 	ctx.display_valid = false
 }
@@ -414,7 +425,7 @@ mdcore_caret_set :: proc "c" (handle: rawptr, x, y: f64) -> bool {
 		ctx.caret = 0
 		return true
 	}
-	at := layout.hit_test(&ctx.page, f32(x), y) or_return
+	at := layout.caret_hit(&ctx.page, f32(x), y) or_return
 	// Not at text that has no place in the source for text to go to.
 	ctx.caret = document.source_of(&ctx.doc, at) or_return
 	ctx.selection = {}
@@ -489,6 +500,7 @@ mdcore_source :: proc "c" (handle: rawptr, length: ^c.long) -> [^]u8 {
 	ctx := cast(^Ctx)handle
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
+	hold(ctx)
 	clear(&ctx.source_out)
 	append(&ctx.source_out, ..ctx.doc.source)
 	length^ = c.long(len(ctx.source_out))

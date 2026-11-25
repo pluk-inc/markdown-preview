@@ -231,8 +231,11 @@ int main(int argc, const char *argv[]) {
         }
     }
     printf("type_caret_cpu_ms %.2f\n", (thread_cpu_ms() - type_start) / KEYS);
-    double moved_x = 0;
-    bool moved = caret && mdcore_caret_rect(ctx, &moved_x, &caret_y, &caret_height) && moved_x > caret_x;
+    // To the right, or on another line when the text went over the end
+    // of its line.
+    double moved_x = 0, moved_y = 0;
+    bool moved = caret && mdcore_caret_rect(ctx, &moved_x, &moved_y, &caret_height)
+        && (moved_x > caret_x || moved_y != caret_y);
     for (int key = 0; caret && key < KEYS; key++) {
         mdcore_delete_backward(ctx);
     }

@@ -139,6 +139,76 @@ test_text_that_the_parser_makes_has_the_source_between_its_neighbours :: proc(t:
 }
 
 @(test)
+test_a_character_goes_out_with_all_that_the_source_has_for_it :: proc(t: ^testing.T) {
+	Case :: struct {
+		source: string,
+		at:     Address, // after the character
+		gone:   string,
+	}
+	cases := []Case {
+		// A character with a backslash before it is the two bytes; a
+		// backslash that is text (in code) is one.
+		{"a\\*b\n", {0, 0, 2}, "\\*"},
+		{"a\\*b\n", {0, 0, 3}, "b"},
+		{"`a\\*`\n", {0, 0, 2}, "\\"},
+		// A line break in inline code shows as a space, also in a quote.
+		{"> `foo\n> bar`\n", {0, 0, 4}, "\n> "},
+		// Marks of bold text beside a line break stay.
+		{"**foo**\nbar\n", {0, 0, 4}, "\n"},
+		{"foo\n**bar**\n", {0, 0, 4}, "\n"},
+		{"> *foo*  \n> bar\n", {0, 0, 4}, "  \n> "},
+		// An entity is one thing, also when its characters have as
+		// many bytes as its name.
+		{"x &acE; y\n", {0, 0, 7}, "&acE;"},
+		// A NUL byte shows as one character of three bytes.
+		{"a\x00\n", {0, 0, 4}, "\x00"},
+		{"a\x00b\n", {0, 0, 4}, "\x00"},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		testing.expect_value(t, before(&doc, c.at), c.gone)
+	}
+}
+
+@(test)
+test_a_space_typed_into_a_run_of_spaces_is_before_the_caret :: proc(t: ^testing.T) {
+	// "a b", a space typed after "a": the source has two spaces that show
+	// as one, and the caret is after it, so the next delete takes the
+	// spaces and not the "a".
+	doc := parse("a  b\n")
+	defer destroy(&doc)
+	testing.expect_value(t, address_of(&doc, 2), Address{0, 0, 2})
+	testing.expect_value(t, address_of(&doc, 1), Address{0, 0, 1})
+	testing.expect_value(t, before(&doc, {0, 0, 2}), "  ")
+}
+
+@(test)
+test_the_places_are_of_the_text_that_the_document_has :: proc(t: ^testing.T) {
+	// Many uses of a long definition in one paragraph, and a long
+	// paragraph far from it: the parser has room for all uses in a parse
+	// of all of the source, and not in a parse of the lines of the
+	// paragraph alone. The places are of the text with the links.
+	target := strings.repeat("a", 1000)
+	defer delete(target)
+	uses := strings.repeat("[r] ", 40)
+	defer delete(uses)
+	filler := strings.repeat("word ", 1600)
+	defer delete(filler)
+	source := strings.concatenate({"[r]: /", target, "\n\n", uses, "end\n\n", filler, "\n"})
+	defer delete(source)
+	doc := parse(source)
+	defer destroy(&doc)
+	text := string(block_at(&doc, 0).text.bytes[:])
+	testing.expect(t, strings.has_prefix(text, "r r r "))
+	testing.expect(t, strings.has_suffix(text, " end"))
+	offset, ok := source_of(&doc, {0, 0, len(text)})
+	testing.expect(t, ok)
+	testing.expect_value(t, string(doc.source[offset - 3:offset]), "end")
+	testing.expect_value(t, address_of(&doc, offset), Address{0, 0, len(text)})
+}
+
+@(test)
 test_text_with_no_room_in_the_source_has_no_place :: proc(t: ^testing.T) {
 	// A table cell with no text, also one that the source does not have
 	// (a row with fewer cells): text there needs a change to the row.

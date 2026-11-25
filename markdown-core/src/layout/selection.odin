@@ -397,6 +397,64 @@ line_of_byte :: proc(part: ^Part, box: Box, b: ^document.Block, src: ^document.T
 	return
 }
 
+// The address for a caret at a point of the page. As `hit_test`, and
+// also at text that has no line: an empty line of a code block, and a
+// block with no text (an item of a list with nothing in it).
+caret_hit :: proc(l: ^Layout, x: f32, y: f64) -> (at: document.Address, ok: bool) {
+	p := part_at(l, y)
+	if p < 0 {
+		return
+	}
+	part := &l.parts[p]
+	from_top := f32(y - part.top)
+	for box, slot in part.boxes {
+		if from_top < box.top || from_top >= box.bottom {
+			continue
+		}
+		b := &l.doc.parts[p].blocks[slot]
+		block := l.doc.starts[p] + slot
+		if (b.kind == .Paragraph || b.kind == .Heading) && len(b.text.bytes) == 0 {
+			return {block, 0, 0}, true
+		}
+		if b.kind != .Code {
+			break
+		}
+		// The line of the point, counted from the last line with a
+		// record above it: each empty line after that one is one line
+		// break more in the text.
+		height := math.round(l.m.code_size * CODE_LINE_HEIGHT)
+		bytes := b.text.bytes[:]
+		top, byte := box.top + CODE_PAD, 0
+		for i in box.line_first ..< box.line_end {
+			line := part.lines[i]
+			para := &part.paras[line.para]
+			if para.src != &b.text || line.top > from_top {
+				continue
+			}
+			top, byte = line.top, para.base + line.line.end
+		}
+		down := int((from_top - top) / height)
+		if byte > 0 {
+			// Below a line with text: the point is in an empty line when
+			// the bytes to it are line breaks, and the line itself ends
+			// with one or with the text.
+			if down < 1 {
+				break
+			}
+			at := byte + down
+			if at > len(bytes) || strings.count(string(bytes[byte:at]), "\n") != down || (at < len(bytes) && bytes[at] != '\n') {
+				break
+			}
+			return {block, 0, at}, true
+		}
+		if down >= 0 && down < len(bytes) && strings.count(string(bytes[:down + 1]), "\n") == down + 1 {
+			return {block, 0, down}, true
+		}
+		break
+	}
+	return hit_test(l, x, y)
+}
+
 // Where a caret at an address of the document is: its x, the top of its
 // line from the top of the part of its block, the height of the line,
 // and that part. False when the block has no records (`lay_out_block`
@@ -409,7 +467,12 @@ caret_place :: proc(l: ^Layout, at: document.Address) -> (x, top, height: f32, p
 	part := &l.parts[p]
 	b := &l.doc.parts[p].blocks[slot]
 	src := document.text_at(l.doc, at)
-	if slot >= blocks_done(part) || src == nil {
+	if slot >= len(part.boxes) || src == nil {
+		return
+	}
+	// A long code block can have its first lines only: the caret has a
+	// place when its line is one of them.
+	if slot >= blocks_done(part) && at.byte >= part.code_offset {
 		return
 	}
 	box := part.boxes[slot]
