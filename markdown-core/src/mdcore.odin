@@ -640,7 +640,9 @@ mdcore_caret_move :: proc "c" (handle: rawptr, move: Move, extend: bool) -> bool
 		// time, until one of them is the next line or the page ends
 		// there: blocks with no text (many rules) can be between the
 		// caret and the next line.
-		for reach := f64(ctx.height);; reach *= 4 {
+		// From a reach that is more than nothing: a view with no height
+		// yet would look at the same lines each time.
+		for reach := max(f64(ctx.height), 64);; reach *= 4 {
 			_, y, _, _ := layout.caret_y(&ctx.page, at, upstream)
 			if !layout.laid_out(&ctx.page, y - reach, y + reach) && layout.lay_out(&ctx.page, y - reach, y + reach, y) {
 				layout_changed(ctx)
