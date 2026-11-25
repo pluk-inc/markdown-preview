@@ -140,8 +140,8 @@ Md_Parser :: struct {
 	// right before the spans that the mark starts or ends.
 	// With the range of the element that the mark starts or ends.
 	mark_offset:  proc "c" (start, end, element_start, element_end: c.uint, userdata: rawptr),
-	// And: each line of the text of a heading, with the start of its
-	// line of the source, before the text of the heading comes.
+	// And: each line of the text of a heading and of a paragraph, with
+	// the start of its line of the source, before the text comes.
 	line_offset:  proc "c" (line, start, end: c.uint, userdata: rawptr),
 }
 

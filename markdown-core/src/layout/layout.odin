@@ -723,6 +723,10 @@ place_marker :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32, tex
 		place_task(l, b, x, y, line_height, text_font)
 		return
 	}
+	// The mark of the item is in its text, as the caret is in the block.
+	if b.mark_shown {
+		return
+	}
 	if b.marker == .Bullet {
 		// A circle, not the bullet of the font: that one is a fifth of
 		// the size of the text in the system font, and each font has

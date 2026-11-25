@@ -533,12 +533,13 @@ typedef struct MD_PARSER {
     /* Not in upstream md4c (see README.md of this folder). Optional (may be
      * NULL).
      *
-     * Called for each line of the text of a heading, after enter_block() of
-     * the heading and before its text: with the start of the input line,
-     * and the range of the text in it. What is between the two starts is
-     * the marks of the line: the ones of the containers (a quote, a list
-     * item) and the "#"s of the heading with the spaces after them. The
-     * "#"s at the end of the line are after the end of the text.
+     * Called for each line of the text of a heading and of a paragraph,
+     * after enter_block() of the block (a paragraph of a tight list has
+     * none) and before its text: with the start of the input line, and the
+     * range of the text in it. What is between the two starts is the marks
+     * of the line: the ones of the containers (a quote, a list item) and
+     * the "#"s of a heading with the spaces after them. The "#"s at the
+     * end of the line are after the end of the text.
      */
     void (*line_offset)(MD_OFFSET /*line*/, MD_OFFSET /*beg*/, MD_OFFSET /*end*/, void* /*userdata*/);
 } MD_PARSER;

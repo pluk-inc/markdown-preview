@@ -566,36 +566,48 @@ mark_part :: proc(p: ^Parser, type: Md_Span) -> (start, end: int) {
 	return
 }
 
-// A line of the text of a heading, from the parser, before its text:
-// the "#"s of the line with the spaces after them are its mark (the
-// first line only; a heading with a line under it has none). It is
+// A line of the text of a heading or of a paragraph, from the parser,
+// before its text. What its first line has before the text, from the
+// first byte that is no space, is the mark of the block: the "#"s of a
+// heading, the "-" or the number of a list item, the ">" of a quote,
+// and all of them for a block in more than one (a later line of the
+// block has the marks of a quote again; those do not show yet). A task
+// keeps its check box, so its mark ends before the "[". The mark is
 // noted as a mark with no second mark (`Pair.line`), and it is text
-// when the offset whose marks show is in the line.
+// when the offset whose marks show is in the block.
 @(private)
 on_line_offset :: proc "c" (line, start, end: c.uint, userdata: rawptr) {
 	p := cast(^Parser)userdata
 	context = p.ctx
 	line, text := int(line), int(start)
-	if p.cur == nil || p.in_table || len(p.cur.bytes) > 0 || text > len(p.bytes) {
+	if p.in_table || p.in_html || text > len(p.bytes) || line > text || !text_open(p) || len(p.cur.bytes) > 0 {
 		return
 	}
-	// After the marks of a quote or a list item that the line is in.
 	mark := line
-	for mark < text && p.bytes[mark] != '#' {
+	for mark < text && (p.bytes[mark] == ' ' || p.bytes[mark] == '\t') {
 		mark += 1
 	}
-	if mark == text {
+	mark_end := text
+	if p.block.marker == .Task_Open || p.block.marker == .Task_Done {
+		for mark_end > mark && p.bytes[mark_end - 1] != '[' {
+			mark_end -= 1
+		}
+		mark_end = max(mark_end - 1, mark)
+	}
+	if mark >= mark_end {
 		return
 	}
-	line_end, _ := line_at(p.bytes, text)
+	// To the end of the last line of the block, before its line break.
+	block_end := break_before(p.bytes, clamp(p.block.source + int(p.block.lines), text, len(p.bytes)))
 	if p.pairs != nil && p.doc.count == p.places_block {
-		append(p.pairs, Pair{mark, text, -1, line_end, false, mark, line_end, true})
+		append(p.pairs, Pair{mark, mark_end, -1, block_end, false, mark, block_end, true})
 	}
-	if reveal, shows := p.reveal.?; shows && reveal >= mark && reveal <= line_end {
+	if reveal, shows := p.reveal.?; shows && reveal >= mark && reveal <= block_end {
 		p.marking = true
-		append_text(p, string(p.bytes[mark:text]), mark, text - mark)
+		append_text(p, string(p.bytes[mark:mark_end]), mark, mark_end - mark)
 		p.marking = false
 		p.doc.reveal = reveal
+		p.block.mark_shown = p.block.marker == .Bullet || p.block.marker == .Number
 	}
 }
 

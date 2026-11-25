@@ -73,6 +73,10 @@ Shape :: struct {
 	list_depth:  int,
 	quote_depth: int,
 	columns:     int, // table
+	// The mark of the line of the block is in its text, as a mark that
+	// shows (`Document.reveal`): the "-" or the number of a list item.
+	// A layout then draws no bullet and no number for the block.
+	mark_shown:  bool,
 }
 
 Block :: struct {

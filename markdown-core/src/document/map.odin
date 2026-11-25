@@ -76,6 +76,7 @@ reveal_block :: proc(doc: ^Document, block: int, reveal: Maybe(int), pairs: ^[dy
 		}
 	}
 	old.text, new.text = new.text, old.text
+	old.mark_shown = new.mark_shown
 	for &cell, i in old.cells {
 		cell, new.cells[i] = new.cells[i], cell
 	}
@@ -143,7 +144,14 @@ block_parse :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs: 
 		// shape and as many links as it had: the limit of the parser for
 		// the uses of definitions can cut a link in the piece that a
 		// parse of all keeps, and marks that show change no link.
-		same = retext ? a.shape == b.shape && len(a.cells) == len(b.cells) && links_in(a) == links_in(b) : layout_equal(a, b)
+		if retext {
+			// But for the mark of its line, which shows or not.
+			shape := b.shape
+			shape.mark_shown = a.mark_shown
+			same = a.shape == shape && len(a.cells) == len(b.cells) && links_in(a) == links_in(b)
+		} else {
+			same = layout_equal(a, b)
+		}
 	}
 	if !same {
 		destroy(&fresh)

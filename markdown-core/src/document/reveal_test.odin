@@ -55,21 +55,38 @@ test_the_marks_of_the_element_of_an_offset_are_text :: proc(t: ^testing.T) {
 		// With text that starts with a character with a backslash, in
 		// a quote and a list item, and with no text at all.
 		{"# \\#x\n", 4, "# #x", "^^  "},
-		{"> ## T\n", 5, "## T", "^^^ "},
-		{"- # T\n", 5, "# T", "^^ "},
+		{"> ## T\n", 5, "> ## T", "^^^^^ "},
+		{"- # T\n", 5, "- # T", "^^^^ "},
 		{"## \n\ntext\n", 1, "## ", "^^^"},
 		{"#\n\ntext\n", 0, "#", "^"},
 		// With raw HTML or a NUL byte at the start of the text.
 		{"# <b>x</b>\n", 6, "# x", "^^ "},
 		{"# \x00b\n", 4, "# \uFFFDb", "^^    "},
+		// The mark of a list item and of a quote, for an offset in the
+		// block: the "-", the number, the ">", and the marks of a block
+		// that is in more than one. Not for an offset in another block.
+		{"- one\n- two\n", 3, "- one", "^^   "},
+		{"- one\n- two\n", 5, "- one", "^^   "},
+		{"- one\n- two\n", 6, "one", "   "},
+		{"12. one\n", 5, "12. one", "^^^^   "},
+		{"> quote\n", 4, "> quote", "^^     "},
+		{"> - a\n", 4, "> - a", "^^^^ "},
+		// The first line only: a later line of a quote keeps its mark
+		// out of the text.
+		{"> one\n> two\n", 9, "> one two", "^^       "},
+		// A task keeps its check box: the "-" only.
+		{"- [ ] task\n", 8, "- task", "^^    "},
+		{"- [x] task\n", 8, "- task", "^^    "},
+		// A later block of an item has only its indent, which is no mark.
+		{"plain\n", 2, "plain", "     "},
 		// Not the line under a heading.
 		{"Title\n=====\n", 2, "Title", "     "},
 		// Of code that goes on in a next line of a quote, the backticks
 		// only.
-		{"> `\n> x\n> `\n", 6, "`x`", "^ ^"},
+		{"> `\n> x\n> `\n", 6, "> `x`", "^^^ ^"},
 		// The target of a link in a next line of a quote: no line break
 		// and no mark of the quote in the text.
-		{"> [x](\n> /a)\n", 3, "[x](/a)", "^ ^^^^^"},
+		{"> [x](\n> /a)\n", 3, "> [x](/a)", "^^^ ^^^^^"},
 		// Not the "<" and ">" of an address.
 		{"a <https://e.com> c\n", 5, "a https://e.com c", "                 "},
 	}
@@ -84,7 +101,7 @@ test_the_marks_of_the_element_of_an_offset_are_text :: proc(t: ^testing.T) {
 // all of the new source gives.
 @(test)
 test_a_block_with_marks_as_text_has_its_places :: proc(t: ^testing.T) {
-	source := "# Head *h*\n\nx\n\na **bc** and `d` [e](https://e.com) f\n\n- item _g_\n\n### Last\n"
+	source := "# Head *h*\n\nx\n\na **bc** and `d` [e](https://e.com) f\n\n- item _g_\n\n  more of it\n- [ ] task\n\n> quote\n> two\n\n1. n\n\n### Last\n"
 	for at in 0 ..= len(source) {
 		doc := parse_owned(transmute([]u8)fmt.aprintf("%s", source), at)
 		defer destroy(&doc)
@@ -204,9 +221,9 @@ test_a_character_of_a_mark_over_two_lines_is_its_bytes :: proc(t: ^testing.T) {
 	places := block_map(&doc, 0)
 	defer delete(places)
 	text := string(block_at(&doc, 0).text.bytes[:])
-	testing.expect_value(t, text, "[x](/a)")
-	// The "/" is the fifth character.
-	first, last, ok := char_before(&doc, places[:], {block = 0, byte = 5})
+	testing.expect_value(t, text, "> [x](/a)")
+	// The "/" is the seventh character.
+	first, last, ok := char_before(&doc, places[:], {block = 0, byte = 7})
 	testing.expect(t, ok)
 	testing.expect_value(t, string(doc.source[first:last]), "/")
 }
