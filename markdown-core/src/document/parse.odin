@@ -149,7 +149,9 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 	// The text of the piece can end before the end of what is parsed
 	// (definitions of links after it), where a block of the document
 	// starts.
-	count_empties(&doc, end < 0 ? len(bytes) : end, followed, followed_in_list)
+	if places == nil {
+		count_empties(&doc, end < 0 ? len(bytes) : end, followed, followed_in_list)
+	}
 	// The parser gave offsets from the start of the source.
 	anchor(&doc, 0, len(doc.parts) - 1)
 	return doc

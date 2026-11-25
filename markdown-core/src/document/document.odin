@@ -62,7 +62,7 @@ Shape :: struct {
 	spacing:     Spacing,
 	// How many empty paragraphs come after the block: lines of the
 	// source with nothing in them that are a paragraph of their own when
-	// text is typed into them (`empties.odin`). An editor shows each as
+	// text is typed into them (`empties.odin`). The page shows each as
 	// an empty line. Small, and here, so a block is no larger for it.
 	empties:     u16,
 	level:       int, // heading: 1 to 6

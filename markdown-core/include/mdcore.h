@@ -161,9 +161,9 @@ void mdcore_insert(void *ctx, const char *utf8, long length);
 // Return at the caret: what the block of the caret needs for it. In
 // code, a new line. At the end of the text of a list item, a new item
 // of the same kind. At the end of each other text, an empty line after
-// the block, with the caret in it. In an empty line, one more. In the text, the rest of the text
-// is a paragraph of its own. Does nothing in a table, and with no
-// caret.
+// the block, with the caret in it. In an empty line, one more. In the
+// text, the rest of the text is a paragraph of its own. Does nothing in
+// a table, and with no caret.
 void mdcore_insert_break(void *ctx);
 
 // Takes out the character before the caret: all that the source has for

@@ -806,6 +806,16 @@ The order of the next steps, from the review of the second step:
 - Next for the editor, in the order that a reader misses them: a
   selection that typing takes the place of, with cut; the marks at the
   caret (Decisions); undo.
+- Where the lines of a block end is found from the source a second
+  time (`empties.lines_end`, with `fence_line` for a fence of code):
+  the parser read those lines and knows it. A callback of the parser
+  for the end of a block, as there is one for its start, takes that
+  second reader out, and one read of the lines of each block at each
+  parse with it.
+- The host knows that text in an empty line gets a line break before
+  it (`NativeRendererView.put`, the `lead` of the text of an input
+  method), to take it back with text that an input method takes back.
+  The core could say where the text starts.
 - Before the selection work: `Address.byte` has two meanings now (a
   byte of the text, and past its end an empty paragraph). Code that
   cuts text with it clamps, so a selection over empty paragraphs draws

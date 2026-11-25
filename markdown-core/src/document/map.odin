@@ -26,12 +26,17 @@ block_map :: proc(doc: ^Document, block: int) -> (places: [dynamic]Place) {
 	start := first == 0 ? 0 : block_start(doc, first)
 	end := last < doc.count ? block_start(doc, last) : len(doc.source)
 	text, _, _, _, _, lead := piece_text(doc, doc.source[start:end], start, end)
-	fresh := parse_piece(text[:], 0, len(doc.source), &places, block - first, lead + end - start, last < doc.count, last < doc.count && in_list(block_at(doc, last)))
+	fresh := parse_piece(text[:], 0, len(doc.source), &places, block - first)
 	base := start - lead
 	// The piece must give the block as the document has it. It does not
 	// when the limit of the parser for the uses of definitions cuts a
 	// use in the piece that a parse of all keeps: then the places are
 	// of another text. A parse of all of the source is right each time.
+	// A parse that notes places does not count the empty paragraphs of
+	// its blocks: the places are of the text.
+	if block - first < fresh.count {
+		block_at(&fresh, block - first).empties = block_at(doc, block).empties
+	}
 	if block - first >= fresh.count || !layout_equal(block_at(doc, block), block_at(&fresh, block - first)) {
 		destroy(&fresh)
 		clear(&places)
@@ -115,7 +120,7 @@ place_escapes :: proc(places: ^[dynamic]Place, source: []u8) {
 @(private)
 place_made :: proc(places: []Place, source: []u8, content: int) {
 	// The start of the line break that ends before `at`, or `at`.
-	break_before :: proc(source: []u8, at: int) -> int {
+	line_break_before :: proc(source: []u8, at: int) -> int {
 		for i := at - 1; i >= 0; i -= 1 {
 			if source[i] == '\n' {
 				return i > 0 && source[i - 1] == '\r' ? i - 1 : i
@@ -201,7 +206,7 @@ place_made :: proc(places: []Place, source: []u8, content: int) {
 			#reverse for place in places[i:j] {
 				switch {
 				case place.line_break:
-					a = break_before(source, a)
+					a = line_break_before(source, a)
 				case place.nul:
 					for k := a - 1; k >= content; k -= 1 {
 						if source[k] == 0 {

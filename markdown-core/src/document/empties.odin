@@ -43,6 +43,16 @@ break_before :: proc(source: []u8, at: int) -> int {
 	return at
 }
 
+// The start of the line that an offset is in.
+@(private)
+line_start :: proc(source: []u8, at: int) -> int {
+	at := at
+	for at > 0 && source[at - 1] != '\n' && source[at - 1] != '\r' {
+		at -= 1
+	}
+	return at
+}
+
 // The line that starts at an offset: where its text ends, and where the
 // next line starts (the same at the end of the source).
 @(private)
@@ -136,19 +146,19 @@ fence_line :: proc(line: []u8) -> bool {
 }
 
 // The empty lines right after the lines of a block: where the first
-// one starts (where the lines of the block end), how many there are,
-// and if a line with something in it comes after them. `whole`: the
+// one starts (where the lines of the block end), and how many there
+// are. `whole`: the
 // source ends where `source` ends, so its end is a line when a line
 // break is before it. No lines for a block that has no empty
 // paragraphs; `first` is then where its lines end all the same, when
 // the lines show it.
 @(private)
-empty_lines :: proc(source: []u8, b: ^Block, start, next: int, next_in_list, whole: bool) -> (first, count: int, followed: bool) {
+empty_lines :: proc(source: []u8, b: ^Block, start, next: int, next_in_list, whole: bool) -> (first, count: int) {
 	whole := whole
-	found: bool
+	followed, found: bool
 	first, found = lines_end(source, b, start, next)
 	if !found {
-		return next, 0, true
+		return next, 0
 	}
 	at := first
 	for at < len(source) {
@@ -189,30 +199,30 @@ empties_in :: proc(count: int) -> u16 {
 
 // Gives each block of a document that was parsed its number of empty
 // paragraphs. The blocks have their offsets from the start of the
-// source still. `end`: where the text of the last block ends, and
-// `followed`: a block that is not in this document starts there, in a
-// list or not.
+// source still. `end`: where the text of the last block ends;
+// `followed`: a block that is not in this document starts there; and
+// `followed_in_list`: that block goes on a list (`in_list`).
 @(private)
 count_empties :: proc(doc: ^Document, end: int, followed, followed_in_list: bool) {
 	before: ^Block
 	for part in doc.parts {
 		for &b in part_blocks(part) {
 			if before != nil {
-				_, count, _ := empty_lines(doc.source[:end], before, before.source, b.source, in_list(&b), false)
+				_, count := empty_lines(doc.source[:end], before, before.source, b.source, in_list(&b), false)
 				before.empties = empties_in(count)
 			}
 			before = &b
 		}
 	}
 	if before != nil {
-		_, count, _ := empty_lines(doc.source[:end], before, before.source, end, followed && followed_in_list, !followed)
+		_, count := empty_lines(doc.source[:end], before, before.source, end, followed_in_list, !followed)
 		before.empties = empties_in(count)
 	}
 }
 
 // The empty lines after a block of a document (`empty_lines`).
 @(private)
-block_empty_lines :: proc(doc: ^Document, block: int) -> (first, count: int, followed: bool) {
+block_empty_lines :: proc(doc: ^Document, block: int) -> (first, count: int) {
 	_, next := block_source(doc, block)
 	inside := block + 1 < doc.count && in_list(block_at(doc, block + 1))
 	return empty_lines(doc.source, block_at(doc, block), block_start(doc, block), next, inside, true)
@@ -221,7 +231,7 @@ block_empty_lines :: proc(doc: ^Document, block: int) -> (first, count: int, fol
 // The offset of the source where an empty paragraph of a block starts:
 // `n` from 1. The block has that many.
 empty_offset :: proc(doc: ^Document, block, n: int) -> int {
-	at, _, _ := block_empty_lines(doc, block)
+	at, _ := block_empty_lines(doc, block)
 	for _ in 1 ..< n {
 		_, at = line_at(doc.source, at)
 	}
@@ -244,7 +254,7 @@ empty_at :: proc(doc: ^Document, block, offset: int) -> int {
 	if empties == 0 {
 		return 0
 	}
-	first, _, _ := block_empty_lines(doc, block)
+	first, _ := block_empty_lines(doc, block)
 	if offset < first {
 		return 0
 	}

@@ -70,10 +70,7 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address, allocator := co
 	// indent is no code, so Return there is as at the end of each other
 	// text.
 	if b.kind == .Code && (fence_line(source[block_begin:first_end]) || !at_end) {
-		line := offset
-		for line > block_begin && source[line - 1] != '\n' && source[line - 1] != '\r' {
-			line -= 1
-		}
+		line := max(line_start(source, offset), block_begin)
 		// The indent, and as many marks of a quote as the block is in
 		// quotes: a ">" after those is a character of the code.
 		lead, quotes := line, 0
@@ -107,7 +104,7 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address, allocator := co
 	// At the end of the text: after the lines of the block. The empty
 	// paragraph is the first line after them, and the line after it
 	// ends it: a block with no empty line after it needs the two.
-	after, empty, _ := block_empty_lines(doc, at.block)
+	after, empty := block_empty_lines(doc, at.block)
 	breaks := empty == 0 ? 2 : 1
 	in_list_next := at.block + 1 < doc.count && in_list(block_at(doc, at.block + 1))
 	if is_item(doc, at.block) {
@@ -132,7 +129,7 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address, allocator := co
 			for last + 1 < doc.count && block_at(doc, last + 1).list_depth > b.list_depth {
 				last += 1
 			}
-			below, _, _ := block_empty_lines(doc, last)
+			below, _ := block_empty_lines(doc, last)
 			below = break_before(source, below)
 			return done(&out, below, below, below + strings.builder_len(out))
 		}
@@ -175,10 +172,7 @@ delete_back :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end
 	line := block_start(doc, at.block)
 	line_end, _ := line_at(doc.source, line)
 	before := break_before(doc.source, line)
-	above := before
-	for above > 0 && doc.source[above - 1] != '\n' && doc.source[above - 1] != '\r' {
-		above -= 1
-	}
+	above := line_start(doc.source, before)
 	if from != line || to != line_end || before == line || !blank(doc.source[above:before]) || block_at(doc, at.block - 1).kind == .Rule {
 		return
 	}
@@ -216,7 +210,7 @@ empty_item :: proc(doc: ^Document, block: int) -> (start, end: int, ok: bool) {
 	if block + 1 < doc.count && block_at(doc, block + 1).list_depth > b.list_depth {
 		return
 	}
-	end, _, _ = block_empty_lines(doc, block)
+	end, _ = block_empty_lines(doc, block)
 	if block == 0 {
 		return block_start(doc, 0), end, end > block_start(doc, 0)
 	}
