@@ -961,7 +961,7 @@ mdcore_insert_break :: proc "c" (handle: rawptr) {
 		return
 	}
 	// Return does nothing in a table, so nothing goes there.
-	if ctx.doc.count > 0 && document.block_at(&ctx.doc, ctx.caret_at.block).kind == .Table {
+	if ctx.doc.count > 0 && ctx.caret_at.empty == 0 && document.block_at(&ctx.doc, ctx.caret_at.block).kind == .Table {
 		return
 	}
 	// The text that is selected goes first: the line break is at the

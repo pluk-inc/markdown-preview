@@ -1203,9 +1203,14 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
                 var tail = 0
                 while tail < min(before.count, after.count) - head,
                       before[before.count - 1 - tail] == after[after.count - 1 - tail] { tail += 1 }
+                // Not from the middle of a character: two characters
+                // can start or end with the same bytes.
+                var end = before.count - tail
+                while head > 0, head < before.count, before[head] & 0xC0 == 0x80 { head -= 1 }
+                while end < before.count, before[end] & 0xC0 == 0x80 { end += 1 }
                 // Only what went is kept: a delete that took nothing
                 // leaves the text of the one before.
-                Self.killed = String(decoding: before[head..<(before.count - tail)], as: UTF8.self)
+                Self.killed = String(decoding: before[head..<end], as: UTF8.self)
             }
             didEdit()
         } else {

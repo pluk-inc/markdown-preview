@@ -900,8 +900,10 @@ The order of the next steps, from the review of the second step:
   block that the caret came from is thrown away one step before);
   a definition of a link in a quote that has more than one line
   comes out with the mark of the quote in it when it is kept; spaces
-  at the start of new text right after a mark that starts a style
-  stay inside of it; Control-K
+  at the start or the end of new text right beside a mark of a style
+  stay inside of it ("**bX **" is no bold text), because the new text
+  must stay one piece with the caret right after it for the text of an
+  input method; Control-K
   keeps one text and does not add to it for some presses in a row.
   The text that Control-K takes is the bytes of the source that went,
   so it comes back with its marks.

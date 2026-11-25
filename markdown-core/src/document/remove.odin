@@ -155,24 +155,17 @@ range_edit :: proc(pairs: []Pair, source: []u8, from, to: int, text: string, all
 			end = open.end
 		}
 	}
-	// Spaces at the end of the new text go after the marks that end
-	// right after it, as the spaces before the range do.
-	inner := text
-	if len(closes) > 0 && closes[0].tight {
-		for len(inner) > 0 && (inner[len(inner) - 1] == ' ' || inner[len(inner) - 1] == '\t') {
-			inner = inner[:len(inner) - 1]
-		}
-	}
 	out := make([dynamic]u8, 0, len(text) + before + after + 8, allocator)
-	append(&out, inner)
+	append(&out, text)
 	for mark in closes {
 		append(&out, ..source[mark.start:mark.end])
 	}
-	append(&out, text[len(inner):])
 	append(&out, ..source[start - before:start])
 	// The caret is after the new text, in the styles that it is in, or
-	// with none at the place where the two parts of the text meet.
-	caret = head - before + (len(text) > len(inner) || len(text) == 0 ? len(out) : len(text))
+	// with none at the place where the two parts of the text meet. The
+	// new text stays one piece, with the caret right after it: a host
+	// takes it back from there (the text of an input method).
+	caret = head - before + (len(text) > 0 ? len(text) : len(out))
 	append(&out, ..source[end:end + after])
 	for mark in opens {
 		append(&out, ..source[mark.start:mark.end])

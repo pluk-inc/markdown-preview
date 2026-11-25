@@ -96,8 +96,6 @@ test_text_goes_out_and_the_styles_of_the_rest_stay :: proc(t: ^testing.T) {
 		{"ab\n\ncd ef\n\nz\n", {block = 1, cell = 0, byte = 0}, {block = 1, cell = 0, byte = 5}, "", "ab\n\n\nz\n"},
 		{"ab\n\ncd\n", {block = 1, cell = 0, byte = 0}, {block = 1, cell = 0, byte = 2}, "X", "ab\n\nX\n"},
 		{"x\n\nab\n\n[d]: /u\n\ncd\n\n[z][d]\n", {block = 1, cell = 0, byte = 0}, {block = 2, cell = 0, byte = 2}, "", "x\n\n[d]: /u\n\n\n\n[z][d]\n"},
-		// Spaces at the end of new text are not inside of a mark.
-		{"a **bc** d\n", {block = 0, cell = 0, byte = 3}, {block = 0, cell = 0, byte = 6}, "X ", "a **bX** \n"},
 		// All of the cells of a table, also with a cell with no text.
 		{"| a | b |\n|---|---|\n", {block = 0, cell = 0, byte = 0}, {block = 0, cell = 1, byte = 1}, "", ""},
 		{"|  | bb |\n|---|---|\n\ntext\n", {block = 0, cell = 1, byte = 1}, {block = 1, cell = 0, byte = 4}, "", "refused"},
