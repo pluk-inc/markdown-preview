@@ -353,9 +353,10 @@ final class NativeRendererView: NSView {
     /// A click gave the view a caret.
     private var hasCaret = false
     /// The text of an input method that is not final yet: where it is in
-    /// the source of the document, in bytes. The next form of it, or the
-    /// final text, takes its place.
-    private var markedText: (start: Int, length: Int)?
+    /// the source of the document, in bytes, and how long it is in the
+    /// units that the system's text input counts in (UTF-16). The next
+    /// form of it, or the final text, takes its place.
+    private var markedText: (start: Int, length: Int, units: Int)?
     /// The caret that the reader sees: the system's own, which blinks as
     /// the system's settings say. It is on the page, at the place that
     /// the core gives.
@@ -963,7 +964,7 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         // of the one before. It has no line under it yet.
         let text = plainText(string)
         let start = put(text)
-        markedText = text.isEmpty || start < 0 ? nil : (start, text.utf8.count)
+        markedText = text.isEmpty || start < 0 ? nil : (start, text.utf8.count, text.utf16.count)
         didEdit()
     }
 
@@ -971,12 +972,16 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         markedText = nil
     }
 
+    // The view gives the system's text input the text that is not final
+    // as the only text there is: it starts at 0, and the caret is at its
+    // end. A caret inside that text is not a thing the view has yet.
+
     func selectedRange() -> NSRange {
-        NSRange(location: markedText?.length ?? 0, length: 0)
+        NSRange(location: markedText?.units ?? 0, length: 0)
     }
 
     func markedRange() -> NSRange {
-        markedText.map { NSRange(location: 0, length: $0.length) } ?? NSRange(location: NSNotFound, length: 0)
+        markedText.map { NSRange(location: 0, length: $0.units) } ?? NSRange(location: NSNotFound, length: 0)
     }
 
     func hasMarkedText() -> Bool {

@@ -70,13 +70,29 @@ final class Editor: DocumentEditor {
     func fetchMarkdown(_ completion: @escaping (String?) -> Void) { completion(markdown) }
 }
 typealias EditorViewController = Editor
+// The native renderer's view: another type than the web editor, as in
+// production, with only what each editor has.
+final class NativeEditor: DocumentEditor {
+    var markdown = ""
+    var cancelRequested: (() -> Void)?
+    var contentDidChange: (() -> Void)?
+    func fetchMarkdown(_ completion: @escaping (String?) -> Void) { completion(markdown) }
+}
 final class Window { func makeFirstResponder(_ responder: AnyObject?) {} }
 final class Split {
     var isEditingDocument = false
     var editorViewController: Editor? = Editor()
-    // The web editor is the one under test: no native renderer here.
-    var documentEditor: (any DocumentEditor)? { editorViewController }
-    func enterNativeEditMode() -> Editor? { nil }
+    // The native renderer's view, when a case has one: it is the editor
+    // then, and the web editor is not used.
+    var nativeEditor: NativeEditor?
+    var isNativeEditing = false
+    var documentEditor: (any DocumentEditor)? { isNativeEditing ? nativeEditor : editorViewController }
+    func enterNativeEditMode() -> NativeEditor? {
+        guard let nativeEditor else { return nil }
+        isEditingDocument = true
+        isNativeEditing = true
+        return nativeEditor
+    }
     var onLiveMetadataNeedsRefresh: (() -> Void)?
     func updateInspectorSelection(_ text: String?) {}
     func enterEditMode(markdown: String, assetBaseURL: URL?, autofocus: Bool) -> Editor {
@@ -109,6 +125,7 @@ final class Controller {
     func exitEditMode(rerender: Bool, preserveUnsavedChanges: Bool,
                       hidesAccessoryAfterSwap: Bool, completion: () -> Void) {
         mainSplit?.isEditingDocument = false
+        mainSplit?.isNativeEditing = false
         if rerender { rerenderCurrentPreview() }
         completion()
     }
@@ -197,6 +214,29 @@ for choice in [Response.alertFirstButtonReturn, .alertSecondButtonReturn, .cance
                  "Reentering Edit Mode must not resurrect the rejected draft")
     precondition(c.editorBaselineMarkdown == expectedDisk)
 }
+// The native renderer's view as the editor: the session takes the text
+// from it, wires only what each editor has, and leaves the web editor alone.
+do {
+    let c = try fixture("native")
+    let native = NativeEditor()
+    native.markdown = original
+    c.mainSplit!.nativeEditor = native
+    c.enterEditMode()
+    precondition(c.isEditing && c.mainSplit!.documentEditor === native, "The native view must be the editor")
+    precondition(native.contentDidChange != nil && native.cancelRequested != nil)
+    precondition(c.mainSplit!.editorViewController!.contentDidChange == nil,
+                 "The web editor must not be wired in the native view's Edit Mode")
+    let draft = original + "\nTyped in the native view\n"
+    native.markdown = draft
+    native.contentDidChange?()
+    precondition(c.hasUnsavedEditorChanges && c.editorChangeRevision == 1)
+    native.cancelRequested?()
+    precondition(!c.isEditing, "Escape must leave Edit Mode")
+    precondition(c.editorDraftMarkdown == draft && c.currentMarkdown == draft && c.rendered == draft,
+                 "The draft must come from the native view")
+    precondition(c.mainSplit!.editorViewController!.markdown != draft)
+    precondition(tryDisk(c) == original, "A preview of the edits is no save")
+}
 // A rename while either conflict choice waits must neither recreate the old
 // file nor show an unsaved checkbox value under the renamed document.
 for choice in [Response.alertFirstButtonReturn, .alertSecondButtonReturn] {
@@ -238,7 +278,7 @@ permission.currentMarkdown = original
 NSSavePanel.respond!(.OK)
 precondition(!FileManager.default.fileExists(atPath: chosen.path))
 precondition(tryDisk(other) == original)
-print("PASS: checkbox disk writes, draft preview and editor reentry for all conflict choices, rename during conflict, missing-file navigation, permission-panel navigation")
+print("PASS: checkbox disk writes, draft preview and editor reentry for all conflict choices, the native view as the editor, rename during conflict, missing-file navigation, permission-panel navigation")
 '''
 with tempfile.TemporaryDirectory(prefix='checkbox-save-tests-') as directory:
     path = Path(directory) / 'probe.swift'
