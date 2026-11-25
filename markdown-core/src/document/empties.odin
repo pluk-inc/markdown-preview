@@ -163,8 +163,17 @@ count_empties :: proc(doc: ^Document, end: int, followed, followed_in_list: bool
 // with nothing in it (an item of a list with no text yet).
 @(private)
 end_spaces_of :: proc(source: []u8, b: ^Block, first, lines: int) -> u16 {
+	count, _ := end_spaces_line(source, b, first, lines)
+	return count
+}
+
+// `end_spaces_of`, with the end of the line that it counts: that line
+// can be after the line where the text ends, when the marks that close
+// the text are on a later line ("[ab](\n/u\n) ").
+@(private)
+end_spaces_line :: proc(source: []u8, b: ^Block, first, lines: int) -> (spaces: u16, line_end: int) {
 	if (b.kind != .Paragraph && b.kind != .Heading) || len(b.text.bytes) == 0 {
-		return 0
+		return
 	}
 	end := break_before(source, lines)
 	for {
@@ -181,7 +190,7 @@ end_spaces_of :: proc(source: []u8, b: ^Block, first, lines: int) -> u16 {
 			end = break_before(source, start)
 			continue
 		}
-		return len(text) == 0 ? 0 : u16(min(count, int(max(u16))))
+		return len(text) == 0 ? 0 : u16(min(count, int(max(u16)))), end
 	}
 }
 
