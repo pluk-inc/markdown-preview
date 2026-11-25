@@ -83,6 +83,11 @@ Ctx :: struct {
 	// The marks at the caret show as text (`document.Document.reveal`,
 	// `reveal_update`), but not while the view does not take the keys.
 	unfocused:       bool,
+	// Where a selection that the keys make started, as an offset of the
+	// source: with marks that show, some offsets are one place of the
+	// text with no marks, and the caret comes back to the one that it
+	// had when the selection is empty again.
+	select_from:     Maybe(int),
 	caret_hidden:    bool, // the off half of a blink; the caret is there
 	// A byte where a line of a paragraph ends and the next one starts
 	// is two places on the page. The caret is at the end of the first
@@ -416,6 +421,7 @@ change_source_held :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil, 
 	context.temp_allocator = ctx.temp
 	hold(ctx)
 	commit_held(ctx, &pending)
+	ctx.select_from = nil
 	if ctx.caret >= 0 {
 		ctx.caret = after
 		// Not in a character: an edit that the core found between two
@@ -509,6 +515,30 @@ reveal_update :: proc(ctx: ^Ctx) -> (changed: bool) {
 		return
 	}
 	from, to, selected := selection_offsets(ctx)
+	// A selection that is empty again: the caret is at the offset where
+	// the selection started, when that is the same place of the text.
+	if start, held := ctx.select_from.?; held && !selected && ctx.caret >= 0 && start != ctx.caret {
+		if start <= len(ctx.doc.source) && document.block_at_offset(&ctx.doc, start) == ctx.caret_at.block && document.address_for(&ctx.doc, ctx.caret_places[:], ctx.caret_at.block, start) == ctx.caret_at {
+			ctx.caret = start
+		}
+		ctx.select_from = nil
+	}
+	// A selection of only bytes of marks that show (Shift and a step
+	// over a "*") is a selection of text that is there only while the
+	// marks show: they stay, as with nothing selected.
+	if selected && ctx.caret >= 0 && ctx.doc.reveal != nil {
+		only_marks := true
+		for at := from; at < to && only_marks; at += 1 {
+			only_marks = false
+			for pair in ctx.caret_pairs {
+				if pair.close >= 0 && ((at >= pair.open && at < pair.open_end) || (at >= pair.close && at < pair.close_end)) {
+					only_marks = true
+					break
+				}
+			}
+		}
+		selected = !only_marks
+	}
 	want: Maybe(int)
 	count := 0
 	if ctx.caret >= 0 && !ctx.unfocused && !selected {
@@ -549,6 +579,13 @@ reveal_update :: proc(ctx: ^Ctx) -> (changed: bool) {
 	// The addresses of the offsets, in the text that the blocks have now.
 	if ctx.caret >= 0 {
 		ctx.caret_at = document.address_for(&ctx.doc, ctx.caret_places[:], ctx.caret_at.block, ctx.caret)
+		// With no marks in its block, the caret is at no byte of a mark
+		// that it was in: at the place where text goes for its address.
+		if count == 0 {
+			if offset, placed := document.place_of(&ctx.doc, ctx.caret_places[:], ctx.caret_at); placed {
+				ctx.caret = offset
+			}
+		}
 		caret_placed(ctx)
 	}
 	if selected {
@@ -763,6 +800,11 @@ mdcore_caret_move :: proc "c" (handle: rawptr, move: Move, extend: bool) -> bool
 	defer sync.unlock(&ctx.source_lock)
 	hold(ctx)
 	went := Move.Left
+	if !extend {
+		ctx.select_from = nil
+	} else if _, _, selected := document.selection_range(ctx.selection); !selected && ctx.caret >= 0 {
+		ctx.select_from = ctx.caret
+	}
 	moved := caret_move(ctx, move, extend, &went)
 	// A move to an end of a line, a paragraph, or the document that made
 	// marks show there: the end is after those marks (before them, for
@@ -952,6 +994,7 @@ mdcore_caret_set :: proc "c" (handle: rawptr, x, y: f64) -> bool {
 	// The selection is empty and at the caret, which can be beside the
 	// point (at an end of an entity that is one thing): a drag from here
 	// selects from this place (`mdcore_mouse`).
+	ctx.select_from = nil
 	set_caret(ctx, stop, upstream && stop.at == at, stop.at)
 	reveal_update(ctx)
 	return true

@@ -85,6 +85,19 @@ static const char *caret_walk(void *ctx, long length) {
         at = now;
     }
     long last = at;
+    // A step with the selection and the step back with it, from each
+    // place: the caret is where it was, with nothing selected. Marks
+    // that show at the caret are text for these steps.
+    mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false);
+    for (steps = 0; steps <= length; steps++) {
+        long from = mdcore_caret_offset(ctx);
+        if (mdcore_caret_move(ctx, MDCORE_MOVE_RIGHT, true)) {
+            if (!mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, true) || mdcore_caret_offset(ctx) != from || mdcore_has_selection(ctx)) {
+                return "a step with the selection and the step back do not end where they started";
+            }
+        }
+        if (!mdcore_caret_move(ctx, MDCORE_MOVE_RIGHT, false)) break;
+    }
     mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false);
     mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_END, false);
     if (mdcore_caret_offset(ctx) != last) return "the end of the document is not where the steps to the right end";

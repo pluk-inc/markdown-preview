@@ -282,7 +282,10 @@ Pending :: struct {
 // edit changes the definition of a link, all of the source is parsed.
 //
 // `reveal`: the offset of the new source whose marks show as text
-// (`Document.reveal`), for the document after the edit.
+// (`Document.reveal`), for the document after the edit. Only the blocks
+// that the edit parses get it: a block with marks that the edit is not
+// in must have its text with no marks before (`reveal_block`), which
+// is the caller's to do.
 prepare :: proc(doc: ^Document, edit: Edit, reveal: Maybe(int) = nil) -> (p: Pending) {
 	p.reveal = reveal
 	p.edit.start = clamp(edit.start, 0, len(doc.source))
