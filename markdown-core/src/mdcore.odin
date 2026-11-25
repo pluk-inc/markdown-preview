@@ -88,6 +88,13 @@ Ctx :: struct {
 	// text with no marks, and the caret comes back to the one that it
 	// had when the selection is empty again.
 	select_from:     Maybe(int),
+	// Where the button of the pointer went down, and if the pointer
+	// went away from there since: a click is no drag. The text under
+	// the pointer can be another one after the click (marks that show
+	// at the caret move the text of its line), so the button that comes
+	// up at the same point selects nothing.
+	mouse_down:      [2]f64,
+	mouse_dragged:   bool,
 	// The bytes of the source that the last delete took out
 	// (`mdcore_deleted_text`).
 	gone:            [dynamic]u8,
@@ -481,7 +488,7 @@ commit_held :: proc(ctx: ^Ctx, pending: ^document.Pending) {
 // or at one of its ends: its marks show for a caret there.
 @(private)
 pair_has :: proc(pair: document.Pair, at: int) -> bool {
-	return (pair.close >= 0 || pair.line) && pair.open_end > pair.open && at >= pair.open && at <= pair.close_end
+	return (pair.close >= 0 || pair.line) && pair.open_end > pair.open && at >= pair.from && at <= pair.to
 }
 
 // Makes the text of a block again with the marks of an offset as text,
@@ -503,6 +510,17 @@ reveal_block :: proc(ctx: ^Ctx, block: int, reveal: Maybe(int)) {
 	}
 	if ctx.layout_valid {
 		layout.apply_change(&ctx.page, change)
+	}
+	// The place of the reader is at the text that it was at: marks that
+	// came before it in its block make its byte another one.
+	if ctx.place.known {
+		same: bool
+		ctx.place.place.at, same = document.moved(change, ctx.place.place.at)
+		if !same {
+			ctx.place.place.fraction = 0
+		}
+	}
+	if ctx.layout_valid {
 		layout.restore_place(&ctx.page, ctx.place)
 		layout_changed(ctx)
 	}
@@ -532,6 +550,7 @@ reveal_update :: proc(ctx: ^Ctx) -> (changed: bool) {
 	// A selection of only bytes of marks that show (Shift and a step
 	// over a "*") is a selection of text that is there only while the
 	// marks show: they stay, as with nothing selected.
+	hides := selected
 	if selected && ctx.caret >= 0 && ctx.doc.reveal != nil {
 		only_marks := true
 		for at := from; at < to && only_marks; at += 1 {
@@ -543,11 +562,11 @@ reveal_update :: proc(ctx: ^Ctx) -> (changed: bool) {
 				}
 			}
 		}
-		selected = !only_marks
+		hides = !only_marks
 	}
 	want: Maybe(int)
 	count := 0
-	if ctx.caret >= 0 && !ctx.unfocused && !selected {
+	if ctx.caret >= 0 && !ctx.unfocused && !hides {
 		for pair in ctx.caret_pairs {
 			count += int(pair_has(pair, ctx.caret))
 		}
@@ -585,10 +604,16 @@ reveal_update :: proc(ctx: ^Ctx) -> (changed: bool) {
 	// The addresses of the offsets, in the text that the blocks have now.
 	if ctx.caret >= 0 {
 		ctx.caret_at = document.address_for(&ctx.doc, ctx.caret_places[:], ctx.caret_at.block, ctx.caret)
-		// With no marks in its block, the caret is at no byte of a mark
+		// With no marks in its block, the caret is at no byte in a mark
 		// that it was in: at the place where text goes for its address.
+		// At an end of a mark it stays: text that is typed after "**"
+		// is after it when the marks do not show too.
 		if count == 0 {
-			if offset, placed := document.place_of(&ctx.doc, ctx.caret_places[:], ctx.caret_at); placed {
+			in_mark := false
+			for pair in ctx.caret_pairs {
+				in_mark ||= (ctx.caret > pair.open && ctx.caret < pair.open_end) || (pair.close >= 0 && ctx.caret > pair.close && ctx.caret < pair.close_end)
+			}
+			if offset, placed := document.place_of(&ctx.doc, ctx.caret_places[:], ctx.caret_at); placed && in_mark {
 				ctx.caret = offset
 			}
 		}
@@ -736,6 +761,10 @@ set_caret :: proc(ctx: ^Ctx, stop: Stop, upstream: bool, anchor: document.Addres
 	ctx.selection = {anchor = anchor, focus = stop.at, active = true}
 	caret_placed(ctx)
 }
+
+// How far the pointer goes from the point of a click, in points, before
+// it is a drag that selects.
+MOUSE_SLOP :: 3
 
 // The moves of `mdcore_caret_move`, with the numbers of the header.
 Move :: enum c.int {
@@ -994,6 +1023,8 @@ mdcore_caret_set :: proc "c" (handle: rawptr, x, y: f64) -> bool {
 		if ctx.caret >= 0 {
 			ctx.selection = {anchor = ctx.caret_at, focus = ctx.caret_at, active = true}
 			show_selection(ctx)
+			ctx.select_from = nil
+			reveal_update(ctx)
 		}
 		return false
 	}
@@ -1314,6 +1345,9 @@ mdcore_deleted_text :: proc "c" (handle: rawptr, length: ^c.long) -> [^]u8 {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
+	// A delete writes the bytes with this lock.
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
 	hold(ctx)
 	length^ = c.long(len(ctx.gone))
 	return raw_data(ctx.gone)
@@ -1653,6 +1687,14 @@ mdcore_mouse :: proc "c" (handle: rawptr, x, y: f64, phase: c.int) {
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
 	hold(ctx)
+	if phase == 0 {
+		ctx.mouse_down, ctx.mouse_dragged = {x, y}, false
+	} else if !ctx.mouse_dragged {
+		if abs(x - ctx.mouse_down.x) + abs(y - ctx.mouse_down.y) < MOUSE_SLOP {
+			return
+		}
+		ctx.mouse_dragged = true
+	}
 	if phase != 0 && ctx.caret >= 0 {
 		// The caret of an editor is the end of the selection that
 		// moves: the next key goes on from there. Its place is the one

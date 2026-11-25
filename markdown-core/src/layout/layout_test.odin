@@ -1720,3 +1720,22 @@ test_a_click_puts_a_caret_at_text_with_no_line :: proc(t: ^testing.T) {
 	hit, _, found := caret_hit(&f.page, x, f.page.parts[p].top + f64(top + height / 2))
 	testing.expect(t, found && hit.block == 0 && hit.byte >= 1 && hit.byte <= 6)
 }
+
+@(test)
+test_a_mark_that_shows_has_the_secondary_color :: proc(t: ^testing.T) {
+	f: Fixture
+	setup(&f, "text\n", 500)
+	defer teardown(&f)
+	f.page.style.text = {20, 20, 20, 255}
+	f.page.style.secondary = {120, 120, 120, 255}
+	f.page.style.link = {0, 0, 255, 255}
+	para: Para
+	// A mark of the source that shows at the caret, also the mark of a
+	// link and one in a task that is done.
+	testing.expect_value(t, span_color(&f.page, &para, {.Mark}, false), f.page.style.secondary)
+	testing.expect_value(t, span_color(&f.page, &para, {.Mark}, true), f.page.style.secondary)
+	// Each other span as before.
+	testing.expect_value(t, span_color(&f.page, &para, {.Link}, false), f.page.style.link)
+	testing.expect_value(t, span_color(&f.page, &para, {}, false), f.page.style.text)
+	testing.expect_value(t, span_color(&f.page, &para, {}, true), done_color(&f.page))
+}

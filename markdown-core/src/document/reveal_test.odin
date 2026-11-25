@@ -1,6 +1,7 @@
 package document
 
 import "core:fmt"
+import "core:strings"
 import "core:testing"
 
 // The text of the first block of a source with the marks of an offset
@@ -63,6 +64,9 @@ test_the_marks_of_the_element_of_an_offset_are_text :: proc(t: ^testing.T) {
 		{"# \x00b\n", 4, "# \uFFFDb", "^^    "},
 		// Not the line under a heading.
 		{"Title\n=====\n", 2, "Title", "     "},
+		// Of code that goes on in a next line of a quote, the backticks
+		// only.
+		{"> `\n> x\n> `\n", 6, "`x`", "^ ^"},
 		// Not the "<" and ">" of an address.
 		{"a <https://e.com> c\n", 5, "a https://e.com c", "                 "},
 	}
@@ -130,10 +134,10 @@ test_one_block_gets_its_marks_and_loses_them :: proc(t: ^testing.T) {
 		testing.expect_value(t, doc.reveal != nil, all.reveal != nil)
 		for &text, cell in block_texts(block_at(&doc, block)) {
 			for span, i in text.spans {
-				want := block_texts(block_at(&all, block))[cell].spans[i]
 				if !same {
 					break
 				}
+				want := block_texts(block_at(&all, block))[cell].spans[i]
 				testing.expectf(t, (span.link == 0) == (want.link == 0) && (span.link == 0 || doc.links[span.link - 1] == all.links[want.link - 1]), "reveal %d: a span of block %d has another link", at, block)
 			}
 		}
@@ -141,5 +145,48 @@ test_one_block_gets_its_marks_and_loses_them :: proc(t: ^testing.T) {
 		delete(places)
 		testing.expectf(t, layout_equal(block_at(&doc, block), block_at(&plain, block)), "reveal %d: block %d with no marks again is %q", at, block, block_at(&doc, block).text.bytes[:])
 		testing.expect(t, doc.reveal == nil)
+	}
+}
+
+// Many uses of a long definition in one paragraph, and a long paragraph
+// far from it: a parse of the lines of the paragraph alone has no room
+// for all of the links that a parse of all of the source has. The
+// paragraph keeps each link when its marks show.
+@(test)
+test_marks_that_show_keep_the_links_of_a_block :: proc(t: ^testing.T) {
+	target := strings.repeat("a", 1000)
+	defer delete(target)
+	uses := strings.repeat("[r] ", 40)
+	defer delete(uses)
+	filler := strings.repeat("word ", 1600)
+	defer delete(filler)
+	source := strings.concatenate({"[r]: /", target, "\n\n**b** ", uses, "end\n\n", filler, "\n"})
+	defer delete(source)
+	doc := parse(source)
+	defer destroy(&doc)
+	at := strings.index(source, "**b**") + 3
+	places, _ := reveal_block(&doc, 0, at)
+	delete(places)
+	text := string(block_at(&doc, 0).text.bytes[:])
+	testing.expect(t, strings.has_prefix(text, "**b** r r r "))
+	testing.expect(t, !strings.contains(text, "[r]"))
+	testing.expect_value(t, links_in(block_at(&doc, 0)), 40)
+}
+
+// The two styles of "***b***" are one mark of the parser: the two show
+// for the same offsets, and a delete of the marks that show takes what
+// shows and no mark more.
+@(test)
+test_two_styles_of_one_mark_show_for_the_same_offsets :: proc(t: ^testing.T) {
+	doc := parse("x ***b*** y\n")
+	defer destroy(&doc)
+	pairs: [dynamic]Pair
+	defer delete(pairs)
+	places := block_map(&doc, 0, &pairs)
+	delete(places)
+	testing.expect_value(t, len(pairs), 2)
+	for pair in pairs {
+		testing.expect_value(t, pair.from, 2)
+		testing.expect_value(t, pair.to, 9)
 	}
 }

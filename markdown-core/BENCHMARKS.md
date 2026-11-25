@@ -82,6 +82,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-25 | a caret after a space at the end of a text | 635 / 619 | 56 / 103 | 545 / 840 | 66 / 81 | none | none | 7.1 / 26.2 (16.1 at the first frame) |
 | 2026-11-25 | a selection that goes, and the delete keys | 620 / 613 | 52 / 100 | 495 / 745 | 69 / 82 | none | none | 7.0 / 26.2 (16.1 at the first frame) |
 | 2026-11-25 | the marks at the caret | 580 / 591 | 53 / 99 | 485 / 725 | 63 / 80 | none | none | 7.0 / 26.2 (16.1 at the first frame) |
+| 2026-11-25 | the mark of a heading at the caret | 557 / 603 | 53 / 100 | 470 / 735 | 59 / 76 | none | none | 7.0 / 26.1 (16.1 at the first frame) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1003,4 +1004,37 @@ of the last launch set). The steps of the caret in the benchmark go
 through the styled text of the document, so they have the changes of
 the marks in them; the walk before the runs also selects and steps
 back at each place.
+
+## The mark of a heading at the caret (2026-11-25)
+
+The "#" of a heading shows for a caret in its line. The parser gives
+the lines of the text of a heading only to a parse that notes the
+marks. `app.py`, short / long, five launches for each number, the base
+(the marks at the caret) built from its commit on the same day:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 593 / 603 | 54 / 96 | 480 / 730 |
+| change | 522 / 598 | 53 / 100 | 460 / 730 |
+| change | 591 / 608 | 53 / 100 | 480 / 740 |
+| base | 578 / 597 | 53 / 101 | 490 / 730 |
+
+`core.py`, short / long, two runs each in turns (base, change, change,
+base):
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 56, 58 / 76, 74 | 59, 59 / 78, 74 |
+| A typed character in the middle of the text (CPU ms) | 1.17, 1.36 / 1.55, 1.60 | 1.31, 1.31 / 1.53, 1.52 |
+| A typed character at the end of the text (CPU ms) | 0.92, 1.51 / 3.49, 2.89 | 1.43, 1.11 / 2.99, 3.47 |
+| A typed character at a caret (CPU ms) | 1.11, 1.94 / 2.04, 2.04 | 1.84, 1.54 / 2.02, 2.02 |
+| A step of the caret to the left or to the right (CPU ms) | 0.35, 0.43 / 0.35, 0.48 | 0.44, 0.36 / 0.41, 0.37 |
+| Heap with all of the document laid out (MB) | 7.0 / 26.1 | 7.0 / 26.0, 26.1 |
+
+No number moved by more than the two runs of one build differ. The
+Mac had other work for some minutes of the launch sets (a load of 38
+at the end of the first set of the change, 18 and 10 after the next
+two). The measure was of the form that looked for the "#" back from
+the first text; the form that has the lines from the parser came
+after it and does less work for each heading.
 

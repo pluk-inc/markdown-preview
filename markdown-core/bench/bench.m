@@ -73,6 +73,17 @@ static void scroll_pass(void *ctx, const char *name, double end) {
 // caret gets from one end of the document to the other. Returns what is
 // wrong, or NULL.
 static const char *caret_walk(void *ctx, long length) {
+    // A click: the button down, the caret, and the button up at the
+    // same point. Nothing is selected, also when the click made the
+    // marks of its line show and the text moved under the pointer.
+    for (double click_y = 20; click_y < 400; click_y += 20) {
+        mdcore_mouse(ctx, 60, click_y, 0);
+        if (mdcore_caret_set(ctx, 60, click_y)) {
+            mdcore_mouse(ctx, 60, click_y, 1);
+            mdcore_mouse(ctx, 61, click_y + 1, 1);
+            if (mdcore_has_selection(ctx)) return "a click selected text";
+        }
+    }
     if (!mdcore_caret_set(ctx, VIEW_WIDTH / 2, 40)) return "no caret at a click";
     mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false);
     if (mdcore_caret_move(ctx, MDCORE_MOVE_UP, false) || mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, false)) {
@@ -169,7 +180,17 @@ static const char *caret_walk(void *ctx, long length) {
     mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false);
     long text_start = mdcore_caret_offset(ctx);
     mdcore_caret_move(ctx, MDCORE_MOVE_PARAGRAPH_END, false);
-    if (mdcore_caret_offset(ctx) > text_start) {
+    // Text, not only the mark of a heading with no text, which shows at
+    // the caret and is a place for it.
+    bool has_text = false;
+    {
+        long size = 0;
+        const char *bytes = mdcore_source(ctx, &size);
+        for (long at = text_start; at < mdcore_caret_offset(ctx) && at < size; at++) {
+            has_text = has_text || (bytes[at] != '#' && bytes[at] != ' ' && bytes[at] != '\t');
+        }
+    }
+    if (has_text) {
         double end_x = 0, space_x = 0, two_x = 0;
         if (!mdcore_caret_rect(ctx, &end_x, &y, &height)) return "no place for the caret at the end of the first paragraph";
         mdcore_insert(ctx, " ", 1);

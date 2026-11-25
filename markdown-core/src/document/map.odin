@@ -80,6 +80,25 @@ reveal_block :: proc(doc: ^Document, block: int, reveal: Maybe(int), pairs: ^[dy
 	return
 }
 
+// How many links the texts of a block have.
+@(private)
+links_in :: proc(b: ^Block) -> (count: int) {
+	seen := -1
+	for &text in block_texts(b) {
+		for span in text.spans {
+			// The spans of one link are next to each other, with marks
+			// that show between them.
+			if span.link > 0 && span.link != seen {
+				count += 1
+			}
+			if span.link > 0 || .Mark not_in span.style {
+				seen = span.link
+			}
+		}
+	}
+	return
+}
+
 // The parse of the lines around a block that gives its text with the
 // places of its pieces, for `block_map`. `index`: the number of the
 // block in what was parsed; `text`: what was parsed, which starts at
@@ -115,7 +134,11 @@ block_parse :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs: 
 	same := index < fresh.count
 	if same {
 		a, b := block_at(doc, block), block_at(&fresh, index)
-		same = retext ? a.shape == b.shape && len(a.cells) == len(b.cells) : layout_equal(a, b)
+		// With another text, the block is the same when it has the
+		// shape and as many links as it had: the limit of the parser for
+		// the uses of definitions can cut a link in the piece that a
+		// parse of all keeps, and marks that show change no link.
+		same = retext ? a.shape == b.shape && len(a.cells) == len(b.cells) && links_in(a) == links_in(b) : layout_equal(a, b)
 	}
 	if !same {
 		destroy(&fresh)
@@ -174,6 +197,8 @@ block_places :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs:
 			// Not the -1 of a mark with no second mark.
 			pair.close += pair.close >= 0 ? base : 0
 			pair.close_end += base
+			pair.from += base
+			pair.to += base
 		}
 	}
 }
@@ -376,8 +401,11 @@ place_of :: proc(doc: ^Document, places: []Place, at: Address) -> (offset: int, 
 	// After spaces at the end of the text: where those spaces start in
 	// its last line, and as many on.
 	if n := spaces_of(doc, at); n > 0 {
-		first, _ := end_spaces_at(doc, places, at) or_return
-		return first + n, true
+		// Not past the end of the line: a mark of the line that shows as
+		// text (the "# " of a heading with no text) has those spaces in
+		// the text already.
+		first, line_end := end_spaces_at(doc, places, at) or_return
+		return min(first + n, max(line_end, first)), true
 	}
 	return text_place(doc, places, at)
 }
