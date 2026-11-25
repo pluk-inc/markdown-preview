@@ -864,7 +864,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             return activeDocumentWindowController?.canToggleEditMode ?? false
         case #selector(toggleEditorSourceModeFromMenu(_:)):
             menuItem.state = EditorSourceModeSetting.current ? .on : .off
-            return activeDocumentWindowController?.isEditing ?? false
+            return activeDocumentWindowController?.canFormatMarkdown ?? false
         case #selector(formatMarkdownFromMenu(_:)):
             return activeDocumentWindowController?.canFormatMarkdown ?? false
         case #selector(selectTabFromMenu(_:)):

@@ -16,7 +16,7 @@ struct AdvancedSettingsView: View {
             LabeledContent(columnLabel("Renderer")) {
                 VStack(alignment: .leading, spacing: 6) {
                     Toggle(L("Use the experimental native renderer"), isOn: $model.usesNativeRenderer)
-                    SettingsCaption(L("Opens documents faster and uses less memory. It does not have images, math, diagrams, code colors, Find, Edit Mode, or export yet."))
+                    SettingsCaption(L("Opens documents faster and uses less memory. It does not have images, math, diagrams, code colors, Find, or export yet, and its Edit Mode has only the basics."))
                 }
             }
             .settingsGroupGap()

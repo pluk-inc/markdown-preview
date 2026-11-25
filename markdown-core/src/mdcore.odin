@@ -76,6 +76,7 @@ Ctx :: struct {
 	// (`document.block_map`), for the next key. Of the document as it
 	// is: each change makes it again.
 	caret_places:    [dynamic]document.Place,
+	caret_hidden:    bool, // the off half of a blink; the caret is there
 	source_out:      [dynamic]u8, // the source, for `mdcore_source`
 	// Held for all of a change of the source of the document, before
 	// `lock`. A frame does not take it.
@@ -177,7 +178,7 @@ keep_window :: proc(ctx: ^Ctx) {
 show_selection :: proc(ctx: ^Ctx) {
 	clear(&ctx.selection_quads)
 	layout.selection_quads(&ctx.page, ctx.selection, ctx.shown_y0, ctx.shown_y1, ctx.scale, ctx.origin_px, &ctx.selection_quads)
-	if ctx.caret >= 0 && ctx.layout_valid {
+	if ctx.caret >= 0 && !ctx.caret_hidden && ctx.layout_valid {
 		if ctx.doc.count == 0 {
 			layout.caret_quad_empty(&ctx.page, ctx.scale, ctx.origin_px, &ctx.selection_quads)
 		} else {
@@ -452,6 +453,33 @@ mdcore_caret_clear :: proc "c" (handle: rawptr) {
 	hold(ctx)
 	ctx.caret = -1
 	ctx.display_valid = false
+}
+
+// See the header.
+@(export)
+mdcore_caret_offset :: proc "c" (handle: rawptr) -> c.long {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	return c.long(ctx.caret)
+}
+
+// See the header.
+@(export)
+mdcore_caret_show :: proc "c" (handle: rawptr, shown: bool) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	if ctx.caret_hidden == shown {
+		ctx.caret_hidden = !shown
+		// Only the quads of the selection and the caret: the page is
+		// the same.
+		if ctx.display_valid {
+			show_selection(ctx)
+		}
+	}
 }
 
 // See the header.

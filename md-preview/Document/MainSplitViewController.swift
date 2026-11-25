@@ -50,7 +50,7 @@ final class MainSplitViewController: NSSplitViewController {
         let sidebarVC = SidebarViewController()
         sidebarVC.onSelectHeading = { [weak self] index, sourceLine in
             guard let self else { return }
-            if self.isEditingDocument {
+            if self.isEditingDocument, !self.isNativeEditing {
                 // The preview behind the editor can contain older headings.
                 guard self.isEditorVisible else { return }
                 self.cachedEditorViewController?.scrollToSourceLine(sourceLine)
@@ -522,12 +522,36 @@ final class MainSplitViewController: NSSplitViewController {
     private var pendingPreviewScrollProgress: CGFloat = 0
     private var shouldAutofocusEditor = false
 
+    /// Edit mode in the native renderer's view (`enterNativeEditMode`):
+    /// the view takes the keys.
+    var isNativeEditing: Bool {
+        contentViewController?.nativeRenderer?.isEditable ?? false
+    }
+
     var isEditingDocument: Bool {
-        isEditorPreparing || isEditorVisible || isEditorExiting
+        isNativeEditing || isEditorPreparing || isEditorVisible || isEditorExiting
+    }
+
+    /// The view that the reader types in now: the web editor, or the
+    /// native renderer's view in its Edit mode.
+    var documentEditor: (any DocumentEditor)? {
+        isNativeEditing ? contentViewController?.nativeRenderer : editorViewController
+    }
+
+    /// Edit mode with the native renderer: the view that shows the
+    /// document takes the keys. No second view comes in, so nothing is
+    /// swapped and the reader stays at their place. Nil when the native
+    /// renderer does not show the document.
+    func enterNativeEditMode() -> NativeRendererView? {
+        guard let view = contentViewController?.nativeRenderer else { return nil }
+        view.isEditable = true
+        return view
     }
 
     var editorViewController: EditorViewController? {
-        isEditingDocument ? cachedEditorViewController : nil
+        // Not in the native renderer's Edit mode: a web editor from a
+        // session before can still be there, hidden.
+        isEditingDocument && !isNativeEditing ? cachedEditorViewController : nil
     }
 
     @discardableResult
@@ -759,6 +783,14 @@ final class MainSplitViewController: NSSplitViewController {
                       renderPreview: (() -> Void)? = nil,
                       overlayHidden: (@MainActor () -> Void)? = nil,
                       completion: @escaping () -> Void) {
+        if isNativeEditing {
+            // The view stays; it only stops taking keys.
+            contentViewController?.nativeRenderer?.isEditable = false
+            renderPreview?()
+            overlayHidden?()
+            completion()
+            return
+        }
         if isEditorExiting {
             pendingExitCompletions.append {
                 renderPreview?()

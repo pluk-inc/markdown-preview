@@ -31,6 +31,8 @@ links (shown, not opened), lists with nesting, task lists with check boxes
 that a click checks and saves, quotes, code blocks, tables, rules, emoji,
 text of any script that CoreText can shape.
 Scrolling with the system scroll bar, selection by drag, Select All, Copy.
+Edit Mode in its first form: a caret at a click, typed text (also from an
+input method), delete, Return, paste, save.
 The reader style from the app: font, text size and zoom, line spacing,
 bold text, margins, content width, theme colors, light and dark.
 
@@ -43,6 +45,12 @@ These came from the maintainer. Do not undo one without asking.
 - **The native renderer is the only renderer while its switch is on.** A
   feature it does not have is a visible gap. There is no automatic fall
   back to the web view for a document that needs one.
+- **With the native renderer on, Edit Mode is the native view**
+  (2026-11-25). The maintainer chose this over a hidden switch for
+  tests: the web editor is for the web renderer only. So Edit Mode has
+  fewer features for a reader with the native renderer until they are
+  built (the list is at the end of `README.md`), which is the rule
+  above: a feature it does not have is a visible gap.
 - **The core is built from source in the Xcode build.** No prebuilt binary
   in the repository. Odin is a build requirement (`brew install odin`).
 - **Names say what the thing is, not what it is written in.** The folder is
@@ -668,8 +676,33 @@ The order of the next steps, from the review of the second step:
   `mdcore_insert`, `mdcore_delete_backward`, `mdcore_caret_rect`,
   `mdcore_source`). No part of the app calls these yet; the benchmark
   does. A key at the caret: 1.8 ms of CPU.
-- Next: the host side, so a reader can type in the native view: key
-  input (also from an input method), the caret that blinks, a save.
+- Done: the host side. With the native renderer on, Edit Mode makes
+  the native view take the keys (`NativeRendererView.isEditable`): no
+  second view comes in and nothing is swapped, so the reader stays at
+  their place. The view and the web editor are one thing for the edit
+  session (`DocumentEditor`: the text changed, cancel, give the text,
+  take another text), so a save, an automatic save, a conflict with
+  the file on disk, and a document with no file go the ways that were
+  there. Keys come through the system's text input (`NSTextInputClient`),
+  so an input method and dead keys work; the text of an input method
+  that is not final is in the document with no line under it, and each
+  new form of it takes its place in one change of the source
+  (`mdcore_caret_offset`, `mdcore_replace_text`). The caret that the
+  reader sees is the system's own (`NSTextInsertionIndicator`) at the
+  place that the core gives; the host tells the core to draw none, as
+  it draws no check box. A path of the app that needs the web editor
+  (the formatting bar and its menu, images that are pasted, the source
+  mode) asks for `editorViewController`, which is nil in the native
+  view's Edit Mode; a path that needs the text or the session asks for
+  `documentEditor`.
+- A new document with no file opens in the web editor also with the
+  native renderer on: the native view comes with a document that has a
+  file. And a change of the renderer setting during Edit Mode in the
+  native view leaves Edit Mode, with the edits kept as the draft.
+- Next for the editor, in the order that a reader misses them: the
+  arrow keys and the other keys that move the caret; a selection that
+  typing takes the place of, with cut; undo; Return that knows its
+  block (a new list item, a line in a code block).
 - Not done for the caret: the arrow keys, a selection that typing takes
   the place of, a delete at the start of a block (to join it with the
   block before), Enter (the source needs a line break that is right for
@@ -967,3 +1000,11 @@ export.
   blocks and a store for the text were next in the plan and have no
   user yet, so they wait. A key at the caret: 1.8 ms of CPU in 9 KB,
   2.0 ms in 1.1 MB.
+- **2026-11-25** — Edit Mode in the native view. The maintainer chose
+  Edit Mode itself, not a hidden switch, as the place where typing is
+  on. The native view takes the keys through the system's text input,
+  shows the system's caret, keeps the caret in view, and is the editor
+  of the edit session beside the web editor, so a save goes the way
+  that was there. Checked on the hidden display: a caret, typed text,
+  delete, Return, leave Edit Mode and enter it again, an automatic
+  save to the file.

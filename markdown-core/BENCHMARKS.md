@@ -72,6 +72,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-24 | an edit parses only the blocks around it | 577 / 599 | 62 / 107 | 460 / 700 | 60 / 74 | none | 0.47 / 0.42 | 7.0 / 25.3 (16.1 at the first frame) |
 | 2026-11-24 | a key lays out its block again, not its part | 558 / 560 | 62 / 108 (see the section) | 450 / 695 | 60 / 70 | none | 0.50 / 0.42 | 7.2 / 25.5 (16.1 at the first frame) |
 | 2026-11-25 | a caret, and text that is typed at it | 596 / 587 | 53 / 98 | 505 / 730 | 66 / 72 | none | 0.51 / 0.43 | 7.1 / 26.7 (16.2 at the first frame) |
+| 2026-11-25 | Edit Mode in the native view | 569 / 579 | 53 / 99 | 475 / 720 | 61 / 71 | none | 0.52 / 0.44 | 7.2 / 26.7 (16.2 at the first frame) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -744,3 +745,33 @@ from its commit on the same day:
 The app is the same: no part of it has a caret yet. The memory is 8 MB
 under the numbers of the day before for the two builds alike, as the
 launch time is 30 ms over them: the state of the Mac, not the builds.
+
+## Edit Mode in the native view (2026-11-25)
+
+The host side of the caret: with the native renderer on, Edit Mode makes
+the native view take the keys. Nothing of it runs before the reader
+turns Edit Mode on. `app.py`, short / long, five launches for each
+number, the base built from its commit on the same day:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 562 / 591 | 53 / 100 | 480 / 720 |
+| change | 571 / 582 | 53 / 100 | 470 / 720 |
+| change | 566 / 576 | 53 / 98 | 480 / 720 |
+| base | 554 / 569 | 53 / 100 | 470 / 720 |
+
+The core changed by two small calls for the host (`mdcore_caret_show`,
+`mdcore_caret_offset`). `core.py`, short / long, the base and the
+change, two runs each in turns:
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 60 / 73 | 61 / 71 |
+| Scroll frame, new glyphs / ready (CPU ms, long) | 0.52 / 0.44 | 0.52 / 0.44 |
+| A typed character in the middle of the text (CPU ms) | 1.3 / 1.4 | 1.2 / 1.5 |
+| A typed character at the end of the text (CPU ms) | 1.5 / 3.3 | 1.3 / 3.3 |
+| A typed character at a caret (CPU ms) | 1.8 / 2.0 | 1.6 / 2.1 |
+| Heap at the first frame (MB) | 5.3 / 16.2 | 5.3 / 16.2 |
+
+The same for the two, as it must be: the benchmark calls neither of
+the new calls.

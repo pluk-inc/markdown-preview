@@ -92,6 +92,18 @@ bool mdcore_caret_set(void *ctx, double x, double y);
 // Takes the caret away.
 void mdcore_caret_clear(void *ctx);
 
+// Shows the caret or not: the caret is still there and takes text. For a
+// host that draws the caret itself (the system's own caret on Apple
+// systems) and so wants none from the core. The next frame draws the
+// change.
+void mdcore_caret_show(void *ctx, bool shown);
+
+// Where the caret is in the text of the document, as a UTF-8 byte
+// offset; -1 for no caret. With mdcore_replace_text, a host puts text in
+// the place of text that it put in before (the text of an input method
+// that is not final yet).
+long mdcore_caret_offset(void *ctx);
+
 // Where the caret is: its x in the view, the top of its line in the
 // space of the page, and the height of the line. For a host that keeps
 // the caret in view or puts an input window at it. In a document with no

@@ -70,7 +70,8 @@ struct Deadline { static func now() -> Self { Self() }; static func +(lhs: Self,
 }
 enum MarkdownHTML { static let preferredPageWidth: Double = 820 }
 final class Constraint { var constant: Double = 0 }
-final class NativeRenderer { var textZoom: Double = 1 }
+final class NativeRenderer { var textZoom: Double = 1; var isEditable = false }
+typealias NativeRendererView = NativeRenderer
 @MainActor final class Preview {
     let view = View()
     var nativeRenderer: NativeRenderer?
@@ -99,7 +100,6 @@ swift += '''
     var pendingExitCompletions: [() -> Void] = []
     var layeredContentViewController: Host? = Host()
     var findOverlayView: View?
-    var editorViewController: EditorViewController? { isEditingDocument ? cachedEditorViewController : nil }
     var editModeGeneration = UUID()
     var pendingSourceScrollAnchor: SourceScrollAnchor?
     var isSourceScrollAnchorResolved = true
@@ -111,7 +111,8 @@ swift += '''
 swift += '\n'.join(method(name) for name in [
     '@IBAction func zoomInDocument', '@IBAction func zoomOutDocument',
     '@IBAction func resetDocumentZoom', 'func applyTextSizeSetting()',
-    'var isEditingDocument:', 'func enterEditMode',
+    'var isNativeEditing:', 'var isEditingDocument:', 'var editorViewController:',
+    'func enterNativeEditMode', 'func enterEditMode',
     'private func revealEditorIfPrepared', 'func exitEditMode'
 ])
 swift += '\n    init() {\n' + method('    contentViewController?.zoomDidChange =') + '\n    }\n}\n'
@@ -236,7 +237,23 @@ swift += '''
     fallback()
     precondition(fallbackCompletions == 1 && !f.isEditingDocument,
                  "Missing render callback must still finish navigation exactly once")
-    print("PASS: preparation cancellation, stale deadline rejection, restoration ordering, and file navigation")
+    // Edit Mode in the native renderer's view: the view takes the keys,
+    // no web editor comes in, and the exit ends at once.
+    let n = Controller()
+    precondition(n.enterNativeEditMode() == nil, "No native view, no native Edit Mode")
+    n.contentViewController!.nativeRenderer = NativeRenderer()
+    precondition(n.enterNativeEditMode() != nil)
+    precondition(n.isNativeEditing && n.isEditingDocument, "The native view must count as editing")
+    precondition(n.editorViewController == nil, "The web editor is not the editor in the native view")
+    precondition(!n.isEditorPreparing && !n.isEditorVisible, "No web editor may be prepared")
+    var nativeRendered = 0, nativeDone = 0
+    n.exitEditMode(waitForPreviewRender: true,
+                   renderPreview: { nativeRendered += 1 },
+                   completion: { nativeDone += 1 })
+    precondition(nativeRendered == 1 && nativeDone == 1, "The native exit has nothing to wait for")
+    precondition(!n.isEditingDocument && !n.contentViewController!.nativeRenderer!.isEditable)
+
+    print("PASS: preparation cancellation, stale deadline rejection, restoration ordering, file navigation, and Edit Mode in the native view")
 }
 await probe()
 '''

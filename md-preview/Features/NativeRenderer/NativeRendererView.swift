@@ -187,6 +187,8 @@ final class NativeRendererView: NSView {
         // The core takes the reader's place from the last offset that it
         // heard of, when the layout changes.
         mdcore_note_scroll(ctx, scrollY)
+        // The window of an input method goes with the caret.
+        if markedText != nil { inputContext?.invalidateCharacterCoordinates() }
         // Another place of the page is under the pointer now.
         updatePointerShape()
         updateTaskCheckBoxes()
@@ -287,9 +289,14 @@ final class NativeRendererView: NSView {
             page.setBoundsOrigin(frame.origin)
         }
         updateTaskCheckBoxes()
+        // The caret is where the new layout has its text.
+        if isEditable { updateCaretIndicator() }
+        if markedText != nil { inputContext?.invalidateCharacterCoordinates() }
         // After each layout and each frame that laid out more: other text
         // can be under a pointer that did not move.
         updatePointerShape()
+        // And the caret can be at another place of the page.
+        if isEditable { updateCaretIndicator() }
     }
 
     /// The zoom of the document: the text size is the body size times this.
@@ -322,6 +329,47 @@ final class NativeRendererView: NSView {
     /// "[ ]" (from 1) and the state it got. The view shows the new state
     /// already; the owner changes the source and saves it.
     var taskCheckboxToggled: ((_ line: Int, _ checked: Bool) -> Void)?
+
+    // MARK: Edit mode
+
+    /// Edit mode: a click puts a caret in the text, and the view takes
+    /// the keys. The document is the one that the view shows; no second
+    /// view comes in, so the reader stays at their place.
+    var isEditable = false {
+        didSet {
+            guard isEditable != oldValue else { return }
+            markedText = nil
+            if isEditable {
+                // The system's caret shows where the core's caret is.
+                mdcore_caret_show(ctx, false)
+                if caretIndicator.superview == nil { page.addSubview(caretIndicator) }
+            } else {
+                hasCaret = false
+                mdcore_caret_clear(ctx)
+                setNeedsDraw()
+            }
+            updateCaretIndicator()
+        }
+    }
+    /// The reader changed the text (`DocumentEditor`).
+    var contentDidChange: (() -> Void)?
+    /// The reader pressed Escape in Edit mode (`DocumentEditor`).
+    var cancelRequested: (() -> Void)?
+    /// A click gave the view a caret.
+    private var hasCaret = false
+    /// The text of an input method that is not final yet: where it is in
+    /// the source of the document, in bytes, and the text itself, which
+    /// the system's text input counts in UTF-16 units. The next form of
+    /// it, or the final text, takes its place.
+    private var markedText: (start: Int, length: Int, text: String, selection: NSRange)?
+    /// The caret that the reader sees: the system's own, which blinks as
+    /// the system's settings say. It is on the page, at the place that
+    /// the core gives.
+    private let caretIndicator: NSTextInsertionIndicator = {
+        let indicator = NSTextInsertionIndicator(frame: .zero)
+        indicator.displayMode = .hidden
+        return indicator
+    }()
 
     /// The check boxes of the tasks in view: the system's own buttons, as
     /// subviews of the page, so they scroll with it. The core leaves their
@@ -443,6 +491,12 @@ final class NativeRendererView: NSView {
         // the view shows gets the same change, so `open` knows the
         // document that the owner saves and gives back, and does nothing
         // for it.
+        if isEditable {
+            // In Edit mode the core has the text: the mark changes
+            // there, and the owner saves it with the other edits.
+            if mdcore_set_task_checked(ctx, line, checked) { didEdit() }
+            return
+        }
         if let shown = shownMarkdown,
            let changed = TaskCheckboxSource.settingChecked(checked, onLine: line, in: shown),
            mdcore_set_task_checked(ctx, line, checked) {
@@ -467,6 +521,12 @@ final class NativeRendererView: NSView {
             return
         }
         shownMarkdown = markdown
+        // The text changed under the text of an input method that is not
+        // final: its range is of the text before.
+        if markedText != nil {
+            markedText = nil
+            inputContext?.discardMarkedText()
+        }
         var text = markdown
         text.withUTF8 { utf8 in
             utf8.withMemoryRebound(to: CChar.self) { mdcore_set_markdown(ctx, $0.baseAddress, $0.count) }
@@ -564,10 +624,16 @@ final class NativeRendererView: NSView {
         if window == nil { endScrollAnimation() }
         NotificationCenter.default.removeObserver(self, name: NSWindow.didChangeScreenNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: NSWindow.didBecomeKeyNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didResignKeyNotification, object: nil)
         if let window {
             NotificationCenter.default.addObserver(
                 self, selector: #selector(windowDidBecomeKey),
                 name: NSWindow.didBecomeKeyNotification, object: window
+            )
+            // The caret shows only in the window that takes the keys.
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(windowDidResignKey),
+                name: NSWindow.didResignKeyNotification, object: window
             )
             NotificationCenter.default.addObserver(
                 self, selector: #selector(followDisplay),
@@ -624,6 +690,11 @@ final class NativeRendererView: NSView {
 
     @objc private func windowDidBecomeKey() {
         updatePointerShape()
+        updateCaretIndicator()
+    }
+
+    @objc private func windowDidResignKey() {
+        updateCaretIndicator()
     }
 
     /// A pointer event on the page. `point` is in page coordinates, which
@@ -631,6 +702,16 @@ final class NativeRendererView: NSView {
     fileprivate func pointer(at point: NSPoint, phase: Int32) {
         if phase == 0 { window?.makeFirstResponder(self) }
         mdcore_mouse(ctx, point.x, point.y, phase)
+        if isEditable, phase == 0 {
+            // No caret where the source has no room for text (a table
+            // cell with no text): the caret stays where it was.
+            if mdcore_caret_set(ctx, point.x, point.y) {
+                hasCaret = true
+                markedText = nil
+                inputContext?.discardMarkedText()
+            }
+            updateCaretIndicator()
+        }
         setNeedsDraw()
     }
 
@@ -652,6 +733,7 @@ final class NativeRendererView: NSView {
         static let space: UInt16 = 49
         static let home: UInt16 = 115
         static let pageUp: UInt16 = 116
+        static let escape: UInt16 = 53
         static let end: UInt16 = 119
         static let pageDown: UInt16 = 121
         static let downArrow: UInt16 = 125
@@ -659,6 +741,22 @@ final class NativeRendererView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
+        if isEditable {
+            // Escape leaves Edit mode, also before a click gave a caret.
+            // Not while an input method has text that is not final: the
+            // key is the input method's, to take that text back.
+            if event.keyCode == Key.escape, markedText == nil {
+                cancelOperation(nil)
+                return
+            }
+            if hasCaret {
+                // Through the system's text input: an input method, the
+                // dead keys, and the key bindings of the reader give
+                // text and commands (`NSTextInputClient` below).
+                interpretKeyEvents([event])
+                return
+            }
+        }
         switch event.keyCode {
         case Key.pageDown: scrollPageDown(nil)
         case Key.space: event.modifierFlags.contains(.shift) ? scrollPageUp(nil) : scrollPageDown(nil)
@@ -766,5 +864,212 @@ private final class PageArea: NSView {
         guard let event = lastDrag else { return }
         autoscroll(with: event)
         owner?.pointer(at: convert(event.locationInWindow, from: nil), phase: 1)
+    }
+}
+
+// MARK: - Edit mode: text input
+
+extension NativeRendererView: DocumentEditor {
+    func fetchMarkdown(_ completion: @escaping (String?) -> Void) {
+        var length = 0
+        let bytes = mdcore_source(ctx, &length)
+        // A document with no text has no bytes, and that is its text.
+        completion(String(decoding: UnsafeRawBufferPointer(start: bytes, count: bytes == nil ? 0 : length), as: UTF8.self))
+    }
+
+    func load(markdown: String, assetBaseURL: URL?) {
+        open(markdown, keepsScroll: true)
+    }
+}
+
+extension NativeRendererView: @preconcurrency NSTextInputClient {
+    /// After a change of the text by the reader.
+    fileprivate func didEdit() {
+        // `open` compares with the text that it showed; that is another
+        // one now.
+        shownMarkdown = nil
+        updatePageArea()
+        keepCaretInView()
+        updateCaretIndicator()
+        setNeedsDraw()
+        contentDidChange?()
+    }
+
+    /// Puts the system's caret where the core's caret is, and shows it
+    /// while the view takes the keys.
+    fileprivate func updateCaretIndicator() {
+        var x = 0.0, y = 0.0, height = 0.0
+        let takesKeys = isEditable && hasCaret && window?.firstResponder === self && window?.isKeyWindow == true
+        guard takesKeys, mdcore_caret_rect(ctx, &x, &y, &height) else {
+            caretIndicator.displayMode = .hidden
+            return
+        }
+        // The page is in the space of the core's page.
+        caretIndicator.frame = NSRect(x: x - 1, y: y, width: 2, height: height)
+        caretIndicator.displayMode = .automatic
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        defer { updateCaretIndicator() }
+        return super.becomeFirstResponder()
+    }
+
+    override func resignFirstResponder() -> Bool {
+        defer {
+            // The view is still first responder inside the call.
+            DispatchQueue.main.async { [weak self] in self?.updateCaretIndicator() }
+        }
+        return super.resignFirstResponder()
+    }
+
+    /// Text from the system's text input, which gives a string or an
+    /// attributed string.
+    private func plainText(_ string: Any) -> String {
+        (string as? String) ?? (string as? NSAttributedString)?.string ?? ""
+    }
+
+    /// Puts text in at the caret, or in the place of the text of an input
+    /// method that is not final. Returns where the text starts in the
+    /// source.
+    @discardableResult
+    private func put(_ text: String) -> Int {
+        var text = text
+        let start = markedText?.start ?? mdcore_caret_offset(ctx)
+        let end = start + (markedText?.length ?? 0)
+        markedText = nil
+        guard hasCaret, start >= 0 else { return start }
+        text.withUTF8 { utf8 in
+            utf8.withMemoryRebound(to: CChar.self) {
+                // One change of the source, also for a text that takes
+                // the place of another one.
+                mdcore_replace_text(ctx, start, end, $0.baseAddress, $0.count)
+            }
+        }
+        return start
+    }
+
+    /// Scrolls so that the line of the caret shows, with a little room.
+    private func keepCaretInView() {
+        var x = 0.0, y = 0.0, height = 0.0
+        guard mdcore_caret_rect(ctx, &x, &y, &height) else { return }
+        // Not against a scroll that a key started.
+        endScrollAnimation()
+        let room: CGFloat = 24
+        let top = scrollY + scrollView.contentInsets.top
+        let bottom = scrollY + scrollView.contentView.bounds.height
+        if y - room < top {
+            scroll(toY: y - room - scrollView.contentInsets.top)
+        } else if y + height + room > bottom {
+            scroll(toY: y + height + room - scrollView.contentView.bounds.height)
+        }
+    }
+
+    /// The text that is not final with a part of it changed: an input
+    /// method can give a new form of a part of its text only. The range
+    /// counts from the start of the text that is not final, in UTF-16
+    /// units. With no such range, the new text is all of it.
+    private func replacingMarked(_ replacementRange: NSRange, with text: String) -> String {
+        guard let marked = markedText?.text, replacementRange.location != NSNotFound,
+              let range = Range(replacementRange, in: marked) else { return text }
+        return marked.replacingCharacters(in: range, with: text)
+    }
+
+    func insertText(_ string: Any, replacementRange: NSRange) {
+        put(replacingMarked(replacementRange, with: plainText(string)))
+        didEdit()
+    }
+
+    func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        // The text of an input method while the reader makes it: it is in
+        // the document as it is typed, and each new form takes the place
+        // of the one before. It has no line under it yet.
+        let text = replacingMarked(replacementRange, with: plainText(string))
+        // The selection that the input method has in its text counts
+        // from the start of the new part.
+        var selection = selectedRange
+        if markedText != nil, replacementRange.location != NSNotFound {
+            selection.location += replacementRange.location
+        }
+        let units = text.utf16.count
+        selection.location = min(max(selection.location, 0), units)
+        selection.length = min(max(selection.length, 0), units - selection.location)
+        let start = put(text)
+        markedText = text.isEmpty || start < 0 ? nil : (start, text.utf8.count, text, selection)
+        didEdit()
+    }
+
+    func unmarkText() {
+        markedText = nil
+    }
+
+    // The view gives the system's text input the text that is not final
+    // as the only text there is: it starts at 0. The selection in it is
+    // the one that the input method gave; the view's own caret shows at
+    // the end of that text.
+
+    func selectedRange() -> NSRange {
+        markedText?.selection ?? NSRange(location: 0, length: 0)
+    }
+
+    func markedRange() -> NSRange {
+        markedText.map { NSRange(location: 0, length: $0.text.utf16.count) } ?? NSRange(location: NSNotFound, length: 0)
+    }
+
+    func hasMarkedText() -> Bool {
+        markedText != nil
+    }
+
+    func attributedSubstring(forProposedRange range: NSRange, actualRange: NSRangePointer?) -> NSAttributedString? {
+        nil
+    }
+
+    func validAttributesForMarkedText() -> [NSAttributedString.Key] {
+        []
+    }
+
+    /// Where the window of an input method goes: at the caret.
+    func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> NSRect {
+        var x = 0.0, y = 0.0, height = 0.0
+        guard let window, mdcore_caret_rect(ctx, &x, &y, &height) else { return .zero }
+        // The caret is in the space of the page; the page is the document
+        // view of the scroll view.
+        let inView = convert(NSRect(x: x, y: y, width: 1, height: height), from: page)
+        return window.convertToScreen(convert(inView, to: nil))
+    }
+
+    func characterIndex(for point: NSPoint) -> Int {
+        NSNotFound
+    }
+
+    override func doCommand(by selector: Selector) {
+        // The commands that the view has (delete, a new line, the scroll
+        // keys). Each other one (the arrow keys) does nothing yet.
+        if responds(to: selector) {
+            perform(selector, with: nil)
+        }
+    }
+
+    override func deleteBackward(_ sender: Any?) {
+        guard isEditable, hasCaret else { return }
+        markedText = nil
+        mdcore_delete_backward(ctx)
+        didEdit()
+    }
+
+    override func insertNewline(_ sender: Any?) {
+        guard isEditable, hasCaret else { return }
+        // A new paragraph: Markdown ends one with an empty line.
+        put("\n\n")
+        didEdit()
+    }
+
+    override func cancelOperation(_ sender: Any?) {
+        if isEditable { cancelRequested?() }
+    }
+
+    @objc func paste(_ sender: Any?) {
+        guard isEditable, hasCaret, let text = NSPasteboard.general.string(forType: .string) else { return }
+        put(text)
+        didEdit()
     }
 }

@@ -349,7 +349,7 @@
 "App links" = "پیوندهای برنامه";
 "Renderer" = "رندرگر";
 "Use the experimental native renderer" = "استفاده از رندرگر بومی آزمایشی";
-"Opens documents faster and uses less memory. It does not have images, math, diagrams, code colors, Find, Edit Mode, or export yet." = "اسناد را سریع‌تر باز می‌کند و حافظهٔ کمتری مصرف می‌کند. هنوز تصاویر، فرمول‌ها، نمودارها، رنگ‌آمیزی کد، جست‌وجو، حالت ویرایش و خروجی گرفتن را ندارد.";
+"Opens documents faster and uses less memory. It does not have images, math, diagrams, code colors, Find, or export yet, and its Edit Mode has only the basics." = "سندها را سریع‌تر باز می‌کند و حافظهٔ کمتری مصرف می‌کند. هنوز تصاویر، فرمول‌ها، نمودارها، رنگ‌های کد، جست‌وجو یا خروجی‌گرفتن را ندارد و حالت ویرایش آن فقط امکانات اولیه را دارد.";
 "Ask again before opening custom app links. Approvals are saved per URL scheme and shared with Quick Look." = "پیش از باز کردن پیوندهای سفارشی برنامه دوباره سؤال شود. مجوزها برای هر URL scheme ذخیره می‌شوند و با Quick Look به اشتراک گذاشته می‌شوند.";
 "No application can open this link" = "هیچ برنامه‌ای نمی‌تواند این پیوند را باز کند";
 "OK" = "تأیید";

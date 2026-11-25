@@ -280,7 +280,9 @@ final class ContentViewController: NSViewController {
 
     // MARK: - Experimental native renderer
 
-    private var nativeRenderer: NativeRendererView?
+    /// The native renderer's view while it shows the document. In Edit
+    /// mode it is the editor too (`MainSplitViewController`).
+    private(set) var nativeRenderer: NativeRendererView?
     /// The document the native renderer draws right after the window's
     /// first frame. Its parse, layout and Metal setup would otherwise hold
     /// that frame back.
