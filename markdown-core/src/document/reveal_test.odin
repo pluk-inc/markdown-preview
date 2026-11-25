@@ -318,3 +318,29 @@ test_the_text_of_a_task_starts_after_its_check_box :: proc(t: ^testing.T) {
 	testing.expect_value(t, offset, 6)
 	testing.expect_value(t, address_of(&doc, 6), Address{block = 0, byte = 2})
 }
+
+// Each character of the mark of a task that shows is a place of its
+// own: the caret goes between the digits of a number, and the Delete
+// key before the first letter takes out one character of the mark, and
+// not the check box with all of the mark.
+@(test)
+test_the_mark_of_a_task_is_edited_by_character :: proc(t: ^testing.T) {
+	doc := parse_owned(transmute([]u8)fmt.aprintf("%s", "12. [x] task\n"), 9)
+	defer destroy(&doc)
+	testing.expect_value(t, fmt.tprintf("%s", block_at(&doc, 0).text.bytes[:]), "12. task")
+	for byte in 0 ..= 3 {
+		offset, ok := source_of(&doc, {block = 0, byte = byte})
+		testing.expect(t, ok)
+		testing.expect_value(t, offset, byte)
+	}
+	offset, ok := source_of(&doc, {block = 0, byte = 4})
+	testing.expect(t, ok)
+	testing.expect_value(t, offset, 8)
+	places := block_map(&doc, 0)
+	defer delete(places)
+	start, end, found := char_before(&doc, places[:], {block = 0, byte = 4})
+	testing.expect(t, found)
+	testing.expect_value(t, [2]int{start, end}, [2]int{3, 4})
+	// An offset in the check box is the start of the text.
+	testing.expect_value(t, address_of(&doc, 5), Address{block = 0, byte = 4})
+}
