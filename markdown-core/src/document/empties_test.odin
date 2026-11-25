@@ -45,6 +45,7 @@ test_the_lines_that_return_makes_are_empty_paragraphs :: proc(t: ^testing.T) {
 		{"```\na\n\n```\n\n\nz\n", {1, 0}, {11}},
 		{"```\n\n```\n\n\nz\n", {1, 0}, {9}},
 		{"```\n```\n\n\nz\n", {1, 0}, {8}},
+		{"> ```\n>\n> ```\n\n\nz\n", {1, 0}, {14}},
 		// Code by its indent that shows the marks of a fence is no
 		// fence.
 		{"    ```\n    x\n\n\nz\n", {1, 0}, {14}},

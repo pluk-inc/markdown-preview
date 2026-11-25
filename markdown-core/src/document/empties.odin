@@ -120,7 +120,8 @@ lines_end :: proc(source: []u8, b: ^Block, start, next: int) -> (end: int, ok: b
 	if fenced {
 		mark_end, after_mark := line_at(source, end)
 		// Code of one empty line has no text, as code of no line has.
-		if lines == 0 && end < next && blank(source[end:mark_end]) {
+		// In a quote that line has the mark of the quote.
+		if lines == 0 && end < next && blank(bytes.trim_left(source[end:mark_end], {' ', '\t', '>'})) {
 			end = after_mark
 			mark_end, after_mark = line_at(source, end)
 		}
