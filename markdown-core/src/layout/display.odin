@@ -54,6 +54,18 @@ rect_quad :: proc(x, y, w, h: f32, color: base.Color, radius, scale: f32, top, o
 	return base.Quad{pos = {x0, f32(y0 - origin_y)}, size = {max(x1 - x0, 1), f32(max(y1 - y0, 1))}, uv = {radius * scale, 0}, color = color, kind = .Rect}
 }
 
+// The quad of a mark that stands beside text (`Decor.baseline`): from
+// the whole pixel of the line that the text stands on, as the text is
+// drawn, with a size in whole pixels. Each edge of `rect_quad` goes to
+// its own whole pixel, so a mark of 3.75 points is 7 or 8 or 9 pixels
+// high there, a pixel higher or lower beside its text from line to line.
+@(private)
+mark_quad :: proc(d: Decor, color: base.Color, scale: f32, top, origin_y: f64) -> base.Quad {
+	w, h := max(math.round(d.w * scale), 1), max(math.round(d.h * scale), 1)
+	y := page_pixel(top, d.baseline, scale) - f64(math.round((d.baseline - d.y) * scale))
+	return base.Quad{pos = {math.round(d.x * scale), f32(y - origin_y)}, size = {w, h}, uv = {min(w, h) / 2, 0}, color = color, kind = .Rect}
+}
+
 // Makes the quads of the range of the page between y0 and y1 (points).
 // `origin_y` (device pixels) is taken from every y, so the numbers stay
 // small on a long page. `buffer` is working memory that the caller keeps.
@@ -99,6 +111,10 @@ display_part :: proc(
 				continue
 			}
 			color := d.soft_done && done ? done_color(l) : d.color
+			if d.baseline != 0 {
+				append(rects, mark_quad(d, color, scale, part.top, origin_y))
+				continue
+			}
 			append(d.above ? glyphs : rects, rect_quad(d.x, d.y, d.w, d.h, color, d.radius, scale, part.top, origin_y))
 		}
 		for i in box.line_first ..< box.line_end {

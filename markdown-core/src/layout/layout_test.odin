@@ -324,6 +324,18 @@ test_a_task_keeps_a_place_for_its_check_box :: proc(t: ^testing.T) {
 	testing.expect(t, middle > line_height / 2 && middle < baseline - x_height / 2)
 	testing.expect(t, abs(one.y + size / 2 - first.top - middle) < 0.01)
 	testing.expect_value(t, bullet.color, f.page.style.text)
+	// It knows the line that its text stands on, so it is drawn from
+	// the pixel of that line: of one size and at one distance from the
+	// line, at each height of the page.
+	testing.expect(t, abs(bullet.baseline - text_line.top - baseline) < 0.01)
+	first_quad := mark_quad(bullet, bullet.color, 2, 0, 0)
+	for step in 1 ..< 40 {
+		quad := mark_quad(bullet, bullet.color, 2, f64(step) * 0.13, 0)
+		line_pixel := page_pixel(f64(step) * 0.13, bullet.baseline, 2)
+		testing.expect_value(t, quad.size, first_quad.size)
+		testing.expect_value(t, line_pixel - f64(quad.pos.y), page_pixel(0, bullet.baseline, 2) - f64(first_quad.pos.y))
+	}
+	testing.expect_value(t, first_quad.size.x, first_quad.size.y)
 	// Only the box that a range touches.
 	found: [4]Task_Place
 	testing.expect_value(t, tasks_between(&f.page, f64(two.y + 1), f64(two.y + size - 1), found[:]), 1)

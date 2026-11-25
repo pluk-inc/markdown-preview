@@ -74,6 +74,12 @@ Decor :: struct {
 	color:      base.Color,
 	radius:     f32,
 	above:      bool, // a line through text: drawn over the selection, as the text is
+	// For a mark that stands beside text (the bullet of a list item):
+	// the line that the text stands on, as y is; 0 for each other
+	// record. The text is drawn from the whole pixel of that line, so
+	// the mark is too: at the same distance from it in each line, and
+	// of the same size, in whole pixels (`mark_quad`).
+	baseline:   f32,
 	soft_done:  bool, // of text that is softer in a checked task (`done_color`)
 }
 
@@ -657,15 +663,17 @@ BULLET_GAP :: 0.35
 MARKER_MIDDLE :: 0.6
 
 // The height of the middle of the mark of a list item (`MARKER_MIDDLE`)
-// in a line at `y` with text of a size. With no size, the middle of
-// the line: a mark beside a block with no text (a rule).
+// in a line at `y` with text of a size, and the line that the text
+// stands on. With no size, the middle of the line and no line of text:
+// a mark beside a block with no text (a rule).
 @(private)
-marker_middle :: proc(l: ^Layout, y, line_height, text_size: f32) -> f32 {
+marker_middle :: proc(l: ^Layout, y, line_height, text_size: f32) -> (middle, baseline: f32) {
 	if text_size <= 0 {
-		return y + line_height / 2
+		return y + line_height / 2, 0
 	}
 	ascent, descent, x_height := text.font_metrics(font(l, .Regular, text_size))
-	return y + (line_height - (ascent + descent)) / 2 + ascent - MARKER_MIDDLE * x_height
+	baseline = y + (line_height - (ascent + descent)) / 2 + ascent
+	return baseline - MARKER_MIDDLE * x_height, baseline
 }
 
 // Part `t` of the way from one color to another.
@@ -690,7 +698,8 @@ place_task :: proc(l: ^Layout, b: ^document.Block, x, y, line_height, text_size:
 	bx := math.round(x - l.m.body * TASK_GAP - size)
 	// Not on a whole point here: that is a point of the page, and y is
 	// from the top of the part (`tasks_between`).
-	by := marker_middle(l, y, line_height, text_size) - size / 2
+	middle, _ := marker_middle(l, y, line_height, text_size)
+	by := middle - size / 2
 	append(&l.work.tasks, Task{bx, by, len(l.work.boxes) - 1})
 }
 
@@ -706,7 +715,9 @@ place_marker :: proc(l: ^Layout, b: ^document.Block, x, y, line_height, text_siz
 		// the size of the text in the system font, and each font has
 		// its own. In the color of the text.
 		across := BULLET_SIZE * l.m.body
-		push_decor(l, x - BULLET_GAP * l.m.body - across, marker_middle(l, y, line_height, text_size) - across / 2, across, across, l.style.text, across / 2)
+		middle, baseline := marker_middle(l, y, line_height, text_size)
+		push_decor(l, x - BULLET_GAP * l.m.body - across, middle - across / 2, across, across, l.style.text, across / 2)
+		l.work.decor[len(l.work.decor) - 1].baseline = baseline
 		return
 	}
 	label := marker_text(b)
