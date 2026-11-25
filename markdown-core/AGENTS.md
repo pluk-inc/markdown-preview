@@ -530,12 +530,14 @@ Design, before the features that need it:
   with a size in whole pixels (`mark_quad`): each edge to its own
   pixel made it 8 or 9 pixels high and a pixel higher or lower beside
   its text from line to line. Not done: the check box is a view of the
-  system that the host places in points, with no such rule; the line
-  of the text is from the font of the item and not from the line as it
-  is shaped, so beside a first line with an emoji or text of another
-  script (a font with other heights) the bullet can be a pixel off;
-  and a line through text and the background of inline code are placed
-  edge by edge too, and could take the same rule.
+  system that the host places in points, with no such rule; and a
+  line through text and the background of inline code are placed edge
+  by edge too, and could take the same rule. The pixel is of the line
+  of the text as it is drawn (`mark_baseline`: the first line of text
+  of the box, with the heights of its shaped line), not of a line that
+  the bullet keeps for itself: the two got a move down the page with
+  an addition each, and a first line with an emoji stands lower than
+  the font says.
 - The marker of a list item has its place from a switch on the block kind
   with each kind's padding repeated, and the first-line height of a block
   is written in two or three places for each kind.

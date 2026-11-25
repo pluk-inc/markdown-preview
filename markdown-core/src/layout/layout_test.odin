@@ -324,20 +324,23 @@ test_a_task_keeps_a_place_for_its_check_box :: proc(t: ^testing.T) {
 	testing.expect(t, middle > line_height / 2 && middle < baseline - x_height / 2)
 	testing.expect(t, abs(one.y + size / 2 - first.top - middle) < 0.01)
 	testing.expect_value(t, bullet.color, f.page.style.text)
-	// It knows the line that its text stands on, so it is drawn from
-	// the pixel of that line: of one size and at one distance from the
-	// line, at each height of the page, and after a move down the page
-	// (a change above it moves `y` only).
+	// It is drawn from the pixel of the line that its text stands on:
+	// of one size and at one distance from that line, at each height of
+	// the page. The line is the one of the text itself, which gets a
+	// move down the page with an addition of its own: the distance that
+	// the bullet keeps is not from a sum of its own.
 	testing.expect(t, abs(bullet.y + bullet.to_baseline - text_line.top - baseline) < 0.01)
-	first_quad := mark_quad(bullet, bullet.color, 2, 0, 0)
+	testing.expect_value(t, mark_baseline(&f.page, 0, plain, bullet), line_baseline(text_line.top, line_height, text_line.line.ascent, text_line.line.descent))
+	first_quad := mark_quad(bullet, text_line.top + baseline, bullet.color, 2, 0, 0)
 	for step in 1 ..< 40 {
 		moved := bullet
 		moved.y += f32(step) * 0.37
+		text_top := text_line.top + f32(step) * 0.37
+		text_baseline := line_baseline(text_top, line_height, ascent, descent)
 		for top in ([]f64{0, f64(step) * 0.13}) {
-			quad := mark_quad(moved, bullet.color, 2, top, 0)
-			line_pixel := page_pixel(top, moved.y + moved.to_baseline, 2)
+			quad := mark_quad(moved, text_baseline, bullet.color, 2, top, 0)
 			testing.expect_value(t, quad.size, first_quad.size)
-			testing.expect_value(t, line_pixel - f64(quad.pos.y), page_pixel(0, bullet.y + bullet.to_baseline, 2) - f64(first_quad.pos.y))
+			testing.expect_value(t, page_pixel(top, text_baseline, 2) - f64(quad.pos.y), page_pixel(0, text_line.top + baseline, 2) - f64(first_quad.pos.y))
 		}
 	}
 	testing.expect_value(t, first_quad.size.x, first_quad.size.y)

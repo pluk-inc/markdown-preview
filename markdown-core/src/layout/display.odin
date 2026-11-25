@@ -55,17 +55,35 @@ rect_quad :: proc(x, y, w, h: f32, color: base.Color, radius, scale: f32, top, o
 }
 
 // The quad of a mark that stands beside text (`Decor.to_baseline`): from
-// the whole pixel of the line that the text stands on, as the text is
-// drawn, with a size in whole pixels. Each edge of `rect_quad` goes to
+// the whole pixel of the line that the text stands on (`baseline`, the
+// one that the text itself is drawn from), as the text is drawn, with a
+// size in whole pixels. Each edge of `rect_quad` goes to
 // its own whole pixel, so a mark of 3.75 points is 7 or 8 or 9 pixels
 // high there, a pixel higher or lower beside its text from line to line.
 @(private)
-mark_quad :: proc(d: Decor, color: base.Color, scale: f32, top, origin_y: f64) -> base.Quad {
+mark_quad :: proc(d: Decor, baseline: f32, color: base.Color, scale: f32, top, origin_y: f64) -> base.Quad {
 	w, h := max(math.round(d.w * scale), 1), max(math.round(d.h * scale), 1)
-	y := page_pixel(top, d.y + d.to_baseline, scale) - f64(math.round(d.to_baseline * scale))
+	y := page_pixel(top, baseline, scale) - f64(math.round(d.to_baseline * scale))
 	// A circle stays a circle in its whole pixels.
 	radius := d.radius * 2 >= min(d.w, d.h) ? min(w, h) / 2 : d.radius * scale
 	return base.Quad{pos = {math.round(d.x * scale), f32(y - origin_y)}, size = {w, h}, uv = {radius, 0}, color = color, kind = .Rect}
+}
+
+// The line that the text beside a mark of a box stands on: the one of
+// the first line of text of the box, as the text is drawn (the heights
+// of its shaped line, which a font of another script makes larger, and
+// its top, which moved with the box). For a box with no line of text
+// yet, the line that the mark was placed for.
+@(private)
+mark_baseline :: proc(l: ^Layout, p: int, box: Box, d: Decor) -> f32 {
+	part := &l.parts[p]
+	for i in box.line_first ..< box.line_end {
+		if para := &part.paras[part.lines[i].para]; para.src != nil {
+			line := shaped_line(l, p, i)
+			return line_baseline(line.top, para.line_height, line.line.ascent, line.line.descent)
+		}
+	}
+	return d.y + d.to_baseline
 }
 
 // Makes the quads of the range of the page between y0 and y1 (points).
@@ -114,7 +132,7 @@ display_part :: proc(
 			}
 			color := d.soft_done && done ? done_color(l) : d.color
 			if d.to_baseline != 0 {
-				append(d.above ? glyphs : rects, mark_quad(d, color, scale, part.top, origin_y))
+				append(d.above ? glyphs : rects, mark_quad(d, mark_baseline(l, p, box, d), color, scale, part.top, origin_y))
 				continue
 			}
 			append(d.above ? glyphs : rects, rect_quad(d.x, d.y, d.w, d.h, color, d.radius, scale, part.top, origin_y))
