@@ -326,14 +326,19 @@ test_a_task_keeps_a_place_for_its_check_box :: proc(t: ^testing.T) {
 	testing.expect_value(t, bullet.color, f.page.style.text)
 	// It knows the line that its text stands on, so it is drawn from
 	// the pixel of that line: of one size and at one distance from the
-	// line, at each height of the page.
-	testing.expect(t, abs(bullet.baseline - text_line.top - baseline) < 0.01)
+	// line, at each height of the page, and after a move down the page
+	// (a change above it moves `y` only).
+	testing.expect(t, abs(bullet.y + bullet.to_baseline - text_line.top - baseline) < 0.01)
 	first_quad := mark_quad(bullet, bullet.color, 2, 0, 0)
 	for step in 1 ..< 40 {
-		quad := mark_quad(bullet, bullet.color, 2, f64(step) * 0.13, 0)
-		line_pixel := page_pixel(f64(step) * 0.13, bullet.baseline, 2)
-		testing.expect_value(t, quad.size, first_quad.size)
-		testing.expect_value(t, line_pixel - f64(quad.pos.y), page_pixel(0, bullet.baseline, 2) - f64(first_quad.pos.y))
+		moved := bullet
+		moved.y += f32(step) * 0.37
+		for top in ([]f64{0, f64(step) * 0.13}) {
+			quad := mark_quad(moved, bullet.color, 2, top, 0)
+			line_pixel := page_pixel(top, moved.y + moved.to_baseline, 2)
+			testing.expect_value(t, quad.size, first_quad.size)
+			testing.expect_value(t, line_pixel - f64(quad.pos.y), page_pixel(0, bullet.y + bullet.to_baseline, 2) - f64(first_quad.pos.y))
+		}
 	}
 	testing.expect_value(t, first_quad.size.x, first_quad.size.y)
 	// Only the box that a range touches.

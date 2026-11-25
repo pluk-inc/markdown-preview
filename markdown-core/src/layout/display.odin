@@ -54,7 +54,7 @@ rect_quad :: proc(x, y, w, h: f32, color: base.Color, radius, scale: f32, top, o
 	return base.Quad{pos = {x0, f32(y0 - origin_y)}, size = {max(x1 - x0, 1), f32(max(y1 - y0, 1))}, uv = {radius * scale, 0}, color = color, kind = .Rect}
 }
 
-// The quad of a mark that stands beside text (`Decor.baseline`): from
+// The quad of a mark that stands beside text (`Decor.to_baseline`): from
 // the whole pixel of the line that the text stands on, as the text is
 // drawn, with a size in whole pixels. Each edge of `rect_quad` goes to
 // its own whole pixel, so a mark of 3.75 points is 7 or 8 or 9 pixels
@@ -62,8 +62,10 @@ rect_quad :: proc(x, y, w, h: f32, color: base.Color, radius, scale: f32, top, o
 @(private)
 mark_quad :: proc(d: Decor, color: base.Color, scale: f32, top, origin_y: f64) -> base.Quad {
 	w, h := max(math.round(d.w * scale), 1), max(math.round(d.h * scale), 1)
-	y := page_pixel(top, d.baseline, scale) - f64(math.round((d.baseline - d.y) * scale))
-	return base.Quad{pos = {math.round(d.x * scale), f32(y - origin_y)}, size = {w, h}, uv = {min(w, h) / 2, 0}, color = color, kind = .Rect}
+	y := page_pixel(top, d.y + d.to_baseline, scale) - f64(math.round(d.to_baseline * scale))
+	// A circle stays a circle in its whole pixels.
+	radius := d.radius * 2 >= min(d.w, d.h) ? min(w, h) / 2 : d.radius * scale
+	return base.Quad{pos = {math.round(d.x * scale), f32(y - origin_y)}, size = {w, h}, uv = {radius, 0}, color = color, kind = .Rect}
 }
 
 // Makes the quads of the range of the page between y0 and y1 (points).
@@ -111,8 +113,8 @@ display_part :: proc(
 				continue
 			}
 			color := d.soft_done && done ? done_color(l) : d.color
-			if d.baseline != 0 {
-				append(rects, mark_quad(d, color, scale, part.top, origin_y))
+			if d.to_baseline != 0 {
+				append(d.above ? glyphs : rects, mark_quad(d, color, scale, part.top, origin_y))
 				continue
 			}
 			append(d.above ? glyphs : rects, rect_quad(d.x, d.y, d.w, d.h, color, d.radius, scale, part.top, origin_y))
@@ -124,14 +126,15 @@ display_part :: proc(
 				continue
 			}
 			line = shaped_line(l, p, i)^
-			baseline := line.top + (para.line_height - (line.line.ascent + line.line.descent)) / 2 + line.line.ascent
+			baseline := line_baseline(line.top, para.line_height, line.line.ascent, line.line.descent)
 			text.line_glyphs(line.line, buffer)
 			// Glyphs come in runs of one span, so the color is looked up
 			// only when the span changes.
 			span: ^document.Span
-			// The number of a list item has the color of the text, as
-			// the circle of a bullet has; text with no span is soft.
-			color := para.src == nil ? l.style.text : l.style.secondary
+			// The number of a list item has the color of the text of
+			// the item, as the circle of a bullet has (softer in a
+			// quote); text with no span is soft.
+			color := para.src == nil && !para.quote ? l.style.text : l.style.secondary
 			// The same for the font: a line has a few runs of one font each.
 			run_font: base.Font
 			run_font_id: u16

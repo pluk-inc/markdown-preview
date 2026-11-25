@@ -526,11 +526,16 @@ Design, before the features that need it:
   little above the middle of the small letters (`marker_middle`); the
   middle of the line box is near the middle of the capital letters and
   looks too high. The bullet knows the line that its text stands on
-  (`Decor.baseline`) and is drawn from the whole pixel of that line
+  (`Decor.to_baseline`) and is drawn from the whole pixel of that line
   with a size in whole pixels (`mark_quad`): each edge to its own
   pixel made it 8 or 9 pixels high and a pixel higher or lower beside
   its text from line to line. Not done: the check box is a view of the
-  system that the host places in points, with no such rule.
+  system that the host places in points, with no such rule; the line
+  of the text is from the font of the item and not from the line as it
+  is shaped, so beside a first line with an emoji or text of another
+  script (a font with other heights) the bullet can be a pixel off;
+  and a line through text and the background of inline code are placed
+  edge by edge too, and could take the same rule.
 - The marker of a list item has its place from a switch on the block kind
   with each kind's padding repeated, and the first-line height of a block
   is written in two or three places for each kind.
@@ -558,7 +563,7 @@ Speed and memory (the 1.1 MB document):
   and a half, with a new GPU buffer each time. Strips of one view height
   would keep 70 % of them.
 - A table cell is shaped two times (natural width, then lines), and each
-  bullet and each code line makes a paragraph object that is released at
+  number of a list item and each code line makes a paragraph object that is released at
   once outside the window: 6 to 7 % of the layout.
 - Layout records are 64 bytes for a paragraph and for a line; 40 would do.
 
