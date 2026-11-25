@@ -155,15 +155,24 @@ range_edit :: proc(pairs: []Pair, source: []u8, from, to: int, text: string, all
 			end = open.end
 		}
 	}
+	// Spaces at the end of the new text go after the marks that end
+	// right after it, as the spaces before the range do.
+	inner := text
+	if len(closes) > 0 && closes[0].tight {
+		for len(inner) > 0 && (inner[len(inner) - 1] == ' ' || inner[len(inner) - 1] == '\t') {
+			inner = inner[:len(inner) - 1]
+		}
+	}
 	out := make([dynamic]u8, 0, len(text) + before + after + 8, allocator)
-	append(&out, text)
+	append(&out, inner)
 	for mark in closes {
 		append(&out, ..source[mark.start:mark.end])
 	}
+	append(&out, text[len(inner):])
 	append(&out, ..source[start - before:start])
 	// The caret is after the new text, in the styles that it is in, or
 	// with none at the place where the two parts of the text meet.
-	caret = head - before + (len(text) > 0 ? len(text) : len(out))
+	caret = head - before + (len(text) > len(inner) || len(text) == 0 ? len(out) : len(text))
 	append(&out, ..source[end:end + after])
 	for mark in opens {
 		append(&out, ..source[mark.start:mark.end])
@@ -211,9 +220,25 @@ space_after :: proc(source: []u8, at: int) -> int {
 // The range of the source of the lines that two offsets are in, with
 // the line break of the last one: what goes out when the lines go.
 lines_range :: proc(source: []u8, from, to: int) -> (start, end: int) {
-	start = line_start(source, clamp(from, 0, len(source)))
-	_, end = line_at(source, line_start(source, clamp(to, 0, len(source))))
+	from := clamp(from, 0, len(source))
+	// The last line is the one of the last byte of the range: a range
+	// that ends at the start of a line has nothing of that line.
+	last := clamp(to > from ? to - 1 : to, from, len(source))
+	start = line_start(source, from)
+	_, end = line_at(source, line_start(source, last))
 	return
+}
+
+// The edit that takes the lines of two offsets out of a document
+// (`lines_range`), with the definitions of links in them kept, and the
+// offset where the lines were. False when there is nothing to take.
+remove_lines :: proc(doc: ^Document, from, to: int, allocator := context.allocator) -> (edit: Edit, caret: int, ok: bool) {
+	start, end := lines_range(doc.source, from, to)
+	if start == end {
+		return
+	}
+	edit, caret = keep_defs(doc, {start, end, ""}, start, start, allocator)
+	return edit, caret, true
 }
 
 // The map of a block that a caller of `replace_range` has already: the
@@ -267,13 +292,7 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 		if verbatim(a) || verbatim(b) {
 			// All of the text of the blocks: from the start of the first
 			// text or before it, to the end of the last text or after it.
-			texts := block_texts(b)
-			head, has_head := place_of(doc, places, {block = first})
-			tail, has_tail := len(doc.source), true
-			if len(texts) > 0 {
-				tail, has_tail = place_of(doc, places_last, {block = last, cell = len(texts) - 1, byte = len(texts[len(texts) - 1].bytes)})
-			}
-			if (has_head && from > head) || (has_tail && to < tail) {
+			if !covers(doc, first, last, places, places_last, from, to) {
 				return
 			}
 			_, end := block_source(doc, last)
@@ -297,7 +316,20 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 		made_pairs[0] = both
 		pairs = both[:]
 	} else if a.kind == .Table && address_in(places, first, from).cell != address_in(places, first, to).cell {
-		return
+		// All of the cells of a table: the table goes with its lines.
+		if !covers(doc, first, last, places, places, from, to) {
+			return
+		}
+		_, end := block_source(doc, last)
+		out := make([dynamic]u8, 0, len(text) + 4, allocator)
+		append(&out, text)
+		if len(text) > 0 && end < len(doc.source) {
+			nl := line_ending(doc.source)
+			append(&out, nl)
+			append(&out, nl)
+		}
+		edit, caret = keep_defs(doc, {line, end, string(out[:])}, line + len(text), line, allocator)
+		return edit, caret, true
 	}
 	// From an empty paragraph: what comes in its place is a paragraph of
 	// its own, at the line of the empty one (`empty_text`). Not for
@@ -358,6 +390,31 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 	return edit, caret, true
 }
 
+// True for a range of the source that has all of the text of some
+// blocks: it starts at the first place of the text of the first one or
+// before it, and ends at the last place of the text of the last one or
+// after it. A cell of a table with no text has no place; the first and
+// the last one that have one count.
+@(private)
+covers :: proc(doc: ^Document, first, last: int, places, places_last: []Place, from, to: int) -> bool {
+	for text, cell in block_texts(block_at(doc, first)) {
+		_ = text
+		if head, placed := place_of(doc, places, {block = first, cell = cell}); placed {
+			if from > head {
+				return false
+			}
+			break
+		}
+	}
+	texts := block_texts(block_at(doc, last))
+	#reverse for text, cell in texts {
+		if tail, placed := place_of(doc, places_last, {block = last, cell = cell, byte = len(text.bytes)}); placed {
+			return to >= tail
+		}
+	}
+	return true
+}
+
 // An edit with the definitions of links that are in its range kept:
 // they go before `line`, the start of a line at the start of the edit or
 // before it, as lines of their own with an empty line after them.
@@ -401,7 +458,9 @@ keep_defs :: proc(doc: ^Document, edit: Edit, caret, line: int, allocator := con
 // around it that are next to each other in the source.
 transpose :: proc(doc: ^Document, places: []Place, at: Address, allocator := context.allocator) -> (edit: Edit, caret: int, ok: bool) {
 	text := text_at(doc, at)
-	if text == nil || at.byte > len(text.bytes) {
+	// Not from an empty paragraph or from after the spaces at the end of
+	// a text: the two characters are not at that place.
+	if text == nil || at.byte > len(text.bytes) || at.empty > 0 || at.spaces > 0 {
 		return
 	}
 	middle := at.byte

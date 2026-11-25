@@ -116,8 +116,11 @@ end of the paragraph (Control-K, with Control-Y to put it back), and
 Delete at the start of a block joins it with the block before.
 Control-T changes the places of two characters, and Command-Shift-K
 takes the line of the source out. It does not have undo, the
-formatting bar, images that are pasted, a caret in a table cell with
-no text, or a delete of a selection that starts in code or in a table
-and ends in another block. Markdown marks do
+formatting bar, images that are pasted, or a caret in a table cell with
+no text. Some selections have no edit yet, so typed text, a paste,
+Return, Delete, and Cut do nothing with them: one with an end in code
+or in a table and the other end in another block, and one over two
+cells of a table (but when all of the text of those blocks or of the
+table is selected, as with Select All). Markdown marks do
 not show at the caret yet, so the caret has no place between a mark and
 its text.
