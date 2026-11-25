@@ -58,6 +58,8 @@ test_return_puts_in_what_the_block_of_the_caret_needs :: proc(t: ^testing.T) {
 		// break is the empty line, in a quote too.
 		{"ab\ncd\n", {0, 0, 2}, "ab\n\ncd\n", 4, 0},
 		{"ab  \ncd\n", {0, 0, 2}, "ab\n\ncd\n", 4, 0},
+		{"ab\\\ncd\n", {0, 0, 2}, "ab\n\ncd\n", 4, 0},
+		{"ab \\\r\ncd\r\n", {0, 0, 2}, "ab\r\n\r\ncd\r\n", 6, 0},
 		{"> ab\n> cd\n", {0, 0, 2}, "> ab\n\n> cd\n", 6, 8},
 		// In an empty line after code and after a table.
 		{"```\nc\n```\n\n\nz\n", {0, 0, 2}, "```\nc\n```\n\n\n\nz\n", 11, 0},
