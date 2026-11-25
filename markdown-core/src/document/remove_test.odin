@@ -224,6 +224,10 @@ test_two_characters_change_places_as_wholes :: proc(t: ^testing.T) {
 		// Not over a mark of a style.
 		{"**a**b\n", 1, ""},
 		{"a\n", 1, ""},
+		// Not a space to an end of the text, which does not show there.
+		{"A b\n", 1, ""},
+		{"a B\n", 3, ""},
+		{"a b c\n", 2, "ab  c\n"},
 	}
 	// Not from an empty paragraph after the text.
 	{

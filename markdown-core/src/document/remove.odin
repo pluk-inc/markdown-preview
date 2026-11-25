@@ -535,6 +535,13 @@ transpose :: proc(doc: ^Document, places: []Place, at: Address, allocator := con
 		return
 	}
 	first := char_step(text.bytes[:], middle, false)
+	// Not a space to an end of the text: Markdown does not show a space
+	// there, so the text would lose it, and the next Control-T would
+	// have no two characters ("A b" would be " Ab", which shows "Ab").
+	space :: proc(c: u8) -> bool {return c == ' ' || c == '\t'}
+	if first == 0 && space(text.bytes[middle]) || last == len(text.bytes) && space(text.bytes[first]) {
+		return
+	}
 	// Not a mark of the source that shows as text: the two would make
 	// another thing of the line (" #" is no heading).
 	for span in text.spans {

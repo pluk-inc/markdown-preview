@@ -486,12 +486,6 @@ Known limits, found in review and left on purpose:
 
 - One very long paragraph or one large table is laid out in one step. Code
   blocks stop between lines.
-- Control-T after the first character of a paragraph that starts with a
-  word and a space ("A paragraph") puts the space first, where Markdown
-  does not show it, and a second Control-T then has no two characters to
-  change. The walk of `bench.m` stops there on
-  `~/Desktop/Pluk/md-test-docs/empty-lines.md` (also before Undo came).
-  `document.transpose` must not move a space to the start of a text.
 - The time from a key to its frame has no program in `bench/`: it was
   measured with a build that has time stamps in the view and in the render
   loop (`BENCHMARKS.md`, "The frame for a key does not wait for the
