@@ -83,6 +83,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-25 | a selection that goes, and the delete keys | 620 / 613 | 52 / 100 | 495 / 745 | 69 / 82 | none | none | 7.0 / 26.2 (16.1 at the first frame) |
 | 2026-11-25 | the marks at the caret | 580 / 591 | 53 / 99 | 485 / 725 | 63 / 80 | none | none | 7.0 / 26.2 (16.1 at the first frame) |
 | 2026-11-25 | the mark of a heading at the caret | 557 / 603 | 53 / 100 | 470 / 735 | 59 / 76 | none | none | 7.0 / 26.1 (16.1 at the first frame) |
+| 2026-11-25 | the mark of a list item and of a quote at the caret | 601 / 609 | 62 / 108 (the base too) | 480 / 715 | 61 / 75 | none | none | 7.0 / 26.3 (16.1 at the first frame) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1037,4 +1038,39 @@ at the end of the first set of the change, 18 and 10 after the next
 two). The measure was of the form that looked for the "#" back from
 the first text; the form that has the lines from the parser came
 after it and does less work for each heading.
+
+## The mark of a list item and of a quote at the caret (2026-11-25)
+
+The mark of a block shows before its text for a caret in the block.
+The parser gives the lines of paragraphs too, to a parse that notes
+marks; a block has one flag more. `app.py`, short / long, five launches
+for each number, the base (the mark of a heading) built from its commit
+on the same day:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 611 / 626 | 62 / 108 | 480 / 730 |
+| change | 600 / 608 | 62 / 108 | 480 / 710 |
+| change | 602 / 610 | 62 / 107 | 480 / 720 |
+| base | 595 / 631 | 62 / 108 | 470 / 730 |
+
+`core.py`, short / long, two runs each in turns (base, change, change,
+base):
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 44, 62 / 76, 69 | 64, 58 / 75, 75 |
+| A typed character in the middle of the text (CPU ms) | 1.11, 1.33 / 1.40, 1.45 | 1.22, 1.15 / 1.47, 1.36 |
+| A typed character at the end of the text (CPU ms) | 1.27, 1.40 / 2.56, 2.85 | 1.29, 1.07 / 2.42, 2.42 |
+| A typed character at a caret (CPU ms) | 1.65, 1.60 / 1.33, 1.80 | 1.64, 1.77 / 1.75, 1.83 |
+| A step of the caret to the left or to the right (CPU ms) | 0.38, 0.34 / 0.39, 0.40 | 0.35, 0.37 / 0.32, 0.43 |
+| Heap with all of the document laid out (MB) | 7.1, 7.0 / 26.2 | 7.0 / 26.3, 26.4 |
+
+No number moved by more than the two runs of one build differ, but the
+heap of the long document: 0.1 to 0.2 MB more, which is the flag in
+each of its 15 000 blocks. The memory of the app process is 62 / 108 MB
+for the two builds in this set, and was 53 / 100 in the sets of the
+morning: the two builds moved together, so it is the state of the Mac
+(the same jump is in the section of the key that lays out its block).
+The load was 4 to 9.
 
