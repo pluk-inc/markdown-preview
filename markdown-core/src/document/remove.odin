@@ -320,7 +320,7 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{
 		before := break_before(source, line)
 		above := line_start(source, before)
 		if line_end == edit.end && before < line && blank(source[above:before]) && block_at(doc, first - 1).kind != .Rule {
-			edit.start, caret = above, above
+			edit.start, caret, line = above, above, above
 		}
 	}
 	// The line under a heading is a line of the heading after its text:
@@ -376,6 +376,11 @@ keep_defs :: proc(doc: ^Document, edit: Edit, caret, line: int, allocator := con
 	}
 	nl := line_ending(doc.source)
 	out := make([dynamic]u8, 0, size + len(edit.text) + edit.start - line + 16, allocator)
+	// A definition is no part of the paragraph before it only with an
+	// empty line between the two.
+	if before := break_before(doc.source, line); before < line && !blank(doc.source[line_start(doc.source, before):before]) {
+		append(&out, nl)
+	}
 	for def in doc.defs {
 		if def.start >= edit.start && def.end <= edit.end {
 			append(&out, ..doc.source[def.start:def.end])

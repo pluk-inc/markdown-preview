@@ -95,6 +95,7 @@ test_text_goes_out_and_the_styles_of_the_rest_stay :: proc(t: ^testing.T) {
 		{"ab\n\ncd\n", {block = 1, cell = 0, byte = 0}, {block = 1, cell = 0, byte = 2}, "", "ab\n\n"},
 		{"ab\n\ncd ef\n\nz\n", {block = 1, cell = 0, byte = 0}, {block = 1, cell = 0, byte = 5}, "", "ab\n\n\nz\n"},
 		{"ab\n\ncd\n", {block = 1, cell = 0, byte = 0}, {block = 1, cell = 0, byte = 2}, "X", "ab\n\nX\n"},
+		{"x\n\nab\n\n[d]: /u\n\ncd\n\n[z][d]\n", {block = 1, cell = 0, byte = 0}, {block = 2, cell = 0, byte = 2}, "", "x\n\n[d]: /u\n\n\n\n[z][d]\n"},
 		// All of the text of a block: its marks stay, for text to come.
 		{"# ab\n", {block = 0, cell = 0, byte = 0}, {block = 0, cell = 0, byte = 2}, "", "# \n"},
 		{"- ab\n- cd\n", {block = 0, cell = 0, byte = 0}, {block = 0, cell = 0, byte = 2}, "", "- \n- cd\n"},
