@@ -209,8 +209,9 @@ Document :: struct {
 	// that has the offset in it or at one of its ends (bold text, code,
 	// a link) has its two marks in the text of its block, as text of
 	// the style `.Mark`. An editor sets it to the place of its caret,
-	// so the marks around the caret show. None for a reader. A parse of
-	// a piece of the document gets it (`prepare`, `block_map`).
+	// so the marks around the caret show (`prepare`, `reveal_block`).
+	// It is there only while a text has such marks: none for a reader,
+	// and none for an offset that is in no element.
 	reveal: Maybe(int),
 	parts:  [dynamic]^Part,
 	starts: [dynamic]int, // for each part, the number of its first block

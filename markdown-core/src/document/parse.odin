@@ -98,9 +98,7 @@ parse :: proc(source: string) -> Document {
 // Parses a Markdown source that the document keeps: memory of the
 // allocator of the context, which goes with the document.
 parse_owned :: proc(bytes: []u8, reveal: Maybe(int) = nil) -> Document {
-	doc := parse_piece(bytes, 0, len(bytes), reveal = reveal)
-	doc.reveal = reveal
-	return doc
+	return parse_piece(bytes, 0, len(bytes), reveal = reveal)
 }
 
 // Parses a piece of the source of a document that starts where a block
@@ -577,6 +575,7 @@ note_mark :: proc(p: ^Parser, type: Md_Span, opens: bool, autolink := false) {
 		p.marking = true
 		append_text(p, string(p.bytes[start:end]), start, end - start)
 		p.marking = false
+		p.doc.reveal = reveal
 	}
 	if !noted {
 		return

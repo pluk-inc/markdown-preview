@@ -509,7 +509,8 @@ discard :: proc(p: ^Pending) {
 // stays as it is.
 commit :: proc(doc: ^Document, p: ^Pending) -> (change: Change) {
 	fresh := &p.fresh
-	doc.reveal = p.reveal
+	// The offset is there only while marks are in a text.
+	doc.reveal = fresh.reveal != nil ? p.reveal : nil
 	end := p.first + p.count
 	// The lines that the source gets. A line ends at a byte or not by
 	// that byte and the next one, so the byte before the edit counts.

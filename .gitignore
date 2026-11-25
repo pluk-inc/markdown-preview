@@ -74,3 +74,6 @@ fastlane/test_output
 
 # Editor bundle build (scripts/editor-bundle)
 node_modules/
+
+# Python bytecode of the benchmark scripts
+__pycache__/

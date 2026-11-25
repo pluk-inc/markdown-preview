@@ -1,5 +1,6 @@
 package document
 
+import "core:slice"
 import "core:strings"
 import "core:unicode/utf8"
 
@@ -16,6 +17,76 @@ import "core:unicode/utf8"
 // also the marks of the styles of the text, in the order of their first
 // marks.
 block_map :: proc(doc: ^Document, block: int, pairs: ^[dynamic]Pair = nil) -> (places: [dynamic]Place) {
+	fresh, _, text, base := block_parse(doc, block, &places, pairs, false)
+	block_places(doc, block, &places, pairs, text[:], base)
+	destroy(&fresh)
+	return
+}
+
+// Makes the text of a block again with the marks of another offset as
+// text, or with none (`Document.reveal`): the source is as it was, and
+// so is each other block. Gives the map of the new text, as `block_map`
+// does, and the change for a layout. The links of the text are the
+// ones that it had.
+reveal_block :: proc(doc: ^Document, block: int, reveal: Maybe(int), pairs: ^[dynamic]Pair = nil) -> (places: [dynamic]Place, change: Change) {
+	doc.reveal = reveal
+	fresh, index, text, base := block_parse(doc, block, &places, pairs, true)
+	old, new := block_at(doc, block), block_at(&fresh, index)
+	change = {first = block, removed = 1, added = 1, count = doc.count}
+	if old.kind != .Table {
+		before, after := old.text.bytes[:], new.text.bytes[:]
+		change.text_head = slice.prefix_length(before, after)
+		rest := min(len(before), len(after)) - change.text_head
+		for change.text_tail < rest && before[len(before) - 1 - change.text_tail] == after[len(after) - 1 - change.text_tail] {
+			change.text_tail += 1
+		}
+		change.text_was, change.text_grew = len(before), len(after) - len(before)
+	}
+	// The links of the new text, in their order, are the links that the
+	// text had: each gets the number that the document has for it.
+	numbers := make([dynamic]int, context.temp_allocator)
+	for &t in block_texts(old) {
+		for span in t.spans {
+			if span.link > 0 && !slice.contains(numbers[:], span.link) {
+				append(&numbers, span.link)
+			}
+		}
+	}
+	fresh_numbers := make([dynamic]int, context.temp_allocator)
+	for &t in block_texts(new) {
+		for &span in t.spans {
+			if span.link == 0 {
+				continue
+			}
+			at, found := slice.linear_search(fresh_numbers[:], span.link)
+			if !found {
+				at = len(fresh_numbers)
+				append(&fresh_numbers, span.link)
+			}
+			if at >= len(numbers) {
+				append(&doc.links, strings.clone(fresh.links[span.link - 1]))
+				append(&numbers, len(doc.links))
+			}
+			span.link = numbers[at]
+		}
+	}
+	old.text, new.text = new.text, old.text
+	for &cell, i in old.cells {
+		cell, new.cells[i] = new.cells[i], cell
+	}
+	doc.reveal = fresh.reveal != nil ? reveal : nil
+	block_places(doc, block, &places, pairs, text[:], base)
+	destroy(&fresh)
+	return
+}
+
+// The parse of the lines around a block that gives its text with the
+// places of its pieces, for `block_map`. `index`: the number of the
+// block in what was parsed; `text`: what was parsed, which starts at
+// `base` of the source. With `retext`, the block of the document can
+// have another text than the parse gives (`reveal_block`).
+@(private)
+block_parse :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs: ^[dynamic]Pair, retext: bool) -> (fresh: Document, index: int, text: [dynamic]u8, base: int) {
 	// From a block where a parse can start to the next such block.
 	first := block
 	for !starts_piece(doc, first) {
@@ -27,9 +98,10 @@ block_map :: proc(doc: ^Document, block: int, pairs: ^[dynamic]Pair = nil) -> (p
 	}
 	start := first == 0 ? 0 : block_start(doc, first)
 	end := last < doc.count ? block_start(doc, last) : len(doc.source)
-	text, _, _, _, _, lead := piece_text(doc, doc.source[start:end], start, end)
-	base := start - lead
-	fresh := parse_piece(text[:], 0, len(doc.source), &places, block - first, pairs = pairs, reveal = reveal_in(doc.reveal, base, len(text)))
+	lead: int
+	text, _, _, _, _, lead = piece_text(doc, doc.source[start:end], start, end)
+	base = start - lead
+	fresh = parse_piece(text[:], 0, len(doc.source), places, block - first, pairs = pairs, reveal = reveal_in(doc.reveal, base, len(text)))
 	// The piece must give the block as the document has it. It does not
 	// when the limit of the parser for the uses of definitions cuts a
 	// use in the piece that a parse of all keeps: then the places are
@@ -39,27 +111,40 @@ block_map :: proc(doc: ^Document, block: int, pairs: ^[dynamic]Pair = nil) -> (p
 	if block - first < fresh.count {
 		block_at(&fresh, block - first).empties = block_at(doc, block).empties
 	}
-	if block - first >= fresh.count || !layout_equal(block_at(doc, block), block_at(&fresh, block - first)) {
+	index = block - first
+	same := index < fresh.count
+	if same {
+		a, b := block_at(doc, block), block_at(&fresh, index)
+		same = retext ? a.shape == b.shape && len(a.cells) == len(b.cells) : layout_equal(a, b)
+	}
+	if !same {
 		destroy(&fresh)
-		clear(&places)
+		clear(places)
 		if pairs != nil {
 			clear(pairs)
 		}
 		text = make([dynamic]u8, len(doc.source))
 		copy(text[:], doc.source)
-		fresh = parse_piece(text[:], 0, len(doc.source), &places, block, pairs = pairs, reveal = doc.reveal)
-		base = 0
+		fresh = parse_piece(text[:], 0, len(doc.source), places, block, pairs = pairs, reveal = doc.reveal)
+		base, index = 0, block
 	}
+	return
+}
+
+// The places of the pieces of a block that `block_parse` noted, as
+// offsets of the source.
+@(private)
+block_places :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs: ^[dynamic]Pair, text: []u8, base: int) {
 	// The line break at the end of a code block is no text of it.
 	texts := block_texts(block_at(doc, block))
-	for len(places) > 0 {
+	for len(places^) > 0 {
 		place := places[len(places) - 1]
 		if place.cell < len(texts) && place.text < len(texts[place.cell].bytes) {
 			break
 		}
-		pop(&places)
+		pop(places)
 	}
-	place_escapes(&places, text[:])
+	place_escapes(places, text)
 	// Where the text of the block can start, for a block with no text
 	// from the source at all: a code block of empty lines starts after
 	// its first line, which is its fence; each other block (a paragraph
@@ -78,9 +163,8 @@ block_map :: proc(doc: ^Document, block: int, pairs: ^[dynamic]Pair = nil) -> (p
 		}
 		content = min(content + 1, len(text))
 	}
-	place_made(places[:], text[:], content)
-	destroy(&fresh)
-	for &place in places {
+	place_made(places[:], text, content)
+	for &place in places^ {
 		place.source += base
 	}
 	if pairs != nil {
@@ -91,8 +175,8 @@ block_map :: proc(doc: ^Document, block: int, pairs: ^[dynamic]Pair = nil) -> (p
 			pair.close_end += base
 		}
 	}
-	return
 }
+
 
 // The offset whose marks show (`Document.reveal`) in a piece of the
 // source that starts at `base` and has `size` bytes, or none.

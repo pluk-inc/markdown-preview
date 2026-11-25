@@ -88,3 +88,39 @@ test_a_block_with_marks_as_text_has_its_places :: proc(t: ^testing.T) {
 		}
 	}
 }
+
+// The text of one block made again with the marks of an offset, and
+// with none again: what a parse of all of the source gives each time,
+// with the links of the text as they were.
+@(test)
+test_one_block_gets_its_marks_and_loses_them :: proc(t: ^testing.T) {
+	source := "x [a](https://a.com)\n\na **bc** and `d` [e](https://e.com) f [g](https://g.com)\n\n- item _g_\n\n| a | **b** |\n|---|---|\n| c | d |\n"
+	plain := parse(source)
+	defer destroy(&plain)
+	for at in 0 ..= len(source) {
+		doc := parse(source)
+		defer destroy(&doc)
+		block := block_at_offset(&doc, at)
+		places, change := reveal_block(&doc, block, at)
+		delete(places)
+		testing.expect_value(t, change.first, block)
+		all := parse_owned(transmute([]u8)fmt.aprintf("%s", source), at)
+		defer destroy(&all)
+		same := layout_equal(block_at(&doc, block), block_at(&all, block))
+		testing.expectf(t, same, "reveal %d: block %d is %q, not %q", at, block, block_at(&doc, block).text.bytes[:], block_at(&all, block).text.bytes[:])
+		testing.expect_value(t, doc.reveal != nil, all.reveal != nil)
+		for &text, cell in block_texts(block_at(&doc, block)) {
+			for span, i in text.spans {
+				want := block_texts(block_at(&all, block))[cell].spans[i]
+				if !same {
+					break
+				}
+				testing.expectf(t, (span.link == 0) == (want.link == 0) && (span.link == 0 || doc.links[span.link - 1] == all.links[want.link - 1]), "reveal %d: a span of block %d has another link", at, block)
+			}
+		}
+		places, _ = reveal_block(&doc, block, nil)
+		delete(places)
+		testing.expectf(t, layout_equal(block_at(&doc, block), block_at(&plain, block)), "reveal %d: block %d with no marks again is %q", at, block, block_at(&doc, block).text.bytes[:])
+		testing.expect(t, doc.reveal == nil)
+	}
+}
