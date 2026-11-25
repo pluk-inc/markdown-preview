@@ -72,18 +72,24 @@ mark_quad :: proc(d: Decor, baseline: f32, color: base.Color, scale: f32, top, o
 // The line that the text beside a mark of a box stands on: the one of
 // the first line of text of the box, as the text is drawn (the heights
 // of its shaped line, which a font of another script makes larger, and
-// its top, which moved with the box). For a box with no line of text
-// yet, the line that the mark was placed for.
+// its top, which moved with the box). The line that the mark was placed
+// for when the first line of text is not the line of the mark: a box
+// with no line of text yet, and code that starts with empty lines,
+// which have no record.
 @(private)
 mark_baseline :: proc(l: ^Layout, p: int, box: Box, d: Decor) -> f32 {
 	part := &l.parts[p]
+	placed := d.y + d.to_baseline
 	for i in box.line_first ..< box.line_end {
 		if para := &part.paras[part.lines[i].para]; para.src != nil {
 			line := shaped_line(l, p, i)
+			if placed < line.top || placed >= line.top + para.line_height {
+				break
+			}
 			return line_baseline(line.top, para.line_height, line.line.ascent, line.line.descent)
 		}
 	}
-	return d.y + d.to_baseline
+	return placed
 }
 
 // Makes the quads of the range of the page between y0 and y1 (points).

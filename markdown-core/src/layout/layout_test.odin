@@ -344,6 +344,19 @@ test_a_task_keeps_a_place_for_its_check_box :: proc(t: ^testing.T) {
 		}
 	}
 	testing.expect_value(t, first_quad.size.x, first_quad.size.y)
+	// A list item that starts with code whose first lines are empty:
+	// those lines have no record, and the bullet stays beside the first
+	// of them, not beside the first line with text.
+	code: Fixture
+	setup(&code, "- ```\n\n\n  text\n  ```\n", 600)
+	defer teardown(&code)
+	step(&code.page, 1e30)
+	code_box := only(&code.page).boxes[0]
+	code_bullet := only(&code.page).decor[code_box.decor_end - 1]
+	testing.expect(t, code_bullet.to_baseline > 0)
+	code_line := only(&code.page).lines[code_box.line_first]
+	testing.expect(t, code_line.top > code_bullet.y + code_bullet.h)
+	testing.expect_value(t, mark_baseline(&code.page, 0, code_box, code_bullet), code_bullet.y + code_bullet.to_baseline)
 	// Only the box that a range touches.
 	found: [4]Task_Place
 	testing.expect_value(t, tasks_between(&f.page, f64(two.y + 1), f64(two.y + size - 1), found[:]), 1)
