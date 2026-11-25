@@ -535,13 +535,6 @@ transpose :: proc(doc: ^Document, places: []Place, at: Address, allocator := con
 		return
 	}
 	first := char_step(text.bytes[:], middle, false)
-	// Not a space to an end of the text: Markdown does not show a space
-	// there, so the text would lose it, and the next Control-T would
-	// have no two characters ("A b" would be " Ab", which shows "Ab").
-	space :: proc(c: u8) -> bool {return c == ' ' || c == '\t'}
-	if first == 0 && space(text.bytes[middle]) || last == len(text.bytes) && space(text.bytes[first]) {
-		return
-	}
 	// Not a mark of the source that shows as text: the two would make
 	// another thing of the line (" #" is no heading).
 	for span in text.spans {
@@ -553,6 +546,50 @@ transpose :: proc(doc: ^Document, places: []Place, at: Address, allocator := con
 	b_start, b_end := char_source(doc, places, at, middle, last) or_return
 	if a_end != b_start {
 		return
+	}
+	// A space that changes places has a character that is no space on
+	// each side after it, next to it in the source too. Markdown shows no
+	// space at an end of a text or of a line, one space for a run of
+	// them, and no bold text with a space inside its mark, so the page
+	// would lose the space ("A b" would be " Ab", which shows "Ab"), and
+	// the next Control-T would have no two characters. Code shows each
+	// space as it is.
+	if block_at(doc, at.block).kind != .Code {
+		space :: proc(c: u8) -> bool {return c == ' ' || c == '\t'}
+		shown_mark :: proc(text: ^Text, i: int) -> bool {
+			for span in text.spans {
+				if .Mark in span.style && span.start <= i && i < span.end {
+					return true
+				}
+			}
+			return false
+		}
+		if space(text.bytes[first]) {
+			// To after the second character: the one after that is its
+			// right side.
+			if last >= len(text.bytes) || space(text.bytes[last]) || shown_mark(text, last) {
+				return
+			}
+			next_start, _ := char_source(doc, places, at, last, char_step(text.bytes[:], last, true)) or_return
+			if next_start != b_end {
+				return
+			}
+		}
+		if space(text.bytes[middle]) {
+			// To before the first character: the one before that is its
+			// left side.
+			if first == 0 {
+				return
+			}
+			before := char_step(text.bytes[:], first, false)
+			if space(text.bytes[before]) || shown_mark(text, before) {
+				return
+			}
+			_, before_end := char_source(doc, places, at, before, first) or_return
+			if before_end != a_start {
+				return
+			}
+		}
 	}
 	out := make([]u8, b_end - a_start, allocator)
 	copy(out, doc.source[b_start:b_end])
