@@ -50,7 +50,17 @@ block_map :: proc(doc: ^Document, block: int) -> (places: [dynamic]Place) {
 		pop(&places)
 	}
 	place_escapes(&places, text[:])
-	place_made(places[:], text[:])
+	// Where the text of the block can start, for a block with no text
+	// from the source at all (a code block of empty lines): after its
+	// first line, which is its fence.
+	content := block_start(doc, block) - base
+	for content < len(text) && text[content] != '\n' && text[content] != '\r' {
+		content += 1
+	}
+	if content + 1 < len(text) && text[content] == '\r' && text[content + 1] == '\n' {
+		content += 1
+	}
+	place_made(places[:], text[:], min(content + 1, len(text)))
 	destroy(&fresh)
 	for &place in places {
 		place.source += base
@@ -95,7 +105,7 @@ place_escapes :: proc(places: ^[dynamic]Place, source: []u8) {
 // spaces of an indent at the end of a run of made pieces are the bytes
 // right before the text after them.
 @(private)
-place_made :: proc(places: []Place, source: []u8) {
+place_made :: proc(places: []Place, source: []u8, content: int) {
 	// The start of the line break that ends before `at`, or `at`.
 	break_before :: proc(source: []u8, at: int) -> int {
 		for i := at - 1; i >= 0; i -= 1 {
@@ -156,10 +166,14 @@ place_made :: proc(places: []Place, source: []u8) {
 		for place in places[i:j] {
 			breaks += int(place.line_break)
 		}
-		if a < 0 {
+		if a < 0 && b < 0 {
+			// No text from the source at all: from where the text of
+			// the block can start.
+			a = content
+		} else if a < 0 {
 			// At the start of the text: as many line breaks back from
 			// the text after it.
-			a = max(b, 0)
+			a = b
 			for _ in 0 ..< breaks {
 				a = break_before(source, a)
 			}

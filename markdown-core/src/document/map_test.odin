@@ -105,6 +105,15 @@ test_text_that_the_parser_makes_has_the_source_between_its_neighbours :: proc(t:
 		testing.expect_value(t, put_at(&doc, {0, 0, 1}), 5)
 	}
 	{
+		// A code block of empty lines only: text goes into its lines,
+		// after the fence.
+		doc := parse("x\n\n```\n\n\n```\n")
+		defer destroy(&doc)
+		testing.expect_value(t, put_at(&doc, {1, 0, 0}), 7)
+		testing.expect_value(t, before(&doc, {1, 0, 1}), "\n")
+		testing.expect_value(t, put_at(&doc, {1, 0, 1}), 8)
+	}
+	{
 		// Code with a deeper indent: the two spaces that show are the
 		// two before the text, after the indent that makes it code.
 		doc := parse("      foo\n")

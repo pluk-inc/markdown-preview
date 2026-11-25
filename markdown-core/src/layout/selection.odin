@@ -506,7 +506,17 @@ caret_place :: proc(l: ^Layout, at: document.Address) -> (x, top, height: f32, p
 
 // The quad of a caret at an address, in the display space of
 // `selection_quads`. Nothing when the caret has no place.
-caret_quad :: proc(l: ^Layout, at: document.Address, scale: f32, origin_y: f64, out: ^[dynamic]base.Quad) {
+caret_quad :: proc(l: ^Layout, at: document.Address, y0, y1: f64, scale: f32, origin_y: f64, out: ^[dynamic]base.Quad) {
+	// Not for a caret whose block is out of the range that is shown:
+	// its place needs the shaped text of its line.
+	if l.doc == nil || at.block < 0 || at.block >= l.doc.count {
+		return
+	}
+	part_index, slot := document.locate(l.doc, at.block)
+	part := &l.parts[part_index]
+	if slot >= len(part.boxes) || part.top + f64(part.boxes[slot].bottom) < y0 || part.top + f64(part.boxes[slot].top) > y1 {
+		return
+	}
 	x, top, height, p, ok := caret_place(l, at)
 	if !ok {
 		return

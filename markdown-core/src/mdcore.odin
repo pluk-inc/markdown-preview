@@ -178,7 +178,7 @@ show_selection :: proc(ctx: ^Ctx) {
 	clear(&ctx.selection_quads)
 	layout.selection_quads(&ctx.page, ctx.selection, ctx.shown_y0, ctx.shown_y1, ctx.scale, ctx.origin_px, &ctx.selection_quads)
 	if ctx.caret >= 0 && ctx.doc.count > 0 && ctx.layout_valid {
-		layout.caret_quad(&ctx.page, ctx.caret_at, ctx.scale, ctx.origin_px, &ctx.selection_quads)
+		layout.caret_quad(&ctx.page, ctx.caret_at, ctx.shown_y0, ctx.shown_y1, ctx.scale, ctx.origin_px, &ctx.selection_quads)
 	}
 	renderer.set_selection(&ctx.gpu, ctx.selection_quads[:])
 }
