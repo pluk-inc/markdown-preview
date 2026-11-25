@@ -171,7 +171,8 @@ block_places :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs:
 		for &pair in pairs {
 			pair.open += base
 			pair.open_end += base
-			pair.close += base
+			// Not the -1 of a mark with no second mark.
+			pair.close += pair.close >= 0 ? base : 0
 			pair.close_end += base
 		}
 	}

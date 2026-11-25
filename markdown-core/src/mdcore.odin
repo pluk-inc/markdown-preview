@@ -481,7 +481,7 @@ commit_held :: proc(ctx: ^Ctx, pending: ^document.Pending) {
 // or at one of its ends: its marks show for a caret there.
 @(private)
 pair_has :: proc(pair: document.Pair, at: int) -> bool {
-	return pair.close >= 0 && pair.open_end > pair.open && at >= pair.open && at <= pair.close_end
+	return (pair.close >= 0 || pair.line) && pair.open_end > pair.open && at >= pair.open && at <= pair.close_end
 }
 
 // Makes the text of a block again with the marks of an offset as text,
@@ -537,7 +537,7 @@ reveal_update :: proc(ctx: ^Ctx) -> (changed: bool) {
 		for at := from; at < to && only_marks; at += 1 {
 			only_marks = false
 			for pair in ctx.caret_pairs {
-				if pair.close >= 0 && ((at >= pair.open && at < pair.open_end) || (at >= pair.close && at < pair.close_end)) {
+				if (at >= pair.open && at < pair.open_end) || (pair.close >= 0 && at >= pair.close && at < pair.close_end) {
 					only_marks = true
 					break
 				}

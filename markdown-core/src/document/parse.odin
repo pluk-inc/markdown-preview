@@ -80,6 +80,9 @@ Parser :: struct {
 	element:      [2]int,
 	reveal:       Maybe(int),
 	marking:      bool, // the text that comes is such a mark
+	// The text of a heading has not started: the "#" before it is the
+	// mark of its line (`line_mark`).
+	heading:      bool,
 	bytes:        []u8, // what is parsed
 	after_nul:    bool, // the text before was the character for a NUL byte
 	// Table.
@@ -373,6 +376,7 @@ enter_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 		append_block(p.doc, start_block(p, .Rule))
 	case .H:
 		open_text(p, .Heading, clamp(int((cast(^Md_H_Detail)detail).level), 1, 6))
+		p.heading = p.reveal != nil || p.pairs != nil
 	case .P:
 		open_text(p, .Paragraph)
 	case .Code:
@@ -528,6 +532,12 @@ Pair :: struct {
 	// Markdown reads the marks as marks only with no space on their
 	// inner side: bold, italic, and struck text.
 	tight:            bool,
+	// The mark of a line (the "#" of a heading): `open` is the mark,
+	// `close_end` the end of the line, and there is no second mark
+	// (`close` is -1). It shows for a caret in the line. An edit does
+	// not keep it and does not take it for the text of the line: it
+	// is no element with two marks for `range_edit`.
+	line:             bool,
 }
 
 @(private)
@@ -554,11 +564,51 @@ mark_part :: proc(p: ^Parser, type: Md_Span) -> (start, end: int) {
 	return
 }
 
+// The mark of the line of a heading, when the first thing of its text
+// comes, at `at` of what is parsed: the "#"s with the spaces after
+// them. A heading with a line under it has none. It is noted as a
+// mark with no second mark (`Pair.line`), and it is text when the
+// offset whose marks show is in the line.
+@(private)
+line_mark :: proc(p: ^Parser, at: int) {
+	p.heading = false
+	if at <= 0 || at > len(p.bytes) || p.cur == nil || p.in_table {
+		return
+	}
+	spaces := at
+	for spaces > 0 && (p.bytes[spaces - 1] == ' ' || p.bytes[spaces - 1] == '\t') {
+		spaces -= 1
+	}
+	start := spaces
+	for start > 0 && p.bytes[start - 1] == '#' {
+		start -= 1
+	}
+	if start == spaces || len(p.cur.bytes) > 0 {
+		return
+	}
+	end := at
+	for end < len(p.bytes) && p.bytes[end] != '\n' && p.bytes[end] != '\r' {
+		end += 1
+	}
+	if p.pairs != nil && p.doc.count == p.places_block {
+		append(p.pairs, Pair{start, at, -1, end, false, true})
+	}
+	if reveal, shows := p.reveal.?; shows && reveal >= start && reveal <= end {
+		p.marking = true
+		append_text(p, string(p.bytes[start:at]), start, at - start)
+		p.marking = false
+		p.doc.reveal = reveal
+	}
+}
+
 // A mark of a span: it is noted for the block that `block_map` asks
 // for, and it is text when its element has the offset whose marks show
 // (`Document.reveal`).
 @(private)
 note_mark :: proc(p: ^Parser, type: Md_Span, opens: bool, autolink := false) {
+	if p.heading {
+		line_mark(p, p.mark[0])
+	}
 	reveal, shows := p.reveal.?
 	noted := p.pairs != nil && p.doc.count == p.places_block
 	if !noted && !shows {
@@ -582,7 +632,7 @@ note_mark :: proc(p: ^Parser, type: Md_Span, opens: bool, autolink := false) {
 	}
 	if opens {
 		append(&p.pairs_open, len(p.pairs))
-		append(p.pairs, Pair{start, end, -1, -1, type == .Em || type == .Strong || type == .Del})
+		append(p.pairs, Pair{start, end, -1, -1, type == .Em || type == .Strong || type == .Del, false})
 	} else if len(p.pairs_open) > 0 {
 		pair := &p.pairs[pop(&p.pairs_open)]
 		pair.close, pair.close_end = start, end
@@ -661,11 +711,14 @@ on_text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr)
 	// Where the text is in what is parsed, for a parse that notes
 	// places; -1 for text that the parser made.
 	at := -1
-	if p.places != nil {
+	if p.places != nil || p.heading {
 		from := int(uintptr(text) - uintptr(raw_data(p.bytes)))
 		if uintptr(text) >= uintptr(raw_data(p.bytes)) && from < len(p.bytes) {
 			at = from
 		}
+	}
+	if p.heading {
+		line_mark(p, at)
 	}
 	after_nul := p.after_nul
 	p.after_nul = type == .Nullchar
