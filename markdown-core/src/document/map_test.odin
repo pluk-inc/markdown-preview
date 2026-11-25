@@ -203,6 +203,25 @@ test_a_nul_byte_of_a_later_block_does_not_move_the_place_of_one_before :: proc(t
 }
 
 @(test)
+test_the_spaces_that_a_tab_shows_as_are_the_tab :: proc(t: ^testing.T) {
+	// A fence with an indent of two takes two columns of each line of
+	// its code: a tab shows as the two spaces that are left of it.
+	for source in ([]string{"  ~~~\n\tfoo\n  ~~~\n", "  ~~~\nx\n\tfoo\n  ~~~\n"}) {
+		doc := parse(source)
+		defer destroy(&doc)
+		tab := strings.index_byte(source, '\t')
+		text := string(block_at(&doc, 0).text.bytes[:])
+		spaces := strings.index(text, "  foo")
+		testing.expect(t, spaces >= 0)
+		// Text before the spaces goes before the tab, and a delete
+		// after them takes the tab.
+		testing.expect_value(t, put_at(&doc, {0, 0, spaces}), tab)
+		testing.expect_value(t, put_at(&doc, {0, 0, spaces + 2}), tab + 1)
+		testing.expect_value(t, before(&doc, {0, 0, spaces + 2}), "\t")
+	}
+}
+
+@(test)
 test_a_space_typed_into_a_run_of_spaces_is_before_the_caret :: proc(t: ^testing.T) {
 	// "a b", a space typed after "a": the source has two spaces that show
 	// as one, and the caret is after it, so the next delete takes the
