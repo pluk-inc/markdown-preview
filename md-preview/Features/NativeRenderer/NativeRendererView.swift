@@ -723,9 +723,7 @@ final class NativeRendererView: NSView {
     }
 
     @objc func copy(_ sender: Any?) {
-        var length = 0
-        guard let bytes = mdcore_selection_text(ctx, &length), length > 0 else { return }
-        let text = String(decoding: UnsafeRawBufferPointer(start: bytes, count: length), as: UTF8.self)
+        guard let text = selectedText else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
     }
@@ -757,6 +755,13 @@ final class NativeRendererView: NSView {
                 return
             }
             if hasCaret {
+                // Command-Shift-K takes the lines of the caret out. The
+                // system's key bindings have no command for it.
+                let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
+                if modifiers == [.command, .shift], event.charactersIgnoringModifiers?.lowercased() == "k" {
+                    deleteLines()
+                    return
+                }
                 // Through the system's text input: an input method, the
                 // dead keys, and the key bindings of the reader give
                 // text and commands (`NSTextInputClient` below).
@@ -885,6 +890,10 @@ extension NativeRendererView: NSMenuItemValidation {
             // `keyDown`. With a caret they are the caret's: an item that
             // is off lets its key through.
             return !(isEditable && hasCaret)
+        case #selector(cut(_:)):
+            return isEditable && hasCaret && mdcore_has_selection(ctx)
+        case #selector(paste(_:)):
+            return isEditable && hasCaret
         default:
             return true
         }
@@ -974,8 +983,13 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         text.withUTF8 { utf8 in
             utf8.withMemoryRebound(to: CChar.self) {
                 // One change of the source, also for a text that takes
-                // the place of another one.
-                mdcore_replace_text(ctx, start, end, $0.baseAddress, $0.count)
+                // the place of another one: of the text of the input
+                // method, or of the text that is selected.
+                if marked != nil {
+                    mdcore_replace_text(ctx, start, end, $0.baseAddress, $0.count)
+                } else {
+                    mdcore_insert(ctx, $0.baseAddress, $0.count)
+                }
             }
         }
         // The text ends at the caret. In an empty line the core put a
@@ -1113,9 +1127,34 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         return table
     }()
 
+    /// The commands of the system's key bindings that take text out,
+    /// with the move of the core that says how much.
+    private static let deleteMoves: [Selector: mdcore_move] = {
+        typealias R = NSResponder
+        return [
+            #selector(R.deleteBackward(_:)): MDCORE_MOVE_LEFT,
+            #selector(R.deleteBackwardByDecomposingPreviousCharacter(_:)): MDCORE_MOVE_LEFT,
+            #selector(R.deleteForward(_:)): MDCORE_MOVE_RIGHT,
+            #selector(R.deleteWordBackward(_:)): MDCORE_MOVE_WORD_LEFT,
+            #selector(R.deleteWordForward(_:)): MDCORE_MOVE_WORD_RIGHT,
+            #selector(R.deleteToBeginningOfLine(_:)): MDCORE_MOVE_LINE_START,
+            #selector(R.deleteToEndOfLine(_:)): MDCORE_MOVE_LINE_END,
+            #selector(R.deleteToBeginningOfParagraph(_:)): MDCORE_MOVE_PARAGRAPH_START,
+            #selector(R.deleteToEndOfParagraph(_:)): MDCORE_MOVE_PARAGRAPH_END,
+        ]
+    }()
+
+    /// The text that Control-K took out last, for Control-Y. One for the
+    /// app, as the system's text views have it.
+    private static var killed = ""
+
     override func doCommand(by selector: Selector) {
         if isEditable, hasCaret, let move = Self.caretMoves[selector] {
             moveCaret(move.move, extend: move.extend)
+            return
+        }
+        if isEditable, hasCaret, let move = Self.deleteMoves[selector] {
+            delete(to: move, keepsText: selector == #selector(NSResponder.deleteToEndOfParagraph(_:)))
             return
         }
         // The other commands that the view has (delete, a new line, the
@@ -1131,11 +1170,54 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         caretDidMove()
     }
 
-    override func deleteBackward(_ sender: Any?) {
+    /// The text that is selected.
+    private var selectedText: String? {
+        var length = 0
+        guard let bytes = mdcore_selection_text(ctx, &length), length > 0 else { return nil }
+        return String(decoding: UnsafeRawBufferPointer(start: bytes, count: length), as: UTF8.self)
+    }
+
+    /// Takes out the text that is selected, or the text from the caret
+    /// to where a move goes. `keepsText`: for Control-Y.
+    private func delete(to move: mdcore_move, keepsText: Bool = false) {
+        markedText = nil
+        if keepsText {
+            // The text that goes is the selection that the move makes.
+            // At the end of a paragraph that is no text: the line break
+            // goes.
+            if !mdcore_has_selection(ctx) { mdcore_caret_move(ctx, move, true) }
+            Self.killed = selectedText ?? "\n"
+        }
+        if mdcore_delete(ctx, move) {
+            didEdit()
+        } else {
+            // A selection that the core takes no text out for stays.
+            caretDidMove()
+        }
+    }
+
+    private func deleteLines() {
+        markedText = nil
+        if mdcore_delete_lines(ctx) { didEdit() }
+    }
+
+    @objc func cut(_ sender: Any?) {
+        guard isEditable, hasCaret, mdcore_has_selection(ctx) else { return }
+        copy(sender)
+        delete(to: MDCORE_MOVE_LEFT)
+    }
+
+    override func yank(_ sender: Any?) {
+        guard isEditable, hasCaret, !Self.killed.isEmpty else { return }
+        markedText = nil
+        put(Self.killed)
+        didEdit()
+    }
+
+    override func transpose(_ sender: Any?) {
         guard isEditable, hasCaret else { return }
         markedText = nil
-        mdcore_delete_backward(ctx)
-        didEdit()
+        if mdcore_transpose(ctx) { didEdit() }
     }
 
     override func insertNewline(_ sender: Any?) {

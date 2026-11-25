@@ -54,8 +54,9 @@ range_edit :: proc(pairs: []Pair, source: []u8, from, to: int, text: string, all
 		start, end: int,
 		tight:      bool,
 	}
-	closes := make([dynamic]Mark, context.temp_allocator)
-	opens := make([dynamic]Mark, context.temp_allocator)
+	closes, opens: [dynamic]Mark
+	defer delete(closes)
+	defer delete(opens)
 	for pair in pairs {
 		if pair.close < 0 {
 			continue
@@ -167,12 +168,14 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, allocator := 
 		return
 	}
 	first, last := block_at_offset(doc, from), block_at_offset(doc, to)
-	pairs := make([dynamic]Pair, context.temp_allocator)
+	pairs: [dynamic]Pair
+	defer delete(pairs)
 	places := block_map(doc, first, &pairs)
 	defer delete(places)
 	a, b := block_at(doc, first), block_at(doc, last)
 	if first != last {
-		pairs_last := make([dynamic]Pair, context.temp_allocator)
+		pairs_last: [dynamic]Pair
+		defer delete(pairs_last)
 		places_last := block_map(doc, last, &pairs_last)
 		defer delete(places_last)
 		append(&pairs, ..pairs_last[:])
@@ -216,9 +219,38 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, allocator := 
 		edit, caret = range_edit(pairs[:], doc.source, from, to, text, allocator)
 		return edit, caret, true
 	}
-	led := make([]u8, len(lead) + len(text), context.temp_allocator)
+	led := make([]u8, len(lead) + len(text))
+	defer delete(led)
 	copy(led, lead)
 	copy(led[len(lead):], text)
 	edit, caret = range_edit(pairs[:], doc.source, from, to, string(led), allocator)
 	return edit, caret, true
+}
+
+// The edit that puts the character before an address after the one at
+// it (the two before it, at the end of a text), and where the caret is
+// then: after the two. False when the address has no two characters
+// around it that are next to each other in the source.
+transpose :: proc(doc: ^Document, places: []Place, at: Address, allocator := context.allocator) -> (edit: Edit, caret: int, ok: bool) {
+	text := text_at(doc, at)
+	if text == nil || at.byte > len(text.bytes) {
+		return
+	}
+	middle := at.byte
+	if middle >= len(text.bytes) {
+		middle = char_step(text.bytes[:], middle, false)
+	}
+	last := char_step(text.bytes[:], middle, true)
+	if middle <= 0 || last <= middle {
+		return
+	}
+	a_start, a_end := char_before(doc, places, {at.block, at.cell, middle}) or_return
+	b_start, b_end := char_before(doc, places, {at.block, at.cell, last}) or_return
+	if a_end != b_start {
+		return
+	}
+	out := make([]u8, b_end - a_start, allocator)
+	copy(out, doc.source[b_start:b_end])
+	copy(out[b_end - b_start:], doc.source[a_start:a_end])
+	return {a_start, b_end, string(out)}, b_end, true
 }

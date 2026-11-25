@@ -108,8 +108,16 @@ line in code, and the caret is in the new line at once. A line of the
 source with nothing in it shows as an empty line of the page (each but
 the last one before a block), in Read mode and in Edit Mode. The arrow keys move the caret
 (with Option by a word, with Command to the ends of a line and of the
-document), and with Shift they select. It does not have a selection
-that typing takes the place of, undo, the formatting bar, images that
-are pasted, or a caret in a table cell with no text. Markdown marks do
+document), and with Shift they select. Typed text, a paste, and Return
+take the place of the text that is selected; Delete and Cut take it out.
+The delete keys of the system work: forward (Fn-Delete, Control-D), by
+a word (with Option), to the ends of the line (with Command), to the
+end of the paragraph (Control-K, with Control-Y to put it back), and
+Delete at the start of a block joins it with the block before.
+Control-T changes the places of two characters, and Command-Shift-K
+takes the line of the source out. It does not have undo, the
+formatting bar, images that are pasted, a caret in a table cell with
+no text, or a delete of a selection that starts in code or in a table
+and ends in another block. Markdown marks do
 not show at the caret yet, so the caret has no place between a mark and
 its text.

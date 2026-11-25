@@ -32,8 +32,9 @@ that a click checks and saves, quotes, code blocks, tables, rules, emoji,
 text of any script that CoreText can shape.
 Scrolling with the system scroll bar, selection by drag, Select All, Copy.
 Edit Mode in its first form: a caret at a click, typed text (also from an
-input method), delete, Return, paste, save, and the keys that move the
-caret, with Shift to select.
+input method), Return, paste, cut, save, the keys that move the caret,
+with Shift to select, and the delete keys of the system. Text that is
+selected goes out with a delete, and typed text takes its place.
 The reader style from the app: font, text size and zoom, line spacing,
 bold text, margins, content width, theme colors, light and dark.
 
@@ -75,7 +76,7 @@ These came from the maintainer. Do not undo one without asking.
   ways were looked at and not taken: to find the starts of blocks and
   the definitions of links with a scan of our own (a second parser that
   must agree with md4c each time), and another parser. A pull request
-  to md4c for the three calls is a thing to do only when the maintainer
+  to md4c for the calls (four now) is a thing to do only when the maintainer
   asks for it.
 - **Edit Mode shows what the Edit Mode of the web view shows**
   (2026-11-25): the text as a reader sees it, with the Markdown marks
@@ -100,6 +101,19 @@ These came from the maintainer. Do not undo one without asking.
   circle of the web preview, which is larger and has the color of a
   link; the maintainer saw that one in a test build and said no. The
   numbers of a numbered list have the color of the text too.
+- **A delete of text of more than one block keeps the kind of the
+  first block** (2026-11-25): the text of the last block that stays
+  goes on in the first one. At the start of a block, a delete by a word
+  or to the end of the paragraph takes only the line break. Cut with
+  nothing selected does nothing. Told to the maintainer as the plan,
+  with no objection.
+- **An edit is a change of the source, and what Markdown then reads is
+  the result** (2026-11-25). A delete that leaves "# text" at the start
+  of a line makes a heading, as the same keys do in the web editor. So
+  the core does not check that the text of the document after a delete
+  is the text of before with the range out, which the first plan had:
+  that check refuses what a reader of Markdown expects. What the core
+  keeps right by itself is the styles (`document.range_edit`).
 - **A reader at the end of the document is kept by the first line that
   shows, as at each other place** (2026-11-24). With a narrower window the
   end then goes out of view. Browsers and editors do the same; only a
@@ -722,7 +736,7 @@ The order of the next steps, from the review of the second step:
 - Done: the first step of the editor in the core. A caret at a clicked
   place, text put in at it, the character before it taken out, its
   place for the host, and the source for a save (`mdcore_caret_set`,
-  `mdcore_insert`, `mdcore_delete_backward`, `mdcore_caret_rect`,
+  `mdcore_insert`, `mdcore_delete_backward` (now `mdcore_delete`), `mdcore_caret_rect`,
   `mdcore_source`). No part of the app calls these yet; the benchmark
   does. A key at the caret: 1.8 ms of CPU.
 - Done: the host side. With the native renderer on, Edit Mode makes
@@ -842,9 +856,34 @@ The order of the next steps, from the review of the second step:
   the start of the next line), a space before the "#" that ends a
   heading. After two spaces and then a character, the character shows
   one space after the text, so the caret goes back by one space.
-- Next for the editor, in the order that a reader misses them: a
-  selection that typing takes the place of, with cut; the marks at the
-  caret (Decisions); undo.
+- Done: text goes out as a range of the source between two places of
+  a caret (`document.replace_range`, `range_edit`), for a selection
+  and for each delete key. A delete key is a move of the caret with the
+  selection and then that edit (`mdcore_delete` with a `Move`), so a
+  delete takes what the same move goes over, with no rules of its own.
+  The parser says where the two marks of each style are
+  (`mark_offset` in the parser copy, `document.Pair`, with the map of
+  a block when it is asked for): a mark in the range stays when its
+  other mark is not in it, the two go when all of their text goes, and
+  spaces that would be on the inner side of a mark go to its outer
+  side. Typed text over a selection is the same edit with the text in
+  it.
+- Not done for a delete: a range with one end in code or in a table
+  and the other end in another block (nothing happens, but when the
+  range has all of the text of its blocks: Select All and Delete give
+  an empty document); a range over two cells of a table; a delete at
+  the start of the first item of a list (the web editor makes a
+  paragraph of it); a mark that stays right after a letter and before
+  another mark ("a**_b_**") is text for Markdown, so the marks show
+  (about 3 of 100 ranges of the test text); Control-K
+  keeps one text and does not add to it for some presses in a row.
+  The text that Control-K takes is what a copy of that selection
+  gives, so it comes back with no styles.
+- Cut, Paste, and Select All are menu commands, which a test on the
+  hidden display cannot send (a menu needs the app in front). Each is
+  two calls that the keys check (a copy and a delete, an insert).
+- Next for the editor, in the order that a reader misses them: the
+  marks at the caret (Decisions); undo.
 - Where the lines of a block end is found from the source a second
   time (`empties.lines_end`, with `fence_line` for a fence of code):
   the parser read those lines and knows it. A callback of the parser
@@ -882,14 +921,13 @@ The order of the next steps, from the review of the second step:
   delete, and a paragraph with a block right after it has one empty
   line there after the two; a document of only empty lines has no
   block and no caret.
-- Not done for the caret: a selection that typing takes
-  the place of, a delete at the start of a block with text (to join it
-  with the block before), a caret in a table cell with no text, undo.
-- A delete of the only character between two marks leaves the marks:
-  "**a**" is "****" after it, which is a rule, and "`a`" is two
-  backticks. The marks must go with their last character, or the
-  block of the caret must show its marks, so the reader takes them
-  out. This waits for the decision on what the editor shows.
+- Not done for the caret: a caret in a table cell with no text, undo.
+- Done: a delete of the only character between two marks takes the
+  marks too ("**a**" was "****" after it, which is a rule). The Delete
+  key is the range edit of one step to the left, as each other delete.
+  A space that is typed at the end of bold text is still on the inner
+  side of its mark until the next character comes ("**ab **" shows its
+  marks for that time).
 - The places of the text of the caret's block are made by a parse of
   the lines around the block after each key (one parse; kept until
   the next change for the next key). The parse of the edit read the
@@ -1226,3 +1264,20 @@ export.
   above the line of the text), and the pixel came from a measure of a
   screenshot: after the change each bullet is 8 by 8 pixels and 11
   above the bottom of its text, at each depth of a list.
+- **2026-11-25** — A selection that goes, and the delete keys. The
+  plan had four steps of structure first; two were done and two were
+  not needed. Done: the parser says where the marks of the styles are,
+  and one edit takes a range of the source out with the styles of the
+  rest kept. Not needed: a start-side place of an address (a range
+  between two places of a caret, which are end-side, has the marks
+  that it must look at inside of it or right beside it), and the check
+  by a parse (Decisions: what Markdown reads after an edit is the
+  result). The field of its own in `Address` for an empty paragraph
+  is not a part of this step: the edit works with offsets of the
+  source, which have a place for an empty line and for the spaces at
+  the end of a text. A delete key is a move with the selection and then
+  the edit, so the core got one call for all of them and
+  `mdcore_delete_backward` went. A test takes each range of a text
+  with styles out and compares the text; the benchmark script does
+  each kind of delete from places through its two documents. Checked
+  on the hidden display with a log of the source after each key.
