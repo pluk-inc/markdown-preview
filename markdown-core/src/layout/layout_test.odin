@@ -303,20 +303,27 @@ test_a_task_keeps_a_place_for_its_check_box :: proc(t: ^testing.T) {
 		box := only(&f.page).boxes[task]
 		testing.expect_value(t, box.decor_end, box.decor_first)
 	}
-	// The plain item has its bullet: a circle 0.4 of the body size
-	// across, 0.75 of it before the text, at the middle of the line.
+	// The plain item has its bullet: a circle a quarter of the body size
+	// across, a third of it before the text, in the color of the text.
+	// Its middle is a little above the middle of the small letters, and
+	// the middle of a check box is at the same height in its line.
 	plain := only(&f.page).boxes[2]
 	testing.expect_value(t, plain.decor_end - plain.decor_first, 1)
 	bullet := only(&f.page).decor[plain.decor_first]
 	text_line := only(&f.page).lines[plain.line_first]
 	body := f.page.m.body
-	testing.expect_value(t, bullet.w, 0.4 * body)
+	testing.expect_value(t, bullet.w, 0.25 * body)
 	testing.expect_value(t, bullet.h, bullet.w)
 	testing.expect_value(t, bullet.radius, bullet.w / 2)
-	testing.expect_value(t, bullet.x + bullet.w, text_line.x - 0.75 * body)
+	testing.expect_value(t, bullet.x + bullet.w, text_line.x - 0.35 * body)
 	line_height := only(&f.page).paras[text_line.para].line_height
-	testing.expect_value(t, bullet.y + bullet.h / 2, text_line.top + line_height / 2)
-	testing.expect_value(t, bullet.color, f.page.style.link)
+	ascent, descent, x_height := text.font_metrics(f.style.body_font)
+	baseline := (line_height - (ascent + descent)) / 2 + ascent
+	middle := bullet.y + bullet.h / 2 - text_line.top
+	testing.expect(t, abs(middle - (baseline - 0.6 * x_height)) < 0.01)
+	testing.expect(t, middle > line_height / 2 && middle < baseline - x_height / 2)
+	testing.expect(t, abs(one.y + size / 2 - first.top - middle) < 0.01)
+	testing.expect_value(t, bullet.color, f.page.style.text)
 	// Only the box that a range touches.
 	found: [4]Task_Place
 	testing.expect_value(t, tasks_between(&f.page, f64(two.y + 1), f64(two.y + size - 1), found[:]), 1)

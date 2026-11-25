@@ -39,6 +39,13 @@ font_equal :: proc(a, b: base.Font) -> bool {
 	return bool(CF.Equal(CF.TypeRef(rawptr(a)), CF.TypeRef(rawptr(b))))
 }
 
+// How high a font goes above the line that its text stands on, how far
+// below it, and how high its small letters are, in points.
+font_metrics :: proc(font: base.Font) -> (ascent, descent, x_height: f32) {
+	ct := ct_font(font)
+	return f32(CT.FontGetAscent(ct)), f32(CT.FontGetDescent(ct)), f32(CT.FontGetXHeight(ct))
+}
+
 font_has_color :: proc(font: base.Font) -> bool {
 	return .ColorGlyphs in CT.FontGetSymbolicTraits(ct_font(font))
 }
