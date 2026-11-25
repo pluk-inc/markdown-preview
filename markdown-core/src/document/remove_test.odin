@@ -21,7 +21,7 @@ replaced :: proc(source: string, from, to: Address, text: string) -> string {
 	if !has_a || !has_b {
 		return "no place"
 	}
-	edit, _, ok := replace_range(&doc, a, b, text, context.temp_allocator)
+	edit, _, ok := replace_range(&doc, a, b, text, allocator = context.temp_allocator)
 	if !ok {
 		return "refused"
 	}
@@ -62,6 +62,20 @@ test_text_goes_out_and_the_styles_of_the_rest_stay :: proc(t: ^testing.T) {
 		{"**ab cd** e\n", {0, 0, 3}, {0, 0, 5}, "", "**ab**  e\n"},
 		{"a **b c** d\n", {0, 0, 1}, {0, 0, 3}, "", "a **c** d\n"},
 		{"`ab cd` e\n", {0, 0, 3}, {0, 0, 5}, "", "`ab ` e\n"},
+		// A line break as well, with the mark of a quote.
+		{"a **b\nc** d\n", {0, 0, 2}, {0, 0, 3}, "", "a \n**c** d\n"},
+		{"> a **b\n> c** d\n", {0, 0, 2}, {0, 0, 3}, "", "> a \n> **c** d\n"},
+		{"**a\nb** c\n", {0, 0, 2}, {0, 0, 3}, "", "**a**\n c\n"},
+		// Two texts of one style with nothing between them now are one.
+		{"`a` `b`\n", {0, 0, 1}, {0, 0, 2}, "", "`ab`\n"},
+		{"**a** **b** c\n", {0, 0, 1}, {0, 0, 2}, "", "**ab** c\n"},
+		{"**a** _b_\n", {0, 0, 1}, {0, 0, 2}, "", "**a**_b_\n"},
+		// The "<" and ">" of an address are not kept as marks.
+		{"x <https://e.com> y\n", {0, 0, 0}, {0, 0, 6}, "", "s://e.com> y\n"},
+		// A definition of a link in the range stays, before the block.
+		{"ab\n\n[d]: https://e.com\n\ncd [z][d]\n", {0, 0, 1}, {1, 0, 1}, "", "[d]: https://e.com\n\nad [z][d]\n"},
+		{"[d]: https://e.com\n\n```\ncd\n```\n\nab\n\n[z][d]\n", {0, 0, 0}, {1, 0, 2}, "", "[d]: https://e.com\n\n[z][d]\n"},
+		{"```\ncd\n```\n\nab\n\n[d]: https://e.com\n\n[z][d]\n", {0, 0, 0}, {1, 0, 2}, "", "[d]: https://e.com\n\n[z][d]\n"},
 		// A line break of a paragraph with the mark of its next line.
 		{"> ab\n> cd\n", {0, 0, 1}, {0, 0, 4}, "", "> ad\n"},
 		// Two blocks: the first one keeps its kind, and the blocks
@@ -117,7 +131,7 @@ test_each_range_of_a_text_goes_out_of_its_text_only :: proc(t: ^testing.T) {
 				want := plain(fmt.tprintf("%s%s", text[:from], text[to:]))
 				a, _ := source_of(&doc, {block, 0, from})
 				b, _ := source_of(&doc, {block, 0, to})
-				edit, _, ok := replace_range(&doc, a, b, "", context.temp_allocator)
+				edit, _, ok := replace_range(&doc, a, b, "", allocator = context.temp_allocator)
 				if !ok {
 					failed += 1
 					continue

@@ -528,11 +528,17 @@ mark_part :: proc(p: ^Parser, type: Md_Span) -> (start, end: int) {
 
 // Notes a mark of a span of the block that `block_map` asks for.
 @(private)
-note_mark :: proc(p: ^Parser, type: Md_Span, opens: bool) {
+note_mark :: proc(p: ^Parser, type: Md_Span, opens: bool, autolink := false) {
 	if p.pairs == nil || p.doc.count != p.places_block {
 		return
 	}
 	start, end := mark_part(p, type)
+	// The "<" and ">" around an address are no marks of a style: with a
+	// part of the address out, Markdown reads them in another way, and
+	// they are not kept for the part that stays.
+	if autolink {
+		end = start
+	}
 	if opens {
 		append(&p.pairs_open, len(p.pairs))
 		append(p.pairs, Pair{start, end, -1, -1, type == .Em || type == .Strong || type == .Del})
@@ -563,7 +569,7 @@ span_counter :: proc(p: ^Parser, type: Md_Span) -> ^int {
 enter_span :: proc "c" (type: Md_Span, detail: rawptr, userdata: rawptr) -> c.int {
 	p := cast(^Parser)userdata
 	context = p.ctx
-	note_mark(p, type, true)
+	note_mark(p, type, true, type == .A && (cast(^Md_A_Detail)detail).is_autolink != 0)
 	if type == .A {
 		append(&p.doc.links, strings.clone(attribute((cast(^Md_A_Detail)detail).href)))
 		p.link = len(p.doc.links)
@@ -577,7 +583,7 @@ enter_span :: proc "c" (type: Md_Span, detail: rawptr, userdata: rawptr) -> c.in
 leave_span :: proc "c" (type: Md_Span, detail: rawptr, userdata: rawptr) -> c.int {
 	p := cast(^Parser)userdata
 	context = p.ctx
-	note_mark(p, type, false)
+	note_mark(p, type, false, type == .A && (cast(^Md_A_Detail)detail).is_autolink != 0)
 	if type == .A {
 		p.link = 0
 	} else if counter := span_counter(p, type); counter != nil {

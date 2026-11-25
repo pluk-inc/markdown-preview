@@ -864,10 +864,16 @@ The order of the next steps, from the review of the second step:
   The parser says where the two marks of each style are
   (`mark_offset` in the parser copy, `document.Pair`, with the map of
   a block when it is asked for): a mark in the range stays when its
-  other mark is not in it, the two go when all of their text goes, and
-  spaces that would be on the inner side of a mark go to its outer
-  side. Typed text over a selection is the same edit with the text in
-  it.
+  other mark is not in it, the two go when all of their text goes,
+  spaces and a line break that would be on the inner side of a mark go
+  to its outer side, and a mark that ends a style right before the same
+  mark for the start of one goes with it ("`a` `b`" with the space out
+  is "`ab`"). The definitions of links in the range stay, before the
+  first block of the edit: they are no text. Typed text over a
+  selection is the same edit with the text in it. The marks of the
+  block of the caret are kept with its places (`Ctx.caret_pairs`), so
+  a delete in one block is two parses, as it was: the one of the edit
+  and the one of the new map.
 - Not done for a delete: a range with one end in code or in a table
   and the other end in another block (nothing happens, but when the
   range has all of the text of its blocks: Select All and Delete give
@@ -875,7 +881,13 @@ The order of the next steps, from the review of the second step:
   the start of the first item of a list (the web editor makes a
   paragraph of it); a mark that stays right after a letter and before
   another mark ("a**_b_**") is text for Markdown, so the marks show
-  (about 3 of 100 ranges of the test text); Control-K
+  (about 3 of 100 ranges of the test text); raw HTML that is not a
+  block of the document (a comment) between two blocks goes with the
+  range; an address in "<" and ">" with a part of it out is what
+  Markdown reads of the rest ("<h>" is raw HTML); a delete that joins
+  two blocks parses the two blocks again (five parses; the map of the
+  block that the caret came from is thrown away one step before);
+  Control-K
   keeps one text and does not add to it for some presses in a row.
   The text that Control-K takes is what a copy of that selection
   gives, so it comes back with no styles.
@@ -1280,4 +1292,11 @@ export.
   `mdcore_delete_backward` went. A test takes each range of a text
   with styles out and compares the text; the benchmark script does
   each kind of delete from places through its two documents. Checked
-  on the hidden display with a log of the source after each key.
+  on the hidden display with a log of the source after each key. A
+  reviewer with the task to break the edit ran each pair of places of
+  89 sources through it: no edit was out of the source, and four
+  faults of what Markdown read after it came out (a definition of a
+  link in the range was lost, a mark was left before a line break, two
+  code spans became one with backticks in it, and the "<" and ">" of
+  an address were kept as the marks of a style). Each has a case in
+  the tests now.

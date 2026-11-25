@@ -76,6 +76,12 @@ Ctx :: struct {
 	// (`document.block_map`), for the next key. Of the document as it
 	// is: each change makes it again.
 	caret_places:    [dynamic]document.Place,
+	// The marks of the styles of that block, for an edit that takes
+	// text out of it (`document.replace_range`). Not there (`caret_marked`
+	// is false) after a move of the caret to another block, until the
+	// next change.
+	caret_pairs:     [dynamic]document.Pair,
+	caret_marked:    bool,
 	caret_hidden:    bool, // the off half of a blink; the caret is there
 	// A byte where a line of a paragraph ends and the next one starts
 	// is two places on the page. The caret is at the end of the first
@@ -270,6 +276,7 @@ mdcore_destroy :: proc "c" (handle: rawptr) {
 	delete(ctx.clipboard)
 	delete(ctx.source_out)
 	delete(ctx.caret_places)
+	delete(ctx.caret_pairs)
 	runtime.default_temp_allocator_destroy(&ctx.scratch)
 	free(ctx)
 }
@@ -440,7 +447,9 @@ caret_changed :: proc(ctx: ^Ctx) {
 	}
 	block := document.block_at_offset(&ctx.doc, ctx.caret)
 	delete(ctx.caret_places)
-	ctx.caret_places = document.block_map(&ctx.doc, block)
+	clear(&ctx.caret_pairs)
+	ctx.caret_places = document.block_map(&ctx.doc, block, &ctx.caret_pairs)
+	ctx.caret_marked = true
 	ctx.caret_at = document.address_for(&ctx.doc, ctx.caret_places[:], block, ctx.caret)
 	ctx.caret_spaces = document.spaces_before(&ctx.doc, ctx.caret_at, ctx.caret)
 	ctx.caret_upstream, ctx.caret_goal = false, nil
@@ -549,6 +558,7 @@ set_caret :: proc(ctx: ^Ctx, stop: Stop, upstream: bool, anchor: document.Addres
 	if stop.made {
 		delete(ctx.caret_places)
 		ctx.caret_places = stop.places
+		ctx.caret_marked = false
 	}
 	ctx.caret, ctx.caret_at = stop.offset, stop.at
 	ctx.caret_spaces = document.spaces_before(&ctx.doc, stop.at, stop.offset)
@@ -904,20 +914,21 @@ selection_offsets :: proc(ctx: ^Ctx) -> (from, to: int, ok: bool) {
 // nothing changes then.
 @(private)
 replace_between :: proc(ctx: ^Ctx, from, to: int, text: string) -> bool {
-	edit, caret := document.replace_range(&ctx.doc, from, to, text) or_return
+	// The map of the block of the caret is there already.
+	held := document.Held{ctx.caret_at.block, ctx.caret_places[:], ctx.caret_pairs[:], ctx.caret_marked}
+	edit, caret := document.replace_range(&ctx.doc, from, to, text, held) or_return
 	defer delete(edit.text)
 	change_source_held(ctx, edit.text, [2]int{edit.start, edit.end}, caret)
 	return true
 }
 
-// Puts `text` in the place of the text that is selected. False with no
-// text selected: the caller then does what it does at a caret. True
-// also for a selection that has no edit.
+// Puts `text` in the place of the text that is selected. `selected`:
+// there was such text; with none, the caller does what it does at a
+// caret. `changed` is false for a selection that has no edit.
 @(private)
-replace_selection :: proc(ctx: ^Ctx, text: string) -> bool {
+replace_selection :: proc(ctx: ^Ctx, text: string) -> (selected, changed: bool) {
 	from, to := selection_offsets(ctx) or_return
-	replace_between(ctx, from, to, text)
-	return true
+	return true, replace_between(ctx, from, to, text)
 }
 
 // After an edit that left the caret at an offset where no text goes
@@ -947,7 +958,7 @@ mdcore_insert :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	if ctx.caret < 0 || length <= 0 {
 		return
 	}
-	if replace_selection(ctx, string(utf8[:length])) {
+	if selected, _ := replace_selection(ctx, string(utf8[:length])); selected {
 		return
 	}
 	typed(ctx, string(utf8[:length]), ctx.caret, ctx.caret)
@@ -964,8 +975,10 @@ mdcore_insert_break :: proc "c" (handle: rawptr) {
 		return
 	}
 	// The text that is selected goes first: the line break is at the
-	// place where it was.
-	replace_selection(ctx, "")
+	// place where it was. Nothing for a selection that has no edit.
+	if selected, changed := replace_selection(ctx, ""); selected && !changed {
+		return
+	}
 	if ctx.doc.count == 0 {
 		// A document with no block: a line break, as each other text
 		// that is typed there.
@@ -989,12 +1002,6 @@ mdcore_insert_break :: proc "c" (handle: rawptr) {
 // changed. The caller holds `source_lock`.
 @(private)
 delete_back :: proc(ctx: ^Ctx) -> bool {
-	// A space at the end of a text, which the text has not: that space
-	// goes, not the last character of the text.
-	if ctx.caret_spaces > 0 {
-		change_source_held(ctx, "", [2]int{ctx.caret - 1, ctx.caret})
-		return true
-	}
 	// An empty paragraph or a list item with no text goes, and the
 	// caret is at the end of what is before it.
 	if start, end, caret, ok := document.delete_back(&ctx.doc, ctx.caret_places[:], ctx.caret_at); ok {
@@ -1002,8 +1009,8 @@ delete_back :: proc(ctx: ^Ctx) -> bool {
 		return true
 	}
 	// The character before the caret, with the marks of a style that
-	// has no other text. At the start of a block, its text goes on in
-	// the block before it.
+	// has no other text. After spaces at the end of a text, one of them.
+	// At the start of a block, its text goes on in the block before it.
 	return delete_to(ctx, .Left)
 }
 
@@ -1046,9 +1053,8 @@ mdcore_delete :: proc "c" (handle: rawptr, move: Move) -> bool {
 	if ctx.caret < 0 || ctx.doc.count == 0 || move < min(Move) || move > max(Move) {
 		return false
 	}
-	before := len(ctx.doc.source)
-	if replace_selection(ctx, "") {
-		return len(ctx.doc.source) != before
+	if selected, changed := replace_selection(ctx, ""); selected {
+		return changed
 	}
 	move := move
 	at := ctx.caret_at
@@ -1109,7 +1115,7 @@ mdcore_transpose :: proc "c" (handle: rawptr) -> bool {
 	if ctx.caret < 0 || ctx.doc.count == 0 {
 		return false
 	}
-	if _, _, selected := selection_offsets(ctx); selected {
+	if _, _, selected := document.selection_range(ctx.selection); selected {
 		return false
 	}
 	edit, caret := document.transpose(&ctx.doc, ctx.caret_places[:], ctx.caret_at) or_return

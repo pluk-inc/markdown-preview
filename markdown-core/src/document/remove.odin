@@ -1,7 +1,5 @@
 package document
 
-import "core:slice"
-
 // Text that goes out of the source: a selection that a key deletes or
 // that typed text takes the place of, a word, a line. The range is
 // between two places of a caret, so it has no part of a thing that the
@@ -13,7 +11,8 @@ import "core:slice"
 // What takes the place of the bytes from `start` to `end` of a source
 // when the text between the offsets `from` and `to` goes out, with
 // `text` in its place. `pairs`: the marks of the styles of the blocks
-// that the two offsets are in (`block_map`).
+// that the two offsets are in (`block_map`), in the order of their
+// first marks for each block.
 //
 // A mark in the range whose other mark is not in it stays. A style
 // that has all of its text in the range goes with its two marks, also
@@ -22,9 +21,13 @@ import "core:slice"
 // The new text comes first, in the styles that end in the range, as
 // text that is typed at the place where the range starts would be.
 //
-// Spaces that the edit puts on the inner side of a mark of bold text
-// and the like go to its outer side: Markdown reads "** more**" as no
-// bold text. They are the same spaces of the text, with no style.
+// Two things that Markdown reads in another way are put right. Spaces
+// and a line break that the edit puts on the inner side of a mark of
+// bold text and the like go to its outer side ("** more**" is no bold
+// text); they are the same spaces of the text, with no style. And a
+// mark that ends a style right before the same mark that starts one
+// ("`a``b`", "**a****b**") goes with it: the two texts are one text of
+// that style.
 //
 // `caret`: the offset of the place of the range in the source that the
 // edit gives, after the new text. Memory of `allocator`, the caller's
@@ -48,87 +51,106 @@ range_edit :: proc(pairs: []Pair, source: []u8, from, to: int, text: string, all
 			grown = true
 		}
 	}
-	// The marks that stay, in the order of the source: the ones that
-	// end a style, then the ones that start one (styles do not cross).
+	// The marks that stay, in the order of the source. Styles do not
+	// cross: the ones that end in the range all have its start in them,
+	// the inner one first, and the ones that start in it all have its
+	// end, the outer one first.
 	Mark :: struct {
 		start, end: int,
 		tight:      bool,
 	}
+	inside :: proc(a, b, start, end: int) -> bool {return a >= start && b <= end && b > a}
 	closes, opens: [dynamic]Mark
 	defer delete(closes)
 	defer delete(opens)
-	for pair in pairs {
-		if pair.close < 0 {
-			continue
-		}
-		open_in := pair.open >= start && pair.open_end <= end
-		close_in := pair.close >= start && pair.close_end <= end
-		if open_in && !close_in && pair.open_end > pair.open {
-			append(&opens, Mark{pair.open, pair.open_end, pair.tight})
-		} else if close_in && !open_in && pair.close_end > pair.close {
+	#reverse for pair in pairs {
+		if pair.close >= 0 && inside(pair.close, pair.close_end, start, end) && !inside(pair.open, pair.open_end, start, end) {
 			append(&closes, Mark{pair.close, pair.close_end, pair.tight})
 		}
 	}
-	by_start :: proc(a, b: Mark) -> bool {return a.start < b.start}
-	slice.sort_by(closes[:], by_start)
-	slice.sort_by(opens[:], by_start)
-	space :: proc(ch: u8) -> bool {return ch == ' ' || ch == '\t'}
-	// Spaces before the range, with a mark that ends a style right
-	// after them now: one that stays, or the first one after the range
-	// when nothing comes between. They go after the marks that end
-	// there.
-	before := 0
+	for pair in pairs {
+		if pair.close >= 0 && inside(pair.open, pair.open_end, start, end) && !inside(pair.close, pair.close_end, start, end) {
+			append(&opens, Mark{pair.open, pair.open_end, pair.tight})
+		}
+	}
+	// The mark that ends a style right after the range, and the one
+	// that starts a style right before it: with no new text and no mark
+	// that stays between, they are beside what is before and after the
+	// range now.
+	close_after :: proc(pairs: []Pair, start, at: int) -> (mark: Mark, ok: bool) {
+		for pair in pairs {
+			if pair.close == at && pair.close_end > at && pair.open < start {
+				return {pair.close, pair.close_end, pair.tight}, true
+			}
+		}
+		return
+	}
+	open_before :: proc(pairs: []Pair, at, end: int) -> (mark: Mark, ok: bool) {
+		for pair in pairs {
+			if pair.close >= end && pair.open_end == at && pair.open < at {
+				return {pair.open, pair.open_end, pair.tight}, true
+			}
+		}
+		return
+	}
+	bare := len(text) == 0 && len(closes) == 0 && len(opens) == 0
+	head := start
+	before, after := 0, 0
+	// Spaces before the range with a mark that ends a style right after
+	// them: they go after the marks that end there.
 	if len(text) == 0 {
-		tail := end
-		if len(closes) == 0 && len(opens) == 0 {
-			for found := true; found; {
-				found = false
-				for pair in pairs {
-					if pair.close == tail && pair.close_end > tail && pair.open < start {
-						append(&closes, Mark{pair.close, pair.close_end, pair.tight})
-						tail, found = pair.close_end, true
-					}
-				}
-			}
+		first, found := len(closes) > 0 ? closes[0] : Mark{}, len(closes) > 0
+		if bare {
+			first, found = close_after(pairs, start, end)
 		}
-		if len(closes) > 0 && closes[0].tight {
-			for start - before > 0 && space(source[start - before - 1]) {
-				before += 1
-			}
-		}
-		if before > 0 {
-			end = tail
-		} else {
-			for len(closes) > 0 && closes[len(closes) - 1].start >= end {
-				pop(&closes)
+		if run := space_before(source, start); found && first.tight && run > 0 {
+			before = run
+			for bare {
+				mark := close_after(pairs, start, end) or_break
+				append(&closes, mark)
+				end = mark.end
 			}
 		}
 	}
-	// Spaces after the range, with a mark that starts a style right
-	// before them now. They go before the marks that start there.
-	after := 0
-	head := start - before
-	if len(opens) == 0 && len(closes) == 0 && len(text) == 0 {
-		for found := true; found; {
-			found = false
+	// Spaces after the range with a mark that starts a style right
+	// before them: they go before the marks that start there.
+	{
+		last, found := len(opens) > 0 ? opens[len(opens) - 1] : Mark{}, len(opens) > 0
+		if bare && before == 0 {
+			last, found = open_before(pairs, start, end)
+		}
+		if run := space_after(source, end); found && last.tight && run > 0 {
+			after = run
+			for bare && before == 0 {
+				mark := open_before(pairs, head, end) or_break
+				inject_at(&opens, 0, mark)
+				head = mark.start
+			}
+		}
+	}
+	// A mark that ends a style, and right after it the same mark for
+	// the start of one: the two go.
+	for len(text) == 0 && before == 0 && after == 0 && len(closes) > 0 {
+		close := closes[len(closes) - 1]
+		open, kept := len(opens) > 0 ? opens[0] : Mark{}, len(opens) > 0
+		if !kept {
+			found := false
 			for pair in pairs {
-				if pair.close >= 0 && pair.open_end == head && pair.open < head && pair.close >= end {
-					inject_at(&opens, 0, Mark{pair.open, pair.open_end, pair.tight})
-					head, found = pair.open, true
+				if pair.open == end && pair.open_end > end && pair.close >= pair.open_end {
+					open, found = Mark{pair.open, pair.open_end, pair.tight}, true
 				}
 			}
+			found or_break
 		}
-	}
-	if len(opens) > 0 && opens[len(opens) - 1].tight {
-		for end + after < len(source) && space(source[end + after]) {
-			after += 1
+		if string(source[close.start:close.end]) != string(source[open.start:open.end]) {
+			break
 		}
-	}
-	if after == 0 {
-		for len(opens) > 0 && opens[0].end <= start - before {
+		pop(&closes)
+		if kept {
 			ordered_remove(&opens, 0)
+		} else {
+			end = open.end
 		}
-		head = start - before
 	}
 	out := make([dynamic]u8, 0, len(text) + before + after + 8, allocator)
 	append(&out, text)
@@ -136,12 +158,49 @@ range_edit :: proc(pairs: []Pair, source: []u8, from, to: int, text: string, all
 		append(&out, ..source[mark.start:mark.end])
 	}
 	append(&out, ..source[start - before:start])
-	caret = head + len(out)
+	caret = head - before + len(out)
 	append(&out, ..source[end:end + after])
 	for mark in opens {
 		append(&out, ..source[mark.start:mark.end])
 	}
-	return {head, end + after, string(out[:])}, caret
+	return {head - before, end + after, string(out[:])}, caret
+}
+
+// How many bytes right before an offset are space between two words of
+// a text: spaces and tabs, or a line break with them around it and the
+// marks of a quote at the start of its next line.
+@(private)
+space_before :: proc(source: []u8, at: int) -> int {
+	i := at
+	for i > 0 && (source[i - 1] == ' ' || source[i - 1] == '\t' || source[i - 1] == '>') {
+		i -= 1
+	}
+	if line := break_before(source, i); line < i {
+		i = line
+	} else {
+		// A ">" with no line break before it is text.
+		i = at
+	}
+	for i > 0 && (source[i - 1] == ' ' || source[i - 1] == '\t') {
+		i -= 1
+	}
+	return at - i
+}
+
+// `space_before` for the bytes right after an offset.
+@(private)
+space_after :: proc(source: []u8, at: int) -> int {
+	i := at
+	for i < len(source) && (source[i] == ' ' || source[i] == '\t') {
+		i += 1
+	}
+	if i < len(source) && (source[i] == '\n' || source[i] == '\r') {
+		_, i = line_at(source, i)
+		for i < len(source) && (source[i] == ' ' || source[i] == '\t' || source[i] == '>') {
+			i += 1
+		}
+	}
+	return i - at
 }
 
 // The range of the source of the lines that two offsets are in, with
@@ -152,47 +211,66 @@ lines_range :: proc(source: []u8, from, to: int) -> (start, end: int) {
 	return
 }
 
+// The map of a block that a caller of `replace_range` has already: the
+// places and the marks of the block of a caret.
+Held :: struct {
+	block:  int,
+	places: []Place,
+	pairs:  []Pair,
+	valid:  bool,
+}
+
 // The edit that takes the text between two offsets of the source out of
 // a document and puts `text` in its place (`range_edit`), for two
 // offsets that are places of a caret, `from` not after `to`. The text
 // of the block of `to` that stays goes on in the block of `from`, which
-// keeps its kind; the blocks between them go.
+// keeps its kind; the blocks between them go. The definitions of links
+// in the range stay: they are no text, and other text uses them.
 //
 // False for a range that has no such edit yet: one with an end in code
 // or in a table and the other end in another block (the rest of code
 // is no text of a paragraph), but when the range has all of the text of
 // its blocks, which then go with their lines; and one from a cell of a
 // table to another one.
-replace_range :: proc(doc: ^Document, from, to: int, text: string, allocator := context.allocator) -> (edit: Edit, caret: int, ok: bool) {
+replace_range :: proc(doc: ^Document, from, to: int, text: string, held := Held{}, allocator := context.allocator) -> (edit: Edit, caret: int, ok: bool) {
 	if doc.count == 0 || from < 0 || to < from || to > len(doc.source) {
 		return
 	}
 	first, last := block_at_offset(doc, from), block_at_offset(doc, to)
-	pairs: [dynamic]Pair
-	defer delete(pairs)
-	places := block_map(doc, first, &pairs)
-	defer delete(places)
+	// The maps of the two blocks: the one that the caller has, or one
+	// that is made here.
+	made: [2][dynamic]Place
+	made_pairs: [2][dynamic]Pair
+	defer for i in 0 ..< 2 {
+		delete(made[i])
+		delete(made_pairs[i])
+	}
+	map_of :: proc(doc: ^Document, block: int, held: Held, places: ^[dynamic]Place, pairs: ^[dynamic]Pair) -> ([]Place, []Pair) {
+		if held.valid && held.block == block {
+			return held.places, held.pairs
+		}
+		places^ = block_map(doc, block, pairs)
+		return places[:], pairs[:]
+	}
+	places, pairs := map_of(doc, first, held, &made[0], &made_pairs[0])
 	a, b := block_at(doc, first), block_at(doc, last)
+	// The first line of the first block: where definitions that stay go.
+	line := block_start(doc, first)
 	if first != last {
-		pairs_last: [dynamic]Pair
-		defer delete(pairs_last)
-		places_last := block_map(doc, last, &pairs_last)
-		defer delete(places_last)
-		append(&pairs, ..pairs_last[:])
+		places_last, pairs_last := map_of(doc, last, held, &made[1], &made_pairs[1])
 		verbatim :: proc(b: ^Block) -> bool {return b.kind == .Code || b.kind == .Table}
 		if verbatim(a) || verbatim(b) {
 			// All of the text of the blocks: from the start of the first
 			// text or before it, to the end of the last text or after it.
 			texts := block_texts(b)
-			head, has_head := place_of(doc, places[:], {first, 0, 0})
+			head, has_head := place_of(doc, places, {first, 0, 0})
 			tail, has_tail := len(doc.source), true
 			if len(texts) > 0 {
-				tail, has_tail = place_of(doc, places_last[:], {last, len(texts) - 1, len(texts[len(texts) - 1].bytes)})
+				tail, has_tail = place_of(doc, places_last, {last, len(texts) - 1, len(texts[len(texts) - 1].bytes)})
 			}
 			if (has_head && from > head) || (has_tail && to < tail) {
 				return
 			}
-			start := first == 0 ? 0 : block_start(doc, first)
 			_, end := block_source(doc, last)
 			out := make([dynamic]u8, 0, len(text) + 4, allocator)
 			append(&out, text)
@@ -203,28 +281,63 @@ replace_range :: proc(doc: ^Document, from, to: int, text: string, allocator := 
 				append(&out, nl)
 				append(&out, nl)
 			}
-			return {start, end, string(out[:])}, start + len(text), true
+			edit, caret = keep_defs(doc, {line, end, string(out[:])}, line + len(text), line, allocator)
+			return edit, caret, true
 		}
-	} else if a.kind == .Table && address_in(places[:], first, from).cell != address_in(places[:], first, to).cell {
+		// The marks of the two blocks, in the order of the source.
+		both := make([dynamic]Pair, 0, len(pairs) + len(pairs_last))
+		append(&both, ..pairs)
+		append(&both, ..pairs_last)
+		delete(made_pairs[0])
+		made_pairs[0] = both
+		pairs = both[:]
+	} else if a.kind == .Table && address_in(places, first, from).cell != address_in(places, first, to).cell {
 		return
 	}
 	// From an empty paragraph: what comes in its place is a paragraph of
 	// its own, at the line of the empty one (`empty_text`). Not for
 	// empty lines only that go: the lines after them are as they were.
-	lead := ""
 	if empty_at(doc, first, from) > 0 && (len(text) > 0 || first != last) {
-		lead = line_ending(doc.source)
+		led := empty_text(doc, text)
+		defer delete(led)
+		edit, caret = range_edit(pairs, doc.source, from, to, led, allocator)
+	} else {
+		edit, caret = range_edit(pairs, doc.source, from, to, text, allocator)
 	}
-	if lead == "" {
-		edit, caret = range_edit(pairs[:], doc.source, from, to, text, allocator)
-		return edit, caret, true
-	}
-	led := make([]u8, len(lead) + len(text))
-	defer delete(led)
-	copy(led, lead)
-	copy(led[len(lead):], text)
-	edit, caret = range_edit(pairs[:], doc.source, from, to, string(led), allocator)
+	edit, caret = keep_defs(doc, edit, caret, line, allocator)
 	return edit, caret, true
+}
+
+// An edit with the definitions of links that are in its range kept:
+// they go before `line`, the start of a line at the start of the edit or
+// before it, as lines of their own with an empty line after them.
+// `edit.text` is memory of `allocator`, and so is the text of the
+// result.
+@(private)
+keep_defs :: proc(doc: ^Document, edit: Edit, caret, line: int, allocator := context.allocator) -> (kept: Edit, at: int) {
+	size := 0
+	for def in doc.defs {
+		if def.start >= edit.start && def.end <= edit.end {
+			size += def.end - def.start
+		}
+	}
+	if size == 0 || line > edit.start {
+		return edit, caret
+	}
+	nl := line_ending(doc.source)
+	out := make([dynamic]u8, 0, size + len(edit.text) + edit.start - line + 16, allocator)
+	for def in doc.defs {
+		if def.start >= edit.start && def.end <= edit.end {
+			append(&out, ..doc.source[def.start:def.end])
+			append(&out, nl)
+		}
+	}
+	append(&out, nl)
+	moved := len(out)
+	append(&out, ..doc.source[line:edit.start])
+	append(&out, edit.text)
+	delete(edit.text, allocator)
+	return {line, edit.end, string(out[:])}, caret + moved
 }
 
 // The edit that puts the character before an address after the one at
