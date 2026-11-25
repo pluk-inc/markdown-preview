@@ -486,6 +486,10 @@ Known limits, found in review and left on purpose:
 
 - One very long paragraph or one large table is laid out in one step. Code
   blocks stop between lines.
+- A change in a run of many link definitions parses all of them again:
+  with the 2,200 definitions of the 1 MB fixture (all that a delete of
+  all of its text leaves) one change costs tens of ms, and the walk of
+  `bench.m` with its Undo check runs for many minutes on that file.
 - The time from a key to its frame has no program in `bench/`: it was
   measured with a build that has time stamps in the view and in the render
   loop (`BENCHMARKS.md`, "The frame for a key does not wait for the
@@ -1458,4 +1462,24 @@ export.
   hidden display with screenshots: the marks of italic text, bold
   text, and a link with its target in gray at the caret, and none
   with text selected.
-
+- **2026-11-25** — Undo and Redo. The maintainer asked for undo as the
+  next editor task, before footnotes. The history is a package of its
+  own (`src/history`), with no document in it; the core records each
+  change of `change_source_held` in a command of the reader and makes
+  the changes of a group again through the same entry point. The
+  reference editor was read for its grouping (a time gap and an end at
+  a caret move) only after the first form was written; the maintainer
+  pointed that out, and the gap went from 0.6 to 0.3 s and the
+  selection came into the group after it. A reviewer with the task to
+  break the round trip found four faults before the PR opened: a task
+  that was set with no caret was no step (a later Redo then worked on
+  another text), an input method that was let go in an empty line was
+  two groups, the caret after a command was taken before its last move
+  (Return in a quote), and a change to the same bytes was a step. The
+  bots then found a history that went on into another document with the
+  same text, the forms of an input method over a selection in two
+  groups, a paste that joined the typing around it, and a limit that
+  did not count the records. A timing on the 1 MB fixture found Undo of
+  40 typed characters at 15 ms (one parse for each character); the
+  characters of a run are one step now, 0.33 ms. Undo of a delete of
+  all of that document is 13 to 15 ms, a parse of what comes back.

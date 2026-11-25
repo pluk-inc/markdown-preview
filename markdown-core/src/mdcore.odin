@@ -559,6 +559,16 @@ mdcore_redo :: proc "c" (handle: rawptr) -> bool {
 
 // See the header.
 @(export)
+mdcore_forget_history :: proc "c" (handle: rawptr) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	history.clear(&ctx.history)
+}
+
+// See the header.
+@(export)
 mdcore_can_undo :: proc "c" (handle: rawptr) -> bool {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
@@ -1350,7 +1360,19 @@ caret_to_place :: proc(ctx: ^Ctx) {
 @(export)
 mdcore_insert :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) -> bool {
 	context = runtime.default_context()
-	ctx := cast(^Ctx)handle
+	return insert(cast(^Ctx)handle, utf8, length, .Typing)
+}
+
+// `mdcore_insert` for text that the reader did not type: a group of its
+// own for Undo. See the header.
+@(export)
+mdcore_paste :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) -> bool {
+	context = runtime.default_context()
+	return insert(cast(^Ctx)handle, utf8, length, .Other)
+}
+
+@(private)
+insert :: proc(ctx: ^Ctx, utf8: [^]u8, length: c.long, kind: history.Kind) -> bool {
 	// From the look at the caret to the end of the change: no other
 	// change of the source comes between.
 	sync.lock(&ctx.source_lock)
@@ -1358,7 +1380,7 @@ mdcore_insert :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) -> bool 
 	if ctx.caret < 0 || length <= 0 {
 		return false
 	}
-	command(ctx, .Typing)
+	command(ctx, kind)
 	defer history.end(&ctx.history, ctx.caret)
 	if selected, changed := replace_selection(ctx, string(utf8[:length])); selected {
 		return changed

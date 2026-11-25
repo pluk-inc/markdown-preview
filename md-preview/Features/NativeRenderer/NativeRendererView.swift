@@ -546,6 +546,9 @@ final class NativeRendererView: NSView {
         text.withUTF8 { utf8 in
             utf8.withMemoryRebound(to: CChar.self) { mdcore_set_markdown(ctx, $0.baseAddress, $0.count) }
         }
+        // Another document: Undo has no change of it, also when its text
+        // is the same as the one before (two empty files).
+        if !keepsScroll { mdcore_forget_history(ctx) }
         hasDocument = true
         endScrollAnimation()
         // The core changed the document in place: what is the same as
@@ -1004,8 +1007,11 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
     /// Puts text in at the caret, or in the place of the text of an input
     /// method that is not final. Returns where the text starts in the
     /// source, and how many bytes the core has before it for it.
+    /// `typed`: text of a key or of an input method, which goes on in
+    /// one step of Undo with the text typed before it; a paste is a step
+    /// of its own.
     @discardableResult
-    private func put(_ text: String) -> (start: Int, lead: Int) {
+    private func put(_ text: String, typed: Bool = true) -> (start: Int, lead: Int) {
         var text = text
         let marked = markedText
         var start = marked?.start ?? mdcore_caret_offset(ctx)
@@ -1023,8 +1029,10 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
                 // method, or of the text that is selected.
                 if marked != nil {
                     mdcore_replace_text(ctx, start, end, $0.baseAddress, $0.count)
-                } else if $0.count > 0 {
+                } else if $0.count > 0, typed {
                     applied = mdcore_insert(ctx, $0.baseAddress, $0.count)
+                } else if $0.count > 0 {
+                    applied = mdcore_paste(ctx, $0.baseAddress, $0.count)
                 }
             }
         }
@@ -1255,7 +1263,7 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
     override func yank(_ sender: Any?) {
         guard isEditable, hasCaret, !Self.killed.isEmpty else { return }
         markedText = nil
-        put(Self.killed)
+        put(Self.killed, typed: false)
         didEdit()
     }
 
@@ -1281,7 +1289,7 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
 
     @objc func paste(_ sender: Any?) {
         guard isEditable, hasCaret, let text = NSPasteboard.general.string(forType: .string) else { return }
-        put(text)
+        put(text, typed: false)
         didEdit()
     }
 

@@ -28,11 +28,12 @@ Kind :: enum u8 {
 	Back,
 	// The character after the caret went.
 	Forward,
-	// Text that the host put in the place of a range: it goes on in a
-	// group of text that came at the caret when the range is the end
-	// of that text (the text of an input method, which each new form of
-	// it replaces; in an empty line a line break came before its first
-	// form, and goes with all of its text when it is taken back).
+	// Text that the host put in the place of a range: it goes on in the
+	// last group when the range is the end of the text that the group
+	// put in (the text of an input method, which each new form of it
+	// replaces: also its first form over text that was selected; in an
+	// empty line a line break came before its first form, and goes with
+	// all of its text when it is taken back).
 	Replace,
 }
 
@@ -75,8 +76,9 @@ History :: struct {
 // sentence.
 GAP :: 0.3 // seconds
 
-// When the bytes are more than this, the oldest groups go until they are
-// half of it: no key moves all of them.
+// When the memory of the history (its bytes and its records) is more
+// than this, the oldest groups go until it is half of it: no key moves
+// all of them.
 LIMIT :: 16 << 20
 
 destroy :: proc(h: ^History) {
@@ -149,8 +151,13 @@ record :: proc(h: ^History, start: int, gone: []u8, came: string, now: time.Tick
 		resize(&h.bytes, g.bytes)
 		resize(&h.groups, h.done)
 	}
-	joins := h.in_command || (h.done > 0 && !h.sealed && goes_on(h, start, gone, came, now))
-	if !joins {
+	goes := !h.in_command && h.done > 0 && !h.sealed && goes_on(h, start, gone, came, now)
+	if goes && merge(h, start, gone, came) {
+		h.groups[h.done - 1].time = now
+		h.in_command = true
+		return
+	}
+	if !(h.in_command || goes) {
 		append(&h.groups, Group{len(h.steps), len(h.bytes), h.kind, now, h.caret, h.anchor, h.caret})
 		h.done = len(h.groups)
 	}
@@ -163,9 +170,48 @@ record :: proc(h: ^History, start: int, gone: []u8, came: string, now: time.Tick
 	step.came = {len(h.bytes), len(h.bytes) + len(came)}
 	append(&h.bytes, came)
 	append(&h.steps, step)
-	if len(h.bytes) > LIMIT {
+	if size_from(h, 0) > LIMIT {
 		trim(h, LIMIT / 2)
 	}
+}
+
+// A step that goes on in the last group and is next to its last step in
+// the source is a part of that step: Undo of a run of characters is one
+// change of the source, not one for each character. The bytes of the
+// last step are at the end of `bytes`, so they grow in place.
+@(private)
+merge :: proc(h: ^History, start: int, gone: []u8, came: string) -> bool {
+	last := &h.steps[len(h.steps) - 1]
+	switch h.kind {
+	case .Typing:
+		// After the text of the last step.
+		append(&h.bytes, came)
+		last.came[1] += len(came)
+	case .Back:
+		// Before the bytes that went: they are the last ones, as the
+		// step put nothing in.
+		inject_at(&h.bytes, last.gone[0], ..gone)
+		last.start = start
+		last.gone[1] += len(gone)
+		last.came += len(gone)
+	case .Forward:
+		append(&h.bytes, ..gone)
+		last.gone[1] += len(gone)
+		last.came += len(gone)
+	case .Replace:
+		// In the place of the end of the text of the last step only: a
+		// range that starts before it (the line break before the text of
+		// an input method in an empty line) is a step of its own.
+		if start < last.start {
+			return false
+		}
+		resize(&h.bytes, len(h.bytes) - len(gone))
+		append(&h.bytes, came)
+		last.came[1] = len(h.bytes)
+	case .Other:
+		return false
+	}
+	return true
 }
 
 // The first step of a command goes on in the last group: see `Kind`.
@@ -177,7 +223,7 @@ goes_on :: proc(h: ^History, start: int, gone: []u8, came: string, now: time.Tic
 	if h.kind == .Replace {
 		// In the place of the end of what the group put in, and of
 		// nothing else.
-		return (g.kind == .Typing || g.kind == .Replace) && len(gone) > 0 && start >= h.steps[g.first].start && start + len(gone) == last_end
+		return last.came[1] > last.came[0] && len(gone) > 0 && start >= h.steps[g.first].start && start + len(gone) == last_end
 	}
 	if h.kind == .Other || h.kind != g.kind || h.caret != g.caret_after || time.duration_seconds(time.tick_diff(g.time, now)) > GAP {
 		return false
@@ -238,8 +284,18 @@ redo :: proc(h: ^History) -> (steps: []Step, group: Group, ok: bool) {
 	return steps_of(h, h.done - 1), h.groups[h.done - 1], true
 }
 
-// Drops the oldest groups until the bytes are no more than `limit`. The
-// last group stays.
+// The memory of the groups from `group` on, with their steps and bytes.
+@(private)
+size_from :: proc(h: ^History, group: int) -> int {
+	if group >= len(h.groups) {
+		return 0
+	}
+	g := h.groups[group]
+	return len(h.bytes) - g.bytes + (len(h.steps) - g.first) * size_of(Step) + (len(h.groups) - group) * size_of(Group)
+}
+
+// Drops the oldest groups until the memory of the history is no more
+// than `limit`. The last group stays.
 @(private)
 trim :: proc(h: ^History, limit: int) {
 	if len(h.groups) < 2 {
@@ -247,7 +303,7 @@ trim :: proc(h: ^History, limit: int) {
 	}
 	// The first group that stays.
 	keep := 1
-	for keep < len(h.groups) - 1 && len(h.bytes) - h.groups[keep].bytes > limit {
+	for keep < len(h.groups) - 1 && size_from(h, keep) > limit {
 		keep += 1
 	}
 	steps, bytes := h.groups[keep].first, h.groups[keep].bytes
