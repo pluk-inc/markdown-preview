@@ -849,8 +849,8 @@ mdcore_insert_break :: proc "c" (handle: rawptr) {
 	if ctx.caret < 0 || ctx.doc.count == 0 {
 		return
 	}
-	if offset, text, caret, ok := document.line_break(&ctx.doc, ctx.caret_places[:], ctx.caret_at); ok {
-		change_source_held(ctx, text, [2]int{offset, offset}, caret)
+	if start, end, text, caret, ok := document.line_break(&ctx.doc, ctx.caret_places[:], ctx.caret_at); ok {
+		change_source_held(ctx, text, [2]int{start, end}, caret)
 	}
 }
 
@@ -874,6 +874,12 @@ mdcore_delete_backward :: proc "c" (handle: rawptr) {
 			ctx.caret = offset
 			change_source_held(ctx, "", [2]int{start, end})
 		}
+		return
+	}
+	if start, end, ok := document.empty_item(&ctx.doc, ctx.caret_at.block); ok {
+		// In a list item with no text: the item goes, and the caret is
+		// at the end of the text before it.
+		change_source_held(ctx, "", [2]int{start, end}, start)
 		return
 	}
 	// Nothing at the start of a block: to join it with the block before

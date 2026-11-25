@@ -15,32 +15,62 @@ import "core:strings"
 // - In the text, two line breaks at the caret: the text after it is a
 //   paragraph of its own.
 // - In an empty paragraph, one more after it.
+// - In a list item with no text, the item goes and an empty paragraph
+//   is there: Return two times ends a list.
 //
-// False where Return does nothing yet (a table). `text` is in the
-// temporary memory of the context.
-line_break :: proc(doc: ^Document, places: []Place, at: Address) -> (offset: int, text: string, caret: int, ok: bool) {
+// The text takes the place of the source from `start` to `end`. False
+// where Return does nothing yet (a table). `text` is in the temporary
+// memory of the context.
+line_break :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end: int, text: string, caret: int, ok: bool) {
 	b := block_at(doc, at.block)
 	if b.kind == .Table {
 		return
 	}
-	offset = place_of(doc, places, at) or_return
+	offset := place_of(doc, places, at) or_return
 	texts := block_texts(b)
 	if b.kind == .Code {
-		return offset, "\n", offset + 1, true
+		return offset, offset, "\n", offset + 1, true
 	}
-	if empty_of(doc, at) > 0 || at.cell >= len(texts) || at.byte < len(texts[at.cell].bytes) {
-		return offset, "\n\n", offset + 2, true
+	if empty_of(doc, at) > 0 || at.cell >= len(texts) || (at.byte < len(texts[at.cell].bytes)) {
+		return offset, offset, "\n\n", offset + 2, true
 	}
 	// At the end of the text: after the lines of the block.
-	end, empty := content_end(doc, at.block)
-	if mark, is_item := item_mark(doc, at.block); is_item && len(texts[at.cell].bytes) > 0 {
-		text = strings.concatenate({"\n", mark}, context.temp_allocator)
-		return end, text, end + len(text), true
+	after, empty := content_end(doc, at.block)
+	followed := at.block + 1 < doc.count
+	if mark, is_item := item_mark(doc, at.block); is_item {
+		if len(texts[at.cell].bytes) > 0 {
+			text = strings.concatenate({"\n", mark}, context.temp_allocator)
+			return after, after, text, after + len(text), true
+		}
+		// No text: the line of the item becomes an empty paragraph.
+		start, end = empty_item(doc, at.block) or_return
+		text = empty == 0 && followed ? "\n\n\n" : "\n\n"
+		return start, end, text, start + 2, true
 	}
 	// The empty paragraph is the second line after the block. With a
 	// block right after, it needs a line that ends it too.
-	text = empty == 0 && at.block + 1 < doc.count ? "\n\n\n" : "\n\n"
-	return end, text, end + 2, true
+	text = empty == 0 && followed ? "\n\n\n" : "\n\n"
+	return after, after, text, after + 2, true
+}
+
+// The lines of a list item with no text, with the line break before
+// them: with these out of the source, the item is gone and the text
+// before it ends as it did. False for each other block, and for the
+// first block of the source.
+empty_item :: proc(doc: ^Document, block: int) -> (start, end: int, ok: bool) {
+	b := block_at(doc, block)
+	if _, is_item := item_mark(doc, block); !is_item || len(b.text.bytes) > 0 || block == 0 {
+		return
+	}
+	start = block_start(doc, block)
+	if start > 0 && doc.source[start - 1] == '\n' {
+		start -= 1
+	}
+	if start > 0 && doc.source[start - 1] == '\r' {
+		start -= 1
+	}
+	end, _ = content_end(doc, block)
+	return start, end, end > start
 }
 
 // Where the lines of a block end in the source, before the line break

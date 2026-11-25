@@ -34,6 +34,11 @@ test_return_puts_in_what_the_block_of_the_caret_needs :: proc(t: ^testing.T) {
 		{"1. one\n2. two\n", {1, 0, 3}, "1. one\n2. two\n3. \n", 17},
 		{"9) one\n", {0, 0, 3}, "9) one\n10) \n", 11},
 		{"- [x] done\n", {0, 0, 4}, "- [x] done\n- [ ] \n", 17},
+		// In an item with no text: the item goes, and an empty
+		// paragraph is there, in a list and at its end.
+		{"- one\n- \n- two\n", {1, 0, 0}, "- one\n\n\n\n- two\n", 7},
+		{"- one\n- \n", {1, 0, 0}, "- one\n\n\n", 7},
+		{"- one\n- \n\nz\n", {1, 0, 0}, "- one\n\n\n\nz\n", 7},
 		// Not for an item that goes on in a second block, and not in a
 		// quote: an empty paragraph there.
 		{"- one\n\n  more\n\nz\n", {0, 0, 3}, "- one\n\n\n\n  more\n\nz\n", 7},
@@ -44,9 +49,9 @@ test_return_puts_in_what_the_block_of_the_caret_needs :: proc(t: ^testing.T) {
 		defer destroy(&doc)
 		places := block_map(&doc, c.at.block)
 		defer delete(places)
-		offset, text, caret, ok := line_break(&doc, places[:], c.at)
+		start, end, text, caret, ok := line_break(&doc, places[:], c.at)
 		testing.expect(t, ok)
-		apply(&doc, {offset, offset, text})
+		apply(&doc, {start, end, text})
 		testing.expect_value(t, string(doc.source), c.after)
 		testing.expect_value(t, caret, c.caret)
 		// The caret is at a place of its own after it: an address that
@@ -61,6 +66,6 @@ test_return_puts_in_what_the_block_of_the_caret_needs :: proc(t: ^testing.T) {
 	defer destroy(&table)
 	places := block_map(&table, 0)
 	defer delete(places)
-	_, _, _, ok := line_break(&table, places[:], {0, 0, 1})
+	_, _, _, _, ok := line_break(&table, places[:], {0, 0, 1})
 	testing.expect(t, !ok)
 }

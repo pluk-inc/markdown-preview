@@ -754,10 +754,43 @@ The order of the next steps, from the review of the second step:
     (many table cells and headings with no text in a row, blocks with
     no text at the two ends, text with no spaces). A step with its
     frame: 0.5 ms of CPU (`BENCHMARKS.md`).
+- Done: Return that knows its block, and the line that it makes.
+  Markdown has no paragraph with no text, so the line that Return
+  makes after a paragraph had no place on the page, and the caret
+  stayed at the end of the text before it until a character came.
+  - **An empty paragraph** (`document/empties.odin`) is a line of the
+    source with nothing in it that is a paragraph of its own when text
+    is typed there: of the empty lines b0, b1, b2… after the lines of a
+    block, the odd ones, but not the last one before a block. Each
+    block has their number (`Shape.empties`, so a change of the empty
+    lines after a block is a change of that block for a layout), and
+    each is an address of the text of its block: a byte after the end
+    of its last text, one for each (`empty_address`, `empty_of`,
+    `empty_offset`). `place_of`, `address_for`, and `step` know them,
+    so a caret, the keys that move it, and a selection need no other
+    kind of place.
+  - **An editor shows them** (`Layout.shows_empties`,
+    `mdcore_set_editing`): the box of a block has a line at its bottom
+    for each, and all below is lower. A reader gives them no room, so
+    a document with such lines is a little longer in Edit Mode.
+  - **Return** (`document.line_break`, `mdcore_insert_break`) is of the
+    block and not of the byte of the caret: in code a line break; at
+    the end of the text of a list item a new item of its kind (the
+    next number, a task that is not done); at the end of each other
+    text an empty paragraph after the lines of the block (after the
+    line under a heading, after the marks that end bold text); in an
+    item with no text, that item becomes an empty paragraph, so Return
+    two times ends a list. A delete in an empty paragraph or in an item
+    with no text takes it out (`empty_range`, `empty_item`).
 - Next for the editor, in the order that a reader misses them: a
   selection that typing takes the place of, with cut; the marks at the
-  caret (Decisions); undo; Return that knows its block (a new list
-  item, a line in a code block).
+  caret (Decisions); undo.
+- Not done for Return: in a table; in a quote (the new paragraph is
+  after the quote, not in it); in an item that has more blocks, and in
+  a list in a quote (an empty paragraph, not a new item); in the
+  middle of bold text the two halves keep one mark each; the items
+  after a new numbered item keep their numbers in the source (they
+  show right, because the first number counts).
 - Not done for the keys that move the caret: text that reads from right
   to left (left and right are against the reading order and in it,
   which is the other way on the page there); Page Up and Page Down
@@ -765,10 +798,8 @@ The order of the next steps, from the review of the second step:
   that starts in Edit Mode selects from the caret's stop, and one over
   a place with no stop keeps the caret where it was.
 - Not done for the caret: a selection that typing takes
-  the place of, a delete at the start of a block (to join it with the
-  block before), Enter (the source needs a line break that is right for
-  the block: a new paragraph, a new list item), a caret in a table cell
-  with no text, undo.
+  the place of, a delete at the start of a block with text (to join it
+  with the block before), a caret in a table cell with no text, undo.
 - A delete of the only character between two marks leaves the marks:
   "**a**" is "****" after it, which is a rule, and "`a`" is two
   backticks. The marks must go with their last character, or the
@@ -1088,3 +1119,14 @@ export.
   caret, and one writer (Open work). `mdcore.odin` has no unit tests,
   so the benchmark script now walks the caret through two documents
   and stops when a move is wrong.
+- **2026-11-25** — Return. The maintainer saw in a test build that the
+  caret did not move after Return until a character was typed. Two
+  causes, each of the structure: the line that Return makes was no
+  place in the document, and Return put its line breaks at the byte of
+  the caret, which is inside the lines of the block at the end of a
+  heading with a line under it and at the end of bold text. So the
+  document got empty paragraphs as places of the text of a block, and
+  Return became a call that knows the block. Checked on the hidden
+  display with a log of the caret: Return after a list item, a
+  paragraph, and a heading; typing and delete in the new line; Return
+  two times and delete in a list; up and down through the new lines.
