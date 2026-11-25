@@ -753,7 +753,7 @@ The order of the next steps, from the review of the second step:
     the short fixture, and one that it writes with the hard places
     (many table cells and headings with no text in a row, blocks with
     no text at the two ends, text with no spaces). A step with its
-    frame: about 1.2 ms of CPU.
+    frame: 0.5 ms of CPU (`BENCHMARKS.md`).
 - Next for the editor, in the order that a reader misses them: a
   selection that typing takes the place of, with cut; the marks at the
   caret (Decisions); undo; Return that knows its block (a new list
