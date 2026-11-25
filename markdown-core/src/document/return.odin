@@ -74,8 +74,11 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address, allocator := co
 		for line > block_begin && source[line - 1] != '\n' && source[line - 1] != '\r' {
 			line -= 1
 		}
-		lead := line
-		for lead < offset && (source[lead] == ' ' || source[lead] == '\t' || source[lead] == '>') {
+		// The indent, and as many marks of a quote as the block is in
+		// quotes: a ">" after those is a character of the code.
+		lead, quotes := line, 0
+		for lead < offset && (source[lead] == ' ' || source[lead] == '\t' || (source[lead] == '>' && quotes < b.quote_depth)) {
+			quotes += int(source[lead] == '>')
 			lead += 1
 		}
 		strings.write_string(&out, nl)

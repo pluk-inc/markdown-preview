@@ -32,6 +32,8 @@ test_return_puts_in_what_the_block_of_the_caret_needs :: proc(t: ^testing.T) {
 		{"```\nab\n```\n", {0, 0, 1}, "```\na\nb\n```\n", 6, 0},
 		{"- a\n\n  ```\n  ab\n  ```\n", {1, 0, 1}, "- a\n\n  ```\n  a\n  b\n  ```\n", 17, 0},
 		{"> ```\n> ab\n> ```\n", {0, 0, 1}, "> ```\n> a\n> b\n> ```\n", 12, 0},
+		{"```\n> ab\n```\n", {0, 0, 3}, "```\n> a\nb\n```\n", 8, 0},
+		{"> ```\n> > ab\n> ```\n", {0, 0, 3}, "> ```\n> > a\n> b\n> ```\n", 14, 0},
 		// A new item of a list, of the kind of the item.
 		{"- one\n- two\n", {0, 0, 3}, "- one\n- \n- two\n", 8, 0},
 		{"  * one\n", {0, 0, 3}, "  * one\n  * \n", 12, 0},
