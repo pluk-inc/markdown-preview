@@ -12,6 +12,9 @@ Inline :: enum u8 {
 	Link,
 	Image, // the alternative text of an image
 	Strike,
+	// A mark of the source that shows as text: the "**" of bold text
+	// that the caret is in (`Document.reveal`).
+	Mark,
 }
 
 Inline_Set :: bit_set[Inline;u8]
@@ -202,6 +205,13 @@ Part :: struct {
 #assert(size_of(Part) <= PART_BYTES)
 
 Document :: struct {
+	// An offset of the source whose marks show as text: each element
+	// that has the offset in it or at one of its ends (bold text, code,
+	// a link) has its two marks in the text of its block, as text of
+	// the style `.Mark`. An editor sets it to the place of its caret,
+	// so the marks around the caret show. None for a reader. A parse of
+	// a piece of the document gets it (`prepare`, `block_map`).
+	reveal: Maybe(int),
 	parts:  [dynamic]^Part,
 	starts: [dynamic]int, // for each part, the number of its first block
 	count:  int, // the blocks of all parts

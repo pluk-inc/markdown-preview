@@ -138,7 +138,8 @@ Md_Parser :: struct {
 	ref_def_use:  proc "c" (size: c.uint, accepted: c.int, userdata: rawptr),
 	// And: the range of the source of each mark of the inline syntax,
 	// right before the spans that the mark starts or ends.
-	mark_offset:  proc "c" (start, end: c.uint, userdata: rawptr),
+	// With the range of the element that the mark starts or ends.
+	mark_offset:  proc "c" (start, end, element_start, element_end: c.uint, userdata: rawptr),
 }
 
 Md_Entity :: struct {

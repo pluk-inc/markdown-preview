@@ -104,6 +104,17 @@ void mdcore_caret_show(void *ctx, bool shown);
 // that is not final yet).
 long mdcore_caret_offset(void *ctx);
 
+// The marks of the source at the caret show as text, as they do in a
+// source: the two marks of bold, italic, and struck text, of code, and
+// of a link (with its target) that the caret is in or at an end of.
+// They are text for the caret then: it has a place before a mark and
+// after it, and a delete takes one character of a mark. Each other
+// mark does not show, and none shows with text selected, with no
+// caret, and while the view does not take the keys.
+//
+// Says if the view takes the keys (true at the start).
+void mdcore_set_focused(void *ctx, bool focused);
+
 // Where the caret is: its x in the view, the top of its line in the
 // space of the page, and the height of the line. For a host that keeps
 // the caret in view or puts an input window at it. In a document with no

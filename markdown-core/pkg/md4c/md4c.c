@@ -4907,8 +4907,19 @@ md_process_inlines(MD_CTX* ctx, const MD_LINE* lines, MD_SIZE n_lines)
         /* If reached the mark, process it and move to next one. */
         if(off >= mark->beg) {
             /* (Not in upstream.) */
-            if(ctx->parser.mark_offset != NULL)
-                ctx->parser.mark_offset(mark->beg, mark->end, ctx->userdata);
+            if(ctx->parser.mark_offset != NULL) {
+                /* The element of the mark: from its opener to the end of
+                 * its closer. */
+                OFF el_beg = mark->beg;
+                OFF el_end = mark->end;
+                if((mark->flags & MD_MARK_OPENER)  &&  mark->next >= 0  &&  mark->next < ctx->n_marks
+                            &&  ctx->marks[mark->next].end >= mark->end)
+                    el_end = ctx->marks[mark->next].end;
+                else if((mark->flags & MD_MARK_CLOSER)  &&  mark->prev >= 0  &&  mark->prev < ctx->n_marks
+                            &&  ctx->marks[mark->prev].beg <= mark->beg)
+                    el_beg = ctx->marks[mark->prev].beg;
+                ctx->parser.mark_offset(mark->beg, mark->end, el_beg, el_end, ctx->userdata);
+            }
 
             switch(mark->ch) {
                 case '\\':      /* Backslash escape. */

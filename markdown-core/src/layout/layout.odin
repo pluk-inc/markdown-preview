@@ -484,6 +484,10 @@ done_color :: proc(l: ^Layout) -> base.Color {
 // task item. The state is read from the document when the page is drawn,
 // not kept in the layout, so a task that is checked needs no new layout.
 span_color :: proc(l: ^Layout, para: ^Para, style: document.Inline_Set, done: bool) -> base.Color {
+	// A mark of the source that shows at the caret.
+	if .Mark in style {
+		return l.style.secondary
+	}
 	if .Link in style {
 		return l.style.link
 	}

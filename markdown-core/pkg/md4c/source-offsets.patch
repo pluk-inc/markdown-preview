@@ -1,17 +1,17 @@
 --- a/md4c.c
 +++ b/md4c.c
-@@ -269,6 +269,11 @@
-     /* Pending count of blank lines not yet reported as MD_BLOCK_BLANK.
+@@ -270,6 +270,11 @@
       * Used only with MD_FLAG_PRESERVEBLANKLINES. */
      unsigned n_blank_lines;
-+
+ 
 +    /* Start of the input line that is analyzed now, and of the line after
 +     * it. (Not in upstream.) */
 +    OFF line_beg;
 +    OFF line_next;
- 
++
      /* For container block analysis. */
      MD_CONTAINER* containers;
+     int n_containers;
 @@ -2593,6 +2598,9 @@
              MD_LOG("Too many link reference definition instantiations.");
              ctx->max_ref_def_output = 0;
@@ -22,18 +22,29 @@
      }
  
  abort:
-@@ -4898,6 +4906,10 @@
+@@ -4898,6 +4906,21 @@
  
          /* If reached the mark, process it and move to next one. */
          if(off >= mark->beg) {
 +            /* (Not in upstream.) */
-+            if(ctx->parser.mark_offset != NULL)
-+                ctx->parser.mark_offset(mark->beg, mark->end, ctx->userdata);
++            if(ctx->parser.mark_offset != NULL) {
++                /* The element of the mark: from its opener to the end of
++                 * its closer. */
++                OFF el_beg = mark->beg;
++                OFF el_end = mark->end;
++                if((mark->flags & MD_MARK_OPENER)  &&  mark->next >= 0  &&  mark->next < ctx->n_marks
++                            &&  ctx->marks[mark->next].end >= mark->end)
++                    el_end = ctx->marks[mark->next].end;
++                else if((mark->flags & MD_MARK_CLOSER)  &&  mark->prev >= 0  &&  mark->prev < ctx->n_marks
++                            &&  ctx->marks[mark->prev].beg <= mark->beg)
++                    el_beg = ctx->marks[mark->prev].beg;
++                ctx->parser.mark_offset(mark->beg, mark->end, el_beg, el_end, ctx->userdata);
++            }
 +
              switch(mark->ch) {
                  case '\\':      /* Backslash escape. */
                      if(ISNEWLINE(mark->beg+1))
-@@ -5399,6 +5411,11 @@
+@@ -5399,6 +5422,11 @@
       * MD_BLOCK_OL:     Start item number.
       */
      MD_SIZE n_lines;
@@ -45,17 +56,17 @@
  };
  
  struct MD_CONTAINER_tag {
-@@ -5582,6 +5599,9 @@
-     }
+@@ -5583,6 +5611,9 @@
  
      memset(&det, 0, sizeof(det));
-+
+ 
 +    if(ctx->parser.block_offset != NULL  &&  block->type != MD_BLOCK_BLANK)
 +        ctx->parser.block_offset(block->type, block->beg, block->end, ctx->userdata);
- 
++
      if(ctx->n_containers == 0)
          is_in_tight_list = false;
-@@ -5727,6 +5747,8 @@
+     else
+@@ -5727,6 +5758,8 @@
              }
  
              if(block->flags & MD_BLOCK_CONTAINER_OPENER) {
@@ -64,7 +75,7 @@
                  MD_ENTER_BLOCK(block->type, &det);
  
                  if(block->type == MD_BLOCK_UL || block->type == MD_BLOCK_OL) {
-@@ -5839,6 +5861,8 @@
+@@ -5839,6 +5872,8 @@
      block->flags = 0;
      block->data = line->data;
      block->n_lines = 0;
@@ -73,11 +84,10 @@
  
      ctx->current_block = block;
      return 0;
-@@ -5846,6 +5870,15 @@
- 
+@@ -5847,6 +5882,15 @@
  /* Forward declarations */
  static int md_is_hr_line(MD_CTX* ctx, OFF beg, OFF* p_end, OFF* p_killer);
-+
+ 
 +/* Start of the input line that has an offset. (Not in upstream.) */
 +static OFF
 +md_line_start(MD_CTX* ctx, OFF off)
@@ -86,10 +96,11 @@
 +        off--;
 +    return off;
 +}
- 
++
  /* Eat from start of current (textual) block any reference definitions and/or
   * footnote definitions, and remember them.
-@@ -5860,6 +5893,8 @@
+  *
+@@ -5860,6 +5904,8 @@
      MD_SIZE n_lines = ctx->current_block->n_lines;
      MD_SIZE n = 0;
      bool inject_hr = false;
@@ -98,7 +109,7 @@
      OFF ignored;
  
      while(n < n_lines) {
-@@ -5881,6 +5916,9 @@
+@@ -5881,6 +5927,9 @@
              n_consumed = md_is_link_reference_definition(ctx, lines + n, n_lines - n);
              if(n_consumed < 0)
                  return -1;
@@ -108,7 +119,7 @@
          }
  
          if(n_consumed == 0)
-@@ -5897,7 +5935,15 @@
+@@ -5897,7 +5946,15 @@
       * (https://github.com/mity/md4c/issues/414) */
      if(n < n_lines  &&  md_is_hr_line(ctx, lines[n].beg, &ignored, &ignored)) {
          inject_hr = true;
@@ -124,7 +135,7 @@
      }
  
      if(n == n_lines) {
-@@ -5928,6 +5974,8 @@
+@@ -5928,6 +5985,8 @@
  
          memset(hr_block, 0, sizeof(MD_BLOCK));
          hr_block->type = MD_BLOCK_HR;
@@ -133,7 +144,7 @@
      }
  
      return 0;
-@@ -6003,6 +6051,11 @@
+@@ -6003,6 +6062,11 @@
          line->end = analysis->end;
      }
      ctx->current_block->n_lines++;
@@ -145,7 +156,7 @@
  
      return 0;
  }
-@@ -6024,6 +6077,8 @@
+@@ -6024,6 +6088,8 @@
      block->flags = 0;
      block->data = ctx->n_blank_lines;
      block->n_lines = 0;
@@ -154,7 +165,7 @@
  
      ctx->n_blank_lines = 0;
      return 0;
-@@ -6047,6 +6102,8 @@
+@@ -6047,6 +6113,8 @@
      block->flags = flags;
      block->data = data;
      block->n_lines = start;
@@ -163,7 +174,7 @@
  
  abort:
      return ret;
-@@ -7209,6 +7266,9 @@
+@@ -7209,6 +7277,9 @@
  
      /* Blank line ends current leaf block. */
      if(line->type == MD_LINE_BLANK) {
@@ -173,7 +184,7 @@
          MD_CHECK(md_end_current_block(ctx));
          /* Count only genuinely empty lines: some non-blank lines (e.g. a closing
           * code fence) are internally retyped as MD_LINE_BLANK but still hold
-@@ -7361,7 +7421,9 @@
+@@ -7361,7 +7432,9 @@
          if(line == pivot_line)
              line = (line == &line_buf[0] ? &line_buf[1] : &line_buf[0]);
  
@@ -185,7 +196,7 @@
  
 --- a/md4c.h
 +++ b/md4c.h
-@@ -468,6 +468,63 @@
+@@ -468,6 +468,67 @@
      /* Reserved. Set to NULL.
       */
      void (*syntax)(void);
@@ -244,8 +255,12 @@
 +     * "***"), and also before a mark that gives none (a backslash escape, a
 +     * line break). The mark that closes a link or an image has its
 +     * destination and title: "](target)".
++     *
++     * el_beg and el_end: the range of the element that the mark starts or
++     * ends, from the start of its first mark to the end of its last one;
++     * the range of the mark itself for a mark of no such element.
 +     */
-+    void (*mark_offset)(MD_OFFSET /*beg*/, MD_OFFSET /*end*/, void* /*userdata*/);
++    void (*mark_offset)(MD_OFFSET /*beg*/, MD_OFFSET /*end*/, MD_OFFSET /*el_beg*/, MD_OFFSET /*el_end*/, void* /*userdata*/);
  } MD_PARSER;
  
  

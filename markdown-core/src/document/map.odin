@@ -28,8 +28,8 @@ block_map :: proc(doc: ^Document, block: int, pairs: ^[dynamic]Pair = nil) -> (p
 	start := first == 0 ? 0 : block_start(doc, first)
 	end := last < doc.count ? block_start(doc, last) : len(doc.source)
 	text, _, _, _, _, lead := piece_text(doc, doc.source[start:end], start, end)
-	fresh := parse_piece(text[:], 0, len(doc.source), &places, block - first, pairs = pairs)
 	base := start - lead
+	fresh := parse_piece(text[:], 0, len(doc.source), &places, block - first, pairs = pairs, reveal = reveal_in(doc.reveal, base, len(text)))
 	// The piece must give the block as the document has it. It does not
 	// when the limit of the parser for the uses of definitions cuts a
 	// use in the piece that a parse of all keeps: then the places are
@@ -47,7 +47,7 @@ block_map :: proc(doc: ^Document, block: int, pairs: ^[dynamic]Pair = nil) -> (p
 		}
 		text = make([dynamic]u8, len(doc.source))
 		copy(text[:], doc.source)
-		fresh = parse_piece(text[:], 0, len(doc.source), &places, block, pairs = pairs)
+		fresh = parse_piece(text[:], 0, len(doc.source), &places, block, pairs = pairs, reveal = doc.reveal)
 		base = 0
 	}
 	// The line break at the end of a code block is no text of it.
@@ -92,6 +92,17 @@ block_map :: proc(doc: ^Document, block: int, pairs: ^[dynamic]Pair = nil) -> (p
 		}
 	}
 	return
+}
+
+// The offset whose marks show (`Document.reveal`) in a piece of the
+// source that starts at `base` and has `size` bytes, or none.
+@(private)
+reveal_in :: proc(reveal: Maybe(int), base, size: int) -> Maybe(int) {
+	at, shows := reveal.?
+	if !shows || at < base || at > base + size {
+		return nil
+	}
+	return at - base
 }
 
 // A character with a backslash before it in the source ("\\*") is the

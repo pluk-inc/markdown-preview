@@ -82,6 +82,14 @@ Ctx :: struct {
 	// next change.
 	caret_pairs:     [dynamic]document.Pair,
 	caret_marked:    bool,
+	// The marks at the caret show as text (`document.Document.reveal`):
+	// the block that has such marks in its text now, or none. Not while
+	// text is selected, and not while the view does not take the keys
+	// (`unfocused`). `reveal_frozen`: for the time of a delete, which
+	// selects the text that goes, the marks stay as they are.
+	revealed:        Maybe(int),
+	reveal_frozen:   bool,
+	unfocused:       bool,
 	caret_hidden:    bool, // the off half of a blink; the caret is there
 	// A byte where a line of a paragraph ends and the next one starts
 	// is two places on the page. The caret is at the end of the first
@@ -372,34 +380,38 @@ change_source_held :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil, 
 	if document.edit_is_empty(edit) {
 		return
 	}
+	// The marks at the caret show as text: the parse of the edit makes
+	// the text of its blocks with the marks of the place where the
+	// caret is after it. A block with marks that the edit is not in
+	// gets its text with no marks first.
+	want: Maybe(int)
+	if ctx.caret >= 0 && !ctx.unfocused {
+		start := clamp(edit.start, 0, len(ctx.doc.source))
+		end := clamp(edit.end, start, len(ctx.doc.source))
+		bytes := len(edit.text) - (end - start)
+		after := ctx.caret
+		if caret_after >= 0 {
+			after = caret_after
+		} else if after >= end {
+			after += bytes
+		} else if after > start {
+			after = end + bytes
+		}
+		want = clamp(after, 0, len(ctx.doc.source) + bytes)
+		if shown, had := ctx.revealed.?; had && ctx.doc.count > 0 && (document.block_at_offset(&ctx.doc, start) != shown || document.block_at_offset(&ctx.doc, end) != shown) {
+			context.temp_allocator = ctx.temp
+			hold(ctx)
+			reveal_none(ctx)
+		}
+	}
 	// All that takes time, with no change to the document: the parse of
 	// the blocks around the edit, or of all of the source.
-	pending := document.prepare(&ctx.doc, edit)
+	pending := document.prepare(&ctx.doc, edit, want)
 	// What is left of the two texts goes with no wait of a frame.
 	defer document.discard(&pending)
 	context.temp_allocator = ctx.temp
 	hold(ctx)
-	// From the layout of the text before.
-	take_place(ctx)
-	change := document.commit(&ctx.doc, &pending)
-	if ctx.layout_valid {
-		layout.apply_change(&ctx.page, change)
-	}
-	// Each address that the view holds has the number that its block
-	// has now. One in the blocks that changed is at the start of
-	// them, so a reader who is in such a block stays there.
-	ctx.selection.anchor, _ = document.moved(change, ctx.selection.anchor)
-	ctx.selection.focus, _ = document.moved(change, ctx.selection.focus)
-	if ctx.place.known {
-		same: bool
-		ctx.place.place.at, same = document.moved(change, ctx.place.place.at)
-		if !same {
-			ctx.place.place.fraction = 0
-		}
-	}
-	if change.count == 0 {
-		ctx.selection, ctx.place = {}, {}
-	}
+	commit_held(ctx, &pending)
 	// The caret is an offset in the source: after the edit it is as much
 	// later as the source is longer, and one that was in the text that
 	// went is at the end of the text that came.
@@ -428,6 +440,172 @@ change_source_held :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil, 
 	if ctx.layout_valid {
 		layout.restore_place(&ctx.page, ctx.place)
 		layout_changed(ctx)
+	}
+	// The parse of the edit showed the marks of the offset that it got.
+	ctx.revealed = nil
+	if at, shows := ctx.doc.reveal.?; shows && ctx.doc.count > 0 {
+		block := document.block_at_offset(&ctx.doc, at)
+		if ctx.caret >= 0 && block == ctx.caret_at.block && ctx.caret_marked {
+			if marks_at(ctx.caret_pairs[:], at) > 0 {
+				ctx.revealed = block
+			}
+		} else {
+			pairs: [dynamic]document.Pair
+			places := document.block_map(&ctx.doc, block, &pairs)
+			if marks_at(pairs[:], at) > 0 {
+				ctx.revealed = block
+			}
+			delete(places)
+			delete(pairs)
+		}
+	}
+	reveal_update(ctx)
+}
+
+// Makes the change of an edit that is ready, in the document and in the
+// layout, and moves each address that the view holds. The caller holds
+// the two locks, and gives the reader the place again after it
+// (`layout.restore_place`).
+@(private)
+commit_held :: proc(ctx: ^Ctx, pending: ^document.Pending) {
+	// From the layout of the text before.
+	take_place(ctx)
+	change := document.commit(&ctx.doc, pending)
+	if ctx.layout_valid {
+		layout.apply_change(&ctx.page, change)
+	}
+	// Each address that the view holds has the number that its block
+	// has now. One in the blocks that changed is at the start of
+	// them, so a reader who is in such a block stays there.
+	ctx.selection.anchor, _ = document.moved(change, ctx.selection.anchor)
+	ctx.selection.focus, _ = document.moved(change, ctx.selection.focus)
+	if ctx.place.known {
+		same: bool
+		ctx.place.place.at, same = document.moved(change, ctx.place.place.at)
+		if !same {
+			ctx.place.place.fraction = 0
+		}
+	}
+	if change.count == 0 {
+		ctx.selection, ctx.place = {}, {}
+	}
+}
+
+// How many elements with marks have an offset of the source in them or
+// at one of their ends: the elements whose marks show for a caret there.
+@(private)
+marks_at :: proc(pairs: []document.Pair, at: int) -> (count: int) {
+	for pair in pairs {
+		if pair.close >= 0 && pair.open_end > pair.open && at >= pair.open && at <= pair.close_end {
+			count += 1
+		}
+	}
+	return
+}
+
+// Parses the block of an offset again, with the marks of `reveal` as
+// text or with none, and gives it its new layout. The source is as it
+// was. The caller holds the two locks.
+@(private)
+reveal_refresh :: proc(ctx: ^Ctx, at: int, reveal: Maybe(int)) {
+	pending := document.prepare(&ctx.doc, {at, at, ""}, reveal)
+	defer document.discard(&pending)
+	commit_held(ctx, &pending)
+	if ctx.layout_valid {
+		layout.restore_place(&ctx.page, ctx.place)
+		layout_changed(ctx)
+	}
+}
+
+// Takes the marks out of the text of the block that shows some. The
+// addresses in that block are of another text then.
+@(private)
+reveal_none :: proc(ctx: ^Ctx) {
+	if _, had := ctx.revealed.?; had {
+		at := ctx.doc.reveal.? or_else 0
+		reveal_refresh(ctx, at, nil)
+	}
+	ctx.revealed, ctx.doc.reveal = nil, nil
+}
+
+// After the caret or the selection changed: the marks of the elements
+// that the caret is in show as text, and no other marks. Nothing shows
+// with text selected, with no caret, and while the view does not take
+// the keys. The text of a block changes with it, so the caret and the
+// ends of the selection, which are offsets of the source for this, get
+// their addresses again. The caller holds the two locks.
+@(private)
+reveal_update :: proc(ctx: ^Ctx) {
+	if ctx.reveal_frozen {
+		return
+	}
+	want: Maybe(int)
+	_, _, selected := document.selection_range(ctx.selection)
+	if ctx.caret >= 0 && !ctx.unfocused && !selected && ctx.doc.count > 0 {
+		want = ctx.caret
+	}
+	shown, had := ctx.revealed.?
+	count := 0
+	if at, wants := want.?; wants {
+		if !ctx.caret_marked {
+			delete(ctx.caret_places)
+			clear(&ctx.caret_pairs)
+			ctx.caret_places = document.block_map(&ctx.doc, ctx.caret_at.block, &ctx.caret_pairs)
+			ctx.caret_marked = true
+		}
+		count = marks_at(ctx.caret_pairs[:], at)
+		// The same elements as before: the text is right as it is.
+		if old, was := ctx.doc.reveal.?; had && was && count > 0 && shown == ctx.caret_at.block {
+			same := true
+			for pair in ctx.caret_pairs {
+				inside :: proc(pair: document.Pair, at: int) -> bool {
+					return pair.close >= 0 && pair.open_end > pair.open && at >= pair.open && at <= pair.close_end
+				}
+				same &&= inside(pair, old) == inside(pair, at)
+			}
+			if same {
+				ctx.doc.reveal = want
+				return
+			}
+		}
+	}
+	if !had && count == 0 {
+		ctx.doc.reveal = want
+		return
+	}
+	// The ends of the selection as offsets of the source, which the
+	// change of the text leaves as they are.
+	anchor, focus := -1, -1
+	if ctx.selection.active && ctx.doc.count > 0 {
+		first, last, _ := document.selection_range(ctx.selection)
+		forward := first == ctx.selection.anchor
+		anchor, _ = selection_end(ctx, ctx.selection.anchor, forward)
+		focus, _ = selection_end(ctx, ctx.selection.focus, !forward)
+		_ = last
+	}
+	upstream, goal := ctx.caret_upstream, ctx.caret_goal
+	reveal_none(ctx)
+	if at, wants := want.?; wants && count > 0 {
+		reveal_refresh(ctx, at, want)
+		ctx.revealed = document.block_at_offset(&ctx.doc, at)
+	}
+	ctx.doc.reveal = want
+	if ctx.caret >= 0 && ctx.doc.count > 0 {
+		caret_changed(ctx)
+		ctx.caret_upstream, ctx.caret_goal = upstream, goal
+	}
+	if ctx.selection.active && ctx.doc.count > 0 {
+		at := ctx.selection
+		if anchor >= 0 {
+			at.anchor = anchor == ctx.caret && ctx.caret >= 0 ? ctx.caret_at : document.address_of(&ctx.doc, anchor)
+		}
+		if focus >= 0 {
+			at.focus = focus == ctx.caret && ctx.caret >= 0 ? ctx.caret_at : document.address_of(&ctx.doc, focus)
+		}
+		ctx.selection = at
+	}
+	if ctx.display_valid {
+		show_selection(ctx)
 	}
 }
 
@@ -480,6 +658,7 @@ Stop :: struct {
 	at:     document.Address,
 	offset: int,
 	places: [dynamic]document.Place,
+	pairs:  [dynamic]document.Pair,
 	made:   bool,
 }
 
@@ -487,6 +666,7 @@ Stop :: struct {
 stop_delete :: proc(stop: Stop) {
 	if stop.made {
 		delete(stop.places)
+		delete(stop.pairs)
 	}
 }
 
@@ -500,7 +680,7 @@ stop_look :: proc(ctx: ^Ctx, at: document.Address, held: Stop) -> (found: Stop, 
 	if found.places == nil {
 		found.places = ctx.caret_places
 		if ctx.caret < 0 || at.block != ctx.caret_at.block {
-			found.places, found.made = document.block_map(&ctx.doc, at.block), true
+			found.places, found.made = document.block_map(&ctx.doc, at.block, &found.pairs), true
 		}
 	}
 	found.offset, ok = document.place_of(&ctx.doc, found.places[:], at)
@@ -551,13 +731,15 @@ stop_from :: proc(ctx: ^Ctx, at: document.Address, forward: bool) -> (stop: Stop
 set_caret :: proc(ctx: ^Ctx, stop: Stop, upstream: bool, anchor: document.Address) {
 	if stop.made {
 		delete(ctx.caret_places)
-		ctx.caret_places = stop.places
-		ctx.caret_marked = false
+		delete(ctx.caret_pairs)
+		ctx.caret_places, ctx.caret_pairs = stop.places, stop.pairs
+		ctx.caret_marked = true
 	}
 	ctx.caret, ctx.caret_at = stop.offset, stop.at
 	ctx.caret_upstream, ctx.caret_goal = upstream, nil
 	ctx.selection = {anchor = anchor, focus = stop.at, active = true}
 	caret_placed(ctx)
+	reveal_update(ctx)
 }
 
 // The moves of `mdcore_caret_move`, with the numbers of the header.
@@ -817,6 +999,7 @@ mdcore_caret_clear :: proc "c" (handle: rawptr) {
 	hold(ctx)
 	ctx.caret = -1
 	ctx.display_valid = false
+	reveal_update(ctx)
 }
 
 // See the header.
@@ -843,6 +1026,21 @@ mdcore_caret_show :: proc "c" (handle: rawptr, shown: bool) {
 		if ctx.display_valid {
 			show_selection(ctx)
 		}
+	}
+}
+
+// See the header.
+@(export)
+mdcore_set_focused :: proc "c" (handle: rawptr, focused: bool) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	hold(ctx)
+	if ctx.unfocused == focused {
+		ctx.unfocused = !focused
+		reveal_update(ctx)
 	}
 }
 
@@ -923,8 +1121,11 @@ caret_to_place :: proc(ctx: ^Ctx) {
 	if ctx.caret < 0 || ctx.doc.count == 0 {
 		return
 	}
-	if offset, placed := document.place_of(&ctx.doc, ctx.caret_places[:], ctx.caret_at); placed {
+	if offset, placed := document.place_of(&ctx.doc, ctx.caret_places[:], ctx.caret_at); placed && offset != ctx.caret {
+		context.temp_allocator = ctx.temp
+		hold(ctx)
 		ctx.caret = offset
+		reveal_update(ctx)
 	}
 }
 
@@ -1004,9 +1205,13 @@ delete_to :: proc(ctx: ^Ctx, move: Move) -> bool {
 	start := ctx.caret
 	moved: bool
 	{
+		// The marks stay as they are for the selection of a moment that
+		// the move makes: the text that goes is what shows now.
 		context.temp_allocator = ctx.temp
 		hold(ctx)
+		ctx.reveal_frozen = true
 		moved = caret_move(ctx, move, true)
+		ctx.reveal_frozen = false
 	}
 	if !moved {
 		return false
@@ -1022,6 +1227,7 @@ delete_to :: proc(ctx: ^Ctx, move: Move) -> bool {
 	caret_changed(ctx)
 	ctx.selection = {anchor = ctx.caret_at, focus = ctx.caret_at, active = true}
 	show_selection(ctx)
+	reveal_update(ctx)
 	return false
 }
 
@@ -1127,9 +1333,12 @@ mdcore_select_none :: proc "c" (handle: rawptr) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
 	hold(ctx)
 	ctx.selection = {}
 	show_selection(ctx)
+	reveal_update(ctx)
 }
 
 // See the header.
@@ -1455,6 +1664,7 @@ mdcore_select_all :: proc "c" (handle: rawptr) {
 			set_caret(ctx, stop, false, ctx.selection.anchor)
 		}
 	}
+	reveal_update(ctx)
 }
 
 // The selected text as UTF-8. The pointer is valid until the next call.
