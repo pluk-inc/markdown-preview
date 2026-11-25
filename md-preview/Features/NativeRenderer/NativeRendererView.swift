@@ -516,6 +516,12 @@ final class NativeRendererView: NSView {
             return
         }
         shownMarkdown = markdown
+        // The text changed under the text of an input method that is not
+        // final: its range is of the text before.
+        if markedText != nil {
+            markedText = nil
+            inputContext?.discardMarkedText()
+        }
         var text = markdown
         text.withUTF8 { utf8 in
             utf8.withMemoryRebound(to: CChar.self) { mdcore_set_markdown(ctx, $0.baseAddress, $0.count) }
@@ -951,8 +957,18 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         }
     }
 
+    /// The text that is not final with a part of it changed: an input
+    /// method can give a new form of a part of its text only. The range
+    /// counts from the start of the text that is not final, in UTF-16
+    /// units. With no such range, the new text is all of it.
+    private func replacingMarked(_ replacementRange: NSRange, with text: String) -> String {
+        guard let marked = markedText?.text, replacementRange.location != NSNotFound,
+              let range = Range(replacementRange, in: marked) else { return text }
+        return marked.replacingCharacters(in: range, with: text)
+    }
+
     func insertText(_ string: Any, replacementRange: NSRange) {
-        put(plainText(string))
+        put(replacingMarked(replacementRange, with: plainText(string)))
         didEdit()
     }
 
@@ -960,14 +976,7 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         // The text of an input method while the reader makes it: it is in
         // the document as it is typed, and each new form takes the place
         // of the one before. It has no line under it yet.
-        var text = plainText(string)
-        // An input method can give a new form of a part of its text only:
-        // the range counts from the start of the text that is not final,
-        // in UTF-16 units.
-        if let marked = markedText?.text, replacementRange.location != NSNotFound,
-           let range = Range(replacementRange, in: marked) {
-            text = marked.replacingCharacters(in: range, with: text)
-        }
+        let text = replacingMarked(replacementRange, with: plainText(string))
         let start = put(text)
         markedText = text.isEmpty || start < 0 ? nil : (start, text.utf8.count, text)
         didEdit()
