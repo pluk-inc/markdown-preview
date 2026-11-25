@@ -106,8 +106,8 @@ lines_end :: proc(source: []u8, b: ^Block, start, next: int) -> (end: int, ok: b
 	if len(b.text.bytes) > 0 {
 		lines = bytes.count(b.text.bytes[:], {'\n'}) + int(b.text.bytes[len(b.text.bytes) - 1] != '\n')
 	}
-	first_end, after := line_at(source, start)
-	fenced := fence_line(source[start:first_end])
+	_, after := line_at(source, start)
+	fenced := b.fenced
 	end = fenced ? after : start
 	for _ in 0 ..< lines {
 		if end >= next {
@@ -125,8 +125,10 @@ lines_end :: proc(source: []u8, b: ^Block, start, next: int) -> (end: int, ok: b
 	return min(end, next), true
 }
 
-// True for a line that starts or ends a fence of code, after the marks
-// of a quote or of a list item before it.
+// True for a line that ends a fence of code, after the marks of a quote
+// or of a list item before it. If a block of code is in a fence, the
+// parser says (`Block.fenced`): a line of code by its indent can start
+// with the marks of a fence.
 @(private)
 fence_line :: proc(line: []u8) -> bool {
 	text := bytes.trim_left(line, {' ', '\t', '>'})

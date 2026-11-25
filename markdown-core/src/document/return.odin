@@ -65,11 +65,10 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address, allocator := co
 	}
 	block_begin := block_start(doc, at.block)
 	at_end := at.byte >= len(texts[at.cell].bytes)
-	first_end, _ := line_at(source, block_begin)
 	// Code by its indent ends at its last line: a line with only the
 	// indent is no code, so Return there is as at the end of each other
 	// text.
-	if b.kind == .Code && (fence_line(source[block_begin:first_end]) || !at_end) {
+	if b.kind == .Code && (b.fenced || !at_end) {
 		line := max(line_start(source, offset), block_begin)
 		// The indent, and as many marks of a quote as the block is in
 		// quotes: a ">" after those is a character of the code.

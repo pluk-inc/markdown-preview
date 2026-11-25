@@ -884,6 +884,11 @@ mdcore_insert_break :: proc "c" (handle: rawptr) {
 		change_source_held(ctx, text, [2]int{start, end}, caret)
 		// The caret can be before the marks of its new line (the mark
 		// of a quote): text that is typed goes where its address is.
+		// Not in a document that has no block now (the item with no
+		// text was all of it): the caret has no address there.
+		if ctx.doc.count == 0 {
+			return
+		}
 		if offset, placed := document.place_of(&ctx.doc, ctx.caret_places[:], ctx.caret_at); placed {
 			ctx.caret = offset
 		}

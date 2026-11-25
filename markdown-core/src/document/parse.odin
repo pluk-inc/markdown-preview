@@ -349,6 +349,7 @@ enter_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 	case .Code:
 		p.block = start_block(p, .Code)
 		p.block.language = strings.clone(attribute((cast(^Md_Code_Detail)detail).lang))
+		p.block.fenced = (cast(^Md_Code_Detail)detail).fence_char != 0
 		p.cur = &p.block.text
 		p.in_code = true
 	case .Html:

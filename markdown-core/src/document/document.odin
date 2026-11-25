@@ -93,6 +93,7 @@ Block :: struct {
 	// `source` is; 0 for no task. Its line: `task_line`.
 	task_mark:   int,
 	done:        bool, // the block stands directly in a checked task item
+	fenced:      bool, // code: between two fence lines, not code by its indent
 	item:        int, // the list item that the block stands directly in: a number from 1, 0 for none
 }
 

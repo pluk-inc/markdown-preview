@@ -66,6 +66,9 @@ test_return_puts_in_what_the_block_of_the_caret_needs :: proc(t: ^testing.T) {
 		// an empty line after the code.
 		{"    code\n    more\n", {0, 0, 2}, "    co\n    de\n    more\n", 11, 0},
 		{"    code\n\nz\n", {0, 0, 4}, "    code\n\n\nz\n", 9, 0},
+		{"    ```\n    x\n\nz\n", {0, 0, 5}, "    ```\n    x\n\n\nz\n", 14, 0},
+		// An item with no text that is all of the source.
+		{"- \n", {0, 0, 0}, "", 0, 0},
 	}
 	for c in cases {
 		doc := parse(c.source)
@@ -78,6 +81,10 @@ test_return_puts_in_what_the_block_of_the_caret_needs :: proc(t: ^testing.T) {
 		apply(&doc, {start, end, text})
 		testing.expect_value(t, string(doc.source), c.after)
 		testing.expect_value(t, caret, c.caret)
+		// A document with no block has no address for a caret.
+		if doc.count == 0 {
+			continue
+		}
 		// The caret is at a place of its own after it: an address that
 		// is that offset again.
 		landed := address_of(&doc, caret)
