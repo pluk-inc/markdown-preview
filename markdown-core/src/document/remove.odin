@@ -522,6 +522,13 @@ transpose :: proc(doc: ^Document, places: []Place, at: Address, allocator := con
 		return
 	}
 	first := char_step(text.bytes[:], middle, false)
+	// Not a mark of the source that shows as text: the two would make
+	// another thing of the line (" #" is no heading).
+	for span in text.spans {
+		if .Mark in span.style && span.start < last && span.end > first {
+			return
+		}
+	}
 	// The range of the source of a character of some bytes of the text:
 	// from the start of its first code point to the end of its last
 	// one. False when the source has more between the two than the
