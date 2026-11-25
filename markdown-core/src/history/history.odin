@@ -155,6 +155,7 @@ record :: proc(h: ^History, start: int, gone: []u8, came: string, now: time.Tick
 	if goes && merge(h, start, gone, came) {
 		h.groups[h.done - 1].time = now
 		h.in_command = true
+		keep_in_limit(h)
 		return
 	}
 	if !(h.in_command || goes) {
@@ -170,6 +171,11 @@ record :: proc(h: ^History, start: int, gone: []u8, came: string, now: time.Tick
 	step.came = {len(h.bytes), len(h.bytes) + len(came)}
 	append(&h.bytes, came)
 	append(&h.steps, step)
+	keep_in_limit(h)
+}
+
+@(private)
+keep_in_limit :: proc(h: ^History) {
 	if size_from(h, 0) > LIMIT {
 		trim(h, LIMIT / 2)
 	}
