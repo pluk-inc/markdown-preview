@@ -178,8 +178,12 @@ keep_window :: proc(ctx: ^Ctx) {
 show_selection :: proc(ctx: ^Ctx) {
 	clear(&ctx.selection_quads)
 	layout.selection_quads(&ctx.page, ctx.selection, ctx.shown_y0, ctx.shown_y1, ctx.scale, ctx.origin_px, &ctx.selection_quads)
-	if ctx.caret >= 0 && !ctx.caret_hidden && ctx.doc.count > 0 && ctx.layout_valid {
-		layout.caret_quad(&ctx.page, ctx.caret_at, ctx.shown_y0, ctx.shown_y1, ctx.scale, ctx.origin_px, &ctx.selection_quads)
+	if ctx.caret >= 0 && !ctx.caret_hidden && ctx.layout_valid {
+		if ctx.doc.count == 0 {
+			layout.caret_quad_empty(&ctx.page, ctx.scale, ctx.origin_px, &ctx.selection_quads)
+		} else {
+			layout.caret_quad(&ctx.page, ctx.caret_at, ctx.shown_y0, ctx.shown_y1, ctx.scale, ctx.origin_px, &ctx.selection_quads)
+		}
 	}
 	renderer.set_selection(&ctx.gpu, ctx.selection_quads[:])
 }
@@ -424,6 +428,7 @@ mdcore_caret_set :: proc "c" (handle: rawptr, x, y: f64) -> bool {
 	if ctx.doc.count == 0 {
 		// A document with no text yet: text goes at its start.
 		ctx.caret = 0
+		ctx.display_valid = false
 		return true
 	}
 	at := layout.caret_hit(&ctx.page, f32(x), y) or_return
@@ -484,8 +489,13 @@ mdcore_caret_rect :: proc "c" (handle: rawptr, x, y, height: ^f64) -> bool {
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
 	hold(ctx)
-	if ctx.caret < 0 || ctx.doc.count == 0 || !ctx.layout_valid {
+	if ctx.caret < 0 || !ctx.layout_valid {
 		return false
+	}
+	if ctx.doc.count == 0 {
+		cx, top, h := layout.caret_place_empty(&ctx.page)
+		x^, y^, height^ = f64(cx), ctx.page.origin + f64(top), f64(h)
+		return true
 	}
 	cx, top, h, part := layout.caret_place(&ctx.page, ctx.caret_at) or_return
 	x^, y^, height^ = f64(cx), ctx.page.parts[part].top + f64(top), f64(h)

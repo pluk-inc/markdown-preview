@@ -106,8 +106,9 @@ long mdcore_caret_offset(void *ctx);
 
 // Where the caret is: its x in the view, the top of its line in the
 // space of the page, and the height of the line. For a host that keeps
-// the caret in view or puts an input window at it. False for no caret,
-// and when the block of the caret has no layout.
+// the caret in view or puts an input window at it. In a document with no
+// text, it is where the first line starts. False for no caret, and when
+// the block of the caret has no layout.
 bool mdcore_caret_rect(void *ctx, double *x, double *y, double *height);
 
 // Puts text in at the caret, as mdcore_replace_text does at its place in

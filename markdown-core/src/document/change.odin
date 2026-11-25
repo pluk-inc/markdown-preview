@@ -199,10 +199,13 @@ walk_from :: proc(doc: ^Document, block, step: int) -> Walk {
 
 // True for a block where a parse of a piece of the source can start: it
 // is in no list and no quote, or it is the first block of one that is
-// in none. The lines before it do not change what it and the text after
-// it are.
+// in none, and it is not in the paragraph of a definition of a link.
+// The lines before it do not change what it and the text after it are.
 @(private)
 starts_piece :: proc(doc: ^Document, block: int) -> bool {
+	if block > 0 && under_def(doc, block_start(doc, block)) {
+		return false
+	}
 	b := block_at(doc, block)
 	if b.list_depth == 0 && b.quote_depth == 0 {
 		return true
@@ -212,6 +215,30 @@ starts_piece :: proc(doc: ^Document, block: int) -> bool {
 	}
 	before := block_at(doc, block - 1)
 	return before.list_depth == 0 && before.quote_depth == 0
+}
+
+// True when the line before an offset is the last line of a definition
+// of a link. A block that starts there is the rest of the paragraph
+// that the definition was in: with the definition, a line with a deep
+// indent is text of the paragraph or a rule; with no definition before
+// it, the same line is code.
+@(private)
+under_def :: proc(doc: ^Document, offset: int) -> bool {
+	// The last definition that starts before the offset.
+	low, high := 0, len(doc.defs)
+	for low < high {
+		mid := (low + high) / 2
+		if doc.defs[mid].start < offset {
+			low = mid + 1
+		} else {
+			high = mid
+		}
+	}
+	if low == 0 {
+		return false
+	}
+	end := doc.defs[low - 1].end
+	return end <= offset && count_lines(doc.source, end, offset) <= 1
 }
 
 // How many blocks after an edit are parsed again to see that they are

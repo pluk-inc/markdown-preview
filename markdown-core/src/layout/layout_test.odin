@@ -1409,6 +1409,31 @@ test_a_caret_has_the_place_of_its_address :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_the_caret_of_an_empty_document_is_where_its_first_text_starts :: proc(t: ^testing.T) {
+	empty: Fixture
+	setup(&empty, "", 300)
+	defer teardown(&empty)
+	step(&empty.page, 1e30)
+	expect_ok(t, &empty.page)
+	x, top, height := caret_place_empty(&empty.page)
+	out: [dynamic]base.Quad
+	defer delete(out)
+	caret_quad_empty(&empty.page, 2, 0, &out)
+	testing.expect_value(t, len(out), 1)
+	// The same place as the caret before the first character typed.
+	typed: Fixture
+	setup(&typed, "a\n", 300)
+	defer teardown(&typed)
+	step(&typed.page, 1e30)
+	expect_ok(t, &typed.page)
+	tx, ttop, theight, p, ok := caret_place(&typed.page, {0, 0, 0})
+	testing.expect(t, ok)
+	testing.expect_value(t, x, tx)
+	testing.expect_value(t, empty.page.origin + f64(top), typed.page.parts[p].top + f64(ttop))
+	testing.expect_value(t, height, theight)
+}
+
+@(test)
 test_a_click_puts_a_caret_at_text_with_no_line :: proc(t: ^testing.T) {
 	// A code block with empty lines, at its start and between two lines
 	// with text, and a list item with nothing in it.
