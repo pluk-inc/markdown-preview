@@ -42,8 +42,8 @@ test_the_lines_that_return_makes_are_empty_paragraphs :: proc(t: ^testing.T) {
 		testing.expect_value(t, doc.count, len(c.empties))
 		found := 0
 		for block in 0 ..< min(doc.count, len(c.empties)) {
-			testing.expect_value(t, block_at(&doc, block).empties, c.empties[block])
-			for n in 1 ..= block_at(&doc, block).empties {
+			testing.expect_value(t, int(block_at(&doc, block).empties), c.empties[block])
+			for n in 1 ..= int(block_at(&doc, block).empties) {
 				if found < len(c.offsets) {
 					testing.expect_value(t, empty_offset(&doc, block, n), c.offsets[found])
 					// The address of the paragraph is that offset, and
@@ -108,10 +108,10 @@ test_a_change_of_the_empty_lines_after_a_block_is_a_change_of_that_block :: proc
 	doc := parse("ab\n\nnext\n")
 	defer destroy(&doc)
 	change := apply(&doc, {2, 2, "\n\n"})
-	testing.expect_value(t, block_at(&doc, 0).empties, 1)
+	testing.expect_value(t, int(block_at(&doc, 0).empties), 1)
 	testing.expect(t, change.count > 0 && change.first == 0)
 	back := apply(&doc, {3, 5, ""})
-	testing.expect_value(t, block_at(&doc, 0).empties, 0)
+	testing.expect_value(t, int(block_at(&doc, 0).empties), 0)
 	testing.expect(t, back.count > 0 && back.first == 0)
 	check := parse("ab\n\nnext\n")
 	defer destroy(&check)

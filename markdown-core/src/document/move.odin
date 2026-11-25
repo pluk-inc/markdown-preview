@@ -160,7 +160,7 @@ text_beside :: proc(doc: ^Document, at: Address, forward: bool) -> (next: Addres
 			}
 			// The end of the last text of a block is after its empty
 			// paragraphs.
-			empties := cell == len(texts) - 1 ? block_at(doc, block).empties : 0
+			empties := cell == len(texts) - 1 ? int(block_at(doc, block).empties) : 0
 			return {block, cell, len(texts[cell].bytes) + empties}, true
 		}
 		block += step
@@ -179,7 +179,7 @@ caret_ends :: proc(doc: ^Document) -> (first, last: Address, ok: bool) {
 	first = text_beside(doc, {0, -1, 0}, true) or_return
 	for block := doc.count - 1; block >= 0; block -= 1 {
 		if texts := block_texts(block_at(doc, block)); len(texts) > 0 {
-			return first, {block, len(texts) - 1, len(texts[len(texts) - 1].bytes) + block_at(doc, block).empties}, true
+			return first, {block, len(texts) - 1, len(texts[len(texts) - 1].bytes) + int(block_at(doc, block).empties)}, true
 		}
 	}
 	return
@@ -192,7 +192,7 @@ step :: proc(doc: ^Document, at: Address, how: Step, forward: bool) -> (next: Ad
 	text := text_at(doc, at)
 	// An empty paragraph after the text is one step, of each kind.
 	if text != nil {
-		if n := empty_of(doc, at); forward ? at.byte >= len(text.bytes) && n < block_at(doc, at.block).empties && at.cell == len(block_texts(block_at(doc, at.block))) - 1 : n > 0 {
+		if n := empty_of(doc, at); forward ? at.byte >= len(text.bytes) && n < int(block_at(doc, at.block).empties) && at.cell == len(block_texts(block_at(doc, at.block))) - 1 : n > 0 {
 			next = at
 			next.byte = len(text.bytes) + n + (forward ? 1 : -1)
 			return next, true

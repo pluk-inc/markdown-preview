@@ -339,6 +339,11 @@ final class NativeRendererView: NSView {
         didSet {
             guard isEditable != oldValue else { return }
             markedText = nil
+            // An editor shows a line for each empty paragraph (the line
+            // that Return makes); the heights of the page can change.
+            mdcore_set_editing(ctx, isEditable)
+            updatePageArea()
+            setNeedsDraw()
             if isEditable {
                 // The system's caret shows where the core's caret is.
                 mdcore_caret_show(ctx, false)
@@ -1130,8 +1135,11 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
 
     override func insertNewline(_ sender: Any?) {
         guard isEditable, hasCaret else { return }
-        // A new paragraph: Markdown ends one with an empty line.
-        put("\n\n")
+        // What Return is depends on the block of the caret (a new
+        // paragraph, a new list item, a new line of code): the core
+        // knows it.
+        markedText = nil
+        mdcore_insert_break(ctx)
         didEdit()
     }
 

@@ -68,8 +68,8 @@ empty_lines :: proc(source: []u8, end: int, followed: bool) -> (first, count: in
 
 // How many of some empty lines are empty paragraphs.
 @(private)
-empties_in :: proc(count: int, followed: bool) -> int {
-	return (followed ? count - 1 : count) / 2
+empties_in :: proc(count: int, followed: bool) -> u16 {
+	return u16(min((followed ? count - 1 : count) / 2, int(max(u16))))
 }
 
 // Gives each block of a document that was parsed its number of empty
@@ -114,10 +114,39 @@ empty_offset :: proc(doc: ^Document, block, n: int) -> int {
 	return at
 }
 
+// The lines of the source that an empty paragraph of a block is: the
+// line that ends what is before it, and its own line. With these out,
+// the source has one empty paragraph less after the block.
+empty_range :: proc(doc: ^Document, block, n: int) -> (start, end: int) {
+	source := doc.source
+	at := empty_offset(doc, block, n)
+	// The start of the line before it.
+	start = at
+	if start > 0 && source[start - 1] == '\n' {
+		start -= 1
+	}
+	if start > 0 && source[start - 1] == '\r' {
+		start -= 1
+	}
+	for start > 0 && source[start - 1] != '\n' && source[start - 1] != '\r' {
+		start -= 1
+	}
+	// The start of the line after it, or the end of the source.
+	end = at
+	for end < len(source) && source[end] != '\n' && source[end] != '\r' {
+		end += 1
+	}
+	if end + 1 < len(source) && source[end] == '\r' && source[end + 1] == '\n' {
+		end += 1
+	}
+	end = min(end + 1, len(source))
+	return
+}
+
 // The empty paragraph of a block that an offset of the source is in or
 // after: its number from 1, or 0 for an offset before the first one.
 empty_at :: proc(doc: ^Document, block, offset: int) -> (n: int) {
-	for n < block_at(doc, block).empties && empty_offset(doc, block, n + 1) <= offset {
+	for n < int(block_at(doc, block).empties) && empty_offset(doc, block, n + 1) <= offset {
 		n += 1
 	}
 	return
@@ -141,5 +170,5 @@ empty_of :: proc(doc: ^Document, at: Address) -> int {
 	if at.cell != len(texts) - 1 || at.cell < 0 {
 		return 0
 	}
-	return clamp(at.byte - len(texts[at.cell].bytes), 0, block_at(doc, at.block).empties)
+	return clamp(at.byte - len(texts[at.cell].bytes), 0, int(block_at(doc, at.block).empties))
 }

@@ -334,7 +334,7 @@ change_source :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil) {
 // `change_source` for a caller that holds `source_lock`: one that made
 // the range from the source as it is (a key at the caret).
 @(private)
-change_source_held :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil) {
+change_source_held :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil, caret_after := -1) {
 	edit: document.Edit
 	if r, given := range.?; given {
 		edit = {r[0], r[1], text}
@@ -384,6 +384,10 @@ change_source_held :: proc(ctx: ^Ctx, text: string, range: Maybe([2]int) = nil) 
 		} else if ctx.caret > edit.start {
 			ctx.caret = edit.end + pending.bytes
 		}
+		// The caller knows a place for it in the new text.
+		if caret_after >= 0 {
+			ctx.caret = min(caret_after, len(ctx.doc.source))
+		}
 		// Not in a character: an edit that the core found between two
 		// texts can end in one.
 		source := ctx.doc.source
@@ -413,7 +417,7 @@ caret_changed :: proc(ctx: ^Ctx) {
 	block := document.block_at_offset(&ctx.doc, ctx.caret)
 	delete(ctx.caret_places)
 	ctx.caret_places = document.block_map(&ctx.doc, block)
-	ctx.caret_at = document.address_in(ctx.caret_places[:], block, ctx.caret)
+	ctx.caret_at = document.address_for(&ctx.doc, ctx.caret_places[:], block, ctx.caret)
 	ctx.caret_upstream, ctx.caret_goal = false, nil
 	caret_placed(ctx)
 }
@@ -476,7 +480,7 @@ stop_look :: proc(ctx: ^Ctx, at: document.Address, held: Stop) -> (found: Stop, 
 	// one (the two ends of one thing of the source), in the same block.
 	ok &&= document.block_at_offset(&ctx.doc, found.offset) == at.block
 	if ok {
-		found.at = document.address_in(found.places[:], at.block, found.offset)
+		found.at = document.address_for(&ctx.doc, found.places[:], at.block, found.offset)
 	}
 	return
 }
@@ -834,6 +838,22 @@ mdcore_insert :: proc "c" (handle: rawptr, utf8: [^]u8, length: c.long) {
 	change_source_held(ctx, string(utf8[:length]), [2]int{ctx.caret, ctx.caret})
 }
 
+// Return at the caret. See the header.
+@(export)
+mdcore_insert_break :: proc "c" (handle: rawptr) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	if ctx.caret < 0 || ctx.doc.count == 0 {
+		return
+	}
+	if offset, text, caret, ok := document.line_break(&ctx.doc, ctx.caret_places[:], ctx.caret_at); ok {
+		change_source_held(ctx, text, [2]int{offset, offset}, caret)
+	}
+}
+
 // Takes out the character before the caret. See the header.
 @(export)
 mdcore_delete_backward :: proc "c" (handle: rawptr) {
@@ -842,6 +862,18 @@ mdcore_delete_backward :: proc "c" (handle: rawptr) {
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
 	if ctx.caret < 0 || ctx.doc.count == 0 {
+		return
+	}
+	if n := document.empty_of(&ctx.doc, ctx.caret_at); n > 0 {
+		// In an empty paragraph: the paragraph goes, and the caret is
+		// in the one before it, or at the end of the text of the block.
+		start, end := document.empty_range(&ctx.doc, ctx.caret_at.block, n)
+		before := ctx.caret_at
+		before.byte -= 1
+		if offset, ok := document.source_of(&ctx.doc, before); ok && offset <= start {
+			ctx.caret = offset
+			change_source_held(ctx, "", [2]int{start, end})
+		}
 		return
 	}
 	// Nothing at the start of a block: to join it with the block before
@@ -884,6 +916,45 @@ mdcore_set_page_width :: proc "c" (handle: rawptr, width: f64) {
 	context.temp_allocator = ctx.temp
 	hold(ctx)
 	ctx.page_width = f32(max(width, 0))
+}
+
+// See the header.
+@(export)
+mdcore_set_editing :: proc "c" (handle: rawptr, editing: bool) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	// Not in the middle of a frame, which has the layout of before.
+	sync.lock(&ctx.draw_lock)
+	defer sync.unlock(&ctx.draw_lock)
+	hold(ctx)
+	if ctx.page.shows_empties == editing {
+		return
+	}
+	// A new layout only for a document that has such paragraphs: each
+	// other one has the same records with them and with none.
+	has := false
+	walk: for part in ctx.doc.parts {
+		for &b in document.part_blocks(part) {
+			if b.empties > 0 {
+				has = true
+				break walk
+			}
+		}
+	}
+	if !has || !ctx.layout_valid {
+		ctx.page.shows_empties = editing
+		return
+	}
+	take_place(ctx)
+	ctx.page.shows_empties = editing
+	layout.begin(&ctx.page, &ctx.doc, ctx.style, ctx.layout_width)
+	// The text that the reader was at keeps its height on the page.
+	layout.restore_place(&ctx.page, ctx.place)
+	layout_changed(ctx)
+	if ctx.caret >= 0 {
+		caret_placed(ctx)
+	}
 }
 
 // Sets the view size in points and the backing scale. Starts a new

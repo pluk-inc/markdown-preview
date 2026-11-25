@@ -81,6 +81,13 @@ void mdcore_set_markdown(void *ctx, const char *utf8, long length);
 // reaches out of the text is cut to it.
 void mdcore_replace_text(void *ctx, long start, long end, const char *utf8, long length);
 
+// For an editor: a line of the source with nothing in it that is a
+// paragraph of its own when text is typed there (the line that Return
+// makes after a paragraph) shows as an empty line, and a caret can be
+// in it. A reader shows none of them. A change of this can give the
+// text other heights, as a new width does.
+void mdcore_set_editing(void *ctx, bool editing);
+
 // The caret of an editor: the place where typed text goes. A view has
 // none until one of these calls gives it one, and the core draws it.
 //
@@ -148,9 +155,17 @@ bool mdcore_caret_move(void *ctx, mdcore_move move, bool extend);
 // nothing with no caret.
 void mdcore_insert(void *ctx, const char *utf8, long length);
 
+// Return at the caret: what the block of the caret needs for it. In
+// code, a new line. At the end of the text of a list item, a new item
+// of the same kind. At the end of each other text, an empty paragraph
+// after the block (with mdcore_set_editing it shows as a line, and the
+// caret is in it). In the text, the rest of the text is a paragraph of
+// its own. Does nothing in a table, and with no caret.
+void mdcore_insert_break(void *ctx);
+
 // Takes out the character before the caret: all that the source has for
-// it (an entity, a run of spaces that shows as one space). Does nothing
-// at the start of a block.
+// it (an entity, a run of spaces that shows as one space). In an empty
+// paragraph, the paragraph goes. Does nothing at the start of a block.
 void mdcore_delete_backward(void *ctx);
 
 // The text of the document as it is now, UTF-8: what a host saves after

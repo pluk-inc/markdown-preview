@@ -65,6 +65,7 @@ def caret_document(path: Path) -> Path:
     text = "# \n\na\n\n| x | y |\n| - | - |\n" + "|  |  |\n" * 40 + "\nmiddle\n\n"
     text += "#\n\n" * 70 + "-\n" * 70 + "\n" + "# \n\n" * 6 + "---\n\n" * 500 + "after the rules\n\n"
     text += "日本語の文章がここにあります。" * 6 + "\n\n"
+    text += "one\n\n\n\ntwo\n\n\n\n\n\nthree\r\n\r\n\r\n\r\n- item\n\n\n\n"
     text += "```\nab   \n\n\tcd\n```\n\n> a &amp; **b** \\* `c`  \n> [d](https://example.com) e\u0301 👨‍👩‍👧‍👦\n\n---\n\nz\n\n- \n"
     path.write_text(text, encoding="utf-8")
     return path

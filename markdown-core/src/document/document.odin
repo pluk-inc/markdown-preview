@@ -60,16 +60,16 @@ Shape :: struct {
 	kind:        Block_Kind,
 	marker:      Marker,
 	spacing:     Spacing,
+	// How many empty paragraphs come after the block: lines of the
+	// source with nothing in them that are a paragraph of their own when
+	// text is typed into them (`empties.odin`). An editor shows each as
+	// an empty line. Small, and here, so a block is no larger for it.
+	empties:     u16,
 	level:       int, // heading: 1 to 6
 	number:      int, // marker == .Number
 	list_depth:  int,
 	quote_depth: int,
 	columns:     int, // table
-	// How many empty paragraphs come after the block: lines of the
-	// source with nothing in them that are a paragraph of their own when
-	// text is typed into them (`empties.odin`). An editor shows each as
-	// an empty line.
-	empties:     int,
 }
 
 Block :: struct {
