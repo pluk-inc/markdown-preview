@@ -77,6 +77,11 @@ Ctx :: struct {
 	// is: each change makes it again.
 	caret_places:    [dynamic]document.Place,
 	caret_hidden:    bool, // the off half of a blink; the caret is there
+	// The x that a caret goes to in each line that it comes to with the
+	// keys for the line above and below: the x that it had in the line
+	// where those keys started. Each other move of the caret ends it.
+	caret_goal:      f32,
+	caret_goal_set:  bool,
 	source_out:      [dynamic]u8, // the source, for `mdcore_source`
 	// Held for all of a change of the source of the document, before
 	// `lock`. A frame does not take it.
@@ -403,15 +408,194 @@ caret_changed :: proc(ctx: ^Ctx) {
 	delete(ctx.caret_places)
 	ctx.caret_places = document.block_map(&ctx.doc, block)
 	ctx.caret_at = document.address_in(ctx.caret_places[:], block, ctx.caret)
+	caret_placed(ctx)
+}
+
+// The end of `caret_changed`, after the caret got its address: the
+// records of its block, so the caret has a place.
+@(private)
+caret_placed :: proc(ctx: ^Ctx) {
+	ctx.caret_goal_set = false
 	// The records of its block, when the caret has no place with the
 	// ones that are there: a long code block is not laid out to its end
 	// for a caret in one of its first lines.
 	if ctx.layout_valid {
 		if _, _, _, _, placed := layout.caret_place(&ctx.page, ctx.caret_at); !placed {
-			layout.lay_out_block(&ctx.page, block)
+			if layout.lay_out_block(&ctx.page, ctx.caret_at.block) {
+				layout_changed(ctx)
+			}
 		}
 	}
 	ctx.display_valid = false
+}
+
+// The moves of `mdcore_caret_move`, with the numbers of the header.
+Move :: enum c.int {
+	Left,
+	Right,
+	Word_Left,
+	Word_Right,
+	Up,
+	Down,
+	Line_Start,
+	Line_End,
+	Document_Start,
+	Document_End,
+	Paragraph_Start,
+	Paragraph_End,
+}
+
+// The address that a move of the caret goes to from an address. False
+// when there is none: at an end of the document, and for a caret with
+// no place.
+@(private)
+move_from :: proc(ctx: ^Ctx, at: document.Address, move: Move) -> (next: document.Address, ok: bool) {
+	switch move {
+	case .Left, .Right:
+		return document.step(&ctx.doc, at, .Character, move == .Right)
+	case .Word_Left, .Word_Right:
+		return document.step(&ctx.doc, at, .Word, move == .Word_Right)
+	case .Up, .Down:
+		return layout.caret_line_step(&ctx.page, at, ctx.caret_goal, move == .Down)
+	case .Line_Start, .Line_End:
+		return layout.caret_line_end(&ctx.page, at, move == .Line_End)
+	case .Document_Start, .Document_End:
+		first, last := document.text_ends(&ctx.doc) or_return
+		return move == .Document_Start ? first : last, true
+	case .Paragraph_Start, .Paragraph_End:
+		src := document.text_at(&ctx.doc, at)
+		if src == nil {
+			return
+		}
+		next = at
+		next.byte = document.paragraph_end(src.bytes[:], at.byte, move == .Paragraph_End)
+		return next, true
+	}
+	return
+}
+
+// Moves the caret. See the header.
+@(export)
+mdcore_caret_move :: proc "c" (handle: rawptr, move: Move, extend: bool) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	// The source does not change under the look at it.
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	hold(ctx)
+	if ctx.caret < 0 || ctx.doc.count == 0 || move < min(Move) || move > max(Move) {
+		return false
+	}
+	from := ctx.caret_at
+	// The selection that the move makes longer or shorter starts where
+	// the caret was, when the caret is not the end of one already.
+	anchor := from
+	if ctx.selection.active && ctx.selection.focus == from {
+		anchor = ctx.selection.anchor
+	}
+	move := move
+	at := from
+	if !extend && anchor != from {
+		// With text selected, a step to the left or to the right goes to
+		// that end of the selection, and each other move starts there.
+		first, last := anchor, from
+		if document.before(last, first) {
+			first, last = last, first
+		}
+		#partial switch move {
+		case .Left, .Word_Left, .Up:
+			at = first
+		case .Right, .Word_Right, .Down:
+			at = last
+		}
+		if move == .Left || move == .Right {
+			if offset, placed := document.source_of(&ctx.doc, at); placed {
+				ctx.caret = offset
+				caret_changed(ctx)
+				ctx.selection = {anchor = ctx.caret_at, focus = ctx.caret_at, active = true}
+				return true
+			}
+		}
+	}
+	vertical := move == .Up || move == .Down
+	// A move with one place to go to, and no way on from it.
+	one_place := move == .Line_Start || move == .Line_End || move == .Paragraph_Start || move == .Paragraph_End
+	goal_set := ctx.caret_goal_set
+	if vertical && ctx.layout_valid {
+		// The lines around the caret have their records: a line with
+		// none is no line that the caret can go to.
+		if x, top, _, p, placed := layout.caret_place(&ctx.page, at); placed {
+			if !goal_set {
+				ctx.caret_goal, goal_set = x, true
+			}
+			y := ctx.page.parts[p].top + f64(top)
+			reach := f64(ctx.height)
+			if !layout.laid_out(&ctx.page, y - reach, y + reach) && layout.lay_out(&ctx.page, y - reach, y + reach, y) {
+				layout_changed(ctx)
+			}
+		}
+	}
+	// A place that the source has no room for (a table cell with no
+	// text) is no place for the caret, and some places are one place of
+	// the source: the move goes on until the caret is at another place.
+	// Left and right do not go against their direction.
+	forward := move == .Right || move == .Word_Right
+	backward := move == .Left || move == .Word_Left
+	to_end := false
+	for _ in 0 ..< 64 {
+		next, ok := move_from(ctx, at, move)
+		if !ok {
+			// No line above the first line and none below the last one:
+			// to that end of the document.
+			if move == .Up || move == .Down {
+				move = move == .Up ? .Document_Start : .Document_End
+				continue
+			}
+			break
+		}
+		at = next
+		// After the first try, the ends go on into the text, to the
+		// first place that the caret can have.
+		#partial switch move {
+		case .Document_Start:
+			move, to_end = .Right, true
+		case .Document_End:
+			move, to_end = .Left, true
+		}
+		places := document.block_map(&ctx.doc, at.block)
+		offset, placed := document.place_of(&ctx.doc, places[:], at)
+		if !placed || document.block_at_offset(&ctx.doc, offset) != at.block {
+			delete(places)
+			if one_place {
+				break
+			}
+			continue
+		}
+		landed := document.address_in(places[:], at.block, offset)
+		if landed == from || (forward && document.before(landed, from)) || (backward && document.before(from, landed)) {
+			delete(places)
+			// The caret is at that place already.
+			if one_place || to_end {
+				break
+			}
+			continue
+		}
+		delete(ctx.caret_places)
+		ctx.caret, ctx.caret_places, ctx.caret_at = offset, places, landed
+		caret_placed(ctx)
+		ctx.caret_goal_set = vertical && goal_set
+		ctx.selection = {anchor = extend ? anchor : landed, focus = landed, active = true}
+		return true
+	}
+	if !extend && anchor != from {
+		// The caret is at an end of the document already: the selection
+		// ends all the same.
+		ctx.selection = {anchor = from, focus = from, active = true}
+		ctx.display_valid = false
+		return true
+	}
+	return false
 }
 
 // Puts the caret at the text that is nearest to a point of the page.
@@ -818,6 +1002,9 @@ mdcore_mouse :: proc "c" (handle: rawptr, x, y: f64, phase: c.int) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
+	// The caret goes with a drag, and its place is a look at the source.
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
 	hold(ctx)
 	pos, ok := layout.hit_test(&ctx.page, f32(x), y)
 	if !ok {
@@ -828,7 +1015,28 @@ mdcore_mouse :: proc "c" (handle: rawptr, x, y: f64, phase: c.int) {
 	}
 	ctx.selection.focus = pos
 	ctx.selection.active = true
+	if phase != 0 && ctx.caret >= 0 {
+		// The caret of an editor is the end of the selection that
+		// moves: the next key goes on from there. Not at a place where
+		// the source has no room for text; the caret then stays.
+		if offset, placed := document.source_of(&ctx.doc, pos); placed {
+			ctx.caret = offset
+			caret_changed(ctx)
+			ctx.selection.focus = ctx.caret_at
+		}
+	}
 	show_selection(ctx)
+}
+
+// See the header.
+@(export)
+mdcore_has_selection :: proc "c" (handle: rawptr) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	_, _, selected := document.selection_range(ctx.selection)
+	return selected
 }
 
 @(export)

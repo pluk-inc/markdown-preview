@@ -34,6 +34,7 @@ METRICS = [
     ("type_middle_cpu_ms", "A typed character in the middle of the text, the view at the end (CPU ms)"),
     ("type_end_cpu_ms", "A typed character at the end of the text, the view at the end (CPU ms)"),
     ("type_caret_cpu_ms", "A typed character at a caret that a click put in the view (CPU ms)"),
+    ("caret_move_cpu_ms", "A step of the caret to the left or to the right (CPU ms)"),
     ("select_all_ms", "Select All (ms)"),
     ("copy_all_ms", "Copy of all of the text (ms)"),
     ("full_layout_cpu_ms", "All of the document laid out, by frames through it (CPU ms)"),

@@ -245,6 +245,34 @@ int main(int argc, const char *argv[]) {
         fprintf(stderr, "the caret did not work: caret %d, moved %d, text as before %d\n", caret, moved, same);
         return 1;
     }
+    // The keys that move the caret: each step, and the frame after it.
+    // A step and the step back give the place of before, the caret of a
+    // line below is lower, and a step with the selection selects text.
+    long home = mdcore_caret_offset(ctx);
+    bool moves = true;
+    double move_start = thread_cpu_ms();
+    for (int key = 0; key < KEYS; key++) {
+        moves = mdcore_caret_move(ctx, key % 2 == 0 ? MDCORE_MOVE_LEFT : MDCORE_MOVE_RIGHT, false) && moves;
+        @autoreleasepool {
+            mdcore_draw(ctx, bottom);
+        }
+    }
+    printf("caret_move_cpu_ms %.2f\n", (thread_cpu_ms() - move_start) / KEYS);
+    moves = moves && (KEYS % 2 != 0 || mdcore_caret_offset(ctx) == home);
+    double line_x = 0, line_y = 0, below_y = 0;
+    moves = moves && mdcore_caret_rect(ctx, &line_x, &line_y, &caret_height);
+    moves = moves && mdcore_caret_move(ctx, MDCORE_MOVE_DOWN, false) && mdcore_caret_rect(ctx, &line_x, &below_y, &caret_height) && below_y > line_y;
+    moves = moves && mdcore_caret_move(ctx, MDCORE_MOVE_UP, false) && mdcore_caret_rect(ctx, &line_x, &below_y, &caret_height) && below_y == line_y;
+    moves = moves && !mdcore_has_selection(ctx) && mdcore_caret_move(ctx, MDCORE_MOVE_WORD_LEFT, true) && mdcore_has_selection(ctx);
+    moves = moves && mdcore_caret_move(ctx, MDCORE_MOVE_RIGHT, false) && !mdcore_has_selection(ctx);
+    // The two ends of the document, from the middle of it.
+    long caret_middle = mdcore_caret_offset(ctx);
+    moves = moves && mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false) && mdcore_caret_offset(ctx) < caret_middle;
+    moves = moves && !mdcore_caret_move(ctx, MDCORE_MOVE_UP, false);
+    if (!moves) {
+        fprintf(stderr, "the caret did not move as the keys say\n");
+        return 1;
+    }
     mdcore_caret_clear(ctx);
     // The estimate for the comparison below is of this text.
     mdcore_page_area(ctx, &top, &height);

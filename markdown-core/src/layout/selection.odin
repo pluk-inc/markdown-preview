@@ -504,6 +504,80 @@ caret_place :: proc(l: ^Layout, at: document.Address) -> (x, top, height: f32, p
 	return x, line.top, height, p, true
 }
 
+// The address for a caret one line above or below an address, as near
+// to the x `goal` as that line has a place. False when the caret has no
+// place, and when what is laid out has no line of text there: the
+// caret is in the first or the last line.
+caret_line_step :: proc(l: ^Layout, at: document.Address, goal: f32, down: bool) -> (next: document.Address, ok: bool) {
+	_, top, height, p := caret_place(l, at) or_return
+	here := l.parts[p].top + f64(top)
+	// A point above the line or below it; then farther, over what is
+	// between two blocks, until the nearest text is of another line.
+	probe := down ? here + f64(height) + 1 : here - 1
+	for reach := f64(2); probe >= l.origin && probe <= l.origin + l.content_height; reach = min(reach * 2, 64) {
+		found := caret_hit(l, goal, probe) or_return
+		_, ftop, _, fp := caret_place(l, found) or_return
+		y := l.parts[fp].top + f64(ftop)
+		if y > probe && found.byte > 0 {
+			// The end of a line that goes on in the next line is the
+			// start of that one, and the caret shows there. The place
+			// before the last character is in the line of the point.
+			before := found
+			before.byte = document.char_step(document.text_at(l.doc, found).bytes[:], found.byte, false)
+			if _, btop, _, bp, placed := caret_place(l, before); placed && l.parts[bp].top + f64(btop) < y {
+				found, y = before, l.parts[bp].top + f64(btop)
+			}
+		}
+		if down ? y > here : y < here {
+			return found, true
+		}
+		probe += down ? reach : -reach
+	}
+	return
+}
+
+// The address at the start or at the end of the line that a caret is
+// in. The end of a line that goes on in the next line is before the
+// space that the line ends with. False when the caret has no place.
+caret_line_end :: proc(l: ^Layout, at: document.Address, end: bool) -> (next: document.Address, ok: bool) {
+	_, _, _, p := caret_place(l, at) or_return
+	_, slot := document.locate(l.doc, at.block)
+	part := &l.parts[p]
+	b := &l.doc.parts[p].blocks[slot]
+	src := document.text_at(l.doc, at)
+	bytes := src.bytes[:]
+	next = at
+	found := line_of_byte(part, part.boxes[slot], b, src, at.byte)
+	line_end := 0
+	if found >= 0 {
+		line := part.lines[found]
+		line_end = part.paras[line.para].base + line.line.end
+	}
+	if found < 0 || at.byte > line_end {
+		// An empty line of a code block, or a text with no line: from
+		// the line break before the byte to the one after it.
+		if end {
+			rest := strings.index_byte(string(bytes[min(at.byte, len(bytes)):]), '\n')
+			next.byte = rest < 0 ? len(bytes) : at.byte + rest
+		} else {
+			next.byte = strings.last_index_byte(string(bytes[:min(at.byte, len(bytes))]), '\n') + 1
+		}
+		return next, true
+	}
+	line := part.lines[found]
+	start := part.paras[line.para].base + line.line.start
+	if !end {
+		return {at.block, at.cell, start}, true
+	}
+	next.byte = line_end
+	if line_end > start && bytes[line_end - 1] == '\n' {
+		next.byte = line_end - 1
+	} else if line_end < len(bytes) && line_end > start && bytes[line_end - 1] == ' ' {
+		next.byte = line_end - 1
+	}
+	return next, true
+}
+
 // Where a caret is in a document with no block: where the first line of
 // its first paragraph starts when text comes. `top` is from the top of
 // the page (`Layout.origin`).
