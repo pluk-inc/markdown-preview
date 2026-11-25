@@ -87,8 +87,10 @@ parse_owned :: proc(bytes: []u8) -> Document {
 // starts that is in no list and no quote. The offsets of its blocks count
 // from the start of the piece. `items` is the number of list items of
 // the document so far, and `full_size` the size of all of its source.
+// `end` and `followed`: see `count_empties`; with none, the piece is all
+// of a source.
 @(private)
-parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place = nil, places_block := 0) -> Document {
+parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place = nil, places_block := 0, end := -1, followed := false) -> Document {
 	source := string(bytes)
 	doc: Document
 	p := Parser {
@@ -144,6 +146,10 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 			}
 		}
 	}
+	// The text of the piece can end before the end of what is parsed
+	// (definitions of links after it), where a block of the document
+	// starts.
+	count_empties(&doc, end < 0 ? len(bytes) : end, followed)
 	// The parser gave offsets from the start of the source.
 	anchor(&doc, 0, len(doc.parts) - 1)
 	return doc

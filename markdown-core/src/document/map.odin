@@ -26,7 +26,7 @@ block_map :: proc(doc: ^Document, block: int) -> (places: [dynamic]Place) {
 	start := first == 0 ? 0 : block_start(doc, first)
 	end := last < doc.count ? block_start(doc, last) : len(doc.source)
 	text, _, _, _, _, lead := piece_text(doc, doc.source[start:end], start, end)
-	fresh := parse_piece(text[:], 0, len(doc.source), &places, block - first)
+	fresh := parse_piece(text[:], 0, len(doc.source), &places, block - first, lead + end - start, last < doc.count)
 	base := start - lead
 	// The piece must give the block as the document has it. It does not
 	// when the limit of the parser for the uses of definitions cuts a
@@ -255,6 +255,10 @@ place_made :: proc(places: []Place, source: []u8, content: int) {
 // has no place: a table cell with no text (the source can have no room
 // for one), a block with no text and no space after its mark.
 place_of :: proc(doc: ^Document, places: []Place, at: Address) -> (offset: int, ok: bool) {
+	// An empty paragraph after the text: its line of the source.
+	if n := empty_of(doc, at); n > 0 {
+		return empty_offset(doc, at.block, n), true
+	}
 	// The last piece of the text of the cell that starts at the address
 	// or before it.
 	found := -1
@@ -343,6 +347,18 @@ address_in :: proc(places: []Place, block, offset: int) -> (at: Address) {
 	return
 }
 
+// `address_in` for a block of a document: an offset in an empty
+// paragraph after the block, or after one, is the address of that
+// paragraph (`empties.odin`).
+address_for :: proc(doc: ^Document, places: []Place, block, offset: int) -> Address {
+	if n := empty_at(doc, block, offset); n > 0 {
+		if at, ok := empty_address(doc, block, n); ok {
+			return at
+		}
+	}
+	return address_in(places, block, offset)
+}
+
 // `place_of` with a map that is made for the call.
 source_of :: proc(doc: ^Document, at: Address) -> (offset: int, ok: bool) {
 	places := block_map(doc, at.block)
@@ -356,5 +372,5 @@ address_of :: proc(doc: ^Document, offset: int) -> Address {
 	block := block_at_offset(doc, offset)
 	places := block_map(doc, block)
 	defer delete(places)
-	return address_in(places[:], block, offset)
+	return address_for(doc, places[:], block, offset)
 }
