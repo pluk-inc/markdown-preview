@@ -115,6 +115,25 @@ These came from the maintainer. Do not undo one without asking.
   is the text of before with the range out, which the first plan had:
   that check refuses what a reader of Markdown expects. What the core
   keeps right by itself is the styles (`document.range_edit`).
+- **List marks act as in other Markdown editors** (2026-11-26, the
+  maintainer's tests against Obsidian's Live Preview). A list item keeps
+  its bullet, number, or check box also at the caret; the raw "- " does
+  not come back (a heading in an item still shows its "#"). A mark with
+  nothing after it ("-", "1.") is plain text at the caret
+  (`typed_mark`, `Shape.typed`), at the edge where it is typed, and the
+  space after it makes the item: the bullet then stands a little in from
+  that edge (`BULLET_IN`), as the "-" of a list line does there. "- [ ]"
+  with nothing after it is a bullet with the text "[ ]"; the space makes
+  the check box. Such a line is another shape with the caret in it, so
+  the core parses the blocks around it again when the caret comes or
+  goes (`reveal_block` in mdcore.odin, `bare_mark_line`), and its caret
+  place is after the mark. Return in an empty item ends the list;
+  Return after a typed mark makes no item. A list that the reader starts
+  after two empty lines below another list (Return three times) gets the
+  other mark in the same step of Undo (`new_list_mark`), since in
+  Markdown empty lines do not end a list and another mark does; one
+  empty line keeps a loose list. A step of a list is 1.6 body sizes (2.1
+  before), and a number is one line, right-aligned to its text.
 - **Undo is a history of the source in the core** (2026-11-25), not the
   undo manager of the window. A step is the bytes that went and came
   at an offset, with the caret and the selection before and after; the
@@ -486,6 +505,14 @@ Known limits, found in review and left on purpose:
 
 - One very long paragraph or one large table is laid out in one step. Code
   blocks stop between lines.
+- In a list with empty lines in it, Up from an item can put the caret at
+  the start of the line after the item above (an offset that is no place
+  of a text); text typed there goes on in that item. On main the same
+  keys put the text before the list. The moves of the caret over empty
+  lines in lists need their own look.
+- Return after a mark that is being typed ("-" and Return) makes no item:
+  the "-" stays text in the source. With the caret on another line,
+  Markdown reads it as an empty list item, which can join the list above.
 - A change in a run of many link definitions parses all of them again:
   with the 2,200 definitions of the 1 MB fixture (all that a delete of
   all of its text leaves) one change costs tens of ms, and the walk of
@@ -984,8 +1011,9 @@ The order of the next steps, from the review of the second step:
   (`Pair.line`, `close` is -1), so the edit that takes a range out does
   not keep it and does not take it for the text. The core needed one
   line for it (`pair_has`).
-- Done: the mark of a list item and of a quote, by the rule that the
-  second review gave. The parser gives the lines of a paragraph too,
+- Done (the list item part was changed on 2026-11-26, see the decision
+  on list marks): the mark of a list item and of a quote, by the rule
+  that the second review gave. The parser gives the lines of a paragraph too,
   and what the first line of a block has before its text, from its
   first byte that is no space, is its mark (`on_line_offset`): "#",
   "-", "12.", ">", "> - ". It shows for a caret in the block, not in
@@ -1507,3 +1535,16 @@ export.
   character that is no space on each side after it, next to it in the
   source; code keeps each change. The walk passes on each test
   document.
+- **2026-11-26** — List marks as in other Markdown editors. The
+  maintainer tested the marks at the caret: "-" became a bullet at once,
+  a task showed "- " after its check box, an empty line and a new "-"
+  joined the list above, and the line jumped while it was typed. Their
+  rule, checked against the values of Obsidian's Live Preview: no style
+  until the space, a bullet that stays a bullet, Return two times out of
+  a list, and nothing that moves while a mark is typed. A first form put
+  the bullet at the edge with no step in; the maintainer chose the
+  Obsidian form. The list step went from 2.1 to 1.6 body sizes, which
+  broke numbers of two digits into two lines (the maintainer saw "23"
+  with its "." under it); a number is one line now. Also found: a click
+  under the text of a short document hit no view (the page was the
+  height of its text), so an empty document could not get a caret.

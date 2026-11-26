@@ -131,9 +131,13 @@ it, so the caret has a place on each side of a mark and a delete can
 take a mark. They do not show while text is selected (but a selection
 of only characters of those marks keeps them) and while the window
 does not have the keys. The mark of a block shows in the same way, before its text, while the
-caret is in the block: the "#" of a heading, the "-" or the number of
-a list item (in the place of its bullet), and the ">" of a quote. So a
-reader changes the level of a heading, the number of an item, or makes
-a paragraph of a block with the keys. A task keeps its check box. The
-">" of the later lines of a quote, a code fence, and the line under a
-heading do not show yet.
+caret is in the block: the "#" of a heading and the ">" of a quote. So
+a reader changes the level of a heading or makes a paragraph of a quote
+with the keys. A list item keeps its bullet, number, or check box at
+the caret too, as in other Markdown editors: a mark with nothing after
+it ("-", "1.", "- [ ]") is plain text where it is typed, and the space
+after it makes the list item. Return in an item with no text ends the
+list, and a list that is started after empty lines below another list
+gets the other mark ("*" for "-", "1)" for "1."), so it stays a list of
+its own. The ">" of the later lines of a quote, a code fence, and the
+line under a heading do not show yet.

@@ -268,11 +268,12 @@ test_text_with_no_room_in_the_source_has_no_place :: proc(t: ^testing.T) {
 	testing.expect_value(t, put_at(&doc, {block = 0, cell = 3}), -1)
 	testing.expect_value(t, put_at(&doc, {block = 0, cell = 5}), -1)
 	// A block with no text has a place when its line ends with the
-	// space after its mark; with no space, text there is no item.
+	// space after its mark. A list item that is only its mark has its
+	// place after the mark: text there is a mark that is being typed.
 	items := parse("- \n- x\n\n-\n\n#\n")
 	defer destroy(&items)
 	testing.expect_value(t, put_at(&items, {block = 0}), 2)
-	testing.expect_value(t, put_at(&items, {block = 2}), -1)
+	testing.expect_value(t, put_at(&items, {block = 2}), 9)
 	testing.expect_value(t, put_at(&items, {block = 3}), -1)
 }
 

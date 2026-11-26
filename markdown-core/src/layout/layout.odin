@@ -654,10 +654,16 @@ marker_text :: proc(b: ^document.Block) -> string {
 }
 
 // The circle of a bullet, in sizes of the body text: how far across it
-// is, and the room between it and the text of its item. The sizes of
-// the bullet of a text font with the room that it has beside it: a
-// quarter of the size of the text, and a third of it to the text.
+// is (a quarter of the size of the text, as the bullet of a text font),
+// and how far it stands in from the edge of the step of its list, at
+// about the middle of where the "-" of a list line is drawn in an editor
+// that keeps it (a step of 0.75, and half of the "-").
 BULLET_SIZE :: 0.25
+BULLET_IN :: 0.8
+// The width that the number of an item has room in, left of its text, in
+// body sizes: more than a number of many digits needs, so it is one line.
+NUMBER_ROOM :: 6.0
+// The room between the number of an item and its text, in body sizes.
 BULLET_GAP :: 0.35
 // Where the middle of a bullet or of a check box is above the line
 // that the text stands on, in heights of the small letters: where the
@@ -714,7 +720,10 @@ place_task :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32, text_
 	append(&l.work.tasks, Task{bx, by, len(l.work.boxes) - 1})
 }
 
-// The bullet, number, or box of a list item, right-aligned left of x.
+// The bullet, number, or box of a list item, left of x. The bullet stands
+// a little in from the edge of the step of its list (`BULLET_IN`); a "-"
+// that is being typed is text at that edge (`list_x`), so the space that
+// makes it a list item moves it in by that much, once.
 // `text_font`: the font of the text of the first line of the item, or
 // nil for a block with no text (a rule).
 @(private)
@@ -723,8 +732,8 @@ place_marker :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32, tex
 		place_task(l, b, x, y, line_height, text_font)
 		return
 	}
-	// The mark of the item is in its text, as the caret is in the block.
-	if b.mark_shown {
+	// A mark that is being typed is the text of the block: no item yet.
+	if b.typed {
 		return
 	}
 	if b.marker == .Bullet {
@@ -736,7 +745,7 @@ place_marker :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32, tex
 		middle, baseline := marker_middle(y, line_height, text_font)
 		top := middle - across / 2
 		append(&l.work.decor, Decor {
-			x           = x - BULLET_GAP * l.m.body - across,
+			x           = x - l.m.list_indent + BULLET_IN * l.m.body,
 			y           = top,
 			w           = across,
 			h           = across,
@@ -753,7 +762,11 @@ place_marker :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32, tex
 	paras := &l.work.paras
 	append(paras, Para{block = len(l.work.boxes) - 1, len = len(label), size = l.m.body, line_height = line_height, quote = b.quote_depth > 0})
 	shape_marker(l, &paras[len(paras) - 1], label)
-	place_para(l, len(paras) - 1, x - l.m.list_indent, y, l.m.list_indent - 8, .Right)
+	// Right-aligned to the text, in one line: a number of more digits
+	// ("123.") goes further left, into the edge of the step, and never
+	// breaks into a second line.
+	room := NUMBER_ROOM * l.m.body
+	place_para(l, len(paras) - 1, x - BULLET_GAP * l.m.body - room, y, room, .Right)
 }
 
 @(private)
@@ -790,7 +803,7 @@ estimate_block :: proc(l: ^Layout, b: ^document.Block, first: bool) -> f32 {
 	// The mean width of a character, in sizes of its font.
 	CHAR :: 0.5
 	MONO_CHAR :: 0.6
-	x := f32(b.list_depth) * l.m.list_indent + f32(b.quote_depth) * l.m.quote_indent
+	x := list_x(l, b) + f32(b.quote_depth) * l.m.quote_indent
 	width := max(l.column - x, 20)
 	size := l.m.body * HEADING_SCALE[b.kind == .Heading ? b.level : 0]
 	height: f32
@@ -834,11 +847,20 @@ estimate :: proc(l: ^Layout, part, from: int) -> (height: f32) {
 	return
 }
 
+// How far the text of a block stands in from the column for its lists.
+// A mark that is being typed at the caret (`Shape.typed`) is no list
+// item yet: it stands at the edge of the step, where its line starts, and
+// moves in only at the space that makes it a list item.
+list_x :: proc(l: ^Layout, b: ^document.Block) -> f32 {
+	depth := b.typed ? b.list_depth - 1 : b.list_depth
+	return f32(max(depth, 0)) * l.m.list_indent
+}
+
 // The bars at the left of a block in a quote, one for each level.
 @(private)
 push_quote_bars :: proc(l: ^Layout, b: ^document.Block, top, height: f32) {
 	for depth in 0 ..< b.quote_depth {
-		bar_x := l.column_x + f32(b.list_depth) * l.m.list_indent + f32(depth) * l.m.quote_indent
+		bar_x := l.column_x + list_x(l, b) + f32(depth) * l.m.quote_indent
 		push_decor(l, bar_x, top, 3, height, l.style.quote_bar, 1.5)
 	}
 }
@@ -878,7 +900,7 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 		progressed = true
 		b := &blocks.blocks[slot]
 		new_lines := len(work.lines)
-		x := l.column_x + f32(b.list_depth) * l.m.list_indent + f32(b.quote_depth) * l.m.quote_indent
+		x := l.column_x + list_x(l, b) + f32(b.quote_depth) * l.m.quote_indent
 		width := l.column - (x - l.column_x)
 		heading_size := l.m.body * HEADING_SCALE[b.kind == .Heading ? b.level : 0]
 

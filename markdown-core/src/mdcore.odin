@@ -16,6 +16,7 @@ import "base"
 import "base:runtime"
 import "core:c"
 import "core:math"
+import "core:strings"
 import "core:sync"
 import "core:time"
 import "document"
@@ -657,6 +658,30 @@ in_mark :: proc(pair: document.Pair, from, to: int) -> bool {
 // block are of another text then. The caller holds the two locks.
 @(private)
 reveal_block :: proc(ctx: ^Ctx, block: int, reveal: Maybe(int)) {
+	// A line that is only a list mark is a mark that is being typed when
+	// the caret is in it, and a list item when it is not (`typed_mark`):
+	// another shape, which can join a list or end one, and the empty lines
+	// before it are other ones. The blocks around it are parsed again, as
+	// for an edit, with no change of the source.
+	if start, end := document.block_source(&ctx.doc, block); start < len(ctx.doc.source) {
+		line := document.block_start(&ctx.doc, block)
+		line_end, _ := document.line_at(ctx.doc.source, line)
+		if document.bare_mark_line(ctx.doc.source, line, line_end) {
+			same := strings.clone(string(ctx.doc.source[start:end]))
+			defer delete(same)
+			pending := document.prepare(&ctx.doc, {start, end, same}, reveal)
+			defer document.discard(&pending)
+			commit_held(ctx, &pending)
+			if ctx.caret >= 0 {
+				caret_changed(ctx)
+			}
+			if ctx.layout_valid {
+				layout.restore_place(&ctx.page, ctx.place)
+				layout_changed(ctx)
+			}
+			return
+		}
+	}
 	take_place(ctx)
 	pairs: [dynamic]document.Pair
 	places, change := document.reveal_block(&ctx.doc, block, reveal, &pairs)
@@ -1407,7 +1432,19 @@ insert :: proc(ctx: ^Ctx, utf8: [^]u8, length: c.long, kind: history.Kind) -> bo
 	if selected, changed := replace_selection(ctx, string(utf8[:length])); selected {
 		return changed
 	}
+	// A mark that is being typed (`Shape.typed`) is a list item after a
+	// space: it can join the list above it.
+	space := length == 1 && (utf8[0] == ' ' || utf8[0] == '\t')
+	was_mark := space && ctx.doc.count > 0 && ctx.caret_at.empty == 0 && document.block_at(&ctx.doc, ctx.caret_at.block).typed
 	typed(ctx, string(utf8[:length]), ctx.caret, ctx.caret)
+	// A list that the reader starts below another one, after empty
+	// lines, is a list of its own: its mark is the other one, in the same
+	// step of Undo.
+	if was_mark && ctx.doc.count > 0 && ctx.caret_at.empty == 0 {
+		if at, mark := document.new_list_mark(&ctx.doc, ctx.caret_at.block); at >= 0 {
+			change_source_held(ctx, string([]u8{mark}), [2]int{at, at + 1}, ctx.caret)
+		}
+	}
 	return true
 }
 

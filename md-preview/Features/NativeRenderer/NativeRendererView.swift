@@ -283,7 +283,12 @@ final class NativeRendererView: NSView {
         var top = 0.0, height = 0.0
         let revision = mdcore_page_area(ctx, &top, &height)
         // Not wider than the visible part: a wider page could move sideways.
-        let frame = NSRect(x: 0, y: top, width: pageWidth, height: max(height, 1))
+        // Not lower than the visible part either: the page takes the clicks,
+        // and one under the text (in an empty document, under nothing) puts
+        // the caret at the end of the text. As high as the view, it adds no
+        // room to scroll.
+        let visible = scrollView.contentView.bounds.height - scrollView.contentInsets.top - scrollView.contentInsets.bottom
+        let frame = NSRect(x: 0, y: top, width: pageWidth, height: max(height, visible, 1))
         // What is at a place of the page is the same while the layout and
         // the page area are: this runs after each key, each step of a
         // scroll, and each new layout, and most of them change neither.
