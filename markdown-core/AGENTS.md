@@ -510,9 +510,9 @@ Known limits, found in review and left on purpose:
   of a text); text typed there goes on in that item. On main the same
   keys put the text before the list. The moves of the caret over empty
   lines in lists need their own look.
-- Return after a mark that is being typed ("-" and Return) leaves an
-  empty list item, as Markdown reads the "-" then; it can join the list
-  above.
+- Return after a mark that is being typed ("-" and Return) makes no item:
+  the "-" stays text in the source. With the caret on another line,
+  Markdown reads it as an empty list item, which can join the list above.
 - A change in a run of many link definitions parses all of them again:
   with the 2,200 definitions of the 1 MB fixture (all that a delete of
   all of its text leaves) one change costs tens of ms, and the walk of

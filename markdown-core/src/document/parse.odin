@@ -622,21 +622,28 @@ line_mark :: proc(p: ^Parser, line, text: int) {
 	}
 	// To the end of the last line of the block, before its line break.
 	block_end := break_before(p.bytes, clamp(p.block.source + int(p.block.lines), text, len(p.bytes)))
-	// The mark is all that the source has before the text, with the
-	// check box of a task.
-	if p.pairs != nil && p.doc.count == p.places_block {
-		append(p.pairs, Pair{mark, text, -1, block_end, false, mark, block_end, true})
-	}
 	// A list item shows its bullet, number, or check box also at the
 	// caret: once a list, the mark of the item is no raw text again (an
 	// editor makes a list of it at the space after the mark,
 	// `typed_mark`). What comes after it shows (the "#" of a heading).
-	if p.block.marker != .None {
-		mark = after_item_mark(p, mark, text)
-		if mark >= text {
-			return
+	shown := p.block.marker != .None ? after_item_mark(p, mark, text) : mark
+	// The mark is all that the source has before the text, with the
+	// check box of a task: an edit and a selection keep to it. A caret in
+	// the block shows its part that shows, and only a mark that shows (or
+	// a line that is only a list mark, which is being typed with the
+	// caret in it) asks for that: a list item with none has an empty
+	// range, so a move of the caret in it makes no new text.
+	if p.pairs != nil && p.doc.count == p.places_block {
+		from, to := mark, block_end
+		if shown >= text && !bare_mark_line(p.bytes, line, text) {
+			from, to = block_end + 1, block_end
 		}
+		append(p.pairs, Pair{mark, text, -1, block_end, false, from, to, true})
 	}
+	if shown >= text {
+		return
+	}
+	mark = shown
 	if reveal, shows := p.reveal.?; shows && reveal >= mark && reveal <= block_end {
 		p.marking = true
 		append_text(p, string(p.bytes[mark:text]), mark, text - mark)
