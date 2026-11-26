@@ -490,12 +490,6 @@ Known limits, found in review and left on purpose:
   with the 2,200 definitions of the 1 MB fixture (all that a delete of
   all of its text leaves) one change costs tens of ms, and the walk of
   `bench.m` with its Undo check runs for many minutes on that file.
-- Control-T after the first character of a paragraph that starts with a
-  word and a space ("A paragraph") puts the space first, where Markdown
-  does not show it, and a second Control-T then has no two characters to
-  change. The walk of `bench.m` stops there on
-  `~/Desktop/Pluk/md-test-docs/empty-lines.md` (also before Undo came).
-  `document.transpose` must not move a space to the start of a text.
 - The time from a key to its frame has no program in `bench/`: it was
   measured with a build that has time stamps in the view and in the render
   loop (`BENCHMARKS.md`, "The frame for a key does not wait for the
@@ -1503,3 +1497,13 @@ export.
   40 typed characters at 15 ms (one parse for each character); the
   characters of a run are one step now, 0.33 ms. Undo of a delete of
   all of that document is 13 to 15 ms, a parse of what comes back.
+- **2026-11-26** — Control-T and spaces. The walk of `bench.m` stopped on
+  `empty-lines.md`: Control-T at the start of "A paragraph" put the
+  space first, where the page does not show it, and a second Control-T
+  had nothing to change. The first fix looked only at the two ends of
+  the text; a reviewer with the task to break it found six more ways
+  to lose a space (beside another space, at an end of a line, inside
+  the mark of bold text). A space now changes places only with a
+  character that is no space on each side after it, next to it in the
+  source; code keeps each change. The walk passes on each test
+  document.

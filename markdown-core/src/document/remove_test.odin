@@ -224,6 +224,29 @@ test_two_characters_change_places_as_wholes :: proc(t: ^testing.T) {
 		// Not over a mark of a style.
 		{"**a**b\n", 1, ""},
 		{"a\n", 1, ""},
+		// A space between two characters that are no spaces, in the
+		// line and in the source.
+		{"ab cd\n", 3, "abc d\n"},
+		// Also beside a character that the source has as an entity.
+		{"ab c&amp;\n", 3, "abc &amp;\n"},
+		{"&amp;a b\n", 2, "&amp; ab\n"},
+		// Not a space to an end of the text, to another space, to an
+		// end of a line, or into the mark of a style: it does not show
+		// there.
+		{"A b\n", 1, ""},
+		{"a B\n", 3, ""},
+		{"a b c\n", 2, ""},
+		{"a b c\n", 4, ""},
+		{"a b\nc\n", 2, ""},
+		{"a\nb c\n", 3, ""},
+		{"a b\nc\n", 3, ""},
+		{"x **a b**\n", 4, ""},
+		// Nor beside a hard line break.
+		{"ab c  \nd\n", 3, ""},
+		{"a  \nb cd\n", 3, ""},
+		{"a  \nb cd\n", 4, "a  \nbc d\n"},
+		// Code shows each space.
+		{"```\n a\n```\n", 1, "```\na \n```\n"},
 	}
 	// Not from an empty paragraph after the text.
 	{

@@ -547,6 +547,54 @@ transpose :: proc(doc: ^Document, places: []Place, at: Address, allocator := con
 	if a_end != b_start {
 		return
 	}
+	// A space that changes places has a character that is no space on
+	// each side after it, next to it in the source too. Markdown shows no
+	// space at an end of a text or of a line, one space for a run of
+	// them, and no bold text with a space inside its mark, so the page
+	// would lose the space ("A b" would be " Ab", which shows "Ab"), and
+	// the next Control-T would have no two characters. Code shows each
+	// space as it is.
+	if block_at(doc, at.block).kind != .Code {
+		// A line break in the text (of a hard break) is no neighbour
+		// either: the spaces before it are the mark of that break.
+		space :: proc(c: u8) -> bool {return c == ' ' || c == '\t' || c == '\n' || c == '\r'}
+		shown_mark :: proc(text: ^Text, i: int) -> bool {
+			for span in text.spans {
+				if .Mark in span.style && span.start <= i && i < span.end {
+					return true
+				}
+			}
+			return false
+		}
+		if space(text.bytes[first]) {
+			// To after the second character: the one after that is its
+			// right side.
+			if last >= len(text.bytes) || space(text.bytes[last]) || shown_mark(text, last) {
+				return
+			}
+			// The source can have it in another form (an entity): only
+			// where it starts counts.
+			next_start, _, _ := char_source(doc, places, at, last, char_step(text.bytes[:], last, true))
+			if next_start != b_end {
+				return
+			}
+		}
+		if space(text.bytes[middle]) {
+			// To before the first character: the one before that is its
+			// left side.
+			if first == 0 {
+				return
+			}
+			before := char_step(text.bytes[:], first, false)
+			if space(text.bytes[before]) || shown_mark(text, before) {
+				return
+			}
+			_, before_end, _ := char_source(doc, places, at, before, first)
+			if before_end != a_start {
+				return
+			}
+		}
+	}
 	out := make([]u8, b_end - a_start, allocator)
 	copy(out, doc.source[b_start:b_end])
 	copy(out[b_end - b_start:], doc.source[a_start:a_end])
