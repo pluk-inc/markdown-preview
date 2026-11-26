@@ -382,10 +382,16 @@ final class NativeRendererView: NSView {
         var point = top + 1
         var inView = false
         repeat {
+            // To under the line that was found, when it is cut at the top:
+            // the next line is the first one, also with lines that are
+            // less high than a fixed step. Else a small step, over what
+            // takes no caret.
+            var next = point + 8
             if takeCaret(at: NSPoint(x: 0, y: point)), mdcore_caret_rect(ctx, &x, &y, &height) {
                 inView = y >= top && y + height <= bottom
+                next = max(next, y + height + 1)
             }
-            point += 24
+            point = next
         } while !inView && point < bottom
         // No such place (a view with one tall thing in it): the page goes
         // to the caret that is there.
