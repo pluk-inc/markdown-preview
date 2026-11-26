@@ -409,6 +409,9 @@ test_a_typed_fence :: proc(t: ^testing.T) {
 		{"a\n\n\n```\n\nmore\n", {true, true, true, 3}, 3, .Unopened, "a\n\n\n\nmore\n"},
 		// The word after it only changed: nothing.
 		{"```js\n```\n", {true, true, true, 0}, 5, .None, ""},
+		// A fence after four spaces is a line of code, no closing fence.
+		{"```\nx\n    ```\n", {true, false, false, 0}, 13, .None, ""},
+		{"- ```\n  x\n     ```\n", {true, false, false, 0}, 18, .Closed, ""},
 		// A line of code that ends with a fence is no closing fence.
 		{"```\necho ```\n", {true, false, false, 0}, 12, .None, ""},
 	}
@@ -470,5 +473,32 @@ test_the_caret_leaves_a_closing_fence :: proc(t: ^testing.T) {
 		back, placed := source_of(&doc, landed)
 		testing.expect(t, placed)
 		testing.expect_value(t, back, caret)
+	}
+}
+
+// A text with line breaks that is put into code with no line (a paste):
+// each of its lines is a line of the code of its block.
+@(test)
+test_pasted_lines_are_lines_of_the_code :: proc(t: ^testing.T) {
+	Case :: struct {
+		source, text, after: string,
+		place, caret:        int,
+	}
+	cases := []Case {
+		{"> ```\n> ```\n", "a\nb", "> ```\n> a\n> b\n> ```\n", 6, 13},
+		{"- ```\n  ```\n", "a\nb\n", "- ```\n  a\n  b\n  \n  ```\n", 6, 16},
+		{"```\r\n```\r\n", "a\r\nb", "```\r\na\r\nb\r\n```\r\n", 5, 9},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		own, caret, ok := code_first_line(&doc, {block = 0}, c.place, c.text)
+		defer delete(own)
+		if !testing.expect(t, ok) {
+			continue
+		}
+		apply(&doc, {c.place, c.place, own})
+		testing.expect_value(t, string(doc.source), c.after)
+		testing.expect_value(t, c.place + caret, c.caret)
 	}
 }

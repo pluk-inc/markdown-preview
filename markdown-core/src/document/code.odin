@@ -53,6 +53,12 @@ closes_code :: proc(source: []u8, open, open_end, line, end: int) -> bool {
 	}
 	first, first_end, _ := fence_run(source, open, open_end)
 	from, to, _ := fence_run(source, line, end)
+	// Not with four spaces or more after the marks of its containers,
+	// which are as long as the ones before the opening fence: such a
+	// line is a line of the code.
+	if from - line > first - open + 3 {
+		return false
+	}
 	return source[from] == source[first] && to - from >= first_end - first
 }
 
@@ -96,7 +102,8 @@ code_place :: proc(doc: ^Document, block: int) -> (offset: int, needs_line: bool
 
 // The text that goes into the source for `text` typed at `offset`, when
 // that is the place of code with no line (`code_place`): a line of its
-// own for it, as a line of the code of its block. `caret` is where the
+// own for it, as a line of the code of its block, and so each line of
+// a text with line breaks. `caret` is where the
 // caret is after it, from the offset. False at each other place. The
 // text is memory of `allocator`.
 code_first_line :: proc(doc: ^Document, at: Address, offset: int, text: string, allocator := context.allocator) -> (own: string, caret: int, ok: bool) {
@@ -109,7 +116,14 @@ code_first_line :: proc(doc: ^Document, at: Address, offset: int, text: string, 
 	}
 	out := strings.builder_make(allocator)
 	write_code_lead(&out, doc, at.block)
-	strings.write_string(&out, text)
+	// Each line of a text with line breaks (a paste) is a line of the
+	// code.
+	for i := 0; i < len(text); i += 1 {
+		strings.write_byte(&out, text[i])
+		if text[i] == '\n' || (text[i] == '\r' && (i + 1 == len(text) || text[i + 1] != '\n')) {
+			write_code_lead(&out, doc, at.block)
+		}
+	}
 	caret = strings.builder_len(out)
 	strings.write_string(&out, line_ending(doc.source))
 	return strings.to_string(out), caret, true
