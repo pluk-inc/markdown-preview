@@ -1594,3 +1594,10 @@ export.
   lines, which also fixes the native page. The test copy of
   `MarkdownTOC.swift` was a copy, not a link like the others, so its
   tests did not run the app's file; it is a link now.
+- **2026-11-26** — A caret when Edit Mode starts. The maintainer asked
+  that Edit Mode needs no click before the first key. The host puts the
+  caret at the start of the first text that shows
+  (`NativeRendererView.placeCaretInView`: the first place under the top
+  edge that takes a caret), with no scroll. Checked on the hidden display
+  with a typed key right after Command-E: a short document, an empty one,
+  and the 1 MB fixture two pages down.

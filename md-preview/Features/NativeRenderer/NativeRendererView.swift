@@ -367,6 +367,29 @@ final class NativeRendererView: NSView {
             updateCaretIndicator()
         }
     }
+    /// Puts the caret at the start of the first text that shows, when the
+    /// view has none: Edit mode starts with a place to type, with no click
+    /// first. The page does not scroll: the place is one that shows.
+    func placeCaretInView() {
+        guard isEditable, !hasCaret else { return }
+        let top = scrollY + scrollView.contentInsets.top
+        let bottom = scrollY + scrollView.contentView.bounds.height
+        // From a little under the top edge, so the line is all in view,
+        // down to the first place that takes a caret (a table cell with no
+        // text has none).
+        var y = top + 24
+        repeat {
+            if mdcore_caret_set(ctx, 0, y) {
+                hasCaret = true
+                markedText = nil
+                break
+            }
+            y += 24
+        } while y < bottom
+        updateCaretIndicator()
+        setNeedsDraw()
+    }
+
     /// The reader changed the text (`DocumentEditor`).
     var contentDidChange: (() -> Void)?
     /// The reader pressed Escape in Edit mode (`DocumentEditor`).
