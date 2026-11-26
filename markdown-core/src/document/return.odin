@@ -77,15 +77,19 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address, allocator := co
 			quotes += int(source[lead] == '>')
 			lead += 1
 		}
+		// With no line of code yet (`code_place`): two lines of it, and
+		// the caret in the second one.
+		if place, needs_line, empty := code_place(doc, at.block); empty && needs_line && place == offset {
+			write_code_lead(&out, doc, at.block)
+			strings.write_string(&out, nl)
+			write_code_lead(&out, doc, at.block)
+			caret = offset + strings.builder_len(out)
+			strings.write_string(&out, nl)
+			return done(&out, offset, offset, caret)
+		}
 		strings.write_string(&out, nl)
 		strings.write_bytes(&out, source[line:lead])
-		caret = offset + len(nl) + lead - line
-		// With no line of code yet, the line after the caret is the one
-		// of the closing fence: the new line gets a line break of its own.
-		if code_needs_line(doc, at, offset) {
-			strings.write_string(&out, nl)
-		}
-		return done(&out, offset, offset, caret)
+		return done(&out, offset, offset, offset + len(nl) + lead - line)
 	}
 	if !at_end {
 		// In the text: the spaces around the caret and one line break

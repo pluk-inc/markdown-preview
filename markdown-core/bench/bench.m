@@ -96,12 +96,16 @@ static const char *list_caret_check(void) {
     return same ? NULL : "text typed after Up from a list mark is not where the caret is";
 }
 
-// A code block that is typed: the fence, Return, and the code, at the end
-// of a document; and typed text and Return in a block with no line of
-// code between its two fences. Returns what is wrong, or NULL.
+// A code block that is typed, with the keys of a reader: the fence,
+// Return, the code, and a closing fence, which takes the caret out of the
+// code (a second block that is typed after it is a block of its own);
+// the same in a list item; and typed text and Return in a block with no
+// line of code between its two fences. Returns what is wrong, or NULL.
 static const char *typed_code_check(void) {
     struct { const char *start; double click_y; const char *keys; const char *want; } cases[] = {
-        {"Text\n", -1, "\n```\nab\nc", "Text\n\n```\nab\nc\n"},
+        {"Text\n", -1, "\n```\nab\nc", "Text\n\n```\nab\nc\n```\n"},
+        {"Text\n", -1, "\n```\nx\n``````\nz\n```q", "Text\n\n```\nx\n```\n\n```\nz\n```\n\nq\n"},
+        {"- item\n", -1, "\n```\nx\ny", "- item\n- ```\n  x\n  y\n  ```\n"},
         {"Text\n\n```\n```\n\nMore\n", 76, "z\nw", "Text\n\n```\nz\nw\n```\n\nMore\n"},
         {"Text\n\n```\n```\n\nMore\n", 76, "\nq", "Text\n\n```\n\nq\n```\n\nMore\n"},
     };
@@ -112,7 +116,7 @@ static const char *typed_code_check(void) {
         @autoreleasepool { mdcore_draw(ctx, 0); }
         if (cases[i].click_y < 0) {
             mdcore_caret_set(ctx, 0, 0);
-            mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_END, false);
+            mdcore_caret_move(ctx, MDCORE_MOVE_LINE_END, false);
         } else {
             mdcore_caret_set(ctx, 100, cases[i].click_y);
         }
@@ -123,8 +127,13 @@ static const char *typed_code_check(void) {
         long n = 0;
         const char *out = mdcore_source(ctx, &n);
         bool same = n == (long)strlen(cases[i].want) && memcmp(out, cases[i].want, (size_t)n) == 0;
+        // Undo takes each step back, to the source at the start.
+        while (mdcore_can_undo(ctx)) mdcore_undo(ctx);
+        out = mdcore_source(ctx, &n);
+        bool back = n == (long)strlen(cases[i].start) && memcmp(out, cases[i].start, (size_t)n) == 0;
         mdcore_destroy(ctx);
         if (!same) return "text typed in a new code block is not in its code";
+        if (!back) return "Undo after a typed code block does not give the source back";
     }
     return NULL;
 }

@@ -278,25 +278,32 @@ test_empty_lines_stay_before_a_typed_mark :: proc(t: ^testing.T) {
 	testing.expect_value(t, int(block_at(&plain, plain.count - 2).empties), 0)
 }
 
-// Code in a fence with no line of code has a place for a caret: where
-// its first line starts. Text there needs a line break of its own when
-// the next line is the closing fence.
+// Code in a fence with no line of code has a place for a caret, and
+// text there is a line of the code of its block: with the indent of a
+// list item and the mark of a quote.
 @(test)
-test_code_with_no_line_has_a_place_for_a_caret :: proc(t: ^testing.T) {
+test_code_with_no_line_takes_text :: proc(t: ^testing.T) {
 	Case :: struct {
 		source: string,
 		block:  int,
 		place:  int, // -1 for none
-		needs:  bool,
+		after:  string, // with "x" typed at the place
+		caret:  int,
 	}
 	cases := []Case {
-		{"```\n```\n", 0, 4, true},
-		{"x\n\n~~~js\r\n~~~\r\n", 1, 10, true},
-		// The fence is not closed: the place is the end of the source,
-		// or an empty line of the code.
-		{"```\n", 0, 4, false},
+		{"```\n```\n", 0, 4, "```\nx\n```\n", 5},
+		{"x\r\n\r\n~~~js\r\n~~~\r\n", 1, 12, "x\r\n\r\n~~~js\r\nx\r\n~~~\r\n", 13},
+		// The fence is not closed: the end of the source.
+		{"```\n", 0, 4, "```\nx\n", 5},
+		// An empty line of code is the place.
+		{"```\n\n```\n", 0, 4, "```\nx\n```\n", 5},
+		// In a list item and in a quote.
+		{"- item\n\n  ```\n  ```\n", 1, 14, "- item\n\n  ```\n  x\n  ```\n", 17},
+		{"- ```\n- b\n", 0, 6, "- ```\n  x\n- b\n", 9},
+		{"> ```\n> ```\n", 0, 6, "> ```\n> x\n> ```\n", 9},
+		{"> ```\n>\n> ```\n", 0, 7, "> ```\n>x\n> ```\n", 8},
 		// No line break after the fence: no line for code yet.
-		{"```", 0, -1, false},
+		{"```", 0, -1, "", 0},
 	}
 	for c in cases {
 		doc := parse(c.source)
@@ -305,20 +312,100 @@ test_code_with_no_line_has_a_place_for_a_caret :: proc(t: ^testing.T) {
 		testing.expect_value(t, block_at(&doc, c.block).kind, Block_Kind.Code)
 		offset, placed := source_of(&doc, at)
 		testing.expect_value(t, placed, c.place >= 0)
-		if placed {
-			testing.expect_value(t, offset, c.place)
-			testing.expect_value(t, code_needs_line(&doc, at, offset), c.needs)
+		if !placed {
+			continue
 		}
-		// Each place in the line of the fence is in that line, and the
-		// first line of the code is not.
-		start := block_start(&doc, c.block)
-		end, content := fence_line(doc.source, start)
-		testing.expect(t, in_fence_line(&doc, at, start) && in_fence_line(&doc, at, end))
-		testing.expect(t, content == end || !in_fence_line(&doc, at, content))
+		testing.expect_value(t, offset, c.place)
+		text, caret := "x", 1
+		own, own_caret, first := code_first_line(&doc, at, offset, "x")
+		defer delete(own)
+		if first {
+			text, caret = own, own_caret
+		}
+		apply(&doc, {offset, offset, text})
+		testing.expect_value(t, string(doc.source), c.after)
+		testing.expect_value(t, offset + caret, c.caret)
 	}
-	// Code with a line, and other blocks, have no such place.
+}
+
+// Return in the line of a fence that was typed starts the first line of
+// the code, and closes code that has no closing fence.
+@(test)
+test_return_in_the_line_of_a_fence :: proc(t: ^testing.T) {
+	Case :: struct {
+		source: string,
+		block:  int,
+		offset: int,
+		after:  string,
+		caret:  int,
+	}
+	cases := []Case {
+		{"```\n", 0, 3, "```\n\n```\n", 4},
+		{"```js", 0, 5, "```js\n\n```", 6},
+		{"a\n\n```\n\nmore\n", 1, 6, "a\n\n```\n\n```\n\nmore\n", 7},
+		{"- ```\n", 0, 5, "- ```\n  \n  ```\n", 8},
+		{"> ```\n", 0, 5, "> ```\n> \n> ```\n", 8},
+		// Code with a closing fence gets a line only.
+		{"```\n```\n", 0, 3, "```\n\n```\n", 4},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		text, caret, ok := fence_return(&doc, {block = c.block}, c.offset)
+		defer delete(text)
+		if !testing.expect(t, ok) {
+			continue
+		}
+		apply(&doc, {c.offset, c.offset, text})
+		testing.expect_value(t, string(doc.source), c.after)
+		testing.expect_value(t, c.offset + caret, c.caret)
+		// The caret is in the code, at a place of its own.
+		landed := address_of(&doc, c.offset + caret)
+		back, placed := source_of(&doc, landed)
+		testing.expect(t, placed)
+		testing.expect_value(t, back, c.offset + caret)
+	}
+	// Not in the code, and not in another block.
 	doc := parse("```\nab\n```\n\ntext\n")
 	defer destroy(&doc)
-	testing.expect(t, !code_needs_line(&doc, {block = 0}, 4))
-	testing.expect(t, !in_fence_line(&doc, {block = 1}, 13))
+	_, _, in_code := fence_return(&doc, {block = 0, byte = 1}, 5)
+	_, _, in_text := fence_return(&doc, {block = 1}, 13)
+	testing.expect(t, !in_code && !in_text)
+}
+
+// A caret in the line of the closing fence of its code goes to an empty
+// paragraph after the code; a closing fence that was typed before the
+// one that was there goes.
+@(test)
+test_the_caret_leaves_a_closing_fence :: proc(t: ^testing.T) {
+	// The fence that closed the code before is the line after.
+	doc := parse("```\nx\n```\n```\n\nmore\n")
+	defer destroy(&doc)
+	start, end, twice := typed_close_range(&doc, {block = 0, byte = 1}, 9)
+	testing.expect(t, twice)
+	testing.expect_value(t, [2]int{start, end}, [2]int{6, 10})
+	apply(&doc, {start, end, ""})
+	testing.expect_value(t, string(doc.source), "```\nx\n```\n\nmore\n")
+	// An empty line is after the code: the caret goes there.
+	at, text, caret, ok := code_exit(&doc, {block = 0, byte = 1}, 9)
+	defer delete(text)
+	testing.expect(t, ok && len(text) == 0)
+	testing.expect_value(t, caret, 10)
+	_ = at
+	// None: one is made.
+	last := parse("```\nx\n```\n")
+	defer destroy(&last)
+	_, _, once := typed_close_range(&last, {block = 0, byte = 1}, 9)
+	testing.expect(t, !once)
+	at2, text2, caret2, ok2 := code_exit(&last, {block = 0, byte = 1}, 9)
+	defer delete(text2)
+	if testing.expect(t, ok2) {
+		apply(&last, {at2, at2, text2})
+		testing.expect_value(t, string(last.source), "```\nx\n```\n\n")
+		testing.expect_value(t, caret2, 10)
+		testing.expect(t, empty_of(&last, address_of(&last, caret2)) > 0)
+	}
+	// Not for a caret in the code.
+	_, _, _, in_code := code_exit(&last, {block = 0, byte = 1}, 5)
+	testing.expect(t, !in_code)
 }
