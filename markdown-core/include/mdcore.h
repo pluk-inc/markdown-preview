@@ -263,6 +263,17 @@ bool mdcore_can_redo(void *ctx);
 // edits. The pointer is good until the next call of this.
 const char *mdcore_source(void *ctx, long *length);
 
+// The headings of the document, in their order, for an outline: each
+// heading as its level (1 byte, 1 to 6), the source line where it starts
+// (4 bytes, little-endian, from 1), the length of its text (4 bytes,
+// little-endian), and its text, UTF-8, as it shows with no Markdown
+// marks. Empty headings are in it. Headings in front matter (a first line
+// of "---" or "+++" up to the line that closes it) are not: the app
+// shows front matter as its own table. The core reads its records for
+// this, with no parse, so a host can ask after each change. The pointer
+// is good until the next call of this.
+const unsigned char *mdcore_outline(void *ctx, long *length);
+
 // Sets the view size and backing scale. Starts a new layout when the
 // document, the style, or the width changed; the next frame lays out
 // what it shows. A new scale only makes the glyph bitmaps again.

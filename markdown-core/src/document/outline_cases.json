@@ -1,0 +1,253 @@
+[
+ {
+  "source": "# One\n\ntext\n\n## Two **bold** _em_ `code` [link](https://e.com) ![alt](i.png)\n",
+  "headings": [
+   {
+    "level": 1,
+    "line": 1,
+    "title": "One"
+   },
+   {
+    "level": 2,
+    "line": 5,
+    "title": "Two bold em code link alt"
+   }
+  ]
+ },
+ {
+  "source": "Top\n===\n\nSub\n---\n\nTwo lines\nof a setext\n===\n",
+  "headings": [
+   {
+    "level": 1,
+    "line": 1,
+    "title": "Top"
+   },
+   {
+    "level": 2,
+    "line": 4,
+    "title": "Sub"
+   },
+   {
+    "level": 1,
+    "line": 7,
+    "title": "Two lines of a setext"
+   }
+  ]
+ },
+ {
+  "source": "#\n\n- #\n\n> #\n\n #\n\n## \n",
+  "headings": [
+   {
+    "level": 1,
+    "line": 1,
+    "title": ""
+   },
+   {
+    "level": 1,
+    "line": 3,
+    "title": ""
+   },
+   {
+    "level": 1,
+    "line": 5,
+    "title": ""
+   },
+   {
+    "level": 1,
+    "line": 7,
+    "title": ""
+   },
+   {
+    "level": 2,
+    "line": 9,
+    "title": ""
+   }
+  ]
+ },
+ {
+  "source": "> ### In a quote\n\n- #### In an item\n  - ##### In an inner item\n",
+  "headings": [
+   {
+    "level": 3,
+    "line": 1,
+    "title": "In a quote"
+   },
+   {
+    "level": 4,
+    "line": 3,
+    "title": "In an item"
+   },
+   {
+    "level": 5,
+    "line": 4,
+    "title": "In an inner item"
+   }
+  ]
+ },
+ {
+  "source": "```\n# not a heading\n```\n\n    # not either\n\n# yes\n",
+  "headings": [
+   {
+    "level": 1,
+    "line": 7,
+    "title": "yes"
+   }
+  ]
+ },
+ {
+  "source": "- ```\n    foo\n  ```\n\n## After a fence in a list\n",
+  "headings": [
+   {
+    "level": 2,
+    "line": 5,
+    "title": "After a fence in a list"
+   }
+  ]
+ },
+ {
+  "source": "# Closing hashes ##\n\n## Escaped \\# hash\n\n### Entity &amp; &copy;\n",
+  "headings": [
+   {
+    "level": 1,
+    "line": 1,
+    "title": "Closing hashes"
+   },
+   {
+    "level": 2,
+    "line": 3,
+    "title": "Escaped # hash"
+   },
+   {
+    "level": 3,
+    "line": 5,
+    "title": "Entity & ©"
+   }
+  ]
+ },
+ {
+  "source": "---\ntitle: x\n---\n\n# Body\n",
+  "headings": [
+   {
+    "level": 1,
+    "line": 5,
+    "title": "Body"
+   }
+  ]
+ },
+ {
+  "source": "+++\ntitle = 'x'\n+++\n# Body\n",
+  "headings": [
+   {
+    "level": 1,
+    "line": 4,
+    "title": "Body"
+   }
+  ]
+ },
+ {
+  "source": "---\na: b\n...\n# Body\n",
+  "headings": [
+   {
+    "level": 1,
+    "line": 4,
+    "title": "Body"
+   }
+  ]
+ },
+ {
+  "source": "---\n# No closing line\n",
+  "headings": [
+   {
+    "level": 1,
+    "line": 2,
+    "title": "No closing line"
+   }
+  ]
+ },
+ {
+  "source": "---\na: b\n---\n# After a byte order mark\n",
+  "headings": [
+   {
+    "level": 1,
+    "line": 4,
+    "title": "After a byte order mark"
+   }
+  ]
+ },
+ {
+  "source": "\r\n# CRLF\r\n\r\n## Two\r\n",
+  "headings": [
+   {
+    "level": 1,
+    "line": 2,
+    "title": "CRLF"
+   },
+   {
+    "level": 2,
+    "line": 4,
+    "title": "Two"
+   }
+  ]
+ },
+ {
+  "source": "# A\n## B\n### C\n## D\n# E\n",
+  "headings": [
+   {
+    "level": 1,
+    "line": 1,
+    "title": "A"
+   },
+   {
+    "level": 2,
+    "line": 2,
+    "title": "B"
+   },
+   {
+    "level": 3,
+    "line": 3,
+    "title": "C"
+   },
+   {
+    "level": 2,
+    "line": 4,
+    "title": "D"
+   },
+   {
+    "level": 1,
+    "line": 5,
+    "title": "E"
+   }
+  ]
+ },
+ {
+  "source": "Text\n# Heading right after a paragraph\nmore text\n",
+  "headings": [
+   {
+    "level": 1,
+    "line": 2,
+    "title": "Heading right after a paragraph"
+   }
+  ]
+ },
+ {
+  "source": "# Heading with <b>html</b> in it\n",
+  "headings": [
+   {
+    "level": 1,
+    "line": 1,
+    "title": "Heading with <b>html</b> in it",
+    "native_title": "Heading with html in it"
+   }
+  ]
+ },
+ {
+  "source": "# Hard  \nbreak\n",
+  "headings": [
+   {
+    "level": 1,
+    "line": 1,
+    "title": "Hard"
+   }
+  ]
+ }
+]

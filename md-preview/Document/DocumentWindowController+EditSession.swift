@@ -107,6 +107,14 @@ extension DocumentWindowController {
 
             let revision = self.editorChangeRevision
             let fileURL = self.currentFileURL
+            // An editor that has the outline with no parse (the native
+            // one): with only the outline open, no text is fetched.
+            let needsOutline = self.mainSplit.map { $0.isSidebarVisible && $0.sidebarMode == .outline } ?? false
+            let outline = needsOutline ? editor.currentOutline() : nil
+            if let outline, self.mainSplit?.isInspectorVisible != true {
+                self.mainSplit?.applyLiveSidebarUpdates(outline: outline, metadata: nil, fileURL: fileURL)
+                return
+            }
             editor.fetchMarkdown { [weak self, weak editor] markdown in
                 guard let self, let editor, let markdown,
                       self.inspectorRefreshSessionID == sessionID,
@@ -114,7 +122,8 @@ extension DocumentWindowController {
                       self.currentFileURL == fileURL,
                       self.mainSplit?.documentEditor === editor else { return }
                 self.computeVisibleSidebars(markdown: markdown, fileURL: fileURL,
-                                            revision: revision, sessionID: sessionID)
+                                            revision: revision, sessionID: sessionID,
+                                            outline: outline)
             }
         }
         pendingInspectorRefresh = work
@@ -123,8 +132,10 @@ extension DocumentWindowController {
 
     /// Parse immutable editor text off the main thread; touch UI only when the
     /// result still belongs to the active revision, file, and editing session.
+    /// `outline`: the editor's own, which takes the place of a parse.
     private func computeVisibleSidebars(markdown: String, fileURL: URL?,
-                                        revision: Int, sessionID: UUID) {
+                                        revision: Int, sessionID: UUID,
+                                        outline known: [TOCItem]? = nil) {
         guard let split = mainSplit else { return }
         let needsOutline = split.isSidebarVisible && split.sidebarMode == .outline
         let needsMetadata = split.isInspectorVisible
@@ -132,7 +143,7 @@ extension DocumentWindowController {
 
         pendingInspectorComputation?.cancel()
         let work = DispatchWorkItem { @Sendable [weak self] in
-            let outline = needsOutline ? MarkdownTOC.parse(markdown) : nil
+            let outline = needsOutline ? known ?? MarkdownTOC.parse(markdown) : nil
             let metadata = needsMetadata ? DocumentMetadata.make(url: fileURL, markdown: markdown) : nil
             DispatchQueue.main.async {
                 guard let self,

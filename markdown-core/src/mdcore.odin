@@ -115,6 +115,7 @@ Ctx :: struct {
 	// where those keys started. Each other move of the caret ends it.
 	caret_goal:      Maybe(f32),
 	source_out:      [dynamic]u8, // the source, for `mdcore_source`
+	outline_out:     [dynamic]u8, // the headings, for `mdcore_outline`
 	// Held for all of a change of the source of the document, before
 	// `lock`. A frame does not take it.
 	source_lock:     sync.Mutex,
@@ -293,6 +294,7 @@ mdcore_destroy :: proc "c" (handle: rawptr) {
 	text.glyph_buffer_destroy(&ctx.glyph_buffer)
 	delete(ctx.clipboard)
 	delete(ctx.source_out)
+	delete(ctx.outline_out)
 	delete(ctx.caret_places)
 	delete(ctx.caret_pairs)
 	delete(ctx.gone)
@@ -1633,6 +1635,35 @@ mdcore_source :: proc "c" (handle: rawptr, length: ^c.long) -> [^]u8 {
 	append(&ctx.source_out, ..ctx.doc.source)
 	length^ = c.long(len(ctx.source_out))
 	return raw_data(ctx.source_out)
+}
+
+// The headings of the document, for an outline. See the header.
+@(export)
+mdcore_outline :: proc "c" (handle: rawptr, length: ^c.long) -> [^]u8 {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	titles := make([dynamic]u8, context.temp_allocator)
+	headings := make([dynamic]document.Heading, context.temp_allocator)
+	document.outline(&ctx.doc, &titles, &headings)
+	// For each heading: its level (1 byte), its line and the length of
+	// its text (4 bytes each, little-endian), then its text.
+	out := &ctx.outline_out
+	clear(out)
+	reserve(out, len(titles) + 9 * len(headings))
+	put :: proc(out: ^[dynamic]u8, value: int) {
+		v := u32(value)
+		append(out, u8(v), u8(v >> 8), u8(v >> 16), u8(v >> 24))
+	}
+	for h in headings {
+		append(out, u8(h.level))
+		put(out, h.line)
+		put(out, h.title[1] - h.title[0])
+		append(out, ..titles[h.title[0]:h.title[1]])
+	}
+	length^ = c.long(len(out))
+	return raw_data(out^)
 }
 
 // See the header.

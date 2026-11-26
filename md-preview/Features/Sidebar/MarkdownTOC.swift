@@ -21,10 +21,23 @@ nonisolated enum MarkdownTOC {
         return buildTree(headings)
     }
 
-    private struct RawHeading {
+    /// A heading in the order of the document, before the tree.
+    struct RawHeading: Equatable {
         let level: Int
         let title: String
         let sourceLine: Int
+    }
+
+    /// The tree of headings that another reader of the text found (the
+    /// native renderer's core), the same as `parse` builds.
+    static func tree(_ headings: [RawHeading]) -> [TOCItem] {
+        buildTree(headings)
+    }
+
+    /// The headings of a text in order, with no tree: for a check that
+    /// another reader finds the same ones.
+    static func headings(_ markdown: String) -> [RawHeading] {
+        extractHeadings(from: markdown)
     }
 
     private static func extractHeadings(from markdown: String) -> [RawHeading] {
