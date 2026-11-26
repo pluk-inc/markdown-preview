@@ -7,6 +7,22 @@ import "core:strings"
 // does in the line of a fence that was typed, and how the caret gets out
 // of the block after a closing fence that was typed.
 
+// Where the line of the fence of code starts. Not always where the block
+// starts: the first block of a quote or of a list item starts at the
+// line of their mark, which can be a line before the fence (">" alone).
+fence_start :: proc(doc: ^Document, block: int) -> int {
+	start := block_start(doc, block)
+	end := min(start + int(block_at(doc, block).lines), len(doc.source))
+	for at := start; at < end; {
+		line_end, next := line_at(doc.source, at)
+		if _, _, found := fence_run(doc.source, at, line_end); found {
+			return at
+		}
+		at = next
+	}
+	return start
+}
+
 // The run of a fence in a line from `line` to `end`: three or more "`"
 // or "~" after the marks of the containers of the block (the indent,
 // the ">" of a quote, the mark of a list item). False for a line with
@@ -46,16 +62,17 @@ bare_fence :: proc(source: []u8, line, end: int) -> bool {
 // each quote as it is.
 @(private)
 write_code_lead :: proc(out: ^strings.Builder, doc: ^Document, block: int) {
-	start := block_start(doc, block)
+	start := fence_start(doc, block)
 	end, _ := line_at(doc.source, start)
 	from, _, _ := fence_run(doc.source, start, end)
 	for ch, i in doc.source[start:from] {
 		strings.write_byte(out, ch == '>' || ch == '\t' ? ch : ' ')
-		// A ">" before the mark of a list item gets a space when it has
-		// none: the parser takes the first space after a ">" for the
-		// quote, not for the indent of the item. Not before a ">" or a
-		// tab, which a space would move to another column.
-		if next := start + i + 1; ch == '>' && next < from && doc.source[next] != ' ' && doc.source[next] != '\t' && doc.source[next] != '>' {
+		// A ">" before the fence or before the mark of a list item gets
+		// a space when it has none: the parser takes the first space
+		// after a ">" for the quote, not for the indent of the item or
+		// of the code. Not before a ">" or a tab, which a space would
+		// move to another column.
+		if next := start + i + 1; ch == '>' && (next >= from || (doc.source[next] != ' ' && doc.source[next] != '\t' && doc.source[next] != '>')) {
 			strings.write_byte(out, ' ')
 		}
 	}
@@ -72,14 +89,14 @@ code_place :: proc(doc: ^Document, block: int) -> (offset: int, needs_line: bool
 	if !b.fenced || len(b.text.bytes) > 0 {
 		return
 	}
-	start := block_start(doc, block)
+	start := fence_start(doc, block)
 	end, content := line_at(doc.source, start)
 	if content == end {
 		return
 	}
 	// A line of the block after the fence that is not its closing fence:
 	// an empty line of code.
-	if close, _, closed := code_close(doc, block); content < start + int(b.lines) && !(closed && close == content) {
+	if close, _, closed := code_close(doc, block); content < block_start(doc, block) + int(b.lines) && !(closed && close == content) {
 		line_end, _ := line_at(doc.source, content)
 		return line_end, false, true
 	}
@@ -145,7 +162,7 @@ code_before :: proc(doc: ^Document, at: Address, offset: int) -> (before: Code_B
 		return
 	}
 	line, _, closed := code_close(doc, at.block)
-	first_end, content := line_at(doc.source, block_start(doc, at.block))
+	first_end, content := line_at(doc.source, fence_start(doc, at.block))
 	return {true, closed, closed && line == content && offset <= first_end, len(doc.source) - first_end}
 }
 
@@ -191,7 +208,7 @@ typed_fence :: proc(doc: ^Document, before: Code_Before, at: Address, offset: in
 	if at.empty != 0 || !block_at(doc, at.block).fenced {
 		return
 	}
-	first := block_start(doc, at.block)
+	first := fence_start(doc, at.block)
 	first_end, _ := line_at(doc.source, first)
 	from, to, _ := fence_run(doc.source, first, first_end)
 	if offset >= to && offset <= first_end {
@@ -249,7 +266,7 @@ fence_return :: proc(doc: ^Document, at: Address, offset: int, allocator := cont
 	if at.empty != 0 || !block_at(doc, at.block).fenced {
 		return
 	}
-	start := block_start(doc, at.block)
+	start := fence_start(doc, at.block)
 	end, _ := line_at(doc.source, start)
 	from, to := fence_run(doc.source, start, end) or_return
 	if offset < to || offset > end {

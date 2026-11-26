@@ -301,6 +301,9 @@ test_code_with_no_line_takes_text :: proc(t: ^testing.T) {
 		// In a list item and in a quote.
 		{"- item\n\n  ```\n  ```\n", 1, 14, "- item\n\n  ```\n  x\n  ```\n", 17},
 		{"- ```\n- b\n", 0, 6, "- ```\n  x\n- b\n", 9},
+		// The mark of the quote is on a line before the fence.
+		{">\n> ```\n> ```\n", 0, 8, ">\n> ```\n> x\n> ```\n", 11},
+		{">```\n>```\n", 0, 5, ">```\n> x\n>```\n", 8},
 		{">- ```\n>   ```\n", 0, 7, ">- ```\n>   x\n>   ```\n", 12},
 		{"> ```\n> ```\n", 0, 6, "> ```\n> x\n> ```\n", 9},
 		{"> ```\n>\n> ```\n", 0, 7, "> ```\n>x\n> ```\n", 8},
@@ -349,7 +352,8 @@ test_return_in_the_line_of_a_fence :: proc(t: ^testing.T) {
 		{"> ```\n", 0, 5, "> ```\n> \n> ```\n", 8},
 		// The marks of two quotes and a tab are as they are.
 		{">>\t```\n", 0, 6, ">>\t```\n>>\t\n>>\t```\n", 10},
-		{">```\n", 0, 4, ">```\n>\n>```\n", 6},
+		{">```\n", 0, 4, ">```\n> \n> ```\n", 7},
+		{">\n> ```\n", 0, 7, ">\n> ```\n> \n> ```\n", 10},
 		// Code with a closing fence gets a line only.
 		{"```\n```\n", 0, 3, "```\n\n```\n", 4},
 	}
@@ -518,6 +522,7 @@ test_pasted_lines_are_lines_of_the_code :: proc(t: ^testing.T) {
 	}
 	cases := []Case {
 		{"> ```\n> ```\n", "a\nb", "> ```\n> a\n> b\n> ```\n", 6, 13},
+		{">```\n>```\n", "    pass", ">```\n>     pass\n>```\n", 5, 15},
 		{"- ```\n  ```\n", "a\nb\n", "- ```\n  a\n  b\n  \n  ```\n", 6, 16},
 		{"```\r\n```\r\n", "a\r\nb", "```\r\na\r\nb\r\n```\r\n", 5, 9},
 	}

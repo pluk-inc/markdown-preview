@@ -189,7 +189,7 @@ block_places :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs:
 	// of a NUL byte) at its own start.
 	content := block_start(doc, block) - base
 	if block_at(doc, block).fenced {
-		_, content = line_at(text, content)
+		_, content = line_at(text, fence_start(doc, block) - base)
 	}
 	place_made(places[:], text, content)
 	for &place in places^ {
