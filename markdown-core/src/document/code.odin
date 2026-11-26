@@ -106,7 +106,8 @@ code_place :: proc(doc: ^Document, block: int) -> (offset: int, needs_line: bool
 // The text that goes into the source for `text` typed at `offset`, when
 // that is the place of code with no line (`code_place`): a line of its
 // own for it, as a line of the code of its block, and so each line of
-// a text with line breaks. `caret` is where the
+// a text with line breaks. In an empty line of code that ends with the
+// mark of a quote, the text after the space of that quote. `caret` is where the
 // caret is after it, from the offset. False at each other place. The
 // text is memory of `allocator`.
 code_first_line :: proc(doc: ^Document, at: Address, offset: int, text: string, allocator := context.allocator) -> (own: string, caret: int, ok: bool) {
@@ -114,8 +115,17 @@ code_first_line :: proc(doc: ^Document, at: Address, offset: int, text: string, 
 		return
 	}
 	place, needs_line := code_place(doc, at.block) or_return
-	if !needs_line || place != offset {
+	if place != offset {
 		return
+	}
+	if !needs_line {
+		// An empty line of code that is only the mark of a quote: the
+		// space of the quote first, or the parser takes the first space
+		// of the text for it.
+		if offset == 0 || doc.source[offset - 1] != '>' || block_at(doc, at.block).quote_depth == 0 {
+			return
+		}
+		return strings.concatenate({" ", text}, allocator), len(text) + 1, true
 	}
 	out := strings.builder_make(allocator)
 	write_code_lead(&out, doc, at.block)

@@ -306,7 +306,7 @@ test_code_with_no_line_takes_text :: proc(t: ^testing.T) {
 		{">```\n>```\n", 0, 5, ">```\n> x\n>```\n", 8},
 		{">- ```\n>   ```\n", 0, 7, ">- ```\n>   x\n>   ```\n", 12},
 		{"> ```\n> ```\n", 0, 6, "> ```\n> x\n> ```\n", 9},
-		{"> ```\n>\n> ```\n", 0, 7, "> ```\n>x\n> ```\n", 8},
+		{"> ```\n>\n> ```\n", 0, 7, "> ```\n> x\n> ```\n", 9},
 		// No line break after the fence: no line for code yet.
 		{"```", 0, -1, "", 0},
 	}
@@ -523,6 +523,7 @@ test_pasted_lines_are_lines_of_the_code :: proc(t: ^testing.T) {
 	cases := []Case {
 		{"> ```\n> ```\n", "a\nb", "> ```\n> a\n> b\n> ```\n", 6, 13},
 		{">```\n>```\n", "    pass", ">```\n>     pass\n>```\n", 5, 15},
+		{"> ```\n>\n> ```\n", "    pass", "> ```\n>     pass\n> ```\n", 7, 16},
 		{"- ```\n  ```\n", "a\nb\n", "- ```\n  a\n  b\n  \n  ```\n", 6, 16},
 		{"```\r\n```\r\n", "a\r\nb", "```\r\na\r\nb\r\n```\r\n", 5, 9},
 	}
