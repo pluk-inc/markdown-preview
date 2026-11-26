@@ -86,6 +86,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-25 | the mark of a list item and of a quote at the caret | 601 / 609 | 62 / 108 (the base too) | 480 / 715 | 61 / 75 | none | none | 7.0 / 26.3 (16.1 at the first frame) |
 | 2026-11-25 | the frame for a key does not wait for the refresh | 611 / 586 | 65 / 110 (the base too) | 490 / 800 | none | none | none (the core is the same) | none |
 | 2026-11-25 | Undo and Redo | 608 / 601 | 65 / 111 (the base too) | 485 / 785 | none | none | 0.39 / 0.40 | 7.0 / 26.4 (the base too) |
+| 2026-11-26 | Control-T keeps each space | not run (no launch path) | not run | not run | none | none | 0.37 / 0.33 | 7.0 / 26.4 (the base too) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1151,3 +1152,21 @@ frame for a key) built from its commit on the same day:
 
 No number moved by more than the two runs of one build differ. The load
 was 2 to 7.
+
+## Control-T keeps each space (2026-11-26)
+
+The rule runs only for Control-T, so `app.py` did not run: no launch,
+scroll, or typing path calls it. `core.py`, short / long, in turns
+(base, change, change, base), with a load of 5 to 9 from other work on
+the Mac:
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 62, 55 / 73, 83 | 57, 60 / 73, 70 |
+| A typed character in the middle of the text (CPU ms) | 1.15, 1.15 / 1.46, 1.70 | 1.16, 1.03 / 1.30, 1.26 |
+| A typed character at the end of the text (CPU ms) | 1.14, 1.33 / 3.48, 3.16 | 1.20, 1.37 / 2.02, 2.32 |
+| A typed character at a caret (CPU ms) | 1.49, 1.51 / 2.04, 2.06 | 1.53, 1.57 / 1.59, 1.32 |
+| A step of the caret to the left or to the right (CPU ms) | 0.36, 0.39 / 0.41, 0.46 | 0.37, 0.44 / 0.34, 0.32 |
+| Heap with all of the document laid out (MB) | 7.0 / 26.3, 26.4 | 7.0 / 26.5, 26.4 |
+
+No number moved by more than the two runs of one build differ.
