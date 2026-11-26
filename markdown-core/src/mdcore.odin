@@ -599,7 +599,10 @@ move_from :: proc(ctx: ^Ctx, at: document.Address, upstream: bool, move: Move, g
 		if document.empty_of(&ctx.doc, at) > 0 {
 			return
 		}
-		next.byte = document.paragraph_end(src.bytes[:], at.byte, move == .Paragraph_End)
+		next.byte, next.spaces = document.paragraph_end(src.bytes[:], at.byte, move == .Paragraph_End), 0
+		if move == .Paragraph_End {
+			next = document.with_end_spaces(&ctx.doc, next)
+		}
 	}
 	return
 }
@@ -903,6 +906,12 @@ mdcore_delete_backward :: proc "c" (handle: rawptr) {
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
 	if ctx.caret < 0 || ctx.doc.count == 0 {
+		return
+	}
+	// A space at the end of a text, which the text has not: that space
+	// goes, not the last character of the text.
+	if ctx.caret_at.spaces > 0 {
+		change_source_held(ctx, "", [2]int{ctx.caret - 1, ctx.caret})
 		return
 	}
 	// An empty paragraph or a list item with no text goes, and the

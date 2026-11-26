@@ -79,6 +79,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-25 | the keys that move the caret | 650 / 628 | 59 / 105 | 545 / 875 | 56 / 81 | none | none / 0.42 | 7.1 / 26.6 (16.2 at the first frame) |
 | 2026-11-25 | Return, and the empty line that it makes | 616 / 565 | 61 / 107 | 490 / 775 | 48 / 61 | none | none / 0.34 | 7.2 / 26.6 (16.1 at the first frame) |
 | 2026-11-25 | the bullet of a list item as a circle | 598 / 596 | 51 / 96 | 490 / 740 | 62 / 78 | none | 0.49 / 0.41 | 7.0 / 26.2 (16.1 at the first frame) |
+| 2026-11-25 | a caret after a space at the end of a text | 635 / 619 | 56 / 103 | 545 / 840 | 66 / 81 | none | none | 7.1 / 26.2 (16.1 at the first frame) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -889,3 +890,37 @@ shaped line, and is one record of its box now. A first run of this
 benchmark showed 40 ms more for a launch of the change; two reviewer
 agents had started in the middle of it. This run had the Mac to
 itself.
+
+## A caret after a space at the end of a text (2026-11-25)
+
+The caret knows the spaces of the source before it that the text has
+not. Nothing of it runs before a key. `app.py`, short / long, five
+launches for each number, the base built from its commit on the same
+day:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 644 / 667 | 53 / 100 | 530 / 800 |
+| change | 639 / 613 | 53 / 102 | 510 / 830 |
+| change | 630 / 624 | 58 / 103 | 580 / 850 |
+| base | 627 / 628 | 53 / 96 | 510 / 760 |
+
+`core.py`, short / long, the base and the change, two runs each in
+turns (base, change, change, base):
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 64, 68 / 80, 95 | 66, 66 / 82, 79 |
+| A typed character in the middle of the text (CPU ms) | 1.2, 1.5 / 1.5, 1.6 | 1.1, 1.3 / 1.6, 1.7 |
+| A typed character at the end of the text (CPU ms) | 1.4, 1.5 / 2.7, 3.3 | 1.3, 1.3 / 3.9, 3.5 |
+| A typed character at a caret (CPU ms) | 1.9, 1.7 / 1.8, 2.1 | 1.5, 1.4 / 2.2, 2.2 |
+| A step of the caret to the left or to the right (CPU ms) | 0.39, 0.43 / 0.37, 0.50 | 0.37, 0.34 / 0.49, 0.49 |
+| Heap at the first frame (MB) | 5.3 / 16.1 | 5.3 / 16.1 |
+| Heap with all of the document laid out (MB) | 7.2, 7.0 / 26.2 | 7.2, 7.0 / 26.2 |
+
+No number moved by more than the two runs of one build differ (the
+character at the end of the long text is 2.7 and 3.3 for the base and
+3.9 and 3.5 for the change; unit tests of another branch ran on the
+Mac for some seconds of this run). The walk of the caret before the
+runs types two spaces at the end of a paragraph and goes back over
+them.

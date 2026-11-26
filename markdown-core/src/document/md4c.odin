@@ -127,8 +127,9 @@ Md_Parser :: struct {
 	debug_log:   proc "c" (msg: cstring, userdata: rawptr),
 	syntax:      proc "c" (),
 	// Not in upstream md4c (pkg/md4c/README.md): the start of the source
-	// line where a block starts, before the block comes.
-	block_offset: proc "c" (type: Md_Block, offset: c.uint, userdata: rawptr),
+	// line where a block starts, and of the line after its last line (for
+	// a container block, its start), before the block comes.
+	block_offset: proc "c" (type: Md_Block, beg, end: c.uint, userdata: rawptr),
 	// Not in upstream md4c either: the range of the source of each
 	// definition of a link, in the order of the source.
 	ref_def:      proc "c" (start, end: c.uint, userdata: rawptr),

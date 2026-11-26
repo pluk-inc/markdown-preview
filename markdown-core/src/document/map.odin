@@ -264,6 +264,35 @@ place_of :: proc(doc: ^Document, places: []Place, at: Address) -> (offset: int, 
 	if n := empty_of(doc, at); n > 0 {
 		return empty_offset(doc, at.block, n), true
 	}
+	// After spaces at the end of the text: where those spaces start in
+	// its last line, and as many on.
+	if n := spaces_of(doc, at); n > 0 {
+		first, _ := end_spaces_at(doc, places, at) or_return
+		return first + n, true
+	}
+	return text_place(doc, places, at)
+}
+
+// Where the spaces at the end of the text of a block are in the source
+// (`Block.end_spaces`): where they start, and the end of the line that
+// they end. They are after the end of the text (`place_of`), and after
+// the marks that close it ("**" after bold text, also on a later line).
+@(private)
+end_spaces_at :: proc(doc: ^Document, places: []Place, at: Address) -> (first, line_end: int, ok: bool) {
+	at := at
+	at.spaces = 0
+	text_end := text_place(doc, places, at) or_return
+	// The line that the count is of (`Block.end_spaces`).
+	b := block_at(doc, at.block)
+	start := block_start(doc, at.block)
+	_, line_end = end_spaces_line(doc.source, b, start, start + int(b.lines))
+	first = max(line_end - int(b.end_spaces), text_end)
+	return first, line_end, line_end >= text_end
+}
+
+// `place_of` for an address in the text.
+@(private)
+text_place :: proc(doc: ^Document, places: []Place, at: Address) -> (offset: int, ok: bool) {
 	// The last piece of the text of the cell that starts at the address
 	// or before it.
 	found := -1
@@ -354,14 +383,23 @@ address_in :: proc(places: []Place, block, offset: int) -> (at: Address) {
 
 // `address_in` for a block of a document: an offset in an empty
 // paragraph after the block, or after one, is the address of that
-// paragraph (`empties.odin`).
+// paragraph (`empties.odin`), and one in the spaces at the end of its
+// text is after some of them (`Address.spaces`).
 address_for :: proc(doc: ^Document, places: []Place, block, offset: int) -> Address {
 	if n := empty_at(doc, block, offset); n > 0 {
 		if at, ok := empty_address(doc, block, n); ok {
 			return at
 		}
 	}
-	return address_in(places, block, offset)
+	at := address_in(places, block, offset)
+	// An offset in the spaces at the end of the text, or after them:
+	// after as many of them as are before the offset.
+	if b := block_at(doc, block); b.end_spaces > 0 && with_end_spaces(doc, at).spaces > 0 {
+		if first, line_end, ok := end_spaces_at(doc, places, at); ok && offset > first && offset <= line_end {
+			at.spaces = offset - first
+		}
+	}
+	return at
 }
 
 // `place_of` with a map that is made for the call.

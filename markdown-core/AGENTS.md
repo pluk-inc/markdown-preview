@@ -795,8 +795,9 @@ The order of the next steps, from the review of the second step:
     where typed text is a paragraph by itself). Each block has their
     number (`Shape.empties`, so a change of the empty lines after a
     block is a change of that block for a layout), and each is an
-    address of the text of its block: a byte after the end of its last
-    text, one for each (`empty_address`, `empty_of`, `empty_offset`).
+    address of the text of its block: the end of its last text, with
+    the number of the empty paragraph in a field of its own
+    (`Address.empty`; `empty_address`, `empty_of`, `empty_offset`).
     `place_of`, `address_for`, `step`, and the caret places of the
     layout know them, so a caret and the keys that move it need no
     other kind of place. Text that is typed in one goes in with a line
@@ -828,26 +829,53 @@ The order of the next steps, from the review of the second step:
     empty line. Return and then a delete, and a typed character and
     then a delete, give the source of before: the two are tested as
     pairs.
+- Done: a caret after a space at the end of a text. Markdown leaves the
+  spaces at the end of a paragraph out of its text, so the caret did
+  not move for a space until a character came after it, and a delete
+  took the last letter and not the space. Each paragraph and heading
+  knows how many spaces its source has after the end of its text
+  (`Block.end_spaces`, counted with the empty paragraphs, on the line
+  where the text ends), and an address has a field for how many of
+  them are before it (`Address.spaces`; order: the text, then the
+  spaces, then the empty paragraphs). So each space is a place of its
+  own for each user of addresses: `place_of`/`address_for` map it both
+  ways, `step` goes through the spaces one at a time (a step of a word
+  over all of them), the end of a line is after them, a selection with
+  Shift can end in them, and `layout.caret_place` shows the caret
+  after them (`caret_spaces`, not out of the column). A first form
+  kept the count beside the caret (`Ctx.caret_spaces`); review found
+  that a step to the right and Shift with a step to the left did not
+  know it, so the count became a part of the address. A delete takes
+  one of them. The page is as a reader has it. A selection of only
+  spaces shows no highlight and copies no text. Not done: a space at the
+  start of a text, a second space in a text (a run of spaces shows as
+  one), a space before a line break in a paragraph (the caret goes to
+  the start of the next line), a space before the "#" that ends a
+  heading. After two spaces and then a character, the character shows
+  one space after the text, so the caret goes back by one space.
 - Next for the editor, in the order that a reader misses them: a
   selection that typing takes the place of, with cut; the marks at the
   caret (Decisions); undo.
-- Where the lines of a block end is found from the source a second
-  time (`empties.lines_end`, with `fence_line` for a fence of code):
-  the parser read those lines and knows it. A callback of the parser
-  for the end of a block, as there is one for its start, takes that
-  second reader out, and one read of the lines of each block at each
-  parse with it.
+- Done: where the lines of a block end comes from the parser
+  (`block_offset` gives the end too, `Block.lines`), as its start does.
+  Before, `empties.lines_end` and `fence_line` read the lines a second
+  time and guessed: a fence in a quote or an item, raw HTML right after
+  a paragraph (its lines were read as lines of the paragraph, so the
+  spaces at the end of the paragraph were not counted), and more, each
+  a review finding. The parser knows: the closing fence and the line
+  under a heading are lines of the block, the blank lines after code by
+  its indent are not, an item with no text has the line of its mark.
 - The host knows that text in an empty line gets a line break before
   it (`NativeRendererView.put`, the `lead` of the text of an input
   method), to take it back with text that an input method takes back.
   The core could say where the text starts.
-- Before the selection work: `Address.byte` has two meanings now (a
-  byte of the text, and past its end an empty paragraph). Code that
-  cuts text with it clamps, so a selection over empty paragraphs draws
-  nothing on their lines and a copy leaves them out, and the pointer
-  is not the text pointer over them. A field of its own in `Address`
-  for the empty paragraph makes `byte` a byte of the text for each
-  reader again, and gives a rule its empty paragraphs. Do that first.
+- A selection over empty paragraphs or over the spaces at the end of a
+  text draws nothing on them and a copy leaves them out (`text_between`
+  and `selected_part` read bytes of the text), and the pointer is not
+  the text pointer over an empty paragraph. They are places of their
+  own in `Address` now (`empty`, `spaces`), so this is for the
+  selection work. A rule has no empty paragraphs (no text, so no
+  address).
 - Not as the web preview for empty lines: the web preview gives lines
   with nothing in them no room, and this renderer shows each but the
   last as a line, in Read mode too (Decisions). So a document with

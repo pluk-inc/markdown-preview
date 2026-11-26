@@ -398,27 +398,27 @@ test_the_text_between_two_addresses :: proc(t: ^testing.T) {
 	testing.expect_value(t, doc.count, 6)
 	first, last, ok := text_ends(&doc)
 	testing.expect(t, ok)
-	testing.expect_value(t, first, Address{0, 0, 0})
-	testing.expect_value(t, last, Address{5, 0, 4})
+	testing.expect_value(t, first, Address{block = 0})
+	testing.expect_value(t, last, Address{block = 5, byte = 4})
 	// Each text on a line of its own; a rule gives no line; the blank
 	// lines of the code stay; the empty cell gives an empty line.
 	all_text := between(&doc, first, last)
 	defer delete(all_text)
 	testing.expect_value(t, all_text, "Title\nSome words.\none\n\ntwo\n\na\n\n1\n2\nEnd.")
 	// From the middle of one text to the middle of another.
-	part := between(&doc, Address{1, 0, 5}, Address{3, 0, 2})
+	part := between(&doc, Address{block = 1, byte = 5}, Address{block = 3, byte = 2})
 	defer delete(part)
 	testing.expect_value(t, part, "words.\non")
 	// In one text.
-	one := between(&doc, Address{1, 0, 0}, Address{1, 0, 4})
+	one := between(&doc, Address{block = 1}, Address{block = 1, byte = 4})
 	defer delete(one)
 	testing.expect_value(t, one, "Some")
 	// From one cell to another: the cells between them, each on a line.
-	cells := between(&doc, Address{4, 0, 0}, Address{4, 3, 1})
+	cells := between(&doc, Address{block = 4}, Address{block = 4, cell = 3, byte = 1})
 	defer delete(cells)
 	testing.expect_value(t, cells, "a\n\n1\n2")
 	// Texts with nothing in the range at the two ends give no line.
-	ends := between(&doc, Address{0, 0, 5}, Address{1, 0, 4})
+	ends := between(&doc, Address{block = 0, byte = 5}, Address{block = 1, byte = 4})
 	defer delete(ends)
 	testing.expect_value(t, ends, "Some")
 	// Nothing for a document with no text.
@@ -430,11 +430,11 @@ test_the_text_between_two_addresses :: proc(t: ^testing.T) {
 
 @(test)
 test_addresses_are_in_reading_order :: proc(t: ^testing.T) {
-	testing.expect(t, before(Address{0, 0, 9}, Address{1, 0, 0}))
-	testing.expect(t, before(Address{1, 0, 9}, Address{1, 1, 0}))
-	testing.expect(t, before(Address{1, 1, 0}, Address{1, 1, 1}))
-	testing.expect(t, !before(Address{1, 1, 1}, Address{1, 1, 1}))
-	testing.expect(t, !before(Address{2, 0, 0}, Address{1, 5, 5}))
+	testing.expect(t, before(Address{block = 0, byte = 9}, Address{block = 1}))
+	testing.expect(t, before(Address{block = 1, byte = 9}, Address{block = 1, cell = 1}))
+	testing.expect(t, before(Address{block = 1, cell = 1}, Address{block = 1, cell = 1, byte = 1}))
+	testing.expect(t, !before(Address{block = 1, cell = 1, byte = 1}, Address{block = 1, cell = 1, byte = 1}))
+	testing.expect(t, !before(Address{block = 2}, Address{block = 1, cell = 5, byte = 5}))
 }
 
 // Paragraphs, one for each number, with some other kinds between them.
@@ -553,22 +553,22 @@ test_a_change_in_the_middle_keeps_the_other_blocks_in_place :: proc(t: ^testing.
 	testing.expect(t, block_at(&doc, AT) == changed && block_at(&doc, AT + 1) == beside)
 	expect_document(t, &doc, after)
 	// The addresses before the block, in it, and after it.
-	now, same := moved(change, Address{AT - 1, 0, 4})
-	testing.expect(t, same && now == Address{AT - 1, 0, 4})
+	now, same := moved(change, Address{block = AT - 1, byte = 4})
+	testing.expect(t, same && now == Address{block = AT - 1, byte = 4})
 	// In the block that changed, "Paragraph 123 with a link." to
 	// "Paragraph 123 with other words.": an address in the text that
 	// is the same at the start stays, one in the text that is the same
 	// at the end (the full stop) moves with it, and one in the text
 	// that changed is at the start of the block.
 	old_text, new_text := len("Paragraph 123 with a link."), len("Paragraph 123 with other words.")
-	now, same = moved(change, Address{AT, 0, 9})
-	testing.expect(t, same && now == Address{AT, 0, 9})
-	now, same = moved(change, Address{AT, 0, old_text})
-	testing.expect(t, same && now == Address{AT, 0, new_text})
-	now, same = moved(change, Address{AT, 0, 22})
-	testing.expect(t, !same && now == Address{AT, 0, 0})
-	now, same = moved(change, Address{AT + 1, 2, 4})
-	testing.expect(t, same && now == Address{AT + 1, 2, 4})
+	now, same = moved(change, Address{block = AT, byte = 9})
+	testing.expect(t, same && now == Address{block = AT, byte = 9})
+	now, same = moved(change, Address{block = AT, byte = old_text})
+	testing.expect(t, same && now == Address{block = AT, byte = new_text})
+	now, same = moved(change, Address{block = AT, byte = 22})
+	testing.expect(t, !same && now == Address{block = AT})
+	now, same = moved(change, Address{block = AT + 1, cell = 2, byte = 4})
+	testing.expect(t, same && now == Address{block = AT + 1, cell = 2, byte = 4})
 }
 
 @(test)
@@ -582,22 +582,22 @@ test_an_address_where_text_comes_in_is_of_the_text_after_it :: proc(t: ^testing.
 	testing.expect_value(t, change.first, 1)
 	testing.expect_value(t, change.removed, 1)
 	testing.expect_value(t, change.added, 1)
-	now, same := moved(change, Address{1, 0, 0})
-	testing.expect(t, same && now == Address{1, 0, 4})
-	now, same = moved(change, Address{1, 0, 4})
-	testing.expect(t, same && now == Address{1, 0, 8})
+	now, same := moved(change, Address{block = 1})
+	testing.expect(t, same && now == Address{block = 1, byte = 4})
+	now, same = moved(change, Address{block = 1, byte = 4})
+	testing.expect(t, same && now == Address{block = 1, byte = 8})
 	// Text that comes in at the end: an address at the old end is after it.
 	change = change_to(&doc, "intro\n\n```\nnew\nold\nmore\nlast\n```\n\nend\n")
-	now, same = moved(change, Address{1, 0, 12})
-	testing.expect(t, same && now == Address{1, 0, 17})
-	now, same = moved(change, Address{1, 0, 3})
-	testing.expect(t, same && now == Address{1, 0, 3})
+	now, same = moved(change, Address{block = 1, byte = 12})
+	testing.expect(t, same && now == Address{block = 1, byte = 17})
+	now, same = moved(change, Address{block = 1, byte = 3})
+	testing.expect(t, same && now == Address{block = 1, byte = 3})
 	// Text that goes out: an address in it is at the start of the block.
 	change = change_to(&doc, "intro\n\n```\nnew\nlast\n```\n\nend\n")
-	now, same = moved(change, Address{1, 0, 6})
-	testing.expect(t, !same && now == Address{1, 0, 0})
-	now, same = moved(change, Address{1, 0, 13})
-	testing.expect(t, same && now == Address{1, 0, 4})
+	now, same = moved(change, Address{block = 1, byte = 6})
+	testing.expect(t, !same && now == Address{block = 1})
+	now, same = moved(change, Address{block = 1, byte = 13})
+	testing.expect(t, same && now == Address{block = 1, byte = 4})
 }
 
 @(test)
@@ -618,8 +618,8 @@ test_blocks_that_come_and_go_move_the_numbers_after_them :: proc(t: ^testing.T) 
 		testing.expect_value(t, change.removed, 0)
 		testing.expect_value(t, change.added, 3)
 		expect_document(t, &doc, after)
-		now, same := moved(change, Address{AT, 0, 2})
-		testing.expect(t, same && now == Address{AT + 3, 0, 2})
+		now, same := moved(change, Address{block = AT, byte = 2})
+		testing.expect(t, same && now == Address{block = AT + 3, byte = 2})
 		// The last part did not move; the block has another number.
 		testing.expect(t, block_at(&doc, COUNT + 2) == last)
 	}
@@ -635,11 +635,11 @@ test_blocks_that_come_and_go_move_the_numbers_after_them :: proc(t: ^testing.T) 
 		testing.expect_value(t, change.added, 0)
 		// An address in the block that went is at the block that came
 		// to its number.
-		gone, same := moved(change, Address{AT, 0, 3})
-		testing.expect(t, !same && gone == Address{AT, 0, 0})
+		gone, same := moved(change, Address{block = AT, byte = 3})
+		testing.expect(t, !same && gone == Address{block = AT})
 		expect_document(t, &doc, after)
-		now, kept := moved(change, Address{AT + 1, 0, 0})
-		testing.expect(t, kept && now == Address{AT, 0, 0})
+		now, kept := moved(change, Address{block = AT + 1})
+		testing.expect(t, kept && now == Address{block = AT})
 	}
 }
 
@@ -666,7 +666,7 @@ test_a_change_at_each_end_and_of_all_of_the_document :: proc(t: ^testing.T) {
 		testing.expect_value(t, change.count, doc.count)
 		// An address of the old end is in the new document, or at its
 		// first block when that has none.
-		end, _ := moved(change, Address{3 * PART_BLOCKS - 1, 0, 0})
+		end, _ := moved(change, Address{block = 3 * PART_BLOCKS - 1})
 		testing.expect(t, end.block >= 0 && end.block < max(doc.count, 1))
 		if after == base {
 			// The same text: no block is another one, no part is made again.

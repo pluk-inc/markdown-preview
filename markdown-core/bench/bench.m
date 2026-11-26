@@ -150,6 +150,44 @@ static const char *caret_walk(void *ctx, long length) {
     if (mdcore_caret_offset(ctx) != end_of_first || after_length != before_length || memcmp(after, before.bytes, (size_t)before_length) != 0) {
         return "a delete in the line that Return made does not give the text of before";
     }
+    // A space typed at the end of a paragraph is not in its text: the
+    // caret shows after it all the same, and a delete takes the space.
+    // Not at a first block with no text: a space there is after nothing.
+    mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false);
+    long text_start = mdcore_caret_offset(ctx);
+    mdcore_caret_move(ctx, MDCORE_MOVE_PARAGRAPH_END, false);
+    if (mdcore_caret_offset(ctx) > text_start) {
+        double end_x = 0, space_x = 0, two_x = 0;
+        if (!mdcore_caret_rect(ctx, &end_x, &y, &height)) return "no place for the caret at the end of the first paragraph";
+        mdcore_insert(ctx, " ", 1);
+        if (!mdcore_caret_rect(ctx, &space_x, &line, &height) || space_x <= end_x || line != y) return "the caret does not move for a space at the end of a text";
+        long one_space = mdcore_caret_offset(ctx);
+        mdcore_insert(ctx, " ", 1);
+        // At the edge of the column the caret stays there: the second
+        // space is in the source all the same.
+        if (mdcore_caret_offset(ctx) != one_space + 1 || !mdcore_caret_rect(ctx, &two_x, &line, &height) || two_x < space_x) return "the caret does not move for a second space";
+        // A step to the left is one space back, and not a letter, and a
+        // step to the right one space on again.
+        if (!mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, false) || !mdcore_caret_rect(ctx, &x, &line, &height) || x != space_x) return "a step to the left after two spaces is not one space";
+        if (!mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, false) || !mdcore_caret_rect(ctx, &x, &line, &height) || x != end_x) return "a step to the left after one space is not the end of the text";
+        if (!mdcore_caret_move(ctx, MDCORE_MOVE_RIGHT, false) || mdcore_caret_offset(ctx) != one_space) return "a step to the right from the end of a text is not over its first space";
+        if (!mdcore_caret_move(ctx, MDCORE_MOVE_RIGHT, false) || !mdcore_caret_rect(ctx, &x, &line, &height) || x != two_x) return "a step to the right is not over the second space";
+        // With Shift, the steps over the spaces select them.
+        if (!mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, true) || !mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, true) || !mdcore_has_selection(ctx)) return "a step to the left with Shift over spaces does not select";
+        if (!mdcore_caret_move(ctx, MDCORE_MOVE_RIGHT, true) || !mdcore_caret_move(ctx, MDCORE_MOVE_RIGHT, true) || mdcore_has_selection(ctx)) return "steps back with Shift over spaces do not end the selection where it started";
+        mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, false);
+        mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, false);
+        // Two spaces again after the two that are after the caret now,
+        // and a delete for each of the four: the text of before.
+        mdcore_insert(ctx, "  ", 2);
+        mdcore_delete_backward(ctx);
+        mdcore_delete_backward(ctx);
+        mdcore_replace_text(ctx, mdcore_caret_offset(ctx), mdcore_caret_offset(ctx) + 2, "", 0);
+        after = mdcore_source(ctx, &after_length);
+        if (!mdcore_caret_rect(ctx, &x, &line, &height) || x != end_x || after_length != before_length || memcmp(after, before.bytes, (size_t)before_length) != 0) {
+            return "a delete after a space at the end of a text does not take the space";
+        }
+    }
     // A typed character ends the selection at the caret: a step back
     // with the selection selects that character and no more.
     mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false);
