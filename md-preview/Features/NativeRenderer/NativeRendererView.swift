@@ -298,14 +298,16 @@ final class NativeRendererView: NSView {
         }
         if moved {
             updateTaskCheckBoxes()
-            if markedText != nil { inputContext?.invalidateCharacterCoordinates() }
             // After each layout and each frame that laid out more: other
             // text can be under a pointer that did not move.
             updatePointerShape()
         }
         // The caret is where the layout has its text, and it moves with
-        // no new layout too.
+        // no new layout too. So does the text of an input method that is
+        // not final, which ends at the caret: the input method asks for
+        // its place again.
         if isEditable { updateCaretIndicator() }
+        if markedText != nil { inputContext?.invalidateCharacterCoordinates() }
     }
 
     /// The zoom of the document: the text size is the body size times this.
