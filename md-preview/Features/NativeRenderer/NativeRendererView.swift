@@ -369,32 +369,48 @@ final class NativeRendererView: NSView {
     }
     /// Puts the caret at the start of the first text that shows, when the
     /// view has none: Edit mode starts with a place to type, with no click
-    /// first. The page does not scroll: the place is one that shows.
+    /// first. The page does not scroll for a place that shows.
     func placeCaretInView() {
-        guard isEditable, !hasCaret else { return }
+        guard isEditable, !hasCaret, hasDocument else { return }
         let top = scrollY + scrollView.contentInsets.top
         let bottom = scrollY + scrollView.contentView.bounds.height
-        // From a little under the top edge, so the line is all in view,
-        // down to the first place that takes a caret (a table cell with no
-        // text has none).
-        var y = top + 24
+        // The core gives the text that is nearest to a point, which can be
+        // a line above the view (the point is on a picture or in a gap):
+        // from the top edge down to the first place whose line is all in
+        // view.
+        var x = 0.0, y = 0.0, height = 0.0
+        var point = top + 1
+        var inView = false
         repeat {
-            if mdcore_caret_set(ctx, 0, y) {
-                hasCaret = true
-                markedText = nil
-                break
+            if takeCaret(at: NSPoint(x: 0, y: point)), mdcore_caret_rect(ctx, &x, &y, &height) {
+                inView = y >= top && y + height <= bottom
             }
-            y += 24
-        } while y < bottom
+            point += 24
+        } while !inView && point < bottom
+        // No such place (a view with one tall thing in it): the page goes
+        // to the caret that is there.
+        if hasCaret, !inView { keepCaretInView() }
         updateCaretIndicator()
         setNeedsDraw()
+    }
+
+    /// Puts the caret at the text of a point of the page. False where the
+    /// source has no room for text (a table cell with no text): the caret
+    /// then stays where it was.
+    private func takeCaret(at point: NSPoint) -> Bool {
+        guard mdcore_caret_set(ctx, point.x, point.y) else { return false }
+        hasCaret = true
+        markedText = nil
+        inputContext?.discardMarkedText()
+        return true
     }
 
     /// The reader changed the text (`DocumentEditor`).
     var contentDidChange: (() -> Void)?
     /// The reader pressed Escape in Edit mode (`DocumentEditor`).
     var cancelRequested: (() -> Void)?
-    /// A click gave the view a caret.
+    /// The view has a caret: from the start of Edit mode
+    /// (`placeCaretInView`) or from a click.
     private var hasCaret = false
     /// What the core knows of the keys (`mdcore_set_focused`); it starts
     /// with true.
@@ -590,6 +606,13 @@ final class NativeRendererView: NSView {
             scroll(toY: topScrollY)
         }
         relayout(force: true)
+        // Another document in Edit mode (it started before the document
+        // was here): the caret of the text before is no place of this one.
+        if !keepsScroll, isEditable {
+            hasCaret = false
+            mdcore_caret_clear(ctx)
+            placeCaretInView()
+        }
     }
 
     /// Gives the core the view's size and draws. Skips a call that changes
@@ -751,13 +774,7 @@ final class NativeRendererView: NSView {
         if phase == 0 { window?.makeFirstResponder(self) }
         mdcore_mouse(ctx, point.x, point.y, phase)
         if isEditable, phase == 0 {
-            // No caret where the source has no room for text (a table
-            // cell with no text): the caret stays where it was.
-            if mdcore_caret_set(ctx, point.x, point.y) {
-                hasCaret = true
-                markedText = nil
-                inputContext?.discardMarkedText()
-            }
+            _ = takeCaret(at: point)
             updateCaretIndicator()
         } else if isEditable, hasCaret {
             // A drag moves the caret with the end of the selection, and
