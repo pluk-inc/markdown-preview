@@ -372,6 +372,9 @@ final class NativeRendererView: NSView {
     /// first. The page does not scroll for a place that shows.
     func placeCaretInView() {
         guard isEditable, !hasCaret, hasDocument else { return }
+        // A keyboard scroll on its way stops here: the caret goes into the
+        // view that shows, and the page must not move on from it.
+        endScrollAnimation()
         let top = scrollY + scrollView.contentInsets.top
         let bottom = scrollY + scrollView.contentView.bounds.height
         // The core gives the text that is nearest to a point, which can be
