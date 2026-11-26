@@ -971,6 +971,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         NSApp.windows.contains { $0 is NSOpenPanel && $0.isVisible }
     }
 
+    /// The installed `md-preview` is a symlink to the launcher inside the app,
+    /// not a copy of it, so each app update also updates the command. A copy
+    /// kept the old bundle id after the move to the new one and stopped
+    /// opening the app. The cost: moving the app breaks the link, and the
+    /// reader runs Install CLI again.
     private func makeCommandLineToolInstallerScript(commandLineToolURL: URL) -> String {
         """
         #!/bin/sh
@@ -978,6 +983,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         installer_path=$0
         trap 'rm -f "$installer_path"' EXIT
         bundled_cli=\(commandLineToolURL.path.shellQuotedString)
+
+        # A translocated app runs from a random read-only path that is gone
+        # after the next launch, so a link to it would break at once.
+        case "$bundled_cli" in
+          */AppTranslocation/*)
+            echo "Move Markdown Preview to the Applications folder, open it from there, then choose Install CLI again." >&2
+            exit 1
+            ;;
+        esac
 
         path_contains() {
           case ":$PATH:" in
@@ -1058,7 +1072,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
         is_markdown_preview_launcher() {
           path="$1"
-          [ -f "$path" ] && [ ! -L "$path" ] || return 1
+          if [ -L "$path" ]; then
+            # A link this installer made, also one to a moved or deleted app.
+            case $(readlink "$path" || true) in
+              */Contents/Resources/bin/markdown-preview) return 0 ;;
+              *) return 1 ;;
+            esac
+          fi
+          # A copy that an earlier version of this installer made.
+          [ -f "$path" ] || return 1
           if grep -q '^# Managed by Markdown Preview CLI$' "$path"; then
             return 0
           fi
@@ -1098,10 +1120,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         if [ "$needs_sudo" = "true" ]; then
           echo "Installing Markdown Preview command line tools to $install_dir requires your password."
           sudo mkdir -p "$install_dir"
-          sudo install -m 755 "$bundled_cli" "$primary"
+          sudo ln -sfn "$bundled_cli" "$primary"
         else
           mkdir -p "$install_dir"
-          install -m 755 "$bundled_cli" "$primary"
+          ln -sfn "$bundled_cli" "$primary"
         fi
 
         for alias in mdp markdown-preview; do
@@ -1128,7 +1150,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         echo
         echo "Tips:"
         echo "  Use mdp for the shortest command."
-        echo "  Re-run Install CLI after updating the app to refresh these commands."
+        echo "  These commands stay current when the app updates."
+        echo "  If you move Markdown Preview, choose Install CLI again."
         echo "  Installed in: $install_dir"
         echo
 
