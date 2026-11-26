@@ -360,47 +360,52 @@ final class NativeRendererView: NSView {
                 mdcore_caret_show(ctx, false)
                 if caretIndicator.superview == nil { page.addSubview(caretIndicator) }
             } else {
-                hasCaret = false
-                mdcore_caret_clear(ctx)
+                clearCaret()
                 setNeedsDraw()
             }
             updateCaretIndicator()
         }
     }
+
     /// Puts the caret at the start of the first text that shows, when the
     /// view has none: Edit mode starts with a place to type, with no click
     /// first. The page does not scroll for a place that shows.
     func placeCaretInView() {
         guard isEditable, !hasCaret, hasDocument else { return }
+        // A view with no size has no layout to put a caret in: the caret
+        // comes with the first layout (`relayout`).
+        firstCaretWaits = !hasPageToDraw
+        guard hasPageToDraw else { return }
         // A keyboard scroll on its way stops here: the caret goes into the
         // view that shows, and the page must not move on from it.
         endScrollAnimation()
-        let top = scrollY + scrollView.contentInsets.top
-        let bottom = scrollY + scrollView.contentView.bounds.height
-        // The core gives the text that is nearest to a point, which can be
-        // a line above the view (the point is on a picture or in a gap):
-        // from the top edge down to the first place whose line is all in
-        // view.
-        var x = 0.0, y = 0.0, height = 0.0
-        var point = top + 1
-        var inView = false
-        repeat {
-            // To under the line that was found, when it is cut at the top:
-            // the next line is the first one, also with lines that are
-            // less high than a fixed step. Else a small step, over what
-            // takes no caret.
-            var next = point + 8
-            if takeCaret(at: NSPoint(x: 0, y: point)), mdcore_caret_rect(ctx, &x, &y, &height) {
-                inView = y >= top && y + height <= bottom
-                next = max(next, y + height + 1)
-            }
-            point = next
-        } while !inView && point < bottom
-        // No such place (a view with one tall thing in it): the page goes
-        // to the caret that is there.
-        if hasCaret, !inView { keepCaretInView() }
+        // With the room that a caret keeps to the edges of the view
+        // (`keepCaretInView`), or the first key moves the page. Not at
+        // the top of the document, where the page cannot move up.
+        let shown = visiblePageRange
+        let top = shown.lowerBound + (scrollY > topScrollY ? Self.caretRoom : 0)
+        let bottom = max(top, shown.upperBound - Self.caretRoom)
+        guard mdcore_caret_set_in(ctx, top, bottom) else { return }
+        caretWasSet()
+        // For a caret out of that range: no line of text is all in it
+        // (one tall thing fills the view), so the page goes to the caret.
+        keepCaretInView()
         updateCaretIndicator()
         setNeedsDraw()
+    }
+
+    /// A start of Edit mode found a view with no size, so its caret waits
+    /// for a layout.
+    private var firstCaretWaits = false
+
+    /// The room that the caret keeps to the top and the bottom of the view.
+    private static let caretRoom: CGFloat = 24
+
+    /// The part of the page that shows under the top inset, in the space
+    /// of the page.
+    private var visiblePageRange: ClosedRange<CGFloat> {
+        let top = scrollY + scrollView.contentInsets.top
+        return top...max(top, scrollY + scrollView.contentView.bounds.height)
     }
 
     /// Puts the caret at the text of a point of the page. False where the
@@ -408,10 +413,22 @@ final class NativeRendererView: NSView {
     /// then stays where it was.
     private func takeCaret(at point: NSPoint) -> Bool {
         guard mdcore_caret_set(ctx, point.x, point.y) else { return false }
+        caretWasSet()
+        return true
+    }
+
+    /// The view has a caret at a new place: text that an input method
+    /// did not make final was for the place before.
+    private func caretWasSet() {
         hasCaret = true
         markedText = nil
         inputContext?.discardMarkedText()
-        return true
+    }
+
+    private func clearCaret() {
+        hasCaret = false
+        firstCaretWaits = false
+        mdcore_caret_clear(ctx)
     }
 
     /// The reader changed the text (`DocumentEditor`).
@@ -618,8 +635,7 @@ final class NativeRendererView: NSView {
         // Another document in Edit mode (it started before the document
         // was here): the caret of the text before is no place of this one.
         if !keepsScroll, isEditable {
-            hasCaret = false
-            mdcore_caret_clear(ctx)
+            clearCaret()
             placeCaretInView()
         }
     }
@@ -661,6 +677,7 @@ final class NativeRendererView: NSView {
             _ = mdcore_page_area(ctx, &top, &height)
             return Self.clamped(offset, top: top, height: height, inset: topInset, viewHeight: viewHeight)
         }
+        if firstCaretWaits { placeCaretInView() }
     }
 
     /// Draws a frame now and waits for it: the first frame of a document,
@@ -1129,9 +1146,8 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         guard mdcore_caret_rect(ctx, &x, &y, &height) else { return }
         // Not against a scroll that a key started.
         endScrollAnimation()
-        let room: CGFloat = 24
-        let top = scrollY + scrollView.contentInsets.top
-        let bottom = scrollY + scrollView.contentView.bounds.height
+        let room = Self.caretRoom
+        let top = visiblePageRange.lowerBound, bottom = visiblePageRange.upperBound
         if y - room < top {
             scroll(toY: y - room - scrollView.contentInsets.top)
         } else if y + height + room > bottom {

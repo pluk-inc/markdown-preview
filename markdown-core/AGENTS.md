@@ -1607,9 +1607,13 @@ export.
   around such a line, the caret is at the place of its address. The walk
   of `bench.m` has this sequence (`list_caret_check`).
 - **2026-11-26** — A caret when Edit Mode starts. The maintainer asked
-  that Edit Mode needs no click before the first key. The host puts the
-  caret at the start of the first text that shows
-  (`NativeRendererView.placeCaretInView`: the first place under the top
-  edge that takes a caret), with no scroll. Checked on the hidden display
+  that Edit Mode needs no click before the first key. The core puts the
+  caret at the start of the first text whose line is all in a range of
+  the page (`mdcore_caret_set_in`), and the host gives it the view less
+  the room that a caret keeps to the edges
+  (`NativeRendererView.placeCaretInView`), so the first key does not
+  move the page. The first form was a loop of `mdcore_caret_set` in the
+  host; each of its looks moved the caret and could show marks, which
+  changed the layout under the next look. Checked on the hidden display
   with a typed key right after Command-E: a short document, an empty one,
   and the 1 MB fixture two pages down.
