@@ -440,8 +440,16 @@ leave_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 		close_text(p)
 		if p.item_blocks == 0 {
 			// An item with nothing in it still shows its marker. Its
-			// block starts where the item does.
+			// block starts where the item does. At the caret its mark is
+			// its text, as for an item with text ("-" that is typed is
+			// "-" there, not a bullet).
 			open_text(p, .Paragraph)
+			if line := p.block.source; line < len(p.bytes) {
+				end, _ := line_at(p.bytes, line)
+				if !typed_mark(p, line, end) {
+					line_mark(p, line, end)
+				}
+			}
 			close_text(p)
 		}
 		p.lists[len(p.lists) - 1].next += 1
@@ -577,10 +585,10 @@ mark_part :: proc(p: ^Parser, type: Md_Span) -> (start, end: int) {
 // A line of the text of a heading or of a paragraph, from the parser,
 // before its text. What its first line has before the text, from the
 // first byte that is no space, is the mark of the block: the "#"s of a
-// heading, the "-" or the number of a list item, the ">" of a quote,
-// and all of them for a block in more than one (a later line of the
-// block has the marks of a quote again; those do not show yet). A task
-// keeps its check box, so its mark ends before the "[". The mark is
+// heading and the ">" of a quote (a later line of the block has the
+// marks of a quote again; those do not show yet). The first block of a
+// list item shows its bullet, number, or check box at the caret too, and
+// no text for its mark. The mark is
 // noted as a mark with no second mark (`Pair.line`), and it is text
 // when the offset whose marks show is in the block.
 @(private)
@@ -610,32 +618,93 @@ line_mark :: proc(p: ^Parser, line, text: int) {
 	for mark < text && (p.bytes[mark] == ' ' || p.bytes[mark] == '\t') {
 		mark += 1
 	}
-	// A task keeps its check box: to before its "[".
-	mark_end := p.block.task_mark > 0 ? min(p.block.task_mark - 1, text) : text
-	if mark >= mark_end {
+	if mark >= text {
 		return
 	}
 	// To the end of the last line of the block, before its line break.
 	block_end := break_before(p.bytes, clamp(p.block.source + int(p.block.lines), text, len(p.bytes)))
 	// The mark is all that the source has before the text, with the
-	// check box of a task, which does not show as text.
+	// check box of a task.
 	if p.pairs != nil && p.doc.count == p.places_block {
 		append(p.pairs, Pair{mark, text, -1, block_end, false, mark, block_end, true})
 	}
+	// A list item shows its bullet, number, or check box also at the
+	// caret: once a list, the mark of the item is no raw text again (an
+	// editor makes a list of it at the space after the mark,
+	// `typed_mark`). What comes after it shows (the "#" of a heading).
+	if p.block.marker != .None {
+		mark = after_item_mark(p, mark, text)
+		if mark >= text {
+			return
+		}
+	}
 	if reveal, shows := p.reveal.?; shows && reveal >= mark && reveal <= block_end {
 		p.marking = true
-		append_text(p, string(p.bytes[mark:mark_end]), mark, mark_end - mark)
+		append_text(p, string(p.bytes[mark:text]), mark, text - mark)
 		p.marking = false
-		// The check box of a task is a piece with no text, after the
-		// mark that shows: each byte of that mark is a byte of the
-		// source, and text that is typed before the first letter of
-		// the task goes after its check box.
-		if mark_end < text && p.places != nil && p.doc.count == p.places_block {
-			append(p.places, Place{0, len(p.cur.bytes), 0, mark_end, text - mark_end, true, false, false, false})
-		}
 		p.doc.reveal = reveal
 		p.block.mark_shown = true
 	}
+}
+
+// Where the mark of a list item ends in the first line of its first
+// block: after the marks of quotes before it, its bullet or number, the
+// check box of a task, and the spaces after them.
+@(private)
+after_item_mark :: proc(p: ^Parser, mark, text: int) -> int {
+	space :: proc(c: u8) -> bool {return c == ' ' || c == '\t'}
+	at := mark
+	for at < text && (p.bytes[at] == '>' || space(p.bytes[at])) {
+		at += 1
+	}
+	if at < text && (p.bytes[at] == '-' || p.bytes[at] == '*' || p.bytes[at] == '+') {
+		at += 1
+	} else {
+		for at < text && p.bytes[at] >= '0' && p.bytes[at] <= '9' {
+			at += 1
+		}
+		if at < text && (p.bytes[at] == '.' || p.bytes[at] == ')') {
+			at += 1
+		}
+	}
+	// The "[ ]" of a task: its mark is in it, the "]" after that.
+	if p.block.task_mark > 0 {
+		at = max(at, min(p.block.task_mark + 2, text))
+	}
+	for at < text && space(p.bytes[at]) {
+		at += 1
+	}
+	return at
+}
+
+// An item with nothing in it at the caret, whose mark has nothing after
+// it, not a space either ("-", "1.", "- [ ]"): the mark is text that is
+// being typed, as in an editor that makes a list of it at the space after
+// the mark. So it shows as plain text, with no bullet and no check box,
+// and it is noted as a mark of the line for an edit. True when that is so.
+@(private)
+typed_mark :: proc(p: ^Parser, line, end: int) -> bool {
+	reveal, shows := p.reveal.?
+	if !shows || reveal < line || reveal > end || end == line || p.bytes[end - 1] == ' ' || p.bytes[end - 1] == '\t' {
+		return false
+	}
+	mark := line
+	for mark < end && (p.bytes[mark] == ' ' || p.bytes[mark] == '\t') {
+		mark += 1
+	}
+	if p.pairs != nil && p.doc.count == p.places_block {
+		append(p.pairs, Pair{mark, end, -1, end, false, mark, end, true})
+	}
+	// No check box: the "[ ]" is text until the space after it.
+	if p.block.marker == .Task_Open || p.block.marker == .Task_Done {
+		p.block.marker = .Bullet
+		p.block.task_mark = 0
+		p.block.done = false
+	}
+	append_text(p, string(p.bytes[mark:end]), mark, end - mark)
+	p.doc.reveal = reveal
+	p.block.mark_shown = true
+	return true
 }
 
 // A mark of a span: it is noted for the block that `block_map` asks

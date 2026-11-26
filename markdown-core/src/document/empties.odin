@@ -120,7 +120,9 @@ empty_lines :: proc(source: []u8, b: ^Block, start, next: int, next_in_list, who
 // first block of a list of its own.
 @(private)
 in_list :: proc(b: ^Block) -> bool {
-	return b.list_depth > 0 && b.spacing != .List_Start
+	// A mark that is being typed at the caret is no list yet: the empty
+	// lines before it stay where the reader typed them.
+	return b.list_depth > 0 && b.spacing != .List_Start && !typed_mark_shown(b)
 }
 
 // How many of some empty lines are empty paragraphs: each but the last.

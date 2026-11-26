@@ -520,7 +520,7 @@ caret_place :: proc(l: ^Layout, at: document.Address, upstream := false) -> (x, 
 	if found < 0 {
 		// Text with no line: an empty paragraph, or the empty lines at
 		// the start of a code block. At the start of the block.
-		x = l.column_x + f32(b.list_depth) * l.m.list_indent + f32(b.quote_depth) * l.m.quote_indent
+		x = l.column_x + list_x(l, b) + f32(b.quote_depth) * l.m.quote_indent
 		top = box.top
 		height = math.round(l.m.body * l.m.line_height)
 		if b.kind == .Code {

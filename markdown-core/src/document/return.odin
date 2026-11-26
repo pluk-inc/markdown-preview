@@ -110,7 +110,9 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address, allocator := co
 	after, empty := block_empty_lines(doc, at.block)
 	breaks := empty == 0 ? 2 : 1
 	in_list_next := at.block + 1 < doc.count && in_list(block_at(doc, at.block + 1))
-	if is_item(doc, at.block) {
+	// A mark with nothing after it that is being typed (`typed_mark`): no
+	// list yet, so no new item; Return is as at the end of a paragraph.
+	if is_item(doc, at.block) && !typed_mark_shown(b) {
 		if len(texts[at.cell].bytes) == 0 {
 			// No text: the line of the item becomes an empty paragraph.
 			// Between two items it only goes (a paragraph there makes
@@ -252,4 +254,67 @@ item_mark :: proc(doc: ^Document, block: int, out: ^strings.Builder) -> bool {
 		strings.write_string(out, "[ ] ")
 	}
 	return true
+}
+
+// The text of a block is a mark with nothing after it, at the caret,
+// that is plain text while it is typed (`typed_mark`): no list yet.
+typed_mark_shown :: proc(b: ^Block) -> bool {
+	if !b.mark_shown || b.marker == .None || len(b.text.bytes) == 0 {
+		return false
+	}
+	for span in b.text.spans {
+		if .Mark in span.style {
+			return false
+		}
+	}
+	return true
+}
+
+// For a list item that joins the list before it across empty lines (a
+// list that the reader starts after leaving the one above with Return):
+// where its mark is in the source, and the mark that makes a list of its
+// own there ("*" for "-", "-" for "*" and "+", ")" for "." of a number,
+// "." for ")"). In Markdown empty lines do not end a list, but another
+// mark does. -1 when the item does not join such a list.
+new_list_mark :: proc(doc: ^Document, block: int) -> (at: int, mark: u8) {
+	at = -1
+	if block <= 0 || block >= doc.count {
+		return
+	}
+	b := block_at(doc, block)
+	before := block_at(doc, block - 1)
+	if b.marker == .None || b.spacing != .Item || b.quote_depth > 0 || before.list_depth < b.list_depth {
+		return
+	}
+	// An empty line between the two: the lines of the source after the
+	// last line of the block before (in a list they are no empty
+	// paragraphs, so they are counted here).
+	source := doc.source
+	i := block_start(doc, block)
+	after_before := clamp(block_start(doc, block - 1) + int(before.lines), 0, i)
+	if count_lines(source, after_before, i) == 0 {
+		return
+	}
+	for i < len(source) && (source[i] == ' ' || source[i] == '\t') {
+		i += 1
+	}
+	if i >= len(source) {
+		return
+	}
+	switch source[i] {
+	case '-':
+		return i, '*'
+	case '*', '+':
+		return i, '-'
+	}
+	for i < len(source) && source[i] >= '0' && source[i] <= '9' {
+		i += 1
+	}
+	if i < len(source) && source[i] == '.' {
+		return i, ')'
+	}
+	if i < len(source) && source[i] == ')' {
+		return i, '.'
+	}
+	return -1, 0
 }

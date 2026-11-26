@@ -56,7 +56,7 @@ test_the_marks_of_the_element_of_an_offset_are_text :: proc(t: ^testing.T) {
 		// a quote and a list item, and with no text at all.
 		{"# \\#x\n", 4, "# #x", "^^  "},
 		{"> ## T\n", 5, "> ## T", "^^^^^ "},
-		{"- # T\n", 5, "- # T", "^^^^ "},
+		{"- # T\n", 5, "# T", "^^ "},
 		{"## \n\ntext\n", 1, "## ", "^^^"},
 		{"#\n\ntext\n", 0, "#", "^"},
 		// With raw HTML or a NUL byte at the start of the text.
@@ -65,19 +65,29 @@ test_the_marks_of_the_element_of_an_offset_are_text :: proc(t: ^testing.T) {
 		// The mark of a list item and of a quote, for an offset in the
 		// block: the "-", the number, the ">", and the marks of a block
 		// that is in more than one. Not for an offset in another block.
-		{"- one\n- two\n", 3, "- one", "^^   "},
-		{"- one\n- two\n", 5, "- one", "^^   "},
+		{"- one\n- two\n", 3, "one", "   "},
+		{"- one\n- two\n", 5, "one", "   "},
 		{"- one\n- two\n", 6, "one", "   "},
-		{"12. one\n", 5, "12. one", "^^^^   "},
+		{"12. one\n", 5, "one", "   "},
 		{"> quote\n", 4, "> quote", "^^     "},
-		{"> - a\n", 4, "> - a", "^^^^ "},
+		{"> - a\n", 4, "a", " "},
 		// The first line only: a later line of a quote keeps its mark
 		// out of the text.
 		{"> one\n> two\n", 9, "> one two", "^^       "},
-		{"- a\n\n> one\n> two\n", 0, "- a", "^^ "},
-		// A task keeps its check box: the "-" only.
-		{"- [ ] task\n", 8, "- task", "^^    "},
-		{"- [x] task\n", 8, "- task", "^^    "},
+		{"- a\n\n> one\n> two\n", 0, "a", " "},
+		// The check box of a task is its mark: no text for it.
+		{"- [ ] task\n", 8, "task", "    "},
+		{"- [x] task\n", 8, "task", "    "},
+		{"- [ ] \n", 3, "", ""},
+		// An item with nothing in it and nothing after its mark: the mark
+		// is plain text that is being typed (no bullet, no check box)
+		// until a space comes after it.
+		{"-\n", 1, "-", " "},
+		{"12.\n", 2, "12.", "   "},
+		{"- [ ]\n", 3, "- [ ]", "     "},
+		{"> -\n", 3, "> -", "   "},
+		// With the space, a list item: its bullet, also at the caret.
+		{"* \n", 1, "", ""},
 		// A later block of an item has only its indent, which is no mark.
 		{"plain\n", 2, "plain", "     "},
 		// Not the line under a heading.
@@ -306,41 +316,47 @@ test_marks_make_no_block_for_an_item_with_no_text :: proc(t: ^testing.T) {
 	}
 }
 
-// Text that is typed before the first letter of a task whose mark shows
-// goes after its check box.
+// Text that is typed before the first letter of a task at the caret
+// goes after its check box: the text starts there, and an offset in the
+// check box is the start of the text.
 @(test)
 test_the_text_of_a_task_starts_after_its_check_box :: proc(t: ^testing.T) {
-	doc := parse_owned(transmute([]u8)fmt.aprintf("%s", "- [ ] task\n"), 7)
-	defer destroy(&doc)
-	testing.expect_value(t, fmt.tprintf("%s", block_at(&doc, 0).text.bytes[:]), "- task")
-	offset, ok := source_of(&doc, {block = 0, byte = 2})
-	testing.expect(t, ok)
-	testing.expect_value(t, offset, 6)
-	testing.expect_value(t, address_of(&doc, 6), Address{block = 0, byte = 2})
-}
-
-// Each character of the mark of a task that shows is a place of its
-// own: the caret goes between the digits of a number, and the Delete
-// key before the first letter takes out one character of the mark, and
-// not the check box with all of the mark.
-@(test)
-test_the_mark_of_a_task_is_edited_by_character :: proc(t: ^testing.T) {
 	doc := parse_owned(transmute([]u8)fmt.aprintf("%s", "12. [x] task\n"), 9)
 	defer destroy(&doc)
-	testing.expect_value(t, fmt.tprintf("%s", block_at(&doc, 0).text.bytes[:]), "12. task")
-	for byte in 0 ..= 3 {
-		offset, ok := source_of(&doc, {block = 0, byte = byte})
-		testing.expect(t, ok)
-		testing.expect_value(t, offset, byte)
-	}
-	offset, ok := source_of(&doc, {block = 0, byte = 4})
+	testing.expect_value(t, fmt.tprintf("%s", block_at(&doc, 0).text.bytes[:]), "task")
+	testing.expect(t, !block_at(&doc, 0).mark_shown)
+	offset, ok := source_of(&doc, {block = 0, byte = 0})
 	testing.expect(t, ok)
 	testing.expect_value(t, offset, 8)
-	places := block_map(&doc, 0)
-	defer delete(places)
-	start, end, found := char_before(&doc, places[:], {block = 0, byte = 4})
-	testing.expect(t, found)
-	testing.expect_value(t, [2]int{start, end}, [2]int{3, 4})
-	// An offset in the check box is the start of the text.
-	testing.expect_value(t, address_of(&doc, 5), Address{block = 0, byte = 4})
+	testing.expect_value(t, address_of(&doc, 5), Address{block = 0, byte = 0})
+}
+
+// The mark of an item with nothing in it shows as its text at the caret,
+// and the item draws no bullet then; text that is typed goes after it.
+// An empty task with nothing after its "]" draws no check box.
+@(test)
+test_an_empty_item_shows_its_mark_at_the_caret :: proc(t: ^testing.T) {
+	task := parse_owned(transmute([]u8)fmt.aprintf("%s", "- [ ]\n"), 5)
+	defer destroy(&task)
+	testing.expect(t, block_at(&task, 0).marker == .Bullet && block_at(&task, 0).mark_shown)
+	spaced := parse_owned(transmute([]u8)fmt.aprintf("%s", "- [ ] \n"), 5)
+	defer destroy(&spaced)
+	testing.expect(t, block_at(&spaced, 0).marker == .Task_Open)
+	doc := parse_owned(transmute([]u8)fmt.aprintf("%s", "-\n"), 1)
+	defer destroy(&doc)
+	testing.expect_value(t, fmt.tprintf("%s", block_at(&doc, 0).text.bytes[:]), "-")
+	testing.expect(t, block_at(&doc, 0).mark_shown)
+	offset, ok := source_of(&doc, {block = 0, byte = 1})
+	testing.expect(t, ok)
+	testing.expect_value(t, offset, 1)
+	// A second item with nothing in it, after one with text.
+	second := parse_owned(transmute([]u8)fmt.aprintf("%s", "- a\n-\n"), 5)
+	defer destroy(&second)
+	testing.expect_value(t, fmt.tprintf("%s", block_at(&second, 1).text.bytes[:]), "-")
+	testing.expect_value(t, fmt.tprintf("%s", block_at(&second, 0).text.bytes[:]), "a")
+	// With no caret there, the bullet.
+	plain := parse("-\n")
+	defer destroy(&plain)
+	testing.expect_value(t, len(block_at(&plain, 0).text.bytes), 0)
+	testing.expect(t, !block_at(&plain, 0).mark_shown)
 }

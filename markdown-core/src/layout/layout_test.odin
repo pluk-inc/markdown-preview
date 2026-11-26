@@ -304,7 +304,8 @@ test_a_task_keeps_a_place_for_its_check_box :: proc(t: ^testing.T) {
 		testing.expect_value(t, box.decor_end, box.decor_first)
 	}
 	// The plain item has its bullet: a circle a quarter of the body size
-	// across, a third of it before the text, in the color of the text.
+	// across, a little in from the edge of the step of its list (where the
+	// "-" of its "- " is), in the color of the text.
 	// Its middle is a little above the middle of the small letters, and
 	// the middle of a check box is at the same height in its line.
 	plain := only(&f.page).boxes[2]
@@ -315,7 +316,7 @@ test_a_task_keeps_a_place_for_its_check_box :: proc(t: ^testing.T) {
 	testing.expect_value(t, bullet.w, 0.25 * body)
 	testing.expect_value(t, bullet.h, bullet.w)
 	testing.expect_value(t, bullet.radius, bullet.w / 2)
-	testing.expect_value(t, bullet.x + bullet.w, text_line.x - 0.35 * body)
+	testing.expect_value(t, bullet.x, text_line.x - f.page.m.list_indent + 0.8 * body)
 	line_height := only(&f.page).paras[text_line.para].line_height
 	ascent, descent, x_height := text.font_metrics(f.style.body_font)
 	baseline := (line_height - (ascent + descent)) / 2 + ascent
@@ -476,8 +477,8 @@ test_only_a_line_of_text_is_text_for_the_pointer :: proc(t: ^testing.T) {
 			}
 		}
 	}
-	// A number so long that it wraps: its lines come before the text of
-	// the item and start at the same height again.
+	// A long number: its line comes before the text of the item and is no
+	// text for the pointer.
 	{
 		g: Fixture
 		setup(&g, "123456789. first line of the item\n   second paragraph of it\n", 600)
@@ -496,7 +497,7 @@ test_only_a_line_of_text_is_text_for_the_pointer :: proc(t: ^testing.T) {
 			}
 		}
 		testing.expect(t, texts >= 1)
-		testing.expect(t, marker_lines >= 2)
+		testing.expect(t, marker_lines >= 1)
 	}
 	// Not above the page and not below it.
 	testing.expect(t, !text_at(&f.page, first.x + 5, -10))
@@ -1738,4 +1739,31 @@ test_a_mark_that_shows_has_the_secondary_color :: proc(t: ^testing.T) {
 	testing.expect_value(t, span_color(&f.page, &para, {.Link}, false), f.page.style.link)
 	testing.expect_value(t, span_color(&f.page, &para, {}, false), f.page.style.text)
 	testing.expect_value(t, span_color(&f.page, &para, {}, true), done_color(&f.page))
+}
+
+// The number of an item is one line right-aligned to its text, also with
+// many digits: it does not break into a second line.
+@(test)
+test_the_number_of_an_item_is_one_line :: proc(t: ^testing.T) {
+	f: Fixture
+	setup(&f, "123456. many digits\n124. b\n", 600)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	page := only(&f.page)
+	for i in 0 ..< 2 {
+		box := page.boxes[i]
+		// The lines of the box: its text, and its number, which has no
+		// source.
+		numbers, text_top, number_top := 0, f32(-1), f32(-1)
+		for line in page.lines[box.line_first:box.line_end] {
+			if page.paras[line.para].src == nil {
+				numbers += 1
+				number_top = line.top
+			} else if text_top < 0 {
+				text_top = line.top
+			}
+		}
+		testing.expect_value(t, numbers, 1)
+		testing.expect(t, abs(number_top - text_top) < 1, "the number is on the line of the text")
+	}
 }

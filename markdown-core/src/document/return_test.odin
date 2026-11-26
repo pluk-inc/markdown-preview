@@ -1,5 +1,6 @@
 package document
 
+import "core:fmt"
 import "core:testing"
 
 @(test)
@@ -208,4 +209,63 @@ test_the_line_of_a_paragraph_stays_when_its_only_character_goes :: proc(t: ^test
 		apply(&doc, edit)
 		testing.expect_value(t, string(doc.source), c.after)
 	}
+}
+
+// Return after a mark with nothing after it that is being typed at the
+// caret ("-"): no list yet, so no new item, as at the end of a paragraph.
+@(test)
+test_return_after_a_typed_mark_makes_no_item :: proc(t: ^testing.T) {
+	doc := parse_owned(transmute([]u8)fmt.aprintf("%s", "-\n"), 1)
+	defer destroy(&doc)
+	testing.expect(t, typed_mark_shown(block_at(&doc, 0)))
+	places := block_map(&doc, 0)
+	defer delete(places)
+	start, end, text, caret, ok := line_break(&doc, places[:], {block = 0, byte = 1})
+	defer delete(text)
+	testing.expect(t, ok)
+	// "-\n\n": an empty paragraph after it, with the caret there.
+	testing.expect_value(t, text, "\n")
+	testing.expect_value(t, [3]int{start, end, caret}, [3]int{1, 1, 2})
+}
+
+// A list item that joins the list above it across empty lines gets the
+// other mark, which makes a list of its own; with no empty line, or with
+// a paragraph between, nothing changes.
+@(test)
+test_a_list_after_empty_lines_gets_another_mark :: proc(t: ^testing.T) {
+	Case :: struct {
+		source: string,
+		at:     int,
+		mark:   u8,
+	}
+	cases := []Case {
+		{"- a\n\n\n- b\n", 6, '*'},
+		{"* a\n\n* b\n", 5, '-'},
+		{"1. a\n\n\n1. b\n", 8, ')'},
+		{"- [ ] a\n\n- [ ] b\n", 9, '*'},
+		{"- a\n- b\n", -1, 0},
+		{"- a\n\nb\n\n- c\n", -1, 0},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		at, mark := new_list_mark(&doc, doc.count - 1)
+		testing.expectf(t, at == c.at && mark == c.mark, "%q: %d %c, not %d %c", c.source, at, mark, c.at, c.mark)
+	}
+}
+
+// The empty lines before a mark that is being typed below a list stay
+// empty lines: the mark is no list yet, so it does not move up into the
+// list above it.
+@(test)
+test_empty_lines_stay_before_a_typed_mark :: proc(t: ^testing.T) {
+	source := "- a\n- b\n\n\n-\n"
+	doc := parse_owned(transmute([]u8)fmt.aprintf("%s", source), len(source) - 1)
+	defer destroy(&doc)
+	testing.expect(t, typed_mark_shown(block_at(&doc, doc.count - 1)))
+	testing.expect_value(t, int(block_at(&doc, doc.count - 2).empties), 1)
+	// Once it is a list item, its list has it with no empty paragraph.
+	plain := parse(source)
+	defer destroy(&plain)
+	testing.expect_value(t, int(block_at(&plain, plain.count - 2).empties), 0)
 }

@@ -1407,7 +1407,18 @@ insert :: proc(ctx: ^Ctx, utf8: [^]u8, length: c.long, kind: history.Kind) -> bo
 	if selected, changed := replace_selection(ctx, string(utf8[:length])); selected {
 		return changed
 	}
+	// A mark that is being typed (`document.typed_mark_shown`) is a list
+	// item after this text: it can join the list above it.
+	was_mark := ctx.doc.count > 0 && ctx.caret_at.empty == 0 && document.typed_mark_shown(document.block_at(&ctx.doc, ctx.caret_at.block))
 	typed(ctx, string(utf8[:length]), ctx.caret, ctx.caret)
+	// A list that the reader starts below another one, after empty
+	// lines, is a list of its own: its mark is the other one, in the same
+	// step of Undo.
+	if was_mark && ctx.doc.count > 0 && ctx.caret_at.empty == 0 {
+		if at, mark := document.new_list_mark(&ctx.doc, ctx.caret_at.block); at >= 0 {
+			change_source_held(ctx, string([]u8{mark}), [2]int{at, at + 1}, ctx.caret)
+		}
+	}
 	return true
 }
 
