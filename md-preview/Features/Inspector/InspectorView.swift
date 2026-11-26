@@ -31,17 +31,13 @@ extension DocumentMetadata {
         if let raw = split.raw {
             meta.frontmatter = MarkdownFrontmatter.parse(raw, format: split.format ?? .yaml)
         }
-        let body = split.body
-        let bodyLines = body.components(separatedBy: .newlines)
-
-        meta.characterCount = body.count
-        meta.wordCount = wordCount(ofBody: body)
-        meta.lineCount = body.isEmpty ? 0 : bodyLines.count
-        meta.headingCount = bodyLines
-            .filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("#") }.count
-        let totalRefs = max(0, body.components(separatedBy: "](").count - 1)
-        meta.imageCount = max(0, body.components(separatedBy: "![").count - 1)
-        meta.linkCount = max(0, totalRefs - meta.imageCount)
+        let counts = DocumentCounts(body: split.body)
+        meta.characterCount = counts.characters
+        meta.wordCount = counts.words
+        meta.lineCount = counts.lines
+        meta.headingCount = counts.headings
+        meta.imageCount = counts.images
+        meta.linkCount = counts.links
 
         if let url,
            let attrs = try? FileManager.default.attributesOfItem(atPath: url.path) {
@@ -54,11 +50,7 @@ extension DocumentMetadata {
     /// The inspector's word count without the rest of `make`, for callers that
     /// need only this number.
     nonisolated static func wordCount(of markdown: String) -> Int {
-        wordCount(ofBody: MarkdownFrontmatter.split(markdown).body)
-    }
-
-    private nonisolated static func wordCount(ofBody body: String) -> Int {
-        body.split { $0.isWhitespace }.count
+        DocumentCounts(body: MarkdownFrontmatter.split(markdown).body).words
     }
 }
 
