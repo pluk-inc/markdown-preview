@@ -346,7 +346,7 @@ mdcore_replace_text :: proc "c" (handle: rawptr, start, end: c.long, utf8: [^]u8
 	sync.lock(&ctx.source_lock)
 	defer sync.unlock(&ctx.source_lock)
 	command(ctx, .Replace)
-	defer history.end(&ctx.history, ctx.caret)
+	defer command_end(ctx)
 	typed(ctx, length > 0 ? string(utf8[:length]) : "", int(start), int(end))
 }
 
@@ -488,7 +488,13 @@ command :: proc(ctx: ^Ctx, kind: history.Kind) {
 	if from, to, selected := selection_offsets(ctx); selected {
 		kind, anchor = .Other, ctx.caret == from ? to : from
 	}
-	history.begin(&ctx.history, kind, ctx.caret, anchor)
+	history.begin(&ctx.history, kind, ctx.caret, anchor, ctx.caret_upstream)
+}
+
+// Ends a command (`command`), with the caret after all that it did.
+@(private)
+command_end :: proc(ctx: ^Ctx) {
+	history.end(&ctx.history, ctx.caret, ctx.caret_upstream)
 }
 
 // Makes the changes of a group of the history again, or takes them
@@ -527,6 +533,12 @@ replay :: proc(ctx: ^Ctx, steps: []history.Step, group: history.Group, back: boo
 		ctx.caret = clamp(caret, 0, len(ctx.doc.source))
 		caret_changed(ctx)
 		ctx.select_from = anchor
+	}
+	// At the end of a line that wraps, where the caret was: the offset
+	// is also the start of the next line.
+	if upstream := back ? group.upstream_before : group.upstream_after; upstream && ctx.caret == caret {
+		ctx.caret_upstream = true
+		caret_placed(ctx)
 	}
 	ctx.selection = {anchor = from, focus = ctx.caret_at, active = true}
 	ctx.display_valid = false
@@ -1391,7 +1403,7 @@ insert :: proc(ctx: ^Ctx, utf8: [^]u8, length: c.long, kind: history.Kind) -> bo
 		return false
 	}
 	command(ctx, kind)
-	defer history.end(&ctx.history, ctx.caret)
+	defer command_end(ctx)
 	if selected, changed := replace_selection(ctx, string(utf8[:length])); selected {
 		return changed
 	}
@@ -1414,7 +1426,7 @@ mdcore_insert_break :: proc "c" (handle: rawptr) {
 		return
 	}
 	command(ctx, .Other)
-	defer history.end(&ctx.history, ctx.caret)
+	defer command_end(ctx)
 	// The text that is selected goes first: the line break is at the
 	// place where it was. Nothing for a selection that has no edit.
 	if selected, changed := replace_selection(ctx, ""); selected && !changed {
@@ -1521,7 +1533,7 @@ mdcore_delete :: proc "c" (handle: rawptr, move: Move) -> bool {
 		return false
 	}
 	command(ctx, move == .Left ? .Back : move == .Right ? .Forward : .Other)
-	defer history.end(&ctx.history, ctx.caret)
+	defer command_end(ctx)
 	if selected, changed := replace_selection(ctx, ""); selected {
 		return changed
 	}
@@ -1581,7 +1593,7 @@ mdcore_delete_lines :: proc "c" (handle: rawptr) -> bool {
 	edit, caret := document.remove_lines(&ctx.doc, from, to) or_return
 	defer delete(edit.text)
 	command(ctx, .Other)
-	defer history.end(&ctx.history, ctx.caret)
+	defer command_end(ctx)
 	change_source_held(ctx, edit.text, [2]int{edit.start, edit.end}, caret)
 	caret_to_place(ctx)
 	return true
@@ -1604,7 +1616,7 @@ mdcore_transpose :: proc "c" (handle: rawptr) -> bool {
 	edit, caret := document.transpose(&ctx.doc, ctx.caret_places[:], ctx.caret_at) or_return
 	defer delete(edit.text)
 	command(ctx, .Other)
-	defer history.end(&ctx.history, ctx.caret)
+	defer command_end(ctx)
 	change_source_held(ctx, edit.text, [2]int{edit.start, edit.end}, caret)
 	return true
 }
@@ -1851,7 +1863,7 @@ mdcore_set_task_checked :: proc "c" (handle: rawptr, line: c.long, checked: bool
 	if mark >= 0 {
 		command(ctx, .Other)
 		history.record(&ctx.history, mark, []u8{was}, string(ctx.doc.source[mark:mark + 1]), time.tick_now())
-		history.end(&ctx.history, ctx.caret)
+		command_end(ctx)
 	}
 	// The places are the same; only the color of the item's text changes.
 	ctx.display_valid = false

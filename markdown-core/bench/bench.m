@@ -292,25 +292,32 @@ static const char *caret_walk(void *ctx, long length) {
         }
         if (!more) break;
     }
+    // The text of Select All before the delete, and the source right
+    // after it (Select All can leave what does not show: link
+    // definitions).
     mdcore_select_all(ctx);
+    const char *all = mdcore_selection_text(ctx, &selected);
+    NSData *all_text = [NSData dataWithBytes:all length:(NSUInteger)(all != NULL ? selected : 0)];
     mdcore_delete(ctx, MDCORE_MOVE_LEFT);
+    NSData *deleted = [NSData dataWithBytes:mdcore_source(ctx, &size) length:(NSUInteger)size];
     mdcore_select_all(ctx);
     if (mdcore_selection_text(ctx, &selected) != NULL && selected > 0) return "text is there after a delete of all of it";
-    // Undo of a change over a selection selects that text again, and
-    // Redo makes the change again.
+    // Undo of a change over a selection selects all of that text again,
+    // and Redo makes the same source as the change.
     if (!mdcore_undo(ctx)) return "no Undo after a delete of all of the text";
     NSData *whole = [NSData dataWithBytes:mdcore_source(ctx, &size) length:(NSUInteger)size];
-    if (size > 0 && !mdcore_has_selection(ctx)) return "Undo of a delete of a selection selects nothing";
+    const char *back_text = mdcore_selection_text(ctx, &selected);
+    if (back_text == NULL ? all_text.length != 0 : ((NSUInteger)selected != all_text.length || memcmp(back_text, all_text.bytes, all_text.length) != 0)) return "Undo of a delete of a selection does not select that text again";
     if (!mdcore_redo(ctx)) return "no Redo after an Undo";
-    mdcore_source(ctx, &now);
-    if (now != 0 && now >= size) return "Redo did not take the text out again";
+    source = mdcore_source(ctx, &now);
+    if ((NSUInteger)now != deleted.length || memcmp(source, deleted.bytes, deleted.length) != 0) return "Redo did not make the source of the delete";
     if (mdcore_can_redo(ctx)) return "Redo has a change after the last one";
     mdcore_undo(ctx);
     source = mdcore_source(ctx, &now);
     if (now != size || memcmp(source, whole.bytes, (size_t)size) != 0) return "Undo after Redo did not give the same text";
     // Each change of this walk taken back gives the source that the
-    // walk started with, byte for byte; made again, the source with no
-    // text; and taken back again, the first one.
+    // walk started with, byte for byte; made again, the source of the
+    // delete; and taken back again, the first one.
     long undone = 1;
     while (mdcore_undo(ctx)) undone++;
     source = mdcore_source(ctx, &now);
@@ -318,10 +325,9 @@ static const char *caret_walk(void *ctx, long length) {
     if (mdcore_can_undo(ctx)) return "Undo has a change at the first source";
     long again = 0;
     while (mdcore_redo(ctx)) again++;
-    mdcore_source(ctx, &now);
+    source = mdcore_source(ctx, &now);
     if (again != undone) return "Redo has another count of changes than Undo";
-    mdcore_select_all(ctx);
-    if (mdcore_selection_text(ctx, &selected) != NULL && selected > 0) return "text is there after Redo of each change";
+    if ((NSUInteger)now != deleted.length || memcmp(source, deleted.bytes, deleted.length) != 0) return "Redo of each change did not make the source of the delete";
     while (mdcore_undo(ctx)) {
     }
     source = mdcore_source(ctx, &now);

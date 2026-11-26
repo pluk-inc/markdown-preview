@@ -307,3 +307,21 @@ test_deletes_in_a_row_are_one_step :: proc(t: ^testing.T) {
 	make_again(&x)
 	testing.expect_value(t, string(x.bytes[:]), "ab")
 }
+
+// The side of the caret at the end of a line that wraps comes back with
+// Undo and with Redo.
+@(test)
+test_the_side_of_the_caret_comes_back :: proc(t: ^testing.T) {
+	x: Text
+	defer free_text(&x)
+	append(&x.bytes, "ab")
+	x.caret = 2
+	begin(&x.h, .Typing, x.caret, upstream = true)
+	change(&x, 2, 2, "c", 0)
+	end(&x.h, x.caret, false)
+	steps, group, ok := undo(&x.h)
+	testing.expect(t, ok)
+	testing.expect_value(t, len(steps), 1)
+	testing.expect(t, group.upstream_before)
+	testing.expect(t, !group.upstream_after)
+}
