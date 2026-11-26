@@ -115,6 +115,18 @@ These came from the maintainer. Do not undo one without asking.
   is the text of before with the range out, which the first plan had:
   that check refuses what a reader of Markdown expects. What the core
   keeps right by itself is the styles (`document.range_edit`).
+- **Undo is a history of the source in the core** (2026-11-25), not the
+  undo manager of the window. A step is the bytes that went and came
+  at an offset, with the caret and the selection before and after; the
+  steps of one exported call are one group, and Undo makes the edit of
+  each step back through the one way that the source changes, so the
+  layout, the caret, and the marks at the caret work as for each other
+  edit. Steps of typed or deleted characters in a row less than 0.3 s
+  apart go on in one group, as the forms of the text of an input method
+  do; a move of the caret ends a group, and so does a line break that
+  is typed. A new text from the host (a file that another app changed)
+  ends the history: its steps are of a source that is no more. The
+  bytes of the history are kept to 16 MB; the oldest groups go first.
 - **A reader at the end of the document is kept by the first line that
   shows, as at each other place** (2026-11-24). With a narrower window the
   end then goes out of view. Browsers and editors do the same; only a
@@ -474,6 +486,16 @@ Known limits, found in review and left on purpose:
 
 - One very long paragraph or one large table is laid out in one step. Code
   blocks stop between lines.
+- A change in a run of many link definitions parses all of them again:
+  with the 2,200 definitions of the 1 MB fixture (all that a delete of
+  all of its text leaves) one change costs tens of ms, and the walk of
+  `bench.m` with its Undo check runs for many minutes on that file.
+- Control-T after the first character of a paragraph that starts with a
+  word and a space ("A paragraph") puts the space first, where Markdown
+  does not show it, and a second Control-T then has no two characters to
+  change. The walk of `bench.m` stops there on
+  `~/Desktop/Pluk/md-test-docs/empty-lines.md` (also before Undo came).
+  `document.transpose` must not move a space to the start of a text.
 - The time from a key to its frame has no program in `bench/`: it was
   measured with a build that has time stamps in the view and in the render
   loop (`BENCHMARKS.md`, "The frame for a key does not wait for the
@@ -1014,8 +1036,8 @@ The order of the next steps, from the review of the second step:
   the marks of an element go with the last text between them also
   while they show, as with no marks in the text (an edit knows each
   element but the ones with a mark that the range has a byte of).
-- Next for the editor, in the order that a reader misses them: undo;
-  the fence lines of code and the line under a heading.
+- Next for the editor, in the order that a reader misses them: the
+  fence lines of code and the line under a heading.
 - Done: where the lines of a block end comes from the parser
   (`block_offset` gives the end too, `Block.lines`), as its start does.
   Before, `empties.lines_end` and `fence_line` read the lines a second
@@ -1056,7 +1078,7 @@ The order of the next steps, from the review of the second step:
   delete, and a paragraph with a block right after it has one empty
   line there after the two; a document of only empty lines has no
   block and no caret.
-- Not done for the caret: a caret in a table cell with no text, undo.
+- Not done for the caret: a caret in a table cell with no text.
 - Done: a delete of the only character between two marks takes the
   marks too ("**a**" was "****" after it, which is a rule). The Delete
   key is the range edit of one step to the left, as each other delete.
@@ -1460,3 +1482,24 @@ export.
   could draw in the wrong order; the bots found a second early frame in
   the queue and a note about a lock that was wrong. The CPU for each key
   in the app process is 5.6 ms (short) and 6.5 ms (long).
+- **2026-11-25** — Undo and Redo. The maintainer asked for undo as the
+  next editor task, before footnotes. The history is a package of its
+  own (`src/history`), with no document in it; the core records each
+  change of `change_source_held` in a command of the reader and makes
+  the changes of a group again through the same entry point. The
+  reference editor was read for its grouping (a time gap and an end at
+  a caret move) only after the first form was written; the maintainer
+  pointed that out, and the gap went from 0.6 to 0.3 s and the
+  selection came into the group after it. A reviewer with the task to
+  break the round trip found four faults before the PR opened: a task
+  that was set with no caret was no step (a later Redo then worked on
+  another text), an input method that was let go in an empty line was
+  two groups, the caret after a command was taken before its last move
+  (Return in a quote), and a change to the same bytes was a step. The
+  bots then found a history that went on into another document with the
+  same text, the forms of an input method over a selection in two
+  groups, a paste that joined the typing around it, and a limit that
+  did not count the records. A timing on the 1 MB fixture found Undo of
+  40 typed characters at 15 ms (one parse for each character); the
+  characters of a run are one step now, 0.33 ms. Undo of a delete of
+  all of that document is 13 to 15 ms, a parse of what comes back.

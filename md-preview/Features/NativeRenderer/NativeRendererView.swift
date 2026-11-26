@@ -548,6 +548,9 @@ final class NativeRendererView: NSView {
         text.withUTF8 { utf8 in
             utf8.withMemoryRebound(to: CChar.self) { mdcore_set_markdown(ctx, $0.baseAddress, $0.count) }
         }
+        // Another document: Undo has no change of it, also when its text
+        // is the same as the one before (two empty files).
+        if !keepsScroll { mdcore_forget_history(ctx) }
         hasDocument = true
         endScrollAnimation()
         // The core changed the document in place: what is the same as
@@ -908,6 +911,11 @@ extension NativeRendererView: NSMenuItemValidation {
             return isEditable && hasCaret && mdcore_has_selection(ctx)
         case #selector(paste(_:)):
             return isEditable && hasCaret
+        // Also before a click in the text: a task that was set is a step.
+        case #selector(undo(_:)):
+            return isEditable && mdcore_can_undo(ctx)
+        case #selector(redo(_:)):
+            return isEditable && mdcore_can_redo(ctx)
         default:
             return true
         }
@@ -1002,8 +1010,11 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
     /// Puts text in at the caret, or in the place of the text of an input
     /// method that is not final. Returns where the text starts in the
     /// source, and how many bytes the core has before it for it.
+    /// `typed`: text of a key or of an input method, which goes on in
+    /// one step of Undo with the text typed before it; a paste is a step
+    /// of its own.
     @discardableResult
-    private func put(_ text: String) -> (start: Int, lead: Int) {
+    private func put(_ text: String, typed: Bool = true) -> (start: Int, lead: Int) {
         var text = text
         let marked = markedText
         var start = marked?.start ?? mdcore_caret_offset(ctx)
@@ -1020,9 +1031,14 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
                 // the place of another one: of the text of the input
                 // method, or of the text that is selected.
                 if marked != nil {
+                    // A paste in the place of the text of an input method
+                    // is a step of its own, not a new form of that text.
+                    if !typed { mdcore_end_undo_group(ctx) }
                     mdcore_replace_text(ctx, start, end, $0.baseAddress, $0.count)
-                } else if $0.count > 0 {
+                } else if $0.count > 0, typed {
                     applied = mdcore_insert(ctx, $0.baseAddress, $0.count)
+                } else if $0.count > 0 {
+                    applied = mdcore_paste(ctx, $0.baseAddress, $0.count)
                 }
             }
         }
@@ -1253,7 +1269,7 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
     override func yank(_ sender: Any?) {
         guard isEditable, hasCaret, !Self.killed.isEmpty else { return }
         markedText = nil
-        put(Self.killed)
+        put(Self.killed, typed: false)
         didEdit()
     }
 
@@ -1279,7 +1295,31 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
 
     @objc func paste(_ sender: Any?) {
         guard isEditable, hasCaret, let text = NSPasteboard.general.string(forType: .string) else { return }
-        put(text)
+        put(text, typed: false)
         didEdit()
+    }
+
+    // The core keeps the changes of the reader (`mdcore_undo`): the
+    // view's own Undo and Redo, before the window's undo manager.
+
+    @objc func undo(_ sender: Any?) {
+        stepHistory(redo: false)
+    }
+
+    @objc func redo(_ sender: Any?) {
+        stepHistory(redo: true)
+    }
+
+    private func stepHistory(redo: Bool) {
+        guard isEditable else { return }
+        // The text of an input method that is not final is a part of the
+        // last change: the input method lets it go first, while the view
+        // still knows its range (an input method can answer with the
+        // text as final, which then takes the place of that range).
+        if markedText != nil {
+            inputContext?.discardMarkedText()
+            markedText = nil
+        }
+        if redo ? mdcore_redo(ctx) : mdcore_undo(ctx) { didEdit() }
     }
 }

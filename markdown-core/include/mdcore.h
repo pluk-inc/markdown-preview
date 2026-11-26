@@ -174,6 +174,9 @@ bool mdcore_caret_move(void *ctx, mdcore_move move, bool extend);
 // what goes). Does nothing with no caret. False when nothing changed: no
 // caret, no text, or a selection that has no edit.
 bool mdcore_insert(void *ctx, const char *utf8, long length);
+// mdcore_insert for text that the reader did not type (a paste, Control-Y):
+// it is one step of Undo of its own, and typed text after it is another.
+bool mdcore_paste(void *ctx, const char *utf8, long length);
 
 // Return at the caret: what the block of the caret needs for it. In
 // code, a new line. At the end of the text of a list item, a new item
@@ -226,6 +229,35 @@ bool mdcore_delete_lines(void *ctx);
 // characters next to each other in the source, with text selected, and
 // with no caret.
 bool mdcore_transpose(void *ctx);
+
+// Undo and Redo. The core keeps each change that a call made at the
+// caret (text that came, text that went, a task that was set), in the
+// order that they came. mdcore_undo takes the last one back, and
+// mdcore_redo makes it again; the caret is where it was before the
+// change (after it, for Redo), and Undo selects the text again that was
+// selected before the change. False, with no change, when there is no
+// such change.
+//
+// One Undo takes back what one call changed, and with it the calls
+// before it that go on from each other in a short time: characters that
+// came one after the other at the caret, characters that went one after
+// the other, the forms of the text of an input method
+// (mdcore_replace_text for the end of the text that the calls before
+// put in). A move of the caret and a click end such a run. A change
+// after an Undo ends what Redo can make again. A new text of the
+// document (mdcore_set_markdown with another text) ends both.
+bool mdcore_undo(void *ctx);
+bool mdcore_redo(void *ctx);
+// The next change is a step of Undo of its own: for text that the host
+// puts in the place of the text of an input method (a paste), which
+// would else go on in the step of that text.
+void mdcore_end_undo_group(void *ctx);
+// Ends the history: for another document, also one with the same text
+// (two empty files).
+void mdcore_forget_history(void *ctx);
+// True when mdcore_undo (mdcore_redo) has a change.
+bool mdcore_can_undo(void *ctx);
+bool mdcore_can_redo(void *ctx);
 
 // The text of the document as it is now, UTF-8: what a host saves after
 // edits. The pointer is good until the next call of this.
