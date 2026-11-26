@@ -69,6 +69,9 @@ Ctx :: struct {
 	cache:           text.Glyph_Cache,
 	gpu:             renderer.Renderer,
 	selection:       document.Selection,
+	// The code that the caret was in when the command of the reader in
+	// progress started (`command`), for the rules at its end.
+	code_before:    document.Code_Before,
 	// The caret of an editor: where text that is typed goes. An offset
 	// in the source of the document, because that is what an edit
 	// changes; -1 for no caret. `caret_at` is the address in the text of
@@ -364,16 +367,6 @@ mdcore_replace_text :: proc "c" (handle: rawptr, start, end: c.long, utf8: [^]u8
 // of the view at the same time.
 @(private)
 typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
-	before := document.code_before(&ctx.doc, ctx.caret_at)
-	put_typed(ctx, text, start, end)
-	if ctx.caret >= 0 {
-		typed_fence(ctx, before)
-	}
-}
-
-// The change of `typed`.
-@(private)
-put_typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
 	// Not for text that starts with a line break itself (the bytes of a
 	// delete that come back): it has what makes it a paragraph of its own.
 	// After front matter with no line break at its end (and no text
@@ -405,15 +398,16 @@ put_typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
 	change_source_held(ctx, text, [2]int{start, end})
 }
 
-// After text that was typed, the rules for a fence that it made
-// (`document.typed_fence`): the lines of a fence do not show, so the
-// caret has no place in them. A new fence gets its closing fence at
-// once. A closing fence takes the caret to an empty paragraph after the
+// At the end of a command of the reader, the rules for a fence that it
+// made or took away (`document.typed_fence`): the lines of a fence do
+// not show, so the caret has no place in them. A new fence gets its
+// closing fence at once, and loses it when its line is no fence any
+// more. A closing fence takes the caret to an empty paragraph after the
 // code, or, where none can be, back to the end of the code. The caller
-// holds `source_lock`, in a command of the history.
+// holds `source_lock`, in the command.
 @(private)
 typed_fence :: proc(ctx: ^Ctx, before: document.Code_Before) {
-	if ctx.doc.count == 0 {
+	if ctx.doc.count == 0 || ctx.caret < 0 {
 		return
 	}
 	kind, start, end, text := document.typed_fence(&ctx.doc, before, ctx.caret_at, ctx.caret)
@@ -423,6 +417,9 @@ typed_fence :: proc(ctx: ^Ctx, before: document.Code_Before) {
 		return
 	case .Opened:
 		change_source_held(ctx, text, [2]int{start, end}, ctx.caret)
+		return
+	case .Unopened:
+		change_source_held(ctx, "", [2]int{start, end}, ctx.caret)
 		return
 	case .Closed_Twice:
 		change_source_held(ctx, "", [2]int{start, end}, start)
@@ -565,12 +562,20 @@ command :: proc(ctx: ^Ctx, kind: history.Kind) {
 	if from, to, selected := selection_offsets(ctx); selected {
 		kind, anchor = .Other, ctx.caret == from ? to : from
 	}
+	if ctx.history.depth == 0 {
+		ctx.code_before = ctx.caret >= 0 ? document.code_before(&ctx.doc, ctx.caret_at, ctx.caret) : {}
+	}
 	history.begin(&ctx.history, kind, ctx.caret, anchor, ctx.caret_upstream)
 }
 
-// Ends a command (`command`), with the caret after all that it did.
+// Ends a command (`command`), with the caret after all that it did, and
+// after the rules for a fence that it made (`typed_fence`).
 @(private)
 command_end :: proc(ctx: ^Ctx) {
+	// With the changes of the command done, and in its step of Undo.
+	if ctx.history.depth == 1 {
+		typed_fence(ctx, ctx.code_before)
+	}
 	history.end(&ctx.history, ctx.caret, ctx.caret_upstream)
 }
 

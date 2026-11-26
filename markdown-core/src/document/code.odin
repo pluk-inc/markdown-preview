@@ -135,14 +135,20 @@ code_close :: proc(doc: ^Document, block: int) -> (line, end: int, ok: bool) {
 Code_Before :: struct {
 	in_code: bool, // the caret is in code in a fence
 	closed:  bool, // which has a closing fence
+	// The caret is in the line of a fence whose closing fence is the
+	// next line: a fence that was typed and got it (`.Opened`).
+	pair:    bool,
+	start:   int, // where the line of that fence starts
 }
 
-code_before :: proc(doc: ^Document, at: Address) -> (before: Code_Before) {
+code_before :: proc(doc: ^Document, at: Address, offset: int) -> (before: Code_Before) {
 	if doc.count == 0 || at.empty != 0 || !block_at(doc, at.block).fenced {
 		return
 	}
-	_, _, closed := code_close(doc, at.block)
-	return {true, closed}
+	line, _, closed := code_close(doc, at.block)
+	start := block_start(doc, at.block)
+	first_end, content := line_at(doc.source, start)
+	return {true, closed, closed && line == content && offset <= first_end, start}
 }
 
 // What the caret is in after text that was typed made a fence, or was
@@ -159,12 +165,32 @@ Typed_Fence :: enum {
 	Closed_Twice,
 	// The closing fence of code that had none: the caret leaves.
 	Closed,
+	// The line of a fence that was typed is no fence now (a "`" in the
+	// word after it, or its characters went): the closing fence that it
+	// got, from `start` to `end` with the line break before it, goes,
+	// or it would start code of its own.
+	Unopened,
 }
 
 // The rule for a caret at `offset` after text was typed there. The text
 // is memory of `allocator`.
 typed_fence :: proc(doc: ^Document, before: Code_Before, at: Address, offset: int, allocator := context.allocator) -> (kind: Typed_Fence, start, end: int, text: string) {
-	if doc.count == 0 || at.empty != 0 || !block_at(doc, at.block).fenced {
+	if doc.count == 0 {
+		return
+	}
+	if before.pair {
+		// The line of the fence is where it was, or, when text before it
+		// went, the line of the caret.
+		line := offset < before.start ? line_start(doc.source, offset) : min(before.start, len(doc.source))
+		line_end, next := line_at(doc.source, line)
+		if opens := block_at_offset(doc, line); !block_at(doc, opens).fenced || block_start(doc, opens) != line {
+			if next_end, _ := line_at(doc.source, next); next > line_end && next < len(doc.source) && closing_fence(doc.source, next, next_end) {
+				return .Unopened, line_end, next_end, ""
+			}
+			return
+		}
+	}
+	if at.empty != 0 || !block_at(doc, at.block).fenced {
 		return
 	}
 	first := block_start(doc, at.block)

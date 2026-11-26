@@ -1620,7 +1620,10 @@ export.
   - A fence that is typed gets its closing fence at once, so the code
     takes no text after it and no fence of other code is its end
     (`typed_fence`, `.Opened`); one more character of the fence goes to
-    its closing fence too.
+    its closing fence too, and when the line is no fence any more (a
+    "`" in the word after it, or its characters went) that closing
+    fence goes (`.Unopened`). The rule runs at the end of each command
+    of the reader (`command_end`), so a delete has it too.
   - Return in the line of a fence that was typed starts the first line
     of the code (`fence_return`).
   - Text that makes a closing fence takes the caret to an empty
@@ -1638,5 +1641,7 @@ export.
   Open: the word after the fence (the language) cannot be changed after
   Return; a delete at the start of the first line of code does nothing;
   a document that is only a fence with no line break has no caret; Left
-  from the end of a typed fence goes to the block before. The walk of
+  from the end of a typed fence goes to the block before; text typed
+  after a fence with no Return is the word of the fence (the language),
+  which does not show. The walk of
   `bench.m` types these (`typed_code_check`).
