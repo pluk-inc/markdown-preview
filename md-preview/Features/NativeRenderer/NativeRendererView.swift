@@ -911,10 +911,11 @@ extension NativeRendererView: NSMenuItemValidation {
             return isEditable && hasCaret && mdcore_has_selection(ctx)
         case #selector(paste(_:)):
             return isEditable && hasCaret
+        // Also before a click in the text: a task that was set is a step.
         case #selector(undo(_:)):
-            return isEditable && hasCaret && mdcore_can_undo(ctx)
+            return isEditable && mdcore_can_undo(ctx)
         case #selector(redo(_:)):
-            return isEditable && hasCaret && mdcore_can_redo(ctx)
+            return isEditable && mdcore_can_redo(ctx)
         default:
             return true
         }
@@ -1030,6 +1031,9 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
                 // the place of another one: of the text of the input
                 // method, or of the text that is selected.
                 if marked != nil {
+                    // A paste in the place of the text of an input method
+                    // is a step of its own, not a new form of that text.
+                    if !typed { mdcore_end_undo_group(ctx) }
                     mdcore_replace_text(ctx, start, end, $0.baseAddress, $0.count)
                 } else if $0.count > 0, typed {
                     applied = mdcore_insert(ctx, $0.baseAddress, $0.count)
@@ -1307,7 +1311,7 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
     }
 
     private func stepHistory(redo: Bool) {
-        guard isEditable, hasCaret else { return }
+        guard isEditable else { return }
         // The text of an input method that is not final is a part of the
         // last change: the input method lets it go first, while the view
         // still knows its range (an input method can answer with the
