@@ -85,8 +85,12 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-25 | the mark of a heading at the caret | 557 / 603 | 53 / 100 | 470 / 735 | 59 / 76 | none | none | 7.0 / 26.1 (16.1 at the first frame) |
 | 2026-11-25 | the mark of a list item and of a quote at the caret | 601 / 609 | 62 / 108 (the base too) | 480 / 715 | 61 / 75 | none | none | 7.0 / 26.3 (16.1 at the first frame) |
 | 2026-11-25 | the frame for a key does not wait for the refresh | 611 / 586 | 65 / 110 (the base too) | 490 / 800 | none | none | none (the core is the same) | none |
+<<<<<<< HEAD
 | 2026-11-25 | Undo and Redo | 608 / 601 | 65 / 111 (the base too) | 485 / 785 | none | none | 0.39 / 0.40 | 7.0 / 26.4 (the base too) |
-| 2026-11-26 | Control-T keeps each space | 598 / 588 | 52 / 100 (the base too) | 490 / 725 | none | none | 0.40 / 0.43 | 7.1 / 26.4 (the base too) |
+| 2026-11-26 | Control-T keeps each space | 598 / 588 | 52 / 100 (the base too) | 490 / 725 | 67 / 85 | not recorded | not recorded | 7.1 / 26.4 (the base too) |
+=======
+| 2026-11-25 | Undo and Redo | 608 / 601 | 65 / 111 (the base too) | 485 / 785 | 62 / 76 | not recorded | not recorded | 7.0 / 26.4 (the base too) |
+>>>>>>> feature/native-undo
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1180,9 +1184,13 @@ so the set was made again with a lower load (2 to 4.5):
 | A step of the caret to the left or to the right (CPU ms) | 0.41, 0.39 / 0.36, 0.44 | 0.35, 0.45 / 0.42, 0.43 |
 | Heap with all of the document laid out (MB) | 7.2, 7.0 / 26.5, 26.4 | 7.0, 7.2 / 26.3, 26.4 |
 
-In this set the same rows overlap, and the end of the long text is a
-little higher for the change: the first set's gap was the load, not the
-change. `app.py`, short / long, five launches for each number, in the
+In this set the rows of the end of the text and of the middle overlap
+between the builds, and a typed character at a caret is higher for the
+change in both documents (short 1.57, 1.72 against 1.27, 1.31; long
+2.01, 2.03 against 1.58, 1.94). So the two rows went down for the change
+in the first set and up in the second: the change does not run there
+(only Control-T calls the rule), and the gaps are the spread of this Mac
+under load. `app.py`, short / long, five launches for each number, in the
 order that they ran:
 
 | Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
