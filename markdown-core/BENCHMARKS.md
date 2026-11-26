@@ -86,7 +86,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-25 | the mark of a list item and of a quote at the caret | 601 / 609 | 62 / 108 (the base too) | 480 / 715 | 61 / 75 | none | none | 7.0 / 26.3 (16.1 at the first frame) |
 | 2026-11-25 | the frame for a key does not wait for the refresh | 611 / 586 | 65 / 110 (the base too) | 490 / 800 | none | none | none (the core is the same) | none |
 | 2026-11-25 | Undo and Redo | 608 / 601 | 65 / 111 (the base too) | 485 / 785 | none | none | 0.39 / 0.40 | 7.0 / 26.4 (the base too) |
-| 2026-11-26 | Control-T keeps each space | not run (no launch path) | not run | not run | none | none | 0.37 / 0.33 | 7.0 / 26.4 (the base too) |
+| 2026-11-26 | Control-T keeps each space | 598 / 588 | 52 / 100 (the base too) | 490 / 725 | none | none | 0.40 / 0.43 | 7.1 / 26.4 (the base too) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1155,18 +1155,43 @@ was 2 to 7.
 
 ## Control-T keeps each space (2026-11-26)
 
-The rule runs only for Control-T, so `app.py` did not run: no launch,
-scroll, or typing path calls it. `core.py`, short / long, in turns
-(base, change, change, base), with a load of 5 to 9 from other work on
-the Mac:
+The rule runs only for Control-T: no launch, scroll, or typing path
+calls it. Two sets, each in turns (base, change, change, base), the
+base (Undo and Redo) built from its commit on the same day.
+
+The first set, `core.py` only, with a load of 5 to 9 from other work on
+the Mac, short / long:
 
 | | Base | Change |
 | --- | --- | --- |
-| First frame (ms) | 62, 55 / 73, 83 | 57, 60 / 73, 70 |
-| A typed character in the middle of the text (CPU ms) | 1.15, 1.15 / 1.46, 1.70 | 1.16, 1.03 / 1.30, 1.26 |
 | A typed character at the end of the text (CPU ms) | 1.14, 1.33 / 3.48, 3.16 | 1.20, 1.37 / 2.02, 2.32 |
 | A typed character at a caret (CPU ms) | 1.49, 1.51 / 2.04, 2.06 | 1.53, 1.57 / 1.59, 1.32 |
-| A step of the caret to the left or to the right (CPU ms) | 0.36, 0.39 / 0.41, 0.46 | 0.37, 0.44 / 0.34, 0.32 |
-| Heap with all of the document laid out (MB) | 7.0 / 26.3, 26.4 | 7.0 / 26.5, 26.4 |
 
-No number moved by more than the two runs of one build differ.
+Those two rows of the long document were lower for the change by more
+than the two runs of one build differ. The change does not run there,
+so the set was made again with a lower load (2 to 4.5):
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 72, 56 / 79, 80 | 69, 65 / 82, 87 |
+| A typed character in the middle of the text (CPU ms) | 1.25, 1.12 / 1.40, 1.55 | 1.08, 1.24 / 1.49, 1.54 |
+| A typed character at the end of the text (CPU ms) | 1.29, 0.92 / 2.64, 2.88 | 1.37, 1.47 / 3.25, 2.81 |
+| A typed character at a caret (CPU ms) | 1.31, 1.27 / 1.58, 1.94 | 1.57, 1.72 / 2.03, 2.01 |
+| A step of the caret to the left or to the right (CPU ms) | 0.41, 0.39 / 0.36, 0.44 | 0.35, 0.45 / 0.42, 0.43 |
+| Heap with all of the document laid out (MB) | 7.2, 7.0 / 26.5, 26.4 | 7.0, 7.2 / 26.3, 26.4 |
+
+In this set the same rows overlap, and the end of the long text is a
+little higher for the change: the first set's gap was the load, not the
+change. `app.py`, short / long, five launches for each number, in the
+order that they ran:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 636 / 616 | 51 / 97 | 510 / 750 |
+| change | 592 / 602 | 52 / 100 | 500 / 720 |
+| change | 604 / 573 | 51 / 99 | 480 / 730 |
+| base | 610 / 653 | 52 / 94 | 480 / 760 |
+
+The launches of the change were 20 to 50 ms earlier in this set. No
+code of a launch changed, so that is the spread of launches at this
+load.
