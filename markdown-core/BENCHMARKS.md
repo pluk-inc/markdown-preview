@@ -85,7 +85,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-25 | the mark of a heading at the caret | 557 / 603 | 53 / 100 | 470 / 735 | 59 / 76 | none | none | 7.0 / 26.1 (16.1 at the first frame) |
 | 2026-11-25 | the mark of a list item and of a quote at the caret | 601 / 609 | 62 / 108 (the base too) | 480 / 715 | 61 / 75 | none | none | 7.0 / 26.3 (16.1 at the first frame) |
 | 2026-11-25 | the frame for a key does not wait for the refresh | 611 / 586 | 65 / 110 (the base too) | 490 / 800 | none | none | none (the core is the same) | none |
-| 2026-11-25 | Undo and Redo | 608 / 601 | 65 / 111 (the base too) | 485 / 785 | none | none | 0.39 / 0.40 | 7.0 / 26.4 (the base too) |
+| 2026-11-25 | Undo and Redo | 608 / 601 | 65 / 111 (the base too) | 485 / 785 | 62 / 76 | not recorded | not recorded | 7.0 / 26.4 (the base too) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
