@@ -89,6 +89,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-26 | Control-T keeps each space | 598 / 588 | 52 / 100 (the base too) | 490 / 725 | 67 / 85 | not recorded | not recorded | 7.1 / 26.4 (the base too) |
 | 2026-11-26 | list marks as in other Markdown editors | 576 / 555 | 60 / 107 (the base too) | 485 / 770 | 59 / 72 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
 | 2026-11-26 | the outline of native Edit Mode from the core | 574 / 559 | 64 / 110 (the base too) | 475 / 755 | 58 / 74 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
+| 2026-11-26 | the caret at its place after Up from a list mark | 568 / 591 | 60 / 108 (the base too) | 490 / 800 | 60 / 74 | not recorded | not recorded | 7.1 / 26.4 (the base too) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1290,3 +1291,34 @@ read only when the app asks. So this is noted, not explained. `app.py`, short / 
 
 The outline of a document that opens did not change: it still comes
 from `MarkdownTOC.parse` (see Open work).
+
+## The caret at its place after Up from a list mark (2026-11-26)
+
+One look for the place of the caret after the parse around a line that
+is only a list mark: no launch, scroll, or typing path of the benchmark
+runs it. `core.py`, short / long, in turns (base, change, change, base),
+with a load of 1.6 to 4:
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 62, 63 / 72, 71 | 59, 61 / 74, 75 |
+| A typed character in the middle of the text (CPU ms) | 1.30, 1.16 / 1.04, 1.38 | 1.10, 1.24 / 1.67, 1.43 |
+| A typed character at the end of the text (CPU ms) | 1.19, 1.09 / 2.04, 3.48 | 1.14, 1.37 / 2.65, 2.89 |
+| A typed character at a caret (CPU ms) | 1.91, 1.28 / 1.62, 1.96 | 1.52, 1.54 / 1.79, 1.94 |
+| A step of the caret to the left or to the right (CPU ms) | 0.47, 0.39 / 0.44, 0.48 | 0.41, 0.34 / 0.42, 0.39 |
+| Heap with all of the document laid out (MB) | 7.1, 7.0 / 26.4 | 7.1, 7.0 / 26.4 |
+
+The rows overlap but for a typed character in the middle of the long
+text, where the two runs of the change (1.67, 1.43) are above the two of
+the base (1.04, 1.38); the change is not on that path. `app.py`, short /
+long, five launches each, in the order that they ran:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 593 / 632 | 60 / 107 | 520 / 830 |
+| change | 583 / 559 | 60 / 108 | 500 / 770 |
+| change | 552 / 622 | 60 / 107 | 480 / 830 |
+| base | 637 / 633 | 60 / 107 | 530 / 830 |
+
+The launches of the base were slower in this set; no code of a launch
+changed, so that is the spread of the Mac (other apps were in use).
