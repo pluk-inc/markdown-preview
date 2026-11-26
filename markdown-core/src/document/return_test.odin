@@ -417,6 +417,11 @@ test_a_typed_fence :: proc(t: ^testing.T) {
 		// An edit before the line of a typed fence: its closing fence
 		// stays.
 		{"ext\n\n```\n```\n\nMore\n", {true, true, true}, 8, .None, ""},
+		// A ">" in code that is in no quote, and four spaces after a
+		// fence with one space before it: lines of code.
+		{"```\nx\n> ```\n", {true, false, false}, 11, .None, ""},
+		{"```\nx\n    > ```\n", {true, false, false}, 15, .None, ""},
+		{" ```\nx\n    ```\n", {true, false, false}, 14, .None, ""},
 		// A fence after four spaces is a line of code, no closing fence.
 		{"```\nx\n    ```\n", {true, false, false}, 13, .None, ""},
 		{"- ```\n  x\n     ```\n", {true, false, false}, 18, .Closed, ""},
@@ -457,6 +462,8 @@ test_the_caret_leaves_a_closing_fence :: proc(t: ^testing.T) {
 		// An empty paragraph is there.
 		{"```\nx\n```\n\n\nmore\n", 9, true, "```\nx\n```\n\n\nmore\n", 10},
 		{"```\r\nx\r\n```\r\n", 11, true, "```\r\nx\r\n```\r\n\r\n", 13},
+		// Code in no list leaves before a list too.
+		{"```\nx\n```\n- b\n", 9, true, "```\nx\n```\n\n\n- b\n", 10},
 		// Not out of a list and not out of a quote that go on.
 		{"- a\n- ```\n  x\n  ```\n- b\n", 20, false, "", 0},
 		{"> ~~~\n> x\n> ~~~\n> more\n", 14, false, "", 0},
@@ -508,5 +515,43 @@ test_pasted_lines_are_lines_of_the_code :: proc(t: ^testing.T) {
 		apply(&doc, {c.place, c.place, own})
 		testing.expect_value(t, string(doc.source), c.after)
 		testing.expect_value(t, c.place + caret, c.caret)
+	}
+}
+
+// The parser says if code in a fence has its closing fence.
+@(test)
+test_the_parser_knows_a_closing_fence :: proc(t: ^testing.T) {
+	Case :: struct {
+		source: string,
+		block:  int,
+		closed: bool,
+	}
+	cases := []Case {
+		{"```\nx\n```\n", 0, true},
+		{"```\n```", 0, true},
+		{"```\n\n\nx\n\n```\n\nmore\n", 0, true},
+		{"~~~js\r\nx\r\n~~~~\r\n", 0, true},
+		{"> ```\n> x\n> ```\n", 0, true},
+		{"- a\n\n  ```\n  x\n  ```\n", 1, true},
+		{">```\n> x\n>    ```\n", 0, true},
+		// No closing fence: the end of the source, a fence that is too
+		// short or of the other character, and lines of code with a fence.
+		{"```\nx\n", 0, false},
+		{"```\n", 0, false},
+		{"```", 0, false},
+		{"```\n\n\n", 0, false},
+		{"````\nx\n```\n", 0, false},
+		{"```\nx\n~~~\n", 0, false},
+		{"```\nx\n    ```\n", 0, false},
+		{"```\nx\n> ```\n", 0, false},
+		{"```\necho ```\n", 0, false},
+		{"> ```\n> x\n\nmore\n", 0, false},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		b := block_at(&doc, c.block)
+		testing.expect(t, b.fenced)
+		testing.expectf(t, b.closed == c.closed, "%q: closed %v", c.source, b.closed)
 	}
 }

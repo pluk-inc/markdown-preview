@@ -1638,6 +1638,11 @@ export.
   typed closing fence. A second form took each typed closing fence for
   an end of the code and read a fence from the bytes of each line; a
   reviewer broke it in the middle of code and before one empty line.
+  If a line is a closing fence, only the parser knows (its indent, the
+  marks of the quotes that it is in): the parser records it
+  (`Block.closed`, from the lines of the block that are no lines of its
+  code), and no rule reads it from the bytes of a line. Three forms
+  that did were each wrong in a case that a review bot found.
   Open: the word after the fence (the language) cannot be changed after
   Return; a delete at the start of the first line of code does nothing;
   a document that is only a fence with no line break has no caret; Left

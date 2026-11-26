@@ -24,55 +24,20 @@ fence_run :: proc(source: []u8, line, end: int) -> (from, to: int, ok: bool) {
 	return from, to, to - from >= 3
 }
 
-// True for a line that is only a fence, one that can end code: before
-// the fence only the indent and the ">" of a quote, and nothing after
-// it. A line of code that ends with such a run ("echo ```") is none.
+// True for a line with nothing after its fence: the form of a closing
+// fence. Only for a line that the parser read as a fence (the first line
+// of code, or a line that closed code before an edit of another line):
+// if a line of the source is a closing fence, only the parser knows
+// (`Block.closed`).
 @(private)
-closing_fence :: proc(source: []u8, line, end: int) -> bool {
-	from, to := fence_run(source, line, end) or_return
-	for i in line ..< from {
-		if source[i] != ' ' && source[i] != '\t' && source[i] != '>' {
-			return false
-		}
-	}
+bare_fence :: proc(source: []u8, line, end: int) -> bool {
+	_, to := fence_run(source, line, end) or_return
 	for i in to ..< end {
 		if source[i] != ' ' && source[i] != '\t' {
 			return false
 		}
 	}
 	return true
-}
-
-// True for a line that ends the code that the fence in the line from
-// `open` to `open_end` starts: a closing fence of the same character,
-// and not shorter.
-@(private)
-closes_code :: proc(source: []u8, open, open_end, line, end: int) -> bool {
-	if !closing_fence(source, line, end) {
-		return false
-	}
-	first, first_end, _ := fence_run(source, open, open_end)
-	from, to, _ := fence_run(source, line, end)
-	// Not with four spaces or more after the marks of its containers:
-	// such a line is a line of the code. The opening fence has the mark
-	// of its list item there, which the lines after it have as spaces.
-	if fence_indent(source, line, from) > fence_indent(source, open, first) + 3 {
-		return false
-	}
-	return source[from] == source[first] && to - from >= first_end - first
-}
-
-// How many bytes are before a fence at `from` in its line after the
-// marks of the quotes that it is in: each ">" and one space after it.
-@(private)
-fence_indent :: proc(source: []u8, line, from: int) -> int {
-	after := line
-	for i in line ..< from {
-		if source[i] == '>' {
-			after = i + 1 < from && source[i + 1] == ' ' ? i + 2 : i + 1
-		}
-	}
-	return from - after
 }
 
 // What a line of the code of a block starts with: the marks before the
@@ -105,10 +70,11 @@ code_place :: proc(doc: ^Document, block: int) -> (offset: int, needs_line: bool
 	if content == end {
 		return
 	}
-	if content < start + int(b.lines) {
-		if line_end, _ := line_at(doc.source, content); !closing_fence(doc.source, content, line_end) {
-			return line_end, false, true
-		}
+	// A line of the block after the fence that is not its closing fence:
+	// an empty line of code.
+	if close, _, closed := code_close(doc, block); content < start + int(b.lines) && !(closed && close == content) {
+		line_end, _ := line_at(doc.source, content)
+		return line_end, false, true
 	}
 	return content, true, true
 }
@@ -147,14 +113,11 @@ code_first_line :: proc(doc: ^Document, at: Address, offset: int, text: string, 
 @(private)
 code_close :: proc(doc: ^Document, block: int) -> (line, end: int, ok: bool) {
 	b := block_at(doc, block)
-	if !b.fenced {
+	if !b.fenced || !b.closed {
 		return
 	}
-	start := block_start(doc, block)
-	first_end, _ := line_at(doc.source, start)
-	end = break_before(doc.source, min(start + int(b.lines), len(doc.source)))
-	line = line_start(doc.source, end)
-	return line, end, line > start && closes_code(doc.source, start, first_end, line, end)
+	end = break_before(doc.source, min(block_start(doc, block) + int(b.lines), len(doc.source)))
+	return line_start(doc.source, end), end, true
 }
 
 // How the code of the caret is before text is typed, for the rules
@@ -208,7 +171,7 @@ typed_fence :: proc(doc: ^Document, before: Code_Before, at: Address, offset: in
 	// after Return). In code no more: that line is no fence now.
 	if before.pair && (at.empty != 0 || !block_at(doc, at.block).fenced) {
 		line_end, next := line_at(doc.source, line_start(doc.source, min(offset, len(doc.source))))
-		if next_end, _ := line_at(doc.source, next); next > line_end && next < len(doc.source) && closing_fence(doc.source, next, next_end) {
+		if next_end, _ := line_at(doc.source, next); next > line_end && next < len(doc.source) && bare_fence(doc.source, next, next_end) {
 			return .Unopened, line_end, next_end, ""
 		}
 		return
@@ -226,7 +189,7 @@ typed_fence :: proc(doc: ^Document, before: Code_Before, at: Address, offset: in
 			// to end the code.
 			_, next := line_at(doc.source, first)
 			next_end, _ := line_at(doc.source, next)
-			if before.pair && next < len(doc.source) && closing_fence(doc.source, next, next_end) {
+			if before.pair && next < len(doc.source) && bare_fence(doc.source, next, next_end) {
 				if close, close_end, _ := fence_run(doc.source, next, next_end); doc.source[close] == doc.source[from] && close_end - close < to - from {
 					more := strings.repeat(string(doc.source[from:from + 1]), (to - from) - (close_end - close), allocator)
 					return .Opened, close_end, close_end, more
@@ -248,8 +211,12 @@ typed_fence :: proc(doc: ^Document, before: Code_Before, at: Address, offset: in
 	// starts code of its own now, and closes this code again when the
 	// typed line goes.
 	_, next := line_at(doc.source, line)
-	if next_end, _ := line_at(doc.source, next); next < len(doc.source) && closes_code(doc.source, first, first_end, next, next_end) && before.in_code && before.closed {
-		return .Closed_Twice, line, next, ""
+	if before.in_code && before.closed && at.block + 1 < doc.count && block_at(doc, at.block + 1).fenced && block_start(doc, at.block + 1) == next {
+		next_end, _ := line_at(doc.source, next)
+		close, close_end, _ := fence_run(doc.source, next, next_end)
+		if bare_fence(doc.source, next, next_end) && doc.source[close] == doc.source[from] && close_end - close >= to - from {
+			return .Closed_Twice, line, next, ""
+		}
 	}
 	// In the middle of code that has its closing fence: no end of the
 	// code that the reader sees. The next character makes the line a
@@ -295,7 +262,7 @@ fence_return :: proc(doc: ^Document, at: Address, offset: int, allocator := cont
 // none there, `text` at `at` makes one, as Return at the end of a text
 // does (`line_break`). False for a caret at another place, and where an
 // empty paragraph cannot be: the next block is in a list or in a quote
-// with the code. The text is memory of `allocator`.
+// with the code. Code that is in no list leaves also before a list. The text is memory of `allocator`.
 code_exit :: proc(doc: ^Document, address: Address, offset: int, allocator := context.allocator) -> (at: int, text: string, caret: int, ok: bool) {
 	if address.empty != 0 {
 		return
@@ -306,7 +273,9 @@ code_exit :: proc(doc: ^Document, address: Address, offset: int, allocator := co
 	}
 	b := block_at(doc, address.block)
 	if address.block + 1 < doc.count {
-		if next := block_at(doc, address.block + 1); in_list(next) || (b.quote_depth > 0 && next.quote_depth > 0) {
+		// Not between two blocks of the list or of the quote that the
+		// code is in: an empty paragraph there makes two of it.
+		if next := block_at(doc, address.block + 1); (in_list(b) && in_list(next)) || (b.quote_depth > 0 && next.quote_depth > 0) {
 			return
 		}
 	}
