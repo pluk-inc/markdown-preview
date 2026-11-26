@@ -1462,6 +1462,20 @@ export.
   hidden display with screenshots: the marks of italic text, bold
   text, and a link with its target in gray at the caret, and none
   with text selected.
+- **2026-11-25** — The frame for a key. The maintainer asked how our typing
+  compares with an editor that states less than 10 ms. Measured from the
+  key event to the frame handed to the display system (hidden 60 Hz
+  display, time stamps in a test build): 11.9 ms median, 18.2 ms at worst,
+  because a key waited for the next refresh. The frame for a key is now
+  drawn at once on the queue of the render loop, at most one such frame
+  for each refresh and none during a scroll: 3.4 ms median (4.0 ms in the
+  1 MB fixture). A first form drew that frame on the main thread and
+  waited there for a drawable; it was dropped. Four reviewers found that
+  the new function had the name of the one that draws the first frame
+  and a new size (so those no longer drew at once), and two frames that
+  could draw in the wrong order; the bots found a second early frame in
+  the queue and a note about a lock that was wrong. The CPU for each key
+  in the app process is 5.6 ms (short) and 6.5 ms (long).
 - **2026-11-25** — Undo and Redo. The maintainer asked for undo as the
   next editor task, before footnotes. The history is a package of its
   own (`src/history`), with no document in it; the core records each
