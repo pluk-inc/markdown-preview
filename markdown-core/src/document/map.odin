@@ -12,8 +12,10 @@ import "core:unicode/utf8"
 // with a note of where each piece of its text came from.
 
 // The pieces of the text of a block with their places in the source, in
-// the order of the text. The caller deletes the result.
-block_map :: proc(doc: ^Document, block: int) -> (places: [dynamic]Place) {
+// the order of the text. The caller deletes the result. With `pairs`,
+// also the marks of the styles of the text, in the order of their first
+// marks.
+block_map :: proc(doc: ^Document, block: int, pairs: ^[dynamic]Pair = nil) -> (places: [dynamic]Place) {
 	// From a block where a parse can start to the next such block.
 	first := block
 	for !starts_piece(doc, first) {
@@ -26,7 +28,7 @@ block_map :: proc(doc: ^Document, block: int) -> (places: [dynamic]Place) {
 	start := first == 0 ? 0 : block_start(doc, first)
 	end := last < doc.count ? block_start(doc, last) : len(doc.source)
 	text, _, _, _, _, lead := piece_text(doc, doc.source[start:end], start, end)
-	fresh := parse_piece(text[:], 0, len(doc.source), &places, block - first)
+	fresh := parse_piece(text[:], 0, len(doc.source), &places, block - first, pairs = pairs)
 	base := start - lead
 	// The piece must give the block as the document has it. It does not
 	// when the limit of the parser for the uses of definitions cuts a
@@ -40,9 +42,12 @@ block_map :: proc(doc: ^Document, block: int) -> (places: [dynamic]Place) {
 	if block - first >= fresh.count || !layout_equal(block_at(doc, block), block_at(&fresh, block - first)) {
 		destroy(&fresh)
 		clear(&places)
+		if pairs != nil {
+			clear(pairs)
+		}
 		text = make([dynamic]u8, len(doc.source))
 		copy(text[:], doc.source)
-		fresh = parse_piece(text[:], 0, len(doc.source), &places, block)
+		fresh = parse_piece(text[:], 0, len(doc.source), &places, block, pairs = pairs)
 		base = 0
 	}
 	// The line break at the end of a code block is no text of it.
@@ -77,6 +82,14 @@ block_map :: proc(doc: ^Document, block: int) -> (places: [dynamic]Place) {
 	destroy(&fresh)
 	for &place in places {
 		place.source += base
+	}
+	if pairs != nil {
+		for &pair in pairs {
+			pair.open += base
+			pair.open_end += base
+			pair.close += base
+			pair.close_end += base
+		}
 	}
 	return
 }

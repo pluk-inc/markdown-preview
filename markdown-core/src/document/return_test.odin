@@ -181,25 +181,31 @@ test_the_line_of_a_paragraph_stays_when_its_only_character_goes :: proc(t: ^test
 			apply(&doc, {offset, offset, text})
 			at := address_of(&doc, offset + len(text))
 			testing.expect_value(t, at, Address{block = 1, byte = 1})
-			places := block_map(&doc, at.block)
-			start, end, caret, ok := delete_back(&doc, places[:], at)
-			delete(places)
+			from, _ := source_of(&doc, {block = 1})
+			to, _ := source_of(&doc, at)
+			edit, caret, ok := replace_range(&doc, from, to, "", allocator = context.temp_allocator)
 			testing.expect(t, ok)
-			apply(&doc, {start, end, ""})
+			apply(&doc, edit)
 			testing.expect_value(t, string(doc.source), source)
 			testing.expect_value(t, address_of(&doc, caret), line)
 		}
 	}
-	// Not for a paragraph with more text, or with marks around its
-	// character: the character goes as each other one does.
-	for source in ([]string{"ab\n\nxy\n", "ab\n\n**x**\n", "ab\n\n- x\n", "x\n"}) {
-		doc := parse(source)
+	// Not for a paragraph with more text, for an item of a list, and for
+	// the first block: the character goes as each other one does. With
+	// marks around the character, they go too, and the line is empty.
+	Case :: struct {
+		source, after: string,
+	}
+	for c in ([]Case{{"ab\n\nxy\n", "ab\n\nx\n"}, {"ab\n\n**x**\n", "ab\n\n"}, {"ab\n\n- x\n", "ab\n\n- \n"}, {"x\n", "\n"}}) {
+		doc := parse(c.source)
 		defer destroy(&doc)
 		block := doc.count - 1
-		at := Address{block = block, byte = len(block_at(&doc, block).text.bytes)}
-		places := block_map(&doc, block)
-		defer delete(places)
-		_, _, _, ok := delete_back(&doc, places[:], at)
-		testing.expect(t, !ok)
+		size := len(block_at(&doc, block).text.bytes)
+		from, _ := source_of(&doc, {block = block, byte = size - 1})
+		to, _ := source_of(&doc, {block = block, byte = size})
+		edit, _, ok := replace_range(&doc, from, to, "", allocator = context.temp_allocator)
+		testing.expect(t, ok)
+		apply(&doc, edit)
+		testing.expect_value(t, string(doc.source), c.after)
 	}
 }

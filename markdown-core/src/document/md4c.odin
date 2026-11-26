@@ -136,6 +136,9 @@ Md_Parser :: struct {
 	// And: each use of a definition, with the size that it counts for
 	// in the parser's limit for such uses, and if the limit had room.
 	ref_def_use:  proc "c" (size: c.uint, accepted: c.int, userdata: rawptr),
+	// And: the range of the source of each mark of the inline syntax,
+	// right before the spans that the mark starts or ends.
+	mark_offset:  proc "c" (start, end: c.uint, userdata: rawptr),
 }
 
 Md_Entity :: struct {

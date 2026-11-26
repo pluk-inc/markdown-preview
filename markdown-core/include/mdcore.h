@@ -154,22 +154,63 @@ bool mdcore_caret_move(void *ctx, mdcore_move move, bool extend);
 //
 // Puts text in at the caret, as mdcore_replace_text does at its place in
 // the source, and the caret is after the text. Text at the end of bold
-// text is bold: it goes where the character before the caret is. Does
-// nothing with no caret.
-void mdcore_insert(void *ctx, const char *utf8, long length);
+// text is bold: it goes where the character before the caret is. With
+// text selected, the new text comes in its place (see mdcore_delete for
+// what goes). Does nothing with no caret. False when nothing changed: no
+// caret, no text, or a selection that has no edit.
+bool mdcore_insert(void *ctx, const char *utf8, long length);
 
 // Return at the caret: what the block of the caret needs for it. In
 // code, a new line. At the end of the text of a list item, a new item
 // of the same kind. At the end of each other text, an empty line after
 // the block, with the caret in it. In an empty line, one more. In the
-// text, the rest of the text is a paragraph of its own. Does nothing in
-// a table, and with no caret.
+// text, the rest of the text is a paragraph of its own. Text that is selected
+// goes first. Does nothing in a table, and with no caret.
 void mdcore_insert_break(void *ctx);
 
-// Takes out the character before the caret: all that the source has for
-// it (an entity, a run of spaces that shows as one space). In an empty
-// paragraph, the paragraph goes. Does nothing at the start of a block.
-void mdcore_delete_backward(void *ctx);
+// Takes out the text that is selected. With no text selected, the text
+// from the caret to where the move of the caret goes (mdcore_move):
+// MDCORE_MOVE_LEFT is the Delete key, MDCORE_MOVE_RIGHT a delete forward,
+// the moves by a word, to an end of the line, and to an end of the
+// paragraph take that much. True when the source changed.
+//
+// A character goes with all that the source has for it (an entity, a
+// run of spaces that shows as one space). An empty paragraph goes as a
+// whole. At the start of a block, MDCORE_MOVE_LEFT puts its text at the
+// end of the block before it, which keeps its kind; a move by a word or
+// to the end of a paragraph takes only that line break there.
+//
+// The text that stays keeps its styles: a mark of bold text and the
+// like that is in the range stays when its other mark is not, and the
+// two marks of a style go when all of its text goes. Text of more than
+// one block goes on in the first block, and the blocks between go.
+// Nothing changes for a range with one end in code or in a table and
+// the other end in another block (but when it has all of the text of
+// its blocks), and for one from a cell of a table to another cell.
+bool mdcore_delete(void *ctx, mdcore_move move);
+
+// The bytes of the source that the last call that took a range out
+// removed (mdcore_delete, and typed text or Return over a selection),
+// as UTF-8: the text with the marks that went with it, and no mark
+// that stayed for the text around it. None after a call that changed
+// nothing. Text that puts them in again at the caret gives the text
+// of before (Control-Y after Control-K), but for what the edit moved
+// to another place: the line under a heading and a definition of a
+// link that stay are where the edit put them. Valid until the next
+// such call; for the thread that makes those calls.
+const char *mdcore_deleted_text(void *ctx, long *length);
+
+// Takes out the lines of the source that the caret is in, or the text
+// that is selected, with their line breaks. True when the source
+// changed.
+bool mdcore_delete_lines(void *ctx);
+
+// Changes the places of the character before the caret and the one
+// after it (the two before it, at the end of a text), and puts the
+// caret after them. False, with no change, when there are no two such
+// characters next to each other in the source, with text selected, and
+// with no caret.
+bool mdcore_transpose(void *ctx);
 
 // The text of the document as it is now, UTF-8: what a host saves after
 // edits. The pointer is good until the next call of this.

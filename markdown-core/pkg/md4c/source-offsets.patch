@@ -1,17 +1,17 @@
 --- a/md4c.c
 +++ b/md4c.c
-@@ -270,6 +270,11 @@
+@@ -269,6 +269,11 @@
+     /* Pending count of blank lines not yet reported as MD_BLOCK_BLANK.
       * Used only with MD_FLAG_PRESERVEBLANKLINES. */
      unsigned n_blank_lines;
- 
++
 +    /* Start of the input line that is analyzed now, and of the line after
 +     * it. (Not in upstream.) */
 +    OFF line_beg;
 +    OFF line_next;
-+
+ 
      /* For container block analysis. */
      MD_CONTAINER* containers;
-     int n_containers;
 @@ -2593,6 +2598,9 @@
              MD_LOG("Too many link reference definition instantiations.");
              ctx->max_ref_def_output = 0;
@@ -22,7 +22,18 @@
      }
  
  abort:
-@@ -5399,6 +5407,11 @@
+@@ -4898,6 +4906,10 @@
+ 
+         /* If reached the mark, process it and move to next one. */
+         if(off >= mark->beg) {
++            /* (Not in upstream.) */
++            if(ctx->parser.mark_offset != NULL)
++                ctx->parser.mark_offset(mark->beg, mark->end, ctx->userdata);
++
+             switch(mark->ch) {
+                 case '\\':      /* Backslash escape. */
+                     if(ISNEWLINE(mark->beg+1))
+@@ -5399,6 +5411,11 @@
       * MD_BLOCK_OL:     Start item number.
       */
      MD_SIZE n_lines;
@@ -34,17 +45,17 @@
  };
  
  struct MD_CONTAINER_tag {
-@@ -5583,6 +5596,9 @@
+@@ -5582,6 +5599,9 @@
+     }
  
      memset(&det, 0, sizeof(det));
- 
++
 +    if(ctx->parser.block_offset != NULL  &&  block->type != MD_BLOCK_BLANK)
 +        ctx->parser.block_offset(block->type, block->beg, block->end, ctx->userdata);
-+
+ 
      if(ctx->n_containers == 0)
          is_in_tight_list = false;
-     else
-@@ -5727,6 +5743,8 @@
+@@ -5727,6 +5747,8 @@
              }
  
              if(block->flags & MD_BLOCK_CONTAINER_OPENER) {
@@ -53,7 +64,7 @@
                  MD_ENTER_BLOCK(block->type, &det);
  
                  if(block->type == MD_BLOCK_UL || block->type == MD_BLOCK_OL) {
-@@ -5839,6 +5857,8 @@
+@@ -5839,6 +5861,8 @@
      block->flags = 0;
      block->data = line->data;
      block->n_lines = 0;
@@ -62,7 +73,7 @@
  
      ctx->current_block = block;
      return 0;
-@@ -5846,6 +5866,15 @@
+@@ -5846,6 +5870,15 @@
  
  /* Forward declarations */
  static int md_is_hr_line(MD_CTX* ctx, OFF beg, OFF* p_end, OFF* p_killer);
@@ -78,7 +89,7 @@
  
  /* Eat from start of current (textual) block any reference definitions and/or
   * footnote definitions, and remember them.
-@@ -5860,6 +5889,8 @@
+@@ -5860,6 +5893,8 @@
      MD_SIZE n_lines = ctx->current_block->n_lines;
      MD_SIZE n = 0;
      bool inject_hr = false;
@@ -87,7 +98,7 @@
      OFF ignored;
  
      while(n < n_lines) {
-@@ -5881,6 +5912,9 @@
+@@ -5881,6 +5916,9 @@
              n_consumed = md_is_link_reference_definition(ctx, lines + n, n_lines - n);
              if(n_consumed < 0)
                  return -1;
@@ -97,7 +108,7 @@
          }
  
          if(n_consumed == 0)
-@@ -5897,7 +5931,15 @@
+@@ -5897,7 +5935,15 @@
       * (https://github.com/mity/md4c/issues/414) */
      if(n < n_lines  &&  md_is_hr_line(ctx, lines[n].beg, &ignored, &ignored)) {
          inject_hr = true;
@@ -113,7 +124,7 @@
      }
  
      if(n == n_lines) {
-@@ -5928,6 +5970,8 @@
+@@ -5928,6 +5974,8 @@
  
          memset(hr_block, 0, sizeof(MD_BLOCK));
          hr_block->type = MD_BLOCK_HR;
@@ -122,7 +133,7 @@
      }
  
      return 0;
-@@ -6003,6 +6047,11 @@
+@@ -6003,6 +6051,11 @@
          line->end = analysis->end;
      }
      ctx->current_block->n_lines++;
@@ -134,7 +145,7 @@
  
      return 0;
  }
-@@ -6024,6 +6073,8 @@
+@@ -6024,6 +6077,8 @@
      block->flags = 0;
      block->data = ctx->n_blank_lines;
      block->n_lines = 0;
@@ -143,7 +154,7 @@
  
      ctx->n_blank_lines = 0;
      return 0;
-@@ -6047,6 +6098,8 @@
+@@ -6047,6 +6102,8 @@
      block->flags = flags;
      block->data = data;
      block->n_lines = start;
@@ -152,7 +163,7 @@
  
  abort:
      return ret;
-@@ -7209,6 +7262,9 @@
+@@ -7209,6 +7266,9 @@
  
      /* Blank line ends current leaf block. */
      if(line->type == MD_LINE_BLANK) {
@@ -162,7 +173,7 @@
          MD_CHECK(md_end_current_block(ctx));
          /* Count only genuinely empty lines: some non-blank lines (e.g. a closing
           * code fence) are internally retyped as MD_LINE_BLANK but still hold
-@@ -7361,7 +7417,9 @@
+@@ -7361,7 +7421,9 @@
          if(line == pivot_line)
              line = (line == &line_buf[0] ? &line_buf[1] : &line_buf[0]);
  
@@ -174,7 +185,7 @@
  
 --- a/md4c.h
 +++ b/md4c.h
-@@ -468,6 +468,51 @@
+@@ -468,6 +468,63 @@
      /* Reserved. Set to NULL.
       */
      void (*syntax)(void);
@@ -223,6 +234,18 @@
 +     * had no room for is text, not a link, and so is each use after it.
 +     */
 +    void (*ref_def_use)(MD_SIZE /*size*/, int /*accepted*/, void* /*userdata*/);
++
++    /* Not in upstream md4c (see README.md of this folder). Optional (may be
++     * NULL).
++     *
++     * Called for each mark of the inline syntax when the parser comes to
++     * it, with its range in the input: right before the enter_span() or
++     * leave_span() calls that the mark gives (one mark gives two for
++     * "***"), and also before a mark that gives none (a backslash escape, a
++     * line break). The mark that closes a link or an image has its
++     * destination and title: "](target)".
++     */
++    void (*mark_offset)(MD_OFFSET /*beg*/, MD_OFFSET /*end*/, void* /*userdata*/);
  } MD_PARSER;
  
  

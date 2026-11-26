@@ -143,9 +143,9 @@ static const char *caret_walk(void *ctx, long length) {
     if (!mdcore_caret_move(ctx, MDCORE_MOVE_DOWN, false) || !mdcore_caret_rect(ctx, &x, &y, &height) || y != line) return "down into the line that Return made";
     mdcore_insert(ctx, "w", 1);
     if (!mdcore_caret_rect(ctx, &x, &y, &height) || y != line) return "a character typed in the line that Return made is in another line";
-    mdcore_delete_backward(ctx);
+    mdcore_delete(ctx, MDCORE_MOVE_LEFT);
     if (!mdcore_caret_rect(ctx, &x, &y, &height) || y != line) return "the line that Return made does not stay when its text goes";
-    mdcore_delete_backward(ctx);
+    mdcore_delete(ctx, MDCORE_MOVE_LEFT);
     const char *after = mdcore_source(ctx, &after_length);
     if (mdcore_caret_offset(ctx) != end_of_first || after_length != before_length || memcmp(after, before.bytes, (size_t)before_length) != 0) {
         return "a delete in the line that Return made does not give the text of before";
@@ -180,8 +180,8 @@ static const char *caret_walk(void *ctx, long length) {
         // Two spaces again after the two that are after the caret now,
         // and a delete for each of the four: the text of before.
         mdcore_insert(ctx, "  ", 2);
-        mdcore_delete_backward(ctx);
-        mdcore_delete_backward(ctx);
+        mdcore_delete(ctx, MDCORE_MOVE_LEFT);
+        mdcore_delete(ctx, MDCORE_MOVE_LEFT);
         mdcore_replace_text(ctx, mdcore_caret_offset(ctx), mdcore_caret_offset(ctx) + 2, "", 0);
         after = mdcore_source(ctx, &after_length);
         if (!mdcore_caret_rect(ctx, &x, &line, &height) || x != end_x || after_length != before_length || memcmp(after, before.bytes, (size_t)before_length) != 0) {
@@ -197,6 +197,62 @@ static const char *caret_walk(void *ctx, long length) {
     if (!mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, true)) return "a step with the selection after a typed character";
     const char *text = mdcore_selection_text(ctx, &selected);
     if (selected != 1 || text[0] != 'q') return "the selection after a typed character does not start at the caret";
+    // Text that is typed with text selected comes in its place, and a
+    // delete takes the selection and no more.
+    long size = 0;
+    mdcore_source(ctx, &size);
+    mdcore_insert(ctx, "Q", 1);
+    long now = 0;
+    const char *source = mdcore_source(ctx, &now);
+    long caret = mdcore_caret_offset(ctx);
+    if (now != size || mdcore_has_selection(ctx) || caret < 1 || source[caret - 1] != 'Q') return "a typed character does not take the place of the selection";
+    mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, true);
+    if (!mdcore_delete(ctx, MDCORE_MOVE_RIGHT) || mdcore_has_selection(ctx)) return "a delete with a selection";
+    mdcore_source(ctx, &now);
+    if (now != size - 1 || mdcore_caret_offset(ctx) != caret - 1) return "a delete with a selection does not take the selection only";
+    // The two characters around the caret change places, and again.
+    mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false);
+    if (mdcore_caret_move(ctx, MDCORE_MOVE_RIGHT, false) && mdcore_transpose(ctx)) {
+        NSData *swapped = [NSData dataWithBytes:mdcore_source(ctx, &now) length:(NSUInteger)now];
+        mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, false);
+        if (!mdcore_transpose(ctx)) return "the two characters do not change places again";
+        mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, false);
+        mdcore_transpose(ctx);
+        source = mdcore_source(ctx, &size);
+        if (size != now || memcmp(source, swapped.bytes, (size_t)now) != 0) return "three changes of two characters are not one";
+    }
+    // Each kind of delete, from each place that some steps go to: the
+    // source gets shorter, nothing is selected after it, and the caret
+    // has an offset. Then all of the text goes.
+    static const mdcore_move kinds[] = {
+        MDCORE_MOVE_RIGHT, MDCORE_MOVE_WORD_RIGHT, MDCORE_MOVE_LEFT, MDCORE_MOVE_WORD_LEFT, MDCORE_MOVE_LINE_END,
+        MDCORE_MOVE_PARAGRAPH_END, MDCORE_MOVE_LINE_START, MDCORE_MOVE_PARAGRAPH_START,
+    };
+    mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false);
+    for (long round = 0; round < 4000; round++) {
+        mdcore_source(ctx, &size);
+        bool gone = (round % 16) == 15 ? mdcore_delete_lines(ctx) : mdcore_delete(ctx, kinds[round % 8]);
+        mdcore_source(ctx, &now);
+        if (gone != (now != size)) return "a delete says a thing of the source that is not so";
+        if (now > size) return "a delete made the source longer";
+        // A selection that has no edit stays (one from code into text).
+        if (gone && mdcore_has_selection(ctx)) return "text is selected after a delete";
+        if (mdcore_caret_offset(ctx) < 0 || mdcore_caret_offset(ctx) > now) return "the caret has no offset after a delete";
+        // On through the text, with a selection that the next delete
+        // takes each third time.
+        bool more = true;
+        for (long step = 0; step < 1 + round % 5 && more; step++) {
+            more = mdcore_caret_move(ctx, MDCORE_MOVE_RIGHT, false);
+        }
+        if (round % 3 == 2) {
+            mdcore_caret_move(ctx, (round % 2) ? MDCORE_MOVE_WORD_RIGHT : MDCORE_MOVE_DOWN, true);
+        }
+        if (!more) break;
+    }
+    mdcore_select_all(ctx);
+    mdcore_delete(ctx, MDCORE_MOVE_LEFT);
+    mdcore_select_all(ctx);
+    if (mdcore_selection_text(ctx, &selected) != NULL && selected > 0) return "text is there after a delete of all of it";
     return NULL;
 }
 
@@ -379,7 +435,7 @@ int main(int argc, const char *argv[]) {
     bool moved = caret && mdcore_caret_rect(ctx, &moved_x, &moved_y, &caret_height)
         && (moved_x > caret_x || moved_y != caret_y);
     for (int key = 0; caret && key < KEYS; key++) {
-        mdcore_delete_backward(ctx);
+        mdcore_delete(ctx, MDCORE_MOVE_LEFT);
     }
     const char *after = mdcore_source(ctx, &after_length);
     bool same = caret && after_length == before_length && memcmp(after, before.bytes, (size_t)before_length) == 0;
