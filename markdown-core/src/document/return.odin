@@ -112,7 +112,7 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address, allocator := co
 	in_list_next := at.block + 1 < doc.count && in_list(block_at(doc, at.block + 1))
 	// A mark with nothing after it that is being typed (`typed_mark`): no
 	// list yet, so no new item; Return is as at the end of a paragraph.
-	if is_item(doc, at.block) && !typed_mark_shown(b) {
+	if is_item(doc, at.block) && !b.typed {
 		if len(texts[at.cell].bytes) == 0 {
 			// No text: the line of the item becomes an empty paragraph.
 			// Between two items it only goes (a paragraph there makes
@@ -256,26 +256,13 @@ item_mark :: proc(doc: ^Document, block: int, out: ^strings.Builder) -> bool {
 	return true
 }
 
-// The text of a block is a mark with nothing after it, at the caret,
-// that is plain text while it is typed (`typed_mark`): no list yet.
-typed_mark_shown :: proc(b: ^Block) -> bool {
-	if !b.mark_shown || b.marker == .None || len(b.text.bytes) == 0 {
-		return false
-	}
-	for span in b.text.spans {
-		if .Mark in span.style {
-			return false
-		}
-	}
-	return true
-}
-
 // For a list item that joins the list before it across empty lines (a
-// list that the reader starts after leaving the one above with Return):
-// where its mark is in the source, and the mark that makes a list of its
-// own there ("*" for "-", "-" for "*" and "+", ")" for "." of a number,
-// "." for ")"). In Markdown empty lines do not end a list, but another
-// mark does. -1 when the item does not join such a list.
+// list that the reader starts after leaving the one above with Return,
+// which leaves two empty lines): where its mark is in the source, and
+// the mark that makes a list of its own there ("*" for "-", "-" for "*"
+// and "+", ")" for "." of a number, "." for ")"). In Markdown empty lines
+// do not end a list, but another mark does. One empty line keeps the
+// list: that is a loose list. -1 when the item does not do so.
 new_list_mark :: proc(doc: ^Document, block: int) -> (at: int, mark: u8) {
 	at = -1
 	if block <= 0 || block >= doc.count {
@@ -283,38 +270,83 @@ new_list_mark :: proc(doc: ^Document, block: int) -> (at: int, mark: u8) {
 	}
 	b := block_at(doc, block)
 	before := block_at(doc, block - 1)
-	if b.marker == .None || b.spacing != .Item || b.quote_depth > 0 || before.list_depth < b.list_depth {
+	if b.marker == .None || b.spacing != .Item || before.list_depth < b.list_depth {
 		return
 	}
-	// An empty line between the two: the lines of the source after the
-	// last line of the block before (in a list they are no empty
-	// paragraphs, so they are counted here).
 	source := doc.source
-	i := block_start(doc, block)
-	after_before := clamp(block_start(doc, block - 1) + int(before.lines), 0, i)
-	if count_lines(source, after_before, i) == 0 {
+	start := block_start(doc, block)
+	end, _ := line_at(source, start)
+	after_before := clamp(block_start(doc, block - 1) + int(before.lines), 0, start)
+	if count_lines(source, after_before, start) < 2 {
 		return
 	}
-	for i < len(source) && (source[i] == ' ' || source[i] == '\t') {
-		i += 1
-	}
-	if i >= len(source) {
+	i := skip_quote_marks(source, start, end)
+	mark_end, char, found := list_mark_at(source, i, end)
+	if !found {
 		return
 	}
-	switch source[i] {
+	switch char {
 	case '-':
 		return i, '*'
 	case '*', '+':
 		return i, '-'
+	case '.':
+		return mark_end - 1, ')'
+	case ')':
+		return mark_end - 1, '.'
 	}
-	for i < len(source) && source[i] >= '0' && source[i] <= '9' {
-		i += 1
+	return
+}
+
+// The marks of quotes and the spaces at the start of a line, from `at`:
+// where the next thing of the line starts.
+skip_quote_marks :: proc(source: []u8, at, end: int) -> int {
+	at := at
+	for at < end && (source[at] == '>' || source[at] == ' ' || source[at] == '\t') {
+		at += 1
 	}
-	if i < len(source) && source[i] == '.' {
-		return i, ')'
+	return at
+}
+
+// The mark of a list item at `at` of a line: a bullet ("-", "*", "+") or
+// a number of 1 to 9 digits and its "." or ")". `end` is after it, `char`
+// is the bullet or the delimiter of the number.
+list_mark_at :: proc(source: []u8, at, line_end: int) -> (end: int, char: u8, found: bool) {
+	if at >= line_end {
+		return
 	}
-	if i < len(source) && source[i] == ')' {
-		return i, '.'
+	if c := source[at]; c == '-' || c == '*' || c == '+' {
+		return at + 1, c, true
 	}
-	return -1, 0
+	digits := at
+	for digits < line_end && digits - at < 9 && source[digits] >= '0' && source[digits] <= '9' {
+		digits += 1
+	}
+	if digits > at && digits < line_end && (source[digits] == '.' || source[digits] == ')') {
+		return digits + 1, source[digits], true
+	}
+	return
+}
+
+// A line from `line` to `end` that is only the mark of a list item, and a
+// "[ ]" or "[x]" after it, with nothing after them, not a space either:
+// a mark that is being typed when the caret is in it (`typed_mark`).
+bare_mark_line :: proc(source: []u8, line, end: int) -> bool {
+	if end <= line || source[end - 1] == ' ' || source[end - 1] == '\t' {
+		return false
+	}
+	at := skip_quote_marks(source, line, end)
+	mark_end, _, found := list_mark_at(source, at, end)
+	if !found {
+		return false
+	}
+	if mark_end == end {
+		return true
+	}
+	// "- [ ]": one space or more, and the box at the end of the line.
+	box := mark_end
+	for box < end && (source[box] == ' ' || source[box] == '\t') {
+		box += 1
+	}
+	return box > mark_end && end - box == 3 && source[box] == '[' && source[box + 2] == ']' && (source[box + 1] == ' ' || source[box + 1] == 'x' || source[box + 1] == 'X')
 }

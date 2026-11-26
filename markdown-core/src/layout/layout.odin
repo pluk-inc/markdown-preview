@@ -654,17 +654,16 @@ marker_text :: proc(b: ^document.Block) -> string {
 }
 
 // The circle of a bullet, in sizes of the body text: how far across it
-// is, and the room between it and the text of its item. The sizes of
-// the bullet of a text font with the room that it has beside it: a
-// quarter of the size of the text, and a third of it to the text.
+// is (a quarter of the size of the text, as the bullet of a text font),
+// and how far it stands in from the edge of the step of its list, at
+// about the middle of where the "-" of a list line is drawn in an editor
+// that keeps it (a step of 0.75, and half of the "-").
 BULLET_SIZE :: 0.25
-// How far the bullet stands in from the edge of the step of its list, in
-// body sizes: where the "-" of "- " stands when a list item gets its space
-// (a step of 0.75, and the middle of the "-").
 BULLET_IN :: 0.8
 // The width that the number of an item has room in, left of its text, in
 // body sizes: more than a number of many digits needs, so it is one line.
 NUMBER_ROOM :: 6.0
+// The room between the number of an item and its text, in body sizes.
 BULLET_GAP :: 0.35
 // Where the middle of a bullet or of a check box is above the line
 // that the text stands on, in heights of the small letters: where the
@@ -722,10 +721,9 @@ place_task :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32, text_
 }
 
 // The bullet, number, or box of a list item, left of x. The bullet stands
-// where the "-" of the item is at the start of its line, a little in from
-// the edge of the step of its list (`BULLET_IN`): a "-" that is being
-// typed stands at that edge (`list_x`), and the space after it moves it
-// in by that much, once.
+// a little in from the edge of the step of its list (`BULLET_IN`); a "-"
+// that is being typed is text at that edge (`list_x`), so the space that
+// makes it a list item moves it in by that much, once.
 // `text_font`: the font of the text of the first line of the item, or
 // nil for a block with no text (a rule).
 @(private)
@@ -734,8 +732,8 @@ place_marker :: proc(l: ^Layout, b: ^document.Block, x, y, line_height: f32, tex
 		place_task(l, b, x, y, line_height, text_font)
 		return
 	}
-	// The mark of the item is in its text, as the caret is in the block.
-	if b.mark_shown {
+	// A mark that is being typed is the text of the block: no item yet.
+	if b.typed {
 		return
 	}
 	if b.marker == .Bullet {
@@ -850,11 +848,11 @@ estimate :: proc(l: ^Layout, part, from: int) -> (height: f32) {
 }
 
 // How far the text of a block stands in from the column for its lists.
-// A mark that is being typed at the caret (`document.typed_mark_shown`)
-// is no list yet: it stands at the edge of the step, where its line
-// started, and moves in only at the space that makes it a list item.
+// A mark that is being typed at the caret (`Shape.typed`) is no list
+// item yet: it stands at the edge of the step, where its line starts, and
+// moves in only at the space that makes it a list item.
 list_x :: proc(l: ^Layout, b: ^document.Block) -> f32 {
-	depth := document.typed_mark_shown(b) ? b.list_depth - 1 : b.list_depth
+	depth := b.typed ? b.list_depth - 1 : b.list_depth
 	return f32(max(depth, 0)) * l.m.list_indent
 }
 

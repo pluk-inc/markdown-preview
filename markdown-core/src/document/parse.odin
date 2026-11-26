@@ -440,9 +440,8 @@ leave_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 		close_text(p)
 		if p.item_blocks == 0 {
 			// An item with nothing in it still shows its marker. Its
-			// block starts where the item does. At the caret its mark is
-			// its text, as for an item with text ("-" that is typed is
-			// "-" there, not a bullet).
+			// block starts where the item does. At the caret a mark with
+			// nothing after it is text that is being typed (`typed_mark`).
 			open_text(p, .Paragraph)
 			if line := p.block.source; line < len(p.bytes) {
 				end, _ := line_at(p.bytes, line)
@@ -652,58 +651,55 @@ line_mark :: proc(p: ^Parser, line, text: int) {
 // check box of a task, and the spaces after them.
 @(private)
 after_item_mark :: proc(p: ^Parser, mark, text: int) -> int {
-	space :: proc(c: u8) -> bool {return c == ' ' || c == '\t'}
-	at := mark
-	for at < text && (p.bytes[at] == '>' || space(p.bytes[at])) {
-		at += 1
-	}
-	if at < text && (p.bytes[at] == '-' || p.bytes[at] == '*' || p.bytes[at] == '+') {
-		at += 1
-	} else {
-		for at < text && p.bytes[at] >= '0' && p.bytes[at] <= '9' {
-			at += 1
-		}
-		if at < text && (p.bytes[at] == '.' || p.bytes[at] == ')') {
-			at += 1
-		}
+	at := skip_quote_marks(p.bytes, mark, text)
+	if end, _, found := list_mark_at(p.bytes, at, text); found {
+		at = end
 	}
 	// The "[ ]" of a task: its mark is in it, the "]" after that.
 	if p.block.task_mark > 0 {
 		at = max(at, min(p.block.task_mark + 2, text))
 	}
-	for at < text && space(p.bytes[at]) {
+	for at < text && (p.bytes[at] == ' ' || p.bytes[at] == '\t') {
 		at += 1
 	}
 	return at
 }
 
-// An item with nothing in it at the caret, whose mark has nothing after
-// it, not a space either ("-", "1.", "- [ ]"): the mark is text that is
-// being typed, as in an editor that makes a list of it at the space after
-// the mark. So it shows as plain text, with no bullet and no check box,
-// and it is noted as a mark of the line for an edit. True when that is so.
+// An item with nothing in it at the caret, whose line is its mark with
+// nothing after it, not a space either: the mark is text that is being
+// typed, as in an editor that makes a list of it at the space after the
+// mark. "-" or "1." shows as plain text, no list item yet
+// (`Shape.typed`); "- [ ]" is a bullet with the text "[ ]", no check box
+// yet. The line is noted as a mark of the line for an edit. True when
+// that is so. The core parses the blocks around such a line again when
+// the caret comes to it or goes (`document.bare_mark_line`).
 @(private)
 typed_mark :: proc(p: ^Parser, line, end: int) -> bool {
 	reveal, shows := p.reveal.?
-	if !shows || reveal < line || reveal > end || end == line || p.bytes[end - 1] == ' ' || p.bytes[end - 1] == '\t' {
+	if !shows || reveal < line || reveal > end || !bare_mark_line(p.bytes, line, end) {
 		return false
 	}
-	mark := line
-	for mark < end && (p.bytes[mark] == ' ' || p.bytes[mark] == '\t') {
-		mark += 1
-	}
+	mark := skip_quote_marks(p.bytes, line, end)
+	mark_end, _, _ := list_mark_at(p.bytes, mark, end)
 	if p.pairs != nil && p.doc.count == p.places_block {
 		append(p.pairs, Pair{mark, end, -1, end, false, mark, end, true})
 	}
-	// No check box: the "[ ]" is text until the space after it.
+	p.doc.reveal = reveal
 	if p.block.marker == .Task_Open || p.block.marker == .Task_Done {
+		// A bullet with its "[ ]" as text: the space after it makes the
+		// check box, and the bullet does not go away before that.
 		p.block.marker = .Bullet
 		p.block.task_mark = 0
 		p.block.done = false
+		box := mark_end
+		for box < end && (p.bytes[box] == ' ' || p.bytes[box] == '\t') {
+			box += 1
+		}
+		append_text(p, string(p.bytes[box:end]), box, end - box)
+		return true
 	}
 	append_text(p, string(p.bytes[mark:end]), mark, end - mark)
-	p.doc.reveal = reveal
-	p.block.mark_shown = true
+	p.block.typed = true
 	return true
 }
 

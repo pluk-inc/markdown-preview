@@ -77,6 +77,7 @@ reveal_block :: proc(doc: ^Document, block: int, reveal: Maybe(int), pairs: ^[dy
 	}
 	old.text, new.text = new.text, old.text
 	old.mark_shown = new.mark_shown
+	old.typed = new.typed
 	for &cell, i in old.cells {
 		cell, new.cells[i] = new.cells[i], cell
 	}
@@ -148,6 +149,7 @@ block_parse :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs: 
 			// But for the mark of its line, which shows or not.
 			shape := b.shape
 			shape.mark_shown = a.mark_shown
+			shape.typed = a.typed
 			same = a.shape == shape && len(a.cells) == len(b.cells) && links_in(a) == links_in(b)
 		} else {
 			same = layout_equal(a, b)
@@ -469,6 +471,12 @@ text_place :: proc(doc: ^Document, places: []Place, at: Address) -> (offset: int
 		line := strings.index_any(string(doc.source[start:]), "\r\n")
 		end := line < 0 ? len(doc.source) : start + line
 		if end > start && (doc.source[end - 1] == ' ' || doc.source[end - 1] == '\t') {
+			return end, true
+		}
+		// A list item that is only its mark ("-", "1.", "- [ ]"): after
+		// the mark, where text that is typed makes it a mark that is
+		// being typed (`typed_mark`).
+		if bare_mark_line(doc.source, start, end) {
 			return end, true
 		}
 		return

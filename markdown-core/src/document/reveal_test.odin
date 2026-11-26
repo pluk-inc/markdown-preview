@@ -84,8 +84,9 @@ test_the_marks_of_the_element_of_an_offset_are_text :: proc(t: ^testing.T) {
 		// until a space comes after it.
 		{"-\n", 1, "-", " "},
 		{"12.\n", 2, "12.", "   "},
-		{"- [ ]\n", 3, "- [ ]", "     "},
-		{"> -\n", 3, "> -", "   "},
+		// A task with nothing after its "]": a bullet and the text "[ ]".
+		{"- [ ]\n", 3, "[ ]", "   "},
+		{"> -\n", 3, "-", " "},
 		// With the space, a list item: its bullet, also at the caret.
 		{"* \n", 1, "", ""},
 		// A later block of an item has only its indent, which is no mark.
@@ -338,14 +339,15 @@ test_the_text_of_a_task_starts_after_its_check_box :: proc(t: ^testing.T) {
 test_an_empty_item_shows_its_mark_at_the_caret :: proc(t: ^testing.T) {
 	task := parse_owned(transmute([]u8)fmt.aprintf("%s", "- [ ]\n"), 5)
 	defer destroy(&task)
-	testing.expect(t, block_at(&task, 0).marker == .Bullet && block_at(&task, 0).mark_shown)
+	testing.expect(t, block_at(&task, 0).marker == .Bullet && !block_at(&task, 0).typed)
+	testing.expect_value(t, fmt.tprintf("%s", block_at(&task, 0).text.bytes[:]), "[ ]")
 	spaced := parse_owned(transmute([]u8)fmt.aprintf("%s", "- [ ] \n"), 5)
 	defer destroy(&spaced)
 	testing.expect(t, block_at(&spaced, 0).marker == .Task_Open)
 	doc := parse_owned(transmute([]u8)fmt.aprintf("%s", "-\n"), 1)
 	defer destroy(&doc)
 	testing.expect_value(t, fmt.tprintf("%s", block_at(&doc, 0).text.bytes[:]), "-")
-	testing.expect(t, block_at(&doc, 0).mark_shown)
+	testing.expect(t, block_at(&doc, 0).typed)
 	offset, ok := source_of(&doc, {block = 0, byte = 1})
 	testing.expect(t, ok)
 	testing.expect_value(t, offset, 1)
@@ -358,5 +360,5 @@ test_an_empty_item_shows_its_mark_at_the_caret :: proc(t: ^testing.T) {
 	plain := parse("-\n")
 	defer destroy(&plain)
 	testing.expect_value(t, len(block_at(&plain, 0).text.bytes), 0)
-	testing.expect(t, !block_at(&plain, 0).mark_shown)
+	testing.expect(t, !block_at(&plain, 0).typed)
 }

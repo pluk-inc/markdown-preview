@@ -57,7 +57,6 @@ line_start :: proc(source: []u8, at: int) -> int {
 
 // The line that starts at an offset: where its text ends, and where the
 // next line starts (the same at the end of the source).
-@(private)
 line_at :: proc(source: []u8, at: int) -> (end, next: int) {
 	end = at
 	for end < len(source) && source[end] != '\n' && source[end] != '\r' {
@@ -122,7 +121,7 @@ empty_lines :: proc(source: []u8, b: ^Block, start, next: int, next_in_list, who
 in_list :: proc(b: ^Block) -> bool {
 	// A mark that is being typed at the caret is no list yet: the empty
 	// lines before it stay where the reader typed them.
-	return b.list_depth > 0 && b.spacing != .List_Start && !typed_mark_shown(b)
+	return b.list_depth > 0 && b.spacing != .List_Start && !b.typed
 }
 
 // How many of some empty lines are empty paragraphs: each but the last.

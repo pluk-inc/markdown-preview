@@ -217,7 +217,7 @@ test_the_line_of_a_paragraph_stays_when_its_only_character_goes :: proc(t: ^test
 test_return_after_a_typed_mark_makes_no_item :: proc(t: ^testing.T) {
 	doc := parse_owned(transmute([]u8)fmt.aprintf("%s", "-\n"), 1)
 	defer destroy(&doc)
-	testing.expect(t, typed_mark_shown(block_at(&doc, 0)))
+	testing.expect(t, block_at(&doc, 0).typed)
 	places := block_map(&doc, 0)
 	defer delete(places)
 	start, end, text, caret, ok := line_break(&doc, places[:], {block = 0, byte = 1})
@@ -240,9 +240,13 @@ test_a_list_after_empty_lines_gets_another_mark :: proc(t: ^testing.T) {
 	}
 	cases := []Case {
 		{"- a\n\n\n- b\n", 6, '*'},
-		{"* a\n\n* b\n", 5, '-'},
+		{"* a\n\n\n* b\n", 6, '-'},
+		// One empty line keeps a loose list.
+		{"- a\n\n- b\n", -1, 0},
+		{"- a\n\n  b\n\n- c\n", -1, 0},
 		{"1. a\n\n\n1. b\n", 8, ')'},
-		{"- [ ] a\n\n- [ ] b\n", 9, '*'},
+		{"- [ ] a\n\n\n- [ ] b\n", 10, '*'},
+		{"> - a\n>\n>\n> - b\n", 12, '*'},
 		{"- a\n- b\n", -1, 0},
 		{"- a\n\nb\n\n- c\n", -1, 0},
 	}
@@ -262,7 +266,7 @@ test_empty_lines_stay_before_a_typed_mark :: proc(t: ^testing.T) {
 	source := "- a\n- b\n\n\n-\n"
 	doc := parse_owned(transmute([]u8)fmt.aprintf("%s", source), len(source) - 1)
 	defer destroy(&doc)
-	testing.expect(t, typed_mark_shown(block_at(&doc, doc.count - 1)))
+	testing.expect(t, block_at(&doc, doc.count - 1).typed)
 	testing.expect_value(t, int(block_at(&doc, doc.count - 2).empties), 1)
 	// Once it is a list item, its list has it with no empty paragraph.
 	plain := parse(source)
