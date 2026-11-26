@@ -689,6 +689,14 @@ reveal_block :: proc(ctx: ^Ctx, block: int, reveal: Maybe(int)) {
 			commit_held(ctx, &pending)
 			if ctx.caret >= 0 {
 				caret_changed(ctx)
+				// The empty lines before the line can be none now (in a
+				// list): an offset of the caret in them is no place of a
+				// text. The caret is where text that is typed at its
+				// address goes, as it shows.
+				if offset, placed := document.place_of(&ctx.doc, ctx.caret_places[:], ctx.caret_at); placed && offset != ctx.caret {
+					ctx.caret = offset
+					caret_changed(ctx)
+				}
 			}
 			if ctx.layout_valid {
 				layout.restore_place(&ctx.page, ctx.place)

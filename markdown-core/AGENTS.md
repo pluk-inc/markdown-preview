@@ -524,11 +524,6 @@ Known limits, found in review and left on purpose:
 
 - One very long paragraph or one large table is laid out in one step. Code
   blocks stop between lines.
-- In a list with empty lines in it, Up from an item can put the caret at
-  the start of the line after the item above (an offset that is no place
-  of a text); text typed there goes on in that item. On main the same
-  keys put the text before the list. The moves of the caret over empty
-  lines in lists need their own look.
 - Return after a mark that is being typed ("-" and Return) makes no item:
   the "-" stays text in the source. With the caret on another line,
   Markdown reads it as an empty list item, which can join the list above.
@@ -1594,3 +1589,11 @@ export.
   lines, which also fixes the native page. The test copy of
   `MarkdownTOC.swift` was a copy, not a link like the others, so its
   tests did not run the app's file; it is a link now.
+- **2026-11-26** — The caret after the shape of a mark line changes. Up
+  from a "-" that was being typed, below a list and empty lines, put the
+  caret into an empty line above it; leaving the "-" made it a list item,
+  the empty lines were none in the list, and the caret kept an offset
+  that no place had: it showed at the end of the item above, and typed
+  text went into a new line that joined that item. After the parse
+  around such a line, the caret is at the place of its address. The walk
+  of `bench.m` has this sequence (`list_caret_check`).
