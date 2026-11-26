@@ -90,6 +90,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-26 | list marks as in other Markdown editors | 576 / 555 | 60 / 107 (the base too) | 485 / 770 | 59 / 72 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
 | 2026-11-26 | the outline of native Edit Mode from the core | 574 / 559 | 64 / 110 (the base too) | 475 / 755 | 58 / 74 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
 | 2026-11-26 | the caret at its place after Up from a list mark | 568 / 591 | 60 / 108 (the base too) | 490 / 800 | 60 / 74 | not recorded | not recorded | 7.1 / 26.4 (the base too) |
+| 2026-11-26 | a code block that is typed | 538 / 548 | 61 / 94 (the base 61 / 93) | 420 / 550 | 62 / 75 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1322,3 +1323,35 @@ long, five launches each, in the order that they ran:
 
 The launches of the base were slower in this set; no code of a launch
 changed, so that is the spread of the Mac (other apps were in use).
+
+## A code block that is typed (2026-11-26)
+
+The rules for a fence that a reader types: one look at the block of the
+caret when a command of the reader starts and one when it ends, which
+stop at once for a caret that is not in code in a fence. `core.py`,
+short / long, in turns (base, change, change, base), with a load of 1.4
+to 2.9:
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 62, 59 / 75, 79 | 61, 63 / 74, 76 |
+| A typed character in the middle of the text (CPU ms) | 1.18, 1.23 / 1.59, 1.57 | 1.15, 1.24 / 1.61, 1.53 |
+| A typed character at the end of the text (CPU ms) | 1.41, 1.39 / 3.79, 3.71 | 1.40, 1.40 / 3.73, 3.76 |
+| A typed character at a caret (CPU ms) | 1.82, 1.84 / 2.01, 2.04 | 1.84, 1.86 / 2.00, 2.00 |
+| A step of the caret to the left or to the right (CPU ms) | 0.38, 0.38 / 0.38, 0.35 | 0.40, 0.43 / 0.37, 0.36 |
+| Heap with all of the document laid out (MB) | 7.0, 7.0 / 26.3, 26.4 | 7.0, 7.0 / 26.3, 26.3 |
+
+The rows overlap but for a step of the caret in the short document,
+where the two runs of the change (0.40, 0.43) are above the two of the
+base (0.38, 0.38); a step of the caret is no command that changes the
+source, so the new rules do not run in it. `app.py`, short / long, five
+launches each, in the order that they ran:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 541 / 546 | 61 / 95 | 410 / 550 |
+| change | 544 / 546 | 61 / 96 | 420 / 550 |
+| change | 531 / 549 | 61 / 92 | 420 / 550 |
+| base | 535 / 553 | 61 / 90 | 420 / 560 |
+
+The sets overlap.
