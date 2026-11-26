@@ -58,11 +58,17 @@ final class DocumentCountsTests: XCTestCase {
     }
 
     func testSameNumbersForRandomText() {
-        let pieces = ["a", "b", " ", " ", "\t", "\n", "\n", "\r", "\r\n", "#", "# ", "](", "![", "!", "[", "]", "(",
-                      "\u{301}", "\u{200D}", "é", "日", "👍", "\u{A0}", "\u{2028}", "\u{85}", "\u{0B}", "\u{0C}",
-                      "\u{3000}", "\u{0}", "word", "\u{FE0F}", "🇯", "🇵"]
+        // With characters that join the space beside them into one
+        // character: marks, joiners, signs that go before a letter, emoji
+        // modifiers, Hangul parts, tag characters.
+        let pieces = ["a", "b", " ", " ", " ", "\t", "\n", "\n", "\r", "\r\n", "#", "# ", "](", "![", "!", "[", "]", "(",
+                      "\u{301}", "\u{200D}", "\u{200C}", "é", "日", "あ", "한", "👍", "\u{A0}", "\u{2028}", "\u{85}",
+                      "\u{0B}", "\u{0C}", "\u{3000}", "\u{2003}", "\u{0}", "word", "\u{FE0F}", "🇯", "🇵",
+                      "\u{201C}", "\u{201D}", "\u{2014}", "\u{600}", "\u{110BD}", "\u{D4E}", "\u{1F3FB}",
+                      "\u{E33}", "\u{903}", "\u{FF9E}", "\u{1100}", "\u{1161}", "\u{11A8}", "\u{E0020}",
+                      "\u{20E3}", "\u{34F}", "\u{AD}", "\u{200B}", "\u{FEFF}", "€", "×", "\u{2028}"]
         var generator = SystemRandomNumberGenerator()
-        for round in 0..<3000 {
+        for round in 0..<20000 {
             var text = ""
             for _ in 0..<Int.random(in: 0...24, using: &generator) {
                 text += pieces.randomElement(using: &generator)!

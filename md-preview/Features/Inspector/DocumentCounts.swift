@@ -18,7 +18,9 @@ import Foundation
 ///
 /// One pass over the bytes. A line of only ASCII is counted from its bytes;
 /// a line with another character goes through the string rules of the
-/// first form of this count (`slow`), so a rule of Unicode (a character of
+/// first form of this count, each only when the line needs it (it has the
+/// bytes that the rule looks for; a space of it can be a part of a longer
+/// character), so a rule of Unicode (a character of
 /// more than one code point, a space of another script) gives the same
 /// number as it did. A long document took 110 ms with those rules alone,
 /// and this runs after each key of an edit with the inspector open.
@@ -34,17 +36,35 @@ nonisolated struct DocumentCounts: Equatable, Sendable {
 
     init(body: String) {
         guard !body.isEmpty else { return }
+        // A copy that `withUTF8` can make contiguous: it always gives the
+        // bytes.
         var body = body
-        body.makeContiguousUTF8()
         characters = body.count
         var references = 0
-        body.utf8.withContiguousStorageIfAvailable { bytes in
+        body.withUTF8 { bytes in
             let count = bytes.count
             var lineStart = 0
             var ascii = true
             var inWord = false
             var lineWords = 0
             var first = -1  // the first byte of the line that is no space and no tab
+            // Bytes that the string rules of a line look for: with none of
+            // them in the line, that rule has nothing to count.
+            var hasSign = false, hasReference = false, hasImage = false
+            var before: UInt8 = 0
+            // The words of a line with other characters than ASCII are its
+            // runs between spaces and tabs too, while each space and tab is
+            // a character of its own (`standsAlone`) and the line has no
+            // other whitespace. If not, the string rule counts them.
+            var wordsFromBytes = true
+            var beforeStandsAlone = true
+            // The same for the "](" and "![" of such a line: the pairs of
+            // its bytes, while no character beside a pair can take a byte
+            // of it into a longer character.
+            var pairsFromBytes = true
+            var lineReferences = 0, lineImages = 0
+            var twoBeforeStandsAlone = true
+            var afterPair = false
             var breaks = 0
             var index = 0
 
@@ -66,17 +86,35 @@ nonisolated struct DocumentCounts: Equatable, Sendable {
                         }
                     }
                 } else {
-                    let line = String(decoding: UnsafeBufferPointer(rebasing: bytes[lineStart..<end]), as: UTF8.self)
-                    let slow = Self.slow(line: line)
-                    words += slow.words
-                    headings += slow.headings
-                    references += slow.references
-                    images += slow.images
+                    if wordsFromBytes { words += lineWords }
+                    if pairsFromBytes {
+                        references += lineReferences
+                        images += lineImages
+                    }
+                    let slowPairs = !pairsFromBytes && (hasReference || hasImage)
+                    if !wordsFromBytes || hasSign || slowPairs {
+                        let line = String(decoding: UnsafeBufferPointer(rebasing: bytes[lineStart..<end]), as: UTF8.self)
+                        if !wordsFromBytes { words += line.split { $0.isWhitespace }.count }
+                        if hasSign, line.trimmingCharacters(in: .whitespaces).hasPrefix("#") { headings += 1 }
+                        if slowPairs, hasReference { references += max(0, line.components(separatedBy: "](").count - 1) }
+                        if slowPairs, hasImage { images += max(0, line.components(separatedBy: "![").count - 1) }
+                    }
                 }
                 ascii = true
                 inWord = false
                 lineWords = 0
                 first = -1
+                hasSign = false
+                hasReference = false
+                hasImage = false
+                before = 0
+                wordsFromBytes = true
+                beforeStandsAlone = true
+                pairsFromBytes = true
+                lineReferences = 0
+                lineImages = 0
+                twoBeforeStandsAlone = true
+                afterPair = false
             }
 
             while index < count {
@@ -98,10 +136,50 @@ nonisolated struct DocumentCounts: Equatable, Sendable {
                     lineStart = index
                     continue
                 }
+                let endsPair = afterPair
+                afterPair = false
+                if byte == UInt8(ascii: "#") {
+                    hasSign = true
+                } else if byte == UInt8(ascii: "("), before == UInt8(ascii: "]") {
+                    hasReference = true
+                    lineReferences += 1
+                    afterPair = true
+                    if !twoBeforeStandsAlone { pairsFromBytes = false }
+                } else if byte == UInt8(ascii: "["), before == UInt8(ascii: "!") {
+                    hasImage = true
+                    lineImages += 1
+                    afterPair = true
+                    if !twoBeforeStandsAlone { pairsFromBytes = false }
+                }
                 if byte >= 0x80 {
                     ascii = false
-                } else if byte == 0x20 || byte == 0x09 {
+                    // One code point: its bytes, and what it is beside a
+                    // space or a tab.
+                    let size = byte >= 0xF0 ? 4 : byte >= 0xE0 ? 3 : 2
+                    var value = UInt32(byte) & (size == 4 ? 0x07 : size == 3 ? 0x0F : 0x1F)
+                    var next = index + 1
+                    while next < index + size, next < count {
+                        value = value << 6 | UInt32(bytes[next] & 0x3F)
+                        next += 1
+                    }
+                    let alone = Self.standsAlone(value)
+                    if Self.isSpace(value) || (!alone && (before == 0x20 || before == 0x09)) {
+                        wordsFromBytes = false
+                    }
+                    if endsPair, !alone { pairsFromBytes = false }
+                    twoBeforeStandsAlone = beforeStandsAlone
+                    beforeStandsAlone = alone
+                    if !inWord {
+                        inWord = true
+                        lineWords += 1
+                    }
+                    before = byte
+                    index = next
+                    continue
+                }
+                if byte == 0x20 || byte == 0x09 {
                     inWord = false
+                    if !beforeStandsAlone { wordsFromBytes = false }
                 } else {
                     if !inWord {
                         inWord = true
@@ -109,6 +187,9 @@ nonisolated struct DocumentCounts: Equatable, Sendable {
                     }
                     if first < 0 { first = Int(byte) }
                 }
+                twoBeforeStandsAlone = beforeStandsAlone
+                beforeStandsAlone = true
+                before = byte
                 index += 1
             }
             endLine(at: count)
@@ -117,12 +198,32 @@ nonisolated struct DocumentCounts: Equatable, Sendable {
         links = max(0, references - images)
     }
 
-    /// The counts of one line by the string rules: for a line with a
-    /// character that is no ASCII.
-    private static func slow(line: String) -> (words: Int, headings: Int, references: Int, images: Int) {
-        (line.split { $0.isWhitespace }.count,
-         line.trimmingCharacters(in: .whitespaces).hasPrefix("#") ? 1 : 0,
-         max(0, line.components(separatedBy: "](").count - 1),
-         max(0, line.components(separatedBy: "![").count - 1))
+    /// A whitespace character that is no ASCII and no line break.
+    private static func isSpace(_ value: UInt32) -> Bool {
+        value == 0xA0 || value == 0x1680 || (value >= 0x2000 && value <= 0x200A)
+            || value == 0x202F || value == 0x205F || value == 0x3000
+    }
+
+    /// A code point that makes no one character with a space or a tab
+    /// beside it: a letter with a case, a digit, a punctuation mark, a
+    /// symbol, or a letter of Chinese, Japanese, or Korean. Other ones can
+    /// (a mark that goes on the space before it, a sign that takes the
+    /// space after it), and a space in such a character is no whitespace.
+    private static func standsAlone(_ value: UInt32) -> Bool {
+        if (value >= 0x3040 && value <= 0x3096) || (value >= 0x30A0 && value <= 0x30FA)
+            || (value >= 0x3400 && value <= 0x4DBF) || (value >= 0x4E00 && value <= 0x9FFF)
+            || (value >= 0xAC00 && value <= 0xD7A3) {
+            return true
+        }
+        guard let scalar = Unicode.Scalar(value) else { return false }
+        switch scalar.properties.generalCategory {
+        case .uppercaseLetter, .lowercaseLetter, .titlecaseLetter, .decimalNumber,
+             .connectorPunctuation, .dashPunctuation, .openPunctuation, .closePunctuation,
+             .initialPunctuation, .finalPunctuation, .otherPunctuation,
+             .mathSymbol, .currencySymbol, .otherSymbol:
+            return true
+        default:
+            return false
+        }
     }
 }
