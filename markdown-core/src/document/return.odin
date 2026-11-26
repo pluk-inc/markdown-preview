@@ -69,14 +69,6 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address, allocator := co
 	// indent is no code, so Return there is as at the end of each other
 	// text.
 	if b.kind == .Code && (b.fenced || !at_end) {
-		line := max(line_start(source, offset), block_begin)
-		// The indent, and as many marks of a quote as the block is in
-		// quotes: a ">" after those is a character of the code.
-		lead, quotes := line, 0
-		for lead < offset && (source[lead] == ' ' || source[lead] == '\t' || (source[lead] == '>' && quotes < b.quote_depth)) {
-			quotes += int(source[lead] == '>')
-			lead += 1
-		}
 		// With no line of code yet (`code_place`): two lines of it, and
 		// the caret in the second one.
 		if place, needs_line, empty := code_place(doc, at.block); empty && needs_line && place == offset {
@@ -86,6 +78,14 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address, allocator := co
 			caret = offset + strings.builder_len(out)
 			strings.write_string(&out, nl)
 			return done(&out, offset, offset, caret)
+		}
+		line := max(line_start(source, offset), block_begin)
+		// The indent, and as many marks of a quote as the block is in
+		// quotes: a ">" after those is a character of the code.
+		lead, quotes := line, 0
+		for lead < offset && (source[lead] == ' ' || source[lead] == '\t' || (source[lead] == '>' && quotes < b.quote_depth)) {
+			quotes += int(source[lead] == '>')
+			lead += 1
 		}
 		strings.write_string(&out, nl)
 		strings.write_bytes(&out, source[line:lead])

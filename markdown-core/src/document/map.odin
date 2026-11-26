@@ -184,8 +184,8 @@ block_places :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs:
 	}
 	place_escapes(places, text)
 	// Where the text of the block can start, for a block with no text
-	// from the source at all: a code block of empty lines starts after
-	// its first line, which is its fence; each other block (a paragraph
+	// from the source at all: code in a fence with only empty lines
+	// starts after its first line, the fence; each other block (a paragraph
 	// of a NUL byte) at its own start.
 	content := block_start(doc, block) - base
 	if block_at(doc, block).fenced {

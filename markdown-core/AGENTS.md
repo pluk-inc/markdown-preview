@@ -1617,16 +1617,26 @@ export.
   - Code in a fence with no line of code has a place (`code_place`).
     Text there is a line of its own, with the indent of a list item and
     the ">" of a quote from the line of the fence (`code_first_line`).
+  - A fence that is typed gets its closing fence at once, so the code
+    takes no text after it and no fence of other code is its end
+    (`typed_fence`, `.Opened`); one more character of the fence goes to
+    its closing fence too.
   - Return in the line of a fence that was typed starts the first line
-    of the code and puts a closing fence after it, so the code does not
-    take the rest of the document (`fence_return`).
-  - Text that makes the closing fence takes the caret to an empty
+    of the code (`fence_return`).
+  - Text that makes a closing fence takes the caret to an empty
     paragraph after the code (`code_exit`); with a closing fence there
-    before, the typed one goes (`typed_close_range`).
+    before, the typed one goes (`.Closed_Twice`). Where no empty
+    paragraph can be (the next block is in a list or in a quote with
+    the code), the caret goes back to the end of the code. A fence in
+    the middle of closed code is no end of it: the next character makes
+    its line a line of code again, as before.
   A first form kept the caret in the fence lines with special cases in
   `mdcore.odin`; reviewers broke it in lists, in quotes, and after a
-  typed closing fence. Open: the word after the fence (the language)
-  cannot be changed after Return; a delete at the start of the first
-  line of code does nothing; a document that is only a fence with no
-  line break has no caret. The walk of `bench.m` types these
-  (`typed_code_check`).
+  typed closing fence. A second form took each typed closing fence for
+  an end of the code and read a fence from the bytes of each line; a
+  reviewer broke it in the middle of code and before one empty line.
+  Open: the word after the fence (the language) cannot be changed after
+  Return; a delete at the start of the first line of code does nothing;
+  a document that is only a fence with no line break has no caret; Left
+  from the end of a typed fence goes to the block before. The walk of
+  `bench.m` types these (`typed_code_check`).

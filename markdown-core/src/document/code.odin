@@ -24,16 +24,36 @@ fence_run :: proc(source: []u8, line, end: int) -> (from, to: int, ok: bool) {
 	return from, to, to - from >= 3
 }
 
-// True for a line that is only a fence: one that ends code.
+// True for a line that is only a fence, one that can end code: before
+// the fence only the indent and the ">" of a quote, and nothing after
+// it. A line of code that ends with such a run ("echo ```") is none.
 @(private)
 closing_fence :: proc(source: []u8, line, end: int) -> bool {
-	_, to := fence_run(source, line, end) or_return
+	from, to := fence_run(source, line, end) or_return
+	for i in line ..< from {
+		if source[i] != ' ' && source[i] != '\t' && source[i] != '>' {
+			return false
+		}
+	}
 	for i in to ..< end {
 		if source[i] != ' ' && source[i] != '\t' {
 			return false
 		}
 	}
 	return true
+}
+
+// True for a line that ends the code that the fence in the line from
+// `open` to `open_end` starts: a closing fence of the same character,
+// and not shorter.
+@(private)
+closes_code :: proc(source: []u8, open, open_end, line, end: int) -> bool {
+	if !closing_fence(source, line, end) {
+		return false
+	}
+	first, first_end, _ := fence_run(source, open, open_end)
+	from, to, _ := fence_run(source, line, end)
+	return source[from] == source[first] && to - from >= first_end - first
 }
 
 // What a line of the code of a block starts with: the marks before the
@@ -105,14 +125,89 @@ code_close :: proc(doc: ^Document, block: int) -> (line, end: int, ok: bool) {
 	}
 	start := block_start(doc, block)
 	first_end, _ := line_at(doc.source, start)
-	open, open_end := fence_run(doc.source, start, first_end) or_return
 	end = break_before(doc.source, min(start + int(b.lines), len(doc.source)))
 	line = line_start(doc.source, end)
-	if line <= start || !closing_fence(doc.source, line, end) {
+	return line, end, line > start && closes_code(doc.source, start, first_end, line, end)
+}
+
+// How the code of the caret is before text is typed, for the rules
+// after it (`typed_fence`).
+Code_Before :: struct {
+	in_code: bool, // the caret is in code in a fence
+	closed:  bool, // which has a closing fence
+}
+
+code_before :: proc(doc: ^Document, at: Address) -> (before: Code_Before) {
+	if doc.count == 0 || at.empty != 0 || !block_at(doc, at.block).fenced {
 		return
 	}
-	from, to, _ := fence_run(doc.source, line, end)
-	return line, end, doc.source[from] == doc.source[open] && to - from >= open_end - open
+	_, _, closed := code_close(doc, at.block)
+	return {true, closed}
+}
+
+// What the caret is in after text that was typed made a fence, or was
+// typed in the line of one.
+Typed_Fence :: enum {
+	None,
+	// A new fence, which starts code: `text` at `start` is the closing
+	// fence of that code, so it takes no text after it, and no fence of
+	// other code is its end. Or one more character of such a fence: the
+	// text is that character for its closing fence.
+	Opened,
+	// A closing fence before the one that the code had: the typed line,
+	// from `start` to `end`, goes, and the caret leaves (`code_exit`).
+	Closed_Twice,
+	// The closing fence of code that had none: the caret leaves.
+	Closed,
+}
+
+// The rule for a caret at `offset` after text was typed there. The text
+// is memory of `allocator`.
+typed_fence :: proc(doc: ^Document, before: Code_Before, at: Address, offset: int, allocator := context.allocator) -> (kind: Typed_Fence, start, end: int, text: string) {
+	if doc.count == 0 || at.empty != 0 || !block_at(doc, at.block).fenced {
+		return
+	}
+	first := block_start(doc, at.block)
+	first_end, _ := line_at(doc.source, first)
+	from, to, _ := fence_run(doc.source, first, first_end)
+	if offset >= to && offset <= first_end {
+		if before.in_code {
+			// One more character of the fence that was typed: its closing
+			// fence, in the next line, gets one too, or it is too short
+			// to end the code.
+			_, next := line_at(doc.source, first)
+			next_end, _ := line_at(doc.source, next)
+			if offset == to && next < len(doc.source) && closing_fence(doc.source, next, next_end) {
+				if close, close_end, _ := fence_run(doc.source, next, next_end); doc.source[close] == doc.source[from] && close_end - close == to - from - 1 {
+					return .Opened, close_end, close_end, strings.clone(string(doc.source[from:from + 1]), allocator)
+				}
+			}
+			return
+		}
+		out := strings.builder_make(allocator)
+		strings.write_string(&out, line_ending(doc.source))
+		write_code_lead(&out, doc, at.block)
+		strings.write_bytes(&out, doc.source[from:to])
+		return .Opened, first_end, first_end, strings.to_string(out)
+	}
+	line, line_end, closed := code_close(doc, at.block)
+	if !closed || offset < line || offset > line_end {
+		return
+	}
+	// The line after it is the fence that closed the code before: it
+	// starts code of its own now, and closes this code again when the
+	// typed line goes.
+	_, next := line_at(doc.source, line)
+	if next_end, _ := line_at(doc.source, next); next < len(doc.source) && closes_code(doc.source, first, first_end, next, next_end) && before.in_code && before.closed {
+		return .Closed_Twice, line, next, ""
+	}
+	// In the middle of code that has its closing fence: no end of the
+	// code that the reader sees. The next character makes the line a
+	// line of code again.
+	if before.in_code && before.closed {
+		return
+	}
+	return .Closed, line, line_end, ""
 }
 
 // What Return puts into the source for a caret at `offset` in the first
@@ -145,29 +240,12 @@ fence_return :: proc(doc: ^Document, at: Address, offset: int, allocator := cont
 	return strings.to_string(out), caret, true
 }
 
-// For a caret at `offset` in the line of the closing fence of its block,
-// where it is after that fence was typed: the range of that line when
-// the line after it is a fence too, the one that closed the code before
-// (it now starts code of its own, and closes this code again when the
-// typed line goes). False with no such line after it.
-typed_close_range :: proc(doc: ^Document, at: Address, offset: int) -> (start, end: int, ok: bool) {
-	if at.empty != 0 {
-		return
-	}
-	line, line_end := code_close(doc, at.block) or_return
-	if offset < line || offset > line_end {
-		return
-	}
-	_, next := line_at(doc.source, line)
-	next_end, _ := line_at(doc.source, next)
-	return line, next, next < len(doc.source) && closing_fence(doc.source, next, next_end)
-}
-
 // Where the caret goes from the line of the closing fence of its block,
 // which shows no place for it: an empty paragraph after the code. With
-// none there, `text` at `at` makes one. False for a caret at another
-// place, and where an empty paragraph cannot be (the next block is in a
-// list with this one). The text is memory of `allocator`.
+// none there, `text` at `at` makes one, as Return at the end of a text
+// does (`line_break`). False for a caret at another place, and where an
+// empty paragraph cannot be: the next block is in a list or in a quote
+// with the code. The text is memory of `allocator`.
 code_exit :: proc(doc: ^Document, address: Address, offset: int, allocator := context.allocator) -> (at: int, text: string, caret: int, ok: bool) {
 	if address.empty != 0 {
 		return
@@ -176,16 +254,17 @@ code_exit :: proc(doc: ^Document, address: Address, offset: int, allocator := co
 	if offset < line || offset > line_end {
 		return
 	}
-	if address.block + 1 < doc.count && in_list(block_at(doc, address.block + 1)) {
-		return
+	b := block_at(doc, address.block)
+	if address.block + 1 < doc.count {
+		if next := block_at(doc, address.block + 1); in_list(next) || (b.quote_depth > 0 && next.quote_depth > 0) {
+			return
+		}
 	}
-	// As Return at the end of a text (`line_break`): the empty paragraph
-	// is the first line after the lines of the block, and the line after
-	// it ends it. An empty line of the source that is there is the place.
+	if b.empties > 0 {
+		caret = empty_offset(doc, address.block, 1)
+		return caret, "", caret, true
+	}
 	after, empty := block_empty_lines(doc, address.block)
-	if empty > 0 && after < len(doc.source) {
-		return after, "", after, true
-	}
 	nl := line_ending(doc.source)
 	at = break_before(doc.source, after)
 	return at, strings.concatenate({nl, empty == 0 ? nl : ""}, allocator), at + len(nl), true

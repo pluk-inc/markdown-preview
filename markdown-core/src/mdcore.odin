@@ -364,6 +364,16 @@ mdcore_replace_text :: proc "c" (handle: rawptr, start, end: c.long, utf8: [^]u8
 // of the view at the same time.
 @(private)
 typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
+	before := document.code_before(&ctx.doc, ctx.caret_at)
+	put_typed(ctx, text, start, end)
+	if ctx.caret >= 0 {
+		typed_fence(ctx, before)
+	}
+}
+
+// The change of `typed`.
+@(private)
+put_typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
 	// Not for text that starts with a line break itself (the bytes of a
 	// delete that come back): it has what makes it a paragraph of its own.
 	// After front matter with no line break at its end (and no text
@@ -376,15 +386,16 @@ typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
 		change_source_held(ctx, own, [2]int{start, end})
 		return
 	}
-	if len(text) > 0 && text[0] != '\n' && text[0] != '\r' && start == end && start == ctx.caret && ctx.doc.count > 0 && document.empty_of(&ctx.doc, ctx.caret_at) > 0 {
-		own := document.empty_text(&ctx.doc, text)
-		defer delete(own)
-		change_source_held(ctx, own, [2]int{start, end})
-		return
-	}
-	// The first text of code in a fence with no line of code: a line of
-	// its own (`document.code_first_line`).
+	// Text with no line break at its start, at the caret.
 	if len(text) > 0 && text[0] != '\n' && text[0] != '\r' && start == end && start == ctx.caret && ctx.doc.count > 0 {
+		if document.empty_of(&ctx.doc, ctx.caret_at) > 0 {
+			own := document.empty_text(&ctx.doc, text)
+			defer delete(own)
+			change_source_held(ctx, own, [2]int{start, end})
+			return
+		}
+		// The first text of code in a fence with no line of code: a
+		// line of its own (`document.code_first_line`).
 		if own, caret, first := document.code_first_line(&ctx.doc, ctx.caret_at, start, text); first {
 			defer delete(own)
 			change_source_held(ctx, own, [2]int{start, end}, start + caret)
@@ -392,6 +403,47 @@ typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
 		}
 	}
 	change_source_held(ctx, text, [2]int{start, end})
+}
+
+// After text that was typed, the rules for a fence that it made
+// (`document.typed_fence`): the lines of a fence do not show, so the
+// caret has no place in them. A new fence gets its closing fence at
+// once. A closing fence takes the caret to an empty paragraph after the
+// code, or, where none can be, back to the end of the code. The caller
+// holds `source_lock`, in a command of the history.
+@(private)
+typed_fence :: proc(ctx: ^Ctx, before: document.Code_Before) {
+	if ctx.doc.count == 0 {
+		return
+	}
+	kind, start, end, text := document.typed_fence(&ctx.doc, before, ctx.caret_at, ctx.caret)
+	defer delete(text)
+	switch kind {
+	case .None:
+		return
+	case .Opened:
+		change_source_held(ctx, text, [2]int{start, end}, ctx.caret)
+		return
+	case .Closed_Twice:
+		change_source_held(ctx, "", [2]int{start, end}, start)
+	case .Closed:
+	}
+	at, paragraph, caret, leaves := document.code_exit(&ctx.doc, ctx.caret_at, ctx.caret)
+	defer delete(paragraph)
+	switch {
+	case !leaves:
+		caret_to_place(ctx)
+	case len(paragraph) > 0:
+		change_source_held(ctx, paragraph, [2]int{at, at}, caret)
+	case:
+		context.temp_allocator = ctx.temp
+		// A reader of the caret holds the lock of the state.
+		hold(ctx)
+		ctx.caret = caret
+		caret_changed(ctx)
+		reveal_update(ctx)
+		ctx.display_valid = false
+	}
 }
 
 // The one way that the source of the document changes (but for a task
@@ -1481,7 +1533,6 @@ insert :: proc(ctx: ^Ctx, utf8: [^]u8, length: c.long, kind: history.Kind) -> bo
 	space := length == 1 && (utf8[0] == ' ' || utf8[0] == '\t')
 	was_mark := space && ctx.doc.count > 0 && ctx.caret_at.empty == 0 && document.block_at(&ctx.doc, ctx.caret_at.block).typed
 	typed(ctx, string(utf8[:length]), ctx.caret, ctx.caret)
-	leave_closing_fence(ctx)
 	// A list that the reader starts below another one, after empty
 	// lines, is a list of its own: its mark is the other one, in the same
 	// step of Undo.
@@ -1491,36 +1542,6 @@ insert :: proc(ctx: ^Ctx, utf8: [^]u8, length: c.long, kind: history.Kind) -> bo
 		}
 	}
 	return true
-}
-
-// After text that was typed: a caret in the line of the closing fence of
-// its code (the text made that fence) goes to an empty paragraph after
-// the code, because the line of a fence shows no place for it. When the
-// code had a closing fence before, the typed one goes: the reader ends
-// the code with a fence as in a plain editor, and the code keeps one.
-// The caller holds `source_lock`, in a command of the history.
-@(private)
-leave_closing_fence :: proc(ctx: ^Ctx) {
-	if ctx.caret < 0 || ctx.doc.count == 0 {
-		return
-	}
-	if start, end, twice := document.typed_close_range(&ctx.doc, ctx.caret_at, ctx.caret); twice {
-		change_source_held(ctx, "", [2]int{start, end}, start)
-	}
-	at, text, caret, leaves := document.code_exit(&ctx.doc, ctx.caret_at, ctx.caret)
-	defer delete(text)
-	if !leaves {
-		return
-	}
-	if len(text) > 0 {
-		change_source_held(ctx, text, [2]int{at, at}, caret)
-		return
-	}
-	context.temp_allocator = ctx.temp
-	hold(ctx)
-	ctx.caret = caret
-	caret_changed(ctx)
-	ctx.display_valid = false
 }
 
 // Return at the caret. See the header.
