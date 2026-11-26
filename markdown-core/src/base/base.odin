@@ -79,7 +79,10 @@ metrics :: proc(style: Style) -> Metrics {
 		inset = max(f32(style.column_inset), 0),
 		paragraph = body * 0.8,
 		list_item = body * 0.2,
-		list_indent = body * 2.1,
+		// One step for each list: the text of an item one step in from the
+		// edge where its "-" was typed, the bullet a little in from that
+		// edge; a list in an item has its marks under the text of the item.
+		list_indent = body * 1.6,
 		quote_indent = body * 1.5,
 		large_block = body * 1.6,
 		code_size = body * 0.9,

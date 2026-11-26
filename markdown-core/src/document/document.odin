@@ -74,9 +74,13 @@ Shape :: struct {
 	quote_depth: int,
 	columns:     int, // table
 	// The mark of the line of the block is in its text, as a mark that
-	// shows (`Document.reveal`): the "-" or the number of a list item.
-	// A layout then draws no bullet and no number for the block.
+	// shows (`Document.reveal`): the "#" of a heading, the ">" of a quote.
 	mark_shown:  bool,
+	// A list item with nothing in it at the caret whose mark has nothing
+	// after it ("-", "1."): the mark is plain text that is being typed,
+	// no list item yet (`typed_mark`). A layout draws no bullet and no
+	// number for it and puts it where its line starts.
+	typed:       bool,
 }
 
 Block :: struct {
