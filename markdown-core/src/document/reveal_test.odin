@@ -86,6 +86,10 @@ test_the_marks_of_the_element_of_an_offset_are_text :: proc(t: ^testing.T) {
 		{"12.\n", 2, "12.", "   "},
 		// A task with nothing after its "]": a bullet and the text "[ ]".
 		{"- [ ]\n", 3, "[ ]", "   "},
+		{"12. [ ]\n", 5, "[ ]", "   "},
+		// A list that starts on the line of another one: no mark is text.
+		{"- - text\n", 6, "text", "    "},
+		{"1. - # H\n", 7, "# H", "^^ "},
 		{"> -\n", 3, "-", " "},
 		// With the space, a list item: its bullet, also at the caret.
 		{"* \n", 1, "", ""},
@@ -341,6 +345,9 @@ test_an_empty_item_shows_its_mark_at_the_caret :: proc(t: ^testing.T) {
 	defer destroy(&task)
 	testing.expect(t, block_at(&task, 0).marker == .Bullet && !block_at(&task, 0).typed)
 	testing.expect_value(t, fmt.tprintf("%s", block_at(&task, 0).text.bytes[:]), "[ ]")
+	numbered := parse_owned(transmute([]u8)fmt.aprintf("%s", "12. [ ]\n"), 7)
+	defer destroy(&numbered)
+	testing.expect(t, block_at(&numbered, 0).marker == .Number && block_at(&numbered, 0).number == 12)
 	spaced := parse_owned(transmute([]u8)fmt.aprintf("%s", "- [ ] \n"), 5)
 	defer destroy(&spaced)
 	testing.expect(t, block_at(&spaced, 0).marker == .Task_Open)

@@ -646,14 +646,22 @@ line_mark :: proc(p: ^Parser, line, text: int) {
 	}
 }
 
-// Where the mark of a list item ends in the first line of its first
-// block: after the marks of quotes before it, its bullet or number, the
-// check box of a task, and the spaces after them.
+// Where the marks of list items end in the first line of a block: after
+// the marks of quotes before them, each bullet or number of the lists
+// that start on the line ("- - text"), the check box of a task, and the
+// spaces after them.
 @(private)
 after_item_mark :: proc(p: ^Parser, mark, text: int) -> int {
 	at := skip_quote_marks(p.bytes, mark, text)
-	if end, _, found := list_mark_at(p.bytes, at, text); found {
+	for {
+		end, _, found := list_mark_at(p.bytes, at, text)
+		if !found || end > text || (end < text && p.bytes[end] != ' ' && p.bytes[end] != '\t') {
+			break
+		}
 		at = end
+		for at < text && (p.bytes[at] == ' ' || p.bytes[at] == '\t') {
+			at += 1
+		}
 	}
 	// The "[ ]" of a task: its mark is in it, the "]" after that.
 	if p.block.task_mark > 0 {
@@ -680,15 +688,15 @@ typed_mark :: proc(p: ^Parser, line, end: int) -> bool {
 		return false
 	}
 	mark := skip_quote_marks(p.bytes, line, end)
-	mark_end, _, _ := list_mark_at(p.bytes, mark, end)
+	mark_end, char, _ := list_mark_at(p.bytes, mark, end)
 	if p.pairs != nil && p.doc.count == p.places_block {
 		append(p.pairs, Pair{mark, end, -1, end, false, mark, end, true})
 	}
 	p.doc.reveal = reveal
 	if p.block.marker == .Task_Open || p.block.marker == .Task_Done {
-		// A bullet with its "[ ]" as text: the space after it makes the
-		// check box, and the bullet does not go away before that.
-		p.block.marker = .Bullet
+		// A bullet or number with its "[ ]" as text: the space after it
+		// makes the check box, and the mark does not go away before that.
+		p.block.marker = char == '.' || char == ')' ? .Number : .Bullet
 		p.block.task_mark = 0
 		p.block.done = false
 		box := mark_end
