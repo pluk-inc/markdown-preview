@@ -80,6 +80,13 @@ Parser :: struct {
 	element:      [2]int,
 	reveal:       Maybe(int),
 	marking:      bool, // the text that comes is such a mark
+	// The first line of the text of the block that comes has not come
+	// yet (`on_line_offset`); and that line, for a paragraph of a list
+	// item that is opened when its text comes (`text_open`): the start
+	// of the line and of its text.
+	first_line:   bool,
+	line_waits:   bool,
+	line:         [2]int,
 	bytes:        []u8, // what is parsed
 	after_nul:    bool, // the text before was the character for a NUL byte
 	// Table.
@@ -499,6 +506,7 @@ on_block_offset :: proc "c" (type: Md_Block, beg, end: c.uint, userdata: rawptr)
 	case .Quote, .Ul, .Ol, .Li:
 	case:
 		p.at_end, p.at_end_known = int(end), true
+		p.first_line, p.line_waits = true, false
 	}
 }
 
@@ -566,36 +574,67 @@ mark_part :: proc(p: ^Parser, type: Md_Span) -> (start, end: int) {
 	return
 }
 
-// A line of the text of a heading, from the parser, before its text:
-// the "#"s of the line with the spaces after them are its mark (the
-// first line only; a heading with a line under it has none). It is
+// A line of the text of a heading or of a paragraph, from the parser,
+// before its text. What its first line has before the text, from the
+// first byte that is no space, is the mark of the block: the "#"s of a
+// heading, the "-" or the number of a list item, the ">" of a quote,
+// and all of them for a block in more than one (a later line of the
+// block has the marks of a quote again; those do not show yet). A task
+// keeps its check box, so its mark ends before the "[". The mark is
 // noted as a mark with no second mark (`Pair.line`), and it is text
-// when the offset whose marks show is in the line.
+// when the offset whose marks show is in the block.
 @(private)
 on_line_offset :: proc "c" (line, start, end: c.uint, userdata: rawptr) {
 	p := cast(^Parser)userdata
 	context = p.ctx
-	line, text := int(line), int(start)
-	if p.cur == nil || p.in_table || len(p.cur.bytes) > 0 || text > len(p.bytes) {
+	// The first line of the block only: each line comes before the text.
+	if !p.first_line || int(start) > len(p.bytes) {
 		return
 	}
-	// After the marks of a quote or a list item that the line is in.
+	p.first_line = false
+	if p.cur == nil {
+		// A paragraph of a list item with no block of its own yet: it
+		// is opened when its text comes, and not for text that does
+		// not show (raw HTML), so the mark waits for that.
+		p.line, p.line_waits = {int(line), int(start)}, true
+		return
+	}
+	line_mark(p, int(line), int(start))
+}
+
+// The mark of the block that is open, from the first line of its text:
+// see `on_line_offset`.
+@(private)
+line_mark :: proc(p: ^Parser, line, text: int) {
 	mark := line
-	for mark < text && p.bytes[mark] != '#' {
+	for mark < text && (p.bytes[mark] == ' ' || p.bytes[mark] == '\t') {
 		mark += 1
 	}
-	if mark == text {
+	// A task keeps its check box: to before its "[".
+	mark_end := p.block.task_mark > 0 ? min(p.block.task_mark - 1, text) : text
+	if mark >= mark_end {
 		return
 	}
-	line_end, _ := line_at(p.bytes, text)
+	// To the end of the last line of the block, before its line break.
+	block_end := break_before(p.bytes, clamp(p.block.source + int(p.block.lines), text, len(p.bytes)))
+	// The mark is all that the source has before the text, with the
+	// check box of a task, which does not show as text.
 	if p.pairs != nil && p.doc.count == p.places_block {
-		append(p.pairs, Pair{mark, text, -1, line_end, false, mark, line_end, true})
+		append(p.pairs, Pair{mark, text, -1, block_end, false, mark, block_end, true})
 	}
-	if reveal, shows := p.reveal.?; shows && reveal >= mark && reveal <= line_end {
+	if reveal, shows := p.reveal.?; shows && reveal >= mark && reveal <= block_end {
 		p.marking = true
-		append_text(p, string(p.bytes[mark:text]), mark, text - mark)
+		append_text(p, string(p.bytes[mark:mark_end]), mark, mark_end - mark)
 		p.marking = false
+		// The check box of a task is a piece with no text, after the
+		// mark that shows: each byte of that mark is a byte of the
+		// source, and text that is typed before the first letter of
+		// the task goes after its check box.
+		if mark_end < text && p.places != nil && p.doc.count == p.places_block {
+			append(p.places, Place{0, len(p.cur.bytes), 0, mark_end, text - mark_end, true, false, false, false})
+		}
 		p.doc.reveal = reveal
+		p.block.mark_shown = true
 	}
 }
 
@@ -720,6 +759,11 @@ text_open :: proc(p: ^Parser) -> bool {
 			return false
 		}
 		open_text(p, .Paragraph)
+		// The mark of its first line, which came before it was open.
+		if p.line_waits {
+			p.line_waits = false
+			line_mark(p, p.line[0], p.line[1])
+		}
 	}
 	return true
 }

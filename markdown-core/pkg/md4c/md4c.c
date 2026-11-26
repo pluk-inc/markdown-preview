@@ -5654,8 +5654,9 @@ md_process_leaf_block(MD_CTX* ctx, MD_BLOCK* block)
     if(!is_in_tight_list  ||  block->type != MD_BLOCK_P)
         MD_ENTER_BLOCK(block->type, (void*) &det);
 
-    /* The lines of the text of a heading. (Not in upstream.) */
-    if(ctx->parser.line_offset != NULL  &&  block->type == MD_BLOCK_H) {
+    /* The lines of the text of a heading and of a paragraph. (Not in
+     * upstream.) */
+    if(ctx->parser.line_offset != NULL  &&  (block->type == MD_BLOCK_H  ||  block->type == MD_BLOCK_P)) {
         const MD_LINE* text_lines = (const MD_LINE*)(block + 1);
         MD_SIZE line_index;
 

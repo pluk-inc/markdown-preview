@@ -55,21 +55,39 @@ test_the_marks_of_the_element_of_an_offset_are_text :: proc(t: ^testing.T) {
 		// With text that starts with a character with a backslash, in
 		// a quote and a list item, and with no text at all.
 		{"# \\#x\n", 4, "# #x", "^^  "},
-		{"> ## T\n", 5, "## T", "^^^ "},
-		{"- # T\n", 5, "# T", "^^ "},
+		{"> ## T\n", 5, "> ## T", "^^^^^ "},
+		{"- # T\n", 5, "- # T", "^^^^ "},
 		{"## \n\ntext\n", 1, "## ", "^^^"},
 		{"#\n\ntext\n", 0, "#", "^"},
 		// With raw HTML or a NUL byte at the start of the text.
 		{"# <b>x</b>\n", 6, "# x", "^^ "},
 		{"# \x00b\n", 4, "# \uFFFDb", "^^    "},
+		// The mark of a list item and of a quote, for an offset in the
+		// block: the "-", the number, the ">", and the marks of a block
+		// that is in more than one. Not for an offset in another block.
+		{"- one\n- two\n", 3, "- one", "^^   "},
+		{"- one\n- two\n", 5, "- one", "^^   "},
+		{"- one\n- two\n", 6, "one", "   "},
+		{"12. one\n", 5, "12. one", "^^^^   "},
+		{"> quote\n", 4, "> quote", "^^     "},
+		{"> - a\n", 4, "> - a", "^^^^ "},
+		// The first line only: a later line of a quote keeps its mark
+		// out of the text.
+		{"> one\n> two\n", 9, "> one two", "^^       "},
+		{"- a\n\n> one\n> two\n", 0, "- a", "^^ "},
+		// A task keeps its check box: the "-" only.
+		{"- [ ] task\n", 8, "- task", "^^    "},
+		{"- [x] task\n", 8, "- task", "^^    "},
+		// A later block of an item has only its indent, which is no mark.
+		{"plain\n", 2, "plain", "     "},
 		// Not the line under a heading.
 		{"Title\n=====\n", 2, "Title", "     "},
 		// Of code that goes on in a next line of a quote, the backticks
 		// only.
-		{"> `\n> x\n> `\n", 6, "`x`", "^ ^"},
+		{"> `\n> x\n> `\n", 6, "> `x`", "^^^ ^"},
 		// The target of a link in a next line of a quote: no line break
 		// and no mark of the quote in the text.
-		{"> [x](\n> /a)\n", 3, "[x](/a)", "^ ^^^^^"},
+		{"> [x](\n> /a)\n", 3, "> [x](/a)", "^^^ ^^^^^"},
 		// Not the "<" and ">" of an address.
 		{"a <https://e.com> c\n", 5, "a https://e.com c", "                 "},
 	}
@@ -84,7 +102,7 @@ test_the_marks_of_the_element_of_an_offset_are_text :: proc(t: ^testing.T) {
 // all of the new source gives.
 @(test)
 test_a_block_with_marks_as_text_has_its_places :: proc(t: ^testing.T) {
-	source := "# Head *h*\n\nx\n\na **bc** and `d` [e](https://e.com) f\n\n- item _g_\n\n### Last\n"
+	source := "# Head *h*\n\nx\n\na **bc** and `d` [e](https://e.com) f\n\n- item _g_\n\n  more of it\n- [ ] task\n\n> quote\n> two\n\n1. n\n\n### Last\n"
 	for at in 0 ..= len(source) {
 		doc := parse_owned(transmute([]u8)fmt.aprintf("%s", source), at)
 		defer destroy(&doc)
@@ -93,6 +111,16 @@ test_a_block_with_marks_as_text_has_its_places :: proc(t: ^testing.T) {
 			defer delete(places)
 			text := block_at(&doc, block).text.bytes[:]
 			for byte in 0 ..= len(text) {
+				// A byte in a thing that the source has in another form
+				// (the mark of a task, which has its check box) is no
+				// place of its own: the thing is one piece.
+				inside := false
+				for place in places {
+					inside ||= place.whole && byte > place.text && byte < place.text + place.text_len
+				}
+				if inside {
+					continue
+				}
 				offset, ok := place_of(&doc, places[:], {block = block, byte = byte})
 				testing.expectf(t, ok, "reveal %d: no place for byte %d of block %d", at, byte, block)
 				back := address_for(&doc, places[:], block, offset)
@@ -204,9 +232,9 @@ test_a_character_of_a_mark_over_two_lines_is_its_bytes :: proc(t: ^testing.T) {
 	places := block_map(&doc, 0)
 	defer delete(places)
 	text := string(block_at(&doc, 0).text.bytes[:])
-	testing.expect_value(t, text, "[x](/a)")
-	// The "/" is the fifth character.
-	first, last, ok := char_before(&doc, places[:], {block = 0, byte = 5})
+	testing.expect_value(t, text, "> [x](/a)")
+	// The "/" is the seventh character.
+	first, last, ok := char_before(&doc, places[:], {block = 0, byte = 7})
 	testing.expect(t, ok)
 	testing.expect_value(t, string(doc.source[first:last]), "/")
 }
@@ -226,4 +254,93 @@ test_the_source_of_a_character_of_some_code_points :: proc(t: ^testing.T) {
 		testing.expect_value(t, first, 1)
 		testing.expect_value(t, last, len(source) - 2)
 	}
+}
+
+// The marks of a block that has more than one line are one mark, of its
+// first line, also with the caret in another block; and a parse that
+// notes marks makes the blocks that a parse with none makes.
+@(test)
+test_a_block_has_one_line_mark :: proc(t: ^testing.T) {
+	doc := parse("> one\n> two\n> three\n\n- a\n- <b></b>\n- c\n")
+	defer destroy(&doc)
+	pairs: [dynamic]Pair
+	defer delete(pairs)
+	places := block_map(&doc, 0, &pairs)
+	delete(places)
+	testing.expect_value(t, len(pairs), 1)
+	// An item with only raw HTML has no block, with marks noted too.
+	for at in 0 ..= len(doc.source) {
+		all := parse_owned(transmute([]u8)fmt.aprintf("%s", doc.source), at)
+		testing.expect_value(t, all.count, doc.count)
+		destroy(&all)
+	}
+}
+
+// An item of a list whose first paragraph has no text that shows (raw
+// HTML, an image with no text): a parse that notes marks makes the
+// blocks that a parse with none makes, and the block after it has its
+// places and gets its marks. (Not an image with no text: an offset in
+// it shows its marks, which are text of a block then; no caret is at
+// such an offset, because the image has no place for one.)
+@(test)
+test_marks_make_no_block_for_an_item_with_no_text :: proc(t: ^testing.T) {
+	for source in ([]string{"- a\n- <b></b>\n  - y\n", "1. <b></b>\n   1. y\n", "> - <i></i>\n>   - y\n", "- <b></b>\n  # hh\n", "- [ ] <b></b>\n  - y\n"}) {
+		doc := parse(source)
+		defer destroy(&doc)
+		last := doc.count - 1
+		for at in 0 ..= len(source) {
+			all := parse_owned(transmute([]u8)fmt.aprintf("%s", source), at)
+			testing.expectf(t, all.count == doc.count, "%q with the marks of %d: %d blocks, not %d", source, at, all.count, doc.count)
+			destroy(&all)
+		}
+		places := block_map(&doc, last)
+		testing.expectf(t, len(places) > 0, "%q: no places for its last block", source)
+		delete(places)
+		before := fmt.tprintf("%s", block_at(&doc, last).text.bytes[:])
+		places, _ = reveal_block(&doc, last, len(source) - 1)
+		delete(places)
+		testing.expectf(t, len(block_at(&doc, last).text.bytes) >= len(before), "%q: the last block lost its text with marks", source)
+		places, _ = reveal_block(&doc, last, nil)
+		delete(places)
+		testing.expect_value(t, fmt.tprintf("%s", block_at(&doc, last).text.bytes[:]), before)
+	}
+}
+
+// Text that is typed before the first letter of a task whose mark shows
+// goes after its check box.
+@(test)
+test_the_text_of_a_task_starts_after_its_check_box :: proc(t: ^testing.T) {
+	doc := parse_owned(transmute([]u8)fmt.aprintf("%s", "- [ ] task\n"), 7)
+	defer destroy(&doc)
+	testing.expect_value(t, fmt.tprintf("%s", block_at(&doc, 0).text.bytes[:]), "- task")
+	offset, ok := source_of(&doc, {block = 0, byte = 2})
+	testing.expect(t, ok)
+	testing.expect_value(t, offset, 6)
+	testing.expect_value(t, address_of(&doc, 6), Address{block = 0, byte = 2})
+}
+
+// Each character of the mark of a task that shows is a place of its
+// own: the caret goes between the digits of a number, and the Delete
+// key before the first letter takes out one character of the mark, and
+// not the check box with all of the mark.
+@(test)
+test_the_mark_of_a_task_is_edited_by_character :: proc(t: ^testing.T) {
+	doc := parse_owned(transmute([]u8)fmt.aprintf("%s", "12. [x] task\n"), 9)
+	defer destroy(&doc)
+	testing.expect_value(t, fmt.tprintf("%s", block_at(&doc, 0).text.bytes[:]), "12. task")
+	for byte in 0 ..= 3 {
+		offset, ok := source_of(&doc, {block = 0, byte = byte})
+		testing.expect(t, ok)
+		testing.expect_value(t, offset, byte)
+	}
+	offset, ok := source_of(&doc, {block = 0, byte = 4})
+	testing.expect(t, ok)
+	testing.expect_value(t, offset, 8)
+	places := block_map(&doc, 0)
+	defer delete(places)
+	start, end, found := char_before(&doc, places[:], {block = 0, byte = 4})
+	testing.expect(t, found)
+	testing.expect_value(t, [2]int{start, end}, [2]int{3, 4})
+	// An offset in the check box is the start of the text.
+	testing.expect_value(t, address_of(&doc, 5), Address{block = 0, byte = 4})
 }
