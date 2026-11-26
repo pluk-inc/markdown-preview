@@ -188,18 +188,8 @@ block_places :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs:
 	// its first line, which is its fence; each other block (a paragraph
 	// of a NUL byte) at its own start.
 	content := block_start(doc, block) - base
-	line := content
-	for line < len(text) && text[line] != '\n' && text[line] != '\r' {
-		line += 1
-	}
-	first_line := string(text[min(content, len(text)):line])
-	// Code in a fence, not code by its indent, which has no such line.
-	if block_at(doc, block).kind == .Code && (strings.contains(first_line, "```") || strings.contains(first_line, "~~~")) {
-		content = line
-		if content + 1 < len(text) && text[content] == '\r' && text[content + 1] == '\n' {
-			content += 1
-		}
-		content = min(content + 1, len(text))
+	if block_at(doc, block).fenced {
+		_, content = fence_line(text, content)
 	}
 	place_made(places[:], text, content)
 	for &place in places^ {
@@ -464,10 +454,17 @@ text_place :: proc(doc: ^Document, places: []Place, at: Address) -> (offset: int
 		// A block with no text: after the space that ends its first
 		// line ("- ", "# ").
 		b := block_at(doc, at.block)
+		start := block_start(doc, at.block)
+		if b.kind == .Code && b.fenced {
+			// Code in a fence with no line of code: where its first line
+			// starts, after the line of the fence. Not with no line break
+			// after the fence, where that place is in the fence line.
+			end, content := fence_line(doc.source, start)
+			return content, content > end
+		}
 		if b.kind == .Table || b.kind == .Rule || b.kind == .Code {
 			return
 		}
-		start := block_start(doc, at.block)
 		line := strings.index_any(string(doc.source[start:]), "\r\n")
 		end := line < 0 ? len(doc.source) : start + line
 		if end > start && (doc.source[end - 1] == ' ' || doc.source[end - 1] == '\t') {
@@ -595,4 +592,51 @@ address_of :: proc(doc: ^Document, offset: int) -> Address {
 	places := block_map(doc, block)
 	defer delete(places)
 	return address_for(doc, places[:], block, offset)
+}
+
+// The first line of a code block in a fence, which starts at `start`:
+// the end of the fence and of the word after it, and where the line
+// after it starts (the first line of the code). The two are the same
+// with no line break after the fence.
+fence_line :: proc(source: []u8, start: int) -> (end, content: int) {
+	end = min(start, len(source))
+	for end < len(source) && source[end] != '\n' && source[end] != '\r' {
+		end += 1
+	}
+	content = end
+	if content < len(source) {
+		content += content + 1 < len(source) && source[content] == '\r' && source[content + 1] == '\n' ? 2 : 1
+	}
+	return
+}
+
+// True for a place in a code block in a fence where text needs a line
+// break after it, to be a line of the code: the block has no line of
+// code, and the line at the place is the one of the closing fence.
+code_needs_line :: proc(doc: ^Document, at: Address, offset: int) -> bool {
+	if at.empty != 0 || offset >= len(doc.source) {
+		return false
+	}
+	b := block_at(doc, at.block)
+	if b.kind != .Code || !b.fenced || len(b.text.bytes) > 0 {
+		return false
+	}
+	_, content := fence_line(doc.source, block_start(doc, at.block))
+	return offset == content && doc.source[offset] != '\n' && doc.source[offset] != '\r'
+}
+
+// True for an offset in the first line of a code block in a fence: the
+// caret is there while the fence is typed, and Return there starts the
+// first line of the code.
+in_fence_line :: proc(doc: ^Document, at: Address, offset: int) -> bool {
+	if at.empty != 0 {
+		return false
+	}
+	b := block_at(doc, at.block)
+	if b.kind != .Code || !b.fenced {
+		return false
+	}
+	start := block_start(doc, at.block)
+	end, _ := fence_line(doc.source, start)
+	return offset >= start && offset <= end
 }

@@ -96,9 +96,44 @@ static const char *list_caret_check(void) {
     return same ? NULL : "text typed after Up from a list mark is not where the caret is";
 }
 
+// A code block that is typed: the fence, Return, and the code, at the end
+// of a document; and typed text and Return in a block with no line of
+// code between its two fences. Returns what is wrong, or NULL.
+static const char *typed_code_check(void) {
+    struct { const char *start; double click_y; const char *keys; const char *want; } cases[] = {
+        {"Text\n", -1, "\n```\nab\nc", "Text\n\n```\nab\nc\n"},
+        {"Text\n\n```\n```\n\nMore\n", 76, "z\nw", "Text\n\n```\nz\nw\n```\n\nMore\n"},
+        {"Text\n\n```\n```\n\nMore\n", 76, "\nq", "Text\n\n```\n\nq\n```\n\nMore\n"},
+    };
+    for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        void *ctx = mdcore_create((__bridge void *)[CAMetalLayer layer]);
+        mdcore_set_markdown(ctx, cases[i].start, (long)strlen(cases[i].start));
+        mdcore_resize(ctx, VIEW_WIDTH, VIEW_HEIGHT, VIEW_SCALE);
+        @autoreleasepool { mdcore_draw(ctx, 0); }
+        if (cases[i].click_y < 0) {
+            mdcore_caret_set(ctx, 0, 0);
+            mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_END, false);
+        } else {
+            mdcore_caret_set(ctx, 100, cases[i].click_y);
+        }
+        for (const char *key = cases[i].keys; *key; key++) {
+            if (*key == '\n') mdcore_insert_break(ctx); else mdcore_insert(ctx, key, 1);
+            @autoreleasepool { mdcore_draw(ctx, 0); }
+        }
+        long n = 0;
+        const char *out = mdcore_source(ctx, &n);
+        bool same = n == (long)strlen(cases[i].want) && memcmp(out, cases[i].want, (size_t)n) == 0;
+        mdcore_destroy(ctx);
+        if (!same) return "text typed in a new code block is not in its code";
+    }
+    return NULL;
+}
+
 static const char *caret_walk(void *ctx, long length) {
     const char *list_wrong = list_caret_check();
     if (list_wrong != NULL) return list_wrong;
+    const char *code_wrong = typed_code_check();
+    if (code_wrong != NULL) return code_wrong;
     // The source before the first change, for Undo at the end.
     long first_size = 0;
     const char *first_bytes = mdcore_source(ctx, &first_size);

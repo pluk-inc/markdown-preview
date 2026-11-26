@@ -1606,3 +1606,16 @@ export.
   text went into a new line that joined that item. After the parse
   around such a line, the caret is at the place of its address. The walk
   of `bench.m` has this sequence (`list_caret_check`).
+- **2026-11-26** — A code block that is typed. The maintainer typed a
+  fence at the end of a document and could not type code: Return did
+  nothing, and the next characters went into the line of the fence,
+  where they do not show. Code in a fence with no line of code had no
+  place in the source for a caret (`text_place` gave none), so Return
+  had no place to put a line break, and a click in such a block (two
+  fences with nothing between) went to other text. The place is now
+  where the first line of the code starts (`fence_line`). Return in the
+  line of a fence that was typed starts that line (`in_fence_line`), and
+  text or Return in a block whose next line is the closing fence gets a
+  line break of its own (`code_needs_line`), or the fence would be at
+  the end of the text. The walk of `bench.m` types these
+  (`typed_code_check`).

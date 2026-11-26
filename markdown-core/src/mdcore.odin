@@ -382,6 +382,14 @@ typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
 		change_source_held(ctx, own, [2]int{start, end})
 		return
 	}
+	// The first text of a code block whose closing fence is on the next
+	// line: a line of its own, or the fence is at the end of the text.
+	if len(text) > 0 && text[len(text) - 1] != '\n' && text[len(text) - 1] != '\r' && start == end && start == ctx.caret && ctx.doc.count > 0 && document.code_needs_line(&ctx.doc, ctx.caret_at, start) {
+		own := strings.concatenate({text, document.line_ending(ctx.doc.source)})
+		defer delete(own)
+		change_source_held(ctx, own, [2]int{start, end}, start + len(text))
+		return
+	}
 	change_source_held(ctx, text, [2]int{start, end})
 }
 
@@ -1508,6 +1516,13 @@ mdcore_insert_break :: proc "c" (handle: rawptr) {
 		// A document with no block: a line break, as each other text
 		// that is typed there.
 		change_source_held(ctx, document.line_ending(ctx.doc.source), [2]int{ctx.caret, ctx.caret})
+		return
+	}
+	// In the line of a fence that was typed: the first line of the code
+	// starts, with no empty line before it.
+	if document.in_fence_line(&ctx.doc, ctx.caret_at, ctx.caret) {
+		nl := document.line_ending(ctx.doc.source)
+		change_source_held(ctx, nl, [2]int{ctx.caret, ctx.caret}, ctx.caret + len(nl))
 		return
 	}
 	// The text is memory of its own: a frame uses the working memory of

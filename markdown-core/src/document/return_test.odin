@@ -70,6 +70,10 @@ test_return_puts_in_what_the_block_of_the_caret_needs :: proc(t: ^testing.T) {
 		{"    code\n    more\n", {block = 0, byte = 2}, "    co\n    de\n    more\n", 11, 0},
 		{"    code\n\nz\n", {block = 0, byte = 4}, "    code\n\n\nz\n", 9, 0},
 		{"    ```\n    x\n\nz\n", {block = 0, byte = 5}, "    ```\n    x\n\n\nz\n", 14, 0},
+		// Code in a fence with no line of code: two lines of code, so
+		// the caret is not in the line of the closing fence.
+		{"```\n```\n", {block = 0}, "```\n\n\n```\n", 5, 0},
+		{"x\n\n```js\n```\n", {block = 1}, "x\n\n```js\n\n\n```\n", 10, 0},
 		// An item with no text that is all of the source.
 		{"- \n", {block = 0}, "", 0, 0},
 	}
@@ -272,4 +276,49 @@ test_empty_lines_stay_before_a_typed_mark :: proc(t: ^testing.T) {
 	plain := parse(source)
 	defer destroy(&plain)
 	testing.expect_value(t, int(block_at(&plain, plain.count - 2).empties), 0)
+}
+
+// Code in a fence with no line of code has a place for a caret: where
+// its first line starts. Text there needs a line break of its own when
+// the next line is the closing fence.
+@(test)
+test_code_with_no_line_has_a_place_for_a_caret :: proc(t: ^testing.T) {
+	Case :: struct {
+		source: string,
+		block:  int,
+		place:  int, // -1 for none
+		needs:  bool,
+	}
+	cases := []Case {
+		{"```\n```\n", 0, 4, true},
+		{"x\n\n~~~js\r\n~~~\r\n", 1, 10, true},
+		// The fence is not closed: the place is the end of the source,
+		// or an empty line of the code.
+		{"```\n", 0, 4, false},
+		// No line break after the fence: no line for code yet.
+		{"```", 0, -1, false},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		at := Address{block = c.block}
+		testing.expect_value(t, block_at(&doc, c.block).kind, Block_Kind.Code)
+		offset, placed := source_of(&doc, at)
+		testing.expect_value(t, placed, c.place >= 0)
+		if placed {
+			testing.expect_value(t, offset, c.place)
+			testing.expect_value(t, code_needs_line(&doc, at, offset), c.needs)
+		}
+		// Each place in the line of the fence is in that line, and the
+		// first line of the code is not.
+		start := block_start(&doc, c.block)
+		end, content := fence_line(doc.source, start)
+		testing.expect(t, in_fence_line(&doc, at, start) && in_fence_line(&doc, at, end))
+		testing.expect(t, content == end || !in_fence_line(&doc, at, content))
+	}
+	// Code with a line, and other blocks, have no such place.
+	doc := parse("```\nab\n```\n\ntext\n")
+	defer destroy(&doc)
+	testing.expect(t, !code_needs_line(&doc, {block = 0}, 4))
+	testing.expect(t, !in_fence_line(&doc, {block = 1}, 13))
 }

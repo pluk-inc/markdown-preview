@@ -429,7 +429,8 @@ caret_hit :: proc(l: ^Layout, x: f32, y: f64) -> (at: document.Address, upstream
 				}
 			}
 		}
-		if (b.kind == .Paragraph || b.kind == .Heading) && len(b.text.bytes) == 0 {
+		// Code in a fence with no line of code is such a block too.
+		if (b.kind == .Paragraph || b.kind == .Heading || b.kind == .Code) && len(b.text.bytes) == 0 {
 			return {block = l.doc.starts[p] + near}, false, true
 		}
 	}
