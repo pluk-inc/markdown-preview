@@ -241,6 +241,10 @@ test_two_characters_change_places_as_wholes :: proc(t: ^testing.T) {
 		{"a\nb c\n", 3, ""},
 		{"a b\nc\n", 3, ""},
 		{"x **a b**\n", 4, ""},
+		// Nor beside a hard line break.
+		{"ab c  \nd\n", 3, ""},
+		{"a  \nb cd\n", 3, ""},
+		{"a  \nb cd\n", 4, "a  \nbc d\n"},
 		// Code shows each space.
 		{"```\n a\n```\n", 1, "```\na \n```\n"},
 	}

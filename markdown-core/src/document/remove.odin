@@ -555,7 +555,9 @@ transpose :: proc(doc: ^Document, places: []Place, at: Address, allocator := con
 	// the next Control-T would have no two characters. Code shows each
 	// space as it is.
 	if block_at(doc, at.block).kind != .Code {
-		space :: proc(c: u8) -> bool {return c == ' ' || c == '\t'}
+		// A line break in the text (of a hard break) is no neighbour
+		// either: the spaces before it are the mark of that break.
+		space :: proc(c: u8) -> bool {return c == ' ' || c == '\t' || c == '\n' || c == '\r'}
 		shown_mark :: proc(text: ^Text, i: int) -> bool {
 			for span in text.spans {
 				if .Mark in span.style && span.start <= i && i < span.end {
