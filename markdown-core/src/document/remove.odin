@@ -570,7 +570,9 @@ transpose :: proc(doc: ^Document, places: []Place, at: Address, allocator := con
 			if last >= len(text.bytes) || space(text.bytes[last]) || shown_mark(text, last) {
 				return
 			}
-			next_start, _ := char_source(doc, places, at, last, char_step(text.bytes[:], last, true)) or_return
+			// The source can have it in another form (an entity): only
+			// where it starts counts.
+			next_start, _, _ := char_source(doc, places, at, last, char_step(text.bytes[:], last, true))
 			if next_start != b_end {
 				return
 			}
@@ -585,7 +587,7 @@ transpose :: proc(doc: ^Document, places: []Place, at: Address, allocator := con
 			if space(text.bytes[before]) || shown_mark(text, before) {
 				return
 			}
-			_, before_end := char_source(doc, places, at, before, first) or_return
+			_, before_end, _ := char_source(doc, places, at, before, first)
 			if before_end != a_start {
 				return
 			}

@@ -1483,3 +1483,13 @@ export.
   40 typed characters at 15 ms (one parse for each character); the
   characters of a run are one step now, 0.33 ms. Undo of a delete of
   all of that document is 13 to 15 ms, a parse of what comes back.
+- **2026-11-26** — Control-T and spaces. The walk of `bench.m` stopped on
+  `empty-lines.md`: Control-T at the start of "A paragraph" put the
+  space first, where the page does not show it, and a second Control-T
+  had nothing to change. The first fix looked only at the two ends of
+  the text; a reviewer with the task to break it found six more ways
+  to lose a space (beside another space, at an end of a line, inside
+  the mark of bold text). A space now changes places only with a
+  character that is no space on each side after it, next to it in the
+  source; code keeps each change. The walk passes on each test
+  document.

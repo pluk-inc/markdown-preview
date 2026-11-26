@@ -227,6 +227,9 @@ test_two_characters_change_places_as_wholes :: proc(t: ^testing.T) {
 		// A space between two characters that are no spaces, in the
 		// line and in the source.
 		{"ab cd\n", 3, "abc d\n"},
+		// Also beside a character that the source has as an entity.
+		{"ab c&amp;\n", 3, "abc &amp;\n"},
+		{"&amp;a b\n", 2, "&amp; ab\n"},
 		// Not a space to an end of the text, to another space, to an
 		// end of a line, or into the mark of a style: it does not show
 		// there.
