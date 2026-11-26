@@ -477,10 +477,12 @@ extension DocumentWindowController {
             // Refresh on successful writes as well, so on-disk size and
             // modification time advance even when edit mode stays open.
             if revision == nil || revision == editorChangeRevision {
+                // The editor's own outline, as after each key (the native
+                // one has the texts of its page); none for the web editor.
                 computeVisibleSidebars(markdown: body, fileURL: currentFileURL,
                                        revision: editorChangeRevision,
                                        sessionID: inspectorRefreshSessionID,
-                                       outline: nil)
+                                       outline: mainSplit?.showsOutline == true ? mainSplit?.documentEditor?.currentOutline() : nil)
             }
             completeSuccessfulEditorCommit(exitAfter: exitAfter, rerender: true)
         case let .reloaded(externalMarkdown):

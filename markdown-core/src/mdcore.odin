@@ -368,7 +368,9 @@ typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
 	// delete that come back): it has what makes it a paragraph of its own.
 	// After front matter with no line break at its end (and no text
 	// after it): a line of its own, or the text goes on the closing line.
-	if len(text) > 0 && start == end && ctx.doc.count == 0 && start > 0 && start == ctx.doc.hidden && ctx.doc.source[start - 1] != '\n' && ctx.doc.source[start - 1] != '\r' {
+	// Not after a byte order mark alone, and not for text that starts
+	// with a line break of its own.
+	if len(text) > 0 && text[0] != '\n' && text[0] != '\r' && start == end && ctx.doc.count == 0 && start == ctx.doc.hidden && start > document.bom_size(ctx.doc.source) && ctx.doc.source[start - 1] != '\n' && ctx.doc.source[start - 1] != '\r' {
 		own := strings.concatenate({document.line_ending(ctx.doc.source), text})
 		defer delete(own)
 		change_source_held(ctx, own, [2]int{start, end})

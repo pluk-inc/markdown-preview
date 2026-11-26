@@ -64,7 +64,6 @@ hidden_start :: proc(source: []u8) -> (hidden: int, unclosed: bool) {
 }
 
 // 3 for a source that starts with a byte order mark, else 0.
-@(private)
 bom_size :: proc(source: []u8) -> int {
 	return len(source) >= 3 && source[0] == 0xEF && source[1] == 0xBB && source[2] == 0xBF ? 3 : 0
 }
