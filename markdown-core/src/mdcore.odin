@@ -689,6 +689,14 @@ reveal_block :: proc(ctx: ^Ctx, block: int, reveal: Maybe(int)) {
 			commit_held(ctx, &pending)
 			if ctx.caret >= 0 {
 				caret_changed(ctx)
+				// The empty lines before the line can be none now (in a
+				// list): an offset of the caret in them is no place of a
+				// text. The caret is where text that is typed at its
+				// address goes, as it shows.
+				if offset, moves := caret_place(ctx); moves {
+					ctx.caret = offset
+					caret_changed(ctx)
+				}
 			}
 			if ctx.layout_valid {
 				layout.restore_place(&ctx.page, ctx.place)
@@ -1402,15 +1410,25 @@ replace_selection :: proc(ctx: ^Ctx, text: string) -> (selected, changed: bool) 
 	return true, replace_between(ctx, from, to, text)
 }
 
+// The offset where text that is typed at the address of the caret goes,
+// when the caret is at another one (an offset that is no place of a
+// text).
+@(private)
+caret_place :: proc(ctx: ^Ctx) -> (offset: int, moves: bool) {
+	if ctx.caret < 0 || ctx.doc.count == 0 {
+		return
+	}
+	placed: bool
+	offset, placed = document.place_of(&ctx.doc, ctx.caret_places[:], ctx.caret_at)
+	return offset, placed && offset != ctx.caret
+}
+
 // After an edit that left the caret at an offset where no text goes
 // (before the marks of a line): the caret is where text that is typed
 // at its address goes.
 @(private)
 caret_to_place :: proc(ctx: ^Ctx) {
-	if ctx.caret < 0 || ctx.doc.count == 0 {
-		return
-	}
-	if offset, placed := document.place_of(&ctx.doc, ctx.caret_places[:], ctx.caret_at); placed && offset != ctx.caret {
+	if offset, moves := caret_place(ctx); moves {
 		context.temp_allocator = ctx.temp
 		// A reader of the caret holds the lock of the state.
 		hold(ctx)
