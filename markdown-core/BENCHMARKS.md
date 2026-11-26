@@ -90,6 +90,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-26 | list marks as in other Markdown editors | 576 / 555 | 60 / 107 (the base too) | 485 / 770 | 59 / 72 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
 | 2026-11-26 | the outline of native Edit Mode from the core | 574 / 559 | 64 / 110 (the base too) | 475 / 755 | 58 / 74 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
 | 2026-11-26 | the caret at its place after Up from a list mark | 568 / 591 | 60 / 108 (the base too) | 490 / 800 | 60 / 74 | not recorded | not recorded | 7.1 / 26.4 (the base too) |
+| 2026-11-26 | the caret as high as the text of its line | 588 / 603 | 57 / 91 and 69 / 103 (the base 57 / 91; see the section) | 505 / 635 | 62 / 74 | not recorded | not recorded | 7.0 / 26.4 (the base too) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1322,3 +1323,40 @@ long, five launches each, in the order that they ran:
 
 The launches of the base were slower in this set; no code of a launch
 changed, so that is the spread of the Mac (other apps were in use).
+
+## The caret as high as the text of its line (2026-11-26)
+
+The bar of the caret takes the height of the font of its line, where it
+took the height of the line: one look for the metrics of a font where
+the caret is drawn and where the host asks for its rectangle. `core.py`,
+short / long, in turns (base, change, change, base), with a load of 2.9
+to 4.9:
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 63, 59 / 79, 79 | 63, 61 / 76, 73 |
+| A typed character in the middle of the text (CPU ms) | 1.31, 1.16 / 1.59, 1.54 | 1.43, 1.25 / 1.50, 1.55 |
+| A typed character at the end of the text (CPU ms) | 1.26, 1.34 / 2.81, 3.38 | 1.36, 1.34 / 2.96, 2.69 |
+| A typed character at a caret (CPU ms) | 1.61, 1.64 / 2.11, 2.09 | 1.81, 1.63 / 1.75, 1.79 |
+| A step of the caret to the left or to the right (CPU ms) | 0.53, 0.37 / 0.53, 0.41 | 0.45, 0.38 / 0.38, 0.39 |
+| Heap with all of the document laid out (MB) | 7.1, 7.0 / 26.3, 26.4 | 7.0, 7.0 / 26.3, 26.4 |
+
+The rows overlap but for two of the long document, where both runs of
+the change are below both of the base: the first frame (76, 73 against
+79, 79) and a typed character at a caret (1.75, 1.79 against 2.11,
+2.09). The change adds work to a frame with a caret and takes none
+away, so these are not a gain of it. `app.py`, short / long, five
+launches each, in the order that they ran:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 545 / 619 | 57 / 91 | 450 / 640 |
+| change | 607 / 626 | 69 / 103 | 530 / 670 |
+| change | 569 / 579 | 57 / 91 | 480 / 600 |
+| base | 557 / 587 | 57 / 91 | 470 / 600 |
+
+The first set of the change is above the others in each column (12 MB
+more memory, with a load of 4.9 at its start); the second set of the
+same build gives the numbers of the base. The benchmark opens the
+document in Read mode, which has no caret, so no code of the change
+runs in it. The cause of the 12 MB in that one set is not known.
