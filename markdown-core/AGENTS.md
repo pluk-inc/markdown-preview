@@ -524,6 +524,15 @@ Known limits, found in review and left on purpose:
 
 - One very long paragraph or one large table is laid out in one step. Code
   blocks stop between lines.
+- A selection that Shift and Up makes from before a "-" that is being
+  typed, below a list and empty lines, takes the "-" with it when text is
+  typed over it ("- a", two empty lines, "-": the result is "- ax" with
+  no "-"); on the commit before the list marks the "-" stayed. The end of
+  the selection at the "-" line is after the mark once the line is a list
+  item again.
+- With "**b**", an empty line, and "-": End and four steps to the left
+  put the caret in the first "**", and typed text goes between the two
+  "*".
 - Return after a mark that is being typed ("-" and Return) makes no item:
   the "-" stays text in the source. With the caret on another line,
   Markdown reads it as an empty list item, which can join the list above.
