@@ -33,7 +33,8 @@ text of any script that CoreText can shape.
 Scrolling with the system scroll bar, selection by drag, Select All, Copy.
 Edit Mode in its first form: a caret at a click, typed text (also from an
 input method), Return, paste, cut, save, the keys that move the caret,
-with Shift to select, and the delete keys of the system. Text that is
+with Shift to select, the delete keys of the system, and the marks of
+bold text, code, and a link that show at the caret. Text that is
 selected goes out with a delete, and typed text takes its place.
 The reader style from the app: font, text size and zoom, line spacing,
 bold text, margins, content width, theme colors, light and dark.
@@ -921,8 +922,44 @@ The order of the next steps, from the review of the second step:
 - Cut, Paste, and Select All are menu commands, which a test on the
   hidden display cannot send (a menu needs the app in front). Each is
   two calls that the keys check (a copy and a delete, an insert).
+- Done: the marks of the inline styles show at the caret
+  (Decisions). The mechanism is in the document, not in the layout:
+  `Document.reveal` is an offset of the source, and a parse makes the
+  two marks of each element that has that offset in it or at an end of
+  it text of its block, with the style `.Mark` (gray). So a block with
+  marks is a block with another text, and all that works on the text
+  of a block works on it with no change: the layout, the caret and
+  its steps, the selection, the map of the text to the source (a mark
+  is a piece of text that is its bytes of the source), and each edit.
+  The parser gives the element of each mark with the mark
+  (`mark_offset`), so one parse is enough. The core sets the offset to
+  the caret (`reveal_update` in `mdcore.odin`) when the caret has no
+  text selected and the view takes the keys (`mdcore_set_focused`).
+  It parses the block again only when the set of elements changes: a
+  step in the same element changes nothing. The parse of an edit gets
+  the offset of the caret after it, so a typed character in bold text
+  is one parse. The caret and the ends of the selection are offsets of
+  the source through such a change, and get their addresses again.
+  One block gets or loses its marks by a parse of its lines from the
+  same source (`document.reveal_block`), not by an edit of nothing:
+  no copy of the source, no block beside it, and the links that the
+  text had. Marks that show are text for a delete too: one that is
+  selected goes (`replace_between` gives the edit the elements with no
+  marks in the text only). Shift with a step over a mark selects the
+  mark and the marks stay; and the caret comes back to the offset
+  where a selection started when it is empty again (`select_from`),
+  because the text with no marks has one place for some offsets.
+- Not done for the marks: the marks of a line (the "#" of a heading,
+  the mark of a list item and of a quote, a code fence), a backslash
+  before a character, an entity, and a table cell that shows its
+  source (Decisions has the rules); the "<" and ">" of an address do
+  not show; a move to an end of a line that makes marks show goes on
+  one time to the end of the new text, so End is two moves there;
+  the marks of an element go with the last text between them also
+  while they show, as with no marks in the text (an edit knows each
+  element but the ones with a mark that the range has a byte of).
 - Next for the editor, in the order that a reader misses them: the
-  marks at the caret (Decisions); undo.
+  marks of a line; undo.
 - Done: where the lines of a block end comes from the parser
   (`block_offset` gives the end too, `Block.lines`), as its start does.
   Before, `empties.lines_end` and `fence_line` read the lines a second
@@ -1330,3 +1367,27 @@ export.
   code spans became one with backticks in it, and the "<" and ">" of
   an address were kept as the marks of a style). Each has a case in
   the tests now.
+- **2026-11-25** — The marks at the caret. The maintainer saw in a
+  test build that the "#" of a heading does not show in Edit Mode, and
+  asked for the marks as the next step. The study of the reference
+  editor had a map of hidden runs between the source and what shows;
+  the core did not get that map. A block with marks is made by the
+  parser as a block with another text, and the document says which
+  offset has its marks shown: all that reads the text of a block
+  (the layout, the caret, the selection, the map to the source, the
+  edits) is as it was, and no second set of coordinates came in. The
+  inline marks are this step; the marks of a line are the next one.
+  The walk of the caret in the benchmark script found that End went
+  to the place before the marks that it made show, and later that a
+  mark that was selected did not go with a delete. A reviewer with
+  the task to break it compared the document with a parse of all of
+  the source after each key of random runs, with 33 hard sources at
+  each offset: no difference, and one fault of the caret (Shift and a
+  step over a mark left the caret in a mark that did not show), which
+  the walk now has a check for. The first form made a block again by
+  an edit of nothing, which copied the source and added to the list of
+  links each time; the efficiency review found that. Checked on the
+  hidden display with screenshots: the marks of italic text, bold
+  text, and a link with its target in gray at the caret, and none
+  with text selected.
+

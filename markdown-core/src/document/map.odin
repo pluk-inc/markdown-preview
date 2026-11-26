@@ -1,5 +1,6 @@
 package document
 
+import "core:slice"
 import "core:strings"
 import "core:unicode/utf8"
 
@@ -16,6 +17,100 @@ import "core:unicode/utf8"
 // also the marks of the styles of the text, in the order of their first
 // marks.
 block_map :: proc(doc: ^Document, block: int, pairs: ^[dynamic]Pair = nil) -> (places: [dynamic]Place) {
+	fresh, _, text, base := block_parse(doc, block, &places, pairs, false)
+	block_places(doc, block, &places, pairs, text[:], base)
+	destroy(&fresh)
+	return
+}
+
+// Makes the text of a block again with the marks of another offset as
+// text, or with none (`Document.reveal`): the source is as it was, and
+// so is each other block. Gives the map of the new text, as `block_map`
+// does, and the change for a layout. The links of the text are the
+// ones that it had.
+reveal_block :: proc(doc: ^Document, block: int, reveal: Maybe(int), pairs: ^[dynamic]Pair = nil) -> (places: [dynamic]Place, change: Change) {
+	doc.reveal = reveal
+	fresh, index, text, base := block_parse(doc, block, &places, pairs, true)
+	old, new := block_at(doc, block), block_at(&fresh, index)
+	change = {first = block, removed = 1, added = 1, count = doc.count}
+	if old.kind != .Table {
+		before, after := old.text.bytes[:], new.text.bytes[:]
+		change.text_head = slice.prefix_length(before, after)
+		rest := min(len(before), len(after)) - change.text_head
+		for change.text_tail < rest && before[len(before) - 1 - change.text_tail] == after[len(after) - 1 - change.text_tail] {
+			change.text_tail += 1
+		}
+		change.text_was, change.text_grew = len(before), len(after) - len(before)
+	}
+	// The links of the new text, in their order, are the links that the
+	// text had: each gets the number that the document has for it.
+	// The numbers that the document has for them, in the order of the
+	// text; and for each link of the new text, which of those it is.
+	numbers := make([dynamic]int, context.temp_allocator)
+	seen := make([]bool, len(doc.links) + 1, context.temp_allocator)
+	for &t in block_texts(old) {
+		for span in t.spans {
+			if span.link > 0 && span.link <= len(doc.links) && !seen[span.link] {
+				seen[span.link] = true
+				append(&numbers, span.link)
+			}
+		}
+	}
+	order := make([]int, len(fresh.links) + 1, context.temp_allocator)
+	count := 0
+	for &t in block_texts(new) {
+		for &span in t.spans {
+			if span.link <= 0 || span.link > len(fresh.links) {
+				span.link = 0
+				continue
+			}
+			if order[span.link] == 0 {
+				count += 1
+				order[span.link] = count
+				if count > len(numbers) {
+					append(&doc.links, strings.clone(fresh.links[span.link - 1]))
+					append(&numbers, len(doc.links))
+				}
+			}
+			span.link = numbers[order[span.link] - 1]
+		}
+	}
+	old.text, new.text = new.text, old.text
+	for &cell, i in old.cells {
+		cell, new.cells[i] = new.cells[i], cell
+	}
+	doc.reveal = fresh.reveal != nil ? reveal : nil
+	block_places(doc, block, &places, pairs, text[:], base)
+	destroy(&fresh)
+	return
+}
+
+// How many links the texts of a block have.
+@(private)
+links_in :: proc(b: ^Block) -> (count: int) {
+	seen := -1
+	for &text in block_texts(b) {
+		for span in text.spans {
+			// The spans of one link are next to each other, with marks
+			// that show between them.
+			if span.link > 0 && span.link != seen {
+				count += 1
+			}
+			if span.link > 0 || .Mark not_in span.style {
+				seen = span.link
+			}
+		}
+	}
+	return
+}
+
+// The parse of the lines around a block that gives its text with the
+// places of its pieces, for `block_map`. `index`: the number of the
+// block in what was parsed; `text`: what was parsed, which starts at
+// `base` of the source. With `retext`, the block of the document can
+// have another text than the parse gives (`reveal_block`).
+@(private)
+block_parse :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs: ^[dynamic]Pair, retext: bool) -> (fresh: Document, index: int, text: [dynamic]u8, base: int) {
 	// From a block where a parse can start to the next such block.
 	first := block
 	for !starts_piece(doc, first) {
@@ -27,9 +122,10 @@ block_map :: proc(doc: ^Document, block: int, pairs: ^[dynamic]Pair = nil) -> (p
 	}
 	start := first == 0 ? 0 : block_start(doc, first)
 	end := last < doc.count ? block_start(doc, last) : len(doc.source)
-	text, _, _, _, _, lead := piece_text(doc, doc.source[start:end], start, end)
-	fresh := parse_piece(text[:], 0, len(doc.source), &places, block - first, pairs = pairs)
-	base := start - lead
+	lead: int
+	text, _, _, _, _, lead = piece_text(doc, doc.source[start:end], start, end)
+	base = start - lead
+	fresh = parse_piece(text[:], 0, len(doc.source), places, block - first, pairs = pairs, reveal = reveal_in(doc.reveal, base, len(text)))
 	// The piece must give the block as the document has it. It does not
 	// when the limit of the parser for the uses of definitions cuts a
 	// use in the piece that a parse of all keeps: then the places are
@@ -39,27 +135,44 @@ block_map :: proc(doc: ^Document, block: int, pairs: ^[dynamic]Pair = nil) -> (p
 	if block - first < fresh.count {
 		block_at(&fresh, block - first).empties = block_at(doc, block).empties
 	}
-	if block - first >= fresh.count || !layout_equal(block_at(doc, block), block_at(&fresh, block - first)) {
+	index = block - first
+	same := index < fresh.count
+	if same {
+		a, b := block_at(doc, block), block_at(&fresh, index)
+		// With another text, the block is the same when it has the
+		// shape and as many links as it had: the limit of the parser for
+		// the uses of definitions can cut a link in the piece that a
+		// parse of all keeps, and marks that show change no link.
+		same = retext ? a.shape == b.shape && len(a.cells) == len(b.cells) && links_in(a) == links_in(b) : layout_equal(a, b)
+	}
+	if !same {
 		destroy(&fresh)
-		clear(&places)
+		clear(places)
 		if pairs != nil {
 			clear(pairs)
 		}
 		text = make([dynamic]u8, len(doc.source))
 		copy(text[:], doc.source)
-		fresh = parse_piece(text[:], 0, len(doc.source), &places, block, pairs = pairs)
-		base = 0
+		fresh = parse_piece(text[:], 0, len(doc.source), places, block, pairs = pairs, reveal = doc.reveal)
+		base, index = 0, block
 	}
+	return
+}
+
+// The places of the pieces of a block that `block_parse` noted, as
+// offsets of the source.
+@(private)
+block_places :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs: ^[dynamic]Pair, text: []u8, base: int) {
 	// The line break at the end of a code block is no text of it.
 	texts := block_texts(block_at(doc, block))
-	for len(places) > 0 {
+	for len(places^) > 0 {
 		place := places[len(places) - 1]
 		if place.cell < len(texts) && place.text < len(texts[place.cell].bytes) {
 			break
 		}
-		pop(&places)
+		pop(places)
 	}
-	place_escapes(&places, text[:])
+	place_escapes(places, text)
 	// Where the text of the block can start, for a block with no text
 	// from the source at all: a code block of empty lines starts after
 	// its first line, which is its fence; each other block (a paragraph
@@ -78,9 +191,8 @@ block_map :: proc(doc: ^Document, block: int, pairs: ^[dynamic]Pair = nil) -> (p
 		}
 		content = min(content + 1, len(text))
 	}
-	place_made(places[:], text[:], content)
-	destroy(&fresh)
-	for &place in places {
+	place_made(places[:], text, content)
+	for &place in places^ {
 		place.source += base
 	}
 	if pairs != nil {
@@ -89,9 +201,22 @@ block_map :: proc(doc: ^Document, block: int, pairs: ^[dynamic]Pair = nil) -> (p
 			pair.open_end += base
 			pair.close += base
 			pair.close_end += base
+			pair.from += base
+			pair.to += base
 		}
 	}
-	return
+}
+
+
+// The offset whose marks show (`Document.reveal`) in a piece of the
+// source that starts at `base` and has `size` bytes, or none.
+@(private)
+reveal_in :: proc(reveal: Maybe(int), base, size: int) -> Maybe(int) {
+	at, shows := reveal.?
+	if !shows || at < base || at > base + size {
+		return nil
+	}
+	return at - base
 }
 
 // A character with a backslash before it in the source ("\\*") is the
@@ -370,6 +495,25 @@ char_before :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end
 		return start, start + size, true
 	}
 	return
+}
+
+// The range of the source of a character that is the bytes `from` to
+// `to` of the text of an address: from the start of its first code
+// point to the end of its last one (a letter with a mark of its own, an
+// emoji of some parts). False when the source has more between the two
+// than the text has (a mark, an entity).
+char_source :: proc(doc: ^Document, places: []Place, at: Address, from, to: int) -> (start, end: int, ok: bool) {
+	texts := block_texts(block_at(doc, at.block))
+	if at.cell >= len(texts) || from < 0 || to > len(texts[at.cell].bytes) || from >= to {
+		return
+	}
+	_, size := utf8.decode_rune(texts[at.cell].bytes[from:to])
+	at := at
+	at.byte = from + size
+	start, _ = char_before(doc, places, at) or_return
+	at.byte = to
+	_, end = char_before(doc, places, at) or_return
+	return start, end, end - start == to - from
 }
 
 // The address in the text of a block that an offset of the source is at:

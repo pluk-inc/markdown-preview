@@ -357,6 +357,9 @@ final class NativeRendererView: NSView {
     var cancelRequested: (() -> Void)?
     /// A click gave the view a caret.
     private var hasCaret = false
+    /// What the core knows of the keys (`mdcore_set_focused`); it starts
+    /// with true.
+    fileprivate var coreHasKeys = true
     /// The text of an input method that is not final yet: where it is in
     /// the source of the document, in bytes, and the text itself, which
     /// the system's text input counts in UTF-16 units. The next form of
@@ -936,7 +939,15 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
     /// while the view takes the keys.
     fileprivate func updateCaretIndicator() {
         var x = 0.0, y = 0.0, height = 0.0
-        let takesKeys = isEditable && hasCaret && window?.firstResponder === self && window?.isKeyWindow == true
+        let hasKeys = window?.firstResponder === self && window?.isKeyWindow == true
+        let takesKeys = isEditable && hasCaret && hasKeys
+        // The marks of the source at the caret show only while the view
+        // takes the keys; the text of a block changes with that.
+        if hasKeys != coreHasKeys {
+            coreHasKeys = hasKeys
+            mdcore_set_focused(ctx, hasKeys)
+            setNeedsDraw()
+        }
         // With text selected, the selection shows where the keys go.
         guard takesKeys, !mdcore_has_selection(ctx), mdcore_caret_rect(ctx, &x, &y, &height) else {
             caretIndicator.displayMode = .hidden

@@ -266,6 +266,7 @@ Pending :: struct {
 	// `defs_first` on, with the same text.
 	defs_first:   int,
 	all:          bool, // all of the source was parsed
+	reveal:       Maybe(int), // `Document.reveal` after the edit
 }
 
 // Makes ready an edit of the source of a document, and changes nothing:
@@ -279,7 +280,14 @@ Pending :: struct {
 // at their place: then nothing that the edit opened (a code fence, a
 // list) reaches into the text after the piece. If they do not, or the
 // edit changes the definition of a link, all of the source is parsed.
-prepare :: proc(doc: ^Document, edit: Edit) -> (p: Pending) {
+//
+// `reveal`: the offset of the new source whose marks show as text
+// (`Document.reveal`), for the document after the edit. Only the blocks
+// that the edit parses get it: a block with marks that the edit is not
+// in must have its text with no marks before (`reveal_block`), which
+// is the caller's to do.
+prepare :: proc(doc: ^Document, edit: Edit, reveal: Maybe(int) = nil) -> (p: Pending) {
+	p.reveal = reveal
 	p.edit.start = clamp(edit.start, 0, len(doc.source))
 	p.edit.end = clamp(edit.end, p.edit.start, len(doc.source))
 	p.bytes = len(edit.text) - (p.edit.end - p.edit.start)
@@ -294,7 +302,7 @@ prepare :: proc(doc: ^Document, edit: Edit) -> (p: Pending) {
 			return
 		}
 	}
-	p.fresh = parse_owned(p.source)
+	p.fresh = parse_owned(p.source, reveal)
 	// The document takes the source from `p`.
 	p.fresh.source = nil
 	p.first, p.count, p.added, p.base, p.all = 0, doc.count, p.fresh.count, 0, true
@@ -447,7 +455,7 @@ prepare_piece :: proc(doc: ^Document, p: ^Pending) -> bool {
 
 	text, before, inside, led, trailed, lead := piece_text(doc, piece, start, old_end)
 	p.base = start - lead
-	p.fresh = parse_piece(text[:], doc.items, len(p.source), end = lead + len(piece), followed = end < doc.count, followed_in_list = end < doc.count && in_list(block_at(doc, end)))
+	p.fresh = parse_piece(text[:], doc.items, len(p.source), end = lead + len(piece), followed = end < doc.count, followed_in_list = end < doc.count && in_list(block_at(doc, end)), reveal = reveal_in(p.reveal, p.base, len(text)))
 	fresh := &p.fresh
 	p.added = fresh.count - guard
 	// The definitions came out as definitions, and the ones of the piece
@@ -504,6 +512,8 @@ discard :: proc(p: ^Pending) {
 // stays as it is.
 commit :: proc(doc: ^Document, p: ^Pending) -> (change: Change) {
 	fresh := &p.fresh
+	// The offset is there only while marks are in a text.
+	doc.reveal = fresh.reveal != nil ? p.reveal : nil
 	end := p.first + p.count
 	// The lines that the source gets. A line ends at a byte or not by
 	// that byte and the next one, so the byte before the edit counts.

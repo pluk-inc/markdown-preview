@@ -523,8 +523,12 @@ typedef struct MD_PARSER {
      * "***"), and also before a mark that gives none (a backslash escape, a
      * line break). The mark that closes a link or an image has its
      * destination and title: "](target)".
+     *
+     * el_beg and el_end: the range of the element that the mark starts or
+     * ends, from the start of its first mark to the end of its last one;
+     * the range of the mark itself for a mark of no such element.
      */
-    void (*mark_offset)(MD_OFFSET /*beg*/, MD_OFFSET /*end*/, void* /*userdata*/);
+    void (*mark_offset)(MD_OFFSET /*beg*/, MD_OFFSET /*end*/, MD_OFFSET /*el_beg*/, MD_OFFSET /*el_end*/, void* /*userdata*/);
 } MD_PARSER;
 
 

@@ -75,6 +75,11 @@ Parser :: struct {
 	pairs_open:   [dynamic]int,
 	mark:         [2]int,
 	mark_at:      int,
+	// The element of that mark, and the offset whose marks show as text
+	// (`Document.reveal`), in what is parsed.
+	element:      [2]int,
+	reveal:       Maybe(int),
+	marking:      bool, // the text that comes is such a mark
 	bytes:        []u8, // what is parsed
 	after_nul:    bool, // the text before was the character for a NUL byte
 	// Table.
@@ -92,8 +97,8 @@ parse :: proc(source: string) -> Document {
 
 // Parses a Markdown source that the document keeps: memory of the
 // allocator of the context, which goes with the document.
-parse_owned :: proc(bytes: []u8) -> Document {
-	return parse_piece(bytes, 0, len(bytes))
+parse_owned :: proc(bytes: []u8, reveal: Maybe(int) = nil) -> Document {
+	return parse_piece(bytes, 0, len(bytes), reveal = reveal)
 }
 
 // Parses a piece of the source of a document that starts where a block
@@ -103,7 +108,7 @@ parse_owned :: proc(bytes: []u8) -> Document {
 // `end`, `followed`, and `followed_in_list`: see `count_empties`; with
 // none, the piece is all of a source.
 @(private)
-parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place = nil, places_block := 0, end := -1, followed := false, followed_in_list := false, pairs: ^[dynamic]Pair = nil) -> Document {
+parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place = nil, places_block := 0, end := -1, followed := false, followed_in_list := false, pairs: ^[dynamic]Pair = nil, reveal: Maybe(int) = nil) -> Document {
 	source := string(bytes)
 	doc: Document
 	p := Parser {
@@ -114,6 +119,7 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 		places       = places,
 		places_block = places_block,
 		pairs        = pairs,
+		reveal       = reveal,
 		bytes        = bytes,
 	}
 	md := Md_Parser {
@@ -126,7 +132,7 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 		block_offset = on_block_offset,
 		ref_def     = on_ref_def,
 		ref_def_use = on_ref_def_use,
-		mark_offset = pairs != nil ? on_mark_offset : nil,
+		mark_offset = pairs != nil || reveal != nil ? on_mark_offset : nil,
 	}
 	// md4c takes a 32-bit size; a larger source is cut there.
 	size := c.uint(min(len(source), int(max(c.int))))
@@ -198,12 +204,14 @@ append_text :: proc(p: ^Parser, s: string, source := -1, source_len := 0, line_b
 		cell := p.in_table && p.cur == &p.cell ? len(p.table.cells) : 0
 		append(p.places, Place{cell, start, len(s), source, source_len, whole || source < 0 || source_len != len(s), source < 0, line_break, nul})
 	}
-	style := current_style(p)
-	if n := len(t.spans); n > 0 && t.spans[n - 1].style == style && t.spans[n - 1].link == p.link {
+	// A mark that shows has no style of the text around it.
+	style := p.marking ? Inline_Set{.Mark} : current_style(p)
+	link := p.marking ? 0 : p.link
+	if n := len(t.spans); n > 0 && t.spans[n - 1].style == style && t.spans[n - 1].link == link {
 		t.spans[n - 1].end = len(t.bytes)
 		return
 	}
-	append(&t.spans, Span{start, len(t.bytes), style, p.link})
+	append(&t.spans, Span{start, len(t.bytes), style, link})
 }
 
 @(private)
@@ -520,13 +528,19 @@ Pair :: struct {
 	// Markdown reads the marks as marks only with no space on their
 	// inner side: bold, italic, and struck text.
 	tight:            bool,
+	// The offsets of the source whose marks show these two marks as
+	// text (`Document.reveal`): the range of the element, as the parser
+	// gives it with each of the two marks. For "***b***" the marks of
+	// the two styles are one mark of the parser with one such range.
+	from, to:         int,
 }
 
 @(private)
-on_mark_offset :: proc "c" (start, end: c.uint, userdata: rawptr) {
+on_mark_offset :: proc "c" (start, end, element_start, element_end: c.uint, userdata: rawptr) {
 	p := cast(^Parser)userdata
 	p.mark = {int(start), int(end)}
 	p.mark_at = int(start)
+	p.element = {int(element_start), int(element_end)}
 }
 
 // The part of the mark that the parser is at that a span takes: one
@@ -545,25 +559,71 @@ mark_part :: proc(p: ^Parser, type: Md_Span) -> (start, end: int) {
 	return
 }
 
-// Notes a mark of a span of the block that `block_map` asks for.
+// A mark of a span: it is noted for the block that `block_map` asks
+// for, and it is text when its element has the offset whose marks show
+// (`Document.reveal`).
 @(private)
 note_mark :: proc(p: ^Parser, type: Md_Span, opens: bool, autolink := false) {
-	if p.pairs == nil || p.doc.count != p.places_block {
+	reveal, shows := p.reveal.?
+	noted := p.pairs != nil && p.doc.count == p.places_block
+	if !noted && !shows {
 		return
 	}
 	start, end := mark_part(p, type)
 	// The "<" and ">" around an address are no marks of a style: with a
 	// part of the address out, Markdown reads them in another way, and
-	// they are not kept for the part that stays.
+	// they are not kept for the part that stays. They do not show.
 	if autolink {
 		end = start
 	}
+	if shows && end > start && reveal >= p.element[0] && reveal <= p.element[1] && !p.in_html && text_open(p) {
+		// Of the mark of code only the backticks: the parser gives the
+		// space beside them with the mark, and a line break with the
+		// mark of a quote after it when the code goes on in a next line.
+		from, to := start, end
+		if type == .Code {
+			if opens {
+				to = from
+				for to < end && p.bytes[to] == '`' {
+					to += 1
+				}
+			} else {
+				from = to
+				for from > start && p.bytes[from - 1] == '`' {
+					from -= 1
+				}
+			}
+		}
+		// A mark that goes on in a next line (the target of a link): its
+		// bytes of each line, with no line break and no mark of a quote
+		// at the start of the next line, which are no text of the block.
+		for from < to {
+			line := from
+			for line < to && p.bytes[line] != '\n' && p.bytes[line] != '\r' {
+				line += 1
+			}
+			if line > from {
+				p.marking = true
+				append_text(p, string(p.bytes[from:line]), from, line - from)
+				p.marking = false
+				p.doc.reveal = reveal
+			}
+			from = line
+			for from < to && (p.bytes[from] == '\n' || p.bytes[from] == '\r' || p.bytes[from] == ' ' || p.bytes[from] == '\t' || p.bytes[from] == '>') {
+				from += 1
+			}
+		}
+	}
+	if !noted {
+		return
+	}
 	if opens {
 		append(&p.pairs_open, len(p.pairs))
-		append(p.pairs, Pair{start, end, -1, -1, type == .Em || type == .Strong || type == .Del})
+		append(p.pairs, Pair{start, end, -1, -1, type == .Em || type == .Strong || type == .Del, p.element[0], p.element[1]})
 	} else if len(p.pairs_open) > 0 {
 		pair := &p.pairs[pop(&p.pairs_open)]
 		pair.close, pair.close_end = start, end
+		pair.from, pair.to = min(pair.from, p.element[0]), max(pair.to, p.element[1])
 	}
 }
 
@@ -611,6 +671,19 @@ leave_span :: proc "c" (type: Md_Span, detail: rawptr, userdata: rawptr) -> c.in
 	return 0
 }
 
+// True when text can go to a text of a block. Text directly in a list
+// item, without a paragraph around it, starts one.
+@(private)
+text_open :: proc(p: ^Parser) -> bool {
+	if p.cur == nil {
+		if len(p.lists) == 0 || p.in_table {
+			return false
+		}
+		open_text(p, .Paragraph)
+	}
+	return true
+}
+
 @(private)
 on_text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr) -> c.int {
 	p := cast(^Parser)userdata
@@ -619,12 +692,8 @@ on_text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr)
 	if p.in_html || type == .Html {
 		return 0
 	}
-	// Text directly in a list item, without a paragraph around it.
-	if p.cur == nil {
-		if len(p.lists) == 0 || p.in_table {
-			return 0
-		}
-		open_text(p, .Paragraph)
+	if !text_open(p) {
+		return 0
 	}
 	s := string(text[:size])
 	// Where the text is in what is parsed, for a parse that notes
