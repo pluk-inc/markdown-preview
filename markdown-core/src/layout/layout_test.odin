@@ -1767,3 +1767,34 @@ test_the_number_of_an_item_is_one_line :: proc(t: ^testing.T) {
 		testing.expect(t, abs(number_top - text_top) < 1, "the number is on the line of the text")
 	}
 }
+
+// The bar of a caret is as high as the font of the text of its line, in
+// the middle of the line: higher in a heading than in a paragraph, and
+// less than the line with a wide line spacing.
+@(test)
+test_the_caret_is_as_high_as_the_text_of_its_line :: proc(t: ^testing.T) {
+	f: Fixture
+	setup(&f, "# Heading\n\nA paragraph.\n", 600)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	_, heading_y, heading_line, _ := caret_y(&f.page, {block = 0, byte = 2}, false)
+	_, heading_bar_y, heading_bar, _ := caret_bar_y(&f.page, {block = 0, byte = 2}, false)
+	_, body_y, body_line, _ := caret_y(&f.page, {block = 1, byte = 2}, false)
+	_, body_bar_y, body_bar, _ := caret_bar_y(&f.page, {block = 1, byte = 2}, false)
+	ascent, descent, _ := text.font_metrics(f.style.body_font)
+	testing.expect(t, abs(body_bar - (ascent + descent)) < 0.01)
+	testing.expect(t, body_bar < body_line && heading_bar <= heading_line)
+	testing.expect(t, heading_bar > body_bar * 1.5)
+	// In the middle of its line.
+	testing.expect(t, abs((body_bar_y - body_y) - f64(body_line - body_bar) / 2) < 0.01)
+	// An empty line after a heading is a line of body text.
+	g: Fixture
+	setup(&g, "# Heading\n\n\n\nText.\n", 600)
+	defer teardown(&g)
+	step(&g.page, 1e30)
+	if empty, has := document.empty_address(g.page.doc, 0, 1); testing.expect(t, has) {
+		_, _, empty_bar, _ := caret_bar_y(&g.page, empty, false)
+		testing.expect(t, abs(empty_bar - body_bar) < 0.01)
+	}
+	testing.expect(t, abs((heading_bar_y - heading_y) - f64(heading_line - heading_bar) / 2) < 0.01)
+}

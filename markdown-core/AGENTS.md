@@ -1606,3 +1606,14 @@ export.
   text went into a new line that joined that item. After the parse
   around such a line, the caret is at the place of its address. The walk
   of `bench.m` has this sequence (`list_caret_check`).
+- **2026-11-26** — The height of the caret. The maintainer saw that the
+  caret was higher than in the text views of the system and showed how
+  the editor of the developer tools draws it: as high as the text of its
+  line, larger in a heading. Ours was as high as the line (1.6 times the
+  text with the default line spacing), as the reference editor draws it
+  for code. The bar is now as high as the font of its line (ascent and
+  descent), in the middle of the line: 17 pt in body text of 15 pt (24
+  before), 35 and 29 pt in the two largest headings. `caret_place` still
+  gives the line, for the moves of the caret; `caret_bar` gives what
+  shows. The walk of `bench.m` found that an empty line after a heading
+  took the font of the heading; it is a line of body text.

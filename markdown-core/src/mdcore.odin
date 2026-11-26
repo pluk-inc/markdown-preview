@@ -1332,12 +1332,15 @@ mdcore_caret_rect :: proc "c" (handle: rawptr, x, y, height: ^f64) -> bool {
 	if ctx.caret < 0 || !ctx.layout_valid {
 		return false
 	}
+	// The bar that shows: as high as the text of its line, not as the
+	// line (`layout.caret_bar`).
 	if ctx.doc.count == 0 {
 		cx, top, h := layout.caret_place_empty(&ctx.page)
+		top, h = layout.caret_bar(&ctx.page, nil, top, h)
 		x^, y^, height^ = f64(cx), ctx.page.origin + f64(top), f64(h)
 		return true
 	}
-	cx, cy, h := layout.caret_y(&ctx.page, ctx.caret_at, ctx.caret_upstream) or_return
+	cx, cy, h := layout.caret_bar_y(&ctx.page, ctx.caret_at, ctx.caret_upstream) or_return
 	x^, y^, height^ = f64(cx), cy, f64(h)
 	return true
 }

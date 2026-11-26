@@ -658,9 +658,53 @@ caret_place_empty :: proc(l: ^Layout) -> (x, top, height: f32) {
 	return l.column_x, part_start(l, 0), math.round(l.m.body * l.m.line_height)
 }
 
+// The bar of a caret in a line of the page: as high as the font of the
+// text of the line (from the top of its tall letters to the bottom of the
+// ones that go below the line), where that text stands in the line. Not
+// the height of the line: with a wide line spacing that is much more
+// than the text, and the text views of the system draw the caret as high
+// as the text, larger in a heading. `b` is the block of the line; nil
+// for a document with no block.
+caret_bar :: proc(l: ^Layout, b: ^document.Block, top, line_height: f32) -> (bar_top, bar_height: f32) {
+	text_font: base.Font
+	if b != nil && b.kind == .Code {
+		text_font = font(l, .Mono, l.m.code_size)
+	} else {
+		heading := b != nil && b.kind == .Heading
+		text_font = span_font(l, {}, l.m.body * HEADING_SCALE[heading ? b.level : 0], heading)
+	}
+	if text_font == nil {
+		return top, line_height
+	}
+	ascent, descent, _ := text.font_metrics(text_font)
+	bar_height = min(ascent + descent, line_height)
+	// The text is in the middle of the height of its line (`line_baseline`).
+	return top + (line_height - bar_height) / 2, bar_height
+}
+
+// `caret_y` for the bar of the caret (`caret_bar`): what a host shows.
+caret_bar_y :: proc(l: ^Layout, at: document.Address, upstream: bool) -> (x: f32, y: f64, height: f32, ok: bool) {
+	lx, top, line_height, p := caret_place(l, at, upstream) or_return
+	bar_top, bar_height := caret_bar(l, caret_block(l, at), top, line_height)
+	return lx, l.parts[p].top + f64(bar_top), bar_height, true
+}
+
+// The block whose text the caret at an address is in, for `caret_bar`;
+// nil in an empty paragraph after a block, which is a line of body text
+// whatever the block before it is (a heading).
+@(private)
+caret_block :: proc(l: ^Layout, at: document.Address) -> ^document.Block {
+	if document.empty_of(l.doc, at) > 0 {
+		return nil
+	}
+	part, slot := document.locate(l.doc, at.block)
+	return &l.doc.parts[part].blocks[slot]
+}
+
 // The quad of the caret of a document with no block, as `caret_quad`.
 caret_quad_empty :: proc(l: ^Layout, scale: f32, origin_y: f64, out: ^[dynamic]base.Quad) {
 	x, top, height := caret_place_empty(l)
+	top, height = caret_bar(l, nil, top, height)
 	append(out, rect_quad(x - 0.5, top, max(1, 2 / scale), height, l.style.text, 0, scale, l.origin, origin_y))
 }
 
@@ -681,6 +725,7 @@ caret_quad :: proc(l: ^Layout, at: document.Address, upstream: bool, y0, y1: f64
 	if !ok {
 		return
 	}
+	top, height = caret_bar(l, caret_block(l, at), top, height)
 	// One point wide at least, and two device pixels.
 	append(out, rect_quad(x - 0.5, top, max(1, 2 / scale), height, l.style.text, 0, scale, l.parts[p].top, origin_y))
 }
