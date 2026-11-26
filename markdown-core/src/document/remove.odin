@@ -535,6 +535,13 @@ transpose :: proc(doc: ^Document, places: []Place, at: Address, allocator := con
 		return
 	}
 	first := char_step(text.bytes[:], middle, false)
+	// Not a mark of the source that shows as text: the two would make
+	// another thing of the line (" #" is no heading).
+	for span in text.spans {
+		if .Mark in span.style && span.start < last && span.end > first {
+			return
+		}
+	}
 	a_start, a_end := char_source(doc, places, at, first, middle) or_return
 	b_start, b_end := char_source(doc, places, at, middle, last) or_return
 	if a_end != b_start {

@@ -488,7 +488,7 @@ commit_held :: proc(ctx: ^Ctx, pending: ^document.Pending) {
 // or at one of its ends: its marks show for a caret there.
 @(private)
 pair_has :: proc(pair: document.Pair, at: int) -> bool {
-	return pair.close >= 0 && pair.open_end > pair.open && at >= pair.from && at <= pair.to
+	return (pair.close >= 0 || pair.line) && pair.open_end > pair.open && at >= pair.from && at <= pair.to
 }
 
 // True for bytes of the source that are all in one of the two marks of

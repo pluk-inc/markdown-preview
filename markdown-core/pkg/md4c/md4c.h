@@ -529,6 +529,18 @@ typedef struct MD_PARSER {
      * the range of the mark itself for a mark of no such element.
      */
     void (*mark_offset)(MD_OFFSET /*beg*/, MD_OFFSET /*end*/, MD_OFFSET /*el_beg*/, MD_OFFSET /*el_end*/, void* /*userdata*/);
+
+    /* Not in upstream md4c (see README.md of this folder). Optional (may be
+     * NULL).
+     *
+     * Called for each line of the text of a heading, after enter_block() of
+     * the heading and before its text: with the start of the input line,
+     * and the range of the text in it. What is between the two starts is
+     * the marks of the line: the ones of the containers (a quote, a list
+     * item) and the "#"s of the heading with the spaces after them. The
+     * "#"s at the end of the line are after the end of the text.
+     */
+    void (*line_offset)(MD_OFFSET /*line*/, MD_OFFSET /*beg*/, MD_OFFSET /*end*/, void* /*userdata*/);
 } MD_PARSER;
 
 

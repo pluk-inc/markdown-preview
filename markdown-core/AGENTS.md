@@ -77,7 +77,7 @@ These came from the maintainer. Do not undo one without asking.
   ways were looked at and not taken: to find the starts of blocks and
   the definitions of links with a scan of our own (a second parser that
   must agree with md4c each time), and another parser. A pull request
-  to md4c for the calls (four now) is a thing to do only when the maintainer
+  to md4c for the calls (five now) is a thing to do only when the maintainer
   asks for it.
 - **Edit Mode shows what the Edit Mode of the web view shows**
   (2026-11-25): the text as a reader sees it, with the Markdown marks
@@ -949,8 +949,35 @@ The order of the next steps, from the review of the second step:
   mark and the marks stay; and the caret comes back to the offset
   where a selection started when it is empty again (`select_from`),
   because the text with no marks has one place for some offsets.
-- Not done for the marks: the marks of a line (the "#" of a heading,
-  the mark of a list item and of a quote, a code fence), a backslash
+- Done: the "#" of a heading shows for a caret in its line, by the
+  same mechanism. The parser says where the text of each line of a
+  heading starts (`line_offset` in the parser copy; the first form
+  looked for the "#" back from the first text, which a character with
+  a backslash at the start broke, and which no other kind of line
+  could use), and the "#"s before it are noted (`on_line_offset`) as a
+  mark with no second mark
+  (`Pair.line`, `close` is -1), so the edit that takes a range out does
+  not keep it and does not take it for the text. The core needed one
+  line for it (`pair_has`).
+- For the other marks of a line, from a second review: the parser
+  call for the lines of a heading (`line_offset`) is to become one
+  call for each line of text of each block, and the rule one rule for
+  each kind: the marks of a line are from its first byte that is no
+  space to the start of its text (the ">" of each line of a quote
+  comes with it). Lines with no text (a fence, the line under a
+  heading) need a call of their own. The bullet that the layout draws
+  must not draw while the mark of its item shows. The count of the
+  spaces at the end of a text (`Block.end_spaces`) is to come from the
+  end of the text of the line, which the same call gives: now it is
+  made from a look at the source that takes the marks of a line off by
+  a guess, and it counts the space of "# " when that shows as text
+  (`place_of` keeps the place in the line for that). And the ends of
+  the selection as offsets of the source in the core, beside the
+  caret, take `select_from` and the step that gives the selection its
+  addresses again out of `reveal_update`.
+- Not done for the marks: the other marks of a line (the mark of a
+  list item and of a quote, a code fence, the line under a heading,
+  the "#"s at the end of a heading), a backslash
   before a character, an entity, and a table cell that shows its
   source (Decisions has the rules); the "<" and ">" of an address do
   not show; a move to an end of a line that makes marks show goes on
@@ -959,7 +986,7 @@ The order of the next steps, from the review of the second step:
   while they show, as with no marks in the text (an edit knows each
   element but the ones with a mark that the range has a byte of).
 - Next for the editor, in the order that a reader misses them: the
-  marks of a line; undo.
+  marks of a list item, a quote, and a code fence; undo.
 - Done: where the lines of a block end comes from the parser
   (`block_offset` gives the end too, `Block.lines`), as its start does.
   Before, `empties.lines_end` and `fence_line` read the lines a second

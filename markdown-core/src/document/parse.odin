@@ -133,6 +133,7 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 		ref_def     = on_ref_def,
 		ref_def_use = on_ref_def_use,
 		mark_offset = pairs != nil || reveal != nil ? on_mark_offset : nil,
+		line_offset = pairs != nil || reveal != nil ? on_line_offset : nil,
 	}
 	// md4c takes a 32-bit size; a larger source is cut there.
 	size := c.uint(min(len(source), int(max(c.int))))
@@ -533,6 +534,12 @@ Pair :: struct {
 	// gives it with each of the two marks. For "***b***" the marks of
 	// the two styles are one mark of the parser with one such range.
 	from, to:         int,
+	// The mark of a line (the "#" of a heading): `open` is the mark,
+	// `close_end` the end of the line, and there is no second mark
+	// (`close` is -1). It shows for a caret in the line. An edit does
+	// not keep it and does not take it for the text of the line:
+	// `range_edit` looks only at pairs that have a second mark.
+	line:             bool,
 }
 
 @(private)
@@ -557,6 +564,39 @@ mark_part :: proc(p: ^Parser, type: Md_Span) -> (start, end: int) {
 	}
 	p.mark_at = end
 	return
+}
+
+// A line of the text of a heading, from the parser, before its text:
+// the "#"s of the line with the spaces after them are its mark (the
+// first line only; a heading with a line under it has none). It is
+// noted as a mark with no second mark (`Pair.line`), and it is text
+// when the offset whose marks show is in the line.
+@(private)
+on_line_offset :: proc "c" (line, start, end: c.uint, userdata: rawptr) {
+	p := cast(^Parser)userdata
+	context = p.ctx
+	line, text := int(line), int(start)
+	if p.cur == nil || p.in_table || len(p.cur.bytes) > 0 || text > len(p.bytes) {
+		return
+	}
+	// After the marks of a quote or a list item that the line is in.
+	mark := line
+	for mark < text && p.bytes[mark] != '#' {
+		mark += 1
+	}
+	if mark == text {
+		return
+	}
+	line_end, _ := line_at(p.bytes, text)
+	if p.pairs != nil && p.doc.count == p.places_block {
+		append(p.pairs, Pair{mark, text, -1, line_end, false, mark, line_end, true})
+	}
+	if reveal, shows := p.reveal.?; shows && reveal >= mark && reveal <= line_end {
+		p.marking = true
+		append_text(p, string(p.bytes[mark:text]), mark, text - mark)
+		p.marking = false
+		p.doc.reveal = reveal
+	}
 }
 
 // A mark of a span: it is noted for the block that `block_map` asks
@@ -619,7 +659,7 @@ note_mark :: proc(p: ^Parser, type: Md_Span, opens: bool, autolink := false) {
 	}
 	if opens {
 		append(&p.pairs_open, len(p.pairs))
-		append(p.pairs, Pair{start, end, -1, -1, type == .Em || type == .Strong || type == .Del, p.element[0], p.element[1]})
+		append(p.pairs, Pair{start, end, -1, -1, type == .Em || type == .Strong || type == .Del, p.element[0], p.element[1], false})
 	} else if len(p.pairs_open) > 0 {
 		pair := &p.pairs[pop(&p.pairs_open)]
 		pair.close, pair.close_end = start, end

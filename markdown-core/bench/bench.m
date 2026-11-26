@@ -185,7 +185,17 @@ static const char *caret_walk(void *ctx, long length) {
     mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_START, false);
     long text_start = mdcore_caret_offset(ctx);
     mdcore_caret_move(ctx, MDCORE_MOVE_PARAGRAPH_END, false);
-    if (mdcore_caret_offset(ctx) > text_start) {
+    // Text, not only the mark of a heading with no text, which shows at
+    // the caret and is a place for it.
+    bool has_text = false;
+    {
+        long size = 0;
+        const char *bytes = mdcore_source(ctx, &size);
+        for (long at = text_start; at < mdcore_caret_offset(ctx) && at < size; at++) {
+            has_text = has_text || (bytes[at] != '#' && bytes[at] != ' ' && bytes[at] != '\t');
+        }
+    }
+    if (has_text) {
         double end_x = 0, space_x = 0, two_x = 0;
         if (!mdcore_caret_rect(ctx, &end_x, &y, &height)) return "no place for the caret at the end of the first paragraph";
         mdcore_insert(ctx, " ", 1);

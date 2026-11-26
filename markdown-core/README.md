@@ -127,5 +127,8 @@ target) show in gray while the caret is in their text or at an end of
 it, so the caret has a place on each side of a mark and a delete can
 take a mark. They do not show while text is selected (but a selection
 of only characters of those marks keeps them) and while the window
-does not have the keys. The marks of a line (the "#" of a heading, the mark of a
-list item or a quote, a code fence) do not show yet.
+does not have the keys. The "#" of a heading shows in the same way while the
+caret is in its line, so a reader changes the level of a heading or
+makes a paragraph of it with the keys. The other marks of a line (the
+mark of a list item or a quote, a code fence, the line under a
+heading) do not show yet.

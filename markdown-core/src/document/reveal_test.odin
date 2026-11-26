@@ -45,6 +45,25 @@ test_the_marks_of_the_element_of_an_offset_are_text :: proc(t: ^testing.T) {
 		{"a `b` c\n", 3, "a `b` c", "  ^ ^  "},
 		{"a ~~b~~ c\n", 4, "a ~~b~~ c", "  ^^ ^^  "},
 		{"a [b](https://e.com) c\n", 3, "a [b](https://e.com) c", "  ^ ^^^^^^^^^^^^^^^^  "},
+		// The "#" of a heading, for an offset in its line, with the
+		// marks of an element of the line only for an offset in it.
+		{"## Title **b**\n\ntext\n", 0, "## Title b", "^^^       "},
+		{"## Title **b**\n\ntext\n", 5, "## Title b", "^^^       "},
+		{"## Title **b**\n\ntext\n", 12, "## Title **b**", "^^^      ^^ ^^"},
+		{"## Title **b**\n\ntext\n", 17, "Title b", "       "},
+		{"# **b** c\n", 3, "# **b** c", "^^^^ ^^  "},
+		// With text that starts with a character with a backslash, in
+		// a quote and a list item, and with no text at all.
+		{"# \\#x\n", 4, "# #x", "^^  "},
+		{"> ## T\n", 5, "## T", "^^^ "},
+		{"- # T\n", 5, "# T", "^^ "},
+		{"## \n\ntext\n", 1, "## ", "^^^"},
+		{"#\n\ntext\n", 0, "#", "^"},
+		// With raw HTML or a NUL byte at the start of the text.
+		{"# <b>x</b>\n", 6, "# x", "^^ "},
+		{"# \x00b\n", 4, "# \uFFFDb", "^^    "},
+		// Not the line under a heading.
+		{"Title\n=====\n", 2, "Title", "     "},
 		// Of code that goes on in a next line of a quote, the backticks
 		// only.
 		{"> `\n> x\n> `\n", 6, "`x`", "^ ^"},
@@ -65,7 +84,7 @@ test_the_marks_of_the_element_of_an_offset_are_text :: proc(t: ^testing.T) {
 // all of the new source gives.
 @(test)
 test_a_block_with_marks_as_text_has_its_places :: proc(t: ^testing.T) {
-	source := "x\n\na **bc** and `d` [e](https://e.com) f\n\n- item _g_\n"
+	source := "# Head *h*\n\nx\n\na **bc** and `d` [e](https://e.com) f\n\n- item _g_\n\n### Last\n"
 	for at in 0 ..= len(source) {
 		doc := parse_owned(transmute([]u8)fmt.aprintf("%s", source), at)
 		defer destroy(&doc)
@@ -101,7 +120,7 @@ test_a_block_with_marks_as_text_has_its_places :: proc(t: ^testing.T) {
 // with the links of the text as they were.
 @(test)
 test_one_block_gets_its_marks_and_loses_them :: proc(t: ^testing.T) {
-	source := "x [a](https://a.com)\n\na **bc** and `d` [e](https://e.com) f [g](https://g.com)\n\n- item _g_\n\n| a | **b** |\n|---|---|\n| c | d |\n"
+	source := "## T [t](https://t.com)\n\nx [a](https://a.com)\n\na **bc** and `d` [e](https://e.com) f [g](https://g.com)\n\n- item _g_\n\n| a | **b** |\n|---|---|\n| c | d |\n"
 	plain := parse(source)
 	defer destroy(&plain)
 	for at in 0 ..= len(source) {

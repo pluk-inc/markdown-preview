@@ -199,7 +199,8 @@ block_places :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs:
 		for &pair in pairs {
 			pair.open += base
 			pair.open_end += base
-			pair.close += base
+			// Not the -1 of a mark with no second mark.
+			pair.close += pair.close >= 0 ? base : 0
 			pair.close_end += base
 			pair.from += base
 			pair.to += base
@@ -405,8 +406,13 @@ place_of :: proc(doc: ^Document, places: []Place, at: Address) -> (offset: int, 
 	// After spaces at the end of the text: where those spaces start in
 	// its last line, and as many on.
 	if n := spaces_of(doc, at); n > 0 {
-		first, _ := end_spaces_at(doc, places, at) or_return
-		return first + n, true
+		// Not past the end of the line: the count of the block
+		// (`Block.end_spaces`) is wrong while a mark of its line shows
+		// as text (the "# " of a heading with no text has the space in
+		// the text). The count must come from the end of the text of
+		// the line that the parser gives; see Open work.
+		first, line_end := end_spaces_at(doc, places, at) or_return
+		return min(first + n, max(line_end, first)), true
 	}
 	return text_place(doc, places, at)
 }
