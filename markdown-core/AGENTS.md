@@ -118,10 +118,15 @@ These came from the maintainer. Do not undo one without asking.
 - **Front matter is no Markdown for the core** (2026-11-26, the
   maintainer's choice). The bytes of a byte order mark and of front matter
   at the top of the source (`document.hidden_start`, the rule of the app's
-  web page) are blank lines for the parser (`masked_start`): they make no
-  block and do not show, and each offset and line after them is as it was.
-  The web page shows front matter as a table; the native page gets one
-  later. An edit before the end of front matter is a parse of all.
+  web page) are blank lines for the parser (`masked_start`: front matter
+  as spaces with its line breaks, the mark as line breaks, since spaces
+  would make the first line code): they make no block and do not show,
+  and each offset and line after them is as it was. The web page shows
+  front matter as a table; the native page gets one later. The document
+  keeps where they end (`Document.hidden`, `unclosed`), so an edit in the
+  body reads no more of the source for them; an edit that can change
+  them is a parse of all (`hidden_changes`). A caret in a document with
+  no block starts after them.
 - **The outline of native Edit Mode comes from the core** (2026-11-26):
   `mdcore_outline` reads the heading blocks, with no parse. Its texts are
   the ones the native page shows, so they differ from the web renderer's

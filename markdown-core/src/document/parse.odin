@@ -119,7 +119,12 @@ parse_owned :: proc(bytes: []u8, reveal: Maybe(int) = nil) -> Document {
 @(private)
 parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place = nil, places_block := 0, end := -1, followed := false, followed_in_list := false, pairs: ^[dynamic]Pair = nil, reveal: Maybe(int) = nil, at_start := false) -> Document {
 	kept := bytes
-	masked := at_start ? masked_start(bytes) : nil
+	masked: []u8
+	hidden: int
+	unclosed: bool
+	if at_start {
+		masked, hidden, unclosed = masked_start(bytes)
+	}
 	defer delete(masked)
 	bytes := masked != nil ? masked : bytes
 	source := string(bytes)
@@ -155,6 +160,7 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 	delete(p.lists)
 	delete(p.pairs_open)
 	doc.source = kept
+	doc.hidden, doc.unclosed = hidden, unclosed
 	doc.items = p.item_count
 	doc.links_parsed = len(doc.links)
 	for &def in doc.defs {

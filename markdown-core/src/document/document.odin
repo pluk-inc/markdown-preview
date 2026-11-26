@@ -217,6 +217,12 @@ Document :: struct {
 	// It is there only while a text has such marks: none for a reader,
 	// and none for an offset that is in no element.
 	reveal: Maybe(int),
+	// The bytes at the start of the source that are no Markdown
+	// (`hidden_start`: a byte order mark, front matter), and if its first
+	// line opens front matter that nothing closes. A parse of all sets
+	// them; an edit that can change them is one (`prepare`).
+	hidden:   int,
+	unclosed: bool,
 	parts:  [dynamic]^Part,
 	starts: [dynamic]int, // for each part, the number of its first block
 	count:  int, // the blocks of all parts

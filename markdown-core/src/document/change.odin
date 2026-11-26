@@ -297,11 +297,9 @@ prepare :: proc(doc: ^Document, edit: Edit, reveal: Maybe(int) = nil) -> (p: Pen
 	// A table that has all of its rows keeps them in a source of the new
 	// size.
 	tables := !doc.cells_cut && doc.cells_most <= MIN_TABLE_CELLS + len(p.source)
-	// An edit before the end of the front matter, as it was or as it is
-	// now, can move that end past the piece (a closing line that goes):
-	// a parse of all.
-	hidden := max(hidden_start(doc.source), hidden_start(p.source))
-	if doc.count > 0 && tables && !doc.defs_marked && !doc.defs_cut && len(doc.links) <= 2 * doc.links_parsed + LINKS_SLACK && (hidden == 0 || p.edit.start > hidden) {
+	// An edit that can change where the front matter ends can move that
+	// end past the piece (a closing line that goes): a parse of all.
+	if doc.count > 0 && tables && !doc.defs_marked && !doc.defs_cut && len(doc.links) <= 2 * doc.links_parsed + LINKS_SLACK && !hidden_changes(doc, p.edit.start, p.edit.end, p.source, len(edit.text)) {
 		if prepare_piece(doc, &p) {
 			return
 		}
@@ -551,6 +549,7 @@ commit :: proc(doc: ^Document, p: ^Pending) -> (change: Change) {
 
 	// The links of the new blocks go to the end of the list.
 	if p.all {
+		doc.hidden, doc.unclosed = fresh.hidden, fresh.unclosed
 		doc.links, fresh.links = fresh.links, doc.links
 		doc.links_parsed = len(doc.links)
 		doc.defs, fresh.defs = fresh.defs, doc.defs

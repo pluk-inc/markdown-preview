@@ -16,6 +16,7 @@ import "base"
 import "base:runtime"
 import "core:c"
 import "core:math"
+import "core:strings"
 import "core:sync"
 import "core:time"
 import "document"
@@ -365,6 +366,14 @@ mdcore_replace_text :: proc "c" (handle: rawptr, start, end: c.long, utf8: [^]u8
 typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
 	// Not for text that starts with a line break itself (the bytes of a
 	// delete that come back): it has what makes it a paragraph of its own.
+	// After front matter with no line break at its end (and no text
+	// after it): a line of its own, or the text goes on the closing line.
+	if len(text) > 0 && start == end && ctx.doc.count == 0 && start > 0 && start == ctx.doc.hidden && ctx.doc.source[start - 1] != '\n' && ctx.doc.source[start - 1] != '\r' {
+		own := strings.concatenate({document.line_ending(ctx.doc.source), text})
+		defer delete(own)
+		change_source_held(ctx, own, [2]int{start, end})
+		return
+	}
 	if len(text) > 0 && text[0] != '\n' && text[0] != '\r' && start == end && start == ctx.caret && ctx.doc.count > 0 && document.empty_of(&ctx.doc, ctx.caret_at) > 0 {
 		own := document.empty_text(&ctx.doc, text)
 		defer delete(own)
@@ -1182,8 +1191,10 @@ mdcore_caret_set :: proc "c" (handle: rawptr, x, y: f64) -> bool {
 	hold(ctx)
 	history.seal(&ctx.history)
 	if ctx.doc.count == 0 {
-		// A document with no text yet: text goes at its start.
-		ctx.caret = 0
+		// A document with no text yet: text goes at its start, after
+		// the bytes that are no Markdown (front matter, which does not
+		// show).
+		ctx.caret = ctx.doc.hidden
 		ctx.display_valid = false
 		return true
 	}

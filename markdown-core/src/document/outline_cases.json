@@ -165,7 +165,7 @@
   ]
  },
  {
-  "source": "---\na: b\n---\n# After a byte order mark\n",
+  "source": "﻿---\na: b\n---\n# After a byte order mark\n",
   "headings": [
    {
     "level": 1,
@@ -258,7 +258,7 @@
     "title": "Title after a byte order mark"
    }
   ],
-  "source": "# Title after a byte order mark\n"
+  "source": "﻿# Title after a byte order mark\n"
  },
  {
   "source": "---\na: b\n...\nTitle\n---\n",
@@ -353,5 +353,25 @@
    }
   ],
   "source": "# Quotes 'single' and \"double\"\n"
+ },
+ {
+  "source": "﻿ # A space before the heading after a byte order mark\n",
+  "headings": [
+   {
+    "level": 1,
+    "line": 1,
+    "title": "A space before the heading after a byte order mark"
+   }
+  ]
+ },
+ {
+  "source": "﻿\n# After an empty first line with the mark\n",
+  "headings": [
+   {
+    "level": 1,
+    "line": 2,
+    "title": "After an empty first line with the mark"
+   }
+  ]
  }
 ]
