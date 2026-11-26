@@ -115,7 +115,9 @@ Ctx :: struct {
 	// where those keys started. Each other move of the caret ends it.
 	caret_goal:      Maybe(f32),
 	source_out:      [dynamic]u8, // the source, for `mdcore_source`
-	outline_out:     [dynamic]u8, // the headings, for `mdcore_outline`
+	// The headings and their texts, for `mdcore_outline`.
+	outline:         [dynamic]Host_Heading,
+	outline_titles:  [dynamic]u8,
 	// Held for all of a change of the source of the document, before
 	// `lock`. A frame does not take it.
 	source_lock:     sync.Mutex,
@@ -294,7 +296,8 @@ mdcore_destroy :: proc "c" (handle: rawptr) {
 	text.glyph_buffer_destroy(&ctx.glyph_buffer)
 	delete(ctx.clipboard)
 	delete(ctx.source_out)
-	delete(ctx.outline_out)
+	delete(ctx.outline)
+	delete(ctx.outline_titles)
 	delete(ctx.caret_places)
 	delete(ctx.caret_pairs)
 	delete(ctx.gone)
@@ -1637,33 +1640,28 @@ mdcore_source :: proc "c" (handle: rawptr, length: ^c.long) -> [^]u8 {
 	return raw_data(ctx.source_out)
 }
 
+Host_Heading :: struct {
+	level, line:            c.long,
+	title_start, title_end: c.long, // a range of the texts (`mdcore_outline`)
+}
+
 // The headings of the document, for an outline. See the header.
 @(export)
-mdcore_outline :: proc "c" (handle: rawptr, length: ^c.long) -> [^]u8 {
+mdcore_outline :: proc "c" (handle: rawptr, count: ^c.long, titles: ^[^]u8) -> [^]Host_Heading {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
 	context.temp_allocator = ctx.temp
 	hold(ctx)
-	titles := make([dynamic]u8, context.temp_allocator)
 	headings := make([dynamic]document.Heading, context.temp_allocator)
-	document.outline(&ctx.doc, &titles, &headings)
-	// For each heading: its level (1 byte), its line and the length of
-	// its text (4 bytes each, little-endian), then its text.
-	out := &ctx.outline_out
-	clear(out)
-	reserve(out, len(titles) + 9 * len(headings))
-	put :: proc(out: ^[dynamic]u8, value: int) {
-		v := u32(value)
-		append(out, u8(v), u8(v >> 8), u8(v >> 16), u8(v >> 24))
-	}
+	clear(&ctx.outline_titles)
+	document.outline(&ctx.doc, &ctx.outline_titles, &headings)
+	clear(&ctx.outline)
 	for h in headings {
-		append(out, u8(h.level))
-		put(out, h.line)
-		put(out, h.title[1] - h.title[0])
-		append(out, ..titles[h.title[0]:h.title[1]])
+		append(&ctx.outline, Host_Heading{c.long(h.level), c.long(h.line), c.long(h.title[0]), c.long(h.title[1])})
 	}
-	length^ = c.long(len(out))
-	return raw_data(out^)
+	count^ = c.long(len(ctx.outline))
+	titles^ = raw_data(ctx.outline_titles)
+	return raw_data(ctx.outline)
 }
 
 // See the header.

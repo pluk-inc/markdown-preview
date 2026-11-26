@@ -328,6 +328,25 @@ count_lines :: proc(source: []u8, from, to: int) -> (count: int) {
 	return
 }
 
+// A walk over the lines of a part: the line of an offset, then of a
+// later one, with a count of the lines between the two only. It starts
+// at the part (`part_lines`).
+Line_Walk :: struct {
+	line, counted: int, // the line of the offset `counted`, from 1
+}
+
+part_lines :: proc(part: ^Part) -> Line_Walk {
+	return {part.line + 1, part.source}
+}
+
+// The source line, from 1, of an offset at `counted` of the walk or
+// later.
+line_to :: proc(doc: ^Document, walk: ^Line_Walk, at: int) -> int {
+	walk.line += count_lines(doc.source, walk.counted, at)
+	walk.counted = at
+	return walk.line
+}
+
 // The source line of the mark of a task, from 1; 0 for a block that is
 // no task. `part` is the part of the block.
 task_line :: proc(doc: ^Document, part: ^Part, b: ^Block) -> int {
@@ -433,13 +452,13 @@ set_task_done :: proc(doc: ^Document, line: int, done: bool, mark: ^int = nil, w
 	p := lo - 1
 	part := doc.parts[p]
 	// The lines of the marks go up with the blocks.
-	at, counted := part.line + 1, part.source
+	lines := part_lines(part)
 	for &b, slot in part_blocks(part) {
 		if b.task_mark == 0 {
 			continue
 		}
-		at += count_lines(doc.source, counted, part.source + b.task_mark)
-		counted = part.source + b.task_mark
+		at := line_to(doc, &lines, part.source + b.task_mark)
+		counted := lines.counted
 		if at < line {
 			continue
 		}

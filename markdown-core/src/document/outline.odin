@@ -1,5 +1,7 @@
 package document
 
+import "core:strings"
+
 // A heading of the document, for an outline.
 Heading :: struct {
 	level: int, // 1 to 6
@@ -8,87 +10,76 @@ Heading :: struct {
 }
 
 // The headings of the document in their order, with the text that shows
-// for each one, with no marks (also while the marks at a caret show).
-// An empty heading is one too. A heading in front matter at the top of
-// the source (`front_matter_lines`) is none: front matter is no Markdown.
-// It reads the records of the blocks, with no parse.
+// for each one, with no marks (also while the marks at a caret show) and
+// no spaces at its ends. An empty heading is one too. It reads the
+// records of the blocks, with no parse.
 outline :: proc(doc: ^Document, titles: ^[dynamic]u8, out: ^[dynamic]Heading) {
-	skip := front_matter_lines(doc.source)
 	for part in doc.parts {
-		// The lines before the part, and from its start to each block.
-		line, counted := part.line + 1, part.source
+		lines := part_lines(part)
 		for &b in part_blocks(part) {
 			if b.kind != .Heading {
 				continue
 			}
-			at := part.source + b.source
-			line += count_lines(doc.source, counted, at)
-			counted = at
-			if line <= skip {
-				continue
-			}
+			line := line_to(doc, &lines, part.source + b.source)
 			start := len(titles)
 			for span in b.text.spans {
 				if .Mark not_in span.style {
 					append(titles, ..b.text.bytes[span.start:span.end])
 				}
 			}
-			append(out, Heading{b.level, line, {start, len(titles)}})
+			title := strings.trim_space(string(titles[start:]))
+			trimmed := start + len(title)
+			copy(titles[start:], title)
+			resize(titles, trimmed)
+			append(out, Heading{b.level, line, {start, trimmed}})
 		}
 	}
 }
 
-// How many lines of the source are front matter: a first line of "---"
-// (YAML) or "+++" (TOML), with spaces or tabs around it, to the first
-// line after it that closes it ("---" or "..." for YAML, "+++" for TOML).
-// 0 when the source has none, or when nothing closes it. The same rule
-// as the front matter that the app shows above the page; a byte order
-// mark at the start is no part of the first line.
-front_matter_lines :: proc(source: []u8) -> int {
-	trimmed :: proc(line: []u8) -> string {
-		first, last := 0, len(line)
-		for first < last && (line[first] == ' ' || line[first] == '\t') {
-			first += 1
-		}
-		for last > first && (line[last - 1] == ' ' || line[last - 1] == '\t') {
-			last -= 1
-		}
-		return string(line[first:last])
-	}
+// The bytes at the start of a source that are no Markdown: a byte order
+// mark, and front matter after it: a first line of "---" (YAML) or "+++"
+// (TOML), with spaces around it, to the first line after it that closes
+// it ("---" or "..." for YAML, "+++" for TOML), with its line break. 0
+// when the source has neither; a first line that nothing closes is
+// Markdown. The rule of the app for the front matter that it shows above
+// the page of the web renderer. The parser reads these bytes as blank
+// lines (`masked_start`): they make no block, and each offset and line of
+// the source after them is as it was.
+hidden_start :: proc(source: []u8) -> int {
 	at := 0
 	if len(source) >= 3 && source[0] == 0xEF && source[1] == 0xBB && source[2] == 0xBF {
 		at = 3
 	}
-	// The next line from `at`, and where the line after it starts.
-	next_line :: proc(source: []u8, at: int) -> (line: []u8, next: int) {
-		end := at
-		for end < len(source) && source[end] != '\n' && source[end] != '\r' {
-			end += 1
-		}
-		// LF, CRLF, or CR.
-		next = end
-		if next < len(source) && source[next] == '\r' {
-			next += 1
-		}
-		if next < len(source) && source[next] == '\n' {
-			next += 1
-		}
-		return source[at:end], next
-	}
-	first, after := next_line(source, at)
-	open := trimmed(first)
+	end, next := line_at(source, at)
+	open := strings.trim_space(string(source[at:end]))
 	if open != "---" && open != "+++" {
-		return 0
+		return at
 	}
-	lines := 1
-	for after < len(source) {
-		line: []u8
-		line, after = next_line(source, after)
-		lines += 1
-		closing := trimmed(line)
+	for next < len(source) {
+		start := next
+		end, next = line_at(source, start)
+		closing := strings.trim_space(string(source[start:end]))
 		if open == "---" ? closing == "---" || closing == "..." : closing == "+++" {
-			return lines
+			return next
 		}
 	}
-	return 0
+	return at
+}
+
+// A copy of a piece of the source that starts at the start of the source,
+// with the bytes of `hidden_start` as spaces and their line breaks kept:
+// blank lines for the parser. nil when the source has no such bytes.
+masked_start :: proc(bytes: []u8, allocator := context.allocator) -> []u8 {
+	hidden := hidden_start(bytes)
+	if hidden == 0 {
+		return nil
+	}
+	masked := make([]u8, len(bytes), allocator)
+	copy(masked, bytes)
+	for &b in masked[:hidden] {
+		if b != '\n' && b != '\r' {
+			b = ' '
+		}
+	}
+	return masked
 }

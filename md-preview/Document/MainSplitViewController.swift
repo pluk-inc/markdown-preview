@@ -86,7 +86,7 @@ final class MainSplitViewController: NSSplitViewController {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 (self.view.window?.windowController as? DocumentWindowController)?.syncSidebarToolbarState()
-                if self.isSidebarVisible && self.sidebarMode == .outline {
+                if self.showsOutline {
                     self.onLiveMetadataNeedsRefresh?()
                 }
             }
@@ -224,7 +224,7 @@ final class MainSplitViewController: NSSplitViewController {
             sidebarViewController?.liveOutlineReplacesFirstOutline()
         }
         if metadata != nil { numbersAreLive = true }
-        if let outline, isSidebarVisible && sidebarMode == .outline {
+        if let outline, showsOutline {
             sidebarViewController?.refreshOutline(
                 outline: outline,
                 fileName: ReleaseNotes.displayName(for: fileURL)
@@ -410,6 +410,9 @@ final class MainSplitViewController: NSSplitViewController {
         inspector.animator().isCollapsed = !shouldShow
         return shouldShow
     }
+
+    /// The sidebar shows the outline: it needs one after each change.
+    var showsOutline: Bool { isSidebarVisible && sidebarMode == .outline }
 
     var isSidebarVisible: Bool {
         !(splitViewItems.first?.isCollapsed ?? true)

@@ -2,6 +2,7 @@ package document
 
 import "core:encoding/json"
 import "core:fmt"
+import "core:math/rand"
 import "core:strings"
 import "core:testing"
 
@@ -84,8 +85,10 @@ test_the_outline_has_no_marks_that_show :: proc(t: ^testing.T) {
 // The cases that the app's outline of the web renderer is tested with
 // too (outline_cases.json, beside this file): the two outlines have the same
 // headings and lines, and the same texts but where a case says
-// `native_title`: the text of a heading as the native page shows it
-// (raw HTML in a heading shows its text, not its tags).
+// `native_title`: the text of a heading as the native page shows it.
+// There it has no typographic quotes and dashes, one space for a run of
+// spaces, and the text of raw HTML with no tags; the web renderer's
+// outline shows the text of its parser.
 @(test)
 test_the_outline_has_the_headings_of_the_shared_cases :: proc(t: ^testing.T) {
 	Want :: struct {
@@ -108,5 +111,48 @@ test_the_outline_has_the_headings_of_the_shared_cases :: proc(t: ^testing.T) {
 		got := headings_of(c.source)
 		defer delete(got)
 		testing.expectf(t, got == strings.to_string(want), "%q: %q, not %q", c.source, got, strings.to_string(want))
+	}
+}
+
+// An edit of the front matter or near it gives the document that a
+// parse of all of the new source gives: the front matter can end at
+// another line after it (a closing line that goes, a "---" line later
+// in the text that closes it then).
+@(test)
+test_an_edit_of_front_matter_is_a_parse_of_all :: proc(t: ^testing.T) {
+	source := "---\ntitle: x\n---\n\n# Body\n\ntext\n\n---\n\n## After a rule\n"
+	edits := []Edit {
+		{13, 17, ""}, // the closing line goes: the rule later closes it
+		{13, 13, "---\n"}, // and comes back
+		{4, 9, "name"}, // a change in it
+		{0, 0, "\uFEFF"}, // a byte order mark before it
+		{0, 3, ""}, // the mark goes
+		{0, 3, "+++"}, // the opening line of another kind: nothing closes it
+		{0, 3, "---"},
+		{16, 17, "\n\n# In it?\n---"}, // text after the closing line
+	}
+	doc := parse(source)
+	defer destroy(&doc)
+	for e in edits {
+		p := prepare(&doc, e)
+		commit(&doc, &p)
+		discard(&p)
+		expect_document(t, &doc, string(doc.source))
+	}
+	// Random edits with pieces of front matter.
+	state := rand.create(0x5eed_f00d)
+	context.random_generator = rand.default_random_generator(&state)
+	PIECES_FM := []string{"---\n", "+++\n", "...\n", "\uFEFF", "# H\n", "a: b\n", "\n", "text ", "```\n", "<div>\n"}
+	for _ in 0 ..< 400 {
+		e: Edit
+		e.start = rand.int_max(min(len(doc.source), 80) + 1)
+		e.end = min(e.start + rand.int_max(6), len(doc.source))
+		if rand.int_max(3) > 0 {
+			e.text = PIECES_FM[rand.int_max(len(PIECES_FM))]
+		}
+		p := prepare(&doc, e)
+		commit(&doc, &p)
+		discard(&p)
+		expect_document(t, &doc, string(doc.source))
 	}
 }

@@ -99,7 +99,10 @@ with each change to the parser or the layout.
 ## What it does not do yet
 
 Images, math, diagrams, syntax colors, footnotes, alerts, raw HTML, links
-that open, Find, the outline, print, export, and VoiceOver.
+that open, Find, a click in the outline and its active heading (the core
+gives the headings of the outline, `mdcore_outline`), the table of front
+matter (front matter at the top of a file does not show), print, export,
+and VoiceOver.
 
 Edit Mode has its first form: a click puts a caret in the text, and the
 reader types, deletes the character before the caret, pastes, and

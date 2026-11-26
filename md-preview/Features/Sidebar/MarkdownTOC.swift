@@ -28,19 +28,10 @@ nonisolated enum MarkdownTOC {
         let sourceLine: Int
     }
 
-    /// The tree of headings that another reader of the text found (the
-    /// native renderer's core), the same as `parse` builds.
-    static func tree(_ headings: [RawHeading]) -> [TOCItem] {
-        buildTree(headings)
-    }
 
-    /// The headings of a text in order, with no tree: for a check that
-    /// another reader finds the same ones.
-    static func headings(_ markdown: String) -> [RawHeading] {
-        extractHeadings(from: markdown)
-    }
 
-    private static func extractHeadings(from markdown: String) -> [RawHeading] {
+    /// The headings of a text in order, with no tree.
+    static func extractHeadings(from markdown: String) -> [RawHeading] {
         // Share the renderer's CommonMark parsing so container nesting and fence
         // delimiters cannot turn code-block contents into outline entries.
         let split = MarkdownFrontmatter.split(markdown)
@@ -130,7 +121,9 @@ nonisolated enum MarkdownTOC {
         }
     }
 
-    private static func buildTree(_ headings: [RawHeading]) -> [TOCItem] {
+    /// The tree of headings in order: also of the ones that the native
+    /// renderer's core found.
+    static func buildTree(_ headings: [RawHeading]) -> [TOCItem] {
         final class Node {
             let level: Int
             let id: Int

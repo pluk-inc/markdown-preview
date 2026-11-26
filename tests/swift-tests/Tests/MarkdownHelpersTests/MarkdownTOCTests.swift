@@ -20,12 +20,12 @@ final class MarkdownTOCTests: XCTestCase {
         let cases = try JSONDecoder().decode([Case].self, from: Data(contentsOf: url))
         XCTAssertFalse(cases.isEmpty)
         for test in cases {
-            let got = MarkdownTOC.headings(test.source)
+            let got = MarkdownTOC.extractHeadings(from: test.source)
             XCTAssertEqual(got.map(\.level), test.headings.map(\.level), test.source)
             XCTAssertEqual(got.map(\.sourceLine), test.headings.map(\.line), test.source)
             XCTAssertEqual(got.map(\.title), test.headings.map(\.title), test.source)
             // The tree of these headings is the one that `parse` builds.
-            XCTAssertEqual(MarkdownTOC.tree(got), MarkdownTOC.parse(test.source), test.source)
+            XCTAssertEqual(MarkdownTOC.buildTree(got), MarkdownTOC.parse(test.source), test.source)
         }
     }
 

@@ -95,8 +95,7 @@ extension DocumentWindowController {
     private func scheduleInspectorRefresh(from editor: any DocumentEditor) {
         guard pendingInspectorRefresh == nil,
               let split = mainSplit,
-              split.isInspectorVisible
-                || (split.isSidebarVisible && split.sidebarMode == .outline) else { return }
+              split.isInspectorVisible || split.showsOutline else { return }
         let sessionID = inspectorRefreshSessionID
         let work = DispatchWorkItem { [weak self, weak editor] in
             guard let self else { return }
@@ -109,8 +108,7 @@ extension DocumentWindowController {
             let fileURL = self.currentFileURL
             // An editor that has the outline with no parse (the native
             // one): with only the outline open, no text is fetched.
-            let needsOutline = self.mainSplit.map { $0.isSidebarVisible && $0.sidebarMode == .outline } ?? false
-            let outline = needsOutline ? editor.currentOutline() : nil
+            let outline = self.mainSplit?.showsOutline == true ? editor.currentOutline() : nil
             if let outline, self.mainSplit?.isInspectorVisible != true {
                 self.mainSplit?.applyLiveSidebarUpdates(outline: outline, metadata: nil, fileURL: fileURL)
                 return
@@ -135,9 +133,9 @@ extension DocumentWindowController {
     /// `outline`: the editor's own, which takes the place of a parse.
     private func computeVisibleSidebars(markdown: String, fileURL: URL?,
                                         revision: Int, sessionID: UUID,
-                                        outline known: [TOCItem]? = nil) {
+                                        outline known: [TOCItem]?) {
         guard let split = mainSplit else { return }
-        let needsOutline = split.isSidebarVisible && split.sidebarMode == .outline
+        let needsOutline = split.showsOutline
         let needsMetadata = split.isInspectorVisible
         guard needsOutline || needsMetadata else { return }
 
@@ -481,7 +479,8 @@ extension DocumentWindowController {
             if revision == nil || revision == editorChangeRevision {
                 computeVisibleSidebars(markdown: body, fileURL: currentFileURL,
                                        revision: editorChangeRevision,
-                                       sessionID: inspectorRefreshSessionID)
+                                       sessionID: inspectorRefreshSessionID,
+                                       outline: nil)
             }
             completeSuccessfulEditorCommit(exitAfter: exitAfter, rerender: true)
         case let .reloaded(externalMarkdown):

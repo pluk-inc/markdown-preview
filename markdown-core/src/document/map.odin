@@ -126,7 +126,7 @@ block_parse :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs: 
 	lead: int
 	text, _, _, _, _, lead = piece_text(doc, doc.source[start:end], start, end)
 	base = start - lead
-	fresh = parse_piece(text[:], 0, len(doc.source), places, block - first, pairs = pairs, reveal = reveal_in(doc.reveal, base, len(text)))
+	fresh = parse_piece(text[:], 0, len(doc.source), places, block - first, pairs = pairs, reveal = reveal_in(doc.reveal, base, len(text)), at_start = base == 0)
 	// The piece must give the block as the document has it. It does not
 	// when the limit of the parser for the uses of definitions cuts a
 	// use in the piece that a parse of all keeps: then the places are
@@ -161,7 +161,7 @@ block_parse :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs: 
 		}
 		text = make([dynamic]u8, len(doc.source))
 		copy(text[:], doc.source)
-		fresh = parse_piece(text[:], 0, len(doc.source), places, block, pairs = pairs, reveal = doc.reveal)
+		fresh = parse_piece(text[:], 0, len(doc.source), places, block, pairs = pairs, reveal = doc.reveal, at_start = true)
 		base, index = 0, block
 	}
 	return

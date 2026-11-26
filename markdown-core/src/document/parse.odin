@@ -105,7 +105,7 @@ parse :: proc(source: string) -> Document {
 // Parses a Markdown source that the document keeps: memory of the
 // allocator of the context, which goes with the document.
 parse_owned :: proc(bytes: []u8, reveal: Maybe(int) = nil) -> Document {
-	return parse_piece(bytes, 0, len(bytes), reveal = reveal)
+	return parse_piece(bytes, 0, len(bytes), reveal = reveal, at_start = true)
 }
 
 // Parses a piece of the source of a document that starts where a block
@@ -113,9 +113,15 @@ parse_owned :: proc(bytes: []u8, reveal: Maybe(int) = nil) -> Document {
 // from the start of the piece. `items` is the number of list items of
 // the document so far, and `full_size` the size of all of its source.
 // `end`, `followed`, and `followed_in_list`: see `count_empties`; with
-// none, the piece is all of a source.
+// none, the piece is all of a source. `at_start`: the piece starts at the
+// start of the source, where the bytes of `hidden_start` (front matter)
+// are no Markdown: the parser reads them as blank lines.
 @(private)
-parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place = nil, places_block := 0, end := -1, followed := false, followed_in_list := false, pairs: ^[dynamic]Pair = nil, reveal: Maybe(int) = nil) -> Document {
+parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place = nil, places_block := 0, end := -1, followed := false, followed_in_list := false, pairs: ^[dynamic]Pair = nil, reveal: Maybe(int) = nil, at_start := false) -> Document {
+	kept := bytes
+	masked := at_start ? masked_start(bytes) : nil
+	defer delete(masked)
+	bytes := masked != nil ? masked : bytes
 	source := string(bytes)
 	doc: Document
 	p := Parser {
@@ -148,7 +154,7 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 	close_text(&p)
 	delete(p.lists)
 	delete(p.pairs_open)
-	doc.source = bytes
+	doc.source = kept
 	doc.items = p.item_count
 	doc.links_parsed = len(doc.links)
 	for &def in doc.defs {

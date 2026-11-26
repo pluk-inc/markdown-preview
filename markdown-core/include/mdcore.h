@@ -263,16 +263,23 @@ bool mdcore_can_redo(void *ctx);
 // edits. The pointer is good until the next call of this.
 const char *mdcore_source(void *ctx, long *length);
 
-// The headings of the document, in their order, for an outline: each
-// heading as its level (1 byte, 1 to 6), the source line where it starts
-// (4 bytes, little-endian, from 1), the length of its text (4 bytes,
-// little-endian), and its text, UTF-8, as it shows with no Markdown
-// marks. Empty headings are in it. Headings in front matter (a first line
-// of "---" or "+++" up to the line that closes it) are not: the app
-// shows front matter as its own table. The core reads its records for
-// this, with no parse, so a host can ask after each change. The pointer
-// is good until the next call of this.
-const unsigned char *mdcore_outline(void *ctx, long *length);
+// A heading of the document: its level (1 to 6), the source line where it
+// starts (from 1), and its text as a range of the bytes of `titles`.
+typedef struct {
+    long level;
+    long line;
+    long title_start;
+    long title_end;
+} mdcore_heading;
+
+// The headings of the document, in their order, for an outline, with
+// their texts in `titles` (UTF-8): each text as it shows on the page,
+// with no Markdown marks and no spaces at its ends. Empty headings are in
+// it. Front matter at the top of the source ("---" or "+++" lines) is no
+// Markdown for the core: it makes no heading and does not show. The core
+// reads its records for this, with no parse, so a host can ask after
+// each change. The pointers are good until the next call of this.
+const mdcore_heading *mdcore_outline(void *ctx, long *count, const unsigned char **titles);
 
 // Sets the view size and backing scale. Starts a new layout when the
 // document, the style, or the width changed; the next frame lays out
