@@ -248,6 +248,10 @@ bool mdcore_transpose(void *ctx);
 // document (mdcore_set_markdown with another text) ends both.
 bool mdcore_undo(void *ctx);
 bool mdcore_redo(void *ctx);
+// The next change is a step of Undo of its own: for text that the host
+// puts in the place of the text of an input method (a paste), which
+// would else go on in the step of that text.
+void mdcore_end_undo_group(void *ctx);
 // Ends the history: for another document, also one with the same text
 // (two empty files).
 void mdcore_forget_history(void *ctx);

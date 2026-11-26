@@ -559,6 +559,16 @@ mdcore_redo :: proc "c" (handle: rawptr) -> bool {
 
 // See the header.
 @(export)
+mdcore_end_undo_group :: proc "c" (handle: rawptr) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	history.seal(&ctx.history)
+}
+
+// See the header.
+@(export)
 mdcore_forget_history :: proc "c" (handle: rawptr) {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
