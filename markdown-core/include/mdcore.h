@@ -122,8 +122,9 @@ void mdcore_set_focused(void *ctx, bool focused);
 // Where the caret is: its x in the view, and the top and the height of
 // its bar in the space of the page. The bar is as high as the text of
 // its line (the font, larger in a heading), in the middle of the height
-// of the line, as the text views of the system draw a caret. For a host that keeps
-// the caret in view or puts an input window at it. In a document with no
+// of the line, as the text views of the system draw a caret. For a host
+// that keeps the caret in view or puts an input window at it. In a
+// document with no
 // text, it is where the first line starts. False for no caret, and when
 // the block of the caret has no layout.
 bool mdcore_caret_rect(void *ctx, double *x, double *y, double *height);

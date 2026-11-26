@@ -523,6 +523,12 @@ caret_place :: proc(l: ^Layout, at: document.Address, upstream := false) -> (x, 
 		x = l.column_x + list_x(l, b) + f32(b.quote_depth) * l.m.quote_indent
 		top = box.top
 		height = math.round(l.m.body * l.m.line_height)
+		if b.kind == .Heading {
+			// A heading with no text keeps the line of its level
+			// (`place_para`), so the caret does not move when the first
+			// character comes.
+			height = l.m.body * HEADING_SCALE[b.level] * HEADING_LINE_HEIGHT
+		}
 		if b.kind == .Code {
 			height = math.round(l.m.code_size * CODE_LINE_HEIGHT)
 			x += CODE_PAD
@@ -570,9 +576,7 @@ caret_spaces :: proc(l: ^Layout, at: document.Address, x: f32) -> f32 {
 	if count <= 0 {
 		return 0
 	}
-	b := document.block_at(l.doc, at.block)
-	heading := b.kind == .Heading
-	runs := [1]text.Run{{0, 1, span_font(l, {}, l.m.body * HEADING_SCALE[heading ? b.level : 0], heading)}}
+	runs := [1]text.Run{{0, 1, block_font(l, document.block_at(l.doc, at.block))}}
 	space := text.paragraph_create(" ", runs[:])
 	defer text.paragraph_destroy(space)
 	return clamp(f32(count) * text.paragraph_natural_width(space), 0, max(l.column_x + l.column - x, 0))
@@ -666,13 +670,7 @@ caret_place_empty :: proc(l: ^Layout) -> (x, top, height: f32) {
 // as the text, larger in a heading. `b` is the block of the line; nil
 // for a document with no block.
 caret_bar :: proc(l: ^Layout, b: ^document.Block, top, line_height: f32) -> (bar_top, bar_height: f32) {
-	text_font: base.Font
-	if b != nil && b.kind == .Code {
-		text_font = font(l, .Mono, l.m.code_size)
-	} else {
-		heading := b != nil && b.kind == .Heading
-		text_font = span_font(l, {}, l.m.body * HEADING_SCALE[heading ? b.level : 0], heading)
-	}
+	text_font := block_font(l, b)
 	if text_font == nil {
 		return top, line_height
 	}
@@ -680,6 +678,18 @@ caret_bar :: proc(l: ^Layout, b: ^document.Block, top, line_height: f32) -> (bar
 	bar_height = min(ascent + descent, line_height)
 	// The text is in the middle of the height of its line (`line_baseline`).
 	return top + (line_height - bar_height) / 2, bar_height
+}
+
+// The font of the plain text of a block: the code font in a code block,
+// the font of its level in a heading, the body font in each other one and
+// for no block.
+@(private)
+block_font :: proc(l: ^Layout, b: ^document.Block) -> base.Font {
+	if b != nil && b.kind == .Code {
+		return font(l, .Mono, l.m.code_size)
+	}
+	heading := b != nil && b.kind == .Heading
+	return span_font(l, {}, l.m.body * HEADING_SCALE[heading ? b.level : 0], heading)
 }
 
 // `caret_y` for the bar of the caret (`caret_bar`): what a host shows.

@@ -1797,4 +1797,15 @@ test_the_caret_is_as_high_as_the_text_of_its_line :: proc(t: ^testing.T) {
 		testing.expect(t, abs(empty_bar - body_bar) < 0.01)
 	}
 	testing.expect(t, abs((heading_bar_y - heading_y) - f64(heading_line - heading_bar) / 2) < 0.01)
+	// A heading with no text has the bar of a heading with text, at the
+	// same place: the first character does not move the caret.
+	h: Fixture
+	setup(&h, "#\n\nText.\n", 600)
+	defer teardown(&h)
+	step(&h.page, 1e30)
+	if testing.expect_value(t, h.page.doc.parts[0].blocks[0].kind, document.Block_Kind.Heading) {
+		_, bare_bar_y, bare_bar, _ := caret_bar_y(&h.page, {block = 0}, false)
+		testing.expect(t, abs(bare_bar - heading_bar) < 0.01)
+		testing.expect(t, abs(bare_bar_y - heading_bar_y) < 0.01)
+	}
 }
