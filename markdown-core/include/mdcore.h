@@ -124,9 +124,8 @@ void mdcore_set_focused(void *ctx, bool focused);
 // its line (the font, larger in a heading), in the middle of the height
 // of the line, as the text views of the system draw a caret. For a host
 // that keeps the caret in view or puts an input window at it. In a
-// document with no
-// text, it is where the first line starts. False for no caret, and when
-// the block of the caret has no layout.
+// document with no text, it is where the first line starts. False for no
+// caret, and when the block of the caret has no layout.
 bool mdcore_caret_rect(void *ctx, double *x, double *y, double *height);
 
 // The moves of a caret. Left and right are against the reading order

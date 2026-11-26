@@ -1768,9 +1768,9 @@ test_the_number_of_an_item_is_one_line :: proc(t: ^testing.T) {
 	}
 }
 
-// The bar of a caret is as high as the font of the text of its line, in
-// the middle of the line: higher in a heading than in a paragraph, and
-// less than the line with a wide line spacing.
+// The bar of a caret is as high as the font of the text of its line, on
+// the line that the text stands on: higher in a heading than in a
+// paragraph, and less than the line with a wide line spacing.
 @(test)
 test_the_caret_is_as_high_as_the_text_of_its_line :: proc(t: ^testing.T) {
 	f: Fixture
@@ -1783,20 +1783,38 @@ test_the_caret_is_as_high_as_the_text_of_its_line :: proc(t: ^testing.T) {
 	_, body_bar_y, body_bar, _ := caret_bar_y(&f.page, {block = 1, byte = 2}, false)
 	ascent, descent, _ := text.font_metrics(f.style.body_font)
 	testing.expect(t, abs(body_bar - (ascent + descent)) < 0.01)
-	testing.expect(t, body_bar < body_line && heading_bar <= heading_line)
+	testing.expect(t, body_bar < body_line && heading_bar < heading_line)
 	testing.expect(t, heading_bar > body_bar * 1.5)
-	// In the middle of its line.
-	testing.expect(t, abs((body_bar_y - body_y) - f64(body_line - body_bar) / 2) < 0.01)
-	// An empty line after a heading is a line of body text.
+	// On the line that the glyphs of its line stand on: the top of the
+	// bar is the ascent of the font above the baseline of the shaped line.
+	part := &f.page.parts[0]
+	for line in part.lines {
+		if part.paras[line.para].src != &f.page.doc.parts[0].blocks[1].text {
+			continue
+		}
+		baseline := line_baseline(line.top, body_line, line.line.ascent, line.line.descent)
+		testing.expect(t, abs(f32(body_bar_y - part.top) + ascent - baseline) < 0.01)
+	}
+	testing.expect(t, abs((heading_bar_y - heading_y) - f64(heading_line - heading_bar) / 2) < 0.01)
+	// The quad that is drawn is the same bar, on whole pixels.
+	quads: [dynamic]base.Quad
+	defer delete(quads)
+	caret_quad(&f.page, {block = 1, byte = 2}, false, -1e30, 1e30, 1, 0, &quads)
+	if testing.expect_value(t, len(quads), 1) {
+		testing.expect(t, abs(quads[0].size[1] - body_bar) < 1 && quads[0].size[1] < body_line - 2)
+	}
+	// An empty line after a heading is a line of body text: the same
+	// bar, at the same place in its line.
 	g: Fixture
 	setup(&g, "# Heading\n\n\n\nText.\n", 600)
 	defer teardown(&g)
 	step(&g.page, 1e30)
 	if empty, has := document.empty_address(g.page.doc, 0, 1); testing.expect(t, has) {
-		_, _, empty_bar, _ := caret_bar_y(&g.page, empty, false)
+		_, empty_y, _, _ := caret_y(&g.page, empty, false)
+		_, empty_bar_y, empty_bar, _ := caret_bar_y(&g.page, empty, false)
 		testing.expect(t, abs(empty_bar - body_bar) < 0.01)
+		testing.expect(t, abs((empty_bar_y - empty_y) - (body_bar_y - body_y)) < 0.01)
 	}
-	testing.expect(t, abs((heading_bar_y - heading_y) - f64(heading_line - heading_bar) / 2) < 0.01)
 	// A heading with no text has the bar of a heading with text, at the
 	// same place: the first character does not move the caret.
 	h: Fixture
