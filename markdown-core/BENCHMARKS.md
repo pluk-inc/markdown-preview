@@ -87,6 +87,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-25 | the frame for a key does not wait for the refresh | 611 / 586 | 65 / 110 (the base too) | 490 / 800 | none | none | none (the core is the same) | none |
 | 2026-11-25 | Undo and Redo | 608 / 601 | 65 / 111 (the base too) | 485 / 785 | 62 / 76 | not recorded | not recorded | 7.0 / 26.4 (the base too) |
 | 2026-11-26 | Control-T keeps each space | 598 / 588 | 52 / 100 (the base too) | 490 / 725 | 67 / 85 | not recorded | not recorded | 7.1 / 26.4 (the base too) |
+| 2026-11-26 | list marks as in other Markdown editors | 576 / 555 | 60 / 107 (the base too) | 485 / 770 | 59 / 72 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1199,3 +1200,34 @@ order that they ran:
 The launches of the change were 20 to 50 ms earlier in this set. No
 code of a launch changed, so that is the spread of launches at this
 load.
+
+## List marks as in other Markdown editors (2026-11-26)
+
+The new work runs at the caret in a list item: a parse of the blocks
+around a line that is only a list mark when the caret comes or goes, and
+a look for a new list after a typed space. No launch or scroll path
+runs it. `core.py`, short / long, in turns (base, change, change, base),
+with a load of 2 to 4:
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 61, 62 / 74, 73 | 61, 57 / 73, 72 |
+| A typed character in the middle of the text (CPU ms) | 0.99, 1.13 / 1.42, 1.41 | 0.95, 1.08 / 1.34, 1.27 |
+| A typed character at the end of the text (CPU ms) | 1.19, 1.39 / 2.76, 3.13 | 0.94, 1.30 / 3.44, 2.86 |
+| A typed character at a caret (CPU ms) | 1.73, 1.75 / 2.00, 1.97 | 1.65, 1.68 / 1.94, 1.65 |
+| A step of the caret to the left or to the right (CPU ms) | 0.34, 0.36 / 0.36, 0.35 | 0.38, 0.34 / 0.36, 0.30 |
+| Heap with all of the document laid out (MB) | 7.0 / 26.3, 26.3 | 7.0 / 26.3, 26.4 |
+
+Each row overlaps between the two builds. `app.py`, short / long, five
+launches each, in the order that they ran (a load of 13 at the start,
+3.5 at the end):
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 566 / 597 | 60 / 108 | 490 / 790 |
+| change | 576 / 570 | 60 / 106 | 490 / 770 |
+| change | 576 / 540 | 60 / 108 | 480 / 770 |
+| base | 624 / 644 | 60 / 107 | 510 / 820 |
+
+The second run of the base was the slowest of the set at a lower load;
+no code of a launch changed, so that is the spread of the Mac.
