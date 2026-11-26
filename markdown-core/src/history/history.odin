@@ -48,10 +48,14 @@ Group :: struct {
 	kind:  Kind,
 	time:  time.Tick, // of its last step
 	// The caret and the other end of the selection (-1 for none) before
-	// the group, and the caret after it.
-	caret_before:  int,
-	anchor_before: int,
-	caret_after:   int,
+	// the group, and the caret after it. `upstream`: the caret is at the
+	// end of a line where its offset is also the start of the next one
+	// (a line that wraps).
+	caret_before:    int,
+	anchor_before:   int,
+	caret_after:     int,
+	upstream_before: bool,
+	upstream_after:  bool,
 }
 
 History :: struct {
@@ -66,6 +70,7 @@ History :: struct {
 	kind:       Kind,
 	caret:      int,
 	anchor:     int,
+	upstream:   bool,
 	in_command: bool, // the command has a step
 	// The next command starts a group: the caret went to another place.
 	sealed:     bool,
@@ -101,25 +106,27 @@ clear :: proc(h: ^History) {
 // Starts a command: its steps (`record`) to its `end` go in one group.
 // A command in a command is a part of the outer one. `caret` and
 // `anchor` are the caret and the other end of the selection now (-1 for
-// no selection).
-begin :: proc(h: ^History, kind: Kind, caret: int, anchor := -1) {
+// no selection); `upstream` is the side of the caret at the end of a
+// line.
+begin :: proc(h: ^History, kind: Kind, caret: int, anchor := -1, upstream := false) {
 	if h.depth == 0 {
 		h.kind = kind
-		h.caret, h.anchor = caret, anchor
+		h.caret, h.anchor, h.upstream = caret, anchor, upstream
 		h.in_command = false
 	}
 	h.depth += 1
 }
 
 // Ends a command, with the caret where it is after all that the command
-// did.
-end :: proc(h: ^History, caret: int) {
+// did, and its side at the end of a line.
+end :: proc(h: ^History, caret: int, upstream := false) {
 	h.depth = max(h.depth - 1, 0)
 	if h.depth > 0 {
 		return
 	}
 	if h.in_command {
 		h.groups[h.done - 1].caret_after = caret
+		h.groups[h.done - 1].upstream_after = upstream
 	}
 	h.in_command = false
 }
@@ -159,7 +166,7 @@ record :: proc(h: ^History, start: int, gone: []u8, came: string, now: time.Tick
 		return
 	}
 	if !(h.in_command || goes) {
-		append(&h.groups, Group{len(h.steps), len(h.bytes), h.kind, now, h.caret, h.anchor, h.caret})
+		append(&h.groups, Group{len(h.steps), len(h.bytes), h.kind, now, h.caret, h.anchor, h.caret, h.upstream, h.upstream})
 		h.done = len(h.groups)
 	}
 	h.groups[h.done - 1].time = now
