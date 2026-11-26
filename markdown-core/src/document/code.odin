@@ -49,8 +49,14 @@ write_code_lead :: proc(out: ^strings.Builder, doc: ^Document, block: int) {
 	start := block_start(doc, block)
 	end, _ := line_at(doc.source, start)
 	from, _, _ := fence_run(doc.source, start, end)
-	for ch in doc.source[start:from] {
+	for ch, i in doc.source[start:from] {
 		strings.write_byte(out, ch == '>' || ch == '\t' ? ch : ' ')
+		// A ">" with no space after it gets one: the parser takes the
+		// first space after a ">" for the quote, not for the indent of
+		// a list item in it.
+		if ch == '>' && (start + i + 1 >= from || doc.source[start + i + 1] != ' ') {
+			strings.write_byte(out, ' ')
+		}
 	}
 }
 
@@ -128,6 +134,9 @@ Code_Before :: struct {
 	// The caret is in the line of a fence whose closing fence is the
 	// next line: a fence that was typed and got it (`.Opened`).
 	pair:    bool,
+	// How many bytes the source has after the line of that fence: the
+	// same after a command that changed only that line.
+	tail:    int,
 }
 
 code_before :: proc(doc: ^Document, at: Address, offset: int) -> (before: Code_Before) {
@@ -136,7 +145,7 @@ code_before :: proc(doc: ^Document, at: Address, offset: int) -> (before: Code_B
 	}
 	line, _, closed := code_close(doc, at.block)
 	first_end, content := line_at(doc.source, block_start(doc, at.block))
-	return {true, closed, closed && line == content && offset <= first_end}
+	return {true, closed, closed && line == content && offset <= first_end, len(doc.source) - first_end}
 }
 
 // What the caret is in after text that was typed made a fence, or was
@@ -171,7 +180,9 @@ typed_fence :: proc(doc: ^Document, before: Code_Before, at: Address, offset: in
 	// after Return). In code no more: that line is no fence now.
 	if before.pair && (at.empty != 0 || !block_at(doc, at.block).fenced) {
 		line_end, next := line_at(doc.source, line_start(doc.source, min(offset, len(doc.source))))
-		if next_end, _ := line_at(doc.source, next); next > line_end && next < len(doc.source) && bare_fence(doc.source, next, next_end) {
+		// Only with the source after that line as it was: the line after
+		// it is that closing fence, not a fence of other code.
+		if next_end, _ := line_at(doc.source, next); len(doc.source) - line_end == before.tail && next > line_end && next < len(doc.source) && bare_fence(doc.source, next, next_end) {
 			return .Unopened, line_end, next_end, ""
 		}
 		return
@@ -275,7 +286,7 @@ code_exit :: proc(doc: ^Document, address: Address, offset: int, allocator := co
 	if address.block + 1 < doc.count {
 		// Not between two blocks of the list or of the quote that the
 		// code is in: an empty paragraph there makes two of it.
-		if next := block_at(doc, address.block + 1); (in_list(b) && in_list(next)) || (b.quote_depth > 0 && next.quote_depth > 0) {
+		if next := block_at(doc, address.block + 1); (b.list_depth > 0 && in_list(next)) || (b.quote_depth > 0 && next.quote_depth > 0) {
 			return
 		}
 	}

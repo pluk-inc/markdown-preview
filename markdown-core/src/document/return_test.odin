@@ -300,6 +300,7 @@ test_code_with_no_line_takes_text :: proc(t: ^testing.T) {
 		// In a list item and in a quote.
 		{"- item\n\n  ```\n  ```\n", 1, 14, "- item\n\n  ```\n  x\n  ```\n", 17},
 		{"- ```\n- b\n", 0, 6, "- ```\n  x\n- b\n", 9},
+		{">- ```\n>   ```\n", 0, 7, ">- ```\n>   x\n>   ```\n", 12},
 		{"> ```\n> ```\n", 0, 6, "> ```\n> x\n> ```\n", 9},
 		{"> ```\n>\n> ```\n", 0, 7, "> ```\n>x\n> ```\n", 8},
 		// No line break after the fence: no line for code yet.
@@ -393,40 +394,43 @@ test_a_typed_fence :: proc(t: ^testing.T) {
 		{"> ~~~js", {}, 7, .Opened, "> ~~~js\n> ~~~"},
 		// One more character of a fence that was typed, and of its
 		// closing fence.
-		{"````\n```\n", {true, true, true}, 4, .Opened, "````\n````\n"},
-		{"`````\n```\n", {true, true, true}, 5, .Opened, "`````\n`````\n"},
+		{"````\n```\n", {true, true, true, 0}, 4, .Opened, "````\n````\n"},
+		{"`````\n```\n", {true, true, true, 0}, 5, .Opened, "`````\n`````\n"},
 		// The closing fence of other code is not its own.
-		{"````\nx\n```\n", {true, false, false}, 4, .None, ""},
+		{"````\nx\n```\n", {true, false, false, 0}, 4, .None, ""},
 		// The word after a fence that is there: nothing.
-		{"```js\n```\n", {true, true, false}, 5, .None, ""},
+		{"```js\n```\n", {true, true, false, 0}, 5, .None, ""},
 		// A closing fence before the one of the code: it goes.
-		{"```\nx\n```\n```\n\nmore\n", {true, true, false}, 9, .Closed_Twice, "```\nx\n```\n\nmore\n"},
+		{"```\nx\n```\n```\n\nmore\n", {true, true, false, 0}, 9, .Closed_Twice, "```\nx\n```\n\nmore\n"},
 		// In the middle of closed code: nothing.
-		{"```\nx\n```\ny\n```\n", {true, true, false}, 9, .None, ""},
+		{"```\nx\n```\ny\n```\n", {true, true, false, 0}, 9, .None, ""},
 		// Code with no closing fence gets one.
-		{"```\nx\n```\n", {true, false, false}, 9, .Closed, ""},
+		{"```\nx\n```\n", {true, false, false, 0}, 9, .Closed, ""},
 		// The line of a typed fence is no fence any more: its closing
 		// fence goes.
-		{"```x`\n```\n\nmore\n", {true, true, true}, 5, .Unopened, "```x`\n\nmore\n"},
-		{"a\n\n\n```\n\nmore\n", {true, true, true}, 3, .Unopened, "a\n\n\n\nmore\n"},
+		{"```x`\n```\n\nmore\n", {true, true, true, 11}, 5, .Unopened, "```x`\n\nmore\n"},
+		{"a\n\n\n```\n\nmore\n", {true, true, true, 11}, 3, .Unopened, "a\n\n\n\nmore\n"},
+		// Both fences went, and a fence of other code is the next line:
+		// it stays.
+		{"Text\n```\nx\n```\n", {true, true, true, 22}, 0, .None, ""},
 		// The word after it only changed: nothing.
-		{"```js\n```\n", {true, true, true}, 5, .None, ""},
+		{"```js\n```\n", {true, true, true, 0}, 5, .None, ""},
 		// The space after the ">" of a quote is of the quote.
-		{">```\n> x\n>    ```\n", {true, false, false}, 17, .Closed, ""},
-		{">```\n> x\n>     ```\n", {true, false, false}, 18, .None, ""},
+		{">```\n> x\n>    ```\n", {true, false, false, 0}, 17, .Closed, ""},
+		{">```\n> x\n>     ```\n", {true, false, false, 0}, 18, .None, ""},
 		// An edit before the line of a typed fence: its closing fence
 		// stays.
-		{"ext\n\n```\n```\n\nMore\n", {true, true, true}, 8, .None, ""},
+		{"ext\n\n```\n```\n\nMore\n", {true, true, true, 0}, 8, .None, ""},
 		// A ">" in code that is in no quote, and four spaces after a
 		// fence with one space before it: lines of code.
-		{"```\nx\n> ```\n", {true, false, false}, 11, .None, ""},
-		{"```\nx\n    > ```\n", {true, false, false}, 15, .None, ""},
-		{" ```\nx\n    ```\n", {true, false, false}, 14, .None, ""},
+		{"```\nx\n> ```\n", {true, false, false, 0}, 11, .None, ""},
+		{"```\nx\n    > ```\n", {true, false, false, 0}, 15, .None, ""},
+		{" ```\nx\n    ```\n", {true, false, false, 0}, 14, .None, ""},
 		// A fence after four spaces is a line of code, no closing fence.
-		{"```\nx\n    ```\n", {true, false, false}, 13, .None, ""},
-		{"- ```\n  x\n     ```\n", {true, false, false}, 18, .Closed, ""},
+		{"```\nx\n    ```\n", {true, false, false, 0}, 13, .None, ""},
+		{"- ```\n  x\n     ```\n", {true, false, false, 0}, 18, .Closed, ""},
 		// A line of code that ends with a fence is no closing fence.
-		{"```\necho ```\n", {true, false, false}, 12, .None, ""},
+		{"```\necho ```\n", {true, false, false, 0}, 12, .None, ""},
 	}
 	for c in cases {
 		doc := parse(c.source)
@@ -465,6 +469,7 @@ test_the_caret_leaves_a_closing_fence :: proc(t: ^testing.T) {
 		// Code in no list leaves before a list too.
 		{"```\nx\n```\n- b\n", 9, true, "```\nx\n```\n\n\n- b\n", 10},
 		// Not out of a list and not out of a quote that go on.
+		{"- ```\n  x\n  ```\n- b\n", 16, false, "", 0},
 		{"- a\n- ```\n  x\n  ```\n- b\n", 20, false, "", 0},
 		{"> ~~~\n> x\n> ~~~\n> more\n", 14, false, "", 0},
 		// Not for a caret in the code.
@@ -534,6 +539,9 @@ test_the_parser_knows_a_closing_fence :: proc(t: ^testing.T) {
 		{"> ```\n> x\n> ```\n", 0, true},
 		{"- a\n\n  ```\n  x\n  ```\n", 1, true},
 		{">```\n> x\n>    ```\n", 0, true},
+		{">\n> ```\n> x\n> ```\n", 0, true},
+		{">\n> ```\n> x\n", 0, false},
+		{"-\n  ```\n  x\n", 0, false},
 		// No closing fence: the end of the source, a fence that is too
 		// short or of the other character, and lines of code with a fence.
 		{"```\nx\n", 0, false},

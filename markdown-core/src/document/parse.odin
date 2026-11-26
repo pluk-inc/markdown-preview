@@ -474,10 +474,19 @@ leave_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 		// the parser knows a closing fence (its indent, the marks of the
 		// quotes that it is in): the text that it gave tells.
 		if p.block.fenced {
+			// From the line of the fence: the first block of a quote or
+			// of a list item starts at the line of their mark, which can
+			// be a line before it (">" alone).
 			from := clamp(p.block.source, 0, len(p.bytes))
-			lines := 0
-			for at := from; at < min(from + int(p.block.lines), len(p.bytes)); lines += 1 {
-				_, at = line_at(p.bytes, at)
+			end := min(from + int(p.block.lines), len(p.bytes))
+			lines, opened := 0, false
+			for at := from; at < end; {
+				line_end, next := line_at(p.bytes, at)
+				if !opened {
+					_, _, opened = fence_run(p.bytes, at, line_end)
+				}
+				lines += int(opened)
+				at = next
 			}
 			code := p.block.text.bytes[:]
 			code_lines := 0
