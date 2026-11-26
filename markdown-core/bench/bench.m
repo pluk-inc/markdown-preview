@@ -72,7 +72,33 @@ static void scroll_pass(void *ctx, const char *name, double end) {
 // each line down is lower on the page and each line up higher, and the
 // caret gets from one end of the document to the other. Returns what is
 // wrong, or NULL.
+// Up from a line that is only a list mark, through the empty lines above
+// it, into the list: those lines are none in the list once the caret has
+// left the mark, and the caret is where typed text goes.
+static const char *list_caret_check(void) {
+    void *ctx = mdcore_create((__bridge void *)[CAMetalLayer layer]);
+    const char *start = "- a\n\n\n-\n";
+    mdcore_set_markdown(ctx, start, (long)strlen(start));
+    mdcore_resize(ctx, VIEW_WIDTH, VIEW_HEIGHT, VIEW_SCALE);
+    @autoreleasepool { mdcore_draw(ctx, 0); }
+    mdcore_caret_set(ctx, 0, 0);
+    mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_END, false);
+    mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, false);
+    @autoreleasepool { mdcore_draw(ctx, 0); }
+    mdcore_caret_move(ctx, MDCORE_MOVE_UP, false);
+    @autoreleasepool { mdcore_draw(ctx, 0); }
+    mdcore_insert(ctx, "q", 1);
+    long n = 0;
+    const char *out = mdcore_source(ctx, &n);
+    const char *want = "- aq\n\n\n-\n";
+    bool same = n == (long)strlen(want) && memcmp(out, want, (size_t)n) == 0;
+    mdcore_destroy(ctx);
+    return same ? NULL : "text typed after Up from a list mark is not where the caret is";
+}
+
 static const char *caret_walk(void *ctx, long length) {
+    const char *list_wrong = list_caret_check();
+    if (list_wrong != NULL) return list_wrong;
     // The source before the first change, for Undo at the end.
     long first_size = 0;
     const char *first_bytes = mdcore_source(ctx, &first_size);
