@@ -659,9 +659,12 @@ line_mark :: proc(p: ^Parser, line, text: int) {
 // spaces after them.
 @(private)
 after_item_mark :: proc(p: ^Parser, mark, text: int) -> int {
-	at := skip_quote_marks(p.bytes, mark, text)
+	at := mark
 	for {
-		end, _, found := list_mark_at(p.bytes, at, text)
+		// The marks of quotes between lists ("- > - text") too, but not
+		// the ones before the text: those show.
+		next := skip_quote_marks(p.bytes, at, text)
+		end, _, found := list_mark_at(p.bytes, next, text)
 		if !found || end > text || (end < text && p.bytes[end] != ' ' && p.bytes[end] != '\t') {
 			break
 		}

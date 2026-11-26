@@ -90,6 +90,8 @@ test_the_marks_of_the_element_of_an_offset_are_text :: proc(t: ^testing.T) {
 		// A list that starts on the line of another one: no mark is text.
 		{"- - text\n", 6, "text", "    "},
 		{"1. - # H\n", 7, "# H", "^^ "},
+		{"- > - text\n", 8, "text", "    "},
+		{"- > text\n", 6, "> text", "^^    "},
 		{"> -\n", 3, "-", " "},
 		// With the space, a list item: its bullet, also at the caret.
 		{"* \n", 1, "", ""},
