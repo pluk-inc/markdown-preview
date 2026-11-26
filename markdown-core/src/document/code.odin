@@ -51,10 +51,11 @@ write_code_lead :: proc(out: ^strings.Builder, doc: ^Document, block: int) {
 	from, _, _ := fence_run(doc.source, start, end)
 	for ch, i in doc.source[start:from] {
 		strings.write_byte(out, ch == '>' || ch == '\t' ? ch : ' ')
-		// A ">" with no space after it gets one: the parser takes the
-		// first space after a ">" for the quote, not for the indent of
-		// a list item in it.
-		if ch == '>' && (start + i + 1 >= from || doc.source[start + i + 1] != ' ') {
+		// A ">" before the mark of a list item gets a space when it has
+		// none: the parser takes the first space after a ">" for the
+		// quote, not for the indent of the item. Not before a ">" or a
+		// tab, which a space would move to another column.
+		if next := start + i + 1; ch == '>' && next < from && doc.source[next] != ' ' && doc.source[next] != '\t' && doc.source[next] != '>' {
 			strings.write_byte(out, ' ')
 		}
 	}

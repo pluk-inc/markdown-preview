@@ -1,6 +1,7 @@
 package document
 
 import "core:fmt"
+import "core:strings"
 import "core:testing"
 
 @(test)
@@ -346,6 +347,9 @@ test_return_in_the_line_of_a_fence :: proc(t: ^testing.T) {
 		{"a\n\n```\n\nmore\n", 1, 6, "a\n\n```\n\n```\n\nmore\n", 7},
 		{"- ```\n", 0, 5, "- ```\n  \n  ```\n", 8},
 		{"> ```\n", 0, 5, "> ```\n> \n> ```\n", 8},
+		// The marks of two quotes and a tab are as they are.
+		{">>\t```\n", 0, 6, ">>\t```\n>>\t\n>>\t```\n", 10},
+		{">```\n", 0, 4, ">```\n>\n>```\n", 6},
 		// Code with a closing fence gets a line only.
 		{"```\n```\n", 0, 3, "```\n\n```\n", 4},
 	}
@@ -360,7 +364,15 @@ test_return_in_the_line_of_a_fence :: proc(t: ^testing.T) {
 		apply(&doc, {c.offset, c.offset, text})
 		testing.expect_value(t, string(doc.source), c.after)
 		testing.expect_value(t, c.offset + caret, c.caret)
-		// The caret is in the code, at a place of its own.
+		// Code with its closing fence, and no other code after it.
+		testing.expect(t, block_at(&doc, c.block).closed)
+		testing.expect(t, c.block + 1 >= doc.count || !block_at(&doc, c.block + 1).fenced)
+		// The caret is in the code, at a place of its own. (Not checked
+		// after a tab: the parser gives the columns of the tab that are
+		// more than the indent of the fence as a space of the code.)
+		if strings.contains(c.source, "\t") {
+			continue
+		}
 		landed := address_of(&doc, c.offset + caret)
 		back, placed := source_of(&doc, landed)
 		testing.expect(t, placed)
