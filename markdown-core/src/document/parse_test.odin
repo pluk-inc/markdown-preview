@@ -466,7 +466,7 @@ numbered :: proc(count: int, changed := -1, extra := -1, without := -1) -> strin
 
 // Checks that a document is the one that a parse of `source` gives, and
 // that its parts agree with each other.
-@(private = "file")
+@(private)
 expect_document :: proc(t: ^testing.T, doc: ^Document, source: string, loc := #caller_location) {
 	want := parse(source)
 	defer destroy(&want)

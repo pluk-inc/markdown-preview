@@ -116,6 +116,9 @@ Ctx :: struct {
 	// where those keys started. Each other move of the caret ends it.
 	caret_goal:      Maybe(f32),
 	source_out:      [dynamic]u8, // the source, for `mdcore_source`
+	// The headings and their texts, for `mdcore_outline`.
+	outline:         [dynamic]Host_Heading,
+	outline_titles:  [dynamic]u8,
 	// Held for all of a change of the source of the document, before
 	// `lock`. A frame does not take it.
 	source_lock:     sync.Mutex,
@@ -294,6 +297,8 @@ mdcore_destroy :: proc "c" (handle: rawptr) {
 	text.glyph_buffer_destroy(&ctx.glyph_buffer)
 	delete(ctx.clipboard)
 	delete(ctx.source_out)
+	delete(ctx.outline)
+	delete(ctx.outline_titles)
 	delete(ctx.caret_places)
 	delete(ctx.caret_pairs)
 	delete(ctx.gone)
@@ -361,6 +366,16 @@ mdcore_replace_text :: proc "c" (handle: rawptr, start, end: c.long, utf8: [^]u8
 typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
 	// Not for text that starts with a line break itself (the bytes of a
 	// delete that come back): it has what makes it a paragraph of its own.
+	// After front matter with no line break at its end (and no text
+	// after it): a line of its own, or the text goes on the closing line.
+	// Not after a byte order mark alone, and not for text that starts
+	// with a line break of its own.
+	if len(text) > 0 && text[0] != '\n' && text[0] != '\r' && start == end && ctx.doc.count == 0 && start == ctx.doc.hidden && start > document.bom_size(ctx.doc.source) && ctx.doc.source[start - 1] != '\n' && ctx.doc.source[start - 1] != '\r' {
+		own := strings.concatenate({document.line_ending(ctx.doc.source), text})
+		defer delete(own)
+		change_source_held(ctx, own, [2]int{start, end})
+		return
+	}
 	if len(text) > 0 && text[0] != '\n' && text[0] != '\r' && start == end && start == ctx.caret && ctx.doc.count > 0 && document.empty_of(&ctx.doc, ctx.caret_at) > 0 {
 		own := document.empty_text(&ctx.doc, text)
 		defer delete(own)
@@ -1202,8 +1217,10 @@ mdcore_caret_set :: proc "c" (handle: rawptr, x, y: f64) -> bool {
 	hold(ctx)
 	history.seal(&ctx.history)
 	if ctx.doc.count == 0 {
-		// A document with no text yet: text goes at its start.
-		ctx.caret = 0
+		// A document with no text yet: text goes at its start, after
+		// the bytes that are no Markdown (front matter, which does not
+		// show).
+		ctx.caret = ctx.doc.hidden
 		ctx.display_valid = false
 		return true
 	}
@@ -1670,6 +1687,30 @@ mdcore_source :: proc "c" (handle: rawptr, length: ^c.long) -> [^]u8 {
 	append(&ctx.source_out, ..ctx.doc.source)
 	length^ = c.long(len(ctx.source_out))
 	return raw_data(ctx.source_out)
+}
+
+Host_Heading :: struct {
+	level, line:            c.long,
+	title_start, title_end: c.long, // a range of the texts (`mdcore_outline`)
+}
+
+// The headings of the document, for an outline. See the header.
+@(export)
+mdcore_outline :: proc "c" (handle: rawptr, count: ^c.long, titles: ^[^]u8) -> [^]Host_Heading {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	headings := make([dynamic]document.Heading, context.temp_allocator)
+	clear(&ctx.outline_titles)
+	document.outline(&ctx.doc, &ctx.outline_titles, &headings)
+	clear(&ctx.outline)
+	for h in headings {
+		append(&ctx.outline, Host_Heading{c.long(h.level), c.long(h.line), c.long(h.title[0]), c.long(h.title[1])})
+	}
+	count^ = c.long(len(ctx.outline))
+	titles^ = raw_data(ctx.outline_titles)
+	return raw_data(ctx.outline)
 }
 
 // See the header.

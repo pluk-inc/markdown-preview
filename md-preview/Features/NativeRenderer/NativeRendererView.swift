@@ -938,6 +938,24 @@ extension NativeRendererView: DocumentEditor {
     func load(markdown: String, assetBaseURL: URL?) {
         open(markdown, keepsScroll: true)
     }
+
+    /// The core has the headings after each change, with no parse.
+    func currentOutline() -> [TOCItem]? {
+        MarkdownTOC.buildTree(outlineHeadings())
+    }
+
+    /// The headings of the core in order (`mdcore_outline`).
+    func outlineHeadings() -> [MarkdownTOC.RawHeading] {
+        var count = 0
+        var titles: UnsafePointer<UInt8>?
+        guard let headings = mdcore_outline(ctx, &count, &titles) else { return [] }
+        return UnsafeBufferPointer(start: headings, count: count).map { heading in
+            let title = titles.map {
+                String(decoding: UnsafeBufferPointer(start: $0 + heading.title_start, count: heading.title_end - heading.title_start), as: UTF8.self)
+            } ?? ""
+            return MarkdownTOC.RawHeading(level: heading.level, title: title, sourceLine: heading.line)
+        }
+    }
 }
 
 extension NativeRendererView: @preconcurrency NSTextInputClient {

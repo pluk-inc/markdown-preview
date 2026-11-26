@@ -18,6 +18,13 @@ protocol DocumentEditor: AnyObject {
     func fetchMarkdown(_ completion: @escaping (String?) -> Void)
     /// Takes another text: the file changed on disk and the reader chose it.
     func load(markdown: String, assetBaseURL: URL?)
+    /// The outline of the text as it is now, when the view has it with no
+    /// parse of the text. nil: the session gets the text and parses it.
+    func currentOutline() -> [TOCItem]?
+}
+
+extension DocumentEditor {
+    func currentOutline() -> [TOCItem]? { nil }
 }
 
 extension EditorViewController: DocumentEditor {}

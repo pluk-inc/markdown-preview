@@ -8,6 +8,27 @@ final class MarkdownTOCTests: XCTestCase {
         items.flatMap { [$0] + flattened($0.children) }
     }
 
+    /// The cases that the native renderer's core is tested with too
+    /// (`markdown-core/src/document/outline_cases.json`): both outlines
+    /// have these headings, lines, and texts (`native_title` is the text
+    /// of the core where the native page shows another one).
+    func testSharedOutlineCases() throws {
+        struct Heading: Decodable { let level: Int; let line: Int; let title: String }
+        struct Case: Decodable { let source: String; let headings: [Heading] }
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../../../markdown-core/src/document/outline_cases.json")
+        let cases = try JSONDecoder().decode([Case].self, from: Data(contentsOf: url))
+        XCTAssertFalse(cases.isEmpty)
+        for test in cases {
+            let got = MarkdownTOC.extractHeadings(from: test.source)
+            XCTAssertEqual(got.map(\.level), test.headings.map(\.level), test.source)
+            XCTAssertEqual(got.map(\.sourceLine), test.headings.map(\.line), test.source)
+            XCTAssertEqual(got.map(\.title), test.headings.map(\.title), test.source)
+            // The tree of these headings is the one that `parse` builds.
+            XCTAssertEqual(MarkdownTOC.buildTree(got), MarkdownTOC.parse(test.source), test.source)
+        }
+    }
+
     func testListFenceDoesNotHideFollowingHeadingOrExposeCodeHeadings() {
         for opener in ["- ```", "* ```", "+ ```", "1. ```", "1) ```", "> - ```"] {
             let indent = opener.hasPrefix("1") ? "   " : "  "

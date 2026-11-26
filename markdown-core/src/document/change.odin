@@ -297,7 +297,9 @@ prepare :: proc(doc: ^Document, edit: Edit, reveal: Maybe(int) = nil) -> (p: Pen
 	// A table that has all of its rows keeps them in a source of the new
 	// size.
 	tables := !doc.cells_cut && doc.cells_most <= MIN_TABLE_CELLS + len(p.source)
-	if doc.count > 0 && tables && !doc.defs_marked && !doc.defs_cut && len(doc.links) <= 2 * doc.links_parsed + LINKS_SLACK {
+	// An edit that can change where the front matter ends can move that
+	// end past the piece (a closing line that goes): a parse of all.
+	if doc.count > 0 && tables && !doc.defs_marked && !doc.defs_cut && len(doc.links) <= 2 * doc.links_parsed + LINKS_SLACK && !hidden_changes(doc, p.edit.start, p.edit.end, p.source, len(edit.text)) {
 		if prepare_piece(doc, &p) {
 			return
 		}
@@ -455,7 +457,7 @@ prepare_piece :: proc(doc: ^Document, p: ^Pending) -> bool {
 
 	text, before, inside, led, trailed, lead := piece_text(doc, piece, start, old_end)
 	p.base = start - lead
-	p.fresh = parse_piece(text[:], doc.items, len(p.source), end = lead + len(piece), followed = end < doc.count, followed_in_list = end < doc.count && in_list(block_at(doc, end)), reveal = reveal_in(p.reveal, p.base, len(text)))
+	p.fresh = parse_piece(text[:], doc.items, len(p.source), end = lead + len(piece), followed = end < doc.count, followed_in_list = end < doc.count && in_list(block_at(doc, end)), reveal = reveal_in(p.reveal, p.base, len(text)), at_start = p.base == 0)
 	fresh := &p.fresh
 	p.added = fresh.count - guard
 	// The definitions came out as definitions, and the ones of the piece
@@ -547,6 +549,7 @@ commit :: proc(doc: ^Document, p: ^Pending) -> (change: Change) {
 
 	// The links of the new blocks go to the end of the list.
 	if p.all {
+		doc.hidden, doc.unclosed = fresh.hidden, fresh.unclosed
 		doc.links, fresh.links = fresh.links, doc.links
 		doc.links_parsed = len(doc.links)
 		doc.defs, fresh.defs = fresh.defs, doc.defs

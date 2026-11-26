@@ -88,6 +88,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-25 | Undo and Redo | 608 / 601 | 65 / 111 (the base too) | 485 / 785 | 62 / 76 | not recorded | not recorded | 7.0 / 26.4 (the base too) |
 | 2026-11-26 | Control-T keeps each space | 598 / 588 | 52 / 100 (the base too) | 490 / 725 | 67 / 85 | not recorded | not recorded | 7.1 / 26.4 (the base too) |
 | 2026-11-26 | list marks as in other Markdown editors | 576 / 555 | 60 / 107 (the base too) | 485 / 770 | 59 / 72 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
+| 2026-11-26 | the outline of native Edit Mode from the core | 574 / 559 | 64 / 110 (the base too) | 475 / 755 | 58 / 74 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1231,3 +1232,61 @@ launches each, in the order that they ran (a load of 13 at the start,
 
 The second run of the base was the slowest of the set at a lower load;
 no code of a launch changed, so that is the spread of the Mac.
+## The outline of native Edit Mode from the core (2026-11-26)
+
+With the outline open, native Edit Mode got all of the text after each
+key and parsed it again for the outline (`MarkdownTOC.parse`). The core
+now gives its headings (`mdcore_outline`). The parse of the text for the
+outline, in a release build of the tests, and the call of the core in
+the same document, the fastest of five and of fifty runs:
+
+| Document | `MarkdownTOC.parse` | `mdcore_outline` |
+| --- | --- | --- |
+| 1 MB fixture (3,456 headings) | 91 to 92 ms | 0.24 ms |
+| short.md (8 KB) | 0.7 ms | 0.002 ms |
+
+The app with the key hook of the test builds on the hidden display (60
+Hz), the 1 MB fixture, the outline open, Edit Mode, 200 keys 50 ms apart,
+the CPU of the app process for each key and its memory (`footprint`)
+before and after the keys, in the order that they ran:
+
+| Order | CPU for each key (ms) | Memory before / after the keys (MB) |
+| --- | --- | --- |
+| base | 46.3 | 126 / 148 |
+| change | 9.3 | 126 / 145 |
+| change | 8.0 | 125 / 126 |
+| base | 45.4 | 125 / 149 |
+
+A first set of the same, earlier on the same day: 47.4 and 46.3 for the
+base, 8.8 and 10.2 for the change. The memory after the keys grew by 23
+to 24 MB for the base and by 1 to 19 MB for the change; two runs are too
+few to say more than that it did not grow more.
+
+`core.py`, short / long, in turns (base, change, change, base), with a
+load of 1.3 to 2.3:
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 62, 58 / 71, 74 | 59, 57 / 72, 76 |
+| A typed character in the middle of the text (CPU ms) | 0.93, 1.22 / 1.37, 1.55 | 1.25, 1.00 / 1.29, 1.46 |
+| A typed character at the end of the text (CPU ms) | 1.34, 1.11 / 2.37, 2.43 | 1.48, 1.18 / 2.89, 2.55 |
+| A typed character at a caret (CPU ms) | 1.43, 1.42 / 1.83, 1.65 | 1.85, 1.52 / 1.63, 1.77 |
+| A step of the caret to the left or to the right (CPU ms) | 0.36, 0.34 / 0.33, 0.41 | 0.42, 0.36 / 0.32, 0.36 |
+| Heap with all of the document laid out (MB) | 7.0 / 26.4, 26.4 | 7.0 / 26.3, 26.3 |
+
+The rows overlap but for a typed character at the end of the long text,
+which is higher for the change in both runs (2.89, 2.55 against 2.37,
+2.43). The change adds no work to a typed character in the core but
+the check for front matter in each edit, which reads the first line of
+the source (and the front matter, when there is one): the outline is
+read only when the app asks. So this is noted, not explained. `app.py`, short / long, five launches each:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 575 / 557 | 64 / 112 | 500 / 750 |
+| change | 575 / 558 | 64 / 108 | 470 / 760 |
+| change | 572 / 560 | 64 / 112 | 480 / 750 |
+| base | 581 / 551 | 64 / 113 | 500 / 770 |
+
+The outline of a document that opens did not change: it still comes
+from `MarkdownTOC.parse` (see Open work).

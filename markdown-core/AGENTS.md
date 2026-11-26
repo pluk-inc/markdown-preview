@@ -134,6 +134,25 @@ These came from the maintainer. Do not undo one without asking.
   Markdown empty lines do not end a list and another mark does; one
   empty line keeps a loose list. A step of a list is 1.6 body sizes (2.1
   before), and a number is one line, right-aligned to its text.
+- **Front matter is no Markdown for the core** (2026-11-26, the
+  maintainer's choice). The bytes of a byte order mark and of front matter
+  at the top of the source (`document.hidden_start`, the rule of the app's
+  web page) are blank lines for the parser (`masked_start`: front matter
+  as spaces with its line breaks, the mark as line breaks, since spaces
+  would make the first line code): they make no block and do not show,
+  and each offset and line after them is as it was. The web page shows
+  front matter as a table; the native page gets one later. The document
+  keeps where they end (`Document.hidden`, `unclosed`), so an edit in the
+  body reads no more of the source for them; an edit that can change
+  them is a parse of all (`hidden_changes`). A caret in a document with
+  no block starts after them.
+- **The outline of native Edit Mode comes from the core** (2026-11-26):
+  `mdcore_outline` reads the heading blocks, with no parse. Its texts are
+  the ones the native page shows, so they differ from the web renderer's
+  outline where its parser makes typographic quotes and dashes, keeps a
+  run of spaces, or keeps the tags of raw HTML;
+  `src/document/outline_cases.json` holds the cases that both outlines are
+  tested with, and these differences (`native_title`).
 - **Undo is a history of the source in the core** (2026-11-25), not the
   undo manager of the window. A step is the bytes that went and came
   at an offset, with the caret and the selection before and after; the
@@ -513,6 +532,19 @@ Known limits, found in review and left on purpose:
 - Return after a mark that is being typed ("-" and Return) makes no item:
   the "-" stays text in the source. With the caret on another line,
   Markdown reads it as an empty list item, which can join the list above.
+- The first outline of a document comes from the app's parser, also in
+  native mode (`MainSplitViewController.showOutlineAndMetadata`); only
+  the outline after an edit comes from the core. Where the texts differ
+  (see the decision on the outline), the first edit changes them. The
+  native view can open its document after the outline is made (it waits
+  for the first frame of the window), so the core can give the first
+  outline only when that order changes.
+- With the inspector open, each refresh of native Edit Mode still gets
+  all of the text and counts it (`DocumentMetadata.make`). The core can
+  give those numbers as it gives the outline.
+- A line break of Unicode (U+2028, U+0085) in front matter is a line for
+  the app's parser and none for the core: the lines of the headings after
+  it differ by that many.
 - A change in a run of many link definitions parses all of them again:
   with the 2,200 definitions of the 1 MB fixture (all that a delete of
   all of its text leaves) one change costs tens of ms, and the walk of
@@ -1548,3 +1580,17 @@ export.
   with its "." under it); a number is one line now. Also found: a click
   under the text of a short document hit no view (the page was the
   height of its text), so an empty document could not get a caret.
+- **2026-11-26** — The outline from the core. With the outline open,
+  native Edit Mode got all of the text after each key and parsed it for
+  the outline: about 92 ms of CPU in the 1 MB fixture. The editor now
+  gives the core's headings (`mdcore_outline`, 0.24 ms there), and with
+  only the outline open no text is fetched; the web editor keeps its
+  path. Over 31 documents (7,473 lines of outline) the two outlines were
+  the same but for three headings with typographic quotes. A reviewer
+  with the task to break it found more: a byte order mark made the first
+  heading a paragraph, and front matter was parsed as Markdown, so a fence
+  or HTML in it could take the rest of the file. The maintainer chose to
+  hide front matter for now; the core now reads it and the mark as blank
+  lines, which also fixes the native page. The test copy of
+  `MarkdownTOC.swift` was a copy, not a link like the others, so its
+  tests did not run the app's file; it is a link now.

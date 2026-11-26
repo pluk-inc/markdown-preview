@@ -95,8 +95,7 @@ extension DocumentWindowController {
     private func scheduleInspectorRefresh(from editor: any DocumentEditor) {
         guard pendingInspectorRefresh == nil,
               let split = mainSplit,
-              split.isInspectorVisible
-                || (split.isSidebarVisible && split.sidebarMode == .outline) else { return }
+              split.isInspectorVisible || split.showsOutline else { return }
         let sessionID = inspectorRefreshSessionID
         let work = DispatchWorkItem { [weak self, weak editor] in
             guard let self else { return }
@@ -107,6 +106,13 @@ extension DocumentWindowController {
 
             let revision = self.editorChangeRevision
             let fileURL = self.currentFileURL
+            // An editor that has the outline with no parse (the native
+            // one): with only the outline open, no text is fetched.
+            let outline = self.mainSplit?.showsOutline == true ? editor.currentOutline() : nil
+            if let outline, self.mainSplit?.isInspectorVisible != true {
+                self.mainSplit?.applyLiveSidebarUpdates(outline: outline, metadata: nil, fileURL: fileURL)
+                return
+            }
             editor.fetchMarkdown { [weak self, weak editor] markdown in
                 guard let self, let editor, let markdown,
                       self.inspectorRefreshSessionID == sessionID,
@@ -114,7 +120,8 @@ extension DocumentWindowController {
                       self.currentFileURL == fileURL,
                       self.mainSplit?.documentEditor === editor else { return }
                 self.computeVisibleSidebars(markdown: markdown, fileURL: fileURL,
-                                            revision: revision, sessionID: sessionID)
+                                            revision: revision, sessionID: sessionID,
+                                            outline: outline)
             }
         }
         pendingInspectorRefresh = work
@@ -123,16 +130,18 @@ extension DocumentWindowController {
 
     /// Parse immutable editor text off the main thread; touch UI only when the
     /// result still belongs to the active revision, file, and editing session.
+    /// `outline`: the editor's own, which takes the place of a parse.
     private func computeVisibleSidebars(markdown: String, fileURL: URL?,
-                                        revision: Int, sessionID: UUID) {
+                                        revision: Int, sessionID: UUID,
+                                        outline known: [TOCItem]?) {
         guard let split = mainSplit else { return }
-        let needsOutline = split.isSidebarVisible && split.sidebarMode == .outline
+        let needsOutline = split.showsOutline
         let needsMetadata = split.isInspectorVisible
         guard needsOutline || needsMetadata else { return }
 
         pendingInspectorComputation?.cancel()
         let work = DispatchWorkItem { @Sendable [weak self] in
-            let outline = needsOutline ? MarkdownTOC.parse(markdown) : nil
+            let outline = needsOutline ? known ?? MarkdownTOC.parse(markdown) : nil
             let metadata = needsMetadata ? DocumentMetadata.make(url: fileURL, markdown: markdown) : nil
             DispatchQueue.main.async {
                 guard let self,
@@ -468,9 +477,12 @@ extension DocumentWindowController {
             // Refresh on successful writes as well, so on-disk size and
             // modification time advance even when edit mode stays open.
             if revision == nil || revision == editorChangeRevision {
+                // The editor's own outline, as after each key (the native
+                // one has the texts of its page); none for the web editor.
                 computeVisibleSidebars(markdown: body, fileURL: currentFileURL,
                                        revision: editorChangeRevision,
-                                       sessionID: inspectorRefreshSessionID)
+                                       sessionID: inspectorRefreshSessionID,
+                                       outline: mainSplit?.showsOutline == true ? mainSplit?.documentEditor?.currentOutline() : nil)
             }
             completeSuccessfulEditorCommit(exitAfter: exitAfter, rerender: true)
         case let .reloaded(externalMarkdown):
