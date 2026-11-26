@@ -205,10 +205,12 @@ final class NativeRendererView: NSView {
     /// False without a document or a size: there is nothing to draw then.
     private var hasPageToDraw: Bool { hasDocument && bounds.width > 0 && bounds.height > 0 }
 
-    /// Asks for a frame at the next refresh of the display.
-    private func setNeedsDraw() {
+    /// Asks for a frame at the next refresh of the display. `soon`: for
+    /// a key, the frame does not wait for the refresh
+    /// (`NativeRenderLoop.requestFrame`).
+    private func setNeedsDraw(soon: Bool = false) {
         guard hasPageToDraw else { return }
-        renderLoop.requestFrame(at: scrollY)
+        renderLoop.requestFrame(at: scrollY, soon: soon)
     }
 
     /// After a frame that was a step of a key scroll or that made the page
@@ -279,24 +281,33 @@ final class NativeRendererView: NSView {
     /// offsets of the text that shows stay as they are.
     private func updatePageArea() {
         var top = 0.0, height = 0.0
-        layoutRevision = mdcore_page_area(ctx, &top, &height)
+        let revision = mdcore_page_area(ctx, &top, &height)
         // Not wider than the visible part: a wider page could move sideways.
         let frame = NSRect(x: 0, y: top, width: pageWidth, height: max(height, 1))
-        if page.frame != frame {
+        // What is at a place of the page is the same while the layout and
+        // the page area are: this runs after each key, each step of a
+        // scroll, and each new layout, and most of them change neither.
+        let frameChanged = page.frame != frame
+        let moved = revision != layoutRevision || frameChanged
+        layoutRevision = revision
+        if frameChanged {
             page.frame = frame
             // A height in the page area is a height of the core's page,
             // for the check boxes and the pointer.
             page.setBoundsOrigin(frame.origin)
         }
-        updateTaskCheckBoxes()
-        // The caret is where the new layout has its text.
+        if moved {
+            updateTaskCheckBoxes()
+            // After each layout and each frame that laid out more: other
+            // text can be under a pointer that did not move.
+            updatePointerShape()
+        }
+        // The caret is where the layout has its text, and it moves with
+        // no new layout too. So does the text of an input method that is
+        // not final, which ends at the caret: the input method asks for
+        // its place again.
         if isEditable { updateCaretIndicator() }
         if markedText != nil { inputContext?.invalidateCharacterCoordinates() }
-        // After each layout and each frame that laid out more: other text
-        // can be under a pointer that did not move.
-        updatePointerShape()
-        // And the caret can be at another place of the page.
-        if isEditable { updateCaretIndicator() }
     }
 
     /// The zoom of the document: the text size is the body size times this.
@@ -922,7 +933,14 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         // `open` compares with the text that it showed; that is another
         // one now.
         shownMarkdown = nil
+        let caretFrame = caretIndicator.frame
         caretDidMove()
+        // The caret starts its blink again with each change of the text,
+        // also with one that leaves it where it was (a delete of the
+        // text after it).
+        if caretIndicator.frame == caretFrame, caretIndicator.displayMode == .automatic {
+            caretIndicator.displayMode = .automatic
+        }
         contentDidChange?()
     }
 
@@ -932,7 +950,7 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
         // The caret's own view gets its place with the page area.
         updatePageArea()
         keepCaretInView()
-        setNeedsDraw()
+        setNeedsDraw(soon: true)
     }
 
     /// Puts the system's caret where the core's caret is, and shows it
@@ -949,13 +967,17 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
             setNeedsDraw()
         }
         // With text selected, the selection shows where the keys go.
+        // A change of the system's caret starts its blink again and
+        // makes a display pass, so only what is another value is set:
+        // this runs after each key and each step of a scroll.
         guard takesKeys, !mdcore_has_selection(ctx), mdcore_caret_rect(ctx, &x, &y, &height) else {
-            caretIndicator.displayMode = .hidden
+            if caretIndicator.displayMode != .hidden { caretIndicator.displayMode = .hidden }
             return
         }
         // The page is in the space of the core's page.
-        caretIndicator.frame = NSRect(x: x - 1, y: y, width: 2, height: height)
-        caretIndicator.displayMode = .automatic
+        let frame = NSRect(x: x - 1, y: y, width: 2, height: height)
+        if caretIndicator.frame != frame { caretIndicator.frame = frame }
+        if caretIndicator.displayMode != .automatic { caretIndicator.displayMode = .automatic }
     }
 
     override func becomeFirstResponder() -> Bool {
