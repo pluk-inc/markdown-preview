@@ -402,6 +402,8 @@ test_the_block_of_a_reference_with_the_caret_in_it :: proc(t: ^testing.T) {
 // a long one is done at once.
 @(test)
 test_a_line_of_marks_with_no_end_is_read_one_time :: proc(t: ^testing.T) {
+	closed := strings.concatenate({strings.repeat("[^", 200_000, context.temp_allocator), "]"}, context.temp_allocator)
+	testing.expect_value(t, len(footnotes(transmute([]u8)closed, 0, context.temp_allocator).references), 0)
 	for opener in ([]string{"[^", "^[", "^[[", "[^a "}) {
 		source := strings.repeat(opener, 200_000, context.temp_allocator)
 		found := footnotes(transmute([]u8)source, 0, context.temp_allocator)
@@ -468,6 +470,7 @@ test_a_change_in_a_piece_with_footnotes :: proc(t: ^testing.T) {
 			have := got.notes[n]
 			testing.expectf(t, have == note, "%s: note %d is %v, not %v", what, n, have, note)
 		}
+		testing.expectf(t, got.bullet_lines == want.bullet_lines && got.bullet_free == want.bullet_free, "%s: lines of list marks %v, not %v", what, got.bullet_lines, want.bullet_lines)
 		testing.expectf(t, slice.equal(got.dead, want.dead) && got.bullet == want.bullet, "%s: lines that are no definition at %v with %c, not %v with %c", what, got.dead, got.bullet, want.dead, want.bullet)
 		for reference, r in want.references {
 			testing.expectf(t, got.references[r] == reference, "%s: reference %d is %v, not %v", what, r, got.references[r], reference)
@@ -628,4 +631,41 @@ test_a_definition_in_an_item_of_a_list :: proc(t: ^testing.T) {
 	out := make([dynamic]u8, context.temp_allocator)
 	testing.expect(t, note_text(&doc, 1, &out))
 	testing.expect_value(t, string(out[:]), "Child note.\n\nMore of it.")
+}
+
+// The mark of the list that the definitions are for the parser is one
+// that no line of the source starts with. A change of the lists that
+// makes another mark the free one gives the document of a parse of all.
+@(test)
+test_the_list_mark_of_definitions_after_a_change_of_the_lists :: proc(t: ^testing.T) {
+	source := "+ plus\n\nP.\n\n- minus\n\nP.\n\n* star\n\nP.\n\nP.\n\nP.\n\nText[^a].\n\n+ one\n\n[^a]: A\n\n+ next\n"
+	doc := parse(source)
+	defer destroy(&doc)
+	testing.expect_value(t, doc.notes.bullet, u8('+'))
+	testing.expect(t, !doc.notes.bullet_free)
+	// The only "-" list goes: "-" is free, and the definition is no item
+	// of the "+" lists around it any more.
+	at := strings.index(source, "- minus")
+	pending := prepare(&doc, Edit{at, at + 2, ""})
+	testing.expect(t, pending.all)
+	commit(&doc, &pending)
+	discard(&pending)
+	fresh := parse(string(doc.source))
+	defer destroy(&fresh)
+	testing.expect_value(t, doc.notes.bullet, fresh.notes.bullet)
+	testing.expect_value(t, doc.notes.bullet, u8('-'))
+	if testing.expect_value(t, doc.count, fresh.count) {
+		for i in 0 ..< doc.count {
+			testing.expectf(t, layout_equal(block_at(&doc, i), block_at(&fresh, i)), "block %d", i)
+		}
+	}
+	// A change that keeps the mark is a parse of the piece.
+	at = strings.index(string(doc.source), "star") + len("star\n\nP")
+	pending = prepare(&doc, Edit{at, at, "x"})
+	testing.expect(t, !pending.all)
+	commit(&doc, &pending)
+	discard(&pending)
+	again := parse(string(doc.source))
+	defer destroy(&again)
+	testing.expect_value(t, doc.notes.bullet_lines, again.notes.bullet_lines)
 }

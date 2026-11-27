@@ -63,6 +63,10 @@ Footnotes :: struct {
 	// source takes a definition as its item.
 	bullet:      u8,
 	bullet_free: bool,
+	// How many lines of the source start with each of `BULLETS`: a
+	// change of a piece that makes another mark the free one is a parse
+	// of all (`bullet_after`).
+	bullet_lines: [3]int,
 	items:       []int, // where the two bytes of that mark go
 	masks:       [][2]int, // the ranges of `FOOTNOTE_MASK`
 	// The labels of the `dead` ones, for the caller that keeps the
@@ -87,7 +91,7 @@ footnotes :: proc(source: []u8, from: int, allocator := context.allocator) -> (f
 	scan := footnote_scan(source, start, len(source), nil, 0)
 	possible, candidates, confirmed, defined := scan.possible, scan.candidates, scan.confirmed, scan.defined
 	context.allocator = allocator
-	found.bullet, found.bullet_free = scan.bullet, !scan.used[bullet_index(scan.bullet)]
+	found.bullet, found.bullet_free, found.bullet_lines = scan.bullet, scan.used[bullet_index(scan.bullet)] == 0, scan.used
 	found.items, found.masks = slice.clone(scan.items), slice.clone(scan.masks)
 	dead := make([dynamic]int)
 	dead_labels := make([dynamic]string)
@@ -157,9 +161,10 @@ Footnote_Scan :: struct {
 	defined:    []bool, // for each: the parser reads its text
 	candidates: []Footnote_Candidate, // in the order of the source
 	confirmed:  []bool, // for each: the parser reads it as text
-	// As in `Footnotes`. `used`: which of `BULLETS` a line starts with.
+	// As in `Footnotes`. `used`: how many lines start with each of
+	// `BULLETS`.
 	bullet:     u8,
-	used:       [3]bool,
+	used:       [3]int,
 	items:      []int,
 	masks:      [][2]int,
 }
@@ -167,6 +172,57 @@ Footnote_Scan :: struct {
 // The marks of a list item that a definition can be for the parser.
 @(private)
 BULLETS :: [3]u8{'+', '-', '*'}
+
+// Which of `BULLETS` a line starts with, after an indent and the marks
+// of a quote: the mark of a list item. -1 for none.
+@(private)
+line_bullet :: proc(source: []u8, at, end: int) -> int {
+	lead := at
+	for lead < end && (source[lead] == ' ' || source[lead] == '\t' || source[lead] == '>') {
+		lead += 1
+	}
+	if lead < end && (lead + 1 == end || source[lead + 1] == ' ' || source[lead + 1] == '\t') {
+		for mark, i in BULLETS {
+			if source[lead] == mark {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// The mark for the definitions of a source whose lines start with each
+// of `BULLETS` so many times: the first that no line has, or the first.
+@(private)
+bullet_choice :: proc(lines: [3]int) -> u8 {
+	for mark, i in BULLETS {
+		if lines[i] == 0 {
+			return mark
+		}
+	}
+	return BULLETS[0]
+}
+
+// For a change of a piece of a document with definitions: how many
+// lines start with each of `BULLETS` after it, when `was` is the piece
+// before and `now` the piece after. False when the mark of the
+// definitions would be another one then: all of the source is parsed.
+@(private)
+bullet_after :: proc(doc: ^Document, was, now: []u8) -> (lines: [3]int, ok: bool) {
+	count :: proc(bytes: []u8, lines: ^[3]int, by: int) {
+		for at := 0; at < len(bytes); {
+			end, next := line_at(bytes, at)
+			if mark := line_bullet(bytes, at, end); mark >= 0 {
+				lines[mark] += by
+			}
+			at = next
+		}
+	}
+	lines = doc.notes.bullet_lines
+	count(was, &lines, -1)
+	count(now, &lines, 1)
+	return lines, bullet_choice(lines) == doc.notes.bullet
+}
 
 @(private)
 bullet_index :: proc(bullet: u8) -> int {
@@ -201,16 +257,8 @@ footnote_scan :: proc(source: []u8, start, limit: int, known: ^map[string]int, b
 	for at := start; at < limit; {
 		end, next := line_at(source, at)
 		end, next = min(end, limit), min(next, limit)
-		// The mark of a list item at the start of the line, after an
-		// indent and the marks of a quote.
-		lead := at
-		for lead < end && (source[lead] == ' ' || source[lead] == '\t' || source[lead] == '>') {
-			lead += 1
-		}
-		if lead < end && (lead + 1 == end || source[lead + 1] == ' ' || source[lead + 1] == '\t') {
-			for mark, i in BULLETS {
-				scan.used[i] ||= source[lead] == mark
-			}
+		if mark := line_bullet(source, at, end); mark >= 0 {
+			scan.used[mark] += 1
 		}
 		label, mark, content, is_definition := footnote_definition(source[at:end])
 		if !is_definition {
@@ -266,7 +314,7 @@ footnote_scan :: proc(source: []u8, start, limit: int, known: ^map[string]int, b
 	pairs := make([dynamic]int, context.temp_allocator) // for each byte of a line, where the "]" of its "[" is; 0 for none
 	open := make([dynamic]int, context.temp_allocator)
 	for piece in lines {
-		next_close := piece.start
+		next_close, next_open := piece.start, piece.start
 		paired := false
 		for i := piece.start; i < piece.end; {
 			ch := source[i]
@@ -279,6 +327,17 @@ footnote_scan :: proc(source: []u8, start, limit: int, known: ^map[string]int, b
 					next_close += 1
 				}
 				close := next_close
+				// A label has no "[": with one before the "]", this
+				// "[^" is text. Looked for as the "]" is, so a line of
+				// many "[^" is read one time.
+				next_open = max(next_open, i + 2)
+				for next_open < close && source[next_open] != '[' {
+					next_open += 1
+				}
+				if next_open < close {
+					i += 2
+					continue
+				}
 				if close >= piece.end {
 					// No "]" in the rest of the line.
 					i = piece.end
@@ -335,12 +394,7 @@ footnote_scan :: proc(source: []u8, start, limit: int, known: ^map[string]int, b
 	scan.bullet = bullet
 	if bullet == 0 {
 		scan.bullet = BULLETS[0]
-		for mark, i in BULLETS {
-			if !scan.used[i] {
-				scan.bullet = mark
-				break
-			}
-		}
+		scan.bullet = bullet_choice(scan.used)
 	}
 	// What the parser gets in the place of these: the "[^" of each
 	// possible definition is the mark of a list item, so a definition
@@ -664,12 +718,6 @@ piece_footnotes :: proc(doc: ^Document, text: []u8, from, to: int, old_start, ol
 		}
 	}
 	scan := footnote_scan(text, from, to, &doc.note_keys, old.bullet)
-	// A list of the piece that has the mark that a definition is for the
-	// parser, when no list of the source had it: all of the source is
-	// read for another mark.
-	if old.bullet_free && scan.used[bullet_index(old.bullet)] {
-		return
-	}
 	notes := make([dynamic]Footnote, allocator)
 	references := make([dynamic]Footnote_Reference, allocator)
 	defer if !ok {

@@ -271,6 +271,9 @@ Pending :: struct {
 	// started in the source before.
 	notes:        Footnotes,
 	old_start:    int,
+	// For a document with definitions: `Footnotes.bullet_lines` after
+	// the change.
+	bullet_lines: [3]int,
 	reveal:       Maybe(int), // `Document.reveal` after the edit
 }
 
@@ -464,6 +467,13 @@ prepare_piece :: proc(doc: ^Document, p: ^Pending) -> bool {
 	// of the footnotes of the document are as they were
 	// (`piece_footnotes`).
 	noted := has_footnote(piece) || has_footnote(doc.source[start:old_end])
+	// The definitions are items of a list with a mark that no line of
+	// the source starts with: a change of the lists that makes another
+	// mark the free one is a parse of all.
+	p.bullet_lines = doc.notes.bullet_lines
+	if definition_count(doc.notes.notes) > 0 {
+		p.bullet_lines = bullet_after(doc, doc.source[start:old_end], piece) or_return
+	}
 
 	text, before, inside, led, trailed, lead := piece_text(doc, piece, start, old_end)
 	p.base = start - lead
@@ -583,6 +593,8 @@ commit :: proc(doc: ^Document, p: ^Pending) -> (change: Change) {
 		// The footnotes are the ones that the document had, at the
 		// offsets of the new source.
 		notes_commit(doc, p.notes, p.base, p.old_start, p.edit.end, p.bytes)
+		doc.notes.bullet_lines = p.bullet_lines
+		doc.notes.bullet_free = p.bullet_lines[bullet_index(doc.notes.bullet)] == 0
 		doc.cells_most = max(doc.cells_most, fresh.cells_most)
 		doc.cells_cut ||= fresh.cells_cut
 		for part in fresh.parts {
