@@ -118,7 +118,10 @@ final class MainSplitViewController: NSSplitViewController {
             self?.onOpenMarkdownLink?(url)
         }
         contentViewController?.nativeDocumentDidOpen = { [weak self] in
-            self?.showOutlineOfNativeRenderer()
+            // Not while the document is edited: the sidebar is of the
+            // editor's text then.
+            guard let self, !self.isEditingDocument else { return }
+            self.showOutlineOfNativeRenderer()
         }
         contentViewController?.documentRendererDidChange = { [weak self] markdown, url in
             // The outline of the other renderer: the two give other titles
@@ -296,10 +299,13 @@ final class MainSplitViewController: NSSplitViewController {
         let fileName = ReleaseNotes.displayName(for: newURL)
         let fromCore = contentViewController?.displayedInNativeRenderer == true
         // An outline that comes later (a document that waits to be drawn)
-        // has the new name. The rows that are there stay as they are: the
-        // sidebar has the new file (`openFileURLDidChange`).
+        // has the new name. One of the native renderer that is there gets
+        // it at its top, and its rows stay as they are.
         if outlineFileName != nil {
             outlineFileName = fileName
+        }
+        if fromCore {
+            sidebarViewController?.renameOutlineTitle(fileName)
         }
         if outlineWork != nil {
             // The outline and the numbers of this text are still on their
