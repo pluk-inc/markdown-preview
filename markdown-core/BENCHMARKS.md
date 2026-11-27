@@ -127,7 +127,7 @@ run.
   | `table` | 190 KB | one table of 2,000 rows |
   | `paragraph` | 60 KB | one paragraph with no empty line |
   | `real` | 270 KB | three documents of this repository as they were at one commit |
-  | `front` | 9 KB | `short` below front matter of 24 rows: plain values, a value of two lines, a value that is empty, and two sequences |
+  | `front` | 9 KB | `short` below front matter of 16 entries in 24 lines: plain values, a value of two lines, a value that is empty, and two sequences |
 
 The main table below is for the direction over months only: its rows are
 from different days and loads of the Mac, and two rows that are less than
@@ -1728,7 +1728,7 @@ the first block. `core.py --base` against the commit below it, all
 documents, four runs of each build in turns; `app.py`, ten launches of
 each build in turns, for `short`, `long`, and `front`. `front` is new in
 `corpus.py` with this change: the short document below front matter of
-24 rows, because no document had front matter. The load of the Mac was
+16 entries, because no document had front matter. The load of the Mac was
 2 to 4, so the instructions are what counts.
 
 A document with no front matter costs what it did. In `long`, `prose`,
