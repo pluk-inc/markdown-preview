@@ -123,7 +123,9 @@ final class MainSplitViewController: NSSplitViewController {
         contentViewController?.documentRendererDidChange = { [weak self] markdown, url in
             // The outline of the other renderer: the two give other titles
             // for some headings, and the rows are positions in one of them.
-            guard let self, let fileName = self.outlineFileName else { return }
+            // Not while the document is edited: the sidebar is of the
+            // editor's text then, which this text of the page is not.
+            guard let self, !self.isEditingDocument, let fileName = self.outlineFileName else { return }
             self.showOutlineAndMetadata(markdown: markdown, fileName: fileName, url: url)
         }
     }
@@ -219,7 +221,10 @@ final class MainSplitViewController: NSSplitViewController {
                 // Not for a document that was replaced or edited meanwhile.
                 guard let self, self.outlineRequest == request else { return }
                 self.outlineWork = nil
-                if let outline {
+                // Not when the native renderer opened the document
+                // meanwhile (a received share that waited): its outline is
+                // there, from the core.
+                if let outline, self.contentViewController?.displayedInNativeRenderer != true {
                     self.sidebarViewController?.refreshOutline(outline: outline, fileName: fileName)
                 }
                 // Live numbers of an edit can be there already.
@@ -290,13 +295,11 @@ final class MainSplitViewController: NSSplitViewController {
         sidebarViewController?.openFileURLDidChange(newURL)
         let fileName = ReleaseNotes.displayName(for: newURL)
         let fromCore = contentViewController?.displayedInNativeRenderer == true
+        // An outline that comes later (a document that waits to be drawn)
+        // has the new name. The rows that are there stay as they are: the
+        // sidebar has the new file (`openFileURLDidChange`).
         if outlineFileName != nil {
             outlineFileName = fileName
-        }
-        // The outline of the native renderer is there (or comes when the
-        // document is drawn): it gets the new name at its top.
-        if fromCore {
-            showOutlineOfNativeRenderer()
         }
         if outlineWork != nil {
             // The outline and the numbers of this text are still on their
