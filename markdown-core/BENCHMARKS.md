@@ -78,17 +78,17 @@ run.
 
   `--case scroll` runs one case, also for a profile: each measured step
   is a signpost interval (subsystem `sh.pluk.md-preview.bench`, Points of
-  Interest). Before the runs `core.py` walks the caret through two
-  documents with each key that moves it, and stops with a message when a
-  move is wrong (`mdcore-bench <file> --caret-walk`). A frame is CPU time
+  Interest). Before the runs, when no case is named, `core.py` walks the
+  caret through two documents with each key that moves it, and stops with
+  a message when a move is wrong (`mdcore-bench <file> --caret-walk`). A frame is CPU time
   of the drawing thread, because a draw waits for the display.
 - **`app.py`** starts Release builds of the app with a document, in the
   background, twenty times each by default, and measures from the `open`
   command to two signposts of the first document frame: the frame is
   drawn (`nativeDraw`, `webDraw`), and the frame is committed to the
   window server (`nativePaint`, `webPaint`), which is when it can come on
-  screen. It also gives the time from the start of the process, which has
-  no time of the `open` command in it. Six seconds after the frame it
+  screen. It also gives the time from the start of the process to the
+  drawn frame, which has no time of the `open` command in it. Six seconds after the frame it
   reads the app process from the kernel: CPU time, instructions, memory,
   and the highest memory until then. Six seconds, because the memory of
   the GPU driver for a frame goes away five seconds after it. Use copies
@@ -96,14 +96,16 @@ run.
   use the settings of the installed app.
 
   A build from before 2026-11-27 has only `nativePaint`, at the draw:
-  `app.py` reads it as the drawn frame, so compare such a build by that
-  row. The files of the app are in the cache of the system after the
+  `app.py` sees that in the first launch of a build, which is not
+  counted, and reads the signpost as the drawn frame, so compare such a
+  build by that row. The files of the app are in the cache of the system after the
   first launch, which is not counted: this is not the launch after a
   restart of the Mac. The windows open behind the front app, so it is
   not the launch of an app that comes to the front either.
-- **`corpus.py`** makes each document one time, with a fixed seed, in
-  `markdown-core/build/bench/corpus`, so each run and each build reads
-  the same bytes. `--documents` of the two programs takes a list of them,
+- **`corpus.py`** makes each document but the first one time, with a
+  fixed seed, in `markdown-core/build/bench/corpus`, so each run and each
+  build reads the same bytes (`long` is made again when `short.md`
+  changed). `--documents` of the two programs takes a list of them,
   or `all`; the default is the first two.
 
   | Document | Size | What it is |
@@ -1443,7 +1445,6 @@ each in turns, short / long, on a Mac in use (load 12 to 17):
 | --- | --- | --- |
 | Launch to the first frame, drawn (ms) | 662 ±10% / 600 ±22% | 665 ±16% / 612 ±22% |
 | Launch to the first frame, committed (ms) | no such signpost | 675 / 620 |
-| The same from the start of the process (ms) | 598 / 566 | 618 / 583 |
 | CPU, six seconds after the frame (ms) | 482 / 589 | 494 / 606 |
 | Instructions then (millions) | 3127 / 5245 | 3123 / 5244 |
 | Memory then (MB) | 50.5 / 85.1 | 50.4 / 84.9 |

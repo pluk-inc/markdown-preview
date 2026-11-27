@@ -18,12 +18,13 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import shutil
 import subprocess
 from pathlib import Path
 
 import corpus
 from corpus import CORE
-from report import COUNTED, VALUE, Metric, Samples, in_turns, note, one_at_a_time, tables
+from report import COUNTED, VALUE, Metric, add, in_turns, new_samples, note, one_at_a_time, tables
 
 OUT = CORE / "build" / "bench"
 BENCH = CORE / "bench" / "bench.m"
@@ -64,22 +65,38 @@ METRICS = [
 ]
 
 
-def build(core: Path, out: Path) -> Path:
-    """The core of a checkout as a library, and this bench.m with it."""
+LINK = ["xcrun", "clang", "-fobjc-arc", "-O2", "-framework", "Foundation", "-framework", "QuartzCore",
+        "-framework", "Metal", "-framework", "CoreText", "-framework", "CoreGraphics"]
+
+
+def recipe() -> str:
+    """What a program is made with, but for its core: bench.m, the command
+    that links it, and the compiler of the core."""
+    odin = subprocess.run(["odin", "version"], capture_output=True, text=True).stdout
+    return hashlib.sha256(BENCH.read_bytes() + " ".join(LINK).encode() + odin.encode()).hexdigest()
+
+
+def build(core: Path, out: Path, never_changes: bool = False) -> Path:
+    """The core of a checkout as a library, and this bench.m with it. The
+    program is linked again only when its recipe or the library changed;
+    the core of a commit (`never_changes`) is not built a second time."""
+    program, stamp = out / "mdcore-bench", out / "bench.stamp"
+    made = stamp.read_text().split() if program.exists() and stamp.exists() else ["", ""]
+    if never_changes and made[0] == recipe():
+        return program
     out.mkdir(parents=True, exist_ok=True)
     subprocess.run([core / "build.sh", out], check=True, stdout=subprocess.DEVNULL)
-    program = out / "mdcore-bench"
-    linked = subprocess.run(
-        ["xcrun", "clang", "-fobjc-arc", "-O2", f"-I{core / 'include'}", BENCH, out / "libmdcore.a",
-         "-framework", "Foundation", "-framework", "QuartzCore", "-framework", "Metal",
-         "-framework", "CoreText", "-framework", "CoreGraphics", "-o", program],
-        capture_output=True, text=True,
-    )
+    library = out / "libmdcore.a"
+    version = [recipe(), str(library.stat().st_mtime_ns)]
+    if made == version:
+        return program
+    linked = subprocess.run([*LINK, f"-I{core / 'include'}", BENCH, library, "-o", program], capture_output=True, text=True)
     if linked.returncode != 0:
         raise SystemExit(
             f"{linked.stderr}\nbench.m of this checkout does not build with the core in {core}: "
             "its C API is another one. Compare two commits that have the same API."
         )
+    stamp.write_text(" ".join(version))
     return program
 
 
@@ -95,22 +112,16 @@ def base_build(name: str) -> tuple[str, Path]:
         raise SystemExit(f"{name} is not a folder and not a commit")
     commit = found.stdout.strip()
     out = OUT / "base" / commit
-    label = name if name == commit else f"{name} ({commit})"
-    # A commit never changes: its program is built one time for each
-    # version of bench.m.
-    stamp, version = out / "bench.sha", hashlib.sha256(BENCH.read_bytes()).hexdigest()
-    if (out / "mdcore-bench").exists() and stamp.exists() and stamp.read_text() == version:
-        return label, out / "mdcore-bench"
     source = out / "source"
     if not source.exists():
         source.mkdir(parents=True)
         archive = subprocess.Popen(["git", "-C", CORE.parent, "archive", commit, "markdown-core"], stdout=subprocess.PIPE)
-        subprocess.run(["tar", "-x", "-C", source], stdin=archive.stdout, check=True)
-        if archive.wait() != 0:
+        unpacked = subprocess.run(["tar", "-x", "-C", source], stdin=archive.stdout)
+        if archive.wait() != 0 or unpacked.returncode != 0:
+            shutil.rmtree(source)
             raise SystemExit(f"cannot read markdown-core at {commit}")
-    program = build(source / "markdown-core", out)
-    stamp.write_text(version)
-    return label, program
+    label = name if name == commit else f"{name} ({commit})"
+    return label, build(source / "markdown-core", out, never_changes=True)
 
 
 def caret_document(path: Path) -> Path:
@@ -131,12 +142,10 @@ def check_caret(program: Path, document: Path) -> None:
         raise SystemExit(result.stderr.strip() or f"the caret walk of {document} did not end")
 
 
-def measure(program: Path, document: Path, cases: list[str], into: dict[str, list[float]]) -> None:
+def measure(program: Path, document: Path, cases: list[str]) -> dict[str, float]:
     arguments = [argument for case in cases for argument in ("--case", case)]
     output = subprocess.run([program, document, *arguments], check=True, capture_output=True, text=True).stdout
-    for line in output.splitlines():
-        name, value = line.split()
-        into.setdefault(name, []).append(float(value))
+    return {name: float(value) for name, value in (line.split() for line in output.splitlines())}
 
 
 def main() -> None:
@@ -147,9 +156,8 @@ def main() -> None:
                              "of a few seconds while a change is made; judge it from the instructions")
     parser.add_argument("--base", action="append", default=[], metavar="COMMIT_OR_FOLDER",
                         help="also measure the core of this commit or checkout, in turns with this one")
-    parser.add_argument("--documents", default="short,long",
-                        help=f"a list of {', '.join(corpus.NAMES)}, or all (default short,long)")
-    parser.add_argument("--case", action="append", default=[], help="only this case of bench.m (can be given more than once)")
+    corpus.add_argument(parser)
+    parser.add_argument("--case", action="append", default=[], help="only this case of bench.m (can be given more than once); the walk of the caret is then left out")
     args = parser.parse_args()
 
     runs = args.runs or (4 if args.quick else 10)
@@ -157,20 +165,19 @@ def main() -> None:
     documents = corpus.documents(args.documents)
     programs = dict(base_build(name) for name in args.base)
     programs["this checkout"] = build(CORE, OUT)
-    for document in (corpus.SHORT, caret_document(OUT / "caret.md")):
-        check_caret(programs["this checkout"], document)
+    # The walk is the check of all of the editor: not for one case.
+    if not args.case:
+        for document in (corpus.SHORT, caret_document(OUT / "caret.md")):
+            check_caret(programs["this checkout"], document)
 
-    builds = list(programs)
-    samples: Samples = {label: {name: {} for name, _ in documents} for label in builds}
+    samples = new_samples(list(programs), [name for name, _ in documents])
     for run in range(runs):
         note(f"run {run + 1} of {runs}")
         for name, path in documents:
-            for label in in_turns(builds, run):
-                measure(programs[label], path, args.case, samples[label][name])
+            for label in in_turns(list(programs), run):
+                add(samples[label][name], measure(programs[label], path, args.case))
     del lock
-
-    shown = [metric for metric in METRICS if any(metric.key in samples[builds[-1]][name] for name, _ in documents)]
-    tables(samples, builds, [name for name, _ in documents], shown)
+    tables(samples, METRICS)
 
 
 if __name__ == "__main__":

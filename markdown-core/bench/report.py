@@ -15,12 +15,14 @@ from dataclasses import dataclass
 
 Samples = dict[str, dict[str, dict[str, list[float]]]]
 INSTRUCTIONS = ":instructions"
-# A difference counts only when the runs of the two builds are apart
-# (CHANCE) and the medians differ by more than this share. For a time the
-# share is large: where the linker puts a hot function moves a time by 3
-# to 5 percent with no change of the work.
+# The kind of a number. A difference counts only when the runs of the two
+# builds are apart (CHANCE) and the medians differ by more than the share
+# of the kind. For a time the share is large: where the linker puts a hot
+# function moves a time by 3 to 5 percent with no change of the work. A
+# number of the kind VALUE is only shown.
+TIME, COUNTED, VALUE = "time", "counted", "value"
+LEAST = {TIME: 0.05, COUNTED: 0.01}
 CHANCE = 0.05
-TIME, COUNTED, VALUE = 0.05, 0.01, None
 # A time below this many milliseconds is a few ticks of the clock: shown,
 # not judged. Its instructions are judged.
 SHORTEST_MS = 0.05
@@ -30,9 +32,17 @@ SHORTEST_MS = 0.05
 class Metric:
     key: str
     title: str
-    # The smallest share that counts as a difference; None for a number
-    # that the table only shows.
-    least: float | None = TIME
+    kind: str = TIME
+
+
+def new_samples(builds: list[str], documents: list[str]) -> Samples:
+    return {build: {document: {} for document in documents} for build in builds}
+
+
+def add(into: dict[str, list[float]], values: dict[str, float]) -> None:
+    """The numbers of one run to the samples of its build and document."""
+    for key, value in values.items():
+        into.setdefault(key, []).append(value)
 
 
 def one_at_a_time() -> object:
@@ -109,16 +119,17 @@ def apart(first: list[float], second: list[float]) -> float:
     return math.erfc(max(z, 0) / math.sqrt(2))
 
 
-def change(base: list[float] | None, new: list[float] | None, least: float | None) -> tuple[str, bool]:
+def change(base: list[float] | None, new: list[float] | None, kind: str) -> tuple[str, bool]:
     """The difference of the medians as text, and whether it counts."""
     if not base or not new:
         return "–", False
     before, after = statistics.median(base), statistics.median(new)
+    least = LEAST.get(kind)
+    judged = least is not None and (kind != TIME or max(abs(before), abs(after)) >= SHORTEST_MS)
     if before == 0:
-        return ("0%", False) if after == 0 else ("new", least is not None)
+        return ("0%", False) if after == 0 else ("new", judged)
     share = (after - before) / abs(before)
-    timed = least != TIME or max(abs(before), abs(after)) >= SHORTEST_MS
-    real = least is not None and timed and abs(share) >= least and len(base) > 1 and apart(base, new) < CHANCE
+    real = judged and abs(share) >= least and len(base) > 1 and apart(base, new) < CHANCE
     return f"{share * 100:+.1f}%" + (" **" if real else ""), real
 
 
@@ -130,20 +141,22 @@ def rows(lines: list[list[str]]) -> None:
     print()
 
 
+def grid(columns: list[str], metrics: list[Metric], cells) -> None:
+    """A table with a row for each metric; `cells(metric)` gives the row
+    after its title."""
+    rows([["", *columns]] + [[title, *row] for title, row in ((m.title, cells(m)) for m in metrics)])
+
+
 def one_build(samples: Samples, build: str, documents: list[str], metrics: list[Metric]) -> None:
     """The numbers of one build: the median of the runs, and how far the
     runs are from it."""
-    rows([["", *documents]] + [
-        [metric.title, *(cell(samples[build][document].get(metric.key)) for document in documents)]
-        for metric in metrics
-    ])
-    counted = [m for m in metrics if any(m.key + INSTRUCTIONS in samples[build][d] for d in documents)]
+    of = samples[build]
+    grid(documents, metrics, lambda m: [cell(of[d].get(m.key)) for d in documents])
+    counted = [Metric(m.key + INSTRUCTIONS, no_unit(m.title)) for m in metrics
+               if any(m.key + INSTRUCTIONS in of[d] for d in documents)]
     if counted:
         print("Instructions for the same numbers (millions):\n")
-        rows([["", *documents]] + [
-            [no_unit(metric.title), *(cell(samples[build][document].get(metric.key + INSTRUCTIONS), 1e-6) for document in documents)]
-            for metric in counted
-        ])
+        grid(documents, counted, lambda m: [cell(of[d].get(m.key), 1e-6) for d in documents])
 
 
 def two_builds(samples: Samples, base: str, new: str, documents: list[str], metrics: list[Metric]) -> None:
@@ -156,34 +169,34 @@ def two_builds(samples: Samples, base: str, new: str, documents: list[str], metr
         lines = [["", base, new, "Difference"] + (["Instructions"] if with_work else [])]
         for metric in metrics:
             before, after = (samples[build][document].get(metric.key) for build in (base, new))
-            counted = [samples[build][document].get(metric.key + INSTRUCTIONS) for build in (base, new)]
-            value, real = change(before, after, metric.least)
-            work, real_work = change(counted[0], counted[1], COUNTED if metric.least is not None else None)
+            work_before, work_after = (samples[build][document].get(metric.key + INSTRUCTIONS) for build in (base, new))
+            value, real = change(before, after, metric.kind)
+            work, real_work = change(work_before, work_after, VALUE if metric.kind == VALUE else COUNTED)
             lines.append([metric.title, cell(before), cell(after), value] + ([work] if with_work else []))
             if real or real_work:
                 found.append(f"- {document}: {metric.title}: {cell(before)} to {cell(after)}"
-                             + (f", instructions {work.removesuffix(' **')}" if counted[0] else ""))
+                             + (f", instructions {work.removesuffix(' **')}" if work_before else "")
+                             + (" (the time only, for the same work: measure it again before you believe it)"
+                                if work_before and not real_work else ""))
         rows(lines)
     print("`**`: the runs of the two builds are apart (chance below "
-          f"{CHANCE:g} that they are not), and the medians differ by {TIME:.0%} or more for a time, "
-          f"{COUNTED:.0%} or more for instructions and memory.\n")
+          f"{CHANCE:g} that they are not), and the medians differ by {LEAST[TIME]:.0%} or more for a time, "
+          f"{LEAST[COUNTED]:.0%} or more for instructions and memory.\n")
     print("Differences that count:\n\n" + ("\n".join(found) if found else "none") + "\n")
 
 
-def many_builds(samples: Samples, builds: list[str], documents: list[str], metrics: list[Metric]) -> None:
-    """More than two builds, measured in one sitting: the direction."""
-    for document in documents:
-        print(f"### {document}\n")
-        rows([["", *builds]] + [
-            [metric.title, *(cell(samples[build][document].get(metric.key)) for build in builds)]
-            for metric in metrics
-        ])
-
-
-def tables(samples: Samples, builds: list[str], documents: list[str], metrics: list[Metric]) -> None:
+def tables(samples: Samples, metrics: list[Metric]) -> None:
+    """The tables for the builds and the documents of the samples, with
+    the metrics that a run gave."""
+    builds = list(samples)
+    documents = list(samples[builds[0]])
+    metrics = [m for m in metrics if any(m.key in samples[b][d] for b in builds for d in documents)]
     if len(builds) == 1:
         one_build(samples, builds[0], documents, metrics)
     elif len(builds) == 2:
         two_builds(samples, builds[0], builds[1], documents, metrics)
     else:
-        many_builds(samples, builds, documents, metrics)
+        # More than two builds, measured in one sitting: the direction.
+        for document in documents:
+            print(f"### {document}\n")
+            grid(builds, metrics, lambda m: [cell(samples[b][document].get(m.key)) for b in builds])

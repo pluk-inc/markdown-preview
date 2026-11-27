@@ -73,6 +73,7 @@ static double heap_mb(void) {
 
 // One measured step: a signpost interval, and what it cost.
 typedef struct {
+    const char *name;
     os_signpost_id_t sign;
     double wall, cpu;
     uint64_t instructions;
@@ -82,10 +83,14 @@ typedef struct {
     double wall_ms, cpu_ms, instructions;
 } Cost;
 
+// The clock of a number: the time that passed, or the CPU time of this
+// thread, for a step with frames, which wait for the display.
+typedef enum { WALL, CPU } Clock;
+
 static os_log_t signposts;
 
 static Span span_begin(const char *name) {
-    Span span = {.sign = os_signpost_id_generate(signposts)};
+    Span span = {.name = name, .sign = os_signpost_id_generate(signposts)};
     os_signpost_interval_begin(signposts, span.sign, "step", "%{public}s", name);
     span.instructions = instructions();
     span.wall = now_ms();
@@ -106,6 +111,13 @@ static void print_cost(const char *name, double value, double instructions) {
     printf("%s:instructions %.0f\n", name, instructions);
 }
 
+// Ends a step and prints it under its name, as the cost of one of
+// `count` equal parts (the keys of a step that types some).
+static void span_print(Span span, Clock clock, int count) {
+    Cost cost = span_end(span);
+    print_cost(span.name, (clock == CPU ? cost.cpu_ms : cost.wall_ms) / count, cost.instructions / count);
+}
+
 static int by_value(const void *a, const void *b) {
     double x = *(const double *)a, y = *(const double *)b;
     return (x > y) - (x < y);
@@ -113,9 +125,13 @@ static int by_value(const void *a, const void *b) {
 
 // The value below which the given share of the sorted values is.
 static double percentile(const double *sorted, int count, double share) {
-    if (count == 0) return 0;
-    int at = (int)(share * (count - 1) + 0.5);
-    return sorted[at];
+    return sorted[(int)(share * (count - 1) + 0.5)];
+}
+
+// The middle one of some values, which it puts in order.
+static double median(double *values, int count) {
+    qsort(values, (size_t)count, sizeof(double), by_value);
+    return values[count / 2];
 }
 
 static void draw(void *ctx, double y) {
@@ -164,10 +180,14 @@ static void scroll_pass(void *ctx, const char *name, double end) {
     double *took = malloc(sizeof(double) * (size_t)capacity);
     double total = 0;
     Span span = span_begin(name);
+    // One look at the clock for each frame: the end of a frame is the
+    // start of the next one.
+    double start = thread_cpu_ms();
     for (double y = 0; y <= end && frames < capacity; y += SCROLL_STEP) {
-        double start = thread_cpu_ms();
         draw(ctx, y);
-        took[frames] = thread_cpu_ms() - start;
+        double now = thread_cpu_ms();
+        took[frames] = now - start;
+        start = now;
         total += took[frames];
         late += took[frames] > FRAME_BUDGET_MS;
         frames += 1;
@@ -194,17 +214,13 @@ static void scroll_pass(void *ctx, const char *name, double end) {
 // it, into the list: those lines are none in the list once the caret has
 // left the mark, and the caret is where typed text goes.
 static const char *list_caret_check(void) {
-    void *ctx = mdcore_create((__bridge void *)[CAMetalLayer layer]);
-    const char *start = "- a\n\n\n-\n";
-    mdcore_set_markdown(ctx, start, (long)strlen(start));
-    mdcore_resize(ctx, VIEW_WIDTH, VIEW_HEIGHT, VIEW_SCALE);
-    @autoreleasepool { mdcore_draw(ctx, 0); }
+    void *ctx = open_view([@"- a\n\n\n-\n" dataUsingEncoding:NSUTF8StringEncoding]);
     mdcore_caret_set(ctx, 0, 0);
     mdcore_caret_move(ctx, MDCORE_MOVE_DOCUMENT_END, false);
     mdcore_caret_move(ctx, MDCORE_MOVE_LEFT, false);
-    @autoreleasepool { mdcore_draw(ctx, 0); }
+    draw(ctx, 0);
     mdcore_caret_move(ctx, MDCORE_MOVE_UP, false);
-    @autoreleasepool { mdcore_draw(ctx, 0); }
+    draw(ctx, 0);
     mdcore_insert(ctx, "q", 1);
     long n = 0;
     const char *out = mdcore_source(ctx, &n);
@@ -480,7 +496,7 @@ static const char *caret_walk(void *ctx, long length) {
 }
 
 // The same text with one paragraph more in its middle, as another program
-// puts it in the file. `at` is where the paragraph starts.
+// puts it in the file. `at`, when given, gets where the paragraph starts.
 static NSData *changed_source(NSData *source, NSUInteger *at) {
     NSMutableData *changed = [source mutableCopy];
     NSRange middle = [source rangeOfData:[@"\n\n" dataUsingEncoding:NSUTF8StringEncoding]
@@ -489,8 +505,9 @@ static NSData *changed_source(NSData *source, NSUInteger *at) {
     NSData *more = [@"\n\nA paragraph that another program put in the file.\n\n" dataUsingEncoding:NSUTF8StringEncoding];
     // At the end for a text with no blank line in its second half, so the
     // text is another one in each case.
-    *at = middle.location != NSNotFound ? middle.location : changed.length;
-    [changed replaceBytesInRange:NSMakeRange(*at, 0) withBytes:more.bytes length:more.length];
+    NSUInteger start = middle.location != NSNotFound ? middle.location : changed.length;
+    [changed replaceBytesInRange:NSMakeRange(start, 0) withBytes:more.bytes length:more.length];
+    if (at != NULL) *at = start;
     return changed;
 }
 
@@ -501,18 +518,17 @@ static NSData *changed_source(NSData *source, NSUInteger *at) {
 // later ones have them, and so change less from run to run.
 static bool case_open(NSData *source) {
     enum { ROUNDS = 5 };
-    Span span = span_begin("startup_ms");
+    Span startup = span_begin("startup_ms");
     void *first = open_view([@"a\n" dataUsingEncoding:NSUTF8StringEncoding]);
-    Cost cost = span_end(span);
-    print_cost("startup_ms", cost.wall_ms, cost.instructions);
+    span_print(startup, WALL, 1);
     mdcore_destroy(first);
 
     double parse[ROUNDS], view[ROUNDS], parse_instructions[ROUNDS], view_instructions[ROUNDS];
     for (int round = 0; round < ROUNDS; round++) {
         void *ctx = mdcore_create((__bridge void *)[CAMetalLayer layer]);
-        span = span_begin("parse_ms");
+        Span span = span_begin("parse_ms");
         mdcore_set_markdown(ctx, source.bytes, (long)source.length);
-        cost = span_end(span);
+        Cost cost = span_end(span);
         parse[round] = cost.wall_ms;
         parse_instructions[round] = cost.instructions;
         span = span_begin(round == 0 ? "first_view_ms" : "first_view_again_ms");
@@ -527,12 +543,8 @@ static bool case_open(NSData *source) {
         }
         mdcore_destroy(ctx);
     }
-    qsort(parse, ROUNDS, sizeof(double), by_value);
-    qsort(parse_instructions, ROUNDS, sizeof(double), by_value);
-    print_cost("parse_ms", parse[ROUNDS / 2], parse_instructions[ROUNDS / 2]);
-    qsort(view + 1, ROUNDS - 1, sizeof(double), by_value);
-    qsort(view_instructions + 1, ROUNDS - 1, sizeof(double), by_value);
-    print_cost("first_view_again_ms", view[1 + (ROUNDS - 1) / 2], view_instructions[1 + (ROUNDS - 1) / 2]);
+    print_cost("parse_ms", median(parse, ROUNDS), median(parse_instructions, ROUNDS));
+    print_cost("first_view_again_ms", median(view + 1, ROUNDS - 1), median(view_instructions + 1, ROUNDS - 1));
     return true;
 }
 
@@ -546,8 +558,7 @@ static bool case_scroll(NSData *source) {
     scroll_pass(ctx, "first_scroll", end);
     Span span = span_begin("jump_frame_cpu_ms");
     draw(ctx, 0);
-    Cost cost = span_end(span);
-    print_cost("jump_frame_cpu_ms", cost.cpu_ms, cost.instructions);
+    span_print(span, CPU, 1);
     scroll_pass(ctx, "second_scroll", end);
     printf("scrolled_heap_mb %.1f\n", heap_mb());
     mdcore_destroy(ctx);
@@ -563,8 +574,7 @@ static bool case_end(NSData *source) {
     void *ctx = open_view(source);
     Span span = span_begin("end_frame_ms");
     double bottom = go_to_end(ctx);
-    Cost cost = span_end(span);
-    print_cost("end_frame_ms", cost.wall_ms, cost.instructions);
+    span_print(span, WALL, 1);
 
     double took[WIDTHS], counted[WIDTHS];
     for (int width = 0; width < WIDTHS; width++) {
@@ -572,13 +582,11 @@ static bool case_end(NSData *source) {
         mdcore_note_scroll(ctx, bottom);
         mdcore_resize(ctx, VIEW_WIDTH - (width % 2 == 0 ? 40 : 0), VIEW_HEIGHT, VIEW_SCALE);
         draw(ctx, bottom);
-        cost = span_end(span);
+        Cost cost = span_end(span);
         took[width] = cost.wall_ms;
         counted[width] = cost.instructions;
     }
-    qsort(took, WIDTHS, sizeof(double), by_value);
-    qsort(counted, WIDTHS, sizeof(double), by_value);
-    print_cost("resize_at_end_ms", took[WIDTHS / 2], counted[WIDTHS / 2]);
+    print_cost("resize_at_end_ms", median(took, WIDTHS), median(counted, WIDTHS));
     mdcore_destroy(ctx);
     return true;
 }
@@ -589,13 +597,11 @@ static bool case_end(NSData *source) {
 static bool case_change(NSData *source) {
     void *ctx = open_view(source);
     double bottom = go_to_end(ctx);
-    NSUInteger at = 0;
-    NSData *changed = changed_source(source, &at);
+    NSData *changed = changed_source(source, NULL);
     Span span = span_begin("change_ms");
     mdcore_set_markdown(ctx, changed.bytes, (long)changed.length);
     draw(ctx, bottom);
-    Cost cost = span_end(span);
-    print_cost("change_ms", cost.wall_ms, cost.instructions);
+    span_print(span, WALL, 1);
     mdcore_destroy(ctx);
     return true;
 }
@@ -619,8 +625,7 @@ static bool case_type(NSData *source) {
         mdcore_replace_text(ctx, caret, caret, "x", 1);
         draw(ctx, bottom);
     }
-    Cost cost = span_end(span);
-    print_cost("type_middle_cpu_ms", cost.cpu_ms / KEYS, cost.instructions / KEYS);
+    span_print(span, CPU, KEYS);
 
     // Then at the end of the last line of the text, which the view shows:
     // the frame lays out the part of the text that changed. The end of
@@ -653,8 +658,7 @@ static bool case_type(NSData *source) {
         mdcore_replace_text(ctx, caret, caret, "x", 1);
         draw(ctx, bottom);
     }
-    cost = span_end(span);
-    print_cost("type_end_cpu_ms", cost.cpu_ms / KEYS, cost.instructions / KEYS);
+    span_print(span, CPU, KEYS);
 
     // The same through the caret, as a key in an editor is: a click in
     // the middle of the view puts the caret in the text there, each key
@@ -673,8 +677,7 @@ static bool case_type(NSData *source) {
         mdcore_insert(ctx, "x", 1);
         draw(ctx, bottom);
     }
-    cost = span_end(span);
-    print_cost("type_caret_cpu_ms", cost.cpu_ms / KEYS, cost.instructions / KEYS);
+    span_print(span, CPU, KEYS);
     // To the right, or on another line when the text went over the end
     // of its line.
     double moved_x = 0, moved_y = 0;
@@ -699,8 +702,7 @@ static bool case_type(NSData *source) {
         moves = mdcore_caret_move(ctx, key % 2 == 0 ? MDCORE_MOVE_LEFT : MDCORE_MOVE_RIGHT, false) && moves;
         draw(ctx, bottom);
     }
-    cost = span_end(span);
-    print_cost("caret_move_cpu_ms", cost.cpu_ms / KEYS, cost.instructions / KEYS);
+    span_print(span, CPU, KEYS);
     moves = moves && (KEYS % 2 != 0 || mdcore_caret_offset(ctx) == home);
     double line_x = 0, line_y = 0, below_y = 0;
     moves = moves && mdcore_caret_rect(ctx, &line_x, &line_y, &caret_height);
@@ -727,13 +729,11 @@ static bool case_select(NSData *source) {
     go_to_end(ctx);
     Span span = span_begin("select_all_ms");
     mdcore_select_all(ctx);
-    Cost cost = span_end(span);
-    print_cost("select_all_ms", cost.wall_ms, cost.instructions);
+    span_print(span, WALL, 1);
     span = span_begin("copy_all_ms");
     long copied = 0;
     mdcore_selection_text(ctx, &copied);
-    cost = span_end(span);
-    print_cost("copy_all_ms", cost.wall_ms, cost.instructions);
+    span_print(span, WALL, 1);
     mdcore_destroy(ctx);
     return true;
 }
@@ -756,8 +756,7 @@ static bool case_layout(NSData *source) {
         draw(ctx, y);
         y += 2 * VIEW_HEIGHT;
     }
-    Cost cost = span_end(span);
-    print_cost("full_layout_cpu_ms", cost.cpu_ms, cost.instructions);
+    span_print(span, CPU, 1);
     // How far the height of the page was from the real one, with only
     // the first view laid out.
     double real = 0;
