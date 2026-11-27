@@ -536,13 +536,6 @@ Known limits, found in review and left on purpose:
 - Return after a mark that is being typed ("-" and Return) makes no item:
   the "-" stays text in the source. With the caret on another line,
   Markdown reads it as an empty list item, which can join the list above.
-- The first outline of a document comes from the app's parser, also in
-  native mode (`MainSplitViewController.showOutlineAndMetadata`); only
-  the outline after an edit comes from the core. Where the texts differ
-  (see the decision on the outline), the first edit changes them. The
-  native view can open its document after the outline is made (it waits
-  for the first frame of the window), so the core can give the first
-  outline only when that order changes.
 - With the inspector open, each refresh of native Edit Mode still gets
   all of the text and counts it (`DocumentMetadata.make`). The core can
   give those numbers as it gives the outline.
@@ -1617,3 +1610,20 @@ export.
   changed the layout under the next look. Checked on the hidden display
   with a typed key right after Command-E: a short document, an empty one,
   and the 1 MB fixture two pages down.
+- **2026-11-27** — The first outline from the core. In native mode the
+  sidebar's outline of a document that opens came from the app's parser
+  (a second parse of all of the text, off the main thread for a large
+  one), and each later one from the core: where the two differ (the
+  typographic quotes and dashes of the app's parser), the first edit
+  changed the titles. The host now takes the first outline from the
+  native view when it has the document open
+  (`ContentViewController.nativeDocumentDidOpen`,
+  `MainSplitViewController.showOutlineOfNativeRenderer`): at once for a
+  window that shows, and after the first frame for a document that
+  waited for it. The content view says if the last `display` gave its
+  document to the native renderer (`displayedInNativeRenderer`): a
+  received share waits for its rules, and a native renderer that is
+  there then has the document before, as a reviewer found. A rename
+  gives the outline its new name, and a change of the renderer setting
+  makes the outline of the other renderer. The numbers of the inspector
+  still come from the text. The web renderer keeps its path.

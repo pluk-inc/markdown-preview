@@ -91,6 +91,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-26 | the outline of native Edit Mode from the core | 574 / 559 | 64 / 110 (the base too) | 475 / 755 | 58 / 74 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
 | 2026-11-26 | the caret at its place after Up from a list mark | 568 / 591 | 60 / 108 (the base too) | 490 / 800 | 60 / 74 | not recorded | not recorded | 7.1 / 26.4 (the base too) |
 | 2026-11-26 | a caret when Edit Mode starts | 566 / 579 | 61 / 95 (the base too) | 460 / 605 | 56 / 73 | not recorded | not recorded | 7.0 / 26.3 (the base 26.4) |
+| 2026-11-27 | the first outline of a document from the core, not from a second parse | 584 / 596 (see the section) | 55 / 79 (the base 55 / 89) | 498 / 583 (the base 510 / 700) | – | – | – | – |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1359,3 +1360,36 @@ the order that they ran:
 | base | 565 / 588 | 61 / 95 | 470 / 600 |
 
 The sets overlap.
+
+## The first outline from the core (2026-11-27)
+
+In native mode the app made the first outline of a document with a
+second parse of all of the text by its own parser, off the main thread
+for a document of more than 64 KB. The outline now comes from the core,
+which has the headings from its parse. `bench/core.py` was not run: the
+core did not change. `app.py`, short / long, five launches each, two
+runs of four sets in the order that they ran (the load at the start of
+each set is in the last column):
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) | Load |
+| --- | --- | --- | --- | --- |
+| base | 565 / 567 | 55 / 90 | 500 / 680 | 5.9 |
+| change | 581 / 589 | 55 / 80 | 490 / 580 | 3.6 |
+| change | 573 / 585 | 55 / 79 | 480 / 560 | 3.6 |
+| base | 550 / 567 | 55 / 90 | 480 / 680 | 3.4 |
+| change | 558 / 585 | 55 / 79 | 500 / 570 | 2.7 |
+| base | 657 / 648 | 55 / 85 | 550 / 730 | 3.2 |
+| base | 640 / 624 | 55 / 89 | 510 / 710 | 5.2 |
+| change | 622 / 623 | 54 / 79 | 520 / 620 | 4.5 |
+
+For the long document (1.1 MB), the CPU of the app is 60 to 160 ms less
+in each set of the change than in each set of the base (560 to 620
+against 680 to 730), and the memory 5 to 11 MB less (79 to 80 against
+85 to 90): the second parse and its tree are gone. The short document
+shows no difference in CPU or memory. The launch times are not clear: in
+the first run the change is about 20 ms above the base in both sets, in
+the second run it is below it (the base was 60 to 100 ms slower there,
+with other work on the Mac). No code before the first frame got more
+work (the outline is set after the frame that the benchmark reads), so
+the first run is taken for the spread of the Mac, but the numbers do not
+prove it.
