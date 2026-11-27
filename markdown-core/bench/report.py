@@ -232,3 +232,8 @@ def tables(samples: Samples, metrics: list[Metric]) -> None:
         for document in documents:
             print(f"### {document}\n")
             grid(builds, metrics, lambda m: [cell(samples[b][document].get(m.key)) for b in builds])
+            counted = [Metric(m.key + INSTRUCTIONS, no_unit(m.title)) for m in metrics
+                       if any(m.key + INSTRUCTIONS in samples[b][document] for b in builds)]
+            if counted:
+                print("Instructions for the same numbers (millions):\n")
+                grid(builds, counted, lambda m: [cell(samples[b][document].get(m.key), 1e-6) for b in builds])

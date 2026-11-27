@@ -18,8 +18,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import corpus
@@ -121,14 +121,18 @@ def base_build(name: str) -> tuple[str, Path]:
     out = OUT / "base" / commit
     source = out / "source"
     if not source.exists():
-        source.mkdir(parents=True)
-        archive = subprocess.Popen(["git", "-C", CORE.parent, "archive", commit, "markdown-core"], stdout=subprocess.PIPE)
-        unpacked = subprocess.run(["tar", "-x", "-C", source], stdin=archive.stdout)
-        if archive.wait() != 0 or unpacked.returncode != 0:
-            shutil.rmtree(source)
-            raise SystemExit(f"cannot read markdown-core at {commit}")
+        # Into a folder of its own first: a copy that was stopped half
+        # way must not count as the source at the next run.
+        out.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=out) as unpacking:
+            archive = subprocess.Popen(["git", "-C", CORE.parent, "archive", commit, "markdown-core"], stdout=subprocess.PIPE)
+            unpacked = subprocess.run(["tar", "-x", "-C", unpacking], stdin=archive.stdout)
+            if archive.wait() != 0 or unpacked.returncode != 0:
+                raise SystemExit(f"cannot read markdown-core at {commit}")
+            Path(unpacking, "markdown-core").rename(out / "source-core")
+        (out / "source-core").rename(source)
     label = name if name == commit else f"{name} ({commit})"
-    return label, build(source / "markdown-core", out, never_changes=True)
+    return label, build(source, out, never_changes=True)
 
 
 def caret_document(path: Path) -> Path:
