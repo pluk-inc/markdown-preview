@@ -230,9 +230,102 @@ static const char *list_caret_check(void) {
     return same ? NULL : "text typed after Up from a list mark is not where the caret is";
 }
 
+// A code block that is typed, with the keys of a reader: the fence,
+// Return, the code, and a closing fence, which takes the caret out of the
+// code (a second block that is typed after it is a block of its own);
+// the same in a list item; typed text and Return in a block with no line
+// of code between its two fences; and a delete ("\b") that takes code
+// with no text out. Returns what is wrong, or NULL.
+static const char *typed_code_check(void) {
+    struct { const char *start; double click_y; const char *keys; const char *want; } cases[] = {
+        {"Text\n", -1, "\n```\nab\nc", "Text\n\n```\nab\nc\n```\n"},
+        {"Text\n", -1, "\n```\nx\n``````\nz\n```q", "Text\n\n```\nx\n```\n\n```\nz\n```\n\nq\n"},
+        {"- item\n", -1, "\n```\nx\ny", "- item\n- ```\n  x\n  y\n  ```\n"},
+        {"Text\n\nMore\n", -1, "\n```abc", "Text\n\n```\nabc\n```\n\nMore\n"},
+        {"Text\n\nMore\n", -1, "\n```\nabc", "Text\n\n```\nabc\n```\n\nMore\n"},
+        {"Text\n\nMore\n", -1, "\n```ab\b\b\bq", "Text\n\nq\n\nMore\n"},
+        {"Text\n", -1, "\n```ab\vq", "Text\n\n```\nab\n```\n\nq\n"},
+        {"```\nx\n```\n```\n```\n", 96, "\bq", "```\nx\n```\n\nq\n"},
+        {"a\n```\n```\nb\n", 60, "\bq", "aq\n\nb\n"},
+        {"Text\n\n```\nx\n```\n", -1, "\a\fq", "```\nq\n```"},
+        {"```\nx\n```\n\nText\n", -1, "\a\fq", "```\nq\n```"},
+        {"- a\n- b\n", -1, "\n```\nx\n```q", "- a\n- ```\n  xq\n  ```\n- b\n"},
+        {"Text\n\nPara\n\n```\ncode\n```\n\nEnd\n", -1, "\n```\nx", "Text\n\n```\nx\n```\n\nPara\n\n```\ncode\n```\n\nEnd\n"},
+        {"Text\n\n```\n```\n\nMore\n", 76, "z\nw", "Text\n\n```\nz\nw\n```\n\nMore\n"},
+        {"Text\n\n```\n```\n\nMore\n", 76, "\nq\nr", "Text\n\n```\nq\nr\n```\n\nMore\n"},
+    };
+    for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        void *ctx = mdcore_create((__bridge void *)[CAMetalLayer layer]);
+        mdcore_set_markdown(ctx, cases[i].start, (long)strlen(cases[i].start));
+        mdcore_resize(ctx, VIEW_WIDTH, VIEW_HEIGHT, VIEW_SCALE);
+        @autoreleasepool { mdcore_draw(ctx, 0); }
+        if (cases[i].click_y < 0) {
+            mdcore_caret_set(ctx, 0, 0);
+            mdcore_caret_move(ctx, MDCORE_MOVE_LINE_END, false);
+        } else {
+            mdcore_caret_set(ctx, 100, cases[i].click_y);
+        }
+        for (const char *key = cases[i].keys; *key; key++) {
+            if (*key == '\n') mdcore_insert_break(ctx);
+            else if (*key == '\b') mdcore_delete(ctx, MDCORE_MOVE_LEFT);
+            else if (*key == '\a') mdcore_select_all(ctx);
+            else if (*key == '\f') mdcore_paste(ctx, "```", 3);
+            else if (*key == '\v') { if (!mdcore_caret_move(ctx, MDCORE_MOVE_DOWN, false)) mdcore_paragraph_below(ctx); }
+            else mdcore_insert(ctx, key, 1);
+            @autoreleasepool { mdcore_draw(ctx, 0); }
+        }
+        long n = 0;
+        const char *out = mdcore_source(ctx, &n);
+        bool same = n == (long)strlen(cases[i].want) && memcmp(out, cases[i].want, (size_t)n) == 0;
+        // Undo takes each step back, to the source at the start.
+        while (mdcore_can_undo(ctx)) mdcore_undo(ctx);
+        out = mdcore_source(ctx, &n);
+        bool back = n == (long)strlen(cases[i].start) && memcmp(out, cases[i].start, (size_t)n) == 0;
+        mdcore_destroy(ctx);
+        if (!same) return "text typed in a new code block is not in its code";
+        if (!back) return "Undo after a typed code block does not give the source back";
+    }
+    return NULL;
+}
+
+// The first caret of an editor: at the start of the first line that is
+// all in a range of the page, not at a line that the top of the range
+// cuts.
+static const char *first_caret_check(void) {
+    void *ctx = mdcore_create((__bridge void *)[CAMetalLayer layer]);
+    const char *start = "one\n\ntwo\n\nthree\n";
+    mdcore_set_markdown(ctx, start, (long)strlen(start));
+    mdcore_resize(ctx, VIEW_WIDTH, VIEW_HEIGHT, VIEW_SCALE);
+    @autoreleasepool { mdcore_draw(ctx, 0); }
+    const char *wrong = NULL;
+    double x = 0, y = 0, height = 0, cut = 0;
+    if (!mdcore_caret_set_in(ctx, 0, VIEW_HEIGHT) || !mdcore_caret_rect(ctx, &x, &y, &height) || mdcore_caret_offset(ctx) != 0) {
+        wrong = "the first caret is not at the start of the first line";
+    } else {
+        // The top of the range is in the first line.
+        cut = y + 2;
+        mdcore_caret_clear(ctx);
+        if (!mdcore_caret_set_in(ctx, cut, VIEW_HEIGHT) || !mdcore_caret_rect(ctx, &x, &y, &height) || y < cut || y + height > VIEW_HEIGHT) {
+            wrong = "the first caret is in a line that is not all in the view";
+        } else {
+            mdcore_insert(ctx, "q", 1);
+            long n = 0;
+            const char *out = mdcore_source(ctx, &n);
+            const char *want = "one\n\nqtwo\n\nthree\n";
+            if (n != (long)strlen(want) || memcmp(out, want, (size_t)n) != 0) wrong = "the first caret is not at the start of the first line that shows";
+        }
+    }
+    mdcore_destroy(ctx);
+    return wrong;
+}
+
 static const char *caret_walk(void *ctx, long length) {
     const char *list_wrong = list_caret_check();
     if (list_wrong != NULL) return list_wrong;
+    const char *code_wrong = typed_code_check();
+    if (code_wrong != NULL) return code_wrong;
+    const char *first_wrong = first_caret_check();
+    if (first_wrong != NULL) return first_wrong;
     // The source before the first change, for Undo at the end.
     long first_size = 0;
     const char *first_bytes = mdcore_source(ctx, &first_size);
@@ -539,7 +632,7 @@ static bool case_open(NSData *source) {
         view_instructions[round] = cost.instructions;
         if (round == 0) {
             print_cost("first_view_ms", cost.wall_ms, cost.instructions);
-            printf("first_frame_heap_mb %.1f\n", heap_mb());
+            printf("first_frame_heap_mb %.2f\n", heap_mb());
         }
         mdcore_destroy(ctx);
     }
@@ -560,7 +653,7 @@ static bool case_scroll(NSData *source) {
     draw(ctx, 0);
     span_print(span, CPU, 1);
     scroll_pass(ctx, "second_scroll", end);
-    printf("scrolled_heap_mb %.1f\n", heap_mb());
+    printf("scrolled_heap_mb %.2f\n", heap_mb());
     mdcore_destroy(ctx);
     return true;
 }
@@ -762,7 +855,7 @@ static bool case_layout(NSData *source) {
     double real = 0;
     mdcore_page_area(ctx, &top, &real);
     printf("estimate_error_percent %.1f\n", real > 0 ? (estimate - real) / real * 100 : 0);
-    printf("heap_mb %.1f\n", heap_mb());
+    printf("heap_mb %.2f\n", heap_mb());
     mdcore_destroy(ctx);
     return true;
 }
@@ -819,7 +912,10 @@ int main(int argc, const char *argv[]) {
     printf("source_kb %.0f\n", source.length / 1024.0);
     for (int index = 0; index < CASE_COUNT; index++) {
         if (any && !chosen[index]) continue;
-        if (!CASES[index].run(source)) return 1;
+        // The layers and the other objects of a case go when it ends.
+        @autoreleasepool {
+            if (!CASES[index].run(source)) return 1;
+        }
     }
     // Of all of the run, with what each case made before it measured.
     struct rusage_info_v4 usage = process_usage();

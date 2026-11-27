@@ -399,7 +399,8 @@ line_of_byte :: proc(part: ^Part, box: Box, b: ^document.Block, src: ^document.T
 
 // The address for a caret at a point of the page. As `hit_test`, and
 // also at text that has no line: an empty line of a code block, and a
-// block with no text (an item of a list with nothing in it).
+// block with no text (an item of a list with nothing in it, code in a
+// fence with no line of code).
 caret_hit :: proc(l: ^Layout, x: f32, y: f64) -> (at: document.Address, upstream: bool, ok: bool) {
 	p := part_at(l, y)
 	if p < 0 {
@@ -429,7 +430,8 @@ caret_hit :: proc(l: ^Layout, x: f32, y: f64) -> (at: document.Address, upstream
 				}
 			}
 		}
-		if (b.kind == .Paragraph || b.kind == .Heading) && len(b.text.bytes) == 0 {
+		// Code in a fence with no line of code is such a block too.
+		if (b.kind == .Paragraph || b.kind == .Heading || b.kind == .Code) && len(b.text.bytes) == 0 {
 			return {block = l.doc.starts[p] + near}, false, true
 		}
 	}
@@ -493,6 +495,14 @@ caret_hit :: proc(l: ^Layout, x: f32, y: f64) -> (at: document.Address, upstream
 // `upstream` the end of the first one. False when the block has no
 // records (`lay_out_block` makes them) or no text (a rule).
 caret_place :: proc(l: ^Layout, at: document.Address, upstream := false) -> (x, top, height: f32, part_index: int, ok: bool) {
+	x, top, height, _, _, part_index, ok = caret_spot(l, at, upstream)
+	return
+}
+
+// `caret_place` with the bar of the caret in that line too (`caret_bar`):
+// its top from the top of the part, and its height.
+@(private)
+caret_spot :: proc(l: ^Layout, at: document.Address, upstream: bool) -> (x, top, height, bar_top, bar_height: f32, part_index: int, ok: bool) {
 	if l.doc == nil || at.block < 0 || at.block >= l.doc.count {
 		return
 	}
@@ -512,9 +522,11 @@ caret_place :: proc(l: ^Layout, at: document.Address, upstream := false) -> (x, 
 	if n := document.empty_of(l.doc, at); n > 0 {
 		// An empty paragraph: its line at the bottom of the box, where
 		// a paragraph of the page starts.
-		height = math.round(l.m.body * l.m.line_height)
+		// It is a line of body text, whatever its block is (a heading).
+		height = text_line_height(l, nil)
 		top = box.bottom - height - f32(int(b.empties) - n) * empty_height(l)
-		return l.column_x, top, height, p, true
+		bar_top, bar_height = caret_bar(l, nil, top, height)
+		return l.column_x, top, height, bar_top, bar_height, p, true
 	}
 	found := caret_line(part, box, b, src, at.byte, upstream)
 	if found < 0 {
@@ -522,13 +534,17 @@ caret_place :: proc(l: ^Layout, at: document.Address, upstream := false) -> (x, 
 		// the start of a code block. At the start of the block.
 		x = l.column_x + list_x(l, b) + f32(b.quote_depth) * l.m.quote_indent
 		top = box.top
-		height = math.round(l.m.body * l.m.line_height)
+		// A heading with no text keeps the line of its level
+		// (`place_para`), so the caret does not move when the first
+		// character comes.
+		height = text_line_height(l, b)
 		if b.kind == .Code {
 			height = math.round(l.m.code_size * CODE_LINE_HEIGHT)
 			x += CODE_PAD
 			top += CODE_PAD + height * f32(strings.count(string(src.bytes[:min(at.byte, len(src.bytes))]), "\n"))
 		}
-		return x, top, height, p, true
+		bar_top, bar_height = caret_bar(l, b, top, height)
+		return x, top, height, bar_top, bar_height, p, true
 	}
 	line := shaped_line(l, p, found)^
 	para := &part.paras[line.para]
@@ -538,10 +554,16 @@ caret_place :: proc(l: ^Layout, at: document.Address, upstream := false) -> (x, 
 		// An empty line of a code block has no line record: it is below
 		// the last line that has one, one line for each line break.
 		breaks := strings.count(string(src.bytes[end:min(at.byte, len(src.bytes))]), "\n")
-		return line.x, line.top + height * f32(breaks), height, p, true
+		top = line.top + height * f32(breaks)
+		bar_top, bar_height = caret_bar(l, b, top, height)
+		return line.x, top, height, bar_top, bar_height, p, true
 	}
 	x = line.x + text.line_x_for_index(line.line, min(at.byte, end) - para.base)
-	return x + caret_spaces(l, at, x), line.top, height, p, true
+	// On the line that the text of this line stands on, which a larger
+	// font in it (a fallback font) can move.
+	baseline := line_baseline(line.top, height, line.line.ascent, line.line.descent)
+	bar_top, bar_height = caret_bar(l, b, line.top, height, baseline)
+	return x + caret_spaces(l, at, x), line.top, height, bar_top, bar_height, p, true
 }
 
 // The line that a caret at a byte of a text is in (`line_of_byte`), or
@@ -570,9 +592,7 @@ caret_spaces :: proc(l: ^Layout, at: document.Address, x: f32) -> f32 {
 	if count <= 0 {
 		return 0
 	}
-	b := document.block_at(l.doc, at.block)
-	heading := b.kind == .Heading
-	runs := [1]text.Run{{0, 1, span_font(l, {}, l.m.body * HEADING_SCALE[heading ? b.level : 0], heading)}}
+	runs := [1]text.Run{{0, 1, block_font(l, document.block_at(l.doc, at.block))}}
 	space := text.paragraph_create(" ", runs[:])
 	defer text.paragraph_destroy(space)
 	return clamp(f32(count) * text.paragraph_natural_width(space), 0, max(l.column_x + l.column - x, 0))
@@ -655,12 +675,69 @@ caret_line_end :: proc(l: ^Layout, at: document.Address, upstream: bool, end: bo
 // its first paragraph starts when text comes. `top` is from the top of
 // the page (`Layout.origin`).
 caret_place_empty :: proc(l: ^Layout) -> (x, top, height: f32) {
-	return l.column_x, l.panel.height + part_start(l, 0), math.round(l.m.body * l.m.line_height)
+	return l.column_x, l.panel.height + part_start(l, 0), text_line_height(l, nil)
+}
+
+// The bar of a caret in a line of the page: as high as the font of the
+// text of the line (from the top of its tall letters to the bottom of the
+// ones that go below the line), where that text stands in the line. Not
+// the height of the line: with a wide line spacing that is much more
+// than the text, and the text views of the system draw the caret as high
+// as the text, larger in a heading. `b` is the block of the line; nil
+// for a line of body text with no block. `baseline` is the line that the
+// text stands on, for a line that has shaped text; with none, the text
+// is in the middle of the line (`line_baseline`).
+@(private)
+caret_bar :: proc(l: ^Layout, b: ^document.Block, top, line_height: f32, baseline: Maybe(f32) = nil) -> (bar_top, bar_height: f32) {
+	text_font := block_font(l, b)
+	if text_font == nil {
+		return top, line_height
+	}
+	ascent, descent, _ := text.font_metrics(text_font)
+	bar_height = min(ascent + descent, line_height)
+	base_y := baseline.? or_else line_baseline(top, line_height, ascent, descent)
+	return clamp(base_y - ascent, top, top + line_height - bar_height), bar_height
+}
+
+// The font of the plain text of a block: the code font in a code block,
+// the font of its level in a heading, the body font in each other one and
+// for no block.
+@(private)
+block_font :: proc(l: ^Layout, b: ^document.Block) -> base.Font {
+	if b != nil && b.kind == .Code {
+		return font(l, .Mono, l.m.code_size)
+	}
+	heading := b != nil && b.kind == .Heading
+	return span_font(l, {}, l.m.body * HEADING_SCALE[heading ? b.level : 0], heading)
+}
+
+// The height of a line of the text of a paragraph or of a heading; of
+// body text for no block.
+@(private)
+text_line_height :: proc(l: ^Layout, b: ^document.Block) -> f32 {
+	if b != nil && b.kind == .Heading {
+		return l.m.body * HEADING_SCALE[b.level] * HEADING_LINE_HEIGHT
+	}
+	return math.round(l.m.body * l.m.line_height)
+}
+
+// `caret_y` for the bar of the caret (`caret_bar`): what a host shows.
+caret_bar_y :: proc(l: ^Layout, at: document.Address, upstream: bool) -> (x: f32, y: f64, height: f32, ok: bool) {
+	lx, _, _, bar_top, bar_height, p := caret_spot(l, at, upstream) or_return
+	return lx, l.parts[p].top + f64(bar_top), bar_height, true
+}
+
+// `caret_place_empty` for the bar of the caret.
+caret_bar_empty :: proc(l: ^Layout) -> (x, top, height: f32) {
+	line_height: f32
+	x, top, line_height = caret_place_empty(l)
+	top, height = caret_bar(l, nil, top, line_height)
+	return
 }
 
 // The quad of the caret of a document with no block, as `caret_quad`.
 caret_quad_empty :: proc(l: ^Layout, scale: f32, origin_y: f64, out: ^[dynamic]base.Quad) {
-	x, top, height := caret_place_empty(l)
+	x, top, height := caret_bar_empty(l)
 	append(out, rect_quad(x - 0.5, top, max(1, 2 / scale), height, l.style.text, 0, scale, l.origin, origin_y))
 }
 
@@ -677,7 +754,7 @@ caret_quad :: proc(l: ^Layout, at: document.Address, upstream: bool, y0, y1: f64
 	if slot >= len(part.boxes) || part.top + f64(part.boxes[slot].bottom) < y0 || part.top + f64(part.boxes[slot].top) > y1 {
 		return
 	}
-	x, top, height, p, ok := caret_place(l, at, upstream)
+	x, _, _, top, height, p, ok := caret_spot(l, at, upstream)
 	if !ok {
 		return
 	}

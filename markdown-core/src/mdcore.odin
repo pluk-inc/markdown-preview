@@ -69,6 +69,9 @@ Ctx :: struct {
 	cache:           text.Glyph_Cache,
 	gpu:             renderer.Renderer,
 	selection:       document.Selection,
+	// The code that the caret was in when the command of the reader in
+	// progress started (`command`), for the rules at its end.
+	code_before:    document.Code_Before,
 	// The caret of an editor: where text that is typed goes. An offset
 	// in the source of the document, because that is what an edit
 	// changes; -1 for no caret. `caret_at` is the address in the text of
@@ -376,13 +379,69 @@ typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
 		change_source_held(ctx, own, [2]int{start, end})
 		return
 	}
-	if len(text) > 0 && text[0] != '\n' && text[0] != '\r' && start == end && start == ctx.caret && ctx.doc.count > 0 && document.empty_of(&ctx.doc, ctx.caret_at) > 0 {
-		own := document.empty_text(&ctx.doc, text)
-		defer delete(own)
-		change_source_held(ctx, own, [2]int{start, end})
-		return
+	if len(text) > 0 && start == end && start == ctx.caret && ctx.doc.count > 0 {
+		// Text with no line break at its start, in an empty paragraph.
+		if text[0] != '\n' && text[0] != '\r' && document.empty_of(&ctx.doc, ctx.caret_at) > 0 {
+			own := document.empty_text(&ctx.doc, text)
+			defer delete(own)
+			change_source_held(ctx, own, [2]int{start, end})
+			return
+		}
+		// The first text of code in a fence with no line of code: lines
+		// of that code (`document.code_first_line`), also for text that
+		// starts with a line break, or the closing fence would be at the
+		// end of the text.
+		if own, caret, first := document.code_first_line(&ctx.doc, ctx.caret_at, start, text); first {
+			defer delete(own)
+			change_source_held(ctx, own, [2]int{start, end}, start + caret)
+			return
+		}
 	}
 	change_source_held(ctx, text, [2]int{start, end})
+}
+
+// At the end of a command of the reader, the rules for a fence that it
+// made or took away (`document.typed_fence`): the lines of a fence do
+// not show, so the caret has no place in them. A new fence gets its
+// closing fence at once, and the caret goes into its code. A closing
+// fence takes the caret to an empty paragraph after the code, or, where
+// none can be, back to the end of the code. The caller
+// holds `source_lock`, in the command.
+@(private)
+typed_fence :: proc(ctx: ^Ctx, before: document.Code_Before) {
+	if ctx.doc.count == 0 || ctx.caret < 0 {
+		return
+	}
+	kind, start, end, text := document.typed_fence(&ctx.doc, before, ctx.caret_at, ctx.caret)
+	defer delete(text)
+	switch kind {
+	case .None:
+		return
+	case .Opened:
+		change_source_held(ctx, text, [2]int{start, end}, ctx.caret)
+		// Into the code: text that is typed next is code.
+		caret_to_place(ctx)
+		return
+	case .Closed_Twice:
+		change_source_held(ctx, "", [2]int{start, end}, start)
+	case .Closed:
+	}
+	at, paragraph, caret, leaves := document.code_exit(&ctx.doc, ctx.caret_at, ctx.caret)
+	defer delete(paragraph)
+	switch {
+	case !leaves:
+		caret_to_place(ctx)
+	case len(paragraph) > 0:
+		change_source_held(ctx, paragraph, [2]int{at, at}, caret)
+	case:
+		context.temp_allocator = ctx.temp
+		// A reader of the caret holds the lock of the state.
+		hold(ctx)
+		ctx.caret = caret
+		caret_changed(ctx)
+		reveal_update(ctx)
+		ctx.display_valid = false
+	}
 }
 
 // The one way that the source of the document changes (but for a task
@@ -504,12 +563,27 @@ command :: proc(ctx: ^Ctx, kind: history.Kind) {
 	if from, to, selected := selection_offsets(ctx); selected {
 		kind, anchor = .Other, ctx.caret == from ? to : from
 	}
+	if ctx.history.depth == 0 {
+		// Of the place where the text of the command goes: with text
+		// selected, the code that all of the selection is in.
+		ctx.code_before = {}
+		if from, to, selected := selection_offsets(ctx); selected {
+			ctx.code_before = document.code_before_selection(&ctx.doc, from, to)
+		} else if ctx.caret >= 0 {
+			ctx.code_before = document.code_before(&ctx.doc, ctx.caret_at)
+		}
+	}
 	history.begin(&ctx.history, kind, ctx.caret, anchor, ctx.caret_upstream)
 }
 
-// Ends a command (`command`), with the caret after all that it did.
+// Ends a command (`command`), with the caret after all that it did, and
+// after the rules for a fence that it made (`typed_fence`).
 @(private)
 command_end :: proc(ctx: ^Ctx) {
+	// With the changes of the command done, and in its step of Undo.
+	if ctx.history.depth == 1 {
+		typed_fence(ctx, ctx.code_before)
+	}
 	history.end(&ctx.history, ctx.caret, ctx.caret_upstream)
 }
 
@@ -1069,6 +1143,24 @@ mdcore_caret_move :: proc "c" (handle: rawptr, move: Move, extend: bool) -> bool
 	return moved
 }
 
+// See the header.
+@(export)
+mdcore_paragraph_below :: proc "c" (handle: rawptr) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	if ctx.caret < 0 || ctx.doc.count == 0 {
+		return false
+	}
+	start, text, caret := document.code_below(&ctx.doc, ctx.caret_at) or_return
+	defer delete(text)
+	command(ctx, .Other)
+	defer command_end(ctx)
+	change_source_held(ctx, text, [2]int{start, start}, caret)
+	return true
+}
+
 // `mdcore_caret_move`, for a caller that holds `source_lock` and the
 // lock of the state. The marks at the caret are the caller's to bring
 // up to date (`reveal_update`). `went`: the move that was made.
@@ -1249,12 +1341,81 @@ mdcore_caret_set :: proc "c" (handle: rawptr, x, y: f64) -> bool {
 		}
 		return false
 	}
-	// The selection is empty and at the caret, which can be beside the
-	// point (at an end of an entity that is one thing): a drag from here
-	// selects from this place (`mdcore_mouse`).
+	caret_put(ctx, stop, at, upstream)
+	return true
+}
+
+// Puts the caret at a stop that was found for an address of the page.
+// The selection is empty and at the caret, which can be beside the
+// address (at an end of an entity that is one thing): a drag from here
+// selects from this place (`mdcore_mouse`).
+@(private)
+caret_put :: proc(ctx: ^Ctx, stop: Stop, at: document.Address, upstream: bool) {
 	ctx.select_from = nil
 	set_caret(ctx, stop, upstream && stop.at == at, stop.at)
 	reveal_update(ctx)
+}
+
+// See the header.
+@(export)
+mdcore_caret_set_in :: proc "c" (handle: rawptr, top, bottom: f64) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	hold(ctx)
+	history.seal(&ctx.history)
+	if ctx.doc.count == 0 {
+		// As `mdcore_caret_set`.
+		ctx.caret = ctx.doc.hidden
+		ctx.display_valid = false
+		return true
+	}
+	// The text that is nearest to a point can be a line above the range
+	// (the point is on a picture or in a gap): from the top edge down to
+	// the first place whose line is all in the range. Nothing changes
+	// until the place is found, so each look is at the same layout.
+	Found :: struct {
+		stop:     Stop,
+		at:       document.Address,
+		upstream: bool,
+		ok:       bool,
+	}
+	first, shown: Found
+	for probe := top + 1; probe < bottom && !shown.ok; {
+		// To under the line that was found, so that no line is left out,
+		// also one that is less high than a fixed step. Else a small
+		// step, over what takes no caret.
+		next := probe + 8
+		if at, upstream, placed := layout.caret_hit(&ctx.page, 0, probe); placed {
+			if _, y, height, has := layout.caret_y(&ctx.page, at, upstream); has {
+				next = max(next, y + f64(height) + 1)
+				if stop, stops := stop_at(ctx, at); stops {
+					found := Found{stop, at, upstream, true}
+					switch {
+					case y >= top && y + f64(height) <= bottom:
+						shown = found
+					case !first.ok:
+						first = found
+					case:
+						stop_delete(stop)
+					}
+				}
+			}
+		}
+		probe = next
+	}
+	// No such place (a range with one tall thing in it): the first text
+	// that was found, which the host brings into view.
+	if shown.ok && first.ok {
+		stop_delete(first.stop)
+	}
+	found := shown.ok ? shown : first
+	if !found.ok {
+		return false
+	}
+	caret_put(ctx, found.stop, found.at, found.upstream)
 	return true
 }
 
@@ -1332,12 +1493,14 @@ mdcore_caret_rect :: proc "c" (handle: rawptr, x, y, height: ^f64) -> bool {
 	if ctx.caret < 0 || !ctx.layout_valid {
 		return false
 	}
+	// The bar that shows: as high as the text of its line, not as the
+	// line (`layout.caret_bar`).
 	if ctx.doc.count == 0 {
-		cx, top, h := layout.caret_place_empty(&ctx.page)
+		cx, top, h := layout.caret_bar_empty(&ctx.page)
 		x^, y^, height^ = f64(cx), ctx.page.origin + f64(top), f64(h)
 		return true
 	}
-	cx, cy, h := layout.caret_y(&ctx.page, ctx.caret_at, ctx.caret_upstream) or_return
+	cx, cy, h := layout.caret_bar_y(&ctx.page, ctx.caret_at, ctx.caret_upstream) or_return
 	x^, y^, height^ = f64(cx), cy, f64(h)
 	return true
 }
@@ -1533,6 +1696,10 @@ delete_back :: proc(ctx: ^Ctx) -> bool {
 		clear(&ctx.gone)
 		append(&ctx.gone, ..ctx.doc.source[start:end])
 		change_source_held(ctx, "", [2]int{start, end}, caret)
+		// Code that went can leave the caret in a line where no text
+		// goes (one empty line between two blocks): it is where text
+		// that is typed at its address goes.
+		caret_to_place(ctx)
 		return true
 	}
 	// The character before the caret, with the marks of a style that

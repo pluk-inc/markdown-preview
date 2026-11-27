@@ -104,7 +104,8 @@ gives the headings of the outline, `mdcore_outline`), a change to front
 matter in Edit Mode (the page shows it as a panel of keys and values at
 the top, which is not text of the editor), print, export, and VoiceOver.
 
-Edit Mode has its first form: a click puts a caret in the text, and the
+Edit Mode has its first form: it starts with a caret at the start of the
+first text that shows, a click puts the caret in the text, and the
 reader types, deletes the character before the caret, pastes, and
 saves. Return starts a new paragraph, a new item in a list, or a new
 line in code, and the caret is in the new line at once. A line of the
