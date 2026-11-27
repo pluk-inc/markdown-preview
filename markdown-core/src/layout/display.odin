@@ -175,7 +175,29 @@ display_part :: proc(
 						color = span_color(l, para, span.style, done)
 					}
 				}
-				glyph_quad(cache, glyphs, run_font_id, g, line.x, part.top, baseline, origin_y, color)
+				px := (line.x + g.x) * scale
+				py := f32(page_pixel(part.top, baseline - g.y, scale) - origin_y)
+				fx := math.floor(px)
+				bin := u8(clamp((px - fx) * text.SUBPIXEL_BINS, 0, text.SUBPIXEL_BINS - 1))
+				// Inline by force: the compiler puts a procedure with one
+				// caller inline, and the panel is a second caller of this
+				// one. As a call for each glyph it was 3 to 5 percent more
+				// instructions for the frame of a typed character.
+				e := #force_inline text.cache_get(cache, run_font_id, g.id, bin)
+				if e.w == 0 {
+					continue
+				}
+				append(
+					glyphs,
+					base.Quad {
+						pos = {fx + f32(e.left), py - f32(e.top)},
+						size = {f32(e.w), f32(e.h)},
+						uv = {f32(e.x), f32(e.y)},
+						uvsize = {f32(e.w), f32(e.h)},
+						color = color,
+						kind = e.is_color ? .Color_Glyph : .Gray_Glyph,
+					},
+				)
 			}
 		}
 	}
