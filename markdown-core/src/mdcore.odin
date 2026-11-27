@@ -379,16 +379,18 @@ typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
 		change_source_held(ctx, own, [2]int{start, end})
 		return
 	}
-	// Text with no line break at its start, at the caret.
-	if len(text) > 0 && text[0] != '\n' && text[0] != '\r' && start == end && start == ctx.caret && ctx.doc.count > 0 {
-		if document.empty_of(&ctx.doc, ctx.caret_at) > 0 {
+	if len(text) > 0 && start == end && start == ctx.caret && ctx.doc.count > 0 {
+		// Text with no line break at its start, in an empty paragraph.
+		if text[0] != '\n' && text[0] != '\r' && document.empty_of(&ctx.doc, ctx.caret_at) > 0 {
 			own := document.empty_text(&ctx.doc, text)
 			defer delete(own)
 			change_source_held(ctx, own, [2]int{start, end})
 			return
 		}
-		// The first text of code in a fence with no line of code: a
-		// line of its own (`document.code_first_line`).
+		// The first text of code in a fence with no line of code: lines
+		// of that code (`document.code_first_line`), also for text that
+		// starts with a line break, or the closing fence would be at the
+		// end of the text.
 		if own, caret, first := document.code_first_line(&ctx.doc, ctx.caret_at, start, text); first {
 			defer delete(own)
 			change_source_held(ctx, own, [2]int{start, end}, start + caret)
@@ -562,7 +564,14 @@ command :: proc(ctx: ^Ctx, kind: history.Kind) {
 		kind, anchor = .Other, ctx.caret == from ? to : from
 	}
 	if ctx.history.depth == 0 {
-		ctx.code_before = ctx.caret >= 0 ? document.code_before(&ctx.doc, ctx.caret_at) : {}
+		// Of the place where the text of the command goes: with text
+		// selected, the start of the selection, not its end that moves.
+		ctx.code_before = {}
+		if from, _, selected := selection_offsets(ctx); selected && ctx.doc.count > 0 {
+			ctx.code_before = document.code_before(&ctx.doc, document.address_of(&ctx.doc, from))
+		} else if ctx.caret >= 0 {
+			ctx.code_before = document.code_before(&ctx.doc, ctx.caret_at)
+		}
 	}
 	history.begin(&ctx.history, kind, ctx.caret, anchor, ctx.caret_upstream)
 }

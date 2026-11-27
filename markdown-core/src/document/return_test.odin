@@ -472,6 +472,9 @@ test_pasted_lines_are_lines_of_the_code :: proc(t: ^testing.T) {
 	cases := []Case {
 		{"> ```\n> ```\n", "a\nb", "> ```\n> a\n> b\n> ```\n", 6, 13},
 		{">```\n>```\n", "    pass", ">```\n>     pass\n>```\n", 5, 15},
+		// A text that starts with a line break.
+		{"```\n```\n", "\nx", "```\n\nx\n```\n", 4, 6},
+		{"> ```\n> ```\n", "\nx", "> ```\n> \n> x\n> ```\n", 6, 12},
 		{"> ```\n>\n> ```\n", "    pass", "> ```\n>     pass\n> ```\n", 7, 16},
 		{"- ```\n  ```\n", "a\nb\n", "- ```\n  a\n  b\n  \n  ```\n", 6, 16},
 		{"```\r\n```\r\n", "a\r\nb", "```\r\na\r\nb\r\n```\r\n", 5, 9},
