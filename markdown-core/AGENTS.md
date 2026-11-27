@@ -433,8 +433,8 @@ release.
   behavior, and delete it after.
 - The fast check after an edit is the type check of one package, which
   links nothing: `odin check markdown-core/src/layout -no-entry-point`.
-  This works for `base`, `document`, `text`, and `layout`. It fails for
-  `renderer` and for `src` itself, because `metal_darwin.odin` loads
+  This works for every package but two. It fails for `renderer` and for
+  `src` itself, because `metal_darwin.odin` loads
   `quad.metallib`, a file that only `build.sh` makes, in a copy of the
   source. Those two are checked by the app build.
 - Take a new compiler flag from `odin help build` (or `check`, `test`),
