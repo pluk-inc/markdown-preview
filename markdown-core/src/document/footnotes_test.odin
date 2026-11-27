@@ -152,6 +152,21 @@ test_the_document_has_the_footnotes_as_numbers :: proc(t: ^testing.T) {
 		{"T[^n].\n\n[^n]: Visible.\n\n<div>\n[^n]: Hidden.\n</div>\n", "T<1:1>.|{1}Visible.|"},
 		// A bracket after a backslash is no end of an inline footnote.
 		{"A ^[a \\] b] c.\n", "A <1:1> c.|"},
+		// One that starts or ends in code between backticks is none, and
+		// the one after it has the first number.
+		{"Code `^[literal` tail].\n", "Code ^[literal tail].|"},
+		{"Use `^[` literally]. Next ^[real].\n", "Use ^[ literally]. Next <1:1>.|"},
+		// Code in the text of an inline footnote is of the footnote.
+		{"A ^[with `code` in it] b.\n", "A <1:1> b.|"},
+		// A "[^" with no definition is text, and what is after it is read.
+		{"Typo [^missing; real ^[works].\n\n[^a]: A.\n", "Typo [^missing; real <1:1>.|{0}A.|"},
+		// A label of only spaces is none (the line is the definition of
+		// a link for the parser, which shows nothing).
+		{"T[^ ].\n\n[^ ]: Body.\n", "T[^ ].|"},
+		// A definition that is indented: a line goes on in it when it is
+		// as far in as the text of the definition.
+		{"T[^n].\n\n   [^n]: Intro.\n\n  Tail.\n", "T<1:1>.|{1}Intro.|Tail.|"},
+		{"T[^n].\n\n   [^n]: Intro.\n\n     Tail.\n", "T<1:1>.|{1}Intro.|>Tail.|"},
 		// In raw HTML: no reference.
 		{"A <a href=\"[^1]\">link</a> and[^1].\n\n[^1]: One.\n", "A link and<1:1>.|{1}One.|"},
 		// A definition right after a paragraph, and a list after it.
@@ -221,7 +236,9 @@ test_a_reference_at_the_caret_shows_its_source :: proc(t: ^testing.T) {
 	defer delete(pairs)
 	places := block_map(&doc, 0, &pairs)
 	defer delete(places)
-	testing.expect_value(t, len(pairs), 2)
+	if !testing.expect_value(t, len(pairs), 2) {
+		return
+	}
 	testing.expect_value(t, [2]int{pairs[0].from, pairs[0].to}, [2]int{3, 7})
 	testing.expect_value(t, [2]int{pairs[1].from, pairs[1].to}, [2]int{15, 19})
 }
@@ -335,7 +352,12 @@ test_the_list_of_footnotes_with_other_blocks :: proc(t: ^testing.T) {
 		// (four more than the text of the item), and in the list too.
 		{"T[^n].\n\n[^n]: Intro.\n\n      *literal*\n", "1. Intro. " + BACK + "\n\n       *literal*\n\n"},
 		{"T[^n].\n\n[^n]: Note.\nAfter.\n\nBody.\n", "1. Note.\n   After. " + BACK + "\n\n"},
-		{"T[^n].\n\n[^n]: Read [guide][g].\n\n[g]: https://example.com\n", "1. Read [guide][g]. " + BACK + "\n\n[g]: https://example.com\n"},
+		{"T[^n].\n\n[^n]: Read [guide][g].\n\n[g]: https://example.com\n", "1. Read [guide][g]. " + BACK + "\n\n   [g]: https://example.com\n\n[g]: https://example.com\n"},
+		// A line under the text that makes it a heading has nothing after
+		// it: the mark is in a paragraph of its own.
+		{"T[^n].\n\n[^n]: Intro\n  ---\n", "1. Intro\n   ---\n\n   " + BACK + "\n\n"},
+		// The text after the definition of a link in a footnote is kept.
+		{"T[^n].\n\n[^n]: Intro.\n\n  [g]: /guide\n  Tail.\n\nAfter.\n", "1. Intro. " + BACK + "\n\n   [g]: /guide\n   Tail.\n\n[g]: /guide\n"},
 	}
 	for c in cases {
 		doc := parse(c.source)
@@ -588,4 +610,22 @@ test_a_definition_is_no_item_of_a_list_of_the_source :: proc(t: ^testing.T) {
 	testing.expect_value(t, block_at(&doc, 4).spacing, Spacing.List_Start)
 	testing.expect_value(t, block_at(&doc, 4).marker, Marker.Bullet)
 	testing.expect(t, !block_at(&doc, 4).noted && !block_at(&doc, 2).noted)
+}
+
+// A definition in an item of a list of the source: its blocks are of
+// the footnote, and the items of that list are not.
+@(test)
+test_a_definition_in_an_item_of_a_list :: proc(t: ^testing.T) {
+	doc := parse("T[^n].\n\n- Parent.\n\n  [^n]: Child note.\n\n      More of it.\n\n  Parent again.\n\n- Next.\n\nAfter.\n")
+	defer destroy(&doc)
+	want := []bool{false, false, true, true, false, false, false}
+	if !testing.expect_value(t, doc.count, len(want)) {
+		return
+	}
+	for noted, block in want {
+		testing.expectf(t, in_note(&doc, block) == noted, "block %d (%q): of a footnote is %v", block, string(block_at(&doc, block).text.bytes[:]), !noted)
+	}
+	out := make([dynamic]u8, context.temp_allocator)
+	testing.expect(t, note_text(&doc, 1, &out))
+	testing.expect_value(t, string(out[:]), "Child note.\n\nMore of it.")
 }

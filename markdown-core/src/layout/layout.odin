@@ -1270,9 +1270,17 @@ lay_out :: proc(l: ^Layout, y0, y1, anchor_y: f64) -> (changed: bool) {
 	}
 	// The list of the footnotes below the last part, in the same range:
 	// its layout has the heights of this page.
-	if list := l.notes.page; list != nil && y1 > list.origin && lay_out(list, y0, y1, anchor_y) {
-		changed = true
-		sum_tops(l)
+	if list := l.notes.page; list != nil && y1 > list.origin {
+		was := list.origin
+		if lay_out(list, y0, y1, anchor_y) {
+			changed = true
+			// A part of the list above the view with another height:
+			// the list moved its origin to keep the text of the view
+			// where it is. The list is below this page, so this page is
+			// what moves.
+			l.origin += list.origin - was
+			sum_tops(l)
+		}
 	}
 	when ODIN_DEBUG {
 		problem := check(l)
@@ -1304,6 +1312,14 @@ laid_out :: proc(l: ^Layout, y0, y1: f64) -> bool {
 lay_out_end :: proc(l: ^Layout, height, anchor_y: f64) -> (changed: bool) {
 	anchor := part_at(l, anchor_y)
 	real: f64
+	// The list of the footnotes is the end of a page that has one.
+	if list := l.notes.page; list != nil && len(list.parts) > 0 {
+		if lay_out_end(list, height, anchor_y) {
+			changed = true
+			sum_tops(l)
+		}
+		real = f64(l.notes.height)
+	}
 	for p := len(l.parts) - 1; p >= 0 && real < height; p -= 1 {
 		changed |= lay_out_part(l, p, anchor)
 		real += f64(l.parts[p].height)

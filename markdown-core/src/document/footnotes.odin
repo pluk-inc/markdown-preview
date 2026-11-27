@@ -232,10 +232,10 @@ footnote_scan :: proc(source: []u8, start, limit: int, known: ^map[string]int, b
 				}
 				second_end, _ := line_at(source, after)
 				second_end = min(second_end, limit)
-				if !footnote_continues(source[after:second_end]) {
+				if !footnote_continues(source[after:second_end], mark) {
 					break
 				}
-			} else if !footnote_continues(following) {
+			} else if !footnote_continues(following, mark) {
 				break
 			} else {
 				append(&lines, Piece{next, line_end, len(possible)})
@@ -288,9 +288,15 @@ footnote_scan :: proc(source: []u8, start, limit: int, known: ^map[string]int, b
 					i += 2
 					continue
 				}
-				if key := footnote_key(string(source[i + 2:close])); key in labels^ {
-					append(&candidates, Footnote_Candidate{i, close + 1, key, piece.of})
+				// A label of only spaces is none. With no definition that
+				// has the label, the "[^" is text, and what is after it
+				// is read for itself (an inline footnote can be there).
+				key := footnote_key(string(source[i + 2:close]))
+				if key == "" || key not_in labels^ {
+					i += 2
+					continue
 				}
+				append(&candidates, Footnote_Candidate{i, close + 1, key, piece.of})
 				i = close + 1
 			case ch == '^' && i + 1 < piece.end && source[i + 1] == '[':
 				// To the "]" of this "[": brackets in the text count.
@@ -324,6 +330,8 @@ footnote_scan :: proc(source: []u8, start, limit: int, known: ^map[string]int, b
 			}
 		}
 	}
+	scan.possible = possible[:]
+	footnote_out_of_code(source, start, limit, &scan, &candidates)
 	scan.bullet = bullet
 	if bullet == 0 {
 		scan.bullet = BULLETS[0]
@@ -357,6 +365,87 @@ footnote_scan :: proc(source: []u8, start, limit: int, known: ^map[string]int, b
 	// What the parser reads as text decides.
 	scan.confirmed, scan.defined = footnote_confirm(source, start, limit, &scan)
 	return scan
+}
+
+// Takes out each possible reference that starts or ends in code: one
+// with a backtick in it, whose first or last byte the parser reads as
+// no text in the source as it is. With its bytes masked, the backtick
+// that ends the code would go, and the parser would read text there.
+// Most sources have none: then this is one look at the candidates.
+@(private)
+footnote_out_of_code :: proc(source: []u8, start, limit: int, scan: ^Footnote_Scan, candidates: ^[dynamic]Footnote_Candidate) {
+	ends := make([dynamic]int, context.temp_allocator) // the first and the last byte of each such candidate, in the order of the source
+	for candidate in candidates {
+		if bytes.index_byte(source[candidate.start:candidate.end], '`') >= 0 {
+			append(&ends, candidate.start, candidate.end - 1)
+		}
+	}
+	if len(ends) == 0 {
+		return
+	}
+	State :: struct {
+		ctx:        runtime.Context,
+		base:       uintptr,
+		size, from: int,
+		ends:       []int,
+		text:       []bool, // for each of `ends`: the parser reads it as text
+	}
+	// Only the lines of the possible definitions are other bytes: they
+	// are items of a list in each pass.
+	masked := slice.clone(source[start:limit])
+	defer delete(masked)
+	for note in scan.possible {
+		masked[note.mark - start], masked[note.mark - start + 1] = BULLETS[0], ' '
+	}
+	state := State{context, uintptr(raw_data(masked)), len(masked), start, ends[:], make([]bool, len(ends), context.temp_allocator)}
+	block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.int {
+		return 0
+	}
+	span :: proc "c" (type: Md_Span, detail: rawptr, userdata: rawptr) -> c.int {
+		return 0
+	}
+	text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr) -> c.int {
+		state := cast(^State)userdata
+		context = state.ctx
+		if type != .Normal || uintptr(text) < state.base || uintptr(text) >= state.base + uintptr(state.size) {
+			return 0
+		}
+		from := int(uintptr(text) - state.base) + state.from
+		low, high := 0, len(state.ends)
+		for low < high {
+			middle := (low + high) / 2
+			if state.ends[middle] < from {
+				low = middle + 1
+			} else {
+				high = middle
+			}
+		}
+		for ; low < len(state.ends) && state.ends[low] < from + int(size); low += 1 {
+			state.text[low] = true
+		}
+		return 0
+	}
+	md := Md_Parser {
+		flags       = MD_FLAGS,
+		enter_block = block,
+		leave_block = block,
+		enter_span  = span,
+		leave_span  = span,
+		text        = text,
+	}
+	md_parse(raw_data(masked), c.uint(min(len(masked), int(max(c.int)))), &md, &state)
+	kept, at := 0, 0
+	for candidate in candidates {
+		if at < len(ends) && ends[at] == candidate.start {
+			at += 2
+			if !state.text[at - 2] || !state.text[at - 1] {
+				continue
+			}
+		}
+		candidates[kept] = candidate
+		kept += 1
+	}
+	resize(candidates, kept)
 }
 
 // The byte that stands for each byte of a reference in what the parser
@@ -710,7 +799,8 @@ footnote_definition :: proc(line: []u8) -> (label: string, mark, content: int, o
 	for close < len(line) && line[close] != ']' {
 		close += 1
 	}
-	if close == at + 2 || close + 1 >= len(line) || line[close + 1] != ':' {
+	// A label of only spaces is none.
+	if close == at + 2 || close + 1 >= len(line) || line[close + 1] != ':' || strings.trim_space(string(line[at + 2:close])) == "" {
 		return
 	}
 	content = close + 2
@@ -796,7 +886,7 @@ note_end :: proc(doc: ^Document, block: int) -> int {
 	end := block + 1
 	for end < doc.count {
 		b := block_at(doc, end)
-		if !b.noted || (b.list_depth == 1 && b.spacing != .Continuation) {
+		if !b.noted || (b.marker == .Note && b.spacing != .Continuation) {
 			break
 		}
 		end += 1
@@ -816,7 +906,9 @@ NOTE_BACK_TARGET :: "#back"
 // an item of the list), and a link with `NOTE_BACK` at the end of its
 // first paragraph. A page shows it at its end, where a reader looks for
 // footnotes. "" for a document with none. The memory is of `allocator`.
-notes_source :: proc(doc: ^Document, allocator := context.allocator) -> string {
+// `starts` gets where the item of each footnote starts in the result,
+// in the order of the numbers.
+notes_source :: proc(doc: ^Document, allocator := context.allocator, starts: ^[dynamic]int = nil) -> string {
 	found := document_footnotes(doc)
 	count := 0
 	for note in found.notes {
@@ -856,17 +948,10 @@ notes_source :: proc(doc: ^Document, allocator := context.allocator) -> string {
 			// of it goes on in that paragraph.
 			end := note.content
 			if first := first_block[number] - 1; first >= 0 {
+				// The definition of a link among them is one in the list
+				// too, and shows in none of the two.
 				after := note_end(doc, first)
 				end = after < doc.count ? block_start(doc, after) : len(doc.source)
-				// But for the definitions of links after its last block,
-				// which are no block.
-				last := block_start(doc, after - 1)
-				for def in doc.defs {
-					if def.start > last && def.start < end {
-						end = def.start
-						break
-					}
-				}
 			}
 			for at := note.content; at < end; {
 				line_end, next := line_at(doc.source, at)
@@ -893,6 +978,15 @@ notes_source :: proc(doc: ^Document, allocator := context.allocator) -> string {
 			if len(lines) > 0 {
 				first := strings.trim_space(lines[0])
 				apart = strings.has_prefix(first, "```") || strings.has_prefix(first, "~~~") || strings.has_prefix(first, "|")
+				// A line of "=" or "-" under the text makes it a heading,
+				// and can have nothing after it.
+				for line in lines[1:] {
+					under := strings.trim_space(line)
+					if under == "" {
+						break
+					}
+					apart ||= strings.trim_left(under, "=") == "" || strings.trim_left(under, "-") == ""
+				}
 			}
 		}
 		// The last line of the first paragraph: the mark goes there. A
@@ -906,6 +1000,9 @@ notes_source :: proc(doc: ^Document, allocator := context.allocator) -> string {
 			last += 1
 		}
 		prefix := fmt.tprintf("%d. ", number)
+		if starts != nil {
+			append(starts, strings.builder_len(out))
+		}
 		for line, i in lines {
 			if i == 0 {
 				strings.write_string(&out, prefix)
@@ -924,7 +1021,7 @@ notes_source :: proc(doc: ^Document, allocator := context.allocator) -> string {
 			fmt.sbprintf(&out, "%s[%s](%s)\n", prefix, NOTE_BACK, NOTE_BACK_TARGET)
 		} else if apart {
 			// A fence that nothing closes would have the mark as code.
-			if first := strings.trim_space(lines[0]); first[0] != '|' {
+			if first := strings.trim_space(lines[0]); strings.has_prefix(first, "```") || strings.has_prefix(first, "~~~") {
 				run := 0
 				for run < len(first) && first[run] == first[0] {
 					run += 1
@@ -982,19 +1079,24 @@ has_footnote :: proc(source: []u8) -> bool {
 
 // A line that a definition goes on in.
 @(private)
-footnote_continues :: proc(line: []u8) -> bool {
-	if len(line) > 0 && line[0] == '\t' {
-		return true
-	}
-	if len(line) < FOOTNOTE_INDENT {
-		return false
-	}
-	for ch in line[:FOOTNOTE_INDENT] {
-		if ch != ' ' {
-			return false
+footnote_continues :: proc(line: []u8, lead: int) -> bool {
+	// As far in as the text of the item that the definition is for the
+	// parser: its indent and `FOOTNOTE_INDENT` columns. A tab is four.
+	columns := 0
+	for ch in line {
+		switch ch {
+		case ' ':
+			columns += 1
+		case '\t':
+			columns += 4
+		case:
+			return columns >= lead + FOOTNOTE_INDENT
+		}
+		if columns >= lead + FOOTNOTE_INDENT {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 // The label of a footnote as its references find it: with no spaces

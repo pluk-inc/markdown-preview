@@ -100,7 +100,8 @@ Parser :: struct {
 	line:         [2]int,
 	bytes:        []u8, // what is parsed
 	kept:         []u8, // the source: the same bytes, but for what is masked for the parser
-	note_item:    bool, // the item of the outer list that is open is the definition of a footnote
+	note_item:    bool, // the item that is open, at `note_depth` lists, is the definition of a footnote
+	note_depth:   int,
 	after_nul:    bool, // the text before was the character for a NUL byte
 	// Table.
 	table:        Block,
@@ -111,14 +112,14 @@ Parser :: struct {
 }
 
 // Parses a Markdown source. The caller owns the result (`destroy`).
-parse :: proc(source: string) -> Document {
-	return parse_owned(slice.clone(transmute([]u8)source))
+parse :: proc(source: string, notes := true) -> Document {
+	return parse_owned(slice.clone(transmute([]u8)source), notes = notes)
 }
 
 // Parses a Markdown source that the document keeps: memory of the
 // allocator of the context, which goes with the document.
-parse_owned :: proc(bytes: []u8, reveal: Maybe(int) = nil) -> Document {
-	return parse_piece(bytes, 0, len(bytes), reveal = reveal, at_start = true, whole = true)
+parse_owned :: proc(bytes: []u8, reveal: Maybe(int) = nil, notes := true) -> Document {
+	return parse_piece(bytes, 0, len(bytes), reveal = reveal, at_start = true, whole = notes)
 }
 
 // Parses a piece of the source of a document that starts where a block
@@ -408,10 +409,14 @@ take_item_position :: proc(p: ^Parser, b: ^Block) {
 		b.task_mark = p.item_mark
 		b.spacing = p.list_start ? .List_Start : .Item
 		p.list_start = false
-		// A definition is an item of an outer list; the items of a list
-		// in its text are of it too.
-		if len(p.lists) == 1 {
-			p.note_item = b.marker == .Note
+		// A definition is an item of a list (of the source, when its
+		// line is indented into an item of one); the items of a list in
+		// its text are of it too, and the next item of its own list or
+		// of a list around it is not.
+		if b.marker == .Note {
+			p.note_item, p.note_depth = true, len(p.lists)
+		} else if len(p.lists) <= p.note_depth {
+			p.note_item = false
 		}
 	} else {
 		b.spacing = .Continuation
@@ -531,6 +536,10 @@ leave_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 		p.quote -= 1
 	case .Ul, .Ol:
 		close_text(p)
+		// The list of a definition ends: what is after it is not of it.
+		if len(p.lists) == p.note_depth {
+			p.note_item = false
+		}
 		pop(&p.lists)
 	case .Li:
 		close_text(p)

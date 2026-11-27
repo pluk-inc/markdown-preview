@@ -1064,6 +1064,8 @@ private final class PageArea: NSView {
         downPoint = point
         // Before the caret goes there (see `click`).
         downNote = owner?.note(at: point)
+        // A press is no wait on a number: no bubble comes up in a drag.
+        owner?.pointerLeftPage()
         owner?.pointer(at: point, phase: 0)
     }
 

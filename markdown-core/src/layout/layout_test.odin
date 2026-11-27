@@ -1953,8 +1953,9 @@ test_the_footnotes_are_a_list_at_the_end_of_a_page_that_is_read :: proc(t: ^test
 	_, _, on_text := note_at(&read.page, text_x + 12, y)
 	testing.expect(t, !on_text)
 	line := only(list).lines[item.line_end - 1]
-	_, _, on_back := note_at(&read.page, line.x + line.line.width - 3, y)
-	testing.expect(t, on_back)
+	back_number, back_definition, on_back := note_at(&read.page, line.x + line.line.width - 3, y)
+	testing.expect(t, on_back && back_definition)
+	testing.expect_value(t, back_number, 2)
 	// A document with no footnote has no list.
 	plain: Fixture
 	plain.page.notes_at_end = true
@@ -2042,6 +2043,25 @@ test_a_list_and_a_link_in_the_text_of_a_footnote :: proc(t: ^testing.T) {
 	expect_ok(t, &g.page)
 	_, _, quoted := note_top(&g.page, 1)
 	testing.expect(t, quoted)
+	// So is a text that starts with a list, and the footnote after it.
+	// What has the form of a footnote in a text of the list is text.
+	h: Fixture
+	h.page.notes_at_end = true
+	setup(&h, "T[^n], U[^m], V ^[outer ^[inner]].\n\n[^n]: - Child.\n[^m]: Second.\n", 600)
+	defer teardown(&h)
+	step(&h.page, 1e30)
+	expect_ok(t, &h.page)
+	first_top, _, has_first := note_top(&h.page, 1)
+	second_top, _, has_second := note_top(&h.page, 2)
+	third_top, _, has_third := note_top(&h.page, 3)
+	testing.expect(t, has_first && has_second && has_third && first_top < second_top && second_top < third_top)
+	in_first, _, _ := note_at(&h.page, h.page.notes.page.column_x + 3 * h.page.notes.page.m.list_indent, first_top + 6)
+	testing.expect_value(t, in_first, 1)
+	inner := false
+	for i in 0 ..< h.page.notes.doc.count {
+		inner ||= strings.contains(string(document.block_at(h.page.notes.doc, i).text.bytes[:]), "outer ^[inner]")
+	}
+	testing.expect(t, inner)
 }
 
 // The bar of a caret is as high as the font of the text of its line, on
@@ -2158,6 +2178,13 @@ test_the_list_of_footnotes_is_laid_out_with_the_view :: proc(t: ^testing.T) {
 	}
 	testing.expect_value(t, lines, 0)
 	testing.expect(t, f.page.notes.height > 400 * list.m.body)
+	// The end of the page is the end of the list: a layout of the end
+	// makes the records of its last items, so the height of the page is
+	// the real one there.
+	lay_out_end(&f.page, 800, 0)
+	expect_ok(t, &f.page)
+	testing.expect(t, len(list.parts[len(list.parts) - 1].lines) > 0)
+	testing.expect(t, list.parts[len(list.parts) - 1].complete)
 	// A view at the end of the page has the records of its last items,
 	// and the jump to a footnote those of its item.
 	bottom := f.page.origin + f.page.content_height

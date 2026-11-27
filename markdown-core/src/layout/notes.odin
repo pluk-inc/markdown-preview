@@ -16,7 +16,7 @@ import "../text"
 note_at :: proc(l: ^Layout, x: f32, y: f64) -> (number: int, definition: bool, ok: bool) {
 	// In the list of the footnotes at the end of the page.
 	if l.notes.page != nil && y >= l.notes.top {
-		return note_in_list(l.notes.page, x, y)
+		return note_in_list(l, x, y)
 	}
 	p := first_part_below(l, y)
 	if p >= len(l.parts) {
@@ -108,6 +108,7 @@ block_top :: proc(l: ^Layout, block: int) -> (y: f64, changed: bool, ok: bool) {
 // page. It is no part of the document, so no caret is in it.
 Notes_Area :: struct {
 	doc:    ^document.Document, // of the Markdown of the list, which is its source
+	starts: [dynamic]int, // where the item of each footnote starts in that source, in the order of the numbers
 	page:   ^Layout,
 	top:    f64, // of the area on the page
 	height: f32, // with the room and the hairline above the list; 0 for none
@@ -122,8 +123,9 @@ NOTES_SIZE :: 0.86 // of the text of the list, in sizes of the text of the docum
 @(private)
 notes_begin :: proc(l: ^Layout, force := false) -> bool {
 	want: string
+	starts := make([dynamic]int, context.temp_allocator)
 	if l.notes_at_end && l.doc != nil {
-		want = document.notes_source(l.doc, context.temp_allocator)
+		want = document.notes_source(l.doc, context.temp_allocator, &starts)
 	}
 	if !force && (l.notes.doc != nil ? string(l.notes.doc.source) : "") == want {
 		return false
@@ -135,7 +137,10 @@ notes_begin :: proc(l: ^Layout, force := false) -> bool {
 	}
 	notes := &l.notes
 	notes.doc = new(document.Document)
-	notes.doc^ = document.parse(want)
+	// With no footnotes of its own: what has the form of one in the text
+	// of a footnote (an inline one in an inline one) is that text.
+	notes.doc^ = document.parse(want, notes = false)
+	append(&notes.starts, ..starts[:])
 	notes.page = new(Layout)
 	// Smaller and softer than the text of the document: what a reader
 	// goes to when they want it.
@@ -160,6 +165,7 @@ notes_destroy :: proc(l: ^Layout) {
 		document.destroy(notes.doc)
 		free(notes.doc)
 	}
+	delete(notes.starts)
 	notes^ = {}
 }
 
@@ -193,7 +199,8 @@ notes_display :: proc(l: ^Layout, cache: ^text.Glyph_Cache, y0, y1: f64, origin_
 // that goes back, or on the number of an item. The footnote is the one
 // of the number of the item.
 @(private)
-note_in_list :: proc(list: ^Layout, x: f32, y: f64) -> (number: int, definition: bool, ok: bool) {
+note_in_list :: proc(l: ^Layout, x: f32, y: f64) -> (number: int, definition: bool, ok: bool) {
+	list := l.notes.page
 	p := first_part_below(list, y)
 	if p >= len(list.parts) {
 		return
@@ -206,20 +213,26 @@ note_in_list :: proc(list: ^Layout, x: f32, y: f64) -> (number: int, definition:
 	}
 	block := list.doc.starts[p] + slot
 	b := document.block_at(list.doc, block)
-	// The number is of the item of the list that the block is in: a
-	// footnote can have a list of its own in its text.
-	first: ^document.Block
-	for i := block; i >= 0; i -= 1 {
-		if at := document.block_at(list.doc, i); note_starts(at) {
-			first = at
-			break
+	// The footnote whose item the block is in: the last one that starts
+	// at the block or before it. A footnote can have a list of its own
+	// in its text.
+	at := document.block_start(list.doc, block)
+	low, high := 0, len(l.notes.starts)
+	for low < high {
+		middle := (low + high) / 2
+		if l.notes.starts[middle] <= at {
+			low = middle + 1
+		} else {
+			high = middle
 		}
 	}
-	if first == nil {
+	if low == 0 {
 		return
 	}
+	number = low
+	first := document.block_at(list.doc, document.block_at_offset(list.doc, l.notes.starts[low - 1]))
 	text_x := list.column_x + list_x(list, b)
-	on_mark := b == first && x < text_x && x >= text_x - list.m.list_indent - 0.8 * list.m.body && from_top < part.boxes[slot].top + list.m.body * list.m.line_height
+	on_mark := b == first && b.marker == .Number && x < text_x && x >= text_x - list.m.list_indent - 0.8 * list.m.body && from_top < part.boxes[slot].top + list.m.body * list.m.line_height
 	// The link that goes back (its target and its mark), and no other
 	// link of the text; on the mark itself, not on the room after it.
 	on_back := false
@@ -228,15 +241,7 @@ note_in_list :: proc(list: ^Layout, x: f32, y: f64) -> (number: int, definition:
 			on_back = span.link > 0 && span.link <= len(list.doc.links) && list.doc.links[span.link - 1] == document.NOTE_BACK_TARGET && string(src.bytes[span.start:span.end]) == document.NOTE_BACK
 		}
 	}
-	return first.number, true, on_mark || on_back
-}
-
-// True for the first block of a footnote in the list of the footnotes:
-// of an item of the list itself, and not of a list in a text.
-@(private)
-note_starts :: proc(b: ^document.Block) -> bool {
-	// Also in a quote: a text can start with one.
-	return b.marker == .Number && b.list_depth == 1 && b.spacing != .Continuation
+	return number, true, on_mark || on_back
 }
 
 // The height of the page where the text of a footnote starts: in the
@@ -244,16 +249,14 @@ note_starts :: proc(b: ^document.Block) -> bool {
 // definition is in the document.
 note_top :: proc(l: ^Layout, number: int) -> (y: f64, changed: bool, ok: bool) {
 	if list := l.notes.page; list != nil {
-		for i in 0 ..< list.doc.count {
-			if b := document.block_at(list.doc, i); note_starts(b) && b.number == number {
-				y, changed, ok = block_top(list, i)
-				// The list can have another height with that part of
-				// it laid out, and the page with it.
-				if changed {
-					sum_tops(l)
-				}
-				return
-			}
+		if number < 1 || number > len(l.notes.starts) || list.doc.count == 0 {
+			return
+		}
+		y, changed, ok = block_top(list, document.block_at_offset(list.doc, l.notes.starts[number - 1]))
+		// The list can have another height with that part of it laid
+		// out, and the page with it.
+		if changed {
+			sum_tops(l)
 		}
 		return
 	}
