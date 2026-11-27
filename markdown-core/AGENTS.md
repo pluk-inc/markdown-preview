@@ -1616,3 +1616,10 @@ export.
   gives the outline its new name, and a change of the renderer setting
   makes the outline of the other renderer. The numbers of the inspector
   still come from the text. The web renderer keeps its path.
+- **2026-11-27** — The corners of the card of a code block. The
+  maintainer asked that the card is as the one of the web renderer. The
+  background and the border were (the same two colors, a border of half
+  a point); the corners were 8 pt, and the web card (`.md-code-wrap`)
+  has 16 (`CODE_RADIUS`). Compared on screenshots of one document in
+  the two renderers. Not the same yet: the web card has a row with the
+  language at its top and colors for the syntax.
