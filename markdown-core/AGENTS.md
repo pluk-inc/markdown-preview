@@ -415,6 +415,34 @@ These came from the maintainer. Do not undo one without asking.
   thread's: a queue's threads come and go, and each would leave its own
   behind. An export sets `context.temp_allocator` from it.
 
+## Writing Odin
+
+Odin changes from release to release, and the build uses the Homebrew
+compiler, a monthly `dev-` release. The installed compiler is the source of
+truth: syntax from memory or from an online example can be from another
+release.
+
+- Read an API where the compiler keeps it, not from memory. `odin root`
+  prints the folder that holds `base/`, `core/`, and `vendor/`, and
+  `odin doc core:strings -short` lists a package. The Homebrew install has
+  no `examples/` folder; the tour of the language is
+  <https://odin-lang.org/docs/demo/>, which can be newer than the compiler.
+- Try a syntax or an API you are not sure of in a small package in the
+  temporary folder, never in `src/`. Run `odin check <folder>` on it for a
+  question about types, `odin test <folder>` for a question about
+  behavior, and delete it after.
+- The fast check after an edit is the type check of one package, which
+  links nothing: `odin check markdown-core/src/layout -no-entry-point`.
+  This works for `base`, `document`, `text`, and `layout`. It fails for
+  `renderer` and for `src` itself, because `metal_darwin.odin` loads
+  `quad.metallib`, a file that only `build.sh` makes, in a copy of the
+  source. Those two are checked by the app build.
+- Take a new compiler flag from `odin help build` (or `check`, `test`),
+  and put it in `build.sh` or `test.sh`, which hold the flags of the
+  project.
+- For a compiler or linker failure, read the first error first, and note
+  `odin version` with it.
+
 ## How to check a change
 
 ```bash
