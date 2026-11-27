@@ -634,6 +634,8 @@ final class NativeRendererView: NSView {
         // is the same as the one before (two empty files).
         if !keepsScroll { mdcore_forget_history(ctx) }
         hasDocument = true
+        // The text of a footnote can be another text now.
+        hideNoteBubble()
         endScrollAnimation()
         // The core changed the document in place: what is the same as
         // before kept its layout, and the reader's place its height. A new
@@ -816,11 +818,15 @@ final class NativeRendererView: NSView {
     /// a footnote for a moment shows the text of that footnote: a reader
     /// reads it with no jump, and in Edit mode with no move of the caret.
     private func hoverNote(at point: NSPoint?) {
-        guard let point, let note = note(at: point), !note.isDefinition else {
+        var number = 0
+        // No wait for a frame that has the core: the bubble stays as it
+        // is, and the next move of the pointer asks again.
+        let found = point.map { mdcore_note_hover(ctx, $0.x, $0.y, &number) } ?? 0
+        if found < 0 { return }
+        guard let point, found > 0 else {
             hideNoteBubble()
             return
         }
-        let number = note.number
         guard number != noteBubbleNumber else { return }
         hideNoteBubble()
         noteBubbleNumber = number
@@ -1076,6 +1082,9 @@ private final class PageArea: NSView {
     private var dragTimer: Timer?
 
     override func mouseDragged(with event: NSEvent) {
+        // A drag that comes back to where it started is no click.
+        let point = convert(event.locationInWindow, from: nil)
+        if let down = downPoint, abs(point.x - down.x) + abs(point.y - down.y) >= 3 { downNote = nil }
         lastDrag = event
         extendSelection()
         guard dragTimer == nil else { return }

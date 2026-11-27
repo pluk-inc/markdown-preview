@@ -97,6 +97,7 @@ Parser :: struct {
 	line:         [2]int,
 	bytes:        []u8, // what is parsed
 	kept:         []u8, // the source: the same bytes, but for what is masked for the parser
+	note_item:    bool, // the item of the outer list that is open is the definition of a footnote
 	after_nul:    bool, // the text before was the character for a NUL byte
 	// Table.
 	table:        Block,
@@ -368,9 +369,15 @@ take_item_position :: proc(p: ^Parser, b: ^Block) {
 		b.task_mark = p.item_mark
 		b.spacing = p.list_start ? .List_Start : .Item
 		p.list_start = false
+		// A definition is an item of an outer list; the items of a list
+		// in its text are of it too.
+		if len(p.lists) == 1 {
+			p.note_item = b.marker == .Note
+		}
 	} else {
 		b.spacing = .Continuation
 	}
+	b.noted = p.note_item
 	p.item_blocks += 1
 }
 
@@ -951,7 +958,7 @@ on_text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr)
 		}
 		// The text as it is in the source: the parser can have other
 		// bytes there (a reference to a footnote is masked for it).
-		if len(p.notes.references) > 0 && from + len(s) <= len(p.kept) {
+		if len(p.notes.notes) > 0 && from + len(s) <= len(p.kept) {
 			s = string(p.kept[from:][:len(s)])
 		}
 	}
@@ -967,8 +974,10 @@ on_text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr)
 	case .Entity:
 		append_entity(p, s, at)
 	case .Normal:
-		if len(p.notes.notes) > 0 && uintptr(text) >= uintptr(raw_data(p.bytes)) {
-			append_noted(p, s, at, int(uintptr(text) - uintptr(raw_data(p.bytes))))
+		// Text of the source only: the parser also gives text of its own
+		// (a space for a mark), from other memory.
+		if from := int(uintptr(text) - uintptr(raw_data(p.bytes))); len(p.notes.notes) > 0 && uintptr(text) >= uintptr(raw_data(p.bytes)) && from < len(p.bytes) {
+			append_noted(p, s, at, from)
 		} else {
 			append_collapsed(p, s, at)
 		}

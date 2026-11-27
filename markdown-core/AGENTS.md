@@ -175,7 +175,9 @@ These came from the maintainer. Do not undo one without asking.
   reference is the parser's choice and not a second set of rules for
   code and raw HTML: one pass of the parser with no document, over the
   source with each possible reference masked, says which of them it
-  reads as text (`footnote_confirm`). The mask (a run of one byte that is
+  reads as text, and which definition it reads the text of
+  (`footnote_confirm`); a block knows that it is of a definition
+  (`Shape.noted`, from the parser). The mask (a run of one byte that is
   no mark of Markdown) is in the parse of the document too, so a
   reference or an inline footnote with styles in it is one run of text.
 - **The outline of native Edit Mode comes from the core** (2026-11-26):

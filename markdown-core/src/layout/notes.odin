@@ -209,13 +209,14 @@ note_in_list :: proc(list: ^Layout, x: f32, y: f64) -> (number: int, definition:
 	if !on_mark && text_at(list, x, y) {
 		if at, hit := hit_test(list, x, y); hit {
 			if src := document.text_at(list.doc, at); src != nil && len(src.spans) > 0 {
-				// The link that goes back, and no other link of the text.
+				// The link that goes back (its target and its mark), and
+				// no other link of the text.
 				for byte in ([2]int{at.byte, at.byte - 1}) {
 					if byte < 0 || byte >= len(src.bytes) {
 						continue
 					}
 					span := document.span_at(src, byte)
-					on_back ||= .Link in span.style && span.link > 0 && span.link <= len(list.doc.links) && list.doc.links[span.link - 1] == document.NOTE_BACK_TARGET
+					on_back ||= .Link in span.style && span.link > 0 && span.link <= len(list.doc.links) && list.doc.links[span.link - 1] == document.NOTE_BACK_TARGET && string(src.bytes[span.start:span.end]) == document.NOTE_BACK
 				}
 			}
 		}

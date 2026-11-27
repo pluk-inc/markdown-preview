@@ -427,6 +427,11 @@ void mdcore_set_notes_at_end(void *ctx, bool at_end);
 // (`definition` false), or the number mark of the text of a footnote
 // (`definition` true). False for each other point.
 bool mdcore_note_at(void *ctx, double x, double y, long *number, bool *definition);
+// The same for the number of a reference only, with no wait for a frame
+// or a layout call that has the state of the view: 1 with the number, 0
+// for a point on none, -1 when the state is in use (ask again later).
+// For the pointer that moves.
+int mdcore_note_hover(void *ctx, double x, double y, long *number);
 // The height of the page where the block of a footnote starts: of its
 // text (`reference` 0), or of one of its references, counted from 1. The
 // core lays that part of the page out, so the page can be another height

@@ -1855,6 +1855,7 @@ test_a_point_is_on_a_footnote :: proc(t: ^testing.T) {
 	setup(&f, "Text with a note[^a] and more[^b] text.\n\nPlain.\n\n[^a]: The first.\n[^b]: The second.\n", 600)
 	defer teardown(&f)
 	step(&f.page, 1e30)
+	expect_ok(t, &f.page)
 	part := only(&f.page)
 	src := &f.page.doc.parts[0].blocks[0].text
 	seen := 0
@@ -1905,11 +1906,13 @@ test_the_footnotes_are_a_list_at_the_end_of_a_page_that_is_read :: proc(t: ^test
 	setup(&edited, source, 600)
 	defer teardown(&edited)
 	step(&edited.page, 1e30)
+	expect_ok(t, &edited.page)
 	read: Fixture
 	read.page.notes_at_end = true
 	setup(&read, source, 600)
 	defer teardown(&read)
 	step(&read.page, 1e30)
+	expect_ok(t, &read.page)
 	// The blocks of the definitions have no height and no records.
 	part := only(&read.page)
 	for slot in 1 ..= 2 {
@@ -1954,6 +1957,7 @@ test_the_footnotes_are_a_list_at_the_end_of_a_page_that_is_read :: proc(t: ^test
 	setup(&plain, "No footnotes.\n", 600)
 	defer teardown(&plain)
 	step(&plain.page, 1e30)
+	expect_ok(t, &plain.page)
 	testing.expect(t, plain.page.notes.page == nil)
 	testing.expect_value(t, plain.page.content_height, f64(only(&plain.page).height + plain.page.m.page_pad))
 }
@@ -1969,11 +1973,13 @@ test_a_list_and_a_link_in_the_text_of_a_footnote :: proc(t: ^testing.T) {
 	setup(&f, source, 600)
 	defer teardown(&f)
 	step(&f.page, 1e30)
+	expect_ok(t, &f.page)
 	list := f.page.notes.page
 	if !testing.expect(t, list != nil) {
 		return
 	}
 	step(list, 1e30)
+	expect_ok(t, list)
 	// Footnote 2 is the last block of the list, below the items in the
 	// text of footnote 1.
 	second, _, has := note_top(&f.page, 2)
@@ -2020,6 +2026,7 @@ test_the_caret_is_as_high_as_the_text_of_its_line :: proc(t: ^testing.T) {
 	setup(&f, "# Heading\n\nA paragraph.\n", 600)
 	defer teardown(&f)
 	step(&f.page, 1e30)
+	expect_ok(t, &f.page)
 	_, heading_y, heading_line, _ := caret_y(&f.page, {block = 0, byte = 2}, false)
 	_, heading_bar_y, heading_bar, _ := caret_bar_y(&f.page, {block = 0, byte = 2}, false)
 	_, body_y, body_line, _ := caret_y(&f.page, {block = 1, byte = 2}, false)
@@ -2052,6 +2059,7 @@ test_the_caret_is_as_high_as_the_text_of_its_line :: proc(t: ^testing.T) {
 	setup(&g, "# Heading\n\n\n\nText.\n", 600)
 	defer teardown(&g)
 	step(&g.page, 1e30)
+	expect_ok(t, &g.page)
 	if empty, has := document.empty_address(g.page.doc, 0, 1); testing.expect(t, has) {
 		_, empty_y, _, _ := caret_y(&g.page, empty, false)
 		_, empty_bar_y, empty_bar, _ := caret_bar_y(&g.page, empty, false)
@@ -2064,6 +2072,7 @@ test_the_caret_is_as_high_as_the_text_of_its_line :: proc(t: ^testing.T) {
 	setup(&h, "#\n\nText.\n", 600)
 	defer teardown(&h)
 	step(&h.page, 1e30)
+	expect_ok(t, &h.page)
 	if testing.expect_value(t, h.page.doc.parts[0].blocks[0].kind, document.Block_Kind.Heading) {
 		_, bare_bar_y, bare_bar, _ := caret_bar_y(&h.page, {block = 0}, false)
 		testing.expect(t, abs(bare_bar - heading_bar) < 0.01)
@@ -2079,6 +2088,7 @@ test_the_card_of_code_has_round_corners :: proc(t: ^testing.T) {
 	setup(&f, "```\ncode\n```\n", 600)
 	defer teardown(&f)
 	step(&f.page, 1e30)
+	expect_ok(t, &f.page)
 	part := only(&f.page)
 	box := part.boxes[0]
 	if !testing.expect(t, box.decor_end - box.decor_first >= 2) {

@@ -2200,6 +2200,29 @@ mdcore_note_at :: proc "c" (handle: rawptr, x, y: f64, number: ^c.long, definiti
 	return true
 }
 
+// See the header. No wait for the state of the view, as
+// `mdcore_pointer_shape` has none: the host asks for each move of the
+// pointer.
+@(export)
+mdcore_note_hover :: proc "c" (handle: rawptr, x, y: f64, number: ^c.long) -> c.int {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	if !sync.try_lock(&ctx.lock) {
+		return -1
+	}
+	defer sync.unlock(&ctx.lock)
+	context.temp_allocator = ctx.temp
+	if !ctx.layout_valid {
+		return 0
+	}
+	found, is_definition, on_note := layout.note_at(&ctx.page, f32(x), y)
+	if !on_note || is_definition {
+		return 0
+	}
+	number^ = c.long(found)
+	return 1
+}
+
 // See the header.
 @(export)
 mdcore_set_notes_at_end :: proc "c" (handle: rawptr, at_end: bool) {

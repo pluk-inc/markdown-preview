@@ -120,11 +120,27 @@ footnotes :: proc(source: []u8, from: int, allocator := context.allocator) -> (f
 		}
 		at = next
 	}
-	// What can be a reference, in the order of the source.
+	// The last definition of a label is the one of its references.
+	by_key := make(map[string]int, len(notes), context.temp_allocator)
+	for key, n in keys {
+		by_key[key] = n
+	}
+	// What can be a reference, in the order of the source. Each line is
+	// read one time: the "]" after a place is looked for from where the
+	// search before it ended, and the "]" of each "[" of a line is found
+	// in one pass when the line has an inline footnote.
+	pairs := make([dynamic]int, context.temp_allocator) // for each byte of a line, where the "]" of its "[" is; 0 for none
+	open := make([dynamic]int, context.temp_allocator)
 	for piece in text_lines {
+		next_close := piece.start
+		paired := false
 		for i := piece.start; i < piece.end; {
 			ch := source[i]
 			switch {
+			case ch == '\\':
+				// The character after a backslash is that character and
+				// no mark.
+				i += 2
 			case ch == '`':
 				// Code between two runs of backticks of the same length,
 				// in the line: no reference in it.
@@ -135,25 +151,22 @@ footnotes :: proc(source: []u8, from: int, allocator := context.allocator) -> (f
 				close := footnote_code_end(source, run, piece.end, run - i)
 				i = close > 0 ? close : run
 			case ch == '[' && i + 1 < piece.end && source[i + 1] == '^':
-				close := i + 2
-				for close < piece.end && source[close] != ']' {
-					close += 1
+				next_close = max(next_close, i + 2)
+				for next_close < piece.end && source[next_close] != ']' {
+					next_close += 1
 				}
-				if close >= piece.end || close == i + 2 {
+				close := next_close
+				if close >= piece.end {
+					// No "]" in the rest of the line.
+					i = piece.end
+					continue
+				}
+				if close == i + 2 {
 					i += 2
 					continue
 				}
-				key := footnote_key(string(source[i + 2:close]))
-				// The last definition of a label is the one of its
-				// references.
-				note := -1
-				#reverse for k, n in keys {
-					if k == key && !notes[n].inline {
-						note = n
-						break
-					}
-				}
-				if note < 0 {
+				note, defined := by_key[footnote_key(string(source[i + 2:close]))]
+				if !defined {
 					i = close + 1
 					continue
 				}
@@ -161,24 +174,25 @@ footnotes :: proc(source: []u8, from: int, allocator := context.allocator) -> (f
 				i = close + 1
 			case ch == '^' && i + 1 < piece.end && source[i + 1] == '[':
 				// To the "]" of this "[": brackets in the text count.
-				depth, close := 1, i + 2
-				for close < piece.end {
-					if source[close] == '[' {
-						depth += 1
-					} else if source[close] == ']' {
-						depth -= 1
-						if depth == 0 {
-							break
+				if !paired {
+					paired = true
+					clear(&pairs)
+					resize(&pairs, piece.end - piece.start)
+					clear(&open)
+					for at in piece.start ..< piece.end {
+						if source[at] == '[' {
+							append(&open, at)
+						} else if source[at] == ']' && len(open) > 0 {
+							pairs[pop(&open) - piece.start] = at
 						}
 					}
-					close += 1
 				}
-				if close >= piece.end || close == i + 2 {
+				close := pairs[i + 1 - piece.start]
+				if close == 0 || close == i + 2 {
 					i += 2
 					continue
 				}
 				append(&notes, Footnote{inline = true, start = i, end = close + 1, content = i + 2})
-				append(&keys, "")
 				append(&references, Footnote_Reference{i, close + 1, len(notes) - 1, 0})
 				i = close + 1
 			case:
@@ -188,20 +202,34 @@ footnotes :: proc(source: []u8, from: int, allocator := context.allocator) -> (f
 	}
 	// The ones that are text for the parser are the references, and the
 	// numbers are in their order.
-	confirmed := footnote_confirm(source, min(from, len(source)), notes[:], references[:])
+	confirmed, defined := footnote_confirm(source, min(from, len(source)), notes[:], references[:])
+	// A definition that the parser reads no text of (in raw HTML, in a
+	// code block) is none, and so are its references.
+	place := make([]int, len(notes), context.temp_allocator)
+	live := 0
+	for note, n in notes {
+		place[n] = -1
+		if note.inline || defined[n] {
+			place[n] = live
+			notes[live] = note
+			live += 1
+		}
+	}
+	resize(&notes, live)
 	numbers, count := 0, 0
 	ordinals := make([]int, len(notes), context.temp_allocator)
 	for reference, i in references {
-		if !confirmed[i] {
+		at := place[reference.note]
+		if !confirmed[i] || at < 0 {
 			continue
 		}
-		note := &notes[reference.note]
+		note := &notes[at]
 		if note.number == 0 {
 			numbers += 1
 			note.number = numbers
 		}
-		ordinals[reference.note] += 1
-		references[count] = {reference.start, reference.end, reference.note, ordinals[reference.note]}
+		ordinals[at] += 1
+		references[count] = {reference.start, reference.end, at, ordinals[at]}
 		count += 1
 	}
 	resize(&references, count)
@@ -245,22 +273,32 @@ Footnote_Confirm :: struct {
 	size, from: int,
 	references: []Footnote_Reference,
 	confirmed:  []bool,
+	notes:      []Footnote,
+	marks:      []int, // the definitions among the notes, in the order of the source
+	defined:    []bool, // for each note
 }
 
-// Which of the possible references the parser reads as text: one pass
-// of the parser with no document, over the source with each of them
-// masked. The rules of code and of raw HTML are the parser's, so they
+// Which of the possible references the parser reads as text, and which
+// of the possible definitions it reads the text of: one pass of the
+// parser with no document, over the source with each of them masked. The rules of code and of raw HTML are the parser's, so they
 // are not written a second time here.
 @(private)
-footnote_confirm :: proc(source: []u8, from: int, notes: []Footnote, references: []Footnote_Reference) -> []bool {
-	confirmed := make([]bool, len(references), context.temp_allocator)
-	if len(references) == 0 {
-		return confirmed
+footnote_confirm :: proc(source: []u8, from: int, notes: []Footnote, references: []Footnote_Reference) -> (confirmed: []bool, defined: []bool) {
+	confirmed = make([]bool, len(references), context.temp_allocator)
+	defined = make([]bool, len(notes), context.temp_allocator)
+	if len(notes) == 0 {
+		return
+	}
+	marks := make([dynamic]int, context.temp_allocator)
+	for note, n in notes {
+		if !note.inline {
+			append(&marks, n)
+		}
 	}
 	masked := slice.clone(source[from:])
 	defer delete(masked)
 	footnote_mask(masked, from, notes, references)
-	state := Footnote_Confirm{context, uintptr(raw_data(masked)), len(masked), from, references, confirmed}
+	state := Footnote_Confirm{context, uintptr(raw_data(masked)), len(masked), from, references, confirmed, notes, marks[:], defined}
 	block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.int {
 		return 0
 	}
@@ -288,6 +326,20 @@ footnote_confirm :: proc(source: []u8, from: int, notes: []Footnote, references:
 		for ; low < len(state.references) && state.references[low].end <= end; low += 1 {
 			state.confirmed[low] = true
 		}
+		// The definition whose text starts in this text: after the mark
+		// of its item, where its label is.
+		low, high = 0, len(state.marks)
+		for low < high {
+			middle := (low + high) / 2
+			if state.notes[state.marks[middle]].mark + 2 < start {
+				low = middle + 1
+			} else {
+				high = middle
+			}
+		}
+		if low < len(state.marks) && state.notes[state.marks[low]].mark + 2 < end {
+			state.defined[state.marks[low]] = true
+		}
 		return 0
 	}
 	md := Md_Parser {
@@ -300,7 +352,7 @@ footnote_confirm :: proc(source: []u8, from: int, notes: []Footnote, references:
 	}
 	// md4c takes a 32-bit size; a larger source is cut there.
 	md_parse(raw_data(masked), c.uint(min(len(masked), int(max(c.int)))), &md, &state)
-	return confirmed
+	return
 }
 
 // A line that is a definition: its label, and where its text starts in
@@ -308,7 +360,8 @@ footnote_confirm :: proc(source: []u8, from: int, notes: []Footnote, references:
 @(private)
 footnote_definition :: proc(line: []u8) -> (label: string, mark, content: int, ok: bool) {
 	at := 0
-	for at < len(line) && at < 3 && (line[at] == ' ' || line[at] == '\t') {
+	// Spaces only: a tab is the indent of a code block.
+	for at < len(line) && at < 3 && line[at] == ' ' {
 		at += 1
 	}
 	if at + 2 >= len(line) || line[at] != '[' || line[at + 1] != '^' {
@@ -332,24 +385,21 @@ footnote_definition :: proc(line: []u8) -> (label: string, mark, content: int, o
 // (`reference` 0), or of one of its references, counted from 1 in the
 // order of the text. False for none.
 note_block :: proc(doc: ^Document, number, reference: int) -> (block: int, ok: bool) {
-	seen := 0
-	for i in 0 ..< doc.count {
-		b := block_at(doc, i)
-		if reference == 0 {
-			if b.marker == .Note && b.number == number {
+	if reference == 0 {
+		for i in 0 ..< doc.count {
+			if b := block_at(doc, i); b.marker == .Note && b.number == number {
 				return i, true
 			}
-			continue
 		}
-		for &text in block_texts(b) {
-			for span in text.spans {
-				if .Note in span.style && span.link == number {
-					seen += 1
-					if seen == reference {
-						return i, true
-					}
-				}
-			}
+		return 0, false
+	}
+	// From the source, and not from the numbers in the texts: a reference
+	// with the caret in it shows as its source, and is still the
+	// reference that it was.
+	found := footnotes(doc.source, doc.unclosed ? 0 : doc.hidden, context.temp_allocator)
+	for r in found.references {
+		if r.ordinal == reference && found.notes[r.note].number == number && doc.count > 0 {
+			return block_at_offset(doc, r.start), true
 		}
 	}
 	return 0, false
@@ -386,18 +436,7 @@ note_text :: proc(doc: ^Document, number: int, out: ^[dynamic]u8) -> bool {
 // True for a block of the definition of a footnote: its first block, or
 // a later block of the same list item.
 in_note :: proc(doc: ^Document, block: int) -> bool {
-	// The item of the outer list that the block is in: a definition is
-	// such an item, and a list in its text is deeper.
-	for i := block; i >= 0; i -= 1 {
-		b := block_at(doc, i)
-		if b.list_depth == 0 {
-			return false
-		}
-		if b.list_depth == 1 && b.spacing != .Continuation {
-			return b.marker == .Note
-		}
-	}
-	return false
+	return block_at(doc, block).noted
 }
 
 // The block after the last block of the definition that starts at
@@ -407,7 +446,7 @@ note_end :: proc(doc: ^Document, block: int) -> int {
 	end := block + 1
 	for end < doc.count {
 		b := block_at(doc, end)
-		if b.list_depth == 0 || (b.list_depth == 1 && b.spacing != .Continuation) {
+		if !b.noted || (b.list_depth == 1 && b.spacing != .Continuation) {
 			break
 		}
 		end += 1
@@ -442,6 +481,13 @@ notes_source :: proc(doc: ^Document, allocator := context.allocator) -> string {
 			by_number[note.number] = i
 		}
 	}
+	// The first block of each definition, from one pass of the blocks.
+	first_block := make([]int, count + 1, context.temp_allocator)
+	for i in 0 ..< doc.count {
+		if b := block_at(doc, i); b.marker == .Note && b.number > 0 && b.number <= count {
+			first_block[b.number] = i + 1
+		}
+	}
 	out := strings.builder_make(allocator)
 	lines := make([dynamic]string, context.temp_allocator)
 	for number in 1 ..= count {
@@ -459,7 +505,7 @@ notes_source :: proc(doc: ^Document, allocator := context.allocator) -> string {
 			// definition: a line with no indent right after a paragraph
 			// of it goes on in that paragraph.
 			end := note.end
-			if first, defined := note_block(doc, number, 0); defined {
+			if first := first_block[number] - 1; first >= 0 {
 				after := note_end(doc, first)
 				end = after < doc.count ? block_start(doc, after) : len(doc.source)
 				// But for the definitions of links after its last block,
@@ -476,12 +522,14 @@ notes_source :: proc(doc: ^Document, allocator := context.allocator) -> string {
 				line_end, next := line_at(doc.source, at)
 				line := string(doc.source[at:line_end])
 				if at > note.content {
-					// With no indent of the definition: a tab, or as many
-					// as four spaces.
+					// With no indent of the item that the definition is
+					// for the parser (`FOOTNOTE_INDENT` columns; a tab is
+					// four): what is left of the indent is of the text,
+					// as it is in its place (a list in it, code).
 					if strings.has_prefix(line, "\t") {
-						line = line[1:]
+						line = strings.concatenate({"  ", line[1:]}, context.temp_allocator)
 					} else {
-						for cut := 0; cut < 4 && strings.has_prefix(line, " "); cut += 1 {
+						for cut := 0; cut < FOOTNOTE_INDENT && strings.has_prefix(line, " "); cut += 1 {
 							line = line[1:]
 						}
 					}
@@ -525,6 +573,25 @@ notes_source :: proc(doc: ^Document, allocator := context.allocator) -> string {
 		if len(lines) == 0 {
 			fmt.sbprintf(&out, "%s[%s](%s)\n", prefix, NOTE_BACK, NOTE_BACK_TARGET)
 		} else if apart {
+			// A fence that nothing closes would have the mark as code.
+			if first := strings.trim_space(lines[0]); first[0] != '|' {
+				run := 0
+				for run < len(first) && first[run] == first[0] {
+					run += 1
+				}
+				closed := false
+				for line in lines[1:] {
+					end := strings.trim_space(line)
+					closed ||= len(end) >= run && strings.trim_left(end, first[:1]) == ""
+				}
+				if !closed {
+					for _ in 0 ..< len(prefix) {
+						strings.write_byte(&out, ' ')
+					}
+					strings.write_string(&out, first[:run])
+					strings.write_byte(&out, '\n')
+				}
+			}
 			strings.write_byte(&out, '\n')
 			for _ in 0 ..< len(prefix) {
 				strings.write_byte(&out, ' ')

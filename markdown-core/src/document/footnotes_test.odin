@@ -132,6 +132,13 @@ test_the_document_has_the_footnotes_as_numbers :: proc(t: ^testing.T) {
 		{"T[^n][^n].\n\n[^n]: N.\n", "T<1:1><1:1>.|{1}N.|"},
 		// A label with an entity or the mark of a style in it is no text.
 		{"T[^a&amp;b] and[^c*d*].\n\n[^a&amp;b]: One.\n[^c*d*]: Two.\n", "T<1:1> and<2:2>.|{1}One.|{2}Two.|"},
+		// After a backslash: text. After two: a reference.
+		{"Literal \\[^a] and \\^[no]. Real[^b] and \\\\[^a].\n\n[^a]: A.\n[^b]: B.\n", "Literal [^a] and ^[no]. Real<1:1> and \\<2:2>.|{2}A.|{1}B.|"},
+		// A definition in raw HTML, or after a tab (code), is none, and
+		// the code is as it is in the source.
+		{"T[^n].\n\n<div>\n[^n]: Hidden.\n</div>\n", "T[^n].|"},
+		{"T[^n].\n\n\t[^n]: Code.\n", "T[^n].|[^n]: Code.|"},
+		{"\t[^n]: Code.\n", "[^n]: Code.|"},
 		// In raw HTML: no reference.
 		{"A <a href=\"[^1]\">link</a> and[^1].\n\n[^1]: One.\n", "A link and<1:1>.|{1}One.|"},
 		// A definition right after a paragraph, and a list after it.
@@ -259,7 +266,7 @@ test_the_list_of_the_footnotes :: proc(t: ^testing.T) {
 	back := " [" + NOTE_BACK + "](#back)"
 	doc := parse("B[^b], inline ^[In the text.], A[^a].\n\n[^a]: Text of a.\n[^b]: First line.\n  Second line.\n\n    A second paragraph.\n[^c]: No reference.\n\nAfter.\n")
 	defer destroy(&doc)
-	want := strings.concatenate({"1. First line.\n   Second line.", back, "\n\n   A second paragraph.\n\n2. In the text.", back, "\n\n3. Text of a.", back, "\n\n"}, context.temp_allocator)
+	want := strings.concatenate({"1. First line.\n   Second line.", back, "\n\n     A second paragraph.\n\n2. In the text.", back, "\n\n3. Text of a.", back, "\n\n"}, context.temp_allocator)
 	testing.expect_value(t, notes_source(&doc, context.temp_allocator), want)
 	// The blocks of a definition, and no other block.
 	testing.expect(t, !in_note(&doc, 0))
@@ -307,7 +314,12 @@ test_the_list_of_footnotes_with_other_blocks :: proc(t: ^testing.T) {
 	}
 	cases := []Case {
 		{"T[^n].\n\n[^n]: ```swift\n  let x = 1\n  ```\n", "1. ```swift\n   let x = 1\n   ```\n\n   " + BACK + "\n\n"},
-		{"T[^n].\n\n[^n]: Text\n    ```\n    code\n    ```\n", "1. Text " + BACK + "\n   ```\n   code\n   ```\n\n"},
+		{"T[^n].\n\n[^n]: Text\n    ```\n    code\n    ```\n", "1. Text " + BACK + "\n     ```\n     code\n     ```\n\n"},
+		// A fence that nothing closes: closed before the mark.
+		{"T[^n].\n\n[^n]: ```\n  x\n", "1. ```\n   x\n   ```\n\n   " + BACK + "\n\n"},
+		// The indent of the text stays: six spaces are code in its place
+		// (four more than the text of the item), and in the list too.
+		{"T[^n].\n\n[^n]: Intro.\n\n      *literal*\n", "1. Intro. " + BACK + "\n\n       *literal*\n\n"},
 		{"T[^n].\n\n[^n]: Note.\nAfter.\n\nBody.\n", "1. Note.\n   After. " + BACK + "\n\n"},
 		{"T[^n].\n\n[^n]: Read [guide][g].\n\n[g]: https://example.com\n", "1. Read [guide][g]. " + BACK + "\n\n[g]: https://example.com\n"},
 	}
@@ -332,4 +344,37 @@ test_the_list_of_footnotes_with_other_blocks :: proc(t: ^testing.T) {
 	defer destroy(&doc)
 	testing.expect_value(t, doc.count, 3)
 	testing.expect_value(t, string(block_at(&doc, 1).text.bytes[:]), "Note. After.")
+}
+
+// A reference with the caret in it shows as its source and is still
+// the reference that it was: the block of each reference is found.
+@(test)
+test_the_block_of_a_reference_with_the_caret_in_it :: proc(t: ^testing.T) {
+	source := "One[^a].\n\nTwo[^a].\n\n[^a]: A.\n"
+	doc := parse_owned(slice.clone(transmute([]u8)source), 5)
+	defer destroy(&doc)
+	testing.expect_value(t, string(block_at(&doc, 0).text.bytes[:]), "One[^a].")
+	first, has_first := note_block(&doc, 1, 1)
+	second, has_second := note_block(&doc, 1, 2)
+	_, has_third := note_block(&doc, 1, 3)
+	testing.expect(t, has_first && has_second && !has_third)
+	testing.expect_value(t, first, 0)
+	testing.expect_value(t, second, 1)
+}
+
+// A line of many "[^" or "^[" with no "]" is read one time: the scan of
+// a long one is done at once.
+@(test)
+test_a_line_of_marks_with_no_end_is_read_one_time :: proc(t: ^testing.T) {
+	for opener in ([]string{"[^", "^[", "^[[", "[^a "}) {
+		source := strings.repeat(opener, 200_000, context.temp_allocator)
+		found := footnotes(transmute([]u8)source, 0, context.temp_allocator)
+		testing.expect_value(t, len(found.references), 0)
+	}
+	// Brackets in an inline footnote are of its text.
+	found := footnotes(transmute([]u8)string("A ^[one [two] three] b ^[x].\n"), 0, context.temp_allocator)
+	testing.expect_value(t, len(found.references), 2)
+	if len(found.references) == 2 {
+		testing.expect_value(t, found.references[0].end - found.references[0].start, 18)
+	}
 }
