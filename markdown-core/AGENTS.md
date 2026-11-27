@@ -465,12 +465,14 @@ While a change is made, do not run all of it. Run the case that the
 change is in, against the base, which takes a few seconds:
 
 ```bash
-markdown-core/bench/core.py --quick --base origin/main --case type --documents long
+markdown-core/bench/core.py --base origin/main --case type --documents long
 ```
 
 The cases are `open`, `scroll`, `end`, `change`, `type`, `select`, and
-`layout` (`BENCHMARKS.md`, "How to measure"). The full run is for the
-pull request. Rules for each run:
+`layout` (`BENCHMARKS.md`, "How to measure", has the time of each kind
+of run). The run of all cases is for the pull request; it is short by
+default (four runs, ten launches), and `--careful` is for a record or a
+time that is in doubt. Rules for each run:
 
 - A difference of the instructions is a difference of the work. A
   difference of a time with the same instructions is most often the Mac,
@@ -551,11 +553,11 @@ Known limits, found in review and left on purpose:
 
 - Measured on 2026-11-27 with the documents of `bench/corpus.py`
   (`BENCHMARKS.md`, "The method of the benchmark"): the one-step layout
-  of a long paragraph or table (the next point) costs 127 to 138 ms for
+  of a long paragraph or table (the next point) costs 127 to 141 ms for
   the first view, for a new width, and for each typed character at a
   caret, for 60 KB of paragraph or 2,000 table rows. The estimated
   height of a page of Chinese and Japanese text is 32 % above the real
-  one, and its first scroll has one frame in 100 above 57 ms of CPU.
+  one, and its first scroll has one frame in 100 above 48 ms of CPU.
   The frames of a draw wait for the display also in the benchmark
   (about 8 ms each on the clock, with a layer that no display shows), so
   the scroll passes are two thirds of the time of a run.
@@ -1654,7 +1656,7 @@ export.
   more from a fixed seed, and frame percentiles. The maintainer then
   said that a wait of 15 minutes is too long while a change is made: a
   run of one case on one document against the base takes six seconds
-  (`core.py --quick --case …`), and the full run is for the pull
+  (`core.py --case …`), and the full run is for the pull
   request. The new documents gave numbers for two known limits (one long
   paragraph or table: 130 ms for each typed character) and one that was
   not known (the estimated height of a page of Chinese and Japanese text

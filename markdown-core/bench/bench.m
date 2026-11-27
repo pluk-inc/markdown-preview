@@ -539,7 +539,7 @@ static bool case_open(NSData *source) {
         view_instructions[round] = cost.instructions;
         if (round == 0) {
             print_cost("first_view_ms", cost.wall_ms, cost.instructions);
-            printf("first_frame_heap_mb %.1f\n", heap_mb());
+            printf("first_frame_heap_mb %.2f\n", heap_mb());
         }
         mdcore_destroy(ctx);
     }
@@ -560,7 +560,7 @@ static bool case_scroll(NSData *source) {
     draw(ctx, 0);
     span_print(span, CPU, 1);
     scroll_pass(ctx, "second_scroll", end);
-    printf("scrolled_heap_mb %.1f\n", heap_mb());
+    printf("scrolled_heap_mb %.2f\n", heap_mb());
     mdcore_destroy(ctx);
     return true;
 }
@@ -762,7 +762,7 @@ static bool case_layout(NSData *source) {
     double real = 0;
     mdcore_page_area(ctx, &top, &real);
     printf("estimate_error_percent %.1f\n", real > 0 ? (estimate - real) / real * 100 : 0);
-    printf("heap_mb %.1f\n", heap_mb());
+    printf("heap_mb %.2f\n", heap_mb());
     mdcore_destroy(ctx);
     return true;
 }
@@ -819,7 +819,10 @@ int main(int argc, const char *argv[]) {
     printf("source_kb %.0f\n", source.length / 1024.0);
     for (int index = 0; index < CASE_COUNT; index++) {
         if (any && !chosen[index]) continue;
-        if (!CASES[index].run(source)) return 1;
+        // The layers and the other objects of a case go when it ends.
+        @autoreleasepool {
+            if (!CASES[index].run(source)) return 1;
+        }
     }
     // Of all of the run, with what each case made before it measured.
     struct rusage_info_v4 usage = process_usage();

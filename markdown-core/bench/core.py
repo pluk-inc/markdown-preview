@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Benchmark of the Markdown core, with no window.
 
-    markdown-core/bench/core.py [--base <commit or folder>]... [--runs 10 | --quick]
+    markdown-core/bench/core.py [--base <commit or folder>]... [--runs 4 | --careful]
                                 [--documents short,long] [--case scroll]...
 
 Builds the core and bench.m, then runs the program on the documents of
@@ -23,9 +23,9 @@ import subprocess
 from pathlib import Path
 
 import corpus
-from corpus import CORE
-from report import COUNTED, VALUE, Metric, add, in_turns, new_samples, note, one_at_a_time, tables
+from report import COUNTED, VALUE, Metric, Samples, add, in_turns, new_samples, note, one_at_a_time, tables
 
+CORE = corpus.CORE
 OUT = CORE / "build" / "bench"
 BENCH = CORE / "bench" / "bench.m"
 
@@ -85,8 +85,12 @@ def build(core: Path, out: Path, never_changes: bool = False) -> Path:
     if never_changes and made[0] == recipe():
         return program
     out.mkdir(parents=True, exist_ok=True)
-    subprocess.run([core / "build.sh", out], check=True, stdout=subprocess.DEVNULL)
     library = out / "libmdcore.a"
+    if made[0] != recipe():
+        # build.sh keeps a library while its sources are the same; one of
+        # another compiler must go.
+        library.unlink(missing_ok=True)
+    subprocess.run([core / "build.sh", out], check=True, stdout=subprocess.DEVNULL)
     version = [recipe(), str(library.stat().st_mtime_ns)]
     if made == version:
         return program
@@ -105,8 +109,11 @@ def base_build(name: str) -> tuple[str, Path]:
     commit, whose core is copied out of the repository."""
     folder = Path(name).expanduser()
     if folder.is_dir():
+        folder = folder.resolve()
         core = folder / "markdown-core" if (folder / "markdown-core").is_dir() else folder
-        return folder.resolve().name, build(core.resolve(), OUT / "base" / folder.resolve().name)
+        # Two checkouts can have folders of the same name.
+        place = hashlib.sha256(str(core).encode()).hexdigest()[:8]
+        return str(folder), build(core, OUT / "base" / f"{folder.name}-{place}")
     found = subprocess.run(["git", "-C", CORE, "rev-parse", "--short=8", f"{name}^{{commit}}"], capture_output=True, text=True)
     if found.returncode != 0:
         raise SystemExit(f"{name} is not a folder and not a commit")
@@ -150,20 +157,25 @@ def measure(program: Path, document: Path, cases: list[str]) -> dict[str, float]
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--runs", type=int, help="processes for each document and build (default 10)")
-    parser.add_argument("--quick", action="store_true",
-                        help="four runs: the fewest that can show a difference. With --case and one document, for a check "
-                             "of a few seconds while a change is made; judge it from the instructions")
+    parser.add_argument("--runs", type=int, help="processes for each document and build (default 4, the fewest "
+                        "that can show a difference; judge such a run from the instructions)")
+    parser.add_argument("--careful", action="store_true", help="ten runs, for times that are less in doubt")
     parser.add_argument("--base", action="append", default=[], metavar="COMMIT_OR_FOLDER",
                         help="also measure the core of this commit or checkout, in turns with this one")
     corpus.add_argument(parser)
     parser.add_argument("--case", action="append", default=[], help="only this case of bench.m (can be given more than once); the walk of the caret is then left out")
     args = parser.parse_args()
 
-    runs = args.runs or (4 if args.quick else 10)
-    lock = one_at_a_time()
+    with one_at_a_time():
+        tables(measured(args), METRICS)
+
+
+def measured(args: argparse.Namespace) -> Samples:
+    runs = args.runs or (10 if args.careful else 4)
     documents = corpus.documents(args.documents)
     programs = dict(base_build(name) for name in args.base)
+    if len(programs) < len(args.base):
+        raise SystemExit("the same base two times")
     programs["this checkout"] = build(CORE, OUT)
     # The walk is the check of all of the editor: not for one case.
     if not args.case:
@@ -176,8 +188,7 @@ def main() -> None:
         for name, path in documents:
             for label in in_turns(list(programs), run):
                 add(samples[label][name], measure(programs[label], path, args.case))
-    del lock
-    tables(samples, METRICS)
+    return samples
 
 
 if __name__ == "__main__":

@@ -6,12 +6,15 @@ the number with ":instructions" after it.
 """
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import math
 import os
 import statistics
 import sys
+from collections import Counter
 from dataclasses import dataclass
+from pathlib import Path
 
 Samples = dict[str, dict[str, dict[str, list[float]]]]
 INSTRUCTIONS = ":instructions"
@@ -24,8 +27,10 @@ TIME, COUNTED, VALUE = "time", "counted", "value"
 LEAST = {TIME: 0.05, COUNTED: 0.01}
 CHANCE = 0.05
 # A time below this many milliseconds is a few ticks of the clock: shown,
-# not judged. Its instructions are judged.
+# not judged. So is a number of instructions below FEWEST: a step that
+# small differs by 2 percent from run to run of the same program.
 SHORTEST_MS = 0.05
+FEWEST = 2_000_000
 
 
 @dataclass(frozen=True)
@@ -45,17 +50,25 @@ def add(into: dict[str, list[float]], values: dict[str, float]) -> None:
         into.setdefault(key, []).append(value)
 
 
-def one_at_a_time() -> object:
-    """Stops when another benchmark runs: two at a time measure each other."""
-    lock = open("/tmp/sh.pluk.md-preview.bench.lock", "w")
+@contextlib.contextmanager
+def one_at_a_time():
+    """Stops when another benchmark of this user runs: two at a time
+    measure each other."""
+    path = Path.home() / "Library" / "Caches" / "sh.pluk.md-preview.bench.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Not through a link, and with no change of what is there.
+    lock = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        raise SystemExit("another benchmark runs on this Mac; wait for it, or the two measure each other")
-    load = os.getloadavg()[0]
-    if load > (os.cpu_count() or 8) / 4:
-        note(f"the Mac is busy (load {load:.1f}): the times have more noise; the instructions are still good")
-    return lock
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            raise SystemExit("another benchmark runs on this Mac; wait for it, or the two measure each other")
+        load = os.getloadavg()[0]
+        if load > (os.cpu_count() or 8) / 4:
+            note(f"the Mac is busy (load {load:.1f}): the times have more noise; the instructions are still good")
+        yield
+    finally:
+        os.close(lock)
 
 
 def note(text: str) -> None:
@@ -100,37 +113,48 @@ def no_unit(title: str) -> str:
 
 def apart(first: list[float], second: list[float]) -> float:
     """The chance that two lists of runs differ this much with no real
-    difference (the rank sum test of Mann and Whitney, two sides)."""
-    ranked = sorted([(value, 0) for value in first] + [(value, 1) for value in second])
-    rank_sum, ties, at = 0.0, 0.0, 0
-    while at < len(ranked):
+    difference: the rank sum test of Mann and Whitney, two sides, counted
+    exactly (no approximation, which is wrong for a few runs)."""
+    values = sorted(first + second)
+    # Two times the rank of each value, so that the middle rank of equal
+    # values is a whole number.
+    rank: dict[float, int] = {}
+    at = 0
+    while at < len(values):
         end = at
-        while end < len(ranked) and ranked[end][0] == ranked[at][0]:
+        while end < len(values) and values[end] == values[at]:
             end += 1
-        rank = (at + end + 1) / 2
-        rank_sum += rank * sum(1 for _, group in ranked[at:end] if group == 0)
-        ties += (end - at) ** 3 - (end - at)
+        rank[values[at]] = at + end + 1
         at = end
-    n, m, total = len(first), len(second), len(ranked)
-    variance = n * m / 12 * ((total + 1) - ties / (total * (total - 1)))
-    if variance <= 0:
-        return 1.0
-    z = (abs(rank_sum - n * (n + 1) / 2 - n * m / 2) - 0.5) / math.sqrt(variance)
-    return math.erfc(max(z, 0) / math.sqrt(2))
+    # ways[count][sum]: in how many ways `count` of the values have this
+    # sum of ranks.
+    n, total = len(first), len(values)
+    ways = [Counter() for _ in range(n + 1)]
+    ways[0][0] = 1
+    for value in values:
+        for count in range(n - 1, -1, -1):
+            for rank_sum, number_of in list(ways[count].items()):
+                ways[count + 1][rank_sum + rank[value]] += number_of
+    middle = n * (total + 1)
+    far = abs(sum(rank[value] for value in first) - middle)
+    as_far = sum(number_of for rank_sum, number_of in ways[n].items() if abs(rank_sum - middle) >= far)
+    return as_far / math.comb(total, n)
 
 
-def change(base: list[float] | None, new: list[float] | None, kind: str) -> tuple[str, bool]:
-    """The difference of the medians as text, and whether it counts."""
+def change(base: list[float] | None, new: list[float] | None, kind: str, smallest: float = 0) -> tuple[str, bool]:
+    """The difference of the medians as text, and whether it counts. A
+    number below `smallest` is not judged."""
     if not base or not new:
         return "–", False
     before, after = statistics.median(base), statistics.median(new)
     least = LEAST.get(kind)
-    judged = least is not None and (kind != TIME or max(abs(before), abs(after)) >= SHORTEST_MS)
-    if before == 0:
-        return ("0%", False) if after == 0 else ("new", judged)
-    share = (after - before) / abs(before)
-    real = judged and abs(share) >= least and len(base) > 1 and apart(base, new) < CHANCE
-    return f"{share * 100:+.1f}%" + (" **" if real else ""), real
+    if before == 0 and after == 0:
+        return "0%", False
+    share = (after - before) / abs(before) if before else math.inf
+    real = (least is not None and abs(share) >= least and len(base) > 1 and len(new) > 1
+            and max(abs(before), abs(after)) >= smallest
+            and apart(base, new) < CHANCE)
+    return (f"{share * 100:+.1f}%" if before else "new") + (" **" if real else ""), real
 
 
 def rows(lines: list[list[str]]) -> None:
@@ -152,10 +176,17 @@ def one_build(samples: Samples, build: str, documents: list[str], metrics: list[
     runs are from it."""
     of = samples[build]
     grid(documents, metrics, lambda m: [cell(of[d].get(m.key)) for d in documents])
+    instructions(samples, build, documents, metrics)
+
+
+def instructions(samples: Samples, build: str, documents: list[str], metrics: list[Metric]) -> None:
+    """The instructions of a build's numbers: what a later day can compare
+    with, on the same Mac and with the same documents."""
+    of = samples[build]
     counted = [Metric(m.key + INSTRUCTIONS, no_unit(m.title)) for m in metrics
                if any(m.key + INSTRUCTIONS in of[d] for d in documents)]
     if counted:
-        print("Instructions for the same numbers (millions):\n")
+        print(f"Instructions of {build} for the same numbers (millions):\n")
         grid(documents, counted, lambda m: [cell(of[d].get(m.key), 1e-6) for d in documents])
 
 
@@ -170,8 +201,8 @@ def two_builds(samples: Samples, base: str, new: str, documents: list[str], metr
         for metric in metrics:
             before, after = (samples[build][document].get(metric.key) for build in (base, new))
             work_before, work_after = (samples[build][document].get(metric.key + INSTRUCTIONS) for build in (base, new))
-            value, real = change(before, after, metric.kind)
-            work, real_work = change(work_before, work_after, VALUE if metric.kind == VALUE else COUNTED)
+            value, real = change(before, after, metric.kind, SHORTEST_MS if metric.kind == TIME else 0)
+            work, real_work = change(work_before, work_after, VALUE if metric.kind == VALUE else COUNTED, FEWEST)
             lines.append([metric.title, cell(before), cell(after), value] + ([work] if with_work else []))
             if real or real_work:
                 found.append(f"- {document}: {metric.title}: {cell(before)} to {cell(after)}"
@@ -183,6 +214,7 @@ def two_builds(samples: Samples, base: str, new: str, documents: list[str], metr
           f"{CHANCE:g} that they are not), and the medians differ by {LEAST[TIME]:.0%} or more for a time, "
           f"{LEAST[COUNTED]:.0%} or more for instructions and memory.\n")
     print("Differences that count:\n\n" + ("\n".join(found) if found else "none") + "\n")
+    instructions(samples, new, documents, metrics)
 
 
 def tables(samples: Samples, metrics: list[Metric]) -> None:
