@@ -120,8 +120,9 @@ extension DocumentWindowController {
         if isEditing {
             previewPendingEdits()
         } else {
-            // Enter without placing a caret or selecting the toolbar search
-            // field. Clicking the document will focus the editor explicitly.
+            // Enter without selecting the toolbar search field. The web
+            // editor gets no caret: clicking the document focuses it. The
+            // native view starts with a caret at the top of what shows.
             window?.makeFirstResponder(nil)
             enterEditMode()
         }

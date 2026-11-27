@@ -89,6 +89,15 @@ void mdcore_replace_text(void *ctx, long start, long end, const char *utf8, long
 // is there. In a document with no text, the caret is at its start.
 bool mdcore_caret_set(void *ctx, double x, double y);
 
+// Puts the caret at the start of the first text whose line is all in a
+// range of the page (top to bottom, in the space of the page), and ends
+// the selection: the place to type at when an editor starts with no
+// click. With no such line (one tall thing fills the range), at the text
+// that is nearest to the top of the range, which can be out of it. False
+// when no text is there. In a document with no text, the caret is at its
+// start.
+bool mdcore_caret_set_in(void *ctx, double top, double bottom);
+
 // Takes the caret away.
 void mdcore_caret_clear(void *ctx);
 

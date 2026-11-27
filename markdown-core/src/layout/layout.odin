@@ -27,6 +27,9 @@ import "core:mem"
 HEADING_LINE_HEIGHT :: 1.25
 CODE_LINE_HEIGHT :: 1.3
 CODE_PAD :: 16.0
+// The corners of the card of a code block, as the card of the web
+// renderer has them (`.md-code-wrap`).
+CODE_RADIUS :: 16.0
 CELL_PAD_X :: 12.0
 CELL_PAD_Y :: 6.0
 
@@ -931,8 +934,8 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 				// line and grow with the block: a long one can stay in
 				// progress while the reader is in it. They are the first
 				// records of the box, so the marker comes after them.
-				push_decor(l, x - 0.5, l.y - 0.5, width + 1, 0, l.style.code_border, 8.5)
-				push_decor(l, x, l.y, width, 0, l.style.code_background, 8)
+				push_decor(l, x - 0.5, l.y - 0.5, width + 1, 0, l.style.code_border, CODE_RADIUS + 0.5)
+				push_decor(l, x, l.y, width, 0, l.style.code_background, CODE_RADIUS)
 				push_quote_bars(l, b, l.y, 0)
 				place_marker(l, b, x, l.y + CODE_PAD, math.round(l.m.code_size * CODE_LINE_HEIGHT), block_font(l, b))
 			case .Table:

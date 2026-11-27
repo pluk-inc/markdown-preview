@@ -1827,3 +1827,26 @@ test_the_caret_is_as_high_as_the_text_of_its_line :: proc(t: ^testing.T) {
 		testing.expect(t, abs(bare_bar_y - heading_bar_y) < 0.01)
 	}
 }
+
+// The card of a code block: its background, and a border of half a point
+// around it, with the round corners of the card of the web renderer.
+@(test)
+test_the_card_of_code_has_round_corners :: proc(t: ^testing.T) {
+	f: Fixture
+	setup(&f, "```\ncode\n```\n", 600)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	part := only(&f.page)
+	box := part.boxes[0]
+	if !testing.expect(t, box.decor_end - box.decor_first >= 2) {
+		return
+	}
+	border, card := part.decor[box.decor_first], part.decor[box.decor_first + 1]
+	testing.expect_value(t, card.radius, f32(16))
+	testing.expect_value(t, border.radius, card.radius + 0.5)
+	// The border is the card, half a point larger on each side.
+	testing.expect_value(t, border.x, card.x - 0.5)
+	testing.expect_value(t, border.w, card.w + 1)
+	testing.expect_value(t, border.color, f.style.code_border)
+	testing.expect_value(t, card.color, f.style.code_background)
+}

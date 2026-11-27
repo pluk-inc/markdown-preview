@@ -536,13 +536,6 @@ Known limits, found in review and left on purpose:
 - Return after a mark that is being typed ("-" and Return) makes no item:
   the "-" stays text in the source. With the caret on another line,
   Markdown reads it as an empty list item, which can join the list above.
-- The first outline of a document comes from the app's parser, also in
-  native mode (`MainSplitViewController.showOutlineAndMetadata`); only
-  the outline after an edit comes from the core. Where the texts differ
-  (see the decision on the outline), the first edit changes them. The
-  native view can open its document after the outline is made (it waits
-  for the first frame of the window), so the core can give the first
-  outline only when that order changes.
 - With the inspector open, each refresh of native Edit Mode still gets
   all of the text and counts it (`DocumentMetadata.make`). The core can
   give those numbers as it gives the outline.
@@ -1606,6 +1599,17 @@ export.
   text went into a new line that joined that item. After the parse
   around such a line, the caret is at the place of its address. The walk
   of `bench.m` has this sequence (`list_caret_check`).
+- **2026-11-26** — A caret when Edit Mode starts. The maintainer asked
+  that Edit Mode needs no click before the first key. The core puts the
+  caret at the start of the first text whose line is all in a range of
+  the page (`mdcore_caret_set_in`), and the host gives it the view less
+  the room that a caret keeps to the edges
+  (`NativeRendererView.placeCaretInView`), so the first key does not
+  move the page. The first form was a loop of `mdcore_caret_set` in the
+  host; each of its looks moved the caret and could show marks, which
+  changed the layout under the next look. Checked on the hidden display
+  with a typed key right after Command-E: a short document, an empty one,
+  and the 1 MB fixture two pages down.
 - **2026-11-26** — The height of the caret. The maintainer saw that the
   caret was higher than in the text views of the system and showed how
   the editor of the developer tools draws it: as high as the text of its
@@ -1618,3 +1622,27 @@ export.
   with it (`caret_bar`), on the baseline of the shaped line where the
   line has one, so the bar and the glyphs come from the same numbers. The walk of `bench.m` found that an empty line after a heading
   took the font of the heading; it is a line of body text.
+- **2026-11-27** — The first outline from the core. In native mode the
+  sidebar's outline of a document that opens came from the app's parser
+  (a second parse of all of the text, off the main thread for a large
+  one), and each later one from the core: where the two differ (the
+  typographic quotes and dashes of the app's parser), the first edit
+  changed the titles. The host now takes the first outline from the
+  native view when it has the document open
+  (`ContentViewController.nativeDocumentDidOpen`,
+  `MainSplitViewController.showOutlineOfNativeRenderer`): at once for a
+  window that shows, and after the first frame for a document that
+  waited for it. The content view says if the last `display` gave its
+  document to the native renderer (`displayedInNativeRenderer`): a
+  received share waits for its rules, and a native renderer that is
+  there then has the document before, as a reviewer found. A rename
+  gives the outline its new name, and a change of the renderer setting
+  makes the outline of the other renderer. The numbers of the inspector
+  still come from the text. The web renderer keeps its path.
+- **2026-11-27** — The corners of the card of a code block. The
+  maintainer asked that the card is as the one of the web renderer. The
+  background and the border were (the same two colors, a border of half
+  a point); the corners were 8 pt, and the web card (`.md-code-wrap`)
+  has 16 (`CODE_RADIUS`). Compared on screenshots of one document in
+  the two renderers. Not the same yet: the web card has a row with the
+  language at its top and colors for the syntax.
