@@ -148,7 +148,8 @@ code_first_line :: proc(doc: ^Document, at: Address, offset: int, text: string, 
 // them), from the fence to the end of its last line, and the caret is
 // at the start of that range. The marks of its containers before the
 // fence stay, so a list item or a quote is there with no text. With no
-// such marks, the line of the fence goes too. False for each
+// such marks and an empty line before it, the line of the fence goes
+// too. False for each
 // other block, and for a caret at another place.
 code_delete :: proc(doc: ^Document, at: Address, offset: int) -> (start, end: int, ok: bool) {
 	if at.empty != 0 {
@@ -167,8 +168,13 @@ code_delete :: proc(doc: ^Document, at: Address, offset: int) -> (start, end: in
 	// paragraph is on a line of its own after that one
 	// (`empty_text`), so the source is then as it was before the fence,
 	// with the caret in that empty paragraph again.
+	// Only after an empty line: after a line with text (or the closing
+	// fence of other code) that line break ends that line, and the caret
+	// would be in it.
 	if start == first && first > 0 {
-		start = break_before(doc.source, first)
+		if before := break_before(doc.source, first); before == 0 || doc.source[before - 1] == '\n' || doc.source[before - 1] == '\r' {
+			start = before
+		}
 	}
 	return start, max(end, first_end), true
 }

@@ -547,7 +547,12 @@ test_a_delete_takes_code_with_no_text_out :: proc(t: ^testing.T) {
 		// fence that was typed in an empty paragraph.
 		{"Text\n\n```\n```\n\nMore\n", 1, "Text\n\n\nMore\n", 5},
 		{"Text\n\n```js\n\n```\n", 1, "Text\n\n", 5},
-		{"Text\n```\n```\n", 1, "Text\n", 4},
+		// After a line with text, or the closing fence of other code:
+		// an empty line stays, and the caret is in it.
+		{"Text\n```\n```\n", 1, "Text\n\n", 5},
+		{"a\n```\n```\nb\n", 1, "a\n\nb\n", 2},
+		{"```\nx\n```\n```\n```\n", 1, "```\nx\n```\n\n", 10},
+		{"```\nx\n```\n\n```\n```\n", 1, "```\nx\n```\n\n", 10},
 		{"```\n```", 0, "", 0},
 		{"```\n", 0, "\n", 0},
 		// Code that is all of a list item: the item goes, as an item
@@ -570,6 +575,17 @@ test_a_delete_takes_code_with_no_text_out :: proc(t: ^testing.T) {
 		apply(&doc, {start, end, ""})
 		testing.expect_value(t, string(doc.source), c.after)
 		testing.expect_value(t, caret, c.caret)
+		// The address of the caret has a place (where the core puts the
+		// caret: one empty line between two blocks is none), and is not
+		// in code in a fence: text that is typed next is in no line of a
+		// fence.
+		if doc.count == 0 {
+			continue
+		}
+		landed := address_of(&doc, caret)
+		_, placed := source_of(&doc, landed)
+		testing.expectf(t, placed, "%q: the caret at %d has no place", c.source, caret)
+		testing.expectf(t, landed.empty > 0 || !block_at(&doc, landed.block).fenced, "%q: the caret is in code", c.source)
 	}
 	// Not with code in it, and not at another place of the block.
 	doc := parse("```\nx\n```\n")

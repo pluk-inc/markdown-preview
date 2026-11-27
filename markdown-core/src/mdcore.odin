@@ -1616,6 +1616,10 @@ delete_back :: proc(ctx: ^Ctx) -> bool {
 		clear(&ctx.gone)
 		append(&ctx.gone, ..ctx.doc.source[start:end])
 		change_source_held(ctx, "", [2]int{start, end}, caret)
+		// Code that went can leave the caret in a line where no text
+		// goes (one empty line between two blocks): it is where text
+		// that is typed at its address goes.
+		caret_to_place(ctx)
 		return true
 	}
 	// The character before the caret, with the marks of a style that
