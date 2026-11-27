@@ -591,6 +591,12 @@ Known limits, found in review and left on purpose:
 - With the inspector open, each refresh of native Edit Mode still gets
   all of the text and counts it (`DocumentMetadata.make`). The core can
   give those numbers as it gives the outline.
+- The panel of front matter is laid out all at one time and keeps the
+  shaped text of each row (`layout/panel.odin`). That is right for the
+  few rows of a usual file. Front matter of thousands of rows costs its
+  layout at the first frame and keeps that memory while the document is
+  open. Form, when a file needs it: rows that are laid out and released
+  with the view, as the lines of a part are.
 - A line break of Unicode (U+2028, U+0085) in front matter is a line for
   the app's parser and none for the core: the lines of the headings after
   it differ by that many.

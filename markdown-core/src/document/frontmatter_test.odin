@@ -2,6 +2,7 @@ package document
 
 import "core:encoding/json"
 import "core:fmt"
+import "core:mem"
 import "core:strings"
 import "core:testing"
 
@@ -44,4 +45,34 @@ test_front_matter_has_the_entries_of_the_shared_cases :: proc(t: ^testing.T) {
 		}
 		testing.expectf(t, strings.to_string(got) == strings.to_string(want), "%q: %q, not %q", c.source, strings.to_string(got), strings.to_string(want))
 	}
+}
+
+// A value of many lines is its lines with a space between them, and the
+// value of the entry after it starts new. The memory for it is about its
+// size, not its size times its lines.
+@(test)
+test_a_front_matter_value_of_many_lines :: proc(t: ^testing.T) {
+	LINES :: 2000
+	source := strings.builder_make(context.temp_allocator)
+	want := strings.builder_make(context.temp_allocator)
+	strings.write_string(&source, "---\ntext: |\n")
+	for i in 0 ..< LINES {
+		fmt.sbprintf(&source, "  line %d\n", i)
+		fmt.sbprintf(&want, "%sline %d", i > 0 ? " " : "", i)
+	}
+	strings.write_string(&source, "first: one\n  two\nlast: end\n---\n\nBody.\n")
+	bytes := transmute([]u8)strings.to_string(source)
+	hidden, _ := hidden_start(bytes)
+	// Memory of a fixed size: a parse that needs more gets none.
+	arena: mem.Arena
+	buffer := make([]u8, 16 * len(bytes))
+	defer delete(buffer)
+	mem.arena_init(&arena, buffer)
+	entries := front_matter(bytes, hidden, mem.arena_allocator(&arena))
+	if !testing.expect_value(t, len(entries), 3) {
+		return
+	}
+	testing.expect_value(t, entries[0].value, strings.to_string(want))
+	testing.expect_value(t, entries[1].value, "one two")
+	testing.expect_value(t, entries[2].value, "end")
 }
