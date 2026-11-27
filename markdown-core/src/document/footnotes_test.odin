@@ -139,6 +139,17 @@ test_the_document_has_the_footnotes_as_numbers :: proc(t: ^testing.T) {
 		{"T[^n].\n\n<div>\n[^n]: Hidden.\n</div>\n", "T[^n].|"},
 		{"T[^n].\n\n\t[^n]: Code.\n", "T[^n].|[^n]: Code.|"},
 		{"\t[^n]: Code.\n", "[^n]: Code.|"},
+		// A fence line in raw HTML is no fence of code: the text after
+		// it has its footnote.
+		{"<div>\n~~~\n</div>\n\nT[^n].\n\n[^n]: Note.\n", "T<1:1>.|{1}Note.|"},
+		// In a fenced code block: text, also a definition there, and the
+		// text after the block has its footnotes.
+		{"```\n[^a] and ^[x]\n[^a]: In code.\n```\n\nReal[^a].\n\n[^a]: A.\n", "[^a] and ^[x]\n[^a]: In code.|Real<1:1>.|{1}A.|"},
+		// The last definition that is one has the references: a later
+		// one in raw HTML is none.
+		{"T[^n].\n\n[^n]: Visible.\n\n<div>\n[^n]: Hidden.\n</div>\n", "T<1:1>.|{1}Visible.|"},
+		// A bracket after a backslash is no end of an inline footnote.
+		{"A ^[a \\] b] c.\n", "A <1:1> c.|"},
 		// In raw HTML: no reference.
 		{"A <a href=\"[^1]\">link</a> and[^1].\n\n[^1]: One.\n", "A link and<1:1>.|{1}One.|"},
 		// A definition right after a paragraph, and a list after it.

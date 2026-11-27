@@ -822,7 +822,16 @@ final class NativeRendererView: NSView {
         // No wait for a frame that has the core: the bubble stays as it
         // is, and the next move of the pointer asks again.
         let found = point.map { mdcore_note_hover(ctx, $0.x, $0.y, &number) } ?? 0
-        if found < 0 { return }
+        if found < 0 {
+            // One later call asks again, for a pointer that does not move.
+            guard !pointerShapeRetryScheduled else { return }
+            pointerShapeRetryScheduled = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
+                self?.pointerShapeRetryScheduled = false
+                self?.updatePointerShape()
+            }
+            return
+        }
         guard let point, found > 0 else {
             hideNoteBubble()
             return

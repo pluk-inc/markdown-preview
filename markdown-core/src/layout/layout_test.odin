@@ -2006,19 +2006,42 @@ test_a_list_and_a_link_in_the_text_of_a_footnote :: proc(t: ^testing.T) {
 	number, _, goes := note_at(&f.page, list.column_x + 3 * list.m.list_indent, nested_top + 6)
 	testing.expect_value(t, number, 1)
 	testing.expect(t, !goes)
-	// The two links of the first line: the one of the text does not go
-	// back, the mark at the end of the line does.
-	first := only(list).boxes[0]
-	line := only(list).lines[first.line_first]
-	y := only(list).top + f64(first.top) + 6
-	on_link, on_back := false, false
-	for x := line.x; x < line.x + line.line.width; x += 2 {
-		_, _, goes := note_at(&f.page, x, y)
-		on_back ||= goes && x > line.x + line.line.width - 12
-		on_link ||= goes && x < line.x + line.line.width - 24
+	// The two links of the first text: a point in the middle of the one
+	// of the text does not go back, a point in the middle of the mark at
+	// the end does, and a point in the room right of the mark does not.
+	src := &document.block_at(list.doc, 0).text
+	links := 0
+	for span in src.spans {
+		if .Link not_in span.style {
+			continue
+		}
+		links += 1
+		x0, top, height, part_index, placed0 := caret_place(list, {block = 0, byte = span.start})
+		x1, _, _, _, placed1 := caret_place(list, {block = 0, byte = span.end}, true)
+		if !testing.expect(t, placed0 && placed1) {
+			continue
+		}
+		y := list.parts[part_index].top + f64(top + height / 2)
+		number, definition, goes := note_at(&f.page, (x0 + x1) / 2, y)
+		is_mark := string(src.bytes[span.start:span.end]) == document.NOTE_BACK
+		testing.expect_value(t, goes, is_mark)
+		if is_mark {
+			testing.expect(t, definition)
+			testing.expect_value(t, number, 1)
+			_, _, beside := note_at(&f.page, x1 + 30, y)
+			testing.expect(t, !beside)
+		}
 	}
-	testing.expect(t, on_back)
-	testing.expect(t, !on_link)
+	testing.expect_value(t, links, 2)
+	// A text that starts with a quote is a footnote of the list too.
+	g: Fixture
+	g.page.notes_at_end = true
+	setup(&g, "T[^n].\n\n[^n]: > Quoted.\n", 600)
+	defer teardown(&g)
+	step(&g.page, 1e30)
+	expect_ok(t, &g.page)
+	_, _, quoted := note_top(&g.page, 1)
+	testing.expect(t, quoted)
 }
 
 // The bar of a caret is as high as the font of the text of its line, on

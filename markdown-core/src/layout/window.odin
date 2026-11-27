@@ -21,6 +21,10 @@ import "../text"
 // points, and releases the shaped text outside it.
 keep :: proc(l: ^Layout, y0, y1: f64) {
 	l.keep_y0, l.keep_y1 = y0, y1
+	// The list of the footnotes is at heights of the same page.
+	if l.notes.page != nil {
+		keep(l.notes.page, y0, y1)
+	}
 	for &part in l.parts {
 		if part.live_first < part.live_end {
 			part.live_first, part.live_end = trim(l, &part, part.live_first, min(part.live_end, len(part.lines)))

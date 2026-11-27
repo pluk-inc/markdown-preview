@@ -45,6 +45,7 @@ Parser :: struct {
 	notes:        Footnotes,
 	note_ref:     int, // the next reference
 	note_def:     int, // the next definition
+	note_defs:    int, // how many of the notes are definitions
 	// Containers.
 	quote:        int,
 	lists:        [dynamic]List,
@@ -166,6 +167,9 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 		bytes        = bytes,
 		kept         = kept,
 		notes        = notes,
+	}
+	for p.note_defs < len(notes.notes) && !notes.notes[p.note_defs].inline {
+		p.note_defs += 1
 	}
 	md := Md_Parser {
 		flags       = MD_FLAGS,
@@ -1018,11 +1022,19 @@ append_noted :: proc(p: ^Parser, s: string, at, from: int) {
 		}
 	}
 	notes := p.notes.notes
-	for d := 0; d < len(notes); d += 1 {
-		if note := notes[d]; !note.inline && from == note.mark + 2 && !p.in_code && p.code == 0 {
-			step(&s, &at, &from, min(note.content - from, len(s)))
-			break
+	// The definition whose text starts here, if one does: the
+	// definitions are the first of the notes, in the order of the source.
+	low, high := 0, p.note_defs
+	for low < high {
+		middle := (low + high) / 2
+		if notes[middle].mark + 2 < from {
+			low = middle + 1
+		} else {
+			high = middle
 		}
+	}
+	if low < p.note_defs && notes[low].mark + 2 == from && !p.in_code && p.code == 0 {
+		step(&s, &at, &from, min(notes[low].content - from, len(s)))
 	}
 	references := p.notes.references
 	for len(s) > 0 {

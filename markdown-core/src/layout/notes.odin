@@ -33,23 +33,39 @@ note_at :: proc(l: ^Layout, x: f32, y: f64) -> (number: int, definition: bool, o
 	if b.marker == .Note && b.number > 0 && x < text_x && x >= text_x - l.m.list_indent - 0.8 * l.m.body && from_top < part.boxes[slot].top + l.m.body * l.m.line_height {
 		return b.number, true, true
 	}
-	if !text_at(l, x, y) {
+	// Only a block with a number in its text needs the place of the
+	// point in the text: the pointer asks for each of its moves, and that
+	// place costs a look at each line of the block (a long code block).
+	noted := false
+	for &t in document.block_texts(b) {
+		for span in t.spans {
+			noted ||= .Note in span.style
+		}
+	}
+	if !noted || !text_at(l, x, y) {
 		return
 	}
+	span, _ := span_under(l, x, y, {.Note}) or_return
+	return span.link, false, true
+}
+
+// The span with one of `styles` that a point of the page is on, between
+// the two ends of its text. The place nearest to the point is an end of
+// the span when the point is on it: the span there, or the one before
+// it.
+@(private)
+span_under :: proc(l: ^Layout, x: f32, y: f64, styles: document.Inline_Set) -> (found: document.Span, src: ^document.Text, ok: bool) {
 	at := hit_test(l, x, y) or_return
-	src := document.text_at(l.doc, at)
+	src = document.text_at(l.doc, at)
 	if src == nil || len(src.spans) == 0 {
 		return
 	}
-	// The place nearest to the point is an end of the number when the
-	// point is on it: the span there, or the one before it, between the
-	// two places of its ends.
 	for byte in ([2]int{at.byte, at.byte - 1}) {
 		if byte < 0 || byte >= len(src.bytes) {
 			continue
 		}
 		span := document.span_at(src, byte)
-		if .Note not_in span.style {
+		if span.style & styles == {} {
 			continue
 		}
 		start, end := at, at
@@ -57,7 +73,7 @@ note_at :: proc(l: ^Layout, x: f32, y: f64) -> (number: int, definition: bool, o
 		x0, _, _, _, placed0 := caret_place(l, start)
 		x1, _, _, _, placed1 := caret_place(l, end, true)
 		if placed0 && placed1 && x >= x0 - 1 && x <= x1 + 1 {
-			return span.link, false, true
+			return span^, src, true
 		}
 	}
 	return
@@ -205,20 +221,12 @@ note_in_list :: proc(list: ^Layout, x: f32, y: f64) -> (number: int, definition:
 	}
 	text_x := list.column_x + list_x(list, b)
 	on_mark := b == first && x < text_x && x >= text_x - list.m.list_indent - 0.8 * list.m.body && from_top < part.boxes[slot].top + list.m.body * list.m.line_height
+	// The link that goes back (its target and its mark), and no other
+	// link of the text; on the mark itself, not on the room after it.
 	on_back := false
 	if !on_mark && text_at(list, x, y) {
-		if at, hit := hit_test(list, x, y); hit {
-			if src := document.text_at(list.doc, at); src != nil && len(src.spans) > 0 {
-				// The link that goes back (its target and its mark), and
-				// no other link of the text.
-				for byte in ([2]int{at.byte, at.byte - 1}) {
-					if byte < 0 || byte >= len(src.bytes) {
-						continue
-					}
-					span := document.span_at(src, byte)
-					on_back ||= .Link in span.style && span.link > 0 && span.link <= len(list.doc.links) && list.doc.links[span.link - 1] == document.NOTE_BACK_TARGET && string(src.bytes[span.start:span.end]) == document.NOTE_BACK
-				}
-			}
+		if span, src, hit := span_under(list, x, y, {.Link}); hit {
+			on_back = span.link > 0 && span.link <= len(list.doc.links) && list.doc.links[span.link - 1] == document.NOTE_BACK_TARGET && string(src.bytes[span.start:span.end]) == document.NOTE_BACK
 		}
 	}
 	return first.number, true, on_mark || on_back
@@ -228,7 +236,8 @@ note_in_list :: proc(list: ^Layout, x: f32, y: f64) -> (number: int, definition:
 // of an item of the list itself, and not of a list in a text.
 @(private)
 note_starts :: proc(b: ^document.Block) -> bool {
-	return b.marker == .Number && b.list_depth == 1 && b.quote_depth == 0 && b.spacing != .Continuation
+	// Also in a quote: a text can start with one.
+	return b.marker == .Number && b.list_depth == 1 && b.spacing != .Continuation
 }
 
 // The height of the page where the text of a footnote starts: in the
