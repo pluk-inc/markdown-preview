@@ -1,6 +1,7 @@
 package document
 
 import "core:fmt"
+import "core:strings"
 import "core:testing"
 
 @(test)
@@ -70,6 +71,12 @@ test_return_puts_in_what_the_block_of_the_caret_needs :: proc(t: ^testing.T) {
 		{"    code\n    more\n", {block = 0, byte = 2}, "    co\n    de\n    more\n", 11, 0},
 		{"    code\n\nz\n", {block = 0, byte = 4}, "    code\n\n\nz\n", 9, 0},
 		{"    ```\n    x\n\nz\n", {block = 0, byte = 5}, "    ```\n    x\n\n\nz\n", 14, 0},
+		// Code in a fence with no line of code: its first line, with
+		// the caret in it. Then a line more.
+		{"```\n```\n", {block = 0}, "```\n\n```\n", 4, 0},
+		{"x\n\n```js\n```\n", {block = 1}, "x\n\n```js\n\n```\n", 9, 0},
+		{"- ```\n  ```\n", {block = 0}, "- ```\n  \n  ```\n", 8, 0},
+		{"```\n\n```\n", {block = 0}, "```\n\n\n```\n", 5, 0},
 		// An item with no text that is all of the source.
 		{"- \n", {block = 0}, "", 0, 0},
 	}
@@ -272,4 +279,382 @@ test_empty_lines_stay_before_a_typed_mark :: proc(t: ^testing.T) {
 	plain := parse(source)
 	defer destroy(&plain)
 	testing.expect_value(t, int(block_at(&plain, plain.count - 2).empties), 0)
+}
+
+// Code in a fence with no line of code has a place for a caret, and
+// text there is a line of the code of its block: with the indent of a
+// list item and the mark of a quote.
+@(test)
+test_code_with_no_line_takes_text :: proc(t: ^testing.T) {
+	Case :: struct {
+		source: string,
+		block:  int,
+		place:  int, // -1 for none
+		after:  string, // with "x" typed at the place
+		caret:  int,
+	}
+	cases := []Case {
+		{"```\n```\n", 0, 4, "```\nx\n```\n", 5},
+		{"x\r\n\r\n~~~js\r\n~~~\r\n", 1, 12, "x\r\n\r\n~~~js\r\nx\r\n~~~\r\n", 13},
+		// The fence is not closed: the end of the source.
+		{"```\n", 0, 4, "```\nx\n", 5},
+		// An empty line of code is the place.
+		{"```\n\n```\n", 0, 4, "```\nx\n```\n", 5},
+		// In a list item and in a quote.
+		{"- item\n\n  ```\n  ```\n", 1, 14, "- item\n\n  ```\n  x\n  ```\n", 17},
+		{"- ```\n- b\n", 0, 6, "- ```\n  x\n- b\n", 9},
+		// The mark of the quote is on a line before the fence.
+		{">\n> ```\n> ```\n", 0, 8, ">\n> ```\n> x\n> ```\n", 11},
+		{">```\n>```\n", 0, 5, ">```\n> x\n>```\n", 8},
+		{">- ```\n>   ```\n", 0, 7, ">- ```\n>   x\n>   ```\n", 12},
+		{"> ```\n> ```\n", 0, 6, "> ```\n> x\n> ```\n", 9},
+		{"> ```\n>\n> ```\n", 0, 7, "> ```\n> x\n> ```\n", 9},
+		// No line break after the fence: no line for code yet.
+		{"```", 0, -1, "", 0},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		at := Address{block = c.block}
+		testing.expect_value(t, block_at(&doc, c.block).kind, Block_Kind.Code)
+		offset, placed := source_of(&doc, at)
+		testing.expect_value(t, placed, c.place >= 0)
+		if !placed {
+			continue
+		}
+		testing.expect_value(t, offset, c.place)
+		text, caret := "x", 1
+		own, own_caret, first := code_first_line(&doc, at, offset, "x")
+		defer delete(own)
+		if first {
+			text, caret = own, own_caret
+		}
+		apply(&doc, {offset, offset, text})
+		testing.expect_value(t, string(doc.source), c.after)
+		testing.expect_value(t, offset + caret, c.caret)
+	}
+}
+
+// A command of the reader made a fence: a new fence gets its closing
+// fence, a closing fence before the one that was there goes, and a
+// closing fence in the middle of closed code is no end of it.
+@(test)
+test_a_typed_fence :: proc(t: ^testing.T) {
+	Case :: struct {
+		source: string,
+		before: Code_Before,
+		offset: int,
+		kind:   Typed_Fence,
+		after:  string, // with the edit of the rule
+	}
+	cases := []Case {
+		// A new fence: closed at once, also before other code, with
+		// the marks of its containers.
+		{"a\n\n```\n\nmore\n", {}, 6, .Opened, "a\n\n```\n```\n\nmore\n"},
+		{"```\n```\nx\n```\n", {}, 3, .Opened, "```\n```\n```\nx\n```\n"},
+		{"```\nx\n```\n", {}, 3, .Opened, "```\n```\nx\n```\n"},
+		{"- ```\n", {}, 5, .Opened, "- ```\n  ```\n"},
+		{"> ~~~js", {}, 7, .Opened, "> ~~~js\n> ~~~"},
+		{">>\t```\n", {}, 6, .Opened, ">>\t```\n>>\t```\n"},
+		{">```\n", {}, 4, .Opened, ">```\n> ```\n"},
+		{">\n> ```\n", {}, 7, .Opened, ">\n> ```\n> ```\n"},
+		// A caret that was in the code: nothing.
+		{"```js\n```\n", {true, true}, 5, .None, ""},
+		// A closing fence before the one of the code: it goes.
+		{"```\nx\n```\n```\n\nmore\n", {true, true}, 9, .Closed_Twice, "```\nx\n```\n\nmore\n"},
+		// A caret in code with no line, before its closing fence, typed
+		// no fence: nothing, also with other code after it.
+		{"```\n```\n```\nx\n```\n", {true, true}, 4, .None, ""},
+		{"```\n```\n", {true, false}, 4, .None, ""},
+		// In the middle of closed code: nothing.
+		{"```\nx\n```\ny\n```\n", {true, true}, 9, .None, ""},
+		// Code with no closing fence gets one.
+		{"```\nx\n```\n", {true, false}, 9, .Closed, ""},
+		{">```\n> x\n>    ```\n", {true, false}, 17, .Closed, ""},
+		// Also with the last character typed in the middle of the fence.
+		{"```\nx\n```\n", {true, false}, 8, .Closed, ""},
+		{"```\nx\n```\n", {true, false}, 7, .Closed, ""},
+		{"- ```\n  x\n     ```\n", {true, false}, 18, .Closed, ""},
+		// Lines of code with a fence in them are no closing fence: after
+		// four spaces, after a ">" in code that is in no quote, after
+		// other text, and one that is too short.
+		{"```\nx\n    ```\n", {true, false}, 13, .None, ""},
+		{" ```\nx\n    ```\n", {true, false}, 14, .None, ""},
+		{">```\n> x\n>     ```\n", {true, false}, 18, .None, ""},
+		{"```\nx\n> ```\n", {true, false}, 11, .None, ""},
+		{"```\nx\n    > ```\n", {true, false}, 15, .None, ""},
+		{"```\necho ```\n", {true, false}, 12, .None, ""},
+		{"````\nx\n```\n", {true, false}, 10, .None, ""},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		kind, start, end, text := typed_fence(&doc, c.before, address_of(&doc, c.offset), c.offset)
+		defer delete(text)
+		testing.expectf(t, kind == c.kind, "%q: %v", c.source, kind)
+		if kind != c.kind || (kind != .Opened && kind != .Closed_Twice) {
+			continue
+		}
+		apply(&doc, {start, end, text})
+		testing.expect_value(t, string(doc.source), c.after)
+		if kind != .Opened {
+			continue
+		}
+		// The code has its closing fence, and a place for the caret in
+		// it, which is not in the line of the fence.
+		block := block_at_offset(&doc, c.offset)
+		testing.expect(t, block_at(&doc, block).closed)
+		place, _, placed := code_place(&doc, block)
+		line_end, _ := line_at(doc.source, fence_start(&doc, block))
+		testing.expect(t, !placed || place > line_end)
+	}
+}
+
+// A caret in the line of the closing fence of its code goes to an empty
+// paragraph after the code. With none there, one is made; where none can
+// be (the next block is in a list or in a quote with the code), the
+// caret does not leave.
+@(test)
+test_the_caret_leaves_a_closing_fence :: proc(t: ^testing.T) {
+	Case :: struct {
+		source: string,
+		offset: int,
+		leaves: bool,
+		after:  string,
+		caret:  int,
+	}
+	cases := []Case {
+		{"```\nx\n```\n", 9, true, "```\nx\n```\n\n", 10},
+		{"```\nx\n```", 9, true, "```\nx\n```\n\n", 10},
+		// One empty line is what is between two blocks: one more.
+		{"```\nx\n```\n\nmore\n", 9, true, "```\nx\n```\n\n\nmore\n", 10},
+		// An empty paragraph is there.
+		{"```\nx\n```\n\n\nmore\n", 9, true, "```\nx\n```\n\n\nmore\n", 10},
+		{"```\r\nx\r\n```\r\n", 11, true, "```\r\nx\r\n```\r\n\r\n", 13},
+		// Code in no list leaves before a list too.
+		{"```\nx\n```\n- b\n", 9, true, "```\nx\n```\n\n\n- b\n", 10},
+		// Not out of a list and not out of a quote that go on.
+		{"- ```\n  x\n  ```\n- b\n", 16, false, "", 0},
+		{"- a\n- ```\n  x\n  ```\n- b\n", 20, false, "", 0},
+		{"> ~~~\n> x\n> ~~~\n> more\n", 14, false, "", 0},
+		// Not for a caret in the code.
+		{"```\nx\n```\n", 5, false, "", 0},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		at, text, caret, ok := code_exit(&doc, address_of(&doc, c.offset), c.offset)
+		defer delete(text)
+		testing.expect_value(t, ok, c.leaves)
+		if !ok || !c.leaves {
+			continue
+		}
+		apply(&doc, {at, at, text})
+		testing.expect_value(t, string(doc.source), c.after)
+		testing.expect_value(t, caret, c.caret)
+		// The caret is in an empty paragraph, at that offset again.
+		landed := address_of(&doc, caret)
+		testing.expect(t, empty_of(&doc, landed) > 0)
+		back, placed := source_of(&doc, landed)
+		testing.expect(t, placed)
+		testing.expect_value(t, back, caret)
+	}
+}
+
+// A text with line breaks that is put into code with no line (a paste):
+// each of its lines is a line of the code of its block.
+@(test)
+test_pasted_lines_are_lines_of_the_code :: proc(t: ^testing.T) {
+	Case :: struct {
+		source, text, after: string,
+		place, caret:        int,
+	}
+	cases := []Case {
+		{"> ```\n> ```\n", "a\nb", "> ```\n> a\n> b\n> ```\n", 6, 13},
+		{">```\n>```\n", "    pass", ">```\n>     pass\n>```\n", 5, 15},
+		// A text that starts with a line break.
+		{"```\n```\n", "\nx", "```\n\nx\n```\n", 4, 6},
+		{"> ```\n> ```\n", "\nx", "> ```\n> \n> x\n> ```\n", 6, 12},
+		// In an empty line of code that is only the mark of a quote.
+		{"> ~~~\n>\n> ~~~\n", "\nx", "> ~~~\n> \n> x\n> ~~~\n", 7, 12},
+		{"> ~~~\n>\n> ~~~\n", "a\nb", "> ~~~\n> a\n> b\n> ~~~\n", 7, 13},
+		{"> ```\n>\n> ```\n", "    pass", "> ```\n>     pass\n> ```\n", 7, 16},
+		{"- ```\n  ```\n", "a\nb\n", "- ```\n  a\n  b\n  \n  ```\n", 6, 16},
+		{"```\r\n```\r\n", "a\r\nb", "```\r\na\r\nb\r\n```\r\n", 5, 9},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		own, caret, ok := code_first_line(&doc, {block = 0}, c.place, c.text)
+		defer delete(own)
+		if !testing.expect(t, ok) {
+			continue
+		}
+		apply(&doc, {c.place, c.place, own})
+		testing.expect_value(t, string(doc.source), c.after)
+		testing.expect_value(t, c.place + caret, c.caret)
+	}
+}
+
+// The parser says if code in a fence has its closing fence.
+@(test)
+test_the_parser_knows_a_closing_fence :: proc(t: ^testing.T) {
+	Case :: struct {
+		source: string,
+		block:  int,
+		closed: bool,
+	}
+	cases := []Case {
+		{"```\nx\n```\n", 0, true},
+		{"```\n```", 0, true},
+		{"```\n\n\nx\n\n```\n\nmore\n", 0, true},
+		{"~~~js\r\nx\r\n~~~~\r\n", 0, true},
+		{"> ```\n> x\n> ```\n", 0, true},
+		{"- a\n\n  ```\n  x\n  ```\n", 1, true},
+		{">```\n> x\n>    ```\n", 0, true},
+		{">\n> ```\n> x\n> ```\n", 0, true},
+		{">\n> ```\n> x\n", 0, false},
+		{"-\n  ```\n  x\n", 0, false},
+		// No closing fence: the end of the source, a fence that is too
+		// short or of the other character, and lines of code with a fence.
+		{"```\nx\n", 0, false},
+		{"```\n", 0, false},
+		{"```", 0, false},
+		{"```\n\n\n", 0, false},
+		{"````\nx\n```\n", 0, false},
+		{"```\nx\n~~~\n", 0, false},
+		{"```\nx\n    ```\n", 0, false},
+		{"```\nx\n> ```\n", 0, false},
+		{"```\necho ```\n", 0, false},
+		{"> ```\n> x\n\nmore\n", 0, false},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		b := block_at(&doc, c.block)
+		testing.expect(t, b.fenced)
+		testing.expectf(t, b.closed == c.closed, "%q: closed %v", c.source, b.closed)
+	}
+}
+
+// A delete in code in a fence with no text takes the code out: its two
+// fences, and the empty line between them. The marks of its containers
+// stay.
+@(test)
+test_a_delete_takes_code_with_no_text_out :: proc(t: ^testing.T) {
+	Case :: struct {
+		source: string,
+		block:  int,
+		after:  string,
+		caret:  int,
+	}
+	cases := []Case {
+		// The line of the fence goes: the source is as it was before a
+		// fence that was typed in an empty paragraph.
+		{"Text\n\n```\n```\n\nMore\n", 1, "Text\n\n\nMore\n", 5},
+		{"Text\n\n```js\n\n```\n", 1, "Text\n\n", 5},
+		// After a line with text, or the closing fence of other code:
+		// an empty line stays, and the caret is in it.
+		{"Text\n```\n```\n", 1, "Text\n\n", 5},
+		{"a\n```\n```\nb\n", 1, "a\n\nb\n", 2},
+		{"```\nx\n```\n```\n```\n", 1, "```\nx\n```\n\n", 10},
+		{"```\nx\n```\n\n```\n```\n", 1, "```\nx\n```\n\n", 10},
+		{"```\n```", 0, "", 0},
+		{"```\n", 0, "\n", 0},
+		// Code that is all of a list item: the item goes, as an item
+		// with no text does. In an item with other blocks, the code only.
+		{"- a\n- ```\n  ```\n- b\n", 1, "- a\n- b\n", 3},
+		{"- a\n\n  ```\n  ```\n\n  more\n", 1, "- a\n\n  \n\n  more\n", 7},
+		{"> ```\n> ```\n> more\n", 0, "> \n> more\n", 2},
+		{"~~~\r\n~~~\r\n\r\nx\r\n", 0, "\r\n\r\nx\r\n", 0},
+		{"a\r\n\r\n~~~\r\n~~~\r\n", 1, "a\r\n\r\n", 3},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		places := block_map(&doc, c.block)
+		defer delete(places)
+		start, end, caret, ok := delete_back(&doc, places[:], {block = c.block})
+		if !testing.expectf(t, ok, "%q", c.source) {
+			continue
+		}
+		apply(&doc, {start, end, ""})
+		testing.expect_value(t, string(doc.source), c.after)
+		testing.expect_value(t, caret, c.caret)
+		// The address of the caret has a place (where the core puts the
+		// caret: one empty line between two blocks is none), and is not
+		// in code in a fence: text that is typed next is in no line of a
+		// fence.
+		if doc.count == 0 {
+			continue
+		}
+		landed := address_of(&doc, caret)
+		_, placed := source_of(&doc, landed)
+		testing.expectf(t, placed, "%q: the caret at %d has no place", c.source, caret)
+		testing.expectf(t, landed.empty > 0 || !block_at(&doc, landed.block).fenced, "%q: the caret is in code", c.source)
+	}
+	// Not with code in it, and not at another place of the block.
+	doc := parse("```\nx\n```\n")
+	defer destroy(&doc)
+	places := block_map(&doc, 0)
+	defer delete(places)
+	_, _, _, with_code := delete_back(&doc, places[:], {block = 0})
+	testing.expect(t, !with_code)
+}
+
+// Down from code that is the last block of the document makes an empty
+// paragraph after it.
+@(test)
+test_down_from_the_last_code_makes_a_paragraph :: proc(t: ^testing.T) {
+	Case :: struct {
+		source: string,
+		block:  int,
+		ok:     bool,
+		after:  string,
+		caret:  int,
+	}
+	cases := []Case {
+		{"```\nx\n```\n", 0, true, "```\nx\n```\n\n", 10},
+		{"```\nx\n```", 0, true, "```\nx\n```\n\n", 10},
+		{"a\r\n\r\n```\r\nx\r\n```\r\n", 1, true, "a\r\n\r\n```\r\nx\r\n```\r\n\r\n", 18},
+		{"- a\n\n  ```\n  x\n  ```\n", 1, true, "- a\n\n  ```\n  x\n  ```\n\n", 21},
+		// Not with a block or an empty paragraph after it, and not for
+		// code with no closing fence.
+		{"```\nx\n```\n\nmore\n", 0, false, "", 0},
+		{"```\nx\n```\n\n\n", 0, false, "", 0},
+		{"```\nx\n", 0, false, "", 0},
+		{"text\n", 0, false, "", 0},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		start, text, caret, ok := code_below(&doc, {block = c.block, byte = 1})
+		defer delete(text)
+		testing.expectf(t, ok == c.ok, "%q", c.source)
+		if !ok || !c.ok {
+			continue
+		}
+		apply(&doc, {start, start, text})
+		testing.expect_value(t, string(doc.source), c.after)
+		testing.expect_value(t, caret, c.caret)
+		testing.expect(t, empty_of(&doc, address_of(&doc, caret)) > 0)
+	}
+}
+
+// The code that text which is selected is in, for a command that takes
+// that text out: only when all of it is in the lines of the code.
+@(test)
+test_the_code_of_a_selection :: proc(t: ^testing.T) {
+	doc := parse("```\nab\ncd\n```\n\nText\n")
+	defer destroy(&doc)
+	// In the code.
+	testing.expect_value(t, code_before_selection(&doc, 5, 8), Code_Before{true, true})
+	// With the fence, with the closing fence, and with text after the
+	// code in it: the code goes, or is no more the code of all of it.
+	testing.expect_value(t, code_before_selection(&doc, 0, 8), Code_Before{})
+	testing.expect_value(t, code_before_selection(&doc, 5, 12), Code_Before{})
+	testing.expect_value(t, code_before_selection(&doc, 0, len(doc.source)), Code_Before{})
+	testing.expect_value(t, code_before_selection(&doc, 5, 17), Code_Before{})
+	// In other text.
+	testing.expect_value(t, code_before_selection(&doc, 15, 17), Code_Before{})
 }

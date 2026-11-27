@@ -184,22 +184,12 @@ block_places :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs:
 	}
 	place_escapes(places, text)
 	// Where the text of the block can start, for a block with no text
-	// from the source at all: a code block of empty lines starts after
-	// its first line, which is its fence; each other block (a paragraph
+	// from the source at all: code in a fence with only empty lines
+	// starts after its first line, the fence; each other block (a paragraph
 	// of a NUL byte) at its own start.
 	content := block_start(doc, block) - base
-	line := content
-	for line < len(text) && text[line] != '\n' && text[line] != '\r' {
-		line += 1
-	}
-	first_line := string(text[min(content, len(text)):line])
-	// Code in a fence, not code by its indent, which has no such line.
-	if block_at(doc, block).kind == .Code && (strings.contains(first_line, "```") || strings.contains(first_line, "~~~")) {
-		content = line
-		if content + 1 < len(text) && text[content] == '\r' && text[content + 1] == '\n' {
-			content += 1
-		}
-		content = min(content + 1, len(text))
+	if block_at(doc, block).fenced {
+		_, content = line_at(text, fence_start(doc, block) - base)
 	}
 	place_made(places[:], text, content)
 	for &place in places^ {
@@ -407,7 +397,8 @@ place_made :: proc(places: []Place, source: []u8, content: int) {
 // is in the marks that the character before it is in (bold text that
 // ends at the address gets the new text too). False when the address
 // has no place: a table cell with no text (the source can have no room
-// for one), a block with no text and no space after its mark.
+// for one), a block with no text and no space after its mark, code in a
+// fence with no line break after the fence.
 place_of :: proc(doc: ^Document, places: []Place, at: Address) -> (offset: int, ok: bool) {
 	// An empty paragraph after the text: its line of the source.
 	if n := empty_of(doc, at); n > 0 {
@@ -461,13 +452,19 @@ text_place :: proc(doc: ^Document, places: []Place, at: Address) -> (offset: int
 				return place.source, true
 			}
 		}
-		// A block with no text: after the space that ends its first
-		// line ("- ", "# ").
 		b := block_at(doc, at.block)
+		start := block_start(doc, at.block)
+		// Code in a fence with no line of code: its first line
+		// (`code_place`).
+		if b.fenced {
+			offset, _, ok = code_place(doc, at.block)
+			return
+		}
+		// Each other block with no text: after the space that ends its
+		// first line ("- ", "# ").
 		if b.kind == .Table || b.kind == .Rule || b.kind == .Code {
 			return
 		}
-		start := block_start(doc, at.block)
 		line := strings.index_any(string(doc.source[start:]), "\r\n")
 		end := line < 0 ? len(doc.source) : start + line
 		if end > start && (doc.source[end - 1] == ' ' || doc.source[end - 1] == '\t') {

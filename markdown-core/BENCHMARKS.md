@@ -180,6 +180,11 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-26 | list marks as in other Markdown editors | 576 / 555 | 60 / 107 (the base too) | 485 / 770 | 59 / 72 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
 | 2026-11-26 | the outline of native Edit Mode from the core | 574 / 559 | 64 / 110 (the base too) | 475 / 755 | 58 / 74 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
 | 2026-11-26 | the caret at its place after Up from a list mark | 568 / 591 | 60 / 108 (the base too) | 490 / 800 | 60 / 74 | not recorded | not recorded | 7.1 / 26.4 (the base too) |
+| 2026-11-26 | a caret when Edit Mode starts | 566 / 579 | 61 / 95 (the base too) | 460 / 605 | 56 / 73 | not recorded | not recorded | 7.0 / 26.3 (the base 26.4) |
+| 2026-11-26 | the caret as high as the text of its line | 572 / 592 | 61 / 95 (the base too) | 465 / 615 | 60 / 74 | not recorded | not recorded | 7.0 / 26.4 (the base too) |
+| 2026-11-26 | a code block that is typed | 538 / 548 | 61 / 94 (the base 61 / 93) | 420 / 550 | 62 / 75 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
+| 2026-11-27 | the first outline of a document from the core, not from a second parse | 584 / 596 (see the section) | 55 / 79 (the base 55 / 89) | 498 / 583 (the base 510 / 700) | – | – | – | – |
+| 2026-11-27 | the corners of the card of a code block, as the web renderer has them | 579 / 591 | 52 / 86 (the base too) | 495 / 640 (the base 475 / 620) | 63 / 75 | not recorded | 0.49 / 0.40 | 7.0 / 26.3 (the base 26.4) |
 | 2026-11-27 | the method of the benchmark: two builds in turns, instructions, cases, more documents (see the section; the columns have other meanings from here) | 584 / 587 to the drawn frame, 593 / 596 to the committed one | 50 / 85, six seconds after the frame (the base too); highest 143 / 178 | 471 / 583, six seconds after the frame | 11.5 / 10.9 with the system started; the parse 0.16 / 11.6 apart | none | 0.42 / 0.35, 99 of 100 frames below 9.5 / 4.0 | 6.95 / 23.4 in a view that only this case used |
 
 The web renderer in the same build on the same day as the first row, for
@@ -1413,6 +1418,176 @@ long, five launches each, in the order that they ran:
 
 The launches of the base were slower in this set; no code of a launch
 changed, so that is the spread of the Mac (other apps were in use).
+
+## A caret when Edit Mode starts (2026-11-26)
+
+One new call of the core puts the first caret of Edit Mode, and the
+host calls it one time when the mode starts: no launch, scroll, or
+typing path of the benchmark runs it. `core.py`, short / long, the two
+runs of each in the order base, change, change, base (the runs of
+another change were around them), with a load of 1.8 to 4.9:
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 60, 62 / 75, 74 | 57, 56 / 71, 76 |
+| A typed character in the middle of the text (CPU ms) | 1.16, 1.23 / 1.33, 1.28 | 1.02, 1.20 / 1.37, 1.46 |
+| A typed character at the end of the text (CPU ms) | 0.84, 1.18 / 2.42, 2.25 | 1.34, 1.29 / 2.99, 2.87 |
+| A typed character at a caret (CPU ms) | 1.10, 1.32 / 1.63, 1.48 | 1.67, 1.75 / 1.59, 1.85 |
+| A step of the caret to the left or to the right (CPU ms) | 0.40, 0.33 / 0.33, 0.36 | 0.35, 0.31 / 0.36, 0.34 |
+| Heap with all of the document laid out (MB) | 7.0, 7.0 / 26.4, 26.4 | 7.0, 7.0 / 26.3, 26.3 |
+
+The rows overlap but for three. The first frame of the short document:
+both runs of the change (57, 56) are below both of the base (60, 62).
+A typed character in the long document, in the middle and at the end:
+both runs of the change (1.37, 1.46 and 2.99, 2.87) are above both of
+the base (1.33, 1.28 and 2.42, 2.25). The change is on none of these
+paths (the program of the benchmark got one more check before its
+measures, in a document of its own), and the rows of the day before
+have this spread too. `app.py`, short / long, five launches each, in
+the order that they ran:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 560 / 582 | 61 / 95 | 470 / 600 |
+| change | 576 / 578 | 61 / 95 | 460 / 600 |
+| change | 556 / 579 | 61 / 94 | 460 / 610 |
+| base | 565 / 588 | 61 / 95 | 470 / 600 |
+
+The sets overlap.
+
+## The caret as high as the text of its line (2026-11-26)
+
+The bar of the caret takes the height of the font of its line, where it
+took the height of the line: one look for the metrics of a font where
+the caret is drawn and where the host asks for its rectangle. `core.py`,
+short / long, the two runs of each in the order base, change, change,
+base (the runs of another change were between them), with a load of 1.8
+to 4.9:
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 60, 62 / 75, 74 | 61, 59 / 74, 74 |
+| A typed character in the middle of the text (CPU ms) | 1.16, 1.23 / 1.33, 1.28 | 1.27, 1.04 / 1.23, 1.35 |
+| A typed character at the end of the text (CPU ms) | 0.84, 1.18 / 2.42, 2.25 | 1.42, 0.86 / 2.74, 2.20 |
+| A typed character at a caret (CPU ms) | 1.10, 1.32 / 1.63, 1.48 | 1.77, 1.21 / 1.47, 1.53 |
+| A step of the caret to the left or to the right (CPU ms) | 0.40, 0.33 / 0.33, 0.36 | 0.37, 0.36 / 0.33, 0.34 |
+| Heap with all of the document laid out (MB) | 7.0, 7.0 / 26.4, 26.4 | 7.0, 7.0 / 26.4, 26.3 |
+
+The rows overlap. `app.py`, short / long, five launches each, in the
+order that they ran:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 560 / 582 | 61 / 95 | 470 / 600 |
+| change | 590 / 590 | 61 / 95 | 480 / 610 |
+| change | 553 / 593 | 61 / 95 | 450 / 620 |
+| base | 565 / 588 | 61 / 95 | 470 / 600 |
+
+The benchmark opens the document in Read mode, which has no caret, so
+no code of the change runs in it, and the sets show none. A set of an
+earlier commit of this change showed 12 MB more memory one time (69 /
+103 against 57 / 91, with a load of 4.9 at its start) and its second
+set did not; these sets of the final code do not show it.
+
+## A code block that is typed (2026-11-26)
+
+The rules for a fence that a reader types: one look at the block of the
+caret when a command of the reader starts and one when it ends, which
+stop at once for a caret that is not in code in a fence. `core.py`,
+short / long, in turns (base, change, change, base), with a load of 1.4
+to 2.9:
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 62, 59 / 75, 79 | 61, 63 / 74, 76 |
+| A typed character in the middle of the text (CPU ms) | 1.18, 1.23 / 1.59, 1.57 | 1.15, 1.24 / 1.61, 1.53 |
+| A typed character at the end of the text (CPU ms) | 1.41, 1.39 / 3.79, 3.71 | 1.40, 1.40 / 3.73, 3.76 |
+| A typed character at a caret (CPU ms) | 1.82, 1.84 / 2.01, 2.04 | 1.84, 1.86 / 2.00, 2.00 |
+| A step of the caret to the left or to the right (CPU ms) | 0.38, 0.38 / 0.38, 0.35 | 0.40, 0.43 / 0.37, 0.36 |
+| Heap with all of the document laid out (MB) | 7.0, 7.0 / 26.3, 26.4 | 7.0, 7.0 / 26.3, 26.3 |
+
+The rows overlap but for a step of the caret in the short document,
+where the two runs of the change (0.40, 0.43) are above the two of the
+base (0.38, 0.38); a step of the caret is no command that changes the
+source, so the new rules do not run in it. `app.py`, short / long, five
+launches each, in the order that they ran:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 541 / 546 | 61 / 95 | 410 / 550 |
+| change | 544 / 546 | 61 / 96 | 420 / 550 |
+| change | 531 / 549 | 61 / 92 | 420 / 550 |
+| base | 535 / 553 | 61 / 90 | 420 / 560 |
+
+The sets overlap.
+
+## The first outline from the core (2026-11-27)
+
+In native mode the app made the first outline of a document with a
+second parse of all of the text by its own parser, off the main thread
+for a document of more than 64 KB. The outline now comes from the core,
+which has the headings from its parse. `bench/core.py` was not run: the
+core did not change. `app.py`, short / long, five launches each, two
+runs of four sets in the order that they ran (the load at the start of
+each set is in the last column):
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) | Load |
+| --- | --- | --- | --- | --- |
+| base | 565 / 567 | 55 / 90 | 500 / 680 | 5.9 |
+| change | 581 / 589 | 55 / 80 | 490 / 580 | 3.6 |
+| change | 573 / 585 | 55 / 79 | 480 / 560 | 3.6 |
+| base | 550 / 567 | 55 / 90 | 480 / 680 | 3.4 |
+| change | 558 / 585 | 55 / 79 | 500 / 570 | 2.7 |
+| base | 657 / 648 | 55 / 85 | 550 / 730 | 3.2 |
+| base | 640 / 624 | 55 / 89 | 510 / 710 | 5.2 |
+| change | 622 / 623 | 54 / 79 | 520 / 620 | 4.5 |
+
+For the long document (1.1 MB), the CPU of the app is 60 to 160 ms less
+in each set of the change than in each set of the base (560 to 620
+against 680 to 730), and the memory 5 to 11 MB less (79 to 80 against
+85 to 90): the second parse and its tree are gone. The short document
+shows no difference in CPU or memory. The launch times are not clear: in
+the first run the change is about 20 ms above the base in both sets, in
+the second run it is below it (the base was 60 to 100 ms slower there,
+with other work on the Mac). No code before the first frame got more
+work (the outline is set after the frame that the benchmark reads), so
+the first run is taken for the spread of the Mac, but the numbers do not
+prove it.
+
+## The corners of the card of a code block (2026-11-27)
+
+One number of the card of a code block changed: the radius of its
+corners, 16 pt where it was 8. `core.py`, short / long, in turns (base,
+change, change, base), with a load of 2.0 to 3.1:
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 58, 68 / 73, 80 | 63, 64 / 73, 77 |
+| Scroll frame, new glyphs (CPU ms) | 0.53, 0.46 / 0.49, 0.44 | 0.55, 0.61 / 0.50, 0.49 |
+| Scroll frame, glyphs ready (CPU ms) | 0.34, 0.38 / 0.40, 0.40 | 0.30, 0.33 / 0.41, 0.40 |
+| A typed character at a caret (CPU ms) | 1.77, 1.51 / 1.97, 1.89 | 1.76, 1.86 / 1.85, 1.96 |
+| Heap with all of the document laid out (MB) | 7.0, 7.0 / 26.4, 26.4 | 7.0, 7.0 / 26.3, 26.3 |
+
+A scroll frame with new glyphs in the short document is above the base
+in both runs of the change (0.55, 0.61 against 0.53, 0.46), and with the
+glyphs ready it is below in both (0.30, 0.33 against 0.34, 0.38); the
+other rows overlap. `app.py`, short / long, five launches each, in the
+order that they ran:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 587 / 577 | 52 / 86 | 480 / 630 |
+| change | 590 / 597 | 52 / 86 | 500 / 640 |
+| change | 568 / 585 | 52 / 86 | 490 / 640 |
+| base | 549 / 563 | 52 / 86 | 470 / 610 |
+
+The CPU of the app is above the base in both sets of the change: 500
+and 490 against 480 and 470 ms for the short document, 640 and 640
+against 630 and 610 for the long one, so 10 to 30 ms. The launch times
+overlap. The change is one constant of a rectangle with round corners,
+and the short document has three such cards; no cause for 10 to 30 ms
+is known, and the differences are near the spread between the two sets
+of the base (10 and 20 ms).
 
 ## The method of the benchmark (2026-11-27)
 

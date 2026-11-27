@@ -77,6 +77,9 @@ final class NativeEditor: DocumentEditor {
     var cancelRequested: (() -> Void)?
     var contentDidChange: (() -> Void)?
     func fetchMarkdown(_ completion: @escaping (String?) -> Void) { completion(markdown) }
+    // Edit Mode starts with a caret in the view.
+    var caretsPlaced = 0
+    func placeCaretInView() { caretsPlaced += 1 }
 }
 final class Window { func makeFirstResponder(_ responder: AnyObject?) {} }
 final class Split {
@@ -224,6 +227,7 @@ do {
     c.enterEditMode()
     precondition(c.isEditing && c.mainSplit!.documentEditor === native, "The native view must be the editor")
     precondition(native.contentDidChange != nil && native.cancelRequested != nil)
+    precondition(native.caretsPlaced == 1, "Edit Mode in the native view must start with a caret")
     precondition(c.mainSplit!.editorViewController!.contentDidChange == nil,
                  "The web editor must not be wired in the native view's Edit Mode")
     let draft = original + "\nTyped in the native view\n"
