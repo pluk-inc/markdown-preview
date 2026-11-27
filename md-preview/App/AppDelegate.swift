@@ -1072,14 +1072,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
         is_markdown_preview_launcher() {
           path="$1"
-          if [ -L "$path" ]; then
-            # A link this installer made, also one to a moved or deleted app.
+          if [ -L "$path" ] && [ ! -e "$path" ]; then
+            # A link this installer made to an app that was moved or deleted.
+            # Only the link text is left to tell whose it was.
             case $(readlink "$path" || true) in
               */Contents/Resources/bin/markdown-preview) return 0 ;;
               *) return 1 ;;
             esac
           fi
-          # A copy that an earlier version of this installer made.
+          # A link to the launcher inside an app, or a copy that an earlier
+          # version of this installer made. Both hold a marker line.
           [ -f "$path" ] || return 1
           if grep -q '^# Managed by Markdown Preview CLI$' "$path"; then
             return 0
