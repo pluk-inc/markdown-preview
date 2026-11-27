@@ -90,6 +90,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-26 | list marks as in other Markdown editors | 576 / 555 | 60 / 107 (the base too) | 485 / 770 | 59 / 72 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
 | 2026-11-26 | the outline of native Edit Mode from the core | 574 / 559 | 64 / 110 (the base too) | 475 / 755 | 58 / 74 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
 | 2026-11-26 | the caret at its place after Up from a list mark | 568 / 591 | 60 / 108 (the base too) | 490 / 800 | 60 / 74 | not recorded | not recorded | 7.1 / 26.4 (the base too) |
+| 2026-11-27 | the corners of the card of a code block, as the web renderer has them | 579 / 591 | 52 / 86 (the base too) | 495 / 640 (the base 475 / 620) | 63 / 75 | not recorded | 0.49 / 0.40 | 7.0 / 26.3 (the base 26.4) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1322,3 +1323,38 @@ long, five launches each, in the order that they ran:
 
 The launches of the base were slower in this set; no code of a launch
 changed, so that is the spread of the Mac (other apps were in use).
+
+## The corners of the card of a code block (2026-11-27)
+
+One number of the card of a code block changed: the radius of its
+corners, 16 pt where it was 8. `core.py`, short / long, in turns (base,
+change, change, base), with a load of 2.0 to 3.1:
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 58, 68 / 73, 80 | 63, 64 / 73, 77 |
+| Scroll frame, new glyphs (CPU ms) | 0.53, 0.46 / 0.49, 0.44 | 0.55, 0.61 / 0.50, 0.49 |
+| Scroll frame, glyphs ready (CPU ms) | 0.34, 0.38 / 0.40, 0.40 | 0.30, 0.33 / 0.41, 0.40 |
+| A typed character at a caret (CPU ms) | 1.77, 1.51 / 1.97, 1.89 | 1.76, 1.86 / 1.85, 1.96 |
+| Heap with all of the document laid out (MB) | 7.0, 7.0 / 26.4, 26.4 | 7.0, 7.0 / 26.3, 26.3 |
+
+A scroll frame with new glyphs in the short document is above the base
+in both runs of the change (0.55, 0.61 against 0.53, 0.46), and with the
+glyphs ready it is below in both (0.30, 0.33 against 0.34, 0.38); the
+other rows overlap. `app.py`, short / long, five launches each, in the
+order that they ran:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 587 / 577 | 52 / 86 | 480 / 630 |
+| change | 590 / 597 | 52 / 86 | 500 / 640 |
+| change | 568 / 585 | 52 / 86 | 490 / 640 |
+| base | 549 / 563 | 52 / 86 | 470 / 610 |
+
+The CPU of the app is above the base in both sets of the change: 500
+and 490 against 480 and 470 ms for the short document, 640 and 640
+against 630 and 610 for the long one, so 10 to 30 ms. The launch times
+overlap. The change is one constant of a rectangle with round corners,
+and the short document has three such cards; no cause for 10 to 30 ms
+is known, and the differences are near the spread between the two sets
+of the base (10 and 20 ms).
