@@ -191,15 +191,16 @@ note_in_list :: proc(list: ^Layout, x: f32, y: f64) -> (number: int, definition:
 	}
 	block := list.doc.starts[p] + slot
 	b := document.block_at(list.doc, block)
-	// The number of the item is of its first block.
-	first := b
-	for i := block; i >= 0 && first.spacing == .Continuation; i -= 1 {
-		first = document.block_at(list.doc, i)
-		if first.item != b.item {
-			return
+	// The number is of the item of the list that the block is in: a
+	// footnote can have a list of its own in its text.
+	first: ^document.Block
+	for i := block; i >= 0; i -= 1 {
+		if at := document.block_at(list.doc, i); note_starts(at) {
+			first = at
+			break
 		}
 	}
-	if first.marker != .Number {
+	if first == nil {
 		return
 	}
 	text_x := list.column_x + list_x(list, b)
@@ -208,13 +209,25 @@ note_in_list :: proc(list: ^Layout, x: f32, y: f64) -> (number: int, definition:
 	if !on_mark && text_at(list, x, y) {
 		if at, hit := hit_test(list, x, y); hit {
 			if src := document.text_at(list.doc, at); src != nil && len(src.spans) > 0 {
+				// The link that goes back, and no other link of the text.
 				for byte in ([2]int{at.byte, at.byte - 1}) {
-					on_back ||= byte >= 0 && byte < len(src.bytes) && .Link in document.span_at(src, byte).style
+					if byte < 0 || byte >= len(src.bytes) {
+						continue
+					}
+					span := document.span_at(src, byte)
+					on_back ||= .Link in span.style && span.link > 0 && span.link <= len(list.doc.links) && list.doc.links[span.link - 1] == document.NOTE_BACK_TARGET
 				}
 			}
 		}
 	}
 	return first.number, true, on_mark || on_back
+}
+
+// True for the first block of a footnote in the list of the footnotes:
+// of an item of the list itself, and not of a list in a text.
+@(private)
+note_starts :: proc(b: ^document.Block) -> bool {
+	return b.marker == .Number && b.list_depth == 1 && b.quote_depth == 0 && b.spacing != .Continuation
 }
 
 // The height of the page where the text of a footnote starts: in the
@@ -223,7 +236,7 @@ note_in_list :: proc(list: ^Layout, x: f32, y: f64) -> (number: int, definition:
 note_top :: proc(l: ^Layout, number: int) -> (y: f64, changed: bool, ok: bool) {
 	if list := l.notes.page; list != nil {
 		for i in 0 ..< list.doc.count {
-			if b := document.block_at(list.doc, i); b.marker == .Number && b.number == number {
+			if b := document.block_at(list.doc, i); note_starts(b) && b.number == number {
 				return block_top(list, i)
 			}
 		}

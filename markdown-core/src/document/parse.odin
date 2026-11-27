@@ -96,6 +96,7 @@ Parser :: struct {
 	line_waits:   bool,
 	line:         [2]int,
 	bytes:        []u8, // what is parsed
+	kept:         []u8, // the source: the same bytes, but for what is masked for the parser
 	after_nul:    bool, // the text before was the character for a NUL byte
 	// Table.
 	table:        Block,
@@ -141,14 +142,11 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 	notes: Footnotes
 	if whole {
 		notes = footnotes(bytes, unclosed ? 0 : hidden, context.temp_allocator)
-		for note in notes.notes {
-			if note.inline {
-				continue
-			}
+		if len(notes.notes) > 0 {
 			if masked == nil {
 				masked = slice.clone(bytes)
 			}
-			masked[note.mark], masked[note.mark + 1] = '+', ' '
+			footnote_mask(masked, 0, notes.notes, notes.references)
 		}
 	}
 	defer delete(masked)
@@ -165,10 +163,11 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 		pairs        = pairs,
 		reveal       = reveal,
 		bytes        = bytes,
+		kept         = kept,
 		notes        = notes,
 	}
 	md := Md_Parser {
-		flags       = MD_FLAG_TABLES | MD_FLAG_STRIKETHROUGH | MD_FLAG_TASKLISTS | MD_FLAG_PERMISSIVEAUTOLINKS,
+		flags       = MD_FLAGS,
 		enter_block = enter_block,
 		leave_block = leave_block,
 		enter_span  = enter_span,
@@ -915,10 +914,14 @@ on_text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr)
 	// Where the text is in what is parsed, for a parse that notes
 	// places; -1 for text that the parser made.
 	at := -1
-	if p.places != nil {
-		from := int(uintptr(text) - uintptr(raw_data(p.bytes)))
-		if uintptr(text) >= uintptr(raw_data(p.bytes)) && from < len(p.bytes) {
+	if from := int(uintptr(text) - uintptr(raw_data(p.bytes))); uintptr(text) >= uintptr(raw_data(p.bytes)) && from < len(p.bytes) {
+		if p.places != nil {
 			at = from
+		}
+		// The text as it is in the source: the parser can have other
+		// bytes there (a reference to a footnote is masked for it).
+		if len(p.notes.references) > 0 && from + len(s) <= len(p.kept) {
+			s = string(p.kept[from:][:len(s)])
 		}
 	}
 	after_nul := p.after_nul

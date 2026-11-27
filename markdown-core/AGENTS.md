@@ -171,7 +171,13 @@ These came from the maintainer. Do not undo one without asking.
   stay in place, and a pointer on a number shows the text in a bubble.
   A click on a number goes to its text and back (Command-click in Edit
   Mode). A piece that has footnote syntax is parsed with all of the
-  source, since a number depends on each reference before it.
+  source, since a number depends on each reference before it. What is a
+  reference is the parser's choice and not a second set of rules for
+  code and raw HTML: one pass of the parser with no document, over the
+  source with each possible reference masked, says which of them it
+  reads as text (`footnote_confirm`). The mask (a run of one byte that is
+  no mark of Markdown) is in the parse of the document too, so a
+  reference or an inline footnote with styles in it is one run of text.
 - **The outline of native Edit Mode comes from the core** (2026-11-26):
   `mdcore_outline` reads the heading blocks, with no parse. Its texts are
   the ones the native page shows, so they differ from the web renderer's
@@ -694,7 +700,11 @@ Design, before the features that need it:
   Edit Mode, and Return in a definition has no rule; no key or menu
   command goes from a caret to the footnote text; a list inside a
   footnote text shows in its place in Read mode too; the web renderer
-  does not read the inline form.
+  does not read the inline form; the texts in the list at the end of the
+  page are no text of the document, so a reader cannot select or copy
+  them (form: a selection that can be in the layout of the list); a
+  document with footnotes costs one more pass of the parser for each
+  read of its footnotes (the parse, the list, the text of a bubble).
 - The bullet of a list item is a record of the box (`Decor`) and not a
   character: the bullet of the system font is a fifth of the size of
   the text, and each font has its own. It and the check box of a task

@@ -50,7 +50,8 @@ reveal_block :: proc(doc: ^Document, block: int, reveal: Maybe(int), pairs: ^[dy
 	seen := make([]bool, len(doc.links) + 1, context.temp_allocator)
 	for &t in block_texts(old) {
 		for span in t.spans {
-			if span.link > 0 && span.link <= len(doc.links) && !seen[span.link] {
+			// The number of a footnote is no link (`Span.link`).
+			if .Note not_in span.style && span.link > 0 && span.link <= len(doc.links) && !seen[span.link] {
 				seen[span.link] = true
 				append(&numbers, span.link)
 			}
@@ -60,6 +61,9 @@ reveal_block :: proc(doc: ^Document, block: int, reveal: Maybe(int), pairs: ^[dy
 	count := 0
 	for &t in block_texts(new) {
 		for &span in t.spans {
+			if .Note in span.style {
+				continue
+			}
 			if span.link <= 0 || span.link > len(fresh.links) {
 				span.link = 0
 				continue
@@ -93,6 +97,9 @@ links_in :: proc(b: ^Block) -> (count: int) {
 	seen := -1
 	for &text in block_texts(b) {
 		for span in text.spans {
+			if .Note in span.style {
+				continue
+			}
 			// The spans of one link are next to each other, with marks
 			// that show between them.
 			if span.link > 0 && span.link != seen {

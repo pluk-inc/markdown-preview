@@ -1957,3 +1957,56 @@ test_the_footnotes_are_a_list_at_the_end_of_a_page_that_is_read :: proc(t: ^test
 	testing.expect(t, plain.page.notes.page == nil)
 	testing.expect_value(t, plain.page.content_height, f64(only(&plain.page).height + plain.page.m.page_pad))
 }
+
+// The text of a footnote can have a numbered list and a link of its
+// own: the number of an item of that list is no footnote, and its link
+// does not go back.
+@(test)
+test_a_list_and_a_link_in_the_text_of_a_footnote :: proc(t: ^testing.T) {
+	source := "One[^a] and two[^b].\n\n[^a]: First, see [the source](https://example.com).\n\n    2. An item of its own.\n    3. One more.\n[^b]: The second.\n"
+	f: Fixture
+	f.page.notes_at_end = true
+	setup(&f, source, 600)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	list := f.page.notes.page
+	if !testing.expect(t, list != nil) {
+		return
+	}
+	step(list, 1e30)
+	// Footnote 2 is the last block of the list, below the items in the
+	// text of footnote 1.
+	second, _, has := note_top(&f.page, 2)
+	last, _, _ := block_top(list, list.doc.count - 1)
+	testing.expect(t, has)
+	testing.expect_value(t, second, last)
+	nested := -1
+	for i in 0 ..< list.doc.count {
+		if b := document.block_at(list.doc, i); b.list_depth == 2 && b.number == 2 {
+			nested = i
+		}
+	}
+	if !testing.expect(t, nested > 0) {
+		return
+	}
+	nested_top, _, _ := block_top(list, nested)
+	testing.expect(t, second > nested_top)
+	// A point on the text of the item in the text is in footnote 1, and
+	// goes nowhere.
+	number, _, goes := note_at(&f.page, list.column_x + 3 * list.m.list_indent, nested_top + 6)
+	testing.expect_value(t, number, 1)
+	testing.expect(t, !goes)
+	// The two links of the first line: the one of the text does not go
+	// back, the mark at the end of the line does.
+	first := only(list).boxes[0]
+	line := only(list).lines[first.line_first]
+	y := only(list).top + f64(first.top) + 6
+	on_link, on_back := false, false
+	for x := line.x; x < line.x + line.line.width; x += 2 {
+		_, _, goes := note_at(&f.page, x, y)
+		on_back ||= goes && x > line.x + line.line.width - 12
+		on_link ||= goes && x < line.x + line.line.width - 24
+	}
+	testing.expect(t, on_back)
+	testing.expect(t, !on_link)
+}

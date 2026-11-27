@@ -741,12 +741,11 @@ final class NativeRendererView: NSView {
     /// a footnote for a moment shows the text of that footnote: a reader
     /// reads it with no jump, and in Edit mode with no move of the caret.
     private func hoverNote(at point: NSPoint?) {
-        var number = 0
-        var isDefinition = false
-        guard let point, mdcore_note_at(ctx, point.x, point.y, &number, &isDefinition), !isDefinition else {
+        guard let point, let note = note(at: point), !note.isDefinition else {
             hideNoteBubble()
             return
         }
+        let number = note.number
         guard number != noteBubbleNumber else { return }
         hideNoteBubble()
         noteBubbleNumber = number
@@ -805,20 +804,30 @@ final class NativeRendererView: NSView {
         updateCaretIndicator()
     }
 
+    /// The footnote that a point of the view is on: the number of a
+    /// reference, or (`isDefinition`) the mark of the text of a footnote.
+    fileprivate func note(at point: NSPoint) -> (number: Int, isDefinition: Bool)? {
+        var number = 0
+        var isDefinition = false
+        guard mdcore_note_at(ctx, point.x, point.y, &number, &isDefinition) else { return nil }
+        return (number, isDefinition)
+    }
+
     /// A click on the page (the button went down and up at one place). A
     /// click on the number of a footnote goes to the text of that
     /// footnote, and a click on the number mark of that text goes back to
     /// where the reader was, or to its first reference. In Edit mode only
-    /// with Command, because a click there puts the caret.
-    fileprivate func click(at point: NSPoint, withCommand: Bool) {
+    /// with Command, because a click there puts the caret. `note` is the
+    /// footnote that the point was on when the button went down: in Edit
+    /// mode the caret is there after that, and a number with the caret in
+    /// it shows as its source, which is no number to find.
+    fileprivate func click(on note: (number: Int, isDefinition: Bool)?, withCommand: Bool) {
         hideNoteBubble()
         // In Edit mode a click puts the caret; with Command it follows.
-        guard !isEditable || withCommand else { return }
-        var number = 0
-        var isDefinition = false
-        guard mdcore_note_at(ctx, point.x, point.y, &number, &isDefinition) else { return }
+        guard !isEditable || withCommand, let note else { return }
+        let number = note.number
         var target = 0.0
-        if isDefinition {
+        if note.isDefinition {
             if let back = noteReturns.removeValue(forKey: number) {
                 scroll(toY: back)
                 setNeedsDraw()
@@ -973,12 +982,17 @@ private final class PageArea: NSView {
     override func mouseMoved(with event: NSEvent) { owner?.updatePointerShape() }
 
     override func mouseDown(with event: NSEvent) {
-        downPoint = convert(event.locationInWindow, from: nil)
-        owner?.pointer(at: convert(event.locationInWindow, from: nil), phase: 0)
+        let point = convert(event.locationInWindow, from: nil)
+        downPoint = point
+        // Before the caret goes there (see `click`).
+        downNote = owner?.note(at: point)
+        owner?.pointer(at: point, phase: 0)
     }
 
-    /// Where the button went down, for a click (a mouse up at that place).
+    /// Where the button went down, for a click (a mouse up at that place),
+    /// and the footnote that was at that point then.
     private var downPoint: NSPoint?
+    private var downNote: (number: Int, isDefinition: Bool)?
 
     /// The last drag event, repeated by a timer while the button is down:
     /// AppKit sends no drag events for a pointer that does not move, and a
@@ -1001,9 +1015,10 @@ private final class PageArea: NSView {
         endDrag()
         let point = convert(event.locationInWindow, from: nil)
         if let down = downPoint, abs(point.x - down.x) + abs(point.y - down.y) < 3 {
-            owner?.click(at: point, withCommand: event.modifierFlags.contains(.command))
+            owner?.click(on: downNote, withCommand: event.modifierFlags.contains(.command))
         }
         downPoint = nil
+        downNote = nil
     }
 
     /// A view that leaves its window in the middle of a drag gets no mouse up.

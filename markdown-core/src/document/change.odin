@@ -568,7 +568,7 @@ commit :: proc(doc: ^Document, p: ^Pending) -> (change: Change) {
 			for &b in part_blocks(part) {
 				for &t in block_texts(&b) {
 					for &span in t.spans {
-						span.link += span.link > 0 ? len(doc.links) : 0
+						span.link += span.link > 0 && .Note not_in span.style ? len(doc.links) : 0
 					}
 				}
 			}

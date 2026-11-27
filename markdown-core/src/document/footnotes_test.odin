@@ -118,6 +118,16 @@ test_the_document_has_the_footnotes_as_numbers :: proc(t: ^testing.T) {
 		{"None[^x].\n\n[^y]: Alone.\n", "None[^x].|{0}Alone.|"},
 		// In code, and in bold text.
 		{"`[^1]` and **bold[^1]**.\n\n[^1]: One.\n", "[^1] and bold<1:1>.|{1}One.|"},
+		// In a code block that is indented: text, and no number is used.
+		{"Code:\n\n    [^a] in code\n\nReal[^b].\n\n[^a]: A.\n[^b]: B.\n", "Code:|[^a] in code|Real<1:1>.|{0}A.|{1}B.|"},
+		// An inline footnote with styles, an entity, and a "|" in it is
+		// one number, with nothing of its source left in the text.
+		{"A ^[a *bold* note] b ^[c &amp; d] e.\n", "A <1:1> b <2:2> e.|"},
+		{"S ^[with `code` and **more**]!\n", "S <1:1>!|"},
+		// A reference between the marks of a style, and after an "&".
+		{"*[^1]* and &[^1];\n\n[^1]: One.\n", "<1:1> and &<1:1>;|{1}One.|"},
+		// In raw HTML: no reference.
+		{"A <a href=\"[^1]\">link</a> and[^1].\n\n[^1]: One.\n", "A link and<1:1>.|{1}One.|"},
 		// A definition right after a paragraph, and a list after it.
 		{"Text[^1].\n[^1]: One.\n\n- item\n", "Text<1:1>.|{1}One.|*item|"},
 		// Styles in the text of a definition.
@@ -187,6 +197,34 @@ test_a_reference_at_the_caret_shows_its_source :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(pairs), 2)
 	testing.expect_value(t, [2]int{pairs[0].from, pairs[0].to}, [2]int{3, 7})
 	testing.expect_value(t, [2]int{pairs[1].from, pairs[1].to}, [2]int{15, 19})
+}
+
+// A block that gets the marks at the caret, and loses them, keeps the
+// numbers of its footnotes: they are no links of the document.
+@(test)
+test_a_block_keeps_its_footnote_numbers_through_a_reveal :: proc(t: ^testing.T) {
+	for source in ([]string{"One[^a] and two[^b].\n\n[^a]: A.\n[^b]: B.\n", "One[^a], [a link](https://a.com), two[^b].\n\n[^a]: A.\n[^b]: B.\n"}) {
+		doc := parse(source)
+		defer destroy(&doc)
+		for reveal in ([]Maybe(int){5, nil, 1, nil}) {
+			places, _ := reveal_block(&doc, 0, reveal)
+			delete(places)
+		}
+		numbers := make([dynamic]int, context.temp_allocator)
+		for span in block_at(&doc, 0).text.spans {
+			if .Note in span.style {
+				append(&numbers, span.link)
+			}
+		}
+		testing.expect_value(t, len(numbers), 2)
+		if len(numbers) == 2 {
+			testing.expect_value(t, [2]int{numbers[0], numbers[1]}, [2]int{1, 2})
+		}
+		first, has_first := note_block(&doc, 1, 1)
+		second, has_second := note_block(&doc, 2, 1)
+		testing.expect(t, has_first && has_second && first == 0 && second == 0)
+		testing.expect_value(t, links_in(block_at(&doc, 0)), len(doc.links))
+	}
 }
 
 // The text of a footnote, plain: of all of the blocks of its definition,
