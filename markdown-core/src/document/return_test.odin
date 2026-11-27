@@ -543,8 +543,11 @@ test_a_delete_takes_code_with_no_text_out :: proc(t: ^testing.T) {
 		caret:  int,
 	}
 	cases := []Case {
-		{"Text\n\n```\n```\n\nMore\n", 1, "Text\n\n\n\nMore\n", 6},
-		{"Text\n\n```js\n\n```\n", 1, "Text\n\n\n", 6},
+		// The line of the fence goes: the source is as it was before a
+		// fence that was typed in an empty paragraph.
+		{"Text\n\n```\n```\n\nMore\n", 1, "Text\n\n\nMore\n", 5},
+		{"Text\n\n```js\n\n```\n", 1, "Text\n\n", 5},
+		{"Text\n```\n```\n", 1, "Text\n", 4},
 		{"```\n```", 0, "", 0},
 		{"```\n", 0, "\n", 0},
 		// Code that is all of a list item: the item goes, as an item
@@ -553,6 +556,7 @@ test_a_delete_takes_code_with_no_text_out :: proc(t: ^testing.T) {
 		{"- a\n\n  ```\n  ```\n\n  more\n", 1, "- a\n\n  \n\n  more\n", 7},
 		{"> ```\n> ```\n> more\n", 0, "> \n> more\n", 2},
 		{"~~~\r\n~~~\r\n\r\nx\r\n", 0, "\r\n\r\nx\r\n", 0},
+		{"a\r\n\r\n~~~\r\n~~~\r\n", 1, "a\r\n\r\n", 3},
 	}
 	for c in cases {
 		doc := parse(c.source)

@@ -145,9 +145,10 @@ code_first_line :: proc(doc: ^Document, at: Address, offset: int, text: string, 
 
 // What a delete takes out for a caret in code in a fence with no text:
 // the code, which is its two fences then (and an empty line between
-// them), from the fence to the end of its last line. The marks of its
-// containers before the fence stay, so a list item or a quote is there
-// with no text, and the caret is where the fence was. False for each
+// them), from the fence to the end of its last line, and the caret is
+// at the start of that range. The marks of its containers before the
+// fence stay, so a list item or a quote is there with no text. With no
+// such marks, the line of the fence goes too. False for each
 // other block, and for a caret at another place.
 code_delete :: proc(doc: ^Document, at: Address, offset: int) -> (start, end: int, ok: bool) {
 	if at.empty != 0 {
@@ -161,6 +162,14 @@ code_delete :: proc(doc: ^Document, at: Address, offset: int) -> (start, end: in
 	first_end, _ := line_at(doc.source, first)
 	start, _, _ = fence_run(doc.source, first, first_end)
 	end = break_before(doc.source, min(block_start(doc, at.block) + int(block_at(doc, at.block).lines), len(doc.source)))
+	// A fence at the start of its line, after another line: the line
+	// break before it goes too. A fence that is typed in an empty
+	// paragraph is on a line of its own after that one
+	// (`empty_text`), so the source is then as it was before the fence,
+	// with the caret in that empty paragraph again.
+	if start == first && first > 0 {
+		start = break_before(doc.source, first)
+	}
 	return start, max(end, first_end), true
 }
 
