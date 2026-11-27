@@ -371,6 +371,9 @@ test_a_typed_fence :: proc(t: ^testing.T) {
 		// Code with no closing fence gets one.
 		{"```\nx\n```\n", {true, false}, 9, .Closed, ""},
 		{">```\n> x\n>    ```\n", {true, false}, 17, .Closed, ""},
+		// Also with the last character typed in the middle of the fence.
+		{"```\nx\n```\n", {true, false}, 8, .Closed, ""},
+		{"```\nx\n```\n", {true, false}, 7, .Closed, ""},
 		{"- ```\n  x\n     ```\n", {true, false}, 18, .Closed, ""},
 		// Lines of code with a fence in them are no closing fence: after
 		// four spaces, after a ">" in code that is in no quote, after

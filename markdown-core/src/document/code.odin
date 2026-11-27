@@ -231,10 +231,10 @@ typed_fence :: proc(doc: ^Document, before: Code_Before, at: Address, offset: in
 	if !closed || offset < line || offset > line_end {
 		return
 	}
-	// After the fence of that line, where the caret is when it typed it.
-	// Not before it: that is the place of a caret in code with no line
-	// (`code_place`), which typed no fence.
-	if _, typed_end, _ := fence_run(doc.source, line, line_end); offset < typed_end {
+	// In the fence of that line or after it, where the caret is when it
+	// typed a character of it. Not before it: that is the place of a
+	// caret in code with no line (`code_place`), which typed no fence.
+	if typed_from, _, _ := fence_run(doc.source, line, line_end); offset <= typed_from {
 		return
 	}
 	// The line after it is the fence that closed the code before: it
