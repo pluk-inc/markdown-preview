@@ -47,6 +47,7 @@ Parser :: struct {
 	note_ref:     int, // the next reference
 	note_def:     int, // the next definition
 	note_defs:    int, // how many of the notes are definitions
+	noted:        bool, // the source has footnotes: some of its bytes are masked for the parser
 	// Containers.
 	quote:        int,
 	lists:        [dynamic]List,
@@ -140,19 +141,20 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 	// The footnotes, with all of the source (`whole`): the number of one
 	// is of all of the references before it. A definition is a list item
 	// for the parser, so it can have more than one block, as an item has:
-	// its "[^" is a "+" and a space, the mark of a list with no other
-	// item in most sources (a list with another mark is another list).
+	// its "[^" is the mark of a list that no list of the source has,
+	// when one of the three is free (`Footnotes.bullet`).
 	// For a piece, the caller gives its footnotes with the numbers that
 	// they have in the document (`piece_notes`, with offsets of `bytes`).
 	notes := piece_notes
 	if whole {
 		notes = footnotes(bytes, unclosed ? 0 : hidden)
 	}
-	if len(notes.notes) > 0 {
+	noted := len(notes.items) > 0 || len(notes.masks) > 0
+	if noted {
 		if masked == nil {
 			masked = slice.clone(bytes)
 		}
-		footnote_mask(masked, 0, notes.notes, notes.references)
+		footnote_mask(masked, 0, notes.bullet, notes.items, notes.masks)
 	}
 	defer delete(masked)
 	bytes := masked != nil ? masked : bytes
@@ -171,9 +173,8 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 		kept         = kept,
 		notes        = notes,
 	}
-	for p.note_defs < len(notes.notes) && !notes.notes[p.note_defs].inline && !notes.notes[p.note_defs].elsewhere {
-		p.note_defs += 1
-	}
+	p.note_defs = definition_count(notes.notes)
+	p.noted = noted
 	md := Md_Parser {
 		flags       = MD_FLAGS,
 		enter_block = enter_block,
@@ -208,7 +209,22 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 			}
 			note.label = ""
 		}
-		doc.notes, doc.notes_valid = notes, true
+		// Lines that have the form of a definition and are none: a
+		// reference can have the label, and is none.
+		for label in notes.dead_labels {
+			key := footnote_key(label, context.allocator)
+			if key in doc.note_keys {
+				delete(key)
+			} else {
+				doc.note_keys[key] = -1
+			}
+		}
+		// What the parser got is of this parse only.
+		delete(notes.items)
+		delete(notes.masks)
+		delete(notes.dead_labels)
+		notes.items, notes.masks, notes.dead_labels = nil, nil, nil
+		doc.notes = notes
 	}
 	doc.hidden, doc.unclosed = hidden, unclosed
 	doc.items = p.item_count
@@ -985,7 +1001,7 @@ on_text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr)
 		}
 		// The text as it is in the source: the parser can have other
 		// bytes there (a reference to a footnote is masked for it).
-		if len(p.notes.notes) > 0 && from + len(s) <= len(p.kept) {
+		if p.noted && from + len(s) <= len(p.kept) {
 			s = string(p.kept[from:][:len(s)])
 		}
 	}
@@ -1003,7 +1019,7 @@ on_text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr)
 	case .Normal:
 		// Text of the source only: the parser also gives text of its own
 		// (a space for a mark), from other memory.
-		if from := int(uintptr(text) - uintptr(raw_data(p.bytes))); len(p.notes.notes) > 0 && uintptr(text) >= uintptr(raw_data(p.bytes)) && from < len(p.bytes) {
+		if from := int(uintptr(text) - uintptr(raw_data(p.bytes))); p.noted && uintptr(text) >= uintptr(raw_data(p.bytes)) && from < len(p.bytes) {
 			append_noted(p, s, at, from)
 		} else {
 			append_collapsed(p, s, at)
@@ -1047,16 +1063,7 @@ append_noted :: proc(p: ^Parser, s: string, at, from: int) {
 	notes := p.notes.notes
 	// The definition whose text starts here, if one does: the
 	// definitions are the first of the notes, in the order of the source.
-	low, high := 0, p.note_defs
-	for low < high {
-		middle := (low + high) / 2
-		if notes[middle].mark + 2 < from {
-			low = middle + 1
-		} else {
-			high = middle
-		}
-	}
-	if low < p.note_defs && notes[low].mark + 2 == from && !p.in_code && p.code == 0 {
+	if low := definition_at_label(notes[:p.note_defs], from); low < p.note_defs && notes[low].mark + 2 == from && !p.in_code && p.code == 0 {
 		step(&s, &at, &from, min(notes[low].content - from, len(s)))
 	}
 	references := p.notes.references
@@ -1088,7 +1095,7 @@ append_noted :: proc(p: ^Parser, s: string, at, from: int) {
 			p.marking = false
 			p.doc.reveal = reveal
 		} else {
-			p.note = notes[reference.note].number
+			p.note = reference.number
 			digits: [20]u8
 			append_text(p, strconv.write_int(digits[:], i64(p.note), 10), at, size, whole = true)
 			p.note = 0

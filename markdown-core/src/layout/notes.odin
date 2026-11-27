@@ -7,7 +7,8 @@ import "../document"
 import "../text"
 
 // Footnotes on the page: what a point is on, for a click that goes from
-// a reference to the text of its footnote and back.
+// a reference to the text of its footnote and back, and the list of the
+// texts at the end of a page that is read (`Notes_Area`).
 
 // The footnote that a point of the page is on: the number of a reference
 // in the text, or (`definition`) the number mark of the text of a
@@ -106,8 +107,7 @@ block_top :: proc(l: ^Layout, block: int) -> (y: f64, changed: bool, ok: bool) {
 // is its place on the page of the owner: its heights are heights of that
 // page. It is no part of the document, so no caret is in it.
 Notes_Area :: struct {
-	source: []u8, // the Markdown of the list
-	doc:    ^document.Document,
+	doc:    ^document.Document, // of the Markdown of the list, which is its source
 	page:   ^Layout,
 	top:    f64, // of the area on the page
 	height: f32, // with the room and the hairline above the list; 0 for none
@@ -125,7 +125,7 @@ notes_begin :: proc(l: ^Layout, force := false) -> bool {
 	if l.notes_at_end && l.doc != nil {
 		want = document.notes_source(l.doc, context.temp_allocator)
 	}
-	if !force && string(l.notes.source) == want {
+	if !force && (l.notes.doc != nil ? string(l.notes.doc.source) : "") == want {
 		return false
 	}
 	had := l.notes.page != nil
@@ -134,7 +134,6 @@ notes_begin :: proc(l: ^Layout, force := false) -> bool {
 		return had
 	}
 	notes := &l.notes
-	notes.source = slice.clone(transmute([]u8)want)
 	notes.doc = new(document.Document)
 	notes.doc^ = document.parse(want)
 	notes.page = new(Layout)
@@ -161,7 +160,6 @@ notes_destroy :: proc(l: ^Layout) {
 		document.destroy(notes.doc)
 		free(notes.doc)
 	}
-	delete(notes.source)
 	notes^ = {}
 }
 

@@ -462,12 +462,8 @@ prepare_piece :: proc(doc: ^Document, p: ^Pending) -> bool {
 	// A piece with a footnote in it, before or after the edit, is parsed
 	// alone only when it has the footnotes that it had: then the numbers
 	// of the footnotes of the document are as they were
-	// (`piece_footnotes`). At the start of a source with front matter,
-	// all is parsed.
+	// (`piece_footnotes`).
 	noted := has_footnote(piece) || has_footnote(doc.source[start:old_end])
-	if noted && (!doc.notes_valid || (start == 0 && doc.hidden > 0)) {
-		return false
-	}
 
 	text, before, inside, led, trailed, lead := piece_text(doc, piece, start, old_end)
 	p.base = start - lead
@@ -578,7 +574,6 @@ commit :: proc(doc: ^Document, p: ^Pending) -> (change: Change) {
 		doc.links, fresh.links = fresh.links, doc.links
 		doc.links_parsed = len(doc.links)
 		doc.notes, fresh.notes = fresh.notes, doc.notes
-		doc.notes_valid = fresh.notes_valid
 		doc.note_keys, fresh.note_keys = fresh.note_keys, doc.note_keys
 		doc.defs, fresh.defs = fresh.defs, doc.defs
 		doc.defs_marked, doc.defs_cut = fresh.defs_marked, fresh.defs_cut

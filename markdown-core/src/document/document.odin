@@ -253,7 +253,6 @@ Document :: struct {
 	// and then only their offsets change (`piece_footnotes`,
 	// `notes_commit`). The labels are in `note_keys`.
 	notes:       Footnotes,
-	notes_valid: bool,
 	// For the label of each definition among them (as `footnote_key`
 	// makes it), which of the notes it is. The document has the strings.
 	note_keys:   map[string]int,
@@ -543,8 +542,7 @@ block_destroy :: proc(b: ^Block) {
 }
 
 destroy :: proc(doc: ^Document) {
-	delete(doc.notes.notes)
-	delete(doc.notes.references)
+	notes_destroy(&doc.notes)
 	note_keys_destroy(doc)
 	for part in doc.parts {
 		for &b in part_blocks(part) {

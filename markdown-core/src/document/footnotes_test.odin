@@ -61,11 +61,13 @@ test_footnotes_of_the_shared_cases :: proc(t: ^testing.T) {
 @(test)
 test_the_lines_of_a_footnote_definition :: proc(t: ^testing.T) {
 	source := "Text[^a].\n\n[^a]: First.\n    Second.\n\n    Third.\n\nAfter[^b].\n[^b]:   B.\n"
-	found := footnotes(transmute([]u8)source, 0, context.temp_allocator)
-	if !testing.expect_value(t, len(found.notes), 2) {
+	// The lines are of the scan; what a document keeps has no end of a
+	// definition (the blocks have it).
+	scan := footnote_scan(transmute([]u8)source, 0, len(source), nil, 0)
+	if !testing.expect_value(t, len(scan.possible), 2) {
 		return
 	}
-	a, b := found.notes[0], found.notes[1]
+	a, b := scan.possible[0], scan.possible[1]
 	testing.expect_value(t, source[a.start:a.end], "[^a]: First.\n    Second.\n\n    Third.\n")
 	testing.expect_value(t, source[a.content:a.content + 6], "First.")
 	testing.expect_value(t, source[b.start:b.end], "[^b]:   B.\n")
@@ -400,14 +402,12 @@ test_the_footnotes_of_a_document_after_a_change_of_a_piece :: proc(t: ^testing.T
 	// (`GUARD_BLOCKS`), and a change in the first block is a parse of all.
 	doc := parse("Plain text.\n\nP2.\n\nP3.\n\nP4.\n\nP5.\n\nP6.\n\nOne[^a].\n\nTwo[^a].\n\n[^a]: A.\n")
 	defer destroy(&doc)
-	testing.expect(t, doc.notes_valid)
 	testing.expect_value(t, len(doc.notes.references), 2)
 	pending := prepare(&doc, Edit{19, 19, " more"})
 	testing.expect(t, !pending.all)
 	commit(&doc, &pending)
 	discard(&pending)
 	// A parse of the piece: the footnotes are kept, five bytes later.
-	testing.expect(t, doc.notes_valid)
 	testing.expect_value(t, doc.notes.references[0].start, strings.index(string(doc.source), "[^a]"))
 	first, has_first := note_block(&doc, 1, 1)
 	second, has_second := note_block(&doc, 1, 2)
@@ -418,7 +418,6 @@ test_the_footnotes_of_a_document_after_a_change_of_a_piece :: proc(t: ^testing.T
 	pending = prepare(&doc, Edit{0, 0, "New[^a] "})
 	commit(&doc, &pending)
 	discard(&pending)
-	testing.expect(t, doc.notes_valid)
 	testing.expect_value(t, len(doc.notes.references), 3)
 }
 
@@ -439,15 +438,15 @@ test_a_change_in_a_piece_with_footnotes :: proc(t: ^testing.T) {
 			a, b := block_at(doc, i), block_at(&fresh, i)
 			testing.expectf(t, layout_equal(a, b) && a.number == b.number, "%s: block %d is %q, not %q", what, i, string(a.text.bytes[:]), string(b.text.bytes[:]))
 		}
-		testing.expectf(t, doc.notes_valid, "%s: the footnotes are not kept", what)
 		got, want := doc.notes, fresh.notes
 		if !testing.expectf(t, len(got.notes) == len(want.notes) && len(got.references) == len(want.references), "%s: %d notes and %d references, not %d and %d", what, len(got.notes), len(got.references), len(want.notes), len(want.references)) {
 			return
 		}
 		for note, n in want.notes {
 			have := got.notes[n]
-			testing.expectf(t, have.number == note.number && have.inline == note.inline && have.start == note.start && have.content == note.content && (note.inline ? have.end == note.end : have.mark == note.mark), "%s: note %d is %v, not %v", what, n, have, note)
+			testing.expectf(t, have == note, "%s: note %d is %v, not %v", what, n, have, note)
 		}
+		testing.expectf(t, slice.equal(got.dead, want.dead) && got.bullet == want.bullet, "%s: lines that are no definition at %v with %c, not %v with %c", what, got.dead, got.bullet, want.dead, want.bullet)
 		for reference, r in want.references {
 			testing.expectf(t, got.references[r] == reference, "%s: reference %d is %v, not %v", what, r, got.references[r], reference)
 		}
@@ -520,4 +519,73 @@ test_a_change_in_a_piece_with_footnotes :: proc(t: ^testing.T) {
 		same(t, &doc, fmt.tprintf("step %d at %d", step, at))
 	}
 	testing.expect(t, alone > 100)
+}
+
+// A label with a backtick in it that is also the label of a line in a
+// code block (no definition): the pass that says what is a footnote and
+// the parse get the same bytes, so they pair the backticks the same
+// way, and a change of the piece is a parse of all.
+@(test)
+test_a_label_of_a_line_that_is_no_definition :: proc(t: ^testing.T) {
+	Case :: struct {
+		source, find, text: string,
+		remove:             int,
+	}
+	cases := []Case {
+		{"Intro.\n\n[^x`y] `q [^a] q\n\nMid.\n\n[^a]: A\n\n~~~\n[^x`y]: dead\n~~~\n\nEnd.\n", " q\n\nMid", " q`", 2},
+		{"Intro.\n\n[^x`y] `q [^a] q` [^a] `\n\nMid.\n\n[^a]: A\n\n~~~\n[^x`y]: dead\n~~~\n\nEnd.\n", "Mid", "X", 0},
+		{"Intro.\n\nP2.\n\nText [^a] here.\n\n[^a]: A\n\n  second\n\nEnd.\n", "P2", "X", 0},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		at := strings.index(c.source, c.find)
+		pending := prepare(&doc, Edit{at, at + c.remove, c.text})
+		commit(&doc, &pending)
+		discard(&pending)
+		fresh := parse(string(doc.source))
+		defer destroy(&fresh)
+		if !testing.expect_value(t, doc.count, fresh.count) {
+			continue
+		}
+		for i in 0 ..< doc.count {
+			a, b := block_at(&doc, i), block_at(&fresh, i)
+			testing.expectf(t, layout_equal(a, b) && a.number == b.number, "%q: block %d is %q, not %q", c.source, i, string(a.text.bytes[:]), string(b.text.bytes[:]))
+		}
+		testing.expect_value(t, len(doc.notes.references), len(fresh.notes.references))
+		for reference, r in fresh.notes.references {
+			if r < len(doc.notes.references) {
+				testing.expect_value(t, doc.notes.references[r], reference)
+			}
+		}
+		// The block with the caret in each place of it is the block of a
+		// parse of all with the caret there.
+		for offset in 8 ..< 30 {
+			block := block_at_offset(&doc, offset)
+			places, _ := reveal_block(&doc, block, offset)
+			delete(places)
+			all := parse_owned(slice.clone(doc.source), offset)
+			testing.expectf(t, layout_equal(block_at(&doc, block), block_at(&all, block)), "%q, the caret at %d: %q, not %q", c.source, offset, string(block_at(&doc, block).text.bytes[:]), string(block_at(&all, block).text.bytes[:]))
+			destroy(&all)
+			places, _ = reveal_block(&doc, block, nil)
+			delete(places)
+		}
+	}
+}
+
+// A definition is no item of a list of the source that has "+" as its
+// mark, before it or after it.
+@(test)
+test_a_definition_is_no_item_of_a_list_of_the_source :: proc(t: ^testing.T) {
+	doc := parse("Text [^a].\n\n+ one\n+ two\n\n[^a]: A\n\n+ next\n+ more\n")
+	defer destroy(&doc)
+	if !testing.expect_value(t, doc.count, 6) {
+		return
+	}
+	testing.expect_value(t, block_at(&doc, 1).spacing, Spacing.List_Start)
+	testing.expect_value(t, block_at(&doc, 3).marker, Marker.Note)
+	testing.expect_value(t, block_at(&doc, 3).spacing, Spacing.List_Start)
+	testing.expect_value(t, block_at(&doc, 4).spacing, Spacing.List_Start)
+	testing.expect_value(t, block_at(&doc, 4).marker, Marker.Bullet)
+	testing.expect(t, !block_at(&doc, 4).noted && !block_at(&doc, 2).noted)
 }

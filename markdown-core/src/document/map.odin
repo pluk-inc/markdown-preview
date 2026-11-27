@@ -140,10 +140,7 @@ block_parse :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs: 
 	notes: Footnotes
 	alone := true
 	if has_footnote(doc.source[start:end]) {
-		alone = !(start == 0 && doc.hidden > 0)
-		if alone {
-			notes, alone = piece_footnotes(doc, text[:], lead, lead + end - start, start, end, context.temp_allocator)
-		}
+		notes, alone = piece_footnotes(doc, text[:], lead, lead + end - start, start, end, context.temp_allocator)
 	}
 	if alone {
 		fresh = parse_piece(text[:], 0, len(doc.source), places, block - first, pairs = pairs, reveal = reveal_in(doc.reveal, base, len(text)), at_start = base == 0, piece_notes = notes)

@@ -642,7 +642,6 @@ final class NativeRendererView: NSView {
         // document starts at its top, which can be at another height now.
         if !keepsScroll {
             noteReturns.removeAll()
-            hideNoteBubble()
             mdcore_select_none(ctx)
             updatePageArea()
             scroll(toY: topScrollY)
@@ -782,8 +781,10 @@ final class NativeRendererView: NSView {
         shown.origin.y += topInset
         shown.size.height -= topInset
         var cursor = NSCursor.arrow
+        // The number of the footnote whose reference the pointer is on.
+        var note = 0
         if hasDocument, shown.contains(point) {
-            switch mdcore_pointer_shape(ctx, point.x, point.y) {
+            switch mdcore_pointer_shape(ctx, point.x, point.y, &note) {
             case MDCORE_POINTER_TEXT: cursor = .iBeam
             case MDCORE_POINTER_LINK: cursor = .pointingHand
             case MDCORE_POINTER_BUSY:
@@ -801,7 +802,7 @@ final class NativeRendererView: NSView {
             }
         }
         if scrollView.documentCursor !== cursor { scrollView.documentCursor = cursor }
-        hoverNote(at: cursor === NSCursor.pointingHand ? point : nil)
+        hoverNote(note, at: point)
     }
 
     // MARK: - The text of a footnote beside its number
@@ -813,26 +814,13 @@ final class NativeRendererView: NSView {
     private var noteBubbleNumber = 0
     private var noteBubbleWork: DispatchWorkItem?
 
-    /// The pointer is on a point of the page that is on a footnote
-    /// (`point`), or on none (nil). A pointer that stays on the number of
-    /// a footnote for a moment shows the text of that footnote: a reader
-    /// reads it with no jump, and in Edit mode with no move of the caret.
-    private func hoverNote(at point: NSPoint?) {
-        var number = 0
-        // No wait for a frame that has the core: the bubble stays as it
-        // is, and the next move of the pointer asks again.
-        let found = point.map { mdcore_note_hover(ctx, $0.x, $0.y, &number) } ?? 0
-        if found < 0 {
-            // One later call asks again, for a pointer that does not move.
-            guard !pointerShapeRetryScheduled else { return }
-            pointerShapeRetryScheduled = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
-                self?.pointerShapeRetryScheduled = false
-                self?.updatePointerShape()
-            }
-            return
-        }
-        guard let point, found > 0 else {
+    /// The pointer is at `point`, on the number of footnote `number` in
+    /// the text (0 for a point on none). A pointer that stays on the
+    /// number of a footnote for a moment shows the text of that footnote:
+    /// a reader reads it with no jump, and in Edit mode with no move of
+    /// the caret.
+    private func hoverNote(_ number: Int, at point: NSPoint) {
+        guard number > 0 else {
             hideNoteBubble()
             return
         }

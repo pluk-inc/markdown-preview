@@ -892,7 +892,7 @@ estimate :: proc(l: ^Layout, part, from: int) -> (height: f32) {
 	blocks := document.part_blocks(l.doc.parts[part])
 	for &b, slot in blocks[min(from, len(blocks)):] {
 		// The text of a footnote is in the list at the end of the page.
-		if l.notes_at_end && document.in_note(l.doc, l.doc.starts[part] + from + slot) {
+		if l.notes_at_end && b.noted {
 			continue
 		}
 		height += estimate_block(l, &b, part == 0 && from + slot == 0)
@@ -959,7 +959,7 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 
 		// The text of a footnote is in the list at the end of the page: its
 		// block has a box with no height and no records.
-		if !l.in_block && l.notes_at_end && document.in_note(l.doc, l.doc.starts[index] + slot) {
+		if !l.in_block && l.notes_at_end && b.noted {
 			append(&work.boxes, Box{top = l.y, bottom = l.y, line_first = len(work.lines), line_end = len(work.lines), decor_first = len(work.decor), decor_end = len(work.decor), para_first = len(work.paras), para_end = len(work.paras)})
 			show_work(l)
 			continue

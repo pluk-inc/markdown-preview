@@ -2166,7 +2166,7 @@ Pointer_Shape :: enum c.int {
 // for the place of a footnote number uses the working memory of the
 // view, which the lock makes safe.
 @(export)
-mdcore_pointer_shape :: proc "c" (handle: rawptr, x, y: f64) -> Pointer_Shape {
+mdcore_pointer_shape :: proc "c" (handle: rawptr, x, y: f64, note: ^c.long) -> Pointer_Shape {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
 	if !sync.try_lock(&ctx.lock) {
@@ -2175,7 +2175,12 @@ mdcore_pointer_shape :: proc "c" (handle: rawptr, x, y: f64) -> Pointer_Shape {
 	defer sync.unlock(&ctx.lock)
 	context.temp_allocator = ctx.temp
 	if ctx.layout_valid {
-		if _, _, on_note := layout.note_at(&ctx.page, f32(x), y); on_note {
+		if number, definition, on_note := layout.note_at(&ctx.page, f32(x), y); on_note {
+			// The number of a reference, for the text of its footnote
+			// beside the pointer; the mark of a text has none.
+			if note != nil && !definition {
+				note^ = c.long(number)
+			}
 			return .Link
 		}
 		if layout.text_at(&ctx.page, f32(x), y) {
@@ -2198,29 +2203,6 @@ mdcore_note_at :: proc "c" (handle: rawptr, x, y: f64, number: ^c.long, definiti
 	found, is_definition := layout.note_at(&ctx.page, f32(x), y) or_return
 	number^, definition^ = c.long(found), is_definition
 	return true
-}
-
-// See the header. No wait for the state of the view, as
-// `mdcore_pointer_shape` has none: the host asks for each move of the
-// pointer.
-@(export)
-mdcore_note_hover :: proc "c" (handle: rawptr, x, y: f64, number: ^c.long) -> c.int {
-	context = runtime.default_context()
-	ctx := cast(^Ctx)handle
-	if !sync.try_lock(&ctx.lock) {
-		return -1
-	}
-	defer sync.unlock(&ctx.lock)
-	context.temp_allocator = ctx.temp
-	if !ctx.layout_valid {
-		return 0
-	}
-	found, is_definition, on_note := layout.note_at(&ctx.page, f32(x), y)
-	if !on_note || is_definition {
-		return 0
-	}
-	number^ = c.long(found)
-	return 1
 }
 
 // See the header.

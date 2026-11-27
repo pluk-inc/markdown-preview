@@ -159,7 +159,9 @@ These came from the maintainer. Do not undo one without asking.
   definition (indented by `FOOTNOTE_INDENT` spaces or more), and an
   inline footnote `^[text]`. A number is the order of the first
   reference. md4c has no footnotes, so a definition is masked as a list
-  item for it and a reference is one span that the core adds after the
+  item for it (with a list mark that no line of the source starts with,
+  when one of the three is free, so no list of the source takes it as
+  its item) and a reference is one span that the core adds after the
   parse; `footnote_cases.json` tests the core and the app's parser with
   the same cases. A reference shows as a small raised number, and as its
   source where the caret is, as a link does. Read mode shows the list of
@@ -185,6 +187,12 @@ These came from the maintainer. Do not undo one without asking.
   (`Shape.noted`, from the parser). The mask (a run of one byte that is
   no mark of Markdown) is in the parse of the document too, so a
   reference or an inline footnote with styles in it is one run of text.
+  The two passes get the same bytes (`Footnotes.items`, `masks`): with
+  other bytes they pair backticks in other ways, and what one pass says
+  is not true for the other (a reviewer broke it with a label that has
+  a backtick). A line that has the form of a definition and is none (in
+  a code block) is kept apart (`Footnotes.dead`): a change of a piece
+  with one is a parse of all.
   The footnote code has working memory of its own for each call: a
   parse runs beside the frames (`prepare`), where no one frees the
   working memory of the thread. The list at the end of the page is laid
