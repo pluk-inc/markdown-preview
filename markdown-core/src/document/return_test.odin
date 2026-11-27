@@ -362,6 +362,10 @@ test_a_typed_fence :: proc(t: ^testing.T) {
 		{"```js\n```\n", {true, true}, 5, .None, ""},
 		// A closing fence before the one of the code: it goes.
 		{"```\nx\n```\n```\n\nmore\n", {true, true}, 9, .Closed_Twice, "```\nx\n```\n\nmore\n"},
+		// A caret in code with no line, before its closing fence, typed
+		// no fence: nothing, also with other code after it.
+		{"```\n```\n```\nx\n```\n", {true, true}, 4, .None, ""},
+		{"```\n```\n", {true, false}, 4, .None, ""},
 		// In the middle of closed code: nothing.
 		{"```\nx\n```\ny\n```\n", {true, true}, 9, .None, ""},
 		// Code with no closing fence gets one.
