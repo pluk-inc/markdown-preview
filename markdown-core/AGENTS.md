@@ -1610,6 +1610,18 @@ export.
   changed the layout under the next look. Checked on the hidden display
   with a typed key right after Command-E: a short document, an empty one,
   and the 1 MB fixture two pages down.
+- **2026-11-26** — The height of the caret. The maintainer saw that the
+  caret was higher than in the text views of the system and showed how
+  the editor of the developer tools draws it: as high as the text of its
+  line, larger in a heading. Ours was as high as the line (1.6 times the
+  text with the default line spacing), as the reference editor draws it
+  for code. The bar is now as high as the font of its line (ascent and
+  descent), in the middle of the line: 17 pt in body text of 15 pt (24
+  before), 35 and 29 pt in the two largest headings. `caret_place` still
+  gives the line, for the moves of the caret; `caret_spot` gives the bar
+  with it (`caret_bar`), on the baseline of the shaped line where the
+  line has one, so the bar and the glyphs come from the same numbers. The walk of `bench.m` found that an empty line after a heading
+  took the font of the heading; it is a line of body text.
 - **2026-11-27** — The first outline from the core. In native mode the
   sidebar's outline of a document that opens came from the app's parser
   (a second parse of all of the text, off the main thread for a large

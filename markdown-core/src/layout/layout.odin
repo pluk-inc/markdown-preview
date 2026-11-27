@@ -812,7 +812,7 @@ estimate_block :: proc(l: ^Layout, b: ^document.Block, first: bool) -> f32 {
 	height: f32
 	switch b.kind {
 	case .Paragraph, .Heading:
-		line := b.kind == .Heading ? size * HEADING_LINE_HEIGHT : math.round(size * l.m.line_height)
+		line := text_line_height(l, b)
 		lines := math.ceil(f32(len(b.text.bytes)) * CHAR * size / width)
 		height = max(lines, 1) * line
 	case .Code:
@@ -926,9 +926,9 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 			body_line := math.round(l.m.body * l.m.line_height)
 			switch b.kind {
 			case .Paragraph:
-				place_marker(l, b, x, l.y, body_line, span_font(l, {}, l.m.body, false))
+				place_marker(l, b, x, l.y, body_line, block_font(l, b))
 			case .Heading:
-				place_marker(l, b, x, l.y, heading_size * HEADING_LINE_HEIGHT, span_font(l, {}, heading_size, true))
+				place_marker(l, b, x, l.y, text_line_height(l, b), block_font(l, b))
 			case .Code:
 				// The card and the quote bars are there from the first
 				// line and grow with the block: a long one can stay in
@@ -937,7 +937,7 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 				push_decor(l, x - 0.5, l.y - 0.5, width + 1, 0, l.style.code_border, CODE_RADIUS + 0.5)
 				push_decor(l, x, l.y, width, 0, l.style.code_background, CODE_RADIUS)
 				push_quote_bars(l, b, l.y, 0)
-				place_marker(l, b, x, l.y + CODE_PAD, math.round(l.m.code_size * CODE_LINE_HEIGHT), font(l, .Mono, l.m.code_size))
+				place_marker(l, b, x, l.y + CODE_PAD, math.round(l.m.code_size * CODE_LINE_HEIGHT), block_font(l, b))
 			case .Table:
 				// The first row of a table is its header.
 				place_marker(l, b, x, l.y + CELL_PAD_Y, body_line, span_font(l, {}, l.m.body, true))
@@ -952,7 +952,7 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 		case .Paragraph, .Heading:
 			look := Text_Look {
 				size        = heading_size,
-				line_height = b.kind == .Heading ? heading_size * HEADING_LINE_HEIGHT : math.round(heading_size * l.m.line_height),
+				line_height = text_line_height(l, b),
 				heading     = b.kind == .Heading,
 				quote       = b.quote_depth > 0,
 			}
