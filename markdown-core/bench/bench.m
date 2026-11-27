@@ -114,6 +114,7 @@ static const char *typed_code_check(void) {
         {"```\nx\n```\n```\n```\n", 96, "\bq", "```\nx\n```\n\nq\n"},
         {"a\n```\n```\nb\n", 60, "\bq", "aq\n\nb\n"},
         {"Text\n\n```\nx\n```\n", -1, "\a\fq", "```\nq\n```"},
+        {"```\nx\n```\n\nText\n", -1, "\a\fq", "```\nq\n```"},
         {"- a\n- b\n", -1, "\n```\nx\n```q", "- a\n- ```\n  xq\n  ```\n- b\n"},
         {"Text\n\nPara\n\n```\ncode\n```\n\nEnd\n", -1, "\n```\nx", "Text\n\n```\nx\n```\n\nPara\n\n```\ncode\n```\n\nEnd\n"},
         {"Text\n\n```\n```\n\nMore\n", 76, "z\nw", "Text\n\n```\nz\nw\n```\n\nMore\n"},

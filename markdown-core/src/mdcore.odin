@@ -565,10 +565,10 @@ command :: proc(ctx: ^Ctx, kind: history.Kind) {
 	}
 	if ctx.history.depth == 0 {
 		// Of the place where the text of the command goes: with text
-		// selected, the start of the selection, not its end that moves.
+		// selected, the code that all of the selection is in.
 		ctx.code_before = {}
-		if from, _, selected := selection_offsets(ctx); selected && ctx.doc.count > 0 {
-			ctx.code_before = document.code_before(&ctx.doc, document.address_of(&ctx.doc, from))
+		if from, to, selected := selection_offsets(ctx); selected {
+			ctx.code_before = document.code_before_selection(&ctx.doc, from, to)
 		} else if ctx.caret >= 0 {
 			ctx.code_before = document.code_before(&ctx.doc, ctx.caret_at)
 		}

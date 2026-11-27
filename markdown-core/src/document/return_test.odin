@@ -475,6 +475,9 @@ test_pasted_lines_are_lines_of_the_code :: proc(t: ^testing.T) {
 		// A text that starts with a line break.
 		{"```\n```\n", "\nx", "```\n\nx\n```\n", 4, 6},
 		{"> ```\n> ```\n", "\nx", "> ```\n> \n> x\n> ```\n", 6, 12},
+		// In an empty line of code that is only the mark of a quote.
+		{"> ~~~\n>\n> ~~~\n", "\nx", "> ~~~\n> \n> x\n> ~~~\n", 7, 12},
+		{"> ~~~\n>\n> ~~~\n", "a\nb", "> ~~~\n> a\n> b\n> ~~~\n", 7, 13},
 		{"> ```\n>\n> ```\n", "    pass", "> ```\n>     pass\n> ```\n", 7, 16},
 		{"- ```\n  ```\n", "a\nb\n", "- ```\n  a\n  b\n  \n  ```\n", 6, 16},
 		{"```\r\n```\r\n", "a\r\nb", "```\r\na\r\nb\r\n```\r\n", 5, 9},
@@ -636,4 +639,22 @@ test_down_from_the_last_code_makes_a_paragraph :: proc(t: ^testing.T) {
 		testing.expect_value(t, caret, c.caret)
 		testing.expect(t, empty_of(&doc, address_of(&doc, caret)) > 0)
 	}
+}
+
+// The code that text which is selected is in, for a command that takes
+// that text out: only when all of it is in the lines of the code.
+@(test)
+test_the_code_of_a_selection :: proc(t: ^testing.T) {
+	doc := parse("```\nab\ncd\n```\n\nText\n")
+	defer destroy(&doc)
+	// In the code.
+	testing.expect_value(t, code_before_selection(&doc, 5, 8), Code_Before{true, true})
+	// With the fence, with the closing fence, and with text after the
+	// code in it: the code goes, or is no more the code of all of it.
+	testing.expect_value(t, code_before_selection(&doc, 0, 8), Code_Before{})
+	testing.expect_value(t, code_before_selection(&doc, 5, 12), Code_Before{})
+	testing.expect_value(t, code_before_selection(&doc, 0, len(doc.source)), Code_Before{})
+	testing.expect_value(t, code_before_selection(&doc, 5, 17), Code_Before{})
+	// In other text.
+	testing.expect_value(t, code_before_selection(&doc, 15, 17), Code_Before{})
 }

@@ -79,6 +79,19 @@ write_code_lead :: proc(out: ^strings.Builder, doc: ^Document, block: int) {
 	}
 }
 
+// A text for the code of a block: each line of it after the first one
+// (a paste with line breaks) starts with what a line of that code starts
+// with (`write_code_lead`), so it is a line of the code.
+@(private)
+write_code_lines :: proc(out: ^strings.Builder, doc: ^Document, block: int, text: string) {
+	for i := 0; i < len(text); i += 1 {
+		strings.write_byte(out, text[i])
+		if text[i] == '\n' || (text[i] == '\r' && (i + 1 == len(text) || text[i + 1] != '\n')) {
+			write_code_lead(out, doc, block)
+		}
+	}
+}
+
 // Where text goes in code in a fence that has no text: the end of its
 // first line when it has one (an empty line, after its indent), or with
 // `needs_line` the start of the line after the fence, where a line for
@@ -126,18 +139,14 @@ code_first_line :: proc(doc: ^Document, at: Address, offset: int, text: string, 
 		if offset == 0 || doc.source[offset - 1] != '>' || block_at(doc, at.block).quote_depth == 0 {
 			return
 		}
-		return strings.concatenate({" ", text}, allocator), len(text) + 1, true
+		line := strings.builder_make(allocator)
+		strings.write_byte(&line, ' ')
+		write_code_lines(&line, doc, at.block, text)
+		return strings.to_string(line), strings.builder_len(line), true
 	}
 	out := strings.builder_make(allocator)
 	write_code_lead(&out, doc, at.block)
-	// Each line of a text with line breaks (a paste) is a line of the
-	// code.
-	for i := 0; i < len(text); i += 1 {
-		strings.write_byte(&out, text[i])
-		if text[i] == '\n' || (text[i] == '\r' && (i + 1 == len(text) || text[i + 1] != '\n')) {
-			write_code_lead(&out, doc, at.block)
-		}
-	}
+	write_code_lines(&out, doc, at.block, text)
 	caret = strings.builder_len(out)
 	strings.write_string(&out, line_ending(doc.source))
 	return strings.to_string(out), caret, true
@@ -203,6 +212,28 @@ code_before :: proc(doc: ^Document, at: Address) -> (before: Code_Before) {
 		return
 	}
 	return {true, block_at(doc, at.block).closed}
+}
+
+// `code_before` for text that is selected, from `from` to `to`, which
+// the command takes out: the code that the selection is in, when all of
+// it is in the lines of that code after its fence. A selection with the
+// fence in it takes the code out, so text that comes in its place is in
+// no code.
+code_before_selection :: proc(doc: ^Document, from, to: int) -> (before: Code_Before) {
+	if doc.count == 0 {
+		return
+	}
+	block := block_at_offset(doc, from)
+	if !block_at(doc, block).fenced || block_at_offset(doc, to) != block {
+		return
+	}
+	if first_end, _ := line_at(doc.source, fence_start(doc, block)); from <= first_end {
+		return
+	}
+	if line, _, closed := code_close(doc, block); closed && to >= line {
+		return
+	}
+	return {true, block_at(doc, block).closed}
 }
 
 // What the caret is in after a command of the reader made a fence.
