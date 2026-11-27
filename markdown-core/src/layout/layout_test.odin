@@ -2010,3 +2010,86 @@ test_a_list_and_a_link_in_the_text_of_a_footnote :: proc(t: ^testing.T) {
 	testing.expect(t, on_back)
 	testing.expect(t, !on_link)
 }
+
+// The bar of a caret is as high as the font of the text of its line, on
+// the line that the text stands on: higher in a heading than in a
+// paragraph, and less than the line with a wide line spacing.
+@(test)
+test_the_caret_is_as_high_as_the_text_of_its_line :: proc(t: ^testing.T) {
+	f: Fixture
+	setup(&f, "# Heading\n\nA paragraph.\n", 600)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	_, heading_y, heading_line, _ := caret_y(&f.page, {block = 0, byte = 2}, false)
+	_, heading_bar_y, heading_bar, _ := caret_bar_y(&f.page, {block = 0, byte = 2}, false)
+	_, body_y, body_line, _ := caret_y(&f.page, {block = 1, byte = 2}, false)
+	_, body_bar_y, body_bar, _ := caret_bar_y(&f.page, {block = 1, byte = 2}, false)
+	ascent, descent, _ := text.font_metrics(f.style.body_font)
+	testing.expect(t, abs(body_bar - (ascent + descent)) < 0.01)
+	testing.expect(t, body_bar < body_line && heading_bar < heading_line)
+	testing.expect(t, heading_bar > body_bar * 1.5)
+	// On the line that the glyphs of its line stand on: the top of the
+	// bar is the ascent of the font above the baseline of the shaped line.
+	part := &f.page.parts[0]
+	for line in part.lines {
+		if part.paras[line.para].src != &f.page.doc.parts[0].blocks[1].text {
+			continue
+		}
+		baseline := line_baseline(line.top, body_line, line.line.ascent, line.line.descent)
+		testing.expect(t, abs(f32(body_bar_y - part.top) + ascent - baseline) < 0.01)
+	}
+	testing.expect(t, abs((heading_bar_y - heading_y) - f64(heading_line - heading_bar) / 2) < 0.01)
+	// The quad that is drawn is the same bar, on whole pixels.
+	quads: [dynamic]base.Quad
+	defer delete(quads)
+	caret_quad(&f.page, {block = 1, byte = 2}, false, -1e30, 1e30, 1, 0, &quads)
+	if testing.expect_value(t, len(quads), 1) {
+		testing.expect(t, abs(quads[0].size[1] - body_bar) < 1 && quads[0].size[1] < body_line - 2)
+	}
+	// An empty line after a heading is a line of body text: the same
+	// bar, at the same place in its line.
+	g: Fixture
+	setup(&g, "# Heading\n\n\n\nText.\n", 600)
+	defer teardown(&g)
+	step(&g.page, 1e30)
+	if empty, has := document.empty_address(g.page.doc, 0, 1); testing.expect(t, has) {
+		_, empty_y, _, _ := caret_y(&g.page, empty, false)
+		_, empty_bar_y, empty_bar, _ := caret_bar_y(&g.page, empty, false)
+		testing.expect(t, abs(empty_bar - body_bar) < 0.01)
+		testing.expect(t, abs((empty_bar_y - empty_y) - (body_bar_y - body_y)) < 0.01)
+	}
+	// A heading with no text has the bar of a heading with text, at the
+	// same place: the first character does not move the caret.
+	h: Fixture
+	setup(&h, "#\n\nText.\n", 600)
+	defer teardown(&h)
+	step(&h.page, 1e30)
+	if testing.expect_value(t, h.page.doc.parts[0].blocks[0].kind, document.Block_Kind.Heading) {
+		_, bare_bar_y, bare_bar, _ := caret_bar_y(&h.page, {block = 0}, false)
+		testing.expect(t, abs(bare_bar - heading_bar) < 0.01)
+		testing.expect(t, abs(bare_bar_y - heading_bar_y) < 0.01)
+	}
+}
+
+// The card of a code block: its background, and a border of half a point
+// around it, with the round corners of the card of the web renderer.
+@(test)
+test_the_card_of_code_has_round_corners :: proc(t: ^testing.T) {
+	f: Fixture
+	setup(&f, "```\ncode\n```\n", 600)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	part := only(&f.page)
+	box := part.boxes[0]
+	if !testing.expect(t, box.decor_end - box.decor_first >= 2) {
+		return
+	}
+	border, card := part.decor[box.decor_first], part.decor[box.decor_first + 1]
+	testing.expect_value(t, card.radius, f32(16))
+	testing.expect_value(t, border.radius, card.radius + 0.5)
+	// The border is the card, half a point larger on each side.
+	testing.expect_value(t, border.x, card.x - 0.5)
+	testing.expect_value(t, border.w, card.w + 1)
+	testing.expect_value(t, border.color, f.style.code_border)
+	testing.expect_value(t, card.color, f.style.code_background)
+}

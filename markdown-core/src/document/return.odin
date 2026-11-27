@@ -69,6 +69,16 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address, allocator := co
 	// indent is no code, so Return there is as at the end of each other
 	// text.
 	if b.kind == .Code && (b.fenced || !at_end) {
+		// With no line of code yet (`code_place`): the first line of the
+		// code, with the caret in it. The caret shows in that place
+		// before, so Return after a fence that was typed only starts the
+		// code, as a reader who types the fence and Return means it.
+		if place, needs_line, empty := code_place(doc, at.block); empty && needs_line && place == offset {
+			write_code_lead(&out, doc, at.block)
+			caret = offset + strings.builder_len(out)
+			strings.write_string(&out, nl)
+			return done(&out, offset, offset, caret)
+		}
 		line := max(line_start(source, offset), block_begin)
 		// The indent, and as many marks of a quote as the block is in
 		// quotes: a ">" after those is a character of the code.
@@ -152,7 +162,8 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address, allocator := co
 
 // What a delete takes out for a caret at an address where it is more
 // than the character before the caret, or another thing: an empty
-// paragraph, or a list item with no text. The caret is then at `caret`.
+// paragraph, a list item with no text, or code in a fence with no text.
+// The caret is then at `caret`.
 // False at each other address. (The last text of a paragraph that goes:
 // `replace_range`.)
 delete_back :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end, caret: int, ok: bool) {
@@ -169,6 +180,12 @@ delete_back :: proc(doc: ^Document, places: []Place, at: Address) -> (start, end
 	}
 	if start, end, ok = empty_item(doc, at.block); ok {
 		return start, end, start, true
+	}
+	// Code in a fence with no text: the code goes (`code_delete`).
+	if offset, placed := place_of(doc, places, at); placed {
+		if start, end, ok = code_delete(doc, at, offset); ok {
+			return start, end, start, true
+		}
 	}
 	return
 }

@@ -153,6 +153,18 @@ def paragraph(target_bytes: int) -> str:
     return until(target_bytes, Text(4).sentence, "\n")
 
 
+def front() -> str:
+    """The short document below front matter: the panel of keys and values
+    is above the first block, with plain values, a value of two lines, a
+    value that is empty, and two sequences."""
+    text = Text(5)
+    rows = [f"title: {text.words(3, 6)}", f"author: {text.words(2, 2)}", "date: 2026-11-27", "draft: false",
+            f"tags: [{', '.join(text.word() for _ in range(6))}]", f"summary: {text.words(8, 12)}", f"  {text.words(8, 12)}",
+            "license:", "aliases:"] + [f"  - {text.words(1, 3)}" for _ in range(4)]
+    rows += [f"{text.word()}: {text.words(1, 5)}" for _ in range(8)]
+    return "---\n" + "\n".join(rows) + "\n---\n\n" + SHORT.read_text()
+
+
 def real() -> str:
     """Documents of this repository as they were at one commit."""
     parts = []
@@ -175,6 +187,7 @@ MAKERS = {
     "table": lambda: table(2000),
     "paragraph": lambda: paragraph(60_000),
     "real": real,
+    "front": front,
 }
 NAMES = tuple(MAKERS)
 

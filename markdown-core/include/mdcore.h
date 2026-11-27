@@ -89,6 +89,15 @@ void mdcore_replace_text(void *ctx, long start, long end, const char *utf8, long
 // is there. In a document with no text, the caret is at its start.
 bool mdcore_caret_set(void *ctx, double x, double y);
 
+// Puts the caret at the start of the first text whose line is all in a
+// range of the page (top to bottom, in the space of the page), and ends
+// the selection: the place to type at when an editor starts with no
+// click. With no such line (one tall thing fills the range), at the text
+// that is nearest to the top of the range, which can be out of it. False
+// when no text is there. In a document with no text, the caret is at its
+// start.
+bool mdcore_caret_set_in(void *ctx, double top, double bottom);
+
 // Takes the caret away.
 void mdcore_caret_clear(void *ctx);
 
@@ -119,11 +128,13 @@ long mdcore_caret_offset(void *ctx);
 // Says if the view takes the keys (true at the start).
 void mdcore_set_focused(void *ctx, bool focused);
 
-// Where the caret is: its x in the view, the top of its line in the
-// space of the page, and the height of the line. For a host that keeps
-// the caret in view or puts an input window at it. In a document with no
-// text, it is where the first line starts. False for no caret, and when
-// the block of the caret has no layout.
+// Where the caret is: its x in the view, and the top and the height of
+// its bar in the space of the page. The bar is as high as the text of
+// its line (the font, larger in a heading), in the middle of the height
+// of the line, as the text views of the system draw a caret. For a host
+// that keeps the caret in view or puts an input window at it. In a
+// document with no text, it is where the first line starts. False for no
+// caret, and when the block of the caret has no layout.
 bool mdcore_caret_rect(void *ctx, double *x, double *y, double *height);
 
 // The moves of a caret. Left and right are against the reading order
@@ -156,6 +167,14 @@ typedef enum {
 // in the last line to its end. False when the caret did not move and
 // the selection did not change, and for no caret.
 bool mdcore_caret_move(void *ctx, mdcore_move move, bool extend);
+
+// For a caret in code in a fence that is the last block of the document,
+// with no empty paragraph after it: makes that paragraph and puts the
+// caret in it. The line of the closing fence of code does not show, so a
+// move has no place below such code; a host calls this when a move down
+// did not move the caret. A change of the source, and one step of Undo.
+// False for each other caret, with nothing done.
+bool mdcore_paragraph_below(void *ctx);
 
 // Each line of the source with nothing in it after a block, but the
 // last one, shows as an empty line of the page, and a caret can be in

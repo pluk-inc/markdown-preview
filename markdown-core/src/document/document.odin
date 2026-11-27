@@ -112,6 +112,10 @@ Block :: struct {
 	task_mark:   int,
 	done:        bool, // the block stands directly in a checked task item
 	fenced:      bool, // code: between two fence lines, not code by its indent
+	// Code in a fence that has its closing fence: the last line of the
+	// block. The parser says: a line of the block after the fence that
+	// is no line of the code.
+	closed:      bool,
 	// How many spaces and tabs the source has after the end of the text
 	// of a paragraph or a heading, on its last line: Markdown leaves
 	// them out of the text, and a caret has a place after each of them

@@ -507,6 +507,35 @@ leave_block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.
 	case .H, .P:
 		close_text(p)
 	case .Code:
+		// The lines of the block in the source are the fence, each line
+		// of the code, and the closing fence when the code has one. Only
+		// the parser knows a closing fence (its indent, the marks of the
+		// quotes that it is in): the text that it gave tells.
+		if p.block.fenced {
+			// From the line of the fence: the first block of a quote or
+			// of a list item starts at the line of their mark, which can
+			// be a line before it (">" alone).
+			from := clamp(p.block.source, 0, len(p.bytes))
+			end := min(from + int(p.block.lines), len(p.bytes))
+			lines, opened := 0, false
+			for at := from; at < end; {
+				line_end, next := line_at(p.bytes, at)
+				if !opened {
+					_, _, opened = fence_run(p.bytes, at, line_end)
+				}
+				lines += int(opened)
+				at = next
+			}
+			code := p.block.text.bytes[:]
+			code_lines := 0
+			for ch in code {
+				code_lines += int(ch == '\n')
+			}
+			if n := len(code); n > 0 && code[n - 1] != '\n' {
+				code_lines += 1
+			}
+			p.block.closed = lines - 1 - code_lines >= 1
+		}
 		// The last line break is the end of the block, not a line of it.
 		if n := len(p.block.text.bytes); n > 0 && p.block.text.bytes[n - 1] == '\n' {
 			pop(&p.block.text.bytes)

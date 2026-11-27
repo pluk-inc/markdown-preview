@@ -221,6 +221,7 @@ final class ContentViewController: NSViewController {
         assetBaseURL: URL? = nil,
         renderImmediately: Bool = false
     ) {
+        displayedInNativeRenderer = false
         // A received share renders only once its remote content is blocked;
         // the rules compile asynchronously the first time.
         pendingShareDisplay?.cancel()
@@ -289,6 +290,7 @@ final class ContentViewController: NSViewController {
     private var deferredNativeMarkdown: (markdown: String, keepsScroll: Bool)?
 
     private func showNativeRenderer(markdown: String, keepsScroll: Bool) {
+        displayedInNativeRenderer = true
         webView.suppressesPageLoads = true
         // A visible WKWebView keeps WebKit's GPU process busy for nothing.
         webView.isHidden = true
@@ -353,6 +355,29 @@ final class ContentViewController: NSViewController {
         // `markdown-core/bench/app.py` reads the two.
         LaunchSignposts.event("nativeDraw")
         LaunchSignposts.eventAfterCommit("nativePaint")
+        nativeDocumentDidOpen?()
+    }
+
+    /// The native renderer has the document that `display` gave it: the
+    /// core parsed it, so it has its headings (`currentOutline`).
+    var nativeDocumentDidOpen: (() -> Void)?
+
+    /// True when the last `display` gave its document to the native
+    /// renderer. False for the web renderer, and for a document that
+    /// waits before it is shown (a received share, which comes with a
+    /// later `display`): a native renderer that is there then has the
+    /// document before.
+    private(set) var displayedInNativeRenderer = false
+
+    /// The document is shown again with the other renderer, after a change
+    /// of that setting: with its text and its file.
+    var documentRendererDidChange: ((_ markdown: String, _ url: URL?) -> Void)?
+
+    /// The native renderer with the document open in it. Nil for the web
+    /// renderer, and while the document waits for the window's first
+    /// frame (`nativeDocumentDidOpen` comes then).
+    var openNativeRenderer: NativeRendererView? {
+        deferredNativeMarkdown == nil ? nativeRenderer : nil
     }
 
     private func removeNativeRenderer() {
@@ -690,6 +715,7 @@ final class ContentViewController: NSViewController {
         // The renderer itself changed: show the document again with it.
         if (RendererSetting.current == .native) != isShowingNativeRenderer, let source = exportSource {
             display(markdown: source.markdown, sourceURL: source.sourceURL, assetBaseURL: source.assetBaseURL)
+            documentRendererDidChange?(source.markdown, source.sourceURL)
             return
         }
         nativeRenderer?.applyStyle()

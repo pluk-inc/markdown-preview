@@ -2,7 +2,7 @@
 """Benchmark of the app: a launch with one document, to the first frame.
 
     markdown-core/bench/app.py <Markdown Preview.app>... [--renderer native|web]
-                               [--runs 20] [--documents short,long]
+                               [--runs 10 | --careful] [--documents short,long]
 
 Each run starts a new process of the app in the background with a
 document, waits for the signposts of the first document frame (see
@@ -42,9 +42,6 @@ from report import COUNTED, Metric, add, in_turns, new_samples, note, one_at_a_t
 
 RENDERERS = ("native", "web")
 PAINT_TIMEOUT = 30.0  # seconds; the first launch of a new build is slow
-# Seconds for the second signpost in the launch that finds out if a build
-# has it: a build with the two sends them a few frames apart.
-SECOND_SIGNPOST_WAIT = 0.5
 SETTLE = 6.0  # seconds after the first frame, before memory and CPU are read
 
 METRICS = [
@@ -110,38 +107,13 @@ def executable_of(app: Path) -> Path:
     return app / "Contents" / "MacOS" / name
 
 
-def signposts(lines: queue.Queue, started: float, names: set[str], pid_of, one_is_enough: bool) -> tuple[dict[str, float], int | None]:
-    """The times of the named signposts of the new app process, and its
-    process number. With `one_is_enough`, the wait for a second signpost
-    is a short one."""
-    seen: dict[str, float] = {}
-    pid = None
-    deadline = started + PAINT_TIMEOUT
-    try:
-        while len(seen) < len(names) and (left := deadline - time.time()) > 0:
-            line = lines.get(timeout=left)
-            if not line.startswith("{"):
-                continue
-            entry = json.loads(line)
-            pid = pid or pid_of()
-            name = entry.get("signpostName")
-            if name in names and name not in seen and entry.get("processID") == pid:
-                seen[name] = datetime.strptime(entry["timestamp"], "%Y-%m-%d %H:%M:%S.%f%z").timestamp()
-                if one_is_enough:
-                    deadline = min(deadline, time.time() + SECOND_SIGNPOST_WAIT)
-    except queue.Empty:
-        pass  # the deadline passed; the caller sees what is missing
-    return seen, pid
-
-
-def run_once(app: Path, executable: Path, document: Path, renderer: str, commits: bool | None) -> dict[str, float]:
-    """One launch. `commits` says that the build has the signpost of the
-    committed frame; None finds it out, for the launch that is not counted,
-    which also does not wait to read the process at rest."""
+def run_once(app: Path, executable: Path, document: Path, renderer: str, counted: bool = True) -> dict[str, float]:
+    """One launch. One that is not counted does not wait to read the
+    process at rest."""
     # The frame is drawn, and the frame is committed to the window server.
-    # A build from before the second signpost has only "…Paint", at the draw.
+    # A build from before the second signpost has only "…Paint", at the
+    # draw: a "…Paint" with no "…Draw" before it is such a build.
     draw_event, paint_event = f"{renderer}Draw", f"{renderer}Paint"
-    names = {paint_event} if commits is False else {draw_event, paint_event}
     stream = subprocess.Popen(
         ["log", "stream", "--signpost", "--style", "ndjson",
          "--predicate", 'subsystem == "doc.md-preview.launch"'],
@@ -153,34 +125,46 @@ def run_once(app: Path, executable: Path, document: Path, renderer: str, commits
     threading.Thread(target=lambda: [lines.put(line) for line in stream.stdout], daemon=True).start()
     # A copy of the app that runs already is not this run's to read or stop.
     others = app_pids(executable)
+    pid = None
+    seen: dict[str, float] = {}
     try:
-        lines.get(timeout=PAINT_TIMEOUT)  # the header line: the stream is ready
-        started = time.time()
-        subprocess.run(
-            ["open", "-g", "-n", "-F", "-a", app, document, "--args",
-             "-ApplePersistenceIgnoreState", "YES", "-MarkdownPreview.renderer", renderer],
-            check=True,
-        )
-        seen, pid = signposts(lines, started, names, lambda: next(iter(app_pids(executable) - others), None), commits is None)
-        if commits and len(seen) < 2 or not seen:
-            raise RuntimeError(f"no {' and '.join(sorted(names - set(seen)))} signpost from {app} in {PAINT_TIMEOUT:g} s")
-        # An old build: its one signpost is at the draw.
-        drawn = seen[draw_event] if draw_event in seen else seen[paint_event]
+        try:
+            lines.get(timeout=PAINT_TIMEOUT)  # the header line: the stream is ready
+            started = time.time()
+            subprocess.run(
+                ["open", "-g", "-n", "-F", "-a", app, document, "--args",
+                 "-ApplePersistenceIgnoreState", "YES", "-MarkdownPreview.renderer", renderer],
+                check=True,
+            )
+            while paint_event not in seen and (left := started + PAINT_TIMEOUT - time.time()) > 0:
+                line = lines.get(timeout=left)
+                if not line.startswith("{"):
+                    continue
+                entry = json.loads(line)
+                pid = pid or next(iter(app_pids(executable) - others), None)
+                name = entry.get("signpostName")
+                if name in (draw_event, paint_event) and entry.get("processID") == pid:
+                    seen.setdefault(name, datetime.strptime(entry["timestamp"], "%Y-%m-%d %H:%M:%S.%f%z").timestamp())
+        except queue.Empty:
+            pass  # the deadline passed: reported below
+        if paint_event not in seen:
+            raise RuntimeError(f"no {paint_event} signpost from {app} in {PAINT_TIMEOUT:g} s")
+        drawn = seen.get(draw_event, seen[paint_event])
         sample = {"draw_ms": (drawn - started) * 1000}
-        if draw_event in seen and paint_event in seen:
+        if draw_event in seen:
             sample["paint_ms"] = (seen[paint_event] - started) * 1000
-        if commits is None:
+        if not counted:
             return sample
         # The start of the process on the clock of this program.
         process_started = time.time() - ticks_ms(_libc.mach_absolute_time() - usage(pid).proc_start_abstime) / 1000
         sample["process_ms"] = (drawn - process_started) * 1000
-        time.sleep(max(0.0, max(seen.values()) + SETTLE - time.time()))
-        counted = usage(pid)
+        time.sleep(max(0.0, seen[paint_event] + SETTLE - time.time()))
+        at_rest = usage(pid)
         return sample | {
-            "cpu_ms": ticks_ms(counted.user_time + counted.system_time),
-            "minstructions": counted.instructions / 1e6,
-            "memory_mb": counted.phys_footprint / 1048576,
-            "peak_memory_mb": counted.lifetime_max_phys_footprint / 1048576,
+            "cpu_ms": ticks_ms(at_rest.user_time + at_rest.system_time),
+            "minstructions": at_rest.instructions / 1e6,
+            "memory_mb": at_rest.phys_footprint / 1048576,
+            "peak_memory_mb": at_rest.lifetime_max_phys_footprint / 1048576,
         }
     finally:
         stream.kill()
@@ -193,11 +177,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("app", type=Path, nargs="+", help="a built app, a Release build; two for the base and the change")
     parser.add_argument("--renderer", choices=RENDERERS, default="native")
-    parser.add_argument("--runs", type=int, default=20, help="launches for each document and app (default 20)")
+    parser.add_argument("--runs", type=int, help="launches for each document and app (default 10)")
+    parser.add_argument("--careful", action="store_true", help="twenty launches, for times that are less in doubt")
     corpus.add_argument(parser)
     args = parser.parse_args()
 
-    lock = one_at_a_time()
     apps = {}
     for app in args.app:
         app = app.resolve()
@@ -209,15 +193,16 @@ def main() -> None:
     documents = corpus.documents(args.documents)
     signal.signal(signal.SIGINT, signal.default_int_handler)
 
+    runs = args.runs or (20 if args.careful else 10)
     samples = new_samples(builds, [name for name, _ in documents])
-    for name, path in documents:
-        # Not counted: fills the caches, and shows which signposts a build has.
-        commits = {label: "paint_ms" in run_once(*apps[label], path, args.renderer, None) for label in builds}
-        for run in range(args.runs):
-            note(f"{name}: launch {run + 1} of {args.runs}")
-            for label in in_turns(builds, run):
-                add(samples[label][name], run_once(*apps[label], path, args.renderer, commits[label]))
-    del lock
+    with one_at_a_time():
+        for name, path in documents:
+            for label in builds:
+                run_once(*apps[label], path, args.renderer, counted=False)  # fills the caches
+            for run in range(runs):
+                note(f"{name}: launch {run + 1} of {runs}")
+                for label in in_turns(builds, run):
+                    add(samples[label][name], run_once(*apps[label], path, args.renderer))
 
     print(f"Renderer: {args.renderer}\n")
     tables(samples, METRICS)
