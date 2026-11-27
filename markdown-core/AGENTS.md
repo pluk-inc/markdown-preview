@@ -1606,3 +1606,10 @@ export.
   text went into a new line that joined that item. After the parse
   around such a line, the caret is at the place of its address. The walk
   of `bench.m` has this sequence (`list_caret_check`).
+- **2026-11-27** — The corners of the card of a code block. The
+  maintainer asked that the card is as the one of the web renderer. The
+  background and the border were (the same two colors, a border of half
+  a point); the corners were 8 pt, and the web card (`.md-code-wrap`)
+  has 16 (`CODE_RADIUS`). Compared on screenshots of one document in
+  the two renderers. Not the same yet: the web card has a row with the
+  language at its top and colors for the syntax.
