@@ -33,6 +33,12 @@ front_matter :: proc(source: []u8, hidden: int, allocator := context.allocator) 
 	toml := open == "+++"
 	entries := make([dynamic]Front_Entry)
 	items := make([dynamic][dynamic]string)
+	// The value of the last entry while lines go on in it, and which
+	// entry that is: each line is added to these bytes, so a value of
+	// many lines is copied a fixed number of times, not one time for each
+	// line.
+	joined: [dynamic]u8
+	joined_for := -1
 	_, at := line_at(source, bom_size(source))
 	for at < min(hidden, len(source)) {
 		end, next := line_at(source, at)
@@ -73,7 +79,16 @@ front_matter :: proc(source: []u8, hidden: int, allocator := context.allocator) 
 		}
 		if (line[0] == ' ' || line[0] == '\t') && len(entries) > 0 {
 			last := &entries[len(entries) - 1]
-			last.value = last.value == "" ? trimmed : strings.concatenate({last.value, " ", trimmed})
+			if joined_for != len(entries) - 1 {
+				joined_for = len(entries) - 1
+				joined = make([dynamic]u8)
+				append(&joined, last.value)
+			}
+			if len(joined) > 0 {
+				append(&joined, ' ')
+			}
+			append(&joined, trimmed)
+			last.value = string(joined[:])
 			continue
 		}
 		colon := strings.index_byte(line, ':')
