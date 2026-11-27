@@ -1995,7 +1995,9 @@ Pointer_Shape :: enum c.int {
 // The one export that does not wait for the view's state (`hold`): the
 // host asks on its main thread for each move of the pointer and each step
 // of a scroll, and a layout call or a frame can have the state for some
-// milliseconds. It reads only, and uses no working memory.
+// milliseconds. It reads only; the text of a line that it shapes again
+// for the place of a footnote number uses the working memory of the
+// view, which the lock makes safe.
 @(export)
 mdcore_pointer_shape :: proc "c" (handle: rawptr, x, y: f64) -> Pointer_Shape {
 	context = runtime.default_context()
@@ -2004,6 +2006,7 @@ mdcore_pointer_shape :: proc "c" (handle: rawptr, x, y: f64) -> Pointer_Shape {
 		return .Busy
 	}
 	defer sync.unlock(&ctx.lock)
+	context.temp_allocator = ctx.temp
 	if ctx.layout_valid {
 		if _, _, on_note := layout.note_at(&ctx.page, f32(x), y); on_note {
 			return .Link

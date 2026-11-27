@@ -104,6 +104,12 @@ gives the headings of the outline, `mdcore_outline`), a change to front
 matter in Edit Mode (the page shows it as a panel of keys and values at
 the top, which is not text of the editor), print, export, and VoiceOver.
 
+Footnotes are in, with these limits: the text of the list at the end of
+a page that is read cannot be selected or copied; in Edit Mode the mark
+of a definition (`[^label]:`) does not show at the caret, Return in a
+definition has no rule of its own, and no key goes from the caret to the
+text of a footnote.
+
 Edit Mode has its first form: a click puts a caret in the text, and the
 reader types, deletes the character before the caret, pastes, and
 saves. Return starts a new paragraph, a new item in a list, or a new

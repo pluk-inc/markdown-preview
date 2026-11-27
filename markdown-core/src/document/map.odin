@@ -139,6 +139,10 @@ block_parse :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs: 
 	noted := has_footnote(doc.source[start:end])
 	if !noted {
 		fresh = parse_piece(text[:], 0, len(doc.source), places, block - first, pairs = pairs, reveal = reveal_in(doc.reveal, base, len(text)), at_start = base == 0)
+	} else {
+		// No parse has the bytes of the piece: they go.
+		delete(text)
+		text = nil
 	}
 	// The piece must give the block as the document has it. It does not
 	// when the limit of the parser for the uses of definitions cuts a

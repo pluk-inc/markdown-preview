@@ -126,6 +126,12 @@ test_the_document_has_the_footnotes_as_numbers :: proc(t: ^testing.T) {
 		{"S ^[with `code` and **more**]!\n", "S <1:1>!|"},
 		// A reference between the marks of a style, and after an "&".
 		{"*[^1]* and &[^1];\n\n[^1]: One.\n", "<1:1> and &<1:1>;|{1}One.|"},
+		// In code between backticks that goes over more than one line.
+		{"`start\n[^a]\nend`\n\nReal[^b].\n\n[^a]: A.\n[^b]: B.\n", "start [^a] end|Real<1:1>.|{0}A.|{1}B.|"},
+		// Two references next to each other are two numbers.
+		{"T[^n][^n].\n\n[^n]: N.\n", "T<1:1><1:1>.|{1}N.|"},
+		// A label with an entity or the mark of a style in it is no text.
+		{"T[^a&amp;b] and[^c*d*].\n\n[^a&amp;b]: One.\n[^c*d*]: Two.\n", "T<1:1> and<2:2>.|{1}One.|{2}Two.|"},
 		// In raw HTML: no reference.
 		{"A <a href=\"[^1]\">link</a> and[^1].\n\n[^1]: One.\n", "A link and<1:1>.|{1}One.|"},
 		// A definition right after a paragraph, and a list after it.
@@ -264,4 +270,66 @@ test_the_list_of_the_footnotes :: proc(t: ^testing.T) {
 	none := parse("No footnotes.\n")
 	defer destroy(&none)
 	testing.expect_value(t, notes_source(&none, context.temp_allocator), "")
+}
+
+// The blocks of a definition are all of its item: a list in its text,
+// and the text after that list. The block after the definition is none
+// of them.
+@(test)
+test_a_list_in_a_definition_is_of_the_footnote :: proc(t: ^testing.T) {
+	doc := parse("T[^n][^n].\n\n[^n]: Intro.\n\n    - Child.\n\n    Tail.\n\nAfter.\n")
+	defer destroy(&doc)
+	if !testing.expect_value(t, doc.count, 5) {
+		return
+	}
+	for want, block in ([]bool{false, true, true, true, false}) {
+		testing.expect_value(t, in_note(&doc, block), want)
+	}
+	out := make([dynamic]u8, context.temp_allocator)
+	testing.expect(t, note_text(&doc, 1, &out))
+	testing.expect_value(t, string(out[:]), "Intro.\n\nChild.\n\nTail.")
+	// Each of the two references next to each other is found.
+	_, first := note_block(&doc, 1, 1)
+	_, second := note_block(&doc, 1, 2)
+	_, third := note_block(&doc, 1, 3)
+	testing.expect(t, first && second && !third)
+}
+
+// The list of the footnotes for texts that are not one paragraph: the
+// mark that goes back is in no line of code, a line with no indent after
+// a paragraph of a definition is of that paragraph, and the definitions
+// of links come with the texts that use them.
+@(test)
+test_the_list_of_footnotes_with_other_blocks :: proc(t: ^testing.T) {
+	BACK :: "[" + NOTE_BACK + "](" + NOTE_BACK_TARGET + ")"
+	Case :: struct {
+		source, want: string,
+	}
+	cases := []Case {
+		{"T[^n].\n\n[^n]: ```swift\n  let x = 1\n  ```\n", "1. ```swift\n   let x = 1\n   ```\n\n   " + BACK + "\n\n"},
+		{"T[^n].\n\n[^n]: Text\n    ```\n    code\n    ```\n", "1. Text " + BACK + "\n   ```\n   code\n   ```\n\n"},
+		{"T[^n].\n\n[^n]: Note.\nAfter.\n\nBody.\n", "1. Note.\n   After. " + BACK + "\n\n"},
+		{"T[^n].\n\n[^n]: Read [guide][g].\n\n[g]: https://example.com\n", "1. Read [guide][g]. " + BACK + "\n\n[g]: https://example.com\n"},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		got := notes_source(&doc, context.temp_allocator)
+		testing.expectf(t, got == c.want, "%q:\n %q, not\n %q", c.source, got, c.want)
+		// The list is Markdown with as many footnotes, and the mark that
+		// goes back is a link of it.
+		list := parse(got)
+		defer destroy(&list)
+		testing.expect(t, list.count > 0 && block_at(&list, 0).marker == .Number)
+		has_back := false
+		for link in list.links {
+			has_back ||= link == NOTE_BACK_TARGET
+		}
+		testing.expectf(t, has_back, "%q: no link back in %q", c.source, got)
+	}
+	// The line with no indent is in no other place of a page that is read.
+	doc := parse("T[^n].\n\n[^n]: Note.\nAfter.\n\nBody.\n")
+	defer destroy(&doc)
+	testing.expect_value(t, doc.count, 3)
+	testing.expect_value(t, string(block_at(&doc, 1).text.bytes[:]), "Note. After.")
 }

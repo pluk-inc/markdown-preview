@@ -255,7 +255,9 @@ append_text :: proc(p: ^Parser, s: string, source := -1, source_len := 0, line_b
 	style := p.marking ? Inline_Set{.Mark} : current_style(p)
 	// Of the number of a footnote, that number.
 	link := p.marking ? 0 : p.note > 0 ? p.note : p.link
-	if n := len(t.spans); n > 0 && t.spans[n - 1].style == style && t.spans[n - 1].link == link {
+	// Not for the number of a footnote: two references next to each
+	// other are two numbers, also of the same footnote.
+	if n := len(t.spans); n > 0 && p.note == 0 && t.spans[n - 1].style == style && t.spans[n - 1].link == link {
 		t.spans[n - 1].end = len(t.bytes)
 		return
 	}
@@ -694,7 +696,7 @@ line_mark :: proc(p: ^Parser, line, text: int) {
 	mark = shown
 	if reveal, shows := p.reveal.?; shows && reveal >= mark && reveal <= block_end {
 		p.marking = true
-		append_text(p, string(p.bytes[mark:text]), mark, text - mark)
+		append_text(p, string(p.kept[mark:text]), mark, text - mark)
 		p.marking = false
 		p.doc.reveal = reveal
 		p.block.mark_shown = true
@@ -761,10 +763,10 @@ typed_mark :: proc(p: ^Parser, line, end: int) -> bool {
 		for box < end && (p.bytes[box] == ' ' || p.bytes[box] == '\t') {
 			box += 1
 		}
-		append_text(p, string(p.bytes[box:end]), box, end - box)
+		append_text(p, string(p.kept[box:end]), box, end - box)
 		return true
 	}
-	append_text(p, string(p.bytes[mark:end]), mark, end - mark)
+	append_text(p, string(p.kept[mark:end]), mark, end - mark)
 	p.block.typed = true
 	return true
 }
@@ -814,7 +816,7 @@ note_mark :: proc(p: ^Parser, type: Md_Span, opens: bool, autolink := false) {
 			}
 			if line > from {
 				p.marking = true
-				append_text(p, string(p.bytes[from:line]), from, line - from)
+				append_text(p, string(p.kept[from:line]), from, line - from)
 				p.marking = false
 				p.doc.reveal = reveal
 			}

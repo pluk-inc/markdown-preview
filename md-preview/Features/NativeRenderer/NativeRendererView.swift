@@ -605,8 +605,11 @@ final class NativeRendererView: NSView {
         laidOutPageWidth = pageWidth
         let size = bounds.size
         // A key scroll in progress goes to an offset of the layout before:
-        // it ends where it is.
+        // it ends where it is. The places that the reader came to a
+        // footnote from are heights of that layout too: a click on the
+        // mark of the footnote goes to its first reference then.
         endScrollAnimation()
+        noteReturns.removeAll()
         let offset = scrollY
         let topInset = topInset
         let viewHeight = scrollView.contentView.bounds.height
@@ -785,6 +788,8 @@ final class NativeRendererView: NSView {
         noteBubble = bubble
     }
 
+    fileprivate func pointerLeftPage() { hideNoteBubble() }
+
     private func hideNoteBubble() {
         noteBubbleWork?.cancel()
         noteBubbleWork = nil
@@ -825,6 +830,8 @@ final class NativeRendererView: NSView {
         hideNoteBubble()
         // In Edit mode a click puts the caret; with Command it follows.
         guard !isEditable || withCommand, let note else { return }
+        // A key scroll in progress would go on from the new place.
+        endScrollAnimation()
         let number = note.number
         var target = 0.0
         if note.isDefinition {
@@ -979,6 +986,8 @@ private final class PageArea: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override func mouseEntered(with event: NSEvent) { owner?.updatePointerShape() }
+    /// The pointer is on no footnote of the page now.
+    override func mouseExited(with event: NSEvent) { owner?.pointerLeftPage() }
     override func mouseMoved(with event: NSEvent) { owner?.updatePointerShape() }
 
     override func mouseDown(with event: NSEvent) {

@@ -704,8 +704,10 @@ Design, before the features that need it:
   so that a piece is parsed alone and only the numbers after it change);
   the mark `[^label]: ` of a definition does not show at the caret in
   Edit Mode, and Return in a definition has no rule; no key or menu
-  command goes from a caret to the footnote text; a list inside a
-  footnote text shows in its place in Read mode too; the web renderer
+  command goes from a caret to the footnote text; the first line of a
+  definition is text of a paragraph in its place (a fence of code or a
+  heading that starts there is a block only in the list at the end of
+  the page, which is parsed from the lines of the text); the web renderer
   does not read the inline form; the texts in the list at the end of the
   page are no text of the document, so a reader cannot select or copy
   them (form: a selection that can be in the layout of the list); a

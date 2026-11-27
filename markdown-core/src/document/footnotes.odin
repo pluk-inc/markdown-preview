@@ -221,9 +221,17 @@ FOOTNOTE_MASK :: 0x01
 @(private)
 footnote_mask :: proc(masked: []u8, from: int, notes: []Footnote, references: []Footnote_Reference) {
 	for note in notes {
-		if !note.inline {
-			masked[note.mark - from], masked[note.mark - from + 1] = '+', ' '
+		if note.inline {
+			continue
 		}
+		masked[note.mark - from], masked[note.mark - from + 1] = '+', ' '
+		// Its label and the "]:" are no Markdown: an entity or a mark of
+		// a style in a label does not split it for the parser.
+		end := note.content
+		for end > note.mark + 2 && (masked[end - 1 - from] == ' ' || masked[end - 1 - from] == '\t') {
+			end -= 1
+		}
+		slice.fill(masked[note.mark + 2 - from:end - from], FOOTNOTE_MASK)
 	}
 	for reference in references {
 		slice.fill(masked[reference.start - from:reference.end - from], FOOTNOTE_MASK)
@@ -353,12 +361,8 @@ note_block :: proc(doc: ^Document, number, reference: int) -> (block: int, ok: b
 // the source. False for no such footnote.
 note_text :: proc(doc: ^Document, number: int, out: ^[dynamic]u8) -> bool {
 	if block, defined := note_block(doc, number, 0); defined {
-		item := block_at(doc, block).item
-		for i := block; i < doc.count; i += 1 {
+		for i in block ..< note_end(doc, block) {
 			b := block_at(doc, i)
-			if i > block && (b.item != item || b.spacing != .Continuation) {
-				break
-			}
 			for &text, cell in block_texts(b) {
 				if i > block || cell > 0 {
 					append(out, cell > 0 ? "\t" : "\n\n")
@@ -382,23 +386,33 @@ note_text :: proc(doc: ^Document, number: int, out: ^[dynamic]u8) -> bool {
 // True for a block of the definition of a footnote: its first block, or
 // a later block of the same list item.
 in_note :: proc(doc: ^Document, block: int) -> bool {
-	b := block_at(doc, block)
-	if b.marker == .Note {
-		return true
-	}
-	if b.item == 0 || b.spacing != .Continuation {
-		return false
-	}
-	for i := block - 1; i >= 0; i -= 1 {
-		first := block_at(doc, i)
-		if first.item != b.item {
-			break
+	// The item of the outer list that the block is in: a definition is
+	// such an item, and a list in its text is deeper.
+	for i := block; i >= 0; i -= 1 {
+		b := block_at(doc, i)
+		if b.list_depth == 0 {
+			return false
 		}
-		if first.spacing != .Continuation {
-			return first.marker == .Note
+		if b.list_depth == 1 && b.spacing != .Continuation {
+			return b.marker == .Note
 		}
 	}
 	return false
+}
+
+// The block after the last block of the definition that starts at
+// `block`: the later blocks of its item, and the lists in its text.
+@(private)
+note_end :: proc(doc: ^Document, block: int) -> int {
+	end := block + 1
+	for end < doc.count {
+		b := block_at(doc, end)
+		if b.list_depth == 0 || (b.list_depth == 1 && b.spacing != .Continuation) {
+			break
+		}
+		end += 1
+	}
+	return end
 }
 
 // The mark that goes back from the text of a footnote to the place of
@@ -433,10 +447,32 @@ notes_source :: proc(doc: ^Document, allocator := context.allocator) -> string {
 	for number in 1 ..= count {
 		note := found.notes[by_number[number]]
 		clear(&lines)
+		// The mark that goes back is at the end of the first paragraph.
+		// A text that starts with a fence of code or a table has it in a
+		// paragraph of its own after the text: no line of those can have
+		// more text.
+		apart := false
 		if note.inline {
 			append(&lines, string(doc.source[note.content:note.end - 1]))
 		} else {
-			for at := note.content; at < note.end; {
+			// The lines of the blocks that the parser has in the
+			// definition: a line with no indent right after a paragraph
+			// of it goes on in that paragraph.
+			end := note.end
+			if first, defined := note_block(doc, number, 0); defined {
+				after := note_end(doc, first)
+				end = after < doc.count ? block_start(doc, after) : len(doc.source)
+				// But for the definitions of links after its last block,
+				// which are no block.
+				last := block_start(doc, after - 1)
+				for def in doc.defs {
+					if def.start > last && def.start < end {
+						end = def.start
+						break
+					}
+				}
+			}
+			for at := note.content; at < end; {
 				line_end, next := line_at(doc.source, at)
 				line := string(doc.source[at:line_end])
 				if at > note.content {
@@ -456,10 +492,19 @@ notes_source :: proc(doc: ^Document, allocator := context.allocator) -> string {
 			for len(lines) > 0 && strings.trim_space(lines[len(lines) - 1]) == "" {
 				pop(&lines)
 			}
+			if len(lines) > 0 {
+				first := strings.trim_space(lines[0])
+				apart = strings.has_prefix(first, "```") || strings.has_prefix(first, "~~~") || strings.has_prefix(first, "|")
+			}
 		}
-		// The last line of the first paragraph: the mark goes there.
-		last := 0
-		for last + 1 < len(lines) && strings.trim_space(lines[last + 1]) != "" {
+		// The last line of the first paragraph: the mark goes there. A
+		// fence of code right after it starts another block.
+		last := apart ? -1 : 0
+		for !apart && last + 1 < len(lines) {
+			next := strings.trim_space(lines[last + 1])
+			if next == "" || strings.has_prefix(next, "```") || strings.has_prefix(next, "~~~") {
+				break
+			}
 			last += 1
 		}
 		prefix := fmt.tprintf("%d. ", number)
@@ -479,8 +524,20 @@ notes_source :: proc(doc: ^Document, allocator := context.allocator) -> string {
 		}
 		if len(lines) == 0 {
 			fmt.sbprintf(&out, "%s[%s](%s)\n", prefix, NOTE_BACK, NOTE_BACK_TARGET)
+		} else if apart {
+			strings.write_byte(&out, '\n')
+			for _ in 0 ..< len(prefix) {
+				strings.write_byte(&out, ' ')
+			}
+			fmt.sbprintf(&out, "[%s](%s)\n", NOTE_BACK, NOTE_BACK_TARGET)
 		}
 		strings.write_byte(&out, '\n')
+	}
+	// The definitions of links of the document, for a link of a text
+	// that uses one.
+	for def in doc.defs {
+		strings.write_string(&out, strings.trim_right(string(doc.source[def.start:min(def.end, len(doc.source))]), "\r\n"))
+		strings.write_string(&out, "\n")
 	}
 	return strings.to_string(out)
 }
