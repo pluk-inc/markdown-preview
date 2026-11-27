@@ -1609,5 +1609,10 @@ export.
   (`ContentViewController.nativeDocumentDidOpen`,
   `MainSplitViewController.showOutlineOfNativeRenderer`): at once for a
   window that shows, and after the first frame for a document that
-  waited for it. The numbers of the inspector still come from the text.
-  The web renderer keeps its path.
+  waited for it. The content view says if the last `display` gave its
+  document to the native renderer (`displayedInNativeRenderer`): a
+  received share waits for its rules, and a native renderer that is
+  there then has the document before, as a reviewer found. A rename
+  gives the outline its new name, and a change of the renderer setting
+  makes the outline of the other renderer. The numbers of the inspector
+  still come from the text. The web renderer keeps its path.
