@@ -128,6 +128,7 @@ run.
   | `paragraph` | 60 KB | one paragraph with no empty line |
   | `real` | 270 KB | three documents of this repository as they were at one commit |
   | `front` | 9 KB | `short` below front matter of 16 entries in 24 lines: plain values, a value of two lines, a value that is empty, and two sequences |
+  | `notes` | 500 KB | text with a footnote in most paragraphs (about 700), some inline, and the definitions at the end |
 
 The main table below is for the direction over months only: its rows are
 from different days and loads of the Mac, and two rows that are less than

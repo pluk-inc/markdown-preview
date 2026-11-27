@@ -165,6 +165,32 @@ def front() -> str:
     return "---\n" + "\n".join(rows) + "\n---\n\n" + SHORT.read_text()
 
 
+def notes(target_bytes: int) -> str:
+    """Text with a footnote in most paragraphs: references with a number
+    or a name, inline footnotes, and the definitions at the end, some of
+    more than one paragraph."""
+    text = Text(6)
+    definitions = []
+
+    def block() -> str:
+        paragraph = text.paragraph()
+        kind = text.random.random()
+        if kind < 0.6:
+            number = len(definitions) + 1
+            label = str(number) if text.random.random() < 0.5 else f"note-{number}"
+            body = text.paragraph()
+            if text.random.random() < 0.15:
+                body += "\n\n    " + text.paragraph()
+            definitions.append(f"[^{label}]: {body}")
+            return f"{paragraph}[^{label}]"
+        if kind < 0.7:
+            return f"{paragraph} ^[{text.words(3, 9)}]"
+        return paragraph
+
+    body = until(target_bytes, block, "\n\n")
+    return body + "\n\n" + "\n".join(definitions) + "\n"
+
+
 def real() -> str:
     """Documents of this repository as they were at one commit."""
     parts = []
@@ -188,6 +214,7 @@ MAKERS = {
     "paragraph": lambda: paragraph(60_000),
     "real": real,
     "front": front,
+    "notes": lambda: notes(300_000),
 }
 NAMES = tuple(MAKERS)
 
