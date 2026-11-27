@@ -98,7 +98,7 @@ with each change to the parser or the layout.
 
 ## What it does not do yet
 
-Images, math, diagrams, syntax colors, footnotes, alerts, raw HTML, links
+Images, math, diagrams, syntax colors, alerts, raw HTML, links
 that open, Find, a click in the outline and its active heading (the core
 gives the headings of the outline, `mdcore_outline`), a change to front
 matter in Edit Mode (the page shows it as a panel of keys and values at

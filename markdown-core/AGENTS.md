@@ -153,6 +153,25 @@ These came from the maintainer. Do not undo one without asking.
   body reads no more of the source for them; an edit that can change
   them is a parse of all (`hidden_changes`). A caret in a document with
   no block starts after them.
+- **Footnotes** (2026-11-27, `document/footnotes.odin`,
+  `layout/notes.odin`). The four forms of a footnote are read: a
+  reference `[^label]`, a definition `[^label]: text`, more lines of a
+  definition (indented by `FOOTNOTE_INDENT` spaces or more), and an
+  inline footnote `^[text]`. A number is the order of the first
+  reference. md4c has no footnotes, so a definition is masked as a list
+  item for it and a reference is one span that the core adds after the
+  parse; `footnote_cases.json` tests the core and the app's parser with
+  the same cases. A reference shows as a small raised number, and as its
+  source where the caret is, as a link does. Read mode shows the list of
+  footnote texts at the end of the page, smaller and in the secondary
+  color, each with an arrow back (`Layout.notes_at_end`, an area of its
+  own below the last part, as the panel is above the first). In Edit
+  Mode the maintainer chose no list at the end, because the text of a
+  definition is text that the reader edits where it is: the definitions
+  stay in place, and a pointer on a number shows the text in a bubble.
+  A click on a number goes to its text and back (Command-click in Edit
+  Mode). A piece that has footnote syntax is parsed with all of the
+  source, since a number depends on each reference before it.
 - **The outline of native Edit Mode comes from the core** (2026-11-26):
   `mdcore_outline` reads the heading blocks, with no parse. Its texts are
   the ones the native page shows, so they differ from the web renderer's
@@ -645,9 +664,9 @@ Design, before the features that need it:
   `quote_depth`, so a list in a quote and a quote in a list are the same
   block, the quote bar of a list in a quote is one level too far right,
   and a quote with two paragraphs has a gap in its bar. Alerts (a quote
-  with a kind and a title) and footnotes (a numbered container) do not fit
-  two integers. Form: a list of containers in the document, and a
-  container number in each block. Before alerts and footnotes.
+  with a kind and a title) do not fit two integers (footnotes are in, as
+  list items with a mark of their own). Form: a list of containers in
+  the document, and a container number in each block. Before alerts.
 - **Layout records hold resolved colors**, and `mdcore_style` is mirrored
   field by field in three places. A change of colors alone (light, dark, a
   theme) throws the layout away. Form: color roles in the records,
@@ -665,8 +684,17 @@ Design, before the features that need it:
   places**, and the zoom lives in the web view. Form: one reader protocol
   for both, with the first feature that needs a second branch.
 - **Images and links**: the parser counts an image but drops its source,
-  and a link's target is cloned but not used. md4c has no footnotes or
-  alerts, so both need a pass in `parse.odin` over its output.
+  and a link's target is cloned but not used. md4c has no alerts, so
+  they need a pass in `parse.odin` over its output, as footnotes have.
+- **Footnotes, the open parts**: a change in a paragraph that has
+  footnote syntax parses all of the document (a key in such a paragraph
+  of a long document is slow; form: numbers kept apart from the blocks,
+  so that a piece is parsed alone and only the numbers after it change);
+  the mark `[^label]: ` of a definition does not show at the caret in
+  Edit Mode, and Return in a definition has no rule; no key or menu
+  command goes from a caret to the footnote text; a list inside a
+  footnote text shows in its place in Read mode too; the web renderer
+  does not read the inline form.
 - The bullet of a list item is a record of the box (`Decor`) and not a
   character: the bullet of the system font is a fifth of the size of
   the text, and each font has its own. It and the check box of a task
@@ -1249,7 +1277,7 @@ Left on purpose in the first step:
 
 Next features after that, in the order that seems best (not agreed with
 the maintainer): links that open, images, code colors, Find, the
-outline's scroll position, footnotes and alerts, VoiceOver, print and
+outline's scroll position, alerts, VoiceOver, print and
 export.
 
 ## Timeline
@@ -1686,3 +1714,15 @@ export.
   where the app's one works on characters and line breaks of Unicode
   (U+2028, U+0085, a combining mark after a quote or a "#"); the spaces
   of Unicode at the ends of a key or a value are the same in the two.
+- **2026-11-27** — Footnotes. The native page showed the source of a
+  footnote; it now reads the four forms, numbers them, and shows a small
+  raised number in the text. The first form put the list of texts at the
+  end of the page in both modes; the maintainer said that the end of the
+  file is no easy place while a reader edits, so Edit Mode keeps each
+  definition where it is in the source and shows the text of a number
+  in a bubble under the pointer, and Read mode has the list at the end,
+  gray and smaller, with an arrow back to the number. The list is a
+  child document with a layout of its own, placed below the last part,
+  so the records of the parts know nothing of it. A reference is raw at
+  the caret through a pair of marks around its label, the same way as a
+  link. The open parts are in Open work.
