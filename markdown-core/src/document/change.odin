@@ -557,11 +557,15 @@ commit :: proc(doc: ^Document, p: ^Pending) -> (change: Change) {
 		doc.hidden, doc.unclosed = fresh.hidden, fresh.unclosed
 		doc.links, fresh.links = fresh.links, doc.links
 		doc.links_parsed = len(doc.links)
+		doc.notes, fresh.notes = fresh.notes, doc.notes
+		doc.notes_valid = fresh.notes_valid
 		doc.defs, fresh.defs = fresh.defs, doc.defs
 		doc.defs_marked, doc.defs_cut = fresh.defs_marked, fresh.defs_cut
 		doc.defs_used, doc.def_longest = fresh.defs_used, fresh.def_longest
 		doc.cells_most, doc.cells_cut = fresh.cells_most, fresh.cells_cut
 	} else {
+		// The offsets of the footnotes are of the source before.
+		doc.notes_valid = false
 		doc.cells_most = max(doc.cells_most, fresh.cells_most)
 		doc.cells_cut ||= fresh.cells_cut
 		for part in fresh.parts {

@@ -2130,3 +2130,44 @@ test_the_card_of_code_has_round_corners :: proc(t: ^testing.T) {
 	testing.expect_value(t, border.color, f.style.code_border)
 	testing.expect_value(t, card.color, f.style.code_background)
 }
+
+// The list of the footnotes is laid out where the view is, as the page
+// is: a first view at the top of a long document makes no records of it.
+@(test)
+test_the_list_of_footnotes_is_laid_out_with_the_view :: proc(t: ^testing.T) {
+	source := strings.builder_make(context.temp_allocator)
+	for i in 0 ..< 400 {
+		fmt.sbprintf(&source, "Paragraph %d with a note[^n%d].\n\n", i, i)
+	}
+	for i in 0 ..< 400 {
+		fmt.sbprintf(&source, "[^n%d]: The text of note %d, long enough for a line of its own in the list.\n", i, i)
+	}
+	f: Fixture
+	f.page.notes_at_end = true
+	setup(&f, strings.to_string(source), 600)
+	defer teardown(&f)
+	lay_out(&f.page, 0, 800, 0)
+	expect_ok(t, &f.page)
+	list := f.page.notes.page
+	if !testing.expect(t, list != nil) {
+		return
+	}
+	lines := 0
+	for part in list.parts {
+		lines += len(part.lines)
+	}
+	testing.expect_value(t, lines, 0)
+	testing.expect(t, f.page.notes.height > 400 * list.m.body)
+	// A view at the end of the page has the records of its last items,
+	// and the jump to a footnote those of its item.
+	bottom := f.page.origin + f.page.content_height
+	lay_out(&f.page, bottom - 800, bottom, bottom - 800)
+	expect_ok(t, &f.page)
+	testing.expect(t, len(list.parts[len(list.parts) - 1].lines) > 0)
+	y, _, found := note_top(&f.page, 200)
+	testing.expect(t, found && y > f.page.notes.top && y < f.page.origin + f.page.content_height)
+	expect_ok(t, &f.page)
+	step(&f.page, 1e30)
+	expect_ok(t, &f.page)
+	testing.expect(t, laid_out(&f.page, -1e30, 1e30))
+}

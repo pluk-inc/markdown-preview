@@ -128,7 +128,7 @@ notes_begin :: proc(l: ^Layout, force := false) -> bool {
 	if !force && string(l.notes.source) == want {
 		return false
 	}
-	had := l.notes.height > 0
+	had := l.notes.page != nil
 	notes_destroy(l)
 	if want == "" {
 		return had
@@ -143,10 +143,10 @@ notes_begin :: proc(l: ^Layout, force := false) -> bool {
 	style := l.style
 	style.body_size *= NOTES_SIZE
 	style.text = l.style.secondary
+	// With estimated heights: the list is laid out where the view is, as
+	// the page is (`lay_out`). A document can have hundreds of footnotes,
+	// and its first frame shows none of them.
 	begin(notes.page, notes.doc, style, l.width)
-	// All of it: a list of footnotes is short beside its document.
-	lay_out(notes.page, -1e30, 1e30, 0)
-	notes.height = NOTES_ABOVE * l.m.body + 1 + f32(notes.page.content_height)
 	return true
 }
 
@@ -176,6 +176,7 @@ notes_place :: proc(l: ^Layout, top: f64) -> f64 {
 	}
 	notes.page.origin = top + f64(NOTES_ABOVE * l.m.body + 1)
 	sum_tops(notes.page)
+	notes.height = NOTES_ABOVE * l.m.body + 1 + f32(notes.page.content_height)
 	return top + f64(notes.height)
 }
 
@@ -247,7 +248,13 @@ note_top :: proc(l: ^Layout, number: int) -> (y: f64, changed: bool, ok: bool) {
 	if list := l.notes.page; list != nil {
 		for i in 0 ..< list.doc.count {
 			if b := document.block_at(list.doc, i); note_starts(b) && b.number == number {
-				return block_top(list, i)
+				y, changed, ok = block_top(list, i)
+				// The list can have another height with that part of
+				// it laid out, and the page with it.
+				if changed {
+					sum_tops(l)
+				}
+				return
 			}
 		}
 		return

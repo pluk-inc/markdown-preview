@@ -247,6 +247,12 @@ Document :: struct {
 	starts: [dynamic]int, // for each part, the number of its first block
 	count:  int, // the blocks of all parts
 	links:  [dynamic]string,
+	// The footnotes that the last parse of all of the source read, while
+	// the source is the one of that parse (`notes_valid`): a change of a
+	// piece moves the offsets, and they are read again then
+	// (`document_footnotes`). The labels are not kept.
+	notes:       Footnotes,
+	notes_valid: bool,
 	// How many links the last parse of all of the source gave. An edit
 	// adds the links of its blocks and takes none out; see `prepare`.
 	links_parsed: int,
@@ -533,6 +539,8 @@ block_destroy :: proc(b: ^Block) {
 }
 
 destroy :: proc(doc: ^Document) {
+	delete(doc.notes.notes)
+	delete(doc.notes.references)
 	for part in doc.parts {
 		for &b in part_blocks(part) {
 			block_destroy(&b)

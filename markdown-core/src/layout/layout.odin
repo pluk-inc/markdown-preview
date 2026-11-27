@@ -1268,6 +1268,12 @@ lay_out :: proc(l: ^Layout, y0, y1, anchor_y: f64) -> (changed: bool) {
 		}
 		changed |= lay_out_part(l, p, anchor)
 	}
+	// The list of the footnotes below the last part, in the same range:
+	// its layout has the heights of this page.
+	if list := l.notes.page; list != nil && y1 > list.origin && lay_out(list, y0, y1, anchor_y) {
+		changed = true
+		sum_tops(l)
+	}
 	when ODIN_DEBUG {
 		problem := check(l)
 		assert(problem == "", problem)
@@ -1285,6 +1291,9 @@ laid_out :: proc(l: ^Layout, y0, y1: f64) -> bool {
 		if !part.complete && part.top + f64(part.y) < y1 {
 			return false
 		}
+	}
+	if list := l.notes.page; list != nil && y1 > list.origin {
+		return laid_out(list, y0, y1)
 	}
 	return true
 }

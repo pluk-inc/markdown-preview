@@ -143,7 +143,7 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 	// item in most sources (a list with another mark is another list).
 	notes: Footnotes
 	if whole {
-		notes = footnotes(bytes, unclosed ? 0 : hidden, context.temp_allocator)
+		notes = footnotes(bytes, unclosed ? 0 : hidden)
 		if len(notes.notes) > 0 {
 			if masked == nil {
 				masked = slice.clone(bytes)
@@ -191,6 +191,13 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 	delete(p.lists)
 	delete(p.pairs_open)
 	doc.source = kept
+	// The document keeps the footnotes of a parse of all of its source.
+	if whole {
+		for &note in notes.notes {
+			note.label = ""
+		}
+		doc.notes, doc.notes_valid = notes, true
+	}
 	doc.hidden, doc.unclosed = hidden, unclosed
 	doc.items = p.item_count
 	doc.links_parsed = len(doc.links)
@@ -645,6 +652,10 @@ Pair :: struct {
 	// not keep it and does not take it for the text of the line:
 	// `range_edit` looks only at pairs that have a second mark.
 	line:             bool,
+	// All of the element is text only while its marks show (a reference
+	// to a footnote, which is a number with them hidden): a selection
+	// in it keeps the marks, as a selection of the bytes of a mark does.
+	whole:            bool,
 }
 
 @(private)
@@ -728,7 +739,7 @@ line_mark :: proc(p: ^Parser, line, text: int) {
 		if shown >= text && !bare_mark_line(p.bytes, line, text) {
 			from, to = block_end + 1, block_end
 		}
-		append(p.pairs, Pair{mark, text, -1, block_end, false, from, to, true})
+		append(p.pairs, Pair{mark, text, -1, block_end, false, from, to, true, false})
 	}
 	if shown >= text {
 		return
@@ -790,7 +801,7 @@ typed_mark :: proc(p: ^Parser, line, end: int) -> bool {
 	mark := skip_quote_marks(p.bytes, line, end)
 	mark_end, char, _ := list_mark_at(p.bytes, mark, end)
 	if p.pairs != nil && p.doc.count == p.places_block {
-		append(p.pairs, Pair{mark, end, -1, end, false, mark, end, true})
+		append(p.pairs, Pair{mark, end, -1, end, false, mark, end, true, false})
 	}
 	p.doc.reveal = reveal
 	if p.block.marker == .Task_Open || p.block.marker == .Task_Done {
@@ -871,7 +882,7 @@ note_mark :: proc(p: ^Parser, type: Md_Span, opens: bool, autolink := false) {
 	}
 	if opens {
 		append(&p.pairs_open, len(p.pairs))
-		append(p.pairs, Pair{start, end, -1, -1, type == .Em || type == .Strong || type == .Del, p.element[0], p.element[1], false})
+		append(p.pairs, Pair{start, end, -1, -1, type == .Em || type == .Strong || type == .Del, p.element[0], p.element[1], false, false})
 	} else if len(p.pairs_open) > 0 {
 		pair := &p.pairs[pop(&p.pairs_open)]
 		pair.close, pair.close_end = start, end
@@ -1057,7 +1068,7 @@ append_noted :: proc(p: ^Parser, s: string, at, from: int) {
 		if p.pairs != nil && p.doc.count == p.places_block {
 			// Its two marks are the "[^" (or "^[") and the "]", around
 			// its label or its text.
-			append(p.pairs, Pair{reference.start, reference.start + 2, reference.end - 1, reference.end, false, reference.start, reference.end, false})
+			append(p.pairs, Pair{reference.start, reference.start + 2, reference.end - 1, reference.end, false, reference.start, reference.end, false, true})
 		}
 		if reveal, shows := p.reveal.?; shows && reveal >= reference.start && reveal <= reference.end {
 			p.marking = true

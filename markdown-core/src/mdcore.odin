@@ -839,7 +839,7 @@ reveal_update :: proc(ctx: ^Ctx) -> (changed: bool) {
 		for at := from; at < to && only_marks; at += 1 {
 			only_marks = false
 			for pair in ctx.caret_pairs {
-				if in_mark(pair, at, at + 1) {
+				if in_mark(pair, at, at + 1) || (pair.whole && at >= pair.from && at < pair.to) {
 					only_marks = true
 					break
 				}

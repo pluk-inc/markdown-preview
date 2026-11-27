@@ -341,6 +341,17 @@ footnote_confirm :: proc(source: []u8, from: int, notes: []Footnote, references:
 	return
 }
 
+// The footnotes of a document: the ones of its last parse of all of the
+// source while that is its source, or read again. The memory is of the
+// document or of the working memory.
+@(private)
+document_footnotes :: proc(doc: ^Document) -> Footnotes {
+	if doc.notes_valid {
+		return doc.notes
+	}
+	return footnotes(doc.source, doc.unclosed ? 0 : doc.hidden, context.temp_allocator)
+}
+
 // A line that is a definition: its label, and where its text starts in
 // the line.
 @(private)
@@ -386,7 +397,7 @@ note_block :: proc(doc: ^Document, number, reference: int) -> (block: int, ok: b
 	// From the source, and not from the numbers in the texts: a reference
 	// with the caret in it shows as its source, and is still the
 	// reference that it was.
-	found := footnotes(doc.source, doc.unclosed ? 0 : doc.hidden, context.temp_allocator)
+	found := document_footnotes(doc)
 	for r in found.references {
 		if r.ordinal == reference && found.notes[r.note].number == number && doc.count > 0 {
 			return block_at_offset(doc, r.start), true
@@ -416,7 +427,7 @@ note_text :: proc(doc: ^Document, number: int, out: ^[dynamic]u8) -> bool {
 		return true
 	}
 	// An inline footnote has its text only in the source.
-	found := footnotes(doc.source, doc.unclosed ? 0 : doc.hidden, context.temp_allocator)
+	found := document_footnotes(doc)
 	for note in found.notes {
 		if note.inline && note.number == number {
 			append(out, ..doc.source[note.content:note.end - 1])
@@ -460,7 +471,7 @@ NOTE_BACK_TARGET :: "#back"
 // first paragraph. A page shows it at its end, where a reader looks for
 // footnotes. "" for a document with none. The memory is of `allocator`.
 notes_source :: proc(doc: ^Document, allocator := context.allocator) -> string {
-	found := footnotes(doc.source, doc.unclosed ? 0 : doc.hidden, context.temp_allocator)
+	found := document_footnotes(doc)
 	count := 0
 	for note in found.notes {
 		count = max(count, note.number)

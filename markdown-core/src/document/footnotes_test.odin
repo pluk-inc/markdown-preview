@@ -389,3 +389,30 @@ test_a_line_of_marks_with_no_end_is_read_one_time :: proc(t: ^testing.T) {
 		testing.expect_value(t, found.references[0].end - found.references[0].start, 18)
 	}
 }
+
+// The document keeps the footnotes of a parse of all of its source, and
+// reads them again after a change of a piece, which moves their offsets.
+@(test)
+test_the_footnotes_of_a_document_after_a_change_of_a_piece :: proc(t: ^testing.T) {
+	// The change is some blocks before the first footnote, and not in
+	// the first block: the piece of a change has blocks after it too
+	// (`GUARD_BLOCKS`), and a change in the first block is a parse of all.
+	doc := parse("Plain text.\n\nP2.\n\nP3.\n\nP4.\n\nP5.\n\nP6.\n\nOne[^a].\n\nTwo[^a].\n\n[^a]: A.\n")
+	defer destroy(&doc)
+	testing.expect(t, doc.notes_valid)
+	testing.expect_value(t, len(doc.notes.references), 2)
+	pending := prepare(&doc, Edit{19, 19, " more"})
+	testing.expect(t, !pending.all)
+	commit(&doc, &pending)
+	testing.expect(t, !doc.notes_valid)
+	first, has_first := note_block(&doc, 1, 1)
+	second, has_second := note_block(&doc, 1, 2)
+	testing.expect(t, has_first && has_second)
+	testing.expect_value(t, first, 6)
+	testing.expect_value(t, second, 7)
+	// A change with a footnote in it is a parse of all: kept again.
+	pending = prepare(&doc, Edit{0, 0, "New[^a] "})
+	commit(&doc, &pending)
+	testing.expect(t, doc.notes_valid)
+	testing.expect_value(t, len(doc.notes.references), 3)
+}
