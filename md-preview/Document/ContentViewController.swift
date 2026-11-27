@@ -349,9 +349,10 @@ final class ContentViewController: NSViewController {
         }
         nativeRenderer?.open(markdown, keepsScroll: keepsScroll)
         // The frame is drawn, and goes to the screen with the other changes
-        // of this turn of the run loop; `markdown-core/bench/app.py` reads
-        // this.
-        LaunchSignposts.event("nativePaint")
+        // of this turn of the run loop: "nativePaint" is their commit.
+        // `markdown-core/bench/app.py` reads the two.
+        LaunchSignposts.event("nativeDraw")
+        LaunchSignposts.eventAfterCommit("nativePaint")
     }
 
     private func removeNativeRenderer() {
@@ -648,7 +649,11 @@ final class ContentViewController: NSViewController {
                 "[mdp-perf-open] painted t=\(DispatchTime.now().uptimeNanoseconds, privacy: .public) wall=\(Date().timeIntervalSince1970, privacy: .public) snapshot=\(self?.snapshotOverlay != nil, privacy: .public)"
             )
             #endif
-            LaunchSignposts.event("webPaint")
+            // The page says that it painted; "webPaint" is the commit of
+            // a frame of it in this process, as "nativePaint" is.
+            // `markdown-core/bench/app.py` reads the two.
+            LaunchSignposts.event("webDraw")
+            self?.webView.afterNextPagePaint { LaunchSignposts.event("webPaint") }
             self?.hasPaintedFirstDocument = true
             self?.removeSnapshotOverlay()
             self?.saveSnapshotIfNeeded()

@@ -1,18 +1,33 @@
 // Benchmark of the Markdown core through its C API, with no window.
 //
-//   mdcore-bench <file.md>
+//   mdcore-bench <file.md> [--case <name>]... [--caret-walk]
 //
-// One run is one cold process: it draws the first frame, lays the full
-// document out, and scrolls through it two times. It prints one
-// "name value" pair on each line. core.py builds and runs it.
+// One run is one new process. It runs the cases below one after the other
+// (or only the named ones), and prints one "name value" pair on each line.
+// A line "name:instructions value" is the number of instructions that the
+// process ran for the number before it. core.py builds and runs it.
+//
+// A case makes what it needs before it measures (a view with the document,
+// the view at the end), and that part is not measured. So a case gives the
+// same work when it runs alone, for a profile of one step:
+//
+//   xcrun xctrace record --template 'Time Profiler' --launch -- \
+//       build/bench/mdcore-bench long.md --case scroll
+//
+// Each measured step is a signpost interval ("step", subsystem
+// sh.pluk.md-preview.bench, Points of Interest), so the profile shows
+// where it starts and ends.
 //
 // The layer is not on a screen. A draw still waits for a free drawable, so
-// the cost of a scroll frame is the CPU time of this thread, not the time
-// on the clock: the display list, the glyph bitmaps, and the commands sent
-// to the GPU.
+// the cost of a frame is the CPU time of this thread, not the time on the
+// clock: the display list, the glyph bitmaps, and the commands sent to
+// the GPU. The instructions are of all threads of the process.
 #import <Foundation/Foundation.h>
 #import <QuartzCore/QuartzCore.h>
+#include <libproc.h>
+#include <mach/mach_time.h>
 #include <malloc/malloc.h>
+#include <os/signpost.h>
 #include <pthread/qos.h>
 #include <sys/resource.h>
 #include <time.h>
@@ -23,6 +38,9 @@ static const double SCROLL_STEP = 40;
 // A scroll pass stops here, so that a long document gives the same number
 // of frames in each run.
 static const double SCROLL_LIMIT = 24000;
+// The time between two frames of a 120 Hz display. A frame that needs more
+// CPU time than this is late on such a display.
+static const double FRAME_BUDGET_MS = 1000.0 / 120;
 
 static double now_ms(void) {
     return clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1e6;
@@ -32,11 +50,16 @@ static double thread_cpu_ms(void) {
     return clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID) / 1e6;
 }
 
-static double cpu_ms(void) {
-    struct rusage usage;
-    getrusage(RUSAGE_SELF, &usage);
-    return (usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) * 1e3
-        + (usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1e3;
+static struct rusage_info_v4 process_usage(void) {
+    struct rusage_info_v4 usage = {0};
+    proc_pid_rusage(getpid(), RUSAGE_INFO_V4, (rusage_info_t *)&usage);
+    return usage;
+}
+
+// Instructions that the process ran so far. Unlike a time, the number is
+// almost the same on a busy Mac and on an efficiency core.
+static uint64_t instructions(void) {
+    return process_usage().ri_instructions;
 }
 
 // Memory that the process holds in the heap: the document, the layout, the
@@ -48,23 +71,118 @@ static double heap_mb(void) {
     return stats.size_in_use / 1048576.0;
 }
 
+// One measured step: a signpost interval, and what it cost.
+typedef struct {
+    os_signpost_id_t sign;
+    double wall, cpu;
+    uint64_t instructions;
+} Span;
+
+typedef struct {
+    double wall_ms, cpu_ms, instructions;
+} Cost;
+
+static os_log_t signposts;
+
+static Span span_begin(const char *name) {
+    Span span = {.sign = os_signpost_id_generate(signposts)};
+    os_signpost_interval_begin(signposts, span.sign, "step", "%{public}s", name);
+    span.instructions = instructions();
+    span.wall = now_ms();
+    span.cpu = thread_cpu_ms();
+    return span;
+}
+
+static Cost span_end(Span span) {
+    Cost cost = {.wall_ms = now_ms() - span.wall, .cpu_ms = thread_cpu_ms() - span.cpu};
+    cost.instructions = (double)(instructions() - span.instructions);
+    os_signpost_interval_end(signposts, span.sign, "step");
+    return cost;
+}
+
+// A number, and the instructions for it.
+static void print_cost(const char *name, double value, double instructions) {
+    printf("%s %.3f\n", name, value);
+    printf("%s:instructions %.0f\n", name, instructions);
+}
+
+static int by_value(const void *a, const void *b) {
+    double x = *(const double *)a, y = *(const double *)b;
+    return (x > y) - (x < y);
+}
+
+// The value below which the given share of the sorted values is.
+static double percentile(const double *sorted, int count, double share) {
+    if (count == 0) return 0;
+    int at = (int)(share * (count - 1) + 0.5);
+    return sorted[at];
+}
+
+static void draw(void *ctx, double y) {
+    @autoreleasepool {
+        mdcore_draw(ctx, y);
+    }
+}
+
+// A view with the document and its first frame.
+static void *open_view(NSData *source) {
+    void *ctx = mdcore_create((__bridge void *)[CAMetalLayer layer]);
+    mdcore_set_markdown(ctx, source.bytes, (long)source.length);
+    mdcore_resize(ctx, VIEW_WIDTH, VIEW_HEIGHT, VIEW_SCALE);
+    draw(ctx, 0);
+    return ctx;
+}
+
+// To the end of the document, as the End key does, and the first frame
+// there. Returns the scroll position.
+static double go_to_end(void *ctx) {
+    mdcore_layout_end(ctx);
+    double top = 0, height = 0;
+    mdcore_page_area(ctx, &top, &height);
+    double bottom = top + height - VIEW_HEIGHT;
+    if (bottom < top) bottom = top;
+    draw(ctx, bottom);
+    mdcore_note_scroll(ctx, bottom);
+    return bottom;
+}
+
+// Where a scroll pass from the top ends.
+static double scroll_end(void *ctx) {
+    double top = 0, height = 0;
+    mdcore_page_area(ctx, &top, &height);
+    double end = height - VIEW_HEIGHT;
+    if (end < 0) end = 0;
+    return end > SCROLL_LIMIT ? SCROLL_LIMIT : end;
+}
+
 // Scrolls from the top in steps and prints the CPU time of a frame: the
-// mean and the longest.
+// mean, the median, the value that 99 of 100 frames are below, the
+// longest, and how many frames are late on a 120 Hz display. The mean
+// alone hides a slow frame, and the longest is one frame of one run.
 static void scroll_pass(void *ctx, const char *name, double end) {
-    double total = 0, longest = 0;
-    int frames = 0;
-    for (double y = 0; y <= end; y += SCROLL_STEP) {
+    int capacity = (int)(end / SCROLL_STEP) + 2, frames = 0, late = 0;
+    double *took = malloc(sizeof(double) * (size_t)capacity);
+    double total = 0;
+    Span span = span_begin(name);
+    for (double y = 0; y <= end && frames < capacity; y += SCROLL_STEP) {
         double start = thread_cpu_ms();
-        @autoreleasepool {
-            mdcore_draw(ctx, y);
-        }
-        double took = thread_cpu_ms() - start;
-        total += took;
-        if (took > longest) longest = took;
+        draw(ctx, y);
+        took[frames] = thread_cpu_ms() - start;
+        total += took[frames];
+        late += took[frames] > FRAME_BUDGET_MS;
         frames += 1;
     }
-    printf("%s_frame_cpu_ms %.3f\n", name, total / frames);
-    printf("%s_longest_frame_cpu_ms %.2f\n", name, longest);
+    Cost cost = span_end(span);
+    qsort(took, (size_t)frames, sizeof(double), by_value);
+    char line[96];
+    snprintf(line, sizeof line, "%s_frame_cpu_ms", name);
+    print_cost(line, total / frames, cost.instructions / frames);
+    printf("%s_median_frame_cpu_ms %.3f\n", name, percentile(took, frames, 0.5));
+    printf("%s_p99_frame_cpu_ms %.3f\n", name, percentile(took, frames, 0.99));
+    printf("%s_longest_frame_cpu_ms %.2f\n", name, took[frames - 1]);
+    printf("%s_late_frames %d\n", name, late);
+    printf("%s_frames %d\n", name, frames);
+    free(took);
 }
 
 // The keys that move the caret, through all of a document: each step to
@@ -361,91 +479,9 @@ static const char *caret_walk(void *ctx, long length) {
     return NULL;
 }
 
-int main(int argc, const char *argv[]) {
-    bool walk = argc == 3 && strcmp(argv[2], "--caret-walk") == 0;
-    if (argc != 2 && !walk) {
-        fprintf(stderr, "usage: mdcore-bench <file.md> [--caret-walk]\n");
-        return 2;
-    }
-    // The class of an app's main thread. Without it the system can run the
-    // program on an efficiency core, where the same work takes three times
-    // the CPU time.
-    pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
-    NSData *source = [NSData dataWithContentsOfFile:@(argv[1])];
-    if (source == nil) {
-        fprintf(stderr, "cannot read %s\n", argv[1]);
-        return 1;
-    }
-    printf("source_kb %.0f\n", source.length / 1024.0);
-
-    double start = now_ms();
-    CAMetalLayer *layer = [CAMetalLayer layer];
-    void *ctx = mdcore_create((__bridge void *)layer);
-    mdcore_set_markdown(ctx, source.bytes, (long)source.length);
-    mdcore_resize(ctx, VIEW_WIDTH, VIEW_HEIGHT, VIEW_SCALE);
-    @autoreleasepool {
-        mdcore_draw(ctx, 0);
-    }
-    if (walk) {
-        const char *wrong = caret_walk(ctx, (long)source.length);
-        if (wrong != NULL) {
-            fprintf(stderr, "the caret in %s: %s\n", argv[1], wrong);
-            return 1;
-        }
-        return 0;
-    }
-    printf("first_frame_ms %.2f\n", now_ms() - start);
-    printf("first_frame_heap_mb %.1f\n", heap_mb());
-
-    // The height is an estimate for what no frame showed yet.
-    double top = 0, height = 0;
-    mdcore_page_area(ctx, &top, &height);
-
-    double end = height - VIEW_HEIGHT;
-    if (end < 0) end = 0;
-    if (end > SCROLL_LIMIT) end = SCROLL_LIMIT;
-    // The first pass makes the glyph bitmaps; the second has them all.
-    scroll_pass(ctx, "first_scroll", end);
-    // Back to the top in one frame, as the Home key does: the text there
-    // is shaped again.
-    double jump_start = thread_cpu_ms();
-    @autoreleasepool {
-        mdcore_draw(ctx, 0);
-    }
-    printf("jump_frame_cpu_ms %.2f\n", thread_cpu_ms() - jump_start);
-    scroll_pass(ctx, "second_scroll", end);
-    printf("scrolled_heap_mb %.1f\n", heap_mb());
-
-    // To the end of the document, as the End key does: the first frame
-    // there.
-    double end_start = now_ms();
-    mdcore_layout_end(ctx);
-    double end_top = 0, end_height = 0;
-    mdcore_page_area(ctx, &end_top, &end_height);
-    double bottom = end_top + end_height - VIEW_HEIGHT;
-    if (bottom < end_top) bottom = end_top;
-    @autoreleasepool {
-        mdcore_draw(ctx, bottom);
-    }
-    printf("end_frame_ms %.2f\n", now_ms() - end_start);
-
-    // A new width with the reader at the end, as one step of a live
-    // resize: the new layout, which keeps the reader's place, and the
-    // frame at the same scroll position.
-    double resize_start = now_ms();
-    mdcore_note_scroll(ctx, bottom);
-    mdcore_resize(ctx, VIEW_WIDTH - 40, VIEW_HEIGHT, VIEW_SCALE);
-    @autoreleasepool {
-        mdcore_draw(ctx, bottom);
-    }
-    printf("resize_at_end_ms %.2f\n", now_ms() - resize_start);
-    // The estimate of the page height in this width, with only the last
-    // view laid out, for the comparison with the real one below.
-    mdcore_page_area(ctx, &top, &height);
-
-    // The file changed outside the app, with the reader at the end: the
-    // same text with a paragraph more in its middle. The core compares
-    // the blocks, makes one part again, and draws at the same position.
+// The same text with one paragraph more in its middle, as another program
+// puts it in the file. `at` is where the paragraph starts.
+static NSData *changed_source(NSData *source, NSUInteger *at) {
     NSMutableData *changed = [source mutableCopy];
     NSRange middle = [source rangeOfData:[@"\n\n" dataUsingEncoding:NSUTF8StringEncoding]
                                  options:0
@@ -453,37 +489,144 @@ int main(int argc, const char *argv[]) {
     NSData *more = [@"\n\nA paragraph that another program put in the file.\n\n" dataUsingEncoding:NSUTF8StringEncoding];
     // At the end for a text with no blank line in its second half, so the
     // text is another one in each case.
-    NSUInteger at = middle.location != NSNotFound ? middle.location : changed.length;
-    [changed replaceBytesInRange:NSMakeRange(at, 0) withBytes:more.bytes length:more.length];
-    double change_start = now_ms();
-    // The reader is at the end, as the view says it when it scrolls.
-    mdcore_note_scroll(ctx, bottom);
-    mdcore_set_markdown(ctx, changed.bytes, (long)changed.length);
-    @autoreleasepool {
-        mdcore_draw(ctx, bottom);
-    }
-    printf("change_ms %.2f\n", now_ms() - change_start);
+    *at = middle.location != NSNotFound ? middle.location : changed.length;
+    [changed replaceBytesInRange:NSMakeRange(*at, 0) withBytes:more.bytes length:more.length];
+    return changed;
+}
 
-    // Keys that are typed, one character each, as an editor gives them:
-    // the range of the source that changes, and the frame after it. CPU
-    // time: a frame waits for the display. First into the new paragraph
-    // in the middle: in a long text the view at the end does not show
-    // it, and the frame has no layout of it. Then at the end of the last
-    // line of the text, which the view shows: the frame lays out the
-    // part of the text that changed.
+// The start of the system (Metal, the shaders, the first font), then the
+// document: the parse, and the layout of the first view with its frame.
+// The first view two times: in the first one the fonts and the glyphs of
+// the document are new to the process, as when the app opens it; the
+// later ones have them, and so change less from run to run.
+static bool case_open(NSData *source) {
+    enum { ROUNDS = 5 };
+    Span span = span_begin("startup_ms");
+    void *first = open_view([@"a\n" dataUsingEncoding:NSUTF8StringEncoding]);
+    Cost cost = span_end(span);
+    print_cost("startup_ms", cost.wall_ms, cost.instructions);
+    mdcore_destroy(first);
+
+    double parse[ROUNDS], view[ROUNDS], parse_instructions[ROUNDS], view_instructions[ROUNDS];
+    for (int round = 0; round < ROUNDS; round++) {
+        void *ctx = mdcore_create((__bridge void *)[CAMetalLayer layer]);
+        span = span_begin("parse_ms");
+        mdcore_set_markdown(ctx, source.bytes, (long)source.length);
+        cost = span_end(span);
+        parse[round] = cost.wall_ms;
+        parse_instructions[round] = cost.instructions;
+        span = span_begin(round == 0 ? "first_view_ms" : "first_view_again_ms");
+        mdcore_resize(ctx, VIEW_WIDTH, VIEW_HEIGHT, VIEW_SCALE);
+        draw(ctx, 0);
+        cost = span_end(span);
+        view[round] = cost.wall_ms;
+        view_instructions[round] = cost.instructions;
+        if (round == 0) {
+            print_cost("first_view_ms", cost.wall_ms, cost.instructions);
+            printf("first_frame_heap_mb %.1f\n", heap_mb());
+        }
+        mdcore_destroy(ctx);
+    }
+    qsort(parse, ROUNDS, sizeof(double), by_value);
+    qsort(parse_instructions, ROUNDS, sizeof(double), by_value);
+    print_cost("parse_ms", parse[ROUNDS / 2], parse_instructions[ROUNDS / 2]);
+    qsort(view + 1, ROUNDS - 1, sizeof(double), by_value);
+    qsort(view_instructions + 1, ROUNDS - 1, sizeof(double), by_value);
+    print_cost("first_view_again_ms", view[1 + (ROUNDS - 1) / 2], view_instructions[1 + (ROUNDS - 1) / 2]);
+    return true;
+}
+
+// Two scroll passes from the top: the first lays out what it comes to and
+// makes the glyph bitmaps, the second has them. Between them a jump back
+// to the top in one frame, as the Home key does: the text there is shaped
+// again.
+static bool case_scroll(NSData *source) {
+    void *ctx = open_view(source);
+    double end = scroll_end(ctx);
+    scroll_pass(ctx, "first_scroll", end);
+    Span span = span_begin("jump_frame_cpu_ms");
+    draw(ctx, 0);
+    Cost cost = span_end(span);
+    print_cost("jump_frame_cpu_ms", cost.cpu_ms, cost.instructions);
+    scroll_pass(ctx, "second_scroll", end);
+    printf("scrolled_heap_mb %.1f\n", heap_mb());
+    mdcore_destroy(ctx);
+    return true;
+}
+
+// To the end of the document, as the End key does: the layout there and
+// the first frame. Then a new width with the reader at the end, as one
+// step of a live resize: the new layout, which keeps the reader's place,
+// and the frame at the same scroll position.
+static bool case_end(NSData *source) {
+    enum { WIDTHS = 5 };
+    void *ctx = open_view(source);
+    Span span = span_begin("end_frame_ms");
+    double bottom = go_to_end(ctx);
+    Cost cost = span_end(span);
+    print_cost("end_frame_ms", cost.wall_ms, cost.instructions);
+
+    double took[WIDTHS], counted[WIDTHS];
+    for (int width = 0; width < WIDTHS; width++) {
+        span = span_begin("resize_at_end_ms");
+        mdcore_note_scroll(ctx, bottom);
+        mdcore_resize(ctx, VIEW_WIDTH - (width % 2 == 0 ? 40 : 0), VIEW_HEIGHT, VIEW_SCALE);
+        draw(ctx, bottom);
+        cost = span_end(span);
+        took[width] = cost.wall_ms;
+        counted[width] = cost.instructions;
+    }
+    qsort(took, WIDTHS, sizeof(double), by_value);
+    qsort(counted, WIDTHS, sizeof(double), by_value);
+    print_cost("resize_at_end_ms", took[WIDTHS / 2], counted[WIDTHS / 2]);
+    mdcore_destroy(ctx);
+    return true;
+}
+
+// The file changed outside the app, with the reader at the end: the same
+// text with a paragraph more in its middle. The core compares the blocks,
+// makes one part again, and draws at the same position.
+static bool case_change(NSData *source) {
+    void *ctx = open_view(source);
+    double bottom = go_to_end(ctx);
+    NSUInteger at = 0;
+    NSData *changed = changed_source(source, &at);
+    Span span = span_begin("change_ms");
+    mdcore_set_markdown(ctx, changed.bytes, (long)changed.length);
+    draw(ctx, bottom);
+    Cost cost = span_end(span);
+    print_cost("change_ms", cost.wall_ms, cost.instructions);
+    mdcore_destroy(ctx);
+    return true;
+}
+
+// Keys that are typed, one character each, as an editor gives them: the
+// range of the source that changes, and the frame after it. CPU time: a
+// frame waits for the display. The view is at the end of the text with
+// the paragraph more in its middle (changed_source).
+static bool case_type(NSData *source) {
     enum { KEYS = 10 };
-    double type_start = thread_cpu_ms();
+    NSUInteger at = 0;
+    NSData *changed = changed_source(source, &at);
+    void *ctx = open_view(changed);
+    double bottom = go_to_end(ctx);
+
+    // First into the paragraph in the middle: in a long text the view at
+    // the end does not show it, and the frame has no layout of it.
+    Span span = span_begin("type_middle_cpu_ms");
     for (int key = 0; key < KEYS; key++) {
         long caret = (long)at + 4 + key;
         mdcore_replace_text(ctx, caret, caret, "x", 1);
-        @autoreleasepool {
-            mdcore_draw(ctx, bottom);
-        }
+        draw(ctx, bottom);
     }
-    printf("type_middle_cpu_ms %.2f\n", (thread_cpu_ms() - type_start) / KEYS);
-    // The end of the last line that is text of the page: not an empty
-    // line, and not the definition of a link ("[name]: target"), which
-    // shows nothing and changes text at other places.
+    Cost cost = span_end(span);
+    print_cost("type_middle_cpu_ms", cost.cpu_ms / KEYS, cost.instructions / KEYS);
+
+    // Then at the end of the last line of the text, which the view shows:
+    // the frame lays out the part of the text that changed. The end of
+    // the last line that is text of the page: not an empty line, and not
+    // the definition of a link ("[name]: target"), which shows nothing
+    // and changes text at other places.
     long last = (long)changed.length;
     const char *text = changed.bytes;
     for (;;) {
@@ -503,16 +646,15 @@ int main(int argc, const char *argv[]) {
         if (last == 0 || !definition) break;
         last = line;
     }
-    type_start = thread_cpu_ms();
+    span = span_begin("type_end_cpu_ms");
     for (int key = 0; key < KEYS; key++) {
         // The keys before are in the text too.
         long caret = last + KEYS + key;
         mdcore_replace_text(ctx, caret, caret, "x", 1);
-        @autoreleasepool {
-            mdcore_draw(ctx, bottom);
-        }
+        draw(ctx, bottom);
     }
-    printf("type_end_cpu_ms %.2f\n", (thread_cpu_ms() - type_start) / KEYS);
+    cost = span_end(span);
+    print_cost("type_end_cpu_ms", cost.cpu_ms / KEYS, cost.instructions / KEYS);
 
     // The same through the caret, as a key in an editor is: a click in
     // the middle of the view puts the caret in the text there, each key
@@ -526,14 +668,13 @@ int main(int argc, const char *argv[]) {
     }
     double caret_x = 0, caret_y = 0, caret_height = 0;
     caret = caret && mdcore_caret_rect(ctx, &caret_x, &caret_y, &caret_height);
-    type_start = thread_cpu_ms();
+    span = span_begin("type_caret_cpu_ms");
     for (int key = 0; caret && key < KEYS; key++) {
         mdcore_insert(ctx, "x", 1);
-        @autoreleasepool {
-            mdcore_draw(ctx, bottom);
-        }
+        draw(ctx, bottom);
     }
-    printf("type_caret_cpu_ms %.2f\n", (thread_cpu_ms() - type_start) / KEYS);
+    cost = span_end(span);
+    print_cost("type_caret_cpu_ms", cost.cpu_ms / KEYS, cost.instructions / KEYS);
     // To the right, or on another line when the text went over the end
     // of its line.
     double moved_x = 0, moved_y = 0;
@@ -546,21 +687,20 @@ int main(int argc, const char *argv[]) {
     bool same = caret && after_length == before_length && memcmp(after, before.bytes, (size_t)before_length) == 0;
     if (!caret || !moved || !same) {
         fprintf(stderr, "the caret did not work: caret %d, moved %d, text as before %d\n", caret, moved, same);
-        return 1;
+        return false;
     }
     // The keys that move the caret: each step, and the frame after it.
     // A step and the step back give the place of before, the caret of a
     // line below is lower, and a step with the selection selects text.
     long home = mdcore_caret_offset(ctx);
     bool moves = true;
-    double move_start = thread_cpu_ms();
+    span = span_begin("caret_move_cpu_ms");
     for (int key = 0; key < KEYS; key++) {
         moves = mdcore_caret_move(ctx, key % 2 == 0 ? MDCORE_MOVE_LEFT : MDCORE_MOVE_RIGHT, false) && moves;
-        @autoreleasepool {
-            mdcore_draw(ctx, bottom);
-        }
+        draw(ctx, bottom);
     }
-    printf("caret_move_cpu_ms %.2f\n", (thread_cpu_ms() - move_start) / KEYS);
+    cost = span_end(span);
+    print_cost("caret_move_cpu_ms", cost.cpu_ms / KEYS, cost.instructions / KEYS);
     moves = moves && (KEYS % 2 != 0 || mdcore_caret_offset(ctx) == home);
     double line_x = 0, line_y = 0, below_y = 0;
     moves = moves && mdcore_caret_rect(ctx, &line_x, &line_y, &caret_height);
@@ -574,48 +714,119 @@ int main(int argc, const char *argv[]) {
     moves = moves && !mdcore_caret_move(ctx, MDCORE_MOVE_UP, false);
     if (!moves) {
         fprintf(stderr, "the caret did not move as the keys say\n");
-        return 1;
+        return false;
     }
-    mdcore_caret_clear(ctx);
-    // The estimate for the comparison below is of this text.
-    mdcore_page_area(ctx, &top, &height);
+    mdcore_destroy(ctx);
+    return true;
+}
 
-    // Select All and a copy of all of the text: the two take the text
-    // from the document, with no layout.
-    double select_start = now_ms();
+// Select All and a copy of all of the text, with the view at the end: the
+// two take the text from the document, with no layout.
+static bool case_select(NSData *source) {
+    void *ctx = open_view(source);
+    go_to_end(ctx);
+    Span span = span_begin("select_all_ms");
     mdcore_select_all(ctx);
-    printf("select_all_ms %.2f\n", now_ms() - select_start);
-    double copy_start = now_ms();
+    Cost cost = span_end(span);
+    print_cost("select_all_ms", cost.wall_ms, cost.instructions);
+    span = span_begin("copy_all_ms");
     long copied = 0;
     mdcore_selection_text(ctx, &copied);
-    printf("copy_all_ms %.2f\n", now_ms() - copy_start);
-    printf("scrolled_and_copied_heap_mb %.1f\n", heap_mb());
+    cost = span_end(span);
+    print_cost("copy_all_ms", cost.wall_ms, cost.instructions);
+    mdcore_destroy(ctx);
+    return true;
+}
 
-    // All of the document laid out, by frames from the top to the end.
-    // A frame lays out two and a half view heights below its scroll
-    // position, so a step of two view heights reaches the end of the page.
-    // CPU time: a frame waits for the display.
-    double layout_start = thread_cpu_ms();
-    double y = 0, unused = 0;
-    mdcore_page_area(ctx, &y, &unused);
+// All of the document laid out, by frames from the top to the end. A
+// frame lays out two and a half view heights below its scroll position,
+// so a step of two view heights reaches the end of the page. CPU time: a
+// frame waits for the display.
+static bool case_layout(NSData *source) {
+    void *ctx = open_view(source);
+    // The height is an estimate for what no frame showed yet.
+    double top = 0, estimate = 0;
+    mdcore_page_area(ctx, &top, &estimate);
+    Span span = span_begin("full_layout_cpu_ms");
+    double y = top;
     for (;;) {
         double page_top = 0, page_height = 0;
         mdcore_page_area(ctx, &page_top, &page_height);
         if (y >= page_top + page_height) break;
-        @autoreleasepool {
-            mdcore_draw(ctx, y);
-        }
+        draw(ctx, y);
         y += 2 * VIEW_HEIGHT;
     }
-    printf("full_layout_cpu_ms %.2f\n", thread_cpu_ms() - layout_start);
-    // How far the height of the page was from the real one in the same
-    // width, before any of it was laid out but one view.
+    Cost cost = span_end(span);
+    print_cost("full_layout_cpu_ms", cost.cpu_ms, cost.instructions);
+    // How far the height of the page was from the real one, with only
+    // the first view laid out.
     double real = 0;
     mdcore_page_area(ctx, &top, &real);
-    printf("estimate_error_percent %.1f\n", real > 0 ? (height - real) / real * 100 : 0);
-
+    printf("estimate_error_percent %.1f\n", real > 0 ? (estimate - real) / real * 100 : 0);
     printf("heap_mb %.1f\n", heap_mb());
-    printf("total_cpu_ms %.0f\n", cpu_ms());
     mdcore_destroy(ctx);
+    return true;
+}
+
+static const struct {
+    const char *name;
+    bool (*run)(NSData *source);
+} CASES[] = {
+    {"open", case_open},     {"scroll", case_scroll}, {"end", case_end},       {"change", case_change},
+    {"type", case_type},     {"select", case_select}, {"layout", case_layout},
+};
+enum { CASE_COUNT = sizeof CASES / sizeof CASES[0] };
+
+static int usage(void) {
+    fprintf(stderr, "usage: mdcore-bench <file.md> [--case <name>]... [--caret-walk]\ncases:");
+    for (int index = 0; index < CASE_COUNT; index++) fprintf(stderr, " %s", CASES[index].name);
+    fprintf(stderr, "\n");
+    return 2;
+}
+
+int main(int argc, const char *argv[]) {
+    if (argc < 2) return usage();
+    bool walk = false, chosen[CASE_COUNT] = {false}, any = false;
+    for (int arg = 2; arg < argc; arg++) {
+        if (strcmp(argv[arg], "--caret-walk") == 0) {
+            walk = true;
+            continue;
+        }
+        if (strcmp(argv[arg], "--case") != 0 || ++arg == argc) return usage();
+        int index = 0;
+        while (index < CASE_COUNT && strcmp(argv[arg], CASES[index].name) != 0) index++;
+        if (index == CASE_COUNT) return usage();
+        chosen[index] = any = true;
+    }
+    // The class of an app's main thread. Without it the system can run the
+    // program on an efficiency core, where the same work takes three times
+    // the CPU time.
+    pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+    signposts = os_log_create("sh.pluk.md-preview.bench", OS_LOG_CATEGORY_POINTS_OF_INTEREST);
+    NSData *source = [NSData dataWithContentsOfFile:@(argv[1])];
+    if (source == nil) {
+        fprintf(stderr, "cannot read %s\n", argv[1]);
+        return 1;
+    }
+    if (walk) {
+        void *ctx = open_view(source);
+        const char *wrong = caret_walk(ctx, (long)source.length);
+        if (wrong != NULL) {
+            fprintf(stderr, "the caret in %s: %s\n", argv[1], wrong);
+            return 1;
+        }
+        return 0;
+    }
+    printf("source_kb %.0f\n", source.length / 1024.0);
+    for (int index = 0; index < CASE_COUNT; index++) {
+        if (any && !chosen[index]) continue;
+        if (!CASES[index].run(source)) return 1;
+    }
+    // Of all of the run, with what each case made before it measured.
+    struct rusage_info_v4 usage = process_usage();
+    mach_timebase_info_data_t base;
+    mach_timebase_info(&base);
+    double cpu_ns = (double)(usage.ri_user_time + usage.ri_system_time) * base.numer / base.denom;
+    print_cost("total_cpu_ms", cpu_ns / 1e6, (double)usage.ri_instructions);
     return 0;
 }

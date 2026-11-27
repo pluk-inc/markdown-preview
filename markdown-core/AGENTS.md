@@ -449,12 +449,17 @@ Things that cost time before:
 The main numbers are recorded in `BENCHMARKS.md`, with the two programs
 that measure them (`bench/core.py`, `bench/app.py`). Before a pull request
 that changes the core or the host view, measure the base and the change
-one after the other, and add a row: `app.py` for each such pull request,
-and `core.py` when files of the core changed. A run of `core.py` for a
-change with no core code measures the same program two times; leave it
-out and say so in the section. For a feature that the two benchmark
-documents do not contain (tasks, tables in number), measure a document
-that is full of it too.
+in turns in one run (`core.py --base origin/main`, `app.py <base.app>
+<change.app>`), and add a row: `app.py` for each such pull request, and
+`core.py` when files of the core changed. Judge the change from that
+run, and from the instructions before the times; the rows of other days
+are for the direction only. A run of `core.py` for a change with no core
+code measures the same program two times; leave it out and say so in the
+section. A change to the layout, the text, or the glyphs is measured
+with `--documents all`: the two main documents have no long table, no
+long paragraph, and no text of another script. For a feature that no
+document of `corpus.py` contains (tasks in number), measure a document
+that is full of it too, or add one to `corpus.py`.
 
 The first version of the core, measured on screen on 2026-11-21 with a
 Release build and a new document (another method, so do not compare it
@@ -521,6 +526,17 @@ glyph atlas. Later passes over the same text have none.
 ## Open work
 
 Known limits, found in review and left on purpose:
+
+- Measured on 2026-11-27 with the documents of `bench/corpus.py`
+  (`BENCHMARKS.md`, "The method of the benchmark"): the one-step layout
+  of a long paragraph or table (the next point) costs 127 to 138 ms for
+  the first view, for a new width, and for each typed character at a
+  caret, for 60 KB of paragraph or 2,000 table rows. The estimated
+  height of a page of Chinese and Japanese text is 32 % above the real
+  one, and its first scroll has one frame in 100 above 57 ms of CPU.
+  The frames of a draw wait for the display also in the benchmark
+  (about 8 ms each on the clock, with a layer that no display shows), so
+  the scroll passes are two thirds of the time of a run.
 
 - One very long paragraph or one large table is laid out in one step. Code
   blocks stop between lines.
@@ -1606,3 +1622,18 @@ export.
   text went into a new line that joined that item. After the parse
   around such a line, the caret is at the place of its address. The walk
   of `bench.m` has this sequence (`list_caret_check`).
+- **2026-11-27** — The maintainer asked if the benchmark was flawed and
+  how a terminal that is known for its benchmarks does it. It was: the
+  spread between two runs was larger than most changes that it judged,
+  the first-frame signpost came before the commit of the frame, and the
+  long document was the short one many times. The method is a new one
+  (`BENCHMARKS.md`, "How to measure"): two builds in turns in one run,
+  instructions beside each time, cases that run alone, five documents
+  more from a fixed seed, and frame percentiles. The maintainer then
+  said that a wait of 15 minutes is too long while a change is made: a
+  run of one case on one document against the base takes six seconds
+  (`core.py --quick --case …`), and the full run is for the pull
+  request. The new documents gave numbers for two known limits (one long
+  paragraph or table: 130 ms for each typed character) and one that was
+  not known (the estimated height of a page of Chinese and Japanese text
+  is 32 % off); the three are in Open work.
