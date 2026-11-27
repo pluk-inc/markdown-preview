@@ -1648,6 +1648,7 @@ export.
   where it does not show. Open: a reader cannot give or change the
   language of code (it needs a control of its own, with the lines of
   the fence hidden); a fence of more than three characters cannot be
-  typed; a delete at the start of the first line of code does nothing;
+  typed; a delete at the start of code that has text does nothing (in
+  code with no text it takes the code out, `code_delete`);
   a document that is only a fence with no line break has no caret. The walk of
   `bench.m` types these (`typed_code_check`).

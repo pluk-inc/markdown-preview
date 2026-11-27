@@ -523,3 +523,48 @@ test_the_parser_knows_a_closing_fence :: proc(t: ^testing.T) {
 		testing.expectf(t, b.closed == c.closed, "%q: closed %v", c.source, b.closed)
 	}
 }
+
+// A delete in code in a fence with no text takes the code out: its two
+// fences, and the empty line between them. The marks of its containers
+// stay.
+@(test)
+test_a_delete_takes_code_with_no_text_out :: proc(t: ^testing.T) {
+	Case :: struct {
+		source: string,
+		block:  int,
+		after:  string,
+		caret:  int,
+	}
+	cases := []Case {
+		{"Text\n\n```\n```\n\nMore\n", 1, "Text\n\n\n\nMore\n", 6},
+		{"Text\n\n```js\n\n```\n", 1, "Text\n\n\n", 6},
+		{"```\n```", 0, "", 0},
+		{"```\n", 0, "\n", 0},
+		// Code that is all of a list item: the item goes, as an item
+		// with no text does. In an item with other blocks, the code only.
+		{"- a\n- ```\n  ```\n- b\n", 1, "- a\n- b\n", 3},
+		{"- a\n\n  ```\n  ```\n\n  more\n", 1, "- a\n\n  \n\n  more\n", 7},
+		{"> ```\n> ```\n> more\n", 0, "> \n> more\n", 2},
+		{"~~~\r\n~~~\r\n\r\nx\r\n", 0, "\r\n\r\nx\r\n", 0},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		places := block_map(&doc, c.block)
+		defer delete(places)
+		start, end, caret, ok := delete_back(&doc, places[:], {block = c.block})
+		if !testing.expectf(t, ok, "%q", c.source) {
+			continue
+		}
+		apply(&doc, {start, end, ""})
+		testing.expect_value(t, string(doc.source), c.after)
+		testing.expect_value(t, caret, c.caret)
+	}
+	// Not with code in it, and not at another place of the block.
+	doc := parse("```\nx\n```\n")
+	defer destroy(&doc)
+	places := block_map(&doc, 0)
+	defer delete(places)
+	_, _, _, with_code := delete_back(&doc, places[:], {block = 0})
+	testing.expect(t, !with_code)
+}

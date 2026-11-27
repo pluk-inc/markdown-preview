@@ -99,8 +99,9 @@ static const char *list_caret_check(void) {
 // A code block that is typed, with the keys of a reader: the fence,
 // Return, the code, and a closing fence, which takes the caret out of the
 // code (a second block that is typed after it is a block of its own);
-// the same in a list item; and typed text and Return in a block with no
-// line of code between its two fences. Returns what is wrong, or NULL.
+// the same in a list item; typed text and Return in a block with no line
+// of code between its two fences; and a delete ("\b") that takes code
+// with no text out. Returns what is wrong, or NULL.
 static const char *typed_code_check(void) {
     struct { const char *start; double click_y; const char *keys; const char *want; } cases[] = {
         {"Text\n", -1, "\n```\nab\nc", "Text\n\n```\nab\nc\n```\n"},
@@ -108,6 +109,7 @@ static const char *typed_code_check(void) {
         {"- item\n", -1, "\n```\nx\ny", "- item\n- ```\n  x\n  y\n  ```\n"},
         {"Text\n\nMore\n", -1, "\n```abc", "Text\n\n```\nabc\n```\n\nMore\n"},
         {"Text\n\nMore\n", -1, "\n```\nabc", "Text\n\n```\nabc\n```\n\nMore\n"},
+        {"Text\n\nMore\n", -1, "\n```ab\b\b\bq", "Text\n\n\nq\n\nMore\n"},
         {"- a\n- b\n", -1, "\n```\nx\n```q", "- a\n- ```\n  xq\n  ```\n- b\n"},
         {"Text\n\nPara\n\n```\ncode\n```\n\nEnd\n", -1, "\n```\nx", "Text\n\n```\nx\n```\n\nPara\n\n```\ncode\n```\n\nEnd\n"},
         {"Text\n\n```\n```\n\nMore\n", 76, "z\nw", "Text\n\n```\nz\nw\n```\n\nMore\n"},
@@ -125,7 +127,9 @@ static const char *typed_code_check(void) {
             mdcore_caret_set(ctx, 100, cases[i].click_y);
         }
         for (const char *key = cases[i].keys; *key; key++) {
-            if (*key == '\n') mdcore_insert_break(ctx); else mdcore_insert(ctx, key, 1);
+            if (*key == '\n') mdcore_insert_break(ctx);
+            else if (*key == '\b') mdcore_delete(ctx, MDCORE_MOVE_LEFT);
+            else mdcore_insert(ctx, key, 1);
             @autoreleasepool { mdcore_draw(ctx, 0); }
         }
         long n = 0;
