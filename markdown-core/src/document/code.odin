@@ -3,9 +3,10 @@ package document
 import "core:strings"
 
 // Code in a fence, in an editor that does not show the two lines of the
-// fence: where text goes in a block with no line of code, what Return
-// does in the line of a fence that was typed, and how the caret gets out
-// of the block after a closing fence that was typed.
+// fence, so a caret has no place in them: where text goes in a block
+// with no line of code, how a fence that is typed becomes code with the
+// caret in it, and how the caret gets out of the code after a closing
+// fence that was typed.
 
 // Where the line of the fence of code starts. Not always where the block
 // starts: the first block of a quote or of a list item starts at the
@@ -154,88 +155,51 @@ code_close :: proc(doc: ^Document, block: int) -> (line, end: int, ok: bool) {
 	return line_start(doc.source, end), end, true
 }
 
-// How the code of the caret is before text is typed, for the rules
-// after it (`typed_fence`).
+// How the code of the caret is before a command of the reader, for the
+// rules after it (`typed_fence`).
 Code_Before :: struct {
 	in_code: bool, // the caret is in code in a fence
 	closed:  bool, // which has a closing fence
-	// The caret is in the line of a fence whose closing fence is the
-	// next line: a fence that was typed and got it (`.Opened`).
-	pair:    bool,
-	// How many bytes the source has after the line of that fence: the
-	// same after a command that changed only that line.
-	tail:    int,
 }
 
-code_before :: proc(doc: ^Document, at: Address, offset: int) -> (before: Code_Before) {
+code_before :: proc(doc: ^Document, at: Address) -> (before: Code_Before) {
 	if doc.count == 0 || at.empty != 0 || !block_at(doc, at.block).fenced {
 		return
 	}
-	line, _, closed := code_close(doc, at.block)
-	first_end, content := line_at(doc.source, fence_start(doc, at.block))
-	return {true, closed, closed && line == content && offset <= first_end, len(doc.source) - first_end}
+	return {true, block_at(doc, at.block).closed}
 }
 
-// What the caret is in after text that was typed made a fence, or was
-// typed in the line of one.
+// What the caret is in after a command of the reader made a fence.
 Typed_Fence :: enum {
 	None,
 	// A new fence, which starts code: `text` at `start` is the closing
 	// fence of that code, so it takes no text after it, and no fence of
-	// other code is its end. Or more characters of such a fence: the
-	// text is as many for its closing fence.
+	// other code is its end. The caret then goes into the code
+	// (`code_place`): the line of a fence shows no place for it.
 	Opened,
 	// A closing fence before the one that the code had: the typed line,
 	// from `start` to `end`, goes, and the caret leaves (`code_exit`).
 	Closed_Twice,
 	// The closing fence of code that had none: the caret leaves.
 	Closed,
-	// The line of a fence that was typed is no fence now (a "`" in the
-	// word after it, or its characters went): the closing fence that it
-	// got, from `start` to `end` with the line break before it, goes,
-	// or it would start code of its own.
-	Unopened,
 }
 
-// The rule for a caret at `offset` after text was typed there. The text
-// is memory of `allocator`.
+// The rule for a caret at `offset` after a command of the reader. The
+// text is memory of `allocator`.
 typed_fence :: proc(doc: ^Document, before: Code_Before, at: Address, offset: int, allocator := context.allocator) -> (kind: Typed_Fence, start, end: int, text: string) {
-	if doc.count == 0 {
-		return
-	}
-	// The caret was in the line of a fence with its closing fence in the
-	// next line, and the command left it in that line (or in the code
-	// after Return). In code no more: that line is no fence now.
-	if before.pair && (at.empty != 0 || !block_at(doc, at.block).fenced) {
-		line_end, next := line_at(doc.source, line_start(doc.source, min(offset, len(doc.source))))
-		// Only with the source after that line as it was: the line after
-		// it is that closing fence, not a fence of other code.
-		if next_end, _ := line_at(doc.source, next); len(doc.source) - line_end == before.tail && next > line_end && next < len(doc.source) && bare_fence(doc.source, next, next_end) {
-			return .Unopened, line_end, next_end, ""
-		}
-		return
-	}
-	if at.empty != 0 || !block_at(doc, at.block).fenced {
+	if doc.count == 0 || at.empty != 0 || !block_at(doc, at.block).fenced {
 		return
 	}
 	first := fence_start(doc, at.block)
 	first_end, _ := line_at(doc.source, first)
 	from, to, _ := fence_run(doc.source, first, first_end)
 	if offset >= to && offset <= first_end {
+		// Not for the caret of a fence that was there.
 		if before.in_code {
-			// More characters of the fence that was typed: its closing
-			// fence, in the next line, gets as many, or it is too short
-			// to end the code.
-			_, next := line_at(doc.source, first)
-			next_end, _ := line_at(doc.source, next)
-			if before.pair && next < len(doc.source) && bare_fence(doc.source, next, next_end) {
-				if close, close_end, _ := fence_run(doc.source, next, next_end); doc.source[close] == doc.source[from] && close_end - close < to - from {
-					more := strings.repeat(string(doc.source[from:from + 1]), (to - from) - (close_end - close), allocator)
-					return .Opened, close_end, close_end, more
-				}
-			}
 			return
 		}
+		// Also when the parser finds a closing fence for it: that one
+		// is the fence of other code after it.
 		out := strings.builder_make(allocator)
 		strings.write_string(&out, line_ending(doc.source))
 		write_code_lead(&out, doc, at.block)
@@ -264,36 +228,6 @@ typed_fence :: proc(doc: ^Document, before: Code_Before, at: Address, offset: in
 		return
 	}
 	return .Closed, line, line_end, ""
-}
-
-// What Return puts into the source for a caret at `offset` in the first
-// line of code in a fence, where the caret is while the fence is typed:
-// the first line of the code, and for code with no closing fence that
-// fence after it, so the code does not take the rest of the document.
-// The text goes in at the offset; `caret` is where the caret is after
-// it, from the offset. False at each other place.
-fence_return :: proc(doc: ^Document, at: Address, offset: int, allocator := context.allocator) -> (text: string, caret: int, ok: bool) {
-	if at.empty != 0 || !block_at(doc, at.block).fenced {
-		return
-	}
-	start := fence_start(doc, at.block)
-	end, _ := line_at(doc.source, start)
-	from, to := fence_run(doc.source, start, end) or_return
-	if offset < to || offset > end {
-		return
-	}
-	nl := line_ending(doc.source)
-	out := strings.builder_make(allocator)
-	strings.write_string(&out, nl)
-	write_code_lead(&out, doc, at.block)
-	caret = strings.builder_len(out)
-	// Not in the word after the fence: the rest of it is a line of code.
-	if _, _, closed := code_close(doc, at.block); !closed && offset == end {
-		strings.write_string(&out, nl)
-		write_code_lead(&out, doc, at.block)
-		strings.write_bytes(&out, doc.source[from:to])
-	}
-	return strings.to_string(out), caret, true
 }
 
 // Where the caret goes from the line of the closing fence of its block,

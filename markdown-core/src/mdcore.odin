@@ -401,9 +401,9 @@ typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
 // At the end of a command of the reader, the rules for a fence that it
 // made or took away (`document.typed_fence`): the lines of a fence do
 // not show, so the caret has no place in them. A new fence gets its
-// closing fence at once, and loses it when its line is no fence any
-// more. A closing fence takes the caret to an empty paragraph after the
-// code, or, where none can be, back to the end of the code. The caller
+// closing fence at once, and the caret goes into its code. A closing
+// fence takes the caret to an empty paragraph after the code, or, where
+// none can be, back to the end of the code. The caller
 // holds `source_lock`, in the command.
 @(private)
 typed_fence :: proc(ctx: ^Ctx, before: document.Code_Before) {
@@ -417,9 +417,8 @@ typed_fence :: proc(ctx: ^Ctx, before: document.Code_Before) {
 		return
 	case .Opened:
 		change_source_held(ctx, text, [2]int{start, end}, ctx.caret)
-		return
-	case .Unopened:
-		change_source_held(ctx, "", [2]int{start, end}, ctx.caret)
+		// Into the code: text that is typed next is code.
+		caret_to_place(ctx)
 		return
 	case .Closed_Twice:
 		change_source_held(ctx, "", [2]int{start, end}, start)
@@ -563,7 +562,7 @@ command :: proc(ctx: ^Ctx, kind: history.Kind) {
 		kind, anchor = .Other, ctx.caret == from ? to : from
 	}
 	if ctx.history.depth == 0 {
-		ctx.code_before = ctx.caret >= 0 ? document.code_before(&ctx.doc, ctx.caret_at, ctx.caret) : {}
+		ctx.code_before = ctx.caret >= 0 ? document.code_before(&ctx.doc, ctx.caret_at) : {}
 	}
 	history.begin(&ctx.history, kind, ctx.caret, anchor, ctx.caret_upstream)
 }
@@ -1574,13 +1573,6 @@ mdcore_insert_break :: proc "c" (handle: rawptr) {
 		// A document with no block: a line break, as each other text
 		// that is typed there.
 		change_source_held(ctx, document.line_ending(ctx.doc.source), [2]int{ctx.caret, ctx.caret})
-		return
-	}
-	// In the line of a fence that was typed: the first line of the code
-	// starts (`document.fence_return`).
-	if text, caret, fence := document.fence_return(&ctx.doc, ctx.caret_at, ctx.caret); fence {
-		defer delete(text)
-		change_source_held(ctx, text, [2]int{ctx.caret, ctx.caret}, ctx.caret + caret)
 		return
 	}
 	// The text is memory of its own: a frame uses the working memory of

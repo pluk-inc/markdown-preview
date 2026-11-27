@@ -71,10 +71,12 @@ test_return_puts_in_what_the_block_of_the_caret_needs :: proc(t: ^testing.T) {
 		{"    code\n    more\n", {block = 0, byte = 2}, "    co\n    de\n    more\n", 11, 0},
 		{"    code\n\nz\n", {block = 0, byte = 4}, "    code\n\n\nz\n", 9, 0},
 		{"    ```\n    x\n\nz\n", {block = 0, byte = 5}, "    ```\n    x\n\n\nz\n", 14, 0},
-		// Code in a fence with no line of code: two lines of code, so
-		// the caret is not in the line of the closing fence.
-		{"```\n```\n", {block = 0}, "```\n\n\n```\n", 5, 0},
-		{"x\n\n```js\n```\n", {block = 1}, "x\n\n```js\n\n\n```\n", 10, 0},
+		// Code in a fence with no line of code: its first line, with
+		// the caret in it. Then a line more.
+		{"```\n```\n", {block = 0}, "```\n\n```\n", 4, 0},
+		{"x\n\n```js\n```\n", {block = 1}, "x\n\n```js\n\n```\n", 9, 0},
+		{"- ```\n  ```\n", {block = 0}, "- ```\n  \n  ```\n", 8, 0},
+		{"```\n\n```\n", {block = 0}, "```\n\n\n```\n", 5, 0},
 		// An item with no text that is all of the source.
 		{"- \n", {block = 0}, "", 0, 0},
 	}
@@ -333,66 +335,9 @@ test_code_with_no_line_takes_text :: proc(t: ^testing.T) {
 	}
 }
 
-// Return in the line of a fence that was typed starts the first line of
-// the code, and closes code that has no closing fence.
-@(test)
-test_return_in_the_line_of_a_fence :: proc(t: ^testing.T) {
-	Case :: struct {
-		source: string,
-		block:  int,
-		offset: int,
-		after:  string,
-		caret:  int,
-	}
-	cases := []Case {
-		{"```\n", 0, 3, "```\n\n```\n", 4},
-		{"```js", 0, 5, "```js\n\n```", 6},
-		{"a\n\n```\n\nmore\n", 1, 6, "a\n\n```\n\n```\n\nmore\n", 7},
-		{"- ```\n", 0, 5, "- ```\n  \n  ```\n", 8},
-		{"> ```\n", 0, 5, "> ```\n> \n> ```\n", 8},
-		// The marks of two quotes and a tab are as they are.
-		{">>\t```\n", 0, 6, ">>\t```\n>>\t\n>>\t```\n", 10},
-		{">```\n", 0, 4, ">```\n> \n> ```\n", 7},
-		{">\n> ```\n", 0, 7, ">\n> ```\n> \n> ```\n", 10},
-		// Code with a closing fence gets a line only.
-		{"```\n```\n", 0, 3, "```\n\n```\n", 4},
-	}
-	for c in cases {
-		doc := parse(c.source)
-		defer destroy(&doc)
-		text, caret, ok := fence_return(&doc, {block = c.block}, c.offset)
-		defer delete(text)
-		if !testing.expect(t, ok) {
-			continue
-		}
-		apply(&doc, {c.offset, c.offset, text})
-		testing.expect_value(t, string(doc.source), c.after)
-		testing.expect_value(t, c.offset + caret, c.caret)
-		// Code with its closing fence, and no other code after it.
-		testing.expect(t, block_at(&doc, c.block).closed)
-		testing.expect(t, c.block + 1 >= doc.count || !block_at(&doc, c.block + 1).fenced)
-		// The caret is in the code, at a place of its own. (Not checked
-		// after a tab: the parser gives the columns of the tab that are
-		// more than the indent of the fence as a space of the code.)
-		if strings.contains(c.source, "\t") {
-			continue
-		}
-		landed := address_of(&doc, c.offset + caret)
-		back, placed := source_of(&doc, landed)
-		testing.expect(t, placed)
-		testing.expect_value(t, back, c.offset + caret)
-	}
-	// Not in the code, and not in another block.
-	doc := parse("```\nab\n```\n\ntext\n")
-	defer destroy(&doc)
-	_, _, in_code := fence_return(&doc, {block = 0, byte = 1}, 5)
-	_, _, in_text := fence_return(&doc, {block = 1}, 13)
-	testing.expect(t, !in_code && !in_text)
-}
-
-// Text that was typed made a fence: a new fence gets its closing fence,
-// a closing fence before the one that was there goes, and a closing
-// fence in the middle of closed code is no end of it.
+// A command of the reader made a fence: a new fence gets its closing
+// fence, a closing fence before the one that was there goes, and a
+// closing fence in the middle of closed code is no end of it.
 @(test)
 test_a_typed_fence :: proc(t: ^testing.T) {
 	Case :: struct {
@@ -403,61 +348,58 @@ test_a_typed_fence :: proc(t: ^testing.T) {
 		after:  string, // with the edit of the rule
 	}
 	cases := []Case {
-		// A new fence: closed at once, also before other code.
+		// A new fence: closed at once, also before other code, with
+		// the marks of its containers.
 		{"a\n\n```\n\nmore\n", {}, 6, .Opened, "a\n\n```\n```\n\nmore\n"},
 		{"```\n```\nx\n```\n", {}, 3, .Opened, "```\n```\n```\nx\n```\n"},
+		{"```\nx\n```\n", {}, 3, .Opened, "```\n```\nx\n```\n"},
 		{"- ```\n", {}, 5, .Opened, "- ```\n  ```\n"},
 		{"> ~~~js", {}, 7, .Opened, "> ~~~js\n> ~~~"},
-		// One more character of a fence that was typed, and of its
-		// closing fence.
-		{"````\n```\n", {true, true, true, 0}, 4, .Opened, "````\n````\n"},
-		{"`````\n```\n", {true, true, true, 0}, 5, .Opened, "`````\n`````\n"},
-		// The closing fence of other code is not its own.
-		{"````\nx\n```\n", {true, false, false, 0}, 4, .None, ""},
-		// The word after a fence that is there: nothing.
-		{"```js\n```\n", {true, true, false, 0}, 5, .None, ""},
+		{">>\t```\n", {}, 6, .Opened, ">>\t```\n>>\t```\n"},
+		{">```\n", {}, 4, .Opened, ">```\n> ```\n"},
+		{">\n> ```\n", {}, 7, .Opened, ">\n> ```\n> ```\n"},
+		// A caret that was in the code: nothing.
+		{"```js\n```\n", {true, true}, 5, .None, ""},
 		// A closing fence before the one of the code: it goes.
-		{"```\nx\n```\n```\n\nmore\n", {true, true, false, 0}, 9, .Closed_Twice, "```\nx\n```\n\nmore\n"},
+		{"```\nx\n```\n```\n\nmore\n", {true, true}, 9, .Closed_Twice, "```\nx\n```\n\nmore\n"},
 		// In the middle of closed code: nothing.
-		{"```\nx\n```\ny\n```\n", {true, true, false, 0}, 9, .None, ""},
+		{"```\nx\n```\ny\n```\n", {true, true}, 9, .None, ""},
 		// Code with no closing fence gets one.
-		{"```\nx\n```\n", {true, false, false, 0}, 9, .Closed, ""},
-		// The line of a typed fence is no fence any more: its closing
-		// fence goes.
-		{"```x`\n```\n\nmore\n", {true, true, true, 11}, 5, .Unopened, "```x`\n\nmore\n"},
-		{"a\n\n\n```\n\nmore\n", {true, true, true, 11}, 3, .Unopened, "a\n\n\n\nmore\n"},
-		// Both fences went, and a fence of other code is the next line:
-		// it stays.
-		{"Text\n```\nx\n```\n", {true, true, true, 22}, 0, .None, ""},
-		// The word after it only changed: nothing.
-		{"```js\n```\n", {true, true, true, 0}, 5, .None, ""},
-		// The space after the ">" of a quote is of the quote.
-		{">```\n> x\n>    ```\n", {true, false, false, 0}, 17, .Closed, ""},
-		{">```\n> x\n>     ```\n", {true, false, false, 0}, 18, .None, ""},
-		// An edit before the line of a typed fence: its closing fence
-		// stays.
-		{"ext\n\n```\n```\n\nMore\n", {true, true, true, 0}, 8, .None, ""},
-		// A ">" in code that is in no quote, and four spaces after a
-		// fence with one space before it: lines of code.
-		{"```\nx\n> ```\n", {true, false, false, 0}, 11, .None, ""},
-		{"```\nx\n    > ```\n", {true, false, false, 0}, 15, .None, ""},
-		{" ```\nx\n    ```\n", {true, false, false, 0}, 14, .None, ""},
-		// A fence after four spaces is a line of code, no closing fence.
-		{"```\nx\n    ```\n", {true, false, false, 0}, 13, .None, ""},
-		{"- ```\n  x\n     ```\n", {true, false, false, 0}, 18, .Closed, ""},
-		// A line of code that ends with a fence is no closing fence.
-		{"```\necho ```\n", {true, false, false, 0}, 12, .None, ""},
+		{"```\nx\n```\n", {true, false}, 9, .Closed, ""},
+		{">```\n> x\n>    ```\n", {true, false}, 17, .Closed, ""},
+		{"- ```\n  x\n     ```\n", {true, false}, 18, .Closed, ""},
+		// Lines of code with a fence in them are no closing fence: after
+		// four spaces, after a ">" in code that is in no quote, after
+		// other text, and one that is too short.
+		{"```\nx\n    ```\n", {true, false}, 13, .None, ""},
+		{" ```\nx\n    ```\n", {true, false}, 14, .None, ""},
+		{">```\n> x\n>     ```\n", {true, false}, 18, .None, ""},
+		{"```\nx\n> ```\n", {true, false}, 11, .None, ""},
+		{"```\nx\n    > ```\n", {true, false}, 15, .None, ""},
+		{"```\necho ```\n", {true, false}, 12, .None, ""},
+		{"````\nx\n```\n", {true, false}, 10, .None, ""},
 	}
 	for c in cases {
 		doc := parse(c.source)
 		defer destroy(&doc)
 		kind, start, end, text := typed_fence(&doc, c.before, address_of(&doc, c.offset), c.offset)
 		defer delete(text)
-		testing.expect_value(t, kind, c.kind)
-		if kind == c.kind && (kind == .Opened || kind == .Closed_Twice || kind == .Unopened) {
-			apply(&doc, {start, end, text})
-			testing.expect_value(t, string(doc.source), c.after)
+		testing.expectf(t, kind == c.kind, "%q: %v", c.source, kind)
+		if kind != c.kind || (kind != .Opened && kind != .Closed_Twice) {
+			continue
 		}
+		apply(&doc, {start, end, text})
+		testing.expect_value(t, string(doc.source), c.after)
+		if kind != .Opened {
+			continue
+		}
+		// The code has its closing fence, and a place for the caret in
+		// it, which is not in the line of the fence.
+		block := block_at_offset(&doc, c.offset)
+		testing.expect(t, block_at(&doc, block).closed)
+		place, _, placed := code_place(&doc, block)
+		line_end, _ := line_at(doc.source, fence_start(&doc, block))
+		testing.expect(t, !placed || place > line_end)
 	}
 }
 

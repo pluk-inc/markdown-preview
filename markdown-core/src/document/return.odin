@@ -69,11 +69,11 @@ line_break :: proc(doc: ^Document, places: []Place, at: Address, allocator := co
 	// indent is no code, so Return there is as at the end of each other
 	// text.
 	if b.kind == .Code && (b.fenced || !at_end) {
-		// With no line of code yet (`code_place`): two lines of it, and
-		// the caret in the second one.
+		// With no line of code yet (`code_place`): the first line of the
+		// code, with the caret in it. The caret shows in that place
+		// before, so Return after a fence that was typed only starts the
+		// code, as a reader who types the fence and Return means it.
 		if place, needs_line, empty := code_place(doc, at.block); empty && needs_line && place == offset {
-			write_code_lead(&out, doc, at.block)
-			strings.write_string(&out, nl)
 			write_code_lead(&out, doc, at.block)
 			caret = offset + strings.builder_len(out)
 			strings.write_string(&out, nl)

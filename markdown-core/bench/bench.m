@@ -106,11 +106,12 @@ static const char *typed_code_check(void) {
         {"Text\n", -1, "\n```\nab\nc", "Text\n\n```\nab\nc\n```\n"},
         {"Text\n", -1, "\n```\nx\n``````\nz\n```q", "Text\n\n```\nx\n```\n\n```\nz\n```\n\nq\n"},
         {"- item\n", -1, "\n```\nx\ny", "- item\n- ```\n  x\n  y\n  ```\n"},
-        {"Text\n\nMore\n", -1, "\n```x``` is", "Text\n\n```x``` is\n\nMore\n"},
+        {"Text\n\nMore\n", -1, "\n```abc", "Text\n\n```\nabc\n```\n\nMore\n"},
+        {"Text\n\nMore\n", -1, "\n```\nabc", "Text\n\n```\nabc\n```\n\nMore\n"},
         {"- a\n- b\n", -1, "\n```\nx\n```q", "- a\n- ```\n  xq\n  ```\n- b\n"},
-        {"Text\n\nPara\n\n```\ncode\n```\n\nEnd\n", -1, "\n````\nx", "Text\n\n````\nx\n````\n\nPara\n\n```\ncode\n```\n\nEnd\n"},
+        {"Text\n\nPara\n\n```\ncode\n```\n\nEnd\n", -1, "\n```\nx", "Text\n\n```\nx\n```\n\nPara\n\n```\ncode\n```\n\nEnd\n"},
         {"Text\n\n```\n```\n\nMore\n", 76, "z\nw", "Text\n\n```\nz\nw\n```\n\nMore\n"},
-        {"Text\n\n```\n```\n\nMore\n", 76, "\nq", "Text\n\n```\n\nq\n```\n\nMore\n"},
+        {"Text\n\n```\n```\n\nMore\n", 76, "\nq\nr", "Text\n\n```\nq\nr\n```\n\nMore\n"},
     };
     for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
         void *ctx = mdcore_create((__bridge void *)[CAMetalLayer layer]);

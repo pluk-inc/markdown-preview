@@ -1618,14 +1618,13 @@ export.
     Text there is a line of its own, with the indent of a list item and
     the ">" of a quote from the line of the fence (`code_first_line`).
   - A fence that is typed gets its closing fence at once, so the code
-    takes no text after it and no fence of other code is its end
-    (`typed_fence`, `.Opened`); one more character of the fence goes to
-    its closing fence too, and when the line is no fence any more (a
-    "`" in the word after it, or its characters went) that closing
-    fence goes (`.Unopened`). The rule runs at the end of each command
-    of the reader (`command_end`), so a delete has it too.
-  - Return in the line of a fence that was typed starts the first line
-    of the code (`fence_return`).
+    takes no text after it and no fence of other code is its end, and
+    the caret goes into the code (`typed_fence`, `.Opened`): text that
+    is typed next is code. The rule runs at the end of each command of
+    the reader (`command_end`).
+  - Return in code with no line starts its first line, where the caret
+    shows before (`line_break`), so a reader who types the fence and
+    Return, and one who types the fence and the code, get the same.
   - Text that makes a closing fence takes the caret to an empty
     paragraph after the code (`code_exit`); with a closing fence there
     before, the typed one goes (`.Closed_Twice`). Where no empty
@@ -1643,10 +1642,12 @@ export.
   (`Block.closed`, from the lines of the block that are no lines of its
   code), and no rule reads it from the bytes of a line. Three forms
   that did were each wrong in a case that a review bot found.
-  Open: the word after the fence (the language) cannot be changed after
-  Return; a delete at the start of the first line of code does nothing;
-  a document that is only a fence with no line break has no caret; Left
-  from the end of a typed fence goes to the block before; text typed
-  after a fence with no Return is the word of the fence (the language),
-  which does not show. The walk of
+  A form before this one kept the caret in the line of a typed fence
+  until Return, for the word after the fence (the language): the
+  maintainer typed code with no Return, and it went into that line,
+  where it does not show. Open: a reader cannot give or change the
+  language of code (it needs a control of its own, with the lines of
+  the fence hidden); a fence of more than three characters cannot be
+  typed; a delete at the start of the first line of code does nothing;
+  a document that is only a fence with no line break has no caret. The walk of
   `bench.m` types these (`typed_code_check`).
