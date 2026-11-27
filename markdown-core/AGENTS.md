@@ -427,6 +427,19 @@ release.
   `odin doc core:strings -short` lists a package. The Homebrew install has
   no `examples/` folder; the tour of the language is
   <https://odin-lang.org/docs/demo/>, which can be newer than the compiler.
+- Write Odin, not C or Swift with Odin's syntax. Before you write a
+  helper, a container, or a loop by hand, look for what the language and
+  `core` already have, because code carried over from another language
+  misses it. The ones that fit this core: `bit_set` for flags, an array
+  indexed by an enum (`[Kind]string`), a `union` with a `switch v in`,
+  `#partial switch`, `or_return` and `or_else` for results, arithmetic on
+  fixed arrays (`[2]f32` adds and scales as a value), `#soa` arrays for
+  records that are read one field at a time, an arena
+  (`core:mem/virtual`) in place of many single frees, and the packages
+  `core:slice`, `core:strings`, `core:unicode/utf8`, and
+  `core:container/small_array`. The core has no `#soa` array, no `union`,
+  and no arena of `core:mem/virtual` yet; measure before you move hot
+  code to one.
 - Try a syntax or an API you are not sure of in a small package in the
   temporary folder, never in `src/`. Run `odin check <folder>` on it for a
   question about types, `odin test <folder>` for a question about
