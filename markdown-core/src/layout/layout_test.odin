@@ -1844,6 +1844,10 @@ test_front_matter_is_a_panel_above_the_first_part :: proc(t: ^testing.T) {
 	step(&alone.page, 1e30)
 	testing.expect(t, alone.page.panel.height > 0)
 	testing.expect(t, alone.page.content_height >= f64(alone.page.panel.height))
+	// The line of its caret is in the page, below the panel.
+	_, caret_top, caret_height := caret_place_empty(&alone.page)
+	testing.expect(t, caret_top >= alone.page.panel.height)
+	testing.expect(t, f64(caret_top + caret_height) <= alone.page.content_height)
 }
 
 // A point on the number of a footnote in the text, and one on the number
