@@ -134,11 +134,19 @@ block_parse :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs: 
 	lead: int
 	text, _, _, _, _, lead = piece_text(doc, doc.source[start:end], start, end)
 	base = start - lead
-	// A piece with a footnote in it is parsed with all of the source, for
-	// the numbers of its footnotes.
-	noted := has_footnote(doc.source[start:end])
-	if !noted {
-		fresh = parse_piece(text[:], 0, len(doc.source), places, block - first, pairs = pairs, reveal = reveal_in(doc.reveal, base, len(text)), at_start = base == 0)
+	// A piece with a footnote in it has the numbers that the document
+	// has for its footnotes (`piece_footnotes`); when the document has
+	// none that are right, all of the source is parsed.
+	notes: Footnotes
+	alone := true
+	if has_footnote(doc.source[start:end]) {
+		alone = !(start == 0 && doc.hidden > 0)
+		if alone {
+			notes, alone = piece_footnotes(doc, text[:], lead, lead + end - start, start, end, context.temp_allocator)
+		}
+	}
+	if alone {
+		fresh = parse_piece(text[:], 0, len(doc.source), places, block - first, pairs = pairs, reveal = reveal_in(doc.reveal, base, len(text)), at_start = base == 0, piece_notes = notes)
 	} else {
 		// No parse has the bytes of the piece: they go.
 		delete(text)

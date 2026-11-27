@@ -5,6 +5,7 @@ import "base:runtime"
 import "core:fmt"
 import "core:c"
 import "core:slice"
+import "core:strconv"
 import "core:strings"
 import "core:unicode/utf8"
 
@@ -128,7 +129,7 @@ parse_owned :: proc(bytes: []u8, reveal: Maybe(int) = nil) -> Document {
 // start of the source, where the bytes of `hidden_start` (front matter)
 // are no Markdown: the parser reads them as blank lines.
 @(private)
-parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place = nil, places_block := 0, end := -1, followed := false, followed_in_list := false, pairs: ^[dynamic]Pair = nil, reveal: Maybe(int) = nil, at_start := false, whole := false) -> Document {
+parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place = nil, places_block := 0, end := -1, followed := false, followed_in_list := false, pairs: ^[dynamic]Pair = nil, reveal: Maybe(int) = nil, at_start := false, whole := false, piece_notes: Footnotes = {}) -> Document {
 	kept := bytes
 	masked: []u8
 	hidden: int
@@ -141,15 +142,17 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 	// for the parser, so it can have more than one block, as an item has:
 	// its "[^" is a "+" and a space, the mark of a list with no other
 	// item in most sources (a list with another mark is another list).
-	notes: Footnotes
+	// For a piece, the caller gives its footnotes with the numbers that
+	// they have in the document (`piece_notes`, with offsets of `bytes`).
+	notes := piece_notes
 	if whole {
 		notes = footnotes(bytes, unclosed ? 0 : hidden)
-		if len(notes.notes) > 0 {
-			if masked == nil {
-				masked = slice.clone(bytes)
-			}
-			footnote_mask(masked, 0, notes.notes, notes.references)
+	}
+	if len(notes.notes) > 0 {
+		if masked == nil {
+			masked = slice.clone(bytes)
 		}
+		footnote_mask(masked, 0, notes.notes, notes.references)
 	}
 	defer delete(masked)
 	bytes := masked != nil ? masked : bytes
@@ -168,7 +171,7 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 		kept         = kept,
 		notes        = notes,
 	}
-	for p.note_defs < len(notes.notes) && !notes.notes[p.note_defs].inline {
+	for p.note_defs < len(notes.notes) && !notes.notes[p.note_defs].inline && !notes.notes[p.note_defs].elsewhere {
 		p.note_defs += 1
 	}
 	md := Md_Parser {
@@ -193,7 +196,16 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 	doc.source = kept
 	// The document keeps the footnotes of a parse of all of its source.
 	if whole {
-		for &note in notes.notes {
+		for &note, n in notes.notes {
+			if !note.inline {
+				// The map keeps the string of a label that is new to it.
+				key := footnote_key(note.label, context.allocator)
+				known := key in doc.note_keys
+				doc.note_keys[key] = n
+				if known {
+					delete(key)
+				}
+			}
 			note.label = ""
 		}
 		doc.notes, doc.notes_valid = notes, true
@@ -370,10 +382,10 @@ take_item_position :: proc(p: ^Parser, b: ^Block) {
 		b.marker = p.item_marker
 		b.number = p.item_number
 		// The item of the definition of a footnote: its number.
-		for p.note_def < len(p.notes.notes) && (p.notes.notes[p.note_def].inline || p.notes.notes[p.note_def].start < b.source) {
+		for p.note_def < p.note_defs && p.notes.notes[p.note_def].start < b.source {
 			p.note_def += 1
 		}
-		if p.note_def < len(p.notes.notes) && p.notes.notes[p.note_def].start == b.source {
+		if p.note_def < p.note_defs && p.notes.notes[p.note_def].start == b.source {
 			b.marker = .Note
 			b.number = p.notes.notes[p.note_def].number
 		}
@@ -1077,7 +1089,8 @@ append_noted :: proc(p: ^Parser, s: string, at, from: int) {
 			p.doc.reveal = reveal
 		} else {
 			p.note = notes[reference.note].number
-			append_text(p, fmt.tprintf("%d", p.note), at, size, whole = true)
+			digits: [20]u8
+			append_text(p, strconv.write_int(digits[:], i64(p.note), 10), at, size, whole = true)
 			p.note = 0
 		}
 		step(&s, &at, &from, size)

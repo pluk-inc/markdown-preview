@@ -182,6 +182,7 @@ test_an_edit_at_a_footnote_is_a_parse_of_all :: proc(t: ^testing.T) {
 		defer destroy(&doc)
 		pending := prepare(&doc, edit)
 		commit(&doc, &pending)
+		discard(&pending)
 		fresh := parse(string(doc.source))
 		defer destroy(&fresh)
 		if !testing.expect_value(t, doc.count, fresh.count) {
@@ -391,7 +392,7 @@ test_a_line_of_marks_with_no_end_is_read_one_time :: proc(t: ^testing.T) {
 }
 
 // The document keeps the footnotes of a parse of all of its source, and
-// reads them again after a change of a piece, which moves their offsets.
+// a change of a piece moves their offsets.
 @(test)
 test_the_footnotes_of_a_document_after_a_change_of_a_piece :: proc(t: ^testing.T) {
 	// The change is some blocks before the first footnote, and not in
@@ -404,7 +405,10 @@ test_the_footnotes_of_a_document_after_a_change_of_a_piece :: proc(t: ^testing.T
 	pending := prepare(&doc, Edit{19, 19, " more"})
 	testing.expect(t, !pending.all)
 	commit(&doc, &pending)
-	testing.expect(t, !doc.notes_valid)
+	discard(&pending)
+	// A parse of the piece: the footnotes are kept, five bytes later.
+	testing.expect(t, doc.notes_valid)
+	testing.expect_value(t, doc.notes.references[0].start, strings.index(string(doc.source), "[^a]"))
 	first, has_first := note_block(&doc, 1, 1)
 	second, has_second := note_block(&doc, 1, 2)
 	testing.expect(t, has_first && has_second)
@@ -413,6 +417,107 @@ test_the_footnotes_of_a_document_after_a_change_of_a_piece :: proc(t: ^testing.T
 	// A change with a footnote in it is a parse of all: kept again.
 	pending = prepare(&doc, Edit{0, 0, "New[^a] "})
 	commit(&doc, &pending)
+	discard(&pending)
 	testing.expect(t, doc.notes_valid)
 	testing.expect_value(t, len(doc.notes.references), 3)
+}
+
+// A change in a piece with footnotes is a parse of the piece when the
+// piece has the footnotes that it had, and a parse of all when it has
+// others. In each case the document is the one that a parse of all of
+// the new source gives, with the same footnotes at the same offsets.
+@(test)
+test_a_change_in_a_piece_with_footnotes :: proc(t: ^testing.T) {
+	source := "Intro.\n\nP2.\n\nP3.\n\nFirst[^a] text and ^[an inline one] more.\n\nSecond[^b] text, again[^a].\n\nPlain text.\n\nP7.\n\nP8.\n\n[^a]: The text of A.\n    More of A.\n[^b]: B.\n\nEnd.\n"
+	same :: proc(t: ^testing.T, doc: ^Document, what: string) {
+		fresh := parse(string(doc.source))
+		defer destroy(&fresh)
+		if !testing.expectf(t, doc.count == fresh.count, "%s: %d blocks, not %d", what, doc.count, fresh.count) {
+			return
+		}
+		for i in 0 ..< doc.count {
+			a, b := block_at(doc, i), block_at(&fresh, i)
+			testing.expectf(t, layout_equal(a, b) && a.number == b.number, "%s: block %d is %q, not %q", what, i, string(a.text.bytes[:]), string(b.text.bytes[:]))
+		}
+		testing.expectf(t, doc.notes_valid, "%s: the footnotes are not kept", what)
+		got, want := doc.notes, fresh.notes
+		if !testing.expectf(t, len(got.notes) == len(want.notes) && len(got.references) == len(want.references), "%s: %d notes and %d references, not %d and %d", what, len(got.notes), len(got.references), len(want.notes), len(want.references)) {
+			return
+		}
+		for note, n in want.notes {
+			have := got.notes[n]
+			testing.expectf(t, have.number == note.number && have.inline == note.inline && have.start == note.start && have.content == note.content && (note.inline ? have.end == note.end : have.mark == note.mark), "%s: note %d is %v, not %v", what, n, have, note)
+		}
+		for reference, r in want.references {
+			testing.expectf(t, got.references[r] == reference, "%s: reference %d is %v, not %v", what, r, got.references[r], reference)
+		}
+	}
+	Case :: struct {
+		find, text: string, // the text goes in before `find`
+		remove:     int, // bytes that go out from there
+		alone:      bool, // a parse of the piece
+	}
+	cases := []Case {
+		{" text and", "X", 0, true}, // a letter in a paragraph with two footnotes
+		{"an inline", "Y", 0, true}, // in the text of an inline footnote
+		{"again[^a]", "", 1, true}, // a letter goes out before a reference
+		{"The text of A", "Z", 0, true}, // in the text of a definition
+		{"More of A", "W", 0, true}, // in a later line of it
+		{"Plain text", "Q", 0, true}, // near the footnotes, in none
+		{"[^a] text", "", 4, false}, // a reference goes out: other numbers
+		{"First[^a]", "New[^b] ", 0, false}, // a reference before the others
+		{"a]: The", "", 1, false}, // the label of a definition
+		{"^[an inline", "", 1, false}, // an inline footnote is none any more
+		{"P7.", "[^c]: C.\n\n", 0, false}, // a definition more
+		{"Second[^b]", "\\", 6, false}, // a backslash before a reference
+	}
+	for c in cases {
+		doc := parse(source)
+		defer destroy(&doc)
+		at := strings.index(source, c.find)
+		if !testing.expectf(t, at >= 0, "no %q in the source", c.find) {
+			continue
+		}
+		pending := prepare(&doc, Edit{at, at + c.remove, c.text})
+		testing.expectf(t, pending.all != c.alone, "%q before %q: a parse of all is %v", c.text, c.find, pending.all)
+		commit(&doc, &pending)
+	discard(&pending)
+		discard(&pending)
+		same(t, &doc, c.find)
+		// And a second change after it, at the offsets that the first
+		// one left.
+		again := strings.index(string(doc.source), "End.")
+		pending = prepare(&doc, Edit{again, again, "The "})
+		commit(&doc, &pending)
+	discard(&pending)
+		discard(&pending)
+		same(t, &doc, "after it")
+		first := strings.index(string(doc.source), "Intro")
+		pending = prepare(&doc, Edit{first + 15, first + 15, "!"})
+		commit(&doc, &pending)
+	discard(&pending)
+		discard(&pending)
+		same(t, &doc, "and before it")
+	}
+	// Many changes, one after the other, of one byte in or out at a
+	// place that a seed gives.
+	doc := parse(source)
+	defer destroy(&doc)
+	state := u64(12345)
+	alone := 0
+	for step in 0 ..< 300 {
+		state = state * 6364136223846793005 + 1442695040888963407
+		at := int(state >> 33) % (len(doc.source) + 1)
+		edit := Edit{at, at, "x"}
+		if step % 3 == 0 && at < len(doc.source) && doc.source[at] < 0x80 && (at + 1 == len(doc.source) || doc.source[at + 1] < 0x80) {
+			edit = Edit{at, at + 1, ""}
+		}
+		pending := prepare(&doc, edit)
+		alone += int(!pending.all)
+		commit(&doc, &pending)
+	discard(&pending)
+		discard(&pending)
+		same(t, &doc, fmt.tprintf("step %d at %d", step, at))
+	}
+	testing.expect(t, alone > 100)
 }

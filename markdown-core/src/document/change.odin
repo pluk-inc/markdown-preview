@@ -266,6 +266,11 @@ Pending :: struct {
 	// `defs_first` on, with the same text.
 	defs_first:   int,
 	all:          bool, // all of the source was parsed
+	// For a piece with footnotes: the ones of the piece, with offsets
+	// that count from `base` (`piece_footnotes`), and where the piece
+	// started in the source before.
+	notes:        Footnotes,
+	old_start:    int,
 	reveal:       Maybe(int), // `Document.reveal` after the edit
 }
 
@@ -454,15 +459,28 @@ prepare_piece :: proc(doc: ^Document, p: ^Pending) -> bool {
 	start := first == 0 ? 0 : block_start(doc, first)
 	old_end := end < doc.count ? block_start(doc, end) : len(doc.source)
 	piece := p.source[start:old_end + p.bytes]
-	// A piece with a footnote in it, before or after the edit: the
-	// numbers of the footnotes are of all of the source.
-	if has_footnote(piece) || has_footnote(doc.source[start:old_end]) {
+	// A piece with a footnote in it, before or after the edit, is parsed
+	// alone only when it has the footnotes that it had: then the numbers
+	// of the footnotes of the document are as they were
+	// (`piece_footnotes`). At the start of a source with front matter,
+	// all is parsed.
+	noted := has_footnote(piece) || has_footnote(doc.source[start:old_end])
+	if noted && (!doc.notes_valid || (start == 0 && doc.hidden > 0)) {
 		return false
 	}
 
 	text, before, inside, led, trailed, lead := piece_text(doc, piece, start, old_end)
 	p.base = start - lead
-	p.fresh = parse_piece(text[:], doc.items, len(p.source), end = lead + len(piece), followed = end < doc.count, followed_in_list = end < doc.count && in_list(block_at(doc, end)), reveal = reveal_in(p.reveal, p.base, len(text)), at_start = p.base == 0)
+	p.old_start = start
+	if noted {
+		same: bool
+		p.notes, same = piece_footnotes(doc, text[:], lead, lead + len(piece), start, old_end)
+		if !same {
+			delete(text)
+			return false
+		}
+	}
+	p.fresh = parse_piece(text[:], doc.items, len(p.source), end = lead + len(piece), followed = end < doc.count, followed_in_list = end < doc.count && in_list(block_at(doc, end)), reveal = reveal_in(p.reveal, p.base, len(text)), at_start = p.base == 0, piece_notes = p.notes)
 	fresh := &p.fresh
 	p.added = fresh.count - guard
 	// The definitions came out as definitions, and the ones of the piece
@@ -489,6 +507,7 @@ prepare_piece :: proc(doc: ^Document, p: ^Pending) -> bool {
 	}
 	if !ok {
 		destroy(fresh)
+		notes_destroy(&p.notes)
 		return false
 	}
 	// Of the definitions, the ones of the piece stay, where the new
@@ -507,6 +526,7 @@ prepare_piece :: proc(doc: ^Document, p: ^Pending) -> bool {
 // new blocks; after it, the old ones.
 discard :: proc(p: ^Pending) {
 	destroy(&p.fresh)
+	notes_destroy(&p.notes)
 	delete(p.source)
 	p^ = {}
 }
@@ -559,13 +579,15 @@ commit :: proc(doc: ^Document, p: ^Pending) -> (change: Change) {
 		doc.links_parsed = len(doc.links)
 		doc.notes, fresh.notes = fresh.notes, doc.notes
 		doc.notes_valid = fresh.notes_valid
+		doc.note_keys, fresh.note_keys = fresh.note_keys, doc.note_keys
 		doc.defs, fresh.defs = fresh.defs, doc.defs
 		doc.defs_marked, doc.defs_cut = fresh.defs_marked, fresh.defs_cut
 		doc.defs_used, doc.def_longest = fresh.defs_used, fresh.def_longest
 		doc.cells_most, doc.cells_cut = fresh.cells_most, fresh.cells_cut
 	} else {
-		// The offsets of the footnotes are of the source before.
-		doc.notes_valid = false
+		// The footnotes are the ones that the document had, at the
+		// offsets of the new source.
+		notes_commit(doc, p.notes, p.base, p.old_start, p.edit.end, p.bytes)
 		doc.cells_most = max(doc.cells_most, fresh.cells_most)
 		doc.cells_cut ||= fresh.cells_cut
 		for part in fresh.parts {
