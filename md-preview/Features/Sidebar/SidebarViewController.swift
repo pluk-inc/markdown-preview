@@ -265,6 +265,17 @@ final class SidebarViewController: NSViewController {
         setOpenFileURL(newURL)
     }
 
+    /// The name at the top of an outline that is there, after a rename of
+    /// its file. The rows of the headings stay as they are, with the one
+    /// that is selected and the ones that are open.
+    func renameOutlineTitle(_ fileName: String) {
+        guard let titleItem, lastRenderedFileName != nil, fileName != lastRenderedFileName,
+              !fileName.isEmpty else { return }
+        lastRenderedFileName = fileName
+        titleItem.title = fileName
+        outlineView.reloadItem(titleItem)
+    }
+
     /// Spinner on the navigator row of a file that is still loading; nil
     /// clears it.
     func setLoadingFile(_ fileURL: URL?) {
@@ -471,7 +482,7 @@ class SidebarLabelCellView: NSTableCellView {
 }
 
 private final class TitleItem {
-    let title: String
+    var title: String
     init(title: String) { self.title = title }
 }
 

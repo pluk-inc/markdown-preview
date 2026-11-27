@@ -1341,12 +1341,81 @@ mdcore_caret_set :: proc "c" (handle: rawptr, x, y: f64) -> bool {
 		}
 		return false
 	}
-	// The selection is empty and at the caret, which can be beside the
-	// point (at an end of an entity that is one thing): a drag from here
-	// selects from this place (`mdcore_mouse`).
+	caret_put(ctx, stop, at, upstream)
+	return true
+}
+
+// Puts the caret at a stop that was found for an address of the page.
+// The selection is empty and at the caret, which can be beside the
+// address (at an end of an entity that is one thing): a drag from here
+// selects from this place (`mdcore_mouse`).
+@(private)
+caret_put :: proc(ctx: ^Ctx, stop: Stop, at: document.Address, upstream: bool) {
 	ctx.select_from = nil
 	set_caret(ctx, stop, upstream && stop.at == at, stop.at)
 	reveal_update(ctx)
+}
+
+// See the header.
+@(export)
+mdcore_caret_set_in :: proc "c" (handle: rawptr, top, bottom: f64) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	hold(ctx)
+	history.seal(&ctx.history)
+	if ctx.doc.count == 0 {
+		// As `mdcore_caret_set`.
+		ctx.caret = ctx.doc.hidden
+		ctx.display_valid = false
+		return true
+	}
+	// The text that is nearest to a point can be a line above the range
+	// (the point is on a picture or in a gap): from the top edge down to
+	// the first place whose line is all in the range. Nothing changes
+	// until the place is found, so each look is at the same layout.
+	Found :: struct {
+		stop:     Stop,
+		at:       document.Address,
+		upstream: bool,
+		ok:       bool,
+	}
+	first, shown: Found
+	for probe := top + 1; probe < bottom && !shown.ok; {
+		// To under the line that was found, so that no line is left out,
+		// also one that is less high than a fixed step. Else a small
+		// step, over what takes no caret.
+		next := probe + 8
+		if at, upstream, placed := layout.caret_hit(&ctx.page, 0, probe); placed {
+			if _, y, height, has := layout.caret_y(&ctx.page, at, upstream); has {
+				next = max(next, y + f64(height) + 1)
+				if stop, stops := stop_at(ctx, at); stops {
+					found := Found{stop, at, upstream, true}
+					switch {
+					case y >= top && y + f64(height) <= bottom:
+						shown = found
+					case !first.ok:
+						first = found
+					case:
+						stop_delete(stop)
+					}
+				}
+			}
+		}
+		probe = next
+	}
+	// No such place (a range with one tall thing in it): the first text
+	// that was found, which the host brings into view.
+	if shown.ok && first.ok {
+		stop_delete(first.stop)
+	}
+	found := shown.ok ? shown : first
+	if !found.ok {
+		return false
+	}
+	caret_put(ctx, found.stop, found.at, found.upstream)
 	return true
 }
 
@@ -1424,12 +1493,14 @@ mdcore_caret_rect :: proc "c" (handle: rawptr, x, y, height: ^f64) -> bool {
 	if ctx.caret < 0 || !ctx.layout_valid {
 		return false
 	}
+	// The bar that shows: as high as the text of its line, not as the
+	// line (`layout.caret_bar`).
 	if ctx.doc.count == 0 {
-		cx, top, h := layout.caret_place_empty(&ctx.page)
+		cx, top, h := layout.caret_bar_empty(&ctx.page)
 		x^, y^, height^ = f64(cx), ctx.page.origin + f64(top), f64(h)
 		return true
 	}
-	cx, cy, h := layout.caret_y(&ctx.page, ctx.caret_at, ctx.caret_upstream) or_return
+	cx, cy, h := layout.caret_bar_y(&ctx.page, ctx.caret_at, ctx.caret_upstream) or_return
 	x^, y^, height^ = f64(cx), cy, f64(h)
 	return true
 }

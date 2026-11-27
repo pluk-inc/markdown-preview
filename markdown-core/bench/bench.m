@@ -154,11 +154,44 @@ static const char *typed_code_check(void) {
     return NULL;
 }
 
+// The first caret of an editor: at the start of the first line that is
+// all in a range of the page, not at a line that the top of the range
+// cuts.
+static const char *first_caret_check(void) {
+    void *ctx = mdcore_create((__bridge void *)[CAMetalLayer layer]);
+    const char *start = "one\n\ntwo\n\nthree\n";
+    mdcore_set_markdown(ctx, start, (long)strlen(start));
+    mdcore_resize(ctx, VIEW_WIDTH, VIEW_HEIGHT, VIEW_SCALE);
+    @autoreleasepool { mdcore_draw(ctx, 0); }
+    const char *wrong = NULL;
+    double x = 0, y = 0, height = 0, cut = 0;
+    if (!mdcore_caret_set_in(ctx, 0, VIEW_HEIGHT) || !mdcore_caret_rect(ctx, &x, &y, &height) || mdcore_caret_offset(ctx) != 0) {
+        wrong = "the first caret is not at the start of the first line";
+    } else {
+        // The top of the range is in the first line.
+        cut = y + 2;
+        mdcore_caret_clear(ctx);
+        if (!mdcore_caret_set_in(ctx, cut, VIEW_HEIGHT) || !mdcore_caret_rect(ctx, &x, &y, &height) || y < cut || y + height > VIEW_HEIGHT) {
+            wrong = "the first caret is in a line that is not all in the view";
+        } else {
+            mdcore_insert(ctx, "q", 1);
+            long n = 0;
+            const char *out = mdcore_source(ctx, &n);
+            const char *want = "one\n\nqtwo\n\nthree\n";
+            if (n != (long)strlen(want) || memcmp(out, want, (size_t)n) != 0) wrong = "the first caret is not at the start of the first line that shows";
+        }
+    }
+    mdcore_destroy(ctx);
+    return wrong;
+}
+
 static const char *caret_walk(void *ctx, long length) {
     const char *list_wrong = list_caret_check();
     if (list_wrong != NULL) return list_wrong;
     const char *code_wrong = typed_code_check();
     if (code_wrong != NULL) return code_wrong;
+    const char *first_wrong = first_caret_check();
+    if (first_wrong != NULL) return first_wrong;
     // The source before the first change, for Undo at the end.
     long first_size = 0;
     const char *first_bytes = mdcore_source(ctx, &first_size);
