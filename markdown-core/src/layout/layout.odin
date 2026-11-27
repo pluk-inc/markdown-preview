@@ -291,6 +291,12 @@ sum_tops :: proc(l: ^Layout) {
 	}
 	if len(l.parts) == 0 {
 		top += f64(l.m.page_pad * TOP_PAD)
+		// Below a panel, the line of the caret of a document with no
+		// block is in the page: a panel higher than the view would
+		// leave it below the end of the page, where no scroll goes.
+		if l.panel.height > 0 {
+			top += f64(text_line_height(l, nil) + l.m.page_pad)
+		}
 	} else {
 		top += f64(l.m.page_pad)
 	}
