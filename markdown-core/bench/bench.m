@@ -110,6 +110,7 @@ static const char *typed_code_check(void) {
         {"Text\n\nMore\n", -1, "\n```abc", "Text\n\n```\nabc\n```\n\nMore\n"},
         {"Text\n\nMore\n", -1, "\n```\nabc", "Text\n\n```\nabc\n```\n\nMore\n"},
         {"Text\n\nMore\n", -1, "\n```ab\b\b\bq", "Text\n\n\nq\n\nMore\n"},
+        {"Text\n", -1, "\n```ab\vq", "Text\n\n```\nab\n```\n\nq\n"},
         {"- a\n- b\n", -1, "\n```\nx\n```q", "- a\n- ```\n  xq\n  ```\n- b\n"},
         {"Text\n\nPara\n\n```\ncode\n```\n\nEnd\n", -1, "\n```\nx", "Text\n\n```\nx\n```\n\nPara\n\n```\ncode\n```\n\nEnd\n"},
         {"Text\n\n```\n```\n\nMore\n", 76, "z\nw", "Text\n\n```\nz\nw\n```\n\nMore\n"},
@@ -129,6 +130,7 @@ static const char *typed_code_check(void) {
         for (const char *key = cases[i].keys; *key; key++) {
             if (*key == '\n') mdcore_insert_break(ctx);
             else if (*key == '\b') mdcore_delete(ctx, MDCORE_MOVE_LEFT);
+            else if (*key == '\v') { if (!mdcore_caret_move(ctx, MDCORE_MOVE_DOWN, false)) mdcore_paragraph_below(ctx); }
             else mdcore_insert(ctx, key, 1);
             @autoreleasepool { mdcore_draw(ctx, 0); }
         }

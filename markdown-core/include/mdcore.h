@@ -157,6 +157,14 @@ typedef enum {
 // the selection did not change, and for no caret.
 bool mdcore_caret_move(void *ctx, mdcore_move move, bool extend);
 
+// For a caret in code in a fence that is the last block of the document,
+// with no empty paragraph after it: makes that paragraph and puts the
+// caret in it. The line of the closing fence of code does not show, so a
+// move has no place below such code; a host calls this when a move down
+// did not move the caret. A change of the source, and one step of Undo.
+// False for each other caret, with nothing done.
+bool mdcore_paragraph_below(void *ctx);
+
 // Each line of the source with nothing in it after a block, but the
 // last one, shows as an empty line of the page, and a caret can be in
 // it (the line that Return makes after a paragraph).

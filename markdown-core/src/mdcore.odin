@@ -1134,6 +1134,24 @@ mdcore_caret_move :: proc "c" (handle: rawptr, move: Move, extend: bool) -> bool
 	return moved
 }
 
+// See the header.
+@(export)
+mdcore_paragraph_below :: proc "c" (handle: rawptr) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	if ctx.caret < 0 || ctx.doc.count == 0 {
+		return false
+	}
+	start, text, caret := document.code_below(&ctx.doc, ctx.caret_at) or_return
+	defer delete(text)
+	command(ctx, .Other)
+	defer command_end(ctx)
+	change_source_held(ctx, text, [2]int{start, start}, caret)
+	return true
+}
+
 // `mdcore_caret_move`, for a caller that holds `source_lock` and the
 // lock of the state. The marks at the caret are the caller's to bring
 // up to date (`reveal_update`). `went`: the move that was made.

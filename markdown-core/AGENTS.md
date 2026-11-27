@@ -1632,6 +1632,11 @@ export.
     the code), the caret goes back to the end of the code. A fence in
     the middle of closed code is no end of it: the next character makes
     its line a line of code again, as before.
+  - Down from the last line of code that ends the document makes an
+    empty paragraph after the code and goes there (`code_below`;
+    `mdcore_paragraph_below`, which the host calls when a move down did
+    not move the caret): with the line of the closing fence hidden, a
+    reader had no other way to text after such code.
   A first form kept the caret in the fence lines with special cases in
   `mdcore.odin`; reviewers broke it in lists, in quotes, and after a
   typed closing fence. A second form took each typed closing fence for

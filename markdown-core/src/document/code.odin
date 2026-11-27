@@ -279,12 +279,39 @@ code_exit :: proc(doc: ^Document, address: Address, offset: int, allocator := co
 			return
 		}
 	}
-	if b.empties > 0 {
-		caret = empty_offset(doc, address.block, 1)
-		return caret, "", caret, true
+	at, text, caret = paragraph_after(doc, address.block, allocator)
+	return at, text, caret, true
+}
+
+// An empty paragraph after a block: the offset of the one that is there
+// (`text` is empty then), or `text` at `at` makes one, as Return at the
+// end of a text does (`line_break`). `caret` is its offset.
+@(private)
+paragraph_after :: proc(doc: ^Document, block: int, allocator := context.allocator) -> (at: int, text: string, caret: int) {
+	if block_at(doc, block).empties > 0 {
+		caret = empty_offset(doc, block, 1)
+		return caret, "", caret
 	}
-	after, empty := block_empty_lines(doc, address.block)
+	after, empty := block_empty_lines(doc, block)
 	nl := line_ending(doc.source)
 	at = break_before(doc.source, after)
-	return at, strings.concatenate({nl, empty == 0 ? nl : ""}, allocator), at + len(nl), true
+	return at, strings.concatenate({nl, empty == 0 ? nl : ""}, allocator), at + len(nl)
+}
+
+// What a move of the caret down puts into the source when the caret is
+// in the last line of code that is the last block of the document, with
+// no empty paragraph after it: an empty paragraph, which is the only
+// place below the code that a caret can go to (the line of its closing
+// fence does not show). False for each other caret: in code with no
+// closing fence the text would be code, and above another block the
+// move finds a line.
+code_below :: proc(doc: ^Document, at: Address, allocator := context.allocator) -> (start: int, text: string, caret: int, ok: bool) {
+	if doc.count == 0 || at.empty != 0 || at.block != doc.count - 1 {
+		return
+	}
+	if b := block_at(doc, at.block); !b.fenced || !b.closed || b.empties > 0 {
+		return
+	}
+	start, text, caret = paragraph_after(doc, at.block, allocator)
+	return start, text, caret, true
 }

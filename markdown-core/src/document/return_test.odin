@@ -575,3 +575,42 @@ test_a_delete_takes_code_with_no_text_out :: proc(t: ^testing.T) {
 	_, _, _, with_code := delete_back(&doc, places[:], {block = 0})
 	testing.expect(t, !with_code)
 }
+
+// Down from code that is the last block of the document makes an empty
+// paragraph after it.
+@(test)
+test_down_from_the_last_code_makes_a_paragraph :: proc(t: ^testing.T) {
+	Case :: struct {
+		source: string,
+		block:  int,
+		ok:     bool,
+		after:  string,
+		caret:  int,
+	}
+	cases := []Case {
+		{"```\nx\n```\n", 0, true, "```\nx\n```\n\n", 10},
+		{"```\nx\n```", 0, true, "```\nx\n```\n\n", 10},
+		{"a\r\n\r\n```\r\nx\r\n```\r\n", 1, true, "a\r\n\r\n```\r\nx\r\n```\r\n\r\n", 18},
+		{"- a\n\n  ```\n  x\n  ```\n", 1, true, "- a\n\n  ```\n  x\n  ```\n\n", 21},
+		// Not with a block or an empty paragraph after it, and not for
+		// code with no closing fence.
+		{"```\nx\n```\n\nmore\n", 0, false, "", 0},
+		{"```\nx\n```\n\n\n", 0, false, "", 0},
+		{"```\nx\n", 0, false, "", 0},
+		{"text\n", 0, false, "", 0},
+	}
+	for c in cases {
+		doc := parse(c.source)
+		defer destroy(&doc)
+		start, text, caret, ok := code_below(&doc, {block = c.block, byte = 1})
+		defer delete(text)
+		testing.expectf(t, ok == c.ok, "%q", c.source)
+		if !ok || !c.ok {
+			continue
+		}
+		apply(&doc, {start, start, text})
+		testing.expect_value(t, string(doc.source), c.after)
+		testing.expect_value(t, caret, c.caret)
+		testing.expect(t, empty_of(&doc, address_of(&doc, caret)) > 0)
+	}
+}
