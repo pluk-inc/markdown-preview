@@ -2,6 +2,7 @@ package document
 
 import "../base"
 import "base:runtime"
+import "core:fmt"
 import "core:c"
 import "core:slice"
 import "core:strings"
@@ -37,6 +38,13 @@ Parser :: struct {
 	image:        int,
 	strike:       int,
 	link:         int, // index + 1 in doc.links
+	note:         int, // the number of the footnote whose number is appended now; 0 for none
+	// The footnotes of the source (`footnotes`), for a parse of all of
+	// it: the references and the definitions that the text has from here
+	// on, in the order of the source.
+	notes:        Footnotes,
+	note_ref:     int, // the next reference
+	note_def:     int, // the next definition
 	// Containers.
 	quote:        int,
 	lists:        [dynamic]List,
@@ -105,7 +113,7 @@ parse :: proc(source: string) -> Document {
 // Parses a Markdown source that the document keeps: memory of the
 // allocator of the context, which goes with the document.
 parse_owned :: proc(bytes: []u8, reveal: Maybe(int) = nil) -> Document {
-	return parse_piece(bytes, 0, len(bytes), reveal = reveal, at_start = true)
+	return parse_piece(bytes, 0, len(bytes), reveal = reveal, at_start = true, whole = true)
 }
 
 // Parses a piece of the source of a document that starts where a block
@@ -117,13 +125,31 @@ parse_owned :: proc(bytes: []u8, reveal: Maybe(int) = nil) -> Document {
 // start of the source, where the bytes of `hidden_start` (front matter)
 // are no Markdown: the parser reads them as blank lines.
 @(private)
-parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place = nil, places_block := 0, end := -1, followed := false, followed_in_list := false, pairs: ^[dynamic]Pair = nil, reveal: Maybe(int) = nil, at_start := false) -> Document {
+parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place = nil, places_block := 0, end := -1, followed := false, followed_in_list := false, pairs: ^[dynamic]Pair = nil, reveal: Maybe(int) = nil, at_start := false, whole := false) -> Document {
 	kept := bytes
 	masked: []u8
 	hidden: int
 	unclosed: bool
 	if at_start {
 		masked, hidden, unclosed = masked_start(bytes)
+	}
+	// The footnotes, with all of the source (`whole`): the number of one
+	// is of all of the references before it. A definition is a list item
+	// for the parser, so it can have more than one block, as an item has:
+	// its "[^" is a "+" and a space, the mark of a list with no other
+	// item in most sources (a list with another mark is another list).
+	notes: Footnotes
+	if whole {
+		notes = footnotes(bytes, unclosed ? 0 : hidden, context.temp_allocator)
+		for note in notes.notes {
+			if note.inline {
+				continue
+			}
+			if masked == nil {
+				masked = slice.clone(bytes)
+			}
+			masked[note.mark], masked[note.mark + 1] = '+', ' '
+		}
 	}
 	defer delete(masked)
 	bytes := masked != nil ? masked : bytes
@@ -139,6 +165,7 @@ parse_piece :: proc(bytes: []u8, items, full_size: int, places: ^[dynamic]Place 
 		pairs        = pairs,
 		reveal       = reveal,
 		bytes        = bytes,
+		notes        = notes,
 	}
 	md := Md_Parser {
 		flags       = MD_FLAG_TABLES | MD_FLAG_STRIKETHROUGH | MD_FLAG_TASKLISTS | MD_FLAG_PERMISSIVEAUTOLINKS,
@@ -208,6 +235,7 @@ current_style :: proc(p: ^Parser) -> Inline_Set {
 	if p.code > 0 {style += {.Code}}
 	if p.image > 0 {style += {.Image}}
 	if p.strike > 0 {style += {.Strike}}
+	if p.note > 0 {style += {.Note}}
 	if p.link > 0 {style += {.Link}}
 	return style
 }
@@ -226,7 +254,8 @@ append_text :: proc(p: ^Parser, s: string, source := -1, source_len := 0, line_b
 	}
 	// A mark that shows has no style of the text around it.
 	style := p.marking ? Inline_Set{.Mark} : current_style(p)
-	link := p.marking ? 0 : p.link
+	// Of the number of a footnote, that number.
+	link := p.marking ? 0 : p.note > 0 ? p.note : p.link
 	if n := len(t.spans); n > 0 && t.spans[n - 1].style == style && t.spans[n - 1].link == link {
 		t.spans[n - 1].end = len(t.bytes)
 		return
@@ -327,6 +356,14 @@ take_item_position :: proc(p: ^Parser, b: ^Block) {
 	if p.item_blocks == 0 {
 		b.marker = p.item_marker
 		b.number = p.item_number
+		// The item of the definition of a footnote: its number.
+		for p.note_def < len(p.notes.notes) && (p.notes.notes[p.note_def].inline || p.notes.notes[p.note_def].start < b.source) {
+			p.note_def += 1
+		}
+		if p.note_def < len(p.notes.notes) && p.notes.notes[p.note_def].start == b.source {
+			b.marker = .Note
+			b.number = p.notes.notes[p.note_def].number
+		}
 		b.task_mark = p.item_mark
 		b.spacing = p.list_start ? .List_Start : .Item
 		p.list_start = false
@@ -896,7 +933,11 @@ on_text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr)
 	case .Entity:
 		append_entity(p, s, at)
 	case .Normal:
-		append_collapsed(p, s, at)
+		if len(p.notes.notes) > 0 && uintptr(text) >= uintptr(raw_data(p.bytes)) {
+			append_noted(p, s, at, int(uintptr(text) - uintptr(raw_data(p.bytes))))
+		} else {
+			append_collapsed(p, s, at)
+		}
 	case:
 		// In a code block the parser gives a NUL byte two times: as
 		// the character that stands for it, and then as the byte, at
@@ -916,6 +957,69 @@ on_text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr)
 		append_text(p, s, at, len(s), at < 0 && (s == "\n" || (s == " " && !p.in_code)))
 	}
 	return 0
+}
+
+// Appends normal text of a source with footnotes. `from` is where it is
+// in the source (`at` is that too, or -1 when no places are noted). The
+// rest of the mark of a definition (its label, "]:", and the spaces)
+// is no text, and a reference shows as the number of its footnote, one
+// thing of the text for all of its bytes.
+@(private)
+append_noted :: proc(p: ^Parser, s: string, at, from: int) {
+	s, at, from := s, at, from
+	step :: proc(s: ^string, at, from: ^int, count: int) {
+		s^ = s[count:]
+		from^ += count
+		if at^ >= 0 {
+			at^ += count
+		}
+	}
+	notes := p.notes.notes
+	for d := 0; d < len(notes); d += 1 {
+		if note := notes[d]; !note.inline && from == note.mark + 2 && !p.in_code && p.code == 0 {
+			step(&s, &at, &from, min(note.content - from, len(s)))
+			break
+		}
+	}
+	references := p.notes.references
+	for len(s) > 0 {
+		for p.note_ref < len(references) && references[p.note_ref].start < from {
+			p.note_ref += 1
+		}
+		if p.note_ref >= len(references) || references[p.note_ref].end > from + len(s) || p.code > 0 {
+			break
+		}
+		reference := references[p.note_ref]
+		if reference.start > from {
+			before := reference.start - from
+			append_collapsed(p, s[:before], at)
+			step(&s, &at, &from, before)
+		}
+		size := reference.end - reference.start
+		// With the caret in it, the reference shows as it is in the
+		// source, as the marks of a style do: a reader changes its label
+		// there. The caret asks for that in all of its bytes.
+		if p.pairs != nil && p.doc.count == p.places_block {
+			// Its two marks are the "[^" (or "^[") and the "]", around
+			// its label or its text.
+			append(p.pairs, Pair{reference.start, reference.start + 2, reference.end - 1, reference.end, false, reference.start, reference.end, false})
+		}
+		if reveal, shows := p.reveal.?; shows && reveal >= reference.start && reveal <= reference.end {
+			p.marking = true
+			append_text(p, s[:size], at, size)
+			p.marking = false
+			p.doc.reveal = reveal
+		} else {
+			p.note = notes[reference.note].number
+			append_text(p, fmt.tprintf("%d", p.note), at, size, whole = true)
+			p.note = 0
+		}
+		step(&s, &at, &from, size)
+		p.note_ref += 1
+	}
+	if len(s) > 0 {
+		append_collapsed(p, s, at)
+	}
 }
 
 // Appends normal text. A run of spaces and tabs becomes one space, as it

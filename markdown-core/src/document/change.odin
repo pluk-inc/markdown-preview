@@ -454,6 +454,11 @@ prepare_piece :: proc(doc: ^Document, p: ^Pending) -> bool {
 	start := first == 0 ? 0 : block_start(doc, first)
 	old_end := end < doc.count ? block_start(doc, end) : len(doc.source)
 	piece := p.source[start:old_end + p.bytes]
+	// A piece with a footnote in it, before or after the edit: the
+	// numbers of the footnotes are of all of the source.
+	if has_footnote(piece) || has_footnote(doc.source[start:old_end]) {
+		return false
+	}
 
 	text, before, inside, led, trailed, lead := piece_text(doc, piece, start, old_end)
 	p.base = start - lead

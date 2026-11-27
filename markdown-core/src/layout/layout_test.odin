@@ -1845,3 +1845,115 @@ test_front_matter_is_a_panel_above_the_first_part :: proc(t: ^testing.T) {
 	testing.expect(t, alone.page.panel.height > 0)
 	testing.expect(t, alone.page.content_height >= f64(alone.page.panel.height))
 }
+
+// A point on the number of a footnote in the text, and one on the number
+// mark of the text of a footnote, are on that footnote; each other
+// point is on none. The block of each has a height of the page.
+@(test)
+test_a_point_is_on_a_footnote :: proc(t: ^testing.T) {
+	f: Fixture
+	setup(&f, "Text with a note[^a] and more[^b] text.\n\nPlain.\n\n[^a]: The first.\n[^b]: The second.\n", 600)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	part := only(&f.page)
+	src := &f.page.doc.parts[0].blocks[0].text
+	seen := 0
+	for span in src.spans {
+		if .Note not_in span.style {
+			continue
+		}
+		seen += 1
+		x0, top, height, _, _ := caret_place(&f.page, {block = 0, byte = span.start})
+		x1, _, _, _, _ := caret_place(&f.page, {block = 0, byte = span.end}, true)
+		y := part.top + f64(top + height / 2)
+		number, definition, ok := note_at(&f.page, (x0 + x1) / 2, y)
+		testing.expect(t, ok && !definition)
+		testing.expect_value(t, number, span.link)
+		// Beside the number, on the text: none.
+		_, _, before := note_at(&f.page, x0 - 6, y)
+		_, _, after := note_at(&f.page, x1 + 6, y)
+		testing.expect(t, !before && !after)
+	}
+	testing.expect_value(t, seen, 2)
+	// The mark of the text of the second footnote, and the text beside it.
+	second := part.boxes[3]
+	text_x := f.page.column_x + f.page.m.list_indent
+	number, definition, ok := note_at(&f.page, text_x - 8, part.top + f64(second.top) + 6)
+	testing.expect(t, ok && definition)
+	testing.expect_value(t, number, 2)
+	_, _, in_text := note_at(&f.page, text_x + 20, part.top + f64(second.top) + 6)
+	_, _, in_plain := note_at(&f.page, f.page.column_x + 5, part.top + f64(part.boxes[1].top) + 6)
+	testing.expect(t, !in_text && !in_plain)
+	// The blocks of a footnote, and their heights of the page.
+	definition_block, has := document.note_block(f.page.doc, 2, 0)
+	reference_block, has_reference := document.note_block(f.page.doc, 2, 1)
+	_, none := document.note_block(f.page.doc, 3, 0)
+	testing.expect(t, has && has_reference && !none)
+	testing.expect_value(t, definition_block, 3)
+	testing.expect_value(t, reference_block, 0)
+	y, _, placed := block_top(&f.page, definition_block)
+	testing.expect(t, placed)
+	testing.expect_value(t, y, part.top + f64(second.top))
+}
+
+// A page that is read has the texts of its footnotes in a list at its
+// end, and not where they are in the source.
+@(test)
+test_the_footnotes_are_a_list_at_the_end_of_a_page_that_is_read :: proc(t: ^testing.T) {
+	source := "Text with a note[^a] and more[^b].\n\n[^a]: The first.\n[^b]: The second.\n\nAfter.\n"
+	edited: Fixture
+	setup(&edited, source, 600)
+	defer teardown(&edited)
+	step(&edited.page, 1e30)
+	read: Fixture
+	read.page.notes_at_end = true
+	setup(&read, source, 600)
+	defer teardown(&read)
+	step(&read.page, 1e30)
+	// The blocks of the definitions have no height and no records.
+	part := only(&read.page)
+	for slot in 1 ..= 2 {
+		box := part.boxes[slot]
+		testing.expect_value(t, box.bottom, box.top)
+		testing.expect_value(t, box.line_end, box.line_first)
+	}
+	testing.expect(t, part.boxes[3].top < only(&edited.page).boxes[3].top)
+	// The list is below the last part, and the page is as much higher.
+	list := read.page.notes.page
+	if !testing.expect(t, list != nil) {
+		return
+	}
+	testing.expect_value(t, read.page.notes.top, part.top + f64(part.height))
+	testing.expect_value(t, read.page.content_height, f64(part.height) + f64(read.page.notes.height))
+	testing.expect_value(t, list.doc.count, 2)
+	testing.expect(t, list.parts[0].top > read.page.notes.top)
+	// The text of a footnote is where its item is in the list.
+	first, _, has := note_top(&read.page, 1)
+	second, _, has_second := note_top(&read.page, 2)
+	testing.expect(t, has && has_second && second > first && first > read.page.notes.top)
+	// In place for a page that is edited.
+	in_place, _, _ := note_top(&edited.page, 1)
+	testing.expect_value(t, in_place, only(&edited.page).top + f64(only(&edited.page).boxes[1].top))
+	testing.expect(t, edited.page.notes.page == nil)
+	// A point on the number of the second item, and one on its mark that
+	// goes back, are on footnote 2; a point on its text is on none.
+	item := only(list).boxes[1]
+	text_x := list.column_x + list.m.list_indent
+	y := only(list).top + f64(item.top) + 6
+	number, definition, on_mark := note_at(&read.page, text_x - 8, y)
+	testing.expect(t, on_mark && definition)
+	testing.expect_value(t, number, 2)
+	_, _, on_text := note_at(&read.page, text_x + 12, y)
+	testing.expect(t, !on_text)
+	line := only(list).lines[item.line_end - 1]
+	_, _, on_back := note_at(&read.page, line.x + line.line.width - 3, y)
+	testing.expect(t, on_back)
+	// A document with no footnote has no list.
+	plain: Fixture
+	plain.page.notes_at_end = true
+	setup(&plain, "No footnotes.\n", 600)
+	defer teardown(&plain)
+	step(&plain.page, 1e30)
+	testing.expect(t, plain.page.notes.page == nil)
+	testing.expect_value(t, plain.page.content_height, f64(only(&plain.page).height + plain.page.m.page_pad))
+}

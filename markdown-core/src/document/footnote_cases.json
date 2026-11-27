@@ -1,0 +1,280 @@
+[
+ {
+  "source": "This is a simple footnote[^1].\n\n[^1]: This is the referenced text.\n",
+  "notes": [
+   {
+    "number": 1,
+    "label": "1",
+    "inline": false
+   }
+  ],
+  "references": [
+   {
+    "text": "[^1]",
+    "number": 1,
+    "ordinal": 1
+   }
+  ],
+  "web": true
+ },
+ {
+  "source": "Named[^note] and numbered[^2].\n\n[^2]: Two.\n[^note]: Named footnotes still appear as numbers.\n",
+  "notes": [
+   {
+    "number": 2,
+    "label": "2",
+    "inline": false
+   },
+   {
+    "number": 1,
+    "label": "note",
+    "inline": false
+   }
+  ],
+  "references": [
+   {
+    "text": "[^note]",
+    "number": 1,
+    "ordinal": 1
+   },
+   {
+    "text": "[^2]",
+    "number": 2,
+    "ordinal": 1
+   }
+  ],
+  "web": true
+ },
+ {
+  "source": "Twice[^a] and again[^a], then[^b].\n\n[^a]: A.\n[^b]: B.\n",
+  "notes": [
+   {
+    "number": 1,
+    "label": "a",
+    "inline": false
+   },
+   {
+    "number": 2,
+    "label": "b",
+    "inline": false
+   }
+  ],
+  "references": [
+   {
+    "text": "[^a]",
+    "number": 1,
+    "ordinal": 1
+   },
+   {
+    "text": "[^a]",
+    "number": 1,
+    "ordinal": 2
+   },
+   {
+    "text": "[^b]",
+    "number": 2,
+    "ordinal": 1
+   }
+  ],
+  "web": true
+ },
+ {
+  "source": "Text[^long].\n\n[^long]: First line.\n    Second line.\n\n    A second paragraph.\n\nAfter.\n",
+  "notes": [
+   {
+    "number": 1,
+    "label": "long",
+    "inline": false
+   }
+  ],
+  "references": [
+   {
+    "text": "[^long]",
+    "number": 1,
+    "ordinal": 1
+   }
+  ],
+  "web": true
+ },
+ {
+  "source": "No definition[^x] stays text. And one[^y].\n\n[^y]: Y.\n[^z]: No reference has this one.\n",
+  "notes": [
+   {
+    "number": 1,
+    "label": "y",
+    "inline": false
+   },
+   {
+    "number": 0,
+    "label": "z",
+    "inline": false
+   }
+  ],
+  "references": [
+   {
+    "text": "[^y]",
+    "number": 1,
+    "ordinal": 1
+   }
+  ],
+  "web": true
+ },
+ {
+  "source": "Code `[^1]` is no reference, text[^1] is.\n\n```\n[^1] in a fence\n[^1]: no definition\n```\n\n[^1]: One.\n",
+  "notes": [
+   {
+    "number": 1,
+    "label": "1",
+    "inline": false
+   }
+  ],
+  "references": [
+   {
+    "text": "[^1]",
+    "number": 1,
+    "ordinal": 1
+   }
+  ],
+  "web": true
+ },
+ {
+  "source": "Case[^Note] and spaces[^ note ].\n\n[^NOTE]: The same footnote.\n",
+  "notes": [
+   {
+    "number": 1,
+    "label": "NOTE",
+    "inline": false
+   }
+  ],
+  "references": [
+   {
+    "text": "[^Note]",
+    "number": 1,
+    "ordinal": 1
+   },
+   {
+    "text": "[^ note ]",
+    "number": 1,
+    "ordinal": 2
+   }
+  ],
+  "web": true
+ },
+ {
+  "source": "Before its text[^1].\n\n   [^1]: Three spaces before it.\n",
+  "notes": [
+   {
+    "number": 1,
+    "label": "1",
+    "inline": false
+   }
+  ],
+  "references": [
+   {
+    "text": "[^1]",
+    "number": 1,
+    "ordinal": 1
+   }
+  ],
+  "web": true
+ },
+ {
+  "source": "Two definitions[^d].\n\n[^d]: The first.\n\n[^d]: The last one wins.\n",
+  "notes": [
+   {
+    "number": 0,
+    "label": "d",
+    "inline": false
+   },
+   {
+    "number": 1,
+    "label": "d",
+    "inline": false
+   }
+  ],
+  "references": [
+   {
+    "text": "[^d]",
+    "number": 1,
+    "ordinal": 1
+   }
+  ],
+  "web": true
+ },
+ {
+  "source": "No footnotes here, only a [link](x) and a ^ caret.\n",
+  "notes": [],
+  "references": [],
+  "web": true
+ },
+ {
+  "source": "[^2]: Add 2 spaces at the start of each new line.\n  This lets you write footnotes that span multiple lines.\n\nText[^2].\n",
+  "notes": [
+   {
+    "number": 1,
+    "label": "2",
+    "inline": false
+   }
+  ],
+  "references": [
+   {
+    "text": "[^2]",
+    "number": 1,
+    "ordinal": 1
+   }
+  ],
+  "web": false
+ },
+ {
+  "source": "You can also use inline footnotes. ^[This is an inline footnote.] And a named one[^n].\n\n[^n]: Named.\n",
+  "notes": [
+   {
+    "number": 2,
+    "label": "n",
+    "inline": false
+   },
+   {
+    "number": 1,
+    "label": "",
+    "inline": true
+   }
+  ],
+  "references": [
+   {
+    "text": "^[This is an inline footnote.]",
+    "number": 1,
+    "ordinal": 1
+   },
+   {
+    "text": "[^n]",
+    "number": 2,
+    "ordinal": 1
+   }
+  ],
+  "web": false
+ },
+ {
+  "source": "Inline with brackets ^[see [the page] here] and code `^[not one]`.\n",
+  "notes": [
+   {
+    "number": 1,
+    "label": "",
+    "inline": true
+   }
+  ],
+  "references": [
+   {
+    "text": "^[see [the page] here]",
+    "number": 1,
+    "ordinal": 1
+   }
+  ],
+  "web": false
+ },
+ {
+  "source": "~~~\n[^1]: in tildes\n~~~\n\nText[^1].\n",
+  "notes": [],
+  "references": [],
+  "web": false
+ }
+]

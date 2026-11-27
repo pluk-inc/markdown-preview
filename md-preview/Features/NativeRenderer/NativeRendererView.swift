@@ -67,6 +67,8 @@ final class NativeRendererView: NSView {
         wantsLayer = true
         layerContentsRedrawPolicy = .duringViewResize
         ctx = mdcore_create(Unmanaged.passUnretained(layer!).toOpaque())
+        // The view starts in Read mode: the footnotes are a list at the end.
+        mdcore_set_notes_at_end(ctx, true)
         renderLoop = NativeRenderLoop(ctx: ctx)
         renderLoop.didDraw = { [weak self] step in
             self?.frameDidDraw(step)
@@ -267,7 +269,13 @@ final class NativeRendererView: NSView {
 
     @objc private func userWillScroll() {
         endScrollAnimation()
+        hideNoteBubble()
     }
+
+    /// Where the reader was before a click on a footnote number, by the
+    /// number of the footnote: the offset that a click on the mark of its
+    /// text goes back to.
+    private var noteReturns: [Int: CGFloat] = [:]
 
     /// Scrolls to an offset, kept inside the page.
     private func scroll(toY y: CGFloat) {
@@ -355,6 +363,10 @@ final class NativeRendererView: NSView {
         didSet {
             guard isEditable != oldValue else { return }
             markedText = nil
+            // The texts of the footnotes are where a reader types them in
+            // Edit mode, and in a list at the end of the page that is read.
+            mdcore_set_notes_at_end(ctx, !isEditable)
+            relayout(force: true)
             if isEditable {
                 // The system's caret shows where the core's caret is.
                 mdcore_caret_show(ctx, false)
@@ -562,6 +574,8 @@ final class NativeRendererView: NSView {
         // before kept its layout, and the reader's place its height. A new
         // document starts at its top, which can be at another height now.
         if !keepsScroll {
+            noteReturns.removeAll()
+            hideNoteBubble()
             mdcore_select_none(ctx)
             updatePageArea()
             scroll(toY: topScrollY)
@@ -694,6 +708,7 @@ final class NativeRendererView: NSView {
         if hasDocument, shown.contains(point) {
             switch mdcore_pointer_shape(ctx, point.x, point.y) {
             case MDCORE_POINTER_TEXT: cursor = .iBeam
+            case MDCORE_POINTER_LINK: cursor = .pointingHand
             case MDCORE_POINTER_BUSY:
                 // A frame has the core. The main thread
                 // does not wait for it: the cursor stays, and one later
@@ -709,6 +724,74 @@ final class NativeRendererView: NSView {
             }
         }
         if scrollView.documentCursor !== cursor { scrollView.documentCursor = cursor }
+        hoverNote(at: cursor === NSCursor.pointingHand ? point : nil)
+    }
+
+    // MARK: - The text of a footnote beside its number
+
+    /// The bubble with the text of a footnote, while the pointer is on
+    /// the number of that footnote in the text.
+    private var noteBubble: NSPopover?
+    /// The number of the footnote that the bubble is for, or waits for.
+    private var noteBubbleNumber = 0
+    private var noteBubbleWork: DispatchWorkItem?
+
+    /// The pointer is on a point of the page that is on a footnote
+    /// (`point`), or on none (nil). A pointer that stays on the number of
+    /// a footnote for a moment shows the text of that footnote: a reader
+    /// reads it with no jump, and in Edit mode with no move of the caret.
+    private func hoverNote(at point: NSPoint?) {
+        var number = 0
+        var isDefinition = false
+        guard let point, mdcore_note_at(ctx, point.x, point.y, &number, &isDefinition), !isDefinition else {
+            hideNoteBubble()
+            return
+        }
+        guard number != noteBubbleNumber else { return }
+        hideNoteBubble()
+        noteBubbleNumber = number
+        let work = DispatchWorkItem { [weak self] in self?.showNoteBubble(number, at: point) }
+        noteBubbleWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+    }
+
+    private func showNoteBubble(_ number: Int, at point: NSPoint) {
+        var length = 0
+        guard number == noteBubbleNumber, window != nil,
+              let bytes = mdcore_note_text(ctx, number, &length), length > 0 else { return }
+        let text = String(decoding: UnsafeRawBufferPointer(start: bytes, count: length), as: UTF8.self)
+        let label = NSTextField(wrappingLabelWithString: text)
+        label.font = .systemFont(ofSize: NSFont.systemFontSize)
+        label.isSelectable = false
+        // The size of the text in lines of not more than the widest
+        // bubble: the bubble gets it as a frame, because a popover gives
+        // a view with only constraints no width.
+        let widest: CGFloat = 340
+        let padding = NSSize(width: 12, height: 10)
+        let fitted = label.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: widest, height: .greatestFiniteMagnitude))
+            ?? NSSize(width: widest, height: 20)
+        let textSize = NSSize(width: min(ceil(fitted.width), widest), height: ceil(fitted.height))
+        label.frame = NSRect(origin: NSPoint(x: padding.width, y: padding.height), size: textSize)
+        let size = NSSize(width: textSize.width + 2 * padding.width, height: textSize.height + 2 * padding.height)
+        let content = NSViewController()
+        content.view = NSView(frame: NSRect(origin: .zero, size: size))
+        content.view.addSubview(label)
+        let bubble = NSPopover()
+        bubble.contentViewController = content
+        bubble.contentSize = size
+        // The app closes it: it must not take the keys from the page.
+        bubble.behavior = .applicationDefined
+        bubble.animates = false
+        bubble.show(relativeTo: NSRect(x: point.x - 4, y: point.y - 12, width: 8, height: 24), of: page, preferredEdge: .maxY)
+        noteBubble = bubble
+    }
+
+    private func hideNoteBubble() {
+        noteBubbleWork?.cancel()
+        noteBubbleWork = nil
+        noteBubbleNumber = 0
+        noteBubble?.close()
+        noteBubble = nil
     }
 
     private var pointerShapeRetryScheduled = false
@@ -721,6 +804,39 @@ final class NativeRendererView: NSView {
     @objc private func windowDidResignKey() {
         updateCaretIndicator()
     }
+
+    /// A click on the page (the button went down and up at one place). A
+    /// click on the number of a footnote goes to the text of that
+    /// footnote, and a click on the number mark of that text goes back to
+    /// where the reader was, or to its first reference. In Edit mode only
+    /// with Command, because a click there puts the caret.
+    fileprivate func click(at point: NSPoint, withCommand: Bool) {
+        hideNoteBubble()
+        // In Edit mode a click puts the caret; with Command it follows.
+        guard !isEditable || withCommand else { return }
+        var number = 0
+        var isDefinition = false
+        guard mdcore_note_at(ctx, point.x, point.y, &number, &isDefinition) else { return }
+        var target = 0.0
+        if isDefinition {
+            if let back = noteReturns.removeValue(forKey: number) {
+                scroll(toY: back)
+                setNeedsDraw()
+                return
+            }
+            guard mdcore_note_top(ctx, number, 1, &target) else { return }
+        } else {
+            guard mdcore_note_top(ctx, number, 0, &target) else { return }
+            noteReturns[number] = scrollY
+        }
+        // The page can have another height with that part laid out.
+        updatePageArea()
+        scroll(toY: target - topInset - Self.noteRoom)
+        setNeedsDraw()
+    }
+
+    /// Room above the block that a click on a footnote goes to.
+    private static let noteRoom: CGFloat = 24
 
     /// A pointer event on the page. `point` is in page coordinates, which
     /// are the core's document space. phase: 0 = down, 1 = drag.
@@ -768,6 +884,7 @@ final class NativeRendererView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
+        hideNoteBubble()
         if isEditable {
             // Escape leaves Edit mode, also before a click gave a caret.
             // Not while an input method has text that is not final: the
@@ -856,8 +973,12 @@ private final class PageArea: NSView {
     override func mouseMoved(with event: NSEvent) { owner?.updatePointerShape() }
 
     override func mouseDown(with event: NSEvent) {
+        downPoint = convert(event.locationInWindow, from: nil)
         owner?.pointer(at: convert(event.locationInWindow, from: nil), phase: 0)
     }
+
+    /// Where the button went down, for a click (a mouse up at that place).
+    private var downPoint: NSPoint?
 
     /// The last drag event, repeated by a timer while the button is down:
     /// AppKit sends no drag events for a pointer that does not move, and a
@@ -878,6 +999,11 @@ private final class PageArea: NSView {
 
     override func mouseUp(with event: NSEvent) {
         endDrag()
+        let point = convert(event.locationInWindow, from: nil)
+        if let down = downPoint, abs(point.x - down.x) + abs(point.y - down.y) < 3 {
+            owner?.click(at: point, withCommand: event.modifierFlags.contains(.command))
+        }
+        downPoint = nil
     }
 
     /// A view that leaves its window in the middle of a drag gets no mouse up.

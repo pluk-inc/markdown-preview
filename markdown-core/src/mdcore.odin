@@ -1989,6 +1989,7 @@ Pointer_Shape :: enum c.int {
 	Default = 0,
 	Text    = 1,
 	Busy    = 2, // not known now: another call works on the view
+	Link    = 3, // on the number of a footnote, which a click follows
 }
 
 // The one export that does not wait for the view's state (`hold`): the
@@ -2003,10 +2004,91 @@ mdcore_pointer_shape :: proc "c" (handle: rawptr, x, y: f64) -> Pointer_Shape {
 		return .Busy
 	}
 	defer sync.unlock(&ctx.lock)
-	if ctx.layout_valid && layout.text_at(&ctx.page, f32(x), y) {
-		return .Text
+	if ctx.layout_valid {
+		if _, _, on_note := layout.note_at(&ctx.page, f32(x), y); on_note {
+			return .Link
+		}
+		if layout.text_at(&ctx.page, f32(x), y) {
+			return .Text
+		}
 	}
 	return .Default
+}
+
+// See the header.
+@(export)
+mdcore_note_at :: proc "c" (handle: rawptr, x, y: f64, number: ^c.long, definition: ^bool) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	if !ctx.layout_valid {
+		return false
+	}
+	found, is_definition := layout.note_at(&ctx.page, f32(x), y) or_return
+	number^, definition^ = c.long(found), is_definition
+	return true
+}
+
+// See the header.
+@(export)
+mdcore_set_notes_at_end :: proc "c" (handle: rawptr, at_end: bool) {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	if ctx.page.notes_at_end == at_end {
+		return
+	}
+	// The blocks of the footnotes have another height: a new layout,
+	// which still knows the place of the reader.
+	take_place(ctx)
+	ctx.page.notes_at_end = at_end
+	layout.begin(&ctx.page, nil, ctx.style, 0)
+	ctx.layout_valid = false
+}
+
+// See the header.
+@(export)
+mdcore_note_text :: proc "c" (handle: rawptr, number: c.long, length: ^c.long) -> [^]u8 {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	hold(ctx)
+	clear(&ctx.source_out)
+	length^ = 0
+	if !document.note_text(&ctx.doc, int(number), &ctx.source_out) {
+		return nil
+	}
+	length^ = c.long(len(ctx.source_out))
+	return raw_data(ctx.source_out)
+}
+
+// See the header.
+@(export)
+mdcore_note_top :: proc "c" (handle: rawptr, number, reference: c.long, y: ^f64) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	if !ctx.layout_valid {
+		return false
+	}
+	top: f64
+	changed, ok: bool
+	if reference == 0 {
+		top, changed, ok = layout.note_top(&ctx.page, int(number))
+	} else {
+		block := document.note_block(&ctx.doc, int(number), int(reference)) or_return
+		top, changed, ok = layout.block_top(&ctx.page, block)
+	}
+	if changed {
+		layout_changed(ctx)
+	}
+	y^ = top
+	return ok
 }
 
 // phase 0 = mouse down, 1 = drag. x and y are points in document space.

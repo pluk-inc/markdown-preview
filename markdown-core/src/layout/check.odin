@@ -87,7 +87,9 @@ check :: proc(l: ^Layout) -> string {
 			task_y = task.y
 		}
 	}
-	if len(l.parts) > 0 && l.content_height != top - l.origin + f64(l.m.page_pad) {
+	// Below the parts: the list of the footnotes, or the room at the end.
+	below := l.notes.height > 0 ? f64(l.notes.height) : f64(l.m.page_pad)
+	if len(l.parts) > 0 && l.content_height != top - l.origin + below {
 		return "the page height is not the sum of the parts"
 	}
 	return ""

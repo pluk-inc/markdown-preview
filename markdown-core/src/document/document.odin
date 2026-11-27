@@ -12,6 +12,9 @@ Inline :: enum u8 {
 	Link,
 	Image, // the alternative text of an image
 	Strike,
+	// The number of a footnote, in the place of its reference in the
+	// source ("[^label]", "^[text]"). `Span.link` is that number.
+	Note,
 	// A mark of the source that shows as text: the "**" of bold text
 	// that the caret is in (`Document.reveal`).
 	Mark,
@@ -46,6 +49,10 @@ Marker :: enum u8 {
 	Number,
 	Task_Open,
 	Task_Done,
+	// The first block of the definition of a footnote ("[^label]: "):
+	// `number` is the number of the footnote, 0 for one with no
+	// reference.
+	Note,
 }
 
 // Where a block stands in a list, for the space above it.

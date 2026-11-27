@@ -176,6 +176,12 @@ Layout :: struct {
 	column:         f32,
 	fonts:          [dynamic]Sized_Font,
 	panel:          Panel, // of front matter, above the first part (panel.odin)
+	width:          f32, // of the view that the layout is for (`begin`)
+	// The texts of the footnotes show in a list at the end of the page,
+	// and not where they are in the source: for a page that is read. The
+	// owner sets it before `begin`.
+	notes_at_end:   bool,
+	notes:          Notes_Area, // that list (notes.odin)
 }
 
 // Starts a new layout of `doc` for a view of `width` points. The records of
@@ -200,6 +206,8 @@ begin :: proc(l: ^Layout, doc: ^document.Document, style: base.Style, width: f32
 	l.column -= 2 * inset
 	l.keep_y0, l.keep_y1 = 0, 1e30
 	panel_begin(l, true)
+	l.width = width
+	notes_begin(l, true)
 	if doc != nil {
 		for _, p in doc.parts {
 			append(&l.parts, part_new(l, p))
@@ -226,10 +234,12 @@ part_new :: proc(l: ^Layout, part: int) -> Part {
 // stays; the owner puts the reader's place back after it
 // (`restore_place`).
 apply_change :: proc(l: ^Layout, change: document.Change) {
-	// Front matter that changed is another panel: the parts are at other
+	// Front matter that changed is another panel, and other footnotes
+	// are another list at the end of the page: the parts are at other
 	// heights of the page.
 	panel_changed := panel_begin(l)
-	defer if panel_changed {
+	notes_changed := notes_begin(l)
+	defer if panel_changed || notes_changed {
 		sum_tops(l)
 	}
 	if change.parts_removed == 0 && change.parts_added == 0 {
@@ -286,9 +296,15 @@ sum_tops :: proc(l: ^Layout) {
 		part.top = top
 		top += f64(part.height)
 	}
-	if len(l.parts) == 0 {
+	// The list of the footnotes is below the last part, and has the room
+	// at the end of the page in it.
+	with_notes := notes_place(l, top)
+	switch {
+	case with_notes > top:
+		top = with_notes
+	case len(l.parts) == 0:
 		top += f64(l.m.page_pad * TOP_PAD)
-	} else {
+	case:
 		top += f64(l.m.page_pad)
 	}
 	l.content_height = top - l.origin
@@ -413,6 +429,7 @@ reset :: proc(l: ^Layout) {
 destroy :: proc(l: ^Layout) {
 	reset(l)
 	panel_destroy(l)
+	notes_destroy(l)
 	for f in l.fonts {
 		text.font_release(f.font)
 	}
@@ -462,6 +479,10 @@ span_font :: proc(l: ^Layout, style: document.Inline_Set, size: f32, heading: bo
 	if .Code in style {
 		return font(l, .Mono, size * 0.9)
 	}
+	// The number of a footnote: small, and raised (`NOTE_RAISE`).
+	if .Note in style {
+		return font(l, .Regular, size * NOTE_SIZE)
+	}
 	bold := .Bold in style
 	italic := .Italic in style || .Image in style
 	switch {
@@ -493,12 +514,15 @@ done_color :: proc(l: ^Layout) -> base.Color {
 // The color of the text of a span. `done`: its block stands in a checked
 // task item. The state is read from the document when the page is drawn,
 // not kept in the layout, so a task that is checked needs no new layout.
+NOTE_SIZE :: 0.72 // of the number of a footnote in the text, in sizes of the text
+NOTE_RAISE :: 0.36 // how far its baseline is above the one of the text, in sizes of the text
+
 span_color :: proc(l: ^Layout, para: ^Para, style: document.Inline_Set, done: bool) -> base.Color {
 	// A mark of the source that shows at the caret.
 	if .Mark in style {
 		return l.style.secondary
 	}
-	if .Link in style {
+	if .Link in style || .Note in style {
 		return l.style.link
 	}
 	if done && !para.quote && .Image not_in style {
@@ -657,6 +681,12 @@ marker_text :: proc(b: ^document.Block) -> string {
 	#partial switch b.marker {
 	case .Number:
 		return fmt.tprintf("%d.", b.number)
+	case .Note:
+		// The number of the footnote; none for a footnote that no text
+		// refers to.
+		if b.number > 0 {
+			return fmt.tprintf("%d.", b.number)
+		}
 	}
 	// A bullet is a circle and a task a box, with no text
 	// (`place_marker`).
@@ -852,6 +882,10 @@ estimate_block :: proc(l: ^Layout, b: ^document.Block, first: bool) -> f32 {
 estimate :: proc(l: ^Layout, part, from: int) -> (height: f32) {
 	blocks := document.part_blocks(l.doc.parts[part])
 	for &b, slot in blocks[min(from, len(blocks)):] {
+		// The text of a footnote is in the list at the end of the page.
+		if l.notes_at_end && document.in_note(l.doc, l.doc.starts[part] + from + slot) {
+			continue
+		}
 		height += estimate_block(l, &b, part == 0 && from + slot == 0)
 	}
 	return
@@ -914,6 +948,13 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 		width := l.column - (x - l.column_x)
 		heading_size := l.m.body * HEADING_SCALE[b.kind == .Heading ? b.level : 0]
 
+		// The text of a footnote is in the list at the end of the page: its
+		// block has a box with no height and no records.
+		if !l.in_block && l.notes_at_end && document.in_note(l.doc, l.doc.starts[index] + slot) {
+			append(&work.boxes, Box{top = l.y, bottom = l.y, line_first = len(work.lines), line_end = len(work.lines), decor_first = len(work.decor), decor_end = len(work.decor), para_first = len(work.paras), para_end = len(work.paras)})
+			show_work(l)
+			continue
+		}
 		if !l.in_block {
 			// The first block of the document has no space above it.
 			if index > 0 || slot > 0 {
