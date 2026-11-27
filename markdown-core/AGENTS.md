@@ -1599,6 +1599,17 @@ export.
   text went into a new line that joined that item. After the parse
   around such a line, the caret is at the place of its address. The walk
   of `bench.m` has this sequence (`list_caret_check`).
+- **2026-11-26** — A caret when Edit Mode starts. The maintainer asked
+  that Edit Mode needs no click before the first key. The core puts the
+  caret at the start of the first text whose line is all in a range of
+  the page (`mdcore_caret_set_in`), and the host gives it the view less
+  the room that a caret keeps to the edges
+  (`NativeRendererView.placeCaretInView`), so the first key does not
+  move the page. The first form was a loop of `mdcore_caret_set` in the
+  host; each of its looks moved the caret and could show marks, which
+  changed the layout under the next look. Checked on the hidden display
+  with a typed key right after Command-E: a short document, an empty one,
+  and the 1 MB fixture two pages down.
 - **2026-11-27** — The first outline from the core. In native mode the
   sidebar's outline of a document that opens came from the app's parser
   (a second parse of all of the text, off the main thread for a large

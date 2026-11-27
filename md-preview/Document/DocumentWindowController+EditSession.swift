@@ -52,9 +52,11 @@ extension DocumentWindowController {
         beginEditorBaseline()
         guard let web = editor as? EditorViewController else {
             // The view takes the keys, so Escape leaves Edit mode also
-            // before a click. No formatting bar: its commands are of the
-            // web editor.
+            // before a click, and it has a caret at the top of what
+            // shows, so the reader types with no click first. No
+            // formatting bar: its commands are of the web editor.
             documentWindow.makeFirstResponder(native)
+            native?.placeCaretInView()
             updateEditToolbarItem()
             return
         }

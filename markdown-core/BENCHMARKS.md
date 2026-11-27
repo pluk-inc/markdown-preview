@@ -90,6 +90,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-26 | list marks as in other Markdown editors | 576 / 555 | 60 / 107 (the base too) | 485 / 770 | 59 / 72 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
 | 2026-11-26 | the outline of native Edit Mode from the core | 574 / 559 | 64 / 110 (the base too) | 475 / 755 | 58 / 74 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
 | 2026-11-26 | the caret at its place after Up from a list mark | 568 / 591 | 60 / 108 (the base too) | 490 / 800 | 60 / 74 | not recorded | not recorded | 7.1 / 26.4 (the base too) |
+| 2026-11-26 | a caret when Edit Mode starts | 566 / 579 | 61 / 95 (the base too) | 460 / 605 | 56 / 73 | not recorded | not recorded | 7.0 / 26.3 (the base 26.4) |
 | 2026-11-27 | the first outline of a document from the core, not from a second parse | 584 / 596 (see the section) | 55 / 79 (the base 55 / 89) | 498 / 583 (the base 510 / 700) | – | – | – | – |
 | 2026-11-27 | the corners of the card of a code block, as the web renderer has them | 579 / 591 | 52 / 86 (the base too) | 495 / 640 (the base 475 / 620) | 63 / 75 | not recorded | 0.49 / 0.40 | 7.0 / 26.3 (the base 26.4) |
 
@@ -1324,6 +1325,42 @@ long, five launches each, in the order that they ran:
 
 The launches of the base were slower in this set; no code of a launch
 changed, so that is the spread of the Mac (other apps were in use).
+
+## A caret when Edit Mode starts (2026-11-26)
+
+One new call of the core puts the first caret of Edit Mode, and the
+host calls it one time when the mode starts: no launch, scroll, or
+typing path of the benchmark runs it. `core.py`, short / long, the two
+runs of each in the order base, change, change, base (the runs of
+another change were around them), with a load of 1.8 to 4.9:
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 60, 62 / 75, 74 | 57, 56 / 71, 76 |
+| A typed character in the middle of the text (CPU ms) | 1.16, 1.23 / 1.33, 1.28 | 1.02, 1.20 / 1.37, 1.46 |
+| A typed character at the end of the text (CPU ms) | 0.84, 1.18 / 2.42, 2.25 | 1.34, 1.29 / 2.99, 2.87 |
+| A typed character at a caret (CPU ms) | 1.10, 1.32 / 1.63, 1.48 | 1.67, 1.75 / 1.59, 1.85 |
+| A step of the caret to the left or to the right (CPU ms) | 0.40, 0.33 / 0.33, 0.36 | 0.35, 0.31 / 0.36, 0.34 |
+| Heap with all of the document laid out (MB) | 7.0, 7.0 / 26.4, 26.4 | 7.0, 7.0 / 26.3, 26.3 |
+
+The rows overlap but for three. The first frame of the short document:
+both runs of the change (57, 56) are below both of the base (60, 62).
+A typed character in the long document, in the middle and at the end:
+both runs of the change (1.37, 1.46 and 2.99, 2.87) are above both of
+the base (1.33, 1.28 and 2.42, 2.25). The change is on none of these
+paths (the program of the benchmark got one more check before its
+measures, in a document of its own), and the rows of the day before
+have this spread too. `app.py`, short / long, five launches each, in
+the order that they ran:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 560 / 582 | 61 / 95 | 470 / 600 |
+| change | 576 / 578 | 61 / 95 | 460 / 600 |
+| change | 556 / 579 | 61 / 94 | 460 / 610 |
+| base | 565 / 588 | 61 / 95 | 470 / 600 |
+
+The sets overlap.
 
 ## The first outline from the core (2026-11-27)
 
