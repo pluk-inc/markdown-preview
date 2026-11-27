@@ -170,8 +170,13 @@ These came from the maintainer. Do not undo one without asking.
   definition is text that the reader edits where it is: the definitions
   stay in place, and a pointer on a number shows the text in a bubble.
   A click on a number goes to its text and back (Command-click in Edit
-  Mode). A piece that has footnote syntax is parsed with all of the
-  source, since a number depends on each reference before it. What is a
+  Mode). The number of a footnote is of each reference before it, so
+  the document keeps its footnotes (`Document.notes`, `note_keys`), and
+  a change of a piece with footnote syntax is a parse of the piece only
+  when the piece has the footnotes that it had, in their order
+  (`piece_footnotes`): then no number changes, and only the offsets of
+  the footnotes move (`notes_commit`). A change that adds, removes, or
+  renames one is a parse of all of the source. What is a
   reference is the parser's choice and not a second set of rules for
   code and raw HTML: one pass of the parser with no document, over the
   source with each possible reference masked, says which of them it
@@ -180,6 +185,10 @@ These came from the maintainer. Do not undo one without asking.
   (`Shape.noted`, from the parser). The mask (a run of one byte that is
   no mark of Markdown) is in the parse of the document too, so a
   reference or an inline footnote with styles in it is one run of text.
+  The footnote code has working memory of its own for each call: a
+  parse runs beside the frames (`prepare`), where no one frees the
+  working memory of the thread. The list at the end of the page is laid
+  out where the view is, as the page is.
 - **The outline of native Edit Mode comes from the core** (2026-11-26):
   `mdcore_outline` reads the heading blocks, with no parse. Its texts are
   the ones the native page shows, so they differ from the web renderer's
@@ -695,21 +704,22 @@ Design, before the features that need it:
 - **Images and links**: the parser counts an image but drops its source,
   and a link's target is cloned but not used. md4c has no alerts, so
   they need a pass in `parse.odin` over its output, as footnotes have.
-- **Footnotes, the open parts**: a change in a paragraph that has
-  footnote syntax parses all of the document (a key in such a paragraph
-  of a long document is slow; form: numbers kept apart from the blocks,
-  so that a piece is parsed alone and only the numbers after it change);
-  the mark `[^label]: ` of a definition does not show at the caret in
-  Edit Mode, and Return in a definition has no rule; no key or menu
-  command goes from a caret to the footnote text; the first line of a
-  definition is text of a paragraph in its place (a fence of code or a
-  heading that starts there is a block only in the list at the end of
-  the page, which is parsed from the lines of the text); the web renderer
-  does not read the inline form; the texts in the list at the end of the
-  page are no text of the document, so a reader cannot select or copy
-  them (form: a selection that can be in the layout of the list); a
-  document with footnotes costs one more pass of the parser for each
-  read of its footnotes (the parse, the list, the text of a bubble).
+- **Footnotes, the open parts**: the parse of a source with footnotes
+  is one more pass of the parser (`footnote_confirm`: 7 ms more for the
+  1 MB document, of 11; form: one pass, with the numbers put into the
+  texts after it); a key in the text of a definition parses each
+  definition that is next to it, since they are one list for the parser
+  (5 ms with 588 of them; a document with ten pays nothing that
+  counts); the mark `[^label]: ` of a definition does not show at the
+  caret in Edit Mode, and Return in a definition has no rule; no key or
+  menu command goes from a caret to the footnote text; the first line of
+  a definition is text of a paragraph in its place (a fence of code or
+  a heading that starts there is a block only in the list at the end of
+  the page, which is parsed from the lines of the text); the web
+  renderer does not read the inline form; the texts in the list at the
+  end of the page are no text of the document, so a reader cannot select
+  or copy them (form: a selection that can be in the layout of the
+  list).
 - The bullet of a list item is a record of the box (`Decor`) and not a
   character: the bullet of the system font is a fifth of the size of
   the text, and each font has its own. It and the check box of a task

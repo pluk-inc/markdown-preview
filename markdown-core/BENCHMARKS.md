@@ -189,6 +189,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-27 | the corners of the card of a code block, as the web renderer has them | 579 / 591 | 52 / 86 (the base too) | 495 / 640 (the base 475 / 620) | 63 / 75 | not recorded | 0.49 / 0.40 | 7.0 / 26.3 (the base 26.4) |
 | 2026-11-27 | the method of the benchmark: two builds in turns, instructions, cases, more documents (see the section; the columns have other meanings from here) | 584 / 587 to the drawn frame, 593 / 596 to the committed one | 50 / 85, six seconds after the frame (the base too); highest 143 / 178 | 471 / 583, six seconds after the frame | 11.5 / 10.9 with the system started; the parse 0.16 / 11.6 apart | none | 0.42 / 0.35, 99 of 100 frames below 9.5 / 4.0 | 6.95 / 23.4 in a view that only this case used |
 | 2026-11-27 | the panel of front matter at the top of the native page (see the section) | 516 / 532 to the drawn frame, 524 / 553 to the committed one (the base 520 / 524 and 528 / 544) | 50 / 72 (the base too); highest 143 / 165 | 412 / 451 (the base 415 / 450) | 10.7 / 10.1 (the base 10.9 / 9.9) | none | 0.49 / 0.43 (the base 0.51 / 0.43) | 6.78 / 20.7 (the base too) |
+| 2026-11-27 | footnotes in the native page (see the section) | 511 / 531 to the drawn frame, 519 / 551 to the committed one (the base 518 / 531 and 526 / 552) | 50 / 76 (the base 50 / 72); highest 143 / 169 (the base 143 / 165) | 414 / 458 (the base 417 / 452) | 10.4 / 10.0 (the base 10.2 / 10.0); the parse 0.20 / 17.4 apart (the base 0.13 / 10.6) | none | 0.49 / 0.42 (the base 0.51 / 0.42) | 6.79 / 20.8 (the base 6.78 / 20.7) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1776,3 +1777,82 @@ document, of which about 1 % is also in `short`; the rest is not
 explained, and a typed character does not make or draw the panel when
 the view is at the end. The launch of the app does not show the panel:
 its time and its instructions are in the spread of the base.
+
+## Footnotes (2026-11-27)
+
+The native page reads footnotes. `core.py --base` against the commit
+below it (the panel of front matter), all documents, four runs of each
+build in turns; `app.py`, ten launches of each build in turns, for
+`short`, `long`, and `notes`. `notes` is new in `corpus.py` with this
+change: 500 KB of text with a footnote in most paragraphs (588
+definitions at the end, 108 inline ones). `short` has one footnote, so
+`long` has 128, and `front` one. The load of the Mac was 1.5 to 5.
+
+What a source with footnotes pays:
+
+| | Base | Change | Instructions |
+| --- | --- | --- | --- |
+| Parse, `short` (ms) | 0.133 | 0.202 | +50 % |
+| Parse, `long` (ms) | 10.6 | 17.4 | +58 % |
+| Parse, `notes` (ms) | 3.30 | 6.21 | +73 % |
+| A typed character in the middle of the text, `notes` (CPU ms) | 0.414 | 0.424 | +0.5 % (not marked) |
+| A typed character at the end of the text, `notes` (CPU ms) | 0.552 | 5.32 | 13 times |
+| A typed character at a caret that a click put in the view, `notes` (CPU ms) | 2.16 | 6.53 | 10 times |
+| To the end: layout and first frame there, `notes` (ms) | 27.7 | 16.4 | -41 % |
+| Heap at the first frame, `notes` (MB) | 8.73 | 9.09 | |
+| App, `long`: instructions (millions) / memory (MB) | 3598 / 72.1 | 3736 / 76.1 | +3.8 % |
+| App, `notes`: instructions (millions) / memory (MB) | 3220 / 54.6 | 3299 / 56.3 | +2.5 % |
+| App, `notes`: launch to the drawn frame (ms) | 519 | 528 | not marked |
+
+- **The parse** is one more pass of the parser over the source, which
+  says what of it is a reference and a definition (`footnote_confirm`),
+  and the read of the lines before it. A source with no "[^" and no "^["
+  has none of the two: the parse of `prose` is -0.9 % instructions in
+  the case alone, and 1.3 to 1.6 % more in `table`, `paragraph`, and
+  `real` in the run of all.
+- **The two typed characters that are 10 and 13 times** are in the text
+  of a definition at the end of `notes`. The definitions are the items
+  of one list for the parser, and a change parses its piece, which
+  starts at a block in no list: all 588 definitions (59 of the 109
+  million instructions of a parse of all). A document with ten footnotes
+  has a piece of ten. Open work in `AGENTS.md` has it.
+- **To the end** is faster in `notes` because the base lays out the
+  lines of 588 definitions as paragraphs of text with their marks, and
+  the change as the items of a list.
+- **The app** shows `long` with 4 MB more at rest and 4 MB more at its
+  highest, and 3.8 % more instructions: the pass over 1.1 MB and a
+  second copy of the source for it. The launch times are in the spread
+  of the base for the three documents.
+
+What a document with no footnote pays: a typed character is 1.1 to 3.9 %
+more instructions in `prose`, `cjk`, `table`, `paragraph`, and `real`
+(for example 0.358 to 0.388 ms and +2.9 % in `prose`). Two things are
+known for it. The parser asks at each text that it gives if the source
+has footnotes, and the layout asks at each span if it is the number of
+one. And the display of the list at the end is a second use of the
+procedure that makes the quads of a page: with that call taken out, the
+difference in `paragraph` went from 3.4 and 3.9 % to 1.6 and 1.8 %. A
+form of the call that gives it back was not found (the call from the
+owner of the page, and the part loop inline by force, were tried). The
+scroll frames, the first frame, and the heap of these documents are not
+marked.
+
+Three faults that the benchmark showed, fixed before this record:
+
+- A key in a paragraph with a footnote parsed all of the source: 6.3 ms
+  and 20 times the instructions in `notes`. The document now keeps its
+  footnotes, and a piece that has the footnotes that it had, in their
+  order, is parsed alone (`piece_footnotes`).
+- The list at the end of the page was laid out all at one time before
+  the first frame, and the footnotes were read a second time for it:
+  the launch of `notes` was 92 ms later (515 to 607 ms), with 52 % more
+  instructions and 21 MB more. The list is laid out where the view is
+  now.
+- The footnote code used the working memory of the thread in the parse,
+  which runs beside the frames, where no one frees it: 4 MB more heap in
+  each document with a footnote. It has working memory of its own for
+  each call now.
+
+The walk of `bench.m` also found a fault of the caret that no test had:
+Shift and a step into a reference that shows as its source, and the step
+back, did not end where they started.
