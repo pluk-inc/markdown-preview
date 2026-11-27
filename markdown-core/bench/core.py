@@ -132,7 +132,9 @@ def base_build(name: str) -> tuple[str, Path]:
             Path(unpacking, "markdown-core").rename(out / "source-core")
         (out / "source-core").rename(source)
     label = name if name == commit else f"{name} ({commit})"
-    return label, build(source, out, never_changes=True)
+    # A copy from before 2026-11-27 has the core one folder down.
+    core = source / "markdown-core" if (source / "markdown-core").is_dir() else source
+    return label, build(core, out, never_changes=True)
 
 
 def caret_document(path: Path) -> Path:
