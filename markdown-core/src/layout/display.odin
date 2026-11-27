@@ -103,6 +103,7 @@ display :: proc(
 	rects, glyphs: ^[dynamic]base.Quad,
 	buffer: ^text.Glyph_Buffer,
 ) {
+	panel_display(l, cache, y0, y1, origin_y, rects, glyphs, buffer)
 	for p in first_part_below(l, y0) ..< len(l.parts) {
 		part := &l.parts[p]
 		if part.top >= y1 {
@@ -174,26 +175,34 @@ display_part :: proc(
 						color = span_color(l, para, span.style, done)
 					}
 				}
-				px := (line.x + g.x) * scale
-				py := f32(page_pixel(part.top, baseline - g.y, scale) - origin_y)
-				fx := math.floor(px)
-				bin := u8(clamp((px - fx) * text.SUBPIXEL_BINS, 0, text.SUBPIXEL_BINS - 1))
-				e := text.cache_get(cache, run_font_id, g.id, bin)
-				if e.w == 0 {
-					continue
-				}
-				append(
-					glyphs,
-					base.Quad {
-						pos = {fx + f32(e.left), py - f32(e.top)},
-						size = {f32(e.w), f32(e.h)},
-						uv = {f32(e.x), f32(e.y)},
-						uvsize = {f32(e.w), f32(e.h)},
-						color = color,
-						kind = e.is_color ? .Color_Glyph : .Gray_Glyph,
-					},
-				)
+				glyph_quad(cache, glyphs, run_font_id, g, line.x, part.top, baseline, origin_y, color)
 			}
 		}
 	}
+}
+
+// The quad of one glyph of a line at `x`, whose text stands on
+// `baseline` (points from `top`, a height of the page).
+@(private)
+glyph_quad :: proc(cache: ^text.Glyph_Cache, glyphs: ^[dynamic]base.Quad, font_id: u16, g: text.Glyph, x: f32, top: f64, baseline: f32, origin_y: f64, color: base.Color) {
+	scale := cache.scale
+	px := (x + g.x) * scale
+	py := f32(page_pixel(top, baseline - g.y, scale) - origin_y)
+	fx := math.floor(px)
+	bin := u8(clamp((px - fx) * text.SUBPIXEL_BINS, 0, text.SUBPIXEL_BINS - 1))
+	e := text.cache_get(cache, font_id, g.id, bin)
+	if e.w == 0 {
+		return
+	}
+	append(
+		glyphs,
+		base.Quad {
+			pos = {fx + f32(e.left), py - f32(e.top)},
+			size = {f32(e.w), f32(e.h)},
+			uv = {f32(e.x), f32(e.y)},
+			uvsize = {f32(e.w), f32(e.h)},
+			color = color,
+			kind = e.is_color ? .Color_Glyph : .Gray_Glyph,
+		},
+	)
 }

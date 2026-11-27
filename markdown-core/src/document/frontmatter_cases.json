@@ -1,0 +1,240 @@
+[
+ {
+  "source": "---\ntitle: Draft\ntags:\n  - markdown\n---\n# Body\n",
+  "entries": [
+   {
+    "key": "title",
+    "value": "Draft"
+   },
+   {
+    "key": "tags",
+    "value": "markdown",
+    "items": [
+     "markdown"
+    ]
+   }
+  ]
+ },
+ {
+  "source": "---\nname: \"openai-docs\"\nnote: 'single'\n---\n",
+  "entries": [
+   {
+    "key": "name",
+    "value": "openai-docs"
+   },
+   {
+    "key": "note",
+    "value": "single"
+   }
+  ]
+ },
+ {
+  "source": "---\ntags: [links, \"core features\", drafts]\n---\n",
+  "entries": [
+   {
+    "key": "tags",
+    "value": "links, core features, drafts",
+    "items": [
+     "links",
+     "core features",
+     "drafts"
+    ]
+   }
+  ]
+ },
+ {
+  "source": "---\ntags:\n- links\n- \"core features\"\n---\n",
+  "entries": [
+   {
+    "key": "tags",
+    "value": "links, core features",
+    "items": [
+     "links",
+     "core features"
+    ]
+   }
+  ]
+ },
+ {
+  "source": "---\ndescription: >-\n  Line one\n  line two.\n---\n",
+  "entries": [
+   {
+    "key": "description",
+    "value": "Line one line two."
+   }
+  ]
+ },
+ {
+  "source": "---\n# build metadata\nstatus: shipped # since 0.0.38\nurl: https://example.com/#anchor\n---\n",
+  "entries": [
+   {
+    "key": "status",
+    "value": "shipped"
+   },
+   {
+    "key": "url",
+    "value": "https://example.com/#anchor"
+   }
+  ]
+ },
+ {
+  "source": "+++\ntitle = \"Draft\"\ndate = \"2026-05-21\"\ndraft = false\ntags = [\"markdown\", \"frontmatter\"]\n+++\n",
+  "entries": [
+   {
+    "key": "title",
+    "value": "Draft"
+   },
+   {
+    "key": "date",
+    "value": "2026-05-21"
+   },
+   {
+    "key": "draft",
+    "value": "false"
+   },
+   {
+    "key": "tags",
+    "value": "markdown, frontmatter",
+    "items": [
+     "markdown",
+     "frontmatter"
+    ]
+   }
+  ]
+ },
+ {
+  "source": "+++\n# a comment\n[section]\nname = 'x'\nempty =\n+++\ntext\n",
+  "entries": [
+   {
+    "key": "name",
+    "value": "x"
+   },
+   {
+    "key": "empty",
+    "value": ""
+   }
+  ]
+ },
+ {
+  "source": "---\r\ntitle: With CRLF\r\nlist:\r\n  - a\r\n  - b\r\n...\r\nBody\r\n",
+  "entries": [
+   {
+    "key": "title",
+    "value": "With CRLF"
+   },
+   {
+    "key": "list",
+    "value": "a, b",
+    "items": [
+     "a",
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "source": "---\nempty:\nquoted: \"a # not a comment\"\nnested: [a, [b]]\nmap: {a: 1}\ntime: 12:30\n: no key\nno colon here\n---\n",
+  "entries": [
+   {
+    "key": "empty",
+    "value": ""
+   },
+   {
+    "key": "quoted",
+    "value": "a # not a comment"
+   },
+   {
+    "key": "nested",
+    "value": "[a, [b]]"
+   },
+   {
+    "key": "map",
+    "value": "{a: 1}"
+   },
+   {
+    "key": "time",
+    "value": "12:30"
+   }
+  ]
+ },
+ {
+  "source": "---\nnone: []\nspaced:   value with spaces   \n---\n",
+  "entries": [
+   {
+    "key": "none",
+    "value": ""
+   },
+   {
+    "key": "spaced",
+    "value": "value with spaces"
+   }
+  ]
+ },
+ {
+  "source": "﻿---\ntitle: After a mark\n---\n",
+  "entries": [
+   {
+    "key": "title",
+    "value": "After a mark"
+   }
+  ]
+ },
+ {
+  "source": "# No front matter\n\ntitle: x\n",
+  "entries": []
+ },
+ {
+  "source": "---\ntitle: never closed\n\ntext\n",
+  "entries": []
+ },
+ {
+  "source": "---\ntitle: Hello\ntitre : valeur\n題:　タイトル\nk: [a, b] \ntags:\n　- a\n - b\n---\n",
+  "entries": [
+   {
+    "key": "title",
+    "value": "Hello"
+   },
+   {
+    "key": "titre",
+    "value": "valeur"
+   },
+   {
+    "key": "題",
+    "value": "タイトル"
+   },
+   {
+    "key": "k",
+    "value": "a, b",
+    "items": [
+     "a",
+     "b"
+    ]
+   },
+   {
+    "key": "tags",
+    "value": "a, b",
+    "items": [
+     "a",
+     "b"
+    ]
+   }
+  ]
+ },
+ {
+  "source": "+++\nnone = []\nsome = [1, 2]\n+++\n",
+  "entries": [
+   {
+    "key": "none",
+    "value": ""
+   },
+   {
+    "key": "some",
+    "value": "1, 2",
+    "items": [
+     "1",
+     "2"
+    ]
+   }
+  ]
+ }
+]

@@ -655,7 +655,7 @@ caret_line_end :: proc(l: ^Layout, at: document.Address, upstream: bool, end: bo
 // its first paragraph starts when text comes. `top` is from the top of
 // the page (`Layout.origin`).
 caret_place_empty :: proc(l: ^Layout) -> (x, top, height: f32) {
-	return l.column_x, part_start(l, 0), math.round(l.m.body * l.m.line_height)
+	return l.column_x, l.panel.height + part_start(l, 0), math.round(l.m.body * l.m.line_height)
 }
 
 // The quad of the caret of a document with no block, as `caret_quad`.

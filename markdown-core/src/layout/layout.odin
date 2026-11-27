@@ -175,6 +175,7 @@ Layout :: struct {
 	column_x:       f32,
 	column:         f32,
 	fonts:          [dynamic]Sized_Font,
+	panel:          Panel, // of front matter, above the first part (panel.odin)
 }
 
 // Starts a new layout of `doc` for a view of `width` points. The records of
@@ -198,6 +199,7 @@ begin :: proc(l: ^Layout, doc: ^document.Document, style: base.Style, width: f32
 	l.column_x += inset
 	l.column -= 2 * inset
 	l.keep_y0, l.keep_y1 = 0, 1e30
+	panel_begin(l, true)
 	if doc != nil {
 		for _, p in doc.parts {
 			append(&l.parts, part_new(l, p))
@@ -224,6 +226,12 @@ part_new :: proc(l: ^Layout, part: int) -> Part {
 // stays; the owner puts the reader's place back after it
 // (`restore_place`).
 apply_change :: proc(l: ^Layout, change: document.Change) {
+	// Front matter that changed is another panel: the parts are at other
+	// heights of the page.
+	panel_changed := panel_begin(l)
+	defer if panel_changed {
+		sum_tops(l)
+	}
 	if change.parts_removed == 0 && change.parts_added == 0 {
 		// The blocks of the range are at the places of the blocks
 		// before: only their records are made again.
@@ -272,7 +280,8 @@ TOP_PAD :: 0.6 // the room above the first block, in page paddings
 // the page its height.
 @(private)
 sum_tops :: proc(l: ^Layout) {
-	top := l.origin
+	// The panel of front matter is above the first part.
+	top := l.origin + f64(l.panel.height)
 	for &part in l.parts {
 		part.top = top
 		top += f64(part.height)
@@ -403,6 +412,7 @@ reset :: proc(l: ^Layout) {
 
 destroy :: proc(l: ^Layout) {
 	reset(l)
+	panel_destroy(l)
 	for f in l.fonts {
 		text.font_release(f.font)
 	}
