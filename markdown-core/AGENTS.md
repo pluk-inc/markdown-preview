@@ -1622,6 +1622,57 @@ export.
   with it (`caret_bar`), on the baseline of the shaped line where the
   line has one, so the bar and the glyphs come from the same numbers. The walk of `bench.m` found that an empty line after a heading
   took the font of the heading; it is a line of body text.
+- **2026-11-26** — A code block that is typed. The maintainer typed a
+  fence at the end of a document and could not type code: Return did
+  nothing, and the next characters went into the line of the fence,
+  where they do not show; a second block typed after a closing fence
+  joined that fence. The maintainer chose that the lines of a fence stay
+  hidden in Edit Mode (not text at the caret), so a caret has no place
+  in them, and the rules for the keys of a reader are in
+  `document/code.odin`:
+  - Code in a fence with no line of code has a place (`code_place`).
+    Text there is a line of its own, with the indent of a list item and
+    the ">" of a quote from the line of the fence (`code_first_line`).
+  - A fence that is typed gets its closing fence at once, so the code
+    takes no text after it and no fence of other code is its end, and
+    the caret goes into the code (`typed_fence`, `.Opened`): text that
+    is typed next is code. The rule runs at the end of each command of
+    the reader (`command_end`).
+  - Return in code with no line starts its first line, where the caret
+    shows before (`line_break`), so a reader who types the fence and
+    Return, and one who types the fence and the code, get the same.
+  - Text that makes a closing fence takes the caret to an empty
+    paragraph after the code (`code_exit`); with a closing fence there
+    before, the typed one goes (`.Closed_Twice`). Where no empty
+    paragraph can be (the next block is in a list or in a quote with
+    the code), the caret goes back to the end of the code. A fence in
+    the middle of closed code is no end of it: the next character makes
+    its line a line of code again, as before.
+  - Down from the last line of code that ends the document makes an
+    empty paragraph after the code and goes there (`code_below`;
+    `mdcore_paragraph_below`, which the host calls when a move down did
+    not move the caret): with the line of the closing fence hidden, a
+    reader had no other way to text after such code.
+  A first form kept the caret in the fence lines with special cases in
+  `mdcore.odin`; reviewers broke it in lists, in quotes, and after a
+  typed closing fence. A second form took each typed closing fence for
+  an end of the code and read a fence from the bytes of each line; a
+  reviewer broke it in the middle of code and before one empty line.
+  If a line is a closing fence, only the parser knows (its indent, the
+  marks of the quotes that it is in): the parser records it
+  (`Block.closed`, from the lines of the block that are no lines of its
+  code), and no rule reads it from the bytes of a line. Three forms
+  that did were each wrong in a case that a review bot found.
+  A form before this one kept the caret in the line of a typed fence
+  until Return, for the word after the fence (the language): the
+  maintainer typed code with no Return, and it went into that line,
+  where it does not show. Open: a reader cannot give or change the
+  language of code (it needs a control of its own, with the lines of
+  the fence hidden); a fence of more than three characters cannot be
+  typed; a delete at the start of code that has text does nothing (in
+  code with no text it takes the code out, `code_delete`);
+  a document that is only a fence with no line break has no caret. The walk of
+  `bench.m` types these (`typed_code_check`).
 - **2026-11-27** — The first outline from the core. In native mode the
   sidebar's outline of a document that opens came from the app's parser
   (a second parse of all of the text, off the main thread for a large

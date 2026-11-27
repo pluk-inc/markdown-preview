@@ -69,6 +69,9 @@ Ctx :: struct {
 	cache:           text.Glyph_Cache,
 	gpu:             renderer.Renderer,
 	selection:       document.Selection,
+	// The code that the caret was in when the command of the reader in
+	// progress started (`command`), for the rules at its end.
+	code_before:    document.Code_Before,
 	// The caret of an editor: where text that is typed goes. An offset
 	// in the source of the document, because that is what an edit
 	// changes; -1 for no caret. `caret_at` is the address in the text of
@@ -376,13 +379,69 @@ typed :: proc(ctx: ^Ctx, text: string, start, end: int) {
 		change_source_held(ctx, own, [2]int{start, end})
 		return
 	}
-	if len(text) > 0 && text[0] != '\n' && text[0] != '\r' && start == end && start == ctx.caret && ctx.doc.count > 0 && document.empty_of(&ctx.doc, ctx.caret_at) > 0 {
-		own := document.empty_text(&ctx.doc, text)
-		defer delete(own)
-		change_source_held(ctx, own, [2]int{start, end})
-		return
+	if len(text) > 0 && start == end && start == ctx.caret && ctx.doc.count > 0 {
+		// Text with no line break at its start, in an empty paragraph.
+		if text[0] != '\n' && text[0] != '\r' && document.empty_of(&ctx.doc, ctx.caret_at) > 0 {
+			own := document.empty_text(&ctx.doc, text)
+			defer delete(own)
+			change_source_held(ctx, own, [2]int{start, end})
+			return
+		}
+		// The first text of code in a fence with no line of code: lines
+		// of that code (`document.code_first_line`), also for text that
+		// starts with a line break, or the closing fence would be at the
+		// end of the text.
+		if own, caret, first := document.code_first_line(&ctx.doc, ctx.caret_at, start, text); first {
+			defer delete(own)
+			change_source_held(ctx, own, [2]int{start, end}, start + caret)
+			return
+		}
 	}
 	change_source_held(ctx, text, [2]int{start, end})
+}
+
+// At the end of a command of the reader, the rules for a fence that it
+// made or took away (`document.typed_fence`): the lines of a fence do
+// not show, so the caret has no place in them. A new fence gets its
+// closing fence at once, and the caret goes into its code. A closing
+// fence takes the caret to an empty paragraph after the code, or, where
+// none can be, back to the end of the code. The caller
+// holds `source_lock`, in the command.
+@(private)
+typed_fence :: proc(ctx: ^Ctx, before: document.Code_Before) {
+	if ctx.doc.count == 0 || ctx.caret < 0 {
+		return
+	}
+	kind, start, end, text := document.typed_fence(&ctx.doc, before, ctx.caret_at, ctx.caret)
+	defer delete(text)
+	switch kind {
+	case .None:
+		return
+	case .Opened:
+		change_source_held(ctx, text, [2]int{start, end}, ctx.caret)
+		// Into the code: text that is typed next is code.
+		caret_to_place(ctx)
+		return
+	case .Closed_Twice:
+		change_source_held(ctx, "", [2]int{start, end}, start)
+	case .Closed:
+	}
+	at, paragraph, caret, leaves := document.code_exit(&ctx.doc, ctx.caret_at, ctx.caret)
+	defer delete(paragraph)
+	switch {
+	case !leaves:
+		caret_to_place(ctx)
+	case len(paragraph) > 0:
+		change_source_held(ctx, paragraph, [2]int{at, at}, caret)
+	case:
+		context.temp_allocator = ctx.temp
+		// A reader of the caret holds the lock of the state.
+		hold(ctx)
+		ctx.caret = caret
+		caret_changed(ctx)
+		reveal_update(ctx)
+		ctx.display_valid = false
+	}
 }
 
 // The one way that the source of the document changes (but for a task
@@ -504,12 +563,27 @@ command :: proc(ctx: ^Ctx, kind: history.Kind) {
 	if from, to, selected := selection_offsets(ctx); selected {
 		kind, anchor = .Other, ctx.caret == from ? to : from
 	}
+	if ctx.history.depth == 0 {
+		// Of the place where the text of the command goes: with text
+		// selected, the code that all of the selection is in.
+		ctx.code_before = {}
+		if from, to, selected := selection_offsets(ctx); selected {
+			ctx.code_before = document.code_before_selection(&ctx.doc, from, to)
+		} else if ctx.caret >= 0 {
+			ctx.code_before = document.code_before(&ctx.doc, ctx.caret_at)
+		}
+	}
 	history.begin(&ctx.history, kind, ctx.caret, anchor, ctx.caret_upstream)
 }
 
-// Ends a command (`command`), with the caret after all that it did.
+// Ends a command (`command`), with the caret after all that it did, and
+// after the rules for a fence that it made (`typed_fence`).
 @(private)
 command_end :: proc(ctx: ^Ctx) {
+	// With the changes of the command done, and in its step of Undo.
+	if ctx.history.depth == 1 {
+		typed_fence(ctx, ctx.code_before)
+	}
 	history.end(&ctx.history, ctx.caret, ctx.caret_upstream)
 }
 
@@ -1069,6 +1143,24 @@ mdcore_caret_move :: proc "c" (handle: rawptr, move: Move, extend: bool) -> bool
 	return moved
 }
 
+// See the header.
+@(export)
+mdcore_paragraph_below :: proc "c" (handle: rawptr) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	if ctx.caret < 0 || ctx.doc.count == 0 {
+		return false
+	}
+	start, text, caret := document.code_below(&ctx.doc, ctx.caret_at) or_return
+	defer delete(text)
+	command(ctx, .Other)
+	defer command_end(ctx)
+	change_source_held(ctx, text, [2]int{start, start}, caret)
+	return true
+}
+
 // `mdcore_caret_move`, for a caller that holds `source_lock` and the
 // lock of the state. The marks at the caret are the caller's to bring
 // up to date (`reveal_update`). `went`: the move that was made.
@@ -1604,6 +1696,10 @@ delete_back :: proc(ctx: ^Ctx) -> bool {
 		clear(&ctx.gone)
 		append(&ctx.gone, ..ctx.doc.source[start:end])
 		change_source_held(ctx, "", [2]int{start, end}, caret)
+		// Code that went can leave the caret in a line where no text
+		// goes (one empty line between two blocks): it is where text
+		// that is typed at its address goes.
+		caret_to_place(ctx)
 		return true
 	}
 	// The character before the caret, with the marks of a style that

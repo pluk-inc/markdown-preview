@@ -1307,8 +1307,13 @@ extension NativeRendererView: @preconcurrency NSTextInputClient {
 
     /// Moves the caret as a key says, and keeps it in view.
     private func moveCaret(_ move: mdcore_move, extend: Bool) {
-        guard mdcore_caret_move(ctx, move, extend) else { return }
-        caretDidMove()
+        if mdcore_caret_move(ctx, move, extend) {
+            caretDidMove()
+        } else if move == MDCORE_MOVE_DOWN, !extend, mdcore_paragraph_below(ctx) {
+            // Down from code that ends the document: the core made an
+            // empty paragraph after it, the only place below such code.
+            didEdit()
+        }
     }
 
     /// The text that is selected.

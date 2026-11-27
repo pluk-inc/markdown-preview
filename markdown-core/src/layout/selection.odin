@@ -399,7 +399,8 @@ line_of_byte :: proc(part: ^Part, box: Box, b: ^document.Block, src: ^document.T
 
 // The address for a caret at a point of the page. As `hit_test`, and
 // also at text that has no line: an empty line of a code block, and a
-// block with no text (an item of a list with nothing in it).
+// block with no text (an item of a list with nothing in it, code in a
+// fence with no line of code).
 caret_hit :: proc(l: ^Layout, x: f32, y: f64) -> (at: document.Address, upstream: bool, ok: bool) {
 	p := part_at(l, y)
 	if p < 0 {
@@ -429,7 +430,8 @@ caret_hit :: proc(l: ^Layout, x: f32, y: f64) -> (at: document.Address, upstream
 				}
 			}
 		}
-		if (b.kind == .Paragraph || b.kind == .Heading) && len(b.text.bytes) == 0 {
+		// Code in a fence with no line of code is such a block too.
+		if (b.kind == .Paragraph || b.kind == .Heading || b.kind == .Code) && len(b.text.bytes) == 0 {
 			return {block = l.doc.starts[p] + near}, false, true
 		}
 	}

@@ -92,6 +92,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-26 | the caret at its place after Up from a list mark | 568 / 591 | 60 / 108 (the base too) | 490 / 800 | 60 / 74 | not recorded | not recorded | 7.1 / 26.4 (the base too) |
 | 2026-11-26 | a caret when Edit Mode starts | 566 / 579 | 61 / 95 (the base too) | 460 / 605 | 56 / 73 | not recorded | not recorded | 7.0 / 26.3 (the base 26.4) |
 | 2026-11-26 | the caret as high as the text of its line | 572 / 592 | 61 / 95 (the base too) | 465 / 615 | 60 / 74 | not recorded | not recorded | 7.0 / 26.4 (the base too) |
+| 2026-11-26 | a code block that is typed | 538 / 548 | 61 / 94 (the base 61 / 93) | 420 / 550 | 62 / 75 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
 | 2026-11-27 | the first outline of a document from the core, not from a second parse | 584 / 596 (see the section) | 55 / 79 (the base 55 / 89) | 498 / 583 (the base 510 / 700) | – | – | – | – |
 | 2026-11-27 | the corners of the card of a code block, as the web renderer has them | 579 / 591 | 52 / 86 (the base too) | 495 / 640 (the base 475 / 620) | 63 / 75 | not recorded | 0.49 / 0.40 | 7.0 / 26.3 (the base 26.4) |
 
@@ -1396,6 +1397,38 @@ no code of the change runs in it, and the sets show none. A set of an
 earlier commit of this change showed 12 MB more memory one time (69 /
 103 against 57 / 91, with a load of 4.9 at its start) and its second
 set did not; these sets of the final code do not show it.
+
+## A code block that is typed (2026-11-26)
+
+The rules for a fence that a reader types: one look at the block of the
+caret when a command of the reader starts and one when it ends, which
+stop at once for a caret that is not in code in a fence. `core.py`,
+short / long, in turns (base, change, change, base), with a load of 1.4
+to 2.9:
+
+| | Base | Change |
+| --- | --- | --- |
+| First frame (ms) | 62, 59 / 75, 79 | 61, 63 / 74, 76 |
+| A typed character in the middle of the text (CPU ms) | 1.18, 1.23 / 1.59, 1.57 | 1.15, 1.24 / 1.61, 1.53 |
+| A typed character at the end of the text (CPU ms) | 1.41, 1.39 / 3.79, 3.71 | 1.40, 1.40 / 3.73, 3.76 |
+| A typed character at a caret (CPU ms) | 1.82, 1.84 / 2.01, 2.04 | 1.84, 1.86 / 2.00, 2.00 |
+| A step of the caret to the left or to the right (CPU ms) | 0.38, 0.38 / 0.38, 0.35 | 0.40, 0.43 / 0.37, 0.36 |
+| Heap with all of the document laid out (MB) | 7.0, 7.0 / 26.3, 26.4 | 7.0, 7.0 / 26.3, 26.3 |
+
+The rows overlap but for a step of the caret in the short document,
+where the two runs of the change (0.40, 0.43) are above the two of the
+base (0.38, 0.38); a step of the caret is no command that changes the
+source, so the new rules do not run in it. `app.py`, short / long, five
+launches each, in the order that they ran:
+
+| Order | Launch to the first frame (ms) | Memory (MB) | CPU (ms) |
+| --- | --- | --- | --- |
+| base | 541 / 546 | 61 / 95 | 410 / 550 |
+| change | 544 / 546 | 61 / 96 | 420 / 550 |
+| change | 531 / 549 | 61 / 92 | 420 / 550 |
+| base | 535 / 553 | 61 / 90 | 420 / 560 |
+
+The sets overlap.
 
 ## The first outline from the core (2026-11-27)
 
