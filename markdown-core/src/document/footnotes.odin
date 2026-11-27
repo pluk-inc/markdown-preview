@@ -287,6 +287,10 @@ footnote_scan :: proc(source: []u8, start, limit: int, known: ^map[string]int, b
 				break
 			} else {
 				append(&lines, Piece{next, line_end, len(possible)})
+				// Each line of the source counts, as in `bullet_after`.
+				if mark := line_bullet(source, next, line_end); mark >= 0 {
+					scan.used[mark] += 1
+				}
 			}
 			next = after
 		}

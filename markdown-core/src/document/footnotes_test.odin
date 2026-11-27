@@ -641,6 +641,21 @@ test_the_list_mark_of_definitions_after_a_change_of_the_lists :: proc(t: ^testin
 	source := "+ plus\n\nP.\n\n- minus\n\nP.\n\n* star\n\nP.\n\nP.\n\nP.\n\nText[^a].\n\n+ one\n\n[^a]: A\n\n+ next\n"
 	doc := parse(source)
 	defer destroy(&doc)
+	// A list mark in a line of a definition counts in a parse and in a
+	// change in the same way.
+	{
+		inside := "+ plus\n\nP.\n\n- minus\n\nP.\n\n* star\n\nP.\n\nP.\n\nP.\n\nText[^a].\n\n[^a]: A\n\n    - child\n"
+		noted := parse(inside)
+		defer destroy(&noted)
+		at := strings.index(inside, "- minus")
+		pending := prepare(&noted, Edit{at, at + 2, ""})
+		commit(&noted, &pending)
+		discard(&pending)
+		fresh := parse(string(noted.source))
+		defer destroy(&fresh)
+		testing.expect_value(t, noted.notes.bullet, fresh.notes.bullet)
+		testing.expect_value(t, noted.notes.bullet_lines, fresh.notes.bullet_lines)
+	}
 	testing.expect_value(t, doc.notes.bullet, u8('+'))
 	testing.expect(t, !doc.notes.bullet_free)
 	// The only "-" list goes: "-" is free, and the definition is no item
