@@ -461,6 +461,28 @@ long paragraph, and no text of another script. For a feature that no
 document of `corpus.py` contains (tasks in number), measure a document
 that is full of it too, or add one to `corpus.py`.
 
+While a change is made, do not run all of it. Run the case that the
+change is in, against the base, which takes a few seconds:
+
+```bash
+markdown-core/bench/core.py --quick --base origin/main --case type --documents long
+```
+
+The cases are `open`, `scroll`, `end`, `change`, `type`, `select`, and
+`layout` (`BENCHMARKS.md`, "How to measure"). The full run is for the
+pull request. Rules for each run:
+
+- A difference of the instructions is a difference of the work. A
+  difference of a time with the same instructions is most often the Mac,
+  which is in use: measure the case again before you report it.
+- Do not build and do not run tests or agents while a benchmark runs.
+- `app.py` needs Release builds of the base and of the change, each a
+  copy with a bundle identifier of its own.
+- The benchmark gives the cost of a frame, not frames a second: the
+  display limits those. A change to the render loop, its clock, the
+  threads, or the scroll events needs the check on the real screen too
+  (the capture of the window in `BENCHMARKS.md`).
+
 The first version of the core, measured on screen on 2026-11-21 with a
 Release build and a new document (another method, so do not compare it
 with `BENCHMARKS.md`):
