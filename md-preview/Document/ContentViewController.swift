@@ -352,6 +352,18 @@ final class ContentViewController: NSViewController {
         // of this turn of the run loop; `markdown-core/bench/app.py` reads
         // this.
         LaunchSignposts.event("nativePaint")
+        nativeDocumentDidOpen?()
+    }
+
+    /// The native renderer has the document that `display` gave it: the
+    /// core parsed it, so it has its headings (`currentOutline`).
+    var nativeDocumentDidOpen: (() -> Void)?
+
+    /// The native renderer with the document open in it. Nil for the web
+    /// renderer, and while the document waits for the window's first
+    /// frame (`nativeDocumentDidOpen` comes then).
+    var openNativeRenderer: NativeRendererView? {
+        deferredNativeMarkdown == nil ? nativeRenderer : nil
     }
 
     private func removeNativeRenderer() {
@@ -363,7 +375,7 @@ final class ContentViewController: NSViewController {
     }
 
     /// True while the native renderer shows, or is about to show, the document.
-    private var isShowingNativeRenderer: Bool {
+    var isShowingNativeRenderer: Bool {
         nativeRenderer != nil || deferredNativeMarkdown != nil
     }
 

@@ -117,6 +117,9 @@ final class MainSplitViewController: NSSplitViewController {
         contentViewController?.localMarkdownLinkActivated = { [weak self] url in
             self?.onOpenMarkdownLink?(url)
         }
+        contentViewController?.nativeDocumentDidOpen = { [weak self] in
+            self?.showOutlineOfNativeRenderer()
+        }
     }
 
     var hasPaintedFirstDocument: Bool {
@@ -147,34 +150,65 @@ final class MainSplitViewController: NSSplitViewController {
 
     /// Sets the sidebar's outline and the inspector's numbers for a
     /// document: at once for a small one, off the main thread for a large
-    /// one.
+    /// one. With the native renderer the outline comes from its core,
+    /// which has the headings from its own parse of the document: no
+    /// second parse here, and the titles are the ones that the page shows
+    /// and that an edit gives (`DocumentEditor.currentOutline`).
     private func showOutlineAndMetadata(markdown: String, fileName: String, url: URL?) {
         cancelOutlineWork()
+        let outlineFromCore = contentViewController?.isShowingNativeRenderer == true
+        nativeOutlineFileName = outlineFromCore ? fileName : nil
+        if outlineFromCore {
+            sidebarViewController?.prepare(for: url)
+            showOutlineOfNativeRenderer()
+        }
         guard markdown.utf8.count > Self.syncSidebarLimit else {
-            sidebarViewController?.display(markdown: markdown, fileName: fileName, fileURL: url)
+            if !outlineFromCore {
+                sidebarViewController?.display(markdown: markdown, fileName: fileName, fileURL: url)
+            }
             inspectorViewController?.display(metadata: DocumentMetadata.make(url: url, markdown: markdown))
             return
         }
-        sidebarViewController?.prepare(for: url)
-        makeOutlineAndMetadata(markdown: markdown, fileName: fileName, url: url)
+        if !outlineFromCore {
+            sidebarViewController?.prepare(for: url)
+        }
+        makeOutlineAndMetadata(markdown: markdown, fileName: fileName, url: url, makesOutline: !outlineFromCore)
     }
 
+    /// Sets the outline of the document that the native renderer opened,
+    /// when it is open: at once for a window that shows, and when the
+    /// document that waited for the window's first frame is drawn
+    /// (`ContentViewController.nativeDocumentDidOpen`).
+    private func showOutlineOfNativeRenderer() {
+        guard let fileName = nativeOutlineFileName,
+              let renderer = contentViewController?.openNativeRenderer else { return }
+        nativeOutlineFileName = nil
+        sidebarViewController?.refreshOutline(outline: renderer.currentOutline() ?? [], fileName: fileName)
+    }
+
+    /// The name of the document whose first outline waits for the native
+    /// renderer to open it. Nil when none waits.
+    private var nativeOutlineFileName: String?
+
     /// The off-main part: makes the outline and the numbers of a large
-    /// document and sets them when they are ready.
-    private func makeOutlineAndMetadata(markdown: String, fileName: String, url: URL?) {
+    /// document and sets them when they are ready. `makesOutline`: false
+    /// when the outline comes from the native renderer.
+    private func makeOutlineAndMetadata(markdown: String, fileName: String, url: URL?, makesOutline: Bool = true) {
         cancelOutlineWork()
         let request = outlineRequest
         numbersAreLive = false
         // `@Sendable`: without it the block counts as main-thread code, and
         // the system stops the app when it runs on the queue.
         let work = DispatchWorkItem { @Sendable [weak self] in
-            let outline = MarkdownTOC.parse(markdown)
+            let outline = makesOutline ? MarkdownTOC.parse(markdown) : nil
             let metadata = DocumentMetadata.make(url: url, markdown: markdown)
             DispatchQueue.main.async {
                 // Not for a document that was replaced or edited meanwhile.
                 guard let self, self.outlineRequest == request else { return }
                 self.outlineWork = nil
-                self.sidebarViewController?.refreshOutline(outline: outline, fileName: fileName)
+                if let outline {
+                    self.sidebarViewController?.refreshOutline(outline: outline, fileName: fileName)
+                }
                 // Live numbers of an edit can be there already.
                 if !self.numbersAreLive {
                     self.inspectorViewController?.display(metadata: metadata)
@@ -241,10 +275,15 @@ final class MainSplitViewController: NSSplitViewController {
     func openFileURLDidChange(_ newURL: URL, markdown: String) {
         contentViewController?.sourceFileURLDidChange(newURL)
         sidebarViewController?.openFileURLDidChange(newURL)
+        // An outline that waits for the native renderer gets the new name.
+        if nativeOutlineFileName != nil {
+            nativeOutlineFileName = ReleaseNotes.displayName(for: newURL)
+        }
         if outlineWork != nil {
             // The outline and the numbers of this text are still on their
             // way, with the old name. Make them again for the new one.
-            makeOutlineAndMetadata(markdown: markdown, fileName: ReleaseNotes.displayName(for: newURL), url: newURL)
+            makeOutlineAndMetadata(markdown: markdown, fileName: ReleaseNotes.displayName(for: newURL), url: newURL,
+                                   makesOutline: contentViewController?.isShowingNativeRenderer != true)
             return
         }
         if isEditingDocument {
