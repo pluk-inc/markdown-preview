@@ -100,9 +100,9 @@ with each change to the parser or the layout.
 
 Images, math, diagrams, syntax colors, footnotes, alerts, raw HTML, links
 that open, Find, a click in the outline and its active heading (the core
-gives the headings of the outline, `mdcore_outline`), the table of front
-matter (front matter at the top of a file does not show), print, export,
-and VoiceOver.
+gives the headings of the outline, `mdcore_outline`), a change to front
+matter in Edit Mode (the page shows it as a panel of keys and values at
+the top, which is not text of the editor), print, export, and VoiceOver.
 
 Edit Mode has its first form: it starts with a caret at the start of the
 first text that shows, a click puts the caret in the text, and the

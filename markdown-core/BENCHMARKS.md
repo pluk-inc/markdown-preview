@@ -127,6 +127,7 @@ run.
   | `table` | 190 KB | one table of 2,000 rows |
   | `paragraph` | 60 KB | one paragraph with no empty line |
   | `real` | 270 KB | three documents of this repository as they were at one commit |
+  | `front` | 9 KB | `short` below front matter of 16 entries in 24 lines: plain values, a value of two lines, a value that is empty, and two sequences |
 
 The main table below is for the direction over months only: its rows are
 from different days and loads of the Mac, and two rows that are less than
@@ -186,6 +187,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-27 | the first outline of a document from the core, not from a second parse | 584 / 596 (see the section) | 55 / 79 (the base 55 / 89) | 498 / 583 (the base 510 / 700) | – | – | – | – |
 | 2026-11-27 | the corners of the card of a code block, as the web renderer has them | 579 / 591 | 52 / 86 (the base too) | 495 / 640 (the base 475 / 620) | 63 / 75 | not recorded | 0.49 / 0.40 | 7.0 / 26.3 (the base 26.4) |
 | 2026-11-27 | the method of the benchmark: two builds in turns, instructions, cases, more documents (see the section; the columns have other meanings from here) | 584 / 587 to the drawn frame, 593 / 596 to the committed one | 50 / 85, six seconds after the frame (the base too); highest 143 / 178 | 471 / 583, six seconds after the frame | 11.5 / 10.9 with the system started; the parse 0.16 / 11.6 apart | none | 0.42 / 0.35, 99 of 100 frames below 9.5 / 4.0 | 6.95 / 23.4 in a view that only this case used |
+| 2026-11-27 | the panel of front matter at the top of the native page (see the section) | 516 / 532 to the drawn frame, 524 / 553 to the committed one (the base 520 / 524 and 528 / 544) | 50 / 72 (the base too); highest 143 / 165 | 412 / 451 (the base 415 / 450) | 10.7 / 10.1 (the base 10.9 / 9.9) | none | 0.49 / 0.43 (the base 0.51 / 0.43) | 6.78 / 20.7 (the base too) |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1718,3 +1720,75 @@ What the new documents show, which the two old ones could not:
   are late in `real` and 2 in `long`, and a scroll frame of `prose` is
   1.45 million instructions against 0.98 million in `long`: the long
   document is the kind case, as its name in the table of documents says.
+
+## The panel of front matter (2026-11-27)
+
+The native page shows front matter as a panel of keys and values above
+the first block. `core.py --base` against the commit below it, all
+documents, four runs of each build in turns; `app.py`, ten launches of
+each build in turns, for `short`, `long`, and `front`. `front` is new in
+`corpus.py` with this change: the short document below front matter of
+16 entries, because no document had front matter. The load of the Mac was
+2 to 4, so the instructions are what counts.
+
+A document with no front matter costs what it did. In `long`, `prose`,
+`cjk`, `table`, `paragraph`, and `real` no number is marked. In `short`
+the three typed characters are marked with 1.0, 1.5, and 1.2 % more
+instructions (about 2 million each, at the limit below which a number
+is not judged); the same case alone, against the base, gave -0.3 to
++0.5 % in four runs.
+
+The first run of this change did not show that. A typed character was 3
+to 9 % more instructions in each document, with no front matter in it.
+The cause was the compiler and not the work of the panel: the lookup of
+a glyph in the cache had one caller, the loop of the glyphs of a frame,
+so it was inline there; the panel was a second caller, and the lookup
+became a call for each glyph. It is inline by force in the loop now
+(`display_part`). The lesson for a later change: a procedure of the
+frame loop that gets a second caller can make each frame slower, and the
+`type` case shows it in seconds.
+
+With front matter (`front` against the same document in the base, which
+hides its front matter):
+
+| | Base | Change | Instructions |
+| --- | --- | --- | --- |
+| Layout of the first view and its frame, fonts and glyphs new (ms) | 10.2 | 13.4 | +15.9 % |
+| The same in a later view of the process (ms) | 2.43 | 2.48 | +2.0 % |
+| A new width at the end: layout and frame (ms) | 8.38 | 8.48 | +14.2 % |
+| All of the document laid out, by frames through it (CPU ms) | 9.82 | 9.98 | +13.7 % |
+| A typed character at the end of the text (CPU ms) | 1.12 | 1.14 | +4.0 % |
+| Heap at the first frame (MB) | 5.31 | 6.50 | |
+| Heap with all of the document laid out (MB) | 6.78 | 8.18 | |
+| App: launch to the drawn frame (ms) | 515 | 517 | +0.9 % (not marked) |
+| App: memory six seconds after the frame (MB) | 50.3 | 51.4 | |
+
+The first frame of a new process is 3 ms later: the panel is about 40
+texts in two sizes of the font that the page has nowhere else, so their
+fonts and glyphs are new. In a later view of the process, with those
+made, it is 2 % more instructions. The 1.2 MB of heap is the same thing:
+the glyphs of two more sizes in the cache, and the shaped text of the
+panel, which the panel keeps (it is laid out one time; see Open work in
+`AGENTS.md` for a panel of thousands of rows). A new width makes the
+panel again. The typed character is 2 to 4 % more instructions in this
+document, of which about 1 % is also in `short`; the rest is not
+explained, and a typed character does not make or draw the panel when
+the view is at the end. The launch of the app does not show the panel:
+its time and its instructions are in the spread of the base.
+
+After this record the text of the panel got the size of the text of the
+page (it was 0.92 of it, and a pill 0.95 of that): the two sizes were
+two fonts with each glyph made new. `core.py --case open` for `front`
+against the base, with each form:
+
+| Size of the panel text / of a pill | First frame, new process: instructions |
+| --- | --- |
+| 0.92 / 0.95 of it (the record above) | +15.9 % |
+| 0.92 / the same | +12.2 % |
+| the size of the page / the same (now) | +4.7 % |
+
+What is left is the layout of about 40 texts. The heap at the first
+frame is as it was (6.39 MB against 5.29): it is not the fonts, and not
+the typesetters of the texts (with those freed after the line breaks it
+was 6.45 where it was 6.49); the lines of the texts and their strings
+are what the panel keeps.

@@ -1768,6 +1768,88 @@ test_the_number_of_an_item_is_one_line :: proc(t: ^testing.T) {
 	}
 }
 
+// The panel of front matter is an area above the first part: a text for
+// each key and each value, pills for the items of a sequence, and a
+// hairline below. The page is as much higher, each part is as much
+// lower, and no text of the panel is text that a caret or a selection
+// can be in.
+@(test)
+test_front_matter_is_a_panel_above_the_first_part :: proc(t: ^testing.T) {
+	plain: Fixture
+	setup(&plain, "# Title\n\nText.\n", 600)
+	defer teardown(&plain)
+	step(&plain.page, 1e30)
+	f: Fixture
+	setup(&f, "---\ntitle: A draft\ntags: [one, two]\nempty:\n---\n# Title\n\nText.\n", 600)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	panel := &f.page.panel
+	testing.expect(t, panel.height > 3 * f.page.m.body)
+	testing.expect_value(t, f.page.parts[0].top, f.page.origin + f64(panel.height))
+	testing.expect_value(t, f.page.content_height, plain.page.content_height + f64(panel.height))
+	// The records of the first part are the ones of a page with no panel.
+	testing.expect_value(t, only(&f.page).boxes[0].top, only(&plain.page).boxes[0].top)
+	testing.expect_value(t, len(only(&f.page).lines), len(only(&plain.page).lines))
+	// Three keys, a value, two pills, and the dash of a value that is
+	// empty: one line each. The two pills and the hairline.
+	testing.expect_value(t, len(panel.texts), 7)
+	testing.expect_value(t, len(panel.lines), 7)
+	testing.expect_value(t, len(panel.decor), 3)
+	rule := panel.decor[2]
+	testing.expect_value(t, rule.h, f32(1))
+	testing.expect_value(t, rule.w, f.page.column)
+	testing.expect(t, rule.y + rule.h < panel.height)
+	for line in panel.lines {
+		testing.expect(t, line.top >= f.page.m.page_pad * TOP_PAD && line.top < rule.y)
+	}
+	// The two pills are in one row, beside each other, right of the keys,
+	// each with its text in it.
+	one, two := panel.decor[0], panel.decor[1]
+	testing.expect(t, one.radius > 0 && one.y == two.y && two.x > one.x + one.w)
+	testing.expect(t, one.x >= f.page.column_x + PANEL_KEYS * f.page.column)
+	testing.expect(t, panel.lines[3].x > one.x && panel.lines[3].x + panel.lines[3].line.width < one.x + one.w)
+	testing.expect(t, panel.lines[4].x > two.x && panel.lines[4].x + panel.lines[4].line.width < two.x + two.w)
+	// A point on a text of the panel is on no text of the document, and
+	// a caret there goes to the text of the document.
+	key := panel.lines[0]
+	testing.expect(t, !text_at(&f.page, key.x + 2, f.page.origin + f64(key.top) + 4))
+	at, _, placed := caret_hit(&f.page, key.x + 2, f.page.origin + f64(key.top) + 4)
+	testing.expect(t, placed && at.block == 0)
+	// A narrow page: the pills are in rows of their own, in the column.
+	narrow: Fixture
+	setup(&narrow, "---\ntags: [a long first tag, a long second tag, third]\n---\nText.\n", 260)
+	defer teardown(&narrow)
+	step(&narrow.page, 1e30)
+	rows := 0
+	last: f32 = -1
+	for d in narrow.page.panel.decor[:3] {
+		testing.expect(t, d.x + d.w <= narrow.page.column_x + narrow.page.column + 0.5)
+		rows += int(d.y != last)
+		last = d.y
+	}
+	testing.expect(t, rows >= 2)
+	// Front matter with no entry, and front matter that nothing closes
+	// (it is Markdown then), make no panel. Front matter with no block
+	// after it has its panel.
+	for source in ([]string{"---\n---\n# Title\n", "---\ntitle: x\n\n# Title\n"}) {
+		g: Fixture
+		setup(&g, source, 600)
+		step(&g.page, 1e30)
+		testing.expect_value(t, g.page.panel.height, f32(0))
+		teardown(&g)
+	}
+	alone: Fixture
+	setup(&alone, "---\ntitle: x\n---\n", 600)
+	defer teardown(&alone)
+	step(&alone.page, 1e30)
+	testing.expect(t, alone.page.panel.height > 0)
+	testing.expect(t, alone.page.content_height >= f64(alone.page.panel.height))
+	// The line of its caret is in the page, below the panel.
+	_, caret_top, caret_height := caret_place_empty(&alone.page)
+	testing.expect(t, caret_top >= alone.page.panel.height)
+	testing.expect(t, f64(caret_top + caret_height) <= alone.page.content_height)
+}
+
 // The bar of a caret is as high as the font of the text of its line, on
 // the line that the text stands on: higher in a heading than in a
 // paragraph, and less than the line with a wide line spacing.

@@ -141,7 +141,14 @@ These came from the maintainer. Do not undo one without asking.
   as spaces with its line breaks, the mark as line breaks, since spaces
   would make the first line code): they make no block and do not show,
   and each offset and line after them is as it was. The web page shows
-  front matter as a table; the native page gets one later. The document
+  front matter as a panel of keys and values, and so does the native
+  page (2026-11-27, `layout/panel.odin`): the core reads the entries
+  with the rules of the app's parser (`document.front_matter`;
+  `frontmatter_cases.json` tests the two parsers), and the panel is an
+  area of its own above the first part, with its own records
+  (`Layout.panel`; `sum_tops` starts the parts below it), so no caret
+  and no selection is in it. A reader
+  cannot change front matter in native Edit Mode. The document
   keeps where they end (`Document.hidden`, `unclosed`), so an edit in the
   body reads no more of the source for them; an edit that can change
   them is a parse of all (`hidden_changes`). A caret in a document with
@@ -620,6 +627,12 @@ Known limits, found in review and left on purpose:
 - With the inspector open, each refresh of native Edit Mode still gets
   all of the text and counts it (`DocumentMetadata.make`). The core can
   give those numbers as it gives the outline.
+- The panel of front matter is laid out all at one time and keeps the
+  shaped text of each row (`layout/panel.odin`). That is right for the
+  few rows of a usual file. Front matter of thousands of rows costs its
+  layout at the first frame and keeps that memory while the document is
+  open. Form, when a file needs it: rows that are laid out and released
+  with the view, as the lines of a part are.
 - A line break of Unicode (U+2028, U+0085) in front matter is a line for
   the app's parser and none for the core: the lines of the headings after
   it differ by that many.
@@ -1793,3 +1806,23 @@ export.
   paragraph or table: 130 ms for each typed character) and one that was
   not known (the estimated height of a page of Chinese and Japanese text
   is 32 % off); the three are in Open work.
+- **2026-11-27** — The panel of front matter. The native page hid front
+  matter; it now shows the panel of the web page: the keys soft in a
+  column of a quarter of the width, the values beside them, the items
+  of a sequence as pills in the color of a link, a dash for no value,
+  and a hairline below. The reference editor has blocks that are no
+  text of the buffer, with a height and a place above a position, which
+  its map of rows counts and no caret is in; the panel is that for the
+  top of the page. A first form put its records into the first part,
+  before the ones of the first block: that needed a case of its own in
+  the check of the records, in the drawing, in the estimate, and in the
+  layout of the first block, the panel was measured and then laid out
+  again, and its texts were slices of the source, which is other memory
+  after each change (a reviewer found both). The panel is now an area
+  of the layout above the first part, laid out one time from a copy of
+  its bytes, and a document with front matter and no block has it too.
+  Not yet: text of the panel that can be selected or copied, and a way
+  to change front matter in native Edit Mode. The two parsers differ
+  where the app's one works on characters and line breaks of Unicode
+  (U+2028, U+0085, a combining mark after a quote or a "#"); the spaces
+  of Unicode at the ends of a key or a value are the same in the two.

@@ -18,7 +18,8 @@ check :: proc(l: ^Layout) -> string {
 	if l.open >= len(l.parts) {
 		return "the open part is no part"
 	}
-	top := l.origin
+	// The first part is below the panel of front matter.
+	top := l.origin + f64(l.panel.height)
 	for &part, p in l.parts {
 		if part.top != top {
 			return "a part does not start where the part before it ends"

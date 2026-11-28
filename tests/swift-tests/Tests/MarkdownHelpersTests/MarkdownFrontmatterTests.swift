@@ -4,6 +4,26 @@ import XCTest
 
 final class MarkdownFrontmatterTests: XCTestCase {
 
+    /// The cases that the native renderer's core is tested with too
+    /// (`markdown-core/src/document/frontmatter_cases.json`): the panel of
+    /// the native page has the keys, the values, and the items of this
+    /// parser.
+    func testSharedFrontmatterCases() throws {
+        struct Entry: Decodable { let key: String; let value: String; let items: [String]? }
+        struct Case: Decodable { let source: String; let entries: [Entry] }
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../../../markdown-core/src/document/frontmatter_cases.json")
+        let cases = try JSONDecoder().decode([Case].self, from: Data(contentsOf: url))
+        XCTAssertFalse(cases.isEmpty)
+        for test in cases {
+            let split = MarkdownFrontmatter.split(test.source)
+            let got = split.raw.map { MarkdownFrontmatter.parse($0, format: split.format ?? .yaml) } ?? []
+            XCTAssertEqual(got.map(\.key), test.entries.map(\.key), test.source)
+            XCTAssertEqual(got.map(\.value), test.entries.map(\.value), test.source)
+            XCTAssertEqual(got.map { $0.items ?? [] }, test.entries.map { $0.items ?? [] }, test.source)
+        }
+    }
+
     func testSplitsYamlFrontmatter() {
         let markdown = """
         ---
