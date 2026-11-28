@@ -1853,6 +1853,29 @@ Three faults that the benchmark showed, fixed before this record:
   each document with a footnote. It has working memory of its own for
   each call now.
 
+On 2026-11-28 the list at the end of a page that is read was taken out
+(the two modes show the text of a footnote in its place), with its
+second use of the procedure that makes the quads. The app numbers above
+are of a build that had the list. Measured again with it out, against
+the panel build, ten launches each in turns, load about 3:
+
+| | Base | Change | |
+| --- | --- | --- | --- |
+| `short`: the start of the process to the drawn frame (ms) | 500 | 507 | not marked |
+| `short`: instructions (millions) | 2953 | 2920 | -1.1 % |
+| `long`: the start of the process to the drawn frame (ms) | 513 | 511 | not marked |
+| `long`: instructions (millions) / memory (MB) | 3469 / 82.0 | 3589 / 86.2 | +3.4 % |
+| `notes`: the start of the process to the drawn frame (ms) | 498 | 502 | not marked |
+| `notes`: instructions (millions) / memory (MB) | 3083 / 64.4 | 3146 / 65.2 | +2.0 % |
+
+The launch to the drawn frame of `short`, with the time of the `open`
+command in it, is marked in this run (538 to 572 ms) with 1.1 % fewer
+instructions and the same time from the start of the process: the
+command, not the app. And the typed character in a document with no
+footnote, which was 1.1 to 3.9 % more instructions with the list in the
+build: `core.py --case type` against the panel commit gives -0.2 to
++0.7 % in `prose` and `real`, and 1.2 and 1.5 % in `paragraph`.
+
 After this record, the review rounds changed the scan (one set of
 masked bytes for the two passes, a look for a list mark that the source
 does not use, what is in the text of a definition from the parser). The

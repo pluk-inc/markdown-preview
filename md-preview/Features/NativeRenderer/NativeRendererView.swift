@@ -67,8 +67,6 @@ final class NativeRendererView: NSView {
         wantsLayer = true
         layerContentsRedrawPolicy = .duringViewResize
         ctx = mdcore_create(Unmanaged.passUnretained(layer!).toOpaque())
-        // The view starts in Read mode: the footnotes are a list at the end.
-        mdcore_set_notes_at_end(ctx, true)
         renderLoop = NativeRenderLoop(ctx: ctx)
         renderLoop.didDraw = { [weak self] step in
             self?.frameDidDraw(step)
@@ -363,10 +361,6 @@ final class NativeRendererView: NSView {
         didSet {
             guard isEditable != oldValue else { return }
             markedText = nil
-            // The texts of the footnotes are where a reader types them in
-            // Edit mode, and in a list at the end of the page that is read.
-            mdcore_set_notes_at_end(ctx, !isEditable)
-            relayout(force: true)
             if isEditable {
                 // The system's caret shows where the core's caret is.
                 mdcore_caret_show(ctx, false)

@@ -416,15 +416,9 @@ typedef enum {
 mdcore_pointer mdcore_pointer_shape(void *ctx, double x, double y, long *note);
 
 // Footnotes. A reference in the text shows as the number of its
-// footnote, and the text of a footnote has that number as its mark.
-//
-// Where the texts of the footnotes show: in a numbered list at the end of
-// the page, each with a mark that goes back to its reference (true: for
-// a page that is read), or where they are in the source (false, the
-// state at the start: for a page that is edited, where a reader types
-// them). The page needs mdcore_resize after a change of this, as after
-// a new style.
-void mdcore_set_notes_at_end(void *ctx, bool at_end);
+// footnote, and the text of a footnote has that number as its mark. The
+// text is where its definition is in the source, in a page that is read
+// and in one that is edited.
 
 // The footnote that a point of the page is on: the number of a reference
 // (`definition` false), or the number mark of the text of a footnote

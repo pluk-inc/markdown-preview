@@ -111,7 +111,6 @@ display :: proc(
 		}
 		display_part(l, cache, p, f32(y0 - part.top), f32(y1 - part.top), origin_y, rects, glyphs, buffer)
 	}
-	notes_display(l, cache, y0, y1, origin_y, rects, glyphs, buffer)
 }
 
 // The quads of one part. `from` and `to` are the range from the top of

@@ -303,24 +303,16 @@ test_the_text_of_a_footnote :: proc(t: ^testing.T) {
 	}
 }
 
-// The footnotes as the Markdown of a numbered list, in the order of
-// their numbers, each with the mark that goes back.
+// The blocks of a definition, and no other block.
 @(test)
-test_the_list_of_the_footnotes :: proc(t: ^testing.T) {
-	back := " [" + NOTE_BACK + "](#back)"
+test_the_blocks_of_a_definition :: proc(t: ^testing.T) {
 	doc := parse("B[^b], inline ^[In the text.], A[^a].\n\n[^a]: Text of a.\n[^b]: First line.\n  Second line.\n\n    A second paragraph.\n[^c]: No reference.\n\nAfter.\n")
 	defer destroy(&doc)
-	want := strings.concatenate({"1. First line.\n   Second line.", back, "\n\n     A second paragraph.\n\n2. In the text.", back, "\n\n3. Text of a.", back, "\n\n"}, context.temp_allocator)
-	testing.expect_value(t, notes_source(&doc, context.temp_allocator), want)
-	// The blocks of a definition, and no other block.
 	testing.expect(t, !in_note(&doc, 0))
 	for block in 1 ..= 4 {
 		testing.expect(t, in_note(&doc, block))
 	}
 	testing.expect(t, !in_note(&doc, 5))
-	none := parse("No footnotes.\n")
-	defer destroy(&none)
-	testing.expect_value(t, notes_source(&none, context.temp_allocator), "")
 }
 
 // The blocks of a definition are all of its item: a list in its text,
@@ -344,60 +336,6 @@ test_a_list_in_a_definition_is_of_the_footnote :: proc(t: ^testing.T) {
 	_, second := note_block(&doc, 1, 2)
 	_, third := note_block(&doc, 1, 3)
 	testing.expect(t, first && second && !third)
-}
-
-// The list of the footnotes for texts that are not one paragraph: the
-// mark that goes back is in no line of code, a line with no indent after
-// a paragraph of a definition is of that paragraph, and the definitions
-// of links come with the texts that use them.
-@(test)
-test_the_list_of_footnotes_with_other_blocks :: proc(t: ^testing.T) {
-	BACK :: "[" + NOTE_BACK + "](" + NOTE_BACK_TARGET + ")"
-	Case :: struct {
-		source, want: string,
-	}
-	cases := []Case {
-		{"T[^n].\n\n[^n]: ```swift\n  let x = 1\n  ```\n", "1. ```swift\n   let x = 1\n   ```\n\n   " + BACK + "\n\n"},
-		{"T[^n].\n\n[^n]: Text\n    ```\n    code\n    ```\n", "1. Text " + BACK + "\n     ```\n     code\n     ```\n\n"},
-		// A fence that nothing closes: closed before the mark.
-		{"T[^n].\n\n[^n]: ```\n  x\n", "1. ```\n   x\n   ```\n\n   " + BACK + "\n\n"},
-		// The indent of the text stays: six spaces are code in its place
-		// (four more than the text of the item), and in the list too.
-		{"T[^n].\n\n[^n]: Intro.\n\n      *literal*\n", "1. Intro. " + BACK + "\n\n       *literal*\n\n"},
-		{"T[^n].\n\n[^n]: Note.\nAfter.\n\nBody.\n", "1. Note.\n   After. " + BACK + "\n\n"},
-		{"T[^n].\n\n[^n]: Read [guide][g].\n\n[g]: https://example.com\n", "1. Read [guide][g]. " + BACK + "\n\n   [g]: https://example.com\n\n[g]: https://example.com\n"},
-		// A definition that is indented: its lines lose that indent too,
-		// so a paragraph of it is a paragraph in the list, and no code.
-		{"T[^n].\n\n   [^n]: Intro.\n\n      Tail.\n", "1. Intro. " + BACK + "\n\n    Tail.\n\n"},
-		// Backticks at the start of an inline footnote are its text.
-		{"T ^[```] end.\n", "1. \\``` " + BACK + "\n\n"},
-		// A line under the text that makes it a heading has nothing after
-		// it: the mark is in a paragraph of its own.
-		{"T[^n].\n\n[^n]: Intro\n  ---\n", "1. Intro\n   ---\n\n   " + BACK + "\n\n"},
-		// The text after the definition of a link in a footnote is kept.
-		{"T[^n].\n\n[^n]: Intro.\n\n  [g]: /guide\n  Tail.\n\nAfter.\n", "1. Intro. " + BACK + "\n\n   [g]: /guide\n   Tail.\n\n[g]: /guide\n"},
-	}
-	for c in cases {
-		doc := parse(c.source)
-		defer destroy(&doc)
-		got := notes_source(&doc, context.temp_allocator)
-		testing.expectf(t, got == c.want, "%q:\n %q, not\n %q", c.source, got, c.want)
-		// The list is Markdown with as many footnotes, and the mark that
-		// goes back is a link of it.
-		list := parse(got)
-		defer destroy(&list)
-		testing.expect(t, list.count > 0 && block_at(&list, 0).marker == .Number)
-		has_back := false
-		for link in list.links {
-			has_back ||= link == NOTE_BACK_TARGET
-		}
-		testing.expectf(t, has_back, "%q: no link back in %q", c.source, got)
-	}
-	// The line with no indent is in no other place of a page that is read.
-	doc := parse("T[^n].\n\n[^n]: Note.\nAfter.\n\nBody.\n")
-	defer destroy(&doc)
-	testing.expect_value(t, doc.count, 3)
-	testing.expect_value(t, string(block_at(&doc, 1).text.bytes[:]), "Note. After.")
 }
 
 // A reference with the caret in it shows as its source and is still

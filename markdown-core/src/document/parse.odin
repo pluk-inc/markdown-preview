@@ -112,14 +112,14 @@ Parser :: struct {
 }
 
 // Parses a Markdown source. The caller owns the result (`destroy`).
-parse :: proc(source: string, notes := true) -> Document {
-	return parse_owned(slice.clone(transmute([]u8)source), notes = notes)
+parse :: proc(source: string) -> Document {
+	return parse_owned(slice.clone(transmute([]u8)source))
 }
 
 // Parses a Markdown source that the document keeps: memory of the
 // allocator of the context, which goes with the document.
-parse_owned :: proc(bytes: []u8, reveal: Maybe(int) = nil, notes := true) -> Document {
-	return parse_piece(bytes, 0, len(bytes), reveal = reveal, at_start = true, whole = notes)
+parse_owned :: proc(bytes: []u8, reveal: Maybe(int) = nil) -> Document {
+	return parse_piece(bytes, 0, len(bytes), reveal = reveal, at_start = true, whole = true)
 }
 
 // Parses a piece of the source of a document that starts where a block

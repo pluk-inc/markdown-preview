@@ -2207,24 +2207,6 @@ mdcore_note_at :: proc "c" (handle: rawptr, x, y: f64, number: ^c.long, definiti
 
 // See the header.
 @(export)
-mdcore_set_notes_at_end :: proc "c" (handle: rawptr, at_end: bool) {
-	context = runtime.default_context()
-	ctx := cast(^Ctx)handle
-	context.temp_allocator = ctx.temp
-	hold(ctx)
-	if ctx.page.notes_at_end == at_end {
-		return
-	}
-	// The blocks of the footnotes have another height: a new layout,
-	// which still knows the place of the reader.
-	take_place(ctx)
-	ctx.page.notes_at_end = at_end
-	layout.begin(&ctx.page, nil, ctx.style, 0)
-	ctx.layout_valid = false
-}
-
-// See the header.
-@(export)
 mdcore_note_text :: proc "c" (handle: rawptr, number: c.long, length: ^c.long) -> [^]u8 {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle

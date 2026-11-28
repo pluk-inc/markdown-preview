@@ -179,12 +179,6 @@ Layout :: struct {
 	column:         f32,
 	fonts:          [dynamic]Sized_Font,
 	panel:          Panel, // of front matter, above the first part (panel.odin)
-	width:          f32, // of the view that the layout is for (`begin`)
-	// The texts of the footnotes show in a list at the end of the page,
-	// and not where they are in the source: for a page that is read. The
-	// owner sets it before `begin`.
-	notes_at_end:   bool,
-	notes:          Notes_Area, // that list (notes.odin)
 }
 
 // Starts a new layout of `doc` for a view of `width` points. The records of
@@ -209,8 +203,6 @@ begin :: proc(l: ^Layout, doc: ^document.Document, style: base.Style, width: f32
 	l.column -= 2 * inset
 	l.keep_y0, l.keep_y1 = 0, 1e30
 	panel_begin(l, true)
-	l.width = width
-	notes_begin(l, true)
 	if doc != nil {
 		for _, p in doc.parts {
 			append(&l.parts, part_new(l, p))
@@ -237,12 +229,10 @@ part_new :: proc(l: ^Layout, part: int) -> Part {
 // stays; the owner puts the reader's place back after it
 // (`restore_place`).
 apply_change :: proc(l: ^Layout, change: document.Change) {
-	// Front matter that changed is another panel, and other footnotes
-	// are another list at the end of the page: the parts are at other
+	// Front matter that changed is another panel: the parts are at other
 	// heights of the page.
 	panel_changed := panel_begin(l)
-	notes_changed := notes_begin(l)
-	defer if panel_changed || notes_changed {
+	defer if panel_changed {
 		sum_tops(l)
 	}
 	if change.parts_removed == 0 && change.parts_added == 0 {
@@ -299,13 +289,7 @@ sum_tops :: proc(l: ^Layout) {
 		part.top = top
 		top += f64(part.height)
 	}
-	// The list of the footnotes is below the last part, and has the room
-	// at the end of the page in it.
-	with_notes := notes_place(l, top)
-	switch {
-	case with_notes > top:
-		top = with_notes
-	case len(l.parts) == 0:
+	if len(l.parts) == 0 {
 		top += f64(l.m.page_pad * TOP_PAD)
 		// Below a panel, the line of the caret of a document with no
 		// block is in the page: a panel higher than the view would
@@ -313,7 +297,7 @@ sum_tops :: proc(l: ^Layout) {
 		if l.panel.height > 0 {
 			top += f64(text_line_height(l, nil) + l.m.page_pad)
 		}
-	case:
+	} else {
 		top += f64(l.m.page_pad)
 	}
 	l.content_height = top - l.origin
@@ -438,7 +422,6 @@ reset :: proc(l: ^Layout) {
 destroy :: proc(l: ^Layout) {
 	reset(l)
 	panel_destroy(l)
-	notes_destroy(l)
 	for f in l.fonts {
 		text.font_release(f.font)
 	}
@@ -891,10 +874,6 @@ estimate_block :: proc(l: ^Layout, b: ^document.Block, first: bool) -> f32 {
 estimate :: proc(l: ^Layout, part, from: int) -> (height: f32) {
 	blocks := document.part_blocks(l.doc.parts[part])
 	for &b, slot in blocks[min(from, len(blocks)):] {
-		// The text of a footnote is in the list at the end of the page.
-		if l.notes_at_end && b.noted {
-			continue
-		}
 		height += estimate_block(l, &b, part == 0 && from + slot == 0)
 	}
 	return
@@ -957,13 +936,6 @@ advance :: proc(l: ^Layout, index: int, until: f32, until_slot: int) -> bool {
 		width := l.column - (x - l.column_x)
 		heading_size := l.m.body * HEADING_SCALE[b.kind == .Heading ? b.level : 0]
 
-		// The text of a footnote is in the list at the end of the page: its
-		// block has a box with no height and no records.
-		if !l.in_block && l.notes_at_end && b.noted {
-			append(&work.boxes, Box{top = l.y, bottom = l.y, line_first = len(work.lines), line_end = len(work.lines), decor_first = len(work.decor), decor_end = len(work.decor), para_first = len(work.paras), para_end = len(work.paras)})
-			show_work(l)
-			continue
-		}
 		if !l.in_block {
 			// The first block of the document has no space above it.
 			if index > 0 || slot > 0 {
@@ -1268,20 +1240,6 @@ lay_out :: proc(l: ^Layout, y0, y1, anchor_y: f64) -> (changed: bool) {
 		}
 		changed |= lay_out_part(l, p, anchor)
 	}
-	// The list of the footnotes below the last part, in the same range:
-	// its layout has the heights of this page.
-	if list := l.notes.page; list != nil && y1 > list.origin {
-		was := list.origin
-		if lay_out(list, y0, y1, anchor_y) {
-			changed = true
-			// A part of the list above the view with another height:
-			// the list moved its origin to keep the text of the view
-			// where it is. The list is below this page, so this page is
-			// what moves.
-			l.origin += list.origin - was
-			sum_tops(l)
-		}
-	}
 	when ODIN_DEBUG {
 		problem := check(l)
 		assert(problem == "", problem)
@@ -1300,9 +1258,6 @@ laid_out :: proc(l: ^Layout, y0, y1: f64) -> bool {
 			return false
 		}
 	}
-	if list := l.notes.page; list != nil && y1 > list.origin {
-		return laid_out(list, y0, y1)
-	}
 	return true
 }
 
@@ -1312,14 +1267,6 @@ laid_out :: proc(l: ^Layout, y0, y1: f64) -> bool {
 lay_out_end :: proc(l: ^Layout, height, anchor_y: f64) -> (changed: bool) {
 	anchor := part_at(l, anchor_y)
 	real: f64
-	// The list of the footnotes is the end of a page that has one.
-	if list := l.notes.page; list != nil && len(list.parts) > 0 {
-		if lay_out_end(list, height, anchor_y) {
-			changed = true
-			sum_tops(l)
-		}
-		real = f64(l.notes.height)
-	}
 	for p := len(l.parts) - 1; p >= 0 && real < height; p -= 1 {
 		changed |= lay_out_part(l, p, anchor)
 		real += f64(l.parts[p].height)

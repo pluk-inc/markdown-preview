@@ -164,15 +164,14 @@ These came from the maintainer. Do not undo one without asking.
   its item) and a reference is one span that the core adds after the
   parse; `footnote_cases.json` tests the core and the app's parser with
   the same cases. A reference shows as a small raised number, and as its
-  source where the caret is, as a link does. Read mode shows the list of
-  footnote texts at the end of the page, smaller and in the secondary
-  color, each with an arrow back (`Layout.notes_at_end`, an area of its
-  own below the last part, as the panel is above the first). In Edit
-  Mode the maintainer chose no list at the end, because the text of a
-  definition is text that the reader edits where it is: the definitions
-  stay in place, and a pointer on a number shows the text in a bubble.
-  A click on a number goes to its text and back (Command-click in Edit
-  Mode). The number of a footnote is of each reference before it, so
+  source where the caret is, as a link does. The text of a footnote is
+  where its definition is in the source, in Read mode and in Edit Mode
+  (the maintainer's choice, 2026-11-28: the two modes are the same, and
+  there is no list of the texts at the end of the page; a first form
+  had one for Read mode, as a second document with a layout of its own
+  below the last part, and it was taken out). A pointer on a number
+  shows the text in a bubble, and a click on a number goes to its text
+  and back (Command-click in Edit Mode, where a click puts the caret). The number of a footnote is of each reference before it, so
   the document keeps its footnotes (`Document.notes`, `note_keys`), and
   a change of a piece with footnote syntax is a parse of the piece only
   when the piece has the footnotes that it had, in their order
@@ -195,8 +194,7 @@ These came from the maintainer. Do not undo one without asking.
   with one is a parse of all.
   The footnote code has working memory of its own for each call: a
   parse runs beside the frames (`prepare`), where no one frees the
-  working memory of the thread. The list at the end of the page is laid
-  out where the view is, as the page is.
+  working memory of the thread.
 - **The outline of native Edit Mode comes from the core** (2026-11-26):
   `mdcore_outline` reads the heading blocks, with no parse. Its texts are
   the ones the native page shows, so they differ from the web renderer's
@@ -762,15 +760,10 @@ Design, before the features that need it:
   counts); the mark `[^label]: ` of a definition does not show at the
   caret in Edit Mode, and Return in a definition has no rule; no key or
   menu command goes from a caret to the footnote text; the first line of
-  a definition is text of a paragraph in its place (a fence of code or
-  a heading that starts there is a block only in the list at the end of
-  the page, which is parsed from the lines of the text); the web
-  renderer does not read the inline form; the texts in the list at the
-  end of the page are no text of the document, so a reader cannot select
-  or copy them (form: a selection that can be in the layout of the
-  list); and the place of a reader in that list is not kept through a
-  new width or text size (`take_place` knows the parts of the page
-  only), so the view stays at its offset.
+  a definition is text of a paragraph (a fence of code or a heading
+  that starts there is no block); the web renderer does not read the
+  inline form, and it shows the texts in a list at the end of the page,
+  where the native page has them in place.
 - The bullet of a list item is a record of the box (`Decor`) and not a
   character: the bullet of the system font is a fifth of the size of
   the text, and each font has its own. It and the check box of a task
@@ -1894,9 +1887,11 @@ export.
   end of the page in both modes; the maintainer said that the end of the
   file is no easy place while a reader edits, so Edit Mode keeps each
   definition where it is in the source and shows the text of a number
-  in a bubble under the pointer, and Read mode has the list at the end,
-  gray and smaller, with an arrow back to the number. The list is a
-  child document with a layout of its own, placed below the last part,
-  so the records of the parts know nothing of it. A reference is raw at
+  in a bubble under the pointer. Read mode then had the list at the
+  end, gray and smaller, with an arrow back to the number, as a second
+  document with a layout of its own below the last part. On 2026-11-28
+  the maintainer took that list out: the two modes show the text of a
+  footnote in its place, with the same bubble and the same click. A
+  reference is raw at
   the caret through a pair of marks around its label, the same way as a
   link. The open parts are in Open work.
