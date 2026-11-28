@@ -1853,6 +1853,17 @@ Three faults that the benchmark showed, fixed before this record:
   each document with a footnote. It has working memory of its own for
   each call now.
 
+After this record, the review rounds changed the scan (one set of
+masked bytes for the two passes, a look for a list mark that the source
+does not use, what is in the text of a definition from the parser). The
+cases that those changes are in, measured again against `main` (the
+panel is in the base then): the parse of `notes` is 7.0 ms (79 % more
+instructions, where the table has 73 %), of `long` 19.4 ms (63 %, where
+it has 58 %), of `prose` the same as the base; a typed character in the
+middle of `notes` is 0.8 % more; and the typed character at the end of
+`notes` is 14 times the instructions of the base, where the table has
+13.
+
 The walk of `bench.m` also found a fault of the caret that no test had:
 Shift and a step into a reference that shows as its source, and the step
 back, did not end where they started.

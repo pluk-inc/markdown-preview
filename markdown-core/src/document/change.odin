@@ -470,9 +470,15 @@ prepare_piece :: proc(doc: ^Document, p: ^Pending) -> bool {
 	// The definitions are items of a list with a mark that no line of
 	// the source starts with: a change of the lists that makes another
 	// mark the free one is a parse of all.
+	// With no definition, the mark is only what a parse of all would
+	// choose, and it changes with the lines (`commit`).
 	p.bullet_lines = doc.notes.bullet_lines
-	if definition_count(doc.notes.notes) > 0 {
-		p.bullet_lines = bullet_after(doc, doc.source[start:old_end], piece) or_return
+	if doc.notes.bullet != 0 {
+		same: bool
+		p.bullet_lines, same = bullet_after(doc, doc.source[start:old_end], piece)
+		if !same && definition_count(doc.notes.notes) > 0 {
+			return false
+		}
 	}
 
 	text, before, inside, led, trailed, lead := piece_text(doc, piece, start, old_end)
@@ -593,8 +599,11 @@ commit :: proc(doc: ^Document, p: ^Pending) -> (change: Change) {
 		// The footnotes are the ones that the document had, at the
 		// offsets of the new source.
 		notes_commit(doc, p.notes, p.base, p.old_start, p.edit.end, p.bytes)
-		doc.notes.bullet_lines = p.bullet_lines
-		doc.notes.bullet_free = p.bullet_lines[bullet_index(doc.notes.bullet)] == 0
+		if doc.notes.bullet != 0 {
+			doc.notes.bullet_lines = p.bullet_lines
+			doc.notes.bullet = bullet_choice(p.bullet_lines)
+			doc.notes.bullet_free = p.bullet_lines[bullet_index(doc.notes.bullet)] == 0
+		}
 		doc.cells_most = max(doc.cells_most, fresh.cells_most)
 		doc.cells_cut ||= fresh.cells_cut
 		for part in fresh.parts {

@@ -63,7 +63,7 @@ test_the_lines_of_a_footnote_definition :: proc(t: ^testing.T) {
 	source := "Text[^a].\n\n[^a]: First.\n    Second.\n\n    Third.\n\nAfter[^b].\n[^b]:   B.\n"
 	// The lines are of the scan; what a document keeps has no end of a
 	// definition (the blocks have it).
-	scan := footnote_scan(transmute([]u8)source, 0, len(source), nil, 0)
+	scan := footnote_scan(transmute([]u8)source, 0, len(source), nil, 0, {0, len(source)})
 	if !testing.expect_value(t, len(scan.possible), 2) {
 		return
 	}
@@ -167,6 +167,19 @@ test_the_document_has_the_footnotes_as_numbers :: proc(t: ^testing.T) {
 		// as far in as the text of the definition.
 		{"T[^n].\n\n   [^n]: Intro.\n\n  Tail.\n", "T<1:1>.|{1}Intro.|Tail.|"},
 		{"T[^n].\n\n   [^n]: Intro.\n\n     Tail.\n", "T<1:1>.|{1}Intro.|>Tail.|"},
+		// A reference with ":" after it in a quote is no definition of a
+		// link for the parser: the inline footnote with a backtick
+		// before a reference is a footnote, with or without it.
+		{"^[`][^b]\n\ni\n>[^b]:d\n[^b]:", "<1:1><2:2>|i|<2:2>:d|{2}|"},
+		// In the target of a link: none, and the link is a link.
+		{"A [guide](/docs/^[draft]) and ^[real].\n", "A guide and <1:1>.|"},
+		// In the text of a link: one.
+		{"A [see ^[note] here](/docs) b.\n", "A see <1:1> here b.|"},
+		// A line with no indent that goes on in the paragraph of a
+		// definition is text of the definition: no footnote in it.
+		{"T[^a].\n\n[^a]: Intro.\nTail ^[inner].\n\nAfter ^[real].\n", "T<1:1>.|{1}Intro. Tail ^[inner].|After <2:2>.|"},
+		// A label with a "[" in it is no label: the line is text.
+		{"T.\n\n[^a[b]: Keep this text.\n", "T.|[^a[b]: Keep this text.|"},
 		// In raw HTML: no reference.
 		{"A <a href=\"[^1]\">link</a> and[^1].\n\n[^1]: One.\n", "A link and<1:1>.|{1}One.|"},
 		// A definition right after a paragraph, and a list after it.
@@ -353,6 +366,8 @@ test_the_list_of_footnotes_with_other_blocks :: proc(t: ^testing.T) {
 		{"T[^n].\n\n[^n]: Intro.\n\n      *literal*\n", "1. Intro. " + BACK + "\n\n       *literal*\n\n"},
 		{"T[^n].\n\n[^n]: Note.\nAfter.\n\nBody.\n", "1. Note.\n   After. " + BACK + "\n\n"},
 		{"T[^n].\n\n[^n]: Read [guide][g].\n\n[g]: https://example.com\n", "1. Read [guide][g]. " + BACK + "\n\n   [g]: https://example.com\n\n[g]: https://example.com\n"},
+		// Backticks at the start of an inline footnote are its text.
+		{"T ^[```] end.\n", "1. \\``` " + BACK + "\n\n"},
 		// A line under the text that makes it a heading has nothing after
 		// it: the mark is in a paragraph of its own.
 		{"T[^n].\n\n[^n]: Intro\n  ---\n", "1. Intro\n   ---\n\n   " + BACK + "\n\n"},
@@ -544,6 +559,39 @@ test_a_change_in_a_piece_with_footnotes :: proc(t: ^testing.T) {
 		same(t, &doc, fmt.tprintf("step %d at %d", step, at))
 	}
 	testing.expect(t, alone > 100)
+	// The same with text that is hard for the scan: marks of footnotes,
+	// backticks, fences, quotes, raw HTML, and line breaks go in at
+	// places that a seed gives, in sources with a label that is in a
+	// code block, front matter, and line breaks of two bytes. (A
+	// reviewer found faults with this that the cases above did not.)
+	sources := []string {
+		"Intro.\n\nP2 [^a] and ^[x [y] z] t.\n\nP3 [^b] `c [^a]` [^B].\n\n- item [^a]\n- item2\n\n> quote [^b]\n\nPlain.\n\n[^a]: A [^b] text\n  more\n\n  second para\n[^b]: B\n\n[^a]: dup\n\nEnd.\n",
+		"Intro.\n\n[^x`y] `q [^a] q\n\nMid ^[i].\n\n[^a]: A\n\n~~~\n[^x`y]: dead\n~~~\n\nEnd.\n",
+		"---\nt: 1\n---\nA [^1] b [^2].\n\n[^1]: one\n\n\tcode?\n\n[^2]: two\nlazy\n\nEnd [^1].\n",
+		"Intro.\r\n\r\nP [^a] q.\r\n\r\n[^a]: A\r\n  more\r\n\r\nEnd [^a].\r\n",
+	}
+	alphabet := []string{"[", "]", "^", ":", " ", "`", "\n", "\t", "a", "b", "x", "~", ">", "-", "+", "(", ")", "  ", "\n\n", "[^a]", "^[", "[^b]: ", "<div>", "```"}
+	for hard, which in sources {
+		doc := parse(hard)
+		defer destroy(&doc)
+		state := u64(777 + which)
+		for step in 0 ..< 700 {
+			state = state * 6364136223846793005 + 1442695040888963407
+			at := int(state >> 33) % (len(doc.source) + 1)
+			state = state * 6364136223846793005 + 1442695040888963407
+			pick := int(state >> 33) % (len(alphabet) + 3)
+			edit := Edit{at, at, ""}
+			if pick >= len(alphabet) {
+				edit.end = at + min(pick - len(alphabet) + 1, len(doc.source) - at)
+			} else {
+				edit.text = alphabet[pick]
+			}
+			pending := prepare(&doc, edit)
+			commit(&doc, &pending)
+			discard(&pending)
+			same(t, &doc, fmt.tprintf("source %d, step %d at %d", which, step, at))
+		}
+	}
 }
 
 // A label with a backtick in it that is also the label of a line in a

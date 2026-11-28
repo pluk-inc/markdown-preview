@@ -820,7 +820,8 @@ final class NativeRendererView: NSView {
     /// a reader reads it with no jump, and in Edit mode with no move of
     /// the caret.
     private func hoverNote(_ number: Int, at point: NSPoint) {
-        guard number > 0 else {
+        // Not while a button is down: the reader selects text or clicks.
+        guard number > 0, NSEvent.pressedMouseButtons == 0 else {
             hideNoteBubble()
             return
         }
