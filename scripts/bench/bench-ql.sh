@@ -4,7 +4,7 @@
 #
 # Resets the Quick Look daemon + cache, opens a `qlmanage -p` preview of the
 # sample, and samples RSS/CPU of qlmanage, QuickLookUIService, and the
-# quick-look appex every 500 ms. If the Debug build's PreviewProvider perf
+# Quick Look appex every 500 ms. If the Debug build's PreviewProvider perf
 # logging is registered, provide start→finish wall-time is captured too.
 #
 # Usage:
@@ -87,7 +87,7 @@ TICKS="$(awk -v d="$DURATION" -v i="$INTERVAL" 'BEGIN{printf "%d", d/i}')"
 for ((t = 0; t < TICKS; t++)); do
     sample_role qlmanage "$QL_PID"
     sample_role qluiservice "$(pgrep -f 'QuickLookUIService' 2>/dev/null | tr '\n' ' ')"
-    sample_role appex "$(pgrep -f 'quick-look' 2>/dev/null | tr '\n' ' ')"
+    sample_role appex "$(pgrep -f 'MarkdownPreviewQuickLook\.appex|quick-look\.appex' 2>/dev/null | tr '\n' ' ')"
     sleep "$INTERVAL"
 done
 

@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		9A0209302FA10D4C00092060 /* Quartz.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A02092F2FA10D4C00092060 /* Quartz.framework */; };
-		9A02093C2FA10D4C00092060 /* quick-look.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9A02092D2FA10D4C00092060 /* quick-look.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		9A02093C2FA10D4C00092060 /* MarkdownPreviewQuickLook.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9A02092D2FA10D4C00092060 /* MarkdownPreviewQuickLook.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9A0209C12FA1100200092060 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 9A0209C22FA1100200092060 /* Sparkle */; };
 		9A2040010000000000000001 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9A2040010000000000000004 /* Localizable.strings */; };
 		9A33940A2FA5AF500015D9A4 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 9A3394092FA5AF500015D9A4 /* Markdown */; };
@@ -44,7 +44,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				9A02093C2FA10D4C00092060 /* quick-look.appex in Embed Foundation Extensions */,
+				9A02093C2FA10D4C00092060 /* MarkdownPreviewQuickLook.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -64,7 +64,7 @@
 
 /* Begin PBXFileReference section */
 		9A0207C12FA0ED7C00092060 /* Markdown Preview.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Markdown Preview.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		9A02092D2FA10D4C00092060 /* quick-look.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "quick-look.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		9A02092D2FA10D4C00092060 /* MarkdownPreviewQuickLook.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "MarkdownPreviewQuickLook.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		9A02092F2FA10D4C00092060 /* Quartz.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Quartz.framework; path = System/Library/Frameworks/Quartz.framework; sourceTree = SDKROOT; };
 		9A0209A02FA1100100092060 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
 		9A2040010000000000000002 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = "md-preview/en.lproj/Localizable.strings"; sourceTree = "<group>"; };
@@ -194,7 +194,7 @@
 			isa = PBXGroup;
 			children = (
 				9A0207C12FA0ED7C00092060 /* Markdown Preview.app */,
-				9A02092D2FA10D4C00092060 /* quick-look.appex */,
+				9A02092D2FA10D4C00092060 /* MarkdownPreviewQuickLook.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -268,7 +268,7 @@
 				9A33940B2FA5AF500015D9A4 /* Markdown */,
 			);
 			productName = "quick-look";
-			productReference = 9A02092D2FA10D4C00092060 /* quick-look.appex */;
+			productReference = 9A02092D2FA10D4C00092060 /* MarkdownPreviewQuickLook.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -665,7 +665,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "sh.pluk.md-preview.dev.quick-look";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = MarkdownPreviewQuickLook;
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "QUICK_LOOK_EXTENSION $(inherited)";
@@ -696,7 +696,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "sh.pluk.md-preview.quick-look";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = MarkdownPreviewQuickLook;
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "QUICK_LOOK_EXTENSION $(inherited)";

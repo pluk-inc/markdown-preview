@@ -17,7 +17,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "9A02092C2FA10D4C00092060"
-               BuildableName = "quick-look.appex"
+               BuildableName = "MarkdownPreviewQuickLook.appex"
                BlueprintName = "quick-look"
                ReferencedContainer = "container:md-preview.xcodeproj">
             </BuildableReference>
