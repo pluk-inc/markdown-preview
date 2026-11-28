@@ -1794,6 +1794,7 @@ frame is as it was (6.39 MB against 5.29): it is not the fonts, and not
 the typesetters of the texts (with those freed after the line breaks it
 was 6.45 where it was 6.49); the lines of the texts and their strings
 are what the panel keeps.
+
 ## Footnotes (2026-11-27)
 
 The native page reads footnotes. `core.py --base` against the commit
