@@ -932,8 +932,9 @@ footnote_definition :: proc(line: []u8) -> (label: string, mark, content: int, o
 	}
 	close := at + 2
 	for close < len(line) && line[close] != ']' {
-		// A label has no "[" (as for a reference).
-		if line[close] == '[' {
+		// A label has no "[" (as for a reference), and no "<": the end
+		// of raw HTML in a label ("</script>") would go with the mask.
+		if line[close] == '[' || line[close] == '<' {
 			return
 		}
 		close += 1
