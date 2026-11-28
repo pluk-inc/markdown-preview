@@ -28,7 +28,9 @@
 #include <mach/mach_time.h>
 #include <malloc/malloc.h>
 #include <os/signpost.h>
+#include <pthread.h>
 #include <pthread/qos.h>
+#include <stdatomic.h>
 #include <sys/resource.h>
 #include <time.h>
 #include "mdcore.h"
@@ -860,6 +862,41 @@ static bool case_layout(NSData *source) {
     return true;
 }
 
+// The first two views of a process, made by two threads at the same
+// time, as when a host warms the renderer on a thread of its own while
+// its main thread makes the view of a document. Each thread makes its
+// view, draws a frame, and reads the height of its page. What the views
+// share (the start of the runtime, the Metal device and pipeline) is
+// made one time; with two starts at once this can crash, hang, or give a
+// view with no layout. Must run before each other view of the process.
+static atomic_bool first_views_go;
+static void *first_view_thread(void *source) {
+    while (!atomic_load(&first_views_go)) {
+    }
+    double top = 0, height = 0;
+    @autoreleasepool {
+        void *ctx = open_view((__bridge NSData *)source);
+        mdcore_page_area(ctx, &top, &height);
+        mdcore_destroy(ctx);
+    }
+    return height > 0 ? source : NULL;
+}
+
+static const char *two_first_views_check(NSData *source) {
+    pthread_t threads[2];
+    for (int index = 0; index < 2; index++) {
+        if (pthread_create(&threads[index], NULL, first_view_thread, (__bridge void *)source) != 0) return "no thread for a first view";
+    }
+    atomic_store(&first_views_go, true);
+    bool both = true;
+    for (int index = 0; index < 2; index++) {
+        void *made = NULL;
+        pthread_join(threads[index], &made);
+        both = both && made != NULL;
+    }
+    return both ? NULL : "one of two first views at the same time has no page";
+}
+
 static const struct {
     const char *name;
     bool (*run)(NSData *source);
@@ -901,6 +938,11 @@ int main(int argc, const char *argv[]) {
         return 1;
     }
     if (walk) {
+        const char *apart = two_first_views_check(source);
+        if (apart != NULL) {
+            fprintf(stderr, "the first views of %s: %s\n", argv[1], apart);
+            return 1;
+        }
         void *ctx = open_view(source);
         const char *wrong = caret_walk(ctx, (long)source.length);
         if (wrong != NULL) {

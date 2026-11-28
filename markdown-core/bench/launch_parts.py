@@ -30,6 +30,9 @@ from app import app_pids, executable_of
 from report import one_at_a_time
 
 WAIT = 20.0  # seconds for the first document frame of one launch
+# What each launch must give. The signposts of the warm-up are of a build
+# that has it.
+REQUIRED = ("willFinishLaunching:event", "makeWindow:begin", "renderBeforeShow:begin", "nativeDraw:event", "nativePaint:event")
 # The parts: from one signpost to another one. An interval of the app has
 # a "begin" and an "end"; an event has only "event".
 PARTS = [
@@ -75,7 +78,7 @@ def launch(app: Path, executable: Path, document: Path) -> dict[str, float]:
         try:
             lines.get(timeout=WAIT)  # the header line: the stream is ready
         except queue.Empty:
-            return seen  # no log stream: this run is not counted
+            raise SystemExit("no log stream: the signposts cannot be read")
         subprocess.run(
             ["open", "-g", "-n", "-F", "-a", app, document, "--args",
              "-ApplePersistenceIgnoreState", "YES", "-MarkdownPreview.renderer", "native"],
@@ -99,6 +102,8 @@ def main() -> None:
     parser.add_argument("document", nargs="?", type=Path, default=Path(__file__).with_name("short.md"))
     parser.add_argument("--runs", type=int, default=12)
     args = parser.parse_args()
+    # The path of the process, as `pgrep` has it: with no "..".
+    args.apps = [app.resolve() for app in args.apps]
     samples: dict[Path, list[dict[str, float]]] = {app: [] for app in args.apps}
     executables = {app: executable_of(app) for app in args.apps}
     with one_at_a_time():
@@ -106,8 +111,12 @@ def main() -> None:
             # In turns, and the first of a pair is the other build each time.
             for app in args.apps if run % 2 == 0 else args.apps[::-1]:
                 seen = launch(app, executables[app], args.document)
-                if "nativePaint:event" in seen:
-                    samples[app].append(seen)
+                # A launch with no document frame is a fault of the run
+                # or of the build: no table from the launches that are
+                # left.
+                if missing := [name for name in REQUIRED if name not in seen]:
+                    raise SystemExit(f"launch {run + 1} of {app.name}: no {', '.join(missing)} in {WAIT:g} s")
+                samples[app].append(seen)
     print("| | " + " | ".join(app.stem for app in args.apps) + " |")
     print("| --- | " + " | ".join("---" for _ in args.apps) + " |")
     for label, start, end in PARTS:

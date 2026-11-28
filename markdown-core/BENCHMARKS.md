@@ -1725,9 +1725,14 @@ What the new documents show, which the two old ones could not:
 
 The app starts a thread at its first code that makes a view of the
 native renderer with no window, draws one frame of a text with each kind
-of block, and throws the view away. No file of the core's layout or
-text changed, so `core.py` measures the same program two times and is
-left out. What the warm-up can give, from the core alone (a program of
+of block, and throws the view away. In the core only the first start
+changed (the runtime and the shared Metal state are made one time for
+two threads). `core.py --base origin/main`, `short` / `long`, four runs
+in turns at a load of 14: one number of 60 is marked for instructions,
+a typed character at a caret in `long` with 1.3 % more (a step of 3
+million); each other one is within 1 %, the start of the system too. The
+times are of a busy Mac and say nothing. The walk of `bench.m` now
+starts with two first views that two threads make at the same time. What the warm-up can give, from the core alone (a program of
 its own, the first view of the short document after the start of the
 system, four runs): 10.8 ms with no warm-up, 6.6 ms after a first view
 of the warm-up text; for `prose` 19.0 and 17.1 ms. And the start of the
