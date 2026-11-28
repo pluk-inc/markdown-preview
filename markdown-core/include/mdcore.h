@@ -9,8 +9,10 @@
 // one call at a time work on a renderer, with one exception: mdcore_draw
 // gives the renderer free before it waits for the display, so the other
 // calls do not wait for a frame. Draws do not overlap, and mdcore_resize
-// and mdcore_destroy wait for the draw in progress. Two things stay with
-// the host: calls of mdcore_create do not overlap, and no call uses a
+// and mdcore_destroy wait for the draw in progress. Two renderers share
+// nothing, so calls of mdcore_create can overlap, and so can calls on two
+// renderers (a host warms the system with a renderer of its own on
+// another thread). One thing stays with the host: no call uses a
 // renderer after its mdcore_destroy began.
 #ifndef MDCORE_H
 #define MDCORE_H

@@ -61,6 +61,23 @@ These came from the maintainer. Do not undo one without asking.
   for other platforms later.
 - **The window comes first, then the document.** The host draws the native
   view right after the window's first frame.
+- **The host warms the renderer while the app starts** (2026-11-28,
+  `NativeRendererWarmUp`). The first view of a process pays for what
+  the system makes one time: Metal and the shaders, each font in each
+  size, the image of each glyph. A thread of its own makes a view that
+  no window has, with the reader's style and a text of each kind of
+  block, draws one frame, and throws it away; the system keeps what it
+  made, and the core keeps its Metal device and pipeline for all of its
+  views. Two views share nothing else, so there is no lock between the
+  two; the start of the runtime and the shared Metal state are made one
+  time when two threads ask at one time (`sync.Once`). The glyph images
+  of the warm-up view go with it. Not done: one call of the core for
+  the warm-up (the text beside the layout that it is for, no drawable,
+  and a step of `bench.m` for it), and glyph images that all views of
+  the process share.
+  The two reference programs do the same kind of thing at their start
+  (one finds its fonts, the other makes one slow font and its Metal
+  pipelines, each on a thread of its own); neither makes glyphs ahead.
 - **The core is a product, not a prototype.** It was rewritten from zero
   into packages for that reason. Keep the package borders and the two
   platform seams (see below) when you add to it.
@@ -1793,3 +1810,16 @@ export.
   paragraph or table: 130 ms for each typed character) and one that was
   not known (the estimated height of a page of Chinese and Japanese text
   is 32 % off); the three are in Open work.
+- **2026-11-28** — The warm-up of the renderer at the start of the app.
+  The first frame of a document with front matter was 16 % more
+  instructions with two font sizes of the panel's own, and the question
+  was if a font size must cost that. It must, in each renderer that has
+  an atlas of glyphs, the two reference programs too: the size is in
+  the key of a glyph, and a glyph is made in the frame that first shows
+  it. But the benchmark of the core has the first view two times, and
+  the later one is a quarter of the first: the difference is work that
+  the system does one time in a process, with no need of the document.
+  That work is on a thread of its own now, at the first code of the
+  app. The time of all of a launch did not show the gain (it differs by
+  7 to 11 % from run to run), so `bench/launch_parts.py` measures the
+  parts of a launch between two signposts.

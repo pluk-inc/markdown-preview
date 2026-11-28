@@ -148,6 +148,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         LaunchSignposts.event("willFinishLaunching")
+        NativeRendererWarmUp.start()
         ReleaseNotes.noteLaunch()
     }
 

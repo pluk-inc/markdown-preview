@@ -12,6 +12,7 @@ Two programs, and the documents that they read.
 ```bash
 markdown-core/bench/core.py --base origin/main      # the core alone, no window, against the core of a commit
 markdown-core/bench/app.py <base.app> <change.app>  # the app, from its launch to the first frame; add --renderer web
+markdown-core/bench/launch_parts.py <base.app> <change.app>  # the parts of a launch, between two signposts of the app
 markdown-core/bench/corpus.py                       # makes the documents and lists them
 ```
 
@@ -186,6 +187,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-27 | the first outline of a document from the core, not from a second parse | 584 / 596 (see the section) | 55 / 79 (the base 55 / 89) | 498 / 583 (the base 510 / 700) | – | – | – | – |
 | 2026-11-27 | the corners of the card of a code block, as the web renderer has them | 579 / 591 | 52 / 86 (the base too) | 495 / 640 (the base 475 / 620) | 63 / 75 | not recorded | 0.49 / 0.40 | 7.0 / 26.3 (the base 26.4) |
 | 2026-11-27 | the method of the benchmark: two builds in turns, instructions, cases, more documents (see the section; the columns have other meanings from here) | 584 / 587 to the drawn frame, 593 / 596 to the committed one | 50 / 85, six seconds after the frame (the base too); highest 143 / 178 | 471 / 583, six seconds after the frame | 11.5 / 10.9 with the system started; the parse 0.16 / 11.6 apart | none | 0.42 / 0.35, 99 of 100 frames below 9.5 / 4.0 | 6.95 / 23.4 in a view that only this case used |
+| 2026-11-28 | the warm-up of the renderer on a thread of its own at the start of the app (see the section) | 545 / 537 to the drawn frame (the base 568 / 535; not marked) | 63 / 85 (the base 60 / 82) | 478 / 487 (the base 453 / 460) | – | – | – | – |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1718,3 +1720,71 @@ What the new documents show, which the two old ones could not:
   are late in `real` and 2 in `long`, and a scroll frame of `prose` is
   1.45 million instructions against 0.98 million in `long`: the long
   document is the kind case, as its name in the table of documents says.
+
+## The warm-up of the renderer at the start of the app (2026-11-28)
+
+The app starts a thread at its first code that makes a view of the
+native renderer with no window, draws one frame of a text with each kind
+of block, and throws the view away. In the core only the first start
+changed (the runtime and the shared Metal state are made one time for
+two threads). `core.py --base origin/main`, `short` / `long`, four runs
+in turns at a load of 14: one number of 60 is marked for instructions,
+a typed character at a caret in `long` with 1.3 % more (a step of 3
+million); each other one is within 1 %, the start of the system too. The
+times are of a busy Mac and say nothing. The walk of `bench.m` now
+starts with two first views that two threads make at the same time. What the warm-up can give, from the core alone (a program of
+its own, the first view of the short document after the start of the
+system, four runs): 10.8 ms with no warm-up, 6.6 ms after a first view
+of the warm-up text; for `prose` 19.0 and 17.1 ms. And the start of the
+system (Metal, the shaders, the first font) is 25 ms on the thread that
+makes the first view.
+
+`app.py`, base and change in turns. Ten launches, load 3 to 18 (another
+session worked), then twenty launches of `short` at a load of 3:
+
+| | Base | Change | |
+| --- | --- | --- | --- |
+| `short`, ten: the start of the process to the drawn frame (ms) | 500 ±10 % | 476 ±3 % | -4.7 %, not marked |
+| `long`, ten: the same (ms) | 497 ±6 % | 484 ±4 % | -2.6 %, not marked |
+| `short`, twenty: the same (ms) | 485 ±7 % | 469 ±11 % | -3.3 %, not marked |
+| Instructions of the app, `short` / `long` (millions) | 2919 / 3452 | 3035 / 3580 | +4.0 % / +3.7 % |
+| CPU of the app, six seconds after the frame (ms) | 453 / 460 | 478 / 487 | marked |
+| Memory of the app then (MB) | 60.0 / 82.1 | 63.4 / 85.3 | marked |
+
+The time of all of a launch leans to the change in each run and is
+marked in none: it differs by 7 to 11 % from run to run, and the gain
+is 3 %. `launch_parts.py` gives the parts, the two builds in turns (the
+median, and half of the range of the runs):
+
+| | Base | Change |
+| --- | --- | --- |
+| `short`, 12 launches: the app's code starts, to the document frame drawn (ms) | 277 ±19 | 263 ±14 |
+| the window is made, to the frame drawn (ms) | 208 ±12 | 192 ±8 |
+| the render of the document starts, to its frame drawn (ms) | 119 ±7 | 106 ±7 |
+| `short`, 14 launches, a second run: the same three (ms) | 275 ±25 / 204 ±17 / 117 ±10 | 266 ±16 / 194 ±11 / 107 ±8 |
+| `long`, 10 launches: the same three (ms) | 303 ±23 / 221 ±15 / 129 ±11 | 279 ±19 / 206 ±8 / 120 ±7 |
+| The warm-up, start to end (ms) | – | 35 ±4 |
+| The end of the warm-up, to the start of the render of the document (ms) | – | 119 ±14 |
+
+The document frame is 9 to 17 ms earlier in each of the nine pairs, and
+the ranges of the two builds overlap in each: it is a gain of the size
+of one frame, shown by its direction in each run and not by one run.
+The form that is in the code (a shorter text for the warm-up, and the
+shared state of the renderer made one time for two threads) was
+measured at a load of 7 to 8, where each time is longer: from the start
+of the render to the drawn frame 179 ±33 to 161 ±31 ms for `short` (14
+launches) and 197 ±57 to 175 ±18 ms for `long` (10), and the warm-up
+32 ms.
+The warm-up is done 119 ms before the render of the document starts, so
+the two do not work at the same time.
+
+What it costs: 120 million instructions and 25 ms of CPU, on a thread
+that the main thread does not wait for, and 3 MB of memory that stays
+(what the text system keeps for the fonts of each heading level, which
+a document with fewer levels would not make). The glyph images of the
+warm-up view go with that view: each view has its own. A reader with the web
+renderer pays none of it: the warm-up runs only with the native one.
+
+Seen with the parts and not looked into here: from the start of the
+render of the document to its drawn frame is 106 to 129 ms, and the
+core's part of that is about 10 ms.
