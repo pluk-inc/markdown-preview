@@ -7,42 +7,132 @@ files of the core changed. Do not edit old rows.
 
 ## How to measure
 
-Two programs. Both use `bench/short.md` (9 KB, most block kinds) and a
-long document that is `short.md` 128 times (1.1 MB). Both print the median
-of five runs as a table.
+Two programs, and the documents that they read.
 
 ```bash
-markdown-core/bench/core.py                         # the core alone, no window
-markdown-core/bench/app.py <Markdown Preview.app>   # the app, cold launch; add --renderer web to compare
+markdown-core/bench/core.py --base origin/main      # the core alone, no window, against the core of a commit
+markdown-core/bench/app.py <base.app> <change.app>  # the app, from its launch to the first frame; add --renderer web
+markdown-core/bench/corpus.py                       # makes the documents and lists them
 ```
 
-- **`core.py`** builds the core and `bench/bench.m` and runs the core
-  through its C API in a new process each time: the first frame, the layout
-  two scroll passes of 24,000 points (the first lays out what it comes
-  to and makes the glyph bitmaps, the second has them), a jump back to
-  the top between them, a jump to the end, a new width there, the same
-  text again with one paragraph more in its middle, ten characters typed
-  into that paragraph and ten at the end of the text, ten at a caret
-  that a click put in the view, ten steps of that caret to the left and
-  to the right, Select All,
-  a copy of all of the text, frames through all of the document (so all
-  of it is laid out), and the heap. Before the runs it walks the caret
-  through two documents with each key that moves it, and stops with a
-  message when a move is wrong (`mdcore-bench <file> --caret-walk`). It
-  takes a minute and shows no window. A scroll frame is CPU time of the drawing thread, because
-  a draw waits for the display.
-- **`app.py`** starts a Release build of the app with a document, in the
-  background, and measures from the `open` command to the signpost of the
-  first document frame (`nativePaint`, or `webPaint` for the web renderer).
-  Three seconds later it reads the CPU time and the memory footprint of the
-  app process. Its windows open behind the front app. Use a copy of the app
-  with its own bundle identifier, so the run does not use the settings of
-  the installed app.
+**Judge a change from two builds in one sitting.** Each program takes
+the base and the change, runs them in turns (base, change, change, base,
+and so on), and prints the median of each number with how far the runs
+are from it (`±`). It marks a difference with `**` only when the runs of
+the two builds are apart (an exact rank test, chance below 0.05) and the medians
+differ by 5 % or more for a time, 1 % or more for instructions and
+memory. The limit for a time is that high because the place that the
+linker gives a hot function moves a time by 3 to 5 % with no change of
+the work. With one build and no base, a program prints that build's
+numbers, for a row of the table.
 
-The numbers depend on the Mac and on what else runs on it: a second run on
-a busy Mac gave core times twice as long. To judge a change, measure the
-base and the change one after the other on the same Mac, and compare those
-two. Use the table below to see the direction over months.
+**Read the instructions before the time.** Beside each time is the number
+of instructions that the process ran for it. A time on a busy Mac was up
+to 55 % apart between two builds of the same work in one sitting; the
+instructions were below 1 % apart. A change of the instructions is a
+change of the work. A change of the time alone is most often the Mac.
+For the core, the instructions are of the measured step. For the app
+there is one number, of all that the process did until six seconds after
+the frame: it shows that the launch does more or less work, not if the
+work before the frame changed.
+
+**How long it takes.** The defaults are the short routine: four runs of
+each build for the core (the fewest that can show a difference) and ten
+launches of each app. Judge such a run from the instructions.
+
+| When | What | Time |
+| --- | --- | --- |
+| While a change is made | one case against the base: `core.py --base origin/main --case type --documents long` | 4 to 6 seconds |
+| Before a pull request, when the core changed | `core.py --base origin/main` | about 2.5 minutes |
+| Before a pull request | `app.py <base.app> <change.app>` | about 6 minutes |
+| A change to the layout, the text, or the glyphs | `core.py --base origin/main --documents all` | about 10 minutes |
+| For a record, or when a time is in doubt | the same with `--careful`: ten runs, twenty launches | three times as long |
+
+The scroll passes are 10 of the 15 seconds of one run on the long
+document, and the other cases are below half a second each (`layout`: 4
+seconds), so name the case that the change is in while you work on it. A
+case that runs alone starts with no glyphs and fonts from the cases
+before it, so compare its numbers with a run of the same case, not with
+a row of the table. The core of a base commit is built one time and
+kept.
+
+**One benchmark at a time.** A program stops when the other one runs, and
+says so when the Mac is busy. Do not build and do not run tests during a
+run.
+
+- **`core.py`** builds the core and `bench/bench.m` and runs the core
+  through its C API in a new process each time. With
+  `--base` it also builds the core of that commit, or of the checkout in
+  that folder, with the same `bench.m`; more than one `--base` shows all
+  of them beside each other, which is the way to see a direction over
+  commits. `bench.m` is a list of cases, and each case makes what it
+  needs (a view with the document, the view at the end) before it
+  measures:
+  - `open`: the start of the system (a first view with one word: Metal,
+    the shaders, the first font), the parse, and the layout of the first
+    view with its frame, one time with the fonts and glyphs of the
+    document new and then in later views of the process.
+  - `scroll`: two scroll passes of 24,000 points (the first lays out what
+    it comes to and makes the glyph bitmaps, the second has them) and a
+    jump back to the top between them. For the frames of a pass: the
+    mean, the median, the value that 99 of 100 are below, the longest,
+    and how many need more CPU time than the 8.3 ms of a 120 Hz display.
+  - `end`: a jump to the end, and a new width there.
+  - `change`: the same text again with one paragraph more in its middle.
+  - `type`: ten characters typed into that paragraph, ten at the end of
+    the text, ten at a caret that a click put in the view, and ten steps
+    of that caret.
+  - `select`: Select All and a copy of all of the text.
+  - `layout`: frames through all of the document, so all of it is laid
+    out, and the heap.
+
+  `--case scroll` runs one case, also for a profile: each measured step
+  is a signpost interval (subsystem `sh.pluk.md-preview.bench`, Points of
+  Interest). Before the runs, when no case is named, `core.py` walks the
+  caret through two documents with each key that moves it, and stops with
+  a message when a move is wrong (`mdcore-bench <file> --caret-walk`). A frame is CPU time
+  of the drawing thread, because a draw waits for the display.
+- **`app.py`** starts Release builds of the app with a document, in the
+  background, and measures from the `open`
+  command to two signposts of the first document frame: the frame is
+  drawn (`nativeDraw`, `webDraw`), and the frame is committed to the
+  window server (`nativePaint`, `webPaint`), which is when it can come on
+  screen. It also gives the time from the start of the process to the
+  drawn frame, which has no time of the `open` command in it. Six seconds after the frame it
+  reads the app process from the kernel: CPU time, instructions, memory,
+  and the highest memory until then. Six seconds, because the memory of
+  the GPU driver for a frame goes away five seconds after it. Use copies
+  of the app with a bundle identifier of their own, so the run does not
+  use the settings of the installed app.
+
+  A build from before 2026-11-27 has only `nativePaint`, at the draw:
+  `app.py` sees that in the first launch of a build, which is not
+  counted, and reads the signpost as the drawn frame, so compare such a
+  build by that row. The files of the app are in the cache of the system after the
+  first launch, which is not counted: this is not the launch after a
+  restart of the Mac. The windows open behind the front app, so it is
+  not the launch of an app that comes to the front either.
+- **`corpus.py`** makes each document but the first one time, with a
+  fixed seed, in `markdown-core/build/bench/corpus`, so each run and each
+  build reads the same bytes (`long` is made again when `short.md`
+  changed). `--documents` of the two programs takes a list of them,
+  or `all`; the default is the first two.
+
+  | Document | Size | What it is |
+  | --- | --- | --- |
+  | `short` | 9 KB | `bench/short.md`: most block kinds |
+  | `long` | 1.1 MB | `short` 128 times. After its first copy each word and glyph is one that the caches have, so it shows the cost of size, not of new text |
+  | `prose` | 1 MB | each block kind in an order and with words that do not repeat |
+  | `cjk` | 290 KB | Chinese and Japanese text from 3,000 characters: new glyphs on each screen |
+  | `table` | 190 KB | one table of 2,000 rows |
+  | `paragraph` | 60 KB | one paragraph with no empty line |
+  | `real` | 270 KB | three documents of this repository as they were at one commit |
+
+The main table below is for the direction over months only: its rows are
+from different days and loads of the Mac, and two rows that are less than
+about 60 ms of launch time apart say nothing (the same build gave 613 and
+651 ms in one sitting). To see what a past change did, build its commit
+and the one before it and measure the two now.
 
 With the web renderer most of the work is in WebKit's helper processes,
 which `app.py` does not count. Compare its first frame with the native
@@ -95,6 +185,7 @@ Short / long document. M3 Pro, 36 GB, macOS 27.0.
 | 2026-11-26 | a code block that is typed | 538 / 548 | 61 / 94 (the base 61 / 93) | 420 / 550 | 62 / 75 | not recorded | not recorded | 7.0 / 26.3 (the base too) |
 | 2026-11-27 | the first outline of a document from the core, not from a second parse | 584 / 596 (see the section) | 55 / 79 (the base 55 / 89) | 498 / 583 (the base 510 / 700) | – | – | – | – |
 | 2026-11-27 | the corners of the card of a code block, as the web renderer has them | 579 / 591 | 52 / 86 (the base too) | 495 / 640 (the base 475 / 620) | 63 / 75 | not recorded | 0.49 / 0.40 | 7.0 / 26.3 (the base 26.4) |
+| 2026-11-27 | the method of the benchmark: two builds in turns, instructions, cases, more documents (see the section; the columns have other meanings from here) | 584 / 587 to the drawn frame, 593 / 596 to the committed one | 50 / 85, six seconds after the frame (the base too); highest 143 / 178 | 471 / 583, six seconds after the frame | 11.5 / 10.9 with the system started; the parse 0.16 / 11.6 apart | none | 0.42 / 0.35, 99 of 100 frames below 9.5 / 4.0 | 6.95 / 23.4 in a view that only this case used |
 
 The web renderer in the same build on the same day as the first row, for
 the first frame only: 945 ms for the short document, 13,283 ms for the
@@ -1497,3 +1588,133 @@ overlap. The change is one constant of a rectangle with round corners,
 and the short document has three such cards; no cause for 10 to 30 ms
 is known, and the differences are near the spread between the two sets
 of the base (10 and 20 ms).
+
+## The method of the benchmark (2026-11-27)
+
+No code of the core changed; the app got a second signpost for the first
+frame. What changed is how the numbers are made, after a review of the
+method against the benchmarks of a terminal that is known for them. Four
+faults, and what stands in their place now:
+
+- **The spread hid the result.** The same build gave 613 and 651 ms of
+  launch in one sitting, and most rows of the main table differ by less.
+  Now the base and the change run in turns in one run, with the spread
+  beside each median and a rank test before a difference counts. Each time has its instructions beside it.
+- **The first frame ended too early.** `nativePaint` was written right
+  after the draw call, before the commit that sends the frame to the
+  window server, and `webPaint` when the page said that it painted. Now
+  each renderer has two signposts, the frame drawn and the frame
+  committed in the app process; `webPaint` waits for WebKit's next
+  presentation update. The committed frame is 10 ms after the drawn one
+  for the native renderer and 16 ms for the web one. It is still not the
+  moment that the display shows the frame.
+- **The long document was the short one 128 times.** Five documents more
+  (`corpus.py`), made one time from a fixed seed.
+- **Weak numbers.** CPU time had a step of 10 ms, memory was read while
+  the GPU driver still held the memory of the first frame, a scroll pass
+  gave a mean and one longest frame, and the first frame of the core had
+  the start of Metal in it. Now the kernel's own counters, the highest
+  memory, the median and the 99th of 100 frames, and the start of the
+  system as a number of its own.
+
+The numbers of a row from here on are not the ones of the rows before:
+the first frame of the core has no start of the system in it, each case
+has a view of its own (so the heap at the end has no typed text and no
+Undo history), and the app's memory is read six seconds after the frame.
+
+**The app, the base (`origin/main`) against this change**, 20 launches
+each in turns, short / long (load 4 to 10: the Mac was in use):
+
+| | Base | Change |
+| --- | --- | --- |
+| Launch to the first frame, drawn (ms) | 595 ±18% / 609 ±14% | 584 ±18% / 587 ±20% |
+| Launch to the first frame, committed (ms) | no such signpost | 593 / 596 |
+| The start of the process to the drawn frame (ms) | 564 / 569 | 553 / 558 |
+| CPU, six seconds after the frame (ms) | 455 / 603 | 471 / 583 |
+| Instructions then (millions) | 3104 / 5266 | 3098 / 5247 |
+| Memory then (MB) | 50.3 / 85.0 | 50.4 / 85.1 |
+| Highest memory until then (MB) | 143 / 178 | 143 / 178 |
+
+No difference counts. The instructions of the two builds are 0.2 and
+0.4 % apart while the launch times of one build are 14 to 20 % apart: the
+second signpost costs nothing. The highest memory is a new number: the
+app holds 93 MB more for a moment at launch than it keeps.
+
+**The core against itself**, to see how often the method finds a
+difference that is not there: `core.py --base origin/main --documents
+all --careful`, the same core two times, ten runs each (load 2 to 4).
+Of about 210 compared numbers, six were marked: two times the
+instructions of a step of the caret (-1.9 and -2.0 %; the step is 0.7 to
+4 million instructions), two heaps of the `paragraph` document (0.2 MB
+of 12, when the heap had one decimal place), and two times of that
+document with the same instructions. After this run the rules got
+tighter: instructions below 2 million are not judged, the heap has two
+decimal places, the rank test is exact, and a time that differs with the
+same instructions is listed as one to measure again. The first run of
+this kind, on a busier Mac, marked two (a time of 2 microseconds, not
+judged any more, and the instructions of a copy). So expect a few false
+marks in a run of all documents, and measure a marked case again before
+it is believed.
+
+This checkout, medians of those ten runs. Times and memory:
+
+| | short | long | prose | cjk | table | paragraph | real |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Parse (ms) | 0.159 | 11.6 | 8.41 | 0.929 | 2.49 | 0.372 | 2.22 |
+| First view, fonts and glyphs new (ms) | 11.5 | 10.9 | 11.5 | 111 | 139 | 141 | 11.0 |
+| First view, later in the process (ms) | 2.83 | 3.07 | 3.72 | 22.9 | 129 | 127 | 3.75 |
+| Scroll frame, new glyphs: mean (CPU ms) | 0.419 | 0.352 | 0.409 | 1.55 | 0.449 | 0.370 | 0.556 |
+| Scroll frame, new glyphs: 99 of 100 are below (CPU ms) | 9.47 | 3.98 | 6.62 | 48.1 | 7.88 | 6.04 | 12.8 |
+| Scroll frames, new glyphs: above 8.3 ms of CPU | 2 | 2 | 4.50 | 18 | 4.50 | 0 | 11 |
+| Scroll frame, glyphs ready: mean (CPU ms) | 0.319 | 0.382 | 0.430 | 0.524 | 0.506 | 0.311 | 0.480 |
+| Scroll frame, glyphs ready: 99 of 100 are below (CPU ms) | 2.35 | 4.35 | 6.53 | 10.4 | 7.76 | 3.03 | 8.70 |
+| To the end (ms) | 9.38 | 8.81 | 8.98 | 39.0 | 8.72 | 8.37 | 14.2 |
+| A new width at the end (ms) | 8.08 | 8.38 | 8.30 | 8.61 | 126 | 127 | 8.35 |
+| A typed character at the end of the text (CPU ms) | 0.932 | 1.02 | 0.681 | 0.701 | 4.08 | 1.14 | 0.448 |
+| A typed character at a caret (CPU ms) | 1.55 | 1.22 | 1.46 | 1.55 | 133 | 128 | 1.26 |
+| All of the document laid out (CPU ms) | 7.62 | 1553 | 1021 | 218 | 271 | 5.73 | 207 |
+| Estimated page height against the real one (%) | -0.800 | -0.800 | -1.50 | 31.9 | 0 | 0 | 3.50 |
+| Heap at the first frame (MB) | 5.30 | 14.5 | 12.4 | 15.7 | 14.1 | 11 | 6.60 |
+| Heap with all of the document laid out (MB) | 6.95 | 23.4 | 21.3 | 45.2 | 15.5 | 12.8 | 11.2 |
+
+The instructions for the same steps (millions). These are the numbers to
+compare a later day with, on the same Mac and the same documents; the
+times above are of this day:
+
+| | short | long | prose | cjk | table | paragraph | real |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Parse | 1.78 | 218 | 137 | 23.0 | 47.5 | 10.3 | 42.5 |
+| Layout of the first view and its frame, fonts and glyphs new | 146 | 111 | 114 | 1369 | 2163 | 2288 | 156 |
+| The same in a later view of the process | 39.0 | 36.4 | 47.3 | 250 | 2040 | 2148 | 51.4 |
+| Scroll frame, new glyphs: mean | 1.42 | 0.980 | 1.45 | 9.15 | 1.02 | 0.904 | 1.78 |
+| Scroll frame, glyphs ready: mean | 0.651 | 0.748 | 0.963 | 1.13 | 0.996 | 0.733 | 1.19 |
+| To the end: layout and first frame there | 45.5 | 43.6 | 64.0 | 404 | 34.1 | 12.6 | 109 |
+| A new width at the end: layout and frame | 33.7 | 31.8 | 40.1 | 53.8 | 2039 | 2185 | 65.4 |
+| A change of the text in its middle: parse, compare, and frame | 29.9 | 15.9 | 14.5 | 12.6 | 2108 | 2149 | 9.75 |
+| A typed character in the middle of the text, the view at the end | 3.00 | 4.40 | 4.10 | 4.54 | 58.5 | 10.3 | 3.67 |
+| A typed character at the end of the text, the view at the end | 2.14 | 8.43 | 3.81 | 5.45 | 57.8 | 9.81 | 2.74 |
+| A typed character at a caret that a click put in the view | 2.71 | 3.07 | 5.75 | 5.69 | 2143 | 2149 | 3.36 |
+| A step of the caret to the left or to the right | 0.678 | 0.663 | 0.755 | 0.923 | 5.09 | 3.96 | 0.741 |
+| All of the document laid out, by frames through it | 51.9 | 6147 | 6613 | 2639 | 1406 | 65.0 | 1601 |
+| CPU for the full run, with what each case makes ready | 1492 | 10949 | 11115 | 14997 | 82519 | 80822 | 5534 |
+
+What the new documents show, which the two old ones could not:
+
+- **One long paragraph and one long table are laid out in one step, each
+  time.** The first view of a 60 KB paragraph or a 2,000-row table takes
+  127 to 141 ms, a new width the same, and each typed character at a
+  caret in it 128 to 133 ms of CPU (2.1 billion instructions, against 3
+  to 6 million in the other documents): typing there shows about eight
+  characters a second. A 195 KB paragraph took 1.4 s for each of the
+  three. This is the first limit of Open work in `AGENTS.md`, with its
+  cost.
+- **Text of another script.** The first view of the `cjk` document takes
+  111 ms when its font is new to the process and 23 ms after that; in the
+  first scroll pass 18 of 601 frames are above 8.3 ms and one in 100 is
+  above 48 ms (the glyph bitmaps of a screen of new characters); the heap
+  is 45 MB for 290 KB of source; and the estimated page height is 32 %
+  from the real one, where it is below 4 % for the other documents.
+- **New text against repeated text.** With new glyphs, 11 frames of 601
+  are late in `real` and 2 in `long`, and a scroll frame of `prose` is
+  1.45 million instructions against 0.98 million in `long`: the long
+  document is the kind case, as its name in the table of documents says.

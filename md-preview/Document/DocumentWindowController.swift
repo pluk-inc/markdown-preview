@@ -482,6 +482,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // the document, and the document does not wait for the launch turn.
         if (documentWindow.contentViewController as? MainSplitViewController)?.showDeferredNativeRenderer() == true {
             CATransaction.flush()
+            LaunchSignposts.emitCommittedEvents()
         }
         #if DEBUG
         Logger.perf.debug(
