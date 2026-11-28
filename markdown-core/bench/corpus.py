@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """The documents that the benchmarks measure.
 
 Each one but the short one (a file of the repository) is made one time, with a fixed seed, and kept in
