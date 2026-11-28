@@ -173,6 +173,7 @@ test_the_document_has_the_footnotes_as_numbers :: proc(t: ^testing.T) {
 		{"^[`][^b]\n\ni\n>[^b]:d\n[^b]:", "<1:1><2:2>|i|<2:2>:d|{2}|"},
 		// In the target of a link: none, and the link is a link.
 		{"A [guide](/docs/^[draft]) and ^[real].\n", "A guide and <1:1>.|"},
+		{"A [guide](/docs/(v1)/^[draft]) and ^[real].\n", "A guide and <1:1>.|"},
 		// In the text of a link: one.
 		{"A [see ^[note] here](/docs) b.\n", "A see <1:1> here b.|"},
 		// A line with no indent that goes on in the paragraph of a

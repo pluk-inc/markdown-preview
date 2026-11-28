@@ -85,8 +85,8 @@ Shape :: struct {
 	mark_shown:  bool,
 	// The block is of the definition of a footnote: its first block
 	// (`marker` is `.Note`), a later block of its item, or a block of a
-	// list in its text. A page that is read shows none of these in their
-	// place.
+	// list in its text. The bubble of a footnote has the text of these
+	// (`note_text`).
 	noted:       bool,
 	// A list item with nothing in it at the caret whose mark has nothing
 	// after it ("-", "1."): the mark is plain text that is being typed,

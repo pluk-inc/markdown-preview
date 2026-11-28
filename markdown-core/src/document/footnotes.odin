@@ -25,7 +25,8 @@ import "core:strings"
 //   HTML it is what it was.
 // - The footnotes have their numbers in the order of their first
 //   reference. A reference with no definition is text, and a definition
-//   that no reference has shows nowhere (its number is 0).
+//   that no reference has is a definition with no number (its number
+//   is 0): its text shows in its place, with no mark.
 
 FOOTNOTE_INDENT :: 2
 
@@ -327,15 +328,22 @@ footnote_scan :: proc(source: []u8, start, limit: int, known: ^map[string]int, b
 	for piece in lines {
 		next_close, next_open := piece.start, piece.start
 		paired := false
-		// After "](" to the ")", and after "]:": what can be the target
-		// of a link.
+		// After "](" to its ")", with the pairs of "(" and ")" in it, and
+		// after "]:": what can be the target of a link.
 		target := false
+		open_parens := 0
 		for i := piece.start; i < piece.end; {
 			ch := source[i]
-			if ch == ']' && i + 1 < piece.end && (source[i + 1] == '(' || source[i + 1] == ':') {
+			switch {
+			case ch == ']' && i + 1 < piece.end && source[i + 1] == ':':
 				target = true
-			} else if ch == ')' {
-				target = false
+			case ch == ']' && i + 1 < piece.end && source[i + 1] == '(' && open_parens == 0:
+				target = true
+			case ch == '(' && target:
+				open_parens += 1
+			case ch == ')' && open_parens > 0:
+				open_parens -= 1
+				target = open_parens > 0
 			}
 			switch {
 			case ch == '\\':

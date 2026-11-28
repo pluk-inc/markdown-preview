@@ -896,7 +896,7 @@ final class NativeRendererView: NSView {
     /// footnote that the point was on when the button went down: in Edit
     /// mode the caret is there after that, and a number with the caret in
     /// it shows as its source, which is no number to find.
-    fileprivate func click(on note: (number: Int, isDefinition: Bool)?, withCommand: Bool) {
+    fileprivate func click(on note: (number: Int, isDefinition: Bool)?, at point: NSPoint, withCommand: Bool) {
         hideNoteBubble()
         // In Edit mode a click puts the caret; with Command it follows.
         guard !isEditable || withCommand, let note else { return }
@@ -912,7 +912,13 @@ final class NativeRendererView: NSView {
             }
             guard mdcore_note_top(ctx, number, 1, &target) else { return }
         } else {
-            guard mdcore_note_top(ctx, number, 0, &target) else { return }
+            guard mdcore_note_top(ctx, number, 0, &target) else {
+                // An inline footnote has its text only at its number: the
+                // click shows it there, with no wait.
+                noteBubbleNumber = number
+                showNoteBubble(number, at: point)
+                return
+            }
             noteReturns[number] = scrollY
         }
         // The page can have another height with that part laid out.
@@ -1093,7 +1099,7 @@ private final class PageArea: NSView {
         endDrag()
         let point = convert(event.locationInWindow, from: nil)
         if let down = downPoint, abs(point.x - down.x) + abs(point.y - down.y) < 3 {
-            owner?.click(on: downNote, withCommand: event.modifierFlags.contains(.command))
+            owner?.click(on: downNote, at: point, withCommand: event.modifierFlags.contains(.command))
         }
         downPoint = nil
         downNote = nil
