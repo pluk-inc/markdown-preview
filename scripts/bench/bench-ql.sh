@@ -87,7 +87,7 @@ TICKS="$(awk -v d="$DURATION" -v i="$INTERVAL" 'BEGIN{printf "%d", d/i}')"
 for ((t = 0; t < TICKS; t++)); do
     sample_role qlmanage "$QL_PID"
     sample_role qluiservice "$(pgrep -f 'QuickLookUIService' 2>/dev/null | tr '\n' ' ')"
-    sample_role appex "$(pgrep -f 'MarkdownPreviewQuickLook.appex' 2>/dev/null | tr '\n' ' ')"
+    sample_role appex "$(pgrep -f 'MarkdownPreviewQuickLook\.appex|quick-look\.appex' 2>/dev/null | tr '\n' ' ')"
     sleep "$INTERVAL"
 done
 

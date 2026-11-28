@@ -74,7 +74,8 @@ one you just built. Beware: every Debug build of this project registers an
 appex with the same bundle id (`sh.pluk.md-preview.dev.quick-look`), so multiple
 worktrees/DerivedData folders compete and LaunchServices picks one
 arbitrarily. Verify which binary actually served the preview with
-`ps -axo pid,comm | grep MarkdownPreviewQuickLook.appex` while the panel is open, and
+`ps -axo pid,comm | grep -E 'MarkdownPreviewQuickLook\.appex|quick-look\.appex'` while the panel is open
+(a copy from 0.0.75 or before has the second name), and
 `lsregister -u` stale copies if the wrong one wins.
 
 ## Manual edit-cycle procedure
@@ -118,9 +119,10 @@ Measures the innerHTML-swap (or morphdom) update path under repeated edits:
   candidate to make sure you're averaging the same population.
 - `ps pcpu` is a decaying average, not an instantaneous reading — treat
   `cpu_mean_*` as relative between runs, not absolute utilization.
-- `bench-ql.sh` finds the appex via `pgrep -f quick-look`, which can match
-  unrelated processes whose command line contains that string (e.g. an
-  editor with this repo open). Close those first.
+- `bench-ql.sh` finds the appex via `pgrep -f` on the extension's file name
+  (`MarkdownPreviewQuickLook.appex`, or `quick-look.appex` for a copy from
+  0.0.75 or before), which can match unrelated processes whose command line
+  contains one of those names. Close those first.
 - Runs are single-shot per invocation. For less noise, run each side 3× into
   the same `--out` dir — `report.py` averages duplicate (sample, metric)
   keys within a directory.
