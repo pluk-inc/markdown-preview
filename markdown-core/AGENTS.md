@@ -422,6 +422,47 @@ These came from the maintainer. Do not undo one without asking.
   thread's: a queue's threads come and go, and each would leave its own
   behind. An export sets `context.temp_allocator` from it.
 
+## Writing Odin
+
+Odin changes from release to release, and the build uses the Homebrew
+compiler, a monthly `dev-` release. The installed compiler is the source of
+truth: syntax from memory or from an online example can be from another
+release.
+
+- Read an API where the compiler keeps it, not from memory. `odin root`
+  prints the folder that holds `base/`, `core/`, and `vendor/`, and
+  `odin doc core:strings -short` lists a package. The Homebrew install has
+  no `examples/` folder; the tour of the language is
+  <https://odin-lang.org/docs/demo/>, which can be newer than the compiler.
+- Write Odin, not C or Swift with Odin's syntax. Before you write a
+  helper, a container, or a loop by hand, look for what the language and
+  `core` already have, because code carried over from another language
+  misses it. The ones that fit this core: `bit_set` for flags, an array
+  indexed by an enum (`[Kind]string`), a `union` with a `switch v in`,
+  `#partial switch`, `or_return` and `or_else` for results, arithmetic on
+  fixed arrays (`[2]f32` adds and scales as a value), `#soa` arrays for
+  records that are read one field at a time, an arena
+  (`core:mem/virtual`) in place of many single frees, and the packages
+  `core:slice`, `core:strings`, `core:unicode/utf8`, and
+  `core:container/small_array`. The core has no `#soa` array, no `union`,
+  and no arena of `core:mem/virtual` yet; measure before you move hot
+  code to one.
+- Try a syntax or an API you are not sure of in a small package in the
+  temporary folder, never in `src/`. Run `odin check <folder>` on it for a
+  question about types, `odin test <folder>` for a question about
+  behavior, and delete it after.
+- The fast check after an edit is the type check of one package, which
+  links nothing: `odin check markdown-core/src/layout -no-entry-point`.
+  This works for every package but two. It fails for `renderer` and for
+  `src` itself, because `metal_darwin.odin` loads
+  `quad.metallib`, a file that only `build.sh` makes, in a copy of the
+  source. Those two are checked by the app build.
+- Take a new compiler flag from `odin help build` (or `check`, `test`),
+  and put it in `build.sh` or `test.sh`, which hold the flags of the
+  project.
+- For a compiler or linker failure, read the first error first, and note
+  `odin version` with it.
+
 ## How to check a change
 
 ```bash
