@@ -366,6 +366,9 @@ test_the_list_of_footnotes_with_other_blocks :: proc(t: ^testing.T) {
 		{"T[^n].\n\n[^n]: Intro.\n\n      *literal*\n", "1. Intro. " + BACK + "\n\n       *literal*\n\n"},
 		{"T[^n].\n\n[^n]: Note.\nAfter.\n\nBody.\n", "1. Note.\n   After. " + BACK + "\n\n"},
 		{"T[^n].\n\n[^n]: Read [guide][g].\n\n[g]: https://example.com\n", "1. Read [guide][g]. " + BACK + "\n\n   [g]: https://example.com\n\n[g]: https://example.com\n"},
+		// A definition that is indented: its lines lose that indent too,
+		// so a paragraph of it is a paragraph in the list, and no code.
+		{"T[^n].\n\n   [^n]: Intro.\n\n      Tail.\n", "1. Intro. " + BACK + "\n\n    Tail.\n\n"},
 		// Backticks at the start of an inline footnote are its text.
 		{"T ^[```] end.\n", "1. \\``` " + BACK + "\n\n"},
 		// A line under the text that makes it a heading has nothing after

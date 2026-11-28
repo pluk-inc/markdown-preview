@@ -768,7 +768,9 @@ Design, before the features that need it:
   renderer does not read the inline form; the texts in the list at the
   end of the page are no text of the document, so a reader cannot select
   or copy them (form: a selection that can be in the layout of the
-  list).
+  list); and the place of a reader in that list is not kept through a
+  new width or text size (`take_place` knows the parts of the page
+  only), so the view stays at its offset.
 - The bullet of a list item is a record of the box (`Decor`) and not a
   character: the bullet of the system font is a fifth of the size of
   the text, and each font has its own. It and the check box of a task

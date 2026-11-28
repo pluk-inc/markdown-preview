@@ -1075,16 +1075,17 @@ notes_source :: proc(doc: ^Document, allocator := context.allocator, starts: ^[d
 				line := string(doc.source[at:line_end])
 				if at > note.content {
 					// With no indent of the item that the definition is
-					// for the parser (`FOOTNOTE_INDENT` columns; a tab is
-					// four): what is left of the indent is of the text,
-					// as it is in its place (a list in it, code).
-					if strings.has_prefix(line, "\t") {
-						line = strings.concatenate({"  ", line[1:]}, context.temp_allocator)
-					} else {
-						for cut := 0; cut < FOOTNOTE_INDENT && strings.has_prefix(line, " "); cut += 1 {
-							line = line[1:]
-						}
+					// for the parser (the indent of the definition and
+					// `FOOTNOTE_INDENT` columns; a tab is four): what is
+					// left of the indent is of the text, as it is in its
+					// place (a list in it, code).
+					columns, lead := 0, 0
+					for lead < len(line) && (line[lead] == ' ' || line[lead] == '\t') {
+						columns += line[lead] == '\t' ? 4 : 1
+						lead += 1
 					}
+					left := max(columns - (note.mark - note.start) - FOOTNOTE_INDENT, 0)
+					line = strings.concatenate({strings.repeat(" ", left, context.temp_allocator), line[lead:]}, context.temp_allocator)
 				}
 				append(&lines, line)
 				at = next
