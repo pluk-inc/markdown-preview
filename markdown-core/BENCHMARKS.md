@@ -1778,6 +1778,22 @@ explained, and a typed character does not make or draw the panel when
 the view is at the end. The launch of the app does not show the panel:
 its time and its instructions are in the spread of the base.
 
+After this record the text of the panel got the size of the text of the
+page (it was 0.92 of it, and a pill 0.95 of that): the two sizes were
+two fonts with each glyph made new. `core.py --case open` for `front`
+against the base, with each form:
+
+| Size of the panel text / of a pill | First frame, new process: instructions |
+| --- | --- |
+| 0.92 / 0.95 of it (the record above) | +15.9 % |
+| 0.92 / the same | +12.2 % |
+| the size of the page / the same (now) | +4.7 % |
+
+What is left is the layout of about 40 texts. The heap at the first
+frame is as it was (6.39 MB against 5.29): it is not the fonts, and not
+the typesetters of the texts (with those freed after the line breaks it
+was 6.45 where it was 6.49); the lines of the texts and their strings
+are what the panel keeps.
 ## Footnotes (2026-11-27)
 
 The native page reads footnotes. `core.py --base` against the commit

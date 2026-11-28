@@ -46,14 +46,18 @@ Panel_Line :: struct {
 	x, top: f32, // points; the top counts from the top of the page
 }
 
-PANEL_SIZE :: 0.92 // of the text, in body sizes
+// The text of the panel is in the size of the text of the page, and a
+// pill in the size of the panel: a size of its own is a font of its own
+// and each of its glyphs made new, which was 11 of the 16 percent that
+// the panel added to the first frame of a new process (`BENCHMARKS.md`).
+PANEL_SIZE :: 1.0 // of the text, in body sizes
 PANEL_LINE :: 1.5 // the height of a line, in sizes of the text
 PANEL_PAD :: 0.28 // above and below the text of a row
 PANEL_KEYS :: 0.26 // the column of the keys, of the width
 PANEL_GAP :: 1.4 // between a key and its value
 PANEL_BELOW :: 1.0 // between the last row and the hairline, in body sizes
 PANEL_AFTER :: 0.4 // below the hairline, in body sizes; the room above the first block comes after it
-PILL_SIZE :: 0.95 // of the text of a pill, in sizes of the text of the panel
+PILL_SIZE :: 1.0 // of the text of a pill, in sizes of the text of the panel
 PILL_PAD_X :: 0.7 // left and right of the text of a pill, in its sizes
 PILL_PAD_Y :: 0.08
 PILL_GAP_X :: 0.4
