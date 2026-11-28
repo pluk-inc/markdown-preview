@@ -186,6 +186,7 @@ test_the_document_has_the_footnotes_as_numbers :: proc(t: ^testing.T) {
 		{"T[^a].\n\n[^a]: Intro.\nTail ^[inner].\n\nAfter ^[real].\n", "T<1:1>.|{1}Intro. Tail ^[inner].|After <2:2>.|"},
 		// A label with a "<" in it is none: the end of raw HTML stays.
 		{"<script>\n[^</script>]: Hidden.\nAfter.\n", "After.|"},
+		{"<!--\n[^-->]: Hidden.\n\nAfter.\n", "After.|"},
 		// A label with a "[" in it is no label: the line is text.
 		{"T.\n\n[^a[b]: Keep this text.\n", "T.|[^a[b]: Keep this text.|"},
 		// In raw HTML: no reference.
