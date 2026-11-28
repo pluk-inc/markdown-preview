@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.0.76] – 2026-11-28 – Steadier Quick Look, faster counts
+
+Markdown Preview 0.0.76 brings Quick Look previews that work after an update, faster counts in the inspector, and a command line tool that stays current.
+
+### Changed
+
+- **Faster Counts in the Inspector.** Words, characters, lines, headings, links, and images are counted about 20 times faster with the same numbers, so a large document opens and edits with less work ([#712](https://github.com/pluk-inc/markdown-preview/pull/712)).
+
+### Fixed
+
+- **Quick Look Works After an Update.** Pressing Space on a Markdown file in Finder shows the preview again after an update, instead of an “Extension not found” message that stayed until Finder restarted ([#725](https://github.com/pluk-inc/markdown-preview/pull/725)).
+- **Command Line Tool Stays Current.** Installing the md-preview command from Settings → Advanced now links it to the app, so each app update also updates the command ([#709](https://github.com/pluk-inc/markdown-preview/pull/709)).
+- **Lighter Toolbar in Long Documents.** The toolbar counts a document’s words only when you open Share, not again and again while you type or scroll, so long documents feel smoother ([#670](https://github.com/pluk-inc/markdown-preview/pull/670)).
+
+### Contributors
+
+- [@vnsnclo](https://github.com/vnsnclo) — reported the Quick Look message after the update ([#688](https://github.com/pluk-inc/markdown-preview/issues/688)).
+- [@Bo-Feng-1024](https://github.com/Bo-Feng-1024) — reported the Quick Look message and checked the extension’s registration ([#723](https://github.com/pluk-inc/markdown-preview/issues/723)).
+
 ## [0.0.75] – 2026-11-23 – Leaner menus, a new app identity
 
 Markdown Preview 0.0.75 brings a shorter editor context menu, a favorite folder that reopens on launch, and a new app identity that keeps your settings.
