@@ -50,7 +50,8 @@ reveal_block :: proc(doc: ^Document, block: int, reveal: Maybe(int), pairs: ^[dy
 	seen := make([]bool, len(doc.links) + 1, context.temp_allocator)
 	for &t in block_texts(old) {
 		for span in t.spans {
-			if span.link > 0 && span.link <= len(doc.links) && !seen[span.link] {
+			// The number of a footnote is no link (`Span.link`).
+			if .Note not_in span.style && span.link > 0 && span.link <= len(doc.links) && !seen[span.link] {
 				seen[span.link] = true
 				append(&numbers, span.link)
 			}
@@ -60,6 +61,9 @@ reveal_block :: proc(doc: ^Document, block: int, reveal: Maybe(int), pairs: ^[dy
 	count := 0
 	for &t in block_texts(new) {
 		for &span in t.spans {
+			if .Note in span.style {
+				continue
+			}
 			if span.link <= 0 || span.link > len(fresh.links) {
 				span.link = 0
 				continue
@@ -93,6 +97,9 @@ links_in :: proc(b: ^Block) -> (count: int) {
 	seen := -1
 	for &text in block_texts(b) {
 		for span in text.spans {
+			if .Note in span.style {
+				continue
+			}
 			// The spans of one link are next to each other, with marks
 			// that show between them.
 			if span.link > 0 && span.link != seen {
@@ -127,7 +134,21 @@ block_parse :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs: 
 	lead: int
 	text, _, _, _, _, lead = piece_text(doc, doc.source[start:end], start, end)
 	base = start - lead
-	fresh = parse_piece(text[:], 0, len(doc.source), places, block - first, pairs = pairs, reveal = reveal_in(doc.reveal, base, len(text)), at_start = base == 0)
+	// A piece with a footnote in it has the numbers that the document
+	// has for its footnotes (`piece_footnotes`); when the document has
+	// none that are right, all of the source is parsed.
+	notes: Footnotes
+	alone := true
+	if has_footnote(doc.source[start:end]) {
+		notes, alone = piece_footnotes(doc, text[:], lead, lead + end - start, start, end, context.temp_allocator)
+	}
+	if alone {
+		fresh = parse_piece(text[:], 0, len(doc.source), places, block - first, pairs = pairs, reveal = reveal_in(doc.reveal, base, len(text)), at_start = base == 0, piece_notes = notes)
+	} else {
+		// No parse has the bytes of the piece: they go.
+		delete(text)
+		text = nil
+	}
 	// The piece must give the block as the document has it. It does not
 	// when the limit of the parser for the uses of definitions cuts a
 	// use in the piece that a parse of all keeps: then the places are
@@ -163,7 +184,7 @@ block_parse :: proc(doc: ^Document, block: int, places: ^[dynamic]Place, pairs: 
 		}
 		text = make([dynamic]u8, len(doc.source))
 		copy(text[:], doc.source)
-		fresh = parse_piece(text[:], 0, len(doc.source), places, block, pairs = pairs, reveal = doc.reveal, at_start = true)
+		fresh = parse_piece(text[:], 0, len(doc.source), places, block, pairs = pairs, reveal = doc.reveal, at_start = true, whole = true)
 		base, index = 0, block
 	}
 	return

@@ -408,8 +408,31 @@ typedef enum {
     MDCORE_POINTER_DEFAULT = 0,
     MDCORE_POINTER_TEXT = 1,
     MDCORE_POINTER_BUSY = 2,
+    MDCORE_POINTER_LINK = 3, // on the number of a footnote: a click follows it
 } mdcore_pointer;
-mdcore_pointer mdcore_pointer_shape(void *ctx, double x, double y);
+// `note`: for a point on the number of a reference to a footnote, that
+// number; it is not changed for each other point. NULL for a caller that
+// does not need it.
+mdcore_pointer mdcore_pointer_shape(void *ctx, double x, double y, long *note);
+
+// Footnotes. A reference in the text shows as the number of its
+// footnote, and the text of a footnote has that number as its mark. The
+// text is where its definition is in the source, in a page that is read
+// and in one that is edited.
+
+// The footnote that a point of the page is on: the number of a reference
+// (`definition` false), or the number mark of the text of a footnote
+// (`definition` true). False for each other point.
+bool mdcore_note_at(void *ctx, double x, double y, long *number, bool *definition);
+// The height of the page where the block of a footnote starts: of its
+// text (`reference` 0), or of one of its references, counted from 1. The
+// core lays that part of the page out, so the page can be another height
+// after this (mdcore_page_area). False for no such footnote.
+bool mdcore_note_top(void *ctx, long number, long reference, double *y);
+// The text of a footnote, plain, UTF-8: for a host that shows it beside
+// its number (a pointer over the number). The pointer is good until the
+// next call of this or of mdcore_source. NULL for no such footnote.
+const char *mdcore_note_text(void *ctx, long number, long *length);
 
 // Selection. phase: 0 = mouse down, 1 = drag. x, y are in document space.
 // The pointer is in a drag when it is some points away from where the

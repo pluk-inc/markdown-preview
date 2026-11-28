@@ -1850,6 +1850,57 @@ test_front_matter_is_a_panel_above_the_first_part :: proc(t: ^testing.T) {
 	testing.expect(t, f64(caret_top + caret_height) <= alone.page.content_height)
 }
 
+// A point on the number of a footnote in the text, and one on the number
+// mark of the text of a footnote, are on that footnote; each other
+// point is on none. The block of each has a height of the page.
+@(test)
+test_a_point_is_on_a_footnote :: proc(t: ^testing.T) {
+	f: Fixture
+	setup(&f, "Text with a note[^a] and more[^b] text.\n\nPlain.\n\n[^a]: The first.\n[^b]: The second.\n", 600)
+	defer teardown(&f)
+	step(&f.page, 1e30)
+	expect_ok(t, &f.page)
+	part := only(&f.page)
+	src := &f.page.doc.parts[0].blocks[0].text
+	seen := 0
+	for span in src.spans {
+		if .Note not_in span.style {
+			continue
+		}
+		seen += 1
+		x0, top, height, _, _ := caret_place(&f.page, {block = 0, byte = span.start})
+		x1, _, _, _, _ := caret_place(&f.page, {block = 0, byte = span.end}, true)
+		y := part.top + f64(top + height / 2)
+		number, definition, ok := note_at(&f.page, (x0 + x1) / 2, y)
+		testing.expect(t, ok && !definition)
+		testing.expect_value(t, number, span.link)
+		// Beside the number, on the text: none.
+		_, _, before := note_at(&f.page, x0 - 6, y)
+		_, _, after := note_at(&f.page, x1 + 6, y)
+		testing.expect(t, !before && !after)
+	}
+	testing.expect_value(t, seen, 2)
+	// The mark of the text of the second footnote, and the text beside it.
+	second := part.boxes[3]
+	text_x := f.page.column_x + f.page.m.list_indent
+	number, definition, ok := note_at(&f.page, text_x - 8, part.top + f64(second.top) + 6)
+	testing.expect(t, ok && definition)
+	testing.expect_value(t, number, 2)
+	_, _, in_text := note_at(&f.page, text_x + 20, part.top + f64(second.top) + 6)
+	_, _, in_plain := note_at(&f.page, f.page.column_x + 5, part.top + f64(part.boxes[1].top) + 6)
+	testing.expect(t, !in_text && !in_plain)
+	// The blocks of a footnote, and their heights of the page.
+	definition_block, has := document.note_block(f.page.doc, 2, 0)
+	reference_block, has_reference := document.note_block(f.page.doc, 2, 1)
+	_, none := document.note_block(f.page.doc, 3, 0)
+	testing.expect(t, has && has_reference && !none)
+	testing.expect_value(t, definition_block, 3)
+	testing.expect_value(t, reference_block, 0)
+	y, _, placed := block_top(&f.page, definition_block)
+	testing.expect(t, placed)
+	testing.expect_value(t, y, part.top + f64(second.top))
+}
+
 // The bar of a caret is as high as the font of the text of its line, on
 // the line that the text stands on: higher in a heading than in a
 // paragraph, and less than the line with a wide line spacing.
@@ -1859,6 +1910,7 @@ test_the_caret_is_as_high_as_the_text_of_its_line :: proc(t: ^testing.T) {
 	setup(&f, "# Heading\n\nA paragraph.\n", 600)
 	defer teardown(&f)
 	step(&f.page, 1e30)
+	expect_ok(t, &f.page)
 	_, heading_y, heading_line, _ := caret_y(&f.page, {block = 0, byte = 2}, false)
 	_, heading_bar_y, heading_bar, _ := caret_bar_y(&f.page, {block = 0, byte = 2}, false)
 	_, body_y, body_line, _ := caret_y(&f.page, {block = 1, byte = 2}, false)
@@ -1891,6 +1943,7 @@ test_the_caret_is_as_high_as_the_text_of_its_line :: proc(t: ^testing.T) {
 	setup(&g, "# Heading\n\n\n\nText.\n", 600)
 	defer teardown(&g)
 	step(&g.page, 1e30)
+	expect_ok(t, &g.page)
 	if empty, has := document.empty_address(g.page.doc, 0, 1); testing.expect(t, has) {
 		_, empty_y, _, _ := caret_y(&g.page, empty, false)
 		_, empty_bar_y, empty_bar, _ := caret_bar_y(&g.page, empty, false)
@@ -1903,6 +1956,7 @@ test_the_caret_is_as_high_as_the_text_of_its_line :: proc(t: ^testing.T) {
 	setup(&h, "#\n\nText.\n", 600)
 	defer teardown(&h)
 	step(&h.page, 1e30)
+	expect_ok(t, &h.page)
 	if testing.expect_value(t, h.page.doc.parts[0].blocks[0].kind, document.Block_Kind.Heading) {
 		_, bare_bar_y, bare_bar, _ := caret_bar_y(&h.page, {block = 0}, false)
 		testing.expect(t, abs(bare_bar - heading_bar) < 0.01)
@@ -1918,6 +1972,7 @@ test_the_card_of_code_has_round_corners :: proc(t: ^testing.T) {
 	setup(&f, "```\ncode\n```\n", 600)
 	defer teardown(&f)
 	step(&f.page, 1e30)
+	expect_ok(t, &f.page)
 	part := only(&f.page)
 	box := part.boxes[0]
 	if !testing.expect(t, box.decor_end - box.decor_first >= 2) {

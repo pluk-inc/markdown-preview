@@ -2930,6 +2930,29 @@ final class MarkdownHTMLRenderTests: XCTestCase {
         XCTAssertEqual(errorCount, 0)
     }
 
+    /// The cases that the native renderer's core is tested with too
+    /// (`markdown-core/src/document/footnote_cases.json`): the footnotes
+    /// that show, with their numbers and labels, and the number and the
+    /// place in the count of each reference. A case with `web` false is a
+    /// kind of footnote that only the core reads.
+    func testSharedFootnoteCases() throws {
+        struct Note: Decodable { let number: Int; let label: String; let inline: Bool }
+        struct Reference: Decodable { let text: String; let number: Int; let ordinal: Int }
+        struct Case: Decodable { let source: String; let notes: [Note]; let references: [Reference]; let web: Bool }
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../../../../markdown-core/src/document/footnote_cases.json")
+        let cases = try JSONDecoder().decode([Case].self, from: Data(contentsOf: url))
+        XCTAssertFalse(cases.isEmpty)
+        for test in cases where test.web {
+            let got = MarkdownHTML.extractFootnotes(from: test.source)
+            let shown = test.notes.filter { $0.number > 0 }.sorted { $0.number < $1.number }
+            XCTAssertEqual(got.definitions.map(\.number), shown.map(\.number), test.source)
+            XCTAssertEqual(got.definitions.map(\.label), shown.map(\.label), test.source)
+            XCTAssertEqual(got.references.map(\.number), test.references.map(\.number), test.source)
+            XCTAssertEqual(got.references.map(\.ordinal), test.references.map(\.ordinal), test.source)
+        }
+    }
+
     func testFootnoteRemovalDoesNotShiftFollowingSourceLines() {
         let rendered = MarkdownHTML.render(
             markdown: """

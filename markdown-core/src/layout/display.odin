@@ -156,6 +156,7 @@ display_part :: proc(
 			// Glyphs come in runs of one span, so the color is looked up
 			// only when the span changes.
 			span: ^document.Span
+			raise: f32
 			// The number of a list item has the color of the text of
 			// the item, as the circle of a bullet has (softer in a
 			// quote); text with no span is soft.
@@ -173,10 +174,12 @@ display_part :: proc(
 					if span == nil || index < span.start || index >= span.end {
 						span = document.span_at(para.src, index)
 						color = span_color(l, para, span.style, done)
+						// The number of a footnote stands above the line.
+						raise = .Note in span.style ? NOTE_RAISE * para.size : 0
 					}
 				}
 				px := (line.x + g.x) * scale
-				py := f32(page_pixel(part.top, baseline - g.y, scale) - origin_y)
+				py := f32(page_pixel(part.top, baseline - raise - g.y, scale) - origin_y)
 				fx := math.floor(px)
 				bin := u8(clamp((px - fx) * text.SUBPIXEL_BINS, 0, text.SUBPIXEL_BINS - 1))
 				// Inline by force: the compiler puts a procedure with one

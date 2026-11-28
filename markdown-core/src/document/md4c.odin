@@ -116,6 +116,9 @@ MD_FLAG_TABLES :: 0x100
 MD_FLAG_STRIKETHROUGH :: 0x200
 MD_FLAG_TASKLISTS :: 0x800
 
+// The Markdown that the core reads. Each pass of the parser has these.
+MD_FLAGS :: MD_FLAG_TABLES | MD_FLAG_STRIKETHROUGH | MD_FLAG_TASKLISTS | MD_FLAG_PERMISSIVEAUTOLINKS
+
 Md_Parser :: struct {
 	abi_version: c.uint,
 	flags:       c.uint,

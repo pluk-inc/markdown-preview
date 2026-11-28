@@ -471,6 +471,10 @@ span_font :: proc(l: ^Layout, style: document.Inline_Set, size: f32, heading: bo
 	if .Code in style {
 		return font(l, .Mono, size * 0.9)
 	}
+	// The number of a footnote: small, and raised (`NOTE_RAISE`).
+	if .Note in style {
+		return font(l, .Regular, size * NOTE_SIZE)
+	}
 	bold := .Bold in style
 	italic := .Italic in style || .Image in style
 	switch {
@@ -502,12 +506,15 @@ done_color :: proc(l: ^Layout) -> base.Color {
 // The color of the text of a span. `done`: its block stands in a checked
 // task item. The state is read from the document when the page is drawn,
 // not kept in the layout, so a task that is checked needs no new layout.
+NOTE_SIZE :: 0.72 // of the number of a footnote in the text, in sizes of the text
+NOTE_RAISE :: 0.36 // how far its baseline is above the one of the text, in sizes of the text
+
 span_color :: proc(l: ^Layout, para: ^Para, style: document.Inline_Set, done: bool) -> base.Color {
 	// A mark of the source that shows at the caret.
 	if .Mark in style {
 		return l.style.secondary
 	}
-	if .Link in style {
+	if .Link in style || .Note in style {
 		return l.style.link
 	}
 	if done && !para.quote && .Image not_in style {
@@ -666,6 +673,12 @@ marker_text :: proc(b: ^document.Block) -> string {
 	#partial switch b.marker {
 	case .Number:
 		return fmt.tprintf("%d.", b.number)
+	case .Note:
+		// The number of the footnote; none for a footnote that no text
+		// refers to.
+		if b.number > 0 {
+			return fmt.tprintf("%d.", b.number)
+		}
 	}
 	// A bullet is a circle and a task a box, with no text
 	// (`place_marker`).

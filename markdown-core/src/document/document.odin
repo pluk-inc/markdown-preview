@@ -12,6 +12,9 @@ Inline :: enum u8 {
 	Link,
 	Image, // the alternative text of an image
 	Strike,
+	// The number of a footnote, in the place of its reference in the
+	// source ("[^label]", "^[text]"). `Span.link` is that number.
+	Note,
 	// A mark of the source that shows as text: the "**" of bold text
 	// that the caret is in (`Document.reveal`).
 	Mark,
@@ -46,6 +49,10 @@ Marker :: enum u8 {
 	Number,
 	Task_Open,
 	Task_Done,
+	// The first block of the definition of a footnote ("[^label]: "):
+	// `number` is the number of the footnote, 0 for one with no
+	// reference.
+	Note,
 }
 
 // Where a block stands in a list, for the space above it.
@@ -76,6 +83,11 @@ Shape :: struct {
 	// The mark of the line of the block is in its text, as a mark that
 	// shows (`Document.reveal`): the "#" of a heading, the ">" of a quote.
 	mark_shown:  bool,
+	// The block is of the definition of a footnote: its first block
+	// (`marker` is `.Note`), a later block of its item, or a block of a
+	// list in its text. The bubble of a footnote has the text of these
+	// (`note_text`).
+	noted:       bool,
 	// A list item with nothing in it at the caret whose mark has nothing
 	// after it ("-", "1."): the mark is plain text that is being typed,
 	// no list item yet (`typed_mark`). A layout draws no bullet and no
@@ -235,6 +247,15 @@ Document :: struct {
 	starts: [dynamic]int, // for each part, the number of its first block
 	count:  int, // the blocks of all parts
 	links:  [dynamic]string,
+	// The footnotes of the document, from the last parse of all of the
+	// source. A change of a piece keeps them: it is a parse of the piece
+	// only when the piece has the footnotes that it had, in their order,
+	// and then only their offsets change (`piece_footnotes`,
+	// `notes_commit`). The labels are in `note_keys`.
+	notes:       Footnotes,
+	// For the label of each definition among them (as `footnote_key`
+	// makes it), which of the notes it is. The document has the strings.
+	note_keys:   map[string]int,
 	// How many links the last parse of all of the source gave. An edit
 	// adds the links of its blocks and takes none out; see `prepare`.
 	links_parsed: int,
@@ -521,6 +542,8 @@ block_destroy :: proc(b: ^Block) {
 }
 
 destroy :: proc(doc: ^Document) {
+	notes_destroy(&doc.notes)
+	note_keys_destroy(doc)
 	for part in doc.parts {
 		for &b in part_blocks(part) {
 			block_destroy(&b)

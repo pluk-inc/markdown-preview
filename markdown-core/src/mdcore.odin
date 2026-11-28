@@ -839,7 +839,7 @@ reveal_update :: proc(ctx: ^Ctx) -> (changed: bool) {
 		for at := from; at < to && only_marks; at += 1 {
 			only_marks = false
 			for pair in ctx.caret_pairs {
-				if in_mark(pair, at, at + 1) {
+				if in_mark(pair, at, at + 1) || (pair.whole && at >= pair.from && at < pair.to) {
 					only_marks = true
 					break
 				}
@@ -2156,24 +2156,98 @@ Pointer_Shape :: enum c.int {
 	Default = 0,
 	Text    = 1,
 	Busy    = 2, // not known now: another call works on the view
+	Link    = 3, // on the number of a footnote, which a click follows
 }
 
 // The one export that does not wait for the view's state (`hold`): the
 // host asks on its main thread for each move of the pointer and each step
 // of a scroll, and a layout call or a frame can have the state for some
-// milliseconds. It reads only, and uses no working memory.
+// milliseconds. It reads only; the text of a line that it shapes again
+// for the place of a footnote number uses the working memory of the
+// view, which the lock makes safe.
 @(export)
-mdcore_pointer_shape :: proc "c" (handle: rawptr, x, y: f64) -> Pointer_Shape {
+mdcore_pointer_shape :: proc "c" (handle: rawptr, x, y: f64, note: ^c.long) -> Pointer_Shape {
 	context = runtime.default_context()
 	ctx := cast(^Ctx)handle
 	if !sync.try_lock(&ctx.lock) {
 		return .Busy
 	}
 	defer sync.unlock(&ctx.lock)
-	if ctx.layout_valid && layout.text_at(&ctx.page, f32(x), y) {
-		return .Text
+	context.temp_allocator = ctx.temp
+	if ctx.layout_valid {
+		if number, definition, on_note := layout.note_at(&ctx.page, f32(x), y); on_note {
+			// The number of a reference, for the text of its footnote
+			// beside the pointer; the mark of a text has none.
+			if note != nil && !definition {
+				note^ = c.long(number)
+			}
+			return .Link
+		}
+		if layout.text_at(&ctx.page, f32(x), y) {
+			return .Text
+		}
 	}
 	return .Default
+}
+
+// See the header.
+@(export)
+mdcore_note_at :: proc "c" (handle: rawptr, x, y: f64, number: ^c.long, definition: ^bool) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	if !ctx.layout_valid {
+		return false
+	}
+	found, is_definition := layout.note_at(&ctx.page, f32(x), y) or_return
+	number^, definition^ = c.long(found), is_definition
+	return true
+}
+
+// See the header.
+@(export)
+mdcore_note_text :: proc "c" (handle: rawptr, number: c.long, length: ^c.long) -> [^]u8 {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	sync.lock(&ctx.source_lock)
+	defer sync.unlock(&ctx.source_lock)
+	hold(ctx)
+	clear(&ctx.source_out)
+	length^ = 0
+	if !document.note_text(&ctx.doc, int(number), &ctx.source_out) {
+		return nil
+	}
+	length^ = c.long(len(ctx.source_out))
+	return raw_data(ctx.source_out)
+}
+
+// See the header.
+@(export)
+mdcore_note_top :: proc "c" (handle: rawptr, number, reference: c.long, y: ^f64) -> bool {
+	context = runtime.default_context()
+	ctx := cast(^Ctx)handle
+	context.temp_allocator = ctx.temp
+	hold(ctx)
+	if !ctx.layout_valid {
+		return false
+	}
+	// The reader's place, before a part gets another height.
+	take_place(ctx)
+	top: f64
+	changed, ok: bool
+	if reference == 0 {
+		top, changed, ok = layout.note_top(&ctx.page, int(number))
+	} else {
+		block := document.note_block(&ctx.doc, int(number), int(reference)) or_return
+		top, changed, ok = layout.block_top(&ctx.page, block)
+	}
+	if changed {
+		layout_changed(ctx)
+	}
+	y^ = top
+	return ok
 }
 
 // phase 0 = mouse down, 1 = drag. x and y are points in document space.
