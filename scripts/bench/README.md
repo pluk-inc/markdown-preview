@@ -10,7 +10,7 @@ GitHub Actions; see [the performance check](../../tests/performance/README.md).
 | File | Purpose |
 |---|---|
 | `bench-app.sh` | Launches the app cold per sample, samples RSS/CPU of the app + its WebContent process(es) every 500 ms, parses debug perf logs (FCP, Swift render, `MdPreview.update`) into a CSV. |
-| `bench-ql.sh` | Resets Quick Look, opens `qlmanage -p <sample>`, samples RSS/CPU of `qlmanage`, `QuickLookUIService`, and the `quick-look` appex; captures the appex's provide wall-time from debug logs. |
+| `bench-ql.sh` | Resets Quick Look, opens `qlmanage -p <sample>`, samples RSS/CPU of `qlmanage`, `QuickLookUIService`, and the Quick Look appex; captures the appex's provide wall-time from debug logs. |
 | `report.py` | Joins two CSV directories on (sample, metric) and prints a markdown comparison table. Stdlib python3 only. |
 | `../../samples/mermaid-heavy.md` | Stress sample: ~10 Mermaid diagrams, Swift/TypeScript/Bash code fences, `$...$` / `$$...$$` math — exercises all three renderers at once. |
 
@@ -74,7 +74,7 @@ one you just built. Beware: every Debug build of this project registers an
 appex with the same bundle id (`sh.pluk.md-preview.dev.quick-look`), so multiple
 worktrees/DerivedData folders compete and LaunchServices picks one
 arbitrarily. Verify which binary actually served the preview with
-`ps -axo pid,comm | grep quick-look.appex` while the panel is open, and
+`ps -axo pid,comm | grep MarkdownPreviewQuickLook.appex` while the panel is open, and
 `lsregister -u` stale copies if the wrong one wins.
 
 ## Manual edit-cycle procedure
