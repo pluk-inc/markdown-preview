@@ -1030,14 +1030,15 @@ has_footnote :: proc(source: []u8) -> bool {
 @(private)
 footnote_continues :: proc(line: []u8, lead: int) -> bool {
 	// As far in as the text of the item that the definition is for the
-	// parser: its indent and `FOOTNOTE_INDENT` columns. A tab is four.
+	// parser: its indent and `FOOTNOTE_INDENT` columns. A tab goes to the
+	// next column that is a multiple of four, as for the parser.
 	columns := 0
 	for ch in line {
 		switch ch {
 		case ' ':
 			columns += 1
 		case '\t':
-			columns += 4
+			columns = (columns / 4 + 1) * 4
 		case:
 			return columns >= lead + FOOTNOTE_INDENT
 		}
