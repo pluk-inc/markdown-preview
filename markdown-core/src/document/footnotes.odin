@@ -485,7 +485,8 @@ footnote_out_of_code :: proc(source: []u8, start, limit: int, scan: ^Footnote_Sc
 	doubtful := make([dynamic]int, context.temp_allocator) // which of the possible definitions
 	marks := make([dynamic]int, context.temp_allocator) // where the mark of each is
 	for note, n in scan.possible {
-		if footnote_doubt(source[note.mark:note.content]) {
+		label := source[note.mark:note.content]
+		if bytes.index_byte(label, '<') >= 0 || bytes.index_byte(label, '>') >= 0 {
 			append(&doubtful, n)
 			append(&marks, note.mark)
 		}
@@ -514,14 +515,21 @@ footnote_out_of_code :: proc(source: []u8, start, limit: int, scan: ^Footnote_Sc
 	for note, n in scan.possible {
 		if in_doubt < len(doubtful) && doubtful[in_doubt] == n {
 			in_doubt += 1
-			// As it is in the source, but for the ":" after its label:
-			// with that, the line is the definition of a link for the
-			// parser, and a reference with the label is a link then.
+			// As it is in the source, but for the ":" after its label
+			// (with that, the line is the definition of a link for the
+			// parser, and a reference with the label is a link then) and
+			// for a backtick in its label (which would start code that a
+			// reference in the lines after it is in).
 			end := note.content
 			for end > note.mark + 2 && (source[end - 1] == ' ' || source[end - 1] == '\t') {
 				end -= 1
 			}
 			masked[end - 1 - start] = FOOTNOTE_MASK
+			for at in note.mark ..< end {
+				if source[at] == '`' {
+					masked[at - start] = FOOTNOTE_MASK
+				}
+			}
 			continue
 		}
 		masked[note.mark - start], masked[note.mark - start + 1] = BULLETS[0], ' '

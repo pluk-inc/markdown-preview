@@ -189,6 +189,10 @@ test_the_document_has_the_footnotes_as_numbers :: proc(t: ^testing.T) {
 		{"<script>\n[^</script>]: Hidden.\nAfter.\n", "After.|"},
 		{"<!--\n[^-->]: Hidden.\n\nAfter.\n", "After.|"},
 		{"<!--\n^[-->]\n\nAfter.\n", "After.|"},
+		// A label with a backtick in it: its reference is a footnote,
+		// also in the line before its definition.
+		{"Text[^x`y].\n[^x`y]: Note.\n", "Text<1:1>.|{1}Note.|"},
+		{"Text[^x`y>].\n[^x`y>]: Note.\n", "Text<1:1>.|{1}Note.|"},
 		// A label with a ">" in it, in no raw HTML, is a label.
 		{"Text[^a>b].\n\n[^a>b]: Note.\n", "Text<1:1>.|{1}Note.|"},
 		// A label with a "[" in it is no label: the line is text.
