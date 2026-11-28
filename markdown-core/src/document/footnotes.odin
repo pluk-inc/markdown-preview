@@ -152,10 +152,10 @@ Footnote_Candidate :: struct {
 	start, end: int,
 	key:        string, // of its label; "" for an inline footnote
 	of:         int, // the possible definition whose text it is in; -1 for none
-	// It can start or end in code (a backtick in it), be in the target
-	// of a link (after "](" or "]:"), or be in an address that is a link
-	// as it is (after "<" or "://"): `footnote_out_of_code` asks the
-	// parser.
+	// It can start or end in code (a backtick in it), have the end of
+	// raw HTML in it ("<", ">"), be in the target of a link (after "]("
+	// or "]:"), or be in an address that is a link as it is (after "<"
+	// or "://"): `footnote_out_of_code` asks the parser.
 	doubt:      bool,
 }
 
@@ -168,6 +168,7 @@ Footnote_Scan :: struct {
 	candidates: []Footnote_Candidate, // in the order of the source
 	confirmed:  []bool, // for each: the parser reads it as text
 	inside:     []bool, // for each: in the text of a definition, as the parser has its blocks
+	in_html:    []bool, // for each possible definition: its line is raw HTML for the parser; nil when none was in doubt
 	// As in `Footnotes`. `used`: how many lines start with each of
 	// `BULLETS`.
 	bullet:     u8,
@@ -392,7 +393,7 @@ footnote_scan :: proc(source: []u8, start, limit: int, known: ^map[string]int, b
 					i += 2
 					continue
 				}
-				append(&candidates, Footnote_Candidate{i, close + 1, key, piece.of, target || address || bytes.index_byte(source[i:close], '`') >= 0})
+				append(&candidates, Footnote_Candidate{i, close + 1, key, piece.of, target || address || footnote_doubt(source[i:close])})
 				i = close + 1
 			case ch == '^' && i + 1 < piece.end && source[i + 1] == '[':
 				// To the "]" of this "[": brackets in the text count.
@@ -419,7 +420,7 @@ footnote_scan :: proc(source: []u8, start, limit: int, known: ^map[string]int, b
 					i += 2
 					continue
 				}
-				append(&candidates, Footnote_Candidate{i, close + 1, "", piece.of, target || address || bytes.index_byte(source[i:close], '`') >= 0})
+				append(&candidates, Footnote_Candidate{i, close + 1, "", piece.of, target || address || footnote_doubt(source[i:close])})
 				i = close + 1
 			case:
 				i += 1
@@ -440,7 +441,11 @@ footnote_scan :: proc(source: []u8, start, limit: int, known: ^map[string]int, b
 	// so the parser gives it as one run of text.
 	items := make([dynamic]int, context.temp_allocator)
 	masks := make([dynamic][2]int, context.temp_allocator)
-	for note in possible {
+	for note, n in possible {
+		// In raw HTML it is as it is in the source.
+		if scan.in_html != nil && scan.in_html[n] {
+			continue
+		}
 		append(&items, note.mark)
 		end := note.content
 		for end > note.mark + 2 && (source[end - 1] == ' ' || source[end - 1] == '\t') {
@@ -474,7 +479,18 @@ footnote_out_of_code :: proc(source: []u8, start, limit: int, scan: ^Footnote_Sc
 			append(&ends, candidate.start, candidate.end - 1)
 		}
 	}
-	if len(ends) == 0 {
+	// A possible definition whose label can have the end of raw HTML in
+	// it: in raw HTML it is no definition, and its bytes stay as they
+	// are, so that the HTML ends where it ends in the source.
+	doubtful := make([dynamic]int, context.temp_allocator) // which of the possible definitions
+	marks := make([dynamic]int, context.temp_allocator) // where the mark of each is
+	for note, n in scan.possible {
+		if footnote_doubt(source[note.mark:note.content]) {
+			append(&doubtful, n)
+			append(&marks, note.mark)
+		}
+	}
+	if len(ends) == 0 && len(doubtful) == 0 {
 		return
 	}
 	State :: struct {
@@ -484,6 +500,8 @@ footnote_out_of_code :: proc(source: []u8, start, limit: int, scan: ^Footnote_Sc
 		ends:       []int,
 		text:       []bool, // for each of `ends`: the parser reads it as text
 		addresses:  int, // the links that are open whose text is their address
+		marks:      []int,
+		html:       []bool, // for each of `marks`: it is in raw HTML
 	}
 	// The bytes of the other pass, but for the candidates that are in
 	// doubt, which are as they are in the source. Each other candidate
@@ -492,7 +510,20 @@ footnote_out_of_code :: proc(source: []u8, start, limit: int, scan: ^Footnote_Sc
 	// another place of the source changes with it.
 	masked := slice.clone(source[start:limit])
 	defer delete(masked)
-	for note in scan.possible {
+	in_doubt := 0
+	for note, n in scan.possible {
+		if in_doubt < len(doubtful) && doubtful[in_doubt] == n {
+			in_doubt += 1
+			// As it is in the source, but for the ":" after its label:
+			// with that, the line is the definition of a link for the
+			// parser, and a reference with the label is a link then.
+			end := note.content
+			for end > note.mark + 2 && (source[end - 1] == ' ' || source[end - 1] == '\t') {
+				end -= 1
+			}
+			masked[end - 1 - start] = FOOTNOTE_MASK
+			continue
+		}
 		masked[note.mark - start], masked[note.mark - start + 1] = BULLETS[0], ' '
 		end := note.content
 		for end > note.mark + 2 && (source[end - 1] == ' ' || source[end - 1] == '\t') {
@@ -505,9 +536,22 @@ footnote_out_of_code :: proc(source: []u8, start, limit: int, scan: ^Footnote_Sc
 			slice.fill(masked[candidate.start - start:candidate.end - start], FOOTNOTE_MASK)
 		}
 	}
-	state := State{context, uintptr(raw_data(masked)), len(masked), start, ends[:], make([]bool, len(ends), context.temp_allocator), 0}
+	state := State{context, uintptr(raw_data(masked)), len(masked), start, ends[:], make([]bool, len(ends), context.temp_allocator), 0, marks[:], make([]bool, len(marks), context.temp_allocator)}
 	block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.int {
 		return 0
+	}
+	// The first of sorted offsets that is `from` or more.
+	first_from :: proc(offsets: []int, from: int) -> int {
+		low, high := 0, len(offsets)
+		for low < high {
+			middle := (low + high) / 2
+			if offsets[middle] < from {
+				low = middle + 1
+			} else {
+				high = middle
+			}
+		}
+		return low
 	}
 	// The text of a link that is an address ("<https://…>", or one
 	// with no marks) is that address: with the mask in it, it is none.
@@ -524,20 +568,19 @@ footnote_out_of_code :: proc(source: []u8, start, limit: int, scan: ^Footnote_Sc
 	text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr) -> c.int {
 		state := cast(^State)userdata
 		context = state.ctx
-		if type != .Normal || state.addresses > 0 || uintptr(text) < state.base || uintptr(text) >= state.base + uintptr(state.size) {
+		if uintptr(text) < state.base || uintptr(text) >= state.base + uintptr(state.size) {
 			return 0
 		}
 		from := int(uintptr(text) - state.base) + state.from
-		low, high := 0, len(state.ends)
-		for low < high {
-			middle := (low + high) / 2
-			if state.ends[middle] < from {
-				low = middle + 1
-			} else {
-				high = middle
+		if type == .Html {
+			for at := first_from(state.marks, from); at < len(state.marks) && state.marks[at] < from + int(size); at += 1 {
+				state.html[at] = true
 			}
 		}
-		for ; low < len(state.ends) && state.ends[low] < from + int(size); low += 1 {
+		if type != .Normal || state.addresses > 0 {
+			return 0
+		}
+		for low := first_from(state.ends, from); low < len(state.ends) && state.ends[low] < from + int(size); low += 1 {
 			state.text[low] = true
 		}
 		return 0
@@ -551,6 +594,12 @@ footnote_out_of_code :: proc(source: []u8, start, limit: int, scan: ^Footnote_Sc
 		text        = text,
 	}
 	md_parse(raw_data(masked), c.uint(min(len(masked), int(max(c.int)))), &md, &state)
+	if len(doubtful) > 0 {
+		scan.in_html = make([]bool, len(scan.possible), context.temp_allocator)
+		for n, at in doubtful {
+			scan.in_html[n] = state.html[at]
+		}
+	}
 	kept, at := 0, 0
 	for candidate in candidates {
 		if at < len(ends) && ends[at] == candidate.start {
@@ -563,6 +612,19 @@ footnote_out_of_code :: proc(source: []u8, start, limit: int, scan: ^Footnote_Sc
 		kept += 1
 	}
 	resize(candidates, kept)
+}
+
+// True for bytes of a possible footnote that the parser must be asked
+// about before they are masked: a backtick (code can start or end
+// there), "<" or ">" (raw HTML can end there).
+@(private)
+footnote_doubt :: proc(part: []u8) -> bool {
+	for ch in part {
+		if ch == '`' || ch == '<' || ch == '>' {
+			return true
+		}
+	}
+	return false
 }
 
 // The byte that stands for each byte of a reference in what the parser
@@ -932,10 +994,8 @@ footnote_definition :: proc(line: []u8) -> (label: string, mark, content: int, o
 	}
 	close := at + 2
 	for close < len(line) && line[close] != ']' {
-		// A label has no "[" (as for a reference), and no "<" or ">":
-		// the end of raw HTML in a label ("</script>", "-->", "?>")
-		// would go with the mask.
-		if line[close] == '[' || line[close] == '<' || line[close] == '>' {
+		// A label has no "[" (as for a reference).
+		if line[close] == '[' {
 			return
 		}
 		close += 1

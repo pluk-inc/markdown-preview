@@ -184,9 +184,13 @@ test_the_document_has_the_footnotes_as_numbers :: proc(t: ^testing.T) {
 		// A line with no indent that goes on in the paragraph of a
 		// definition is text of the definition: no footnote in it.
 		{"T[^a].\n\n[^a]: Intro.\nTail ^[inner].\n\nAfter ^[real].\n", "T<1:1>.|{1}Intro. Tail ^[inner].|After <2:2>.|"},
-		// A label with a "<" in it is none: the end of raw HTML stays.
+		// A line that has the form of a definition in raw HTML is as it is
+		// in the source, so the HTML ends where it ends.
 		{"<script>\n[^</script>]: Hidden.\nAfter.\n", "After.|"},
 		{"<!--\n[^-->]: Hidden.\n\nAfter.\n", "After.|"},
+		{"<!--\n^[-->]\n\nAfter.\n", "After.|"},
+		// A label with a ">" in it, in no raw HTML, is a label.
+		{"Text[^a>b].\n\n[^a>b]: Note.\n", "Text<1:1>.|{1}Note.|"},
 		// A label with a "[" in it is no label: the line is text.
 		{"T.\n\n[^a[b]: Keep this text.\n", "T.|[^a[b]: Keep this text.|"},
 		// In raw HTML: no reference.
