@@ -26,10 +26,18 @@ note_at :: proc(l: ^Layout, x: f32, y: f64) -> (number: int, definition: bool, o
 		return
 	}
 	b := &l.doc.parts[p].blocks[slot]
-	// The mark of a definition: left of its text, in its first line.
-	text_x := l.column_x + list_x(l, b) + f32(b.quote_depth) * l.m.quote_indent
-	if b.marker == .Note && b.number > 0 && x < text_x && x >= text_x - l.m.list_indent - 0.8 * l.m.body && from_top < part.boxes[slot].top + l.m.body * l.m.line_height {
-		return b.number, true, true
+	// The mark of a definition: the number that is drawn left of its
+	// text, which is the first line of the block. Not the room between
+	// the number and the text.
+	if box := part.boxes[slot]; b.marker == .Note && b.number > 0 && box.line_end > box.line_first {
+		mark := part.lines[box.line_first]
+		if part.paras[mark.para].src == nil && x >= mark.x - 1 && x <= mark.x + mark.line.width + 1 && from_top >= mark.top && from_top < mark.top + part.paras[mark.para].line_height {
+			return b.number, true, true
+		}
+	}
+	// A document with no reference has no number in a text.
+	if len(l.doc.notes.references) == 0 {
+		return
 	}
 	// Only a block with a number in its text needs the place of the
 	// point in the text: the pointer asks for each of its moves, and that

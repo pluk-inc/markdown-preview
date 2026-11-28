@@ -2233,6 +2233,8 @@ mdcore_note_top :: proc "c" (handle: rawptr, number, reference: c.long, y: ^f64)
 	if !ctx.layout_valid {
 		return false
 	}
+	// The reader's place, before a part gets another height.
+	take_place(ctx)
 	top: f64
 	changed, ok: bool
 	if reference == 0 {

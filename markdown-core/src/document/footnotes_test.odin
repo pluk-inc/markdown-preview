@@ -51,7 +51,10 @@ test_footnotes_of_the_shared_cases :: proc(t: ^testing.T) {
 		}
 		strings.write_string(&got, "#")
 		for r in found.references {
-			fmt.sbprintf(&got, "%s=%d.%d|", string(source[r.start:r.end]), found.notes[r.note].number, r.ordinal)
+			// The number that the reference shows, which is the one of
+			// its footnote.
+			fmt.sbprintf(&got, "%s=%d.%d|", string(source[r.start:r.end]), r.number, r.ordinal)
+			testing.expect_value(t, r.number, found.notes[r.note].number)
 		}
 		testing.expectf(t, strings.to_string(got) == strings.to_string(want), "%q:\n %q, not\n %q", c.source, strings.to_string(got), strings.to_string(want))
 	}
@@ -174,6 +177,8 @@ test_the_document_has_the_footnotes_as_numbers :: proc(t: ^testing.T) {
 		// In the target of a link: none, and the link is a link.
 		{"A [guide](/docs/^[draft]) and ^[real].\n", "A guide and <1:1>.|"},
 		{"A [guide](/docs/(v1)/^[draft]) and ^[real].\n", "A guide and <1:1>.|"},
+		// In an address that is a link as it is: none.
+		{"See <https://example.com/^[draft]> and ^[real].\n", "See https://example.com/^[draft] and <1:1>.|"},
 		// In the text of a link: one.
 		{"A [see ^[note] here](/docs) b.\n", "A see <1:1> here b.|"},
 		// A line with no indent that goes on in the paragraph of a

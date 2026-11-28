@@ -152,8 +152,9 @@ Footnote_Candidate :: struct {
 	start, end: int,
 	key:        string, // of its label; "" for an inline footnote
 	of:         int, // the possible definition whose text it is in; -1 for none
-	// It can start or end in code (a backtick in it) or be in the target
-	// of a link (after "](" or "]:"): `footnote_out_of_code` asks the
+	// It can start or end in code (a backtick in it), be in the target
+	// of a link (after "](" or "]:"), or be in an address that is a link
+	// as it is (after "<" or "://"): `footnote_out_of_code` asks the
 	// parser.
 	doubt:      bool,
 }
@@ -329,11 +330,20 @@ footnote_scan :: proc(source: []u8, start, limit: int, known: ^map[string]int, b
 		next_close, next_open := piece.start, piece.start
 		paired := false
 		// After "](" to its ")", with the pairs of "(" and ")" in it, and
-		// after "]:": what can be the target of a link.
+		// after "]:": what can be the target of a link. After "<" or
+		// "://" to the next space: what can be an address that is a link
+		// as it is.
 		target := false
 		open_parens := 0
+		address := false
 		for i := piece.start; i < piece.end; {
 			ch := source[i]
+			switch {
+			case ch == '<' || (ch == ':' && i + 2 < piece.end && source[i + 1] == '/' && source[i + 2] == '/'):
+				address = true
+			case ch == ' ' || ch == '\t' || ch == '>':
+				address = false
+			}
 			switch {
 			case ch == ']' && i + 1 < piece.end && source[i + 1] == ':':
 				target = true
@@ -382,7 +392,7 @@ footnote_scan :: proc(source: []u8, start, limit: int, known: ^map[string]int, b
 					i += 2
 					continue
 				}
-				append(&candidates, Footnote_Candidate{i, close + 1, key, piece.of, target || bytes.index_byte(source[i:close], '`') >= 0})
+				append(&candidates, Footnote_Candidate{i, close + 1, key, piece.of, target || address || bytes.index_byte(source[i:close], '`') >= 0})
 				i = close + 1
 			case ch == '^' && i + 1 < piece.end && source[i + 1] == '[':
 				// To the "]" of this "[": brackets in the text count.
@@ -409,7 +419,7 @@ footnote_scan :: proc(source: []u8, start, limit: int, known: ^map[string]int, b
 					i += 2
 					continue
 				}
-				append(&candidates, Footnote_Candidate{i, close + 1, "", piece.of, target || bytes.index_byte(source[i:close], '`') >= 0})
+				append(&candidates, Footnote_Candidate{i, close + 1, "", piece.of, target || address || bytes.index_byte(source[i:close], '`') >= 0})
 				i = close + 1
 			case:
 				i += 1
@@ -452,10 +462,10 @@ footnote_scan :: proc(source: []u8, start, limit: int, known: ^map[string]int, b
 // in the target of a link: one whose first or last byte the parser
 // reads as no text in the source as it is. With its bytes masked, the
 // backtick that ends the code would go, and the parser would read text
-// there; and a target with the mask in it is no target. Only a
-// candidate with a backtick in it, or after "](" or "]:" in its line,
-// is in doubt: most sources have none, and this is one look at the
-// candidates then.
+// there; and a target or an address with the mask in it is none. Only
+// a candidate with a backtick in it, or after "](", "]:", "<", or "://"
+// in its line, is in doubt: most sources have none, and this is one look
+// at the candidates then.
 @(private)
 footnote_out_of_code :: proc(source: []u8, start, limit: int, scan: ^Footnote_Scan, candidates: ^[dynamic]Footnote_Candidate) {
 	ends := make([dynamic]int, context.temp_allocator) // the first and the last byte of each such candidate, in the order of the source
@@ -473,6 +483,7 @@ footnote_out_of_code :: proc(source: []u8, start, limit: int, scan: ^Footnote_Sc
 		size, from: int,
 		ends:       []int,
 		text:       []bool, // for each of `ends`: the parser reads it as text
+		addresses:  int, // the links that are open whose text is their address
 	}
 	// The bytes of the other pass, but for the candidates that are in
 	// doubt, which are as they are in the source. Each other candidate
@@ -494,17 +505,26 @@ footnote_out_of_code :: proc(source: []u8, start, limit: int, scan: ^Footnote_Sc
 			slice.fill(masked[candidate.start - start:candidate.end - start], FOOTNOTE_MASK)
 		}
 	}
-	state := State{context, uintptr(raw_data(masked)), len(masked), start, ends[:], make([]bool, len(ends), context.temp_allocator)}
+	state := State{context, uintptr(raw_data(masked)), len(masked), start, ends[:], make([]bool, len(ends), context.temp_allocator), 0}
 	block :: proc "c" (type: Md_Block, detail: rawptr, userdata: rawptr) -> c.int {
 		return 0
 	}
-	span :: proc "c" (type: Md_Span, detail: rawptr, userdata: rawptr) -> c.int {
+	// The text of a link that is an address ("<https://…>", or one
+	// with no marks) is that address: with the mask in it, it is none.
+	enter :: proc "c" (type: Md_Span, detail: rawptr, userdata: rawptr) -> c.int {
+		state := cast(^State)userdata
+		state.addresses += int(type == .A && (cast(^Md_A_Detail)detail).is_autolink != 0)
+		return 0
+	}
+	leave :: proc "c" (type: Md_Span, detail: rawptr, userdata: rawptr) -> c.int {
+		state := cast(^State)userdata
+		state.addresses -= int(type == .A && (cast(^Md_A_Detail)detail).is_autolink != 0)
 		return 0
 	}
 	text :: proc "c" (type: Md_Text, text: [^]u8, size: c.uint, userdata: rawptr) -> c.int {
 		state := cast(^State)userdata
 		context = state.ctx
-		if type != .Normal || uintptr(text) < state.base || uintptr(text) >= state.base + uintptr(state.size) {
+		if type != .Normal || state.addresses > 0 || uintptr(text) < state.base || uintptr(text) >= state.base + uintptr(state.size) {
 			return 0
 		}
 		from := int(uintptr(text) - state.base) + state.from
@@ -526,8 +546,8 @@ footnote_out_of_code :: proc(source: []u8, start, limit: int, scan: ^Footnote_Sc
 		flags       = MD_FLAGS,
 		enter_block = block,
 		leave_block = block,
-		enter_span  = span,
-		leave_span  = span,
+		enter_span  = enter,
+		leave_span  = leave,
 		text        = text,
 	}
 	md_parse(raw_data(masked), c.uint(min(len(masked), int(max(c.int)))), &md, &state)
@@ -976,7 +996,16 @@ note_text :: proc(doc: ^Document, number: int, out: ^[dynamic]u8) -> bool {
 				if i > block || cell > 0 {
 					append(out, cell > 0 ? "\t" : "\n\n")
 				}
-				append(out, ..text.bytes[:])
+				// With no marks that show at the caret: the text is the
+				// same with the caret in it and with the caret away.
+				for span in text.spans {
+					if .Mark not_in span.style {
+						append(out, ..text.bytes[span.start:span.end])
+					}
+				}
+				if len(text.spans) == 0 {
+					append(out, ..text.bytes[:])
+				}
 			}
 		}
 		return true

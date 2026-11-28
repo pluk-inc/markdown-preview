@@ -763,7 +763,12 @@ Design, before the features that need it:
   a definition is text of a paragraph (a fence of code or a heading
   that starts there is no block); the web renderer does not read the
   inline form, and it shows the texts in a list at the end of the page,
-  where the native page has them in place.
+  where the native page has them in place. An inline footnote that is in a
+  larger one that is no footnote (its "^[" is in code) is not read. And
+  the way back from the text of a footnote is a scroll offset that the
+  host kept: when the jump gave a part above it its real height, the
+  way back is off by the change (form: the place of the reference, kept
+  as the core keeps the place of a reader).
 - The bullet of a list item is a record of the box (`Decor`) and not a
   character: the bullet of the system font is a fifth of the size of
   the text, and each font has its own. It and the check box of a task
