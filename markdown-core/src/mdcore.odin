@@ -159,8 +159,12 @@ Ctx :: struct {
 	clipboard:       [dynamic]u8,
 }
 
+// The start of the runtime, one time for the process: 0 not started, 1 a
+// thread starts it, 2 started. Two threads can make their first view at
+// the same time (a host warms the system on one thread while its main
+// thread makes the view of a document).
 @(private)
-runtime_started: bool
+runtime_state: i32
 
 // The style of a view whose host did not set one: the system fonts and the
 // light palette of the app.
@@ -251,9 +255,12 @@ left_shown_part :: proc(ctx: ^Ctx) -> bool {
 @(export)
 mdcore_create :: proc "c" (surface: rawptr) -> rawptr {
 	context = runtime.default_context()
-	if !runtime_started {
+	if _, first := sync.atomic_compare_exchange_strong(&runtime_state, 0, 1); first {
 		runtime._startup_runtime()
-		runtime_started = true
+		sync.atomic_store(&runtime_state, 2)
+	}
+	for sync.atomic_load(&runtime_state) != 2 {
+		sync.cpu_relax()
 	}
 	ctx := new(Ctx)
 	runtime.default_temp_allocator_init(&ctx.scratch, 64 * 1024, context.allocator)

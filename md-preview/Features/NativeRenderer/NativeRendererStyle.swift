@@ -12,7 +12,11 @@ import MDCore
 
 /// Fonts and colors for one `mdcore_set_style` call. It owns the fonts, so
 /// the pointers in `mdcore_style` stay valid while the call runs.
-struct NativeRendererStyle {
+///
+/// A value with no actor: the warm-up gives it to its own thread
+/// (`NativeRendererWarmUp`). It is made on the main actor, which the
+/// settings and the appearance need.
+nonisolated struct NativeRendererStyle {
     private let body: NSFont
     private let bold: NSFont
     private let heading: NSFont
@@ -20,6 +24,7 @@ struct NativeRendererStyle {
     private var style = mdcore_style()
 
     /// The current reader settings, for a view with the given appearance.
+    @MainActor
     init(appearance: NSAppearance, zoom: CGFloat) {
         let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         let scheme: ThemeColorScheme = isDark ? .dark : .light
