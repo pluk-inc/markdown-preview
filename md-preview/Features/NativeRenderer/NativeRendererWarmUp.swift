@@ -10,13 +10,15 @@ import AppKit
 import MDCore
 import QuartzCore
 
-/// The first view of the native renderer pays for what the system makes
-/// one time in a process: the Metal device and the shaders, each font in
-/// each size of a page, and the image of each glyph. None of that needs
-/// the document. This makes one view that no window has, with the reader's
-/// style and a text that has each kind of block and the common letters,
-/// draws one frame of it, and throws it away. The system keeps what it
-/// made, so the view of the document finds it there.
+/// The first view of the native renderer pays for what is made one time
+/// in a process: the Metal device and the shaders (the core keeps them
+/// for all of its views), and what the text system makes at the first
+/// use of a font in a size and of its glyphs. None of that needs the
+/// document. This makes one view that no window has, with the reader's
+/// style and a text that has each font of a page in each of its sizes,
+/// draws one frame of it, and throws it away. The view's own glyph
+/// images go with it; what the system and the core keep for the process
+/// stays, so the view of the document finds it there.
 ///
 /// The work runs while AppKit starts the app and reads the document, on a
 /// thread that the main thread does not wait for.
@@ -30,10 +32,9 @@ nonisolated enum NativeRendererWarmUp {
         started = true
         // What needs the main thread is read here: the settings, the
         // appearance, and the scale of the screen.
-        let stored = UserDefaults.standard.double(forKey: TextSizeSetting.defaultsKey)
         // The fonts of the style are not changed after this, and only
         // the thread below reads them.
-        nonisolated(unsafe) let style = NativeRendererStyle(appearance: NSApp.effectiveAppearance, zoom: stored > 0 ? stored : 1)
+        nonisolated(unsafe) let style = NativeRendererStyle(appearance: NSApp.effectiveAppearance, zoom: TextSizeSetting.currentZoom)
         let scale = NSScreen.main?.backingScaleFactor ?? 2
         let thread = Thread { run(style: style, scale: scale) }
         thread.qualityOfService = .userInitiated
@@ -49,44 +50,46 @@ nonisolated enum NativeRendererWarmUp {
             guard let ctx = mdcore_create(Unmanaged.passUnretained(layer).toOpaque()) else { return }
             style.apply(to: ctx)
             text.withCString { mdcore_set_markdown(ctx, $0, strlen($0)) }
-            mdcore_resize(ctx, 900, 900, scale)
+            // As wide as a page, and as high as the text: the frame has
+            // the glyphs of what is in the view and near it.
+            mdcore_resize(ctx, 900, 600, scale)
             autoreleasepool { mdcore_draw(ctx, 0) }
             mdcore_destroy(ctx)
+            // The layer was set up on this thread, which has no run loop
+            // to end its transaction.
+            CATransaction.flush()
         }
     }
 
-    /// Each kind of block and each style, with the letters, the digits,
-    /// and the marks of most text, so that each font of a page is made in
-    /// each of its sizes with its common glyphs.
+    /// Each font that the layout makes, in each of its sizes: the six
+    /// heading levels, the text in its four styles, and code in a line
+    /// and in a block. With no emoji and no text of another script: their
+    /// fonts are large, and most documents have none.
     private nonisolated static let text = """
-    # The quick brown fox JUMPS over the lazy dog 0123456789
+    # Heading one: The quick brown fox 0123456789
 
-    ## Sphinx of black quartz, judge my vow: (yes) [no] {ok} <tag>
+    ## Heading two: jumps over the lazy dog
 
-    ### Pack my box with five dozen liquor jugs! "Quoted" 'single' & more?
+    ### Heading three: Sphinx of black quartz
 
-    #### How vexingly quick daft zebras jump; x = y + z * 2 / 3 - 1 % 4
+    #### Heading four: judge my vow
 
-    ##### The five boxing wizards jump quickly @ # $ ^ _ | \\ ~
+    ##### Heading five: Pack my box
 
-    ###### Waltz, bad nymph, for quick jigs vex
+    ###### Heading six: with five dozen jugs
 
-    The quick brown fox jumps over the lazy dog. THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG. 0123456789 .,;:!?()[]{}<>'"-_=+*/|@#$%^&~
-    **The quick brown fox jumps over the lazy dog. THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG. 0123456789 .,;:!?()**
-    *The quick brown fox jumps over the lazy dog. THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG. 0123456789 .,;:!?()*
-    ***The quick brown fox jumps over the lazy dog. THE QUICK BROWN FOX JUMPS.***
-    `the quick brown fox jumps over the lazy dog THE QUICK BROWN FOX 0123456789 (){}[]<>=+-*/_.,;:` and [a link to it](https://example.com).
+    The quick brown fox jumps over the lazy dog. THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG. 0123456789 .,;:!?()[]'"-
+    **Bold: the quick brown fox.** *Italic: jumps over the lazy dog.* ***Both: sphinx of black quartz.***
+    `code: the quick brown fox (){}[]<>=+-*/_` and [a link](https://example.com).
 
-    - A list item with text
+    - A list item
     1. A numbered item
-    - [ ] An open task
-    - [x] A done task
+    - [ ] A task
 
-    > A quote with text in it.
+    > A quote.
 
     ```
-    the quick brown fox jumps over the lazy dog THE QUICK BROWN FOX JUMPS OVER
-    0123456789 (){}[]<>=+-*/_.,;:!?'"#$%^&|~@
+    code: the quick brown fox jumps over the lazy dog 0123456789 (){}[]<>=+-*/_.,;:
     ```
 
     | Head | Cell |

@@ -4,6 +4,7 @@ import "../base"
 import "../text"
 import "core:fmt"
 import "core:mem"
+import "core:sync"
 import CF "core:sys/darwin/CoreFoundation"
 import CG "core:sys/darwin/CoreGraphics"
 import NS "core:sys/darwin/Foundation"
@@ -35,11 +36,19 @@ shared: struct {
 	pipeline: ^MTL.RenderPipelineState,
 }
 
+// One time for the process, also when two threads make their first
+// renderer at the same time: the second one waits until all of it is
+// there.
+@(private)
+shared_made: sync.Once
+
 @(private)
 shared_init :: proc() {
-	if shared.device != nil {
-		return
-	}
+	sync.once_do(&shared_made, shared_make)
+}
+
+@(private)
+shared_make :: proc() {
 	shared.device = MTL.CreateSystemDefaultDevice()
 	shared.queue = shared.device->newCommandQueue()
 

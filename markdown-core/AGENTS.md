@@ -67,9 +67,14 @@ These came from the maintainer. Do not undo one without asking.
   size, the image of each glyph. A thread of its own makes a view that
   no window has, with the reader's style and a text of each kind of
   block, draws one frame, and throws it away; the system keeps what it
-  made. No part of the core is shared with the view of the document, so
-  there is no lock between the two, and the core has no code for it but
-  the start of its runtime, which two threads can ask for at one time.
+  made, and the core keeps its Metal device and pipeline for all of its
+  views. Two views share nothing else, so there is no lock between the
+  two; the start of the runtime and the shared Metal state are made one
+  time when two threads ask at one time (`sync.Once`). The glyph images
+  of the warm-up view go with it. Not done: one call of the core for
+  the warm-up (the text beside the layout that it is for, no drawable,
+  and a step of `bench.m` for it), and glyph images that all views of
+  the process share.
   The two reference programs do the same kind of thing at their start
   (one finds its fonts, the other makes one slow font and its Metal
   pipelines, each on a thread of its own); neither makes glyphs ahead.

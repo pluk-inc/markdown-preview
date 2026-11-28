@@ -26,6 +26,9 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from app import app_pids, executable_of
+from report import one_at_a_time
+
 WAIT = 20.0  # seconds for the first document frame of one launch
 # The parts: from one signpost to another one. An interval of the app has
 # a "begin" and an "end"; an event has only "event".
@@ -38,12 +41,7 @@ PARTS = [
 ]
 
 
-def app_pids(app: Path) -> set[int]:
-    found = subprocess.run(["pgrep", "-f", f"{app}/Contents/MacOS/"], capture_output=True, text=True)
-    return {int(pid) for pid in found.stdout.split()}
-
-
-def launch(app: Path, document: Path) -> dict[str, float]:
+def launch(app: Path, executable: Path, document: Path) -> dict[str, float]:
     """One launch: when each signpost of the new process came."""
     stream = subprocess.Popen(
         ["log", "stream", "--signpost", "--style", "ndjson",
@@ -52,7 +50,8 @@ def launch(app: Path, document: Path) -> dict[str, float]:
     )
     lines: queue.Queue[str] = queue.Queue()
     threading.Thread(target=lambda: [lines.put(line) for line in stream.stdout], daemon=True).start()
-    others = app_pids(app)
+    # A copy of the app that runs already is not this run's to read or stop.
+    others = app_pids(executable)
     pid = None
     seen: dict[str, float] = {}
 
@@ -66,14 +65,17 @@ def launch(app: Path, document: Path) -> dict[str, float]:
             if not line.startswith("{"):
                 continue
             entry = json.loads(line)
-            pid = pid or next(iter(app_pids(app) - others), None)
+            pid = pid or next(iter(app_pids(executable) - others), None)
             if entry.get("processID") != pid:
                 continue
             at = datetime.strptime(entry["timestamp"], "%Y-%m-%d %H:%M:%S.%f%z").timestamp()
             seen.setdefault(f"{entry.get('signpostName')}:{entry.get('signpostType')}", at)
 
     try:
-        lines.get(timeout=WAIT)  # the header line: the stream is ready
+        try:
+            lines.get(timeout=WAIT)  # the header line: the stream is ready
+        except queue.Empty:
+            return seen  # no log stream: this run is not counted
         subprocess.run(
             ["open", "-g", "-n", "-F", "-a", app, document, "--args",
              "-ApplePersistenceIgnoreState", "YES", "-MarkdownPreview.renderer", "native"],
@@ -84,8 +86,9 @@ def launch(app: Path, document: Path) -> dict[str, float]:
         read(time.time() + 0.5, None)
     finally:
         stream.terminate()
-        if pid:
-            subprocess.run(["kill", str(pid)], check=False)
+        stream.wait()
+        for started in app_pids(executable) - others:
+            subprocess.run(["kill", str(started)], check=False)
         time.sleep(0.8)
     return seen
 
@@ -97,12 +100,14 @@ def main() -> None:
     parser.add_argument("--runs", type=int, default=12)
     args = parser.parse_args()
     samples: dict[Path, list[dict[str, float]]] = {app: [] for app in args.apps}
-    for run in range(args.runs):
-        # In turns, and the first of a pair is the other build each time.
-        for app in args.apps if run % 2 == 0 else args.apps[::-1]:
-            seen = launch(app, args.document)
-            if "nativePaint:event" in seen:
-                samples[app].append(seen)
+    executables = {app: executable_of(app) for app in args.apps}
+    with one_at_a_time():
+        for run in range(args.runs):
+            # In turns, and the first of a pair is the other build each time.
+            for app in args.apps if run % 2 == 0 else args.apps[::-1]:
+                seen = launch(app, executables[app], args.document)
+                if "nativePaint:event" in seen:
+                    samples[app].append(seen)
     print("| | " + " | ".join(app.stem for app in args.apps) + " |")
     print("| --- | " + " | ".join("---" for _ in args.apps) + " |")
     for label, start, end in PARTS:

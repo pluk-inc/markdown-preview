@@ -1764,13 +1764,20 @@ median, and half of the range of the runs):
 The document frame is 9 to 17 ms earlier in each of the nine pairs, and
 the ranges of the two builds overlap in each: it is a gain of the size
 of one frame, shown by its direction in each run and not by one run.
+The form that is in the code (a shorter text for the warm-up, and the
+shared state of the renderer made one time for two threads) was
+measured at a load of 7 to 8, where each time is longer: from the start
+of the render to the drawn frame 179 ±33 to 161 ±31 ms for `short` (14
+launches) and 197 ±57 to 175 ±18 ms for `long` (10), and the warm-up
+32 ms.
 The warm-up is done 119 ms before the render of the document starts, so
 the two do not work at the same time.
 
 What it costs: 120 million instructions and 25 ms of CPU, on a thread
 that the main thread does not wait for, and 3 MB of memory that stays
-(the fonts of each heading level and their glyph images, which a
-document with fewer levels would not make). A reader with the web
+(what the text system keeps for the fonts of each heading level, which
+a document with fewer levels would not make). The glyph images of the
+warm-up view go with that view: each view has its own. A reader with the web
 renderer pays none of it: the warm-up runs only with the native one.
 
 Seen with the parts and not looked into here: from the start of the
